@@ -1,0 +1,9 @@
+{
+  "payload_size": 792,
+  "payload_sha256": "33d013ca4a63334fdbbd0adb77bd10f81e2e21c3ac41229e216eb17e5949d06f",
+  "daemon_sha256": "3af6104d0ac76cc043ecf38985e1b00a0d5ceace0a4f4b66820e21f4735a98c7",
+  "new_rx_size": 546244,
+  "rw_memsz_offset": 200,
+  "old_rw_memsz": 7856,
+  "new_rw_memsz": 7924
+}
