@@ -4,6 +4,20 @@ Progetto indipendente di Neme77 per ELEGOO Centauri Carbon 2. Non affiliato né 
 
 [English](README_EN.md) · [Installazione USB](docs/INSTALLAZIONE.md) · [Test](docs/TEST.md) · [Builder](docs/BUILD.md)
 
+## 📦 Download firmware
+
+### Centauri Carbon 2 Community V3.7
+
+⬇️ **[DOWNLOAD FIRMWARE V3.7](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.7/CC2_FULL_V3_7_STOCK_BOOTSTRAP.zip.sig)**
+
+**Base verificata:** ELEGOO firmware 02.01.00.00  
+**Dimensione:** 129.897.560 byte
+
+**SHA-256**  
+`149be825757593323aeca8ffd8e8bb3a86354dbedfab7c14e60298b3bb942f7f`
+
+➡️ [Note della release V3.7](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V3.7)
+
 ## Compatibilità
 
 Base verificata: **02.01.00.00**, pacchetto `cc2_eeb001_02.01.00.00_20260707170825.zip.sig`.
@@ -22,10 +36,6 @@ Elegoo Slicer può impedire l'upload lato client quando la stampante è occupata
 ## Stato
 
 Test riusciti di installazione da originale, ritorno all'originale e aggiornamento community. Vedere la matrice dei test per limiti ed evidenze.
-
-## Download firmware
-
-Il pacchetto previsto per la **[Release v3.7](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/v3.7)** è `CC2_FULL_V3_7_STOCK_BOOTSTRAP.zip.sig`. Il collegamento sarà accessibile ai lettori quando la release sarà pubblicata.
 
 È un **firmware modificato firmato stock**, installabile dall'originale 02.01.00.00 collaudato e verificabile anche dal nostro Dual Trust. Include già tutte le modifiche elencate, **Dual Trust v2 compreso**. Questa release distribuisce il solo pacchetto firmato stock.
 
