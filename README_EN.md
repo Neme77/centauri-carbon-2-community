@@ -14,4 +14,4 @@ Private signing keys, the AES key and credentials are excluded. Community update
 
 [USB installation (Italian)](docs/INSTALLAZIONE.md) · [Test evidence](docs/TEST.md)
 
-A project license remains to be selected by the maintainer. No rights to redistribute third-party firmware or components are asserted by this draft.
+A project license remains to be selected. No rights to redistribute third-party firmware or components are asserted by this draft.

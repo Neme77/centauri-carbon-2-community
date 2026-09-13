@@ -7,7 +7,7 @@ Progetto indipendente di Neme77 per ELEGOO Centauri Carbon 2. Non affiliato né 
 ## Compatibilità
 
 Base verificata: **02.01.00.00**, pacchetto `cc2_eeb001_02.01.00.00_20260707170825.zip.sig`.
-Non è stata verificata la compatibilità con Centauri Carbon 1, altre versioni o tutte le revisioni hardware.
+Non è stata verificata la compatibilità con Centauri 2 non Carbon, altre versioni o tutte le revisioni hardware.
 
 ## Modifiche
 
@@ -21,7 +21,7 @@ Elegoo Slicer può impedire l'upload lato client quando la stampante è occupata
 
 ## Stato
 
-Il manutentore ha riferito test riusciti di installazione da originale, ritorno all'originale e aggiornamento community. Vedere la matrice dei test per limiti ed evidenze.
+Test riusciti di installazione da originale, ritorno all'originale e aggiornamento community. Vedere la matrice dei test per limiti ed evidenze.
 
 Questa prima preparazione contiene documentazione e sorgenti. **Nessun firmware scaricabile è incluso**: i pacchetti collaudati verranno allegati alle Releases dopo la verifica dei file finali e della redistribuzione dei componenti.
 Il builder richiede materiale esterno: non è una distribuzione autosufficiente.
@@ -34,4 +34,4 @@ Chiavi private, chiave AES, credenziali e immagini firmware non fanno parte del 
 
 ## Licenze
 
-La licenza dei contributi del progetto è ancora da definire con il manutentore. Non viene attribuita una licenza ai componenti ELEGOO o di terzi. Questa bozza non attesta il diritto di redistribuire firmware o binari di terzi.
+La licenza dei contributi del progetto è ancora da definire con. Non viene attribuita una licenza ai componenti ELEGOO o di terzi. Questa bozza non attesta il diritto di redistribuire firmware o binari di terzi.
