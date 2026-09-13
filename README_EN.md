@@ -8,10 +8,24 @@ Features: restored root SSH access, GUI Z-offset patch, Dual Trust v2 for stock/
 
 The maintainer reports successful stock-to-custom installation, restoration of stock firmware and a community-signed update. OrcaSlicer in LAN mode successfully uploaded a file during printing. Elegoo Slicer may block uploads on the client side. Select upload only; automatic job queuing is not provided.
 
-This repository preparation includes sources and documentation, **not downloadable firmware**. Tested firmware assets and their checksums are pending. The builder also needs external components; see [build requirements](docs/BUILD.md).
+## Firmware download
+
+The planned **[v3.7 release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/v3.7)** provides one asset: `CC2_FULL_V3_7_STOCK_BOOTSTRAP.zip.sig`. The link becomes available to readers once the release is published.
+
+This is **modified, stock-signed firmware that already includes Dual Trust v2**. It was tested installing from stock 02.01.00.00 and can also be verified by our Dual Trust. No community-signed asset is distributed in this release.
+
+SHA-256:
+
+```text
+149be825757593323aeca8ffd8e8bb3a86354dbedfab7c14e60298b3bb942f7f
+```
+
+The repository holds sources and documentation; firmware belongs in Releases. Building requires external components. End users do not need private keys to install a signed release.
 
 Private signing keys, the AES key and credentials are excluded. Community updates require the matching Dual Trust firmware to be running. Installing official firmware removes the custom features in the updated system.
 
 [USB installation (Italian)](docs/INSTALLAZIONE.md) · [Test evidence](docs/TEST.md)
 
-A project license remains to be selected. No rights to redistribute third-party firmware or components are asserted by this draft.
+Original project code contributions are distributed under **GNU GPL version 3**, subject to the scope in [NOTICE.md](NOTICE.md); see [LICENSE](LICENSE). Existing third-party licenses and notices remain applicable. This does not relicense the complete ELEGOO firmware image.
+
+[OpenCentauri Firmware Tools](https://github.com/OpenCentauri/cc-fw-tools) is the organizational reference for this publication. This CC2 project is independent; no affiliation, code derivation or CC1/CC2 firmware compatibility is implied.

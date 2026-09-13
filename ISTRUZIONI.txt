@@ -1,0 +1,7 @@
+Caricare alla radice del repository README.md, README_EN.md, LICENSE e NOTICE.md, sostituendo i README precedenti. Non caricare questo ISTRUZIONI.txt come documentazione del prodotto.
+
+I sorgenti del builder non vengono modificati. I README puntano alla Release v3.7: finché è una bozza, il link non è disponibile ai lettori.
+
+Rimuovere il vecchio releases/v3.7-DRAFT.md oppure sostituirlo con le note stock già preparate. Aggiornare docs/PUBBLICAZIONE.md per indicare che la licenza del codice originale è stata scelta (GPLv3), mentre la verifica dei componenti di terzi rimane da completare.
+
+Questa preparazione segue la struttura di OpenCentauri, ma non certifica i diritti di distribuzione dei binari ELEGOO.
