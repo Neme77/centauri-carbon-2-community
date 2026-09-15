@@ -1,62 +1,61 @@
 # Centauri Carbon 2 Community
 
-Progetto indipendente di Neme77 per ELEGOO Centauri Carbon 2. Non affiliato né supportato da ELEGOO.
+Independent community project maintained by **Neme77** for the ELEGOO Centauri Carbon 2.
 
-[English](README_EN.md) · [Installazione USB](docs/INSTALLAZIONE.md) · [Test](docs/TEST.md) · [Builder](docs/BUILD.md)
+> This project is not affiliated with, endorsed by, or supported by ELEGOO.
 
-## 📦 Download firmware
+## Current release: firmware v3.8
 
-### Centauri Carbon 2 Community V3.7
+Firmware v3.8 is based on the verified ELEGOO **02.01.00.00** firmware and keeps the v3.7 feature set while completing local access in WAN/cloud mode.
 
-⬇️ **[DOWNLOAD FIRMWARE V3.7](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.7/CC2_FULL_V3_7_STOCK_BOOTSTRAP.zip.sig)**
+### Firmware features
 
-**Base verificata:** ELEGOO firmware 02.01.00.00  
-**Dimensione:** 129.897.560 byte
+- Root SSH access.
+- Extended GUI Z-offset range.
+- Dual Trust v2: official ELEGOO packages remain accepted while community-signed updates can also be installed.
+- Local HTTP access on port 80 in both LAN-only and WAN/cloud modes.
+- File upload while a print is already running when the client permits it.
+- Live OrcaSlicer temperature updates in WAN/cloud mode without manual refresh.
+- Local webcam access in WAN/cloud mode while the Matrix service remains operational.
+- Tested WAN -> LAN -> WAN mode switching.
 
-**SHA-256**  
-`149be825757593323aeca8ffd8e8bb3a86354dbedfab7c14e60298b3bb942f7f`
+The existing four-client video limit is unchanged in v3.8.
 
-➡️ [Note della release V3.7](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V3.7)
+Read the dedicated [firmware v3.8 documentation](docs/FIRMWARE_V3_8.md), [installation guide](docs/INSTALL.md), [build guide](docs/BUILD.md), and [test record](docs/TESTING.md).
 
-## Compatibilità
+## ELEGOO-Web v4.1.1
 
-Base verificata: **02.01.00.00**, pacchetto `cc2_eeb001_02.01.00.00_20260707170825.zip.sig`.
-Non è stata verificata la compatibilità con Centauri 2, altre versioni o tutte le revisioni hardware.
+ELEGOO-Web is a small portable Windows launcher for the printer's local web interface. It starts a local server on the PC, stores the printer connection parameters, opens the UI, and provides a QR code for phones or tablets on the same LAN.
 
-## Modifiche
+**Important:** ELEGOO-Web communicates with the printer over the local network. It does not use a USB cable. USB media is used only for offline firmware installation.
 
-- Ripristino del servizio SSH con accesso root.
-- Patch Z-offset della GUI.
-- Dual Trust v2: verifica delle firme stock e della chiave community del progetto.
-- HTTP locale sulla porta 80 anche nel percorso WAN/cloud.
-- Upload v1 durante la stampa, collaudato con OrcaSlicer in modalità LAN.
+Read the separate [ELEGOO-Web v4.1.1 README](elegoo-web/README.md).
 
-Elegoo Slicer può impedire l'upload lato client quando la stampante è occupata. Utilizzare OrcaSlicer LAN con il codice/password della stampante e il solo upload. La modifica non aggiunge una coda di stampa né avvia automaticamente il file caricato.
+## Repository contents
 
-## Stato
+- `cc2_builder_v3_8/` - v3.8 builder, patches, public keys, tools, and tests.
+- `launch_helpers_v3_8/` - Windows/WSL build launcher.
+- `elegoo-web/` - ELEGOO-Web documentation and original wrapper source.
+- `docs/` - installation, build, firmware, and validation documentation.
+- `releases/` - release notes and publication records.
 
-Test riusciti di installazione da originale, ritorno all'originale e aggiornamento community. Vedere la matrice dei test per limiti ed evidenze.
+The v3.7 source remains in the repository as historical material.
 
-È un **firmware modificato firmato stock**, installabile dall'originale 02.01.00.00 collaudato e verificabile anche dal nostro Dual Trust. Include già tutte le modifiche elencate, **Dual Trust v2 compreso**. Questa release distribuisce il solo pacchetto firmato stock.
+## Files intentionally excluded
 
-SHA-256 del pacchetto collaudato:
+This public repository does not contain:
 
-```text
-149be825757593323aeca8ffd8e8bb3a86354dbedfab7c14e60298b3bb942f7f
-```
+- ELEGOO stock firmware or modified vendor executables;
+- private signing keys or the firmware AES key;
+- printer credentials or personal configuration files;
+- the tested `elegoo_printer` binary reference;
+- third-party web UI and server binaries used by the portable application.
 
-Il repository contiene sorgenti e documentazione, non l'immagine firmware. Il builder richiede componenti esterni; vedere la guida di build. Non servono chiavi private per installare il firmware già firmato.
+Users must supply legally obtained external components. See [BUILD.md](docs/BUILD.md).
 
-## Firma e accesso
+## License and warranty
 
-La prima installazione utilizza il pacchetto firmato stock; gli aggiornamenti community richiedono il Dual Trust corrispondente già attivo. Il firmware originale rimuove le modifiche dal sistema aggiornato: non presumere di conservare SSH o Dual Trust dopo il ritorno a stock.
+Original project contributions are licensed under **GPL-3.0-only**. Existing third-party notices and terms continue to apply to their respective material. See `LICENSE` and `NOTICE.md`.
 
-Chiavi private, chiave AES, credenziali e immagini firmware non fanno parte del repository. La chiave pubblica community è in `cc2_builder_v3_7/dualtrust/cc2_community_release_public.pem`.
+Modified firmware can damage or disable a printer. Use it only on the supported model and firmware base, keep the official recovery package available, and proceed at your own risk. No warranty is provided.
 
-## Licenze e attribuzioni
-
-I contributi originali di codice del progetto sono distribuiti sotto **GNU GPL versione 3**; vedere [LICENSE](LICENSE) e [NOTICE.md](NOTICE.md) per l'ambito. Licenze e attribuzioni preesistenti dei componenti di terzi rimangono applicabili. La licenza del repository non attribuisce una nuova licenza all'intera immagine firmware ELEGOO.
-
-## Progetti correlati
-
-[OpenCentauri Firmware Tools](https://github.com/OpenCentauri/cc-fw-tools) pubblica strumenti e patch per Centauri Carbon e release basate su firmware ELEGOO. È il riferimento organizzativo scelto per questa pubblicazione. Questo progetto CC2 è indipendente: non implica affiliazione, derivazione del codice o compatibilità delle immagini CC1/CC2.

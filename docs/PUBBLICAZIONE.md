@@ -1,9 +1,8 @@
-# Preparazione per Neme77
+# Publication notes
 
-Repository proposto: `Neme77/centauri-carbon-2-community`. Questo archivio non crea il repository remoto.
+The repository contains source-controlled project contributions and documentation. Installable firmware, private keys, the AES key, credentials, modified vendor executables, and third-party binary application components must not be committed.
 
-Mantenere questa cartella separata da CC2_BUILD. Contiene una selezione di sorgenti e documenti; non copiare sopra l'intero ambiente di compilazione.
+Each installable artifact must be published under a new GitHub Release identifier with its exact SHA-256 checksum. Previously published artifacts are immutable and must never be silently replaced.
 
-Prima della prima pubblicazione: scegliere la licenza dei contributi propri, verificare provenienza/attribuzioni dei componenti, controllare i due pacchetti finali collaudati e completare le note di release. Non è stata svolta una verifica legale delle licenze del firmware originale.
+See [BUILD.md](BUILD.md) and the current release notes in `releases/`.
 
-Il collegamento autorizzato a GitHub è necessario per operare sull'account da questa conversazione. Iniziare con un repository privato permette di rivedere la preparazione prima di renderla pubblica.
