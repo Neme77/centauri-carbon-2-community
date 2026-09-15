@@ -2,7 +2,7 @@
 
 A direct C# desktop interface for local Centauri Carbon 2 access, tested by the maintainer.
 
-**Publication status: asset upload pending.**
+**[Download ELEGOO-Web v4.2.0 Portable](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.2.0/ELEGOO-Web-v4.2.0-Portable.zip)** · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.2.0/SHA256SUMS.txt) · [Published release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/elegoo-web-v4.2.0)
 
 ## Download and use
 
