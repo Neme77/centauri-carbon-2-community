@@ -1,84 +1,72 @@
-# ELEGOO-Web v4.1.1 Portable
+# ELEGOO-Web v4.2.0 Portable
 
-ELEGOO-Web is a small Windows launcher for the Centauri Carbon 2 local web interface. It packages the connection settings and local server controls into a simple desktop GUI.
-
-## Connection model
-
-The application uses the **local network**:
-
-1. The Windows PC connects to the printer by IPv4 address.
-2. A local HTTP server listens on port `8888` on the PC.
-3. The browser opens the web UI served by that PC.
-4. A phone or tablet on the same LAN can open the displayed address or scan the QR code.
-
-**It does not communicate with the printer over USB.** USB storage is used only when installing firmware from the printer touchscreen.
-
-The PC running ELEGOO-Web must remain powered on while other devices use its local server.
+A simple Windows desktop controller for the Centauri Carbon 2 local web interface.
+The maintainer reports successful compilation and operation on Windows. This
+package includes that executable unchanged; users do not need to compile it.
+The window title still includes "Test" because this is the exact tested build.
 
 ## Requirements
 
-- Windows 10 or Windows 11 x64.
-- Windows PowerShell 5.1.
-- The .NET Framework components included with Windows.
-- PC and printer connected to reachable local networks.
+- Windows 10/11 x64 and .NET Framework 4.8.
+- PC and printer reachable on the local network; TCP port 8888 free on the PC.
+- Printer IP address, username (normally elegoo), Access Code and serial number.
+- For mobile access, allow the server through the firewall on your trusted LAN.
 
-Python, WSL, OrcaSlicer, and additional installers are not required by the portable build.
+No Python, WSL, PowerShell, OrcaSlicer or administrator rights are needed to run
+this application. Network access is over LAN, not USB.
 
-## Configuration
+## Start
 
-The GUI requests:
+1. Stop the server in the previous app and close its window.
+2. Extract this entire archive into a new writable folder.
+3. Optionally copy only config.json from the old folder. Never share this file:
+   it contains your printer Access Code in plain text.
+4. Run ElegooWeb.exe. Enter the printer details and select SALVA E AVVIA
+   (Save and start). Italiano/English selects the web-interface language;
+   desktop controls are in Italian. Serial-number entry is still manual.
+5. APRI WEB UI opens the local page. The original server opens the browser
+   itself on its first start.
+6. Use the displayed URL or QR code from your phone/tablet on the same LAN.
+7. ARRESTA SERVER stops this copy's server. Closing only the window leaves
+   the server running; keep the PC powered on for mobile access.
 
-- printer IPv4 address;
-- username, normally `elegoo`;
-- printer Access Code;
-- printer serial number;
-- Italian or English web-interface language.
+## What's new
 
-Settings are stored in `config.json` beside the program. The Access Code is stored as plain text, so never publish, share, or commit that file.
+- Direct C# Windows Forms GUI replaces the Go/VBS/PowerShell launcher chain.
+- No ExecutionPolicy Bypass and no source compilation when the app starts.
+- Asynchronous network probes, server stop waits and QR generation.
+- Server stop identifies the executable by its full path.
+- Compatible config.json keys and atomic configuration writes.
+- Configuration fields remain visible. Application and window icon included.
 
-## Normal use
+PORTA 9001 OK confirms only TCP reachability, not successful authentication.
+The mobile link depends on LAN routing; VPNs and guest Wi-Fi isolation can affect it.
 
-1. Extract the complete portable archive to a new folder.
-2. Start `ElegooWeb.exe`.
-3. Enter the printer details and select **Save and start**.
-4. Use **Open Web UI** to reopen the browser later.
-5. Use the mobile link or QR code only from a device that can reach the PC over the same LAN.
-6. Use **Stop server** before closing the application when the local service is no longer needed.
+## Files and optional rebuilding
 
-Closing only the GUI can leave the server available for mobile devices.
+Keep ElegooWeb.exe, ElegooWebServer.exe, index.html, QRHelper.exe and favicon.ico
+together. config.json is created when you save. BUILD.cmd and source/ are optional
+for normal use. To rebuild, run BUILD.cmd on Windows with .NET Framework installed.
+The C# 5 compatibility fix moves await outside finally.
 
-## Changes in v4.1.1
+The server, QR helper, web page and icon are unchanged from v4.1.1.
+Only the desktop GUI was rewritten; this is not a new printer firmware.
+Original project source is GPL-3.0-only; third-party terms continue to apply.
 
-- Network probes run outside the GUI thread.
-- QR generation and server restart no longer block the window.
-- Stop targets only the server executable in the current application folder.
-- A clear warning is shown when port 8888 is already in use.
-- Mobile address selection prefers the PC route used to reach the printer.
-- Configuration writes use a temporary file and atomic replacement.
-- Required fields are validated and save failures are reported.
-- The project icon is embedded in the launcher and displayed in the window.
+## Validation and security
 
-The maintainer tested the final v4.1.1 portable package and reported that it operates correctly.
+The supplied executable is unsigned. The maintainer reported five antivirus
+flags in a multi-engine scan and successful acceptance by Google Drive. These
+reports are not a security certification, and detection results may change.
+Do not disable protection or add exclusions to resolve a detection; report the
+exact file hash and detection name for review. The earlier Go launcher is absent.
 
-## Status indicators
+The packaging checks verify ZIP integrity, checksums, no personal configuration,
+and byte identity of the supplied executable and retained components. No new
+Windows runtime test or malware scan was performed during packaging.
+The local server adds no authentication layer: use trusted networks and do not
+forward port 8888 directly to the Internet.
 
-- **Server active** means the server belonging to the current application folder is running and its local HTTP endpoint responds.
-- **Port 9001 OK** means a TCP connection to the printer succeeded. It does not validate the Access Code or serial number.
-- Status checks refresh approximately every five seconds.
+## Repository layout
 
-VPNs, guest Wi-Fi isolation, firewall rules, or unusual routing can prevent a phone from reaching the PC even when the printer itself is reachable.
-
-## Source and binary package
-
-The `source/` directory contains the original PowerShell GUI, asynchronous network helper, launcher, and diagnostic entry point developed for this project.
-
-The public source tree does not include `ElegooWebServer.exe`, `QRHelper.exe`, the vendor-derived `index.html`, or the packaged executables. Those components are kept outside Git and must be distributed only when their respective licensing and redistribution terms permit it.
-
-## Security notes
-
-- The local HTTP server adds no authentication layer of its own.
-- Anyone who can reach the service may be able to open the interface.
-- Keep port 8888 limited to trusted local networks.
-- Do not forward port 8888 directly to the Internet.
-- Do not include `config.json` in screenshots, archives, or bug reports.
-
+The current C# sources are in `source-v4.2/`. The older `source/` directory is retained as historical v4.1.1 material and is not used by v4.2.0. For the complete rebuild inputs, use the portable package's source folder and BUILD.cmd.

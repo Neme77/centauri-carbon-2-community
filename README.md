@@ -4,7 +4,19 @@ Independent community project maintained by **Neme77** for the ELEGOO Centauri C
 
 > This project is not affiliated with, endorsed by, or supported by ELEGOO.
 
-## Current release: firmware v3.8
+## Downloads
+
+> **Firmware v3.8 and ELEGOO-Web v4.2.0: packages prepared; release asset upload pending.**
+> The links below open the package information. Direct download buttons will be enabled once the assets are published.
+
+| **FIRMWARE v3.8** | **ELEGOO-WEB v4.2.0** |
+| :---: | :---: |
+| **[Firmware package & installation](releases/v3.8.md)** | **[Windows portable package & setup](releases/elegoo-web-v4.2.0.md)** |
+| Centauri Carbon 2 · Base 02.01.00.00 | Windows 10/11 x64 · .NET Framework 4.8 |
+
+[Browse published releases](https://github.com/Neme77/centauri-carbon-2-community/releases)
+
+## Firmware v3.8
 
 Firmware v3.8 is based on the verified ELEGOO **02.01.00.00** firmware and keeps the v3.7 feature set while completing local access in WAN/cloud mode.
 
@@ -23,13 +35,15 @@ The existing four-client video limit is unchanged in v3.8.
 
 Read the dedicated [firmware v3.8 documentation](docs/FIRMWARE_V3_8.md), [installation guide](docs/INSTALL.md), [build guide](docs/BUILD.md), and [test record](docs/TESTING.md).
 
-## ELEGOO-Web v4.1.1
+## ELEGOO-Web v4.2.0
 
 ELEGOO-Web is a small portable Windows launcher for the printer's local web interface. It starts a local server on the PC, stores the printer connection parameters, opens the UI, and provides a QR code for phones or tablets on the same LAN.
 
 **Important:** ELEGOO-Web communicates with the printer over the local network. It does not use a USB cable. USB media is used only for offline firmware installation.
 
-Read the separate [ELEGOO-Web v4.1.1 README](elegoo-web/README.md).
+Version 4.2.0 replaces the Go/VBS/PowerShell launcher with a direct C# GUI. The portable package includes the compiled application; no compilation is required for normal use.
+
+Read the separate [ELEGOO-Web v4.2.0 README](elegoo-web/README.md).
 
 ## Repository contents
 
@@ -43,7 +57,7 @@ The v3.7 source remains in the repository as historical material.
 
 ## Files intentionally excluded
 
-This public repository does not contain:
+The Git source tree does not contain:
 
 - ELEGOO stock firmware or modified vendor executables;
 - private signing keys or the firmware AES key;
@@ -51,7 +65,7 @@ This public repository does not contain:
 - the tested `elegoo_printer` binary reference;
 - third-party web UI and server binaries used by the portable application.
 
-Users must supply legally obtained external components. See [BUILD.md](docs/BUILD.md).
+Release assets are distributed separately from the source tree. Users rebuilding from source must supply legally obtained external components. See [BUILD.md](docs/BUILD.md).
 
 ## License and warranty
 
