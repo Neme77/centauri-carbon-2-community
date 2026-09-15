@@ -24,7 +24,7 @@ Firmware v3.8 is based on the verified ELEGOO **02.01.00.00** firmware and keeps
 
 ### Firmware features
 
-* Root SSH access.  "Credentials User login: root pssword:MTY4ODE2"
+* Root SSH access.  **"Credentials User login: root pssword:MTY4ODE2"**
 * Extended GUI Z-offset range.
 * Dual Trust v2: official ELEGOO packages remain accepted while community-signed updates can also be installed.
 * Local HTTP access on port 80 in both LAN-only and WAN/cloud modes.
@@ -39,7 +39,7 @@ Read the dedicated [firmware v3.8 documentation](docs/FIRMWARE_V3_8.md), [instal
 
 ## ELEGOO-Web v4.3.0
 
-The app is currently only available in Italian, but I will soon release a multilingual version.
+**The app is currently only available in Italian, but I will soon release a multilingual version.**
 
 ELEGOO-Web is a small portable Windows launcher for the printer's local web interface. It starts a local server on the PC, stores the printer connection parameters, opens the UI, and provides a QR code for phones or tablets on the same LAN.
 
