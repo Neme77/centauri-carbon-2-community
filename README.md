@@ -6,12 +6,12 @@ Independent community project maintained by **Neme77** for the ELEGOO Centauri C
 
 ## Downloads
 
-|                                                                                                                                **FIRMWARE v3.8**                                                                                                                                |                                                                                                              **ELEGOO-WEB v4.3.0**                                                                                                             |
+|                                                                                                                                **FIRMWARE v3.8**                                                                                                                                |                                                                                                              **ELEGOO-WEB v4.4.0**                                                                                                             |
 | :-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-|                    [![Download firmware v3.8](https://img.shields.io/badge/DOWNLOAD-FIRMWARE_v3.8-1769aa?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/v3.8/CC2_V3_8_STOCK_20260915_052727_a28a8a16.zip.sig)                    | [![Download ELEGOO-Web v4.3.0](https://img.shields.io/badge/DOWNLOAD-ELEGOO--WEB_v4.3.0-238636?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.3.0/ELEGOO-Web-v4.3.0-Portable.zip) |
-|                                                         **[Download firmware (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/v3.8/CC2_V3_8_STOCK_20260915_052727_a28a8a16.zip.sig)**                                                        |                                          **[Download portable app (.zip)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.3.0/ELEGOO-Web-v4.3.0-Portable.zip)**                                          |
+|                    [![Download firmware v3.8](https://img.shields.io/badge/DOWNLOAD-FIRMWARE_v3.8-1769aa?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/v3.8/CC2_V3_8_STOCK_20260915_052727_a28a8a16.zip.sig)                    | [![Download ELEGOO-Web v4.4.0](https://img.shields.io/badge/DOWNLOAD-ELEGOO--WEB_v4.3.0-238636?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.4.0/ELEGOO-Web-v4.4.0-Portable.zip) |
+|                                                         **[Download firmware (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/v3.8/CC2_V3_8_STOCK_20260915_052727_a28a8a16.zip.sig)**                                                        |                                          **[Download portable app (.zip)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.4.0/ELEGOO-Web-v4.4.0-Portable.zip)**                                          |
 |                                                                                                              Centauri Carbon 2 only · Base 02.01.00.00 · 123.9 MiB                                                                                                              |                                                                                                Windows 10/11 x64 · .NET Framework 4.8 · 5.1 MiB                                                                                                |
-| [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/v3.8) · [Installation](docs/INSTALL.md) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/v3.8/CC2_V3_8_STOCK_20260915_052727_a28a8a16.zip.sig.sha256.txt) |               [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/elegoo-web-v4.3.0) · [Setup](elegoo-web/README.md) · SHA-256: `898bd885647c6fbc9ab7aa52f91e2c2fd0c27215f3863dc4bdb6492310831a82`              |
+| [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/v3.8) · [Installation](docs/INSTALL.md) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/v3.8/CC2_V3_8_STOCK_20260915_052727_a28a8a16.zip.sig.sha256.txt) |               [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/elegoo-web-v4.4.0) · [Setup](elegoo-web/README.md) · SHA-256: `704ea08d745ecb16d193852382037a01f6f813b32a3e9422030d2b8fa8097d2f`              |
 
 **Firmware:** copy the downloaded `.zip.sig` unchanged to USB storage; do not extract it.
 **App:** extract the entire ZIP and run `ElegooWeb.exe`; no compilation required.
@@ -24,7 +24,7 @@ Firmware v3.8 is based on the verified ELEGOO **02.01.00.00** firmware and keeps
 
 ### Firmware features
 
-* Root SSH access.  **"Credentials User login: root pssword:MTY4ODE2"**
+* Root SSH access; consult the firmware installation documentation for access details.
 * Extended GUI Z-offset range.
 * Dual Trust v2: official ELEGOO packages remain accepted while community-signed updates can also be installed.
 * Local HTTP access on port 80 in both LAN-only and WAN/cloud modes.
@@ -37,25 +37,21 @@ The existing four-client video limit is unchanged in v3.8.
 
 Read the dedicated [firmware v3.8 documentation](docs/FIRMWARE_V3_8.md), [installation guide](docs/INSTALL.md), [build guide](docs/BUILD.md), and [test record](docs/TESTING.md).
 
-## ELEGOO-Web v4.3.0
+## ELEGOO-Web v4.4.0
 
-**The app is currently only available in Italian, but I will soon release a multilingual version.**
+ELEGOO-Web is a small portable Windows controller for the printer's local web interface. It starts a local server on the PC, stores the printer connection parameters, opens the UI, and provides a QR code for phones or tablets on the same LAN.
 
-ELEGOO-Web is a small portable Windows launcher for the printer's local web interface. It starts a local server on the PC, stores the printer connection parameters, opens the UI, and provides a QR code for phones or tablets on the same LAN.
+**Version 4.4.0 provides a complete Italian and English desktop interface.** Language switching is immediate and covers controls, status messages, printer discovery, errors, QR messages and configuration guidance. The selected language is also used by the printer Web UI and retained in `config.json`.
 
-**Important:** ELEGOO-Web communicates with the printer over the local network. It does not use a USB cable. USB media is used only for offline firmware installation.
-
-Version 4.2.0 replaced the previous Go/VBS/PowerShell launcher chain with a direct C# GUI.
-
-Version 4.3.0 adds the **RILEVA STAMPANTE** (Detect printer) function. After entering the printer IP address and Access Code, the application automatically retrieves:
+Automatic discovery introduced in v4.3.0 remains available. After entering the printer IP address and Access Code, the application retrieves:
 
 * serial number;
 * machine model;
 * hostname.
 
-Manual serial-number entry remains available as a fallback. Automatic discovery uses the printer's authenticated local `/system/info` service and does not require root, SSH, Python, WSL, administrator privileges, or a cloud connection.
+Manual serial-number entry remains available as a fallback. The application uses the printer's authenticated local `/system/info` service and does not require root, SSH, Python, WSL, administrator privileges, or a cloud connection.
 
-The portable package includes the compiled application; no compilation is required for normal use. Existing v4.2.0 configuration files remain compatible.
+The portable package includes the compiled C# application; no compilation is required for normal use. Existing v4.2.0 and v4.3.0 configuration files remain compatible. Do not share `config.json`, because it contains the printer Access Code in plain text.
 
 Read the separate [ELEGOO-Web README](elegoo-web/README.md).
 
@@ -63,7 +59,7 @@ Read the separate [ELEGOO-Web README](elegoo-web/README.md).
 
 * `cc2_builder_v3_8/` — v3.8 builder, patches, public keys, tools, and tests.
 * `launch_helpers_v3_8/` — Windows/WSL build launcher.
-* `elegoo-web/` — ELEGOO-Web documentation and source code.
+* `elegoo-web/` — ELEGOO-Web documentation and versioned C# source code, including v4.4.0.
 * `docs/` — installation, build, firmware, and validation documentation.
 * `releases/` — release notes and publication records.
 

@@ -8,7 +8,7 @@ if not exist "%ELEGOO_CSC%" (
  pause
  exit /b 1
 )
-"%ELEGOO_CSC%" /nologo /target:winexe /platform:anycpu /optimize+ /win32manifest:source-v4.2\app.manifest /win32icon:favicon.ico /out:ElegooWeb.new.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll source-v4.2\ElegooWeb.cs source-v4.2\NetworkProbe.cs
+"%ELEGOO_CSC%" /nologo /target:winexe /platform:anycpu /optimize+ /win32manifest:source\app.manifest /win32icon:favicon.ico /out:ElegooWeb.new.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll source\ElegooWeb.cs source\NetworkProbe.cs
 if errorlevel 1 (
  echo Compilazione fallita. Invia il messaggio di errore.
  pause
