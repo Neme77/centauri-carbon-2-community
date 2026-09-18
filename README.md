@@ -39,6 +39,19 @@ See [CC2 Control documentation](docs/CC2_CONTROL.md), the
 
 Previous firmware: [v3.8 release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/v3.8).
 
+### Builder and source packages
+
+[![Download CC2 Builder v3.9](https://img.shields.io/badge/DOWNLOAD-CC2_BUILDER_v3.9-8250df?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_BUILDER_V3_9_UPDATE_v1.1.14.zip)
+
+[![Download CC2 Control source](https://img.shields.io/badge/DOWNLOAD-CC2_CONTROL_1.1.14_SOURCE-2ea44f?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2-Control-v1.1.14-Source.zip)
+
+- **CC2 Builder v3.9:** `CC2_BUILDER_V3_9_UPDATE_v1.1.14.zip`  
+  SHA-256: `448d7ca50db4b79147b836033a184a5c322f99458eb93f4beda09d9daff57123`
+- **CC2 Control source:** `CC2-Control-v1.1.14-Source.zip`  
+  SHA-256: `2bfb0e31255bb151fe80f9e5a98240568bd3e1389e98c95ab5c0c3b71e3fc31b`
+
+Private signing keys, the firmware AES key and printer credentials are intentionally excluded.
+
 [Browse all releases](https://github.com/Neme77/centauri-carbon-2-community/releases)
 
 ## Firmware v3.8
