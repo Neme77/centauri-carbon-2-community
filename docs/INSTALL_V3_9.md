@@ -17,18 +17,18 @@ Do not install this package on the original Centauri Carbon or any other printer
 PowerShell verification:
 
 ```powershell
-Get-FileHash .\CC2_V3_9_STOCK_20260919_124557_53d24c5b.zip.sig -Algorithm SHA256
+Get-FileHash .\CC2_V3_9_STOCK_20260919_172158_4f40c471.zip.sig -Algorithm SHA256
 ```
 
 Expected SHA-256:
 
 ```text
-bb00f52bfc347093aa17eb8f7be5601d86399d6484f252a3cda0caa72811a6a5
+332af63c3eb5fbfb3e252aa2941c96fc6f152bb35b23810ea72666b7b7a09e64
 ```
 
 ## Installation
 
-1. Copy `CC2_V3_9_STOCK_20260919_124557_53d24c5b.zip.sig` unchanged to USB storage.
+1. Copy `CC2_V3_9_STOCK_20260919_172158_4f40c471.zip.sig` unchanged to USB storage.
 2. Do not extract, rename or modify the package.
 3. Insert the USB drive and start the update from the printer interface.
 4. Do not remove power while the package is being verified, written or booted.
@@ -69,7 +69,7 @@ wget -qO- http://127.0.0.1:8081/api/canvas
 
 Expected health indicators:
 
-- `version` is `1.1.16`;
+- `version` is `1.1.17`;
 - `mqtt_connected` is `true`;
 - `mqtt_registered` is `true`;
 - `snapshot_received` is `true`;
