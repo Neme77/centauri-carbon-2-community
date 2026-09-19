@@ -1,8 +1,6 @@
-# CC2 Control 1.1.14
+# CC2 Control 1.1.16
 
-CC2 Control is a lightweight local control service integrated into Centauri
-Carbon 2 Community Firmware v3.9. It runs directly on the printer and serves a
-dependency-free web interface on TCP port 8081.
+CC2 Control is a lightweight local control platform integrated into Centauri Carbon 2 Community Firmware v3.9. It runs directly on the printer and serves a dependency-free web interface on TCP port 8081.
 
 Open:
 
@@ -14,11 +12,9 @@ http://PRINTER-IP:8081
 
 ![Dashboard overview](images/v3.9/dashboard-overview.jpg)
 
-The dashboard combines the live camera, printer status, current job, time,
-temperatures, short browser-side thermal history, fans, position, hardware
-state, system memory, uptime, load and MQTT message count.
+The dashboard combines the live camera, printer and job status, temperatures, high-DPI browser-side thermal history, fan speeds, position, hardware state, available memory, uptime, system load and MQTT message count.
 
-## Protected controls
+## Protected printer controls
 
 ![Printer controls](images/v3.9/printer-controls.jpg)
 
@@ -26,108 +22,71 @@ Available controls include:
 
 - protected jogging and homing;
 - live session Z-offset adjustment;
-- nozzle and bed targets;
-- part, auxiliary and case fans;
+- nozzle and bed temperature targets;
+- part, auxiliary and enclosure fan control;
 - pause, resume and cancel;
-- light, speed and flow controls;
-- safe manual extrusion and retraction;
-- motors off, all off and emergency stop.
+- light, print speed and flow controls;
+- manual retract and extrude;
+- motor, heater and emergency-stop actions.
 
-Backend validation checks ranges, printer state and required homing before a
-command is generated. Potentially dangerous operations require confirmation.
+Safety checks reject inappropriate commands while the printer is busy. The protected console permits selected diagnostic and calibration commands without exposing an unrestricted shell through the browser.
 
-## Materials and calibration
+## Persistent material presets
 
-![Materials and guided calibration](images/v3.9/materials-and-calibrations.jpg)
+![Materials and calibrations](images/v3.9/materials-and-calibrations.jpg)
 
-PLA, PETG, ABS, ASA, TPU and PA-CF presets are included. Users can add or update
-safe custom names such as PLA+, ASA-CF or PA-CF. Presets are stored on the
-printer in `/opt/usr/cc2-control/material-presets.json` and are therefore
-available to every browser.
+PLA, PETG, ABS, ASA, TPU and PA-CF presets are supplied by default. Users can add, edit and delete arbitrary material names and temperatures. Custom presets are stored on the printer under `/opt/usr` and remain available from every browser and across A/B firmware updates.
 
-Guided controls are included for nozzle PID, bed PID, input shaper and bed mesh.
-
-## Protected console
-
-![Protected console](images/v3.9/protected-console.jpg)
-
-The console is not an unrestricted shell or arbitrary G-code endpoint. It uses
-an allowlist, blocks multiline input, restricts calibration while printing and
-does not expose low-level firmware restart or automatic `SAVE_CONFIG` actions.
-
-## Bed Mesh 2D
+## Bed Mesh 2D and 3D
 
 ![Bed Mesh heatmap](images/v3.9/bed-mesh-2d-overview.jpg)
 
-![Bed Mesh table](images/v3.9/bed-mesh-2d-table.jpg)
+![Bed Mesh values](images/v3.9/bed-mesh-2d-table.jpg)
 
-CC2 Control reads the current Klipper bed mesh through the printer's protected
-local UDS interface. The 11×11 result is rendered as summary statistics, a
-colour heatmap and a complete numerical table.
+The Bed Mesh view displays all 121 points of the printer's 11×11 mesh, including minimum, maximum, range and average values.
 
-## Bed Mesh 3D
+![Interactive Bed Mesh surface](images/v3.9/bed-mesh-3d-overview.jpg)
 
-![Interactive Bed Mesh](images/v3.9/bed-mesh-3d-overview.jpg)
+![3D mesh detail](images/v3.9/bed-mesh-3d-detail.jpg)
 
-![Bed Mesh Cartesian reference](images/v3.9/bed-mesh-3d-detail.jpg)
-
-The browser renders the same mesh as an interactive surface with drag rotation,
-wheel or pinch zoom and adjustable Z exaggeration. The ideal Z=0 plate,
-Cartesian X/Y/Z axes and vertical displacement stems provide a real spatial
-reference without adding a continuous animation loop to the printer.
+The browser-rendered 3D surface can be rotated and zoomed. Real X/Y/Z references, an ideal Z=0 plane and adjustable Z exaggeration make displacement relative to a flat build plate easy to understand. Rendering is performed in the browser and does not add meaningful load to the printer.
 
 ## ELEGOO Canvas
 
 ![Four-slot Canvas control](images/v3.9/canvas-four-slot-control.jpg)
 
-Canvas is discovered through the printer's native MQTT method 2005. The latest
-four-tray state is retained independently from normal temperature updates.
-CC2 Control displays material, colour, brand, nozzle range, active tray and
-module state. Protected controls support slot selection, load, unload and
-material metadata changes while the printer is idle.
+CC2 Control detects Canvas through the printer's native MQTT method 2005. It displays all four physical slots, active tray, colour, material, brand and temperature range. Protected controls support load, unload and material editing.
 
-Cold-boot discovery retries automatically and stops after valid `canvas_info`
-telemetry is received.
+Canvas discovery starts automatically at boot, retries through the printer's hardware initialization sequence, stops after a valid response and restarts after an MQTT reconnection.
+
+## G-code library and printing
+
+The G-code tab lists printable files from internal memory and USB storage, including files inside USB folders. Before a print starts, CC2 Control inspects tool usage and opens a spool-mapping dialog for assigning each G-code tool to one of the four Canvas trays.
+
+The printer does not reliably accept direct public MQTT starts using `storage_media:"u-disk"`. Version 1.1.16 therefore reproduces the touchscreen preparation workflow safely: it validates the USB path, atomically imports the selected file into internal storage and submits the proven local method 1020 request. The original USB file is not modified.
+
+## Guided calibrations and console
+
+![Protected console](images/v3.9/protected-console.jpg)
+
+Guided actions are provided for nozzle PID, bed PID, input shaper and bed-mesh calibration. Calibration commands require an idle printer and results are not saved automatically unless explicitly requested through the supported workflow.
 
 ## First-run setup
 
-Version 1.1.14 adds a browser-based first-run flow. It appears only when the
-service starts without complete MQTT credentials. The access code is written
-atomically with file mode `600`; after successful printer registration the
-setup endpoint locks. The SSH command `cc2-configure` remains available as a
-recovery path.
+A clean installation opens a browser configurator at `http://PRINTER-IP:8081`. Existing credentials and presets stored under `/opt/usr` survive normal A/B firmware updates.
 
-## Persistent and firmware-owned paths
+> **Mandatory first reboot:** after completing the first-run configuration, perform one complete printer reboot. Wait 30–60 seconds before reopening CC2 Control. This allows Canvas to synchronize correctly with both CC2 Control and the original touchscreen interface.
 
-Firmware-owned application:
+## Runtime and resource use
 
-```text
-/opt/inst/cc2-control
+CC2 Control is a single statically linked ARM process managed by `procd`. Hardware validation measured approximately 560 KiB resident memory, one thread and negligible idle CPU use. The installed directory occupies roughly 1.6 MiB.
+
+## Health checks
+
+```sh
+wget -qO- http://127.0.0.1:8081/api/health
+wget -qO- http://127.0.0.1:8081/api/setup
+wget -qO- http://127.0.0.1:8081/api/canvas
 ```
 
-Persistent private state:
-
-```text
-/opt/usr/cc2-control/cc2-control.conf
-/opt/usr/cc2-control/material-presets.json
-```
-
-## Local API
-
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/health` | Service version, resources and MQTT state |
-| `GET /api/setup` | First-run state without returning credentials |
-| `POST /api/setup` | First-run access-code configuration |
-| `GET /api/printer` | Accumulated printer telemetry |
-| `GET /api/canvas` | Retained Canvas telemetry |
-| `POST /api/canvas/refresh` | Request Canvas method 2005 state |
-| `GET /api/material-presets` | Printer-persistent presets |
-| `PUT /api/material-presets` | Validate and save presets |
-| `GET /api/mesh` | Current protected bed-mesh query |
-| `GET /api/console` | Protected console status and output |
-| `POST /api/console/command` | Submit one allowlisted command |
-| `POST /api/control` | Submit one structured dashboard action |
-
-These APIs also provide a practical path for future Home Assistant integration.
-
+A healthy configured system reports version `1.1.16`, `mqtt_connected:true`, `mqtt_registered:true` and `snapshot_received:true`.
