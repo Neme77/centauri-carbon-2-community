@@ -1,4 +1,4 @@
-# CC2 Control 1.1.16
+# CC2 Control 1.1.17
 
 CC2 Control is a lightweight local control platform integrated into Centauri Carbon 2 Community Firmware v3.9. It runs directly on the printer and serves a dependency-free web interface on TCP port 8081.
 
@@ -63,13 +63,21 @@ Canvas discovery starts automatically at boot, retries through the printer's har
 
 The G-code tab lists printable files from internal memory and USB storage, including files inside USB folders. Before a print starts, CC2 Control inspects tool usage and opens a spool-mapping dialog for assigning each G-code tool to one of the four Canvas trays.
 
-The printer does not reliably accept direct public MQTT starts using `storage_media:"u-disk"`. Version 1.1.16 therefore reproduces the touchscreen preparation workflow safely: it validates the USB path, atomically imports the selected file into internal storage and submits the proven local method 1020 request. The original USB file is not modified.
+The printer does not reliably accept direct public MQTT starts using `storage_media:"u-disk"`. Version 1.1.17 therefore reproduces the touchscreen preparation workflow safely: it validates the USB path, atomically imports the selected file into internal storage and submits the proven local method 1020 request. The original USB file is not modified.
 
 ## Guided calibrations and console
 
 ![Protected console](images/v3.9/protected-console.jpg)
 
 Guided actions are provided for nozzle PID, bed PID, input shaper and bed-mesh calibration. Calibration commands require an idle printer and results are not saved automatically unless explicitly requested through the supported workflow.
+
+## Version 1.1.17 calibration fix
+
+Version 1.1.17 keeps the protected console responsive after long resonance and
+bed-mesh calibrations. It retains up to 256 KiB of output, recognises completion
+markers even when JSON data is split across reads, and safely releases a saturated
+calibration stream after ten seconds without new reports. The calibration itself is
+not cancelled.
 
 ## First-run setup
 
@@ -89,4 +97,4 @@ wget -qO- http://127.0.0.1:8081/api/setup
 wget -qO- http://127.0.0.1:8081/api/canvas
 ```
 
-A healthy configured system reports version `1.1.16`, `mqtt_connected:true`, `mqtt_registered:true` and `snapshot_received:true`.
+A healthy configured system reports version `1.1.17`, `mqtt_connected:true`, `mqtt_registered:true` and `snapshot_received:true`.
