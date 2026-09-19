@@ -10,7 +10,7 @@ Independent community project maintained by **Neme77** for the ELEGOO Centauri C
 ## Community Firmware v3.9
 
 
-Firmware v3.9 integrates **CC2 Control 1.1.16**, a lightweight on-printer web
+Firmware v3.9 integrates **CC2 Control 1.1.17**, a lightweight on-printer web
 dashboard available at `http://PRINTER-IP:8081`.
 
 
@@ -39,10 +39,10 @@ See [CC2 Control documentation](docs/CC2_CONTROL.md), the
 
 | **FIRMWARE v3.9** | **ELEGOO-WEB v4.4.0** |
 | :---: | :---: |
-| [![Download firmware v3.9](https://img.shields.io/badge/DOWNLOAD-FIRMWARE_v3.9-1769aa?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_V3_9_STOCK_20260919_124557_53d24c5b.zip.sig) | [![Download ELEGOO-Web v4.4.0](https://img.shields.io/badge/DOWNLOAD-ELEGOO--WEB_v4.4.0-238636?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.4.0/ELEGOO-Web-v4.4.0-Portable.zip) |
-| **[Download firmware (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_V3_9_STOCK_20260919_124557_53d24c5b.zip.sig)** | **[Download portable app (.zip)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.4.0/ELEGOO-Web-v4.4.0-Portable.zip)** |
-| Centauri Carbon 2 only · Base 02.01.00.00 · 124.13 MiB · CC2 Control 1.1.16 | Windows 10/11 x64 · .NET Framework 4.8 · 5.1 MiB |
-| [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V3.9) · [Installation](docs/INSTALL_V3_9.md) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_V3_9_STOCK_20260919_124557_53d24c5b.zip.sig.sha256.txt) | [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/elegoo-web-v4.4.0) · [Setup](elegoo-web/README.md) · SHA-256: `704ea08d745ecb16d193852382037a01f6f813b32a3e9422030d2b8fa8097d2f` |
+| [![Download firmware v3.9](https://img.shields.io/badge/DOWNLOAD-FIRMWARE_v3.9-1769aa?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_V3_9_STOCK_20260919_172158_4f40c471.zip.sig) | [![Download ELEGOO-Web v4.4.0](https://img.shields.io/badge/DOWNLOAD-ELEGOO--WEB_v4.4.0-238636?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.4.0/ELEGOO-Web-v4.4.0-Portable.zip) |
+| **[Download firmware (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_V3_9_STOCK_20260919_172158_4f40c471.zip.sig)** | **[Download portable app (.zip)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/elegoo-web-v4.4.0/ELEGOO-Web-v4.4.0-Portable.zip)** |
+| Centauri Carbon 2 only · Base 02.01.00.00 · 124.13 MiB · CC2 Control 1.1.17 | Windows 10/11 x64 · .NET Framework 4.8 · 5.1 MiB |
+| [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V3.9) · [Installation](docs/INSTALL_V3_9.md) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_V3_9_STOCK_20260919_172158_4f40c471.zip.sig.sha256.txt) | [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/elegoo-web-v4.4.0) · [Setup](elegoo-web/README.md) · SHA-256: `704ea08d745ecb16d193852382037a01f6f813b32a3e9422030d2b8fa8097d2f` |
 
 
 **Firmware:** copy the downloaded `.zip.sig` unchanged to USB storage; do not extract it.
@@ -55,10 +55,23 @@ Previous firmware: [v3.8 release](https://github.com/Neme77/centauri-carbon-2-co
 ### Builder and source packages
 
 
-[![Download CC2 Builder v3.9](https://img.shields.io/badge/DOWNLOAD-CC2_BUILDER_v3.9-8250df?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_BUILDER_V3_9_UPDATE_v1.1.16.zip)
+[![Download CC2 Builder v3.9](https://img.shields.io/badge/DOWNLOAD-CC2_BUILDER_v3.9-8250df?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2_BUILDER_V3_9_UPDATE_v1.1.17.zip)
 
 
-[![Download CC2 Control source](https://img.shields.io/badge/DOWNLOAD-CC2_CONTROL_1.1.16_SOURCE-2ea44f?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2-Control-v1.1.16-Source.zip)
+[![Download CC2 Control source](https://img.shields.io/badge/DOWNLOAD-CC2_CONTROL_1.1.17_SOURCE-2ea44f?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2-Control-v1.1.17-Source.zip)
 
 
-- **CC2 Builder v3.9:** `CC2_BUILDER_V3_9_UPDATE_v1.1.16.zip`  
+- **CC2 Builder v3.9:** `CC2_BUILDER_V3_9_UPDATE_v1.1.17.zip`  
+
+
+### CC2 Control 1.1.17 hotfix
+
+Already running Firmware v3.9? Download the
+[Windows one-click hotfix installer](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V3.9/CC2-Control-v1.1.17-Hotfix-Installer.zip).
+It fixes console completion after long resonance and bed-mesh calibrations without
+requiring a complete firmware reinstall.
+
+- **Firmware SHA-256:** `332af63c3eb5fbfb3e252aa2941c96fc6f152bb35b23810ea72666b7b7a09e64`
+- **Hotfix SHA-256:** `34c0ee4581be016243fe222bf34a9c3f2ad98a37513104d164ec0ec475a047a5`
+- **Builder SHA-256:** `6b83d5e6be1acfe34bb496d106db437f22c896ed2f9878aa5f55a357422d4037`
+- **Source SHA-256:** `df2fc5c4d45273901efb3f8c3782b47ef81d08db15a22b6463ec48ebae5a212a`
