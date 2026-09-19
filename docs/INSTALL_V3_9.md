@@ -2,171 +2,91 @@
 
 ## Scope
 
-This guide applies only to the **ELEGOO Centauri Carbon 2** and to the v3.9
-community firmware built and tested against ELEGOO firmware 02.01.00.00.
+This guide applies only to the **ELEGOO Centauri Carbon 2** and to Community Firmware v3.9 built and tested against official ELEGOO firmware **02.01.00.00**.
 
-Do not use this package on the original Centauri Carbon or another printer.
+Do not install this package on the original Centauri Carbon or any other printer model.
 
 ## Before installing
 
-- Finish or cancel any active print.
-- Remove filament operations and allow heaters to cool.
-- Keep the printer connected to reliable power.
-- Save the official recovery firmware and the previous known-good community release.
+- Finish or cancel any active print and allow the heaters to cool.
+- Keep the printer connected to reliable power throughout the update.
+- Keep the official recovery firmware and the previous known-good community release available.
 - Record the printer IP address and LAN access code.
-- Verify that the downloaded firmware name and SHA-256 match the release page.
+- Verify the firmware filename and SHA-256 against the release page.
 
-PowerShell checksum command:
+PowerShell verification:
 
 ```powershell
-Get-FileHash .\CC2_V3_9_STOCK_20260918_190118_8f964542.zip.sig -Algorithm SHA256
+Get-FileHash .\CC2_V3_9_STOCK_20260919_124557_53d24c5b.zip.sig -Algorithm SHA256
 ```
 
-Expected value:
+Expected SHA-256:
 
 ```text
-f23de6c835f863ba3cc93ab98b9be6dc90fc6c8f7a6aa17ad5624ca48120a6c5
+bb00f52bfc347093aa17eb8f7be5601d86399d6484f252a3cda0caa72811a6a5
 ```
 
-## Install from USB
+## Installation
 
-1. Copy `CC2_V3_9_STOCK_20260918_190118_8f964542.zip.sig` to the USB drive without extracting or renaming it.
-2. Insert the drive while the printer is idle.
-3. Start the update from the printer's local update interface.
-4. Do not remove USB storage or interrupt power while the update is being written.
-5. Allow the printer to reboot and finish its complete hardware initialisation.
+1. Copy `CC2_V3_9_STOCK_20260919_124557_53d24c5b.zip.sig` unchanged to USB storage.
+2. Do not extract, rename or modify the package.
+3. Insert the USB drive and start the update from the printer interface.
+4. Do not remove power while the package is being verified, written or booted.
+5. Allow the first boot to finish completely and wait until the normal printer menus are available.
 
-The CC2 uses A/B root filesystems. The update is written to the inactive slot;
-persistent user data remains under `/opt/usr`.
+The printer uses A/B system partitions. The update writes the inactive system slot and the new slot becomes active after reboot. Persistent user data under `/opt/usr` is separate from the firmware system image.
 
-## Configure CC2 Control
+## First-run CC2 Control setup
 
-Wait 60–90 seconds after the first boot, then open:
+Open:
 
 ```text
 http://PRINTER-IP:8081
 ```
 
-On a clean installation, the first-run page asks for the LAN access code shown
-by the printer. The browser sends it directly to CC2 Control using a local POST
-request. It is written only to:
+On a clean installation, follow the browser configurator and enter the local printer/MQTT credentials requested by the page. Credentials remain on the printer and are not included in the public firmware.
 
-```text
-/opt/usr/cc2-control/cc2-control.conf
-```
+Existing CC2 Control configuration and custom material presets under `/opt/usr` are preserved during normal A/B upgrades.
 
-The file is protected with mode `600`. The code is not placed in the URL,
-returned by the API or stored in browser local storage. After successful MQTT
-registration, the first-run endpoint locks automatically.
+## Mandatory reboot after setup
 
-If an existing valid configuration is found, the dashboard opens immediately.
+> After completing the first-run browser configuration, perform one complete printer reboot—even if Canvas already appears on the touchscreen or dashboard.
 
-### SSH recovery setup
+During a cold boot, Canvas may transition from red to white, briefly flash red while the printer services initialize, and finally return to white. CC2 Control retries discovery during this sequence. The additional complete reboot ensures that Canvas is synchronized with both CC2 Control and the original touchscreen interface.
 
-If browser setup cannot be completed, connect through SSH and run:
+After the reboot, wait 30–60 seconds before opening the dashboard.
 
-```sh
-cc2-configure
-```
+## Validation
 
-## Required post-install reboot
-
-> **Do not skip this step on a clean installation.**
-
-After completing first-run configuration, perform one complete reboot of the
-printer. During real-hardware validation, CC2 Control could already see Canvas
-after the firmware update while the original printer UI had not yet refreshed
-its Canvas menus. A normal reboot synchronised both interfaces, after which
-Canvas remained available in both.
-
-Wait another 60–90 seconds after reboot before testing the dashboard.
-
-## Verification
-
-Through SSH:
+From SSH:
 
 ```sh
 pidof cc2-control
-
-PID=$(pidof cc2-control)
-readlink /proc/$PID/exe
-
 wget -qO- http://127.0.0.1:8081/api/health
 wget -qO- http://127.0.0.1:8081/api/setup
 wget -qO- http://127.0.0.1:8081/api/canvas
-
-ls -l /opt/usr/cc2-control/cc2-control.conf
 ```
 
-Expected executable:
+Expected health indicators:
 
-```text
-/opt/inst/cc2-control/cc2-control
-```
+- `version` is `1.1.16`;
+- `mqtt_connected` is `true`;
+- `mqtt_registered` is `true`;
+- `snapshot_received` is `true`;
+- Canvas reports `available:true` when the module is connected.
 
-Expected health fields:
+Then verify from the browser:
 
-```json
-{
-  "service": "cc2-control",
-  "version": "1.1.14",
-  "mqtt_connected": true,
-  "mqtt_registered": true,
-  "snapshot_received": true
-}
-```
+1. live dashboard and camera;
+2. temperature chart remains a fixed height;
+3. Canvas shows all four trays;
+4. internal-memory printing starts with the selected spool mapping;
+5. USB printing works from both the drive root and a nested folder.
 
-Expected setup state:
+## Recovery and rollback
 
-```json
-{
-  "required": false,
-  "configured": true,
-  "mqtt_connected": true,
-  "mqtt_registered": true,
-  "snapshot_received": true
-}
-```
+Keep the official 02.01.00.00 recovery package available. If the new slot cannot boot, use the printer's documented recovery/update procedure or return to the previously verified A/B slot. Do not interrupt power during recovery.
 
-With a connected Canvas, `/api/canvas` should report `"available":true` and four trays.
+## Warning
 
-## Updating an existing installation
-
-The following files are persistent and are not embedded or overwritten by the
-root filesystem image:
-
-```text
-/opt/usr/cc2-control/cc2-control.conf
-/opt/usr/cc2-control/material-presets.json
-```
-
-The firmware-provided application and web interface are installed under:
-
-```text
-/opt/inst/cc2-control
-```
-
-## Network safety
-
-CC2 Control is intended for a trusted local network. Its protected console
-restricts printer commands, but port 8081 is not a public multi-user login
-service. Do not forward it directly from a router. Use a VPN or an authenticated
-reverse proxy for remote access.
-
-## Recovery
-
-If the printer does not complete a normal boot, stop and use the official
-recovery process or the previous known-good firmware. Do not repeatedly power
-cycle while an update is actively being written.
-
-If only CC2 Control requires recovery:
-
-```sh
-/etc/init.d/cc2-control restart
-```
-
-Reconfigure only when necessary:
-
-```sh
-cc2-configure
-```
+Modified firmware can damage or disable a printer. Installation is entirely at the user's risk and no warranty is provided.
