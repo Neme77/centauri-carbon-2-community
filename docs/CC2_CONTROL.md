@@ -1,95 +1,66 @@
-# CC2 Control 1.1.17
+# CC2 Control 1.1.22
 
-CC2 Control is a lightweight local control platform integrated into Centauri Carbon 2 Community Firmware v3.9. It runs directly on the printer and serves a dependency-free web interface on TCP port 8081.
+CC2 Control is a lightweight local control platform integrated into Centauri Carbon 2 Community Firmware V4.0. It runs directly on the printer and serves a dependency-free web interface on TCP port 8081.
 
-Open:
+Open `http://PRINTER-IP:8081`. A clean installation starts with a browser configurator that requests the printer LAN access code. Credentials remain on the printer.
 
-```text
-http://PRINTER-IP:8081
-```
+## Dashboard and protected controls
 
-## Dashboard
+The dashboard combines the live camera, print state and progress, temperatures, browser-rendered thermal history, fan speeds, position, hardware state, memory, uptime, load, and MQTT status.
 
-![Dashboard overview](images/v3.9/dashboard-overview.jpg)
+Protected actions include jogging and homing, live Z-offset adjustment, temperature and fan targets, pause/resume/cancel, light, speed, flow, extrusion, motors, heaters, and emergency stop. State checks reject inappropriate actions while the printer is busy.
 
-The dashboard combines the live camera, printer and job status, temperatures, high-DPI browser-side thermal history, fan speeds, position, hardware state, available memory, uptime, system load and MQTT message count.
+## Four-screw load-cell bed tramming
 
-## Protected printer controls
+The guided screw measurement probes directly above the four bed screws:
 
-![Printer controls](images/v3.9/printer-controls.jpg)
+| Screw | Coordinate | Role |
+| --- | --- | --- |
+| Front left | X35 Y30 | Reference |
+| Front right | X225 Y30 | Relative correction |
+| Rear right | X225 Y225 | Relative correction |
+| Rear left | X35 Y225 | Relative correction |
 
-Available controls include:
-
-- protected jogging and homing;
-- live session Z-offset adjustment;
-- nozzle and bed temperature targets;
-- part, auxiliary and enclosure fan control;
-- pause, resume and cancel;
-- light, print speed and flow controls;
-- manual retract and extrude;
-- motor, heater and emergency-stop actions.
-
-Safety checks reject inappropriate commands while the printer is busy. The protected console permits selected diagnostic and calibration commands without exposing an unrestricted shell through the browser.
-
-## Persistent material presets
-
-![Materials and calibrations](images/v3.9/materials-and-calibrations.jpg)
-
-PLA, PETG, ABS, ASA, TPU and PA-CF presets are supplied by default. Users can add, edit and delete arbitrary material names and temperatures. Custom presets are stored on the printer under `/opt/usr` and remain available from every browser and across A/B firmware updates.
+Each point uses three load-cell probe samples. CC2 Control homes the printer first, requires the printer to be idle, and reports each screw's difference from the front-left reference with raise/lower guidance. It does not run `SAVE_CONFIG` or alter the stored Bed Mesh.
 
 ## Bed Mesh 2D and 3D
 
-![Bed Mesh heatmap](images/v3.9/bed-mesh-2d-overview.jpg)
+The Bed Mesh view displays the printer's full 11×11 mesh with minimum, maximum, range, average, a 2D value map, and an interactive 3D surface. V4.0 corrects the X-axis orientation. Screw-measurement output is captured separately and can no longer replace valid mesh geometry with four probe points.
 
-![Bed Mesh values](images/v3.9/bed-mesh-2d-table.jpg)
+## Object exclusion
 
-The Bed Mesh view displays all 121 points of the printer's 11×11 mesh, including minimum, maximum, range and average values.
+For labelled multi-object G-code, CC2 Control displays the detected print objects and can send Klipper `EXCLUDE_OBJECT` for a selected component. The action is protected by confirmation and is irreversible for the current print. Availability depends on object labels being present in the sliced G-code.
 
-![Interactive Bed Mesh surface](images/v3.9/bed-mesh-3d-overview.jpg)
+## Temporary expert terminal unlock
 
-![3D mesh detail](images/v3.9/bed-mesh-3d-detail.jpg)
+The console remains protected by default. Arbitrary G-code requires two warnings and the exact phrase `UNLOCK GCODE`. A random in-memory authorization token is then valid for five minutes and is never stored.
 
-The browser-rendered 3D surface can be rotated and zoomed. Real X/Y/Z references, an ideal Z=0 plane and adjustable Z exaggeration make displacement relative to a flat build plate easy to understand. Rendering is performed in the browser and does not add meaningful load to the printer.
+Expert commands are accepted only while the printer is idle. Movement commands (`G0`, `G1`, `G2`, and `G3`) are additionally rejected until X, Y, and Z have all been homed. Emergency and protected dashboard controls remain available independently.
 
-## ELEGOO Canvas
+> Expert mode can move hardware, heat components, or damage the printer. Review every command before sending it.
 
-![Four-slot Canvas control](images/v3.9/canvas-four-slot-control.jpg)
+## Panda Breath bridge
 
-CC2 Control detects Canvas through the printer's native MQTT method 2005. It displays all four physical slots, active tray, colour, material, brand and temperature range. Protected controls support load, unload and material editing.
+CC2 Control 1.1.22 exposes a deliberately limited Moonraker-compatible endpoint on TCP port 7125 for BTT Panda Breath. It supplies connection state, print state and progress, and nozzle/bed temperatures and targets over HTTP/WebSocket.
 
-Canvas discovery starts automatically at boot, retries through the printer's hardware initialization sequence, stops after a valid response and restarts after an MQTT reconnection.
+The bridge is read-only: it does not expose G-code execution, file operations, heater controls, or motion controls. It was hardware-tested with Panda Breath firmware 1.0.4. Configure Panda Breath with the printer IP and port `7125`; no separate Moonraker access code is required.
 
-## G-code library and printing
+Checks:
 
-The G-code tab lists printable files from internal memory and USB storage, including files inside USB folders. Before a print starts, CC2 Control inspects tool usage and opens a spool-mapping dialog for assigning each G-code tool to one of the four Canvas trays.
+```sh
+wget -qO- http://127.0.0.1:7125/server/info
+wget -qO- http://127.0.0.1:7125/printer/objects/list
+```
 
-The printer does not reliably accept direct public MQTT starts using `storage_media:"u-disk"`. Version 1.1.17 therefore reproduces the touchscreen preparation workflow safely: it validates the USB path, atomically imports the selected file into internal storage and submits the proven local method 1020 request. The original USB file is not modified.
+## Canvas, material presets, and G-code library
 
-## Guided calibrations and console
+CC2 Control retains native four-slot ELEGOO Canvas discovery and protected load, unload, material-editing, and spool-mapping workflows. User-defined material presets are stored under `/opt/usr`.
 
-![Protected console](images/v3.9/protected-console.jpg)
+The G-code library lists printable files from internal memory and USB storage, including nested folders. USB jobs are validated, atomically imported into internal storage, and started using the printer's proven native method 1020 workflow; the source file is not modified.
 
-Guided actions are provided for nozzle PID, bed PID, input shaper and bed-mesh calibration. Calibration commands require an idle printer and results are not saved automatically unless explicitly requested through the supported workflow.
+## Runtime and health checks
 
-## Version 1.1.17 calibration fix
-
-Version 1.1.17 keeps the protected console responsive after long resonance and
-bed-mesh calibrations. It retains up to 256 KiB of output, recognises completion
-markers even when JSON data is split across reads, and safely releases a saturated
-calibration stream after ten seconds without new reports. The calibration itself is
-not cancelled.
-
-## First-run setup
-
-A clean installation opens a browser configurator at `http://PRINTER-IP:8081`. Existing credentials and presets stored under `/opt/usr` survive normal A/B firmware updates.
-
-> **Mandatory first reboot:** after completing the first-run configuration, perform one complete printer reboot. Wait 30–60 seconds before reopening CC2 Control. This allows Canvas to synchronize correctly with both CC2 Control and the original touchscreen interface.
-
-## Runtime and resource use
-
-CC2 Control is a single statically linked ARM process managed by `procd`. Hardware validation measured approximately 560 KiB resident memory, one thread and negligible idle CPU use. The installed directory occupies roughly 1.6 MiB.
-
-## Health checks
+CC2 Control is a statically linked ARM process managed by `procd`. In Firmware V4.0, the integrated executable resides under `/opt/inst/cc2-control`, while persistent configuration and presets reside under `/opt/usr/cc2-control`.
 
 ```sh
 wget -qO- http://127.0.0.1:8081/api/health
@@ -97,4 +68,8 @@ wget -qO- http://127.0.0.1:8081/api/setup
 wget -qO- http://127.0.0.1:8081/api/canvas
 ```
 
-A healthy configured system reports version `1.1.17`, `mqtt_connected:true`, `mqtt_registered:true` and `snapshot_received:true`.
+A healthy configured system reports version `1.1.22`, `mqtt_connected:true`, `mqtt_registered:true`, and `snapshot_received:true`.
+
+## Acknowledgements
+
+Thanks to **Barry Green** for extensive remote hardware testing and feedback, including Panda Breath integration, object exclusion, and the four-screw calibration workflow.
