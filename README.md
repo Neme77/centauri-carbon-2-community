@@ -1,6 +1,6 @@
-# Centauri Carbon 2 Community
+# ELEGOO Centauri Carbon 2 Community Firmware
 
-Independent community project maintained by **Neme77** for the ELEGOO Centauri Carbon 2.
+Open-source community firmware, tools and documentation for the **ELEGOO Centauri Carbon 2 (CC2)**, maintained by **Neme77**. The project extends the stock platform while preserving the original ELEGOO ecosystem wherever possible.
 
 > This project is not affiliated with, endorsed by, or supported by ELEGOO.
 
