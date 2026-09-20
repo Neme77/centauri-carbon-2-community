@@ -29,6 +29,19 @@ See the [V4.0 feature documentation](docs/FIRMWARE_V4_0.md), [installation guide
 
 Copy the firmware `.zip.sig` unchanged to USB storage; do not extract or rename it.
 
+
+### Restore official ELEGOO firmware
+
+If you need to return the Centauri Carbon 2 to the original stock firmware, the verified base firmware used during Community Firmware development and recovery testing is **ELEGOO 02.01.00.00**.
+
+[![Restore official ELEGOO firmware 02.01.00.00](https://img.shields.io/badge/RESTORE-OFFICIAL_ELEGOO_02.01.00.00-d73a49?style=for-the-badge)](https://iot-p.elegoo.com.cn/devs/share/ota/fdm/209e2ccf-1bc7-48f2-8238-f4d0e18b98b3_1783510643046_cc2_eeb001_02.01.00.00_20260707170825.zip.sig)
+
+**[Download official ELEGOO firmware 02.01.00.00 directly from the ELEGOO OTA server](https://iot-p.elegoo.com.cn/devs/share/ota/fdm/209e2ccf-1bc7-48f2-8238-f4d0e18b98b3_1783510643046_cc2_eeb001_02.01.00.00_20260707170825.zip.sig)**
+
+This link points directly to ELEGOO's OTA server. The package is not hosted, modified, or maintained by this project. Community Firmware development has been validated through repeated **stock → community → stock → community** installation and recovery cycles using firmware 02.01.00.00.
+
+> **Note:** 02.01.00.00 is the verified stock recovery/base version for this project; it is not presented as ELEGOO's latest available firmware.
+
 ### Builder and source packages
 
 [![Download CC2 Builder V4.0](https://img.shields.io/badge/DOWNLOAD-CC2_BUILDER_V4.0-8250df?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.0/CC2_BUILDER_V4_0_UPDATE_v1.1.22_PANDA.zip)
