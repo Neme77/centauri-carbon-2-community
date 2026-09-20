@@ -16,6 +16,8 @@ The release retains live telemetry and camera, temperature history, protected co
 
 Hardware validation and testing contribution: **Barry Green**.
 
+For the project's technical background, architecture discoveries and implementation record, see [CC2 Research & Technical Findings](docs/CC2_RESEARCH.md).
+
 See the [V4.0 feature documentation](docs/FIRMWARE_V4_0.md), [installation guide](docs/INSTALL_V4_0.md), [CC2 Control documentation](docs/CC2_CONTROL.md), and [V4.0 release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.0).
 
 ## Downloads
