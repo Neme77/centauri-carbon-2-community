@@ -1,3 +1,28 @@
+# ELEGOO Centauri Carbon 2 Community Firmware
+
+Open-source community firmware, tools and documentation for the **ELEGOO Centauri Carbon 2 (CC2)**, maintained by **Neme77**. The project extends the stock platform while preserving the original ELEGOO ecosystem wherever possible.
+
+> This project is not affiliated with, endorsed by, or supported by ELEGOO.
+
+## Community Firmware V4.1
+
+> [!NOTE]
+> **R8 clean-install fix:** CC2 Control now waits for the persistent `/opt/usr` partition before creating its configuration directory. First-run LAN-code saving works correctly without the previous SSH workaround.
+
+Firmware **V4.1** is the largest CC2 Control integration update so far. It integrates **CC2 Control 1.1.25** directly into the firmware and makes the same interface available both from a normal browser and from the **OrcaSlicer Device tab** at:
+
+```text
+http://PRINTER-IP:8081
+```
+
+> [!IMPORTANT]
+> **Reboot the printer once after the firmware installation has completed.**  
+> This post-install reboot is required to fully initialize CC2 Control, Canvas state, the Panda/Moonraker-like service, and the printer-side background services before normal use.
+
+### V4.1 highlights
+
+- **CC2 Control 1.1.25** integrated into the firmware
+- Dashboard and controls available in a browser and inside **OrcaSlicer Device**
 - Live camera, temperatures, fans, printer state, current job, memory, uptime and service health
 - G-code file manager for internal storage and USB, with thumbnails and print launch
 - ELEGOO Canvas four-slot management and material presets
