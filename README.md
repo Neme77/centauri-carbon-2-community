@@ -31,6 +31,20 @@ SHA-256:
 
 [Release page](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.1.26) · [Direct download](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Multiplatform-Hotfix.zip) · [Step-by-step installation guide](docs/INSTALL_CC2_CONTROL_1_1_26.md) · [Full 1.1.26 changelog](releases/cc2-control-1.1.26.md)
 
+### Source code and reproducibility
+
+The complete **CC2 Control 1.1.26 source snapshot** is published with the release, including backend source, web UI, tests, scripts, configuration examples, tools and firmware-integration files.
+
+[![Download CC2 Control 1.1.26 source](https://img.shields.io/badge/DOWNLOAD-1.1.26_SOURCE-8250df?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Source.zip)
+
+Source SHA-256:
+
+```text
+e11200d256c81e3be2fac9d1ae91cf06af7cb51c178fbabec9b1a7ef6004556e
+```
+
+[Source package](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Source.zip) · [Source checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Source-SHA256.txt) · [Build and reproducibility guide](docs/BUILD.md) · [Source publication notes](docs/SOURCE.md)
+
 ## Community Firmware V4.1
 
 > [!NOTE]
