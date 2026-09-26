@@ -6,6 +6,11 @@ Open-source community firmware, tools and documentation for the **ELEGOO Centaur
 
 ## Community Firmware V4.1
 
+"Please note that there is a small bug in this release that can be fixed by connecting via ssh and running these commands:"
+mkdir -p /opt/usr/cc2-control
+chmod 755 /opt/usr/cc2-control
+reboot
+
 Firmware **V4.1** is the largest CC2 Control integration update so far. It integrates **CC2 Control 1.1.25** directly into the firmware and makes the same interface available both from a normal browser and from the **OrcaSlicer Device tab** at:
 
 ```text
