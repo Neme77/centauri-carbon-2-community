@@ -87,25 +87,20 @@ For the project's technical background, architecture discoveries and implementat
 
 ### Community Firmware V4.1
 
-Firmware file:
+| Firmware V4.1 | Builder V4.1 |
+| :---: | :---: |
+| [![Download Firmware V4.1](https://img.shields.io/badge/DOWNLOAD-FIRMWARE_V4.1-1769aa?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig) | [![Download Builder V4.1](https://img.shields.io/badge/DOWNLOAD-BUILDER_V4.1-8250df?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R7_RELEASE_FIXED.zip) |
+| **[Firmware (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig)** | **[Builder (.zip)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R7_RELEASE_FIXED.zip)** |
+| Centauri Carbon 2 only · Base 02.01.00.00 · CC2 Control 1.1.25 | Builder R7 · V4.1 integration package |
+| [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1) · [Installation](docs/INSTALL_V4_1.md) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig.sha256.txt) | [Checksums](SHA256SUMS_V4_1.txt) |
 
-```text
-CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig
-```
-
-SHA-256:
+Firmware SHA-256:
 
 ```text
 868814647d3835c193f0f0625e9037545a5a5128ee504ce74c62fbc4c4f41e19
 ```
 
 Copy the firmware `.zip.sig` unchanged to USB storage; **do not extract or rename it**.
-
-Builder package:
-
-```text
-CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R7_RELEASE_FIXED.zip
-```
 
 The firmware and builder are intended for the **Centauri Carbon 2 only** and are based on official ELEGOO firmware **02.01.00.00**.
 
