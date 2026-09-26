@@ -87,12 +87,12 @@ For the project's technical background, architecture discoveries and implementat
 
 ### Community Firmware V4.1
 
-| Firmware V4.1 | Builder V4.1 |
-| :---: | :---: |
-| [![Download Firmware V4.1](https://img.shields.io/badge/DOWNLOAD-FIRMWARE_V4.1-1769aa?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig) | [![Download Builder V4.1](https://img.shields.io/badge/DOWNLOAD-BUILDER_V4.1-8250df?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R7_RELEASE_FIXED.zip) |
-| **[Firmware (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig)** | **[Builder (.zip)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R7_RELEASE_FIXED.zip)** |
-| Centauri Carbon 2 only · Base 02.01.00.00 · CC2 Control 1.1.25 | Builder R7 · V4.1 integration package |
-| [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1) · [Installation](docs/INSTALL_V4_1.md) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig.sha256.txt) | [Checksums](SHA256SUMS_V4_1.txt) |
+| Firmware V4.1 | Builder V4.1 | CC2 Control source |
+| :---: | :---: | :---: |
+| [![Download Firmware V4.1](https://img.shields.io/badge/DOWNLOAD-FIRMWARE_V4.1-1769aa?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig) | [![Download Builder V4.1](https://img.shields.io/badge/DOWNLOAD-BUILDER_V4.1-8250df?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R7_RELEASE_FIXED.zip) | [![Download CC2 Control source](https://img.shields.io/badge/DOWNLOAD-CC2_CONTROL_SOURCE-2ea44f?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2-Control-v4.1.zip) |
+| **[Firmware (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig)** | **[Builder (.zip)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R7_RELEASE_FIXED.zip)** | **[CC2 Control source (.zip)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2-Control-v4.1.zip)** |
+| Centauri Carbon 2 only · Base 02.01.00.00 · CC2 Control 1.1.25 | Builder R7 · V4.1 integration package | CC2 Control 1.1.25 source + web UI + tests |
+| [Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1) · [Installation](docs/INSTALL_V4_1.md) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.1/CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig.sha256.txt) | [Checksums](SHA256SUMS_V4_1.txt) | SHA-256: `5ac04aa43f350ad7798566bfe8be64aae37f06fd0b73747bf65ee10666750b89` |
 
 Firmware SHA-256:
 
