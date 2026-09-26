@@ -1,7 +1,0 @@
-# Copy to /opt/usr/cc2-control/cc2-control.conf and run chmod 600 on it.
-mqtt_username=elegoo
-mqtt_password=REPLACE_WITH_PRINTER_ACCESS_CODE
-mqtt_topic=elegoo/+/api_status
-# Optional. When omitted, CC2 Control learns it from the first status event
-# and appends it to the private local configuration automatically.
-mqtt_serial=
