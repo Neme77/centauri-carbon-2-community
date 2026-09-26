@@ -1,67 +1,108 @@
-# Firmware v3.8 build guide
+# Reproducible build guide
 
-## Overview
+This repository is intended to keep the Community Firmware build process and CC2 Control source auditable and reproducible.
 
-The v3.8 builder uses the same trusted build environment and signing layout as v3.7. It verifies the official input, applies the source-controlled patches, verifies the v3.7 intermediate state, and installs the separately supplied tested v3.8 printer component.
+## Supported target
 
-The public repository is intentionally not a self-contained firmware distribution.
+- Printer: ELEGOO Centauri Carbon 2
+- Stock firmware base: 02.01.00.00
+- Community firmware: V4.1
+- Integrated CC2 Control baseline: 1.1.25
+- Current CC2 Control hotfix: 1.1.26
 
-## Required external material
+## Build environment
 
-The following files are not included:
+The validated environment is Windows 10/11 with Ubuntu under WSL.
 
-- legally obtained ELEGOO 02.01.00.00 stock firmware;
-- `keys/cc2_aes_key_v1.bin`;
-- the appropriate private signing key for the selected build mode;
-- the tested `components/printer/elegoo_printer_v3_8` reference;
-- `sshd` and the compiled `dual_verify.bin` from the established v3.7 build environment;
-- SquashFS Tools 4.6.1.
+Required tools inside Ubuntu:
 
-Never commit private keys, the AES key, credentials, build output, or vendor firmware to the repository.
-
-## Windows and WSL preparation
-
-The established environment uses `C:\CC2_BUILD` and Ubuntu under WSL.
-
-Place the v3.8 files beside the existing v3.7 environment, then run:
-
-```powershell
-cd C:\CC2_BUILD
-wsl -d Ubuntu -u root --exec python3 /mnt/c/CC2_BUILD/prepare_v3_8.py
+```sh
+sudo apt update
+sudo apt install python3 gcc-arm-linux-gnueabihf squashfs-tools make
 ```
 
-The preparation script copies only the verified reusable `sshd` and `dual_verify.bin` components. It does not copy or alter signing keys.
+SquashFS compatibility should be checked against the version expected by the builder before producing a release package.
 
-## Stock-signed build
+## External input
 
-Run every step separately and continue only after success:
+The firmware builder requires a legally obtained ELEGOO Centauri Carbon 2 stock firmware package.
 
-```powershell
-.\build_stock_v3_8.ps1 -CheckKey
-.\build_stock_v3_8.ps1 -Preflight
-.\build_stock_v3_8.ps1
+The project does not need to redistribute the stock firmware image in the source tree.
+
+The official ELEGOO Centauri Carbon 2 repository also contains the signing-tool material used by ELEGOO under:
+
+```text
+elegoo/lib/signtools/key/
 ```
 
-## Community-signed build
+This includes the public key, private key and AES key published by ELEGOO. They are not duplicated in this repository; obtain them from the official ELEGOO source when required by the selected build workflow.
 
-For an installation where the matching Dual Trust configuration is already active:
+Official repository:
 
-```powershell
-.\build_community_v3_8.ps1 -CheckKey
-.\build_community_v3_8.ps1 -Preflight
-.\build_community_v3_8.ps1
+https://github.com/elegooofficial/CentauriCarbon2
+
+## CC2 Control
+
+CC2 Control is built independently from the firmware image.
+
+From the CC2 Control source directory:
+
+```sh
+make clean
+make
 ```
 
-Output and logs are written under `output/` and `logs/` with names beginning with `CC2_V3_8_`.
+The expected output is:
 
-## Trust model
+```text
+build/cc2-control
+```
 
-Dual Trust v2 preserves the official ELEGOO trust path and adds the project's community public key. ELEGOO private keys are never distributed, embedded, or required by the community signing workflow.
+Verify the binary:
 
-The first Dual Trust installation must follow the established stock-trusted installation path. Later community updates require the matching community trust configuration to remain installed.
+```sh
+file build/cc2-control
+```
 
-## Reproducibility boundary
+It must be an ARM 32-bit EABI5 statically linked executable.
 
-The source tree contains the builder, patch descriptions, validation logic, public keys, and tests. The MQTT v1 intermediate source was not recovered, so the final tested printer executable cannot currently be reconstructed from this repository alone. This limitation is documented explicitly and the reference binary is pinned by hash.
+## Firmware build
 
-Some validation scripts require their external firmware inputs as command-line arguments. `test_dual_emulation.py` additionally requires the Python `unicorn` package, while `test_v38_reference.py` requires the excluded pinned printer reference.
+Use the V4.1 builder package/source and run preparation first. The stock-signed release workflow is:
+
+```powershell
+.\prepare_v4_1.ps1
+.\build_stock_v4_1.ps1 -CheckKey
+.\build_stock_v4_1.ps1 -Preflight
+.\build_stock_v4_1.ps1
+```
+
+Run each stage separately and continue only after the previous stage succeeds.
+
+The builder verifies the input package, assembles the filesystem overlay, integrates CC2 Control, rebuilds the firmware package and verifies the resulting signing/package chain.
+
+## Reproducibility
+
+For a release build, record:
+
+- input stock firmware filename and SHA-256;
+- builder commit/tag;
+- CC2 Control commit/tag;
+- compiler/tool versions;
+- generated firmware SHA-256;
+- generated RootFS, SWU and signature hashes when available.
+
+The published V4.1 release contains the release firmware, checksum and builder package. Source-controlled build logic should remain in this repository; release assets are distribution artifacts, not the canonical source.
+
+## Clean-room rule
+
+Do not commit:
+
+- personal printer credentials;
+- LAN access codes;
+- generated firmware images;
+- local build output;
+- private configuration files;
+- third-party binaries unless their redistribution terms are known and documented.
+
+Vendor material should be referenced from its authoritative source whenever possible.
