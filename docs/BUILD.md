@@ -92,7 +92,9 @@ For a release build, record:
 - generated firmware SHA-256;
 - generated RootFS, SWU and signature hashes when available.
 
-The published V4.1 release contains the release firmware, checksum and builder package. Source-controlled build logic should remain in this repository; release assets are distribution artifacts, not the canonical source.
+The published V4.1 release contains the release firmware, checksum and the validated R8 builder package. The CC2 Control 1.1.26 release contains a complete source snapshot with backend source, web UI, tests, scripts, tools and firmware-integration files.
+
+For the currently published 1.1.26 snapshot, the release source archive is the versioned source artifact and is pinned by SHA-256. The repository documentation describes how to rebuild and verify it. Future development should keep the browsable source tree and release source snapshot in sync before publication.
 
 ## Clean-room rule
 
