@@ -35,15 +35,47 @@ Two complete V4.1 installation cycles were performed successfully on hardware be
 
 ### CC2 Control
 
-| Dashboard | Printer controls |
-|---|---|
-| ![CC2 Control dashboard](docs/images/dashboard-overview.jpg) | ![CC2 Control printer controls](docs/images/printer-controls.jpg) |
+#### Dashboard
 
-| Canvas | Protected console |
-|---|---|
-| ![Canvas four-slot control](docs/images/canvas-four-slot-control.jpg) | ![Protected console](docs/images/protected-console.jpg) |
+<p align="center">
+  <img src="docs/images/v4.1/Dashboard.jpg" alt="CC2 Control dashboard" width="900">
+</p>
 
-> New V4.1 screenshots, including the OrcaSlicer Device integration and Canvas workflow, are being added to the documentation gallery.
+#### Main controls
+
+| Printer Control | Current Job |
+|---|---|
+| <img src="docs/images/v4.1/Printer%20control.jpg" alt="CC2 Control printer control" width="100%"> | <img src="docs/images/v4.1/job.jpg" alt="CC2 Control current job" width="100%"> |
+
+#### Files and print library
+
+| File Manager | File Details / Preview |
+|---|---|
+| <img src="docs/images/v4.1/files.jpg" alt="CC2 Control file manager" width="100%"> | <img src="docs/images/v4.1/files2.jpg" alt="CC2 Control file details" width="100%"> |
+
+#### Canvas and protected console
+
+| Canvas | Protected Console |
+|---|---|
+| <img src="docs/images/v4.1/canvas.jpg" alt="CC2 Control Canvas" width="100%"> | <img src="docs/images/v4.1/Console.jpg" alt="CC2 Control protected console" width="100%"> |
+
+#### Bed Mesh
+
+| Bed Mesh | Bed Mesh Detail |
+|---|---|
+| <img src="docs/images/v4.1/mesh.jpg" alt="CC2 Control Bed Mesh" width="100%"> | <img src="docs/images/v4.1/mesh2.jpg" alt="CC2 Control Bed Mesh detail" width="100%"> |
+
+#### OrcaSlicer Device integration
+
+| CC2 Control in OrcaSlicer | Canvas workflow in OrcaSlicer |
+|---|---|
+| <img src="docs/images/v4.1/orca.jpg" alt="CC2 Control inside OrcaSlicer Device tab" width="100%"> | <img src="docs/images/v4.1/orca2.jpg" alt="CC2 Control Canvas popup inside OrcaSlicer" width="100%"> |
+
+#### Settings
+
+<p align="center">
+  <img src="docs/images/v4.1/setting.jpg" alt="CC2 Control settings" width="900">
+</p>
 
 For the full V4.1 feature list see [Firmware V4.1](docs/FIRMWARE_V4_1.md).  
 For installation and the required post-install reboot see [Installing V4.1](docs/INSTALL_V4_1.md).  
