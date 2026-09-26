@@ -86,6 +86,28 @@ If the password has been changed by the user, the custom password must be used i
 
 For step-by-step instructions, including first-time SSH prompts and Windows OpenSSH requirements, see [Installing CC2 Control 1.1.26](../docs/INSTALL_CC2_CONTROL_1_1_26.md).
 
+## Source code
+
+The complete CC2 Control 1.1.26 source snapshot is published with the GitHub release.
+
+Package:
+
+```text
+CC2-Control-1.1.26-Source.zip
+```
+
+SHA-256:
+
+```text
+e11200d256c81e3be2fac9d1ae91cf06af7cb51c178fbabec9b1a7ef6004556e
+```
+
+The archive includes the C backend source, web interface, tests, startup scripts, configuration examples, development tools and firmware-integration files.
+
+- [Download source](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Source.zip)
+- [Download source checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Source-SHA256.txt)
+- [Build and reproducibility guide](../docs/BUILD.md)
+
 ## Compatibility
 
 - Printer: **ELEGOO Centauri Carbon 2**
