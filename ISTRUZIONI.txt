@@ -5,15 +5,20 @@ The repository documentation is maintained in English.
 Start here:
   README.md
 
-Firmware v3.8:
-  docs/FIRMWARE_V3_8.md
-  docs/INSTALL.md
+Current Community Firmware:
+  docs/FIRMWARE_V4_1.md
+  docs/INSTALL_V4_1.md
+  docs/CC2_CONTROL.md
+  releases/v4.1.md
+  SHA256SUMS_V4_1.txt
+
+Technical background:
+  docs/CC2_RESEARCH.md
   docs/BUILD.md
   docs/TESTING.md
 
-ELEGOO-Web v4.1.1:
+ELEGOO-Web:
   elegoo-web/README.md
 
-Do not publish private signing keys, the AES key, printer credentials,
+Do not publish private signing keys, AES keys, printer credentials,
 ELEGOO firmware images, modified vendor executables, or config.json.
-
