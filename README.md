@@ -105,6 +105,31 @@ For CC2 Control internals and safety behaviour see [CC2 Control](docs/CC2_CONTRO
 For the project's technical background, architecture discoveries and implementation record, see [CC2 Research & Technical Findings](docs/CC2_RESEARCH.md).
 
 
+## CC2 Control 1.1.26 hotfix
+
+A targeted **CC2 Control 1.1.26** dashboard and workflow update is available for printers already running **Community Firmware V4.1**.
+
+No firmware reflash is required. The multiplatform updater works from **Windows, Linux and macOS** using standard SSH/SCP, preserves the existing LAN code, UI preferences and material presets, and automatically restores CC2 Control 1.1.25 if the new service does not pass its health check.
+
+Main fixes include atomic nozzle/bed temperature application, G-code filenames with spaces and UTF-8 characters, file-manager multi-selection, sequential bulk deletion, streaming copy between internal storage and USB, Side A/Side B print workflow improvements, corrected `default` / `default1` mesh handling, clearer saved/adaptive/full-bed mesh states, and a substantial dashboard/layout cleanup.
+
+> [!NOTE]
+> The default printer root password required by the updater is `MTY4ODE2`. If you changed the root password, use your custom password instead.
+
+Package:
+
+```text
+CC2-Control-1.1.26-Multiplatform-Hotfix.zip
+```
+
+SHA-256:
+
+```text
+3b73afaed88752d42240442e1ed3bcd9417e95583eaa77878548a8de2b93c15e
+```
+
+[Step-by-step installation guide](docs/INSTALL_CC2_CONTROL_1_1_26.md) · [Full 1.1.26 changelog](releases/cc2-control-1.1.26.md)
+
 ## Downloads
 
 
