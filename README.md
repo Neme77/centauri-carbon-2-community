@@ -116,6 +116,8 @@ Main fixes include atomic nozzle/bed temperature application, G-code filenames w
 > [!NOTE]
 > The default printer root password required by the updater is `MTY4ODE2`. If you changed the root password, use your custom password instead.
 
+[![Download CC2 Control 1.1.26](https://img.shields.io/badge/DOWNLOAD-CC2_CONTROL_1.1.26-2ea44f?style=for-the-badge)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Multiplatform-Hotfix.zip)
+
 Package:
 
 ```text
@@ -128,7 +130,7 @@ SHA-256:
 3b73afaed88752d42240442e1ed3bcd9417e95583eaa77878548a8de2b93c15e
 ```
 
-[Step-by-step installation guide](docs/INSTALL_CC2_CONTROL_1_1_26.md) · [Full 1.1.26 changelog](releases/cc2-control-1.1.26.md)
+[Release page](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.1.26) · [Direct download](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Multiplatform-Hotfix.zip) · [Step-by-step installation guide](docs/INSTALL_CC2_CONTROL_1_1_26.md) · [Full 1.1.26 changelog](releases/cc2-control-1.1.26.md)
 
 ## Downloads
 
