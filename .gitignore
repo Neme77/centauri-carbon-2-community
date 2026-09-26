@@ -1,29 +1,31 @@
-# Private material and credentials
-**/cc2_stock_private.pem
-**/cc2_community_release_private.pem
-**/cc2_aes_key_v1.bin
+# Credentials and local configuration
+**/cc2-control.conf
 **/config.json
-**/*.key
+**/*.local
+.env
+.env.*
 
-# Vendor firmware and modified vendor binaries
+# Firmware/build inputs and generated packages
 *.swu
 *.zip.sig
-cc2_builder_v3_8/components/printer/
-cc2_builder_v3_7/components/printer/
-elegoo-web/bin/
-elegoo-web/portable/
-
-# Build output and logs
+*.img
+*.bin
 output/
 logs/
 work/
+build/
+dist/
 __pycache__/
 *.pyc
 *.pyo
 
-# Local tools and editor files
+# Generated CC2 Control installer artifacts
+cc2-control-*-payload.tar.gz
+CC2-Control-*-Multiplatform-Hotfix.zip
+CC2-Control-*-Multiplatform-Hotfix.zip.sha256.txt
+
+# Editor / OS files
 .vscode/
 .idea/
 Thumbs.db
 .DS_Store
-
