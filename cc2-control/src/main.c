@@ -261,4 +261,180 @@ static void json_builder_string(json_builder *builder, const char *value) {
         unsigned char ch = *cursor;
         if (ch == '"' || ch == '\\') json_builder_printf(builder, "\\%c", ch);
         else if (ch < 32) json_builder_printf(builder, "\\u%04x", (unsigned int)ch);
-        else json_builder_printf
+        else json_builder_printfa_port > 0 ? "true" : "false",
+        mqtt && mqtt->connected ? "true" : "false",
+        mqtt && mqtt->registered ? "true" : "false");
+    if (length > 0 && (size_t)length < sizeof(body))
+        respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
+}
+
+static void json_number(char *out, size_t cap, int have, double value) {
+    if (have) snprintf(out, cap, "%.1f", value);
+    else snprintf(out, cap, "null");
+}
+
+static void json_escape(char *out,size_t cap,const char *in) {
+    size_t n=0;
+    while(*in&&n+1<cap){unsigned char ch=(unsigned char)*in++;
+        if((ch=='"'||ch=='\\')&&n+2<cap){out[n++]='\\';out[n++]=(char)ch;}
+        else if(ch>=32)out[n++]=(char)ch;}
+    out[n]='\0';
+}
+
+typedef struct {
+    char relative_path[PATH_MAX_LOCAL];
+    long long size;
+    long long modified;
+} gcode_file_entry;
+
+typedef struct {
+    gcode_file_entry files[GCODE_FILES_MAX];
+    size_t count;
+    int available;
+    int truncated;
+} gcode_file_list;
+
+typedef struct {
+    char *data;
+    size_t length;
+    size_t capacity;
+    int failed;
+} json_builder;
+
+static void json_builder_printf(json_builder *builder, const char *format, ...) {
+    if (builder->failed || builder->length >= builder->capacity) return;
+    va_list args;
+    va_start(args, format);
+    int written = vsnprintf(builder->data + builder->length,
+                            builder->capacity - builder->length, format, args);
+    va_end(args);
+    if (written < 0 || (size_t)written >= builder->capacity - builder->length) {
+        builder->failed = 1;
+        return;
+    }
+    builder->length += (size_t)written;
+}
+
+static void json_builder_string(json_builder *builder, const char *value) {
+    json_builder_printf(builder, "\"");
+    for (const unsigned char *cursor = (const unsigned char *)value;
+         *cursor && !builder->failed; ++cursor) {
+        unsigned char ch = *cursor;
+        if (ch == '"' || ch == '\\') json_builder_printf(builder, "\\%c", ch);
+        else if (ch < 32) json_builder_printf(builder, "\\u%04x", (unsigned int)ch);
+        else json_builder_printf(builder, "%c", ch);
+    }
+    json_builder_printf(builder, "\"");
+}
+
+static int is_gcode_filename(const char *name) {
+    size_t length = strlen(name);
+    return length > 6 && strcasecmp(name + length - 6, ".gcode") == 0;
+}
+
+static int safe_relative_path(const char *relative) {
+    if (!relative[0] || relative[0] == '/' || strchr(relative, '\\')) return 0;
+    const char *segment = relative;
+    for (const char *cursor = relative; ; ++cursor) {
+        unsigned char ch = (unsigned char)*cursor;
+        if (ch && ch < 32) return 0;
+        if (ch == '/' || ch == '\0') {
+            size_t length = (size_t)(cursor - segment);
+            if (!length || (length == 1 && segment[0] == '.') ||
+                (length == 2 && segment[0] == '.' && segment[1] == '.')) return 0;
+            if (!ch) break;
+            segment = cursor + 1;
+        }
+    }
+    return 1;
+}
+
+static void scan_gcode_directory(const char *root, const char *relative,
+                                 unsigned int depth, gcode_file_list *list) {
+    if (depth > GCODE_SCAN_DEPTH_MAX || list->count >= GCODE_FILES_MAX) {
+        list->truncated = 1;
+        return;
+    }
+    char directory_path[PATH_MAX_LOCAL * 2];
+    int directory_length = relative[0]
+        ? snprintf(directory_path, sizeof(directory_path), "%s/%s", root, relative)
+        : snprintf(directory_path, sizeof(directory_path), "%s", root);
+    if (directory_length < 0 || (size_t)directory_length >= sizeof(directory_path)) {
+        list->truncated = 1;
+        return;
+    }
+    DIR *directory = opendir(directory_path);
+    if (!directory) return;
+    struct dirent *item;
+    while ((item = readdir(directory)) != NULL) {
+        if (item->d_name[0] == '.') continue;
+        char child_relative[PATH_MAX_LOCAL];
+        int relative_length = relative[0]
+            ? snprintf(child_relative, sizeof(child_relative), "%s/%s", relative, item->d_name)
+            : snprintf(child_relative, sizeof(child_relative), "%s", item->d_name);
+        if (relative_length < 0 || (size_t)relative_length >= sizeof(child_relative)) {
+            list->truncated = 1;
+            continue;
+        }
+        char child_path[PATH_MAX_LOCAL * 2];
+        int path_length = snprintf(child_path, sizeof(child_path), "%s/%s", root, child_relative);
+        if (path_length < 0 || (size_t)path_length >= sizeof(child_path)) {
+            list->truncated = 1;
+            continue;
+        }
+        struct stat status;
+        if (lstat(child_path, &status) != 0 || S_ISLNK(status.st_mode)) continue;
+        if (S_ISDIR(status.st_mode)) {
+            if (depth < GCODE_SCAN_DEPTH_MAX)
+                scan_gcode_directory(root, child_relative, depth + 1, list);
+            else list->truncated = 1;
+        } else if (S_ISREG(status.st_mode) && is_gcode_filename(item->d_name) &&
+                   safe_relative_path(child_relative)) {
+            if (list->count >= GCODE_FILES_MAX) {
+                list->truncated = 1;
+                break;
+            }
+            gcode_file_entry *entry = &list->files[list->count++];
+            snprintf(entry->relative_path, sizeof(entry->relative_path), "%s", child_relative);
+            entry->size = (long long)status.st_size;
+            entry->modified = (long long)status.st_mtime;
+        }
+        if (list->count >= GCODE_FILES_MAX) {
+            list->truncated = 1;
+            break;
+        }
+    }
+    closedir(directory);
+}
+
+static int compare_gcode_files(const void *left, const void *right) {
+    const gcode_file_entry *a = (const gcode_file_entry *)left;
+    const gcode_file_entry *b = (const gcode_file_entry *)right;
+    if (a->modified != b->modified) return a->modified < b->modified ? 1 : -1;
+    return strcasecmp(a->relative_path, b->relative_path);
+}
+
+static void collect_gcode_files(const char *root, gcode_file_list *list) {
+    memset(list, 0, sizeof(*list));
+    struct stat status;
+    if (stat(root, &status) != 0 || !S_ISDIR(status.st_mode)) return;
+    DIR *probe = opendir(root);
+    if (!probe) return;
+    closedir(probe);
+    list->available = 1;
+    scan_gcode_directory(root, "", 0, list);
+    qsort(list->files, list->count, sizeof(list->files[0]), compare_gcode_files);
+}
+
+static void append_gcode_storage(json_builder *builder, const char *name,
+                                 const gcode_file_list *list) {
+    json_builder_string(builder, name);
+    json_builder_printf(builder, ":{\"available\":%s,\"truncated\":%s,\"count\":%lu,\"files\":[",
+                        list->available ? "true" : "false",
+                        list->truncated ? "true" : "false",
+                        (unsigned long)list->count);
+    for (size_t index = 0; index < list->count; ++index) {
+        const gcode_file_entry *entry = &list->files[index];
+        if (index) json_builder_printf(builder, ",");
+        json_builder_printf(builder, "{\"path\":");
+        json_builder_string(
