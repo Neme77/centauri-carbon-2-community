@@ -30,6 +30,8 @@ required_main = (
     'SDCARD_PRINT_FILE FILENAME=%s/\\"%s\\" SLICE_CFG_MODEL=%d',
     'print_media = "local"',
     'GCODE_USB_IMPORT_PREFIX "CC2_USB_"',
+    'bounded_number_after_marker(line, "nozzle_temperature", 500.0)',
+    'bounded_number_after_marker(line, "bed_temperature", 200.0)',
 )
 required_mqtt = (
     '"method\\\":1020',
@@ -60,6 +62,9 @@ required_web = (
     'name="calibrateBed"',
     "form.elements.calibrateBed.checked?'calibrate':'saved'",
     'inspection.adaptive_mesh',
+    'validTemperature(metadata.nozzle_temperature,500)',
+    'const fileMetadataCache = new Map()',
+    'fileMetadataCache.set(metadataKey,metadata)',
 )
 
 for marker in required_main:

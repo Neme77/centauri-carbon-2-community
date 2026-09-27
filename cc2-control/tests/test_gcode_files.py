@@ -38,6 +38,12 @@ def main():
             "BED_MESH_CALIBRATE MESH_MIN=20,30 MESH_MAX=180,190 FROM_SLICER=1\nG28\n",
             encoding="ascii",
         )
+        (internal / "metadata.gcode").write_text(
+            "; nozzle_temperature = 6211\n"
+            "; first_layer_temperature = 215\n"
+            "; bed_temperature = 60\n",
+            encoding="ascii",
+        )
         (internal / "ignored.txt").write_text("not gcode\n", encoding="ascii")
         (usb / "folder" / "part.GCODE").write_text("G1 X1\n", encoding="ascii")
         try:
@@ -70,7 +76,7 @@ def main():
             assert payload["internal"]["available"] is True
             assert payload["usb"]["available"] is True
             assert {item["path"] for item in payload["internal"]["files"]} == {
-                "adaptive.gcode", "cube.gcode", "multicolour.gcode"
+                "adaptive.gcode", "cube.gcode", "metadata.gcode", "multicolour.gcode"
             }
             assert [item["path"] for item in payload["usb"]["files"]] == ["folder/part.GCODE"]
             cube = next(item for item in payload["internal"]["files"] if item["path"] == "cube.gcode")
@@ -94,6 +100,16 @@ def main():
             with urllib.request.urlopen(inspect_adaptive, timeout=1) as response:
                 adaptive = json.load(response)
             assert adaptive == {"tools": [0], "multicolour": False, "adaptive_mesh": True}
+
+            metadata_request = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/gcode-files/metadata",
+                data=b"internal\nmetadata.gcode", method="POST",
+                headers={"Content-Type": "text/plain"},
+            )
+            with urllib.request.urlopen(metadata_request, timeout=1) as response:
+                metadata = json.load(response)
+            assert metadata["nozzle_temperature"] == 215.0
+            assert metadata["bed_temperature"] == 60.0
 
             incomplete = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/print",

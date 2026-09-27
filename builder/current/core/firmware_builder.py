@@ -77,7 +77,7 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_SHA256='21fe382ca8a5c76ae3059b94989ac3ce0ad22cc9266cb83c72d62675364d237f'
+CC2_CONTROL_SOURCE_SHA256='553b13cd0e5571fc604f3dd85d1859a593081e01e1f515ca1d4acaf28ea8f48b'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 
 def load_cc2_control(component,manifest_path):

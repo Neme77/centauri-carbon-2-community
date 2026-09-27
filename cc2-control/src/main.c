@@ -1654,6 +1654,12 @@ static double number_after_marker(const char *line, const char *marker) {
     return end != match && value >= 0.0 ? value : -1.0;
 }
 
+static double bounded_number_after_marker(const char *line, const char *marker,
+                                          double maximum) {
+    double value = number_after_marker(line, marker);
+    return value >= 0.0 && value <= maximum ? value : -1.0;
+}
+
 static long duration_after_marker(const char *line, const char *marker) {
     const char *cursor = find_case_insensitive(line, marker);
     if (!cursor) return -1;
@@ -1708,12 +1714,12 @@ static void gcode_metadata_response(int fd, const char *body, size_t body_len) {
             for (size_t index = 0; index < sizeof(markers)/sizeof(markers[0]) && filament < 0; ++index) filament = number_after_marker(line, markers[index]);
         }
         if (nozzle < 0) {
-            nozzle = number_after_marker(line, "nozzle_temperature");
-            if (nozzle < 0) nozzle = number_after_marker(line, "first_layer_temperature");
+            nozzle = bounded_number_after_marker(line, "nozzle_temperature", 500.0);
+            if (nozzle < 0) nozzle = bounded_number_after_marker(line, "first_layer_temperature", 500.0);
         }
         if (bed < 0) {
-            bed = number_after_marker(line, "bed_temperature");
-            if (bed < 0) bed = number_after_marker(line, "first_layer_bed_temperature");
+            bed = bounded_number_after_marker(line, "bed_temperature", 200.0);
+            if (bed < 0) bed = bounded_number_after_marker(line, "first_layer_bed_temperature", 200.0);
         }
     }
     fclose(file);

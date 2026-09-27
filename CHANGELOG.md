@@ -20,6 +20,10 @@ No user-visible changes yet.
 - added first-run service realignment after LAN-code registration;
 - removed the old post-install manual reboot/power-cycle requirement: CC2 Control
   now restarts and realigns its own local service automatically;
+- rejected implausible G-code temperature metadata instead of displaying values
+  such as 6211 °C in the file preview;
+- restored fast thumbnail display by loading the image before full metadata and
+  caching metadata by storage, path, size and modification time;
 - simplified print preparation to Side A/Side B plus one calibration option;
 - automatically uses the selected side's saved mesh, adaptive G-code probing or
   full-bed calibration as appropriate;
