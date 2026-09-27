@@ -2278,16 +2278,39 @@ static void presets_put_response(int fd,const char *body,size_t body_len) {
     respond(fd,200,"OK","application/json; charset=utf-8",ok,strlen(ok));
 }
 
+/* Reads the value of "key":"..." out of a compact JSON object. Returns 0
+   (leaving out untouched) if the key is absent or the value does not fit
+   out_cap, including the terminator. */
+static int extract_json_string(const char *input, const char *key, char *out, size_t out_cap) {
+    char needle[32];
+    int written = snprintf(needle, sizeof(needle), "\"%s\":\"", key);
+    if (written <= 0 || (size_t)written >= sizeof(needle)) return 0;
+    const char *start = strstr(input, needle);
+    if (!start) return 0;
+    start += written;
+    const char *end = strchr(start, '"');
+    if (!end) return 0;
+    size_t length = (size_t)(end - start);
+    if (length == 0 || length >= out_cap) return 0;
+    memcpy(out, start, length);
+    out[length] = '\0';
+    return 1;
+}
+
+/* Any locale that has a web/locales/<code>.json file is valid: the backend
+   only stores the code, the frontend decides what to do with it (falling
+   back to English for an unknown or not-yet-translated one). */
 static const char *preferences_language(void) {
-    static char language[3] = "en";
+    static char language[9] = "en";
     FILE *file = fopen(ui_preferences_path, "rb");
     if (!file) return language;
     char body[96];
     size_t length = fread(body, 1, sizeof(body) - 1, file);
     fclose(file);
     body[length] = '\0';
-    if (strstr(body, "\"language\"") && strstr(body, "\"it\""))
-        memcpy(language, "it", 3);
+    char code[9];
+    if (extract_json_string(body, "language", code, sizeof(code)) && locale_code_valid(code, strlen(code)))
+        memcpy(language, code, strlen(code) + 1);
     else
         memcpy(language, "en", 3);
     return language;
@@ -2325,9 +2348,11 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
         if (!isspace((unsigned char)body[index])) input[compact_len++] = body[index];
     }
     input[compact_len] = '\0';
+    char language_code[9];
     int has_language = strstr(input, "\"language\":") != NULL;
-    int valid_language = strstr(input, "\"language\":\"it\"") != NULL ||
-                         strstr(input, "\"language\":\"en\"") != NULL;
+    int valid_language = has_language &&
+        extract_json_string(input, "language", language_code, sizeof(language_code)) &&
+        locale_code_valid(language_code, strlen(language_code));
     int has_theme = strstr(input, "\"theme\":") != NULL;
     int valid_theme = strstr(input, "\"theme\":\"light\"") != NULL ||
                       strstr(input, "\"theme\":\"dark\"") != NULL;
@@ -2337,8 +2362,7 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
-    const char *language = strstr(input, "\"language\":\"it\"") ? "it" :
-                           strstr(input, "\"language\":\"en\"") ? "en" : preferences_language();
+    const char *language = valid_language ? language_code : preferences_language();
     const char *theme = strstr(input, "\"theme\":\"light\"") ? "light" :
                         strstr(input, "\"theme\":\"dark\"") ? "dark" : preferences_theme();
     char temporary[512];
