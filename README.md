@@ -3,93 +3,30 @@
 Community firmware, local printer control and reproducible build tools for the
 **ELEGOO Centauri Carbon 2**, maintained by **Neme77**.
 
-> This is an independent community project. It is not affiliated with,
-> endorsed by or supported by ELEGOO.
+> Independent community project. Not affiliated with, endorsed by or supported
+> by ELEGOO.
 
-## Repository status
+## Current release
 
-| Component | `main` | Latest published release |
-|---|---:|---:|
-| Community firmware | V4.2 | [V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2) |
-| CC2 Control | 1.1.30 | 1.1.30 |
+| Component | Version |
+|---|---:|
+| Community firmware | [V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2) |
+| CC2 Control | 1.1.30 |
 
-The source on `main` can be newer than the latest signed firmware. Release
-artifacts, checksums and notes remain attached to their GitHub release.
+Release binaries, standalone updaters, source archives and checksums are kept
+with the corresponding GitHub Release. The canonical development source is
+kept directly on `main`.
 
-## What is included
+## Features
 
 - local web dashboard on port `8081`;
 - live status, camera, temperatures, fans and motion controls;
-- G-code/3MF file manager, thumbnails and OrcaSlicer upload/print support;
+- G-code/3MF file management, thumbnails and OrcaSlicer integration;
 - Canvas material slots, colours, presets and spool selection;
-- saved and adaptive mesh display, Side A/Side B profiles and screw levelling;
+- Side A / Side B mesh handling, adaptive probing and screw levelling;
 - object exclusion, protected console and global emergency stop;
-- English and Italian interface, dark and light themes;
-- Panda/Moonraker compatibility endpoint on port `7125`;
-- source, tests, integration scripts and firmware builder logic in this repository.
-
-CC2 Control is available after installation at:
-
-```text
-http://PRINTER-IP:8081
-```
-
-## Download V4.2
-
-<p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig"><img alt="Download complete firmware V4.2" src="https://img.shields.io/badge/Download-Firmware%20V4.2-00b8d9?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip"><img alt="Update CC2 Control only" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.30-22c55e?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip"><img alt="Download CC2 Control source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.30-6f42c1?style=for-the-badge"></a>
-</p>
-
-<p align="center"><a href="https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2">Release notes, builders, checksums and all downloads</a></p>
-
-| Choose this file | When to use it |
-|---|---|
-| [`CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig) | New installation or complete Community Firmware V4.2 update |
-| [`CC2-Control-1.1.30-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip) | The printer already runs Community Firmware and only CC2 Control must be updated |
-| [`CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip) | Complete CC2 Control 1.1.30 source and reproducible updater builder |
-| [`SHA256SUMS_V4_2.txt`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt) | Verify downloaded release files |
-
-## Update CC2 Control only
-
-Use the standalone updater when Community Firmware is already installed and a
-full firmware reflash is unnecessary. It preserves the LAN code, UI preferences
-and material presets, and automatically rolls back if the health check fails.
-
-1. Download and extract
-   [`CC2-Control-1.1.30-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip).
-2. Open a terminal inside the extracted directory.
-3. Run the installer for your operating system.
-
-### Windows PowerShell
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-.\Install-CC2-Control-1.1.30.ps1 -PrinterIp 192.168.1.103
-```
-
-### Linux and macOS
-
-```sh
-chmod +x install-cc2-control-1.1.30.sh
-./install-cc2-control-1.1.30.sh 192.168.1.103
-```
-
-Replace `192.168.1.103` with the printer IP address. Both installers require
-`ssh` and `scp` and will request the printer root password. After installation,
-wait for service alignment and open `http://PRINTER-IP:8081`; an additional
-printer reboot or power cycle is not required.
-
-## CC2 Control 1.1.30 source
-
-The complete, buildable source is always available directly in
-[`cc2-control/`](cc2-control/), including the C backend, web interface, startup
-scripts, tests, configuration examples and protocol documentation. The release
-also provides a separate
-[`Source-and-Multiplatform-Builder-R4.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip)
-for offline use. Firmware binaries, standalone update packages and source
-archives are deliberately named and documented separately.
+- English and Italian interface with persistent dark and light themes;
+- Panda/Moonraker compatibility endpoint on port `7125`.
 
 ## Source layout
 
@@ -97,37 +34,22 @@ archives are deliberately named and documented separately.
 |---|---|
 | [`cc2-control/`](cc2-control/) | C backend, web UI, scripts, tests and protocol notes |
 | [`builder/current/`](builder/current/) | Current firmware build logic and host-side tests |
-| [`builder/v4.1-r8/`](builder/v4.1-r8/) | Historical reproducibility snapshot |
 | [`docs/`](docs/) | Installation, architecture, build and testing documentation |
-| [`releases/`](releases/) | Historical release notes |
+| [`CHANGELOG.md`](CHANGELOG.md) | User-visible project history |
+| [`AGENTS.md`](AGENTS.md) | Repository working rules for contributors and coding agents |
 
-## Build CC2 Control
+Historical versions are preserved through Git tags, GitHub Releases and Git
+history instead of parallel version-specific documents on `main`.
 
-Native development build:
+## Documentation
 
-```sh
-cd cc2-control
-make clean all CROSS= CC=gcc
-python3 -m unittest discover -s tests -p 'test_*.py'
-```
-
-The production executable targets 32-bit ARM and uses the toolchain described
-in [`docs/BUILD.md`](docs/BUILD.md). Firmware construction also requires a
-legally obtained stock firmware package and separately supplied build inputs;
-vendor binaries and private signing material are not committed.
-
-## Installation
-
-Use the files and instructions belonging to the same GitHub release:
-
-- [Firmware installation](docs/INSTALL.md)
-- [Build and reproduce](docs/BUILD.md)
+- [Installation](docs/INSTALL.md)
+- [Build and reproduction](docs/BUILD.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [CC2 Control](docs/CC2_CONTROL.md)
 - [Source and third-party inputs](docs/SOURCE.md)
 - [Testing](docs/TESTING.md)
-
-After installation, allow the printer to finish hardware initialisation before
-opening CC2 Control. First-run registration now realigns the local services
-without requiring an additional power cycle.
+- [Contributing](CONTRIBUTING.md)
 
 ## Interface preview
 
@@ -150,11 +72,19 @@ without requiring an additional power cycle.
   </tr>
 </table>
 
-## Contributing
+## AI-assisted development
 
-Please read [`CONTRIBUTING.md`](CONTRIBUTING.md). Keep changes focused, update
-tests with behaviour changes and avoid committing credentials, firmware images,
-generated binaries or private keys.
+This project uses AI-assisted development tools as part of the workflow,
+including support for code review, refactoring, debugging, documentation and
+selected code generation tasks.
+
+A substantial part of the codebase is written and maintained directly by the
+project maintainer. Architecture decisions, reverse engineering, hardware
+testing, printer-side validation and release approval are performed by the
+maintainer and community testers.
+
+AI-assisted changes are reviewed and validated before being included in a
+release.
 
 ## License and notices
 
