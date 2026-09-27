@@ -34,6 +34,63 @@ CC2 Control is available after installation at:
 http://PRINTER-IP:8081
 ```
 
+## Download V4.2
+
+<p align="center">
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig"><img alt="Download complete firmware V4.2" src="https://img.shields.io/badge/Download-Firmware%20V4.2-00b8d9?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip"><img alt="Update CC2 Control only" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.30-22c55e?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip"><img alt="Download CC2 Control source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.30-6f42c1?style=for-the-badge"></a>
+</p>
+
+<p align="center"><a href="https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2">Release notes, builders, checksums and all downloads</a></p>
+
+| Choose this file | When to use it |
+|---|---|
+| [`CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig) | New installation or complete Community Firmware V4.2 update |
+| [`CC2-Control-1.1.30-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip) | The printer already runs Community Firmware and only CC2 Control must be updated |
+| [`CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip) | Complete CC2 Control 1.1.30 source and reproducible updater builder |
+| [`SHA256SUMS_V4_2.txt`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt) | Verify downloaded release files |
+
+## Update CC2 Control only
+
+Use the standalone updater when Community Firmware is already installed and a
+full firmware reflash is unnecessary. It preserves the LAN code, UI preferences
+and material presets, and automatically rolls back if the health check fails.
+
+1. Download and extract
+   [`CC2-Control-1.1.30-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip).
+2. Open a terminal inside the extracted directory.
+3. Run the installer for your operating system.
+
+### Windows PowerShell
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+.\Install-CC2-Control-1.1.30.ps1 -PrinterIp 192.168.1.103
+```
+
+### Linux and macOS
+
+```sh
+chmod +x install-cc2-control-1.1.30.sh
+./install-cc2-control-1.1.30.sh 192.168.1.103
+```
+
+Replace `192.168.1.103` with the printer IP address. Both installers require
+`ssh` and `scp` and will request the printer root password. After installation,
+wait for service alignment and open `http://PRINTER-IP:8081`; an additional
+printer reboot or power cycle is not required.
+
+## CC2 Control 1.1.30 source
+
+The complete, buildable source is always available directly in
+[`cc2-control/`](cc2-control/), including the C backend, web interface, startup
+scripts, tests, configuration examples and protocol documentation. The release
+also provides a separate
+[`Source-and-Multiplatform-Builder-R4.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip)
+for offline use. Firmware binaries, standalone update packages and source
+archives are deliberately named and documented separately.
+
 ## Source layout
 
 | Path | Contents |
