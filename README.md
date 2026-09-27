@@ -17,6 +17,19 @@ Release binaries, standalone updaters, source archives and checksums are kept
 with the corresponding GitHub Release. The canonical development source is
 kept directly on `main`.
 
+## Downloads
+
+| Package | Download |
+|---|---|
+| Full Community Firmware V4.2 | [`CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig) |
+| CC2 Control 1.1.30 standalone updater | [`CC2-Control-1.1.30-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip) |
+| CC2 Control source + multiplatform builder | [`CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip) |
+| Firmware builder R4 | [`CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip) |
+| Checksums | [`SHA256SUMS_V4_2.txt`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt) |
+
+For release notes and all attached files, see the
+[GitHub V4.2 release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2).
+
 ## Features
 
 - local web dashboard on port `8081`;
