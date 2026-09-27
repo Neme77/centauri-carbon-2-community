@@ -47,6 +47,14 @@ http://PRINTER-IP:8081
 | CC2 Control 1.1.27 updater | `CC2-Control-1.1.27-Multiplatform-Update.zip` | `17012fc53eaca3bd3ab1a1829172c9d12e8ed56dcf4b135d9e17a8acfc6fdccc` |
 | CC2 Control 1.1.27 source | `CC2-Control-1.1.27-Complete-Source-and-Builder.zip` | `1c3039678c27cbad6e9916dc203d4ea1b87910c7c35f7702c6a1195b33a2be63` |
 
+Direct downloads after the release assets are uploaded:
+
+- [Firmware V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_021129_d31ed55e.zip.sig)
+- [Builder V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_BUILDER_V4_2_CC2_CONTROL_1.1.27_RELEASE.zip)
+- [CC2 Control 1.1.27 updater](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.27-Multiplatform-Update.zip)
+- [CC2 Control 1.1.27 source](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.27-Complete-Source-and-Builder.zip)
+- [Combined checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt)
+
 See [V4.2 release notes](releases/v4.2.md), [installation](docs/INSTALL_V4_2.md), [firmware details](docs/FIRMWARE_V4_2.md), [build guide](docs/BUILD.md), and [source/reproducibility notes](docs/SOURCE.md).
 
 ## Already running Community Firmware V4.1?
