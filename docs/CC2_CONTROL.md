@@ -1,6 +1,6 @@
-# CC2 Control 1.1.25
+# CC2 Control 1.1.27
 
-CC2 Control is the lightweight local control platform integrated into Centauri Carbon 2 Community Firmware **V4.1**. It runs directly on the printer and serves a dependency-free web interface on TCP port **8081**.
+CC2 Control is the lightweight local control platform integrated into Centauri Carbon 2 Community Firmware **V4.2**. It runs directly on the printer and serves a dependency-free web interface on TCP port **8081**.
 
 Open:
 
@@ -13,7 +13,7 @@ The same interface can be used inside the **OrcaSlicer Device tab**.
 A clean installation starts with a browser configurator that requests the printer LAN access code. Credentials remain on the printer.
 
 > [!IMPORTANT]
-> After installing Community Firmware V4.1, reboot the printer once after the first successful boot before normal use.
+> After installing Community Firmware V4.2, **do not use the printer immediately**. Switch the printer completely off, then power it on again before doing anything else. This full power cycle is required to realign Canvas and the related background services. After power-on, wait approximately **30–60 seconds** before normal use.
 
 ## Dashboard and protected controls
 
@@ -21,9 +21,28 @@ The dashboard combines the live camera, print state and progress, temperatures, 
 
 Protected actions include jogging and homing, live Z-offset adjustment, temperature and fan targets, pause/resume/cancel, light, speed, flow, extrusion, motors, heaters and emergency stop. State checks reject inappropriate actions while the printer is busy.
 
+
+## Bed Levelling workflow
+
+CC2 Control 1.1.27 unifies Bed Mesh, saved Side A / Side B profiles, active mesh state and four-screw measurement under one **Bed Levelling** workflow.
+
+Four-screw corrections are displayed in **microns**. A guarded **Optimized reference adjustment** suggestion may be shown when it reduces the largest required correction and remains inside the protected movement range. The suggestion is advisory only; CC2 Control does not move or turn screws automatically.
+
+## Quick Actions and global Emergency Stop
+
+The dashboard now provides operational Quick Actions for Home All, All Heaters Off, Fans Off and Motors Off.
+
+A global Emergency Stop remains accessible from every page and requires a deliberate one-second press-and-hold before execution.
+
+## Settings and themes
+
+Settings are split into compact Connection, Safety, Integrations, Appearance and About panels.
+
+CC2 Control 1.1.27 keeps the original Dark theme and adds a persistent monochrome **Light theme**. The selected appearance is shared between browser and OrcaSlicer.
+
 ## OrcaSlicer Device integration
 
-CC2 Control can be loaded directly in OrcaSlicer as the printer Device page. V4.1 supports the same dashboard and control UI there, together with the upload and print workflow.
+CC2 Control can be loaded directly in OrcaSlicer as the printer Device page. V4.2 supports the same dashboard and control UI there, together with the upload and print workflow.
 
 For Canvas prints, the spool-selection popup can also appear inside the OrcaSlicer Device view without requiring a manual refresh.
 
@@ -63,7 +82,7 @@ Klipper remains the final authority for command execution.
 
 ## Panda / Moonraker-like bridge
 
-CC2 Control 1.1.25 exposes a limited Moonraker-compatible service on TCP port **7125** for integrations such as BTT Panda Breath.
+CC2 Control 1.1.27 exposes a limited Moonraker-compatible service on TCP port **7125** for integrations such as BTT Panda Breath.
 
 Useful checks:
 
@@ -85,7 +104,7 @@ The G-code library lists printable files from internal memory and USB storage, i
 
 ## Discovery API v1
 
-V4.1 includes a stable system/capability discovery API intended for external integrations. It identifies Community Firmware, CC2 Control, service ports and supported capabilities without exposing the printer access code or other credentials.
+V4.2 includes a stable system/capability discovery API intended for external integrations. It identifies Community Firmware, CC2 Control, service ports and supported capabilities without exposing the printer access code or other credentials.
 
 ## Runtime and health checks
 
@@ -109,7 +128,7 @@ wget -qO- http://127.0.0.1:8081/api/setup
 wget -qO- http://127.0.0.1:8081/api/canvas
 ```
 
-A healthy configured system reports CC2 Control **1.1.25** and reaches healthy MQTT/snapshot state after setup.
+A healthy configured system reports CC2 Control **1.1.27** and reaches healthy MQTT/snapshot state after setup.
 
 ## Acknowledgements
 
