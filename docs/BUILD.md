@@ -68,6 +68,20 @@ It must be an ARM 32-bit EABI5 statically linked executable.
 
 ## Firmware build
 
+The exact historical V4.1 R8 builder is pinned by SHA-256:
+
+```text
+c94de033abea04bfe6b3788e131a0a9fdc6d9bfa6ec90a40288ba242750211e9
+```
+
+Builder archive:
+
+```text
+CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R8_PERSISTENT_MOUNT_FIX.zip
+```
+
+See [../builder/v4.1-r8/README.md](../builder/v4.1-r8/README.md) for the historical snapshot and source manifest.
+
 Use the V4.1 builder package/source and run preparation first. The stock-signed release workflow is:
 
 ```powershell
