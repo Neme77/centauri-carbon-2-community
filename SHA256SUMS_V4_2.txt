@@ -1,0 +1,4 @@
+4e9944dd0b3e5eaff24bdaf6ed34d32002f25a069e26ec05549b612e94c9ec6b  CC2_V4_2_STOCK_20260927_021129_d31ed55e.zip.sig
+dd38b9aa4ecd779a246403aa3ba8c075f231d538b12694fa4d7303cdf01b71dd  CC2_BUILDER_V4_2_CC2_CONTROL_1.1.27_RELEASE.zip
+17012fc53eaca3bd3ab1a1829172c9d12e8ed56dcf4b135d9e17a8acfc6fdccc  CC2-Control-1.1.27-Multiplatform-Update.zip
+1c3039678c27cbad6e9916dc203d4ea1b87910c7c35f7702c6a1195b33a2be63  CC2-Control-1.1.27-Complete-Source-and-Builder.zip
