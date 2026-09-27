@@ -22,6 +22,12 @@ required_main = (
     "gcode_has_adaptive_mesh",
     "parse_slot_map",
     "gcode_import_usb",
+    "send_local_gcode_script",
+    "saved_plate_mesh_exists",
+    'strcmp(leveling, "calibrate")',
+    'BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=1',
+    'BED_MESH_CALIBRATE PROFILE=%s BED_TEMP=60',
+    'SDCARD_PRINT_FILE FILENAME=%s/\\"%s\\" SLICE_CFG_MODEL=%d',
     'print_media = "local"',
     'GCODE_USB_IMPORT_PREFIX "CC2_USB_"',
 )
@@ -51,7 +57,8 @@ required_web = (
     "profiles.default1",
     "meshAvailable",
     'id="meshProfile"',
-    'name="leveling"',
+    'name="calibrateBed"',
+    "form.elements.calibrateBed.checked?'calibrate':'saved'",
     'inspection.adaptive_mesh',
 )
 

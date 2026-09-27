@@ -15,5 +15,5 @@ done
 
 logger -t cc2-control "elegoo_printer detected; waiting for hardware initialization"
 sleep 20
-logger -t cc2-control "Starting CC2 Control 1.1.28"
+logger -t cc2-control "Starting CC2 Control 1.1.30"
 exec /opt/inst/cc2-control/start.sh

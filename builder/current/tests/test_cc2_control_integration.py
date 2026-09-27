@@ -14,10 +14,13 @@ if not source.is_file():
 assert hashlib.sha256(source.read_bytes()).hexdigest()==b.CC2_CONTROL_SOURCE_SHA256
 
 runtime_start=(BASE/'components/cc2-control/runtime/start.sh').read_text(encoding='utf-8')
+runtime_init=(BASE/'components/cc2-control/runtime/cc2-control.init').read_text(encoding='utf-8')
 mount_guard="while ! grep -q ' /opt/usr ' /proc/mounts; do"
 assert mount_guard in runtime_start
 assert runtime_start.index(mount_guard) < runtime_start.index('mkdir -p "$PERSIST"')
 assert 'chmod 755 "$PERSIST"' in runtime_start
+assert '/opt/inst/cc2-control/start.sh' in runtime_init
+assert '/opt/usr/cc2-control/launch.sh' not in runtime_init
 
 with tempfile.TemporaryDirectory() as temporary:
     root=Path(temporary)
@@ -30,7 +33,7 @@ with tempfile.TemporaryDirectory() as temporary:
         files[relative]={'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
                          'mode':oct(path.stat().st_mode&0o777)}
     manifest_path=root/'manifest.json'
-    manifest_path.write_text(json.dumps({'component':'CC2 Control','version':'1.1.28',
+    manifest_path.write_text(json.dumps({'component':'CC2 Control','version':'1.1.30',
         'source_sha256':b.CC2_CONTROL_SOURCE_SHA256,'files':files}))
     prepared,manifest=b.load_cc2_control(component,manifest_path)
     image=root/'rootfs';image.mkdir()

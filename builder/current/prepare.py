@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, validate and stage CC2 Control 1.1.28 for firmware V4.2."""
+"""Build, validate and stage CC2 Control 1.1.30 for firmware V4.2."""
 import hashlib
 import json
 from pathlib import Path
@@ -13,7 +13,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_SHA256 = '5cacec2047ddb003bb93fdc5afdd5396f9346dcb1c967ed339d135cf5ad9da47'
+SOURCE_SHA256 = '21fe382ca8a5c76ae3059b94989ac3ce0ad22cc9266cb83c72d62675364d237f'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
@@ -31,10 +31,13 @@ def validate_arm_elf(path):
         raise RuntimeError('CC2 Control output is not a 32-bit little-endian ELF')
     if struct.unpack_from('<H', data, 18)[0] != 40:
         raise RuntimeError('CC2 Control output is not an ARM executable')
-    if b'1.1.28' not in path.read_bytes():
-        raise RuntimeError('CC2 Control binary does not identify version 1.1.28')
+    if b'1.1.30' not in path.read_bytes():
+        raise RuntimeError('CC2 Control binary does not identify version 1.1.30')
 
 def main():
+    firmware_init = (RUNTIME / 'cc2-control.init').read_text(encoding='utf-8')
+    if '/opt/inst/cc2-control/start.sh' not in firmware_init or '/opt/usr/cc2-control/launch.sh' in firmware_init:
+        raise RuntimeError('Firmware init must launch /opt/inst/cc2-control/start.sh')
     if sha256(SOURCE) != SOURCE_SHA256:
         raise RuntimeError('CC2 Control source archive hash mismatch')
     if OUTPUT.exists():
@@ -56,7 +59,7 @@ def main():
         subprocess.run([sys.executable, 'tests/test_light_state_static.py'], cwd=tree, check=True)
         subprocess.run([sys.executable, 'tests/test_launchers_static.py'], cwd=tree, check=True)
         subprocess.run([sys.executable, 'tests/test_translation_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_1127_static.py'], cwd=tree, check=True)
+        subprocess.run([sys.executable, 'tests/test_live_job_static.py'], cwd=tree, check=True)
         subprocess.run(['make', 'clean', 'all', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
         control_test = Path(temporary) / 'test-control-actions'
         subprocess.run(['gcc', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-I', 'src',
@@ -91,12 +94,12 @@ def main():
         }
     manifest = {
         'component': 'CC2 Control',
-        'version': '1.1.28',
+        'version': '1.1.30',
         'source_sha256': SOURCE_SHA256,
         'files': files,
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-    print('CC2 Control 1.1.28 prepared:', OUTPUT)
+    print('CC2 Control 1.1.30 prepared:', OUTPUT)
     print('Manifest:', MANIFEST)
 
 if __name__ == '__main__':

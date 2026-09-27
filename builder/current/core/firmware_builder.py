@@ -2,7 +2,7 @@
 """Centauri Carbon 2 02.01.00.00 unified Dual-Trust firmware builder V4.2.
 
 Builds the following chain (V4.2 full OTA install still requires validation):
- official stock .zip.sig -> verify/decode stock SWU -> Z-offset + OpenSSH + Dual Trust v2 + HTTP/upload v1 + frozen MQTT v2/webcam reference + CC2 Control 1.1.28 -> rebuilt SWU
+ official stock .zip.sig -> verify/decode stock SWU -> Z-offset + OpenSSH + Dual Trust v2 + HTTP/upload v1 + frozen MQTT v2/webcam reference + CC2 Control 1.1.30 -> rebuilt SWU
  -> encrypted/signed ELEG 0x80 -> encrypted/signed manifest ELEG 0x83
  -> ZIP -> plain signed outer ELEG 0x04.
 
@@ -77,14 +77,14 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_SHA256='5cacec2047ddb003bb93fdc5afdd5396f9346dcb1c967ed339d135cf5ad9da47'
+CC2_CONTROL_SOURCE_SHA256='21fe382ca8a5c76ae3059b94989ac3ce0ad22cc9266cb83c72d62675364d237f'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 
 def load_cc2_control(component,manifest_path):
  component=Path(component); manifest_path=Path(manifest_path)
  if not component.is_dir(): raise RuntimeError(f'Missing prepared CC2 Control directory: {component}')
  manifest=json.loads(req(manifest_path,'CC2 Control prepared manifest').read_text(encoding='utf-8'))
- if manifest.get('component')!='CC2 Control' or manifest.get('version')!='1.1.28':
+ if manifest.get('component')!='CC2 Control' or manifest.get('version')!='1.1.30':
   raise RuntimeError('CC2 Control manifest identity mismatch')
  if manifest.get('source_sha256')!=CC2_CONTROL_SOURCE_SHA256:
   raise RuntimeError('CC2 Control source hash mismatch in prepared manifest')
@@ -406,7 +406,7 @@ def install_release_printer(printer,reference):
  reqhash(printer,PRINTER_RELEASE_SHA256,'V3.8 MQTT/webcam installed')
 
 def main():
- ap=argparse.ArgumentParser(description='CC2 02.01.00.00 Dual-Trust firmware builder V4.2 with CC2 Control 1.1.28 and Panda compatibility')
+ ap=argparse.ArgumentParser(description='CC2 02.01.00.00 Dual-Trust firmware builder V4.2 with CC2 Control 1.1.30 and Panda compatibility')
  here=Path(__file__).resolve().parent.parent
  ap.add_argument('stock_package',nargs='?',default=str(here/'original_firmware'/'cc2_eeb001_02.01.00.00_20260707170825.zip.sig'),help='official stock .zip.sig (default: original_firmware/...)')
  ap.add_argument('--signing-mode',choices=['stock','community'],default='community',help='stock: initial install; community: later updates')

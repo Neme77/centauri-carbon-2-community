@@ -5,15 +5,9 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
-### CC2 Control 1.1.28
+No user-visible changes yet.
 
-- removed remaining demonstration values from live job and object statistics;
-- completed elapsed, remaining and total-layer status handling;
-- added first-run CC2 Control restart after LAN-code registration so Canvas can
-  reconnect without rebooting the printer;
-- retained the 1.1.27 Bed Levelling, settings, theme and safety improvements.
-
-## V4.2 — CC2 Control 1.1.27
+## V4.2 — CC2 Control 1.1.30
 
 - unified Bed Levelling workflow;
 - Side A and Side B saved-mesh visibility;
@@ -21,6 +15,15 @@ checksums remain attached to each GitHub release.
 - operational dashboard Quick Actions and global emergency stop;
 - compact settings panels and persistent dark/light themes;
 - file-manager, upload, Canvas, thumbnail and print fixes.
+- removed remaining demonstration values from live job and object statistics;
+- completed elapsed, remaining and total-layer status handling;
+- added first-run service realignment after LAN-code registration;
+- removed the old post-install manual reboot/power-cycle requirement: CC2 Control
+  now restarts and realigns its own local service automatically;
+- simplified print preparation to Side A/Side B plus one calibration option;
+- automatically uses the selected side's saved mesh, adaptive G-code probing or
+  full-bed calibration as appropriate;
+- requires full-bed calibration when the selected side has no saved mesh.
 
 ## V4.1 — CC2 Control 1.1.25
 

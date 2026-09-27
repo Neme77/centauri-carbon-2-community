@@ -6,13 +6,14 @@ Always install artifacts and follow instructions from the same GitHub release.
 
 1. Verify the downloaded firmware checksum against the release checksum file.
 2. Install the signed package using the printer's supported update procedure.
-3. Follow the release-specific restart instructions.
+3. Allow the normal update reboot to complete.
 4. Wait until the printer has completed hardware initialisation.
 5. Open `http://PRINTER-IP:8081` and enter the printer LAN access code.
+6. Allow several seconds for CC2 Control to register and realign its services.
 
-The published V4.2 image requires one complete power cycle immediately after
-installation. Development builds may include newer first-run recovery logic;
-the release notes remain authoritative for a signed image.
+V4.2 with CC2 Control 1.1.30 does not require an additional manual power cycle.
+If the printer or Canvas is not ready, wait for initialisation to finish before
+attempting control actions.
 
 ## CC2 Control-only update
 

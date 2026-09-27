@@ -1,4 +1,4 @@
-# CC2 Control 1.1.27
+# CC2 Control 1.1.30
 
 CC2 Control is the lightweight local control platform integrated into Centauri Carbon 2 Community Firmware **V4.2**. It runs directly on the printer and serves a dependency-free web interface on TCP port **8081**.
 
@@ -12,8 +12,9 @@ The same interface can be used inside the **OrcaSlicer Device tab**.
 
 A clean installation starts with a browser configurator that requests the printer LAN access code. Credentials remain on the printer.
 
-> [!IMPORTANT]
-> After installing Community Firmware V4.2, **do not use the printer immediately**. Switch the printer completely off, then power it on again before doing anything else. This full power cycle is required to realign Canvas and the related background services. After power-on, wait approximately **30–60 seconds** before normal use.
+After firmware installation, wait for hardware initialisation before entering
+the LAN access code. First-run registration realigns CC2 Control, MQTT and
+Canvas services automatically; an additional manual power cycle is not needed.
 
 ## Dashboard and protected controls
 
@@ -24,7 +25,7 @@ Protected actions include jogging and homing, live Z-offset adjustment, temperat
 
 ## Bed Levelling workflow
 
-CC2 Control 1.1.27 unifies Bed Mesh, saved Side A / Side B profiles, active mesh state and four-screw measurement under one **Bed Levelling** workflow.
+CC2 Control 1.1.30 unifies Bed Mesh, saved Side A / Side B profiles, active mesh state and four-screw measurement under one **Bed Levelling** workflow.
 
 Four-screw corrections are displayed in **microns**. A guarded **Optimized reference adjustment** suggestion may be shown when it reduces the largest required correction and remains inside the protected movement range. The suggestion is advisory only; CC2 Control does not move or turn screws automatically.
 
@@ -38,7 +39,7 @@ A global Emergency Stop remains accessible from every page and requires a delibe
 
 Settings are split into compact Connection, Safety, Integrations, Appearance and About panels.
 
-CC2 Control 1.1.27 keeps the original Dark theme and adds a persistent monochrome **Light theme**. The selected appearance is shared between browser and OrcaSlicer.
+CC2 Control 1.1.30 keeps the original Dark theme and adds a persistent monochrome **Light theme**. The selected appearance is shared between browser and OrcaSlicer.
 
 ## OrcaSlicer Device integration
 
@@ -82,7 +83,7 @@ Klipper remains the final authority for command execution.
 
 ## Panda / Moonraker-like bridge
 
-CC2 Control 1.1.27 exposes a limited Moonraker-compatible service on TCP port **7125** for integrations such as BTT Panda Breath.
+CC2 Control 1.1.30 exposes a limited Moonraker-compatible service on TCP port **7125** for integrations such as BTT Panda Breath.
 
 Useful checks:
 
@@ -128,7 +129,7 @@ wget -qO- http://127.0.0.1:8081/api/setup
 wget -qO- http://127.0.0.1:8081/api/canvas
 ```
 
-A healthy configured system reports CC2 Control **1.1.27** and reaches healthy MQTT/snapshot state after setup.
+A healthy configured system reports CC2 Control **1.1.30** and reaches healthy MQTT/snapshot state after setup.
 
 ## Acknowledgements
 

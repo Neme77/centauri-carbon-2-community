@@ -11,8 +11,8 @@ dot segments, control characters, symbolic links, non-regular files and names
 without a `.gcode` extension. Scanning is limited to four directory levels and
 128 files per storage root.
 
-Print start uses the firmware's native MQTT request rather than injecting a
-Klipper console command:
+An ordinary start with an existing saved mesh uses the firmware's native MQTT
+request:
 
 ```json
 {
@@ -35,20 +35,18 @@ Klipper console command:
 }
 ```
 
-Ordinary G-code starts use `print_layout:"A"`. Hardware testing showed that
-changing this field to `B` for a normal single-layout G-code is rejected by the
-printer with error 1026, including when the request originates from ELEGOO's
-own dashboard. It is therefore a file/package layout identifier, not a physical
-build-plate-side selector. CC2 Control does not expose an unsupported A/B
-choice. `bedlevel_force:true` requests a new leveling pass.
+`print_layout:"A"` selects the saved `default` mesh and `print_layout:"B"`
+selects `default1`. The local MQTT API routes method 1020 directly to
+`INTERNAL_START_PRINT`; although it accepts `bedlevel_force:true`, this path
+does not execute the preparation stage used by ELEGOO LAN/RTM `START_PRINT`.
 
-Adaptive leveling is different: its bounds are encoded in the selected G-code with a
-`BED_MESH_CALIBRATE` command carrying `FROM_SLICER=1`, `ADAPTIVE=1`, or bounded
-`MESH_MIN`/`MESH_MAX` coordinates. Inspection reports this capability to the
-browser. The start request still gates probing through `bedlevel_force`: false
-keeps the existing mesh, while true runs the adaptive command when bounds are
-present or traditional full-bed leveling when they are absent. CC2 Control
-therefore exposes only the probing mode that matches the selected file.
+Calibrated starts therefore reproduce the full preparation locally: they set
+the print surface and slicer-calibration flag, configure the Canvas map and
+start with `SLICE_CFG_MODEL=0`. Slicer bounds in `BED_MESH_CALIBRATE` produce
+an adaptive mesh. If the selected Side A/B profile is absent or is not a full
+11x11 mesh, CC2 Control first runs a full calibration into `default` or
+`default1`, respectively, then starts the file with slicer calibration disabled
+for that first run.
 
 USB requests use `storage_media: "u-disk"`. The complete field shape and method
 number were cross-checked against ELEGOO's Apache-2.0 `elegoo-link` LAN SDK and

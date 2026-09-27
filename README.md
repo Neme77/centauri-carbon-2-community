@@ -10,8 +10,8 @@ Community firmware, local printer control and reproducible build tools for the
 
 | Component | `main` | Latest published release |
 |---|---:|---:|
-| Community firmware | V4.2 development | [V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2) |
-| CC2 Control | 1.1.28 | 1.1.27 |
+| Community firmware | V4.2 | [V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2) |
+| CC2 Control | 1.1.30 | 1.1.30 |
 
 The source on `main` can be newer than the latest signed firmware. Release
 artifacts, checksums and notes remain attached to their GitHub release.
@@ -68,8 +68,9 @@ Use the files and instructions belonging to the same GitHub release:
 - [Source and third-party inputs](docs/SOURCE.md)
 - [Testing](docs/TESTING.md)
 
-The currently published V4.2 firmware requires one complete power cycle after
-installation. Follow the release instructions before opening CC2 Control.
+After installation, allow the printer to finish hardware initialisation before
+opening CC2 Control. First-run registration now realigns the local services
+without requiring an additional power cycle.
 
 ## Interface preview
 

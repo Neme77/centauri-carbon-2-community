@@ -1,22 +1,22 @@
 # Community Firmware V4.2
 
-Community Firmware **V4.2** for the ELEGOO Centauri Carbon 2 integrates **CC2 Control 1.1.27** while preserving the validated V4.1/R8 persistent-storage startup fix.
+Community Firmware **V4.2** for the ELEGOO Centauri Carbon 2 integrates **CC2 Control 1.1.30** while preserving the validated V4.1/R8 persistent-storage startup fix.
 
-## Mandatory power cycle
+## Automatic post-install realignment
 
 > [!IMPORTANT]
-> After installation, **do not use the printer immediately**.
->
-> **Switch the printer completely off and then power it on again before doing anything else.**
->
-> This full power cycle is required to realign and reinitialize **Canvas** and the related background services.
+> No additional manual reboot or power-off/power-on cycle is required after the
+> firmware update has completed normally.
 
-A software-only reboot is not the wording used for this release procedure: perform a full power-off / power-on cycle.
+After the LAN code is saved, CC2 Control restarts its own supervised service
+and reconnects MQTT, Canvas and snapshot state without restarting printer
+services. The page can be refreshed after roughly 30 seconds if synchronisation
+takes longer than expected.
 
 ## Included software
 
 - Community Firmware V4.2
-- CC2 Control 1.1.27
+- CC2 Control 1.1.30
 - existing V4.1/R8 persistent `/opt/usr` startup fix
 - original `elegoo_printer` retained unchanged
 - Panda / Moonraker-like compatibility service
@@ -25,7 +25,7 @@ A software-only reboot is not the wording used for this release procedure: perfo
 - protected expert console
 - file manager, thumbnails, upload and print workflow
 
-## CC2 Control 1.1.27
+## CC2 Control 1.1.30
 
 ### Bed Levelling
 
@@ -68,30 +68,30 @@ The interface includes:
 Firmware:
 
 ```text
-CC2_V4_2_STOCK_20260927_021129_d31ed55e.zip.sig
+CC2_V4_2_STOCK_20260927_151944_1a06ebe1.zip.sig
 ```
 
 SHA-256:
 
 ```text
-4e9944dd0b3e5eaff24bdaf6ed34d32002f25a069e26ec05549b612e94c9ec6b
+1e9d7eacf3a8f55b1e019d41af3def59fd2a9a6e1eb39090ee6ae2ac05a4797a
 ```
 
 Builder:
 
 ```text
-CC2_BUILDER_V4_2_CC2_CONTROL_1.1.27_RELEASE.zip
+CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_INIT_FIX_R2_RELEASE.zip
 ```
 
 SHA-256:
 
 ```text
-dd38b9aa4ecd779a246403aa3ba8c075f231d538b12694fa4d7303cdf01b71dd
+eab6bae24857d86ee8a3bc15c5002329f7b33f64464b3cfe912b9aa636237527
 ```
 
 ## Builder lineage
 
-The V4.2 builder is derived from the validated V4.1/R8 builder and integrates CC2 Control 1.1.27.
+The V4.2 builder is derived from the validated V4.1/R8 builder and integrates CC2 Control 1.1.30.
 
 For continuity and reproducibility, some internal script and directory names in the archive still use the `v4_1` naming inherited from the validated builder lineage. The **release designation is V4.2**.
 

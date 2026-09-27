@@ -1,4 +1,4 @@
-# Build the verified CC2 Control 1.1.28 component inside WSL.
+# Build the verified CC2 Control 1.1.30 component inside WSL.
 [CmdletBinding()]
 param([string]$Distro = 'Ubuntu')
 $ErrorActionPreference = 'Stop'

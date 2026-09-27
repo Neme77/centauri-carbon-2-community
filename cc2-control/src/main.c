@@ -41,7 +41,7 @@
 #define GCODE_USB_ROOT "/mnt/exUDISK"
 #define GCODE_USB_IMPORT_PREFIX "CC2_USB_"
 
-#define CC2_CONTROL_VERSION "1.1.28"
+#define CC2_CONTROL_VERSION "1.1.30"
 #define CC2_COMMUNITY_FIRMWARE_VERSION "4.2"
 #define CC2_DISCOVERY_API_VERSION 1
 
@@ -80,6 +80,74 @@ static int send_all(int fd, const void *buffer, size_t length) {
         length -= (size_t)sent;
     }
     return 0;
+}
+
+/* Submit one atomic script to the printer's local Klippy socket. Calibrated
+ * starts cannot use MQTT method 1020: that method is routed to
+ * INTERNAL_START_PRINT and skips the preparation performed by LAN START_PRINT. */
+static int send_local_gcode_script(const char *script) {
+    char escaped[8192], request[8448];
+    size_t used = 0;
+    if (!script) return -1;
+    for (const unsigned char *cursor = (const unsigned char *)script; *cursor; ++cursor) {
+        unsigned char ch = *cursor;
+        const char *replacement = NULL;
+        if (ch == '"') replacement = "\\\"";
+        else if (ch == '\\') replacement = "\\\\";
+        else if (ch == '\n') replacement = "\\n";
+        else if (ch == '\r') replacement = "\\r";
+        else if (ch == '\t') replacement = "\\t";
+        if (replacement) {
+            size_t replacement_length = strlen(replacement);
+            if (used + replacement_length >= sizeof(escaped)) return -1;
+            memcpy(escaped + used, replacement, replacement_length);
+            used += replacement_length;
+        } else {
+            if (ch < 32 || used + 1 >= sizeof(escaped)) return -1;
+            escaped[used++] = (char)ch;
+        }
+    }
+    escaped[used] = '\0';
+    int length = snprintf(request, sizeof(request),
+        "{\"id\":301,\"method\":\"gcode/script\",\"params\":{\"script\":\"%s\"}}\003",
+        escaped);
+    if (length <= 0 || (size_t)length >= sizeof(request)) return -1;
+
+    int uds = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (uds < 0) return -1;
+    struct timeval timeout = {2, 0};
+    setsockopt(uds, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    struct sockaddr_un address; memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", "/tmp/elegoo_uds");
+    int result = connect(uds, (struct sockaddr *)&address, sizeof(address));
+    if (result == 0) result = send_all(uds, request, (size_t)length);
+    close(uds);
+    return result;
+}
+
+static int saved_plate_mesh_exists(char print_layout) {
+    const char *profile = print_layout == 'B' ? "default1" : "default";
+    FILE *file = fopen("/opt/usr/cfg/autosave.cfg", "rb");
+    if (!file) return 0;
+    char line[256], marker[64];
+    snprintf(marker, sizeof(marker), "[bed_mesh %s]", profile);
+    int in_profile = 0, x_count = 0, y_count = 0, have_points = 0;
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, "[bed_mesh ")) {
+            if (in_profile) break;
+            in_profile = strstr(line, marker) != NULL;
+            continue;
+        }
+        if (!in_profile) continue;
+        if (strstr(line, "points =")) have_points = 1;
+        const char *x = strstr(line, "x_count =");
+        const char *y = strstr(line, "y_count =");
+        if (x) x_count = atoi(x + strlen("x_count ="));
+        if (y) y_count = atoi(y + strlen("y_count ="));
+    }
+    fclose(file);
+    return have_points && x_count == 11 && y_count == 11;
 }
 
 static void respond(int fd, int status, const char *status_text,
@@ -1428,8 +1496,8 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
             return;
         }
         memcpy(leveling, level_line, level_len); leveling[level_len] = '\0';
-        if (strcmp(leveling, "saved") != 0 && strcmp(leveling, "adaptive") != 0 &&
-            strcmp(leveling, "full") != 0) {
+        if (strcmp(leveling, "saved") != 0 && strcmp(leveling, "calibrate") != 0 &&
+            strcmp(leveling, "adaptive") != 0 && strcmp(leveling, "full") != 0) {
             const char *error = "{\"accepted\":false,\"error\":\"Invalid bed leveling mode\"}\n";
             respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
             return;
@@ -1493,8 +1561,51 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     } else {
         snprintf(print_filename, sizeof(print_filename), "%s", filename);
     }
-    if (mqtt_start_print(mqtt, print_media, print_filename, tools, trays, slot_count,
-                         print_layout, strcmp(leveling, "saved") != 0) != 0) {
+    int missing_plate_mesh = !saved_plate_mesh_exists(print_layout);
+    int calibration_requested = strcmp(leveling, "calibrate") == 0;
+    int force_full_mesh = strcmp(leveling, "full") == 0 || missing_plate_mesh ||
+                          (calibration_requested && !adaptive);
+    int calibrated_start = strcmp(leveling, "saved") != 0 || missing_plate_mesh;
+    int start_result = -1;
+    if (calibrated_start) {
+        char script[4096]; size_t used = 0;
+        if (strchr(print_filename, '"') || strchr(print_filename, '\\')) {
+            const char *error = "{\"accepted\":false,\"error\":\"Filename is incompatible with calibrated printing\"}\n";
+            respond(fd, 422, "Unprocessable Content", "application/json; charset=utf-8", error, strlen(error));
+            return;
+        }
+        int length;
+        if (force_full_mesh) {
+            length = snprintf(script, sizeof(script),
+                "BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=0\n"
+                "PRINT_SURFACE_SET PLANE=%d\n"
+                "BED_MESH_CALIBRATE PROFILE=%s BED_TEMP=60\n",
+                print_layout == 'B' ? 1 : 0,
+                print_layout == 'B' ? "default1" : "default");
+        } else {
+            length = snprintf(script, sizeof(script),
+                "BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=1\n"
+                "PRINT_SURFACE_SET PLANE=%d\n", print_layout == 'B' ? 1 : 0);
+        }
+        if (length > 0 && (size_t)length < sizeof(script)) used = (size_t)length;
+        for (size_t index = 0; used && index < slot_count; ++index) {
+            length = snprintf(script + used, sizeof(script) - used,
+                "CANVAS_SET_COLOR_TABLE T=%d ID=0 CHANNEL=%d\n", tools[index], trays[index]);
+            if (length <= 0 || (size_t)length >= sizeof(script) - used) { used = 0; break; }
+            used += (size_t)length;
+        }
+        if (used) {
+            length = snprintf(script + used, sizeof(script) - used,
+                "SDCARD_PRINT_FILE FILENAME=%s/\"%s\" SLICE_CFG_MODEL=%d",
+                print_media, print_filename, force_full_mesh ? 1 : 0);
+            if (length <= 0 || (size_t)length >= sizeof(script) - used) used = 0;
+        }
+        if (used) start_result = send_local_gcode_script(script);
+    } else {
+        start_result = mqtt_start_print(mqtt, print_media, print_filename, tools, trays,
+                                        slot_count, print_layout, 0);
+    }
+    if (start_result != 0) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot send the printer start request\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
         return;
