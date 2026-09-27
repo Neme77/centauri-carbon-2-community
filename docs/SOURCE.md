@@ -28,7 +28,7 @@ The source archive contains the backend source, dashboard/web UI, tests, startup
 
 ## Community Firmware V4.1
 
-The V4.1 release publishes the validated R8 firmware builder package alongside the signed firmware and checksums.
+The V4.1 release publishes the validated R8 firmware builder package alongside the signed firmware and checksums. The retained R8 package has been verified against the release asset and is byte-identical.
 
 Builder:
 
@@ -36,9 +36,19 @@ Builder:
 CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R8_PERSISTENT_MOUNT_FIX.zip
 ```
 
+Archive SHA-256:
+
+```text
+c94de033abea04bfe6b3788e131a0a9fdc6d9bfa6ec90a40288ba242750211e9
+```
+
 Release:
 
 https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
+
+Historical builder index:
+
+../builder/v4.1-r8/README.md
 
 The builder requires a legally obtained ELEGOO stock firmware input. ELEGOO's official Centauri Carbon 2 repository also publishes its signing-tool material under `elegoo/lib/signtools/key/`; this project references that authoritative source rather than duplicating those keys.
 
