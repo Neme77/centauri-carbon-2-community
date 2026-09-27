@@ -38,7 +38,7 @@ assert 'strcmp(action,"system:heaters_off")' in control
 assert 'strcmp(action,"system:fans_off")' in control
 assert 'strcmp(action,"system:emergency_stop")' in control
 assert 'active_gcode_total_layers' in main
-assert '\\\"total_layers\\\":%d' in main
+assert '\\"total_layers\\":%d' in main
 assert 'number_in(o,n,"total_layer_count"' in mqtt
 assert 'number_in(o,n,"elapsed_time"' in mqtt
 assert 'number_in(o,n,"remaining_time"' in mqtt
@@ -50,4 +50,4 @@ assert 'Restarting CC2 Control and synchronizing Canvas' in ui
 assert 'for (let count = 0; count < 60; count++)' in ui
 assert "for(const [temp,color]of [[28" not in ui
 assert "lines[index].textContent = 'Read during inspection'" not in ui
-print("PASS: CC2 Control 1.1.30 stable live-job and safety markers")
+print("PASS: CC2 Control 1.1.31 stable live-job and safety markers")
