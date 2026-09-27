@@ -11,6 +11,8 @@ These rules apply to contributors and coding agents working in this repository.
   documents on `main`.
 - Keep historical snapshots and release artifacts read-only unless a change is
   explicitly intended for that historical version.
+- Keep release history in GitHub Releases, tags and `CHANGELOG.md`; do not add
+  duplicate release-pointer documents to `main`.
 
 ## Repository layout
 
@@ -24,7 +26,6 @@ These rules apply to contributors and coding agents working in this repository.
 | `builder/current/tests/` | Host-side builder tests |
 | `docs/` | Stable installation, build, architecture and testing documentation |
 | `CHANGELOG.md` | User-visible release history |
-| `releases/` | Lightweight historical release pointers where retained |
 
 ## Change discipline
 
