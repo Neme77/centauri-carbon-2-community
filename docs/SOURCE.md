@@ -2,33 +2,62 @@
 
 This project aims to keep released community components auditable and reproducible.
 
-## CC2 Control 1.1.26
+## Current release: Community Firmware V4.2
 
-The complete source snapshot for CC2 Control 1.1.26 is published as a GitHub Release asset:
+Community Firmware **V4.2** integrates **CC2 Control 1.1.27**.
 
-```text
-CC2-Control-1.1.26-Source.zip
-```
+Published release artifacts are pinned by SHA-256.
 
-SHA-256:
+### Firmware
 
 ```text
-e11200d256c81e3be2fac9d1ae91cf06af7cb51c178fbabec9b1a7ef6004556e
+CC2_V4_2_STOCK_20260927_021129_d31ed55e.zip.sig
+4e9944dd0b3e5eaff24bdaf6ed34d32002f25a069e26ec05549b612e94c9ec6b
 ```
 
-Direct source download:
+### Builder
 
-https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Source.zip
+```text
+CC2_BUILDER_V4_2_CC2_CONTROL_1.1.27_RELEASE.zip
+dd38b9aa4ecd779a246403aa3ba8c075f231d538b12694fa4d7303cdf01b71dd
+```
 
-Checksum file:
+The V4.2 builder is derived from the validated V4.1/R8 build chain. Some internal directory and script names remain `v4_1` to preserve continuity with the tested builder lineage.
 
-https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.26/CC2-Control-1.1.26-Source-SHA256.txt
+### CC2 Control 1.1.27 source
 
-The source archive contains the backend source, dashboard/web UI, tests, startup scripts, configuration example, development tools and firmware-integration material used for the 1.1.26 release.
+```text
+CC2-Control-1.1.27-Complete-Source-and-Builder.zip
+1c3039678c27cbad6e9916dc203d4ea1b87910c7c35f7702c6a1195b33a2be63
+```
 
-## Community Firmware V4.1
+The source archive contains:
 
-The V4.1 release publishes the validated R8 firmware builder package alongside the signed firmware and checksums. The retained R8 package has been verified against the release asset and is byte-identical.
+- backend source
+- web UI
+- validation tests
+- firmware integration files
+- startup scripts
+- configuration example
+- development tools
+- multiplatform package builder
+
+### Standalone updater
+
+```text
+CC2-Control-1.1.27-Multiplatform-Update.zip
+17012fc53eaca3bd3ab1a1829172c9d12e8ed56dcf4b135d9e17a8acfc6fdccc
+```
+
+## Mandatory post-install power cycle
+
+After installing the full firmware or the standalone CC2 Control updater, **switch the printer completely off and then power it on again before doing anything else**.
+
+This full power cycle is required to realign Canvas and the related background services.
+
+## Historical V4.1 / R8 release
+
+The previous V4.1/R8 release remains preserved as a reproducibility snapshot.
 
 Builder:
 
@@ -36,37 +65,38 @@ Builder:
 CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R8_PERSISTENT_MOUNT_FIX.zip
 ```
 
-Archive SHA-256:
+SHA-256:
 
 ```text
 c94de033abea04bfe6b3788e131a0a9fdc6d9bfa6ec90a40288ba242750211e9
 ```
 
-Release:
+See [../builder/v4.1-r8/README.md](../builder/v4.1-r8/README.md).
 
-https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
+## External vendor input
 
-Historical builder index:
+The firmware builder requires a legally obtained ELEGOO Centauri Carbon 2 stock firmware package.
 
-../builder/v4.1-r8/README.md
+ELEGOO's official Centauri Carbon 2 repository publishes its signing-tool material under:
 
-The builder requires a legally obtained ELEGOO stock firmware input. ELEGOO's official Centauri Carbon 2 repository also publishes its signing-tool material under `elegoo/lib/signtools/key/`; this project references that authoritative source rather than duplicating those keys.
+```text
+elegoo/lib/signtools/key/
+```
 
-Official ELEGOO repository:
+Official repository:
 
 https://github.com/elegooofficial/CentauriCarbon2
 
 ## Verification
 
-Before building, verify downloaded source and builder archives against their published SHA-256 values.
+Before building or installing, verify downloaded archives against the published SHA-256 values.
 
-For build steps and the validated environment, see [BUILD.md](BUILD.md).
+See [BUILD.md](BUILD.md) for the build workflow.
 
 ## Repository policy
 
-- project documentation is written in English;
-- generated firmware images and local credentials are not committed;
-- unrelated tools are kept outside the firmware repository;
-- release artifacts are pinned by hashes;
-- incomplete source trees are not presented as complete source;
-- historical material remains recoverable through Git history, release assets and the pre-cleanup archive branch.
+- project documentation is written in English
+- generated firmware images and local credentials are not committed
+- unrelated tools are kept outside the firmware repository
+- release artifacts are pinned by hashes
+- historical material remains recoverable through Git history, release assets and archive branches
