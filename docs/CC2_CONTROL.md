@@ -46,6 +46,19 @@ CC2 Control can be loaded directly in OrcaSlicer as the printer Device page. V4.
 
 For Canvas prints, the spool-selection popup can also appear inside the OrcaSlicer Device view without requiring a manual refresh.
 
+### Filament sync from Canvas
+
+OrcaSlicer can fill its filament list from the Canvas slots with **Synchronize filament list**. Set **Printer Agent** to **Moonraker** in the OrcaSlicer physical printer dialog (advanced mode) and keep the host on port 8081.
+
+CC2 Control answers the two read-only requests that agent makes on port 8081:
+
+    GET /server/info
+    GET /server/database/item?namespace=lane_data
+
+`lane_data` follows the AFC lane format and is built from the connected Canvas module in the last Canvas snapshot: one lane per tray, `lane` = `tray_id`, `material` = `filament_type`, `color` = `filament_color`, `nozzle_temp` = `max_nozzle_temp`. The Canvas data has no bed temperature, so `bed_temp` is 0. Before the first Canvas snapshot the value object is empty.
+
+OrcaSlicer picks a generic filament preset by type, for example Generic PETG. In a project that already has filaments, OrcaSlicer asks how to map them to the slots and keeps the project order.
+
 ## Four-screw load-cell bed tramming
 
 The guided screw measurement probes above the four bed screws and reports each point relative to the reference corner. Measurements use the printer load-cell probe and remain isolated from the stored Bed Mesh.

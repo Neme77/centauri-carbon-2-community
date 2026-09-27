@@ -11,6 +11,8 @@ checksums remain attached to each GitHub release.
 - completed elapsed, remaining and total-layer status handling;
 - added first-run CC2 Control restart after LAN-code registration so Canvas can
   reconnect without rebooting the printer;
+- added read-only `/server/info` and AFC `lane_data` endpoints so OrcaSlicer's
+  Moonraker printer agent can sync filament type and colour from Canvas;
 - retained the 1.1.27 Bed Levelling, settings, theme and safety improvements.
 
 ## V4.2 — CC2 Control 1.1.27

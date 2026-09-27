@@ -1731,6 +1731,140 @@ static void canvas_response(int fd, const mqtt_client *mqtt) {
     }
 }
 
+/* OrcaSlicer's Moonraker printer agent connects through /server/info and pulls
+ * filament slots from the AFC lane_data namespace. Lanes are built from the
+ * connected Canvas module in the cached snapshot, the same module the web UI shows. */
+static const char *json_string_end(const char *p,const char *end){
+    for(++p;p<end;++p){
+        if(*p=='\\'){if(++p>=end)return NULL;}
+        else if(*p=='"')return p+1;
+    }
+    return NULL;
+}
+
+static const char *json_container_end(const char *p,const char *end){
+    int depth=0;
+    while(p<end){
+        if(*p=='"'){p=json_string_end(p,end);if(!p)return NULL;continue;}
+        if(*p=='{'||*p=='[')depth++;
+        else if((*p=='}'||*p==']')&&--depth==0)return p+1;
+        p++;
+    }
+    return NULL;
+}
+
+static const char *json_skip_space(const char *p,const char *end){
+    while(p<end&&isspace((unsigned char)*p))p++;
+    return p;
+}
+
+/* Returns the start of the value of a top-level member of the object [obj,end). */
+static const char *json_member(const char *obj,const char *end,const char *key){
+    size_t key_len=strlen(key);
+    const char *p=obj+1;
+    while(1){
+        p=json_skip_space(p,end);
+        if(p<end&&*p==',')p=json_skip_space(p+1,end);
+        if(p>=end||*p!='"')return NULL;
+        const char *key_end=json_string_end(p,end);if(!key_end)return NULL;
+        int match=(size_t)(key_end-p-2)==key_len&&memcmp(p+1,key,key_len)==0;
+        p=json_skip_space(key_end,end);
+        if(p>=end||*p!=':')return NULL;
+        p=json_skip_space(p+1,end);
+        if(p>=end)return NULL;
+        if(match)return p;
+        if(*p=='{'||*p=='[')p=json_container_end(p,end);
+        else if(*p=='"')p=json_string_end(p,end);
+        else while(p<end&&*p!=','&&*p!='}')p++;
+        if(!p)return NULL;
+    }
+}
+
+static const char *json_member_object(const char *obj,const char *end,const char *key,char open,const char **value_end){
+    const char *value=json_member(obj,end,key);
+    if(!value||*value!=open)return NULL;
+    *value_end=json_container_end(value,end);
+    return *value_end?value:NULL;
+}
+
+static int json_member_int(const char *obj,const char *end,const char *key,int *out){
+    const char *value=json_member(obj,end,key);
+    if(!value||!(isdigit((unsigned char)*value)||*value=='-'))return 0;
+    *out=atoi(value);return 1;
+}
+
+/* Raw JSON string contents without quotes; escapes stay as they are. */
+static int json_member_raw_string(const char *obj,const char *end,const char *key,const char **text,int *length){
+    const char *value=json_member(obj,end,key);
+    if(!value||*value!='"')return 0;
+    const char *value_end=json_string_end(value,end);
+    if(!value_end)return 0;
+    *text=value+1;*length=(int)(value_end-value-2);return 1;
+}
+
+/* Iterates the elements of the array [array,end). */
+static const char *json_next_element(const char *p,const char *end){
+    p=json_skip_space(p,end);
+    if(p<end&&(*p=='['||*p==','))p=json_skip_space(p+1,end);
+    return p<end&&*p=='{'?p:NULL;
+}
+
+static void lane_data_build(const mqtt_client *mqtt,json_builder *builder){
+    const char *snapshot=mqtt->canvas_snapshot,*end=snapshot+mqtt->canvas_snapshot_len;
+    const char *root=json_skip_space(snapshot,end),*root_end,*result_end,*info_end,*list_end,*trays_end;
+    if(root>=end||*root!='{'||!(root_end=json_container_end(root,end)))return;
+    const char *result=json_member_object(root,root_end,"result",'{',&result_end);
+    const char *info=result?json_member_object(result,result_end,"canvas_info",'{',&info_end):NULL;
+    const char *list=info?json_member_object(info,info_end,"canvas_list",'[',&list_end):NULL;
+    if(!list)return;
+    const char *module=NULL,*module_end=NULL;
+    for(const char *item=json_next_element(list,list_end);item;){
+        const char *item_end=json_container_end(item,list_end);
+        if(!item_end)return;
+        int connected=0,is_connected=json_member_int(item,item_end,"connected",&connected)&&connected==1;
+        if(!module||is_connected){module=item;module_end=item_end;}
+        if(is_connected)break;
+        item=json_next_element(item_end,list_end);
+    }
+    const char *trays=module?json_member_object(module,module_end,"tray_list",'[',&trays_end):NULL;
+    if(!trays)return;
+    int count=0;
+    for(const char *tray=json_next_element(trays,trays_end);tray;){
+        const char *tray_end=json_container_end(tray,trays_end);
+        if(!tray_end)return;
+        int tray_id,nozzle=0,material_len=0,color_len=0;
+        const char *material="",*color="";
+        if(json_member_int(tray,tray_end,"tray_id",&tray_id)&&tray_id>=0){
+            json_member_raw_string(tray,tray_end,"filament_type",&material,&material_len);
+            json_member_raw_string(tray,tray_end,"filament_color",&color,&color_len);
+            json_member_int(tray,tray_end,"max_nozzle_temp",&nozzle);
+            json_builder_printf(builder,"%s\"lane%d\":{\"lane\":\"%d\",\"material\":\"%.*s\",\"color\":\"%.*s\",\"nozzle_temp\":%d,\"bed_temp\":0}",
+                count++?",":"",tray_id+1,tray_id,material_len,material,color_len,color,nozzle);
+        }
+        tray=json_next_element(tray_end,trays_end);
+    }
+}
+
+static void orca_server_info_response(int fd) {
+    const char *body="{\"result\":{\"klippy_connected\":true,\"klippy_state\":\"ready\",\"hostname\":\"CC2\",\"components\":[]}}\n";
+    respond(fd,200,"OK","application/json; charset=utf-8",body,strlen(body));
+}
+
+static void orca_lane_data_response(int fd, const mqtt_client *mqtt) {
+    static const char prefix[]="{\"result\":{\"namespace\":\"lane_data\",\"value\":{";
+    size_t cap=sizeof(prefix)+mqtt->canvas_snapshot_len*4+64;
+    char *data=malloc(cap);
+    if(!data)return;
+    json_builder builder={data,0,cap,0};
+    json_builder_printf(&builder,"%s",prefix);
+    size_t lanes_start=builder.length;
+    lane_data_build(mqtt,&builder);
+    if(builder.failed){builder.failed=0;builder.length=lanes_start;}
+    json_builder_printf(&builder,"}}}\n");
+    if(!builder.failed)respond(fd,200,"OK","application/json; charset=utf-8",data,builder.length);
+    free(data);
+}
+
 static void canvas_refresh_response(int fd, mqtt_client *mqtt) {
     if(mqtt_request_canvas(mqtt)!=0) {
         const char *body="{\"accepted\":false,\"error\":\"MQTT API client is not ready\"}\n";
@@ -2172,6 +2306,11 @@ static int handle_client(int fd, const char *web_root, mqtt_client *mqtt, consol
         snapshot_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mqtt-diagnostic")==0) {
         mqtt_diagnostic_response(fd, mqtt);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/server/info")==0) {
+        orca_server_info_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/server/database/item")==0 &&
+               query && strcmp(query,"namespace=lane_data")==0) {
+        orca_lane_data_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/canvas")==0) {
         canvas_response(fd, mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/canvas/refresh")==0) {
