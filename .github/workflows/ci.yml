@@ -15,12 +15,12 @@ concurrency:
 jobs:
   cc2-control:
     name: CC2 Control (host tests + ARM build)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: cc2-control
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install ARM cross-compiler
         run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf
@@ -36,9 +36,9 @@ jobs:
 
   builder:
     name: Firmware builder (host tests)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Builder tests
         run: python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
