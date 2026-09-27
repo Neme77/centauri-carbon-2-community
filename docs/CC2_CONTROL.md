@@ -1,4 +1,4 @@
-# CC2 Control 1.1.31
+# CC2 Control
 
 CC2 Control is the lightweight local control platform for the Centauri Carbon 2
 Community Firmware. Community Firmware **V4.2** originally ships CC2 Control
@@ -29,7 +29,7 @@ Protected actions include jogging and homing, live Z-offset adjustment, temperat
 
 ## Bed Levelling workflow
 
-CC2 Control 1.1.31 retains the unified Bed Mesh, saved Side A / Side B profiles, active mesh state and four-screw measurement under one **Bed Levelling** workflow.
+CC2 Control retains the unified Bed Mesh, saved Side A / Side B profiles, active mesh state and four-screw measurement under one **Bed Levelling** workflow.
 
 Four-screw corrections are displayed in **microns**. A guarded **Optimized reference adjustment** suggestion may be shown when it reduces the largest required correction and remains inside the protected movement range. The suggestion is advisory only; CC2 Control does not move or turn screws automatically.
 
@@ -43,7 +43,7 @@ A global Emergency Stop remains accessible from every page and requires a delibe
 
 Settings are split into compact Connection, Safety, Integrations, Appearance and About panels.
 
-CC2 Control 1.1.31 keeps the original Dark theme and adds a persistent monochrome **Light theme**. The selected appearance is shared between browser and OrcaSlicer.
+CC2 Control keeps the original Dark theme and adds a persistent monochrome **Light theme**. The selected appearance is shared between browser and OrcaSlicer.
 
 ## OrcaSlicer Device integration
 
@@ -64,7 +64,7 @@ The SSH restart and configuration-reset commands documented in
 
 ## OrcaSlicer Canvas filament synchronization
 
-CC2 Control 1.1.31 adds optional support for OrcaSlicer's **Moonraker** printer
+CC2 Control adds optional support for OrcaSlicer's **Moonraker** printer
 agent filament synchronization. The read-only endpoints on port `8081` are:
 
 ```text
@@ -116,7 +116,7 @@ Klipper remains the final authority for command execution.
 
 ## Panda / Moonraker-like bridge
 
-CC2 Control 1.1.31 exposes a limited Moonraker-compatible service on TCP port **7125** for integrations such as BTT Panda Breath.
+CC2 Control exposes a limited Moonraker-compatible service on TCP port **7125** for integrations such as BTT Panda Breath.
 
 Useful checks:
 
@@ -162,7 +162,7 @@ wget -qO- http://127.0.0.1:8081/api/setup
 wget -qO- http://127.0.0.1:8081/api/canvas
 ```
 
-A healthy updated system reports CC2 Control **1.1.31** and reaches healthy MQTT/snapshot state after setup.
+A healthy updated system reports the installed CC2 Control version and reaches healthy MQTT/snapshot state after setup.
 
 ## Acknowledgements
 
