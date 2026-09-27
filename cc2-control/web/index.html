@@ -313,7 +313,7 @@ if (/^https?:$/.test(location.protocol)) {
   const thermalHistory = {nozzle:[],bed:[],chamber:[]};
   const timelineEvents=[];
   let lastTimelineKey='';
-  let currentLanguage=localStorage.getItem('cc2-language')==='it'?'it':'en';
+  let currentLanguage=localStorage.getItem('cc2-language')||'en';
   let currentTheme=localStorage.getItem('cc2-theme')==='light'?'light':'dark';
   const originalText=new WeakMap();
   const LANGUAGE_NAMES={en:'English',it:'Italiano',fr:'Français'};
