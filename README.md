@@ -58,6 +58,34 @@ reboot or full power cycle should not be necessary.
 
 For detailed instructions, see [Installation](docs/INSTALL.md).
 
+## Changed the printer LAN access code?
+
+If you change the LAN access code from the printer, update the same code in
+CC2 Control at `http://PRINTER-IP:8081` under **Settings → Connection**.
+
+Enter the new code, select **Verify**, then **Save changes**.
+
+If CC2 Control does not immediately reconnect after the LAN code change, restart
+only the CC2 Control service over SSH:
+
+```sh
+/etc/init.d/cc2-control restart
+```
+
+This restarts CC2 Control without rebooting or power-cycling the printer.
+
+If the old code prevents access to the configuration page entirely, reset only
+the CC2 Control connection configuration:
+
+```sh
+/etc/init.d/cc2-control stop
+rm -f /opt/usr/cc2-control/cc2-control.conf
+/etc/init.d/cc2-control start
+```
+
+Then reload `http://PRINTER-IP:8081` and complete the initial setup with the
+new LAN access code. Material presets and interface preferences are preserved.
+
 ## Features
 
 - local web dashboard on port `8081`;
