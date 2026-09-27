@@ -26,8 +26,9 @@ Contributions, test reports and focused bug fixes are welcome.
 
 ```sh
 cd cc2-control
-make clean all CROSS= CC=gcc
-python3 -m unittest discover -s tests -p 'test_*.py'
+make clean test CROSS= CC=gcc
 ```
 
-See [`docs/TESTING.md`](docs/TESTING.md) for firmware and real-printer checks.
+These tests also run automatically on every pull request; a PR should be green
+before it is merged. See [`docs/TESTING.md`](docs/TESTING.md) for firmware and
+real-printer checks.
