@@ -8,7 +8,7 @@ DIST := dist/cc2-control
 TARGET := $(BUILD)/cc2-control
 UDS_PROBE := $(BUILD)/cc2-uds-probe
 
-.PHONY: all clean dist uds-probe
+.PHONY: all clean dist uds-probe test
 
 all: dist
 
@@ -31,6 +31,12 @@ dist: $(TARGET)
 	cp scripts/launch.sh $(DIST)/launch.sh
 	cp scripts/cc2-control.init $(DIST)/cc2-control.init
 	cp config/cc2-control.conf.example $(DIST)/cc2-control.conf.example
+
+# Host-side tests. Each test is a script, run like builder/current/prepare.py
+# runs them. The runtime tests start the binary, so build it for this machine:
+#   make clean test CROSS= CC=gcc
+test: $(TARGET)
+	@set -e; for t in tests/test_*.py; do echo "== $$t"; python3 $$t $(TARGET); done
 
 clean:
 	rm -rf $(BUILD) dist
