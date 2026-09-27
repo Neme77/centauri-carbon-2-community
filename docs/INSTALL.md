@@ -29,11 +29,12 @@ CC2 Control:
 1. Open `http://PRINTER-IP:8081`.
 2. Go to **Settings → Connection**.
 3. Enter the new code in **LAN access code**.
-4. Select **Verify**.
-5. When the status changes to **Verified**, select **Save changes**.
+4. Select **Change / Revalidate**.
+5. Confirm the replacement.
 
-CC2 Control updates its persistent configuration and automatically realigns
-MQTT and Canvas. A printer restart should not be necessary.
+CC2 Control 1.1.31 writes the replacement atomically and restarts only its own
+service. MQTT, Canvas and snapshot state are then established again without a
+printer reboot or power cycle.
 
 ### Recovery if the old code blocks configuration access
 
