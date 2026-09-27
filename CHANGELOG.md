@@ -14,7 +14,7 @@ No user-visible changes yet.
 - screw corrections in microns and guarded reference optimisation;
 - operational dashboard Quick Actions and global emergency stop;
 - compact settings panels and persistent dark/light themes;
-- file-manager, upload, Canvas, thumbnail and print fixes.
+- file-manager, upload, Canvas, thumbnail and print fixes;
 - removed remaining demonstration values from live job and object statistics;
 - completed elapsed, remaining and total-layer status handling;
 - added first-run service realignment after LAN-code registration;
@@ -35,5 +35,5 @@ No user-visible changes yet.
 - fixed persistent-storage startup ordering;
 - established the V4.1/R8 reproducible builder snapshot.
 
-Earlier technical release records remain under [`releases/`](releases/) and in
-Git history.
+Earlier release details remain available through GitHub Releases, tags and Git
+history.
