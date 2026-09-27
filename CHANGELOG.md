@@ -7,6 +7,24 @@ checksums remain attached to each GitHub release.
 
 No user-visible changes yet.
 
+## CC2 Control 1.1.31
+
+- added OrcaSlicer Moonraker-agent Canvas filament synchronization through
+  read-only `/server/info` and `/server/database/item?namespace=lane_data`
+  compatibility endpoints;
+- maps Canvas tray material, colour and nozzle temperature into OrcaSlicer's
+  filament synchronization data without adding a new polling loop or MQTT
+  subscription;
+- added LAN access-code replacement and revalidation from **Settings →
+  Connection**;
+- LAN-code changes are written atomically and restart only CC2 Control, leaving
+  printer services and an active print untouched;
+- retained the documented SSH service-restart and configuration-reset procedures
+  as recovery fallbacks;
+- added regression tests for Orca lane data and LAN-code revalidation;
+- thanks to **@efiten** for the original OrcaSlicer compatibility proposal,
+  investigation and printer-side validation.
+
 ## V4.2 — CC2 Control 1.1.30
 
 - unified Bed Levelling workflow;
