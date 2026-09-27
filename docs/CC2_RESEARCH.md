@@ -108,8 +108,8 @@ The project follows a few practical rules:
 
 ## Further documentation
 
-- [Community Firmware V4.0](FIRMWARE_V4_0.md)
-- [V4.0 installation guide](INSTALL_V4_0.md)
+- [Community Firmware V4.0](https://github.com/Neme77/centauri-carbon-2-community/blob/V4.1/docs/FIRMWARE_V4_0.md)
+- [V4.0 installation guide](https://github.com/Neme77/centauri-carbon-2-community/blob/V4.1/docs/INSTALL_V4_0.md)
 - [CC2 Control](CC2_CONTROL.md)
 - [Project README](../README.md)
 

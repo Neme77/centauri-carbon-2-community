@@ -1,0 +1,12 @@
+The firmware builder must place the ARM EABI5 static binary here as:
+/opt/inst/cc2-control/cc2-control
+
+Build from project root with:
+  make clean && make
+
+Expected source artifact:
+  dist/cc2-control/cc2-control
+
+Verify with:
+  file dist/cc2-control/cc2-control
+It must be an ELF 32-bit ARM EABI5 executable for the CC2.

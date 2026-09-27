@@ -1,0 +1,8 @@
+[
+  {"name":"PLA","nozzle":200,"bed":60,"min":190,"max":230},
+  {"name":"PETG","nozzle":240,"bed":70,"min":220,"max":260},
+  {"name":"ABS","nozzle":250,"bed":100,"min":230,"max":280},
+  {"name":"ASA","nozzle":255,"bed":100,"min":240,"max":280},
+  {"name":"TPU","nozzle":220,"bed":50,"min":200,"max":240},
+  {"name":"PA-CF","nozzle":285,"bed":100,"min":260,"max":300}
+]

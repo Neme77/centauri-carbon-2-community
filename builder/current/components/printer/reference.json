@@ -1,0 +1,31 @@
+{
+  "firmware": "ELEGOO Centauri Carbon 2 02.01.00.00",
+  "base": "MQTT LAN/WAN coexistence v2 TEST",
+  "input_sha256": "0304ea0cbef4e63baa32f98680076c683c18c0d9255c1c66ac3c3b5e4262ff6a",
+  "input_md5": "a825e0915ca7f0ee4df5dde4ee8b2348",
+  "output_sha256": "c21126e78a63ac9140e7347c56f363d5e513495c58c06fc17e8ef97846f3c0a3",
+  "output_md5": "06071f7b3ca6f809d5a329e1a9466f4c",
+  "hardware_tested": true,
+  "change": {
+    "virtual_address": "0x5c3ca8",
+    "file_offset": "0x5b3ca8",
+    "before": "d5d6feeb",
+    "after": "97d7feeb",
+    "from": "bl communication::UdsAICameraClient::stop_local_video_monitor()",
+    "to": "bl communication::UdsAICameraClient::resume_local_video_monitor()",
+    "purpose": "Keep local webcam monitor active while WanStrategy starts"
+  },
+  "validation": {
+    "source": "User-reported tests in this conversation, 2026-09-14",
+    "passed": [
+      "Orca upload and live temperatures in WAN with Matrix operational",
+      "Local webcam and Matrix video simultaneously in WAN",
+      "WAN to LAN to WAN video recovery",
+      "Port 8080 in WAN"
+    ],
+    "full_v3_8_ota_built": false,
+    "full_v3_8_ota_installed": false,
+    "five_video_clients_tested": false
+  },
+  "integration": "Hash-pinned external binary. MQTT v1 source archive was unavailable; no source-only reconstruction is claimed."
+}

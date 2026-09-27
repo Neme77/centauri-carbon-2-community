@@ -1,141 +1,105 @@
-# ELEGOO Centauri Carbon 2 Community Firmware
+# Centauri Carbon 2 Community Firmware
 
-Open-source community firmware, tools and documentation for the **ELEGOO Centauri Carbon 2 (CC2)**, maintained by **Neme77**.
+Community firmware, local printer control and reproducible build tools for the
+**ELEGOO Centauri Carbon 2**, maintained by **Neme77**.
 
-> This project is not affiliated with, endorsed by, or supported by ELEGOO.
+> This is an independent community project. It is not affiliated with,
+> endorsed by or supported by ELEGOO.
 
-## Community Firmware V4.2
+## Repository status
 
-**V4.2** integrates **CC2 Control 1.1.27** and retains the validated V4.1/R8 persistent-storage startup fix.
+| Component | `main` | Latest published release |
+|---|---:|---:|
+| Community firmware | V4.2 development | [V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2) |
+| CC2 Control | 1.1.28 | 1.1.27 |
 
-> [!IMPORTANT]
-> **Mandatory power cycle after installation**
->
-> After installing Community Firmware V4.2, **do not use the printer immediately**.
-> **Switch the printer completely off, then power it on again before doing anything else.**
-> This full power cycle is required to correctly realign and reinitialize **Canvas** and the related background services.
->
-> After power-on, wait approximately **30–60 seconds** before normal use.
+The source on `main` can be newer than the latest signed firmware. Release
+artifacts, checksums and notes remain attached to their GitHub release.
 
-### V4.2 highlights
+## What is included
 
-- CC2 Control **1.1.27** integrated into the firmware
-- unified **Bed Levelling** workflow
-- saved Side A / Side B mesh visibility
-- four-screw corrections displayed in **microns**
-- guarded **Optimized reference adjustment**
-- operational dashboard **Quick Actions**
-- global one-second press-and-hold **Emergency Stop**
-- compact, navigable **Settings** panels
-- persistent **Dark** theme and new monochrome **Light** theme
-- theme shared between browser and OrcaSlicer
-- all CC2 Control 1.1.26 file, upload, Canvas, thumbnail and print fixes
-- original `elegoo_printer` retained unchanged
+- local web dashboard on port `8081`;
+- live status, camera, temperatures, fans and motion controls;
+- G-code/3MF file manager, thumbnails and OrcaSlicer upload/print support;
+- Canvas material slots, colours, presets and spool selection;
+- saved and adaptive mesh display, Side A/Side B profiles and screw levelling;
+- object exclusion, protected console and global emergency stop;
+- English and Italian interface, dark and light themes;
+- Panda/Moonraker compatibility endpoint on port `7125`;
+- source, tests, integration scripts and firmware builder logic in this repository.
 
-CC2 Control is available at:
+CC2 Control is available after installation at:
 
 ```text
 http://PRINTER-IP:8081
 ```
 
-## Interface Preview
+## Source layout
 
-### Main Dashboard — Light Theme
+| Path | Contents |
+|---|---|
+| [`cc2-control/`](cc2-control/) | C backend, web UI, scripts, tests and protocol notes |
+| [`builder/current/`](builder/current/) | Current firmware build logic and host-side tests |
+| [`builder/v4.1-r8/`](builder/v4.1-r8/) | Historical reproducibility snapshot |
+| [`docs/`](docs/) | Installation, architecture, build and testing documentation |
+| [`releases/`](releases/) | Historical release notes |
 
-The updated dashboard provides live camera access, temperature monitoring, printer status, Quick Actions, and direct access to the main daily controls.
+## Build CC2 Control
+
+Native development build:
+
+```sh
+cd cc2-control
+make clean all CROSS= CC=gcc
+python3 -m unittest discover -s tests -p 'test_*.py'
+```
+
+The production executable targets 32-bit ARM and uses the toolchain described
+in [`docs/BUILD.md`](docs/BUILD.md). Firmware construction also requires a
+legally obtained stock firmware package and separately supplied build inputs;
+vendor binaries and private signing material are not committed.
+
+## Installation
+
+Use the files and instructions belonging to the same GitHub release:
+
+- [Firmware installation](docs/INSTALL.md)
+- [Build and reproduce](docs/BUILD.md)
+- [Source and third-party inputs](docs/SOURCE.md)
+- [Testing](docs/TESTING.md)
+
+The currently published V4.2 firmware requires one complete power cycle after
+installation. Follow the release instructions before opening CC2 Control.
+
+## Interface preview
+
+### Dashboard
 
 <p align="center">
-  <img src="docs/images/v4.2/dashboard-light-theme.jpg" alt="CC2 Control 1.1.27 main dashboard - Light Theme" width="1000">
+  <img src="docs/images/v4.2/dashboard-light-theme.jpg" alt="CC2 Control dashboard" width="1000">
 </p>
 
-### Bed Levelling — Dark and Light Themes
-
-The unified Bed Levelling workflow combines mesh visualization, saved profiles, and four-screw adjustment in a single page. CC2 Control 1.1.27 keeps the refined Dark Theme and adds the new monochrome Light Theme.
+### Bed Levelling
 
 <table>
   <tr>
-    <td align="center"><strong>Dark Theme</strong></td>
-    <td align="center"><strong>Light Theme</strong></td>
+    <td align="center"><strong>Dark theme</strong></td>
+    <td align="center"><strong>Light theme</strong></td>
   </tr>
   <tr>
-    <td><img src="docs/images/v4.2/bed-levelling-dark-theme.jpg" alt="CC2 Control Bed Levelling - Dark Theme"></td>
-    <td><img src="docs/images/v4.2/bed-levelling-light-theme.jpg" alt="CC2 Control Bed Levelling - Light Theme"></td>
+    <td><img src="docs/images/v4.2/bed-levelling-dark-theme.jpg" alt="Bed Levelling dark theme"></td>
+    <td><img src="docs/images/v4.2/bed-levelling-light-theme.jpg" alt="Bed Levelling light theme"></td>
   </tr>
 </table>
 
-### Release files
+## Contributing
 
-| Component | File | SHA-256 |
-|---|---|---|
-| Firmware V4.2 | `CC2_V4_2_STOCK_20260927_021129_d31ed55e.zip.sig` | `4e9944dd0b3e5eaff24bdaf6ed34d32002f25a069e26ec05549b612e94c9ec6b` |
-| Builder V4.2 | `CC2_BUILDER_V4_2_CC2_CONTROL_1.1.27_RELEASE.zip` | `dd38b9aa4ecd779a246403aa3ba8c075f231d538b12694fa4d7303cdf01b71dd` |
-| CC2 Control 1.1.27 updater | `CC2-Control-1.1.27-Multiplatform-Update.zip` | `17012fc53eaca3bd3ab1a1829172c9d12e8ed56dcf4b135d9e17a8acfc6fdccc` |
-| CC2 Control 1.1.27 source | `CC2-Control-1.1.27-Complete-Source-and-Builder.zip` | `1c3039678c27cbad6e9916dc203d4ea1b87910c7c35f7702c6a1195b33a2be63` |
+Please read [`CONTRIBUTING.md`](CONTRIBUTING.md). Keep changes focused, update
+tests with behaviour changes and avoid committing credentials, firmware images,
+generated binaries or private keys.
 
-Direct downloads after the release assets are uploaded:
+## License and notices
 
-- [Firmware V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_021129_d31ed55e.zip.sig)
-- [Builder V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_BUILDER_V4_2_CC2_CONTROL_1.1.27_RELEASE.zip)
-- [CC2 Control 1.1.27 updater](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.27-Multiplatform-Update.zip)
-- [CC2 Control 1.1.27 source](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.27-Complete-Source-and-Builder.zip)
-- [Combined checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt)
-
-See [V4.2 release notes](releases/v4.2.md), [installation](docs/INSTALL_V4_2.md), [firmware details](docs/FIRMWARE_V4_2.md), [build guide](docs/BUILD.md), and [source/reproducibility notes](docs/SOURCE.md).
-
-## Already running Community Firmware V4.1?
-
-You can update **CC2 Control only** to 1.1.27 without reflashing the full firmware using:
-
-```text
-CC2-Control-1.1.27-Multiplatform-Update.zip
-```
-
-The updater supports Windows, Linux and macOS and preserves existing persistent settings.
-
-> [!IMPORTANT]
-> After the CC2 Control 1.1.27 update completes, **switch the printer completely off and power it on again before using it** so Canvas and the background services are realigned.
-
-See [Installing CC2 Control 1.1.27](docs/INSTALL_CC2_CONTROL_1_1_27.md).
-
-## CC2 Control 1.1.27
-
-### Bed Levelling
-- one Bed Levelling entry for mesh and screw levelling
-- Side A / Side B profiles and active mesh in one workflow
-- screw corrections shown in microns
-- guarded reference optimization suggestion
-- no automatic screw movement
-
-### Controls and safety
-- Quick Actions: Home All, All Heaters Off, Fans Off and Motors Off
-- global Emergency Stop on every page
-- one-second press-and-hold protection
-- printer-state safety guards remain active
-
-### Settings and appearance
-- Connection, Safety, Integrations, Appearance and About are separate panels
-- compact layout
-- persistent Dark theme
-- new monochrome Light theme
-- appearance shared with OrcaSlicer
-
-## Historical V4.1 release
-
-Community Firmware **V4.1 / R8** remains preserved as the previous release and historical reproducibility snapshot.
-
-- [V4.1 release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1)
-- [V4.1 R8 builder snapshot](builder/v4.1-r8/README.md)
-
-## Documentation
-
-- [Firmware V4.2](docs/FIRMWARE_V4_2.md)
-- [Install Firmware V4.2](docs/INSTALL_V4_2.md)
-- [Install CC2 Control 1.1.27](docs/INSTALL_CC2_CONTROL_1_1_27.md)
-- [CC2 Control](docs/CC2_CONTROL.md)
-- [Reproducible builds](docs/BUILD.md)
-- [Source code and reproducibility](docs/SOURCE.md)
-- [Technical research](docs/CC2_RESEARCH.md)
-
-## License and third-party material
-
-See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+Project code is provided under GPL-3.0-only where the contributors have the
+right to license it. Vendor firmware and third-party components keep their own
+terms. See [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).

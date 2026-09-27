@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+
+STATE=/opt/usr/cc2-control
+CONFIG="$STATE/cc2-control.conf"
+TEMP="$STATE/cc2-control.conf.new"
+
+mkdir -p "$STATE"
+umask 077
+
+printf 'Printer access code: '
+if [ -t 0 ]; then
+    trap 'stty echo 2>/dev/null || true; echo; rm -f "$TEMP"' EXIT INT TERM
+    stty -echo
+fi
+IFS= read -r ACCESS_CODE
+if [ -t 0 ]; then
+    stty echo
+    echo
+fi
+
+case "$ACCESS_CODE" in
+    ''|*[!A-Za-z0-9._-]*)
+        echo 'Invalid code. Use only letters, numbers, dot, underscore or hyphen.' >&2
+        exit 1
+        ;;
+esac
+
+SERIAL=
+if [ -f "$CONFIG" ]; then
+    SERIAL=$(sed -n 's/^mqtt_serial=//p' "$CONFIG" | head -n 1)
+fi
+
+{
+    echo 'mqtt_username=elegoo'
+    printf 'mqtt_password=%s\n' "$ACCESS_CODE"
+    echo 'mqtt_topic=elegoo/+/api_status'
+    printf 'mqtt_serial=%s\n' "$SERIAL"
+} > "$TEMP"
+
+chmod 600 "$TEMP"
+mv -f "$TEMP" "$CONFIG"
+trap - EXIT INT TERM
+
+/etc/init.d/cc2-control stop 2>/dev/null || true
+sleep 1
+/etc/init.d/cc2-control start
+
+echo 'CC2 Control configured. Open http://PRINTER-IP:8081 after about 30 seconds.'

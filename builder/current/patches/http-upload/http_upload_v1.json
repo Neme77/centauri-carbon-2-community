@@ -1,0 +1,94 @@
+{
+  "baseline": {
+    "filename": "elegoo_printer",
+    "size": 18099452,
+    "sha256": "c968ad1430f331bf0a20d5e54bdc8c1428a223b5977c3320c1287e301ec447e5",
+    "md5": "16cb51d81ca983524c121cf0fca234c2"
+  },
+  "variant": {
+    "filename": "elegoo_printer_combined",
+    "sha256": "fb95bd123fbbb9e77ed380a0ab7bdb53a0b86997af8452adf76710a2d242e021",
+    "md5": "b3a607b6d1db7b3d4224c2b3b5f0341a",
+    "patches": [
+      {
+        "va": "0x005b9124",
+        "offset": 5935396,
+        "before": "2857f4eb0040a0e1f8004be2fc3206e3853040e3e020a0e3881606e3851040e3cf41f4eb1c3806e3853040e318300be518301be5ec300be518001be59628f4eb0030a0e1e8300be504208de2ec304be2030093e8030082e80230a0e300308de5f8304be20e0093e80400a0e1c338f6eb",
+        "after": "1a0000eaa8011be5403090e5010053e3d600008a080090e5000050e3d300000a143090e5000053e3d000000aa83200ebce0000ea00f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e3",
+        "reason": "Replace one mode-change informational log with an out-of-line HTTP-start block using the existing NetworkManager stack frame."
+      },
+      {
+        "va": "0x005b9490",
+        "offset": 5936272,
+        "before": "00f020e3",
+        "after": "24ffffea",
+        "reason": "Ensure HTTP is started after strategy selection and token setup, including direct WAN boot."
+      },
+      {
+        "va": "0x005c5470",
+        "offset": 5985392,
+        "before": "ff0100eb",
+        "after": "00f020e3",
+        "reason": "Do not stop the HTTP file server in LanStrategy::stop; MQTT and camera stop paths remain original."
+      },
+      {
+        "va": "0x005f2ff0",
+        "offset": 6172656,
+        "before": "14301be50b0053e3",
+        "after": "020053e30b005313",
+        "reason": "Admit PRINTING=2 in addition to original states 1 and 11. All other states still fail the gate."
+      },
+      {
+        "va": "0x005f3d10",
+        "offset": 6176016,
+        "before": "2d6cf3eb0040a0e1bb0f4be2083b04e3873040e34f2fa0e3a41007e3871040e3d456f3eb243707e3873040e3e0320be5240707e3870040e39c3df3eb0030a0e1dc320be5493e4be20c3043e2083043e20c308de504208de22e3e4be2030093e8030082e80230a0e300308de5bb3f4be20e0093e80400a0e16a23f7eb4e3e4be20c3043e20300a0e1d122f3eb0030a0e10300a0e12820f3eb0030a0e1000053e30130a0130030a0037330efe6000053e33a00000a006cf3eb0040a0e1b60f4be2083b04e3873040e3052da0e3a41007e3871040e3a756f3eb503707e3873040e3cc320be5500707e3870040e36f3df3eb0030a0e1c8320be54e3e4be20c3043e20c308de504208de2b33f4be2030093e8030082e80430a0e300308de5b63f4be20e0093e80400a0e13e23f7ebb8351be5683083e2c81f0ce3801040e30300a0e1b999f3eb0040a0e1323302e3b0320be52b2e4be2b13f4be20210a0e10300a0e174f0ffebb13f4be20310a0e10400a0e1269af3ebb13f4be20300a0e1a072f3eb493e4be20c3043e2083043e20310a0e1b0051be5370900ebc840a0e3250400ea8b5200eb0020a0e14b3e4be20c3043e20310a0e10200a0e19ca300eb",
+        "after": "491e4be2141041e2b0051be5990900eb994100e3870400ea00f020e300f020e300f020e300f020e300f020e300f020e3b4cb90e501005ce30b005c1373a1000a1eff2fe100f020e300f020e300f020e3b4cb90e501005ce30b005c1359a0000a1eff2fe100f020e300f020e300f020e3b4cb90e50b005ce333a2000a1eff2fe100f020e300f020e300f020e300f020e3cf5200ebb43b90e5010053e30b0053130100000a994100e33a0600ea3c311be52e0500ea00f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e3",
+        "reason": "Existing file on first chunk returns HTTP 409 without deletion, in every state. Reclaimed overwrite code hosts guarded state setters and a cancellation guard."
+      },
+      {
+        "va": "0x005f43d0",
+        "offset": 6177744,
+        "before": "d29f00eb",
+        "after": "5afeffeb",
+        "reason": "Only enter upload status when current machine status is 1 or 11."
+      },
+      {
+        "va": "0x005f4608",
+        "offset": 6178312,
+        "before": "329e00eb",
+        "after": "d4fdffeb",
+        "reason": "Write-error path: do not force idle from printing or other active states."
+      },
+      {
+        "va": "0x005f4d78",
+        "offset": 6180216,
+        "before": "569c00eb",
+        "after": "f8fbffeb",
+        "reason": "MD5-error path: do not force idle from printing or other active states."
+      },
+      {
+        "va": "0x005f4d94",
+        "offset": 6180244,
+        "before": "309e00eb",
+        "after": "f9fbffeb",
+        "reason": "Completion substatus 3001 is emitted only while current machine status is 11."
+      },
+      {
+        "va": "0x005f68c0",
+        "offset": 6187200,
+        "before": "659700eb",
+        "after": "2ef5ffeb",
+        "reason": "Timeout substatus 3001 is emitted only while current machine status is 11."
+      },
+      {
+        "va": "0x005f527c",
+        "offset": 6181500,
+        "before": "3c311be5",
+        "after": "c7faffea",
+        "reason": "After token validation, reject transfer cancellation outside idle/transfer states; prevents the stock arbitrary-path deletion during printing."
+      }
+    ],
+    "changed_bytes": 545
+  },
+  "validation": "HTTP and upload during printing reported working by user with OrcaSlicer LAN; upload v1 only. No on_slicer_begin changes."
+}

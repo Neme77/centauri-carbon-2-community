@@ -1,102 +1,35 @@
-# Source code and reproducibility
+# Source and reproducibility
 
-This project aims to keep released community components auditable and reproducible.
+The preferred form for modifying CC2 Control is committed directly under
+[`cc2-control/`](../cc2-control/). Current firmware builder logic is committed
+under [`builder/current/`](../builder/current/).
 
-## Current release: Community Firmware V4.2
+Release archives are convenience snapshots, not substitutes for the repository
+source. A release should be traceable to a signed tag or documented commit and
+must publish checksums for all downloadable artifacts.
 
-Community Firmware **V4.2** integrates **CC2 Control 1.1.27**.
+## External inputs
 
-Published release artifacts are pinned by SHA-256.
+A complete firmware image also contains vendor and third-party material that is
+not owned by this project. The builder therefore requires separately supplied,
+legally obtained inputs and validates them against pinned hashes.
 
-### Firmware
+ELEGOO's public Centauri Carbon 2 repository is available at:
 
-```text
-CC2_V4_2_STOCK_20260927_021129_d31ed55e.zip.sig
-4e9944dd0b3e5eaff24bdaf6ed34d32002f25a069e26ec05549b612e94c9ec6b
-```
+<https://github.com/elegooofficial/CentauriCarbon2>
 
-### Builder
+Private signing keys, LAN access codes, stock firmware, generated images and
+vendor executables are not stored in this repository.
 
-```text
-CC2_BUILDER_V4_2_CC2_CONTROL_1.1.27_RELEASE.zip
-dd38b9aa4ecd779a246403aa3ba8c075f231d538b12694fa4d7303cdf01b71dd
-```
+## Release policy
 
-The V4.2 builder is derived from the validated V4.1/R8 build chain. Some internal directory and script names remain `v4_1` to preserve continuity with the tested builder lineage.
+- Source changes land before or with the corresponding binary release.
+- The release identifies the exact source tag or commit.
+- Checksums cover firmware, updater and source archive downloads.
+- Version-specific facts belong in release notes and `CHANGELOG.md`.
+- Canonical development filenames remain stable.
+- Old release snapshots stay recoverable from tags, release assets and Git
+  history; published history is not rewritten for cosmetic cleanup.
 
-### CC2 Control 1.1.27 source
-
-```text
-CC2-Control-1.1.27-Complete-Source-and-Builder.zip
-1c3039678c27cbad6e9916dc203d4ea1b87910c7c35f7702c6a1195b33a2be63
-```
-
-The source archive contains:
-
-- backend source
-- web UI
-- validation tests
-- firmware integration files
-- startup scripts
-- configuration example
-- development tools
-- multiplatform package builder
-
-### Standalone updater
-
-```text
-CC2-Control-1.1.27-Multiplatform-Update.zip
-17012fc53eaca3bd3ab1a1829172c9d12e8ed56dcf4b135d9e17a8acfc6fdccc
-```
-
-## Mandatory post-install power cycle
-
-After installing the full firmware or the standalone CC2 Control updater, **switch the printer completely off and then power it on again before doing anything else**.
-
-This full power cycle is required to realign Canvas and the related background services.
-
-## Historical V4.1 / R8 release
-
-The previous V4.1/R8 release remains preserved as a reproducibility snapshot.
-
-Builder:
-
-```text
-CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R8_PERSISTENT_MOUNT_FIX.zip
-```
-
-SHA-256:
-
-```text
-c94de033abea04bfe6b3788e131a0a9fdc6d9bfa6ec90a40288ba242750211e9
-```
-
-See [../builder/v4.1-r8/README.md](../builder/v4.1-r8/README.md).
-
-## External vendor input
-
-The firmware builder requires a legally obtained ELEGOO Centauri Carbon 2 stock firmware package.
-
-ELEGOO's official Centauri Carbon 2 repository publishes its signing-tool material under:
-
-```text
-elegoo/lib/signtools/key/
-```
-
-Official repository:
-
-https://github.com/elegooofficial/CentauriCarbon2
-
-## Verification
-
-Before building or installing, verify downloaded archives against the published SHA-256 values.
-
-See [BUILD.md](BUILD.md) for the build workflow.
-
-## Repository policy
-
-- project documentation is written in English
-- generated firmware images and local credentials are not committed
-- unrelated tools are kept outside the firmware repository
-- release artifacts are pinned by hashes
-- historical material remains recoverable through Git history, release assets and archive branches
+See [`BUILD.md`](BUILD.md) for the build workflow and [`../NOTICE.md`](../NOTICE.md)
+for licensing scope and third-party limitations.

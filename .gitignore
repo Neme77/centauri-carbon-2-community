@@ -10,6 +10,10 @@
 *.zip.sig
 *.img
 *.bin
+**/*private*.pem
+**/original_firmware/
+**/components/printer/elegoo_printer*
+**/components/ssh/sshd
 output/
 logs/
 work/
