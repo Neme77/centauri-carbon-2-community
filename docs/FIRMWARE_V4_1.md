@@ -5,9 +5,9 @@ Community Firmware **V4.1** integrates **CC2 Control 1.1.25** into the ELEGOO Ce
 ## Important post-install step
 
 > [!IMPORTANT]
-> After installation has completed and the printer has booted normally, **reboot the printer once more** before normal use.
+> After installation has completed and the printer has booted normally, **switch the printer completely off, then power it on again** before doing anything else. This full power cycle is required to realign Canvas and the related background services before normal use.
 
-The additional reboot lets CC2 Control, Canvas discovery/state, MQTT registration and the compatibility services initialize against a fully settled printer runtime. V4.1 was validated with two complete firmware installation cycles using this procedure.
+The full power cycle lets CC2 Control, Canvas discovery/state, MQTT registration and the compatibility services initialize against a fully settled printer runtime. V4.1 was validated with two complete firmware installation cycles using this procedure.
 
 ## CC2 Control 1.1.25
 
