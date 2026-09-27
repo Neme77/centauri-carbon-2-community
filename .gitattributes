@@ -1,0 +1,10 @@
+# Byte-exact inputs pinned by SHA-256 in builder/current/core/firmware_builder.py.
+# Never convert their line endings: one dropped CR makes the fail-closed build refuse to run.
+builder/current/components/ssh/sshd.init -text
+builder/current/components/ssh/sshd_config -text
+builder/current/patches/z-offset/patch_zoffset.py -text
+builder/current/patches/http-upload/http_upload_v1.json -text
+builder/current/dualtrust/apply_dualtrust.py -text
+builder/current/dualtrust/cc2_community_release_public.pem -text
+builder/current/keys/cc2_stock_public.pem -text
+builder/current/tools/cc2_sig_tool_v1.1.py -text
