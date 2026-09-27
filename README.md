@@ -30,6 +30,22 @@ kept directly on `main`.
 For release notes and all attached files, see the
 [GitHub V4.2 release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2).
 
+## Already running an older Community Firmware?
+
+If your printer already runs an earlier Community Firmware release, you do not
+need to reflash the complete firmware just to update CC2 Control.
+
+Use the standalone updater:
+
+[`CC2-Control-1.1.30-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip)
+
+The standalone updater replaces only CC2 Control and preserves the persistent
+LAN access code, material presets and interface preferences. After the update,
+CC2 Control realigns its local services automatically, so an additional printer
+reboot or full power cycle should not be necessary.
+
+For detailed instructions, see [Installation](docs/INSTALL.md).
+
 ## Features
 
 - local web dashboard on port `8081`;
