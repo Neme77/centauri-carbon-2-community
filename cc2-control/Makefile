@@ -24,9 +24,10 @@ $(UDS_PROBE): tools/uds_probe.c | $(BUILD)
 uds-probe: $(UDS_PROBE)
 
 dist: $(TARGET)
-	mkdir -p $(DIST)/web
+	mkdir -p $(DIST)/web/locales
 	cp $(TARGET) $(DIST)/cc2-control
 	cp web/index.html $(DIST)/web/index.html
+	cp web/locales/*.json $(DIST)/web/locales/
 	cp scripts/start.sh $(DIST)/start.sh
 	cp scripts/launch.sh $(DIST)/launch.sh
 	cp scripts/cc2-control.init $(DIST)/cc2-control.init

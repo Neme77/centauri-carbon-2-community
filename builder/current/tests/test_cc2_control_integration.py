@@ -22,25 +22,52 @@ assert 'chmod 755 "$PERSIST"' in runtime_start
 assert '/opt/inst/cc2-control/start.sh' in runtime_init
 assert '/opt/usr/cc2-control/launch.sh' not in runtime_init
 
-with tempfile.TemporaryDirectory() as temporary:
-    root=Path(temporary)
+def prepare(root,extra=()):
     component=root/'prepared';component.mkdir()
     files={}
-    for relative in b.CC2_CONTROL_FILES:
+    for relative in b.CC2_CONTROL_FILES+tuple(extra):
         path=component/relative;path.parent.mkdir(parents=True,exist_ok=True)
         path.write_bytes(('TEST '+relative+'\n').encode())
-        path.chmod(0o644 if relative in ('web/index.html','defaults/material-presets.json') else 0o755)
+        path.chmod(0o755 if relative in ('cc2-control','start.sh','launch.sh','cc2-control.init','cc2-configure') else 0o644)
         files[relative]={'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
                          'mode':oct(path.stat().st_mode&0o777)}
     manifest_path=root/'manifest.json'
     manifest_path.write_text(json.dumps({'component':'CC2 Control','version':'1.1.30',
         'source_sha256':b.CC2_CONTROL_SOURCE_SHA256,'files':files}))
-    prepared,manifest=b.load_cc2_control(component,manifest_path)
+    return b.load_cc2_control(component,manifest_path)
+
+def install(root,prepared,manifest):
     image=root/'rootfs';image.mkdir()
     b.install_cc2_control(image,prepared,manifest)
     b.audit_cc2_control(image,prepared,manifest)
     assert not (image/'opt/usr/cc2-control').exists(), 'persistent state must not be embedded in rootfs'
     assert (image/'etc/rc.d/S98cc2-control').readlink()==Path('../init.d/cc2-control')
     assert (image/'etc/rc.d/K10cc2-control').readlink()==Path('../init.d/cc2-control')
+    return image
 
-print('PASS: CC2 Control files, permissions, init links and persistent-state separation.')
+# UI snapshots that still embed their translations: no locale files at all.
+with tempfile.TemporaryDirectory() as temporary:
+    image=install(Path(temporary),*prepare(Path(temporary)))
+    assert not (image/'opt/inst/cc2-control/web/locales').exists()
+
+# JSON-backed UI: any number of web/locales/<code>.json files, installed as-is.
+with tempfile.TemporaryDirectory() as temporary:
+    locales=('web/locales/en.json','web/locales/fr.json','web/locales/pt-BR.json')
+    image=install(Path(temporary),*prepare(Path(temporary),locales))
+    for relative in locales:
+        assert (image/'opt/inst/cc2-control'/relative).is_file(), relative
+    assert (image/'opt/inst/cc2-control/web/locales/fr.json').stat().st_mode&0o777==0o644
+
+# Fail closed on locale names outside the pattern or a missing source locale.
+for bad in (('web/locales/en.json','web/locales/EN2.json'),
+            ('web/locales/en.json','web/locales/../cc2-control.json'),
+            ('web/locales/fr.json',),
+            ('web/locales/en.json','web/extra.json')):
+    with tempfile.TemporaryDirectory() as temporary:
+        try:
+            prepare(Path(temporary),bad)
+        except RuntimeError:
+            continue
+        raise AssertionError(f'accepted invalid CC2 Control file set: {bad}')
+
+print('PASS: CC2 Control files, optional locales, permissions, init links and persistent-state separation.')

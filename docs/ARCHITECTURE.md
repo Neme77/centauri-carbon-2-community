@@ -14,7 +14,8 @@ the Centauri Carbon 2.
 | procd service | Startup ordering, supervision and clean restart |
 
 The backend is written in C and serves the single-page UI from
-`cc2-control/web/index.html`. Persistent state belongs under
+`cc2-control/web/index.html`, with its translations loaded from
+`cc2-control/web/locales/<code>.json` at `/i18n/<code>.json`. Persistent state belongs under
 `/opt/usr/cc2-control`; immutable application files belong under
 `/opt/inst/cc2-control`.
 
