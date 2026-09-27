@@ -38,6 +38,31 @@ CC2 Control is available at:
 http://PRINTER-IP:8081
 ```
 
+## Interface Preview
+
+### Main Dashboard — Light Theme
+
+The updated dashboard provides live camera access, temperature monitoring, printer status, Quick Actions, and direct access to the main daily controls.
+
+<p align="center">
+  <img src="docs/images/v4.2/dashboard-light-theme.jpg" alt="CC2 Control 1.1.27 main dashboard - Light Theme" width="1000">
+</p>
+
+### Bed Levelling — Dark and Light Themes
+
+The unified Bed Levelling workflow combines mesh visualization, saved profiles, and four-screw adjustment in a single page. CC2 Control 1.1.27 keeps the refined Dark Theme and adds the new monochrome Light Theme.
+
+<table>
+  <tr>
+    <td align="center"><strong>Dark Theme</strong></td>
+    <td align="center"><strong>Light Theme</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/v4.2/bed-levelling-dark-theme.jpg" alt="CC2 Control Bed Levelling - Dark Theme"></td>
+    <td><img src="docs/images/v4.2/bed-levelling-light-theme.jpg" alt="CC2 Control Bed Levelling - Light Theme"></td>
+  </tr>
+</table>
+
 ### Release files
 
 | Component | File | SHA-256 |
