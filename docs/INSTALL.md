@@ -32,7 +32,7 @@ CC2 Control:
 4. Select **Change / Revalidate**.
 5. Confirm the replacement.
 
-CC2 Control 1.1.31 writes the replacement atomically and restarts only its own
+CC2 Control writes the replacement atomically and restarts only its own
 service. MQTT, Canvas and snapshot state are then established again without a
 printer reboot or power cycle.
 
