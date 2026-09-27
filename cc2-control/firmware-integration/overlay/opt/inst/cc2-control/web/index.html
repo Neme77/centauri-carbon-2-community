@@ -533,7 +533,8 @@ if (/^https?:$/.test(location.protocol)) {
       if (system[2]) system[2].textContent = String(health.loadavg).split(/\s+/).slice(0, 3).join(' ');
       if (system[3]) system[3].textContent = `${(health.mem_available_kb / 1024).toFixed(1)} MiB`;
       const settings=id('settings'),rows=all(settings,'.form-row'),verified=rows[2]&&one(rows[2],'.verified'),verifyButton=rows[2]&&one(rows[2],'button'),mqttTag=rows[3]&&one(rows[3],'.tag'),mqttReady=Boolean(health.mqtt_connected&&health.mqtt_registered);
-      if(verified){verified.textContent=`●  ${translatedText(setup.configured?'Configured':'Configuration required')}`;verified.style.color=setup.configured?'#35e79f':'#ffce54'}
+      const lanReady=Boolean(setup.configured&&mqttReady&&setup.snapshot_received);
+      if(verified){verified.textContent=`●  ${translatedText(lanReady?'Configured':setup.configured?'Revalidation required':'Configuration required')}`;verified.style.color=lanReady?'#35e79f':'#ffce54'}
       if(verifyButton){verifyButton.disabled=false;verifyButton.textContent=translatedText(setup.configured?'Change / Revalidate':'Verify');verifyButton.title=setup.configured?'Replace and revalidate the printer LAN access code':'Configure the LAN access code'}
       if(mqttTag){mqttTag.className=`tag ${mqttReady?'ok':'warning'}`;mqttTag.textContent=`●  ${translatedText(mqttReady?'Connected':'Waiting')}`}
     } catch (_) {}
