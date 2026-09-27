@@ -18,24 +18,24 @@ Do not install this package on the original Centauri Carbon or another printer m
 PowerShell:
 
 ```powershell
-Get-FileHash .\CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig -Algorithm SHA256
+Get-FileHash .\CC2_V4_1_STOCK_20260926_125358_67008870.zip.sig -Algorithm SHA256
 ```
 
 Expected SHA-256:
 
 ```text
-868814647d3835c193f0f0625e9037545a5a5128ee504ce74c62fbc4c4f41e19
+8346631920902283c544f8a93f63443d68982fb619afd908d611c69fa85a8624
 ```
 
 ## Installation
 
-1. Copy `CC2_V4_1_STOCK_20260926_015216_446f1846.zip.sig` unchanged to USB storage.
+1. Copy `CC2_V4_1_STOCK_20260926_125358_67008870.zip.sig` unchanged to USB storage.
 2. Do not extract, rename or modify it.
 3. Insert the USB drive and start the update from the printer interface.
 4. Do not remove power while the package is being verified, written or booted.
 5. Allow the first boot to complete and wait until the normal printer menus are available.
-6. **switch the printer completely off, then power it on again.**
-7. After that reboot, wait roughly 30–60 seconds before opening CC2 Control.
+6. **Switch the printer completely off, then power it on again.**
+7. After powering it back on, wait roughly 30–60 seconds before opening CC2 Control.
 
 > [!IMPORTANT]
 > The full power cycle in step 6 is part of the V4.1 installation procedure. It allows CC2 Control, Canvas state and background services to initialize cleanly before doing anything else. This full power cycle is required to realign Canvas and the related background services before normal use.
