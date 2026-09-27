@@ -19,8 +19,8 @@ Example response:
   "platform": "cc2-community",
   "implementation": "Neme77/centauri-carbon-2-community",
   "device": "ELEGOO Centauri Carbon 2",
-  "community_firmware": "4.1",
-  "cc2_control": "1.1.25",
+  "community_firmware": "4.2",
+  "cc2_control": "1.1.31",
   "api_version": 1,
   "printer_uuid": "...",
   "services": {
@@ -64,3 +64,16 @@ Example response:
 - Breaking schema changes require a new `/api/vN/...` endpoint.
 - `services` reports the actual ports selected at CC2 Control startup.
 - `printer_uuid` may be empty until printer telemetry has supplied it.
+
+## LAN access-code setup and rotation
+
+- `GET /api/setup` reports credential and MQTT synchronization state.
+- `POST /api/setup` accepts the initial LAN access code during first-run setup.
+- `POST /api/setup/revalidate` atomically replaces an existing LAN code and restarts only CC2 Control.
+
+## OrcaSlicer Canvas filament synchronization
+
+- `GET /server/info` reports the live CC2 Control MQTT readiness state in Moonraker-compatible form.
+- `GET /server/database/item?namespace=lane_data` exposes the cached Canvas trays as read-only AFC lanes for OrcaSlicer's Moonraker printer agent.
+
+No additional polling, process, thread, or MQTT subscription is created by these endpoints.

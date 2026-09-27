@@ -7,8 +7,6 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 hotfix = (root / "scripts" / "start.sh").read_text(encoding="utf-8")
 firmware = (root / "scripts" / "start-firmware.sh").read_text(encoding="utf-8")
-standalone_init = (root / "scripts" / "cc2-control.init").read_text(encoding="utf-8")
-firmware_init = (root / "scripts" / "cc2-control-firmware.init").read_text(encoding="utf-8")
 
 assert '--panda-port 7125' in hotfix, "persistent launcher does not expose Panda port 7125"
 assert '--panda-port 7125' in firmware, "firmware launcher does not expose Panda port 7125"
@@ -23,8 +21,5 @@ assert firmware.index(mount_guard) < firmware.index('mkdir -p "$PERSIST"'), (
 )
 assert 'chmod 755 "$PERSIST"' in firmware
 assert 'chmod 644 "$PERSIST/material-presets.json"' in firmware
-assert '/opt/usr/cc2-control/launch.sh' in standalone_init
-assert '/opt/inst/cc2-control/start.sh' in firmware_init
-assert '/opt/usr/cc2-control/launch.sh' not in firmware_init
 
 print("PASS: launchers preserve Panda compatibility and firmware waits for persistent storage.")

@@ -50,4 +50,4 @@ assert 'Restarting CC2 Control and synchronizing Canvas' in ui
 assert 'for (let count = 0; count < 60; count++)' in ui
 assert "for(const [temp,color]of [[28" not in ui
 assert "lines[index].textContent = 'Read during inspection'" not in ui
-print("PASS: CC2 Control 1.1.30 stable live-job and safety markers")
+print("PASS: CC2 Control 1.1.31 stable live-job and safety markers")
