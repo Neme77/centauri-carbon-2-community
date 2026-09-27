@@ -11,7 +11,7 @@ Community firmware, local printer control and reproducible build tools for the
 | Component | Version |
 |---|---:|
 | Community firmware | [V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2) |
-| CC2 Control | 1.1.30 |
+| CC2 Control | [1.1.31](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.1.31) |
 
 Release binaries, standalone updaters, source archives and checksums are kept
 with the corresponding GitHub Release. The canonical development source is
@@ -21,8 +21,8 @@ kept directly on `main`.
 
 <p align="center">
   <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig"><img alt="Download Community Firmware V4.2" src="https://img.shields.io/badge/Download-Firmware%20V4.2-00b8d9?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip"><img alt="Download CC2 Control 1.1.30 updater" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.30-22c55e?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip"><img alt="Download CC2 Control source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.30-6f42c1?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip"><img alt="Download CC2 Control 1.1.31 updater" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.31-22c55e?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip"><img alt="Download CC2 Control 1.1.31 source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.31-6f42c1?style=for-the-badge"></a>
 </p>
 
 <p align="center">
@@ -37,8 +37,8 @@ kept directly on `main`.
 | Choose this file | When to use it |
 |---|---|
 | [`CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig) | New installation or complete Community Firmware V4.2 update |
-| [`CC2-Control-1.1.30-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip) | Existing Community Firmware installation: update only CC2 Control, without reflashing the full firmware |
-| [`CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Source-and-Multiplatform-Builder-R4.zip) | Complete CC2 Control source and reproducible updater builder |
+| [`CC2-Control-1.1.31-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip) | Existing Community Firmware installation: update only CC2 Control, without reflashing the full firmware |
+| [`CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip) | Complete CC2 Control source and reproducible updater builder |
 | [`CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip) | Firmware builder R4 |
 | [`SHA256SUMS_V4_2.txt`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt) | Verify downloaded release files |
 
@@ -49,12 +49,14 @@ need to reflash the complete firmware just to update CC2 Control.
 
 Use the standalone updater:
 
-[`CC2-Control-1.1.30-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2-Control-1.1.30-Multiplatform-Update.zip)
+[`CC2-Control-1.1.31-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip)
 
 The standalone updater replaces only CC2 Control and preserves the persistent
-LAN access code, material presets and interface preferences. After the update,
-CC2 Control realigns its local services automatically, so an additional printer
-reboot or full power cycle should not be necessary.
+LAN access code, material presets and interface preferences. CC2 Control 1.1.31
+also adds LAN-code revalidation and OrcaSlicer Moonraker-agent Canvas filament
+synchronization. After the update, CC2 Control realigns its local services
+automatically, so an additional printer reboot or full power cycle should not
+be necessary.
 
 For detailed instructions, see [Installation](docs/INSTALL.md).
 
