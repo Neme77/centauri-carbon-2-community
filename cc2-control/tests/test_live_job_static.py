@@ -38,7 +38,7 @@ assert 'strcmp(action,"system:heaters_off")' in control
 assert 'strcmp(action,"system:fans_off")' in control
 assert 'strcmp(action,"system:emergency_stop")' in control
 assert 'active_gcode_total_layers' in main
-assert '\\"total_layers\\":%d' in main
+assert '\\\\"total_layers\\\":%d' in main
 assert 'number_in(o,n,"total_layer_count"' in mqtt
 assert 'number_in(o,n,"elapsed_time"' in mqtt
 assert 'number_in(o,n,"remaining_time"' in mqtt
