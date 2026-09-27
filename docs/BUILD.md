@@ -1,16 +1,16 @@
 # Reproducible build guide
 
-This repository is intended to keep the Community Firmware build process and CC2 Control source auditable and reproducible.
+This repository keeps the Community Firmware build process and CC2 Control source auditable and reproducible.
 
-## Supported target
+## Current target
 
 - Printer: ELEGOO Centauri Carbon 2
 - Stock firmware base: 02.01.00.00
-- Community firmware: V4.1
-- Integrated CC2 Control baseline: 1.1.25
-- Current CC2 Control hotfix: 1.1.26
+- Community firmware release: V4.2
+- Integrated CC2 Control: 1.1.27
+- Builder lineage: V4.1/R8 with the 1.1.27 integration update
 
-## Build environment
+## Validated build environment
 
 The validated environment is Windows 10/11 with Ubuntu under WSL.
 
@@ -21,68 +21,67 @@ sudo apt update
 sudo apt install python3 gcc-arm-linux-gnueabihf squashfs-tools make
 ```
 
-SquashFS compatibility should be checked against the version expected by the builder before producing a release package.
+SquashFS compatibility should match the version expected by the builder before producing a release package.
 
 ## External input
 
 The firmware builder requires a legally obtained ELEGOO Centauri Carbon 2 stock firmware package.
 
-The project does not need to redistribute the stock firmware image in the source tree.
-
-The official ELEGOO Centauri Carbon 2 repository also contains the signing-tool material used by ELEGOO under:
+ELEGOO's official Centauri Carbon 2 repository also publishes signing-tool material under:
 
 ```text
 elegoo/lib/signtools/key/
 ```
 
-This includes the public key, private key and AES key published by ELEGOO. They are not duplicated in this repository; obtain them from the official ELEGOO source when required by the selected build workflow.
-
 Official repository:
 
 https://github.com/elegooofficial/CentauriCarbon2
 
-## CC2 Control
+## CC2 Control 1.1.27
 
-CC2 Control is built independently from the firmware image.
-
-From the CC2 Control source directory:
-
-```sh
-make clean
-make
-```
-
-The expected output is:
+The complete source and package-builder snapshot is distributed as:
 
 ```text
-build/cc2-control
+CC2-Control-1.1.27-Complete-Source-and-Builder.zip
 ```
 
-Verify the binary:
-
-```sh
-file build/cc2-control
-```
-
-It must be an ARM 32-bit EABI5 statically linked executable.
-
-## Firmware build
-
-The exact historical V4.1 R8 builder is pinned by SHA-256:
+SHA-256:
 
 ```text
-c94de033abea04bfe6b3788e131a0a9fdc6d9bfa6ec90a40288ba242750211e9
+1c3039678c27cbad6e9916dc203d4ea1b87910c7c35f7702c6a1195b33a2be63
 ```
 
-Builder archive:
+From the release source directory, the provided PowerShell release builder compiles the ARM executable and assembles the multiplatform updater.
+
+The resulting updater is:
 
 ```text
-CC2_BUILDER_V4_1_CC2_CONTROL_1.1.25_R8_PERSISTENT_MOUNT_FIX.zip
+CC2-Control-1.1.27-Multiplatform-Update.zip
 ```
 
-See [../builder/v4.1-r8/README.md](../builder/v4.1-r8/README.md) for the historical snapshot and source manifest.
+SHA-256:
 
-Use the V4.1 builder package/source and run preparation first. The stock-signed release workflow is:
+```text
+17012fc53eaca3bd3ab1a1829172c9d12e8ed56dcf4b135d9e17a8acfc6fdccc
+```
+
+## Firmware V4.2 builder
+
+Release builder:
+
+```text
+CC2_BUILDER_V4_2_CC2_CONTROL_1.1.27_RELEASE.zip
+```
+
+SHA-256:
+
+```text
+dd38b9aa4ecd779a246403aa3ba8c075f231d538b12694fa4d7303cdf01b71dd
+```
+
+The builder retains some internal `v4_1` directory and script names because it is derived directly from the validated V4.1/R8 line.
+
+The stock-signed workflow remains:
 
 ```powershell
 .\prepare_v4_1.ps1
@@ -91,34 +90,58 @@ Use the V4.1 builder package/source and run preparation first. The stock-signed 
 .\build_stock_v4_1.ps1
 ```
 
-Run each stage separately and continue only after the previous stage succeeds.
+Run every stage separately and continue only after the previous stage succeeds.
 
-The builder verifies the input package, assembles the filesystem overlay, integrates CC2 Control, rebuilds the firmware package and verifies the resulting signing/package chain.
+The builder validates the source snapshot, runs host-side tests, compiles the ARM executable, assembles the firmware overlay, rebuilds the package and validates the resulting build chain.
 
-## Reproducibility
+## Published V4.2 firmware
 
-For a release build, record:
+```text
+CC2_V4_2_STOCK_20260927_021129_d31ed55e.zip.sig
+```
 
-- input stock firmware filename and SHA-256;
-- builder commit/tag;
-- CC2 Control commit/tag;
-- compiler/tool versions;
-- generated firmware SHA-256;
-- generated RootFS, SWU and signature hashes when available.
+SHA-256:
 
-The published V4.1 release contains the release firmware, checksum and the validated R8 builder package. The CC2 Control 1.1.26 release contains a complete source snapshot with backend source, web UI, tests, scripts, tools and firmware-integration files.
+```text
+4e9944dd0b3e5eaff24bdaf6ed34d32002f25a069e26ec05549b612e94c9ec6b
+```
 
-For the currently published 1.1.26 snapshot, the release source archive is the versioned source artifact and is pinned by SHA-256. The repository documentation describes how to rebuild and verify it. Future development should keep the browsable source tree and release source snapshot in sync before publication.
+## Mandatory post-install power cycle
+
+After installing firmware produced by this release, **switch the printer completely off and then power it on again before doing anything else**.
+
+This full power cycle is required to realign Canvas and the related background services. Wait approximately **30–60 seconds** after power-on before normal use.
+
+## Reproducibility record
+
+For each release build, retain:
+
+- input stock firmware filename and SHA-256
+- builder archive and SHA-256
+- CC2 Control source archive and SHA-256
+- compiler/tool versions
+- generated firmware SHA-256
+- generated RootFS, SWU and signature hashes when available
+
+## Historical V4.1/R8 builder
+
+The exact V4.1/R8 builder remains pinned at:
+
+```text
+c94de033abea04bfe6b3788e131a0a9fdc6d9bfa6ec90a40288ba242750211e9
+```
+
+See [../builder/v4.1-r8/README.md](../builder/v4.1-r8/README.md).
 
 ## Clean-room rule
 
 Do not commit:
 
-- personal printer credentials;
-- LAN access codes;
-- generated firmware images;
-- local build output;
-- private configuration files;
-- third-party binaries unless their redistribution terms are known and documented.
+- personal printer credentials
+- LAN access codes
+- generated firmware images
+- local build output
+- private configuration files
+- third-party binaries unless their redistribution terms are known and documented
 
 Vendor material should be referenced from its authoritative source whenever possible.
