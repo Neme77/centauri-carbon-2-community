@@ -16,8 +16,7 @@ Centauri Carbon 2 Community Firmware.
 ## Native development build
 
 ```sh
-make clean all CROSS= CC=gcc
-python3 -m unittest discover -s tests -p 'test_*.py'
+make clean test CROSS= CC=gcc
 ```
 
 The native build is for host-side validation. Use the ARM cross toolchain for a

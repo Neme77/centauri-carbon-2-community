@@ -8,14 +8,16 @@ regression test.
 
 ```sh
 cd cc2-control
-make clean all CROSS= CC=gcc
-python3 -m unittest discover -s tests -p 'test_*.py'
+make clean test CROSS= CC=gcc
 ```
 
 The suite covers file operations, uploads, Panda compatibility, preferences,
 translations, thermal layout, light state, launch scripts and static UI
 regressions. Native C harnesses are compiled by their Python drivers where
 required.
+
+The same host tests, an ARM cross-build and the builder tests run automatically
+on every pull request and push to `main` (`.github/workflows/ci.yml`).
 
 ## Builder tests
 

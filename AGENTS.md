@@ -42,8 +42,7 @@ For a native host build:
 
 ```sh
 cd cc2-control
-make clean all CROSS= CC=gcc
-python3 -m unittest discover -s tests -p 'test_*.py'
+make clean test CROSS= CC=gcc
 ```
 
 Cross-compiling for the printer requires the ARM toolchain documented in
