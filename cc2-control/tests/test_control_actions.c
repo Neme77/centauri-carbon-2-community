@@ -12,6 +12,10 @@ int main(void){
     mqtt_client mqtt; char script[512],reason[256];
     memset(&mqtt,0,sizeof(mqtt));
     mqtt.have_machine_status=1; mqtt.machine_status=1;
+    expect(control_build_script("home:ALL",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"G28\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=0.0")==0,"home switches nozzle off when previous target is unavailable");
+    mqtt.have_extruder_target=1; mqtt.extruder_target=205.0;
+    expect(control_build_script("home:X",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"G28 X\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=205.0")==0,"home restores previous nozzle target");
+    expect(control_build_script("screws:measure",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strstr(script,"SET_HEATER_TEMPERATURE HEATER=extruder TARGET=205.0"),"screw measurement restores previous nozzle target");
     expect(control_build_script("system:heaters_off",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"TURN_OFF_HEATERS")==0,"heaters-off command");
     expect(control_build_script("system:fans_off",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strstr(script,"M106 P2 S0"),"fans-off command");
     expect(control_build_script("system:emergency_stop",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"M112")==0,"emergency-stop command");
