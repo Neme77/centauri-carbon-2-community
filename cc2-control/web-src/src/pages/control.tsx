@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp, ArrowUpRight } from 'lucide-preact'
+import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dot, Pip, Tag } from '@/components/ui/badge'
@@ -9,7 +9,7 @@ import { FanSlider, Notice, Warn } from '@/components/shared'
 import { control, errText, notify } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { num } from '@/lib/format'
-import { openPage, presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
+import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
 
 const STEPS = [0.1, 1, 10, 50]
 const I = { size: 16, strokeWidth: 1 }
@@ -155,10 +155,6 @@ export const Control = () => {
           <Extruder d={d} v={v} />
         </div>
         <div class="grid content-start gap-3.5 lg:col-span-2 lg:grid-cols-2 xl:col-span-1 xl:grid-cols-1">
-          <Card><CardHead icon="file" title="Print Status" />
-            <div class="mt-1 text-2xl font-semibold [overflow-wrap:anywhere]">{v.rawFilename === 'No active file' ? t('No active print') : v.rawFilename}</div>
-            <p class="my-3 text-[13px] text-muted">{t('Pause, resume, cancel and object exclusion are grouped in the Job page.')}</p>
-            <Button wide onClick={() => openPage('job')}>{t('Open Current Job')}<ArrowUpRight {...I} /></Button></Card>
           <Card><CardHead icon="settings" title="Machine" />
             <div class="grid grid-cols-2 gap-2.5">
               <Button class={`min-h-16 flex-col gap-1 ${v.lightOn ? 'border-cyan text-cyan' : 'text-muted'}`} aria-pressed={v.lightOn} title={t(v.lightOn ? 'Internal light on: press to turn off' : 'Internal light off: press to turn on')}
