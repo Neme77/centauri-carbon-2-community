@@ -8,6 +8,7 @@ import { control } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { num, duration } from '@/lib/format'
 import { health, printer, view, zoffset } from '@/lib/state'
+import { JobControls } from '@/pages/job'
 
 const quick: [string, string, string, string][] = [
   ['home:ALL', 'home', 'Home All', 'Home all axes?'], ['system:heaters_off', 'temp', 'All Heaters Off', 'Turn all heaters off?'],
@@ -30,11 +31,12 @@ export const Dashboard = () => {
             <div class="mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]">{v.rawFilename === 'No active file' ? t(v.rawFilename) : v.rawFilename}</div>
             {!v.active && <a href="#files" class="mb-3 -mt-1 w-fit text-[13px] text-cyan underline underline-offset-2">{t('Choose a file to print')}</a>}
             <Progress pct={v.progress} />
-            <div class="mt-auto grid grid-cols-2 gap-x-2.5 gap-y-4 pt-5 sm:grid-cols-4">
+            <div class="mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 sm:grid-cols-4">
               {[[v.elapsedText, t('Elapsed')], [v.remainingText, tpl('Remaining · ends {time}', { time: v.finishText })], [v.active ? v.layer || '—' : '—', t('Current layer')], [v.total, t('Total layers')]].map(([val, label], i) => (
                 <div key={i} class="border-edge sm:border-r sm:last:border-0"><strong class="block text-[15px]">{val}</strong><small class="text-[11px] text-muted">{label}</small></div>
               ))}
             </div>
+            <div class="mt-auto"><JobControls v={v} /></div>
           </Card>
           <Card>
             <CardHead icon="bolt" title="Quick Actions" />
