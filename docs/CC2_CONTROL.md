@@ -1,10 +1,6 @@
-# CC2 Control 1.1.31
+# CC2 Control
 
-CC2 Control is the lightweight local control platform for the Centauri Carbon 2
-Community Firmware. Community Firmware **V4.2** originally ships CC2 Control
-**1.1.30**; **1.1.31** is the current standalone CC2 Control update and source
-line. It runs directly on the printer and serves a dependency-free web
-interface on TCP port **8081**.
+CC2 Control is the lightweight local control platform for the Centauri Carbon 2 Community Firmware. Community Firmware **V4.2** originally ships CC2 Control **1.1.30**; **1.1.31** is the current standalone CC2 Control update and source line. It runs directly on the printer and serves a dependency-free web interface on TCP port **8081**.
 
 Open:
 
@@ -16,9 +12,7 @@ The same interface can be used inside the **OrcaSlicer Device tab**.
 
 A clean installation starts with a browser configurator that requests the printer LAN access code. Credentials remain on the printer.
 
-After firmware installation, wait for hardware initialisation before entering
-the LAN access code. First-run registration realigns CC2 Control, MQTT and
-Canvas services automatically; an additional manual power cycle is not needed.
+After firmware installation, wait for hardware initialisation before entering the LAN access code. First-run registration realigns CC2 Control, MQTT and Canvas services automatically; an additional manual power cycle is not needed.
 
 ## Dashboard and protected controls
 
@@ -26,10 +20,9 @@ The dashboard combines the live camera, print state and progress, temperatures, 
 
 Protected actions include jogging and homing, live Z-offset adjustment, temperature and fan targets, pause/resume/cancel, light, speed, flow, extrusion, motors, heaters and emergency stop. State checks reject inappropriate actions while the printer is busy.
 
-
 ## Bed Levelling workflow
 
-CC2 Control 1.1.31 retains the unified Bed Mesh, saved Side A / Side B profiles, active mesh state and four-screw measurement under one **Bed Levelling** workflow.
+CC2 Control retains the unified Bed Mesh, saved Side A / Side B profiles, active mesh state and four-screw measurement under one **Bed Levelling** workflow.
 
 Four-screw corrections are displayed in **microns**. A guarded **Optimized reference adjustment** suggestion may be shown when it reduces the largest required correction and remains inside the protected movement range. The suggestion is advisory only; CC2 Control does not move or turn screws automatically.
 
@@ -43,7 +36,7 @@ A global Emergency Stop remains accessible from every page and requires a delibe
 
 Settings are split into compact Connection, Safety, Integrations, Appearance and About panels.
 
-CC2 Control 1.1.31 keeps the original Dark theme and adds a persistent monochrome **Light theme**. The selected appearance is shared between browser and OrcaSlicer.
+CC2 Control keeps the original Dark theme and adds a persistent monochrome **Light theme**. The selected appearance is shared between browser and OrcaSlicer.
 
 ## OrcaSlicer Device integration
 
@@ -53,32 +46,22 @@ For Canvas prints, the spool-selection popup can also appear inside the OrcaSlic
 
 ## LAN access-code revalidation
 
-If the LAN access code is changed on the printer, open **Settings → Connection**,
-enter the replacement code and select **Change / Revalidate**. CC2 Control
-writes the new credential atomically and restarts only its own service so MQTT,
-Canvas and snapshot state can be established again without rebooting or
-power-cycling the printer.
+If the LAN access code is changed on the printer, open **Settings → Connection**, enter the replacement code and select **Change / Revalidate**. CC2 Control writes the new credential atomically and restarts only its own service so MQTT, Canvas and snapshot state can be established again without rebooting or power-cycling the printer.
 
-The SSH restart and configuration-reset commands documented in
-[Installation](INSTALL.md) remain available as recovery fallbacks.
+The SSH restart and configuration-reset commands documented in [Installation](INSTALL.md) remain available as recovery fallbacks.
 
 ## OrcaSlicer Canvas filament synchronization
 
-CC2 Control 1.1.31 adds optional support for OrcaSlicer's **Moonraker** printer
-agent filament synchronization. The read-only endpoints on port `8081` are:
+CC2 Control adds optional support for OrcaSlicer's **Moonraker** printer agent filament synchronization. The read-only endpoints on port `8081` are:
 
 ```text
 GET /server/info
 GET /server/database/item?namespace=lane_data
 ```
 
-The lane-data response is built from the cached Canvas snapshot and maps tray
-ID, material, colour and maximum nozzle temperature into the format expected by
-OrcaSlicer. The existing Octo/Klipper workflow, Device tab, upload and Canvas
-print-confirmation flow remain unchanged.
+The lane-data response is built from the cached Canvas snapshot and maps tray ID, material, colour and maximum nozzle temperature into the format expected by OrcaSlicer. The existing Octo/Klipper workflow, Device tab, upload and Canvas print-confirmation flow remain unchanged.
 
-Thanks to **@efiten** for the original proposal, analysis and printer-side
-validation.
+Thanks to **@efiten** for the original proposal, analysis and printer-side validation.
 
 ## Four-screw load-cell bed tramming
 
@@ -116,7 +99,7 @@ Klipper remains the final authority for command execution.
 
 ## Panda / Moonraker-like bridge
 
-CC2 Control 1.1.31 exposes a limited Moonraker-compatible service on TCP port **7125** for integrations such as BTT Panda Breath.
+CC2 Control exposes a limited Moonraker-compatible service on TCP port **7125** for integrations such as BTT Panda Breath.
 
 Useful checks:
 
@@ -162,7 +145,7 @@ wget -qO- http://127.0.0.1:8081/api/setup
 wget -qO- http://127.0.0.1:8081/api/canvas
 ```
 
-A healthy updated system reports CC2 Control **1.1.31** and reaches healthy MQTT/snapshot state after setup.
+A healthy updated system reports the installed CC2 Control version and reaches healthy MQTT/snapshot state after setup.
 
 ## Acknowledgements
 
