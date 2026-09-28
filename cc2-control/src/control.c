@@ -24,6 +24,16 @@ static int valid_object_name(const char *name){
  * completed job. machine_status is the live authority: 1=Idle, 2=Printing. */
 static int printing(const mqtt_client *m){return m->have_machine_status&&m->machine_status==2;}
 
+/* The CC2 firmware heats the nozzle to 140 C while executing G28. Unlike the
+ * stock display/app path, a raw G28 does not restore the previous heater
+ * target afterwards. Always append an explicit restore so manual homing
+ * cannot leave the hotend heating indefinitely. */
+static double homing_extruder_restore_target(const mqtt_client *m){
+    if(m->have_extruder_target&&m->extruder_target>=0.0&&m->extruder_target<=300.0)
+        return m->extruder_target;
+    return 0.0;
+}
+
 int control_build_script(const char *action,const mqtt_client *m,char *script,size_t cap,char *reason,size_t reason_cap){
     char kind[32],a[32],b[32],colour[16]; double value,value2;
     int slot,min_temp,max_temp;
@@ -50,7 +60,9 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             "G1 X225 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
             "G1 X225 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
             "G1 X35 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
-            "RESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE");
+            "RESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n"
+            "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f",
+            homing_extruder_restore_target(m));
         return 1;
     }
     if(sscanf(action,"zoffset:undo:%lf",&value)==1){
@@ -90,8 +102,8 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     if(sscanf(action,"%31[^:]:%31s",kind,a)==2&&strcmp(kind,"home")==0){
         if(printing(m))return reject(reason,reason_cap,"Homing is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Homing requires the printer to be idle");
-        if(strcmp(a,"ALL")==0)snprintf(script,cap,"G28");
-        else if(strlen(a)==1&&strchr("XYZ",a[0]))snprintf(script,cap,"G28 %c",a[0]);
+        if(strcmp(a,"ALL")==0)snprintf(script,cap,"G28\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f",homing_extruder_restore_target(m));
+        else if(strlen(a)==1&&strchr("XYZ",a[0]))snprintf(script,cap,"G28 %c\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f",a[0],homing_extruder_restore_target(m));
         else return reject(reason,reason_cap,"Unknown homing selection");
         return 1;
     }
