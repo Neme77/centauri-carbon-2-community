@@ -14,10 +14,10 @@ import { objects, refreshObjects } from '@/lib/objects'
 const I = { size: 16, strokeWidth: 1 }
 
 export const JobControls = ({ v }: { v: ReturnType<typeof view> }) => (
-  <div class="mt-4 flex gap-2.5">
-    <Button class="flex-1" disabled={!v.printing} onClick={() => control('print:pause')}><Pause {...I} />{t('Pause')}</Button>
-    <Button class="flex-1" disabled={!v.paused} onClick={() => control('print:resume')}><Play {...I} />{t('Resume')}</Button>
-    <Button class="flex-1" disabled={!(v.printing || v.paused)} onClick={() => control('print:cancel', t('Cancel the active print?'))}><Square {...I} />{t('Cancel')}</Button>
+  <div class="mt-4 grid grid-cols-3 gap-2.5">
+    <Button class="min-w-0 px-2" disabled={!v.printing} onClick={() => control('print:pause')}><Pause {...I} />{t('Pause')}</Button>
+    <Button class="min-w-0 px-2" disabled={!v.paused} onClick={() => control('print:resume')}><Play {...I} />{t('Resume')}</Button>
+    <Button class="min-w-0 px-2" disabled={!(v.printing || v.paused)} onClick={() => control('print:cancel', t('Cancel the active print?'))}><Square {...I} />{t('Cancel')}</Button>
   </div>
 )
 

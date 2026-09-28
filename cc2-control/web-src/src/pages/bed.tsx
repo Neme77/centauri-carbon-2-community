@@ -151,7 +151,7 @@ const Screws = () => {
 export const Bed = () => {
   const { screws } = nav.use()
   useEffect(() => { if (screws) document.getElementById('screwFocus')?.scrollIntoView({ block: 'center', behavior: 'smooth' }) }, [screws])
-  const tab = (on: boolean) => cn('flex items-center gap-3 rounded-t-lg border border-b-[3px] border-edge px-6 py-3 text-base', on ? 'border-b-cyan bg-field text-cyan' : 'border-b-transparent text-muted')
+  const tab = (on: boolean) => cn('flex items-center gap-2 rounded-t-lg border border-b-[3px] border-edge px-3 py-2.5 text-sm sm:gap-3 sm:px-6 sm:py-3 sm:text-base', on ? 'border-b-cyan bg-field text-cyan' : 'border-b-transparent text-muted')
   return (
     <Page title="Bed Levelling" sub="Mesh, saved profiles and four-screw adjustment in one workflow">
       <div class="mb-3.5 flex border-b border-edge">

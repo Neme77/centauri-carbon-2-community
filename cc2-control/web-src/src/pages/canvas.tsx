@@ -69,9 +69,9 @@ export const Canvas = () => {
       <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.55fr)_minmax(320px,1fr)]">
         <Card>
           <div class="mb-4"><h2 class="text-2xl font-semibold">{t('Canvas')}</h2><p class="text-muted">{t('Material system overview and control (when supported)')}</p></div>
-          <div class="grid items-center gap-6 rounded-lg border border-edge bg-field/40 p-6 md:grid-cols-[1.25fr_1fr]">
-            <div class="flex h-48 items-end justify-center gap-3 border-b-8 border-edge pb-9">
-              {slots.map(s => <div key={s.i} class="relative flex h-40 w-20 items-center justify-center"><i class="block h-36 w-12 rounded-[45%] border border-muted" style={{ background: `repeating-linear-gradient(90deg,${s.colour} 0 3px,#132a38 4px 6px)` }} /><em class="absolute -bottom-7 not-italic text-muted">{s.i + 1}</em></div>)}
+          <div class="grid items-center gap-6 rounded-lg border border-edge bg-field/40 p-4 sm:p-6 md:grid-cols-[1.25fr_1fr]">
+            <div class="flex h-48 items-end justify-center gap-1.5 border-b-8 border-edge pb-9 sm:gap-3">
+              {slots.map(s => <div key={s.i} class="relative flex h-40 w-14 items-center justify-center sm:w-20"><i class="block h-36 w-9 rounded-[45%] border border-muted sm:w-12" style={{ background: `repeating-linear-gradient(90deg,${s.colour} 0 3px,#132a38 4px 6px)` }} /><em class="absolute -bottom-7 not-italic text-muted">{s.i + 1}</em></div>)}
             </div>
             <div><Tag tone={ok ? 'ok' : 'warning'} class="mb-4"><Pip /> {t(ok ? 'Connected' : 'Not Detected')}</Tag>
               <h3 class="mb-3 text-xl leading-snug">{t(ok ? 'Canvas detected and connected.' : 'Canvas control is not exposed by the current printer firmware.')}</h3>

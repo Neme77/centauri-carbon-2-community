@@ -60,9 +60,9 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
         {!ready && <div class="text-center text-muted"><Icon n="camera" class="mx-auto mb-2 size-10" /><strong class="block text-[15px] font-medium">{t(tall ? 'Your live print camera' : 'Your CC2 camera feed')}</strong><p class="text-xs">{t('Waiting for camera stream')}</p></div>}
         <img src={src} alt="CC2 live camera" class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')} onLoad={() => setReady(true)} onError={() => setTimeout(() => setSrc(camera(`?t=${Date.now()}`)), 2500)} />
       </div>
-      <div class="mt-3 flex justify-between gap-2.5">
-        <Button onClick={() => window.open(camera(), 'cc2-camera')}><Icon n="open" class="size-4" />{t('Open in new window')}</Button>
-        <Button onClick={() => window.open(camera(`?snapshot=${Date.now()}`), 'cc2-snapshot')}><Icon n="camera" class="size-4" />{t('Snapshot')}</Button>
+      <div class="mt-3 grid gap-2.5 sm:grid-cols-2">
+        <Button class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs sm:text-sm" onClick={() => window.open(camera(), 'cc2-camera')}><Icon n="open" class="size-4" />{t('Open in new window')}</Button>
+        <Button class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs sm:text-sm" onClick={() => window.open(camera(`?snapshot=${Date.now()}`), 'cc2-snapshot')}><Icon n="camera" class="size-4" />{t('Snapshot')}</Button>
       </div>
     </>
   )

@@ -76,14 +76,14 @@ export const Files = () => {
     if (done === list.length) notify(tpl(kind === 'delete' ? 'Deleted {n} selected files.' : 'Copied {n} selected files.', { n: done }))
   }
 
-  const cols = 'grid grid-cols-[1.6fr_.55fr_.75fr_.75fr_1.25fr] items-center gap-2 border-b border-edge px-3 py-2'
+  const cols = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-edge px-3 py-2 md:grid-cols-[1.6fr_.55fr_.75fr_.75fr_1.25fr]'
   return (
-    <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
-      <div class="grid content-start gap-3">
+    <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
+      <div class="grid min-w-0 content-start gap-3">
         <Card>
           <div class="mb-3.5"><h2 class="text-2xl font-semibold">{t('Files')}</h2><p class="text-muted">{t('Browse protected G-code storage on your CC2')}</p></div>
-          <div class="grid grid-cols-2 gap-2.5 md:grid-cols-[1.6fr_.8fr_1fr_auto]">
-            <div class="relative col-span-2 md:col-span-1"><Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" /><Input class="pl-8" placeholder={t('Search files')} value={q} onInput={e => setQ(e.currentTarget.value)} /></div>
+          <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2.5 md:grid-cols-[1.6fr_.8fr_1fr_auto]">
+            <div class="relative col-span-3 md:col-span-1"><Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" /><Input class="pl-8" placeholder={t('Search files')} value={q} onInput={e => setQ(e.currentTarget.value)} /></div>
             <Select value={loc} onChange={e => setLoc(e.currentTarget.value)}><option value="all">{t('All files')}</option><option value="internal">{t('Internal memory')}</option><option value="usb">{t('USB drive')}</option></Select>
             <Select value={sort} onChange={e => setSort(e.currentTarget.value)}><option value="newest">{t('Newest first')}</option><option value="name">{t('Name')}</option><option value="size">{t('Size')}</option></Select>
             <Button onClick={() => refresh(true)} aria-label="Refresh"><RefreshCw {...I} /></Button>
@@ -92,12 +92,12 @@ export const Files = () => {
           <div class="mt-3.5 overflow-hidden rounded-lg border border-edge">
             <div class={cn(cols, 'min-h-11 text-muted')}>
               <span><input type="checkbox" title={t('Select all shown files')} checked={visible.length > 0 && visible.every(e => checked.has(key(e)))} onChange={e => visible.forEach(x => toggle(key(x), e.currentTarget.checked))} /> {t('Name')}</span>
-              <span>{t('Size')}</span><span class="hidden md:inline">{t('Modified')}</span><span class="hidden md:inline">{t('Storage')}</span><span>{t('Actions')}</span>
+              <span class="hidden md:inline">{t('Size')}</span><span class="hidden md:inline">{t('Modified')}</span><span class="hidden md:inline">{t('Storage')}</span><span>{t('Actions')}</span>
             </div>
             {visible.map(e => (
               <div key={key(e)} onClick={() => setSel(e)} class={cn(cols, 'min-h-16 cursor-pointer', sel && key(sel) === key(e) && 'bg-field outline outline-1 -outline-offset-1 outline-cyan')}>
                 <div class="flex min-w-0 items-center gap-2.5 font-semibold"><input type="checkbox" title={t('Select file')} checked={checked.has(key(e))} onClick={ev => ev.stopPropagation()} onChange={ev => toggle(key(e), ev.currentTarget.checked)} /><FileText {...I} class="shrink-0" /><span class="[overflow-wrap:anywhere]">{e.file.path}</span></div>
-                <span>{fileSize(e.file.size)}</span>
+                <span class="hidden md:inline">{fileSize(e.file.size)}</span>
                 <span class="hidden md:inline">{Number(e.file.modified) > 0 ? new Date(Number(e.file.modified) * 1000).toLocaleString() : '—'}</span>
                 <span class="hidden md:inline">{e.storage === 'usb' ? 'USB' : t('Internal')}</span>
                 <div class="flex gap-1.5" onClick={ev => ev.stopPropagation()}><Button class="px-2.5" onClick={() => startFile(e.storage, e.file.path)}><Play {...I} />{t('Print')}</Button><Button class="hidden px-2.5 sm:inline-flex" variant="danger" onClick={() => remove(e)}>{t('Delete')}</Button></div>
@@ -189,8 +189,8 @@ const Upload = ({ busy, setBusy, refresh }: { busy: boolean; setBusy: (b: boolea
   }
   return (
     <Card><CardHead title="Upload File" end={t('Local upload')} />
-      <div class="grid justify-items-center gap-2.5 rounded-lg border border-dashed border-cyan p-3">
-        <input ref={pick} type="file" accept=".gcode" class="max-w-full" disabled={busy} aria-label="Select G-code file" />
+      <div class="grid grid-cols-[minmax(0,1fr)] justify-items-center gap-2.5 rounded-lg border border-dashed border-cyan p-3">
+        <input ref={pick} type="file" accept=".gcode" class="w-full min-w-0" disabled={busy} aria-label="Select G-code file" />
         <label class="flex items-center gap-2">{t('Destination')} <Select class="w-auto" value={storage} disabled={busy} onChange={e => setStorage(e.currentTarget.value)}><option value="internal">{t('Internal memory')}</option><option value="usb">{t('USB drive')}</option></Select></label>
         <Button variant="primary" disabled={busy} onClick={go}><UploadIcon {...I} />{t('Upload G-code')}</Button>
         {pct >= 0 && <progress class="w-full" value={pct} max="100" />}
