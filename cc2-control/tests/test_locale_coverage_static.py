@@ -21,6 +21,11 @@ for m in re.finditer(r"""\bt\(([^()]*\?[^()]*)\)""", src):
     branches = re.sub(r"""===?\s*'(?:\\.|[^'])*'""", "", m.group(1))  # drop comparisons like v === '3d'
     used.update(re.findall(r"""'((?:\\.|[^'])*)'""", branches))
 
+# Machine state names come from the backend (main.c machine_status_name) and are shown through t().
+names = re.search(r'names\[\]=\{([^}]*)\}', (Path(__file__).resolve().parents[1] / "src" / "main.c").read_text(encoding="utf-8")).group(1)
+used.update(re.findall(r'"([^"]+)"', names))
+used.update({"Offline", "Unknown"})
+
 missing = sorted(k for k in used if k not in en)
 assert not missing, f"{len(missing)} UI string(s) missing from en.json: {missing[:8]}"
 print(f"PASS: {len(used)} literal t()/tpl() keys all exist in en.json")
