@@ -2346,15 +2346,15 @@ static int quick_action_valid(const char *action) {
 
 static const char *preferences_quick_action(int slot) {
     static char actions[4][32];
+    static const char *const keys[4] = {"quick1", "quick2", "quick3", "quick4"};
     if (slot < 0 || slot >= 4) return quick_action_defaults[0];
     snprintf(actions[slot], sizeof(actions[slot]), "%s", quick_action_defaults[slot]);
     FILE *file = fopen(ui_preferences_path, "rb");
     if (!file) return actions[slot];
-    char body[512], key[8], value[32];
+    char body[512], value[32];
     size_t length = fread(body, 1, sizeof(body) - 1, file);
     fclose(file); body[length] = '\0';
-    snprintf(key, sizeof(key), "quick%d", slot + 1);
-    if (extract_json_string(body, key, value, sizeof(value)) && quick_action_valid(value))
+    if (extract_json_string(body, keys[slot], value, sizeof(value)) && quick_action_valid(value))
         snprintf(actions[slot], sizeof(actions[slot]), "%s", value);
     return actions[slot];
 }
@@ -2389,8 +2389,9 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
     int valid_theme = strstr(input, "\"theme\":\"light\"") != NULL ||
                       strstr(input, "\"theme\":\"dark\"") != NULL;
     char quick[4][32]; int has_quick = 0, valid_quick = 1;
+    static const char *const keys[4] = {"quick1", "quick2", "quick3", "quick4"};
     for (int slot = 0; slot < 4; ++slot) {
-        char key[8]; snprintf(key, sizeof(key), "quick%d", slot + 1);
+        const char *key = keys[slot];
         snprintf(quick[slot], sizeof(quick[slot]), "%s", preferences_quick_action(slot));
         char key_marker[12]; snprintf(key_marker, sizeof(key_marker), "\"%s\":", key);
         if (strstr(input, key_marker)) {
