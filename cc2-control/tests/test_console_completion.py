@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import pathlib
 import subprocess
 import tempfile
@@ -9,7 +10,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-console-test-") as temporary:
     binary = pathlib.Path(temporary) / "test-console"
     subprocess.run([
         "cc", "-O2", "-std=c11", "-Wall", "-Wextra", "-Wpedantic",
-        "-D_POSIX_C_SOURCE=200809L", "-pthread",
+        "-D_POSIX_C_SOURCE=200809L", "-pthread", *os.environ.get("CC2_TEST_CFLAGS", "").split(),
         str(ROOT / "tests/test_console_completion.c"), "-o", str(binary),
     ], check=True)
     subprocess.run([str(binary)], check=True)
