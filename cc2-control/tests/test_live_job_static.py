@@ -18,7 +18,7 @@ markers = {
     "light theme stylesheet": ':root[data-theme="light"]',
     "micron display": "Math.round(v * 1000)",
     "optimized reference adjustment": "useOptimized",
-    "live job layer summary": "`${t('Layer')} ${v.layer || '—'} / ${v.total}`",
+    "live job layer stats": "[v.active ? v.layer || '—' : '—', t('Current layer')]",
     "live job elapsed time": "elapsedText: active ? duration(elapsed)",
     "estimated completion time": "finishTime(remaining)",
     "real G-code metadata": "/api/gcode-files/metadata",
