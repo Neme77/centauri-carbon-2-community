@@ -87,7 +87,7 @@ export const Files = () => {
             <div class="relative col-span-3 md:col-span-1"><Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" /><Input class="pl-8" placeholder={t('Search files')} value={q} onInput={e => setQ(e.currentTarget.value)} /></div>
             <Select value={loc} onChange={e => setLoc(e.currentTarget.value)}><option value="all">{t('All files')}</option><option value="internal">{t('Internal memory')}</option><option value="usb">{t('USB drive')}</option></Select>
             <Select value={sort} onChange={e => setSort(e.currentTarget.value)}><option value="newest">{t('Newest first')}</option><option value="name">{t('Name')}</option><option value="size">{t('Size')}</option></Select>
-            <Button onClick={() => refresh(true)} aria-label="Refresh"><RefreshCw {...I} /></Button>
+            <Button onClick={() => refresh(true)} aria-label={t('Refresh')}><RefreshCw {...I} /></Button>
           </div>
           {checked.size > 0 && <div class="my-3 flex items-center gap-2"><strong>{tpl('{n} selected', { n: checked.size })}</strong><Button onClick={() => bulk('copy')}>{t('Copy selected')}</Button><Button variant="danger" onClick={() => bulk('delete')}>{t('Delete selected')}</Button></div>}
           <div class="mt-3.5 overflow-hidden rounded-lg border border-edge">
@@ -147,7 +147,7 @@ const Detail = ({ entry, onPrint, onDelete }: { entry: Entry | null; onPrint: (e
   return (
     <Card class="flex flex-col">
       <div class="flex min-w-0 items-center gap-3.5"><FileText size={36} strokeWidth={1} class="shrink-0" /><div class="min-w-0"><h3 class="text-base leading-snug [overflow-wrap:anywhere]">{entry ? entry.file.path : t('No file selected')}</h3><small class="text-muted">{entry ? where(entry.storage) : t('Select a G-code file to view its details.')}</small></div></div>
-      <div class="my-4 grid min-h-56 place-items-center overflow-hidden rounded-lg border border-edge">{thumb && <img src={thumb} alt="G-code model preview" class="max-h-72 w-full object-contain p-2.5" />}</div>
+      <div class="my-4 grid min-h-56 place-items-center overflow-hidden rounded-lg border border-edge">{thumb && <img src={thumb} alt={t('G-code model preview')} class="max-h-72 w-full object-contain p-2.5" />}</div>
       <div>
         <Row label="Size" value={entry ? fileSize(entry.file.size) : '—'} />
         <Row label="Layers" value={meta && ok(meta.layers) && Number(meta.layers) > 0 ? Math.round(Number(meta.layers)) : '—'} />
@@ -193,7 +193,7 @@ const Upload = ({ busy, setBusy, refresh }: { busy: boolean; setBusy: (b: boolea
       <div class={cn('grid grid-cols-[minmax(0,1fr)] justify-items-center gap-2.5 rounded-lg border border-dashed border-cyan p-3 transition-colors', over && 'bg-cyan/10')}
         onDragOver={e => { if (busy) return; e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
         onDrop={e => { e.preventDefault(); setOver(false); const f = e.dataTransfer?.files; if (busy || !f?.length || !pick.current) return; pick.current.files = f; void go() }}>
-        <input ref={pick} type="file" accept=".gcode" class="w-full min-w-0" disabled={busy} aria-label="Select G-code file" />
+        <input ref={pick} type="file" accept=".gcode" class="w-full min-w-0" disabled={busy} aria-label={t('Select G-code file')} />
         <label class="flex items-center gap-2">{t('Destination')} <Select class="w-auto" value={storage} disabled={busy} onChange={e => setStorage(e.currentTarget.value)}><option value="internal">{t('Internal memory')}</option><option value="usb">{t('USB drive')}</option></Select></label>
         <Button variant="primary" disabled={busy} onClick={go}><UploadIcon {...I} />{t('Upload G-code')}</Button>
         <small class="text-muted">{t('or drop a .gcode file here')}</small>

@@ -83,7 +83,7 @@ const MeshCard = () => {
                 <tbody>{Array.from({ length: 11 }, (_, r) => 10 - r).map(y => <tr key={y}><th class="p-1 text-left">{y * 25}</th>{Array.from({ length: 11 }, (_, x) => <td key={x} class="p-1">{points[y * 11 + x]?.z.toFixed(3)}</td>)}</tr>)}</tbody></table>)}
           </div>
         ) : (
-          <canvas ref={canvas} aria-label="Interactive live bed mesh" class="block h-[430px] w-full cursor-grab touch-none active:cursor-grabbing"
+          <canvas ref={canvas} aria-label={t('Interactive live bed mesh')} class="block h-[430px] w-full cursor-grab touch-none active:cursor-grabbing"
             onPointerDown={e => { drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY }; e.currentTarget.setPointerCapture(e.pointerId) }}
             onPointerMove={e => { const d = drag.current; if (!d || d.id !== e.pointerId) return; cam.current.yaw += (e.clientX - d.x) * 0.005; cam.current.pitch = Math.max(0.25, Math.min(1.2, cam.current.pitch + (e.clientY - d.y) * 0.004)); drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY }; redraw() }}
             onPointerUp={() => { drag.current = null }} onPointerCancel={() => { drag.current = null }} />

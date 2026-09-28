@@ -30,13 +30,13 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
       <div class="my-4 grid grid-cols-[1.4fr_.65fr] gap-5 border-t border-edge pt-4">
         <div><div class="mb-2 text-[13px]">{t('XY Move')}</div>
           <div class="grid grid-cols-3 gap-1.5">
-            <span /><Button class={pad} aria-label="Move Y positive" disabled={!can('y')} onClick={() => move('Y', 1)}><ArrowBigUp {...B} /></Button><span />
-            <Button class={pad} aria-label="Move X negative" disabled={!can('x')} onClick={() => move('X', -1)}><ArrowBigLeft {...B} /></Button><span />
-            <Button class={pad} aria-label="Move X positive" disabled={!can('x')} onClick={() => move('X', 1)}><ArrowBigRight {...B} /></Button><span />
-            <Button class={pad} aria-label="Move Y negative" disabled={!can('y')} onClick={() => move('Y', -1)}><ArrowBigDown {...B} /></Button>
+            <span /><Button class={pad} aria-label={t('Move Y positive')} disabled={!can('y')} onClick={() => move('Y', 1)}><ArrowBigUp {...B} /></Button><span />
+            <Button class={pad} aria-label={t('Move X negative')} disabled={!can('x')} onClick={() => move('X', -1)}><ArrowBigLeft {...B} /></Button><span />
+            <Button class={pad} aria-label={t('Move X positive')} disabled={!can('x')} onClick={() => move('X', 1)}><ArrowBigRight {...B} /></Button><span />
+            <Button class={pad} aria-label={t('Move Y negative')} disabled={!can('y')} onClick={() => move('Y', -1)}><ArrowBigDown {...B} /></Button>
           </div></div>
         <div class="border-l border-edge pl-5"><div class="mb-2 text-[13px]">{t('Z Move')}</div>
-          <div class="grid gap-1.5"><Button class={pad} aria-label="Move Z positive" disabled={!can('z')} onClick={() => move('Z', 1)}><ArrowBigUp {...B} /></Button><Button class={pad} aria-label="Move Z negative" disabled={!can('z')} onClick={() => move('Z', -1)}><ArrowBigDown {...B} /></Button></div></div>
+          <div class="grid gap-1.5"><Button class={pad} aria-label={t('Move Z positive')} disabled={!can('z')} onClick={() => move('Z', 1)}><ArrowBigUp {...B} /></Button><Button class={pad} aria-label={t('Move Z negative')} disabled={!can('z')} onClick={() => move('Z', -1)}><ArrowBigDown {...B} /></Button></div></div>
       </div>
       <small class="text-muted">{t('Step Size')}</small>
       <div class="my-2 flex gap-2">{STEPS.map(s => <Button key={s} variant={s === step ? 'active' : 'default'} class="flex-1 text-xs" onClick={() => setStep(s)}>{s} mm</Button>)}</div>
@@ -62,7 +62,7 @@ const Temperatures = ({ d }: { d: any }) => {
       <CardHead icon="temp" title="Temperatures" />
       {([['red', 'Nozzle', d?.extruder?.temperature, nozzle, setNozzle, 300], ['blue', 'Heated Bed', d?.heater_bed?.temperature, bed, setBed, 120]] as const).map(([dot, label, cur, val, set, max]) => (
         <div key={label} class="my-4 flex items-center gap-2.5"><Dot c={dot} /><span>{t(label)}</span><strong class="ml-auto text-[15px]">{num(cur)} °C</strong>
-          <Input class="w-18 text-center" type="number" min="0" max={max} value={val} aria-label={`${t(label)} target`} onInput={e => set(e.currentTarget.value)} onKeyDown={e => e.key === 'Enter' && apply()} /><small>°C</small></div>
+          <Input class="w-18 text-center" type="number" min="0" max={max} value={val} aria-label={tpl('{name} target', { name: t(label) })} onInput={e => set(e.currentTarget.value)} onKeyDown={e => e.key === 'Enter' && apply()} /><small>°C</small></div>
       ))}
       <Button wide onClick={apply}>{t('Apply targets')}</Button>
       <div class="mt-4 border-t border-edge pt-3"><small class="text-muted">{t('Temperature Presets')}</small>
@@ -81,7 +81,7 @@ const Extruder = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
     <Card>
       <CardHead icon="control" title="Extruder" />
       <Notice><span>{t('Extrusion disabled')}<br /><small>{t('Idle only · nozzle temperature ≥ 170 °C')}</small></span></Notice>
-      <div class="my-4 flex items-center gap-2 text-xs">{t('Length')} <Select class="w-16" value={len} aria-label="Extrusion length" onChange={e => setLen(e.currentTarget.value)}>{[5, 10, 25].map(n => <option key={n}>{n}</option>)}</Select> mm</div>
+      <div class="my-4 flex items-center gap-2 text-xs">{t('Length')} <Select class="w-16" value={len} aria-label={t('Extrusion length')} onChange={e => setLen(e.currentTarget.value)}>{[5, 10, 25].map(n => <option key={n}>{n}</option>)}</Select> mm</div>
       <div class="grid grid-cols-2 gap-2.5"><Button class="min-h-14" disabled={!ok} onClick={() => control(`extrude:${len}`)}><ArrowBigUp {...I} />{t('Extrude')}</Button><Button class="min-h-14" disabled={!ok} onClick={() => control(`extrude:${-Number(len)}`)}><ArrowBigDown {...I} />{t('Retract')}</Button></div>
     </Card>
   )

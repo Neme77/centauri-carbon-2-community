@@ -39,7 +39,7 @@ export const Sidebar = () => {
   const { collapsed } = menu.use()
   return (
     <aside class={cn('fixed bottom-0 left-0 top-17 z-20 flex w-18.5 flex-col border-r border-edge bg-panel transition-[width]', !collapsed && 'md:w-52')}>
-      <nav class="mt-2 grid gap-0.5" aria-label="Main navigation">
+      <nav class="mt-2 grid gap-0.5" aria-label={t('Main navigation')}>
         {items.map(([p, Glyph, label]) => (
           <a key={p} href={`#${p}`} aria-current={page === p ? 'page' : undefined} title={t(label)}
             class={cn('flex h-13 items-center justify-center gap-3.5 border-l-4 border-transparent hover:bg-field', !collapsed && 'md:justify-start md:px-4', page === p && 'border-cyan bg-field text-cyan')}>

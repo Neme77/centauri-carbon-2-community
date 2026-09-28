@@ -38,5 +38,5 @@ export const ThermalChart = () => {
   }
   useEffect(draw, [rev])
   useEffect(() => { addEventListener('resize', draw); return () => removeEventListener('resize', draw) }, [])
-  return <canvas ref={ref} class="block h-32 w-full" aria-label="Temperature history" />
+  return <canvas ref={ref} class="block h-32 w-full" aria-label={t('Temperature history')} />
 }
