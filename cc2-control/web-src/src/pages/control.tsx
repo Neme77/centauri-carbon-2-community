@@ -40,7 +40,7 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
       </div>
       <small class="text-muted">{t('Step Size')}</small>
       <div class="my-2 flex gap-2">{STEPS.map(s => <Button key={s} variant={s === step ? 'active' : 'default'} class="flex-1 text-xs" onClick={() => setStep(s)}>{s} mm</Button>)}</div>
-      <Notice>{t('Motion requires homing. Commands are disabled until the printer is ready.')}</Notice>
+      {!(v.idle && ['x', 'y', 'z'].every(a => v.homed.includes(a))) && <Notice>{t('Motion requires homing. Commands are disabled until the printer is ready.')}</Notice>}
       <div class="mt-4 border-t border-edge pt-3"><small class="text-muted">{t('Current Position')}</small>
         <div class="my-2 grid grid-cols-3">{(['x', 'y', 'z'] as const).map(a => <div key={a}><small class="text-muted">{a.toUpperCase()}</small><strong class="mt-1 block text-[15px]">{v.pos(a)}</strong></div>)}</div>
         <small class="text-muted">{t('Homed Status')}</small>
@@ -80,7 +80,7 @@ const Extruder = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   return (
     <Card>
       <CardHead icon="control" title="Extruder" />
-      <Notice><span>{t('Extrusion disabled')}<br /><small>{t('Idle only · nozzle temperature ≥ 170 °C')}</small></span></Notice>
+      {!ok && <Notice><span>{t('Extrusion disabled')}<br /><small>{t('Idle only · nozzle temperature ≥ 170 °C')}</small></span></Notice>}
       <div class="my-4 flex items-center gap-2 text-xs">{t('Length')} <Select class="w-16" value={len} aria-label={t('Extrusion length')} onChange={e => setLen(e.currentTarget.value)}>{[5, 10, 25].map(n => <option key={n}>{n}</option>)}</Select> mm</div>
       <div class="grid grid-cols-2 gap-2.5"><Button class="min-h-14" disabled={!ok} onClick={() => control(`extrude:${len}`)}><ArrowBigUp {...I} />{t('Extrude')}</Button><Button class="min-h-14" disabled={!ok} onClick={() => control(`extrude:${-Number(len)}`)}><ArrowBigDown {...I} />{t('Retract')}</Button></div>
     </Card>
