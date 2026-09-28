@@ -60,14 +60,27 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         with urllib.request.urlopen(endpoint, timeout=1) as response:
             assert json.load(response) == {"language": "it", "theme": "light"}
 
-        invalid = urllib.request.Request(
+        # Any locale code shaped like web/locales/<code>.json is accepted:
+        # the backend only stores it, the frontend falls back to English for
+        # one it has no translation file for. "fr" is a real, shipped locale.
+        request = urllib.request.Request(
             endpoint, data=b'{"language":"fr"}', method="PUT",
             headers={"Content-Type": "application/json"})
-        try:
-            urllib.request.urlopen(invalid, timeout=1)
-            raise AssertionError("unsupported language accepted")
-        except urllib.error.HTTPError as error:
-            assert error.code == 400
+        with urllib.request.urlopen(request, timeout=1) as response:
+            assert json.load(response) == {"saved": True}
+        with urllib.request.urlopen(endpoint, timeout=1) as response:
+            assert json.load(response) == {"language": "fr", "theme": "light"}
+
+        for malformed in (b'{"language":"../x"}', b'{"language":""}',
+                          b'{"language":"toolongcode"}', b'{"language":"e1"}'):
+            invalid = urllib.request.Request(
+                endpoint, data=malformed, method="PUT",
+                headers={"Content-Type": "application/json"})
+            try:
+                urllib.request.urlopen(invalid, timeout=1)
+                raise AssertionError(f"malformed language accepted: {malformed!r}")
+            except urllib.error.HTTPError as error:
+                assert error.code == 400
         print("PASS: persistent UI language and theme API")
     finally:
         process.terminate()

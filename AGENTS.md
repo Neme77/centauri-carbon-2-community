@@ -18,6 +18,7 @@ These rules apply to contributors and coding agents working in this repository.
 |---|---|
 | `cc2-control/src/` | CC2 Control C backend |
 | `cc2-control/web/index.html` | Browser UI |
+| `cc2-control/web/locales/` | UI translations, one JSON file per language (`en.json` is the source) |
 | `cc2-control/tests/` | Host-side and integration tests |
 | `builder/current/` | Current firmware builder and integration logic |
 | `builder/current/tests/` | Host-side builder tests |
@@ -74,7 +75,9 @@ python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
 When changing it:
 
 - inspect the complete relevant code path before editing;
-- preserve English/Italian behaviour and persistent UI preferences;
+- preserve English/Italian/French behaviour and persistent UI preferences;
+- route new user-visible strings through `translatedText()` or `tpl()` and add
+  the key to every `web/locales/*.json` (`test_locales_static.py` enforces parity);
 - test the actual browser control or event path that changed;
 - do not treat a direct function call or synthetic unit test as sufficient for
   interactive UI behaviour;

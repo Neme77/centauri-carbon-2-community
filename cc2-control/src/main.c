@@ -2104,6 +2104,59 @@ static void serve_index(int fd, const char *web_root) {
     free(body);
 }
 
+/* Locale codes accepted in /i18n/<code>.json requests: 2-5 lowercase letters,
+   optionally followed by '-' and 2 uppercase letters (e.g. "en", "pt-BR").
+   Anchoring the charset this tightly also rules out any '..' or '/'. */
+static int locale_code_valid(const char *code, size_t length) {
+    if (length < 2 || length > 8) return 0;
+    size_t letters = 0;
+    while (letters < length && code[letters] >= 'a' && code[letters] <= 'z') letters++;
+    if (letters < 2 || letters > 5) return 0;
+    if (letters == length) return 1;
+    if (length - letters != 3 || code[letters] != '-') return 0;
+    return code[letters + 1] >= 'A' && code[letters + 1] <= 'Z' &&
+           code[letters + 2] >= 'A' && code[letters + 2] <= 'Z';
+}
+
+/* Serves cc2-control/web/locales/<code>.json. The UI loads en.json as a
+   fallback plus the requested locale, so a missing or partial file degrades
+   to English strings instead of breaking the page. */
+static void serve_locale(int fd, const char *web_root, const char *request_path) {
+    const char *name = request_path + strlen("/i18n/");
+    size_t name_len = strlen(name);
+    static const char suffix[] = ".json";
+    if (name_len <= sizeof(suffix) - 1 ||
+        strcmp(name + name_len - (sizeof(suffix) - 1), suffix) != 0 ||
+        !locale_code_valid(name, name_len - (sizeof(suffix) - 1))) {
+        const char *body = "Not found\n";
+        respond(fd, 404, "Not Found", "text/plain; charset=utf-8", body, strlen(body));
+        return;
+    }
+    char path[PATH_MAX_LOCAL];
+    if (snprintf(path, sizeof(path), "%s/locales/%s", web_root, name) >= (int)sizeof(path)) {
+        const char *body = "Locale path is too long\n";
+        respond(fd, 500, "Internal Server Error", "text/plain; charset=utf-8", body, strlen(body));
+        return;
+    }
+    FILE *file = fopen(path, "rb");
+    if (!file) {
+        const char *body = "{}\n";
+        respond(fd, 404, "Not Found", "application/json; charset=utf-8", body, strlen(body));
+        return;
+    }
+    if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
+    long size = ftell(file);
+    if (size < 0 || size > 262144) { fclose(file); return; }
+    rewind(file);
+    char *body = malloc((size_t)size);
+    if (!body) { fclose(file); return; }
+    size_t read_len = fread(body, 1, (size_t)size, file);
+    fclose(file);
+    if (read_len == (size_t)size)
+        respond(fd, 200, "OK", "application/json; charset=utf-8", body, read_len);
+    free(body);
+}
+
 static size_t content_length_from_headers(const char *request) {
     const char *p = strstr(request, "Content-Length:");
     if (!p) return 0;
@@ -2225,16 +2278,39 @@ static void presets_put_response(int fd,const char *body,size_t body_len) {
     respond(fd,200,"OK","application/json; charset=utf-8",ok,strlen(ok));
 }
 
+/* Reads the value of "key":"..." out of a compact JSON object. Returns 0
+   (leaving out untouched) if the key is absent or the value does not fit
+   out_cap, including the terminator. */
+static int extract_json_string(const char *input, const char *key, char *out, size_t out_cap) {
+    char needle[32];
+    int written = snprintf(needle, sizeof(needle), "\"%s\":\"", key);
+    if (written <= 0 || (size_t)written >= sizeof(needle)) return 0;
+    const char *start = strstr(input, needle);
+    if (!start) return 0;
+    start += written;
+    const char *end = strchr(start, '"');
+    if (!end) return 0;
+    size_t length = (size_t)(end - start);
+    if (length == 0 || length >= out_cap) return 0;
+    memcpy(out, start, length);
+    out[length] = '\0';
+    return 1;
+}
+
+/* Any locale that has a web/locales/<code>.json file is valid: the backend
+   only stores the code, the frontend decides what to do with it (falling
+   back to English for an unknown or not-yet-translated one). */
 static const char *preferences_language(void) {
-    static char language[3] = "en";
+    static char language[9] = "en";
     FILE *file = fopen(ui_preferences_path, "rb");
     if (!file) return language;
     char body[96];
     size_t length = fread(body, 1, sizeof(body) - 1, file);
     fclose(file);
     body[length] = '\0';
-    if (strstr(body, "\"language\"") && strstr(body, "\"it\""))
-        memcpy(language, "it", 3);
+    char code[9];
+    if (extract_json_string(body, "language", code, sizeof(code)) && locale_code_valid(code, strlen(code)))
+        memcpy(language, code, strlen(code) + 1);
     else
         memcpy(language, "en", 3);
     return language;
@@ -2272,9 +2348,11 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
         if (!isspace((unsigned char)body[index])) input[compact_len++] = body[index];
     }
     input[compact_len] = '\0';
+    char language_code[9];
     int has_language = strstr(input, "\"language\":") != NULL;
-    int valid_language = strstr(input, "\"language\":\"it\"") != NULL ||
-                         strstr(input, "\"language\":\"en\"") != NULL;
+    int valid_language = has_language &&
+        extract_json_string(input, "language", language_code, sizeof(language_code)) &&
+        locale_code_valid(language_code, strlen(language_code));
     int has_theme = strstr(input, "\"theme\":") != NULL;
     int valid_theme = strstr(input, "\"theme\":\"light\"") != NULL ||
                       strstr(input, "\"theme\":\"dark\"") != NULL;
@@ -2284,8 +2362,7 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
-    const char *language = strstr(input, "\"language\":\"it\"") ? "it" :
-                           strstr(input, "\"language\":\"en\"") ? "en" : preferences_language();
+    const char *language = valid_language ? language_code : preferences_language();
     const char *theme = strstr(input, "\"theme\":\"light\"") ? "light" :
                         strstr(input, "\"theme\":\"dark\"") ? "dark" : preferences_theme();
     char temporary[512];
@@ -2419,6 +2496,8 @@ static int handle_client(int fd, const char *web_root, mqtt_client *mqtt, consol
         return header_end ? gcode_upload_start(fd,request,query,used,(size_t)(body-request),mqtt):0;
     } else if (strcmp(method,"GET")==0 && (strcmp(path,"/")==0 || strcmp(path,"/index.html")==0)) {
         serve_index(fd, web_root);
+    } else if (strcmp(method,"GET")==0 && strncmp(path,"/i18n/",6)==0) {
+        serve_locale(fd, web_root, path);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/orca/pending-print")==0) {
         orca_pending_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/orca/pending-print/clear")==0) {

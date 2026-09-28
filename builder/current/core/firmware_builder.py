@@ -14,7 +14,7 @@ are informational only: v2 intentionally changes daemon contents.
 import shlex
 import datetime
 from pathlib import Path
-import argparse, hashlib, json, os, shutil, stat, struct, subprocess, sys, tempfile, zipfile
+import argparse, hashlib, json, os, re, shutil, stat, struct, subprocess, sys, tempfile, zipfile
 
 HEADER_SIZE=0x200; OFF_FLAGS=0x004; OFF_VERSION=0x005; OFF_SUBTYPE=0x006; OFF_DATA_SIZE=0x008
 OFF_FILENAME=0x010; OFF_CRYPT_START=0x090; OFF_CRYPT_SPAN=0x098; OFF_IV=0x0A0
@@ -79,6 +79,29 @@ def reqhash(p,h,label):
 
 CC2_CONTROL_SOURCE_SHA256='553b13cd0e5571fc604f3dd85d1859a593081e01e1f515ca1d4acaf28ea8f48b'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
+# Translation files are optional and open-ended (one per language), unlike the
+# fixed files above; names are validated so only web/locales/<code>.json passes.
+CC2_CONTROL_LOCALE=re.compile(r'web/locales/[a-z]{2,5}(-[A-Z]{2})?\.json')
+
+def cc2_control_files(files):
+ locales=sorted(k for k in files if k.startswith('web/locales/'))
+ if any(not CC2_CONTROL_LOCALE.fullmatch(k) for k in locales):
+  raise RuntimeError('Invalid CC2 Control locale file name')
+ if locales and 'web/locales/en.json' not in locales:
+  raise RuntimeError('CC2 Control locales present without web/locales/en.json')
+ return CC2_CONTROL_FILES+tuple(locales)
+
+def cc2_control_destinations(root,manifest):
+ app=root/'opt/inst/cc2-control'
+ destinations={
+  'cc2-control':app/'cc2-control', 'web/index.html':app/'web/index.html',
+  'defaults/material-presets.json':app/'defaults/material-presets.json',
+  'start.sh':app/'start.sh', 'launch.sh':app/'launch.sh',
+  'cc2-control.init':root/'etc/init.d/cc2-control', 'cc2-configure':root/'usr/bin/cc2-configure',
+ }
+ for relative in cc2_control_files(manifest['files'])[len(CC2_CONTROL_FILES):]:
+  destinations[relative]=app/relative
+ return destinations
 
 def load_cc2_control(component,manifest_path):
  component=Path(component); manifest_path=Path(manifest_path)
@@ -89,9 +112,12 @@ def load_cc2_control(component,manifest_path):
  if manifest.get('source_sha256')!=CC2_CONTROL_SOURCE_SHA256:
   raise RuntimeError('CC2 Control source hash mismatch in prepared manifest')
  files=manifest.get('files')
- if not isinstance(files,dict) or set(files)!=set(CC2_CONTROL_FILES):
+ if not isinstance(files,dict):
   raise RuntimeError('CC2 Control manifest file set mismatch')
- for relative in CC2_CONTROL_FILES:
+ expected=cc2_control_files(files)
+ if set(files)!=set(expected):
+  raise RuntimeError('CC2 Control manifest file set mismatch')
+ for relative in expected:
   item=files[relative]
   if not isinstance(item,dict) or not isinstance(item.get('sha256'),str):
    raise RuntimeError('Invalid CC2 Control manifest entry: '+relative)
@@ -99,15 +125,7 @@ def load_cc2_control(component,manifest_path):
  return component,manifest
 
 def install_cc2_control(root,component,manifest):
- app=root/'opt/inst/cc2-control'; web=app/'web'; init=root/'etc/init.d/cc2-control'; command=root/'usr/bin/cc2-configure'
- web.mkdir(parents=True,exist_ok=True); init.parent.mkdir(parents=True,exist_ok=True); command.parent.mkdir(parents=True,exist_ok=True)
- destinations={
-  'cc2-control':app/'cc2-control', 'web/index.html':web/'index.html',
-  'defaults/material-presets.json':app/'defaults/material-presets.json',
-  'start.sh':app/'start.sh', 'launch.sh':app/'launch.sh',
-  'cc2-control.init':init, 'cc2-configure':command,
- }
- for relative,destination in destinations.items():
+ for relative,destination in cc2_control_destinations(root,manifest).items():
   destination.parent.mkdir(parents=True,exist_ok=True)
   shutil.copy2(component/relative,destination)
   os.chmod(destination,int(manifest['files'][relative]['mode'],8))
@@ -118,16 +136,7 @@ def install_cc2_control(root,component,manifest):
   link.symlink_to('../init.d/cc2-control')
 
 def audit_cc2_control(root,component,manifest):
- destinations={
-  'cc2-control':root/'opt/inst/cc2-control/cc2-control',
-  'web/index.html':root/'opt/inst/cc2-control/web/index.html',
-  'defaults/material-presets.json':root/'opt/inst/cc2-control/defaults/material-presets.json',
-  'start.sh':root/'opt/inst/cc2-control/start.sh',
-  'launch.sh':root/'opt/inst/cc2-control/launch.sh',
-  'cc2-control.init':root/'etc/init.d/cc2-control',
-  'cc2-configure':root/'usr/bin/cc2-configure',
- }
- for relative,destination in destinations.items():
+ for relative,destination in cc2_control_destinations(root,manifest).items():
   reqhash(destination,manifest['files'][relative]['sha256'],'installed CC2 Control '+relative)
  for name in ('S98cc2-control','K10cc2-control'):
   link=root/'etc/rc.d'/name

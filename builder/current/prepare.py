@@ -60,6 +60,8 @@ def main():
         subprocess.run([sys.executable, 'tests/test_launchers_static.py'], cwd=tree, check=True)
         subprocess.run([sys.executable, 'tests/test_translation_static.py'], cwd=tree, check=True)
         subprocess.run([sys.executable, 'tests/test_live_job_static.py'], cwd=tree, check=True)
+        if (tree / 'tests/test_locales_static.py').is_file():
+            subprocess.run([sys.executable, 'tests/test_locales_static.py'], cwd=tree, check=True)
         subprocess.run(['make', 'clean', 'all', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
         control_test = Path(temporary) / 'test-control-actions'
         subprocess.run(['gcc', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-I', 'src',
@@ -77,6 +79,16 @@ def main():
         (OUTPUT / 'defaults').mkdir(parents=True)
         shutil.copy2(binary, OUTPUT / 'cc2-control')
         shutil.copy2(web, OUTPUT / 'web/index.html')
+        # Older snapshots embed their translations in index.html; newer ones
+        # fetch /i18n/<code>.json and must ship web/locales alongside it.
+        locales = tree / 'dist/cc2-control/web/locales'
+        if '/i18n/' in web.read_text(encoding='utf-8') and not (locales / 'en.json').is_file():
+            raise RuntimeError('CC2 Control UI loads /i18n/ but dist has no web/locales/en.json')
+        if locales.is_dir():
+            (OUTPUT / 'web/locales').mkdir()
+            for locale in sorted(locales.glob('*.json')):
+                shutil.copy2(locale, OUTPUT / 'web/locales' / locale.name)
+                (OUTPUT / 'web/locales' / locale.name).chmod(0o644)
         shutil.copy2(tree / 'firmware-integration/overlay/opt/inst/cc2-control/defaults/material-presets.json',
                      OUTPUT / 'defaults/material-presets.json')
     for name in ('start.sh', 'launch.sh', 'cc2-control.init', 'cc2-configure'):
