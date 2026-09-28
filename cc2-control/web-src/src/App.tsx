@@ -1,5 +1,5 @@
 import { i18n } from '@/lib/i18n'
-import { nav } from '@/lib/state'
+import { menu, nav } from '@/lib/state'
 import { Sidebar, Toast, Topbar } from '@/components/layout'
 import { SetupDialog } from '@/pages/setup'
 import { PrintDialog } from '@/pages/print-dialog'
@@ -17,12 +17,13 @@ const pages = { dashboard: Dashboard, control: Control, job: Job, files: Files, 
 export const App = () => {
   i18n.use() // re-render the whole tree when the language changes
   const { page } = nav.use()
+  const { collapsed } = menu.use()
   const Page = pages[page]
   return (
     <>
       <Sidebar />
       <Topbar />
-      <main class="ml-18.5 mt-17 max-w-[2000px] p-3 md:ml-52 md:p-4"><Page /></main>
+      <main class={`ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin] md:p-4 ${collapsed ? '' : 'md:ml-52'}`}><Page /></main>
       <Toast />
       <SetupDialog />
       <PrintDialog />

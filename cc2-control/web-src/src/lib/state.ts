@@ -1,4 +1,4 @@
-import { store } from './store'
+import { store, ls } from './store'
 import { request } from './api'
 import { duration, finishTime } from './format'
 
@@ -17,6 +17,10 @@ export const openPage = (page: Page, screws = false) => {
   if (location.hash === hash) nav.set({ page, screws })
   else location.hash = hash
 }
+
+// Side menu: collapsed to icons only; the choice is remembered per browser.
+export const menu = store({ collapsed: ls.get('cc2-menu') === 'collapsed' })
+export const toggleMenu = () => { const collapsed = !menu.get().collapsed; ls.set('cc2-menu', collapsed ? 'collapsed' : 'open'); menu.set({ collapsed }) }
 
 export const printer = store({ data: null as any, rev: 0, ok: true })
 export const health = store({ data: null as any, setup: null as any })
