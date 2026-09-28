@@ -147,7 +147,7 @@ const Detail = ({ entry, onPrint, onDelete }: { entry: Entry | null; onPrint: (e
   return (
     <Card class="flex flex-col">
       <div class="flex min-w-0 items-center gap-3.5"><FileText size={36} strokeWidth={1} class="shrink-0" /><div class="min-w-0"><h3 class="text-base leading-snug [overflow-wrap:anywhere]">{entry ? entry.file.path : t('No file selected')}</h3><small class="text-muted">{entry ? where(entry.storage) : t('Select a G-code file to view its details.')}</small></div></div>
-      <div class="my-4 grid min-h-56 place-items-center overflow-hidden rounded-lg border border-edge">{thumb && <img src={thumb} alt={t('G-code model preview')} class="max-h-72 w-full object-contain p-2.5" />}</div>
+      <div class="my-4 grid min-h-56 place-items-center overflow-hidden rounded-lg border border-edge">{thumb ? <img src={thumb} alt={t('G-code model preview')} class="max-h-72 w-full object-contain p-2.5" /> : <FileText size={56} strokeWidth={1} class="text-edge" />}</div>
       <div>
         <Row label="Size" value={entry ? fileSize(entry.file.size) : '—'} />
         <Row label="Layers" value={meta && ok(meta.layers) && Number(meta.layers) > 0 ? Math.round(Number(meta.layers)) : '—'} />

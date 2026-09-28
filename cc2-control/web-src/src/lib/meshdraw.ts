@@ -16,7 +16,9 @@ export const meshStats = (pts: Pt[]) => {
 }
 
 // Renders the 11×11 bed mesh as a 3D surface or a 2D heat map onto the canvas.
-export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '2d', cam: Cam) {
+export type Labels = { empty: string; min: string; max: string; back: string }
+
+export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '2d', cam: Cam, L: Labels) {
   const r = canvas.getBoundingClientRect()
   if (!r.width || !r.height) return
   const dpr = Math.min(devicePixelRatio || 1, 2)
@@ -24,12 +26,12 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
   const c = canvas.getContext('2d')!, w = r.width, h = r.height
   c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h); c.font = '11px Segoe UI'
   const st = meshStats(points)
-  if (!st) { c.fillStyle = '#8eafc2'; c.textAlign = 'center'; c.fillText('Waiting for live mesh data', w / 2, h / 2); return }
+  if (!st) { c.fillStyle = '#8eafc2'; c.textAlign = 'center'; c.fillText(L.empty, w / 2, h / 2); return }
   const { min: zMin, max: zMax } = st, col = (z: number, a = 1) => colour(z, zMin, zMax, a)
   if (mode === '2d') {
     const side = Math.min(w - 85, h - 70), left = (w - side) / 2, top = 22, cell = side / 11
     for (const p of points) { c.fillStyle = col(p.z); c.fillRect(left + p.x / 25 * cell, top + (10 - p.y / 25) * cell, cell + 0.2, cell + 0.2) }
-    c.fillStyle = '#a2c9dd'; c.textAlign = 'center'; c.fillText('X (mm) →', w / 2, h - 13); c.fillText('Y increases towards the back ↑', w / 2, 13)
+    c.fillStyle = '#a2c9dd'; c.textAlign = 'center'; c.fillText('X (mm) →', w / 2, h - 13); c.fillText(`${L.back} ↑`, w / 2, 13)
     return
   }
   const { yaw, pitch, zoom, scale } = cam
@@ -66,7 +68,7 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     c.fillStyle = col(ps.reduce((s, p) => s + p.z, 0) / 4, 0.94); c.fill(); c.strokeStyle = '#d4f8ee55'; c.lineWidth = 0.7; c.stroke()
   }
   for (const p of points) { const q = project(p.x, p.y, p.z); c.fillStyle = '#d4fcff'; c.beginPath(); c.arc(q.x, q.y, 1.35, 0, Math.PI * 2); c.fill() }
-  for (const [z, label, color] of [[zMin, 'Min', '#16c9f2'], [zMax, 'Max', '#ffcf4d']] as const) {
+  for (const [z, label, color] of [[zMin, L.min, '#16c9f2'], [zMax, L.max, '#ffcf4d']] as const) {
     const p = points.find(p => p.z === z)!, q = project(p.x, p.y, p.z)
     c.beginPath(); c.arc(q.x, q.y, 5.5, 0, Math.PI * 2); c.fillStyle = color; c.fill(); c.strokeStyle = '#ffffff88'; c.stroke()
     c.textAlign = 'left'; c.font = 'bold 12px Segoe UI'; c.fillText(label, q.x + 9, q.y - 17)

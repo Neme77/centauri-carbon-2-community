@@ -32,20 +32,21 @@ const MeshCard = () => {
   const points: Pt[] = useMemo(() => (data && matrixFromUds(data, profile)) || [], [data, profile])
   const st = meshStats(points), root = meshRoot(data)
 
-  const redraw = () => { if (canvas.current && view !== 'values') drawMesh(canvas.current, points, view, cam.current) }
+  const redraw = () => { if (canvas.current && view !== 'values') drawMesh(canvas.current, points, view, cam.current, { empty: t('Waiting for live mesh data'), min: t('Min'), max: t('Max'), back: t('Y increases towards the back') }) }
   useEffect(redraw, [points, view, scale])
   useEffect(() => { addEventListener('resize', redraw); return () => removeEventListener('resize', redraw) }, [points, view])
 
-  const load = async () => {
+  const warned = useRef(false) // one error toast per outage, not one every 5 s
+  const load = async (manual = false) => {
     if (busy.current) return
     busy.current = true
     try {
       const d = await request('/api/mesh')
       if (!meshRoot(d)) throw Error(t('The firmware did not expose bed mesh data'))
-      setData(d)
-    } catch (e) { notify(tpl('Mesh unavailable: {error}', { error: errText(e) }), 'error') } finally { busy.current = false }
+      setData(d); warned.current = false
+    } catch (e) { if (manual === true || !warned.current) notify(tpl('Mesh unavailable: {error}', { error: errText(e) }), 'error'); warned.current = true } finally { busy.current = false }
   }
-  useEffect(() => { load(); const id = setInterval(load, 5000); return () => clearInterval(id) }, [])
+  useEffect(() => { load(); const id = setInterval(() => load(), 5000); return () => clearInterval(id) }, [])
 
   const names = PROFILES.filter(([n]) => root?.profiles?.[n])
   const drag = useRef<{ id: number; x: number; y: number } | null>(null)
@@ -94,7 +95,7 @@ const MeshCard = () => {
         <Stat dot={<Dot c="blue" />} label="Minimum" val={st ? signed(st.min) : '—'} /><Stat dot={<Dot c="amber" />} label="Maximum" val={st ? signed(st.max) : '—'} />
         <Stat dot={<ArrowLeftRight {...I} class="text-cyan" />} label="Range" val={st ? st.range.toFixed(3) : '—'} /><Stat dot={<Sigma {...I} class="text-cyan" />} label="Average" val={st ? signed(st.mean) : '—'} />
       </div>
-      <MeshActions reload={load} note={points.length ? (profile === 'active' ? `${t('Active mesh loaded')}${root?.profile_name ? ' · ' + root.profile_name : ''}.` : `${t('Saved mesh loaded')} · ${profile}.`) : t('Waiting for the printer mesh.')} />
+      <MeshActions reload={() => load(true)} note={points.length ? (profile === 'active' ? `${t('Active mesh loaded')}${root?.profile_name ? ' · ' + root.profile_name : ''}.` : `${t('Saved mesh loaded')} · ${profile}.`) : t('Waiting for the printer mesh.')} />
     </Card>
   )
 }
