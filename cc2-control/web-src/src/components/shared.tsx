@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { cn } from '@/lib/utils'
 import { Dot } from '@/components/ui/badge'
+import { Card, CardHead } from '@/components/ui/card'
 import { Icon } from '@/components/icons'
 import { t } from '@/lib/i18n'
 import { camera } from '@/lib/state'
@@ -50,20 +51,22 @@ export const Warn = ({ children }: { children: ComponentChildren }) => (
 
 export const Muted = ({ children, class: c }: { children: ComponentChildren; class?: string }) => <p class={cn('text-muted', c)}>{children}</p>
 
-// Live MJPEG feed with the same retry behaviour as before; the placeholder shows until the first frame.
+// Live MJPEG feed card. The placeholder shows until the first frame; the header only says "Live" while frames arrive, and a dropped stream retries.
 export const CameraCard = ({ tall }: { tall?: boolean }) => {
   const [ready, setReady] = useState(false)
   const [src, setSrc] = useState(camera())
+  const lost = () => { setReady(false); setTimeout(() => setSrc(camera(`?t=${Date.now()}`)), 2500) }
   return (
-    <>
+    <Card class="flex flex-col">
+      <CardHead icon="camera" title="Live Camera" end={ready ? <><Dot /> {t('Live')}</> : undefined} />
       <div class={cn('relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black', tall ? 'min-h-80' : 'aspect-video')}>
         {!ready && <div class="text-center text-muted"><Icon n="camera" class="mx-auto mb-2 size-10" /><strong class="block text-[15px] font-medium">{t(tall ? 'Your live print camera' : 'Your CC2 camera feed')}</strong><p class="text-xs">{t('Waiting for camera stream')}</p></div>}
-        <img src={src} alt={t('CC2 live camera')} class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')} onLoad={() => setReady(true)} onError={() => setTimeout(() => setSrc(camera(`?t=${Date.now()}`)), 2500)} />
+        <img src={src} alt={t('CC2 live camera')} class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')} onLoad={() => setReady(true)} onError={lost} />
       </div>
       <div class="mt-3 grid gap-2.5 sm:grid-cols-2">
         <Button class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs sm:text-sm" onClick={() => window.open(camera(), 'cc2-camera')}><Icon n="open" class="size-4" />{t('Open in new window')}</Button>
         <Button class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs sm:text-sm" onClick={() => window.open(camera(`?snapshot=${Date.now()}`), 'cc2-snapshot')}><Icon n="camera" class="size-4" />{t('Snapshot')}</Button>
       </div>
-    </>
+    </Card>
   )
 }

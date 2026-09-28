@@ -23,11 +23,12 @@ export const Dashboard = () => {
   return (
     <div class="grid gap-3.5">
       <div class="grid gap-3.5 lg:grid-cols-2">
-        <Card class="flex flex-col"><CardHead icon="camera" title="Live Camera" end={t('Live')} /><CameraCard /></Card>
+        <CameraCard />
         <div class="grid gap-3.5 lg:grid-rows-[1fr_auto]">
           <Card class="flex flex-col">
             <CardHead icon="file" title="Current Job" end={t(v.state)} />
             <div class="mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]">{v.rawFilename === 'No active file' ? t(v.rawFilename) : v.rawFilename}</div>
+            {!v.active && <a href="#files" class="mb-3 -mt-1 w-fit text-[13px] text-cyan underline underline-offset-2">{t('Choose a file to print')}</a>}
             <Progress pct={v.progress} />
             <div class="mt-auto grid grid-cols-2 gap-x-2.5 gap-y-4 pt-5 sm:grid-cols-4">
               {[[v.elapsedText, t('Elapsed')], [v.remainingText, tpl('Remaining · ends {time}', { time: v.finishText })], [v.active ? v.layer || '—' : '—', t('Current layer')], [v.total, t('Total layers')]].map(([val, label], i) => (

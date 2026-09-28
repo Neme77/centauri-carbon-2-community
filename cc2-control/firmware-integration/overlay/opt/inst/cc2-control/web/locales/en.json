@@ -63,6 +63,7 @@
   "Checking configuration…": "Checking configuration…",
   "Choose a Canvas slot for every filament.": "Choose a Canvas slot for every filament.",
   "Choose a G-code file first.": "Choose a G-code file first.",
+  "Choose a file to print": "Choose a file to print",
   "Choose a spool": "Choose a spool",
   "Choose a valid .gcode file between 1 byte and 64 MiB.": "Choose a valid .gcode file between 1 byte and 64 MiB.",
   "Choose material and colour": "Choose material and colour",

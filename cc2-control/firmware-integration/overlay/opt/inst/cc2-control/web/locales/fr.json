@@ -63,6 +63,7 @@
   "Checking configuration…": "Vérification de la configuration…",
   "Choose a Canvas slot for every filament.": "Choisissez une bobine Canvas pour chaque filament.",
   "Choose a G-code file first.": "Choisissez d'abord un fichier G-code.",
+  "Choose a file to print": "Choisir un fichier à imprimer",
   "Choose a spool": "Choisir une bobine",
   "Choose a valid .gcode file between 1 byte and 64 MiB.": "Choisissez un fichier .gcode valide entre 1 octet et 64 Mio.",
   "Choose material and colour": "Choisir le matériau et la couleur",

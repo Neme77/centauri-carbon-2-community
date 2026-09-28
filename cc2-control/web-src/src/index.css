@@ -19,3 +19,7 @@
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", Arial, sans-serif; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 input[type=range], input[type=checkbox], input[type=radio], progress { accent-color: var(--cyan); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

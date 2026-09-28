@@ -42,10 +42,11 @@ export const Job = () => {
   return (
     <div class="grid gap-3.5">
       <div class="grid gap-3.5 lg:grid-cols-2">
-        <Card class="flex flex-col"><CardHead icon="camera" title="Live Camera" end={<><Dot /> {t('Live')}</>} /><CameraCard tall /></Card>
+        <CameraCard tall />
         <Card class="flex flex-col">
           <CardHead icon="file" title="Current Job" end={<span class="text-cyan">{t(v.state)}</span>} />
           <div class="mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]">{v.rawFilename === 'No active file' ? t(v.rawFilename) : v.rawFilename}</div>
+          {!v.active && <a href="#files" class="mb-3 -mt-1 w-fit text-[13px] text-cyan underline underline-offset-2">{t('Choose a file to print')}</a>}
           <Progress pct={v.progress} />
           <div class="mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 sm:grid-cols-3">
             {stats.map(([val, label], i) => <div key={i} class="min-w-0"><strong class="block text-[15px] [overflow-wrap:anywhere]">{val}</strong><small class="text-[11px] text-muted">{label}</small></div>)}
