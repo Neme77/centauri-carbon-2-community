@@ -75,6 +75,15 @@ export const Topbar = () => {
   )
 }
 
+// Keeps the browser tab title informative: current page, and print progress while a job runs.
+export const TitleSync = () => {
+  const { page } = nav.use()
+  const v = view(printer.use().data)
+  const label = items.find(i => i[0] === page)![2]
+  document.title = `${v.active ? `${Math.round(v.progress)}% · ` : ''}${t(label)} · Centauri Carbon 2`
+  return null
+}
+
 export const Toast = () => {
   const { text, n, tone } = toast.use()
   const [show, setShow] = useState(false)

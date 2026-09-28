@@ -1,6 +1,6 @@
 import { i18n } from '@/lib/i18n'
 import { menu, nav } from '@/lib/state'
-import { Sidebar, Toast, Topbar } from '@/components/layout'
+import { Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SetupDialog } from '@/pages/setup'
 import { PrintDialog } from '@/pages/print-dialog'
@@ -22,6 +22,7 @@ export const App = () => {
   const Page = pages[page]
   return (
     <>
+      <TitleSync />
       <Sidebar />
       <Topbar />
       <main class={`ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin] md:p-4 ${collapsed ? '' : 'md:ml-52'}`}><Page /></main>
