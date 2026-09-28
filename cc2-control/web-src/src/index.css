@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: var(--bg); --color-panel: var(--panel); --color-edge: var(--edge);
+  --color-fg: var(--text); --color-muted: var(--muted); --color-field: var(--field); --color-ink: var(--ink);
+  --color-cyan: var(--cyan); --color-green: var(--green); --color-amber: var(--amber);
+  --color-red: var(--red); --color-blue: var(--blue);
+}
+:root {
+  color-scheme: dark;
+  --bg: #031622; --panel: #052131; --edge: #17445b; --text: #edf6fc; --muted: #8daebf; --field: #0a2b3f; --ink: #012331;
+  --cyan: #00d3ed; --green: #29e49b; --amber: #ffc54a; --red: #ff6170; --blue: #209eff;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef0f2; --panel: #fff; --edge: #c5cbd0; --text: #17191b; --muted: #596168; --field: #f4f5f6; --ink: #fff;
+  --cyan: #006f80; --green: #087748; --amber: #815700; --red: #ad2638; --blue: #166fa8;
+}
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", Arial, sans-serif; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+input[type=range], input[type=checkbox], input[type=radio], progress { accent-color: var(--cyan); }

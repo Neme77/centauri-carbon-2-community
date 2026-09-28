@@ -1,39 +1,34 @@
 from pathlib import Path
 
+from _websrc import read_src
+
 root = Path(__file__).resolve().parents[1]
-ui = (root / "web" / "index.html").read_text(encoding="utf-8")
+ui = read_src()
 control = (root / "src" / "control.c").read_text(encoding="utf-8")
 main = (root / "src" / "main.c").read_text(encoding="utf-8")
 mqtt = (root / "src" / "mqtt.c").read_text(encoding="utf-8")
 
 markers = {
-    "single Bed Levelling navigation": 'data-page="bed"',
-    "global emergency stop": 'class="global-estop"',
-    "one-second emergency hold": "setTimeout(async()=>",
-    "quick machine actions": 'data-quick-action="system:heaters_off"',
-    "settings panel routing": "mapping=[0,3,2,1,4]",
-    "compact settings layout": "Compact, tabbed Settings layout",
-    "persistent light theme": "setTheme(preferences.theme,false)",
-    "light theme stylesheet": 'html[data-theme="light"]',
-    "light navigation sidebar": 'background:linear-gradient(180deg,#fff,#f1f3f4)',
-    "accessible light warning palette": 'background:#fff4ce',
-    "micron screw display": "value*1000",
+    "single Bed Levelling navigation": "['bed', Grid3x3, 'Bed Levelling']",
+    "global emergency stop": "control('system:emergency_stop')",
+    "one-second emergency hold": "}, 1000)",
+    "quick machine actions": "'system:heaters_off'",
+    "settings panel routing": "[Link, 'Connection'], [ShieldCheck, 'Safety'], [Plug, 'Integrations'], [Palette, 'Appearance'], [Info, 'About']",
+    "persistent light theme": "setTheme(p.theme)",
+    "light theme stylesheet": ':root[data-theme="light"]',
+    "micron display": "Math.round(v * 1000)",
     "optimized reference adjustment": "useOptimized",
-    "demo job neutralization": "neutralizeJobDemo()",
-    "language-independent telemetry readings": "const aliases={Nozzle:['Nozzle','Ugello']",
-    "live job layer summary": "jobSummary[0].textContent=",
-    "live job elapsed time": "elapsedText=activePrint?showDuration",
-    "estimated completion time": "showFinishTime(remainingSeconds)",
-    "neutral idle job times": "stats.forEach(node=>node.textContent='—')",
+    "live job layer summary": "`${t('Layer')} ${v.layer || '—'} / ${v.total}`",
+    "live job elapsed time": "elapsedText: active ? duration(elapsed)",
+    "estimated completion time": "finishTime(remaining)",
     "real G-code metadata": "/api/gcode-files/metadata",
-    "real current print object": "model.current_object",
-    "live UI demo neutralization": "neutralizeStaticDemo()",
-    "live thermal renderer": "window.cc2DrawLiveThermal=drawLiveThermal",
+    "real current print object": "m?.current_object",
+    "live thermal history": "a.length > 300",
 }
 for label, marker in markers.items():
     assert marker in ui, f"missing {label}: {marker}"
 
-assert 'data-screws' not in ui.split('</nav>', 1)[0], "duplicate screw navigation remains"
+assert "data-screws" not in ui, "duplicate screw navigation remains"
 assert 'strcmp(action,"system:heaters_off")' in control
 assert 'strcmp(action,"system:fans_off")' in control
 assert 'strcmp(action,"system:emergency_stop")' in control
@@ -47,7 +42,7 @@ assert '"filament used [g]"' in main
 assert 'first_run_restart_requested = 1' in main
 assert '\\"restarting\\":true' in main
 assert 'Restarting CC2 Control and synchronizing Canvas' in ui
-assert 'for (let count = 0; count < 60; count++)' in ui
+assert 'n < 60' in ui
 assert "for(const [temp,color]of [[28" not in ui
-assert "lines[index].textContent = 'Read during inspection'" not in ui
+assert "Read during inspection" not in ui
 print("PASS: CC2 Control 1.1.31 stable live-job and safety markers")

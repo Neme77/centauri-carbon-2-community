@@ -3,11 +3,12 @@
 
 from pathlib import Path
 
+from _websrc import read_src
 
 root = Path(__file__).resolve().parents[1]
 main = (root / "src/main.c").read_text(encoding="utf-8")
 mqtt = (root / "src/mqtt.c").read_text(encoding="utf-8")
-web = (root / "web/index.html").read_text(encoding="utf-8")
+web = read_src()
 
 required_main = (
     'GCODE_INTERNAL_ROOT "/opt/usr/gcode/local"',
@@ -45,26 +46,21 @@ required_mqtt = (
     'tools[index], trays[index]',
 )
 required_web = (
-    'data-page="files"',
-    'async function refreshFiles()',
-    'async function startFile(storage, path)',
-    "overlay.id='cc2PrintOverlay'",
-    'name="useCanvas"',
-    'Choose print spool',
-    '/api/gcode-files/inspect',
-    'select.dataset.tool',
-    'Importing USB G-code to internal storage',
-    'name="plateSide"',
-    "form.elements.plateSide.value",
+    "['files', FilesIcon, 'Files']",
+    "const refresh = async",
+    "export async function startFile(storage: string, path: string)",
+    "'Choose print spool'",
+    "useCanvas",
+    "/api/gcode-files/inspect",
+    "`${tool}:${map[tool]}`",
+    "Importing USB G-code to internal storage",
+    "plateSide",
     "profiles.default1",
     "meshAvailable",
-    'id="meshProfile"',
-    'name="calibrateBed"',
-    "form.elements.calibrateBed.checked?'calibrate':'saved'",
-    'inspection.adaptive_mesh',
-    'validTemperature(metadata.nozzle_temperature,500)',
-    'const fileMetadataCache = new Map()',
-    'fileMetadataCache.set(metadataKey,metadata)',
+    "calibrating ? 'calibrate' : 'saved'",
+    "temp(meta.nozzle_temperature, 500)",
+    "const metaCache = new Map",
+    "metaCache.set(k, m)",
 )
 
 for marker in required_main:
