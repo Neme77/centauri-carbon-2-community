@@ -12,6 +12,8 @@ export const Dialog = ({ onClose, locked, children, width = 520 }: { onClose?: (
     const items = () => [...(box.current?.querySelectorAll<HTMLElement>(FOCUSABLE) || [])]
     ;(box.current?.querySelector<HTMLElement>('[autofocus]') || items()[0])?.focus()
     const key = (e: KeyboardEvent) => {
+      const open = document.querySelectorAll('[role=dialog]')
+      if (open[open.length - 1] !== box.current) return // only the topmost dialog reacts
       if (e.key === 'Escape' && !props.current.locked && props.current.onClose) return props.current.onClose()
       if (e.key !== 'Tab') return
       const list = items()
