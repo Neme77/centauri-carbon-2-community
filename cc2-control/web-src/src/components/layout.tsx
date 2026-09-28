@@ -76,13 +76,13 @@ export const Topbar = () => {
 }
 
 export const Toast = () => {
-  const { text, n } = toast.use()
+  const { text, n, tone } = toast.use()
   const [show, setShow] = useState(false)
   useEffect(() => {
     if (!n) return
     setShow(true)
-    const id = setTimeout(() => setShow(false), 3600)
+    const id = setTimeout(() => setShow(false), tone === 'error' ? 7000 : 3600)
     return () => clearTimeout(id)
   }, [n])
-  return show ? <div role="status" aria-live="polite" class="fixed bottom-6 left-1/2 z-[70] max-w-[90%] -translate-x-1/2 rounded-lg border border-cyan bg-panel px-5 py-3 shadow-2xl">{text}</div> : null
+  return show ? <div role={tone === 'error' ? 'alert' : 'status'} onClick={() => setShow(false)} title={t('Dismiss')} class={cn('fixed bottom-6 left-1/2 z-[70] max-w-[90%] -translate-x-1/2 cursor-pointer rounded-lg border bg-panel px-5 py-3 shadow-2xl', tone === 'error' ? 'border-red text-red' : 'border-cyan')}>{text}</div> : null
 }

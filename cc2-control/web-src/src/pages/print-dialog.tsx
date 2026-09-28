@@ -15,7 +15,7 @@ let activeGeneration = 0, lastSeen = 0, opening = false
 
 async function clearOrcaPending(generation: number) {
   if (!generation) return
-  try { await post('/api/orca/pending-print/clear', String(generation)) } catch (e) { notify(tpl('Cannot clear OrcaSlicer request: {error}', { error: errText(e) })) }
+  try { await post('/api/orca/pending-print/clear', String(generation)) } catch (e) { notify(tpl('Cannot clear OrcaSlicer request: {error}', { error: errText(e) }), 'error') }
 }
 
 // Opens the confirmation dialog; a print is never started without the operator confirming the mapping.
@@ -30,7 +30,7 @@ export async function startFile(storage: string, path: string) {
     const tools: number[] = Array.isArray(inspection.tools) && inspection.tools.length ? inspection.tools : [0]
     const model = canvasModel(canvasData), profiles = meshRoot(meshData)?.profiles || {}
     pending.set({ job: { storage, path, tools, meshAvailable: { A: Boolean(profiles.default), B: Boolean(profiles.default1) }, trays: model?.trays || [], connected: Boolean(model?.connected) } })
-  } catch (e) { pending.set({ job: null }); notify(tpl('Cannot prepare print: {error}', { error: errText(e) })) }
+  } catch (e) { pending.set({ job: null }); notify(tpl('Cannot prepare print: {error}', { error: errText(e) }), 'error') }
 }
 
 // An OrcaSlicer "Upload and Print" queues a confirmation here, not an unattended print.

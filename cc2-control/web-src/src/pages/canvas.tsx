@@ -52,7 +52,7 @@ export const Canvas = () => {
   const [dialog, setDialog] = useState(false)
   useEffect(() => { refreshCanvas(); const id = setInterval(() => { if (!dialog) refreshCanvas() }, 1000); return () => clearInterval(id) }, [dialog])
   const ok = Boolean(model?.connected)
-  const sync = async () => { try { await post('/api/canvas/refresh'); setTimeout(refreshCanvas, 600) } catch (e) { notify(errText(e)) } }
+  const sync = async () => { try { await post('/api/canvas/refresh'); setTimeout(refreshCanvas, 600) } catch (e) { notify(errText(e), 'error') } }
   const slots = [0, 1, 2, 3].map(i => {
     const tray = model?.trays[i], tel = tray?.filament_color
     let pend = optimistic[i]

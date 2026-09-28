@@ -34,7 +34,7 @@ for marker in required:
 # Every toast goes through t()/tpl(); `m` is an already-translated message and errText() is backend text.
 for match in re.finditer(r"\bnotify\(([^)]*)", src):
     arg = match.group(1).strip()
-    assert arg.startswith(("t(", "tpl(", "errText(")) or arg == "m", f"untranslated notify(): {match.group(0)}"
+    assert arg.startswith(("t(", "tpl(", "errText(")) or re.fullmatch(r"m(, 'error')?", arg), f"untranslated notify(): {match.group(0)}"
 
 for locale, spot_checks in {
     "it": {

@@ -9,7 +9,7 @@ import { t, tpl } from '@/lib/i18n'
 export const SetupDialog = () => {
   const [open, setOpen] = useState(false), [code, setCode] = useState(''), [busy, setBusy] = useState(false), [state, setState] = useState('Checking configuration…')
   useEffect(() => {
-    request('/api/setup').then(d => setOpen(Boolean(d.required))).catch(e => notify(tpl('Setup check failed: {error}', { error: errText(e) })))
+    request('/api/setup').then(d => setOpen(Boolean(d.required))).catch(e => notify(tpl('Setup check failed: {error}', { error: errText(e) }), 'error'))
   }, [])
   if (!open) return null
   const submit = async (e: Event) => {

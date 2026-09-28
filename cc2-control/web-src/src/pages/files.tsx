@@ -32,7 +32,7 @@ export const Files = () => {
       for (const [storage, group] of [['internal', data.internal], ['usb', data.usb]] as const) for (const file of group?.files || []) next.push({ storage, file })
       setEntries(next); setLoaded(true)
       if (announce) notify(t('Protected file list refreshed.'))
-    } catch (e) { notify(tpl('File list unavailable: {error}', { error: errText(e) })) }
+    } catch (e) { notify(tpl('File list unavailable: {error}', { error: errText(e) }), 'error') }
   }
   useEffect(() => { refresh() }, [])
 
@@ -41,7 +41,7 @@ export const Files = () => {
   const toggle = (k: string, on: boolean) => setChecked(s => { const n = new Set(s); on ? n.add(k) : n.delete(k); return n })
   const items = () => [...checked].map(k => { const i = k.indexOf('\n'); return { storage: k.slice(0, i), path: k.slice(i + 1) } }).filter(i => i.storage && i.path)
 
-  const guard = () => { if (busy) { notify(t('Finish the current file operation first.')); return true } return false }
+  const guard = () => { if (busy) { notify(t('Finish the current file operation first.'), 'error'); return true } return false }
   const remove = async (e: Entry) => {
     const { storage } = e, path = e.file.path
     if (guard() || !(await ask(`${tpl('Permanently delete this G-code from {where}?', { where: where(storage) })}\n\n${path}`, true))) return
@@ -51,7 +51,7 @@ export const Files = () => {
       if (sel && key(sel) === key(e)) setSel(null)
       notify(tpl('Deleted {path} from {where}.', { path, where: where(storage) }))
       await refresh()
-    } catch (err) { notify(tpl('Delete failed: {error}', { error: errText(err) })) }
+    } catch (err) { notify(tpl('Delete failed: {error}', { error: errText(err) }), 'error') }
   }
   const bulk = async (kind: 'delete' | 'copy') => {
     const list = items()
@@ -60,7 +60,7 @@ export const Files = () => {
     if (kind === 'delete') { if (!(await ask(tpl('Permanently delete {n} selected G-code files?', { n: list.length }), true))) return }
     else {
       const d = new Set(list.map(i => (i.storage === 'usb' ? 'internal' : 'usb')))
-      if (d.size !== 1) return notify(t('Select files from only one storage location.'))
+      if (d.size !== 1) return notify(t('Select files from only one storage location.'), 'error')
       dest = [...d][0]
       if (!(await ask(tpl('Copy {n} selected files to {where}?', { n: list.length, where: where(dest) })))) return
     }
@@ -71,7 +71,7 @@ export const Files = () => {
         if (!r.ok) throw Error(await failure(r))
         if (kind === 'delete') toggle(key(i), false)
         done++
-      } catch (err) { notify(tpl('Stopped after {n} files: {error}', { n: done, error: errText(err) })); break }
+      } catch (err) { notify(tpl('Stopped after {n} files: {error}', { n: done, error: errText(err) }), 'error'); break }
     }
     await refresh()
     if (done === list.length) notify(tpl(kind === 'delete' ? 'Deleted {n} selected files.' : 'Copied {n} selected files.', { n: done }))
@@ -168,8 +168,8 @@ const Upload = ({ busy, setBusy, refresh }: { busy: boolean; setBusy: (b: boolea
   const [storage, setStorage] = useState('internal'), [pct, setPct] = useState(-1), [note, setNote] = useState('Maximum 64 MiB · no automatic printing · existing files are never overwritten')
   const go = async () => {
     const file = pick.current?.files?.[0]
-    if (busy || !file) return notify(t('Choose a G-code file first.'))
-    if (!file.name || new TextEncoder().encode(file.name).length >= 256 || !/\.gcode$/i.test(file.name) || file.size === 0 || file.size > 64 * 1024 * 1024) return notify(t('Choose a valid .gcode file between 1 byte and 64 MiB.'))
+    if (busy || !file) return notify(t('Choose a G-code file first.'), 'error')
+    if (!file.name || new TextEncoder().encode(file.name).length >= 256 || !/\.gcode$/i.test(file.name) || file.size === 0 || file.size > 64 * 1024 * 1024) return notify(t('Choose a valid .gcode file between 1 byte and 64 MiB.'), 'error')
     if (!(await ask(`${tpl('Upload {name} ({size}) to {where}?', { name: file.name, size: fileSize(file.size), where: where(storage) })}\n\n${t('The file will not be printed automatically.')}`))) return
     setBusy(true); setPct(0); setNote(tpl('Uploading… {n}%', { n: 0 }))
     try {
@@ -186,7 +186,7 @@ const Upload = ({ busy, setBusy, refresh }: { busy: boolean; setBusy: (b: boolea
       pick.current!.value = ''; setPct(100); setNote(t('Upload completed. File is ready in the selected storage.'))
       notify(tpl('{name} uploaded to {where}.', { name: file.name, where: where(storage) }))
       await refresh()
-    } catch (e) { const m = tpl('Upload failed: {error}', { error: errText(e) }); setNote(m); notify(m) } finally { setBusy(false) }
+    } catch (e) { const m = tpl('Upload failed: {error}', { error: errText(e) }); setNote(m); notify(m, 'error') } finally { setBusy(false) }
   }
   return (
     <Card><CardHead title="Upload File" end={t('Local upload')} />

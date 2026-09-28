@@ -25,17 +25,17 @@ const Connection = () => {
   const mqtt = Boolean(h?.mqtt_connected && h?.mqtt_registered), ready = Boolean(setup?.configured && mqtt && setup?.snapshot_received)
   const verify = async () => {
     const v = code.trim()
-    if (!v) return notify(t('Enter the new LAN access code.'))
+    if (!v) return notify(t('Enter the new LAN access code.'), 'error')
     try {
       const s = await request('/api/setup'), re = Boolean(s.configured)
       if (re && !(await ask(t('Replace the saved LAN code? Only CC2 Control will restart.')))) return
       await post(re ? '/api/setup/revalidate' : '/api/setup', v)
       setCode(''); setBusy(true); notify(t('LAN access code saved. Restarting and synchronizing.'))
       setTimeout(() => location.reload(), 30000)
-    } catch (e) { setBusy(false); notify(tpl('Verification failed: {error}', { error: errText(e) })) }
+    } catch (e) { setBusy(false); notify(tpl('Verification failed: {error}', { error: errText(e) }), 'error') }
   }
   const test = async () => {
-    try { await Promise.all([request('/api/health'), request('/api/printer'), request('/api/setup')]); notify(t('CC2 and MQTT connection are responding.')) } catch (e) { notify(tpl('Connection test failed: {error}', { error: errText(e) })) }
+    try { await Promise.all([request('/api/health'), request('/api/printer'), request('/api/setup')]); notify(t('CC2 and MQTT connection are responding.')) } catch (e) { notify(tpl('Connection test failed: {error}', { error: errText(e) }), 'error') }
   }
   return (
     <Card><CardHead icon="link" title="Connection" sub="Network and device access settings" />

@@ -54,7 +54,7 @@ const Temperatures = ({ d }: { d: any }) => {
   const [nozzle, setNozzle] = useState('0'), [bed, setBed] = useState('0'), [active, setActive] = useState('')
   const apply = async () => {
     const n = Number(nozzle), b = Number(bed)
-    if (!Number.isFinite(n) || n < 0 || n > 300 || !Number.isFinite(b) || b < 0 || b > 120) return notify(t('Invalid temperature target.'))
+    if (!Number.isFinite(n) || n < 0 || n > 300 || !Number.isFinite(b) || b < 0 || b > 120) return notify(t('Invalid temperature target.'), 'error')
     await control(`preheat:${n}:${b}`)
   }
   return (
@@ -91,7 +91,7 @@ const ZOffset = () => {
   const off = zoffset.use().v
   const adjust = async (delta: number) => {
     const next = Math.round((off + delta) * 100) / 100
-    if (Math.abs(next) > 0.5001) return notify(t('Session Z offset is limited to ±0.50 mm.'))
+    if (Math.abs(next) > 0.5001) return notify(t('Session Z offset is limited to ±0.50 mm.'), 'error')
     if (await control(`zoffset:adjust:${delta}`)) zoffset.set({ v: next })
   }
   const undo = async () => { const u = -off; if (Math.abs(u) < 0.0001 || (await control(`zoffset:undo:${u}`))) zoffset.set({ v: 0 }) }
@@ -114,16 +114,16 @@ const Profiles = () => {
   useEffect(() => load(Math.min(idx, list.length - 1)), [list])
   const save = async () => {
     const n = name.trim().toUpperCase().slice(0, 16), nz = Number(nozzle), b = Number(bed)
-    if (!/^[A-Z0-9+_-]{1,16}$/.test(n) || nz < 0 || nz > 300 || b < 0 || b > 120) return notify(t('Invalid material profile values.'))
+    if (!/^[A-Z0-9+_-]{1,16}$/.test(n) || nz < 0 || nz > 300 || b < 0 || b > 120) return notify(t('Invalid material profile values.'), 'error')
     const at = list.findIndex(p => p.name.toUpperCase() === n), prev = at >= 0 ? list[at] : null
     const item = { name: n, nozzle: Math.round(nz), bed: Math.round(b), min: prev?.min || Math.max(120, Math.round(nz - 20)), max: prev?.max || Math.min(320, Math.round(nz + 20)) }
     const next = at >= 0 ? list.map((p, i) => (i === at ? item : p)) : [...list, item]
-    try { await savePresets(next); presets.set({ list: next }); setIdx(at >= 0 ? at : next.length - 1); notify(tpl('Saved {name} on the printer.', { name: n })) } catch (e) { notify(tpl('Profile save failed: {error}', { error: errText(e) })) }
+    try { await savePresets(next); presets.set({ list: next }); setIdx(at >= 0 ? at : next.length - 1); notify(tpl('Saved {name} on the printer.', { name: n })) } catch (e) { notify(tpl('Profile save failed: {error}', { error: errText(e) }), 'error') }
   }
   const remove = async () => {
-    if (list.length <= 1) return notify(t('At least one profile must remain.'))
+    if (list.length <= 1) return notify(t('At least one profile must remain.'), 'error')
     const next = list.filter((_, i) => i !== idx), gone = list[idx]
-    try { await savePresets(next); presets.set({ list: next }); notify(tpl('Deleted {name}.', { name: gone.name })) } catch (e) { notify(tpl('Profile deletion failed: {error}', { error: errText(e) })) }
+    try { await savePresets(next); presets.set({ list: next }); notify(tpl('Deleted {name}.', { name: gone.name })) } catch (e) { notify(tpl('Profile deletion failed: {error}', { error: errText(e) }), 'error') }
   }
   const lab = 'text-[11px] text-muted'
   return (

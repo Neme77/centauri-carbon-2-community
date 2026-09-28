@@ -21,7 +21,7 @@ export async function sendConsole(command: string) {
   try { await post('/api/console/command', command); await refreshConsole() } catch (e) {
     const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     consoleLog.set(s => ({ text: `${s.text}\n[${stamp}]  CC2 Control: command rejected — ${errText(e)}`.trim() }))
-    notify(tpl('Command rejected: {error}', { error: errText(e) }))
+    notify(tpl('Command rejected: {error}', { error: errText(e) }), 'error')
   }
 }
 
@@ -42,7 +42,7 @@ export const Console = () => {
     if ((await ask(t('WARNING: Manual G-code can move axes, heat components and alter calibration. The console is blocked during printing; movement requires homing and direct G0/G1 moves are range checked. Continue?'), true))) expert.set({ on: true })
   }
   const send = () => { const c = cmd; setCmd(''); sendConsole(c) }
-  const clear = async () => { try { await post('/api/console/clear'); consoleLog.set({ text: '' }); await refreshConsole() } catch (e) { notify(errText(e)) } }
+  const clear = async () => { try { await post('/api/console/clear'); consoleLog.set({ text: '' }); await refreshConsole() } catch (e) { notify(errText(e), 'error') } }
   return (
     <>
       <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.3fr)_minmax(330px,1fr)]">

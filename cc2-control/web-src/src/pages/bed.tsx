@@ -43,7 +43,7 @@ const MeshCard = () => {
       const d = await request('/api/mesh')
       if (!meshRoot(d)) throw Error(t('The firmware did not expose bed mesh data'))
       setData(d)
-    } catch (e) { notify(tpl('Mesh unavailable: {error}', { error: errText(e) })) } finally { busy.current = false }
+    } catch (e) { notify(tpl('Mesh unavailable: {error}', { error: errText(e) }), 'error') } finally { busy.current = false }
   }
   useEffect(() => { load(); const id = setInterval(load, 5000); return () => clearInterval(id) }, [])
 
