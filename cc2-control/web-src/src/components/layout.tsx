@@ -24,8 +24,9 @@ const EStop = () => {
   }
   return (
     <button type="button" aria-label={t('Hold for emergency stop')} onPointerDown={start} onPointerUp={cancel} onPointerCancel={cancel} onPointerLeave={cancel} onKeyDown={start} onKeyUp={cancel}
+      onContextMenu={e => e.preventDefault()}
       onClick={e => { e.preventDefault(); if (!fired.current) notify(t('Hold Emergency Stop for one second.')) }}
-      class="relative ml-2 flex min-h-11 items-center justify-center overflow-hidden rounded-lg border border-red bg-red/10 px-3 font-bold text-red md:px-4">
+      class="relative ml-2 flex min-h-11 touch-none select-none items-center justify-center overflow-hidden rounded-lg border border-red bg-red/10 px-3 font-bold text-red md:px-4">
       <i class={cn('absolute inset-y-0 left-0 bg-red/30', holding ? 'w-full transition-[width] duration-1000 ease-linear' : 'w-0')} />
       <span class="relative flex items-center gap-2"><TriangleAlert size={20} strokeWidth={1} /><span class="hidden md:inline">{t('EMERGENCY STOP')}</span></span>
     </button>

@@ -62,7 +62,7 @@ const Temperatures = ({ d }: { d: any }) => {
       <CardHead icon="temp" title="Temperatures" />
       {([['red', 'Nozzle', d?.extruder?.temperature, nozzle, setNozzle, 300], ['blue', 'Heated Bed', d?.heater_bed?.temperature, bed, setBed, 120]] as const).map(([dot, label, cur, val, set, max]) => (
         <div key={label} class="my-4 flex items-center gap-2.5"><Dot c={dot} /><span>{t(label)}</span><strong class="ml-auto text-[15px]">{num(cur)} °C</strong>
-          <Input class="w-18 text-center" type="number" min="0" max={max} value={val} aria-label={`${t(label)} target`} onInput={e => set(e.currentTarget.value)} /><small>°C</small></div>
+          <Input class="w-18 text-center" type="number" min="0" max={max} value={val} aria-label={`${t(label)} target`} onInput={e => set(e.currentTarget.value)} onKeyDown={e => e.key === 'Enter' && apply()} /><small>°C</small></div>
       ))}
       <Button wide onClick={apply}>{t('Apply targets')}</Button>
       <div class="mt-4 border-t border-edge pt-3"><small class="text-muted">{t('Temperature Presets')}</small>
