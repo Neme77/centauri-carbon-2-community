@@ -2329,20 +2329,52 @@ static const char *preferences_theme(void) {
     return theme;
 }
 
+static const char *quick_action_defaults[4] = {
+    "home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"
+};
+
+static int quick_action_valid(const char *action) {
+    static const char *allowed[] = {
+        "home:ALL", "home:X", "home:Y", "home:Z",
+        "system:heaters_off", "system:fans_off", "system:motors_off",
+        "light:toggle", "page:control", "page:files", "page:bed", "page:canvas"
+    };
+    for (size_t index = 0; index < sizeof(allowed) / sizeof(allowed[0]); ++index)
+        if (strcmp(action, allowed[index]) == 0) return 1;
+    return 0;
+}
+
+static const char *preferences_quick_action(int slot) {
+    static char actions[4][32];
+    static const char *const keys[4] = {"quick1", "quick2", "quick3", "quick4"};
+    if (slot < 0 || slot >= 4) return quick_action_defaults[0];
+    snprintf(actions[slot], sizeof(actions[slot]), "%s", quick_action_defaults[slot]);
+    FILE *file = fopen(ui_preferences_path, "rb");
+    if (!file) return actions[slot];
+    char body[512], value[32];
+    size_t length = fread(body, 1, sizeof(body) - 1, file);
+    fclose(file); body[length] = '\0';
+    if (extract_json_string(body, keys[slot], value, sizeof(value)) && quick_action_valid(value))
+        snprintf(actions[slot], sizeof(actions[slot]), "%s", value);
+    return actions[slot];
+}
+
 static void preferences_get_response(int fd) {
-    char body[64];
-    int length = snprintf(body, sizeof(body), "{\"language\":\"%s\",\"theme\":\"%s\"}\n",
-                          preferences_language(), preferences_theme());
+    char body[256];
+    int length = snprintf(body, sizeof(body),
+        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick_actions\":[\"%s\",\"%s\",\"%s\",\"%s\"]}\n",
+        preferences_language(), preferences_theme(), preferences_quick_action(0),
+        preferences_quick_action(1), preferences_quick_action(2), preferences_quick_action(3));
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
 
 static void preferences_put_response(int fd, const char *body, size_t body_len) {
-    if (!body || body_len < 16 || body_len > 128) {
+    if (!body || body_len < 2 || body_len > 512) {
         const char *error = "{\"saved\":false,\"error\":\"Invalid preferences\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
-    char input[129];
+    char input[513];
     size_t compact_len = 0;
     for (size_t index = 0; index < body_len; ++index) {
         if (!isspace((unsigned char)body[index])) input[compact_len++] = body[index];
@@ -2356,7 +2388,20 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
     int has_theme = strstr(input, "\"theme\":") != NULL;
     int valid_theme = strstr(input, "\"theme\":\"light\"") != NULL ||
                       strstr(input, "\"theme\":\"dark\"") != NULL;
-    if ((!has_language && !has_theme) || (has_language && !valid_language) ||
+    char quick[4][32]; int has_quick = 0, valid_quick = 1;
+    static const char *const keys[4] = {"quick1", "quick2", "quick3", "quick4"};
+    for (int slot = 0; slot < 4; ++slot) {
+        const char *key = keys[slot];
+        snprintf(quick[slot], sizeof(quick[slot]), "%s", preferences_quick_action(slot));
+        char key_marker[12]; snprintf(key_marker, sizeof(key_marker), "\"%s\":", key);
+        if (strstr(input, key_marker)) {
+            has_quick = 1;
+            if (!extract_json_string(input, key, quick[slot], sizeof(quick[slot])) ||
+                !quick_action_valid(quick[slot])) valid_quick = 0;
+        }
+    }
+    if ((!has_language && !has_theme && !has_quick) || (has_language && !valid_language) ||
+        !valid_quick ||
         (has_theme && !valid_theme)) {
         const char *error = "{\"saved\":false,\"error\":\"Unsupported UI preference\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
@@ -2371,9 +2416,10 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
         respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
-    char canonical[64];
+    char canonical[256];
     int canonical_len = snprintf(canonical, sizeof(canonical),
-                                 "{\"language\":\"%s\",\"theme\":\"%s\"}\n", language, theme);
+        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick1\":\"%s\",\"quick2\":\"%s\",\"quick3\":\"%s\",\"quick4\":\"%s\"}\n",
+        language, theme, quick[0], quick[1], quick[2], quick[3]);
     FILE *file = fopen(temporary, "wb");
     int failed = !file;
     if (file) {
