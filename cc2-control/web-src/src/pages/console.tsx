@@ -14,6 +14,7 @@ import { consoleLog, printer, refreshConsole, view } from '@/lib/state'
 
 const I = { size: 16, strokeWidth: 1 }
 const expert = store({ on: false })
+const history: string[] = [] // commands sent in this session, for the arrow-key recall
 
 export async function sendConsole(command: string) {
   command = command.trim()
@@ -31,7 +32,7 @@ export const Console = () => {
   const { text } = consoleLog.use()
   const on = expert.use().on
   const d = printer.use().data, v = view(d)
-  const [filter, setFilter] = useState(''), [auto, setAuto] = useState(true), [cmd, setCmd] = useState('')
+  const [filter, setFilter] = useState(''), [auto, setAuto] = useState(true), [cmd, setCmd] = useState(''), recall = useRef(-1)
   const screen = useRef<HTMLPreElement>(null)
   useEffect(() => { refreshConsole() }, [])
   const lines = text.split(/\r?\n/), shown = (filter ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase())) : lines).join('\n')
@@ -41,7 +42,19 @@ export const Console = () => {
     if (on) return expert.set({ on: false })
     if ((await ask(t('WARNING: Manual G-code can move axes, heat components and alter calibration. The console is blocked during printing; movement requires homing and direct G0/G1 moves are range checked. Continue?'), true))) expert.set({ on: true })
   }
-  const send = () => { const c = cmd; setCmd(''); sendConsole(c) }
+  const send = () => {
+    const c = cmd.trim()
+    if (!c) return
+    if (history[history.length - 1] !== c) history.push(c)
+    recall.current = -1; setCmd(''); sendConsole(c)
+  }
+  const browse = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') return send()
+    if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !history.length) return
+    e.preventDefault()
+    recall.current = e.key === 'ArrowUp' ? Math.min(recall.current + 1, history.length - 1) : recall.current - 1
+    setCmd(recall.current < 0 ? '' : history[history.length - 1 - recall.current])
+  }
   const clear = async () => { try { await post('/api/console/clear'); consoleLog.set({ text: '' }); await refreshConsole() } catch (e) { notify(errText(e), 'error') } }
   return (
     <>
@@ -57,7 +70,7 @@ export const Console = () => {
           <pre ref={screen} class="m-0 h-[26rem] overflow-auto whitespace-pre-wrap rounded-md border border-edge bg-[#031521] p-3.5 font-mono text-[#edf6fc] text-[13px] leading-7">{shown}</pre>
           <label class="mb-2 mt-4 block font-semibold">{t('Send G-code command')}</label>
           <div class="flex gap-2.5">
-            <Input class="flex-1" disabled={!on} placeholder={t(on ? 'Enter G-code command' : 'Unlock console to send G-code…')} value={cmd} onInput={e => setCmd(e.currentTarget.value)} onKeyDown={e => e.key === 'Enter' && send()} />
+            <Input class="flex-1" disabled={!on} placeholder={t(on ? 'Enter G-code command' : 'Unlock console to send G-code…')} value={cmd} onInput={e => setCmd(e.currentTarget.value)} onKeyDown={browse} autoComplete="off" spellcheck={false} />
             <Button disabled={!on} onClick={send}><Send {...I} />{t('Send')}</Button>
           </div>
         </Card>
