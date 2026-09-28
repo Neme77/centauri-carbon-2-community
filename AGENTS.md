@@ -19,7 +19,8 @@ These rules apply to contributors and coding agents working in this repository.
 | Path | Purpose |
 |---|---|
 | `cc2-control/src/` | CC2 Control C backend |
-| `cc2-control/web/index.html` | Browser UI |
+| `cc2-control/web-src/` | Browser UI sources (Vite + Preact + Tailwind, TypeScript) |
+| `cc2-control/web/index.html` | Browser UI, the committed single-file build of `web-src/` |
 | `cc2-control/web/locales/` | UI translations, one JSON file per language (`en.json` is the source) |
 | `cc2-control/tests/` | Host-side and integration tests |
 | `builder/current/` | Current firmware builder and integration logic |
@@ -72,17 +73,32 @@ python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
 
 ## Web UI changes
 
-`cc2-control/web/index.html` is a large dependency-free HTML/JavaScript UI.
-When changing it:
+The UI is a Vite + Preact + Tailwind app in `cc2-control/web-src/`.
+`cc2-control/web/index.html` is its committed, self-contained build: never edit
+it by hand. After changing `web-src/`:
 
+```sh
+cd cc2-control/web-src
+npm ci            # once
+npm run check     # type-check
+npm run build     # rewrites ../web/index.html
+```
+
+- commit the rebuilt `web/index.html` with the sources (CI rebuilds it and fails
+  on any difference) and keep the committed copy under
+  `cc2-control/firmware-integration/overlay/.../web/` identical
+  (`test_web_sync_static.py`);
 - inspect the complete relevant code path before editing;
 - preserve English/Italian/French behaviour and persistent UI preferences;
-- route new user-visible strings through `translatedText()` or `tpl()` and add
-  the key to every `web/locales/*.json` (`test_locales_static.py` enforces parity);
+- route every new user-visible string through `t()` or `tpl()` and add the key to
+  every `web/locales/*.json` (`test_locale_coverage_static.py` and
+  `test_locales_static.py` enforce it);
 - test the actual browser control or event path that changed;
 - do not treat a direct function call or synthetic unit test as sufficient for
   interactive UI behaviour;
-- verify the page against a running CC2 Control instance when practical.
+- verify the page against a running CC2 Control instance when practical:
+  `CC2_BACKEND=http://localhost:8099 npm run dev` serves the UI with hot reload
+  and proxies `/api` and `/i18n` to that backend.
 
 ## Credentials and sensitive data
 

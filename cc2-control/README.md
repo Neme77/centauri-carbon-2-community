@@ -6,7 +6,8 @@ Centauri Carbon 2 Community Firmware.
 ## Directories
 
 - `src/`: C backend and Panda compatibility bridge;
-- `web/`: browser interface;
+- `web-src/`: browser interface sources (Vite, Preact, Tailwind);
+- `web/`: the committed single-file build of the interface and its translations;
 - `scripts/`: procd startup and runtime scripts;
 - `config/`: example configuration;
 - `defaults/`: default material presets;
@@ -21,6 +22,18 @@ make clean test CROSS= CC=gcc
 
 The native build is for host-side validation. Use the ARM cross toolchain for a
 printer executable.
+
+## Web interface
+
+```sh
+cd web-src
+npm ci
+npm run build                                  # rewrites ../web/index.html
+CC2_BACKEND=http://localhost:8099 npm run dev  # hot reload, proxying /api and /i18n
+```
+
+Commit the rebuilt `web/index.html` with the sources; CI rebuilds it and fails
+when it is stale.
 
 ## Runtime paths
 
