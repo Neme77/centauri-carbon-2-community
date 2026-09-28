@@ -312,6 +312,8 @@
   "Project": "Project",
   "Protected Terminal": "Protected Terminal",
   "Protected actions": "Protected actions",
+  "Protected console ready.": "Protected console ready.",
+  "Protected console ready. Waiting for live printer output.": "Protected console ready. Waiting for live printer output.",
   "Protected file list refreshed.": "Protected file list refreshed.",
   "Protected session adjustment": "Protected session adjustment",
   "Quick Actions": "Quick Actions",

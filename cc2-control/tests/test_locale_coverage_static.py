@@ -24,7 +24,7 @@ for m in re.finditer(r"""\bt\(([^()]*\?[^()]*)\)""", src):
 # Machine state names come from the backend (main.c machine_status_name) and are shown through t().
 names = re.search(r'names\[\]=\{([^}]*)\}', (Path(__file__).resolve().parents[1] / "src" / "main.c").read_text(encoding="utf-8")).group(1)
 used.update(re.findall(r'"([^"]+)"', names))
-used.update({"Offline", "Unknown"})
+used.update({"Offline", "Unknown", "Protected console ready.", "Protected console ready. Waiting for live printer output."})
 
 missing = sorted(k for k in used if k not in en)
 assert not missing, f"{len(missing)} UI string(s) missing from en.json: {missing[:8]}"

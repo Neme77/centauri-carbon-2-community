@@ -35,7 +35,8 @@ export const Console = () => {
   const [filter, setFilter] = useState(''), [auto, setAuto] = useState(true), [cmd, setCmd] = useState(''), recall = useRef(-1)
   const screen = useRef<HTMLPreElement>(null)
   useEffect(() => { refreshConsole() }, [])
-  const lines = text.split(/\r?\n/), shown = (filter ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase())) : lines).join('\n')
+  // The two placeholder lines come from this UI, everything else is printer output and stays as received.
+  const lines = (/^Protected console ready\.( Waiting for live printer output\.)?$/.test(text) ? t(text) : text).split(/\r?\n/), shown = (filter ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase())) : lines).join('\n')
   useEffect(() => { if (auto && screen.current) screen.current.scrollTop = screen.current.scrollHeight }, [shown, auto])
 
   const toggleExpert = async () => {

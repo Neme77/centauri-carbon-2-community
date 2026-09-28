@@ -312,6 +312,8 @@
   "Project": "Progetto",
   "Protected Terminal": "Terminale protetto",
   "Protected actions": "Azioni protette",
+  "Protected console ready.": "Console protetta pronta.",
+  "Protected console ready. Waiting for live printer output.": "Console protetta pronta. In attesa dell’output live della stampante.",
   "Protected file list refreshed.": "Elenco file protetto aggiornato.",
   "Protected session adjustment": "Regolazione di sessione protetta",
   "Quick Actions": "Azioni rapide",
