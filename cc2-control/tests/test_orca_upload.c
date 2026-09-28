@@ -17,9 +17,7 @@ static int upload(mqtt_client *mqtt,const char *name,const char *file,int do_pri
   char response[1500];ssize_t n=recv(pair[1],response,sizeof(response)-1,0);
   assert(n>0);response[n]=0;
   int status=atoi(strchr(response,' ')+1);
-  if(owns){assert(strstr(response,"Content-Type: application/json"));
-    /* The worker answers before releasing upload_mutex; wait for it so the next upload is not refused as busy. */
-    pthread_mutex_lock(&upload_mutex);pthread_mutex_unlock(&upload_mutex);}
+  if(owns){assert(strstr(response,"Content-Type: application/json"));}
   else close(pair[0]);
   close(pair[1]);return status;
 }

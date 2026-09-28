@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <sys/statvfs.h>
 #include <limits.h>
 #include <signal.h>
@@ -659,7 +660,12 @@ typedef struct {
     char name[PATH_MAX_LOCAL];
     const mqtt_client *mqtt;
 } gcode_upload_job;
-static pthread_mutex_t upload_mutex=PTHREAD_MUTEX_INITIALIZER;
+/* One upload at a time. The connection thread takes the slot and the upload
+ * worker releases it, so this is an atomic flag: a mutex must be unlocked by
+ * the thread that locked it. */
+static atomic_int upload_busy=0;
+static int upload_slot_acquire(void){int expected=0;return atomic_compare_exchange_strong(&upload_busy,&expected,1);}
+static void upload_slot_release(void){atomic_store(&upload_busy,0);}
 /* One print request may await the operator's Canvas mapping. Never print from
  * the upload worker: the existing protected print route remains authoritative. */
 static pthread_mutex_t orca_pending_mutex=PTHREAD_MUTEX_INITIALIZER;
@@ -782,18 +788,17 @@ static void *gcode_upload_worker(void *arg){
         error="Cannot publish uploaded file";goto done;
     }
     temporary[0]=0;
-    {const char *ok="{\"uploaded\":true}\n";
-     respond(job->fd,201,"Created","application/json",ok,strlen(ok));}
-    goto cleanup;
+    code=201;status="Created";
 done:
-    if(!error)error="Upload failed";
-    {char body[220];int n=snprintf(body,sizeof(body),"{\"error\":\"%s\"}\n",error);
-     respond(job->fd,code,status,"application/json",body,(size_t)n);}
-cleanup:
     if(output>=0)close(output);
     if(temporary[0])unlink(temporary);
+    /* Free the upload slot before answering: a client may start its next
+     * upload as soon as it reads this response. */
+    upload_slot_release();
+    {char body[220];int n=code==201?snprintf(body,sizeof(body),"{\"uploaded\":true}\n"):
+        snprintf(body,sizeof(body),"{\"error\":\"%s\"}\n",error?error:"Upload failed");
+     respond(job->fd,code,status,"application/json",body,(size_t)n);}
     close(job->fd);free(job);
-    pthread_mutex_unlock(&upload_mutex);
     return NULL;
 }
 
@@ -818,12 +823,12 @@ static int gcode_upload_start(int fd,const char *request,const char *query,
         const char *e="{\"error\":\"Invalid upload size (maximum 64 MiB)\"}\n";
         respond(fd,413,"Payload Too Large","application/json",e,strlen(e));return 0;
     }
-    if(pthread_mutex_trylock(&upload_mutex)!=0){
+    if(!upload_slot_acquire()){
         const char *e="{\"error\":\"Another upload is running\"}\n";
         respond(fd,409,"Conflict","application/json",e,strlen(e));return 0;
     }
     gcode_upload_job *job=calloc(1,sizeof(*job));
-    if(!job){pthread_mutex_unlock(&upload_mutex);return 0;}
+    if(!job){upload_slot_release();return 0;}
     job->fd=fd;job->initial_length=used;job->header_length=header_length;
     job->content_length=len;memcpy(job->initial,request,used);
     snprintf(job->storage,sizeof(job->storage),"%s",storage);
@@ -833,7 +838,7 @@ static int gcode_upload_start(int fd,const char *request,const char *query,
     setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
     pthread_t worker;
     if(pthread_create(&worker,NULL,gcode_upload_worker,job)!=0){
-        free(job);pthread_mutex_unlock(&upload_mutex);return 0;
+        free(job);upload_slot_release();return 0;
     }
     pthread_detach(worker);
     return 1; /* worker owns fd */
@@ -942,6 +947,7 @@ static void *orca_upload_worker(void *arg){
     FILE *input=NULL;
     size_t bytes=0;long file_start=-1,file_end=-1;
     char boundary[80];
+    char reply[PATH_MAX_LOCAL*5];int reply_len=0;
     if(!gcode_storage_writable("internal",root)){status=507;status_text="Insufficient Storage";error="Internal storage unavailable";goto fail;}
     if(!orca_get_boundary((const char *)job->initial,boundary)){error="Missing multipart boundary";goto fail;}
     if(snprintf(spool,sizeof(spool),"%s/.cc2-orca-body-XXXXXX",root)>=(int)sizeof(spool)){error="Storage path too long";goto fail;}
@@ -1044,21 +1050,25 @@ static void *orca_upload_worker(void *arg){
         if(!pending_generation)pending_generation=++orca_pending_generation;
         pthread_mutex_unlock(&orca_pending_mutex);
     }
-    {char safe_name[PATH_MAX_LOCAL*2],body[PATH_MAX_LOCAL*5];
+    {char safe_name[PATH_MAX_LOCAL*2];
      json_escape(safe_name,sizeof(safe_name),filename);
-     int n=snprintf(body,sizeof(body),"{\"files\":{\"local\":{\"name\":\"%s\",\"origin\":\"local\",\"size\":%ld,\"refs\":{\"resource\":\"/api/files/local/%s\"}}},\"done\":true,\"uploaded\":true,\"printed\":false,\"awaiting_canvas\":%s,\"generation\":%lu}\n",safe_name,file_end-file_start,safe_name,print_requested?"true":"false",pending_generation);
-     if(n>0&&(size_t)n<sizeof(body))respond(job->fd,201,"Created","application/json",body,(size_t)n);}
+     int n=snprintf(reply,sizeof(reply),"{\"files\":{\"local\":{\"name\":\"%s\",\"origin\":\"local\",\"size\":%ld,\"refs\":{\"resource\":\"/api/files/local/%s\"}}},\"done\":true,\"uploaded\":true,\"printed\":false,\"awaiting_canvas\":%s,\"generation\":%lu}\n",safe_name,file_end-file_start,safe_name,print_requested?"true":"false",pending_generation);
+     if(n>0&&(size_t)n<sizeof(reply)){reply_len=n;status=201;status_text="Created";}}
     goto cleanup;
 fail:
-    {char response[300];int n=snprintf(response,sizeof(response),"{\"error\":\"%s\"}\n",error);
-     respond(job->fd,status,status_text,"application/json",response,(size_t)n);}
+    reply_len=snprintf(reply,sizeof(reply),"{\"error\":\"%s\"}\n",error);
 cleanup:
     if(input)fclose(input);
     if(output>=0)close(output);
     if(reserve>=0)close(reserve);
     if(temporary[0])unlink(temporary);
     if(spool[0])unlink(spool);
-    close(job->fd);free(job);pthread_mutex_unlock(&upload_mutex);
+    /* Free the upload slot before answering: OrcaSlicer may start its next
+     * upload as soon as it reads this response. */
+    upload_slot_release();
+    if(reply_len>0&&(size_t)reply_len<sizeof(reply))
+        respond(job->fd,status,status_text,"application/json",reply,(size_t)reply_len);
+    close(job->fd);free(job);
     return NULL;
 }
 static int orca_expect_continue(const char *request){
@@ -1090,12 +1100,12 @@ static int orca_upload_start(int fd,const char *request,size_t used,size_t heade
         const char *msg="{\"error\":\"Invalid upload length\"}\n";
         respond(fd,413,"Payload Too Large","application/json",msg,strlen(msg));return 0;
     }
-    if(pthread_mutex_trylock(&upload_mutex)!=0){
+    if(!upload_slot_acquire()){
         const char *msg="{\"error\":\"Another upload is running\"}\n";
         respond(fd,409,"Conflict","application/json",msg,strlen(msg));return 0;
     }
     gcode_upload_job *job=calloc(1,sizeof(*job));
-    if(!job){pthread_mutex_unlock(&upload_mutex);return 0;}
+    if(!job){upload_slot_release();return 0;}
     job->fd=fd;job->initial_length=used;job->header_length=header_length;
     job->content_length=length;job->mqtt=mqtt;memcpy(job->initial,request,used);
     struct timeval timeout={20,0};
@@ -1104,12 +1114,12 @@ static int orca_upload_start(int fd,const char *request,size_t used,size_t heade
     if(orca_expect_continue(request)){
         const char *interim="HTTP/1.1 100 Continue\r\n\r\n";
         if(send_all(fd,interim,strlen(interim))!=0){
-            free(job);pthread_mutex_unlock(&upload_mutex);return 0;
+            free(job);upload_slot_release();return 0;
         }
     }
     pthread_t worker;
     if(pthread_create(&worker,NULL,orca_upload_worker,job)!=0){
-        free(job);pthread_mutex_unlock(&upload_mutex);return 0;
+        free(job);upload_slot_release();return 0;
     }
     pthread_detach(worker);
     return 1;
