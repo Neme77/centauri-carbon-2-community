@@ -26,8 +26,7 @@ The packaged tree is written to `cc2-control/dist/` and is ignored by Git.
 
 ## Firmware builder
 
-The canonical builder source is [`../builder/current/`](../builder/current/).
-The validated release environment is Windows 10/11 with Ubuntu under WSL.
+The canonical builder source is [`../builder/current/`](../builder/current/). The validated release environment is Windows 10/11 with Ubuntu under WSL.
 
 Inside Ubuntu:
 
@@ -36,9 +35,7 @@ sudo apt update
 sudo apt install python3 gcc-arm-linux-gnueabihf squashfs-tools make openssl
 ```
 
-The builder requires local inputs which are not redistributed in Git. See the
-[builder README](../builder/current/README.md) and place each input at the path
-expected by the launcher. Every security-sensitive input is hash checked.
+The builder requires local inputs which are not redistributed in Git. See the [builder README](../builder/current/README.md) and place each input at the path expected by the launcher. Every security-sensitive input is hash checked.
 
 Typical Windows/WSL workflow:
 
@@ -49,8 +46,7 @@ Typical Windows/WSL workflow:
 .\build_stock.ps1
 ```
 
-Run each stage separately and stop on the first failure. Community signing uses
-`build_community.ps1` with its corresponding local key.
+Run each stage separately and stop on the first failure. Community signing uses `build_community.ps1` with its corresponding local key.
 
 ## Reproducibility record
 
@@ -63,5 +59,4 @@ For every release retain:
 - generated firmware, RootFS, SWU and signature hashes;
 - the real-printer validation record.
 
-Do not commit stock firmware, vendor executables, generated images, credentials
-or private signing keys.
+Do not commit stock firmware, vendor executables, generated images, credentials or private signing keys.
