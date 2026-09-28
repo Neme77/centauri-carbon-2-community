@@ -1,11 +1,13 @@
 #ifndef CC2_PANDA_H
 #define CC2_PANDA_H
 
+#include <stdatomic.h>
+
 typedef struct {
     int port;
     int control_port;
     int server_fd;
-    int started;
+    atomic_int started; /* read by the server thread, cleared by panda_stop() */
     void *thread;
 } panda_server;
 
