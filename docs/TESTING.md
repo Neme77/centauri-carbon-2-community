@@ -13,9 +13,6 @@ The suite covers file operations, uploads, Panda compatibility, preferences, tra
 
 The same host tests, an ARM cross-build and the builder tests run automatically on every pull request, every commit to the `main` and `develop` branches. (`.github/workflows/ci.yml`).
 
-The same host tests, an ARM cross-build and the builder tests run automatically
-on every pull request and push to `main` (`.github/workflows/ci.yml`).
-
 CI also treats compiler warnings as errors, runs the suite under sanitizers and starts the ARM binary under qemu. To reproduce locally:
 
 ```sh
