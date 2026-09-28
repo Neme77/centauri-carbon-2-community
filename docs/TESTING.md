@@ -19,6 +19,17 @@ required.
 The same host tests, an ARM cross-build and the builder tests run automatically
 on every pull request and push to `main` (`.github/workflows/ci.yml`).
 
+CI also treats compiler warnings as errors, runs the suite under sanitizers and starts the ARM binary under qemu. To reproduce locally:
+
+```sh
+make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
+make clean test CROSS= CC=gcc SANITIZE=address,undefined
+make clean test CROSS= CC=gcc SANITIZE=thread
+make clean all && CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
+```
+
+The runtime tests do not check the exit status of the server they start, so set `ASAN_OPTIONS`, `UBSAN_OPTIONS` or `TSAN_OPTIONS` to `log_path=/tmp/sanitizer/report` and look for report files after the run, as CI does.
+
 ## Builder tests
 
 Tests that do not require restricted inputs can run directly:

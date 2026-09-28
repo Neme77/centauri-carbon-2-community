@@ -1,7 +1,15 @@
 CROSS ?= arm-linux-gnueabihf-
 CC := $(CROSS)gcc
-CFLAGS := -Os -std=c11 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -pthread
+CFLAGS := -Os -std=c11 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -pthread $(EXTRA_CFLAGS)
 LDFLAGS := -Wl,--gc-sections -s -static -pthread
+
+# Host sanitizer builds, e.g. `make clean test CROSS= CC=gcc SANITIZE=address,undefined`
+# or SANITIZE=thread. Sanitizers need debug info and a dynamically linked binary.
+ifneq ($(SANITIZE),)
+SANITIZE_FLAGS := -fsanitize=$(SANITIZE) -fno-sanitize-recover=all -fno-omit-frame-pointer -g -O1
+CFLAGS += $(SANITIZE_FLAGS)
+LDFLAGS := -pthread
+endif
 
 BUILD := build
 DIST := dist/cc2-control
@@ -36,8 +44,10 @@ dist: $(TARGET)
 # Host-side tests. Each test is a script, run like builder/current/prepare.py
 # runs them. The runtime tests start the binary, so build it for this machine:
 #   make clean test CROSS= CC=gcc
+# Tests that compile their own C harness receive the same extra and sanitizer
+# flags through CC2_TEST_CFLAGS.
 test: $(TARGET)
-	@set -e; for t in tests/test_*.py; do echo "== $$t"; python3 $$t $(TARGET); done
+	@set -e; for t in tests/test_*.py; do echo "== $$t"; CC2_TEST_CFLAGS="$(EXTRA_CFLAGS) $(SANITIZE_FLAGS)" python3 $$t $(TARGET); done
 
 clean:
 	rm -rf $(BUILD) dist

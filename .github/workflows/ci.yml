@@ -22,17 +22,55 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install ARM cross-compiler
-        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf
+      - name: Install ARM cross-compiler and emulator
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user
 
-      - name: Host build and tests
-        run: make clean test CROSS= CC=gcc
+      - name: Host build and tests (warnings are errors)
+        run: make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
 
-      - name: ARM build
+      - name: ARM build (warnings are errors)
         run: |
-          make clean all
+          make clean all EXTRA_CFLAGS=-Werror
           file dist/cc2-control/cc2-control
           file dist/cc2-control/cc2-control | grep -q 'ARM, EABI5.*statically linked'
+
+      - name: ARM binary smoke test under qemu
+        run: CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
+
+  sanitizers:
+    name: CC2 Control (${{ matrix.sanitize }} sanitizer)
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitize: ["address,undefined", "thread"]
+    defaults:
+      run:
+        working-directory: cc2-control
+    env:
+      # Reports from every process, including the server started by the
+      # runtime tests, whose exit status the tests do not check.
+      ASAN_OPTIONS: log_path=/tmp/sanitizer/report
+      UBSAN_OPTIONS: log_path=/tmp/sanitizer/report:print_stacktrace=1
+      TSAN_OPTIONS: log_path=/tmp/sanitizer/report
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Lower mmap randomisation for the sanitizer runtimes
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Tests with sanitizers
+        run: |
+          mkdir -p /tmp/sanitizer
+          make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror SANITIZE=${{ matrix.sanitize }}
+
+      - name: Fail on any sanitizer report
+        if: always()
+        run: |
+          if ls /tmp/sanitizer/report* >/dev/null 2>&1; then
+            cat /tmp/sanitizer/report*
+            exit 1
+          fi
 
   builder:
     name: Firmware builder (host tests)
