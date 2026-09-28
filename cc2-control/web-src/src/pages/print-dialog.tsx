@@ -96,7 +96,7 @@ const Form = ({ job }: { job: Pending }) => {
         <label class={label}><input type="checkbox" checked={useCanvas} disabled={!job.connected || multi} onChange={e => { setUse(e.currentTarget.checked); setNote(e.currentTarget.checked ? 'Assign one physical Canvas slot to each G-code filament.' : 'The external/default filament path will be used.') }} /> {t('Use ELEGOO Canvas')}</label>
         {job.tools.map(tool => (
           <label key={tool} class="my-3 grid grid-cols-[1fr_2fr] items-center gap-3"><strong>Filament T{tool}</strong>
-            <Select disabled={!useCanvas} value={map[tool] || ''} onChange={e => setMap({ ...map, [tool]: e.currentTarget.value })}>
+            <Select disabled={!useCanvas} value={map[tool] || ''} onChange={e => { const v = e.currentTarget.value; setMap(m => ({ ...m, [tool]: v })) }}>
               <option value="">{t('Choose a spool')}</option>{[0, 1, 2, 3].map(i => <option key={i} value={i}>Slot {i + 1} · {slotLabel(tray(i))}</option>)}
             </Select></label>
         ))}
