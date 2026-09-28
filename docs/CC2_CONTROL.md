@@ -1,10 +1,6 @@
 # CC2 Control
 
-CC2 Control is the lightweight local control platform for the Centauri Carbon 2
-Community Firmware. Community Firmware **V4.2** originally ships CC2 Control
-**1.1.30**; **1.1.31** is the current standalone CC2 Control update and source
-line. It runs directly on the printer and serves a dependency-free web
-interface on TCP port **8081**.
+CC2 Control is the lightweight local control platform for the Centauri Carbon 2 Community Firmware. Community Firmware **V4.2** originally ships CC2 Control **1.1.30**; **1.1.31** is the current standalone CC2 Control update and source line. It runs directly on the printer and serves a dependency-free web interface on TCP port **8081**.
 
 Open:
 
@@ -16,16 +12,13 @@ The same interface can be used inside the **OrcaSlicer Device tab**.
 
 A clean installation starts with a browser configurator that requests the printer LAN access code. Credentials remain on the printer.
 
-After firmware installation, wait for hardware initialisation before entering
-the LAN access code. First-run registration realigns CC2 Control, MQTT and
-Canvas services automatically; an additional manual power cycle is not needed.
+After firmware installation, wait for hardware initialisation before entering the LAN access code. First-run registration realigns CC2 Control, MQTT and Canvas services automatically; an additional manual power cycle is not needed.
 
 ## Dashboard and protected controls
 
 The dashboard combines the live camera, print state and progress, temperatures, browser-rendered thermal history, fan speeds, position, hardware state, memory, uptime, load and MQTT status.
 
 Protected actions include jogging and homing, live Z-offset adjustment, temperature and fan targets, pause/resume/cancel, light, speed, flow, extrusion, motors, heaters and emergency stop. State checks reject inappropriate actions while the printer is busy.
-
 
 ## Bed Levelling workflow
 
@@ -53,32 +46,22 @@ For Canvas prints, the spool-selection popup can also appear inside the OrcaSlic
 
 ## LAN access-code revalidation
 
-If the LAN access code is changed on the printer, open **Settings → Connection**,
-enter the replacement code and select **Change / Revalidate**. CC2 Control
-writes the new credential atomically and restarts only its own service so MQTT,
-Canvas and snapshot state can be established again without rebooting or
-power-cycling the printer.
+If the LAN access code is changed on the printer, open **Settings → Connection**, enter the replacement code and select **Change / Revalidate**. CC2 Control writes the new credential atomically and restarts only its own service so MQTT, Canvas and snapshot state can be established again without rebooting or power-cycling the printer.
 
-The SSH restart and configuration-reset commands documented in
-[Installation](INSTALL.md) remain available as recovery fallbacks.
+The SSH restart and configuration-reset commands documented in [Installation](INSTALL.md) remain available as recovery fallbacks.
 
 ## OrcaSlicer Canvas filament synchronization
 
-CC2 Control adds optional support for OrcaSlicer's **Moonraker** printer
-agent filament synchronization. The read-only endpoints on port `8081` are:
+CC2 Control adds optional support for OrcaSlicer's **Moonraker** printer agent filament synchronization. The read-only endpoints on port `8081` are:
 
 ```text
 GET /server/info
 GET /server/database/item?namespace=lane_data
 ```
 
-The lane-data response is built from the cached Canvas snapshot and maps tray
-ID, material, colour and maximum nozzle temperature into the format expected by
-OrcaSlicer. The existing Octo/Klipper workflow, Device tab, upload and Canvas
-print-confirmation flow remain unchanged.
+The lane-data response is built from the cached Canvas snapshot and maps tray ID, material, colour and maximum nozzle temperature into the format expected by OrcaSlicer. The existing Octo/Klipper workflow, Device tab, upload and Canvas print-confirmation flow remain unchanged.
 
-Thanks to **@efiten** for the original proposal, analysis and printer-side
-validation.
+Thanks to **@efiten** for the original proposal, analysis and printer-side validation.
 
 ## Four-screw load-cell bed tramming
 

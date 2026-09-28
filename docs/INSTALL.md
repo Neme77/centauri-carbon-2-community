@@ -11,20 +11,15 @@ Always install artifacts and follow instructions from the same GitHub release.
 5. Open `http://PRINTER-IP:8081` and enter the printer LAN access code.
 6. Allow several seconds for CC2 Control to register and realign its services.
 
-V4.2 with CC2 Control 1.1.30 does not require an additional manual power cycle.
-If the printer or Canvas is not ready, wait for initialisation to finish before
-attempting control actions.
+V4.2 with CC2 Control 1.1.30 does not require an additional manual power cycle. If the printer or Canvas is not ready, wait for initialisation to finish before attempting control actions.
 
 ## CC2 Control-only update
 
-Use the multiplatform updater attached to the relevant release. It supports
-Windows, Linux and macOS over SSH and preserves persistent settings unless the
-release notes explicitly say otherwise.
+Use the multiplatform updater attached to the relevant release. It supports Windows, Linux and macOS over SSH and preserves persistent settings unless the release notes explicitly say otherwise.
 
 ## Changing the printer LAN access code
 
-If the LAN access code is changed from the printer, update the same code in
-CC2 Control:
+If the LAN access code is changed from the printer, update the same code in CC2 Control:
 
 1. Open `http://PRINTER-IP:8081`.
 2. Go to **Settings → Connection**.
@@ -32,14 +27,11 @@ CC2 Control:
 4. Select **Change / Revalidate**.
 5. Confirm the replacement.
 
-CC2 Control writes the replacement atomically and restarts only its own
-service. MQTT, Canvas and snapshot state are then established again without a
-printer reboot or power cycle.
+CC2 Control writes the replacement atomically and restarts only its own service. MQTT, Canvas and snapshot state are then established again without a printer reboot or power cycle.
 
 ### Recovery if the old code blocks configuration access
 
-If the previous code prevents access to the configuration workflow entirely,
-connect over SSH and reset only the CC2 Control connection configuration:
+If the previous code prevents access to the configuration workflow entirely, connect over SSH and reset only the CC2 Control connection configuration:
 
 ```sh
 /etc/init.d/cc2-control stop
@@ -53,11 +45,9 @@ Then reload:
 http://PRINTER-IP:8081
 ```
 
-The initial setup workflow will appear again so the new LAN access code can be
-entered and verified.
+The initial setup workflow will appear again so the new LAN access code can be entered and verified.
 
-This reset removes only the CC2 Control connection configuration. Material
-presets and interface preferences remain intact.
+This reset removes only the CC2 Control connection configuration. Material presets and interface preferences remain intact.
 
 ## Verification
 
