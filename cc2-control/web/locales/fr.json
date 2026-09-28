@@ -451,6 +451,7 @@
   "now": "maintenant",
   "object": "objet",
   "objects": "objets",
+  "or drop a .gcode file here": "ou déposez un fichier .gcode ici",
   "raise": "augmente",
   "{name} uploaded to {where}.": "{name} envoyé vers {where}.",
   "{name}: targets {nozzle}/{bed} °C loaded. Press Apply targets to send them.": "{name} : cibles {nozzle}/{bed} °C chargées. Appuyez sur Appliquer les cibles pour les envoyer.",

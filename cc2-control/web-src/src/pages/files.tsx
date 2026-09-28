@@ -165,7 +165,7 @@ const Detail = ({ entry, onPrint, onDelete }: { entry: Entry | null; onPrint: (e
 
 const Upload = ({ busy, setBusy, refresh }: { busy: boolean; setBusy: (b: boolean) => void; refresh: () => Promise<void> }) => {
   const pick = useRef<HTMLInputElement>(null)
-  const [storage, setStorage] = useState('internal'), [pct, setPct] = useState(-1), [note, setNote] = useState('Maximum 64 MiB · no automatic printing · existing files are never overwritten')
+  const [storage, setStorage] = useState('internal'), [pct, setPct] = useState(-1), [over, setOver] = useState(false), [note, setNote] = useState('Maximum 64 MiB · no automatic printing · existing files are never overwritten')
   const go = async () => {
     const file = pick.current?.files?.[0]
     if (busy || !file) return notify(t('Choose a G-code file first.'), 'error')
@@ -190,10 +190,13 @@ const Upload = ({ busy, setBusy, refresh }: { busy: boolean; setBusy: (b: boolea
   }
   return (
     <Card><CardHead title="Upload File" end={t('Local upload')} />
-      <div class="grid grid-cols-[minmax(0,1fr)] justify-items-center gap-2.5 rounded-lg border border-dashed border-cyan p-3">
+      <div class={cn('grid grid-cols-[minmax(0,1fr)] justify-items-center gap-2.5 rounded-lg border border-dashed border-cyan p-3 transition-colors', over && 'bg-cyan/10')}
+        onDragOver={e => { if (busy) return; e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
+        onDrop={e => { e.preventDefault(); setOver(false); const f = e.dataTransfer?.files; if (busy || !f?.length || !pick.current) return; pick.current.files = f; void go() }}>
         <input ref={pick} type="file" accept=".gcode" class="w-full min-w-0" disabled={busy} aria-label="Select G-code file" />
         <label class="flex items-center gap-2">{t('Destination')} <Select class="w-auto" value={storage} disabled={busy} onChange={e => setStorage(e.currentTarget.value)}><option value="internal">{t('Internal memory')}</option><option value="usb">{t('USB drive')}</option></Select></label>
         <Button variant="primary" disabled={busy} onClick={go}><UploadIcon {...I} />{t('Upload G-code')}</Button>
+        <small class="text-muted">{t('or drop a .gcode file here')}</small>
         {pct >= 0 && <progress class="w-full" value={pct} max="100" />}
         <small class="text-center text-muted">{t(note)}</small>
       </div>

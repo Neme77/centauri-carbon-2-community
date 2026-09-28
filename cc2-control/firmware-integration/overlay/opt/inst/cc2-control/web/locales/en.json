@@ -444,6 +444,7 @@
   "now": "now",
   "object": "object",
   "objects": "objects",
+  "or drop a .gcode file here": "or drop a .gcode file here",
   "raise": "raise",
   "{name} uploaded to {where}.": "{name} uploaded to {where}.",
   "{name}: targets {nozzle}/{bed} °C loaded. Press Apply targets to send them.": "{name}: targets {nozzle}/{bed} °C loaded. Press Apply targets to send them.",

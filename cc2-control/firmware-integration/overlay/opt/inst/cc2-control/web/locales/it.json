@@ -444,6 +444,7 @@
   "now": "ora",
   "object": "oggetto",
   "objects": "oggetti",
+  "or drop a .gcode file here": "oppure trascina qui un file .gcode",
   "raise": "alza",
   "{name} uploaded to {where}.": "{name} caricato in {where}.",
   "{name}: targets {nozzle}/{bed} °C loaded. Press Apply targets to send them.": "{name}: obiettivi {nozzle}/{bed} °C caricati. Premi Applica obiettivi per inviarli.",
