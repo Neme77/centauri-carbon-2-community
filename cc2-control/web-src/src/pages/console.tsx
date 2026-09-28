@@ -59,7 +59,6 @@ export const Console = () => {
             <Input class="flex-1" disabled={!on} placeholder={t(on ? 'Enter G-code command' : 'Unlock console to send G-code…')} value={cmd} onInput={e => setCmd(e.currentTarget.value)} onKeyDown={e => e.key === 'Enter' && send()} />
             <Button disabled={!on} onClick={send}><Send {...I} />{t('Send')}</Button>
           </div>
-          <div class="mt-3 flex items-center gap-2 text-xs text-muted"><Icon n="info" class="size-4" />{t(on ? 'Console unlocked. Backend safety guards remain active.' : 'Console is locked. Unlock Expert Mode to enable command input.')}</div>
         </Card>
         <div class="grid content-start gap-3">
           <Card><CardHead icon="lock" title="Protected Terminal" />

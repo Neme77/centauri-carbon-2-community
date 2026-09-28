@@ -4,19 +4,18 @@ import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
-import { Activity, Check as CheckIcon, Info, Link, Palette, Plug, RefreshCw, ShieldCheck, Undo2 } from 'lucide-preact'
+import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2 } from 'lucide-preact'
 import { errText, notify, post, request } from '@/lib/api'
 import { i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, theme, tpl } from '@/lib/i18n'
 import { ls } from '@/lib/store'
 import { health } from '@/lib/state'
 
-const TABS = [[Link, 'Connection'], [ShieldCheck, 'Safety'], [Plug, 'Integrations'], [Palette, 'Appearance'], [Info, 'About']] as const
+const TABS = [[Link, 'Connection'], [Plug, 'Integrations'], [Palette, 'Appearance'], [Info, 'About']] as const
 const G = { size: 16, strokeWidth: 1 }
 const Dot = () => <i class="inline-block size-2 rounded-full bg-current align-middle" />
 const Field = ({ label, help, children }: { label: string; help?: string; children: any }) => (
   <div class="my-2.5 grid items-center gap-x-3.5 gap-y-1 md:grid-cols-[170px_minmax(220px,480px)]"><label class="font-semibold">{t(label)}</label>{children}{help && <span class="text-[10px] text-muted md:col-start-2">{t(help)}</span>}</div>
 )
-const Check = ({ children }: { children: string }) => <div class="flex gap-2"><CheckIcon {...G} class="shrink-0 text-cyan" />{t(children)}</div>
 const Kv = ({ k, v }: { k: string; v: any }) => <><span>{t(k)}</span><b>{v}</b></>
 
 const Connection = () => {
@@ -96,15 +95,14 @@ export const Settings = () => {
   return (
     <Card class="mx-auto max-w-[1180px]">
       <Page title="Settings" sub="Configure your CC2 printer and application preferences">
-        <div class="mx-auto mb-3 grid max-w-[860px] grid-cols-2 overflow-hidden rounded-lg border border-edge sm:grid-cols-5">
+        <div class="mx-auto mb-3 grid max-w-[860px] grid-cols-2 overflow-hidden rounded-lg border border-edge sm:grid-cols-4">
           {TABS.map(([Glyph, label], i) => <button type="button" key={label} onClick={() => setTab(i)} class={cn('flex items-center justify-center gap-2 border-edge px-3 py-2 text-[13px] sm:border-r sm:last:border-0', tab === i ? 'bg-field text-cyan' : 'hover:bg-field/50')}><Glyph {...G} />{t(label)}</button>)}
         </div>
         <div class="mx-auto max-w-[860px]">
           {tab === 0 && <Connection />}
-          {tab === 1 && <Card><CardHead icon="shield" title="Safety" /><div class="grid gap-2.5 text-xs sm:grid-cols-2"><Check>Arbitrary G-code: Idle only</Check><Check>Motion commands: Require homing</Check></div></Card>}
-          {tab === 2 && <Integrations />}
-          {tab === 3 && <Appearance />}
-          {tab === 4 && <Card><CardHead icon="info" title="About" /><div class="mx-auto grid max-w-[650px] grid-cols-[190px_1fr] gap-2 text-xs"><Kv k="CC2 Control Version" v={h?.version || '—'} /><Kv k="Operating Mode" v={h?.mode || '—'} /><Kv k="Service Type" v={t('Local service')} /><Kv k="Project" v="CC2 Control Community" /></div></Card>}
+          {tab === 1 && <Integrations />}
+          {tab === 2 && <Appearance />}
+          {tab === 3 && <Card><CardHead icon="info" title="About" /><div class="mx-auto grid max-w-[650px] grid-cols-[190px_1fr] gap-2 text-xs"><Kv k="CC2 Control Version" v={h?.version || '—'} /><Kv k="Operating Mode" v={h?.mode || '—'} /><Kv k="Service Type" v={t('Local service')} /><Kv k="Project" v="CC2 Control Community" /></div></Card>}
         </div>
       </Page>
     </Card>

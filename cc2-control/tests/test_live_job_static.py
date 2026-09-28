@@ -13,7 +13,7 @@ markers = {
     "global emergency stop": "control('system:emergency_stop')",
     "one-second emergency hold": "}, 1000)",
     "quick machine actions": "'system:heaters_off'",
-    "settings panel routing": "[Link, 'Connection'], [ShieldCheck, 'Safety'], [Plug, 'Integrations'], [Palette, 'Appearance'], [Info, 'About']",
+    "settings panel routing": "[Link, 'Connection'], [Plug, 'Integrations'], [Palette, 'Appearance'], [Info, 'About']",
     "persistent light theme": "setTheme(p.theme)",
     "light theme stylesheet": ':root[data-theme="light"]',
     "micron display": "Math.round(v * 1000)",

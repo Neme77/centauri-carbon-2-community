@@ -22,7 +22,7 @@ required = (
     "loadUiPreferences",
     "'/api/preferences'",
     "method: 'PUT'",
-    "Console is locked. Unlock Expert Mode to enable command input.",
+    "Unlock console to send G-code…",
     "LANGUAGE_NAMES",
     "setLanguage(e.currentTarget.value, true)",
     "fetch(`/i18n/${code}.json`",
@@ -39,13 +39,13 @@ for match in re.finditer(r"\bnotify\(([^)]*)", src):
 for locale, spot_checks in {
     "it": {
         "Object Exclusion": "Esclusione oggetti",
-        "Console is locked. Unlock Expert Mode to enable command input.":
-            "La console è bloccata. Sblocca la modalità esperto per inserire comandi.",
+        "Unlock console to send G-code…":
+            "Sblocca la console per inviare G-code…",
     },
     "fr": {
         "Object Exclusion": "Exclusion d’objet",
-        "Console is locked. Unlock Expert Mode to enable command input.":
-            "La console est verrouillée. Déverrouillez le mode Expert pour saisir des commandes.",
+        "Unlock console to send G-code…":
+            "Déverrouillez la console pour envoyer du G-code…",
     },
 }.items():
     data = json.loads((WEB / "locales" / f"{locale}.json").read_text(encoding="utf-8"))
