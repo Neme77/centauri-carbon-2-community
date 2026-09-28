@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { ask } from '@/lib/confirm'
 import { FileText, Play, RefreshCw, Search, Trash2, Upload as UploadIcon } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { Card, CardHead } from '@/components/ui/card'
@@ -43,7 +44,7 @@ export const Files = () => {
   const guard = () => { if (busy) { notify(t('Finish the current file operation first.')); return true } return false }
   const remove = async (e: Entry) => {
     const { storage } = e, path = e.file.path
-    if (guard() || !confirm(`${tpl('Permanently delete this G-code from {where}?', { where: where(storage) })}\n\n${path}`)) return
+    if (guard() || !(await ask(`${tpl('Permanently delete this G-code from {where}?', { where: where(storage) })}\n\n${path}`, true))) return
     try {
       const r = await fetch('/api/gcode-files/delete', body(storage, path))
       if (!r.ok) throw Error(await failure(r))
@@ -56,12 +57,12 @@ export const Files = () => {
     const list = items()
     if (!list.length) return
     let dest = ''
-    if (kind === 'delete') { if (!confirm(tpl('Permanently delete {n} selected G-code files?', { n: list.length }))) return }
+    if (kind === 'delete') { if (!(await ask(tpl('Permanently delete {n} selected G-code files?', { n: list.length }), true))) return }
     else {
       const d = new Set(list.map(i => (i.storage === 'usb' ? 'internal' : 'usb')))
       if (d.size !== 1) return notify(t('Select files from only one storage location.'))
       dest = [...d][0]
-      if (!confirm(tpl('Copy {n} selected files to {where}?', { n: list.length, where: where(dest) }))) return
+      if (!(await ask(tpl('Copy {n} selected files to {where}?', { n: list.length, where: where(dest) })))) return
     }
     let done = 0
     for (const i of list) {
@@ -169,7 +170,7 @@ const Upload = ({ busy, setBusy, refresh }: { busy: boolean; setBusy: (b: boolea
     const file = pick.current?.files?.[0]
     if (busy || !file) return notify(t('Choose a G-code file first.'))
     if (!file.name || new TextEncoder().encode(file.name).length >= 256 || !/\.gcode$/i.test(file.name) || file.size === 0 || file.size > 64 * 1024 * 1024) return notify(t('Choose a valid .gcode file between 1 byte and 64 MiB.'))
-    if (!confirm(`${tpl('Upload {name} ({size}) to {where}?', { name: file.name, size: fileSize(file.size), where: where(storage) })}\n\n${t('The file will not be printed automatically.')}`)) return
+    if (!(await ask(`${tpl('Upload {name} ({size}) to {where}?', { name: file.name, size: fileSize(file.size), where: where(storage) })}\n\n${t('The file will not be printed automatically.')}`))) return
     setBusy(true); setPct(0); setNote(tpl('Uploading… {n}%', { n: 0 }))
     try {
       await new Promise<void>((resolve, reject) => {

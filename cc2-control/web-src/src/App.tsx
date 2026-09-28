@@ -1,6 +1,7 @@
 import { i18n } from '@/lib/i18n'
 import { menu, nav } from '@/lib/state'
 import { Sidebar, Toast, Topbar } from '@/components/layout'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SetupDialog } from '@/pages/setup'
 import { PrintDialog } from '@/pages/print-dialog'
 import { Dashboard } from '@/pages/dashboard'
@@ -27,6 +28,7 @@ export const App = () => {
       <Toast />
       <SetupDialog />
       <PrintDialog />
+      <ConfirmDialog />
     </>
   )
 }

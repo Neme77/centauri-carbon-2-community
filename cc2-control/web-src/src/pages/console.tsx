@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { ask } from '@/lib/confirm'
 import { Activity, Check as CheckIcon, Copy, Send, Trash2, TriangleAlert } from 'lucide-preact'
 import { store } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -36,9 +37,9 @@ export const Console = () => {
   const lines = text.split(/\r?\n/), shown = (filter ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase())) : lines).join('\n')
   useEffect(() => { if (auto && screen.current) screen.current.scrollTop = screen.current.scrollHeight }, [shown, auto])
 
-  const toggleExpert = () => {
+  const toggleExpert = async () => {
     if (on) return expert.set({ on: false })
-    if (confirm(t('WARNING: Manual G-code can move axes, heat components and alter calibration. The console is blocked during printing; movement requires homing and direct G0/G1 moves are range checked. Continue?'))) expert.set({ on: true })
+    if ((await ask(t('WARNING: Manual G-code can move axes, heat components and alter calibration. The console is blocked during printing; movement requires homing and direct G0/G1 moves are range checked. Continue?'), true))) expert.set({ on: true })
   }
   const send = () => { const c = cmd; setCmd(''); sendConsole(c) }
   const clear = async () => { try { await post('/api/console/clear'); consoleLog.set({ text: '' }); await refreshConsole() } catch (e) { notify(errText(e)) } }

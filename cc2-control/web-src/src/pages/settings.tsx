@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks'
+import { ask } from '@/lib/confirm'
 import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,7 +28,7 @@ const Connection = () => {
     if (!v) return notify(t('Enter the new LAN access code.'))
     try {
       const s = await request('/api/setup'), re = Boolean(s.configured)
-      if (re && !confirm(t('Replace the saved LAN code? Only CC2 Control will restart.'))) return
+      if (re && !(await ask(t('Replace the saved LAN code? Only CC2 Control will restart.')))) return
       await post(re ? '/api/setup/revalidate' : '/api/setup', v)
       setCode(''); setBusy(true); notify(t('LAN access code saved. Restarting and synchronizing.'))
       setTimeout(() => location.reload(), 30000)
@@ -68,8 +69,8 @@ const Integrations = () => {
 
 const Appearance = () => {
   const lang = i18n.get().lang, mode = theme.use().mode
-  const restore = () => {
-    if (!confirm(t('Restore interface preferences? Printer configuration and LAN code will not be changed.'))) return
+  const restore = async () => {
+    if (!(await ask(t('Restore interface preferences? Printer configuration and LAN code will not be changed.'), true))) return
     ;['cc2-language', 'cc2-theme'].forEach(ls.del)
     setTheme('dark'); setLanguage('en', true); notify(t('Interface preferences restored.'))
   }

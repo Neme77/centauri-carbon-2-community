@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { ask } from '@/lib/confirm'
 import { ArrowBigDown, ArrowBigRight, ArrowBigUp, ArrowLeftRight, Sigma } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
@@ -101,7 +102,7 @@ const MeshCard = () => {
 const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => (
   <>
     <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_1.15fr]">
-      {[['folder', 'Load Current Mesh', 'Read the saved mesh from printer memory.', reload, false], ['bolt', 'Run Bed Mesh Calibration', 'Start a protected calibration when idle.', () => confirm(t('Start a new bed mesh calibration at 60 °C?')) && sendConsole('BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60'), true]].map(([icon, title, sub, fn, primary]: any) => (
+      {[['folder', 'Load Current Mesh', 'Read the saved mesh from printer memory.', reload, false], ['bolt', 'Run Bed Mesh Calibration', 'Start a protected calibration when idle.', async () => { if (await ask(t('Start a new bed mesh calibration at 60 °C?'))) sendConsole('BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60') }, true]].map(([icon, title, sub, fn, primary]: any) => (
         <Button key={title} variant={primary ? 'primary' : 'default'} class="h-auto items-start justify-start gap-3.5 p-3 text-left" onClick={fn}><Icon n={icon} class="size-7" /><span><strong class="block text-sm">{t(title)}</strong><small class="mt-1 block whitespace-normal text-xs font-normal">{t(sub)}</small></span></Button>
       ))}
     </div>

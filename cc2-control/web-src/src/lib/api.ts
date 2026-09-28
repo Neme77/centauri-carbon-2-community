@@ -1,5 +1,6 @@
 import { store } from './store'
 import { t, tpl } from './i18n'
+import { ask } from './confirm'
 
 export const request = async (path: string, options: RequestInit = {}) => {
   const response = await fetch(path, { cache: 'no-store', ...options })
@@ -16,7 +17,7 @@ export const notify = (text: string) => toast.set(s => ({ text, n: s.n + 1 }))
 
 // Sends a protected control action; `confirmation` is an already translated question.
 export async function control(action: string, confirmation = '') {
-  if (confirmation && !confirm(confirmation)) return false
+  if (confirmation && !(await ask(confirmation, /cancel|emergency|exclude/.test(action)))) return false
   try {
     await post('/api/control', action)
     notify(tpl('Accepted: {action}', { action }))

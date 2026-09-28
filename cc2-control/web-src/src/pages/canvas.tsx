@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
+import { ask } from '@/lib/confirm'
 import { ArrowBigDown, ArrowBigUp, Check, Info, Palette, RefreshCw } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { Card, CardHead } from '@/components/ui/card'
@@ -25,7 +26,7 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
     const p = list[preset]
     if (!p) return
     const hex = colour.slice(1).toUpperCase(), min = Number(p.min || Math.max(120, p.nozzle - 20)), max = Number(p.max || Math.min(320, p.nozzle + 20))
-    if (!confirm(tpl('Save {name}, #{colour}, {min}–{max} °C to Canvas slot {slot}?', { name: p.name, colour: hex, min, max, slot: slot + 1 }))) return
+    if (!(await ask(tpl('Save {name}, #{colour}, {min}–{max} °C to Canvas slot {slot}?', { name: p.name, colour: hex, min, max, slot: slot + 1 })))) return
     canvas.set(s => ({ optimistic: { ...s.optimistic, [slot]: { colour: `#${hex}`, material: p.name, until: Date.now() + 4000 } } }))
     onClose()
     if (await control(`canvas:material:${slot}:${p.name}:${hex}:${min}:${max}`)) { setTimeout(refreshCanvas, 700); setTimeout(refreshCanvas, 2000) } else refreshCanvas()
