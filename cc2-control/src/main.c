@@ -2012,6 +2012,21 @@ static char *exclude_objects_cache = NULL;
 static size_t exclude_objects_cache_len = 0;
 static char exclude_objects_cache_job[256] = "";
 
+/* The object list is cached for the whole job above.  The excluded/current
+ * fields are small but still require a synchronous UDS round trip.  Share a
+ * very short-lived copy between HTTP clients so several dashboards cannot
+ * multiply that printer-side work. */
+static char *exclude_dynamic_cache = NULL;
+static size_t exclude_dynamic_cache_len = 0;
+static char exclude_dynamic_cache_job[256] = "";
+static long long exclude_dynamic_cache_ms = 0;
+
+static long long monotonic_ms(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 0;
+    return (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL;
+}
+
 static int uds_query_json(const char *query, char **result_out, size_t *length_out) {
     int uds = socket(AF_UNIX, SOCK_STREAM, 0);
     if (uds < 0) return -1;
@@ -2104,14 +2119,32 @@ static void exclude_objects_response(int fd, const mqtt_client *mqtt) {
     static const char query[] =
         "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"exclude_object\":[\"excluded_objects\",\"current_object\"]}}}\003";
     char *dynamic = NULL; size_t dynamic_len = 0;
-    if (uds_query_json(query, &dynamic, &dynamic_len) != 0) {
-        const char *error = "{\"available\":false,\"error\":\"Object status unavailable\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));
-        return;
+    int dynamic_owned = 0;
+    long long now_ms = monotonic_ms();
+    int cache_fresh = exclude_dynamic_cache &&
+        strcmp(exclude_dynamic_cache_job, job) == 0 &&
+        now_ms > 0 && exclude_dynamic_cache_ms > 0 &&
+        now_ms - exclude_dynamic_cache_ms < 1000;
+    if (cache_fresh) {
+        dynamic = exclude_dynamic_cache;
+        dynamic_len = exclude_dynamic_cache_len;
+    } else {
+        if (uds_query_json(query, &dynamic, &dynamic_len) != 0) {
+            const char *error = "{\"available\":false,\"error\":\"Object status unavailable\"}\n";
+            respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));
+            return;
+        }
+        dynamic_owned = 1;
+        free(exclude_dynamic_cache);
+        exclude_dynamic_cache = dynamic;
+        exclude_dynamic_cache_len = dynamic_len;
+        snprintf(exclude_dynamic_cache_job, sizeof(exclude_dynamic_cache_job), "%s", job ? job : "");
+        exclude_dynamic_cache_ms = now_ms;
+        dynamic_owned = 0; /* cache owns this allocation */
     }
     const char *payload = exclude_object_payload(dynamic, dynamic_len);
     if (!payload) {
-        free(dynamic);
+        if (dynamic_owned) free(dynamic);
         const char *error = "{\"available\":false,\"error\":\"Invalid object status response\"}\n";
         respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));
         return;
@@ -2120,19 +2153,19 @@ static void exclude_objects_response(int fd, const mqtt_client *mqtt) {
     size_t prefix_len = (size_t)(payload + 1 - dynamic);
     size_t capacity = dynamic_len + exclude_objects_cache_len + 32;
     char *body = malloc(capacity);
-    if (!body) { free(dynamic); return; }
+    if (!body) { if (dynamic_owned) free(dynamic); return; }
     memcpy(body, dynamic, prefix_len);
     int inserted = snprintf(body + prefix_len, capacity - prefix_len,
                             "\"objects\":%s,", exclude_objects_cache);
     if (inserted < 0 || (size_t)inserted >= capacity - prefix_len) {
-        free(body); free(dynamic); return;
+        free(body); if (dynamic_owned) free(dynamic); return;
     }
     size_t body_len = prefix_len + (size_t)inserted;
     memcpy(body + body_len, dynamic + prefix_len, dynamic_len - prefix_len);
     body_len += dynamic_len - prefix_len;
     respond(fd,200,"OK","application/json; charset=utf-8",body,body_len);
     free(body);
-    free(dynamic);
+    if (dynamic_owned) free(dynamic);
 }
 
 static void mesh_response(int fd) {
