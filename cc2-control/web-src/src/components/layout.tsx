@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { cn } from '@/lib/utils'
-import { Icon } from '@/components/icons'
+import { PrinterIcon } from '@/components/printer-icon'
 import {
   Boxes,
   Files as FilesIcon,
@@ -157,7 +157,7 @@ export const Topbar = () => {
       <h1 class="text-xl font-bold leading-tight text-cyan md:text-2xl">Centauri Carbon 2 - Control Center</h1>
       <div class="flex items-center gap-2 text-xs">
         <div class="flex h-11 items-center gap-2 rounded-md border border-edge px-3">
-          <Icon n="monitor" class="hidden sm:block" />
+          <PrinterIcon class="hidden size-6 sm:block" />
           <div>
             <strong class="block text-sm">CC2</strong>
             <small class="text-muted">{link[0] === 'green' ? t(v.state) : '—'}</small>
