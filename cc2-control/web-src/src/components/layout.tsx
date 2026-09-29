@@ -69,7 +69,7 @@ const EStop = () => {
         e.preventDefault()
         if (!fired.current) notify(t('Hold Emergency Stop for one second.'))
       }}
-      class="relative flex h-11 cursor-pointer touch-none select-none items-center justify-center overflow-hidden rounded-md border border-red bg-red/10 px-3 font-bold text-red md:px-4"
+      class="relative flex h-11 touch-none select-none items-center justify-center overflow-hidden rounded-md border border-red bg-red/10 px-3 font-bold text-red md:px-4"
     >
       <i
         class={cn(
@@ -121,7 +121,7 @@ export const Sidebar = () => {
           aria-expanded={!collapsed}
           title={t(collapsed ? 'Expand menu' : 'Collapse menu')}
           class={cn(
-            'flex h-11 w-full cursor-pointer items-center justify-center gap-3.5 text-muted hover:bg-field hover:text-fg',
+            'flex h-11 w-full items-center justify-center gap-3.5 text-muted hover:bg-field hover:text-fg',
             !collapsed && 'md:justify-start md:px-5'
           )}
         >
