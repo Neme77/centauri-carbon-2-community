@@ -13,7 +13,7 @@ export const Tabs = ({
   value: string
   onChange: (id: string) => void
 }) => (
-  <div role="tablist" class="mb-3.5 flex flex-wrap border-b border-edge">
+  <div role="tablist" class="mb-3.5 flex flex-wrap gap-1.5 border-b border-edge">
     {items.map(item => {
       const on = item.id === value
       return (
