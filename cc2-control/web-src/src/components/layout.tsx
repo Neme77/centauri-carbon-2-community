@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { cn } from '@/lib/utils'
 import { CanvasIcon } from '@/components/canvas-icon'
+import { HeaderTitle } from '@/components/header-title'
 import { PrinterIcon } from '@/components/printer-icon'
 import {
   Files as FilesIcon,
@@ -154,8 +155,8 @@ export const Topbar = () => {
           ? ['amber', 'Waiting for the printer']
           : ['green', 'Printer connected']
   return (
-    <header class="fixed inset-x-0 top-0 z-30 flex h-17 items-center justify-between gap-4 border-b border-edge bg-panel px-4 md:px-5">
-      <h1 class="text-xl font-bold leading-tight text-cyan md:text-2xl">Centauri Carbon 2 - Control Center</h1>
+    <header class="fixed inset-x-0 top-0 z-30 flex h-17 items-center justify-between gap-4 border-b border-edge bg-panel px-4 md:px-5 xl:pl-2">
+      <HeaderTitle />
       <div class="flex items-center gap-2">
         <div class="flex h-11 items-center gap-2 rounded-md border border-edge px-3">
           <PrinterIcon class="hidden size-6 sm:block" />
