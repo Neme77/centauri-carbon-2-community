@@ -5,7 +5,17 @@ import { setQuickFromServer } from './quick'
 export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', it: 'Italiano', fr: 'Français' }
 
 export const i18n = store({ lang: ls.get('cc2-language') || 'en', dict: {} as Record<string, string> })
-export const theme = store({ mode: (ls.get('cc2-theme') === 'light' ? 'light' : 'dark') as 'light' | 'dark' })
+// Palettes are defined in index.css; the backend only stores the identifier (see preferences_theme in main.c).
+export const THEMES = [
+  { id: 'dark', label: 'Dark' },
+  { id: 'light', label: 'Light' },
+  { id: 'dracula', label: 'Dracula' },
+  { id: 'nord', label: 'Nord' },
+  { id: 'monokai', label: 'Monokai' },
+  { id: 'solarized-light', label: 'Solarized Light' },
+]
+const themeId = (mode: unknown) => (THEMES.some(x => x.id === mode) ? (mode as string) : 'dark')
+export const theme = store({ mode: themeId(ls.get('cc2-theme')) })
 
 const cache: Record<string, Record<string, string>> = {}
 async function loadLocale(code: string) {
@@ -52,7 +62,7 @@ export async function setLanguage(code: string, save = false) {
 }
 
 export function setTheme(mode: string, save = false) {
-  const m = mode === 'light' ? 'light' : 'dark'
+  const m = themeId(mode)
   ls.set('cc2-theme', m)
   document.documentElement.dataset.theme = m
   theme.set({ mode: m })

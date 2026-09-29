@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'preact/hooks'
 import { printer, thermalHistory } from '@/lib/state'
 import { t } from '@/lib/i18n'
 
-const colours = { nozzle: '#ff6170', bed: '#209eff', chamber: '#ffc54a' }
+// Series follow the theme's status colours, like the legend dots next to the chart.
+const series = { nozzle: '--red', bed: '--blue', chamber: '--amber' }
 
 export const ThermalChart = () => {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -38,10 +39,10 @@ export const ThermalChart = () => {
       ctx.textAlign = 'right'
       ctx.fillText(String(Math.round(top - (top * i) / 4)), pad.l - 5, y + 3)
     }
-    for (const key of Object.keys(colours) as (keyof typeof colours)[]) {
+    for (const key of Object.keys(series) as (keyof typeof series)[]) {
       const s = thermalHistory[key]
       if (s.length < 2) continue
-      ctx.strokeStyle = colours[key]
+      ctx.strokeStyle = css.getPropertyValue(series[key])
       ctx.lineWidth = 1.8
       ctx.beginPath()
       s.forEach((v, i) => {

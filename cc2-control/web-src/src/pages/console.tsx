@@ -128,7 +128,7 @@ export const Console = () => {
           </div>
           <pre
             ref={screen}
-            class="m-0 h-[26rem] overflow-auto whitespace-pre-wrap rounded-md border border-edge bg-[#031521] p-3.5 font-mono text-[#edf6fc] text-[13px] leading-7"
+            class="m-0 h-[26rem] overflow-auto whitespace-pre-wrap rounded-md border border-edge bg-well p-3.5 font-mono text-well-fg text-[13px] leading-7"
           >
             {shown}
           </pre>

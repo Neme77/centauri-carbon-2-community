@@ -153,9 +153,9 @@ const MeshCard = () => {
           <span>{scale.toFixed(1)}×</span>
         </label>
       </div>
-      <div class="overflow-hidden rounded-lg bg-[#031521]">
+      <div class="overflow-hidden rounded-lg bg-well">
         {view === 'values' ? (
-          <div class="h-[430px] overflow-auto p-3 font-mono text-[11px] text-[#edf6fc]">
+          <div class="h-[430px] overflow-auto p-3 font-mono text-[11px] text-well-fg">
             {points.length < 4 ? (
               <p class="text-muted">{t('Waiting for live mesh data.')}</p>
             ) : (
@@ -215,7 +215,7 @@ const MeshCard = () => {
           {t('Drag to rotate · scroll to zoom ·')}{' '}
           <button
             type="button"
-            class="text-[#72d7eb]"
+            class="text-well-fg underline underline-offset-2"
             onClick={() => {
               cam.current = defaultCam()
               setScale(1)

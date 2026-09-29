@@ -9,7 +9,7 @@ import { Tabs } from '@/components/ui/tabs'
 import { GithubIcon } from '@/components/github-icon'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2 } from 'lucide-preact'
 import { errText, notify, post, request } from '@/lib/api'
-import { i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, theme, tpl } from '@/lib/i18n'
+import { i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, THEMES, theme, tpl } from '@/lib/i18n'
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
 import { usePoll } from '@/lib/poll'
@@ -216,8 +216,11 @@ const Appearance = () => {
           <label class={lab}>
             {t('Theme')}
             <Select class="mt-1.5" value={mode} onChange={e => setTheme(e.currentTarget.value, true)}>
-              <option value="dark">{t('Dark')}</option>
-              <option value="light">{t('Light')}</option>
+              {THEMES.map(x => (
+                <option key={x.id} value={x.id}>
+                  {x.id === 'dark' || x.id === 'light' ? t(x.label) : x.label}
+                </option>
+              ))}
             </Select>
           </label>
         </div>
