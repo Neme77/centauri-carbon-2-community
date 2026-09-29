@@ -2006,40 +2006,133 @@ static void canvas_refresh_response(int fd, mqtt_client *mqtt) {
     respond(fd,202,"Accepted","application/json; charset=utf-8",body,strlen(body));
 }
 
-static void exclude_objects_response(int fd) {
+#define EXCLUDE_OBJECT_RESPONSE_MAX (256UL * 1024UL)
+
+static char *exclude_objects_cache = NULL;
+static size_t exclude_objects_cache_len = 0;
+static char exclude_objects_cache_job[256] = "";
+
+static int uds_query_json(const char *query, char **result_out, size_t *length_out) {
     int uds = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (uds < 0) {
-        const char *error="{\"available\":false,\"error\":\"Cannot create UDS socket\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
+    if (uds < 0) return -1;
+    struct timeval timeout = {2, 0};
+    setsockopt(uds, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(uds, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    struct sockaddr_un address; memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", "/tmp/elegoo_uds");
+    if (connect(uds, (struct sockaddr *)&address, sizeof(address)) < 0 ||
+        send_all(uds, query, strlen(query)) != 0) {
+        close(uds);
+        return -1;
     }
-    struct timeval timeout={2,0};
-    setsockopt(uds,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
-    setsockopt(uds,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
-    struct sockaddr_un address; memset(&address,0,sizeof(address));
-    address.sun_family=AF_UNIX;
-    snprintf(address.sun_path,sizeof(address.sun_path),"%s","/tmp/elegoo_uds");
-    if(connect(uds,(struct sockaddr *)&address,sizeof(address))<0){
-        close(uds); const char *error="{\"available\":false,\"error\":\"Printer UDS unavailable\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
+
+    size_t capacity = 16384, used = 0;
+    char *result = malloc(capacity + 1);
+    if (!result) { close(uds); return -2; }
+    for (;;) {
+        if (used == capacity) {
+            if (capacity >= EXCLUDE_OBJECT_RESPONSE_MAX) {
+                free(result); close(uds); return -3;
+            }
+            size_t next = capacity * 2;
+            if (next > EXCLUDE_OBJECT_RESPONSE_MAX) next = EXCLUDE_OBJECT_RESPONSE_MAX;
+            char *grown = realloc(result, next + 1);
+            if (!grown) { free(result); close(uds); return -2; }
+            result = grown; capacity = next;
+        }
+        ssize_t n = recv(uds, result + used, capacity - used, 0);
+        if (n <= 0) break;
+        size_t previous = used;
+        used += (size_t)n;
+        char *terminator = memchr(result + previous, 3, used - previous);
+        if (terminator) { used = (size_t)(terminator - result); break; }
     }
-    static const char query[]="{\"id\":202,\"method\":\"objects/query\",\"params\":{\"objects\":{\"exclude_object\":null}}}\003";
-    if(send_all(uds,query,sizeof(query)-1)!=0){
-        close(uds); const char *error="{\"available\":false,\"error\":\"Object query failed\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
+    close(uds);
+    if (!used) { free(result); return -1; }
+    result[used] = '\0';
+    *result_out = result;
+    *length_out = used;
+    return 0;
+}
+
+static const char *exclude_object_payload(char *json, size_t length) {
+    const char marker[] = "\"exclude_object\"";
+    char *cursor = strstr(json, marker);
+    if (!cursor || (size_t)(cursor - json) >= length) return NULL;
+    cursor += sizeof(marker) - 1;
+    while ((size_t)(cursor - json) < length && isspace((unsigned char)*cursor)) cursor++;
+    if ((size_t)(cursor - json) >= length || *cursor++ != ':') return NULL;
+    while ((size_t)(cursor - json) < length && isspace((unsigned char)*cursor)) cursor++;
+    return (size_t)(cursor - json) < length && *cursor == '{' ? cursor : NULL;
+}
+
+static int cache_exclude_objects(const char *job) {
+    static const char query[] =
+        "{\"id\":202,\"method\":\"objects/query\",\"params\":{\"objects\":{\"exclude_object\":[\"objects\"]}}}\003";
+    char *response = NULL; size_t response_len = 0;
+    if (uds_query_json(query, &response, &response_len) != 0) return -1;
+    const char *payload = exclude_object_payload(response, response_len);
+    if (!payload) { free(response); return -1; }
+    const char *payload_end = json_container_end(payload, response + response_len);
+    const char *objects = json_member(payload, payload_end, "objects");
+    if (!objects || *objects != '[') { free(response); return -1; }
+    const char *objects_end = json_container_end(objects, payload_end);
+    if (!objects_end) { free(response); return -1; }
+    size_t objects_len = (size_t)(objects_end - objects);
+    char *copy = malloc(objects_len + 1);
+    if (!copy) { free(response); return -1; }
+    memcpy(copy, objects, objects_len); copy[objects_len] = '\0';
+    free(response);
+    free(exclude_objects_cache);
+    exclude_objects_cache = copy;
+    exclude_objects_cache_len = objects_len;
+    snprintf(exclude_objects_cache_job, sizeof(exclude_objects_cache_job), "%s", job ? job : "");
+    return 0;
+}
+
+static void exclude_objects_response(int fd, const mqtt_client *mqtt) {
+    const char *job = mqtt ? mqtt->filename : "";
+    if (!exclude_objects_cache || strcmp(exclude_objects_cache_job, job) != 0) {
+        if (cache_exclude_objects(job) != 0) {
+            const char *error = "{\"available\":false,\"error\":\"Object definitions unavailable\"}\n";
+            respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));
+            return;
+        }
     }
-    char *result=malloc(65537); size_t used=0;
-    if(!result){close(uds);return;}
-    while(used<65536){
-        ssize_t n=recv(uds,result+used,65536-used,0);
-        if(n<=0)break;
-        used+=(size_t)n;
-        char *end=memchr(result,3,used);
-        if(end){used=(size_t)(end-result);break;}
+
+    static const char query[] =
+        "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"exclude_object\":[\"excluded_objects\",\"current_object\"]}}}\003";
+    char *dynamic = NULL; size_t dynamic_len = 0;
+    if (uds_query_json(query, &dynamic, &dynamic_len) != 0) {
+        const char *error = "{\"available\":false,\"error\":\"Object status unavailable\"}\n";
+        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));
+        return;
     }
-    close(uds); result[used]='\0';
-    if(!used){free(result);const char *error="{\"available\":false,\"error\":\"No object response\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));return;}
-    respond(fd,200,"OK","application/json; charset=utf-8",result,used); free(result);
+    const char *payload = exclude_object_payload(dynamic, dynamic_len);
+    if (!payload) {
+        free(dynamic);
+        const char *error = "{\"available\":false,\"error\":\"Invalid object status response\"}\n";
+        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));
+        return;
+    }
+
+    size_t prefix_len = (size_t)(payload + 1 - dynamic);
+    size_t capacity = dynamic_len + exclude_objects_cache_len + 32;
+    char *body = malloc(capacity);
+    if (!body) { free(dynamic); return; }
+    memcpy(body, dynamic, prefix_len);
+    int inserted = snprintf(body + prefix_len, capacity - prefix_len,
+                            "\"objects\":%s,", exclude_objects_cache);
+    if (inserted < 0 || (size_t)inserted >= capacity - prefix_len) {
+        free(body); free(dynamic); return;
+    }
+    size_t body_len = prefix_len + (size_t)inserted;
+    memcpy(body + body_len, dynamic + prefix_len, dynamic_len - prefix_len);
+    body_len += dynamic_len - prefix_len;
+    respond(fd,200,"OK","application/json; charset=utf-8",body,body_len);
+    free(body);
+    free(dynamic);
 }
 
 static void mesh_response(int fd) {
@@ -2598,7 +2691,7 @@ static int handle_client(int fd, const char *web_root, mqtt_client *mqtt, consol
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/print")==0) {
         gcode_start_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/exclude-objects")==0) {
-        exclude_objects_response(fd);
+        exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
         mesh_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/console")==0) {
