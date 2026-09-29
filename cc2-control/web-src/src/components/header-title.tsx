@@ -36,7 +36,7 @@ export const HeaderTitle = () => (
     <div class="relative min-w-0 flex-1">
       <h1 class="text-2xl font-extrabold leading-tight tracking-tight text-cyan [text-shadow:0_0_14px_color-mix(in_srgb,currentColor_35%,transparent)] md:text-[28px] xl:absolute xl:bottom-[7px] xl:left-3 xl:whitespace-nowrap xl:text-[32px]">
         Centauri Carbon 2<span class="mx-2.5 font-light opacity-60">/</span>
-        <span class="text-[0.6em] font-semibold">Control Center</span>
+        <span class="text-[0.8em] font-semibold">Control Center</span>
       </h1>
       {/* The line continues at the artwork's baseline (y = 263.7 units) and ends with a dot before the badges. */}
       <svg

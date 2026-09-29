@@ -8,7 +8,7 @@ export const Card = ({
   children,
   ...p
 }: { class?: string; children?: ComponentChildren } & preact.JSX.HTMLAttributes<HTMLElement>) => (
-  <section class={cn('min-w-0 rounded-lg border border-edge bg-panel p-3.5', c)} {...p}>
+  <section class={cn('min-w-0 rounded-lg border border-edge bg-panel p-3.5 [corner-shape:bevel]', c)} {...p}>
     {children}
   </section>
 )
