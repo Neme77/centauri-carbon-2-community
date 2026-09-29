@@ -23,3 +23,12 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Tailwind's reset gives buttons the default arrow: restore the pointer on everything clickable (utilities still win). */
+@layer base {
+  button:not(:disabled),
+  select:not(:disabled),
+  input:is([type="checkbox"], [type="radio"], [type="color"], [type="file"]):not(:disabled) {
+    cursor: pointer;
+  }
+}
