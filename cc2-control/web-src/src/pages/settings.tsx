@@ -192,7 +192,7 @@ const Appearance = () => {
   const restore = async () => {
     if (!(await ask(t('settings.restore_interface_preferences'), true))) return
     ;['cc2-language', 'cc2-theme'].forEach(ls.del)
-    setTheme('dark')
+    setTheme('dark', true)
     void saveQuickActions(QUICK_DEFAULTS)
     setLanguage(detectLanguage(), true)
     notify(t('settings.interface_preferences_restored'))

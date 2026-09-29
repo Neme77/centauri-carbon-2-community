@@ -54,11 +54,12 @@ export const tpl = (key: Key, vars: Record<string, string | number>) => {
   return s
 }
 
-function persist() {
+// Saves only what the user changed: saving the theme must not pin the language detected from the browser.
+function persist(prefs: { language?: string; theme?: string }) {
   void fetch('/api/preferences', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ language: i18n.get().lang, theme: theme.get().mode }),
+    body: JSON.stringify(prefs),
   }).catch(() => {})
 }
 
@@ -72,7 +73,7 @@ export async function setLanguage(code: string, save = false) {
   ls.set('cc2-language', lang)
   document.documentElement.lang = lang
   i18n.set({ lang, dict })
-  if (save) persist()
+  if (save) persist({ language: lang })
 }
 
 export function setTheme(mode: string, save = false) {
@@ -80,7 +81,7 @@ export function setTheme(mode: string, save = false) {
   ls.set('cc2-theme', m)
   document.documentElement.dataset.theme = m
   theme.set({ mode: m })
-  if (save) persist()
+  if (save) persist({ theme: m })
 }
 
 export async function loadUiPreferences() {
