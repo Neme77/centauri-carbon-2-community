@@ -6,6 +6,7 @@ import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dot, Tag } from '@/components/ui/badge'
 import { Select } from '@/components/ui/field'
+import { Tabs } from '@/components/ui/tabs'
 import { Icon } from '@/components/icons'
 import { Notice } from '@/components/shared'
 import { control, errText, notify, request } from '@/lib/api'
@@ -432,23 +433,16 @@ export const Bed = () => {
   useEffect(() => {
     if (screws) document.getElementById('screwFocus')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [screws])
-  const tab = (on: boolean) =>
-    cn(
-      'flex items-center gap-2 rounded-t-lg border border-b-[3px] border-edge px-3 py-2.5 text-sm sm:gap-3 sm:px-6 sm:py-3 sm:text-base',
-      on ? 'border-b-cyan bg-field text-cyan' : 'border-b-transparent text-muted'
-    )
   return (
     <Page title="Bed Levelling" sub="Mesh, saved profiles and four-screw adjustment in one workflow">
-      <div class="mb-3.5 flex border-b border-edge">
-        <button type="button" class={tab(!screws)} onClick={() => openPage('bed')}>
-          <Icon n="grid" />
-          {t('Mesh & Saved Profiles')}
-        </button>
-        <button type="button" class={tab(screws)} onClick={() => openPage('bed', true)}>
-          <Icon n="target" />
-          {t('Screw Levelling')}
-        </button>
-      </div>
+      <Tabs
+        items={[
+          { id: 'mesh', label: t('Mesh & Saved Profiles'), icon: <Icon n="grid" /> },
+          { id: 'screws', label: t('Screw Levelling'), icon: <Icon n="target" /> },
+        ]}
+        value={screws ? 'screws' : 'mesh'}
+        onChange={id => openPage('bed', id === 'screws')}
+      />
       <div class="grid items-start gap-3.5 xl:grid-cols-[1.32fr_1fr]">
         <MeshCard />
         <Screws />

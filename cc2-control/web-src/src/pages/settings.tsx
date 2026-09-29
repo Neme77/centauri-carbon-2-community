@@ -5,6 +5,7 @@ import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
+import { Tabs } from '@/components/ui/tabs'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2 } from 'lucide-preact'
 import { errText, notify, post, request } from '@/lib/api'
 import { i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, theme, tpl } from '@/lib/i18n'
@@ -240,41 +241,28 @@ export const Settings = () => {
   const [tab, setTab] = useState(0)
   const h = health.use().data
   return (
-    <Card class="mx-auto max-w-[1180px]">
-      <Page title="Settings" sub="Configure your CC2 printer and application preferences">
-        <div class="mx-auto mb-3 grid max-w-[860px] grid-cols-2 overflow-hidden rounded-lg border border-edge sm:grid-cols-4">
-          {TABS.map(([Glyph, label], i) => (
-            <button
-              type="button"
-              key={label}
-              onClick={() => setTab(i)}
-              class={cn(
-                'flex items-center justify-center gap-2 border-edge px-3 py-2 text-[13px] sm:border-r sm:last:border-0',
-                tab === i ? 'bg-field text-cyan' : 'hover:bg-field/50'
-              )}
-            >
-              <Glyph {...G} />
-              {t(label)}
-            </button>
-          ))}
-        </div>
-        <div class="mx-auto max-w-[860px]">
-          {tab === 0 && <Connection />}
-          {tab === 1 && <Integrations />}
-          {tab === 2 && <Appearance />}
-          {tab === 3 && (
-            <Card>
-              <CardHead icon="info" title="About" />
-              <div class="mx-auto grid max-w-[650px] grid-cols-[190px_1fr] gap-2 text-xs">
-                <Kv k="CC2 Control Version" v={h?.version || '—'} />
-                <Kv k="Operating Mode" v={h?.mode || '—'} />
-                <Kv k="Service Type" v={t('Local service')} />
-                <Kv k="Project" v="CC2 Control Community" />
-              </div>
-            </Card>
-          )}
-        </div>
-      </Page>
-    </Card>
+    <Page title="Settings" sub="Configure your CC2 printer and application preferences">
+      <Tabs
+        items={TABS.map(([Glyph, label]) => ({ id: label, label: t(label), icon: <Glyph {...G} /> }))}
+        value={TABS[tab][1]}
+        onChange={id => setTab(TABS.findIndex(([, label]) => label === id))}
+      />
+      <div class="max-w-4xl">
+        {tab === 0 && <Connection />}
+        {tab === 1 && <Integrations />}
+        {tab === 2 && <Appearance />}
+        {tab === 3 && (
+          <Card>
+            <CardHead icon="info" title="About" />
+            <div class="grid max-w-2xl grid-cols-[190px_1fr] gap-2 text-xs">
+              <Kv k="CC2 Control Version" v={h?.version || '—'} />
+              <Kv k="Operating Mode" v={h?.mode || '—'} />
+              <Kv k="Service Type" v={t('Local service')} />
+              <Kv k="Project" v="CC2 Control Community" />
+            </div>
+          </Card>
+        )}
+      </div>
+    </Page>
   )
 }
