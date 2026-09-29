@@ -9,7 +9,7 @@ import { Pip } from '@/components/ui/badge'
 import { Input, Switch } from '@/components/ui/field'
 import { Icon } from '@/components/icons'
 import { errText, notify, post } from '@/lib/api'
-import { t, tpl } from '@/lib/i18n'
+import { type Key, t, tState, tpl } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
 import { consoleLog, printer, refreshConsole, view } from '@/lib/state'
 
@@ -25,12 +25,12 @@ export async function sendConsole(command: string) {
     await refreshConsole()
   } catch (e) {
     const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    consoleLog.set(s => ({ text: `${s.text}\n[${stamp}]  CC2 Control: command rejected — ${errText(e)}`.trim() }))
-    notify(tpl('Command rejected: {error}', { error: errText(e) }), 'error')
+    consoleLog.set(s => ({ text: `${s.text ?? ''}\n[${stamp}]  CC2 Control: command rejected — ${errText(e)}`.trim() }))
+    notify(tpl('console.command_rejected_error', { error: errText(e) }), 'error')
   }
 }
 
-const Check = ({ children }: { children: string }) => (
+const Check = ({ children }: { children: Key }) => (
   <div class="flex gap-2.5">
     <CheckIcon {...I} class="shrink-0 text-cyan" />
     {t(children)}
@@ -48,10 +48,8 @@ export const Console = () => {
     recall = useRef(-1)
   const screen = useRef<HTMLPreElement>(null)
   usePoll(refreshConsole, 2500)
-  // The two placeholder lines come from this UI, everything else is printer output and stays as received.
-  const lines = (/^Protected console ready\.( Waiting for live printer output\.)?$/.test(text) ? t(text) : text).split(
-      /\r?\n/
-    ),
+  // The placeholder comes from this UI, everything else is printer output and stays as received.
+  const lines = (text ?? t('common.protected_console_ready_waiting')).split(/\r?\n/),
     shown = (filter ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase())) : lines).join('\n')
   useEffect(() => {
     if (auto && screen.current) screen.current.scrollTop = screen.current.scrollHeight
@@ -59,15 +57,7 @@ export const Console = () => {
 
   const toggleExpert = async () => {
     if (on) return expert.set({ on: false })
-    if (
-      await ask(
-        t(
-          'WARNING: Manual G-code can move axes, heat components and alter calibration. The console is blocked during printing; movement requires homing and direct G0/G1 moves are range checked. Continue?'
-        ),
-        true
-      )
-    )
-      expert.set({ on: true })
+    if (await ask(t('console.warning_manual_g_code_can_move'), true)) expert.set({ on: true })
   }
   const send = () => {
     const c = cmd.trim()
@@ -94,32 +84,33 @@ export const Console = () => {
     }
   }
   return (
-    <Page title="Console" sub="Send G-code commands and view printer output (advanced)">
+    <Page title="common.console" sub="console.send_g_code_commands_and_view">
       <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.3fr)_minmax(330px,1fr)]">
         <Card>
           <div class="mb-3 flex flex-wrap items-center gap-2.5">
             <Input
               class="min-w-48 flex-1"
-              placeholder={t('Filter output (e.g. error, echo, ok)')}
+              placeholder={t('console.filter_output_e_g_error_echo')}
               value={filter}
               onInput={e => setFilter(e.currentTarget.value)}
             />
             <label class="flex items-center gap-2">
-              {t('Auto-scroll')} <Switch on={auto} label={t('Auto-scroll')} onClick={() => setAuto(!auto)} />
+              {t('console.auto_scroll')}{' '}
+              <Switch on={auto} label={t('console.auto_scroll')} onClick={() => setAuto(!auto)} />
             </label>
             <Button onClick={clear}>
               <Trash2 {...I} />
-              {t('Clear Output')}
+              {t('console.clear_output')}
             </Button>
             <Button
               onClick={() =>
                 navigator.clipboard
                   .writeText(screen.current?.textContent || '')
-                  .then(() => notify(t('Console copied.')))
+                  .then(() => notify(t('console.console_copied')))
               }
             >
               <Copy {...I} />
-              {t('Copy Log')}
+              {t('console.copy_log')}
             </Button>
           </div>
           <pre
@@ -129,14 +120,14 @@ export const Console = () => {
             {shown}
           </pre>
           <label htmlFor="console-command" class="mb-2 mt-4 block font-semibold">
-            {t('Send G-code command')}
+            {t('console.send_g_code_command')}
           </label>
           <div class="flex gap-2.5">
             <Input
               id="console-command"
               class="flex-1"
               disabled={!on}
-              placeholder={t(on ? 'Enter G-code command' : 'Unlock console to send G-code…')}
+              placeholder={t(on ? 'console.enter_g_code_command' : 'console.unlock_console_to_send_g_code')}
               value={cmd}
               onInput={e => setCmd(e.currentTarget.value)}
               onKeyDown={browse}
@@ -145,13 +136,13 @@ export const Console = () => {
             />
             <Button disabled={!on} onClick={send}>
               <Send {...I} />
-              {t('Send')}
+              {t('console.send')}
             </Button>
           </div>
         </Card>
         <div class="grid content-start gap-3">
           <Card>
-            <CardHead icon="lock" title="Protected Terminal" />
+            <CardHead icon="lock" title="console.protected_terminal" />
             <div
               class={cn(
                 'flex gap-3 rounded-md border p-3',
@@ -160,56 +151,54 @@ export const Console = () => {
             >
               <Icon n={on ? 'unlock' : 'lock'} class="size-7" />
               <div>
-                <strong class="block text-[15px]">{t(on ? 'Unlocked' : 'Locked')}</strong>
+                <strong class="block text-[15px]">{t(on ? 'console.unlocked' : 'console.locked')}</strong>
                 <small>
-                  {t(
-                    on
-                      ? 'Console enabled for this dashboard session. Backend safety guards remain active.'
-                      : 'Confirm the warning to enable manual G-code.'
-                  )}
+                  {t(on ? 'console.console_enabled_for_this_dashboard' : 'console.confirm_the_warning_to_enable')}
                 </small>
               </div>
             </div>
             <div class="mt-2 flex gap-3 rounded-md border border-amber bg-amber/10 p-3 text-amber">
               <TriangleAlert size={30} strokeWidth={1} class="shrink-0" />
               <div>
-                <strong class="block text-[15px]">
-                  {t('Arbitrary G-code can move axes, heat components, or damage the printer.')}
-                </strong>
-                <small>{t('Only send commands you understand.')}</small>
+                <strong class="block text-[15px]">{t('console.arbitrary_g_code_can_move_axes')}</strong>
+                <small>{t('console.only_send_commands_you_understand')}</small>
               </div>
             </div>
             <div class="mt-3 border-t border-edge pt-3">
-              <h3 class="mb-2 font-semibold">{t('Unlock Expert Mode')}</h3>
+              <h3 class="mb-2 font-semibold">{t('console.unlock_expert_mode')}</h3>
               <Button wide variant="primary" onClick={toggleExpert}>
                 <Icon n={on ? 'lock' : 'unlock'} />
-                <span>{t(on ? 'Lock console' : 'Unlock console')}</span>
+                <span>{t(on ? 'console.lock_console' : 'console.unlock_console')}</span>
               </Button>
-              <small class="mt-2 block text-muted">{t('Available only while the printer is idle.')}</small>
+              <small class="mt-2 block text-muted">{t('console.available_only_while_the_printer')}</small>
             </div>
           </Card>
           <Card>
-            <CardHead icon="settings" title="Safety Rules" />
+            <CardHead icon="settings" title="console.safety_rules" />
             <div class="grid gap-3.5 text-[13px]">
-              {[
-                'Motion commands require homing',
-                'Terminal locks when a print starts',
-                'Simple local confirmation; no password or token',
-                'Kinematic-bypass commands remain blocked',
-              ].map(s => (
+              {(
+                [
+                  'console.motion_commands_require_homing',
+                  'console.terminal_locks_when_a_print_starts',
+                  'console.simple_local_confirmation_no',
+                  'console.kinematic_bypass_commands_remain',
+                ] as Key[]
+              ).map(s => (
                 <Check key={s}>{s}</Check>
               ))}
             </div>
           </Card>
           <Card>
-            <CardHead icon="file" title="Safe Commands" end={t('Available when idle')} />
+            <CardHead icon="file" title="console.safe_commands" end={t('common.available_when_idle')} />
             <div class="grid grid-cols-2 gap-2">
-              {[
-                ['M105', 'Temperatures'],
-                ['M114', 'Position'],
-                ['STATUS', 'Printer status'],
-                ['HELP', 'Show help'],
-              ].map(([c, l]) => (
+              {(
+                [
+                  ['M105', 'common.temperatures'],
+                  ['M114', 'common.position'],
+                  ['STATUS', 'console.printer_status'],
+                  ['HELP', 'console.show_help'],
+                ] as [string, Key][]
+              ).map(([c, l]) => (
                 <Button key={c} class="min-h-14 flex-col text-xs" onClick={() => sendConsole(c)}>
                   <b>{c}</b>
                   <small>{t(l)}</small>
@@ -221,10 +210,10 @@ export const Console = () => {
       </div>
       <div class="mt-3.5 flex justify-between border-t border-edge px-1 pt-3 text-xs text-muted">
         <span class="flex items-center gap-2">
-          <Activity {...I} /> CC2 {t('Connected')} <Pip hollow /> {t(v.state)}
+          <Activity {...I} /> CC2 {t('common.connected')} <Pip hollow /> {tState(v.state)}
         </span>
         <span>
-          {t('Messages received')}: {d?.messages || 0}
+          {t('console.messages_received')}: {d?.messages || 0}
         </span>
       </div>
     </Page>

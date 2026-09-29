@@ -31,7 +31,7 @@ export const toggleMenu = () => {
 
 export const printer = store({ data: null as any, rev: 0, ok: true })
 export const health = store({ data: null as any, setup: null as any })
-export const consoleLog = store({ text: 'Protected console ready. Waiting for live printer output.' })
+export const consoleLog = store({ text: null as string | null }) // null: nothing received yet, the page shows its own placeholder
 export const screwText = store({ text: '' })
 
 export const thermalHistory = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
@@ -75,9 +75,9 @@ export async function refreshSetup() {
 
 export async function refreshConsole() {
   try {
-    const out = String((await request('/api/console')).output || 'Protected console ready.')
-    if (out !== consoleLog.get().text) {
-      consoleLog.set({ text: out })
+    const out = String((await request('/api/console')).output || '')
+    if ((out || null) !== consoleLog.get().text) {
+      consoleLog.set({ text: out || null })
       screwText.set({ text: out })
     }
   } catch {
@@ -88,7 +88,7 @@ export async function refreshConsole() {
 // Derived, display-ready view of the /api/printer payload.
 export function view(d: any) {
   const state: string = d?.machine?.status_name || 'Unknown'
-  const rawFilename: string = d?.print?.filename || 'No active file'
+  const rawFilename: string = d?.print?.filename || ''
   const layer = d?.print?.current_layer || 0
   const totalRaw = d?.print && (d.print.total_layer || d.print.total_layers || d.print.total_layer_count)
   const total: number | string = Number(totalRaw) > 0 ? Number(totalRaw) : '—'

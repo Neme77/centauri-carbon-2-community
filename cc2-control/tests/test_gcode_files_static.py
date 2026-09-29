@@ -46,14 +46,14 @@ required_mqtt = (
     'tools[index], trays[index]',
 )
 required_web = (
-    "['files', FilesIcon, 'Files']",
+    "['files', FilesIcon, 'common.files']",
     "const refresh = async",
     "export async function startFile(storage: string, path: string)",
-    "'Choose print spool'",
+    "'print.choose_print_spool'",
     "useCanvas",
     "/api/gcode-files/inspect",
     "`${tool}:${map[tool]}`",
-    "Importing USB G-code to internal storage",
+    "print.importing_usb_g_code_to_internal",
     "plateSide",
     "profiles.default1",
     "meshAvailable",

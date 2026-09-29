@@ -9,7 +9,7 @@ main = (root / "src" / "main.c").read_text(encoding="utf-8")
 mqtt = (root / "src" / "mqtt.c").read_text(encoding="utf-8")
 
 markers = {
-    "single Bed Levelling navigation": "['bed', Grid3x3, 'Bed Levelling']",
+    "single Bed Levelling navigation": "['bed', Grid3x3, 'common.bed_levelling']",
     "global emergency stop": "control('system:emergency_stop')",
     "one-second emergency hold": "}, 1000)",
     "quick machine actions": "'system:heaters_off'",
@@ -17,7 +17,7 @@ markers = {
     "light theme stylesheet": ':root[data-theme="light"]',
     "micron display": "Math.round(v * 1000)",
     "optimized reference adjustment": "useOptimized",
-    "live job layer stats": "[v.active ? v.layer || '—' : '—', t('Current layer')]",
+    "live job layer stats": "[v.active ? v.layer || '—' : '—', t('common.current_layer')]",
     "live job elapsed time": "elapsedText: active ? duration(elapsed)",
     "estimated completion time": "finishTime(remaining)",
     "real G-code metadata": "/api/gcode-files/metadata",
@@ -27,7 +27,7 @@ markers = {
 for label, marker in markers.items():
     assert marker in ui, f"missing {label}: {marker}"
 
-for tab in ("[Link, 'Connection']", "[Plug, 'Integrations']", "[Palette, 'Appearance']", "[Info, 'About']"):
+for tab in ("[Link, 'settings.connection']", "[Plug, 'settings.integrations']", "[Palette, 'settings.appearance']", "[Info, 'settings.about']"):
     assert tab in ui, f"missing settings tab: {tab}"
 assert "data-screws" not in ui, "duplicate screw navigation remains"
 assert 'strcmp(action,"system:heaters_off")' in control
@@ -42,7 +42,7 @@ assert 'gcode_metadata_response' in main
 assert '"filament used [g]"' in main
 assert 'first_run_restart_requested = 1' in main
 assert '\\"restarting\\":true' in main
-assert 'Restarting CC2 Control and synchronizing Canvas' in ui
+assert 'setup.saved_restarting_cc2_control_and' in ui
 assert 'n < 60' in ui
 assert "for(const [temp,color]of [[28" not in ui
 assert "Read during inspection" not in ui

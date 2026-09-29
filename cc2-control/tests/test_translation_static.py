@@ -18,11 +18,11 @@ from _websrc import read_src
 WEB = Path(__file__).resolve().parents[1] / "web"
 src = read_src()
 required = (
-    "Interface preferences are stored on the printer and shared by every browser.",
+    "settings.interface_preferences_are_stored",
     "loadUiPreferences",
     "'/api/preferences'",
     "method: 'PUT'",
-    "Unlock console to send G-code…",
+    "console.unlock_console_to_send_g_code",
     "LANGUAGE_NAMES",
     "setLanguage(e.currentTarget.value, true)",
     "fetch(`/i18n/${code}.json`",
@@ -38,13 +38,13 @@ for match in re.finditer(r"\bnotify\(([^)]*)", src):
 
 for locale, spot_checks in {
     "it": {
-        "Object Exclusion": "Esclusione oggetti",
-        "Unlock console to send G-code…":
+        "job.object_exclusion": "Esclusione oggetti",
+        "console.unlock_console_to_send_g_code":
             "Sblocca la console per inviare G-code…",
     },
     "fr": {
-        "Object Exclusion": "Exclusion d’objet",
-        "Unlock console to send G-code…":
+        "job.object_exclusion": "Exclusion d’objet",
+        "console.unlock_console_to_send_g_code":
             "Déverrouillez la console pour envoyer du G-code…",
     },
 }.items():

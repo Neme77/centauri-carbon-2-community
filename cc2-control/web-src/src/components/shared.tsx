@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { Dot } from '@/components/ui/badge'
 import { Card, CardHead } from '@/components/ui/card'
 import { Icon } from '@/components/icons'
-import { t } from '@/lib/i18n'
+import { type Key, t } from '@/lib/i18n'
 import { camera } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 
@@ -15,7 +15,7 @@ export const Reading = ({
   target,
 }: {
   dot?: 'red' | 'blue' | 'amber'
-  label: string
+  label: Key
   value: string
   target?: string
 }) => (
@@ -27,7 +27,7 @@ export const Reading = ({
   </div>
 )
 
-export const FanBar = ({ label, pct }: { label: string; pct: number }) => (
+export const FanBar = ({ label, pct }: { label: Key; pct: number }) => (
   <div class="my-2.5 grid grid-cols-[1fr_2.5rem_1fr] items-center gap-2 text-xs">
     <span>{t(label)}</span>
     <b>{pct}%</b>
@@ -37,7 +37,7 @@ export const FanBar = ({ label, pct }: { label: string; pct: number }) => (
   </div>
 )
 
-export const FanSlider = ({ label, pct, onCommit }: { label: string; pct: number; onCommit: (v: number) => void }) => {
+export const FanSlider = ({ label, pct, onCommit }: { label: Key; pct: number; onCommit: (v: number) => void }) => {
   const [v, setV] = useState(pct)
   useEffect(() => setV(pct), [pct])
   return (
@@ -57,9 +57,19 @@ export const FanSlider = ({ label, pct, onCommit }: { label: string; pct: number
   )
 }
 
-export const Row = ({ label, value, class: c }: { label: string; value: ComponentChildren; class?: string }) => (
+export const Row = ({
+  label,
+  text,
+  value,
+  class: c,
+}: {
+  label?: Key
+  text?: string
+  value: ComponentChildren
+  class?: string
+}) => (
   <div class={cn('flex justify-between gap-3 border-b border-edge py-2 text-xs', c)}>
-    <span>{t(label)}</span>
+    <span>{text ?? (label && t(label))}</span>
     <b class="min-w-0 text-right [overflow-wrap:anywhere]">{value}</b>
   </div>
 )
@@ -100,11 +110,11 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
     <Card class="flex flex-col">
       <CardHead
         icon="camera"
-        title="Live Camera"
+        title="common.live_camera"
         end={
           ready ? (
             <>
-              <Dot /> {t('Live')}
+              <Dot /> {t('common.live')}
             </>
           ) : undefined
         }
@@ -119,14 +129,14 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
           <div class="text-center text-muted">
             <Icon n="camera" class="mx-auto mb-2 size-10" />
             <strong class="block text-[15px] font-medium">
-              {t(tall ? 'Your live print camera' : 'Your CC2 camera feed')}
+              {t(tall ? 'common.your_live_print_camera' : 'common.your_cc2_camera_feed')}
             </strong>
-            <p class="text-xs">{t('Waiting for camera stream')}</p>
+            <p class="text-xs">{t('common.waiting_for_camera_stream')}</p>
           </div>
         )}
         <img
           src={src}
-          alt={t('CC2 live camera')}
+          alt={t('common.cc2_live_camera')}
           class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')}
           onLoad={() => setReady(true)}
           onError={lost}
@@ -138,14 +148,14 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
           onClick={() => window.open(camera(), 'cc2-camera')}
         >
           <Icon n="open" class="size-4" />
-          {t('Open in new window')}
+          {t('common.open_in_new_window')}
         </Button>
         <Button
           class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs sm:text-sm"
           onClick={() => window.open(camera(`?snapshot=${Date.now()}`), 'cc2-snapshot')}
         >
           <Icon n="camera" class="size-4" />
-          {t('Snapshot')}
+          {t('common.snapshot')}
         </Button>
       </div>
     </Card>

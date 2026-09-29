@@ -1,29 +1,30 @@
+import type { Key } from './i18n'
 import { store } from './store'
 
 // Dashboard shortcuts: four slots, each one of these actions. Saved on the printer with the other UI preferences.
-export const QUICK_CHOICES: Record<string, [label: string, icon: string]> = {
-  'home:ALL': ['Home All', 'home'],
-  'home:X': ['Home X', 'home'],
-  'home:Y': ['Home Y', 'home'],
-  'home:Z': ['Home Z', 'home'],
-  'system:heaters_off': ['All Heaters Off', 'temp'],
-  'system:fans_off': ['Fans Off', 'fan'],
-  'system:motors_off': ['Motors Off', 'motors'],
-  'light:toggle': ['Lights', 'light'],
-  'page:control': ['Control', 'control'],
-  'page:files': ['Files', 'folder'],
-  'page:bed': ['Bed Levelling', 'grid'],
-  'page:canvas': ['Canvas', 'canvas'],
+export const QUICK_CHOICES: Record<string, [label: Key, icon: string]> = {
+  'home:ALL': ['common.home_all', 'home'],
+  'home:X': ['common.home_x', 'home'],
+  'home:Y': ['common.home_y', 'home'],
+  'home:Z': ['common.home_z', 'home'],
+  'system:heaters_off': ['common.all_heaters_off', 'temp'],
+  'system:fans_off': ['common.fans_off', 'fan'],
+  'system:motors_off': ['common.motors_off', 'motors'],
+  'light:toggle': ['common.lights', 'light'],
+  'page:control': ['common.control', 'control'],
+  'page:files': ['common.files', 'folder'],
+  'page:bed': ['common.bed_levelling', 'grid'],
+  'page:canvas': ['common.canvas', 'canvas'],
 }
 export const QUICK_DEFAULTS = ['home:ALL', 'system:heaters_off', 'system:fans_off', 'system:motors_off']
-export const QUICK_ASK: Record<string, string> = {
-  'home:ALL': 'Home all axes?',
-  'home:X': 'Home X axis?',
-  'home:Y': 'Home Y axis?',
-  'home:Z': 'Home Z axis?',
-  'system:heaters_off': 'Turn all heaters off?',
-  'system:fans_off': 'Turn all fans off?',
-  'system:motors_off': 'Disable all motors?',
+export const QUICK_ASK: Record<string, Key> = {
+  'home:ALL': 'common.home_all_axes',
+  'home:X': 'common.home_x_axis',
+  'home:Y': 'common.home_y_axis',
+  'home:Z': 'common.home_z_axis',
+  'system:heaters_off': 'common.turn_all_heaters_off',
+  'system:fans_off': 'common.turn_all_fans_off',
+  'system:motors_off': 'common.disable_all_motors',
 }
 // Navigation, lights and "heaters off" stay usable while the printer is busy; the rest need an idle printer.
 export const quickAlwaysAvailable = (action: string) =>

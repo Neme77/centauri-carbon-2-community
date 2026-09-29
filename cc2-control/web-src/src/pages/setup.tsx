@@ -10,37 +10,37 @@ export const SetupDialog = () => {
   const [open, setOpen] = useState(false),
     [code, setCode] = useState(''),
     [busy, setBusy] = useState(false),
-    [state, setState] = useState('Checking configuration…')
+    [state, setState] = useState(t('common.checking_configuration'))
   useEffect(() => {
     request('/api/setup')
       .then(d => setOpen(Boolean(d.required)))
-      .catch(e => notify(tpl('Setup check failed: {error}', { error: errText(e) }), 'error'))
+      .catch(e => notify(tpl('setup.setup_check_failed_error', { error: errText(e) }), 'error'))
   }, [])
   if (!open) return null
   const submit = async (e: Event) => {
     e.preventDefault()
     const c = code.trim()
-    if (!/^[A-Za-z0-9._-]{1,128}$/.test(c)) return setState('Use only letters, numbers, dot, underscore or hyphen.')
+    if (!/^[A-Za-z0-9._-]{1,128}$/.test(c)) return setState(t('setup.use_only_letters_numbers_dot'))
     setBusy(true)
     try {
       await post('/api/setup', c)
       setCode('')
-      setState('Saved. Restarting CC2 Control and synchronizing Canvas…')
+      setState(t('setup.saved_restarting_cc2_control_and'))
       for (let n = 0; n < 60; n++) {
         await new Promise(r => setTimeout(r, 1000))
         try {
           const s = await request('/api/setup')
           if (s.mqtt_registered && s.snapshot_received) {
-            setState('Printer and Canvas synchronized.')
+            setState(t('setup.printer_and_canvas_synchronized'))
             return location.reload()
           }
         } catch {
-          setState('CC2 Control is restarting…')
+          setState(t('setup.cc2_control_is_restarting'))
         }
       }
-      setState('Saved, but synchronization is taking longer than expected. Reload this page in a few seconds.')
+      setState(t('setup.saved_but_synchronization_is'))
     } catch (err) {
-      setState(tpl('Connection failed: {error}', { error: errText(err) }))
+      setState(tpl('setup.connection_failed_error', { error: errText(err) }))
     } finally {
       setBusy(false)
     }
@@ -48,26 +48,22 @@ export const SetupDialog = () => {
   return (
     <Dialog locked>
       <form onSubmit={submit}>
-        <h2 class="mb-2 text-2xl font-semibold">{t('Connect CC2 Control')}</h2>
-        <p class="mb-4 leading-relaxed text-muted">
-          {t(
-            'Enter the LAN access code shown by the printer. It is stored locally on the CC2 and is required only for first configuration.'
-          )}
-        </p>
+        <h2 class="mb-2 text-2xl font-semibold">{t('setup.connect_cc2_control')}</h2>
+        <p class="mb-4 leading-relaxed text-muted">{t('setup.enter_the_lan_access_code_shown')}</p>
         <Input
           type="password"
           autoComplete="off"
           required
           class="mb-3"
-          placeholder={t('LAN access code')}
+          placeholder={t('setup.lan_access_code')}
           value={code}
           onInput={e => setCode(e.currentTarget.value)}
           autofocus
         />
         <Button type="submit" variant="primary" wide disabled={busy}>
-          {t('Connect printer')}
+          {t('setup.connect_printer')}
         </Button>
-        <div class="mt-3 min-h-5.5 text-xs text-green">{t(state)}</div>
+        <div class="mt-3 min-h-5.5 text-xs text-green">{state}</div>
       </form>
     </Dialog>
   )

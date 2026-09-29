@@ -14,6 +14,7 @@ a build failure, mirroring the key-consistency check Weblate itself performs
 on JSON components.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -34,7 +35,8 @@ assert source_path in files, f"missing source locale {SOURCE}"
 source = load(source_path)
 assert source, f"{SOURCE} is empty"
 for key, value in source.items():
-    assert key == value, f"en.json is the source language; {key!r} maps to {value!r}, not itself"
+    assert re.fullmatch(r"[a-z0-9]+\.[a-z0-9_]+", key), f"{key!r} is not a <group>.<name> identifier"
+    assert isinstance(value, str) and value.strip(), f"en.json: empty text for {key!r}"
 
 source_keys = set(source)
 for path in files:
@@ -46,6 +48,10 @@ for path in files:
     for key, value in data.items():
         assert isinstance(key, str) and key, f"{path.name}: empty or non-string key {key!r}"
         assert isinstance(value, str) and value.strip(), f"{path.name}: empty value for key {key!r}"
+    for key, value in data.items():
+        placeholders = lambda text: sorted(re.findall(r"\{[a-z]+\}", text))
+        if key in source:
+            assert placeholders(value) == placeholders(source[key]), f"{path.name}[{key!r}]: placeholders differ from en.json"
     extra = set(data) - source_keys
     assert not extra, f"{path.name}: {len(extra)} key(s) not present in {SOURCE}: {sorted(extra)[:5]}"
     # A partial translation is fine at runtime (the loader falls back to

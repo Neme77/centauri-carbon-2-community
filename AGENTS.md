@@ -91,9 +91,13 @@ npm run build     # rewrites ../web/index.html
 - to add a colour theme, append an entry to `THEMES` in `web-src/src/lib/i18n.ts` and a `:root[data-theme="<id>"]` block with every token to `web-src/src/index.css` (`test_themes_static.py` checks it); the backend stores any lowercase-hyphenated identifier, so it needs no change;
 - inspect the complete relevant code path before editing;
 - preserve English/Italian/French behaviour and persistent UI preferences;
-- route every new user-visible string through `t()` or `tpl()` and add the key to
-  every `web/locales/*.json` (`test_locale_coverage_static.py` and
-  `test_locales_static.py` enforce it);
+- route every new user-visible string through `t()` or `tpl()` with an identifier
+  (`<group>.<name>`, e.g. `files.upload_file`; `common.` when several pages share it,
+  `state.` for the machine states the backend sends in English). `en.json` holds the
+  English text and is bundled into the page; add the id to `en.json`, `fr.json` and
+  `it.json`. `t()` only accepts ids from `en.json`, so a typo fails `npm run check`;
+  reword the English text freely, the id does not change
+  (`test_locale_coverage_static.py` and `test_locales_static.py` enforce the rest);
 - register every periodic request with `poll()` or `usePoll()` from `web-src/src/lib/poll.ts` (never `setInterval`): the CC2 is resource-constrained, so the scheduler never overlaps runs of a source, sleeps in hidden tabs (except the OrcaSlicer pending-print check) and lets pages poll faster only while they are open (`test_polling_static.py`);
 - test the actual browser control or event path that changed;
 - do not treat a direct function call or synthetic unit test as sufficient for

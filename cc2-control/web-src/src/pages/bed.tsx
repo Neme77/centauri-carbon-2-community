@@ -10,7 +10,7 @@ import { Tabs } from '@/components/ui/tabs'
 import { Icon } from '@/components/icons'
 import { Notice } from '@/components/shared'
 import { control, errText, notify, request } from '@/lib/api'
-import { t, tpl } from '@/lib/i18n'
+import { type Key, t, tpl } from '@/lib/i18n'
 import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
@@ -20,10 +20,10 @@ import { nav, openPage, refreshConsole, screwText } from '@/lib/state'
 import { sendConsole } from '@/pages/console'
 
 const I = { size: 16, strokeWidth: 1 }
-const PROFILES: [string, string][] = [
-  ['default', 'Side A · default'],
-  ['default1', 'Side B · default1'],
-  ['ADAPTIVE', 'Adaptive mesh · ADAPTIVE'],
+const PROFILES: [string, Key][] = [
+  ['default', 'bed.side_a_default'],
+  ['default1', 'bed.side_b_default1'],
+  ['ADAPTIVE', 'bed.adaptive_mesh_adaptive'],
 ]
 type View = '3d' | '2d' | 'values'
 
@@ -42,10 +42,10 @@ const MeshCard = () => {
   const redraw = () => {
     if (canvas.current && view !== 'values')
       drawMesh(canvas.current, points, view, cam.current, {
-        empty: t('Waiting for live mesh data'),
-        min: t('Min'),
-        max: t('Max'),
-        back: t('Y increases towards the back'),
+        empty: t('bed.waiting_for_live_mesh_data'),
+        min: t('bed.min'),
+        max: t('bed.max'),
+        back: t('bed.y_increases_towards_the_back'),
       })
   }
   useEffect(redraw, [points, view, scale])
@@ -60,11 +60,11 @@ const MeshCard = () => {
     busy.current = true
     try {
       const d = await request('/api/mesh')
-      if (!meshRoot(d)) throw Error(t('The firmware did not expose bed mesh data'))
+      if (!meshRoot(d)) throw Error(t('bed.the_firmware_did_not_expose_bed'))
       setData(d)
       warned.current = false
     } catch (e) {
-      if (manual === true || !warned.current) notify(tpl('Mesh unavailable: {error}', { error: errText(e) }), 'error')
+      if (manual === true || !warned.current) notify(tpl('bed.mesh_unavailable_error', { error: errText(e) }), 'error')
       warned.current = true
     } finally {
       busy.current = false
@@ -86,7 +86,7 @@ const MeshCard = () => {
     return () => el.removeEventListener('wheel', wheel)
   }, [points, view])
 
-  const Stat = ({ dot, label, val }: { dot: any; label: string; val: string }) => (
+  const Stat = ({ dot, label, val }: { dot: any; label: Key; val: string }) => (
     <div class="rounded-lg border border-edge bg-field/60 p-2.5">
       <span class="flex items-center gap-2 text-xs">
         {dot}
@@ -96,7 +96,7 @@ const MeshCard = () => {
         {val} <small class="text-xs">mm</small>
       </strong>
       <p class="mt-1 text-[10px] text-muted">
-        {profile === 'active' ? t('Current printer mesh') : `${t('Saved profile')} · ${profile}`}
+        {profile === 'active' ? t('bed.current_printer_mesh') : `${t('bed.saved_profile')} · ${profile}`}
       </p>
     </div>
   )
@@ -105,21 +105,21 @@ const MeshCard = () => {
       <div class="mb-3 flex flex-wrap items-center gap-3">
         <Icon n="cube" class="text-cyan" />
         <div class="mr-auto">
-          <h2 class="text-xl font-semibold">{t('Bed Mesh 3D')}</h2>
+          <h2 class="text-xl font-semibold">{t('bed.bed_mesh_3d')}</h2>
           <p class="text-xs text-muted">
-            {points.length ? tpl('{n} live probe points', { n: points.length }) : t('Waiting for live mesh data')}
+            {points.length ? tpl('bed.n_live_probe_points', { n: points.length }) : t('bed.waiting_for_live_mesh_data')}
           </p>
         </div>
         <label class="flex items-center gap-2 text-xs">
-          {t('Mesh profile')}
+          {t('bed.mesh_profile')}
           <Select class="w-auto" value={profile} onChange={e => setProfile(e.currentTarget.value)}>
             <option value="active">
-              {t('Active mesh')}
+              {t('bed.active_mesh')}
               {root?.profile_name ? ` · ${root.profile_name}` : ''}
             </option>
             {names.map(([n, l]) => (
               <option key={n} value={n}>
-                {l}
+                {t(l)}
               </option>
             ))}
           </Select>
@@ -132,12 +132,12 @@ const MeshCard = () => {
               class={cn('text-xs', i === 0 ? 'rounded-r-none' : i === 2 ? 'rounded-l-none' : 'rounded-none')}
               onClick={() => setView(v)}
             >
-              {t(v === '3d' ? 'View 3D' : v === '2d' ? 'View 2D' : 'Values')}
+              {t(v === '3d' ? 'bed.view_3d' : v === '2d' ? 'bed.view_2d' : 'bed.values')}
             </Button>
           ))}
         </div>
         <label class="flex items-center gap-2 border-l border-edge pl-3 text-xs">
-          {t('Z Scale')}
+          {t('bed.z_scale')}
           <input
             class="w-18"
             type="range"
@@ -157,10 +157,10 @@ const MeshCard = () => {
         {view === 'values' ? (
           <div class="h-[430px] overflow-auto p-3 font-mono text-[11px] text-well-fg">
             {points.length < 4 ? (
-              <p class="text-muted">{t('Waiting for live mesh data.')}</p>
+              <p class="text-muted">{t('bed.waiting_for_live_mesh_data_2')}</p>
             ) : (
               <table class="w-full border-collapse">
-                <caption class="mb-2 text-left">{t('Live Z heights in mm · Y descending')}</caption>
+                <caption class="mb-2 text-left">{t('bed.live_z_heights_in_mm_y')}</caption>
                 <thead>
                   <tr>
                     <th class="p-1 text-left font-normal">Y / X</th>
@@ -189,7 +189,7 @@ const MeshCard = () => {
         ) : (
           <canvas
             ref={canvas}
-            aria-label={t('Interactive live bed mesh')}
+            aria-label={t('bed.interactive_live_bed_mesh')}
             class="block h-[430px] w-full cursor-grab touch-none active:cursor-grabbing"
             onPointerDown={e => {
               drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
@@ -212,7 +212,7 @@ const MeshCard = () => {
           />
         )}
         <div class="p-2 text-center text-[11px] text-muted">
-          {t('Drag to rotate · scroll to zoom ·')}{' '}
+          {t('bed.drag_to_rotate_scroll_to_zoom')}{' '}
           <button
             type="button"
             class="text-well-fg underline underline-offset-2"
@@ -222,24 +222,28 @@ const MeshCard = () => {
               redraw()
             }}
           >
-            {t('Reset view')}
+            {t('bed.reset_view')}
           </button>
         </div>
       </div>
       <div class="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-4">
-        <Stat dot={<Dot c="blue" />} label="Minimum" val={st ? signed(st.min) : '—'} />
-        <Stat dot={<Dot c="amber" />} label="Maximum" val={st ? signed(st.max) : '—'} />
-        <Stat dot={<ArrowLeftRight {...I} class="text-cyan" />} label="Range" val={st ? st.range.toFixed(3) : '—'} />
-        <Stat dot={<Sigma {...I} class="text-cyan" />} label="Average" val={st ? signed(st.mean) : '—'} />
+        <Stat dot={<Dot c="blue" />} label="bed.minimum" val={st ? signed(st.min) : '—'} />
+        <Stat dot={<Dot c="amber" />} label="bed.maximum" val={st ? signed(st.max) : '—'} />
+        <Stat
+          dot={<ArrowLeftRight {...I} class="text-cyan" />}
+          label="bed.range"
+          val={st ? st.range.toFixed(3) : '—'}
+        />
+        <Stat dot={<Sigma {...I} class="text-cyan" />} label="bed.average" val={st ? signed(st.mean) : '—'} />
       </div>
       <MeshActions
         reload={() => load(true)}
         note={
           points.length
             ? profile === 'active'
-              ? `${t('Active mesh loaded')}${root?.profile_name ? ` · ${root.profile_name}` : ''}.`
-              : `${t('Saved mesh loaded')} · ${profile}.`
-            : t('Waiting for the printer mesh.')
+              ? `${t('bed.active_mesh_loaded')}${root?.profile_name ? ` · ${root.profile_name}` : ''}.`
+              : `${t('bed.saved_mesh_loaded')} · ${profile}.`
+            : t('bed.waiting_for_the_printer_mesh')
         }
       />
     </Card>
@@ -250,13 +254,13 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
   <>
     <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_1.15fr]">
       {[
-        ['folder', 'Load Current Mesh', 'Read the saved mesh from printer memory.', reload, false],
+        ['folder', 'bed.load_current_mesh', 'bed.read_the_saved_mesh_from_printer', reload, false],
         [
           'bolt',
-          'Run Bed Mesh Calibration',
-          'Start a protected calibration when idle.',
+          'bed.run_bed_mesh_calibration',
+          'bed.start_a_protected_calibration_when',
           async () => {
-            if (await ask(t('Start a new bed mesh calibration at 60 °C?')))
+            if (await ask(t('bed.start_a_new_bed_mesh_calibration')))
               sendConsole('BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60')
           },
           true,
@@ -300,12 +304,10 @@ const Screws = () => {
     <Card id="screwFocus" class="flex-1">
       <CardHead
         icon="target"
-        title="Four-Screw Leveling"
-        end={<Tag tone="warning">{t(plan ? 'Measured results' : 'No measurement')}</Tag>}
+        title="bed.four_screw_leveling"
+        end={<Tag tone="warning">{t(plan ? 'bed.measured_results' : 'bed.no_measurement')}</Tag>}
       />
-      <p class="mb-3 text-xs text-muted">
-        {t('Nozzle load-cell measurement at four positions. Not a replacement for bed mesh.')}
-      </p>
+      <p class="mb-3 text-xs text-muted">{t('bed.nozzle_load_cell_measurement_at')}</p>
       <div class="grid gap-3 sm:grid-cols-[.9fr_1.1fr]">
         <div class="rounded-lg border border-edge p-3">
           <div class="relative grid h-48 grid-cols-2 grid-rows-2 rounded-xl border-2 border-muted">
@@ -332,7 +334,7 @@ const Screws = () => {
               )
             })}
           </div>
-          <div class="mt-1.5 text-center text-[10px] text-muted">{t('Top view · front edge at bottom')}</div>
+          <div class="mt-1.5 text-center text-[10px] text-muted">{t('bed.top_view_front_edge_at_bottom')}</div>
           <div class="mt-2 flex justify-between text-[10px] text-muted">
             <span class="flex items-center gap-1">
               <ArrowBigUp size={12} strokeWidth={1} /> Y (back)
@@ -347,9 +349,9 @@ const Screws = () => {
             <table class="w-full border-collapse text-xs">
               <thead>
                 <tr class="text-left text-[11px] text-muted">
-                  <th class="p-2 font-normal">{t('Position')}</th>
-                  <th class="p-2 font-normal">{t('Offset')}</th>
-                  <th class="p-2 font-normal">{t('Adjustment')}</th>
+                  <th class="p-2 font-normal">{t('common.position')}</th>
+                  <th class="p-2 font-normal">{t('bed.offset')}</th>
+                  <th class="p-2 font-normal">{t('bed.adjustment')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -360,22 +362,22 @@ const Screws = () => {
                   return (
                     <tr key={name} class={cn('border-t border-edge', plan?.useOptimized && i === 0 && 'bg-amber/10')}>
                       <td class="p-2 font-semibold">{name}</td>
-                      <td class="p-2">{plan ? (ref ? t('Reference') : microns(d)) : '—'}</td>
+                      <td class="p-2">{plan ? (ref ? t('bed.reference') : microns(d)) : '—'}</td>
                       <td class={cn('p-2', !within && plan && !ref && (d > 0 ? 'text-cyan' : 'text-red'))}>
                         {plan ? (
                           ref ? (
                             '—'
                           ) : within ? (
-                            t('Within tolerance')
+                            t('bed.within_tolerance')
                           ) : d > 0 ? (
                             <span class="flex items-center gap-1">
                               <ArrowBigDown {...I} />
-                              {t('Lower')}
+                              {t('bed.lower')}
                             </span>
                           ) : (
                             <span class="flex items-center gap-1">
                               <ArrowBigUp {...I} />
-                              {t('Raise')}
+                              {t('bed.raise')}
                             </span>
                           )
                         ) : (
@@ -390,36 +392,33 @@ const Screws = () => {
           </div>
           <Notice>
             <span>
-              {t('3 samples per point')}
+              {t('bed.3_samples_per_point')}
               <br />
-              {t('Front-left reference')}
+              {t('bed.front_left_reference')}
               <br />
-              {t('Mesh capture stays separate')}
+              {t('bed.mesh_capture_stays_separate')}
             </span>
           </Notice>
         </div>
       </div>
       {plan?.useOptimized && (
         <Notice icon="info">
-          {tpl(
-            'Optimized reference adjustment: {word} FL by {amount} µm. Maximum suggested movement falls from {before} µm to {best} µm.',
-            {
-              word: t(plan.common > 0 ? 'lower' : 'raise'),
-              amount: Math.abs(Math.round(plan.common * 1000)),
-              before: plan.before,
-              best: plan.best,
-            }
-          )}
+          {tpl('bed.optimized_reference_adjustment', {
+            word: t(plan.common > 0 ? 'bed.lower_2' : 'bed.raise_2'),
+            amount: Math.abs(Math.round(plan.common * 1000)),
+            before: plan.before,
+            best: plan.best,
+          })}
         </Notice>
       )}
       <div class="mt-3">
         <Button
           onClick={async () => {
-            if (await control('screws:measure', t('Start the four-screw load-cell measurement?'))) openPage('bed', true)
+            if (await control('screws:measure', t('bed.start_the_four_screw_load_cell'))) openPage('bed', true)
           }}
         >
           <Icon n="target" class="size-5" />
-          {t('Measure Screws')}
+          {t('bed.measure_screws')}
         </Button>
       </div>
     </Card>
@@ -429,11 +428,11 @@ const Screws = () => {
 export const Bed = () => {
   const { screws } = nav.use()
   return (
-    <Page title="Bed Levelling" sub="Mesh, saved profiles and four-screw adjustment in one workflow">
+    <Page title="common.bed_levelling" sub="bed.mesh_saved_profiles_and_four_screw">
       <Tabs
         items={[
-          { id: 'mesh', label: t('Mesh & Saved Profiles'), icon: <Icon n="grid" /> },
-          { id: 'screws', label: t('Screw Levelling'), icon: <Icon n="target" /> },
+          { id: 'mesh', label: t('bed.mesh_saved_profiles'), icon: <Icon n="grid" /> },
+          { id: 'screws', label: t('bed.screw_levelling'), icon: <Icon n="target" /> },
         ]}
         value={screws ? 'screws' : 'mesh'}
         onChange={id => openPage('bed', id === 'screws')}

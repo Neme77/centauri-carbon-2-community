@@ -54,12 +54,12 @@ export const ThermalChart = () => {
     }
     ctx.fillStyle = css.getPropertyValue('--muted')
     ctx.textAlign = 'right'
-    ctx.fillText(t('now'), w - pad.r, h - 4)
+    ctx.fillText(t('common.now'), w - pad.r, h - 4)
   }
   useEffect(draw, [rev])
   useEffect(() => {
     addEventListener('resize', draw)
     return () => removeEventListener('resize', draw)
   }, [])
-  return <canvas ref={ref} class="block h-32 w-full" aria-label={t('Temperature history')} />
+  return <canvas ref={ref} class="block h-32 w-full" aria-label={t('common.temperature_history')} />
 }

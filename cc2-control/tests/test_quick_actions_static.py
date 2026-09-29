@@ -4,7 +4,7 @@ from _websrc import read_src
 src = read_src()
 for marker in (
     "QUICK_CHOICES",
-    "Configure Quick Actions",
+    "dashboard.configure_quick_actions",
     "setQuickFromServer(p.quick_actions)",
     "`quick${i + 1}`",
     "quickAlwaysAvailable",

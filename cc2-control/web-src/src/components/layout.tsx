@@ -17,20 +17,20 @@ import {
   X,
 } from 'lucide-preact'
 import { Dot } from '@/components/ui/badge'
-import { t } from '@/lib/i18n'
+import { type Key, t, tState } from '@/lib/i18n'
 import { control, notify, toast } from '@/lib/api'
 import { health, menu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
 type NavIcon = typeof Gauge | typeof CanvasIcon
-const items: [Page, NavIcon, string][] = [
-  ['dashboard', Gauge, 'Dashboard'],
-  ['control', SlidersHorizontal, 'Control'],
-  ['job', ListChecks, 'Job'],
-  ['files', FilesIcon, 'Files'],
-  ['bed', Grid3x3, 'Bed Levelling'],
-  ['canvas', CanvasIcon, 'Canvas'],
-  ['console', SquareTerminal, 'Console'],
-  ['settings', Settings, 'Settings'],
+const items: [Page, NavIcon, Key][] = [
+  ['dashboard', Gauge, 'app.dashboard'],
+  ['control', SlidersHorizontal, 'common.control'],
+  ['job', ListChecks, 'common.job'],
+  ['files', FilesIcon, 'common.files'],
+  ['bed', Grid3x3, 'common.bed_levelling'],
+  ['canvas', CanvasIcon, 'common.canvas'],
+  ['console', SquareTerminal, 'common.console'],
+  ['settings', Settings, 'common.settings'],
 ]
 
 // Hold for one second to trigger the emergency stop; a plain click only explains how.
@@ -59,7 +59,7 @@ const EStop = () => {
   return (
     <button
       type="button"
-      aria-label={t('Hold for emergency stop')}
+      aria-label={t('app.hold_for_emergency_stop')}
       onPointerDown={start}
       onPointerUp={cancel}
       onPointerCancel={cancel}
@@ -69,7 +69,7 @@ const EStop = () => {
       onContextMenu={e => e.preventDefault()}
       onClick={e => {
         e.preventDefault()
-        if (!fired.current) notify(t('Hold Emergency Stop for one second.'))
+        if (!fired.current) notify(t('app.hold_emergency_stop_for_one_second'))
       }}
       class="relative flex h-11 touch-none select-none items-center justify-center overflow-hidden rounded-md border border-red bg-red/10 px-3 font-bold text-red md:px-4"
     >
@@ -81,7 +81,7 @@ const EStop = () => {
       />
       <span class="relative flex items-center gap-2">
         <TriangleAlert size={20} strokeWidth={1} />
-        <span class="hidden md:inline">{t('EMERGENCY STOP')}</span>
+        <span class="hidden md:inline">{t('app.emergency_stop')}</span>
       </span>
     </button>
   )
@@ -98,7 +98,7 @@ export const Sidebar = () => {
         !collapsed && 'md:w-52'
       )}
     >
-      <nav class="mt-2 grid gap-0.5" aria-label={t('Main navigation')}>
+      <nav class="mt-2 grid gap-0.5" aria-label={t('app.main_navigation')}>
         {items.map(([p, Glyph, label]) => (
           <a
             key={p}
@@ -121,18 +121,18 @@ export const Sidebar = () => {
           type="button"
           onClick={toggleMenu}
           aria-expanded={!collapsed}
-          title={t(collapsed ? 'Expand menu' : 'Collapse menu')}
+          title={t(collapsed ? 'app.expand_menu' : 'app.collapse_menu')}
           class={cn(
             'flex h-11 w-full items-center justify-center gap-3.5 text-muted hover:bg-field hover:text-fg',
             !collapsed && 'md:justify-start md:px-5'
           )}
         >
           {collapsed ? <PanelLeftOpen size={22} strokeWidth={1} /> : <PanelLeftClose size={22} strokeWidth={1} />}
-          {!collapsed && <span>{t('Collapse menu')}</span>}
+          {!collapsed && <span>{t('app.collapse_menu')}</span>}
         </button>
         {!collapsed && (
           <div class="px-5 pb-3 text-center text-xs text-muted">
-            {t('Version:')} <b class="font-medium tabular-nums text-fg">{h ? `${h.version}` : '—'}</b>
+            {t('app.version')} <b class="font-medium tabular-nums text-fg">{h ? `${h.version}` : '—'}</b>
           </div>
         )}
       </div>
@@ -145,22 +145,22 @@ export const Topbar = () => {
   const v = view(d)
   // The state under "CC2" is only shown while the link is healthy; otherwise it could be stale or unknown.
   // One link indicator: CC2 Control reachable → MQTT session up → printer messages recent (3 missed 10 s heartbeats = stale).
-  const link: ['green' | 'amber' | 'red', string] = !ok
-    ? ['red', 'Printer unreachable']
+  const link: ['green' | 'amber' | 'red', Key] = !ok
+    ? ['red', 'app.printer_unreachable']
     : !d
-      ? ['amber', 'Connecting to the printer…']
+      ? ['amber', 'app.connecting_to_the_printer']
       : !d.connected
-        ? ['red', 'Reconnecting to the printer…']
+        ? ['red', 'app.reconnecting_to_the_printer']
         : d.last_message_age < 0 || d.last_message_age > 30
-          ? ['amber', 'Waiting for the printer']
-          : ['green', 'Printer connected']
+          ? ['amber', 'app.waiting_for_the_printer']
+          : ['green', 'app.printer_connected']
   return (
     <header class="fixed inset-x-0 top-0 z-30 flex h-17 items-center justify-between gap-4 border-b border-edge bg-panel px-4 md:px-5 xl:pl-2">
       <HeaderTitle />
       <div class="flex items-center gap-2">
         <div class="flex h-11 items-center gap-2 rounded-md border border-edge px-3">
           <PrinterIcon class="hidden size-6 sm:block" />
-          <div>{link[0] === 'green' ? t(v.state) : '—'}</div>
+          <div>{link[0] === 'green' ? tState(v.state) : '—'}</div>
         </div>
         <div class="hidden h-11 items-center gap-2 rounded-md border border-edge px-3 sm:flex">
           <Dot c={link[0]} />
@@ -176,7 +176,7 @@ export const Topbar = () => {
 export const TitleSync = () => {
   const { page } = nav.use()
   const v = view(printer.use().data)
-  const label = items.find(i => i[0] === page)?.[2] ?? ''
+  const label = items.find(i => i[0] === page)?.[2] ?? 'app.dashboard'
   document.title = `${v.active ? `${Math.round(v.progress)}% · ` : ''}${t(label)} · Centauri Carbon 2`
   return null
 }
@@ -202,8 +202,8 @@ export const Toast = () => {
       <button
         type="button"
         onClick={() => setShow(false)}
-        aria-label={t('Dismiss')}
-        title={t('Dismiss')}
+        aria-label={t('app.dismiss')}
+        title={t('app.dismiss')}
         class="rounded p-1 hover:bg-field"
       >
         <X size={16} strokeWidth={1} />

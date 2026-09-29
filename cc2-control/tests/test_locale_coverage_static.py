@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Every literal UI string passed to t()/tpl() must exist in the source locale.
+"""Identifiers used by the UI and the entries of en.json must match both ways.
 
-Catches a string added to web-src/ without its en.json (and so it.json/fr.json)
-entry, which would silently stay English. Dynamic keys (t(variable)) and the
-strings handed to components as props are out of reach of a regex; the goal is
-the common case: a new t('…') or tpl('…', …) call.
+A t('group.name') without its en.json entry fails the TypeScript build already;
+this also catches an entry nobody uses any more and a backend machine state
+(main.c machine_status_name) with no state.* text to translate.
 """
 import json
 import re
@@ -15,17 +14,17 @@ from _websrc import read_src
 en = json.loads((Path(__file__).resolve().parents[1] / "web" / "locales" / "en.json").read_text(encoding="utf-8"))
 src = read_src()
 
-used = {m.group(2) for m in re.finditer(r"""\b(?:t|tpl)\(\s*(['"])((?:\\.|(?!\1).)*)\1""", src)}
-# t(cond ? 'a' : 'b')
-for m in re.finditer(r"""\bt\(([^()]*\?[^()]*)\)""", src):
-    branches = re.sub(r"""===?\s*'(?:\\.|[^'])*'""", "", m.group(1))  # drop comparisons like v === '3d'
-    used.update(re.findall(r"""'((?:\\.|[^'])*)'""", branches))
+# Ids used in the sources (any quoted <group>.<name>), plus the backend machine-state names shown through tState().
+used = set(re.findall(r"""['"`]([a-z0-9]+\.[a-z0-9_]+)['"`]""", src)) & set(en)
+literals = {m for m in re.findall(r"""\b(?:t|tpl)\(\s*['"]([^'"]+)['"]""", src)}
+missing = sorted(k for k in literals if k not in en)
+assert not missing, f"{len(missing)} t()/tpl() id(s) missing from en.json: {missing[:8]}"
 
-# Machine state names come from the backend (main.c machine_status_name) and are shown through t().
 names = re.search(r'names\[\]=\{([^}]*)\}', (Path(__file__).resolve().parents[1] / "src" / "main.c").read_text(encoding="utf-8")).group(1)
-used.update(re.findall(r'"([^"]+)"', names))
-used.update({"Offline", "Unknown", "Protected console ready.", "Protected console ready. Waiting for live printer output."})
+state_texts = set(re.findall(r'"([^"]+)"', names)) | {"Offline", "Unknown"}
+missing_states = sorted(s for s in state_texts if s not in {v for k, v in en.items() if k.startswith("state.")})
+assert not missing_states, f"backend machine states without a state.* entry: {missing_states}"
 
-missing = sorted(k for k in used if k not in en)
-assert not missing, f"{len(missing)} UI string(s) missing from en.json: {missing[:8]}"
-print(f"PASS: {len(used)} literal t()/tpl() keys all exist in en.json")
+unused = sorted(k for k in en if k not in used and not k.startswith("state."))
+assert not unused, f"{len(unused)} en.json id(s) not used by any source: {unused[:8]}"
+print(f"PASS: {len(literals)} t()/tpl() ids exist in en.json, no unused ids, all machine states covered")

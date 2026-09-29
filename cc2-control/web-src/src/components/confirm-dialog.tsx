@@ -15,10 +15,10 @@ export const ConfirmDialog = () => {
       <p class="whitespace-pre-line text-[15px] leading-relaxed [overflow-wrap:anywhere]">{req.text}</p>
       <div class="mt-5 flex justify-end gap-2.5">
         <Button onClick={() => close(false)} autofocus={req.danger}>
-          {t('Cancel')}
+          {t('common.cancel')}
         </Button>
         <Button variant={req.danger ? 'danger' : 'primary'} onClick={() => close(true)} autofocus={!req.danger}>
-          {t('Confirm')}
+          {t('common.confirm')}
         </Button>
       </div>
     </Dialog>

@@ -7,7 +7,7 @@ import { Input, Select } from '@/components/ui/field'
 import { Icon } from '@/components/icons'
 import { FanSlider, Notice, Warn } from '@/components/shared'
 import { control, errText, notify } from '@/lib/api'
-import { t, tpl } from '@/lib/i18n'
+import { t, tState, tpl } from '@/lib/i18n'
 import { num } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
@@ -23,54 +23,84 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
   const pad = 'min-h-11 text-xl'
   return (
     <Card>
-      <CardHead icon="control" title="Movement" />
+      <CardHead icon="control" title="control.movement" />
       <Button wide class="min-h-12" disabled={!v.idle} onClick={() => control('home:ALL')}>
         <Icon n="home" />
-        {t('Home All')}
+        {t('common.home_all')}
       </Button>
       <div class="mt-3 grid grid-cols-3 gap-2.5">
         {['X', 'Y', 'Z'].map(a => (
           <Button key={a} class="min-h-16 flex-col gap-1" disabled={!v.idle} onClick={() => control(`home:${a}`)}>
             <Icon n="home" class="text-cyan" />
-            {t(`Home ${a}`)}
+            {t(a === 'X' ? 'common.home_x' : a === 'Y' ? 'common.home_y' : 'common.home_z')}
           </Button>
         ))}
       </div>
       <div class="my-4 grid grid-cols-[1.4fr_.65fr] gap-5 border-t border-edge pt-4">
         <div>
-          <div class="mb-2 text-[13px]">{t('XY Move')}</div>
+          <div class="mb-2 text-[13px]">{t('control.xy_move')}</div>
           <div class="grid grid-cols-3 gap-1.5">
             <span />
-            <Button class={pad} aria-label={t('Move Y positive')} disabled={!can('y')} onClick={() => move('Y', 1)}>
+            <Button
+              class={pad}
+              aria-label={t('control.move_y_positive')}
+              disabled={!can('y')}
+              onClick={() => move('Y', 1)}
+            >
               <ArrowBigUp {...B} />
             </Button>
             <span />
-            <Button class={pad} aria-label={t('Move X negative')} disabled={!can('x')} onClick={() => move('X', -1)}>
+            <Button
+              class={pad}
+              aria-label={t('control.move_x_negative')}
+              disabled={!can('x')}
+              onClick={() => move('X', -1)}
+            >
               <ArrowBigLeft {...B} />
             </Button>
             <span />
-            <Button class={pad} aria-label={t('Move X positive')} disabled={!can('x')} onClick={() => move('X', 1)}>
+            <Button
+              class={pad}
+              aria-label={t('control.move_x_positive')}
+              disabled={!can('x')}
+              onClick={() => move('X', 1)}
+            >
               <ArrowBigRight {...B} />
             </Button>
             <span />
-            <Button class={pad} aria-label={t('Move Y negative')} disabled={!can('y')} onClick={() => move('Y', -1)}>
+            <Button
+              class={pad}
+              aria-label={t('control.move_y_negative')}
+              disabled={!can('y')}
+              onClick={() => move('Y', -1)}
+            >
               <ArrowBigDown {...B} />
             </Button>
           </div>
         </div>
         <div class="border-l border-edge pl-5">
-          <div class="mb-2 text-[13px]">{t('Z Move')}</div>
+          <div class="mb-2 text-[13px]">{t('control.z_move')}</div>
           <div class="grid gap-1.5">
-            <Button class={pad} aria-label={t('Move Z positive')} disabled={!can('z')} onClick={() => move('Z', 1)}>
+            <Button
+              class={pad}
+              aria-label={t('control.move_z_positive')}
+              disabled={!can('z')}
+              onClick={() => move('Z', 1)}
+            >
               <ArrowBigUp {...B} />
             </Button>
-            <Button class={pad} aria-label={t('Move Z negative')} disabled={!can('z')} onClick={() => move('Z', -1)}>
+            <Button
+              class={pad}
+              aria-label={t('control.move_z_negative')}
+              disabled={!can('z')}
+              onClick={() => move('Z', -1)}
+            >
               <ArrowBigDown {...B} />
             </Button>
           </div>
         </div>
       </div>
-      <small class="text-muted">{t('Step Size')}</small>
+      <small class="text-muted">{t('control.step_size')}</small>
       <div class="my-2 flex gap-2">
         {STEPS.map(s => (
           <Button key={s} variant={s === step ? 'active' : 'default'} class="flex-1 text-xs" onClick={() => setStep(s)}>
@@ -79,10 +109,10 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
         ))}
       </div>
       {!(v.idle && ['x', 'y', 'z'].every(a => v.homed.includes(a))) && (
-        <Notice>{t('Motion requires homing. Commands are disabled until the printer is ready.')}</Notice>
+        <Notice>{t('control.motion_requires_homing_commands')}</Notice>
       )}
       <div class="mt-4 border-t border-edge pt-3">
-        <small class="text-muted">{t('Current Position')}</small>
+        <small class="text-muted">{t('control.current_position')}</small>
         <div class="my-2 grid grid-cols-3">
           {(['x', 'y', 'z'] as const).map(a => (
             <div key={a}>
@@ -91,13 +121,13 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
             </div>
           ))}
         </div>
-        <small class="text-muted">{t('Homed Status')}</small>
+        <small class="text-muted">{t('control.homed_status')}</small>
         <div class="mt-2 grid grid-cols-3">
           {(['x', 'y', 'z'] as const).map(a => {
             const ok = v.homed.includes(a)
             return (
               <small key={a} class={ok ? 'text-cyan' : 'text-muted'}>
-                <Pip hollow={!ok} /> {a.toUpperCase()} {t(ok ? 'Homed' : 'not homed')}
+                <Pip hollow={!ok} /> {a.toUpperCase()} {t(ok ? 'control.homed' : 'control.not_homed')}
               </small>
             )
           })}
@@ -116,16 +146,16 @@ const Temperatures = ({ d }: { d: any }) => {
     const n = Number(nozzle),
       b = Number(bed)
     if (!Number.isFinite(n) || n < 0 || n > 300 || !Number.isFinite(b) || b < 0 || b > 120)
-      return notify(t('Invalid temperature target.'), 'error')
+      return notify(t('control.invalid_temperature_target'), 'error')
     await control(`preheat:${n}:${b}`)
   }
   return (
     <Card>
-      <CardHead icon="temp" title="Temperatures" />
+      <CardHead icon="temp" title="common.temperatures" />
       {(
         [
-          ['red', 'Nozzle', d?.extruder?.temperature, nozzle, setNozzle, 300],
-          ['blue', 'Heated Bed', d?.heater_bed?.temperature, bed, setBed, 120],
+          ['red', 'common.nozzle', d?.extruder?.temperature, nozzle, setNozzle, 300],
+          ['blue', 'common.heated_bed', d?.heater_bed?.temperature, bed, setBed, 120],
         ] as const
       ).map(([dot, label, cur, val, set, max]) => (
         <div key={label} class="my-4 flex items-center gap-2.5">
@@ -138,7 +168,7 @@ const Temperatures = ({ d }: { d: any }) => {
             min="0"
             max={max}
             value={val}
-            aria-label={tpl('{name} target', { name: t(label) })}
+            aria-label={tpl('control.name_target', { name: t(label) })}
             onInput={e => set(e.currentTarget.value)}
             onKeyDown={e => e.key === 'Enter' && apply()}
           />
@@ -146,10 +176,10 @@ const Temperatures = ({ d }: { d: any }) => {
         </div>
       ))}
       <Button wide onClick={apply}>
-        {t('Apply targets')}
+        {t('control.apply_targets')}
       </Button>
       <div class="mt-4 border-t border-edge pt-3">
-        <small class="text-muted">{t('Temperature Presets')}</small>
+        <small class="text-muted">{t('control.temperature_presets')}</small>
         <div class="mt-2 flex flex-wrap gap-2">
           {list.map(p => (
             <Button
@@ -162,7 +192,7 @@ const Temperatures = ({ d }: { d: any }) => {
                 setBed(String(p.bed))
                 setActive(p.name)
                 notify(
-                  tpl('{name}: targets {nozzle}/{bed} °C loaded. Press Apply targets to send them.', {
+                  tpl('control.name_targets_nozzle_bed_c_loaded', {
                     name: p.name,
                     nozzle: p.nozzle,
                     bed: p.bed,
@@ -184,22 +214,22 @@ const Extruder = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const ok = v.idle && Number(d?.extruder?.temperature) >= 170
   return (
     <Card>
-      <CardHead icon="control" title="Extruder" />
+      <CardHead icon="control" title="control.extruder" />
       {!ok && (
         <Notice>
           <span>
-            {t('Extrusion disabled')}
+            {t('control.extrusion_disabled')}
             <br />
-            <small>{t('Idle only · nozzle temperature ≥ 170 °C')}</small>
+            <small>{t('control.idle_only_nozzle_temperature_170_c')}</small>
           </span>
         </Notice>
       )}
       <div class="my-4 flex items-center gap-2 text-xs">
-        {t('Length')}{' '}
+        {t('control.length')}{' '}
         <Select
           class="w-16"
           value={len}
-          aria-label={t('Extrusion length')}
+          aria-label={t('control.extrusion_length')}
           onChange={e => setLen(e.currentTarget.value)}
         >
           {[5, 10, 25].map(n => (
@@ -211,11 +241,11 @@ const Extruder = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
       <div class="grid grid-cols-2 gap-2.5">
         <Button class="min-h-14" disabled={!ok} onClick={() => control(`extrude:${len}`)}>
           <ArrowBigUp {...I} />
-          {t('Extrude')}
+          {t('control.extrude')}
         </Button>
         <Button class="min-h-14" disabled={!ok} onClick={() => control(`extrude:${-Number(len)}`)}>
           <ArrowBigDown {...I} />
-          {t('Retract')}
+          {t('control.retract')}
         </Button>
       </div>
     </Card>
@@ -226,7 +256,7 @@ const ZOffset = () => {
   const off = zoffset.use().v
   const adjust = async (delta: number) => {
     const next = Math.round((off + delta) * 100) / 100
-    if (Math.abs(next) > 0.5001) return notify(t('Session Z offset is limited to ±0.50 mm.'), 'error')
+    if (Math.abs(next) > 0.5001) return notify(t('control.session_z_offset_is_limited_to'), 'error')
     if (await control(`zoffset:adjust:${delta}`)) zoffset.set({ v: next })
   }
   const undo = async () => {
@@ -235,8 +265,8 @@ const ZOffset = () => {
   }
   return (
     <Card>
-      <CardHead icon="z" title="Live Z Offset" end={<Tag tone="warning">{t('Session only')}</Tag>} />
-      <small class="text-muted">{t('Protected session adjustment')}</small>
+      <CardHead icon="z" title="common.live_z_offset" end={<Tag tone="warning">{t('common.session_only')}</Tag>} />
+      <small class="text-muted">{t('control.protected_session_adjustment')}</small>
       <div class="my-2 text-3xl">
         {(off > 0 ? '+' : '') + off.toFixed(2)} <small class="text-sm text-muted">mm</small>
       </div>
@@ -248,13 +278,9 @@ const ZOffset = () => {
         ))}
       </div>
       <Button wide class="mt-2" onClick={undo}>
-        {t('Undo session offset')}
+        {t('control.undo_session_offset')}
       </Button>
-      <Warn>
-        {t(
-          'Live session adjustment. It resets after restart and does not modify saved settings. Session limit: ±0.50 mm.'
-        )}
-      </Warn>
+      <Warn>{t('control.live_session_adjustment_it_resets')}</Warn>
     </Card>
   )
 }
@@ -280,7 +306,7 @@ const Profiles = () => {
       nz = Number(nozzle),
       b = Number(bed)
     if (!/^[A-Z0-9+_-]{1,16}$/.test(n) || nz < 0 || nz > 300 || b < 0 || b > 120)
-      return notify(t('Invalid material profile values.'), 'error')
+      return notify(t('control.invalid_material_profile_values'), 'error')
     const at = list.findIndex(p => p.name.toUpperCase() === n),
       prev = at >= 0 ? list[at] : null
     const item = {
@@ -295,30 +321,30 @@ const Profiles = () => {
       await savePresets(next)
       presets.set({ list: next })
       setIdx(at >= 0 ? at : next.length - 1)
-      notify(tpl('Saved {name} on the printer.', { name: n }))
+      notify(tpl('control.saved_name_on_the_printer', { name: n }))
     } catch (e) {
-      notify(tpl('Profile save failed: {error}', { error: errText(e) }), 'error')
+      notify(tpl('control.profile_save_failed_error', { error: errText(e) }), 'error')
     }
   }
   const remove = async () => {
-    if (list.length <= 1) return notify(t('At least one profile must remain.'), 'error')
+    if (list.length <= 1) return notify(t('control.at_least_one_profile_must_remain'), 'error')
     const next = list.filter((_, i) => i !== idx),
       gone = list[idx]
     try {
       await savePresets(next)
       presets.set({ list: next })
-      notify(tpl('Deleted {name}.', { name: gone.name }))
+      notify(tpl('control.deleted_name', { name: gone.name }))
     } catch (e) {
-      notify(tpl('Profile deletion failed: {error}', { error: errText(e) }), 'error')
+      notify(tpl('control.profile_deletion_failed_error', { error: errText(e) }), 'error')
     }
   }
   const lab = 'text-[11px] text-muted'
   return (
     <Card class="mt-3.5">
-      <CardHead icon="temp" title="Material Profiles" end={t('Stored on the printer')} />
+      <CardHead icon="temp" title="control.material_profiles" end={t('control.stored_on_the_printer')} />
       <div class="grid grid-cols-2 items-end gap-2.5 md:grid-cols-[1.1fr_1.1fr_.7fr_.7fr_auto_auto]">
         <label class={lab}>
-          {t('Profile')}
+          {t('control.profile')}
           <Select class="mt-1.5" value={String(idx)} onChange={e => load(+e.currentTarget.value)}>
             {list.map((p, i) => (
               <option key={i} value={i}>
@@ -328,11 +354,11 @@ const Profiles = () => {
           </Select>
         </label>
         <label class={lab}>
-          {t('Name')}
+          {t('common.name')}
           <Input class="mt-1.5" maxLength={16} value={name} onInput={e => setName(e.currentTarget.value)} />
         </label>
         <label class={lab}>
-          {t('Nozzle °C')}
+          {t('control.nozzle_c')}
           <Input
             class="mt-1.5"
             type="number"
@@ -343,7 +369,7 @@ const Profiles = () => {
           />
         </label>
         <label class={lab}>
-          {t('Bed °C')}
+          {t('control.bed_c')}
           <Input
             class="mt-1.5"
             type="number"
@@ -354,15 +380,13 @@ const Profiles = () => {
           />
         </label>
         <Button variant="primary" onClick={save}>
-          {t('Add / update')}
+          {t('control.add_update')}
         </Button>
         <Button variant="danger" onClick={remove}>
-          {t('Delete')}
+          {t('common.delete')}
         </Button>
       </div>
-      <p class="mt-2.5 text-muted">
-        {t('Profiles are available from every browser and are also used for Canvas material assignment.')}
-      </p>
+      <p class="mt-2.5 text-muted">{t('control.profiles_are_available_from_every')}</p>
     </Card>
   )
 }
@@ -378,12 +402,12 @@ export const Control = () => {
   )
   return (
     <Page
-      title="Control"
-      sub="Movement, temperatures and machine controls"
+      title="common.control"
+      sub="control.movement_temperatures_and_machine"
       tags={
         <>
-          {tag(t(d ? v.state : 'Connecting…'))}
-          {tag(v.homed ? `${v.homed.toUpperCase()} ${t('homed')}` : t('Not homed'))}
+          {tag(d ? tState(v.state) : t('common.connecting'))}
+          {tag(v.homed ? `${v.homed.toUpperCase()} ${t('common.homed')}` : t('common.not_homed'))}
         </>
       }
     >
@@ -394,11 +418,11 @@ export const Control = () => {
         <div class="grid content-start gap-3.5">
           <Temperatures d={d} />
           <Card>
-            <CardHead icon="fan" title="Fans" />
+            <CardHead icon="fan" title="common.fans" />
             {(['part', 'aux', 'box'] as const).map(k => (
               <FanSlider
                 key={k}
-                label={k === 'part' ? 'Part Fan' : k === 'aux' ? 'Aux Fan' : 'Chamber Fan'}
+                label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
                 pct={v.fan(k)}
                 onCommit={n => control(`fan:${k}:${n}`)}
               />
@@ -408,47 +432,49 @@ export const Control = () => {
         </div>
         <div class="grid content-start gap-3.5 lg:col-span-2 lg:grid-cols-2 xl:col-span-1 xl:grid-cols-1">
           <Card>
-            <CardHead icon="settings" title="Machine" />
+            <CardHead icon="settings" title="control.machine" />
             <div class="grid grid-cols-2 gap-2.5">
               <Button
                 class={`min-h-16 flex-col gap-1 ${v.lightOn ? 'border-cyan text-cyan' : 'text-muted'}`}
                 aria-pressed={v.lightOn}
-                title={t(v.lightOn ? 'Internal light on: press to turn off' : 'Internal light off: press to turn on')}
+                title={t(
+                  v.lightOn ? 'control.internal_light_on_press_to_turn' : 'control.internal_light_off_press_to_turn'
+                )}
                 onClick={async () => {
                   if (await control(v.lightOn ? 'light:off' : 'light:on')) setTimeout(refreshPrinter, 250)
                 }}
               >
                 <Icon n="light" class="text-current" />
-                <span>{t('Lights')}</span>
-                <small class="text-[10px] opacity-80">{t(v.lightOn ? 'On' : 'Off')}</small>
+                <span>{t('common.lights')}</span>
+                <small class="text-[10px] opacity-80">{t(v.lightOn ? 'control.on' : 'control.off')}</small>
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
-                onClick={() => control('system:motors_off', t('Disable all motors?'))}
+                onClick={() => control('system:motors_off', t('common.disable_all_motors'))}
               >
                 <Icon n="motors" class="text-cyan" />
-                {t('Motors Off')}
+                {t('common.motors_off')}
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
-                onClick={() => control('system:heaters_off', t('Turn all heaters off?'))}
+                onClick={() => control('system:heaters_off', t('common.turn_all_heaters_off'))}
               >
                 <Icon n="temp" class="text-cyan" />
-                {t('Heaters Off')}
+                {t('control.heaters_off')}
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
-                onClick={() => control('system:fans_off', t('Turn all fans off?'))}
+                onClick={() => control('system:fans_off', t('common.turn_all_fans_off'))}
               >
                 <Icon n="fan" class="text-cyan" />
-                {t('Fans Off')}
+                {t('common.fans_off')}
               </Button>
             </div>
             <Notice icon="lock">
               <span>
-                {t('Protected actions')}
+                {t('control.protected_actions')}
                 <br />
-                <small>{t('Emergency Stop is always available in the sidebar.')}</small>
+                <small>{t('control.emergency_stop_is_always_available')}</small>
               </span>
             </Notice>
           </Card>

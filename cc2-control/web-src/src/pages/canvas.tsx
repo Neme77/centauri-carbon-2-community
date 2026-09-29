@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/field'
 import { Dialog } from '@/components/ui/dialog'
 import { Row } from '@/components/shared'
 import { control, errText, notify, post } from '@/lib/api'
-import { t, tpl } from '@/lib/i18n'
+import { type Key, t, tpl } from '@/lib/i18n'
 import { poll } from '@/lib/poll'
 import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
 import { presets } from '@/lib/state'
@@ -47,7 +47,7 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
       max = Number(p.max || Math.min(320, p.nozzle + 20))
     if (
       !(await ask(
-        tpl('Save {name}, #{colour}, {min}–{max} °C to Canvas slot {slot}?', {
+        tpl('canvas.save_name_colour_min_max_c', {
           name: p.name,
           colour: hex,
           min,
@@ -69,9 +69,9 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
   return (
     <Dialog onClose={onClose}>
       <form onSubmit={submit}>
-        <h2 class="mb-4 text-xl font-semibold">{t('Choose material and colour')}</h2>
+        <h2 class="mb-4 text-xl font-semibold">{t('canvas.choose_material_and_colour')}</h2>
         <label htmlFor="material-profile" class="mb-1.5 mt-3 block text-muted">
-          {t('Material profile')}
+          {t('canvas.material_profile')}
         </label>
         <Select
           id="material-profile"
@@ -86,7 +86,7 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
           ))}
         </Select>
         <label htmlFor="material-colour" class="mb-1.5 mt-3 block text-muted">
-          {t('Filament colour')}
+          {t('canvas.filament_colour')}
         </label>
         <div class="grid grid-cols-[78px_1fr] items-center gap-3">
           <input
@@ -99,7 +99,7 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
           <output class="font-mono text-base font-semibold">{colour}</output>
         </div>
         <fieldset class="m-0 min-w-0 border-0 p-0">
-          <legend class="mb-1.5 mt-3 p-0 text-muted">{t('Quick colours')}</legend>
+          <legend class="mb-1.5 mt-3 p-0 text-muted">{t('canvas.quick_colours')}</legend>
           <div class="grid grid-cols-5 gap-2 sm:grid-cols-8">
             {PALETTE.map(c => (
               <button
@@ -117,9 +117,9 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
           </div>
         </fieldset>
         <div class="mt-5 flex justify-end gap-2.5">
-          <Button onClick={onClose}>{t('Cancel')}</Button>
+          <Button onClick={onClose}>{t('common.cancel')}</Button>
           <Button type="submit" variant="primary">
-            {t('Apply to Canvas slot')}
+            {t('canvas.apply_to_canvas_slot')}
           </Button>
         </div>
       </form>
@@ -155,34 +155,30 @@ export const Canvas = () => {
       remaining: tray && tray.remaining_percent !== undefined ? `${tray.remaining_percent}%` : '—',
     }
   })
-  const ctl: [typeof ArrowBigUp, string, () => void, string][] = [
+  const ctl: [typeof ArrowBigUp, Key, () => void, string][] = [
     [
       ArrowBigUp,
-      'Load',
-      () =>
-        control(
-          `canvas:load:${slot}`,
-          tpl('Load filament from Canvas slot {slot}? The printer may heat and move the toolhead.', { slot: slot + 1 })
-        ) as any,
+      'canvas.load',
+      () => control(`canvas:load:${slot}`, tpl('canvas.load_filament_from_canvas_slot', { slot: slot + 1 })) as any,
       '',
     ],
     [
       ArrowBigDown,
-      'Unload',
+      'canvas.unload',
       () =>
         control(
           `canvas:unload:${slot}`,
-          tpl('Unload filament from Canvas slot {slot}? The printer may heat, cut and move filament.', {
+          tpl('canvas.unload_filament_from_canvas_slot', {
             slot: slot + 1,
           })
         ) as any,
       '',
     ],
-    [Palette, 'Select Material', () => setDialog(true), ''],
-    [RefreshCw, 'Sync', sync, ''],
+    [Palette, 'canvas.select_material', () => setDialog(true), ''],
+    [RefreshCw, 'canvas.sync', sync, ''],
   ]
   return (
-    <Page title="Canvas" sub="Material system overview and control (when supported)">
+    <Page title="common.canvas" sub="canvas.material_system_overview_and">
       <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.55fr)_minmax(320px,1fr)]">
         <Card>
           <div class="grid items-center gap-6 rounded-lg border border-edge bg-field/40 p-4 sm:p-6 md:grid-cols-[1.25fr_1fr]">
@@ -199,21 +195,13 @@ export const Canvas = () => {
             </div>
             <div>
               <Tag tone={ok ? 'ok' : 'warning'} class="mb-4">
-                <Pip /> {t(ok ? 'Connected' : 'Not Detected')}
+                <Pip /> {t(ok ? 'common.connected' : 'canvas.not_detected')}
               </Tag>
               <h3 class="mb-3 text-xl leading-snug">
-                {t(
-                  ok
-                    ? 'Canvas detected and connected.'
-                    : 'Canvas control is not exposed by the current printer firmware.'
-                )}
+                {t(ok ? 'canvas.canvas_detected_and_connected' : 'canvas.canvas_control_is_not_exposed_by')}
               </h3>
               <p class="text-[15px] text-muted">
-                {t(
-                  ok
-                    ? 'Live slot telemetry is supplied by the CC2 firmware.'
-                    : 'CC2 Control will enable material controls automatically when compatible telemetry and commands are available.'
-                )}
+                {t(ok ? 'canvas.live_slot_telemetry_is_supplied_by' : 'canvas.cc2_control_will_enable_material')}
               </p>
             </div>
           </div>
@@ -234,24 +222,24 @@ export const Canvas = () => {
                   style={{ borderColor: s.colour, boxShadow: `0 0 18px ${s.colour}66` }}
                 />
                 <div class="mt-auto">
-                  <Row label="Material" value={s.material} />
-                  <Row label="Color" value={s.raw || '—'} />
-                  <Row label="Remaining" value={s.remaining} />
+                  <Row label="canvas.material" value={s.material} />
+                  <Row label="canvas.color" value={s.raw || '—'} />
+                  <Row label="canvas.remaining" value={s.remaining} />
                 </div>
                 <Button class="mt-3.5" disabled={!ok} onClick={() => canvas.set({ slot: s.i })}>
                   {ok ? (
                     s.i === slot ? (
                       <>
                         <Check {...I} />
-                        {t('Selected')}
+                        {t('canvas.selected')}
                       </>
                     ) : (
-                      t('Select slot')
+                      t('canvas.select_slot')
                     )
                   ) : (
                     <>
                       <Info {...I} />
-                      {t('No telemetry')}
+                      {t('canvas.no_telemetry')}
                     </>
                   )}
                 </Button>
@@ -261,17 +249,17 @@ export const Canvas = () => {
         </Card>
         <div class="grid content-start gap-3.5 lg:grid-cols-3 xl:grid-cols-1">
           <Card>
-            <CardHead icon="info" title="Canvas Status" />
-            <Row label="Telemetry" value={t(model ? 'Available' : 'Unavailable')} />
-            <Row label="Native commands" value={t(ok ? 'Available' : 'Unavailable')} />
-            <Row label="Last check" value={checked || '—'} />
+            <CardHead icon="info" title="canvas.canvas_status" />
+            <Row label="canvas.telemetry" value={t(model ? 'canvas.available' : 'canvas.unavailable')} />
+            <Row label="canvas.native_commands" value={t(ok ? 'canvas.available' : 'canvas.unavailable')} />
+            <Row label="canvas.last_check" value={checked || '—'} />
             <Button wide class="mt-3.5" onClick={sync}>
               <RefreshCw {...I} />
-              {t('Check Again')}
+              {t('canvas.check_again')}
             </Button>
           </Card>
           <Card>
-            <CardHead icon="settings" title={ok ? 'Canvas Controls' : 'Controls (Unavailable)'} />
+            <CardHead icon="settings" title={ok ? 'canvas.canvas_controls' : 'canvas.controls_unavailable'} />
             <div class="grid gap-2">
               {ctl.map(([Glyph, label, fn]) => (
                 <Button key={label} class="justify-between" disabled={!ok} onClick={fn}>
@@ -279,22 +267,26 @@ export const Canvas = () => {
                     <Glyph {...I} />
                     {t(label)}
                   </span>
-                  <small class="text-muted">{ok ? `Slot ${slot + 1}` : t('Unavailable')}</small>
+                  <small class="text-muted">{ok ? `Slot ${slot + 1}` : t('canvas.unavailable')}</small>
                 </Button>
               ))}
             </div>
           </Card>
           <Card>
-            <CardHead icon="light" title="What still works" />
+            <CardHead icon="light" title="canvas.what_still_works" />
             <div class="grid gap-3.5 text-[13px]">
-              {['Manual filament loading', 'Printing with the selected tool', 'Automatic detection when supported'].map(
-                s => (
-                  <div key={s} class="flex gap-2.5">
-                    <Check {...I} class="shrink-0 text-cyan" />
-                    {t(s)}
-                  </div>
-                )
-              )}
+              {(
+                [
+                  'canvas.manual_filament_loading',
+                  'canvas.printing_with_the_selected_tool',
+                  'canvas.automatic_detection_when_supported',
+                ] as Key[]
+              ).map(s => (
+                <div key={s} class="flex gap-2.5">
+                  <Check {...I} class="shrink-0 text-cyan" />
+                  {t(s)}
+                </div>
+              ))}
             </div>
           </Card>
         </div>

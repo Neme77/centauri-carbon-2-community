@@ -13,7 +13,7 @@ import { startFile } from '@/pages/print-dialog'
 
 type Entry = { storage: 'internal' | 'usb'; file: any }
 const key = (e: { storage: string; path?: string; file?: any }) => `${e.storage}\n${e.path ?? e.file.path}`
-const where = (s: string) => t(s === 'usb' ? 'USB drive' : 'Internal memory')
+const where = (s: string) => t(s === 'usb' ? 'files.usb_drive' : 'files.internal_memory')
 const I = { size: 16, strokeWidth: 1 }
 const metaCache = new Map<string, any>()
 const body = (s: string, p: string) => ({
@@ -49,9 +49,9 @@ export const Files = () => {
         for (const file of group?.files || []) next.push({ storage, file })
       setEntries(next)
       setLoaded(true)
-      if (announce) notify(t('Protected file list refreshed.'))
+      if (announce) notify(t('files.protected_file_list_refreshed'))
     } catch (e) {
-      notify(tpl('File list unavailable: {error}', { error: errText(e) }), 'error')
+      notify(tpl('files.file_list_unavailable_error', { error: errText(e) }), 'error')
     }
   }
   useEffect(() => {
@@ -83,7 +83,7 @@ export const Files = () => {
 
   const guard = () => {
     if (busy) {
-      notify(t('Finish the current file operation first.'), 'error')
+      notify(t('files.finish_the_current_file_operation'), 'error')
       return true
     }
     return false
@@ -93,17 +93,17 @@ export const Files = () => {
       path = e.file.path
     if (
       guard() ||
-      !(await ask(`${tpl('Permanently delete this G-code from {where}?', { where: where(storage) })}\n\n${path}`, true))
+      !(await ask(`${tpl('files.permanently_delete_this_g_code', { where: where(storage) })}\n\n${path}`, true))
     )
       return
     try {
       const r = await fetch('/api/gcode-files/delete', body(storage, path))
       if (!r.ok) throw Error(await failure(r))
       if (sel && key(sel) === key(e)) setSel(null)
-      notify(tpl('Deleted {path} from {where}.', { path, where: where(storage) }))
+      notify(tpl('files.deleted_path_from_where', { path, where: where(storage) }))
       await refresh()
     } catch (err) {
-      notify(tpl('Delete failed: {error}', { error: errText(err) }), 'error')
+      notify(tpl('files.delete_failed_error', { error: errText(err) }), 'error')
     }
   }
   const bulk = async (kind: 'delete' | 'copy') => {
@@ -111,12 +111,12 @@ export const Files = () => {
     if (!list.length) return
     let dest = ''
     if (kind === 'delete') {
-      if (!(await ask(tpl('Permanently delete {n} selected G-code files?', { n: list.length }), true))) return
+      if (!(await ask(tpl('files.permanently_delete_n_selected_g', { n: list.length }), true))) return
     } else {
       const d = new Set(list.map(i => (i.storage === 'usb' ? 'internal' : 'usb')))
-      if (d.size !== 1) return notify(t('Select files from only one storage location.'), 'error')
+      if (d.size !== 1) return notify(t('files.select_files_from_only_one_storage'), 'error')
       dest = [...d][0]
-      if (!(await ask(tpl('Copy {n} selected files to {where}?', { n: list.length, where: where(dest) })))) return
+      if (!(await ask(tpl('files.copy_n_selected_files_to_where', { n: list.length, where: where(dest) })))) return
     }
     let done = 0
     for (const i of list) {
@@ -129,19 +129,19 @@ export const Files = () => {
         if (kind === 'delete') toggle(key(i), false)
         done++
       } catch (err) {
-        notify(tpl('Stopped after {n} files: {error}', { n: done, error: errText(err) }), 'error')
+        notify(tpl('files.stopped_after_n_files_error', { n: done, error: errText(err) }), 'error')
         break
       }
     }
     await refresh()
     if (done === list.length)
-      notify(tpl(kind === 'delete' ? 'Deleted {n} selected files.' : 'Copied {n} selected files.', { n: done }))
+      notify(tpl(kind === 'delete' ? 'files.deleted_n_selected_files' : 'files.copied_n_selected_files', { n: done }))
   }
 
   const cols =
     'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-edge px-3 py-2 md:grid-cols-[1.6fr_.55fr_.75fr_.75fr_1.25fr]'
   return (
-    <Page title="Files" sub="Browse protected G-code storage on your CC2">
+    <Page title="common.files" sub="files.browse_protected_g_code_storage_on">
       <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
         <div class="grid min-w-0 content-start gap-3">
           <Card>
@@ -150,31 +150,31 @@ export const Files = () => {
                 <Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
                 <Input
                   class="pl-8"
-                  placeholder={t('Search files')}
+                  placeholder={t('files.search_files')}
                   value={q}
                   onInput={e => setQ(e.currentTarget.value)}
                 />
               </div>
               <Select value={loc} onChange={e => setLoc(e.currentTarget.value)}>
-                <option value="all">{t('All files')}</option>
-                <option value="internal">{t('Internal memory')}</option>
-                <option value="usb">{t('USB drive')}</option>
+                <option value="all">{t('files.all_files')}</option>
+                <option value="internal">{t('files.internal_memory')}</option>
+                <option value="usb">{t('files.usb_drive')}</option>
               </Select>
               <Select value={sort} onChange={e => setSort(e.currentTarget.value)}>
-                <option value="newest">{t('Newest first')}</option>
-                <option value="name">{t('Name')}</option>
-                <option value="size">{t('Size')}</option>
+                <option value="newest">{t('files.newest_first')}</option>
+                <option value="name">{t('common.name')}</option>
+                <option value="size">{t('files.size')}</option>
               </Select>
-              <Button onClick={() => refresh(true)} aria-label={t('Refresh')}>
+              <Button onClick={() => refresh(true)} aria-label={t('files.refresh')}>
                 <RefreshCw {...I} />
               </Button>
             </div>
             {checked.size > 0 && (
               <div class="my-3 flex items-center gap-2">
-                <strong>{tpl('{n} selected', { n: checked.size })}</strong>
-                <Button onClick={() => bulk('copy')}>{t('Copy selected')}</Button>
+                <strong>{tpl('files.n_selected', { n: checked.size })}</strong>
+                <Button onClick={() => bulk('copy')}>{t('files.copy_selected')}</Button>
                 <Button variant="danger" onClick={() => bulk('delete')}>
-                  {t('Delete selected')}
+                  {t('files.delete_selected')}
                 </Button>
               </div>
             )}
@@ -183,18 +183,18 @@ export const Files = () => {
                 <span>
                   <input
                     type="checkbox"
-                    title={t('Select all shown files')}
+                    title={t('files.select_all_shown_files')}
                     checked={visible.length > 0 && visible.every(e => checked.has(key(e)))}
                     onChange={e => {
                       for (const x of visible) toggle(key(x), e.currentTarget.checked)
                     }}
                   />{' '}
-                  {t('Name')}
+                  {t('common.name')}
                 </span>
-                <span class="hidden md:inline">{t('Size')}</span>
-                <span class="hidden md:inline">{t('Modified')}</span>
-                <span class="hidden md:inline">{t('Storage')}</span>
-                <span>{t('Actions')}</span>
+                <span class="hidden md:inline">{t('files.size')}</span>
+                <span class="hidden md:inline">{t('files.modified')}</span>
+                <span class="hidden md:inline">{t('files.storage')}</span>
+                <span>{t('files.actions')}</span>
               </div>
               {visible.map(e => (
                 // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: whole-row click is a mouse shortcut; keyboard users select through the file name button
@@ -210,7 +210,7 @@ export const Files = () => {
                   <div class="flex min-w-0 items-center gap-2.5 font-semibold">
                     <input
                       type="checkbox"
-                      title={t('Select file')}
+                      title={t('files.select_file')}
                       checked={checked.has(key(e))}
                       onClick={ev => ev.stopPropagation()}
                       onChange={ev => toggle(key(e), ev.currentTarget.checked)}
@@ -228,7 +228,7 @@ export const Files = () => {
                   <span class="hidden md:inline">
                     {Number(e.file.modified) > 0 ? new Date(Number(e.file.modified) * 1000).toLocaleString() : '—'}
                   </span>
-                  <span class="hidden md:inline">{e.storage === 'usb' ? 'USB' : t('Internal')}</span>
+                  <span class="hidden md:inline">{e.storage === 'usb' ? 'USB' : t('files.internal')}</span>
                   <div class="flex gap-1.5">
                     <Button
                       class="px-2.5"
@@ -238,7 +238,7 @@ export const Files = () => {
                       }}
                     >
                       <Play {...I} />
-                      {t('Print')}
+                      {t('files.print')}
                     </Button>
                     <Button
                       class="hidden px-2.5 sm:inline-flex"
@@ -248,13 +248,13 @@ export const Files = () => {
                         remove(e)
                       }}
                     >
-                      {t('Delete')}
+                      {t('common.delete')}
                     </Button>
                   </div>
                 </div>
               ))}
               {!visible.length && (
-                <div class="p-4 text-muted">{t(loaded ? 'No matching G-code files.' : 'Loading files…')}</div>
+                <div class="p-4 text-muted">{t(loaded ? 'files.no_matching_g_code_files' : 'files.loading_files')}</div>
               )}
             </div>
           </Card>
@@ -323,46 +323,44 @@ const Detail = ({
         <FileText size={36} strokeWidth={1} class="shrink-0" />
         <div class="min-w-0">
           <h3 class="text-base leading-snug [overflow-wrap:anywhere]">
-            {entry ? entry.file.path : t('No file selected')}
+            {entry ? entry.file.path : t('files.no_file_selected')}
           </h3>
-          <small class="text-muted">
-            {entry ? where(entry.storage) : t('Select a G-code file to view its details.')}
-          </small>
+          <small class="text-muted">{entry ? where(entry.storage) : t('files.select_a_g_code_file_to')}</small>
         </div>
       </div>
       <div class="my-4 grid min-h-56 place-items-center overflow-hidden rounded-lg border border-edge">
         {thumb ? (
-          <img src={thumb} alt={t('G-code model preview')} class="max-h-72 w-full object-contain p-2.5" />
+          <img src={thumb} alt={t('files.g_code_model_preview')} class="max-h-72 w-full object-contain p-2.5" />
         ) : (
           <FileText size={56} strokeWidth={1} class="text-edge" />
         )}
       </div>
       <div>
-        <Row label="Size" value={entry ? fileSize(entry.file.size) : '—'} />
+        <Row label="files.size" value={entry ? fileSize(entry.file.size) : '—'} />
         <Row
-          label="Layers"
+          label="files.layers"
           value={meta && ok(meta.layers) && Number(meta.layers) > 0 ? Math.round(Number(meta.layers)) : '—'}
         />
         <Row
-          label="Estimated Print Time"
+          label="files.estimated_print_time"
           value={meta && ok(meta.estimated_seconds) ? duration(meta.estimated_seconds) : '—'}
         />
         <Row
-          label="Filament (est.)"
+          label="files.filament_est"
           value={meta && ok(meta.filament_grams) ? `${Number(meta.filament_grams).toFixed(1)} g` : '—'}
         />
-        <Row label="Nozzle Temperature" value={meta ? temp(meta.nozzle_temperature, 500) : '—'} />
-        <Row label="Bed Temperature" value={meta ? temp(meta.bed_temperature, 200) : '—'} />
+        <Row label="files.nozzle_temperature" value={meta ? temp(meta.nozzle_temperature, 500) : '—'} />
+        <Row label="files.bed_temperature" value={meta ? temp(meta.bed_temperature, 200) : '—'} />
       </div>
       <Button wide variant="primary" class="mt-4" disabled={!entry} onClick={() => entry && onPrint(entry)}>
         <Play {...I} />
-        {t('Start Protected Print')}
+        {t('files.start_protected_print')}
       </Button>
       <Button wide variant="danger" class="mt-2" disabled={!entry} onClick={() => entry && onDelete(entry)}>
         <Trash2 {...I} />
-        {t('Delete')}
+        {t('common.delete')}
       </Button>
-      <p class="mt-3 text-center text-muted">{t('Confirmation is required for protected actions.')}</p>
+      <p class="mt-3 text-center text-muted">{t('files.confirmation_is_required_for')}</p>
     </Card>
   )
 }
@@ -380,10 +378,10 @@ const Upload = ({
   const [storage, setStorage] = useState('internal'),
     [pct, setPct] = useState(-1),
     [over, setOver] = useState(false),
-    [note, setNote] = useState('Maximum 64 MiB · no automatic printing · existing files are never overwritten')
+    [note, setNote] = useState(t('files.maximum_64_mib_no_automatic'))
   const go = async () => {
     const file = pick.current?.files?.[0]
-    if (busy || !file) return notify(t('Choose a G-code file first.'), 'error')
+    if (busy || !file) return notify(t('files.choose_a_g_code_file_first'), 'error')
     if (
       !file.name ||
       new TextEncoder().encode(file.name).length >= 256 ||
@@ -391,16 +389,16 @@ const Upload = ({
       file.size === 0 ||
       file.size > 64 * 1024 * 1024
     )
-      return notify(t('Choose a valid .gcode file between 1 byte and 64 MiB.'), 'error')
+      return notify(t('files.choose_a_valid_gcode_file_between'), 'error')
     if (
       !(await ask(
-        `${tpl('Upload {name} ({size}) to {where}?', { name: file.name, size: fileSize(file.size), where: where(storage) })}\n\n${t('The file will not be printed automatically.')}`
+        `${tpl('files.upload_name_size_to_where', { name: file.name, size: fileSize(file.size), where: where(storage) })}\n\n${t('files.the_file_will_not_be_printed')}`
       ))
     )
       return
     setBusy(true)
     setPct(0)
-    setNote(tpl('Uploading… {n}%', { n: 0 }))
+    setNote(tpl('files.uploading_n', { n: 0 }))
     try {
       await new Promise<void>((resolve, reject) => {
         const x = new XMLHttpRequest()
@@ -414,11 +412,11 @@ const Upload = ({
           if (ev.lengthComputable) {
             const p = Math.min(100, Math.round((ev.loaded * 100) / ev.total))
             setPct(p)
-            setNote(tpl('Uploading… {n}%', { n: p }))
+            setNote(tpl('files.uploading_n', { n: p }))
           }
         }
-        x.onerror = () => reject(Error(t('Network error')))
-        x.ontimeout = () => reject(Error(t('Upload timed out')))
+        x.onerror = () => reject(Error(t('files.network_error')))
+        x.ontimeout = () => reject(Error(t('files.upload_timed_out')))
         x.onload = () => {
           if (x.status === 201) resolve()
           else {
@@ -435,11 +433,11 @@ const Upload = ({
       })
       if (pick.current) pick.current.value = ''
       setPct(100)
-      setNote(t('Upload completed. File is ready in the selected storage.'))
-      notify(tpl('{name} uploaded to {where}.', { name: file.name, where: where(storage) }))
+      setNote(t('files.upload_completed_file_is_ready_in'))
+      notify(tpl('files.name_uploaded_to_where', { name: file.name, where: where(storage) }))
       await refresh()
     } catch (e) {
-      const m = tpl('Upload failed: {error}', { error: errText(e) })
+      const m = tpl('files.upload_failed_error', { error: errText(e) })
       setNote(m)
       notify(m, 'error')
     } finally {
@@ -448,7 +446,7 @@ const Upload = ({
   }
   return (
     <Card>
-      <CardHead title="Upload File" end={t('Local upload')} />
+      <CardHead title="files.upload_file" end={t('files.local_upload')} />
       {/* biome-ignore lint/a11y/noStaticElementInteractions: drag and drop is a pointer shortcut; the file input and button are the keyboard path */}
       <div
         class={cn(
@@ -476,22 +474,22 @@ const Upload = ({
           accept=".gcode"
           class="w-full min-w-0"
           disabled={busy}
-          aria-label={t('Select G-code file')}
+          aria-label={t('files.select_g_code_file')}
         />
         <label class="flex items-center gap-2">
-          {t('Destination')}{' '}
+          {t('files.destination')}{' '}
           <Select class="w-auto" value={storage} disabled={busy} onChange={e => setStorage(e.currentTarget.value)}>
-            <option value="internal">{t('Internal memory')}</option>
-            <option value="usb">{t('USB drive')}</option>
+            <option value="internal">{t('files.internal_memory')}</option>
+            <option value="usb">{t('files.usb_drive')}</option>
           </Select>
         </label>
         <Button variant="primary" disabled={busy} onClick={go}>
           <UploadIcon {...I} />
-          {t('Upload G-code')}
+          {t('files.upload_g_code')}
         </Button>
-        <small class="text-muted">{t('or drop a .gcode file here')}</small>
+        <small class="text-muted">{t('files.or_drop_a_gcode_file_here')}</small>
         {pct >= 0 && <progress class="w-full" value={pct} max="100" />}
-        <small class="text-center text-muted">{t(note)}</small>
+        <small class="text-center text-muted">{note}</small>
       </div>
     </Card>
   )

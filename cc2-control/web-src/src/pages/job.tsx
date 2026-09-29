@@ -4,7 +4,7 @@ import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CameraCard, Progress } from '@/components/shared'
 import { control } from '@/lib/api'
-import { t, tpl } from '@/lib/i18n'
+import { t, tState, tpl } from '@/lib/i18n'
 import { duration } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
 import { printer, refreshPrinter, view } from '@/lib/state'
@@ -16,19 +16,19 @@ export const JobControls = ({ v }: { v: ReturnType<typeof view> }) => (
   <div class="mt-4 grid grid-cols-3 gap-2.5">
     <Button class="min-w-0 px-2" disabled={!v.printing} onClick={() => control('print:pause')}>
       <Pause {...I} />
-      {t('Pause')}
+      {t('job.pause')}
     </Button>
     <Button class="min-w-0 px-2" disabled={!v.paused} onClick={() => control('print:resume')}>
       <Play {...I} />
-      {t('Resume')}
+      {t('job.resume')}
     </Button>
     <Button
       class="min-w-0 px-2"
       disabled={!(v.printing || v.paused)}
-      onClick={() => control('print:cancel', t('Cancel the active print?'))}
+      onClick={() => control('print:cancel', t('job.cancel_the_active_print'))}
     >
       <Square {...I} />
-      {t('Cancel')}
+      {t('common.cancel')}
     </Button>
   </div>
 )
@@ -42,41 +42,39 @@ export const Job = () => {
 
   const live = v.active && o.has && o.list.length > 0
   const endLabel = o.error
-    ? t('Objects unavailable')
+    ? t('job.objects_unavailable')
     : v.active && o.has
-      ? tpl('{n} objects detected', { n: o.list.length })
-      : t('No objects detected')
+      ? tpl('job.n_objects_detected', { n: o.list.length })
+      : t('job.no_objects_detected')
   const exclude = async () => {
     if (!o.selected) return
     const name = o.selected
-    if (
-      await control(`object:exclude:${name}`, tpl('Exclude “{name}” from this print? This cannot be undone.', { name }))
-    ) {
+    if (await control(`object:exclude:${name}`, tpl('job.exclude_name_from_this_print_this', { name }))) {
       objects.set({ selected: '' })
       setTimeout(refreshObjects, 800)
     }
   }
   const stats: [any, string][] = [
-    [v.elapsedText, t('Elapsed')],
-    [v.remainingText, tpl('Remaining · ends {time}', { time: v.finishText })],
-    [v.active ? v.layer || '—' : '—', t('Current layer')],
-    [v.total, t('Total layers')],
-    [v.active ? duration(v.projected) : '—', t('Est. Total Print Time')],
-    [live && o.current ? o.current : '—', t('Current Object')],
+    [v.elapsedText, t('common.elapsed')],
+    [v.remainingText, tpl('common.remaining_ends_time', { time: v.finishText })],
+    [v.active ? v.layer || '—' : '—', t('common.current_layer')],
+    [v.total, t('common.total_layers')],
+    [v.active ? duration(v.projected) : '—', t('job.est_total_print_time')],
+    [live && o.current ? o.current : '—', t('job.current_object')],
   ]
   return (
-    <Page title="Job" sub="Live progress, camera and objects of the current print">
+    <Page title="common.job" sub="job.live_progress_camera_and_objects">
       <div class="grid gap-3.5">
         <div class="grid gap-3.5 lg:grid-cols-2">
           <CameraCard tall />
           <Card class="flex flex-col">
-            <CardHead icon="file" title="Current Job" end={<span class="text-cyan">{t(v.state)}</span>} />
+            <CardHead icon="file" title="common.current_job" end={<span class="text-cyan">{tState(v.state)}</span>} />
             <div class="mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]">
-              {v.rawFilename === 'No active file' ? t(v.rawFilename) : v.rawFilename}
+              {v.rawFilename || t('common.no_active_file')}
             </div>
             {!v.active && (
               <a href="#files" class="mb-3 -mt-1 w-fit text-[13px] text-cyan underline underline-offset-2">
-                {t('Choose a file to print')}
+                {t('common.choose_a_file_to_print')}
               </a>
             )}
             <Progress pct={v.progress} />
@@ -94,11 +92,11 @@ export const Job = () => {
           </Card>
         </div>
         <Card class="min-w-0">
-          <CardHead icon="cube" title="Object Exclusion" end={endLabel} />
+          <CardHead icon="cube" title="job.object_exclusion" end={endLabel} />
           <div class="grid gap-3.5 lg:grid-cols-2">
             <div class="grid min-h-40 grid-cols-2 content-start gap-3 rounded-md border border-edge p-4 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-4">
               {o.list.length === 0 ? (
-                <span class="col-span-full text-muted">{t('No live object data')}</span>
+                <span class="col-span-full text-muted">{t('job.no_live_object_data')}</span>
               ) : (
                 o.list.map(n => {
                   const x = o.excluded.includes(n)
@@ -124,10 +122,10 @@ export const Job = () => {
                   <span class="text-muted">
                     {t(
                       o.error
-                        ? 'Object status unavailable'
+                        ? 'job.object_status_unavailable'
                         : v.active
-                          ? 'No labelled objects reported by the active print.'
-                          : 'Objects will appear during a supported print.'
+                          ? 'job.no_labelled_objects_reported_by'
+                          : 'job.objects_will_appear_during_a'
                     )}
                   </span>
                 ) : (
@@ -145,7 +143,7 @@ export const Job = () => {
                         onClick={() => objects.set({ selected: n })}
                       >
                         {x ? <Diamond {...I} /> : <Diamond {...I} fill="currentColor" />} {n}
-                        {x ? ` · ${t('Excluded')}` : ''}
+                        {x ? ` · ${t('job.excluded')}` : ''}
                       </Button>
                     )
                   })
@@ -159,9 +157,9 @@ export const Job = () => {
                 onClick={exclude}
               >
                 <TriangleAlert {...I} />
-                {t('Exclude Selected Object')}
+                {t('job.exclude_selected_object')}
               </Button>
-              <p class="mt-2 text-center text-muted">{t('This protected action cannot be undone.')}</p>
+              <p class="mt-2 text-center text-muted">{t('job.this_protected_action_cannot_be')}</p>
             </div>
           </div>
         </Card>

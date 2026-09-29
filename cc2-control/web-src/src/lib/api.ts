@@ -20,10 +20,10 @@ export async function control(action: string, confirmation = '') {
   if (confirmation && !(await ask(confirmation, /cancel|emergency|exclude/.test(action)))) return false
   try {
     await post('/api/control', action)
-    notify(t('Command accepted'))
+    notify(t('common.command_accepted'))
     return true
   } catch (e: any) {
-    notify(tpl('Rejected: {error}', { error: e.message }), 'error')
+    notify(tpl('common.rejected_error', { error: e.message }), 'error')
     return false
   }
 }

@@ -7,6 +7,7 @@ checksums remain attached to each GitHub release.
 
 ### Features
 
+- Translations are keyed by identifier (`files.upload_file`) instead of by the English sentence, so the English text can be reworded without touching the other languages.
 - The interface follows the browser language (English, Italian or French) until a language is saved on the printer.
 - Redesigned web interface: full-width header with the emergency stop, a side
   menu that collapses to icons, a link for every section (`#files`, `#bed`…) and

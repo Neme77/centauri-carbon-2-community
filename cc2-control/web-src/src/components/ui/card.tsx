@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { cn } from '@/lib/utils'
 import { Icon } from '@/components/icons'
-import { t } from '@/lib/i18n'
+import { type Key, t } from '@/lib/i18n'
 
 export const Card = ({
   class: c,
@@ -20,9 +20,9 @@ export const CardHead = ({
   sub,
 }: {
   icon?: string
-  title: string
+  title: Key
   end?: ComponentChildren
-  sub?: string
+  sub?: Key
 }) => (
   <div class="mb-3 flex min-h-7 items-center gap-2.5 border-b border-edge pb-2.5">
     {icon && <Icon n={icon} class="text-cyan" />}
@@ -40,8 +40,8 @@ export const Page = ({
   tags,
   children,
 }: {
-  title: string
-  sub?: string
+  title: Key
+  sub?: Key
   tags?: ComponentChildren
   children: ComponentChildren
 }) => (

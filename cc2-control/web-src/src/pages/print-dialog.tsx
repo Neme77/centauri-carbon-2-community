@@ -27,7 +27,7 @@ async function clearOrcaPending(generation: number) {
   try {
     await post('/api/orca/pending-print/clear', String(generation))
   } catch (e) {
-    notify(tpl('Cannot clear OrcaSlicer request: {error}', { error: errText(e) }), 'error')
+    notify(tpl('print.cannot_clear_orcaslicer_request', { error: errText(e) }), 'error')
   }
 }
 
@@ -55,7 +55,7 @@ export async function startFile(storage: string, path: string) {
     })
   } catch (e) {
     pending.set({ job: null })
-    notify(tpl('Cannot prepare print: {error}', { error: errText(e) }), 'error')
+    notify(tpl('print.cannot_prepare_print_error', { error: errText(e) }), 'error')
   }
 }
 
@@ -70,7 +70,7 @@ export async function checkOrcaPendingPrint() {
     if (pending.get().job?.path === job.filename) {
       activeGeneration = lastSeen = job.generation
       openPage('files')
-      notify(t('OrcaSlicer upload complete. Choose the Canvas spool and confirm to start printing.'))
+      notify(t('print.orcaslicer_upload_complete_choose'))
     }
   } catch {
     /* keep the request pending for a retry */
@@ -79,7 +79,7 @@ export async function checkOrcaPendingPrint() {
   }
 }
 
-const slotLabel = (tray: any) => (tray && (tray.filament_name || tray.filament_type)) || t('Not reported')
+const slotLabel = (tray: any) => (tray && (tray.filament_name || tray.filament_type)) || t('print.not_reported')
 
 export const PrintDialog = () => {
   const job = pending.use().job
@@ -94,11 +94,13 @@ const Form = ({ job }: { job: Pending }) => {
   const [calibrate, setCalibrate] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(
-    job.connected
-      ? 'Choose the spool and confirm the print.'
-      : multi
-        ? 'Canvas not detected: a multicolour print cannot start.'
-        : 'Canvas not detected: external/default filament path selected.'
+    t(
+      job.connected
+        ? 'print.choose_the_spool_and_confirm_the'
+        : multi
+          ? 'print.canvas_not_detected_a_multicolour'
+          : 'print.canvas_not_detected_external'
+    )
   )
   const tray = (i: number) => job.trays.find(x => Number(x.tray_id) === i) || job.trays[i]
   const available = job.meshAvailable[side],
@@ -115,14 +117,12 @@ const Form = ({ job }: { job: Pending }) => {
   const submit = async (e: Event) => {
     e.preventDefault()
     if (busy) return
-    if (useCanvas && job.tools.some(tool => !map[tool])) return setNote('Choose a Canvas slot for every filament.')
+    if (useCanvas && job.tools.some(tool => !map[tool])) return setNote(t('print.choose_a_canvas_slot_for_every'))
     const mapping = useCanvas ? job.tools.map(tool => `${tool}:${map[tool]}`).join(',') : ''
-    if (multi && !mapping) return setNote('A multicolour file requires Canvas slot mapping.')
+    if (multi && !mapping) return setNote(t('print.a_multicolour_file_requires_canvas'))
     setBusy(true)
     setNote(
-      job.storage === 'usb'
-        ? 'Importing USB G-code to internal storage and submitting print…'
-        : 'Submitting protected print request…'
+      t(job.storage === 'usb' ? 'print.importing_usb_g_code_to_internal' : 'print.submitting_protected_print_request')
     )
     try {
       const result = await post(
@@ -136,12 +136,12 @@ const Form = ({ job }: { job: Pending }) => {
       notify(
         t(
           result?.imported_from_usb
-            ? 'USB import completed; print request submitted.'
-            : 'Print request submitted. Waiting for printer status.'
+            ? 'print.usb_import_completed_print_request'
+            : 'print.print_request_submitted_waiting'
         )
       )
     } catch (err) {
-      setNote(`${t('Print not started:')} ${errText(err)}`)
+      setNote(`${t('print.print_not_started')} ${errText(err)}`)
       setBusy(false)
     }
   }
@@ -149,8 +149,8 @@ const Form = ({ job }: { job: Pending }) => {
   return (
     <Dialog onClose={close} locked={busy} width={680}>
       <form onSubmit={submit}>
-        <div class="text-xs text-muted">CANVAS · {t('Print setup')}</div>
-        <h2 class="my-2 text-xl font-semibold">{t('Choose print spool')}</h2>
+        <div class="text-xs text-muted">CANVAS · {t('print.print_setup')}</div>
+        <h2 class="my-2 text-xl font-semibold">{t('print.choose_print_spool')}</h2>
         <div class="mb-4 text-muted [overflow-wrap:anywhere]">{job.path}</div>
         <div class="my-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[0, 1, 2, 3].map(i => (
@@ -169,13 +169,15 @@ const Form = ({ job }: { job: Pending }) => {
             onChange={e => {
               setUse(e.currentTarget.checked)
               setNote(
-                e.currentTarget.checked
-                  ? 'Assign one physical Canvas slot to each G-code filament.'
-                  : 'The external/default filament path will be used.'
+                t(
+                  e.currentTarget.checked
+                    ? 'print.assign_one_physical_canvas_slot_to'
+                    : 'print.the_external_default_filament_path'
+                )
               )
             }}
           />{' '}
-          {t('Use ELEGOO Canvas')}
+          {t('print.use_elegoo_canvas')}
         </label>
         {job.tools.map(tool => (
           <label key={tool} class="my-3 grid grid-cols-[1fr_2fr] items-center gap-3">
@@ -188,7 +190,7 @@ const Form = ({ job }: { job: Pending }) => {
                 setMap(m => ({ ...m, [tool]: v }))
               }}
             >
-              <option value="">{t('Choose a spool')}</option>
+              <option value="">{t('print.choose_a_spool')}</option>
               {[0, 1, 2, 3].map(i => (
                 <option key={i} value={i}>
                   Slot {i + 1} · {slotLabel(tray(i))}
@@ -199,23 +201,19 @@ const Form = ({ job }: { job: Pending }) => {
         ))}
         <div class="my-4 grid gap-3 sm:grid-cols-[1fr_1.35fr]">
           <fieldset class="rounded-lg border border-edge p-3">
-            <legend class="px-1.5 font-semibold text-cyan">{t('Build plate side')}</legend>
+            <legend class="px-1.5 font-semibold text-cyan">{t('print.build_plate_side')}</legend>
             {(['A', 'B'] as const).map(s => (
               <label key={s} class={label}>
                 <input type="radio" name="plateSide" checked={side === s} onChange={() => setSide(s)} />{' '}
-                {t(`Side ${s}`)}
+                {t(s === 'A' ? 'print.side_a' : 'print.side_b')}
               </label>
             ))}
             <div class="text-xs text-amber">
-              {t(
-                available
-                  ? 'A saved mesh is available for this build plate side.'
-                  : 'This build plate side has no saved mesh. Calibration is required.'
-              )}
+              {t(available ? 'print.a_saved_mesh_is_available_for' : 'print.this_build_plate_side_has_no')}
             </div>
           </fieldset>
           <fieldset class="rounded-lg border border-edge p-3">
-            <legend class="px-1.5 font-semibold text-cyan">{t('Bed preparation')}</legend>
+            <legend class="px-1.5 font-semibold text-cyan">{t('print.bed_preparation')}</legend>
             <label class={label}>
               <input
                 type="checkbox"
@@ -223,28 +221,28 @@ const Form = ({ job }: { job: Pending }) => {
                 disabled={forced}
                 onChange={e => setCalibrate(e.currentTarget.checked)}
               />{' '}
-              {t('Calibrate bed before printing')}
+              {t('print.calibrate_bed_before_printing')}
             </label>
             <div class="text-xs text-amber">
               {t(
                 forced
-                  ? 'A complete 11 × 11 bed mesh will be measured before printing.'
+                  ? 'print.a_complete_11_11_bed_mesh'
                   : calibrating
-                    ? 'Calibration will follow the G-code: adaptive when supported, otherwise full-bed.'
-                    : 'The printer will use the saved mesh for the selected side.'
+                    ? 'print.calibration_will_follow_the_g_code'
+                    : 'print.the_printer_will_use_the_saved'
               )}
             </div>
           </fieldset>
         </div>
         <div class="min-h-7 text-[13px] text-muted" role="status">
-          {t(note)}
+          {note}
         </div>
         <div class="mt-4 flex justify-end gap-2.5">
           <Button onClick={close} disabled={busy}>
-            {t('Cancel')}
+            {t('common.cancel')}
           </Button>
           <Button type="submit" variant="primary" disabled={busy}>
-            {t('Start print')}
+            {t('print.start_print')}
           </Button>
         </div>
       </form>

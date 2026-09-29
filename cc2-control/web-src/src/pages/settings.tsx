@@ -9,31 +9,32 @@ import { Tabs } from '@/components/ui/tabs'
 import { GithubIcon } from '@/components/github-icon'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2 } from 'lucide-preact'
 import { errText, notify, post, request } from '@/lib/api'
-import { detectLanguage, i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, THEMES, theme, tpl } from '@/lib/i18n'
+import {
+  detectLanguage,
+  i18n,
+  type Key,
+  LANGUAGE_NAMES,
+  setLanguage,
+  setTheme,
+  t,
+  THEMES,
+  theme,
+  tpl,
+} from '@/lib/i18n'
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
 import { usePoll } from '@/lib/poll'
 import { health, refreshHealth, refreshSetup } from '@/lib/state'
 
 const TABS = [
-  [Link, 'Connection'],
-  [Plug, 'Integrations'],
-  [Palette, 'Appearance'],
-  [Info, 'About'],
+  [Link, 'settings.connection'],
+  [Plug, 'settings.integrations'],
+  [Palette, 'settings.appearance'],
+  [Info, 'settings.about'],
 ] as const
 const G = { size: 16, strokeWidth: 1 }
 const Dot = () => <i class="inline-block size-2 rounded-full bg-current align-middle" />
-const Field = ({
-  label,
-  help,
-  htmlFor,
-  children,
-}: {
-  label: string
-  help?: string
-  htmlFor?: string
-  children: any
-}) => (
+const Field = ({ label, help, htmlFor, children }: { label: Key; help?: Key; htmlFor?: string; children: any }) => (
   <div class="my-2.5 grid items-center gap-x-3.5 gap-y-1 md:grid-cols-[170px_minmax(220px,480px)]">
     {htmlFor ? (
       <label htmlFor={htmlFor} class="font-semibold">
@@ -46,9 +47,9 @@ const Field = ({
     {help && <span class="text-[10px] text-muted md:col-start-2">{t(help)}</span>}
   </div>
 )
-const Kv = ({ k, v }: { k: string; v: any }) => (
+const Kv = ({ k, text, v }: { k?: Key; text?: string; v: any }) => (
   <>
-    <span>{t(k)}</span>
+    <span>{text ?? (k && t(k))}</span>
     <b>{v}</b>
   </>
 )
@@ -61,36 +62,36 @@ const Connection = () => {
     ready = Boolean(setup?.configured && mqtt && setup?.snapshot_received)
   const verify = async () => {
     const v = code.trim()
-    if (!v) return notify(t('Enter the new LAN access code.'), 'error')
+    if (!v) return notify(t('settings.enter_the_new_lan_access_code'), 'error')
     try {
       const s = await request('/api/setup'),
         re = Boolean(s.configured)
-      if (re && !(await ask(t('Replace the saved LAN code? Only CC2 Control will restart.')))) return
+      if (re && !(await ask(t('settings.replace_the_saved_lan_code_only')))) return
       await post(re ? '/api/setup/revalidate' : '/api/setup', v)
       setCode('')
       setBusy(true)
-      notify(t('LAN access code saved. Restarting and synchronizing.'))
+      notify(t('settings.lan_access_code_saved_restarting'))
       setTimeout(() => location.reload(), 30000)
     } catch (e) {
       setBusy(false)
-      notify(tpl('Verification failed: {error}', { error: errText(e) }), 'error')
+      notify(tpl('settings.verification_failed_error', { error: errText(e) }), 'error')
     }
   }
   const test = async () => {
     try {
       await Promise.all([request('/api/health'), request('/api/printer'), request('/api/setup')])
-      notify(t('CC2 and MQTT connection are responding.'))
+      notify(t('settings.cc2_and_mqtt_connection_are'))
     } catch (e) {
-      notify(tpl('Connection test failed: {error}', { error: errText(e) }), 'error')
+      notify(tpl('settings.connection_test_failed_error', { error: errText(e) }), 'error')
     }
   }
   return (
     <Card>
-      <CardHead icon="link" title="Connection" sub="Network and device access settings" />
-      <Field label="Printer IP" help="Current IP address (read-only)." htmlFor="printer-ip">
+      <CardHead icon="link" title="settings.connection" sub="settings.network_and_device_access_settings" />
+      <Field label="settings.printer_ip" help="settings.current_ip_address_read_only" htmlFor="printer-ip">
         <Input id="printer-ip" value={location.hostname} readOnly />
       </Field>
-      <Field label="LAN Access Code" help="First launch requires the printer LAN access code." htmlFor="lan-code">
+      <Field label="settings.lan_access_code" help="settings.first_launch_requires_the_printer" htmlFor="lan-code">
         <div class="flex">
           <Input
             id="lan-code"
@@ -100,32 +101,32 @@ const Connection = () => {
             onInput={e => setCode(e.currentTarget.value)}
           />
           <Button class="rounded-l-none" disabled={busy} onClick={verify}>
-            {t(setup?.configured ? 'Change / Revalidate' : 'Verify')}
+            {t(setup?.configured ? 'settings.change_revalidate' : 'settings.verify')}
           </Button>
         </div>
         <span class={cn('text-xs md:col-start-2', ready ? 'text-green' : 'text-amber')}>
           <Dot />{' '}
           {busy
-            ? t('Restarting…')
+            ? t('settings.restarting')
             : t(
                 !setup
-                  ? 'Checking configuration…'
+                  ? 'common.checking_configuration'
                   : ready
-                    ? 'Configured'
+                    ? 'settings.configured'
                     : setup.configured
-                      ? 'Revalidation required'
-                      : 'Configuration required'
+                      ? 'settings.revalidation_required'
+                      : 'settings.configuration_required'
               )}
         </span>
       </Field>
-      <Field label="MQTT Connection">
+      <Field label="settings.mqtt_connection">
         <div class="flex flex-wrap items-center gap-3">
           <Tag tone={mqtt ? 'ok' : 'warning'}>
-            <Dot /> {t(mqtt ? 'Connected' : 'Waiting')}
+            <Dot /> {t(mqtt ? 'common.connected' : 'settings.waiting')}
           </Tag>
           <Button onClick={test}>
             <RefreshCw {...G} />
-            {t('Reconnect / Test')}
+            {t('settings.reconnect_test')}
           </Button>
         </div>
       </Field>
@@ -134,7 +135,7 @@ const Connection = () => {
 }
 
 const Integrations = () => {
-  const ping = async (url: string, ok: string, fail: string, parse?: (r: any) => string) => {
+  const ping = async (url: string, ok: Key, fail: Key, parse?: (r: any) => string) => {
     try {
       const r = await fetch(url)
       if (!r.ok) throw Error(String(r.status))
@@ -147,38 +148,38 @@ const Integrations = () => {
   const row = 'my-2 grid items-center gap-2.5 md:grid-cols-[230px_1fr_auto]'
   return (
     <Card>
-      <CardHead icon="plug" title="Integrations" sub="Service configuration for local integrations" />
+      <CardHead icon="plug" title="settings.integrations" sub="settings.service_configuration_for_local" />
       <div class={row}>
-        <b>{t('Panda Breath Compatibility')}</b>
-        <span class="text-muted">{t('Read-only compatibility endpoint')}</span>
+        <b>{t('settings.panda_breath_compatibility')}</b>
+        <span class="text-muted">{t('settings.read_only_compatibility_endpoint')}</span>
         <Button
           onClick={() =>
             ping(
               `http://${location.hostname}:7125/server/info`,
-              'Panda Breath compatibility endpoint is available.',
-              'Panda endpoint unavailable: {error}'
+              'settings.panda_endpoint_available',
+              'settings.panda_endpoint_unavailable_error'
             )
           }
         >
           <Activity {...G} />
-          {t('Test Endpoint')}
+          {t('settings.test_endpoint')}
         </Button>
       </div>
       <div class={row}>
-        <b>{t('OrcaSlicer Compatibility')}</b>
-        <span class="text-muted">{t('Octo/Klipper test endpoint')}</span>
+        <b>{t('settings.orcaslicer_compatibility')}</b>
+        <span class="text-muted">{t('settings.octo_klipper_test_endpoint')}</span>
         <Button
           onClick={() =>
             ping(
               '/api/version',
-              'Orca compatibility ready: {text}',
-              'Orca compatibility unavailable: {error}',
+              'settings.orca_compatibility_ready_text',
+              'settings.orca_compatibility_unavailable',
               v => v.text
             )
           }
         >
           <Activity {...G} />
-          {t('Test Orca')}
+          {t('settings.test_orca')}
         </Button>
       </div>
     </Card>
@@ -189,22 +190,21 @@ const Appearance = () => {
   const lang = i18n.get().lang,
     mode = theme.use().mode
   const restore = async () => {
-    if (!(await ask(t('Restore interface preferences? Printer configuration and LAN code will not be changed.'), true)))
-      return
+    if (!(await ask(t('settings.restore_interface_preferences'), true))) return
     ;['cc2-language', 'cc2-theme'].forEach(ls.del)
     setTheme('dark')
     void saveQuickActions(QUICK_DEFAULTS)
     setLanguage(detectLanguage(), true)
-    notify(t('Interface preferences restored.'))
+    notify(t('settings.interface_preferences_restored'))
   }
   const lab = 'text-[11px] font-semibold'
   return (
     <>
       <Card>
-        <CardHead icon="palette" title="Appearance" sub="Interface and display preferences" />
+        <CardHead icon="palette" title="settings.appearance" sub="settings.interface_and_display_preferences" />
         <div class="grid gap-3 sm:grid-cols-2">
           <label class={lab}>
-            {t('Language')}
+            {t('settings.language')}
             <Select class="mt-1.5" value={lang} onChange={e => setLanguage(e.currentTarget.value, true)}>
               {Object.entries(LANGUAGE_NAMES).map(([c, n]) => (
                 <option key={c} value={c}>
@@ -214,11 +214,11 @@ const Appearance = () => {
             </Select>
           </label>
           <label class={lab}>
-            {t('Theme')}
+            {t('settings.theme')}
             <Select class="mt-1.5" value={mode} onChange={e => setTheme(e.currentTarget.value, true)}>
               {THEMES.map(x => (
                 <option key={x.id} value={x.id}>
-                  {x.id === 'dark' || x.id === 'light' ? t(x.label) : x.label}
+                  {x.key ? t(x.key) : x.label}
                 </option>
               ))}
             </Select>
@@ -227,15 +227,13 @@ const Appearance = () => {
       </Card>
       <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-edge pt-3">
         <div class="mr-auto">
-          <b>{t('Configuration Actions')}</b>
+          <b>{t('settings.configuration_actions')}</b>
           <br />
-          <small class="text-muted">
-            {t('Interface preferences are stored on the printer and shared by every browser.')}
-          </small>
+          <small class="text-muted">{t('settings.interface_preferences_are_stored')}</small>
         </div>
         <Button variant="danger" onClick={restore}>
           <Undo2 {...G} />
-          {t('Restore Defaults')}
+          {t('settings.restore_defaults')}
         </Button>
       </div>
     </>
@@ -248,7 +246,7 @@ export const Settings = () => {
   const [tab, setTab] = useState(0)
   const h = health.use().data
   return (
-    <Page title="Settings" sub="Configure your CC2 printer and application preferences">
+    <Page title="common.settings" sub="settings.configure_your_cc2_printer_and">
       <Tabs
         items={TABS.map(([Glyph, label]) => ({ id: label, label: t(label), icon: <Glyph {...G} /> }))}
         value={TABS[tab][1]}
@@ -260,16 +258,12 @@ export const Settings = () => {
         {tab === 2 && <Appearance />}
         {tab === 3 && (
           <Card>
-            <CardHead icon="info" title="About" />
-            <p class="mb-4 max-w-2xl text-[13px] leading-relaxed">
-              {t(
-                'CC2 Control is the local control service and web interface of the Centauri Carbon 2 Community Firmware. It runs on the printer itself and lets you monitor and control it from any browser on your network, with safety checks on every command.'
-              )}
-            </p>
+            <CardHead icon="info" title="settings.about" />
+            <p class="mb-4 max-w-2xl text-[13px] leading-relaxed">{t('settings.cc2_control_is_the_local_control')}</p>
             <div class="grid max-w-2xl grid-cols-[190px_1fr] gap-2 text-xs">
-              <Kv k="Version" v={h?.version || '—'} />
+              <Kv k="settings.version" v={h?.version || '—'} />
               <Kv
-                k="GitHub"
+                text="GitHub"
                 v={
                   <a
                     href="https://github.com/Neme77/centauri-carbon-2-community"
@@ -283,14 +277,8 @@ export const Settings = () => {
                 }
               />
               <Kv
-                k="Libraries"
-                v={
-                  <span class="font-normal">
-                    {t(
-                      'Preact, Tailwind CSS, Lucide icons and the GitHub mark (Octicons) for the interface; the service itself is written in C with no third-party library.'
-                    )}
-                  </span>
-                }
+                k="settings.libraries"
+                v={<span class="font-normal">{t('settings.preact_tailwind_css_lucide_icons')}</span>}
               />
             </div>
           </Card>

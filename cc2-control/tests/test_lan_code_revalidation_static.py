@@ -17,8 +17,8 @@ assert 'rename(temporary, mqtt_config_path)' in main
 assert 'first_run_restart_requested = 1' in main
 assert "re = Boolean(s.configured)" in ui
 assert "'/api/setup/revalidate'" in ui
-assert "Change / Revalidate" in ui
-assert "Revalidation required" in ui
+assert "settings.change_revalidate" in ui
+assert "settings.revalidation_required" in ui
 assert "disabled={busy}" in ui
 
 print("PASS: LAN access-code rotation is explicit, atomic and restart-safe.")
