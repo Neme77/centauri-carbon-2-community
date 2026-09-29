@@ -257,7 +257,6 @@ export const Settings = () => {
             <CardHead icon="info" title="About" />
             <div class="grid max-w-2xl grid-cols-[190px_1fr] gap-2 text-xs">
               <Kv k="CC2 Control Version" v={h?.version || '—'} />
-              <Kv k="Operating Mode" v={h?.mode || '—'} />
               <Kv k="Service Type" v={t('Local service')} />
               <Kv k="Project" v="CC2 Control Community" />
               <Kv

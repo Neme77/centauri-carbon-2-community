@@ -282,7 +282,6 @@
   "Online": "En ligne",
   "Only send commands you understand.": "N’envoyez que des commandes que vous comprenez.",
   "Open in new window": "Ouvrir dans une nouvelle fenêtre",
-  "Operating Mode": "Mode de fonctionnement",
   "Optimized reference adjustment": "Réglage de référence optimisé",
   "Optimized reference adjustment: {word} FL by {amount} µm. Maximum suggested movement falls from {before} µm to {best} µm.": "Réglage de référence optimisé : {word} FL de {amount} µm. Le mouvement maximal suggéré passe de {before} µm à {best} µm.",
   "Orca compatibility ready: {text}": "Compatibilité Orca prête : {text}",
