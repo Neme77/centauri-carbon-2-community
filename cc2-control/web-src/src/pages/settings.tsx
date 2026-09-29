@@ -255,6 +255,11 @@ export const Settings = () => {
         {tab === 3 && (
           <Card>
             <CardHead icon="info" title="About" />
+            <p class="mb-4 max-w-2xl text-[13px] leading-relaxed">
+              {t(
+                'CC2 Control is the local control service and web interface of the Centauri Carbon 2 Community Firmware. It runs on the printer itself and lets you monitor and control it from any browser on your network, with safety checks on every command.'
+              )}
+            </p>
             <div class="grid max-w-2xl grid-cols-[190px_1fr] gap-2 text-xs">
               <Kv k="Version" v={h?.version || '—'} />
               <Kv
@@ -269,6 +274,16 @@ export const Settings = () => {
                     <GithubIcon class="size-4" />
                     Neme77/centauri-carbon-2-community
                   </a>
+                }
+              />
+              <Kv
+                k="Libraries"
+                v={
+                  <span class="font-normal">
+                    {t(
+                      'Preact, Tailwind CSS, Lucide icons and the GitHub mark (Octicons) for the interface; the service itself is written in C with no third-party library.'
+                    )}
+                  </span>
                 }
               />
             </div>
