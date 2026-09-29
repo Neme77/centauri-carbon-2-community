@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
 import { Tabs } from '@/components/ui/tabs'
+import { GithubIcon } from '@/components/github-icon'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2 } from 'lucide-preact'
 import { errText, notify, post, request } from '@/lib/api'
 import { i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, theme, tpl } from '@/lib/i18n'
@@ -259,6 +260,20 @@ export const Settings = () => {
               <Kv k="Operating Mode" v={h?.mode || '—'} />
               <Kv k="Service Type" v={t('Local service')} />
               <Kv k="Project" v="CC2 Control Community" />
+              <Kv
+                k="GitHub"
+                v={
+                  <a
+                    href="https://github.com/Neme77/centauri-carbon-2-community"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-2 font-normal text-cyan underline-offset-2 hover:underline"
+                  >
+                    <GithubIcon class="size-4" />
+                    Neme77/centauri-carbon-2-community
+                  </a>
+                }
+              />
             </div>
           </Card>
         )}
