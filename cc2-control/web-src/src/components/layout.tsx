@@ -130,7 +130,7 @@ export const Sidebar = () => {
         </button>
         {!collapsed && (
           <div class="px-5 pb-3 text-center text-xs text-muted">
-            {t('Version:')} <b class="font-medium tabular-nums text-fg">{h ? `v${h.version}` : '—'}</b>
+            {t('Version:')} <b class="font-medium tabular-nums text-fg">{h ? `${h.version}` : '—'}</b>
           </div>
         )}
       </div>
