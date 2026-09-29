@@ -1,5 +1,6 @@
 import { store, ls } from './store'
 import { notify } from './api'
+import { setQuickFromServer } from './quick'
 
 export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', it: 'Italiano', fr: 'Français' }
 
@@ -62,6 +63,7 @@ export async function loadUiPreferences() {
   try {
     const p = await (await fetch('/api/preferences', { cache: 'no-store' })).json()
     setTheme(p.theme)
+    setQuickFromServer(p.quick_actions)
     await setLanguage(p.language)
   } catch {
     setTheme(theme.get().mode)

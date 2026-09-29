@@ -350,6 +350,8 @@
   "Safe Commands": "Comandi sicuri",
   "Safety": "Sicurezza",
   "Safety Rules": "Regole di sicurezza",
+  "Save Changes": "Salva modifiche",
+  "Save failed: {error}": "Salvataggio non riuscito: {error}",
   "Save {name}, #{colour}, {min}–{max} °C to Canvas slot {slot}?": "Salvare {name}, #{colour}, {min}–{max} °C nello slot Canvas {slot}?",
   "Saved mesh loaded": "Mesh salvata caricata",
   "Saved profile": "Profilo salvato",

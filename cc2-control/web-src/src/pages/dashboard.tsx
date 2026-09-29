@@ -1,30 +1,96 @@
+import { useState } from 'preact/hooks'
+import { Settings } from 'lucide-preact'
 import { Card, CardHead } from '@/components/ui/card'
+import { Dialog } from '@/components/ui/dialog'
+import { Select } from '@/components/ui/field'
 import { Button } from '@/components/ui/button'
 import { Dot, Tag } from '@/components/ui/badge'
 import { Icon } from '@/components/icons'
 import { CameraCard, FanBar, Progress, Row } from '@/components/shared'
 import { ThermalChart } from '@/components/thermal'
-import { control } from '@/lib/api'
+import { control, errText, notify } from '@/lib/api'
+import { QUICK_ASK, QUICK_CHOICES, quick, quickAlwaysAvailable, saveQuickActions } from '@/lib/quick'
 import { t, tpl } from '@/lib/i18n'
 import { num, duration } from '@/lib/format'
-import { health, printer, view, zoffset } from '@/lib/state'
+import { health, openPage, type Page, printer, view, zoffset } from '@/lib/state'
 import { JobControls } from '@/pages/job'
 
-const quick: [string, string, string, string][] = [
-  ['home:ALL', 'home', 'Home All', 'Home all axes?'],
-  ['system:heaters_off', 'temp', 'All Heaters Off', 'Turn all heaters off?'],
-  ['system:fans_off', 'fan', 'Fans Off', 'Turn all fans off?'],
-  ['system:motors_off', 'motors', 'Motors Off', 'Disable all motors?'],
-]
+const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightOn: boolean }) => {
+  const [label, icon] = QUICK_CHOICES[action]
+  const blocked = !idle && !quickAlwaysAvailable(action)
+  const run = () => {
+    if (action.startsWith('page:')) return openPage(action.slice(5) as Page)
+    if (action === 'light:toggle') return control(lightOn ? 'light:off' : 'light:on')
+    return control(action, QUICK_ASK[action] ? t(QUICK_ASK[action]) : '')
+  }
+  return (
+    <Button
+      class="min-h-18 flex-col"
+      disabled={blocked}
+      title={blocked ? t('Available when idle') : undefined}
+      onClick={run}
+    >
+      <Icon n={icon} class="size-6 text-cyan" />
+      {t(label)}
+    </Button>
+  )
+}
+
+const QuickEditor = ({ onClose }: { onClose: () => void }) => {
+  const [slots, setSlots] = useState(quick.get().actions)
+  const save = async () => {
+    try {
+      await saveQuickActions(slots)
+      notify(t('Quick Actions saved.'))
+      onClose()
+    } catch (e) {
+      notify(tpl('Save failed: {error}', { error: errText(e) }), 'error')
+    }
+  }
+  return (
+    <Dialog onClose={onClose} width={440}>
+      <h2 class="mb-1 text-xl font-semibold">{t('Configure Quick Actions')}</h2>
+      <p class="mb-4 text-muted">{t('Choose four protected actions or navigation shortcuts.')}</p>
+      {slots.map((action, n) => (
+        <div key={n} class="my-2.5 grid grid-cols-[70px_1fr] items-center gap-2.5">
+          <label for={`quick-slot-${n}`}>Slot {n + 1}</label>
+          <Select
+            id={`quick-slot-${n}`}
+            value={action}
+            onChange={e => {
+              const v = e.currentTarget.value
+              setSlots(list => list.map((a, i) => (i === n ? v : a)))
+            }}
+          >
+            {Object.entries(QUICK_CHOICES).map(([value, [label]]) => (
+              <option key={value} value={value}>
+                {t(label)}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ))}
+      <div class="mt-5 flex justify-end gap-2.5">
+        <Button onClick={onClose}>{t('Cancel')}</Button>
+        <Button variant="primary" onClick={save}>
+          {t('Save Changes')}
+        </Button>
+      </div>
+    </Dialog>
+  )
+}
 
 export const Dashboard = () => {
   const d = printer.use().data
   const h = health.use().data
   const off = zoffset.use().v
   const v = view(d)
+  const quickActions = quick.use().actions
+  const [editing, setEditing] = useState(false)
   const target = (x: any) => (Number(x) > 0 ? ` / ${num(x)}` : '')
   return (
     <div class="grid gap-3.5">
+      {editing && <QuickEditor onClose={() => setEditing(false)} />}
       <div class="grid gap-3.5 lg:grid-cols-2">
         <CameraCard />
         <div class="grid gap-3.5 lg:grid-rows-[1fr_auto]">
@@ -57,19 +123,19 @@ export const Dashboard = () => {
             </div>
           </Card>
           <Card>
-            <CardHead icon="bolt" title="Quick Actions" />
-            <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-              {quick.map(([action, icon, label, ask]) => (
-                <Button
-                  key={action}
-                  class="min-h-18 flex-col"
-                  disabled={action !== 'system:heaters_off' && !v.idle}
-                  title={action !== 'system:heaters_off' && !v.idle ? t('Available when idle') : undefined}
-                  onClick={() => control(action, t(ask))}
-                >
-                  <Icon n={icon} class="size-6 text-cyan" />
-                  {t(label)}
+            <CardHead
+              icon="bolt"
+              title="Quick Actions"
+              end={
+                <Button class="min-h-8 px-2 text-xs" onClick={() => setEditing(true)}>
+                  <Settings size={14} strokeWidth={1} />
+                  {t('Edit')}
                 </Button>
+              }
+            />
+            <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              {quickActions.map((action, n) => (
+                <Slot key={n} action={action} idle={v.idle} lightOn={v.lightOn} />
               ))}
             </div>
           </Card>

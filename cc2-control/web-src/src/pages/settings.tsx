@@ -8,6 +8,7 @@ import { Input, Select } from '@/components/ui/field'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2 } from 'lucide-preact'
 import { errText, notify, post, request } from '@/lib/api'
 import { i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, theme, tpl } from '@/lib/i18n'
+import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
 import { health } from '@/lib/state'
 
@@ -189,6 +190,7 @@ const Appearance = () => {
       return
     ;['cc2-language', 'cc2-theme'].forEach(ls.del)
     setTheme('dark')
+    void saveQuickActions(QUICK_DEFAULTS)
     setLanguage('en', true)
     notify(t('Interface preferences restored.'))
   }

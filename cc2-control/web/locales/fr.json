@@ -350,6 +350,8 @@
   "Safe Commands": "Commandes sûres",
   "Safety": "Sécurité",
   "Safety Rules": "Règles de sécurité",
+  "Save Changes": "Enregistrer les modifications",
+  "Save failed: {error}": "Échec de l’enregistrement : {error}",
   "Save {name}, #{colour}, {min}–{max} °C to Canvas slot {slot}?": "Enregistrer {name}, #{colour}, {min}–{max} °C dans l'emplacement Canvas {slot} ?",
   "Saved mesh loaded": "Maillage enregistré chargé",
   "Saved profile": "Profil enregistré",
