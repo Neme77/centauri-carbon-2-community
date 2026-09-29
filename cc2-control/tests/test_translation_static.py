@@ -52,4 +52,6 @@ for locale, spot_checks in {
     for key, expected in spot_checks.items():
         assert data.get(key) == expected, f"{locale}.json[{key!r}]: expected {expected!r}, got {data.get(key)!r}"
 
+assert "navigator.languages" in src and "p.language || detectLanguage()" in src, "browser language fallback missing"
+
 print("PASS: translation loader wiring and Italian/French spot-check markers")

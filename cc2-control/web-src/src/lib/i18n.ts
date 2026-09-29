@@ -4,7 +4,11 @@ import { setQuickFromServer } from './quick'
 
 export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', it: 'Italiano', fr: 'Français' }
 
-export const i18n = store({ lang: ls.get('cc2-language') || 'en', dict: {} as Record<string, string> })
+// The browser's first language we ship (fr-CA -> fr), else English.
+export const detectLanguage = () =>
+  navigator.languages?.map(l => l.slice(0, 2).toLowerCase()).find(l => l in LANGUAGE_NAMES) ?? 'en'
+
+export const i18n = store({ lang: ls.get('cc2-language') || detectLanguage(), dict: {} as Record<string, string> })
 // Palettes are defined in index.css; the backend only stores the identifier (see preferences_theme in main.c).
 export const THEMES = [
   { id: 'dark', label: 'Dark' },
@@ -74,7 +78,7 @@ export async function loadUiPreferences() {
     const p = await (await fetch('/api/preferences', { cache: 'no-store' })).json()
     setTheme(p.theme)
     setQuickFromServer(p.quick_actions)
-    await setLanguage(p.language)
+    await setLanguage(p.language || detectLanguage()) // empty: nothing saved on the printer yet
   } catch {
     setTheme(theme.get().mode)
     await setLanguage(i18n.get().lang)

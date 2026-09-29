@@ -2299,9 +2299,12 @@ static int extract_json_string(const char *input, const char *key, char *out, si
 
 /* Any locale that has a web/locales/<code>.json file is valid: the backend
    only stores the code, the frontend decides what to do with it (falling
-   back to English for an unknown or not-yet-translated one). */
+   back to English for an unknown or not-yet-translated one). Empty until a
+   language has been saved, so browsers can tell "never chosen" (and follow
+   their own language) from an explicit choice. */
 static const char *preferences_language(void) {
-    static char language[9] = "en";
+    static char language[9];
+    language[0] = '\0';
     FILE *file = fopen(ui_preferences_path, "rb");
     if (!file) return language;
     char body[96];
@@ -2311,8 +2314,6 @@ static const char *preferences_language(void) {
     char code[9];
     if (extract_json_string(body, "language", code, sizeof(code)) && locale_code_valid(code, strlen(code)))
         memcpy(language, code, strlen(code) + 1);
-    else
-        memcpy(language, "en", 3);
     return language;
 }
 

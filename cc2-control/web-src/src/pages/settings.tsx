@@ -9,7 +9,7 @@ import { Tabs } from '@/components/ui/tabs'
 import { GithubIcon } from '@/components/github-icon'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2 } from 'lucide-preact'
 import { errText, notify, post, request } from '@/lib/api'
-import { i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, THEMES, theme, tpl } from '@/lib/i18n'
+import { detectLanguage, i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, THEMES, theme, tpl } from '@/lib/i18n'
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
 import { usePoll } from '@/lib/poll'
@@ -194,7 +194,7 @@ const Appearance = () => {
     ;['cc2-language', 'cc2-theme'].forEach(ls.del)
     setTheme('dark')
     void saveQuickActions(QUICK_DEFAULTS)
-    setLanguage('en', true)
+    setLanguage(detectLanguage(), true)
     notify(t('Interface preferences restored.'))
   }
   const lab = 'text-[11px] font-semibold'

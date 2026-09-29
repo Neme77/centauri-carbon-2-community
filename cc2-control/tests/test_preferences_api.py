@@ -34,12 +34,21 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         for _ in range(30):
             try:
                 with urllib.request.urlopen(endpoint, timeout=1) as response:
-                    assert json.load(response) == {"language": "en", "theme": "dark", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"]}
+                    assert json.load(response) == {"language": "", "theme": "dark", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"]}
                 break
             except OSError:
                 time.sleep(0.1)
         else:
             raise AssertionError("preferences endpoint did not start")
+
+        # Saving only a theme must not invent a language choice.
+        request = urllib.request.Request(
+            endpoint, data=b'{"theme":"dark"}', method="PUT",
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(request, timeout=1):
+            pass
+        with urllib.request.urlopen(endpoint, timeout=1) as response:
+            assert json.load(response)["language"] == ""
 
         request = urllib.request.Request(
             endpoint, data=b'{"language":"it"}', method="PUT",
