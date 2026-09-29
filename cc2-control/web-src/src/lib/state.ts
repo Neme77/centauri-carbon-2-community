@@ -58,8 +58,16 @@ export async function refreshPrinter() {
 
 export async function refreshHealth() {
   try {
-    const [h, setup] = await Promise.all([request('/api/health'), request('/api/setup')])
-    health.set({ data: h, setup })
+    health.set({ data: await request('/api/health') })
+  } catch {
+    /* offline */
+  }
+}
+
+// Only Settings > Connection shows the LAN-code state, so only that page polls it.
+export async function refreshSetup() {
+  try {
+    health.set({ setup: await request('/api/setup') })
   } catch {
     /* offline */
   }

@@ -93,6 +93,7 @@ npm run build     # rewrites ../web/index.html
 - route every new user-visible string through `t()` or `tpl()` and add the key to
   every `web/locales/*.json` (`test_locale_coverage_static.py` and
   `test_locales_static.py` enforce it);
+- register every periodic request with `poll()` or `usePoll()` from `web-src/src/lib/poll.ts` (never `setInterval`): the CC2 is resource-constrained, so the scheduler never overlaps runs of a source, sleeps in hidden tabs (except the OrcaSlicer pending-print check) and lets pages poll faster only while they are open (`test_polling_static.py`);
 - test the actual browser control or event path that changed;
 - do not treat a direct function call or synthetic unit test as sufficient for
   interactive UI behaviour;
