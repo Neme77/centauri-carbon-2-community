@@ -16,7 +16,8 @@ poll(refreshHealth, 30000)
 // and its timers can be throttled, so this one keeps running when hidden and also checks on interaction.
 poll(checkOrcaPendingPrint, 1500, { hidden: true })
 for (const ev of ['visibilitychange', 'focus', 'pageshow']) addEventListener(ev, () => void checkOrcaPendingPrint())
-addEventListener('pointerdown', () => void checkOrcaPendingPrint(), { passive: true })
+for (const ev of ['pointerenter', 'pointerdown'])
+  addEventListener(ev, () => void checkOrcaPendingPrint(), { passive: true })
 
 const root = document.getElementById('app')
 if (root) render(<App />, root)
