@@ -16,7 +16,7 @@ DIST := dist/cc2-control
 TARGET := $(BUILD)/cc2-control
 UDS_PROBE := $(BUILD)/cc2-uds-probe
 
-.PHONY: all clean dist uds-probe test
+.PHONY: all clean dist uds-probe test web
 
 all: dist
 
@@ -30,6 +30,11 @@ $(UDS_PROBE): tools/uds_probe.c | $(BUILD)
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $< -o $@ $(LDFLAGS)
 
 uds-probe: $(UDS_PROBE)
+
+# Rebuild the committed UI (web/index.html and web/locales) from web-src/. Needs Node; `dist` does not,
+# it packages the committed build.
+web:
+	cd web-src && npm ci && npm run build
 
 dist: $(TARGET)
 	mkdir -p $(DIST)/web/locales
