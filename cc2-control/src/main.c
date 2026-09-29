@@ -2316,16 +2316,33 @@ static const char *preferences_language(void) {
     return language;
 }
 
+/* Like the language, a theme is only an identifier the backend stores; the
+   frontend owns the list of palettes and falls back to "dark" for an unknown
+   one. Accepted shape: lowercase words joined by single hyphens, 2-24 chars
+   ("dark", "light", "solarized-light"). */
+static int theme_valid(const char *code, size_t length) {
+    if (length < 2 || length > 24) return 0;
+    for (size_t index = 0; index < length; ++index) {
+        int hyphen = code[index] == '-';
+        if (!hyphen && !(code[index] >= 'a' && code[index] <= 'z')) return 0;
+        if (hyphen && (index == 0 || index == length - 1 || code[index - 1] == '-')) return 0;
+    }
+    return 1;
+}
+
 static const char *preferences_theme(void) {
-    static char theme[6] = "dark";
+    static char theme[25] = "dark";
     FILE *file = fopen(ui_preferences_path, "rb");
     if (!file) return theme;
     char body[160];
     size_t length = fread(body, 1, sizeof(body) - 1, file);
     fclose(file);
     body[length] = '\0';
-    memcpy(theme, strstr(body, "\"theme\":\"light\"") ? "light" : "dark",
-           strstr(body, "\"theme\":\"light\"") ? 6 : 5);
+    char code[25];
+    if (extract_json_string(body, "theme", code, sizeof(code)) && theme_valid(code, strlen(code)))
+        memcpy(theme, code, strlen(code) + 1);
+    else
+        memcpy(theme, "dark", 5);
     return theme;
 }
 
@@ -2385,9 +2402,11 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
     int valid_language = has_language &&
         extract_json_string(input, "language", language_code, sizeof(language_code)) &&
         locale_code_valid(language_code, strlen(language_code));
+    char theme_code[25];
     int has_theme = strstr(input, "\"theme\":") != NULL;
-    int valid_theme = strstr(input, "\"theme\":\"light\"") != NULL ||
-                      strstr(input, "\"theme\":\"dark\"") != NULL;
+    int valid_theme = has_theme &&
+        extract_json_string(input, "theme", theme_code, sizeof(theme_code)) &&
+        theme_valid(theme_code, strlen(theme_code));
     char quick[4][32]; int has_quick = 0, valid_quick = 1;
     static const char *const keys[4] = {"quick1", "quick2", "quick3", "quick4"};
     for (int slot = 0; slot < 4; ++slot) {
@@ -2408,8 +2427,7 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
         return;
     }
     const char *language = valid_language ? language_code : preferences_language();
-    const char *theme = strstr(input, "\"theme\":\"light\"") ? "light" :
-                        strstr(input, "\"theme\":\"dark\"") ? "dark" : preferences_theme();
+    const char *theme = valid_theme ? theme_code : preferences_theme();
     char temporary[512];
     if (snprintf(temporary, sizeof(temporary), "%s.new", ui_preferences_path) >= (int)sizeof(temporary)) {
         const char *error = "{\"saved\":false,\"error\":\"Preferences path is too long\"}\n";

@@ -88,6 +88,30 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         with urllib.request.urlopen(endpoint, timeout=1) as response:
             assert json.load(response) == {"language": "fr", "theme": "light", "quick_actions": ["page:files", "light:toggle", "home:Z", "page:canvas"]}
 
+        # Themes are identifiers too (the frontend owns the palettes): lowercase words joined by hyphens.
+        for theme in ("dracula", "solarized-light"):
+            request = urllib.request.Request(
+                endpoint, data=json.dumps({"theme": theme}).encode(), method="PUT",
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(request, timeout=1) as response:
+                assert json.load(response) == {"saved": True}
+            with urllib.request.urlopen(endpoint, timeout=1) as response:
+                stored = json.load(response)
+            assert stored["theme"] == theme and stored["language"] == "fr", stored
+        for malformed_theme in (b'{"theme":"Dracula"}', b'{"theme":"../x"}', b'{"theme":""}', b'{"theme":"a"}',
+                                b'{"theme":"-nord"}', b'{"theme":"nord-"}', b'{"theme":"a--b"}',
+                                b'{"theme":"abcdefghijklmnopqrstuvwxyz"}', b'{"theme":"nord2"}'):
+            invalid = urllib.request.Request(
+                endpoint, data=malformed_theme, method="PUT",
+                headers={"Content-Type": "application/json"})
+            try:
+                urllib.request.urlopen(invalid, timeout=1)
+                raise AssertionError(f"malformed theme accepted: {malformed_theme!r}")
+            except urllib.error.HTTPError as error:
+                assert error.code == 400
+        with urllib.request.urlopen(endpoint, timeout=1) as response:
+            assert json.load(response)["theme"] == "solarized-light"  # rejected values change nothing
+
         for malformed in (b'{"language":"../x"}', b'{"language":""}',
                           b'{"language":"toolongcode"}', b'{"language":"e1"}'):
             invalid = urllib.request.Request(
