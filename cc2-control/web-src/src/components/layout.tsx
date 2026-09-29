@@ -69,7 +69,7 @@ const EStop = () => {
         e.preventDefault()
         if (!fired.current) notify(t('Hold Emergency Stop for one second.'))
       }}
-      class="relative flex h-11 touch-none select-none items-center justify-center overflow-hidden rounded-md border border-red bg-red/10 px-3 font-bold text-red md:px-4"
+      class="relative flex h-11 cursor-pointer touch-none select-none items-center justify-center overflow-hidden rounded-md border border-red bg-red/10 px-3 font-bold text-red md:px-4"
     >
       <i
         class={cn(
@@ -155,13 +155,10 @@ export const Topbar = () => {
   return (
     <header class="fixed inset-x-0 top-0 z-30 flex h-17 items-center justify-between gap-4 border-b border-edge bg-panel px-4 md:px-5">
       <h1 class="text-xl font-bold leading-tight text-cyan md:text-2xl">Centauri Carbon 2 - Control Center</h1>
-      <div class="flex items-center gap-2 text-xs">
+      <div class="flex items-center gap-2">
         <div class="flex h-11 items-center gap-2 rounded-md border border-edge px-3">
           <PrinterIcon class="hidden size-6 sm:block" />
-          <div>
-            <strong class="block text-sm">CC2</strong>
-            <small class="text-muted">{link[0] === 'green' ? t(v.state) : '—'}</small>
-          </div>
+          <div>{link[0] === 'green' ? t(v.state) : '—'}</div>
         </div>
         <div class="hidden h-11 items-center gap-2 rounded-md border border-edge px-3 sm:flex">
           <Dot c={link[0]} />
