@@ -9,13 +9,26 @@ import { canvasColour, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
 import { openPage } from '@/lib/state'
 
-type Pending = { storage: string; path: string; tools: number[]; meshAvailable: { A: boolean; B: boolean }; trays: any[]; connected: boolean }
+type Pending = {
+  storage: string
+  path: string
+  tools: number[]
+  meshAvailable: { A: boolean; B: boolean }
+  trays: any[]
+  connected: boolean
+}
 const pending = store({ job: null as Pending | null })
-let activeGeneration = 0, lastSeen = 0, opening = false
+let activeGeneration = 0,
+  lastSeen = 0,
+  opening = false
 
 async function clearOrcaPending(generation: number) {
   if (!generation) return
-  try { await post('/api/orca/pending-print/clear', String(generation)) } catch (e) { notify(tpl('Cannot clear OrcaSlicer request: {error}', { error: errText(e) }), 'error') }
+  try {
+    await post('/api/orca/pending-print/clear', String(generation))
+  } catch (e) {
+    notify(tpl('Cannot clear OrcaSlicer request: {error}', { error: errText(e) }), 'error')
+  }
 }
 
 // Opens the confirmation dialog; a print is never started without the operator confirming the mapping.
@@ -28,9 +41,22 @@ export async function startFile(storage: string, path: string) {
       request('/api/mesh').catch(() => null),
     ])
     const tools: number[] = Array.isArray(inspection.tools) && inspection.tools.length ? inspection.tools : [0]
-    const model = canvasModel(canvasData), profiles = meshRoot(meshData)?.profiles || {}
-    pending.set({ job: { storage, path, tools, meshAvailable: { A: Boolean(profiles.default), B: Boolean(profiles.default1) }, trays: model?.trays || [], connected: Boolean(model?.connected) } })
-  } catch (e) { pending.set({ job: null }); notify(tpl('Cannot prepare print: {error}', { error: errText(e) }), 'error') }
+    const model = canvasModel(canvasData),
+      profiles = meshRoot(meshData)?.profiles || {}
+    pending.set({
+      job: {
+        storage,
+        path,
+        tools,
+        meshAvailable: { A: Boolean(profiles.default), B: Boolean(profiles.default1) },
+        trays: model?.trays || [],
+        connected: Boolean(model?.connected),
+      },
+    })
+  } catch (e) {
+    pending.set({ job: null })
+    notify(tpl('Cannot prepare print: {error}', { error: errText(e) }), 'error')
+  }
 }
 
 // An OrcaSlicer "Upload and Print" queues a confirmation here, not an unattended print.
@@ -46,10 +72,14 @@ export async function checkOrcaPendingPrint() {
       openPage('files')
       notify(t('OrcaSlicer upload complete. Choose the Canvas spool and confirm to start printing.'))
     }
-  } catch { /* keep the request pending for a retry */ } finally { opening = false }
+  } catch {
+    /* keep the request pending for a retry */
+  } finally {
+    opening = false
+  }
 }
 
-const slotLabel = (tray: any) => tray && (tray.filament_name || tray.filament_type) || t('Not reported')
+const slotLabel = (tray: any) => (tray && (tray.filament_name || tray.filament_type)) || t('Not reported')
 
 export const PrintDialog = () => {
   const job = pending.use().job
@@ -63,11 +93,25 @@ const Form = ({ job }: { job: Pending }) => {
   const [side, setSide] = useState<'A' | 'B'>('A')
   const [calibrate, setCalibrate] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [note, setNote] = useState(job.connected ? 'Choose the spool and confirm the print.' : multi ? 'Canvas not detected: a multicolour print cannot start.' : 'Canvas not detected: external/default filament path selected.')
+  const [note, setNote] = useState(
+    job.connected
+      ? 'Choose the spool and confirm the print.'
+      : multi
+        ? 'Canvas not detected: a multicolour print cannot start.'
+        : 'Canvas not detected: external/default filament path selected.'
+  )
   const tray = (i: number) => job.trays.find(x => Number(x.tray_id) === i) || job.trays[i]
-  const available = job.meshAvailable[side], forced = !available, calibrating = forced || calibrate
+  const available = job.meshAvailable[side],
+    forced = !available,
+    calibrating = forced || calibrate
 
-  const close = () => { if (busy) return; const g = activeGeneration; activeGeneration = 0; pending.set({ job: null }); void clearOrcaPending(g) }
+  const close = () => {
+    if (busy) return
+    const g = activeGeneration
+    activeGeneration = 0
+    pending.set({ job: null })
+    void clearOrcaPending(g)
+  }
   const submit = async (e: Event) => {
     e.preventDefault()
     if (busy) return
@@ -75,13 +119,31 @@ const Form = ({ job }: { job: Pending }) => {
     const mapping = useCanvas ? job.tools.map(tool => `${tool}:${map[tool]}`).join(',') : ''
     if (multi && !mapping) return setNote('A multicolour file requires Canvas slot mapping.')
     setBusy(true)
-    setNote(job.storage === 'usb' ? 'Importing USB G-code to internal storage and submitting print…' : 'Submitting protected print request…')
+    setNote(
+      job.storage === 'usb'
+        ? 'Importing USB G-code to internal storage and submitting print…'
+        : 'Submitting protected print request…'
+    )
     try {
-      const result = await post('/api/gcode-files/print', `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}`)
-      const g = activeGeneration; activeGeneration = 0; pending.set({ job: null })
+      const result = await post(
+        '/api/gcode-files/print',
+        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}`
+      )
+      const g = activeGeneration
+      activeGeneration = 0
+      pending.set({ job: null })
       await clearOrcaPending(g)
-      notify(t(result?.imported_from_usb ? 'USB import completed; print request submitted.' : 'Print request submitted. Waiting for printer status.'))
-    } catch (err) { setNote(`${t('Print not started:')} ${errText(err)}`); setBusy(false) }
+      notify(
+        t(
+          result?.imported_from_usb
+            ? 'USB import completed; print request submitted.'
+            : 'Print request submitted. Waiting for printer status.'
+        )
+      )
+    } catch (err) {
+      setNote(`${t('Print not started:')} ${errText(err)}`)
+      setBusy(false)
+    }
   }
   const label = 'my-3 flex items-center gap-2 text-[13px]'
   return (
@@ -91,25 +153,100 @@ const Form = ({ job }: { job: Pending }) => {
         <h2 class="my-2 text-xl font-semibold">{t('Choose print spool')}</h2>
         <div class="mb-4 text-muted [overflow-wrap:anywhere]">{job.path}</div>
         <div class="my-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {[0, 1, 2, 3].map(i => <div key={i} class="rounded-lg border border-edge p-2 text-xs [overflow-wrap:anywhere]"><div class="mb-1.5 h-2 rounded" style={{ background: canvasColour(tray(i)?.filament_color, i) }} /><strong>Slot {i + 1}</strong><div>{slotLabel(tray(i))}</div></div>)}
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} class="rounded-lg border border-edge p-2 text-xs [overflow-wrap:anywhere]">
+              <div class="mb-1.5 h-2 rounded" style={{ background: canvasColour(tray(i)?.filament_color, i) }} />
+              <strong>Slot {i + 1}</strong>
+              <div>{slotLabel(tray(i))}</div>
+            </div>
+          ))}
         </div>
-        <label class={label}><input type="checkbox" checked={useCanvas} disabled={!job.connected || multi} onChange={e => { setUse(e.currentTarget.checked); setNote(e.currentTarget.checked ? 'Assign one physical Canvas slot to each G-code filament.' : 'The external/default filament path will be used.') }} /> {t('Use ELEGOO Canvas')}</label>
+        <label class={label}>
+          <input
+            type="checkbox"
+            checked={useCanvas}
+            disabled={!job.connected || multi}
+            onChange={e => {
+              setUse(e.currentTarget.checked)
+              setNote(
+                e.currentTarget.checked
+                  ? 'Assign one physical Canvas slot to each G-code filament.'
+                  : 'The external/default filament path will be used.'
+              )
+            }}
+          />{' '}
+          {t('Use ELEGOO Canvas')}
+        </label>
         {job.tools.map(tool => (
-          <label key={tool} class="my-3 grid grid-cols-[1fr_2fr] items-center gap-3"><strong>Filament T{tool}</strong>
-            <Select disabled={!useCanvas} value={map[tool] || ''} onChange={e => { const v = e.currentTarget.value; setMap(m => ({ ...m, [tool]: v })) }}>
-              <option value="">{t('Choose a spool')}</option>{[0, 1, 2, 3].map(i => <option key={i} value={i}>Slot {i + 1} · {slotLabel(tray(i))}</option>)}
-            </Select></label>
+          <label key={tool} class="my-3 grid grid-cols-[1fr_2fr] items-center gap-3">
+            <strong>Filament T{tool}</strong>
+            <Select
+              disabled={!useCanvas}
+              value={map[tool] || ''}
+              onChange={e => {
+                const v = e.currentTarget.value
+                setMap(m => ({ ...m, [tool]: v }))
+              }}
+            >
+              <option value="">{t('Choose a spool')}</option>
+              {[0, 1, 2, 3].map(i => (
+                <option key={i} value={i}>
+                  Slot {i + 1} · {slotLabel(tray(i))}
+                </option>
+              ))}
+            </Select>
+          </label>
         ))}
         <div class="my-4 grid gap-3 sm:grid-cols-[1fr_1.35fr]">
-          <fieldset class="rounded-lg border border-edge p-3"><legend class="px-1.5 font-semibold text-cyan">{t('Build plate side')}</legend>
-            {(['A', 'B'] as const).map(s => <label key={s} class={label}><input type="radio" name="plateSide" checked={side === s} onChange={() => setSide(s)} /> {t(`Side ${s}`)}</label>)}
-            <div class="text-xs text-amber">{t(available ? 'A saved mesh is available for this build plate side.' : 'This build plate side has no saved mesh. Calibration is required.')}</div></fieldset>
-          <fieldset class="rounded-lg border border-edge p-3"><legend class="px-1.5 font-semibold text-cyan">{t('Bed preparation')}</legend>
-            <label class={label}><input type="checkbox" checked={calibrating} disabled={forced} onChange={e => setCalibrate(e.currentTarget.checked)} /> {t('Calibrate bed before printing')}</label>
-            <div class="text-xs text-amber">{t(forced ? 'A complete 11 × 11 bed mesh will be measured before printing.' : calibrating ? 'Calibration will follow the G-code: adaptive when supported, otherwise full-bed.' : 'The printer will use the saved mesh for the selected side.')}</div></fieldset>
+          <fieldset class="rounded-lg border border-edge p-3">
+            <legend class="px-1.5 font-semibold text-cyan">{t('Build plate side')}</legend>
+            {(['A', 'B'] as const).map(s => (
+              <label key={s} class={label}>
+                <input type="radio" name="plateSide" checked={side === s} onChange={() => setSide(s)} />{' '}
+                {t(`Side ${s}`)}
+              </label>
+            ))}
+            <div class="text-xs text-amber">
+              {t(
+                available
+                  ? 'A saved mesh is available for this build plate side.'
+                  : 'This build plate side has no saved mesh. Calibration is required.'
+              )}
+            </div>
+          </fieldset>
+          <fieldset class="rounded-lg border border-edge p-3">
+            <legend class="px-1.5 font-semibold text-cyan">{t('Bed preparation')}</legend>
+            <label class={label}>
+              <input
+                type="checkbox"
+                checked={calibrating}
+                disabled={forced}
+                onChange={e => setCalibrate(e.currentTarget.checked)}
+              />{' '}
+              {t('Calibrate bed before printing')}
+            </label>
+            <div class="text-xs text-amber">
+              {t(
+                forced
+                  ? 'A complete 11 × 11 bed mesh will be measured before printing.'
+                  : calibrating
+                    ? 'Calibration will follow the G-code: adaptive when supported, otherwise full-bed.'
+                    : 'The printer will use the saved mesh for the selected side.'
+              )}
+            </div>
+          </fieldset>
         </div>
-        <div class="min-h-7 text-[13px] text-muted" role="status">{t(note)}</div>
-        <div class="mt-4 flex justify-end gap-2.5"><Button onClick={close} disabled={busy}>{t('Cancel')}</Button><Button type="submit" variant="primary" disabled={busy}>{t('Start print')}</Button></div>
+        <div class="min-h-7 text-[13px] text-muted" role="status">
+          {t(note)}
+        </div>
+        <div class="mt-4 flex justify-end gap-2.5">
+          <Button onClick={close} disabled={busy}>
+            {t('Cancel')}
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
+            {t('Start print')}
+          </Button>
+        </div>
       </form>
     </Dialog>
   )

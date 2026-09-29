@@ -11,8 +11,13 @@ async function loadLocale(code: string) {
   if (cache[code]) return cache[code]
   try {
     const r = await fetch(`/i18n/${code}.json`, { cache: 'no-store' })
-    if (r.ok) { cache[code] = await r.json(); return cache[code] }
-  } catch { /* handled below */ }
+    if (r.ok) {
+      cache[code] = await r.json()
+      return cache[code]
+    }
+  } catch {
+    /* handled below */
+  }
   return null
 }
 
@@ -25,13 +30,20 @@ export const tpl = (key: string, vars: Record<string, string | number>) => {
 }
 
 function persist() {
-  void fetch('/api/preferences', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: i18n.get().lang, theme: theme.get().mode }) }).catch(() => {})
+  void fetch('/api/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language: i18n.get().lang, theme: theme.get().mode }),
+  }).catch(() => {})
 }
 
 export async function setLanguage(code: string, save = false) {
   const lang = LANGUAGE_NAMES[code] ? code : 'en'
   const dict = lang === 'en' ? {} : await loadLocale(lang)
-  if (!dict) { notify(tpl('Translation unavailable: {lang}', { lang })); return } // keep the current language
+  if (!dict) {
+    notify(tpl('Translation unavailable: {lang}', { lang }))
+    return
+  } // keep the current language
   ls.set('cc2-language', lang)
   document.documentElement.lang = lang
   i18n.set({ lang, dict })

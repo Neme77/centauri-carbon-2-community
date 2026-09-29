@@ -10,7 +10,11 @@ export function canvasModel(data: any) {
 }
 
 export function canvasColour(value: any, index: number): string {
-  if (Array.isArray(value) && value.length >= 3) return `rgb(${value.slice(0, 3).map(p => Math.max(0, Math.min(255, Number(p) || 0))).join(',')})`
+  if (Array.isArray(value) && value.length >= 3)
+    return `rgb(${value
+      .slice(0, 3)
+      .map(p => Math.max(0, Math.min(255, Number(p) || 0)))
+      .join(',')})`
   if (typeof value === 'number') return `#${(value >>> 0).toString(16).slice(-6).padStart(6, '0')}`
   if (typeof value === 'string') {
     const c = value.trim()
@@ -27,14 +31,27 @@ export function canvasHex(value: any, index: number) {
   const hex = c.match(/^#([0-9a-f]{6})$/i)
   if (hex) return `#${hex[1].toUpperCase()}`
   const rgb = c.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/i)
-  return rgb ? `#${rgb.slice(1).map(p => Number(p).toString(16).padStart(2, '0')).join('').toUpperCase()}` : '#00CFE8'
+  return rgb
+    ? `#${rgb
+        .slice(1)
+        .map(p => Number(p).toString(16).padStart(2, '0'))
+        .join('')
+        .toUpperCase()}`
+    : '#00CFE8'
 }
 
-export const canvas = store({ model: null as ReturnType<typeof canvasModel>, slot: 0, checked: '', optimistic: {} as Record<number, { colour: string; material: string; until: number }> })
+export const canvas = store({
+  model: null as ReturnType<typeof canvasModel>,
+  slot: 0,
+  checked: '',
+  optimistic: {} as Record<number, { colour: string; material: string; until: number }>,
+})
 
 export async function refreshCanvas() {
   try {
     const model = canvasModel(await request('/api/canvas'))
     canvas.set({ model, checked: new Date().toLocaleTimeString() })
-  } catch { /* keep last */ }
+  } catch {
+    /* keep last */
+  }
 }

@@ -6,7 +6,7 @@ export const request = async (path: string, options: RequestInit = {}) => {
   const response = await fetch(path, { cache: 'no-store', ...options })
   const type = response.headers.get('content-type') || ''
   const data = type.includes('json') ? await response.json() : await response.text()
-  if (!response.ok) throw Error((data?.error) || data || `HTTP ${response.status}`)
+  if (!response.ok) throw Error(data?.error || data || `HTTP ${response.status}`)
   return data
 }
 export const post = (path: string, body = '') =>

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'preact/hooks'
 
 // Minimal external store: get / set (shallow merge) / use (hook that re-renders on change).
 export function store<T extends object>(init: T) {
-  let v = init, ver = 0
+  let v = init,
+    ver = 0
   const subs = new Set<() => void>()
   return {
     get: () => v,
@@ -12,12 +13,15 @@ export function store<T extends object>(init: T) {
       for (const f of subs) f()
     },
     use() {
-      const [, bump] = useState(0), seen = ver
+      const [, bump] = useState(0),
+        seen = ver
       useEffect(() => {
         const f = () => bump(n => n + 1)
         subs.add(f)
         if (seen !== ver) f() // a set() landed between render and subscription
-        return () => { subs.delete(f) }
+        return () => {
+          subs.delete(f)
+        }
       }, [])
       return v
     },
@@ -25,7 +29,25 @@ export function store<T extends object>(init: T) {
 }
 
 export const ls = {
-  get: (k: string) => { try { return localStorage.getItem(k) } catch { return null } },
-  set: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* private mode */ } },
-  del: (k: string) => { try { localStorage.removeItem(k) } catch { /* private mode */ } },
+  get: (k: string) => {
+    try {
+      return localStorage.getItem(k)
+    } catch {
+      return null
+    }
+  },
+  set: (k: string, v: string) => {
+    try {
+      localStorage.setItem(k, v)
+    } catch {
+      /* private mode */
+    }
+  },
+  del: (k: string) => {
+    try {
+      localStorage.removeItem(k)
+    } catch {
+      /* private mode */
+    }
+  },
 }

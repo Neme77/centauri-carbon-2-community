@@ -1,19 +1,41 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
-	"files": { "includes": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"] },
-	"formatter": { "enabled": false },
-	"assist": { "enabled": false },
-	"linter": {
-		"enabled": true,
-		"rules": {
-			"preset": "recommended",
-			"suspicious": { "noExplicitAny": "off" },
-			"a11y": {
-				"noLabelWithoutControl": {
-					"level": "error",
-					"options": { "inputComponents": ["Input", "Select", "Switch"] }
-				}
-			}
-		}
-	}
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "files": {
+    "includes": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "assist": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noExplicitAny": "off"
+      },
+      "a11y": {
+        "noLabelWithoutControl": {
+          "level": "error",
+          "options": {
+            "inputComponents": ["Input", "Select", "Switch"]
+          }
+        }
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "es5",
+      "arrowParentheses": "asNeeded"
+    }
+  }
 }

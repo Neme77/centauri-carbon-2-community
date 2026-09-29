@@ -15,7 +15,9 @@ const button = cva(
       wide: { true: 'w-full' },
     },
     defaultVariants: { variant: 'default' },
-  },
+  }
 )
 type Props = preact.JSX.ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>
-export const Button = ({ class: c, variant, wide, ...p }: Props) => <button type="button" class={cn(button({ variant, wide }), c as string)} {...p} />
+export const Button = ({ class: c, variant, wide, ...p }: Props) => (
+  <button type="button" class={cn(button({ variant, wide }), c as string)} {...p} />
+)

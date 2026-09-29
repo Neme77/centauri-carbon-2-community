@@ -13,7 +13,16 @@ import { Canvas } from '@/pages/canvas'
 import { Console } from '@/pages/console'
 import { Settings } from '@/pages/settings'
 
-const pages = { dashboard: Dashboard, control: Control, job: Job, files: Files, bed: Bed, canvas: Canvas, console: Console, settings: Settings }
+const pages = {
+  dashboard: Dashboard,
+  control: Control,
+  job: Job,
+  files: Files,
+  bed: Bed,
+  canvas: Canvas,
+  console: Console,
+  settings: Settings,
+}
 
 export const App = () => {
   i18n.use() // re-render the whole tree when the language changes
@@ -25,7 +34,9 @@ export const App = () => {
       <TitleSync />
       <Sidebar />
       <Topbar />
-      <main class={`ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin] md:p-4 ${collapsed ? '' : 'md:ml-52'}`}><Page /></main>
+      <main class={`ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin] md:p-4 ${collapsed ? '' : 'md:ml-52'}`}>
+        <Page />
+      </main>
       <Toast />
       <SetupDialog />
       <PrintDialog />

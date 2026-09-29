@@ -13,7 +13,6 @@ markers = {
     "global emergency stop": "control('system:emergency_stop')",
     "one-second emergency hold": "}, 1000)",
     "quick machine actions": "'system:heaters_off'",
-    "settings panel routing": "[Link, 'Connection'], [Plug, 'Integrations'], [Palette, 'Appearance'], [Info, 'About']",
     "persistent light theme": "setTheme(p.theme)",
     "light theme stylesheet": ':root[data-theme="light"]',
     "micron display": "Math.round(v * 1000)",
@@ -28,6 +27,8 @@ markers = {
 for label, marker in markers.items():
     assert marker in ui, f"missing {label}: {marker}"
 
+for tab in ("[Link, 'Connection']", "[Plug, 'Integrations']", "[Palette, 'Appearance']", "[Info, 'About']"):
+    assert tab in ui, f"missing settings tab: {tab}"
 assert "data-screws" not in ui, "duplicate screw navigation remains"
 assert 'strcmp(action,"system:heaters_off")' in control
 assert 'strcmp(action,"system:fans_off")' in control

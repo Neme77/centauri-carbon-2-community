@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "tsc -p . && biome lint .",
-    "lint": "biome lint ."
+    "check": "tsc -p . && biome check .",
+    "format": "biome format --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
