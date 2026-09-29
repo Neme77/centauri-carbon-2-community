@@ -13,7 +13,7 @@ export const QUICK_CHOICES: Record<string, [label: string, icon: string]> = {
   'page:control': ['Control', 'control'],
   'page:files': ['Files', 'folder'],
   'page:bed': ['Bed Levelling', 'grid'],
-  'page:canvas': ['Canvas', 'cube'],
+  'page:canvas': ['Canvas', 'canvas'],
 }
 export const QUICK_DEFAULTS = ['home:ALL', 'system:heaters_off', 'system:fans_off', 'system:motors_off']
 export const QUICK_ASK: Record<string, string> = {

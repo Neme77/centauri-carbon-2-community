@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { cn } from '@/lib/utils'
+import { CanvasIcon } from '@/components/canvas-icon'
 import { PrinterIcon } from '@/components/printer-icon'
 import {
-  Boxes,
   Files as FilesIcon,
   Gauge,
   Grid3x3,
@@ -20,13 +20,14 @@ import { t } from '@/lib/i18n'
 import { control, notify, toast } from '@/lib/api'
 import { health, menu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
-const items: [Page, typeof Gauge, string][] = [
+type NavIcon = typeof Gauge | typeof CanvasIcon
+const items: [Page, NavIcon, string][] = [
   ['dashboard', Gauge, 'Dashboard'],
   ['control', SlidersHorizontal, 'Control'],
   ['job', ListChecks, 'Job'],
   ['files', FilesIcon, 'Files'],
   ['bed', Grid3x3, 'Bed Levelling'],
-  ['canvas', Boxes, 'Canvas'],
+  ['canvas', CanvasIcon, 'Canvas'],
   ['console', SquareTerminal, 'Console'],
   ['settings', Settings, 'Settings'],
 ]

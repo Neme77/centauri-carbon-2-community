@@ -26,6 +26,7 @@ import {
   Thermometer,
   Zap,
 } from 'lucide-preact'
+import { CanvasIcon } from '@/components/canvas-icon'
 
 const icons = {
   home: House,
@@ -56,8 +57,9 @@ const icons = {
   motors: Power,
 }
 
-// Lucide icons, drawn with a 1 px stroke everywhere.
+// Lucide icons (plus the Canvas glyph, drawn the same way), with a 1 px stroke everywhere.
 export const Icon = ({ n, class: c = '' }: { n: string; class?: string }) => {
+  if (n === 'canvas') return <CanvasIcon strokeWidth={1} class={`size-5 shrink-0 ${c}`} />
   const Glyph = icons[n as keyof typeof icons]
   return <Glyph strokeWidth={1} aria-hidden="true" class={`size-5 shrink-0 ${c}`} />
 }
