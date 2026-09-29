@@ -17,6 +17,7 @@ checksums remain attached to each GitHub release.
   console.
 - Every message, machine state and accessible name is translated in Italian and
   French.
+- Four more colour themes (Dracula, Nord, Monokai, Solarized Light) next to Light and Dark, chosen in **Settings → Appearance** and saved on the printer like the language; `/api/preferences` now accepts any lowercase-hyphenated theme identifier.
 
 ### Removed
 
