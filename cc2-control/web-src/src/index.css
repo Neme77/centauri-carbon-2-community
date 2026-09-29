@@ -44,7 +44,9 @@
   --cyan: #1c78bc; --green: #5f7000; --amber: #946c00; --red: #dc322f; --blue: #1c78bc;
   --well: #002b36; --well-fg: #eee8d5;
 }
-body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", Arial, sans-serif; }
+/* Inter (SIL OFL, see fonts/OFL.txt): variable 400–700, Latin + Latin-1 only, inlined by the build so it needs no request. */
+@font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 input[type=range], input[type=checkbox], input[type=radio], progress { accent-color: var(--cyan); }
 

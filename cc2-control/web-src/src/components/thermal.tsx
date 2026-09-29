@@ -26,7 +26,7 @@ export const ThermalChart = () => {
     ctx.clearRect(0, 0, w, h)
     const all = [...thermalHistory.nozzle, ...thermalHistory.bed, ...thermalHistory.chamber]
     const top = Math.max(40, Math.ceil(Math.max(40, ...all) / 20) * 20)
-    ctx.font = '10px Segoe UI'
+    ctx.font = '10px Inter, Segoe UI, sans-serif'
     ctx.lineWidth = 1
     for (let i = 0; i <= 4; i++) {
       const y = pad.t + ((h - pad.t - pad.b) * i) / 4

@@ -41,7 +41,7 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
   if (!c) return
   c.setTransform(dpr, 0, 0, dpr, 0, 0)
   c.clearRect(0, 0, w, h)
-  c.font = '11px Segoe UI'
+  c.font = '11px Inter, Segoe UI, sans-serif'
   const st = meshStats(points)
   if (!st) {
     c.fillStyle = '#8eafc2'
@@ -152,15 +152,15 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     c.strokeStyle = '#ffffff88'
     c.stroke()
     c.textAlign = 'left'
-    c.font = 'bold 12px Segoe UI'
+    c.font = 'bold 12px Inter, Segoe UI, sans-serif'
     c.fillText(label, q.x + 9, q.y - 17)
     c.fillStyle = '#e5f6fb'
-    c.font = '11px Segoe UI'
+    c.font = '11px Inter, Segoe UI, sans-serif'
     c.fillText(`${(z > 0 ? '+' : '') + z.toFixed(3)} mm`, q.x + 9, q.y - 3)
   }
   c.fillStyle = '#aad5e8'
   c.textAlign = 'center'
-  c.font = '12px Segoe UI'
+  c.font = '12px Inter, Segoe UI, sans-serif'
   let p = project(140, 0, floor)
   c.fillText('X (mm)', p.x, p.y + 40)
   p = project(250, 125, floor)
