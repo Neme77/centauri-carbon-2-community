@@ -202,6 +202,7 @@
   "Live Z Offset": "Décalage Z en direct",
   "Live Z heights in mm · Y descending": "Hauteurs Z en direct en mm · Y décroissant",
   "Live history · 5 minutes": "Historique en direct · 5 minutes",
+  "Live progress, camera and objects of the current print": "Progression en direct, caméra et objets de l’impression en cours",
   "Live session adjustment. It resets after restart and does not modify saved settings. Session limit: ±0.50 mm.": "Réglage valable pour la session. Il est réinitialisé au redémarrage et ne modifie pas les réglages enregistrés. Limite de session : ±0,50 mm.",
   "Live slot telemetry is supplied by the CC2 firmware.": "La télémétrie des emplacements en direct est fournie par le firmware CC2.",
   "Load": "Charger",

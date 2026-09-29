@@ -3,7 +3,7 @@ import { ask } from '@/lib/confirm'
 import { Activity, Check as CheckIcon, Copy, Send, Trash2, TriangleAlert } from 'lucide-preact'
 import { store } from '@/lib/store'
 import { cn } from '@/lib/utils'
-import { Card, CardHead } from '@/components/ui/card'
+import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pip } from '@/components/ui/badge'
 import { Input, Switch } from '@/components/ui/field'
@@ -94,13 +94,9 @@ export const Console = () => {
     }
   }
   return (
-    <>
+    <Page title="Console" sub="Send G-code commands and view printer output (advanced)">
       <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.3fr)_minmax(330px,1fr)]">
         <Card>
-          <div class="mb-4">
-            <h2 class="text-2xl font-semibold">{t('Console')}</h2>
-            <p class="text-muted">{t('Send G-code commands and view printer output (advanced)')}</p>
-          </div>
           <div class="mb-3 flex flex-wrap items-center gap-2.5">
             <Input
               class="min-w-48 flex-1"
@@ -231,6 +227,6 @@ export const Console = () => {
           {t('Messages received')}: {d?.messages || 0}
         </span>
       </div>
-    </>
+    </Page>
   )
 }

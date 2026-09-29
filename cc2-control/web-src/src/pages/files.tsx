@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import { FileText, Play, RefreshCw, Search, Trash2, Upload as UploadIcon } from 'lucide-preact'
 import { cn } from '@/lib/utils'
-import { Card, CardHead } from '@/components/ui/card'
+import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Select } from '@/components/ui/field'
 import { Row } from '@/components/shared'
@@ -141,132 +141,130 @@ export const Files = () => {
   const cols =
     'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-edge px-3 py-2 md:grid-cols-[1.6fr_.55fr_.75fr_.75fr_1.25fr]'
   return (
-    <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
-      <div class="grid min-w-0 content-start gap-3">
-        <Card>
-          <div class="mb-3.5">
-            <h2 class="text-2xl font-semibold">{t('Files')}</h2>
-            <p class="text-muted">{t('Browse protected G-code storage on your CC2')}</p>
-          </div>
-          <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2.5 md:grid-cols-[1.6fr_.8fr_1fr_auto]">
-            <div class="relative col-span-3 md:col-span-1">
-              <Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-              <Input
-                class="pl-8"
-                placeholder={t('Search files')}
-                value={q}
-                onInput={e => setQ(e.currentTarget.value)}
-              />
-            </div>
-            <Select value={loc} onChange={e => setLoc(e.currentTarget.value)}>
-              <option value="all">{t('All files')}</option>
-              <option value="internal">{t('Internal memory')}</option>
-              <option value="usb">{t('USB drive')}</option>
-            </Select>
-            <Select value={sort} onChange={e => setSort(e.currentTarget.value)}>
-              <option value="newest">{t('Newest first')}</option>
-              <option value="name">{t('Name')}</option>
-              <option value="size">{t('Size')}</option>
-            </Select>
-            <Button onClick={() => refresh(true)} aria-label={t('Refresh')}>
-              <RefreshCw {...I} />
-            </Button>
-          </div>
-          {checked.size > 0 && (
-            <div class="my-3 flex items-center gap-2">
-              <strong>{tpl('{n} selected', { n: checked.size })}</strong>
-              <Button onClick={() => bulk('copy')}>{t('Copy selected')}</Button>
-              <Button variant="danger" onClick={() => bulk('delete')}>
-                {t('Delete selected')}
+    <Page title="Files" sub="Browse protected G-code storage on your CC2">
+      <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
+        <div class="grid min-w-0 content-start gap-3">
+          <Card>
+            <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2.5 md:grid-cols-[1.6fr_.8fr_1fr_auto]">
+              <div class="relative col-span-3 md:col-span-1">
+                <Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                <Input
+                  class="pl-8"
+                  placeholder={t('Search files')}
+                  value={q}
+                  onInput={e => setQ(e.currentTarget.value)}
+                />
+              </div>
+              <Select value={loc} onChange={e => setLoc(e.currentTarget.value)}>
+                <option value="all">{t('All files')}</option>
+                <option value="internal">{t('Internal memory')}</option>
+                <option value="usb">{t('USB drive')}</option>
+              </Select>
+              <Select value={sort} onChange={e => setSort(e.currentTarget.value)}>
+                <option value="newest">{t('Newest first')}</option>
+                <option value="name">{t('Name')}</option>
+                <option value="size">{t('Size')}</option>
+              </Select>
+              <Button onClick={() => refresh(true)} aria-label={t('Refresh')}>
+                <RefreshCw {...I} />
               </Button>
             </div>
-          )}
-          <div class="mt-3.5 overflow-hidden rounded-lg border border-edge">
-            <div class={cn(cols, 'min-h-11 text-muted')}>
-              <span>
-                <input
-                  type="checkbox"
-                  title={t('Select all shown files')}
-                  checked={visible.length > 0 && visible.every(e => checked.has(key(e)))}
-                  onChange={e => {
-                    for (const x of visible) toggle(key(x), e.currentTarget.checked)
-                  }}
-                />{' '}
-                {t('Name')}
-              </span>
-              <span class="hidden md:inline">{t('Size')}</span>
-              <span class="hidden md:inline">{t('Modified')}</span>
-              <span class="hidden md:inline">{t('Storage')}</span>
-              <span>{t('Actions')}</span>
-            </div>
-            {visible.map(e => (
-              // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: whole-row click is a mouse shortcut; keyboard users select through the file name button
-              <div
-                key={key(e)}
-                onClick={() => setSel(e)}
-                class={cn(
-                  cols,
-                  'min-h-16 cursor-pointer',
-                  sel && key(sel) === key(e) && 'bg-field outline outline-1 -outline-offset-1 outline-cyan'
-                )}
-              >
-                <div class="flex min-w-0 items-center gap-2.5 font-semibold">
+            {checked.size > 0 && (
+              <div class="my-3 flex items-center gap-2">
+                <strong>{tpl('{n} selected', { n: checked.size })}</strong>
+                <Button onClick={() => bulk('copy')}>{t('Copy selected')}</Button>
+                <Button variant="danger" onClick={() => bulk('delete')}>
+                  {t('Delete selected')}
+                </Button>
+              </div>
+            )}
+            <div class="mt-3.5 overflow-hidden rounded-lg border border-edge">
+              <div class={cn(cols, 'min-h-11 text-muted')}>
+                <span>
                   <input
                     type="checkbox"
-                    title={t('Select file')}
-                    checked={checked.has(key(e))}
-                    onClick={ev => ev.stopPropagation()}
-                    onChange={ev => toggle(key(e), ev.currentTarget.checked)}
-                  />
-                  <FileText {...I} class="shrink-0" />
-                  <button
-                    type="button"
-                    class="min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline"
-                    onClick={() => setSel(e)}
-                  >
-                    {e.file.path}
-                  </button>
-                </div>
-                <span class="hidden md:inline">{fileSize(e.file.size)}</span>
-                <span class="hidden md:inline">
-                  {Number(e.file.modified) > 0 ? new Date(Number(e.file.modified) * 1000).toLocaleString() : '—'}
+                    title={t('Select all shown files')}
+                    checked={visible.length > 0 && visible.every(e => checked.has(key(e)))}
+                    onChange={e => {
+                      for (const x of visible) toggle(key(x), e.currentTarget.checked)
+                    }}
+                  />{' '}
+                  {t('Name')}
                 </span>
-                <span class="hidden md:inline">{e.storage === 'usb' ? 'USB' : t('Internal')}</span>
-                <div class="flex gap-1.5">
-                  <Button
-                    class="px-2.5"
-                    onClick={ev => {
-                      ev.stopPropagation()
-                      startFile(e.storage, e.file.path)
-                    }}
-                  >
-                    <Play {...I} />
-                    {t('Print')}
-                  </Button>
-                  <Button
-                    class="hidden px-2.5 sm:inline-flex"
-                    variant="danger"
-                    onClick={ev => {
-                      ev.stopPropagation()
-                      remove(e)
-                    }}
-                  >
-                    {t('Delete')}
-                  </Button>
-                </div>
+                <span class="hidden md:inline">{t('Size')}</span>
+                <span class="hidden md:inline">{t('Modified')}</span>
+                <span class="hidden md:inline">{t('Storage')}</span>
+                <span>{t('Actions')}</span>
               </div>
-            ))}
-            {!visible.length && (
-              <div class="p-4 text-muted">{t(loaded ? 'No matching G-code files.' : 'Loading files…')}</div>
-            )}
+              {visible.map(e => (
+                // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: whole-row click is a mouse shortcut; keyboard users select through the file name button
+                <div
+                  key={key(e)}
+                  onClick={() => setSel(e)}
+                  class={cn(
+                    cols,
+                    'min-h-16 cursor-pointer',
+                    sel && key(sel) === key(e) && 'bg-field outline outline-1 -outline-offset-1 outline-cyan'
+                  )}
+                >
+                  <div class="flex min-w-0 items-center gap-2.5 font-semibold">
+                    <input
+                      type="checkbox"
+                      title={t('Select file')}
+                      checked={checked.has(key(e))}
+                      onClick={ev => ev.stopPropagation()}
+                      onChange={ev => toggle(key(e), ev.currentTarget.checked)}
+                    />
+                    <FileText {...I} class="shrink-0" />
+                    <button
+                      type="button"
+                      class="min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline"
+                      onClick={() => setSel(e)}
+                    >
+                      {e.file.path}
+                    </button>
+                  </div>
+                  <span class="hidden md:inline">{fileSize(e.file.size)}</span>
+                  <span class="hidden md:inline">
+                    {Number(e.file.modified) > 0 ? new Date(Number(e.file.modified) * 1000).toLocaleString() : '—'}
+                  </span>
+                  <span class="hidden md:inline">{e.storage === 'usb' ? 'USB' : t('Internal')}</span>
+                  <div class="flex gap-1.5">
+                    <Button
+                      class="px-2.5"
+                      onClick={ev => {
+                        ev.stopPropagation()
+                        startFile(e.storage, e.file.path)
+                      }}
+                    >
+                      <Play {...I} />
+                      {t('Print')}
+                    </Button>
+                    <Button
+                      class="hidden px-2.5 sm:inline-flex"
+                      variant="danger"
+                      onClick={ev => {
+                        ev.stopPropagation()
+                        remove(e)
+                      }}
+                    >
+                      {t('Delete')}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {!visible.length && (
+                <div class="p-4 text-muted">{t(loaded ? 'No matching G-code files.' : 'Loading files…')}</div>
+              )}
+            </div>
+          </Card>
+          <div>
+            <Upload busy={busy} setBusy={setBusy} refresh={refresh} />
           </div>
-        </Card>
-        <div>
-          <Upload busy={busy} setBusy={setBusy} refresh={refresh} />
         </div>
+        <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path)} onDelete={remove} />
       </div>
-      <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path)} onDelete={remove} />
-    </div>
+    </Page>
   )
 }
 

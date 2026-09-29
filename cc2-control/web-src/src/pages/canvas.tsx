@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import { ArrowBigDown, ArrowBigUp, Check, Info, Palette, RefreshCw } from 'lucide-preact'
 import { cn } from '@/lib/utils'
-import { Card, CardHead } from '@/components/ui/card'
+import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pip, Tag } from '@/components/ui/badge'
 import { Select } from '@/components/ui/field'
@@ -182,13 +182,9 @@ export const Canvas = () => {
     [RefreshCw, 'Sync', sync, ''],
   ]
   return (
-    <>
+    <Page title="Canvas" sub="Material system overview and control (when supported)">
       <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.55fr)_minmax(320px,1fr)]">
         <Card>
-          <div class="mb-4">
-            <h2 class="text-2xl font-semibold">{t('Canvas')}</h2>
-            <p class="text-muted">{t('Material system overview and control (when supported)')}</p>
-          </div>
           <div class="grid items-center gap-6 rounded-lg border border-edge bg-field/40 p-4 sm:p-6 md:grid-cols-[1.25fr_1fr]">
             <div class="flex h-48 items-end justify-center gap-1.5 border-b-8 border-edge pb-9 sm:gap-3">
               {slots.map(s => (
@@ -312,6 +308,6 @@ export const Canvas = () => {
           }}
         />
       )}
-    </>
+    </Page>
   )
 }

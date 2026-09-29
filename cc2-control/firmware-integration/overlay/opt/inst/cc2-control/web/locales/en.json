@@ -202,6 +202,7 @@
   "Live Z Offset": "Live Z Offset",
   "Live Z heights in mm · Y descending": "Live Z heights in mm · Y descending",
   "Live history · 5 minutes": "Live history · 5 minutes",
+  "Live progress, camera and objects of the current print": "Live progress, camera and objects of the current print",
   "Live session adjustment. It resets after restart and does not modify saved settings. Session limit: ±0.50 mm.": "Live session adjustment. It resets after restart and does not modify saved settings. Session limit: ±0.50 mm.",
   "Live slot telemetry is supplied by the CC2 firmware.": "Live slot telemetry is supplied by the CC2 firmware.",
   "Load": "Load",
