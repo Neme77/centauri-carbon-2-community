@@ -53,16 +53,23 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(printing(m))return reject(reason,reason_cap,"Screw measurement is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)
             return reject(reason,reason_cap,"Screw measurement requires the printer to be idle");
+        /* Match the CC2 stock levelling preparation: heat the bed, run the
+         * firmware-owned nozzle cleaning sequence (G180 S3), then wait for the
+         * bed at 60 C before measuring.  The stock calibration completion path
+         * switches both heaters off, so do the same here instead of restoring
+         * the 140 C probing target left by G28/G180. */
         snprintf(script,cap,
             "SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n"
-            "G28\nG90\nG1 Z10 F600\n"
+            "M140 S60\n"
+            "G180 S3\n"
+            "M190 S60\n"
+            "G90\nG1 Z10 F600\n"
             "G1 X35 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
             "G1 X225 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
             "G1 X225 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
             "G1 X35 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
             "RESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n"
-            "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f",
-            homing_extruder_restore_target(m));
+            "M104 S0\nM140 S0");
         return 1;
     }
     if(sscanf(action,"zoffset:undo:%lf",&value)==1){
