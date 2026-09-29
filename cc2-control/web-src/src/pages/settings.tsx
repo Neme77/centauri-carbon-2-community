@@ -12,7 +12,8 @@ import { errText, notify, post, request } from '@/lib/api'
 import { i18n, LANGUAGE_NAMES, setLanguage, setTheme, t, theme, tpl } from '@/lib/i18n'
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
-import { health } from '@/lib/state'
+import { usePoll } from '@/lib/poll'
+import { health, refreshHealth } from '@/lib/state'
 
 const TABS = [
   [Link, 'Connection'],
@@ -239,6 +240,7 @@ const Appearance = () => {
 }
 
 export const Settings = () => {
+  usePoll(refreshHealth, 5000)
   const [tab, setTab] = useState(0)
   const h = health.use().data
   return (

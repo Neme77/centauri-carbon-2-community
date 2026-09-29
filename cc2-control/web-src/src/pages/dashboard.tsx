@@ -12,7 +12,8 @@ import { control, errText, notify } from '@/lib/api'
 import { QUICK_ASK, QUICK_CHOICES, quick, quickAlwaysAvailable, saveQuickActions } from '@/lib/quick'
 import { t, tpl } from '@/lib/i18n'
 import { num, duration } from '@/lib/format'
-import { health, openPage, type Page, printer, view, zoffset } from '@/lib/state'
+import { usePoll } from '@/lib/poll'
+import { health, openPage, type Page, printer, refreshHealth, refreshPrinter, view, zoffset } from '@/lib/state'
 import { JobControls } from '@/pages/job'
 
 const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightOn: boolean }) => {
@@ -81,6 +82,8 @@ const QuickEditor = ({ onClose }: { onClose: () => void }) => {
 }
 
 export const Dashboard = () => {
+  usePoll(refreshPrinter, 1500)
+  usePoll(refreshHealth, 5000)
   const d = printer.use().data
   const h = health.use().data
   const off = zoffset.use().v

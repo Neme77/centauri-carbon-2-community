@@ -1,4 +1,3 @@
-import { useEffect } from 'preact/hooks'
 import { Diamond, Pause, Play, Square, TriangleAlert, X } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { Card, CardHead } from '@/components/ui/card'
@@ -7,7 +6,8 @@ import { CameraCard, Progress } from '@/components/shared'
 import { control } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { duration } from '@/lib/format'
-import { printer, view } from '@/lib/state'
+import { usePoll } from '@/lib/poll'
+import { printer, refreshPrinter, view } from '@/lib/state'
 import { objects, refreshObjects } from '@/lib/objects'
 
 const I = { size: 16, strokeWidth: 1 }
@@ -37,11 +37,8 @@ export const Job = () => {
   const d = printer.use().data
   const o = objects.use()
   const v = view(d)
-  useEffect(() => {
-    refreshObjects()
-    const id = setInterval(refreshObjects, 1000)
-    return () => clearInterval(id)
-  }, [])
+  usePoll(refreshPrinter, 1500)
+  usePoll(refreshObjects, 2000)
 
   const live = v.active && o.has && o.list.length > 0
   const endLabel = o.error

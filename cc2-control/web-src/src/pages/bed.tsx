@@ -15,7 +15,8 @@ import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
 import { microns, screwPlan, screwValues } from '@/lib/screws'
-import { nav, openPage, screwText } from '@/lib/state'
+import { poll, usePoll } from '@/lib/poll'
+import { nav, openPage, refreshConsole, screwText } from '@/lib/state'
 import { sendConsole } from '@/pages/console'
 
 const I = { size: 16, strokeWidth: 1 }
@@ -69,11 +70,7 @@ const MeshCard = () => {
       busy.current = false
     }
   }
-  useEffect(() => {
-    load()
-    const id = setInterval(() => load(), 5000)
-    return () => clearInterval(id)
-  }, [])
+  useEffect(() => poll(() => load(), 5000), [])
 
   const names = PROFILES.filter(([n]) => root?.profiles?.[n])
   const drag = useRef<{ id: number; x: number; y: number } | null>(null)
@@ -284,6 +281,7 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
 )
 
 const Screws = () => {
+  usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
   const values = screwValues(screwText.use().text)
   const plan = values ? screwPlan(values) : null
   const rows: [string, string, string][] = [

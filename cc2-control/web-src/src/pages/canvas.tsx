@@ -10,6 +10,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { Row } from '@/components/shared'
 import { control, errText, notify, post } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
+import { poll } from '@/lib/poll'
 import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
 import { presets } from '@/lib/state'
 
@@ -129,13 +130,8 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
 export const Canvas = () => {
   const { model, slot, optimistic, checked } = canvas.use()
   const [dialog, setDialog] = useState(false)
-  useEffect(() => {
-    refreshCanvas()
-    const id = setInterval(() => {
-      if (!dialog) refreshCanvas()
-    }, 1000)
-    return () => clearInterval(id)
-  }, [dialog])
+  // Refresh while the page is open, except behind the material dialog.
+  useEffect(() => (dialog ? undefined : poll(refreshCanvas, 2000)), [dialog])
   const ok = Boolean(model?.connected)
   const sync = async () => {
     try {

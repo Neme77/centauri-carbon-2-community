@@ -9,6 +9,7 @@ import { FanSlider, Notice, Warn } from '@/components/shared'
 import { control, errText, notify } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { num } from '@/lib/format'
+import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
 
 const STEPS = [0.1, 1, 10, 50]
@@ -367,6 +368,7 @@ const Profiles = () => {
 }
 
 export const Control = () => {
+  usePoll(refreshPrinter, 1500)
   const d = printer.use().data
   const v = view(d)
   const tag = (s: string) => (

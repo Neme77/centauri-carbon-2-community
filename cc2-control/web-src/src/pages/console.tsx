@@ -10,6 +10,7 @@ import { Input, Switch } from '@/components/ui/field'
 import { Icon } from '@/components/icons'
 import { errText, notify, post } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
+import { usePoll } from '@/lib/poll'
 import { consoleLog, printer, refreshConsole, view } from '@/lib/state'
 
 const I = { size: 16, strokeWidth: 1 }
@@ -46,9 +47,7 @@ export const Console = () => {
     [cmd, setCmd] = useState(''),
     recall = useRef(-1)
   const screen = useRef<HTMLPreElement>(null)
-  useEffect(() => {
-    refreshConsole()
-  }, [])
+  usePoll(refreshConsole, 2500)
   // The two placeholder lines come from this UI, everything else is printer output and stays as received.
   const lines = (/^Protected console ready\.( Waiting for live printer output\.)?$/.test(text) ? t(text) : text).split(
       /\r?\n/
