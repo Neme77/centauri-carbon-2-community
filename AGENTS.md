@@ -80,7 +80,7 @@ it by hand. After changing `web-src/`:
 ```sh
 cd cc2-control/web-src
 npm ci            # once
-npm run check     # type-check
+npm run check     # type-check (strict) and lint (Biome)
 npm run build     # rewrites ../web/index.html
 ```
 

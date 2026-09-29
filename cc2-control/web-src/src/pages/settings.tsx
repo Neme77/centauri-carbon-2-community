@@ -14,8 +14,8 @@ import { health } from '@/lib/state'
 const TABS = [[Link, 'Connection'], [Plug, 'Integrations'], [Palette, 'Appearance'], [Info, 'About']] as const
 const G = { size: 16, strokeWidth: 1 }
 const Dot = () => <i class="inline-block size-2 rounded-full bg-current align-middle" />
-const Field = ({ label, help, children }: { label: string; help?: string; children: any }) => (
-  <div class="my-2.5 grid items-center gap-x-3.5 gap-y-1 md:grid-cols-[170px_minmax(220px,480px)]"><label class="font-semibold">{t(label)}</label>{children}{help && <span class="text-[10px] text-muted md:col-start-2">{t(help)}</span>}</div>
+const Field = ({ label, help, htmlFor, children }: { label: string; help?: string; htmlFor?: string; children: any }) => (
+  <div class="my-2.5 grid items-center gap-x-3.5 gap-y-1 md:grid-cols-[170px_minmax(220px,480px)]">{htmlFor ? <label htmlFor={htmlFor} class="font-semibold">{t(label)}</label> : <span class="font-semibold">{t(label)}</span>}{children}{help && <span class="text-[10px] text-muted md:col-start-2">{t(help)}</span>}</div>
 )
 const Kv = ({ k, v }: { k: string; v: any }) => <><span>{t(k)}</span><b>{v}</b></>
 
@@ -39,9 +39,9 @@ const Connection = () => {
   }
   return (
     <Card><CardHead icon="link" title="Connection" sub="Network and device access settings" />
-      <Field label="Printer IP" help="Current IP address (read-only)."><Input value={location.hostname} readOnly /></Field>
-      <Field label="LAN Access Code" help="First launch requires the printer LAN access code.">
-        <div class="flex"><Input type="password" class="rounded-r-none" value={code} onInput={e => setCode(e.currentTarget.value)} /><Button class="rounded-l-none" disabled={busy} onClick={verify}>{t(setup?.configured ? 'Change / Revalidate' : 'Verify')}</Button></div>
+      <Field label="Printer IP" help="Current IP address (read-only)." htmlFor="printer-ip"><Input id="printer-ip" value={location.hostname} readOnly /></Field>
+      <Field label="LAN Access Code" help="First launch requires the printer LAN access code." htmlFor="lan-code">
+        <div class="flex"><Input id="lan-code" type="password" class="rounded-r-none" value={code} onInput={e => setCode(e.currentTarget.value)} /><Button class="rounded-l-none" disabled={busy} onClick={verify}>{t(setup?.configured ? 'Change / Revalidate' : 'Verify')}</Button></div>
         <span class={cn('text-xs md:col-start-2', ready ? 'text-green' : 'text-amber')}><Dot />  {busy ? t('Restarting…') : t(!setup ? 'Checking configuration…' : ready ? 'Configured' : setup.configured ? 'Revalidation required' : 'Configuration required')}</span>
       </Field>
       <Field label="MQTT Connection"><div class="flex flex-wrap items-center gap-3"><Tag tone={mqtt ? 'ok' : 'warning'}><Dot /> {t(mqtt ? 'Connected' : 'Waiting')}</Tag><Button onClick={test}><RefreshCw {...G} />{t('Reconnect / Test')}</Button></div></Field>

@@ -9,7 +9,7 @@ export function store<T extends object>(init: T) {
     set(p: Partial<T> | ((s: T) => Partial<T>)) {
       v = { ...v, ...(typeof p === 'function' ? p(v) : p) }
       ver++
-      subs.forEach(f => f())
+      for (const f of subs) f()
     },
     use() {
       const [, bump] = useState(0), seen = ver

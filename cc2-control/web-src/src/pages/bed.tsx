@@ -13,7 +13,7 @@ import { t, tpl } from '@/lib/i18n'
 import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
-import { microns, SCREW_KEYS, screwPlan, screwValues } from '@/lib/screws'
+import { microns, screwPlan, screwValues } from '@/lib/screws'
 import { nav, openPage, screwText } from '@/lib/state'
 import { sendConsole } from '@/pages/console'
 
@@ -59,7 +59,7 @@ const MeshCard = () => {
   }, [points, view])
 
   const Stat = ({ dot, label, val }: { dot: any; label: string; val: string }) => (
-    <div class="rounded-lg border border-edge bg-field/60 p-2.5"><label class="flex items-center gap-2 text-xs">{dot}{t(label)}</label>
+    <div class="rounded-lg border border-edge bg-field/60 p-2.5"><span class="flex items-center gap-2 text-xs">{dot}{t(label)}</span>
       <strong class="mt-2 block whitespace-nowrap text-2xl font-semibold">{val} <small class="text-xs">mm</small></strong>
       <p class="mt-1 text-[10px] text-muted">{profile === 'active' ? t('Current printer mesh') : `${t('Saved profile')} · ${profile}`}</p></div>
   )
@@ -95,7 +95,7 @@ const MeshCard = () => {
         <Stat dot={<Dot c="blue" />} label="Minimum" val={st ? signed(st.min) : '—'} /><Stat dot={<Dot c="amber" />} label="Maximum" val={st ? signed(st.max) : '—'} />
         <Stat dot={<ArrowLeftRight {...I} class="text-cyan" />} label="Range" val={st ? st.range.toFixed(3) : '—'} /><Stat dot={<Sigma {...I} class="text-cyan" />} label="Average" val={st ? signed(st.mean) : '—'} />
       </div>
-      <MeshActions reload={() => load(true)} note={points.length ? (profile === 'active' ? `${t('Active mesh loaded')}${root?.profile_name ? ' · ' + root.profile_name : ''}.` : `${t('Saved mesh loaded')} · ${profile}.`) : t('Waiting for the printer mesh.')} />
+      <MeshActions reload={() => load(true)} note={points.length ? (profile === 'active' ? `${t('Active mesh loaded')}${root?.profile_name ? ` · ${root.profile_name}` : ''}.` : `${t('Saved mesh loaded')} · ${profile}.`) : t('Waiting for the printer mesh.')} />
     </Card>
   )
 }
@@ -135,7 +135,7 @@ const Screws = () => {
         <div>
           <div class="overflow-hidden rounded-md border border-edge"><table class="w-full border-collapse text-xs">
             <thead><tr class="text-left text-[11px] text-muted"><th class="p-2 font-normal">{t('Position')}</th><th class="p-2 font-normal">{t('Offset')}</th><th class="p-2 font-normal">{t('Adjustment')}</th></tr></thead>
-            <tbody>{rows.map(([name, key], i) => {
+            <tbody>{rows.map(([name], i) => {
               const d = plan?.shown[i] ?? 0, within = Math.abs(d) <= 0.02, ref = plan && !plan.useOptimized && i === 0
               return <tr key={name} class={cn('border-t border-edge', plan?.useOptimized && i === 0 && 'bg-amber/10')}><td class="p-2 font-semibold">{name}</td>
                 <td class="p-2">{plan ? (ref ? t('Reference') : microns(d)) : '—'}</td>

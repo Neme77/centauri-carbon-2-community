@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies from the lockfile
         run: npm ci
 
-      - name: Type-check
+      - name: Type-check and lint (Biome)
         run: npm run check
 
       - name: Rebuild web/index.html and fail if the committed build is stale

@@ -69,9 +69,9 @@ export const Console = () => {
             <Button onClick={() => navigator.clipboard.writeText(screen.current?.textContent || '').then(() => notify(t('Console copied.')))}><Copy {...I} />{t('Copy Log')}</Button>
           </div>
           <pre ref={screen} class="m-0 h-[26rem] overflow-auto whitespace-pre-wrap rounded-md border border-edge bg-[#031521] p-3.5 font-mono text-[#edf6fc] text-[13px] leading-7">{shown}</pre>
-          <label class="mb-2 mt-4 block font-semibold">{t('Send G-code command')}</label>
+          <label htmlFor="console-command" class="mb-2 mt-4 block font-semibold">{t('Send G-code command')}</label>
           <div class="flex gap-2.5">
-            <Input class="flex-1" disabled={!on} placeholder={t(on ? 'Enter G-code command' : 'Unlock console to send G-code…')} value={cmd} onInput={e => setCmd(e.currentTarget.value)} onKeyDown={browse} autoComplete="off" spellcheck={false} />
+            <Input id="console-command" class="flex-1" disabled={!on} placeholder={t(on ? 'Enter G-code command' : 'Unlock console to send G-code…')} value={cmd} onInput={e => setCmd(e.currentTarget.value)} onKeyDown={browse} autoComplete="off" spellcheck={false} />
             <Button disabled={!on} onClick={send}><Send {...I} />{t('Send')}</Button>
           </div>
         </Card>

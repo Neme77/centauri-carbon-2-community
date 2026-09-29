@@ -17,8 +17,10 @@ export function matrixFromUds(data: any, profile = 'active'): Pt[] | null {
   const min = Array.isArray(root.mesh_min) ? root.mesh_min : [0, 0]
   const max = Array.isArray(root.mesh_max) ? root.mesh_max : [matrix[0].length - 1, matrix.length - 1]
   const out: Pt[] = []
-  matrix.forEach((row: any[], r: number) => row.forEach((z, c) => {
-    if (Number.isFinite(Number(z))) out.push({ x: min[0] + (max[0] - min[0]) * c / Math.max(1, row.length - 1), y: min[1] + (max[1] - min[1]) * r / Math.max(1, matrix.length - 1), z: Number(z) })
-  }))
+  matrix.forEach((row: any[], r: number) => {
+    row.forEach((z, c) => {
+      if (Number.isFinite(Number(z))) out.push({ x: min[0] + (max[0] - min[0]) * c / Math.max(1, row.length - 1), y: min[1] + (max[1] - min[1]) * r / Math.max(1, matrix.length - 1), z: Number(z) })
+    })
+  })
   return out
 }

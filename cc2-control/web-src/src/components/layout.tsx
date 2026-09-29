@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { cn } from '@/lib/utils'
 import { Icon } from '@/components/icons'
-import { Boxes, Files as FilesIcon, Gauge, Grid3x3, ListChecks, Settings, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, SquareTerminal, TriangleAlert } from 'lucide-preact'
+import { Boxes, Files as FilesIcon, Gauge, Grid3x3, ListChecks, Settings, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, SquareTerminal, TriangleAlert, X } from 'lucide-preact'
 import { Dot } from '@/components/ui/badge'
 import { t } from '@/lib/i18n'
 import { control, notify, toast } from '@/lib/api'
@@ -80,7 +80,7 @@ export const Topbar = () => {
 export const TitleSync = () => {
   const { page } = nav.use()
   const v = view(printer.use().data)
-  const label = items.find(i => i[0] === page)![2]
+  const label = items.find(i => i[0] === page)?.[2] ?? ''
   document.title = `${v.active ? `${Math.round(v.progress)}% · ` : ''}${t(label)} · Centauri Carbon 2`
   return null
 }
@@ -94,5 +94,10 @@ export const Toast = () => {
     const id = setTimeout(() => setShow(false), tone === 'error' ? 7000 : 3600)
     return () => clearTimeout(id)
   }, [n])
-  return show ? <div role={tone === 'error' ? 'alert' : 'status'} onClick={() => setShow(false)} title={t('Dismiss')} class={cn('fixed bottom-6 left-1/2 z-[70] max-w-[90%] -translate-x-1/2 cursor-pointer rounded-lg border bg-panel px-5 py-3 shadow-2xl', tone === 'error' ? 'border-red text-red' : 'border-cyan')}>{text}</div> : null
+  return show ? (
+    <div role={tone === 'error' ? 'alert' : 'status'} class={cn('fixed bottom-6 left-1/2 z-[70] flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-lg border bg-panel py-3 pl-5 pr-3 shadow-2xl', tone === 'error' ? 'border-red text-red' : 'border-cyan')}>
+      <span>{text}</span>
+      <button type="button" onClick={() => setShow(false)} aria-label={t('Dismiss')} title={t('Dismiss')} class="rounded p-1 hover:bg-field"><X size={16} strokeWidth={1} /></button>
+    </div>
+  ) : null
 }

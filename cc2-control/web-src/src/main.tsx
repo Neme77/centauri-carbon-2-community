@@ -17,4 +17,5 @@ setInterval(checkOrcaPendingPrint, 1500)
 for (const ev of ['visibilitychange', 'focus', 'pageshow']) addEventListener(ev, () => void checkOrcaPendingPrint())
 addEventListener('pointerdown', () => void checkOrcaPendingPrint(), { passive: true })
 
-render(<App />, document.getElementById('app')!)
+const root = document.getElementById('app')
+if (root) render(<App />, root)

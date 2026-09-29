@@ -6,7 +6,7 @@ import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Select } from '@/components/ui/field'
 import { Row } from '@/components/shared'
-import { errText, notify, post, request } from '@/lib/api'
+import { errText, notify, request } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { duration, fileSize } from '@/lib/format'
 import { startFile } from '@/pages/print-dialog'
@@ -92,16 +92,17 @@ export const Files = () => {
           {checked.size > 0 && <div class="my-3 flex items-center gap-2"><strong>{tpl('{n} selected', { n: checked.size })}</strong><Button onClick={() => bulk('copy')}>{t('Copy selected')}</Button><Button variant="danger" onClick={() => bulk('delete')}>{t('Delete selected')}</Button></div>}
           <div class="mt-3.5 overflow-hidden rounded-lg border border-edge">
             <div class={cn(cols, 'min-h-11 text-muted')}>
-              <span><input type="checkbox" title={t('Select all shown files')} checked={visible.length > 0 && visible.every(e => checked.has(key(e)))} onChange={e => visible.forEach(x => toggle(key(x), e.currentTarget.checked))} /> {t('Name')}</span>
+              <span><input type="checkbox" title={t('Select all shown files')} checked={visible.length > 0 && visible.every(e => checked.has(key(e)))} onChange={e => { for (const x of visible) toggle(key(x), e.currentTarget.checked) }} /> {t('Name')}</span>
               <span class="hidden md:inline">{t('Size')}</span><span class="hidden md:inline">{t('Modified')}</span><span class="hidden md:inline">{t('Storage')}</span><span>{t('Actions')}</span>
             </div>
             {visible.map(e => (
+              // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: whole-row click is a mouse shortcut; keyboard users select through the file name button
               <div key={key(e)} onClick={() => setSel(e)} class={cn(cols, 'min-h-16 cursor-pointer', sel && key(sel) === key(e) && 'bg-field outline outline-1 -outline-offset-1 outline-cyan')}>
-                <div class="flex min-w-0 items-center gap-2.5 font-semibold"><input type="checkbox" title={t('Select file')} checked={checked.has(key(e))} onClick={ev => ev.stopPropagation()} onChange={ev => toggle(key(e), ev.currentTarget.checked)} /><FileText {...I} class="shrink-0" /><span class="[overflow-wrap:anywhere]">{e.file.path}</span></div>
+                <div class="flex min-w-0 items-center gap-2.5 font-semibold"><input type="checkbox" title={t('Select file')} checked={checked.has(key(e))} onClick={ev => ev.stopPropagation()} onChange={ev => toggle(key(e), ev.currentTarget.checked)} /><FileText {...I} class="shrink-0" /><button type="button" class="min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline" onClick={() => setSel(e)}>{e.file.path}</button></div>
                 <span class="hidden md:inline">{fileSize(e.file.size)}</span>
                 <span class="hidden md:inline">{Number(e.file.modified) > 0 ? new Date(Number(e.file.modified) * 1000).toLocaleString() : '—'}</span>
                 <span class="hidden md:inline">{e.storage === 'usb' ? 'USB' : t('Internal')}</span>
-                <div class="flex gap-1.5" onClick={ev => ev.stopPropagation()}><Button class="px-2.5" onClick={() => startFile(e.storage, e.file.path)}><Play {...I} />{t('Print')}</Button><Button class="hidden px-2.5 sm:inline-flex" variant="danger" onClick={() => remove(e)}>{t('Delete')}</Button></div>
+                <div class="flex gap-1.5"><Button class="px-2.5" onClick={ev => { ev.stopPropagation(); startFile(e.storage, e.file.path) }}><Play {...I} />{t('Print')}</Button><Button class="hidden px-2.5 sm:inline-flex" variant="danger" onClick={ev => { ev.stopPropagation(); remove(e) }}>{t('Delete')}</Button></div>
               </div>
             ))}
             {!visible.length && <div class="p-4 text-muted">{t(loaded ? 'No matching G-code files.' : 'Loading files…')}</div>}
@@ -183,13 +184,14 @@ const Upload = ({ busy, setBusy, refresh }: { busy: boolean; setBusy: (b: boolea
         x.onload = () => { if (x.status === 201) resolve(); else { let m = `HTTP ${x.status}`; try { m = JSON.parse(x.responseText).error || m } catch { /* keep HTTP status */ } reject(Error(m)) } }
         x.send(file)
       })
-      pick.current!.value = ''; setPct(100); setNote(t('Upload completed. File is ready in the selected storage.'))
+      if (pick.current) pick.current.value = ''; setPct(100); setNote(t('Upload completed. File is ready in the selected storage.'))
       notify(tpl('{name} uploaded to {where}.', { name: file.name, where: where(storage) }))
       await refresh()
     } catch (e) { const m = tpl('Upload failed: {error}', { error: errText(e) }); setNote(m); notify(m, 'error') } finally { setBusy(false) }
   }
   return (
     <Card><CardHead title="Upload File" end={t('Local upload')} />
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: drag and drop is a pointer shortcut; the file input and button are the keyboard path */}
       <div class={cn('grid grid-cols-[minmax(0,1fr)] justify-items-center gap-2.5 rounded-lg border border-dashed border-cyan p-3 transition-colors', over && 'bg-cyan/10')}
         onDragOver={e => { if (busy) return; e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
         onDrop={e => { e.preventDefault(); setOver(false); const f = e.dataTransfer?.files; if (busy || !f?.length || !pick.current) return; pick.current.files = f; void go() }}>

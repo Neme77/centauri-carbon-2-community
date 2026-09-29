@@ -13,7 +13,8 @@ export const ThermalChart = () => {
     const box = canvas.getBoundingClientRect()
     if (!box.width || !box.height) return
     const css = getComputedStyle(document.documentElement)
-    const dpr = Math.min(devicePixelRatio || 1, 2), w = box.width, h = box.height, ctx = canvas.getContext('2d')!, pad = { l: 27, r: 7, t: 8, b: 20 }
+    const dpr = Math.min(devicePixelRatio || 1, 2), w = box.width, h = box.height, ctx = canvas.getContext('2d'), pad = { l: 27, r: 7, t: 8, b: 20 }
+    if (!ctx) return
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h)
     const all = [...thermalHistory.nozzle, ...thermalHistory.bed, ...thermalHistory.chamber]

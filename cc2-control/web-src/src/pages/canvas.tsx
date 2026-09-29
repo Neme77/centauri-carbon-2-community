@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Pip, Tag } from '@/components/ui/badge'
 import { Select } from '@/components/ui/field'
 import { Dialog } from '@/components/ui/dialog'
-import { Icon } from '@/components/icons'
 import { Row } from '@/components/shared'
 import { control, errText, notify, post } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
@@ -35,12 +34,11 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
     <Dialog onClose={onClose}>
       <form onSubmit={submit}>
         <h2 class="mb-4 text-xl font-semibold">{t('Choose material and colour')}</h2>
-        <label class="mb-1.5 mt-3 block text-muted">{t('Material profile')}</label>
-        <Select value={String(preset)} onChange={e => setPreset(+e.currentTarget.value)} autofocus>{list.map((p, i) => <option key={i} value={i}>{p.name} ({p.min || p.nozzle - 20}–{p.max || p.nozzle + 20} °C)</option>)}</Select>
-        <label class="mb-1.5 mt-3 block text-muted">{t('Filament colour')}</label>
-        <div class="grid grid-cols-[78px_1fr] items-center gap-3"><input type="color" class="h-12 w-19.5 rounded-md border border-edge bg-field p-0.5" value={colour.toLowerCase()} onInput={e => setColour(e.currentTarget.value.toUpperCase())} /><output class="font-mono text-base font-semibold">{colour}</output></div>
-        <label class="mb-1.5 mt-3 block text-muted">{t('Quick colours')}</label>
-        <div class="grid grid-cols-5 gap-2 sm:grid-cols-8">{PALETTE.map(c => <button key={c} type="button" title={c} class={cn('h-8.5 rounded-md border-2 border-white/30', c === colour && 'outline outline-2 outline-offset-2 outline-cyan')} style={{ background: c }} onClick={() => setColour(c)} />)}</div>
+        <label htmlFor="material-profile" class="mb-1.5 mt-3 block text-muted">{t('Material profile')}</label>
+        <Select id="material-profile" value={String(preset)} onChange={e => setPreset(+e.currentTarget.value)} autofocus>{list.map((p, i) => <option key={i} value={i}>{p.name} ({p.min || p.nozzle - 20}–{p.max || p.nozzle + 20} °C)</option>)}</Select>
+        <label htmlFor="material-colour" class="mb-1.5 mt-3 block text-muted">{t('Filament colour')}</label>
+        <div class="grid grid-cols-[78px_1fr] items-center gap-3"><input id="material-colour" type="color" class="h-12 w-19.5 rounded-md border border-edge bg-field p-0.5" value={colour.toLowerCase()} onInput={e => setColour(e.currentTarget.value.toUpperCase())} /><output class="font-mono text-base font-semibold">{colour}</output></div>
+        <fieldset class="m-0 min-w-0 border-0 p-0"><legend class="mb-1.5 mt-3 p-0 text-muted">{t('Quick colours')}</legend><div class="grid grid-cols-5 gap-2 sm:grid-cols-8">{PALETTE.map(c => <button key={c} type="button" title={c} class={cn('h-8.5 rounded-md border-2 border-white/30', c === colour && 'outline outline-2 outline-offset-2 outline-cyan')} style={{ background: c }} onClick={() => setColour(c)} />)}</div></fieldset>
         <div class="mt-5 flex justify-end gap-2.5"><Button onClick={onClose}>{t('Cancel')}</Button><Button type="submit" variant="primary">{t('Apply to Canvas slot')}</Button></div>
       </form>
     </Dialog>
@@ -55,8 +53,8 @@ export const Canvas = () => {
   const sync = async () => { try { await post('/api/canvas/refresh'); setTimeout(refreshCanvas, 600) } catch (e) { notify(errText(e), 'error') } }
   const slots = [0, 1, 2, 3].map(i => {
     const tray = model?.trays[i], tel = tray?.filament_color
-    let pend = optimistic[i]
-    if (pend && (Date.now() >= pend.until || canvasHex(tel, i) === pend.colour)) pend = undefined
+    const saved = optimistic[i]
+    const pend = saved && Date.now() < saved.until && canvasHex(tel, i) !== saved.colour ? saved : undefined // drop it once expired or confirmed by telemetry
     const raw = pend ? pend.colour : tel
     return { i, colour: canvasColour(raw, i), raw, material: pend ? pend.material : tray && (tray.filament_name || tray.filament_type) || '—', remaining: tray && tray.remaining_percent !== undefined ? `${tray.remaining_percent}%` : '—' }
   })

@@ -23,7 +23,8 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
   if (!r.width || !r.height) return
   const dpr = Math.min(devicePixelRatio || 1, 2)
   canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr)
-  const c = canvas.getContext('2d')!, w = r.width, h = r.height
+  const c = canvas.getContext('2d'), w = r.width, h = r.height
+  if (!c) return
   c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h); c.font = '11px Segoe UI'
   const st = meshStats(points)
   if (!st) { c.fillStyle = '#8eafc2'; c.textAlign = 'center'; c.fillText(L.empty, w / 2, h / 2); return }
@@ -64,15 +65,17 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
   faces.sort((a, b) => b.depth - a.depth)
   for (const { ps } of faces) {
     const qs = ps.map(p => project(p.x, p.y, p.z))
-    c.beginPath(); qs.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath()
+    c.beginPath(); qs.forEach((q, i) => { if (i) c.lineTo(q.x, q.y); else c.moveTo(q.x, q.y) }); c.closePath()
     c.fillStyle = col(ps.reduce((s, p) => s + p.z, 0) / 4, 0.94); c.fill(); c.strokeStyle = '#d4f8ee55'; c.lineWidth = 0.7; c.stroke()
   }
   for (const p of points) { const q = project(p.x, p.y, p.z); c.fillStyle = '#d4fcff'; c.beginPath(); c.arc(q.x, q.y, 1.35, 0, Math.PI * 2); c.fill() }
   for (const [z, label, color] of [[zMin, L.min, '#16c9f2'], [zMax, L.max, '#ffcf4d']] as const) {
-    const p = points.find(p => p.z === z)!, q = project(p.x, p.y, p.z)
+    const p = points.find(p => p.z === z)
+    if (!p) continue
+    const q = project(p.x, p.y, p.z)
     c.beginPath(); c.arc(q.x, q.y, 5.5, 0, Math.PI * 2); c.fillStyle = color; c.fill(); c.strokeStyle = '#ffffff88'; c.stroke()
     c.textAlign = 'left'; c.font = 'bold 12px Segoe UI'; c.fillText(label, q.x + 9, q.y - 17)
-    c.fillStyle = '#e5f6fb'; c.font = '11px Segoe UI'; c.fillText((z > 0 ? '+' : '') + z.toFixed(3) + ' mm', q.x + 9, q.y - 3)
+    c.fillStyle = '#e5f6fb'; c.font = '11px Segoe UI'; c.fillText(`${(z > 0 ? '+' : '') + z.toFixed(3)} mm`, q.x + 9, q.y - 3)
   }
   c.fillStyle = '#aad5e8'; c.textAlign = 'center'; c.font = '12px Segoe UI'
   let p = project(140, 0, floor); c.fillText('X (mm)', p.x, p.y + 40)

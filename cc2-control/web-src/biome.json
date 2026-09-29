@@ -1,0 +1,19 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+	"files": { "includes": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"] },
+	"formatter": { "enabled": false },
+	"assist": { "enabled": false },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"suspicious": { "noExplicitAny": "off" },
+			"a11y": {
+				"noLabelWithoutControl": {
+					"level": "error",
+					"options": { "inputComponents": ["Input", "Select", "Switch"] }
+				}
+			}
+		}
+	}
+}

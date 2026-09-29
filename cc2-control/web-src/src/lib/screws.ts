@@ -3,12 +3,11 @@ export const SCREW_KEYS = ['35,30', '225,30', '225,225', '35,225'] as const
 // Median of the last three probes at each of the four screw positions, parsed from console output.
 export function screwValues(text: string): Record<string, number> | null {
   const re = /probe at\s+(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s+is z=(-?\d+(?:\.\d+)?)/gi, groups = new Map<string, number[]>()
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text || ''))) {
+  for (const m of (text || '').matchAll(re)) {
     const k = `${Math.round(+m[1])},${Math.round(+m[2])}`
     if (!(SCREW_KEYS as readonly string[]).includes(k)) continue
     if (!groups.has(k)) groups.set(k, [])
-    groups.get(k)!.push(+m[3])
+    groups.get(k)?.push(+m[3])
   }
   const out: Record<string, number> = {}
   for (const [k, v] of groups) if (v.length >= 3) out[k] = [...v.slice(-3)].sort((a, b) => a - b)[1]

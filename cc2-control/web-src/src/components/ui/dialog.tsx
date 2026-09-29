@@ -26,7 +26,8 @@ export const Dialog = ({ onClose, locked, children, width = 520 }: { onClose?: (
     return () => { removeEventListener('keydown', key); previous?.focus?.() }
   }, [])
   return (
-    <div class="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" onClick={e => e.target === e.currentTarget && !locked && onClose?.()}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: a click on the backdrop is a pointer shortcut; Escape is the keyboard path
+    <div role="presentation" class="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" onClick={e => e.target === e.currentTarget && !locked && onClose?.()}>
       <div ref={box} class="max-h-[92vh] overflow-auto rounded-xl border border-edge bg-panel p-6 shadow-2xl" style={{ width: `min(${width}px,96vw)` }} role="dialog" aria-modal="true">{children}</div>
     </div>
   )

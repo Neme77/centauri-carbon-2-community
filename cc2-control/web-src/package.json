@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "tsc -p ."
+    "check": "tsc -p . && biome lint .",
+    "lint": "biome lint ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.14",
     "@preact/preset-vite": "^2.10.6",
     "@tailwindcss/vite": "^4.3.3",
     "tailwindcss": "^4.3.3",

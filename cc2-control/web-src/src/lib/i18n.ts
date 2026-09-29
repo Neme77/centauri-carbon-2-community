@@ -11,7 +11,7 @@ async function loadLocale(code: string) {
   if (cache[code]) return cache[code]
   try {
     const r = await fetch(`/i18n/${code}.json`, { cache: 'no-store' })
-    if (r.ok) return (cache[code] = await r.json())
+    if (r.ok) { cache[code] = await r.json(); return cache[code] }
   } catch { /* handled below */ }
   return null
 }
