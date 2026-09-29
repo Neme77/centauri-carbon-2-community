@@ -121,7 +121,7 @@ export const Sidebar = () => {
           aria-expanded={!collapsed}
           title={t(collapsed ? 'Expand menu' : 'Collapse menu')}
           class={cn(
-            'flex h-11 w-full items-center justify-center gap-3.5 text-muted hover:bg-field hover:text-fg',
+            'flex h-11 w-full cursor-pointer items-center justify-center gap-3.5 text-muted hover:bg-field hover:text-fg',
             !collapsed && 'md:justify-start md:px-5'
           )}
         >
