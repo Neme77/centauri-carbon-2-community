@@ -3,6 +3,30 @@
 This file records user-visible project changes. Signed artifacts and exact
 checksums remain attached to each GitHub release.
 
+## Unreleased
+
+### Features
+
+- Translations are keyed by identifier (`files.upload_file`) instead of by the English sentence, so the English text can be reworded without touching the other languages.
+- The interface follows the browser language (English, Italian or French) until a language is saved on the printer.
+- Redesigned web interface: full-width header with the emergency stop, a side
+  menu that collapses to icons, a link for every section (`#files`, `#bed`…) and
+  Lucide icons throughout.
+- One printer-link indicator (connected, waiting for the printer, reconnecting,
+  unreachable) instead of two always-green badges.
+- In-page confirmations, red dismissible error messages, print progress in the
+  browser tab title, drag-and-drop G-code upload and command history in the
+  console.
+- Every message, machine state and accessible name is translated in Italian and
+  French.
+- Four more colour themes (Dracula, Nord, Monokai, Solarized Light) next to Light and Dark, chosen in **Settings → Appearance** and saved on the printer like the language; `/api/preferences` now accepts any lowercase-hyphenated theme identifier.
+
+### Removed
+
+- Interface elements that showed nothing real: the printer-name field, the
+  storage summary computed from the file list, the invented expert-console
+  timeout and duplicated cards on the dashboard, job and control pages.
+
 ## CC2 Control 1.1.31 — 2026-09-27
 
 ### Features

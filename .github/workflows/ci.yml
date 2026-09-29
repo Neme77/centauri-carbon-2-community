@@ -37,6 +37,33 @@ jobs:
       - name: ARM binary smoke test under qemu
         run: CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
 
+  web:
+    name: Web UI (type-check, build, up to date)
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: cc2-control/web-src
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+
+      - name: Install dependencies from the lockfile
+        run: npm ci
+
+      - name: Type-check, lint and formatting (Biome)
+        run: npm run check
+
+      - name: Rebuild web/ (index.html and locales) and fail if the committed build is stale
+        run: |
+          npm run build
+          git add --intent-to-add ../web
+          git diff --exit-code -- ../web
+
   sanitizers:
     name: CC2 Control (${{ matrix.sanitize }} sanitizer)
     runs-on: ubuntu-26.04

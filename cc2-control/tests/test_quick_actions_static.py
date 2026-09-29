@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-from pathlib import Path
+from _websrc import read_src
 
-html = (Path(__file__).parents[1] / "web" / "index.html").read_text(encoding="utf-8")
+src = read_src()
 for marker in (
-    "data-quick-edit",
-    "quickActionChoices",
-    "renderQuickActions()",
-    "persistUiPreferences()",
-    "light:toggle",
-    "page:files",
-    "page:bed",
-    "page:canvas",
+    "QUICK_CHOICES",
+    "dashboard.configure_quick_actions",
+    "setQuickFromServer(p.quick_actions)",
+    "`quick${i + 1}`",
+    "quickAlwaysAvailable",
+    "'light:toggle'",
+    "'page:files'",
+    "'page:bed'",
+    "'page:canvas'",
 ):
-    assert marker in html, marker
+    assert marker in src, marker
 print("PASS: configurable persistent Quick Actions UI markers")

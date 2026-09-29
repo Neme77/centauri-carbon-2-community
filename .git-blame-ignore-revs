@@ -1,0 +1,5 @@
+# Revisions ignored by `git blame` (mass reformatting only).
+# Enable locally with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Format the web sources with Biome
+238f447e4778b36ec97f520e8897e8e36ebe63e4

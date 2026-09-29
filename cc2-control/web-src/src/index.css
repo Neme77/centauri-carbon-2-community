@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: var(--bg); --color-panel: var(--panel); --color-edge: var(--edge);
+  --color-fg: var(--text); --color-muted: var(--muted); --color-field: var(--field); --color-ink: var(--ink);
+  --color-cyan: var(--cyan); --color-green: var(--green); --color-amber: var(--amber);
+  --color-red: var(--red); --color-blue: var(--blue);
+  --color-well: var(--well); --color-well-fg: var(--well-fg);
+}
+:root {
+  color-scheme: dark;
+  --bg: #031622; --panel: #052131; --edge: #17445b; --text: #edf6fc; --muted: #8daebf; --field: #0a2b3f; --ink: #012331;
+  --cyan: #00d3ed; --green: #29e49b; --amber: #ffc54a; --red: #ff6170; --blue: #209eff;
+  --well: #031521; --well-fg: #edf6fc; /* inset dark surfaces: 3D mesh, terminal */
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef0f2; --panel: #fff; --edge: #c5cbd0; --text: #17191b; --muted: #596168; --field: #f4f5f6; --ink: #fff;
+  --cyan: #006f80; --green: #087748; --amber: #815700; --red: #ad2638; --blue: #166fa8;
+  --well: #031521; --well-fg: #edf6fc;
+}
+/* Extra palettes. Each one defines every token above; --cyan is the accent colour, --ink the text drawn on it. */
+:root[data-theme="dracula"] {
+  color-scheme: dark;
+  --bg: #21222c; --panel: #282a36; --edge: #44475a; --text: #f8f8f2; --muted: #a4a9c8; --field: #343746; --ink: #282a36;
+  --cyan: #bd93f9; --green: #50fa7b; --amber: #ffb86c; --red: #ff5555; --blue: #8be9fd;
+  --well: #191a21; --well-fg: #f8f8f2;
+}
+:root[data-theme="nord"] {
+  color-scheme: dark;
+  --bg: #2e3440; --panel: #3b4252; --edge: #4c566a; --text: #eceff4; --muted: #b4bfd3; --field: #434c5e; --ink: #2e3440;
+  --cyan: #88c0d0; --green: #a3be8c; --amber: #ebcb8b; --red: #d57780; --blue: #81a1c1;
+  --well: #242933; --well-fg: #eceff4;
+}
+:root[data-theme="monokai"] {
+  color-scheme: dark;
+  --bg: #1e1f1c; --panel: #272822; --edge: #49483e; --text: #f8f8f2; --muted: #a6a28c; --field: #3e3d32; --ink: #272822;
+  --cyan: #a6e22e; --green: #a6e22e; --amber: #fd971f; --red: #f92672; --blue: #66d9ef;
+  --well: #191a15; --well-fg: #f8f8f2;
+}
+:root[data-theme="solarized-light"] {
+  color-scheme: light;
+  --bg: #eee8d5; --panel: #fdf6e3; --edge: #d6cfb9; --text: #073642; --muted: #586e75; --field: #f5eedb; --ink: #fdf6e3;
+  --cyan: #1c78bc; --green: #5f7000; --amber: #946c00; --red: #dc322f; --blue: #1c78bc;
+  --well: #002b36; --well-fg: #eee8d5;
+}
+/* Inter (SIL OFL, see fonts/OFL.txt): variable 400–700, Latin + Latin-1 only, inlined by the build so it needs no request. */
+@font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+input[type=range], input[type=checkbox], input[type=radio], progress { accent-color: var(--cyan); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* Tailwind's reset gives buttons the default arrow: restore the pointer on everything clickable (utilities still win). */
+@layer base {
+  button:not(:disabled),
+  select:not(:disabled),
+  input:is([type="checkbox"], [type="radio"], [type="color"], [type="file"]):not(:disabled) {
+    cursor: pointer;
+  }
+}

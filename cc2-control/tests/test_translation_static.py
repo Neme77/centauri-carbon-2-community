@@ -1,49 +1,55 @@
 #!/usr/bin/env python3
 """Release markers for the JSON-backed translation and persistent-language wiring.
 
-Objective: catch a regression in how index.html loads/applies translations
-(the inline dictionary coming back, the /i18n/ fetch or LANGUAGE_NAMES map
-disappearing) rather than in the translations themselves — see
-test_locales_static.py for that. These are literal substring markers against
-the live source, so expect to update them whenever the checked lines are
-touched, even for an unrelated, correct change (e.g. the notify() toast
-translation work: it currently doesn't test that path, but if it changes any
-line already listed here, this file needs updating too).
+Objective: catch a regression in how the web UI loads/applies translations
+(the /i18n/ fetch or the LANGUAGE_NAMES map disappearing, untranslated
+notify() toasts creeping back) rather than in the translations themselves —
+see test_locales_static.py for that. These are literal substring markers
+against the readable sources in web-src/, so expect to update them whenever
+the checked lines are touched.
 """
 
 import json
-from pathlib import Path
+import re
 
-WEB = Path(__file__).resolve().parents[1] / "web"
-html = (WEB / "index.html").read_text(encoding="utf-8")
+from _websrc import LOCALES, read_src
+
+src = read_src()
 required = (
-    "Interface preferences are stored on the printer and shared by every browser.",
-    "loadUiPreferences()",
-    "request('/api/preferences')",
-    "method:'PUT'",
-    "Console is locked. Unlock Expert Mode to enable command input.",
+    "settings.interface_preferences_are_stored",
+    "loadUiPreferences",
+    "'/api/preferences'",
+    "method: 'PUT'",
+    "console.unlock_console_to_send_g_code",
     "LANGUAGE_NAMES",
-    "languageCodeForLabel(preferenceSelects[0].value)",
+    "setLanguage(e.currentTarget.value, true)",
     "fetch(`/i18n/${code}.json`",
-    "italian=currentLanguage==='en'?{}:await loadLocale(currentLanguage)",
+    "const dict = lang === 'en' ? {} : await loadLocale(lang)",
 )
 for marker in required:
-    assert marker in html, f"missing translation-wiring marker: {marker}"
+    assert marker in src, f"missing translation-wiring marker: {marker}"
+
+# Every toast goes through t()/tpl(); `m` is an already-translated message and errText() is backend text.
+for match in re.finditer(r"\bnotify\(([^)]*)", src):
+    arg = match.group(1).strip()
+    assert arg.startswith(("t(", "tpl(", "errText(")) or re.fullmatch(r"m(, 'error')?", arg), f"untranslated notify(): {match.group(0)}"
 
 for locale, spot_checks in {
     "it": {
-        "Object Exclusion": "Esclusione oggetti",
-        "Console is locked. Unlock Expert Mode to enable command input.":
-            "La console è bloccata. Sblocca la modalità esperto per inserire comandi.",
+        "job.object_exclusion": "Esclusione oggetti",
+        "console.unlock_console_to_send_g_code":
+            "Sblocca la console per inviare G-code…",
     },
     "fr": {
-        "Object Exclusion": "Exclusion d’objet",
-        "Console is locked. Unlock Expert Mode to enable command input.":
-            "La console est verrouillée. Déverrouillez le mode Expert pour saisir des commandes.",
+        "job.object_exclusion": "Exclusion d’objet",
+        "console.unlock_console_to_send_g_code":
+            "Déverrouillez la console pour envoyer du G-code…",
     },
 }.items():
-    data = json.loads((WEB / "locales" / f"{locale}.json").read_text(encoding="utf-8"))
+    data = json.loads((LOCALES / f"{locale}.json").read_text(encoding="utf-8"))
     for key, expected in spot_checks.items():
         assert data.get(key) == expected, f"{locale}.json[{key!r}]: expected {expected!r}, got {data.get(key)!r}"
+
+assert "navigator.languages" in src and "p.language || detectLanguage()" in src, "browser language fallback missing"
 
 print("PASS: translation loader wiring and Italian/French spot-check markers")
