@@ -430,9 +430,6 @@ const Screws = () => {
 
 export const Bed = () => {
   const { screws } = nav.use()
-  useEffect(() => {
-    if (screws) document.getElementById('screwFocus')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }, [screws])
   return (
     <Page title="Bed Levelling" sub="Mesh, saved profiles and four-screw adjustment in one workflow">
       <Tabs
@@ -443,10 +440,13 @@ export const Bed = () => {
         value={screws ? 'screws' : 'mesh'}
         onChange={id => openPage('bed', id === 'screws')}
       />
-      <div class="grid items-start gap-3.5 xl:grid-cols-[1.32fr_1fr]">
+      {screws ? (
+        <div class="max-w-4xl">
+          <Screws />
+        </div>
+      ) : (
         <MeshCard />
-        <Screws />
-      </div>
+      )}
     </Page>
   )
 }
