@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, validate and stage CC2 Control 1.1.30 for firmware V4.2."""
+"""Build, validate and stage CC2 Control 1.1.31 for firmware V4.2."""
 import hashlib
 import json
 from pathlib import Path
@@ -13,7 +13,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_SHA256 = '553b13cd0e5571fc604f3dd85d1859a593081e01e1f515ca1d4acaf28ea8f48b'
+SOURCE_SHA256 = 'e29b66dcead6c8591061086d4086dfbf178a94d29c2b660f64bd1c726f03fe98'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
@@ -31,8 +31,8 @@ def validate_arm_elf(path):
         raise RuntimeError('CC2 Control output is not a 32-bit little-endian ELF')
     if struct.unpack_from('<H', data, 18)[0] != 40:
         raise RuntimeError('CC2 Control output is not an ARM executable')
-    if b'1.1.30' not in path.read_bytes():
-        raise RuntimeError('CC2 Control binary does not identify version 1.1.30')
+    if b'1.1.31' not in path.read_bytes():
+        raise RuntimeError('CC2 Control binary does not identify version 1.1.31')
 
 def main():
     firmware_init = (RUNTIME / 'cc2-control.init').read_text(encoding='utf-8')
@@ -106,12 +106,12 @@ def main():
         }
     manifest = {
         'component': 'CC2 Control',
-        'version': '1.1.30',
+        'version': '1.1.31',
         'source_sha256': SOURCE_SHA256,
         'files': files,
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-    print('CC2 Control 1.1.30 prepared:', OUTPUT)
+    print('CC2 Control 1.1.31 prepared:', OUTPUT)
     print('Manifest:', MANIFEST)
 
 if __name__ == '__main__':
