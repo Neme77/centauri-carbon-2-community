@@ -15,7 +15,7 @@ import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
 import { microns, screwPlan, screwValues } from '@/lib/screws'
-import { poll, usePoll } from '@/lib/poll'
+import { usePoll } from '@/lib/poll'
 import { nav, openPage, refreshConsole, screwText } from '@/lib/state'
 import { sendConsole } from '@/pages/console'
 
@@ -70,7 +70,9 @@ const MeshCard = () => {
       busy.current = false
     }
   }
-  useEffect(() => poll(() => load(), 5000), [])
+  useEffect(() => {
+    void load()
+  }, [])
 
   const names = PROFILES.filter(([n]) => root?.profiles?.[n])
   const drag = useRef<{ id: number; x: number; y: number } | null>(null)
