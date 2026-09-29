@@ -4,7 +4,7 @@ import preact from '@preact/preset-vite'
 import tailwindcss from '@tailwindcss/vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
-// `npm run build` writes the single self-contained ../web/index.html (locales/ stays untouched).
+// `npm run build` writes the single self-contained ../web/index.html and copies public/ (the locales) next to it in ../web/locales.
 // `npm run dev` proxies the API to a running CC2 Control: CC2_BACKEND=http://host:8081 npm run dev
 const backend = process.env.CC2_BACKEND || 'http://localhost:8081'
 

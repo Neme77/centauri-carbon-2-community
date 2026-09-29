@@ -9,9 +9,9 @@ import json
 import re
 from pathlib import Path
 
-from _websrc import read_src
+from _websrc import LOCALES, read_src
 
-en = json.loads((Path(__file__).resolve().parents[1] / "web" / "locales" / "en.json").read_text(encoding="utf-8"))
+en = json.loads((LOCALES / "en.json").read_text(encoding="utf-8"))
 src = read_src()
 
 # Ids used in the sources (any quoted <group>.<name>), plus the backend machine-state names shown through tState().

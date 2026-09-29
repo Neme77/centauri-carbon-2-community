@@ -7,6 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "web-src" / "src"
+# Translation sources; the build copies them to web/locales, which the backend serves.
+LOCALES = ROOT / "web-src" / "public" / "locales"
 
 
 def read_src():

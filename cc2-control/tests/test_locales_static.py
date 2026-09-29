@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static consistency checks for web/locales/*.json.
+"""Static consistency checks for web-src/public/locales/*.json.
 
 Objective: guard the *data*, not the code that reads it. Structural only (key
 parity, valid JSON, non-empty values) and independent of any exact string in
@@ -18,7 +18,7 @@ import re
 import sys
 from pathlib import Path
 
-LOCALES_DIR = Path(__file__).resolve().parents[1] / "web" / "locales"
+from _websrc import LOCALES as LOCALES_DIR
 SOURCE = "en.json"
 
 

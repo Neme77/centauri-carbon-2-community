@@ -21,7 +21,7 @@ These rules apply to contributors and coding agents working in this repository.
 | `cc2-control/src/` | CC2 Control C backend |
 | `cc2-control/web-src/` | Browser UI sources (Vite + Preact + Tailwind, TypeScript) |
 | `cc2-control/web/index.html` | Browser UI, the committed single-file build of `web-src/` |
-| `cc2-control/web/locales/` | UI translations, one JSON file per language (`en.json` is the source) |
+| `cc2-control/web-src/public/locales/` | UI translations, one JSON file per language (`en.json` is the source); the build copies them to `cc2-control/web/locales/`, which the backend serves and the firmware ships |
 | `cc2-control/tests/` | Host-side and integration tests |
 | `builder/current/` | Current firmware builder and integration logic |
 | `builder/current/tests/` | Host-side builder tests |
@@ -81,10 +81,10 @@ it by hand. After changing `web-src/`:
 cd cc2-control/web-src
 npm ci            # once
 npm run check     # type-check (strict), lint and formatting (Biome); `npm run format` fixes formatting
-npm run build     # rewrites ../web/index.html
+npm run build     # rewrites ../web/index.html and ../web/locales/
 ```
 
-- commit the rebuilt `web/index.html` with the sources (CI rebuilds it and fails
+- commit the rebuilt `web/index.html` and `web/locales/` with the sources (CI rebuilds it and fails
   on any difference) and keep the committed copy under
   `cc2-control/firmware-integration/overlay/.../web/` identical
   (`test_web_sync_static.py`);
@@ -93,9 +93,9 @@ npm run build     # rewrites ../web/index.html
 - preserve English/Italian/French behaviour and persistent UI preferences;
 - route every new user-visible string through `t()` or `tpl()` with an identifier
   (`<group>.<name>`, e.g. `files.upload_file`; `common.` when several pages share it,
-  `state.` for the machine states the backend sends in English). `en.json` holds the
-  English text and is bundled into the page; add the id to `en.json`, `fr.json` and
-  `it.json`. `t()` only accepts ids from `en.json`, so a typo fails `npm run check`;
+  `state.` for the machine states the backend sends in English). `web-src/public/locales/en.json`
+  holds the English text and is bundled into the page; add the id to `en.json`, `fr.json`
+  and `it.json` there (never edit `web/locales/`, the build overwrites it). `t()` only accepts ids from `en.json`, so a typo fails `npm run check`;
   reword the English text freely, the id does not change
   (`test_locale_coverage_static.py` and `test_locales_static.py` enforce the rest);
 - register every periodic request with `poll()` or `usePoll()` from `web-src/src/lib/poll.ts` (never `setInterval`): the CC2 is resource-constrained, so the scheduler never overlaps runs of a source, sleeps in hidden tabs (except the OrcaSlicer pending-print check) and lets pages poll faster only while they are open (`test_polling_static.py`);

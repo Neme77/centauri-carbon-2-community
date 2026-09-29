@@ -58,10 +58,11 @@ jobs:
       - name: Type-check, lint and formatting (Biome)
         run: npm run check
 
-      - name: Rebuild web/index.html and fail if the committed build is stale
+      - name: Rebuild web/ (index.html and locales) and fail if the committed build is stale
         run: |
           npm run build
-          git diff --exit-code -- ../web/index.html
+          git add --intent-to-add ../web
+          git diff --exit-code -- ../web
 
   sanitizers:
     name: CC2 Control (${{ matrix.sanitize }} sanitizer)

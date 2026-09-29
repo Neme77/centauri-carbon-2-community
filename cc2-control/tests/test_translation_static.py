@@ -11,11 +11,9 @@ the checked lines are touched.
 
 import json
 import re
-from pathlib import Path
 
-from _websrc import read_src
+from _websrc import LOCALES, read_src
 
-WEB = Path(__file__).resolve().parents[1] / "web"
 src = read_src()
 required = (
     "settings.interface_preferences_are_stored",
@@ -48,7 +46,7 @@ for locale, spot_checks in {
             "Déverrouillez la console pour envoyer du G-code…",
     },
 }.items():
-    data = json.loads((WEB / "locales" / f"{locale}.json").read_text(encoding="utf-8"))
+    data = json.loads((LOCALES / f"{locale}.json").read_text(encoding="utf-8"))
     for key, expected in spot_checks.items():
         assert data.get(key) == expected, f"{locale}.json[{key!r}]: expected {expected!r}, got {data.get(key)!r}"
 

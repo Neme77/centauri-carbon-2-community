@@ -1,4 +1,4 @@
-import en from '../../../web/locales/en.json'
+import en from '../../public/locales/en.json'
 import { store, ls } from './store'
 import { notify } from './api'
 import { setQuickFromServer } from './quick'
@@ -9,7 +9,7 @@ export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', it: 'Ital
 export const detectLanguage = () =>
   navigator.languages?.map(l => l.slice(0, 2).toLowerCase()).find(l => l in LANGUAGE_NAMES) ?? 'en'
 
-// Every UI string is an identifier from web/locales/en.json (the source language, bundled); other locales load on demand.
+// Every UI string is an identifier from public/locales/en.json (the source language, bundled); other locales load on demand.
 export type Key = keyof typeof en
 const source: Record<string, string> = en
 
