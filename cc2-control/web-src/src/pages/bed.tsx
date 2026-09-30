@@ -15,7 +15,7 @@ import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
 import { microns, screwPlan, screwValues } from '@/lib/screws'
-import { poll, usePoll } from '@/lib/poll'
+import { usePoll } from '@/lib/poll'
 import { nav, openPage, refreshConsole, screwText } from '@/lib/state'
 import { sendConsole } from '@/pages/console'
 
@@ -70,7 +70,9 @@ const MeshCard = () => {
       busy.current = false
     }
   }
-  useEffect(() => poll(() => load(), 5000), [])
+  useEffect(() => {
+    void load()
+  }, [])
 
   const names = PROFILES.filter(([n]) => root?.profiles?.[n])
   const drag = useRef<{ id: number; x: number; y: number } | null>(null)
@@ -260,8 +262,24 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
           'bed.run_bed_mesh_calibration',
           'bed.start_a_protected_calibration_when',
           async () => {
-            if (await ask(t('bed.start_a_new_bed_mesh_calibration')))
-              sendConsole('BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60')
+            if (!(await ask(t('bed.start_a_new_bed_mesh_calibration')))) return
+            await sendConsole('BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60')
+            // The console worker knows exactly when the calibration command has finished.
+            // Poll only that local status while calibration is running, then fetch the new mesh once.
+            const deadline = Date.now() + 15 * 60_000
+            while (Date.now() < deadline) {
+              await new Promise(resolve => setTimeout(resolve, 2500))
+              try {
+                const status = await request('/api/console')
+                if (status?.command !== 'BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60') return
+                if (status?.completed) {
+                  if (status.success) reload()
+                  return
+                }
+              } catch {
+                return
+              }
+            }
           },
           true,
         ],
@@ -289,16 +307,16 @@ const Screws = () => {
   const values = screwValues(screwText.use().text)
   const plan = values ? screwPlan(values) : null
   const rows: [string, string, string][] = [
-    ['FL', '35,30', '1'],
-    ['FR', '225,30', '2'],
-    ['RR', '225,225', '3'],
-    ['RL', '35,225', '4'],
+    ['FL', '30,30', '1'],
+    ['FR', '230,30', '2'],
+    ['RR', '230,225', '3'],
+    ['RL', '30,225', '4'],
   ]
   const plate: [number, string, string, string][] = [
-    [3, '4', 'RL', 'X35 Y225'],
-    [2, '3', 'RR', 'X225 Y225'],
-    [0, '1', 'FL', 'X35 Y30'],
-    [1, '2', 'FR', 'X225 Y30'],
+    [3, '4', 'RL', 'X30 Y225'],
+    [2, '3', 'RR', 'X230 Y225'],
+    [0, '1', 'FL', 'X30 Y30'],
+    [1, '2', 'FR', 'X230 Y30'],
   ]
   return (
     <Card id="screwFocus" class="flex-1">
