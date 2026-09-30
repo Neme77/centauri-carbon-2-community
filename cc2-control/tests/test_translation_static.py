@@ -45,6 +45,11 @@ for locale, spot_checks in {
         "console.unlock_console_to_send_g_code":
             "Déverrouillez la console pour envoyer du G-code…",
     },
+    "zh": {
+        "job.object_exclusion": "对象排除",
+        "console.unlock_console_to_send_g_code":
+            "解锁控制台以发送 G-code…",
+    },
 }.items():
     data = json.loads((LOCALES / f"{locale}.json").read_text(encoding="utf-8"))
     for key, expected in spot_checks.items():
@@ -52,4 +57,4 @@ for locale, spot_checks in {
 
 assert "navigator.languages" in src and "p.language || detectLanguage()" in src, "browser language fallback missing"
 
-print("PASS: translation loader wiring and Italian/French spot-check markers")
+print("PASS: translation loader wiring and Italian/French/Chinese spot-check markers")

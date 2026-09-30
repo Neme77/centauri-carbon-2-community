@@ -83,7 +83,7 @@ Then reload `http://PRINTER-IP:8081` and complete the initial setup with the new
 - Canvas material slots, colours, presets and spool selection;
 - Side A / Side B mesh handling, adaptive probing and screw levelling;
 - object exclusion, protected console and global emergency stop;
-- English and Italian interface with persistent dark and light themes;
+- English, Italian, French and Simplified Chinese interface with persistent themes;
 - Panda/Moonraker compatibility endpoint on port `7125`.
 
 ## Source layout

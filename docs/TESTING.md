@@ -45,7 +45,7 @@ Tests involving stock packages, vendor reference binaries or signing keys must r
 - live temperatures, manual nozzle/bed heating and fans;
 - thumbnails, elapsed/remaining time, layer totals and object statistics;
 - Side A/Side B saved meshes, adaptive mesh and screw levelling;
-- camera aspect ratio, English/Italian text and both themes;
+- camera aspect ratio, English/Italian/French/Chinese text and both themes;
 - protected console, emergency stop and unsafe-state guards;
 - power-cycle persistence and update/rollback behaviour.
 

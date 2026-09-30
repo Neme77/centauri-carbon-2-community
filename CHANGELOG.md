@@ -8,7 +8,8 @@ checksums remain attached to each GitHub release.
 ### Features
 
 - Translations are keyed by identifier (`files.upload_file`) instead of by the English sentence, so the English text can be reworded without touching the other languages.
-- The interface follows the browser language (English, Italian or French) until a language is saved on the printer.
+- The interface follows the browser language (English, Italian, French or Chinese) until a language is saved on the printer.
+- Added a Simplified Chinese (`zh`) interface translation, selectable in **Settings → Appearance**.
 - Redesigned web interface: full-width header with the emergency stop, a side
   menu that collapses to icons, a link for every section (`#files`, `#bed`…) and
   Lucide icons throughout.
@@ -17,8 +18,8 @@ checksums remain attached to each GitHub release.
 - In-page confirmations, red dismissible error messages, print progress in the
   browser tab title, drag-and-drop G-code upload and command history in the
   console.
-- Every message, machine state and accessible name is translated in Italian and
-  French.
+- Every message, machine state and accessible name is translated in Italian,
+  French and Chinese.
 - Four more colour themes (Dracula, Nord, Monokai, Solarized Light) next to Light and Dark, chosen in **Settings → Appearance** and saved on the printer like the language; `/api/preferences` now accepts any lowercase-hyphenated theme identifier.
 
 ### Removed
