@@ -273,7 +273,7 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
                 const status = await request('/api/console')
                 if (status?.command !== 'BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60') return
                 if (status?.completed) {
-                  if (status.success) await load()
+                  if (status.success) reload()
                   return
                 }
               } catch {
