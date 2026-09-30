@@ -32,7 +32,7 @@ def prepare(root,extra=()):
         files[relative]={'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
                          'mode':oct(path.stat().st_mode&0o777)}
     manifest_path=root/'manifest.json'
-    manifest_path.write_text(json.dumps({'component':'CC2 Control','version':'1.1.30',
+    manifest_path.write_text(json.dumps({'component':'CC2 Control','version':'1.1.31',
         'source_sha256':b.CC2_CONTROL_SOURCE_SHA256,'files':files}))
     return b.load_cc2_control(component,manifest_path)
 
