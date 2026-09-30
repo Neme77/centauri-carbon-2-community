@@ -3,7 +3,7 @@ import { store, ls } from './store'
 import { notify } from './api'
 import { setQuickFromServer } from './quick'
 
-export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', it: 'Italiano', fr: 'Français' }
+export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', it: 'Italiano', fr: 'Français', zh: '中文' }
 
 // The browser's first language we ship (fr-CA -> fr), else English.
 export const detectLanguage = () =>
