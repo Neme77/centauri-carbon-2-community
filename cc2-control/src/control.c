@@ -64,10 +64,10 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             "G180 S3\n"
             "M190 S60\n"
             "G90\nG1 Z10 F600\n"
-            "G1 X35 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
-            "G1 X225 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
-            "G1 X225 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
-            "G1 X35 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
+            "G1 X30 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
+            "G1 X230 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
+            "G1 X230 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
+            "G1 X30 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n"
             "RESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n"
             "M104 S0\nM140 S0");
         return 1;
