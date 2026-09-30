@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { cn } from '@/lib/utils'
 import { Dot } from '@/components/ui/badge'
 import { Card, CardHead } from '@/components/ui/card'
@@ -102,10 +102,23 @@ export const Muted = ({ children, class: c }: { children: ComponentChildren; cla
 export const CameraCard = ({ tall }: { tall?: boolean }) => {
   const [ready, setReady] = useState(false)
   const [src, setSrc] = useState(camera())
+  const retry = useRef<number | undefined>(undefined)
   const lost = () => {
     setReady(false)
-    setTimeout(() => setSrc(camera(`?t=${Date.now()}`)), 2500)
+    if (retry.current !== undefined) clearTimeout(retry.current)
+    retry.current = window.setTimeout(() => {
+      retry.current = undefined
+      setSrc(camera(`?t=${Date.now()}`))
+    }, 2500)
   }
+  useEffect(
+    () => () => {
+      if (retry.current !== undefined) clearTimeout(retry.current)
+      retry.current = undefined
+      setSrc('')
+    },
+    []
+  )
   return (
     <Card class="flex flex-col">
       <CardHead
