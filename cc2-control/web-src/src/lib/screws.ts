@@ -1,4 +1,4 @@
-export const SCREW_KEYS = ['35,30', '225,30', '225,225', '35,225'] as const
+export const SCREW_KEYS = ['30,30', '230,30', '230,225', '30,225'] as const
 
 // Median of the last three probes at each of the four screw positions, parsed from console output.
 export function screwValues(text: string): Record<string, number> | null {

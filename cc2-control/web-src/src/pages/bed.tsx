@@ -307,16 +307,16 @@ const Screws = () => {
   const values = screwValues(screwText.use().text)
   const plan = values ? screwPlan(values) : null
   const rows: [string, string, string][] = [
-    ['FL', '35,30', '1'],
-    ['FR', '225,30', '2'],
-    ['RR', '225,225', '3'],
-    ['RL', '35,225', '4'],
+    ['FL', '30,30', '1'],
+    ['FR', '230,30', '2'],
+    ['RR', '230,225', '3'],
+    ['RL', '30,225', '4'],
   ]
   const plate: [number, string, string, string][] = [
-    [3, '4', 'RL', 'X35 Y225'],
-    [2, '3', 'RR', 'X225 Y225'],
-    [0, '1', 'FL', 'X35 Y30'],
-    [1, '2', 'FR', 'X225 Y30'],
+    [3, '4', 'RL', 'X30 Y225'],
+    [2, '3', 'RR', 'X230 Y225'],
+    [0, '1', 'FL', 'X30 Y30'],
+    [1, '2', 'FR', 'X230 Y30'],
   ]
   return (
     <Card id="screwFocus" class="flex-1">
