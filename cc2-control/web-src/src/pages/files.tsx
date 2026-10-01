@@ -203,11 +203,11 @@ export const Files = () => {
                   onClick={() => setSel(e)}
                   class={cn(
                     cols,
-                    'min-h-16 cursor-pointer',
+                    'cc2-file-row min-h-16 cursor-pointer',
                     sel && key(sel) === key(e) && 'bg-field outline outline-1 -outline-offset-1 outline-cyan'
                   )}
                 >
-                  <div class="flex min-w-0 items-center gap-2.5 font-semibold">
+                  <div class="cc2-file-identity flex min-w-0 items-center gap-2.5 font-semibold">
                     <input
                       type="checkbox"
                       title={t('files.select_file')}
@@ -218,7 +218,8 @@ export const Files = () => {
                     <FileText {...I} class="shrink-0" />
                     <button
                       type="button"
-                      class="min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline"
+                      class="cc2-file-name min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline"
+                      title={e.file.path}
                       onClick={() => setSel(e)}
                     >
                       {e.file.path}
@@ -251,6 +252,7 @@ export const Files = () => {
                       {t('common.delete')}
                     </Button>
                   </div>
+                  {sel && key(sel) === key(e) && <div class="cc2-file-expanded col-span-2 hidden">{e.file.path}</div>}
                 </div>
               ))}
               {!visible.length && (
@@ -322,7 +324,7 @@ const Detail = ({
       <div class="flex min-w-0 items-center gap-3.5">
         <FileText size={36} strokeWidth={1} class="shrink-0" />
         <div class="min-w-0">
-          <h3 class="text-base leading-snug [overflow-wrap:anywhere]">
+          <h3 class="cc2-file-detail-title text-base leading-snug [overflow-wrap:anywhere]">
             {entry ? entry.file.path : t('files.no_file_selected')}
           </h3>
           <small class="text-muted">{entry ? where(entry.storage) : t('files.select_a_g_code_file_to')}</small>

@@ -68,6 +68,14 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 @media (max-width: 767px) and (orientation: portrait) {
   .cc2-main { margin-left: 0; padding: 10px; }
   .cc2-main input, .cc2-main select, .cc2-main textarea { font-size: 16px; }
+  .cc2-file-row { min-height: 56px; }
+  .cc2-file-identity { gap: 6px; }
+  .cc2-file-name {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; font-weight: 500;
+  }
+  .cc2-file-expanded { display: block; overflow-wrap: anywhere; font-size: 12px; }
+  .cc2-file-detail-title { font-size: 13px; }
   .cc2-mobile-menu { display: flex; }
   .cc2-topbar { gap: 8px; padding-inline: 8px; }
   .cc2-full-brand { display: none; }

@@ -59,6 +59,8 @@ let d = {
 	motion: { x: 20, y: 20, z: 4, homed_axes: "xyz" },
 	tuning: { speed_percent: 100, flow_percent: 100, live_velocity: 80 },
 };
+const longFilename =
+	"ECC2_0.4_Buddha_Elegoo_PLA_very_long_print_name_with_extended_metadata_0.2_25m47s.gcode";
 const commands = [];
 let failPrinter = false;
 await page.route("**/api/**", async (route) => {
@@ -80,6 +82,11 @@ await page.route("**/api/**", async (route) => {
 	if (path === "/api/preferences") out = { language: "en", theme: "dark" };
 	if (path === "/api/orca/pending-print") out = { pending: false };
 	if (path === "/api/material-presets") out = { presets: [] };
+	if (path === "/api/gcode-files")
+		out = {
+			internal: { files: [{ path: longFilename, size: 5190855, modified: 1 }] },
+			usb: { files: [] },
+		};
 	if (path === "/api/control") {
 		const command = req.postData();
 		commands.push(command);
@@ -113,11 +120,14 @@ assert.ok(size.scroll <= size.width, JSON.stringify(size));
 assert.equal(await page.locator("#cc2-navigation").isVisible(), false);
 await page.getByRole("button", { name: "Expand menu", exact: true }).click();
 assert.equal(await page.locator("#cc2-navigation").isVisible(), true);
+await page.waitForFunction(() =>
+	document.activeElement?.matches("#cc2-navigation a"),
+);
 await page.keyboard.press("Escape");
-assert.equal(await page.locator("#cc2-navigation").isVisible(), false);
+await page.locator("#cc2-navigation").waitFor({ state: "hidden" });
 await page.getByRole("button", { name: "Expand menu", exact: true }).click();
 await page.locator('#cc2-navigation a[href="#job"]').click();
-assert.equal(await page.locator("#cc2-navigation").isVisible(), false);
+await page.locator("#cc2-navigation").waitFor({ state: "hidden" });
 await page.locator("#tune-speed").fill("77");
 await page.waitForTimeout(1800);
 assert.equal(await page.locator("#tune-speed").inputValue(), "77");
@@ -176,6 +186,27 @@ for (const width of [320, 360, 390]) {
 	]) {
 		await page.evaluate((name) => (location.hash = name), name);
 		await page.waitForTimeout(180);
+		if (name === "files") {
+			const button = page.locator(".cc2-file-name");
+			await button.waitFor();
+			const metrics = await button.evaluate((el) => ({
+				height: el.getBoundingClientRect().height,
+				line: parseFloat(getComputedStyle(el).lineHeight),
+				whiteSpace: getComputedStyle(el).whiteSpace,
+				overflow: getComputedStyle(el).textOverflow,
+				title: el.title,
+			}));
+			assert.equal(metrics.whiteSpace, "nowrap");
+			assert.equal(metrics.overflow, "ellipsis");
+			assert.equal(metrics.title, longFilename);
+			assert.ok(metrics.height <= metrics.line + 1);
+			await button.click();
+			await page.locator(".cc2-file-expanded").waitFor();
+			assert.equal(
+				await page.locator(".cc2-file-expanded").textContent(),
+				longFilename,
+			);
+		}
 		size = await overflow();
 		assert.ok(
 			size.scroll <= width,

@@ -31,7 +31,10 @@ sidebar with an expandable navigation drawer, a compact product title and
 full-width content. The drawer closes on navigation, Escape, backdrop click or
 rotation out of narrow portrait. Keyboard focus stays within the menu while
 open. Form fields use 16px text in portrait to avoid input-focus zoom on mobile
-browsers. Existing landscape and desktop navigation breakpoints are preserved.
+browsers. Existing landscape and desktop navigation breakpoints are preserved. In portrait,
+file-list names use a compact single line with ellipsis. Selecting a row reveals
+its full filename, also retained in the detail panel and button title. Landscape
+filename wrapping is unchanged.
 
 ## Validation
 
