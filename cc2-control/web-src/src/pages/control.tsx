@@ -180,11 +180,11 @@ const Temperatures = ({ d }: { d: any }) => {
       </Button>
       <div class="mt-4 border-t border-edge pt-3">
         <small class="text-muted">{t('control.temperature_presets')}</small>
-        <div class="mt-2 flex flex-wrap gap-2">
+        <div class="mt-2 flex gap-2">
           {list.map(p => (
             <Button
               key={p.name}
-              class="min-w-20 flex-1 text-xs"
+              class="min-w-0 flex-1 truncate px-1 text-xs"
               variant={active === p.name ? 'active' : 'default'}
               title={`${p.nozzle} °C nozzle / ${p.bed} °C bed`}
               onClick={() => {
