@@ -551,6 +551,13 @@ static int gcode_idle_for_mutation(const mqtt_client *mqtt){
         time(NULL)-mqtt->last_message<=15;
 }
 
+/* Uploads publish new files without changing the active job. */
+static int gcode_ready_for_upload(const mqtt_client *mqtt){
+    return mqtt->connected && mqtt->registered && mqtt->have_machine_status &&
+        (mqtt->machine_status==1 || mqtt->machine_status==2) &&
+        mqtt->last_message>0 && time(NULL)-mqtt->last_message<=15;
+}
+
 static void gcode_delete_response(int fd,const char *request,const mqtt_client *mqtt,
                                   const char *body,size_t length){
     (void)request;
@@ -804,8 +811,8 @@ done:
 
 static int gcode_upload_start(int fd,const char *request,const char *query,
                               size_t used,size_t header_length,const mqtt_client *mqtt){
-    if(!gcode_idle_for_mutation(mqtt)){
-        const char *e="{\"error\":\"Printer must be idle and connected\"}\n";
+    if(!gcode_ready_for_upload(mqtt)){
+        const char *e="{\"error\":\"Printer must be idle or printing and connected\"}\n";
         respond(fd,409,"Conflict","application/json",e,strlen(e));return 0;
     }
     char storage[16],name[PATH_MAX_LOCAL];
@@ -1000,6 +1007,7 @@ static void *orca_upload_worker(void *arg){
     if(!saw_file){error="Missing file field";goto fail;}
     if((unsigned long)(file_end-file_start)>FILE_UPLOAD_MAX){status=413;status_text="Payload Too Large";error="G-code file too large";goto fail;}
     if(print_requested){
+        if(!gcode_idle_for_mutation(job->mqtt)){status=409;status_text="Conflict";error="Printer must be idle for upload-and-print";goto fail;}
         pthread_mutex_lock(&orca_pending_mutex);
         orca_pending_expire_locked();
         int occupied=orca_pending_filename[0]!=0;
@@ -1025,9 +1033,9 @@ static void *orca_upload_worker(void *arg){
         left-=(long)want;
     }
     if(fsync(output)!=0 || close(output)!=0){output=-1;status=507;status_text="Insufficient Storage";error="Cannot finalize G-code file";goto fail;}output=-1;
-    /* A second idle check protects against a print starting mid-transfer. */
+    /* Recheck before publication; upload-only may continue during printing. */
     if(lstat(destination,&st)==0){status=409;status_text="Conflict";error="File already exists";goto fail;}
-    if(!gcode_idle_for_mutation(job->mqtt)){status=409;status_text="Conflict";error="Printer is no longer idle";goto fail;}
+    if(!(print_requested ? gcode_idle_for_mutation(job->mqtt) : gcode_ready_for_upload(job->mqtt))){status=409;status_text="Conflict";error="Printer state changed during upload";goto fail;}
     reserve=open(destination,O_WRONLY|O_CREAT|O_EXCL,0600);
     if(reserve<0){status=errno==EEXIST?409:507;status_text=status==409?"Conflict":"Insufficient Storage";error="Cannot reserve destination";goto fail;}
     close(reserve);reserve=-1;
@@ -1086,8 +1094,8 @@ static int orca_expect_continue(const char *request){
     return 0;
 }
 static int orca_upload_start(int fd,const char *request,size_t used,size_t header_length,const mqtt_client *mqtt){
-    if(!gcode_idle_for_mutation(mqtt)){
-        const char *msg="{\"error\":\"Printer must be idle and connected\"}\n";
+    if(!gcode_ready_for_upload(mqtt)){
+        const char *msg="{\"error\":\"Printer must be idle or printing and connected\"}\n";
         respond(fd,409,"Conflict","application/json",msg,strlen(msg));return 0;
     }
     char boundary[80];

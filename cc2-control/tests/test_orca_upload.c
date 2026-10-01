@@ -41,8 +41,20 @@ int main(void){
  assert(upload(&mqtt,"bad.gcode","G28\n",0,1)==415);
  puts("PASS non-multipart rejected");
  mqtt.machine_status=2;
- assert(upload(&mqtt,"busy.gcode","G28\n",0,0)==409);
- puts("PASS upload during print rejected");
+ assert(upload(&mqtt,"busy.gcode","G28\n",0,0)==201);
+ snprintf(file,sizeof(file),"%s/busy.gcode",path);assert(access(file,F_OK)==0);unlink(file);
+ assert(upload(&mqtt,"cube.gcode","REPLACE\n",0,0)==409);
+ pthread_mutex_lock(&orca_pending_mutex);orca_pending_filename[0]=0;pthread_mutex_unlock(&orca_pending_mutex);
+ assert(upload(&mqtt,"second-print.gcode","G28\n",1,0)==409);
+ assert(!orca_pending_filename[0]);
+ snprintf(file,sizeof(file),"%s/second-print.gcode",path);assert(access(file,F_OK)!=0);
+ mqtt.last_message=time(NULL)-60;
+ assert(upload(&mqtt,"stale.gcode","G28\n",0,0)==409);
+ mqtt.last_message=time(NULL);mqtt.connected=0;
+ assert(upload(&mqtt,"offline.gcode","G28\n",0,0)==409);
+ mqtt.connected=1;mqtt.machine_status=10;
+ assert(upload(&mqtt,"active.gcode","G28\n",0,0)==409);
+ puts("PASS upload-only during print allowed; overwrite and print requests rejected");
  snprintf(file,sizeof(file),"%s/cube.gcode",path);unlink(file);snprintf(file,sizeof(file),"%s/print.gcode",path);unlink(file);rmdir(path);
  puts("PASS all Orca adapter tests");return 0;
 }
