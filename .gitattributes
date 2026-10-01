@@ -9,3 +9,6 @@ builder/current/dualtrust/cc2_community_release_public.pem -text
 builder/current/keys/cc2_stock_public.pem -text
 builder/current/tools/cc2_sig_tool_v1.1.py -text
 builder/current/core/firmware_builder.py -text
+
+# Standalone updater shell launchers.
+cc2-control/installer/*.sh text eol=lf
