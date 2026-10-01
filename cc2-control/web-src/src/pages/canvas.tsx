@@ -216,7 +216,7 @@ export const Canvas = () => {
                 )}
                 onClick={() => ok && canvas.set({ slot: s.i })}
               >
-                <h3 class="text-base font-semibold">Slot {s.i + 1}</h3>
+                <h3 class="text-base font-semibold">{tpl('common.slot_n', { n: s.i + 1 })}</h3>
                 <div
                   class="mx-auto my-2 mb-4 size-24 rounded-full border-[18px] bg-bg"
                   style={{ borderColor: s.colour, boxShadow: `0 0 18px ${s.colour}66` }}
@@ -267,7 +267,9 @@ export const Canvas = () => {
                     <Glyph {...I} />
                     {t(label)}
                   </span>
-                  <small class="text-muted">{ok ? `Slot ${slot + 1}` : t('canvas.unavailable')}</small>
+                  <small class="text-muted">
+                    {ok ? tpl('common.slot_n', { n: slot + 1 }) : t('canvas.unavailable')}
+                  </small>
                 </Button>
               ))}
             </div>

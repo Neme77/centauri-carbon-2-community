@@ -32,7 +32,7 @@ const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightO
       title={blocked ? t('common.available_when_idle') : undefined}
       onClick={run}
     >
-      <Icon n={icon} class="size-6 text-cyan" />
+      <Icon n={icon} class="text-cyan" />
       {t(label)}
     </Button>
   )
@@ -55,7 +55,7 @@ const QuickEditor = ({ onClose }: { onClose: () => void }) => {
       <p class="mb-4 text-muted">{t('dashboard.choose_four_protected_actions_or')}</p>
       {slots.map((action, n) => (
         <div key={n} class="my-2.5 grid grid-cols-[70px_1fr] items-center gap-2.5">
-          <label for={`quick-slot-${n}`}>Slot {n + 1}</label>
+          <label for={`quick-slot-${n}`}>{tpl('common.slot_n', { n: n + 1 })}</label>
           <Select
             id={`quick-slot-${n}`}
             value={action}
@@ -131,7 +131,7 @@ export const Dashboard = () => {
               icon="bolt"
               title="dashboard.quick_actions"
               end={
-                <Button class="min-h-8 px-2 text-xs" onClick={() => setEditing(true)}>
+                <Button class="min-h-8 px-2 text-xs text-fg" onClick={() => setEditing(true)}>
                   <Settings size={14} strokeWidth={1} />
                   {t('dashboard.edit')}
                 </Button>
@@ -182,7 +182,8 @@ export const Dashboard = () => {
           <div class="my-2 text-3xl">
             {(off > 0 ? '+' : '') + off.toFixed(2)} <small class="text-sm text-muted">mm</small>
           </div>
-          <div class="mt-auto">
+          <div class="mt-auto grid justify-items-start gap-1.5">
+            <small class="text-muted">{t('dashboard.z_offset_page_only')}</small>
             <Tag tone="warning">{t('common.session_only')}</Tag>
           </div>
         </Card>
