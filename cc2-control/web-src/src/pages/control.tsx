@@ -457,7 +457,7 @@ export const Control = () => {
         <div class="grid content-start gap-3.5 lg:col-span-2 lg:grid-cols-2 xl:col-span-1 xl:grid-cols-1">
           <Card>
             <CardHead icon="settings" title="control.machine" />
-            <div class="grid grid-cols-2 gap-2.5">
+            <div class="grid auto-rows-fr grid-cols-2 gap-2.5">
               <Button
                 class="min-h-16 flex-col gap-1"
                 variant={v.lightOn ? 'active' : 'default'}
