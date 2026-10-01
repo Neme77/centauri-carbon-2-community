@@ -380,7 +380,7 @@ const Upload = ({
   const [storage, setStorage] = useState('internal'),
     [pct, setPct] = useState(-1),
     [over, setOver] = useState(false),
-    [note, setNote] = useState(t('files.maximum_64_mib_no_automatic'))
+    [note, setNote] = useState(t('files.maximum_upload_size_no_automatic'))
   const go = async () => {
     const file = pick.current?.files?.[0]
     if (busy || !file) return notify(t('files.choose_a_g_code_file_first'), 'error')
@@ -389,7 +389,7 @@ const Upload = ({
       new TextEncoder().encode(file.name).length >= 256 ||
       !/\.gcode$/i.test(file.name) ||
       file.size === 0 ||
-      file.size > 64 * 1024 * 1024
+      file.size > 128 * 1024 * 1024
     )
       return notify(t('files.choose_a_valid_gcode_file_between'), 'error')
     if (
