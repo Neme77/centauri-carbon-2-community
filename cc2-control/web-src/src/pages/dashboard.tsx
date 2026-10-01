@@ -182,7 +182,8 @@ export const Dashboard = () => {
           <div class="my-2 text-3xl">
             {(off > 0 ? '+' : '') + off.toFixed(2)} <small class="text-sm text-muted">mm</small>
           </div>
-          <div class="mt-auto">
+          <div class="mt-auto grid justify-items-start gap-1.5">
+            <small class="text-muted">{t('dashboard.z_offset_page_only')}</small>
             <Tag tone="warning">{t('common.session_only')}</Tag>
           </div>
         </Card>
