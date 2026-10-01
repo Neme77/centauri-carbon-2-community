@@ -112,12 +112,19 @@ int uds_message(uds_client *c,const char *json,size_t length){
  c->parse_error="invalid_json";
  if(root>=end||*root!='{'||json_container_end(root,end)!=end)return 0;
  double id=0;int initial=numeric(root,end,"id",&id)&&id==11;
+ if(initial&&json_member(root,end,"error")){c->parse_error="subscription_error";return 0;}
  const char *container=json_member_object(root,end,initial?"result":"params",'{',&ce);
  if(!initial){
   const char *m=json_member(root,end,"method");
   if(!m||end-m<12||memcmp(m,"\"cc2_status\"",12)){
-   if(id==12&&json_member_object(root,end,"result",'{',&ce)){c->last_rx=now_mono();return 1;}
-   c->parse_error="unexpected_message";return 0;
+   if(id==12){
+    if(json_member(root,end,"error")){c->parse_error="heartbeat_error";return 0;}
+    if(json_member_object(root,end,"result",'{',&ce)){c->last_rx=now_mono();return 1;}
+    c->parse_error="invalid_heartbeat";return 0;
+   }
+   /* Vendor reports and unrelated replies may share this socket. Ignore them
+    * without refreshing telemetry or closing an otherwise healthy stream. */
+   c->ignored_messages++;return 1;
   }
  }
  c->parse_error="missing_container";

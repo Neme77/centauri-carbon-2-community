@@ -59,3 +59,10 @@ added. Hardware retesting must identify and resolve recurring disconnects before
 merge. The job UI also recognizes `print.state=paused` when the machine status
 remains Printing, enabling Resume and disabling Pause. The rebuilt UI needs
 interactive printer validation.
+
+The next printer run identified `unexpected_message` as the reconnect reason.
+The client now ignores unrelated vendor reports/replies instead of closing the
+stream, counted by `ignored_messages`. They do not refresh cache freshness or
+modify fields. Subscription/heartbeat errors and malformed telemetry still
+close the connection. The exact unsolicited printer message has not been
+captured; hardware testing must confirm this addresses the reconnects.

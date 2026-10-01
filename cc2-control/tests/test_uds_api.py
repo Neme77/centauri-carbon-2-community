@@ -64,6 +64,11 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         value = wait_for("/api/uds", lambda x: x["fresh"])
         assert value["values"]["speed_factor"] == 0.8
         assert value["values"]["extrude_factor"] == 0.95
+        send({"id": 0, "report": {"message": "vendor report"}})
+        send({"method": "other_notification", "params": {}})
+        value = wait_for("/api/uds", lambda x: x["ignored_messages"] == 2)
+        assert value["connections"] == 1 and value["disconnects"] == 0
+        assert value["values"]["speed_factor"] == 0.8
         printer = get("/api/printer")
         assert printer["extruder"] == {"temperature": 210, "target": 215}
         assert printer["fans"]["part"] == 153

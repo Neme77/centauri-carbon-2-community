@@ -27,6 +27,16 @@ int main(void){
  c.last_rx.tv_sec-=10;assert(!uds_value(&c,U_ET,&v));view.extruder_temp=200;uds_overlay(&c,&view);assert(view.extruder_temp==200);
  message(&c,"{\"id\":12,\"result\":{\"state\":\"ready\"}}");assert(uds_fresh(&c));
  assert(!uds_message(&c,"{broken",7));
+ struct timespec saved_rx=c.last_rx;unsigned long saved_messages=c.messages;
+ message(&c,"{\"id\":0,\"report\":{\"message\":\"vendor report\"}}");
+ message(&c,"{\"method\":\"other_notification\",\"params\":{}}");
+ assert(c.ignored_messages==2&&c.messages==saved_messages&&c.fd>=0);
+ assert(c.last_rx.tv_sec==saved_rx.tv_sec&&c.last_rx.tv_nsec==saved_rx.tv_nsec);
+ assert(uds_value(&c,U_SPEED_FACTOR,&v)&&v==0.5);
+ assert(!uds_message(&c,"{\"id\":11,\"error\":{}}",strlen("{\"id\":11,\"error\":{}}")));
+ assert(!strcmp(c.parse_error,"subscription_error"));
+ assert(!uds_message(&c,"{\"id\":12,\"error\":{}}",strlen("{\"id\":12,\"error\":{}}")));
+ assert(!strcmp(c.parse_error,"heartbeat_error"));
  assert(!fcntl(c.fd,F_SETFL,O_NONBLOCK));
  const char *frame="{\"method\":\"cc2_status\",\"params\":{\"eventtime\":5,\"status\":{\"gcode_move\":{\"speed_factor\":1.3}}}}\003";
  assert(write(pair[1],frame,10)==10);uds_process(&c);assert(c.used==10);
