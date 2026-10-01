@@ -20,6 +20,36 @@ static void read_printer(mqtt_client *m,char *out,size_t cap){
  ssize_t n=recv(peers[1],out,cap-1,0);assert(n>0);out[n]=0;
  close(peers[0]);close(peers[1]);
 }
+static void test_gcode_remaining(void){
+ char directory[]="/tmp/cc2-eta-test-XXXXXX";assert(mkdtemp(directory));
+ const char *old_root=gcode_internal_root;gcode_internal_root=directory;
+ char path[1024];snprintf(path,sizeof(path),"%s/orca.gcode",directory);
+ FILE *file=fopen(path,"w");assert(file);
+ fputs("; total layer number: 617\nG1 X1\n; estimated printing time (normal mode) = 1h 9m 56s\n",file);fclose(file);
+ mqtt_client m;memset(&m,0,sizeof(m));m.connected=m.registered=m.have_machine_status=1;
+ m.last_message=time(NULL);m.machine_status=2;strcpy(m.print_state,"printing");strcpy(m.filename,"orca.gcode");m.print_duration=60;
+ char response[6000];read_printer(&m,response,sizeof(response));
+ assert(strstr(response,"\"remaining\":4136,\"remaining_source\":\"gcode\""));
+ assert(strstr(response,"\"total_layers\":617"));
+ assert(m.remaining_time==0&&m.print_duration==60);
+ m.remaining_time=99;m.have_total_layers=1;m.total_layers=700;
+ read_printer(&m,response,sizeof(response));
+ assert(strstr(response,"\"remaining\":99,\"remaining_source\":\"mqtt\""));
+ assert(strstr(response,"\"total_layers\":700"));
+ m.remaining_time=0;m.have_total_layers=0;m.last_message-=30;
+ read_printer(&m,response,sizeof(response));assert(strstr(response,"\"remaining_source\":\"unavailable\""));
+ m.last_message=time(NULL);strcpy(m.filename,"missing.gcode");
+ read_printer(&m,response,sizeof(response));assert(strstr(response,"\"remaining_source\":\"unavailable\""));
+ snprintf(path,sizeof(path),"%s/elegoo.gcode",directory);file=fopen(path,"w");assert(file);
+ fputs("; total layer number: 227\n; estimated printing time (normal mode) = 25m 47s\n",file);fclose(file);
+ strcpy(m.filename,"elegoo.gcode");read_printer(&m,response,sizeof(response));
+ assert(strstr(response,"\"remaining\":1487,\"remaining_source\":\"gcode\""));
+ m.print_duration=2000;read_printer(&m,response,sizeof(response));assert(strstr(response,"\"remaining\":0,"));
+ m.machine_status=1;strcpy(m.print_state,"complete");m.print_duration=60;
+ read_printer(&m,response,sizeof(response));assert(strstr(response,"\"remaining_source\":\"unavailable\""));
+ unlink(path);snprintf(path,sizeof(path),"%s/orca.gcode",directory);unlink(path);rmdir(directory);
+ gcode_internal_root=old_root;
+}
 int main(void){
  mqtt_client m;memset(&m,0,sizeof(m));m.connected=m.registered=m.have_machine_status=1;
  m.machine_status=2;m.last_message=time(NULL);strcpy(m.filename,"cube.gcode");strcpy(m.print_state,"printing");
@@ -49,5 +79,5 @@ int main(void){
  assert(strstr(response,"\"extruder\":{\"temperature\":205.0,\"target\":210.0}"));
  assert(strstr(response,"\"part\":100.0"));
  assert(request_tune(&m,"tune:flow:100")==409&&!sent_script[0]);
- uds_close(&telemetry);close(pair[1]);puts("PASS tuning API readback gate and protected command dispatch");return 0;
+ uds_close(&telemetry);close(pair[1]);test_gcode_remaining();puts("PASS tuning API readback gate and protected command dispatch");return 0;
 }
