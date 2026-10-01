@@ -459,7 +459,8 @@ export const Control = () => {
             <CardHead icon="settings" title="control.machine" />
             <div class="grid grid-cols-2 gap-2.5">
               <Button
-                class={`min-h-16 flex-col gap-1 ${v.lightOn ? 'border-cyan text-cyan' : ''}`}
+                class="min-h-16 flex-col gap-1"
+                variant={v.lightOn ? 'active' : 'default'}
                 aria-pressed={v.lightOn}
                 title={t(
                   v.lightOn ? 'control.internal_light_on_press_to_turn' : 'control.internal_light_off_press_to_turn'
@@ -468,9 +469,9 @@ export const Control = () => {
                   if (await control(v.lightOn ? 'light:off' : 'light:on')) setTimeout(refreshPrinter, 250)
                 }}
               >
-                <Icon n="light" class="text-current" />
+                <Icon n="light" class="text-cyan" />
                 <span>
-                  {t('common.lights')} <small class="opacity-80">{t(v.lightOn ? 'control.on' : 'control.off')}</small>
+                  {t('common.lights')} <small>{t(v.lightOn ? 'control.on' : 'control.off')}</small>
                 </span>
               </Button>
               <Button
