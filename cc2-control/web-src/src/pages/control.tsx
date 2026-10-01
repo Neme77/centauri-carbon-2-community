@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -137,11 +137,19 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
   )
 }
 
-const Temperatures = ({ d }: { d: any }) => {
+const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const list = presets.use().list
   const [nozzle, setNozzle] = useState('0'),
-    [bed, setBed] = useState('0'),
-    [active, setActive] = useState('')
+    [bed, setBed] = useState('0')
+  const seeded = useRef(false)
+  // Start from the printer's current targets, so Apply never silently sends 0/0 over a running preheat.
+  useEffect(() => {
+    if (seeded.current || !d) return
+    seeded.current = true
+    setNozzle(String(Math.round(Number(d.extruder?.target) || 0)))
+    setBed(String(Math.round(Number(d.heater_bed?.target) || 0)))
+  }, [d])
+  const active = list.find(p => String(p.nozzle) === nozzle && String(p.bed) === bed)?.name
   const apply = async () => {
     const n = Number(nozzle),
       b = Number(bed)
@@ -154,20 +162,24 @@ const Temperatures = ({ d }: { d: any }) => {
       <CardHead icon="temp" title="common.temperatures" />
       {(
         [
-          ['red', 'common.nozzle', d?.extruder?.temperature, nozzle, setNozzle, 300],
-          ['blue', 'common.heated_bed', d?.heater_bed?.temperature, bed, setBed, 120],
+          ['red', 'common.nozzle', d?.extruder, nozzle, setNozzle, 300],
+          ['blue', 'common.heated_bed', d?.heater_bed, bed, setBed, 120],
         ] as const
-      ).map(([dot, label, cur, val, set, max]) => (
+      ).map(([dot, label, heater, val, set, max]) => (
         <div key={label} class="my-4 flex items-center gap-2.5">
           <Dot c={dot} />
           <span>{t(label)}</span>
-          <strong class="ml-auto text-[15px]">{num(cur)} °C</strong>
+          <strong class="ml-auto text-[15px]">
+            {num(heater?.temperature)}
+            {Number(heater?.target) > 0 ? ` / ${num(heater.target)}` : ''} °C
+          </strong>
           <Input
             class="w-18 text-center"
             type="number"
             min="0"
             max={max}
             value={val}
+            disabled={!v.idle}
             aria-label={tpl('control.name_target', { name: t(label) })}
             onInput={e => set(e.currentTarget.value)}
             onKeyDown={e => e.key === 'Enter' && apply()}
@@ -175,22 +187,23 @@ const Temperatures = ({ d }: { d: any }) => {
           <small>°C</small>
         </div>
       ))}
-      <Button wide onClick={apply}>
+      <Button wide disabled={!v.idle} onClick={apply}>
         {t('control.apply_targets')}
       </Button>
+      {!v.idle && <Notice>{t('common.available_when_idle')}</Notice>}
       <div class="mt-4 border-t border-edge pt-3">
         <small class="text-muted">{t('control.temperature_presets')}</small>
-        <div class="mt-2 flex flex-wrap gap-2">
+        <div class="mt-2 flex gap-2">
           {list.map(p => (
             <Button
               key={p.name}
-              class="min-w-20 flex-1 text-xs"
+              class="min-w-0 flex-1 truncate px-1 text-xs"
               variant={active === p.name ? 'active' : 'default'}
+              disabled={!v.idle}
               title={`${p.nozzle} °C nozzle / ${p.bed} °C bed`}
               onClick={() => {
                 setNozzle(String(p.nozzle))
                 setBed(String(p.bed))
-                setActive(p.name)
                 notify(
                   tpl('control.name_targets_nozzle_bed_c_loaded', {
                     name: p.name,
@@ -416,7 +429,7 @@ export const Control = () => {
           <Movement v={v} />
         </div>
         <div class="grid content-start gap-3.5">
-          <Temperatures d={d} />
+          <Temperatures d={d} v={v} />
           <Card>
             <CardHead icon="fan" title="common.fans" />
             {(['part', 'aux', 'box'] as const).map(k => (
