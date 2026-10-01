@@ -62,3 +62,27 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
     cursor: pointer;
   }
 }
+
+/* Narrow portrait phones use the full content width. Landscape keeps the icon rail. */
+.cc2-menu-backdrop { display: none; }
+@media (max-width: 767px) and (orientation: portrait) {
+  .cc2-main { margin-left: 0; padding: 10px; }
+  .cc2-main input, .cc2-main select, .cc2-main textarea { font-size: 16px; }
+  .cc2-mobile-menu { display: flex; }
+  .cc2-topbar { gap: 8px; padding-inline: 8px; }
+  .cc2-full-brand { display: none; }
+  .cc2-portrait-brand { display: block; }
+  .cc2-sidebar {
+    width: min(280px, 85vw); transform: translateX(-100%); visibility: hidden;
+    overflow-y: auto; transition: transform 150ms ease;
+  }
+  .cc2-sidebar-open { transform: translateX(0); visibility: visible; }
+  .cc2-sidebar nav a { justify-content: flex-start; padding-inline: 16px; }
+  .cc2-sidebar nav a span { display: inline; }
+  .cc2-menu-backdrop {
+    display: block; position: fixed; inset: 68px 0 0; z-index: 19;
+    background: #0008;
+  }
+  .cc2-topbar > div:last-child { min-width: 0; gap: 4px; }
+  .cc2-topbar > div:last-child > div:first-child { padding-inline: 8px; }
+}

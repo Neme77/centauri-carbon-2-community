@@ -2,7 +2,7 @@
 // and a hatched pocket on the left, then a continuous line running under the title. From xl up only; below that the
 // title stands alone. Scale: the artwork's 268 units of height become the 56 px of the header block (0.209 px per unit).
 export const HeaderTitle = () => (
-  <div class="flex min-w-0 flex-1 items-stretch xl:h-14">
+  <div class="cc2-header-title flex min-w-0 flex-1 items-stretch xl:h-14">
     <svg aria-hidden="true" viewBox="0 16 702 268" class="hidden h-full w-auto shrink-0 text-cyan opacity-80 xl:block">
       <defs>
         <pattern
@@ -33,7 +33,8 @@ export const HeaderTitle = () => (
       />
       <circle cx="16" cy="254" r="14" fill="currentColor" />
     </svg>
-    <div class="relative min-w-0 flex-1">
+    <span class="cc2-portrait-brand hidden font-bold text-cyan">CC2 Control</span>
+    <div class="cc2-full-brand relative min-w-0 flex-1">
       <h1 class="text-2xl font-extrabold leading-tight tracking-tight text-cyan [text-shadow:0_0_14px_color-mix(in_srgb,currentColor_35%,transparent)] md:text-[28px] xl:absolute xl:bottom-[7px] xl:left-3 xl:whitespace-nowrap xl:text-[32px]">
         Centauri Carbon 2<span class="mx-2.5 font-light opacity-60">/</span>
         <span class="text-[0.8em] font-semibold">Control Center</span>

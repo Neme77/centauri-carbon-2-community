@@ -460,5 +460,17 @@
   "state.timelapse_generation": "延时摄影生成",
   "state.unknown": "未知",
   "state.unloading": "卸载中",
-  "state.upgrade": "升级"
+  "state.upgrade": "升级",
+  "tuning.title": "打印调节",
+  "tuning.speed": "打印速度 (%)",
+  "tuning.flow": "挤出流量 (%)",
+  "tuning.actual": "实际值：{value}%",
+  "tuning.apply": "应用",
+  "tuning.reset": "恢复 100%",
+  "tuning.range": "范围：{min}–{max}%",
+  "tuning.live_velocity": "实时移动速度：{value} mm/s",
+  "tuning.waiting": "等待确认…",
+  "tuning.not_confirmed": "请求的值尚未确认。重试前请检查实际值。",
+  "tuning.manual_note": "手动调整速度可能不会改变屏幕上的模式名称。屏幕模式或 G-code 可能覆盖这些值。",
+  "tuning.unavailable": "控制需要正在打印或已暂停的任务，以及最新的遥测数据。"
 }

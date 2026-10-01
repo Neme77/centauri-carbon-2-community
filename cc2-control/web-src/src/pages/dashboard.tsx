@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks'
 import { Settings } from 'lucide-preact'
+import { PrintTuning } from '@/components/print-tuning'
 import { Card, CardHead } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/field'
@@ -187,6 +188,7 @@ export const Dashboard = () => {
         </Card>
       </div>
 
+      <PrintTuning />
       <div class="grid gap-3.5 md:grid-cols-2">
         <Card class="flex flex-col">
           <CardHead icon="target" title="common.position" />

@@ -1,5 +1,6 @@
 import { Diamond, Pause, Play, Square, TriangleAlert, X } from 'lucide-preact'
 import { cn } from '@/lib/utils'
+import { PrintTuning } from '@/components/print-tuning'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CameraCard, Progress } from '@/components/shared'
@@ -91,6 +92,7 @@ export const Job = () => {
             </div>
           </Card>
         </div>
+        <PrintTuning />
         <Card class="min-w-0">
           <CardHead icon="cube" title="job.object_exclusion" end={endLabel} />
           <div class="grid gap-3.5 lg:grid-cols-2">
