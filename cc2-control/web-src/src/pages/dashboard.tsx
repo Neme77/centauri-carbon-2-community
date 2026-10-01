@@ -55,7 +55,7 @@ const QuickEditor = ({ onClose }: { onClose: () => void }) => {
       <p class="mb-4 text-muted">{t('dashboard.choose_four_protected_actions_or')}</p>
       {slots.map((action, n) => (
         <div key={n} class="my-2.5 grid grid-cols-[70px_1fr] items-center gap-2.5">
-          <label for={`quick-slot-${n}`}>Slot {n + 1}</label>
+          <label for={`quick-slot-${n}`}>{tpl('common.slot_n', { n: n + 1 })}</label>
           <Select
             id={`quick-slot-${n}`}
             value={action}
