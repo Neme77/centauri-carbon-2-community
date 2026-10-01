@@ -17,7 +17,9 @@ typedef struct {
  char filename[512];
  int have_filename;
  struct timespec last_rx, retry, last_ping;
- unsigned long messages;
+ unsigned long messages, connections, disconnects;
+ const char *last_disconnect, *parse_error;
+ int last_errno;
 } uds_client;
 void uds_init(uds_client *c);
 void uds_close(uds_client *c);

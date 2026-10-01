@@ -43,3 +43,19 @@ layer, temperature, progress and fan values against the display. Confirm chamber
 Canvas and the console still work. On a test instance with a disposable socket,
 verify fallback when the peer is stopped and cache reset on reconnection. Do not
 remove or replace the printer's live socket to simulate a failure.
+
+## Hardware validation follow-up
+
+The first ARM build passed WSL tests (including the fake UNIX peer integration)
+and printer checks for fresh UDS data, temperatures, fan RPM, matched job layer
+and duration, and 50%/100% speed changes from the display. Pause/resume from the
+display was reflected in MQTT job state. Repeated resets of the per-connection
+message counter revealed reconnects; their cause remains unverified.
+
+`/api/uds` now includes lifetime `connections` and `disconnects`,
+`last_disconnect` (a fixed reason identifier), and `last_errno`. These counters
+survive reconnects and reset only on process startup. No payload logging is
+added. Hardware retesting must identify and resolve recurring disconnects before
+merge. The job UI also recognizes `print.state=paused` when the machine status
+remains Printing, enabling Resume and disabling Pause. The rebuilt UI needs
+interactive printer validation.

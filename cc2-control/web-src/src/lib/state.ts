@@ -88,6 +88,8 @@ export async function refreshConsole() {
 // Derived, display-ready view of the /api/printer payload.
 export function view(d: any) {
   const state: string = d?.machine?.status_name || 'Unknown'
+  const jobState = String(d?.print?.state || '')
+  const paused = /pause/i.test(jobState) || /pause/i.test(state)
   const rawFilename: string = d?.print?.filename || ''
   const layer = d?.print?.current_layer || 0
   const totalRaw = d?.print && (d.print.total_layer || d.print.total_layers || d.print.total_layer_count)
@@ -106,8 +108,8 @@ export function view(d: any) {
     homed,
     progress: Math.max(0, Math.min(100, Number(d?.machine?.progress || 0))),
     idle: /idle|ready/i.test(state),
-    printing: /print/i.test(state),
-    paused: /pause/i.test(state),
+    printing: !paused && (/print/i.test(state) || /print/i.test(jobState)),
+    paused,
     elapsedText: active ? duration(elapsed) : '—',
     remainingText: active ? duration(remaining) : '—',
     finishText: active ? finishTime(remaining) : '—',

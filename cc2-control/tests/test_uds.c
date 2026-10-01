@@ -35,6 +35,12 @@ int main(void){
  message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":6,\"status\":{\"print_stats\":{\"filename\":\"local/next.gcode\"}}}}");
  assert(!uds_value(&c,U_LAYER,&v)&&!uds_value(&c,U_PROGRESS,&v));
  close(pair[1]);uds_process(&c);assert(c.fd==-1&&!c.ready&&!c.present);
+ assert(c.disconnects==1&&!strcmp(c.last_disconnect,"peer_closed"));
+ uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
+ assert(!fcntl(c.fd,F_SETFL,O_NONBLOCK));
+ const char *bad="{broken\003";
+ assert(write(pair[1],bad,strlen(bad))==(ssize_t)strlen(bad));uds_process(&c);
+ assert(c.fd==-1&&c.disconnects==1&&!strcmp(c.last_disconnect,"invalid_json"));close(pair[1]);
  uds_init(&c);uds_tick(&c,"/nonexistent/cc2-test-socket");assert(c.fd==-1);
  puts("PASS UDS initial/delta merge, ordering, scaling, job matching, stale fallback and fragmented frames");
  return 0;

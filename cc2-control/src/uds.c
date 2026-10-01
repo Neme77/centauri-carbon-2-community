@@ -109,6 +109,7 @@ static const struct {const char *object,*key;enum uds_field field;double min,max
 };
 int uds_message(uds_client *c,const char *json,size_t length){
  const char *end=json+length,*root=json_skip_space(json,end),*ce,*se;
+ c->parse_error="invalid_json";
  if(root>=end||*root!='{'||json_container_end(root,end)!=end)return 0;
  double id=0;int initial=numeric(root,end,"id",&id)&&id==11;
  const char *container=json_member_object(root,end,initial?"result":"params",'{',&ce);
@@ -116,14 +117,16 @@ int uds_message(uds_client *c,const char *json,size_t length){
   const char *m=json_member(root,end,"method");
   if(!m||end-m<12||memcmp(m,"\"cc2_status\"",12)){
    if(id==12&&json_member_object(root,end,"result",'{',&ce)){c->last_rx=now_mono();return 1;}
-   return 0;
+   c->parse_error="unexpected_message";return 0;
   }
  }
+ c->parse_error="missing_container";
  if(!container)return 0;
  const char *status=json_member_object(container,ce,"status",'{',&se);double event;
+ c->parse_error="missing_status_or_eventtime";
  if(!status||!numeric(container,ce,"eventtime",&event)||event<0)return 0;
  int older=c->messages&&event<c->eventtime;
- if(older&&!initial)return 0;
+ if(older&&!initial){c->parse_error="out_of_order_event";return 0;}
  /* Initial snapshots can follow an earlier notification with the same time. */
  const char *pe;const char *ps=json_member_object(status,se,"print_stats",'{',&pe);
  if(ps&&(!older||!c->have_filename)&&json_member(ps,pe,"filename")){
@@ -154,6 +157,9 @@ int uds_message(uds_client *c,const char *json,size_t length){
 }
 void uds_init(uds_client *c){memset(c,0,sizeof(*c));c->fd=-1;}
 void uds_close(uds_client *c){if(c->fd>=0)close(c->fd);c->fd=-1;c->ready=0;c->present=0;c->used=c->sent=0;c->have_filename=0;}
+static void uds_disconnect(uds_client *c,const char *reason,int error){
+ c->disconnects++;c->last_disconnect=reason;c->last_errno=error;uds_close(c);
+}
 int uds_fresh(const uds_client *c){return c->fd>=0&&c->ready&&elapsed(now_mono(),c->last_rx)<=5;}
 int uds_value(const uds_client *c,enum uds_field field,double *out){
  if(!uds_fresh(c)||field<0||field>=U_FIELDS||!(c->present&(UINT32_C(1)<<field)))return 0;
@@ -161,7 +167,7 @@ int uds_value(const uds_client *c,enum uds_field field,double *out){
 }
 void uds_tick(uds_client *c,const char *path){
  struct timespec now=now_mono();
- if(c->fd>=0&&elapsed(now,c->last_rx)>5)uds_close(c);
+ if(c->fd>=0&&elapsed(now,c->last_rx)>5)uds_disconnect(c,"receive_timeout",0);
  if(c->fd<0){
   if(c->retry.tv_sec&&elapsed(now,c->retry)<5)return;
   c->retry=now;
@@ -170,19 +176,19 @@ void uds_tick(uds_client *c,const char *path){
   strcpy(a.sun_path,path);
   int fd=socket(AF_UNIX,SOCK_STREAM,0);if(fd<0)return;
   if(fcntl(fd,F_SETFL,O_NONBLOCK)<0||connect(fd,(struct sockaddr *)&a,sizeof(a))<0){close(fd);return;}
-  c->fd=fd;c->last_rx=now;c->last_ping=now;c->messages=0;c->eventtime=0;
+  c->fd=fd;c->last_rx=now;c->last_ping=now;c->messages=0;c->eventtime=0;c->connections++;
  }
  if(c->sent<sizeof(subscription)-1){
   ssize_t n=send(c->fd,subscription+c->sent,sizeof(subscription)-1-c->sent,MSG_NOSIGNAL);
   if(n>0)c->sent+=(size_t)n;
-  else if(n==0||(errno!=EAGAIN&&errno!=EWOULDBLOCK&&errno!=EINTR))uds_close(c);
+  else if(n==0||(errno!=EAGAIN&&errno!=EWOULDBLOCK&&errno!=EINTR))uds_disconnect(c,"subscribe_send",n<0?errno:0);
   return;
  }
  /* The stream may be silent when idle. A small read-only heartbeat distinguishes
   * an unchanged cache from a dead peer; it never queries the object snapshot. */
  if(elapsed(now,c->last_ping)>=2){
   ssize_t n=send(c->fd,heartbeat,sizeof(heartbeat)-1,MSG_NOSIGNAL);
-  if(n!=(ssize_t)(sizeof(heartbeat)-1)){uds_close(c);return;}
+  if(n!=(ssize_t)(sizeof(heartbeat)-1)){uds_disconnect(c,"heartbeat_send",n<0?errno:0);return;}
   c->last_ping=now;
  }
 }
@@ -191,15 +197,15 @@ void uds_process(uds_client *c){
  char buffer[4096];
  for(int turn=0;turn<4&&c->fd>=0;turn++){
   ssize_t n=recv(c->fd,buffer,sizeof(buffer),0);
-  if(n<0){if(errno==EINTR)continue;if(errno==EAGAIN||errno==EWOULDBLOCK)return;uds_close(c);return;}
-  if(!n){uds_close(c);return;}
+  if(n<0){if(errno==EINTR)continue;if(errno==EAGAIN||errno==EWOULDBLOCK)return;uds_disconnect(c,"receive_error",errno);return;}
+  if(!n){uds_disconnect(c,"peer_closed",0);return;}
   for(ssize_t i=0;i<n;i++){
    if((unsigned char)buffer[i]==3){
     c->input[c->used]=0;
-    if(!uds_message(c,c->input,c->used)){uds_close(c);return;}
+    if(!uds_message(c,c->input,c->used)){uds_disconnect(c,c->parse_error,0);return;}
     c->used=0;
    }else{
-    if(c->used+1>=sizeof(c->input)){uds_close(c);return;}
+    if(c->used+1>=sizeof(c->input)){uds_disconnect(c,"frame_too_large",0);return;}
     c->input[c->used++]=buffer[i];
    }
   }

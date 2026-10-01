@@ -1841,8 +1841,9 @@ static void uds_response(int fd){
         "controller_fan","heater_fan","part_fan","fan1","controller_rpm","heater_rpm","part_rpm","fan1_rpm",
         "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed"};
     char body[2048];json_builder b={body,0,sizeof(body),0};
-    json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"values\":{",
-        telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages);
+    json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"connections\":%lu,\"disconnects\":%lu,\"last_disconnect\":\"%s\",\"last_errno\":%d,\"values\":{",
+        telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages,
+        telemetry.connections,telemetry.disconnects,telemetry.last_disconnect?telemetry.last_disconnect:"none",telemetry.last_errno);
     for(int i=0;i<U_FIELDS;i++){
         double value;int have=uds_value(&telemetry,(enum uds_field)i,&value);
         json_builder_printf(&b,"%s\"%s\":",i?",":"",names[i]);
