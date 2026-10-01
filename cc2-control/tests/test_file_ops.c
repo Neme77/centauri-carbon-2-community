@@ -41,8 +41,15 @@ int main(void){
     expect(run_upload(&mqtt,"..%2Fetc.gcode","internal","bad-path","test-code")==400,"reject URL-encoded slash");
     expect(run_upload(&mqtt,"new.gcode","usb","test","test-code")==400,"reject unavailable USB");
     mqtt.machine_status=2;
-    expect(run_upload(&mqtt,"new.gcode","internal","test","test-code")==409,"reject upload during print");
+    expect(run_upload(&mqtt,"new.gcode","internal","test","test-code")==201,"allow upload during print");
     expect(run_delete(&mqtt,"internal\ncube.gcode","test-code")==409,"reject delete during print");
+    expect(run_upload(&mqtt,"cube.gcode","internal","replacement","test-code")==409,"reject overwrite during print");
+    mqtt.last_message=time(NULL)-60;
+    expect(run_upload(&mqtt,"stale.gcode","internal","test","test-code")==409,"reject stale telemetry");
+    mqtt.last_message=time(NULL);mqtt.connected=0;
+    expect(run_upload(&mqtt,"offline.gcode","internal","test","test-code")==409,"reject disconnected upload");
+    mqtt.connected=1;mqtt.machine_status=10;
+    expect(run_upload(&mqtt,"active.gcode","internal","test","test-code")==409,"reject other active states");
     mqtt.machine_status=1;
     expect(run_delete(&mqtt,"internal\nno-code.gcode","")==200,"delete without access code");
     expect(run_delete(&mqtt,"internal\nbarca 1.gcode","")==200,"delete filename with spaces");
@@ -57,5 +64,6 @@ int main(void){
     expect(run_upload(&mqtt,"cc2-file-manager-smoke-9f78.gcode","usb","G28\n","test-code")==201,"upload to mounted USB-style filesystem");
     expect(run_delete(&mqtt,"usb\ncc2-file-manager-smoke-9f78.gcode","test-code")==200,"delete on mounted USB-style filesystem");
     }else puts("SKIP mounted USB-style test: /dev/shm not separately mounted");
+    snprintf(path,sizeof(path),"%s/new.gcode",root);unlink(path);
     rmdir(root);puts("PASS all file mutation tests");return 0;
 }
