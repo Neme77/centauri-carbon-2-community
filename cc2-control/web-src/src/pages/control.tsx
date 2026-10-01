@@ -459,7 +459,7 @@ export const Control = () => {
             <CardHead icon="settings" title="control.machine" />
             <div class="grid grid-cols-2 gap-2.5">
               <Button
-                class={`min-h-16 flex-col gap-1 ${v.lightOn ? 'border-cyan text-cyan' : 'text-muted'}`}
+                class={`min-h-16 flex-col gap-1 ${v.lightOn ? 'border-cyan text-cyan' : ''}`}
                 aria-pressed={v.lightOn}
                 title={t(
                   v.lightOn ? 'control.internal_light_on_press_to_turn' : 'control.internal_light_off_press_to_turn'
