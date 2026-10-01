@@ -131,7 +131,7 @@ export const Dashboard = () => {
               icon="bolt"
               title="dashboard.quick_actions"
               end={
-                <Button class="min-h-8 px-2 text-xs" onClick={() => setEditing(true)}>
+                <Button class="min-h-8 px-2 text-xs text-fg" onClick={() => setEditing(true)}>
                   <Settings size={14} strokeWidth={1} />
                   {t('dashboard.edit')}
                 </Button>
