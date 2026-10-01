@@ -23,8 +23,8 @@ all: dist
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(TARGET): src/main.c src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/panda.c src/panda.h | $(BUILD)
-	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c -o $@ $(LDFLAGS) -lm
+$(TARGET): src/main.c src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/panda.c src/panda.h src/uds.c src/uds.h | $(BUILD)
+	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o $@ $(LDFLAGS) -lm
 
 $(UDS_PROBE): tools/uds_probe.c | $(BUILD)
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $< -o $@ $(LDFLAGS)
