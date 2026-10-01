@@ -7,11 +7,12 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FLAGS = ["-O2", "-std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-D_POSIX_C_SOURCE=200809L", "-pthread", *os.environ.get("CC2_TEST_CFLAGS", "").split()]
-BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", ROOT / "src/panda.c"]
+BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", ROOT / "src/panda.c", ROOT / "src/uds.c"]
 HARNESSES = {
     # test_file_ops.c and test_orca_upload.c include src/main.c themselves.
     "test_file_ops.c": BACKEND,
     "test_orca_upload.c": BACKEND,
+    "test_uds.c": [ROOT / "src/uds.c"],
     "test_control_actions.c": [ROOT / "src/control.c"],
 }
 

@@ -26,6 +26,9 @@
 #include "panda.h"
 #include "console.h"
 #include "control.h"
+#include "uds.h"
+
+static uds_client telemetry;
 
 #define REQUEST_MAX 12288
 #define FILE_UPLOAD_MAX (64UL * 1024UL * 1024UL)
@@ -1761,7 +1764,7 @@ static int active_gcode_total_layers(const char *filename) {
         cached_filename[0] = '\0'; cached_total = 0; return 0;
     }
     if (strcmp(cached_filename, filename) == 0) return cached_total;
-    snprintf(cached_filename, sizeof(cached_filename), "%s", filename);
+    snprintf(cached_filename, sizeof(cached_filename), "%.255s", filename);
     cached_total = 0;
 
     char path[PATH_MAX_LOCAL * 2], line[4096];
@@ -1795,6 +1798,9 @@ static int active_gcode_total_layers(const char *filename) {
 }
 
 static void printer_response(int fd, const mqtt_client *mqtt) {
+    mqtt_client view=*mqtt;
+    uds_overlay(&telemetry,&view);
+    mqtt=&view;
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
     char body[4096],filename[520],state[140],uuid[260],axes[40];
     json_number(et,sizeof(et),mqtt->have_extruder_temp,mqtt->extruder_temp);
@@ -1828,6 +1834,23 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
+}
+
+static void uds_response(int fd){
+    static const char *names[U_FIELDS]={"nozzle_temperature","nozzle_target","bed_temperature","bed_target",
+        "controller_fan","heater_fan","part_fan","fan1","controller_rpm","heater_rpm","part_rpm","fan1_rpm",
+        "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed"};
+    char body[2048];json_builder b={body,0,sizeof(body),0};
+    json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"connections\":%lu,\"disconnects\":%lu,\"last_disconnect\":\"%s\",\"last_errno\":%d,\"ignored_messages\":%lu,\"values\":{",
+        telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages,
+        telemetry.connections,telemetry.disconnects,telemetry.last_disconnect?telemetry.last_disconnect:"none",telemetry.last_errno,telemetry.ignored_messages);
+    for(int i=0;i<U_FIELDS;i++){
+        double value;int have=uds_value(&telemetry,(enum uds_field)i,&value);
+        json_builder_printf(&b,"%s\"%s\":",i?",":"",names[i]);
+        if(have)json_builder_printf(&b,"%.6f",value);else json_builder_printf(&b,"null");
+    }
+    json_builder_printf(&b,"}}\n");
+    if(!b.failed)respond(fd,200,"OK","application/json",body,b.length);
 }
 
 static void snapshot_response(int fd, const mqtt_client *mqtt) {
@@ -2713,6 +2736,8 @@ static int handle_client(int fd, const char *web_root, mqtt_client *mqtt, consol
         setup_configure_response(fd,mqtt,body,body_len,0);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/setup/revalidate")==0) {
         setup_configure_response(fd,mqtt,body,body_len,1);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/uds")==0) {
+        uds_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/printer")==0) {
         printer_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/snapshot")==0) {
@@ -2776,17 +2801,19 @@ int main(int argc, char **argv) {
     int port = 8081;
     int panda_port = 7125;
     const char *web_root = "./web";
+    const char *uds_path = "/tmp/elegoo_uds";
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
         else if (strcmp(argv[i], "--panda-port") == 0 && i + 1 < argc) panda_port = atoi(argv[++i]);
         else if (strcmp(argv[i], "--web-root") == 0 && i + 1 < argc) web_root = argv[++i];
+        else if (strcmp(argv[i], "--uds-socket") == 0 && i + 1 < argc) uds_path = argv[++i];
         else if (strcmp(argv[i], "--config") == 0 && i + 1 < argc) mqtt_config_path = argv[++i];
         else if (strcmp(argv[i], "--presets") == 0 && i + 1 < argc) material_presets_path = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--gcode-internal DIR] [--gcode-usb DIR]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
             return 2;
         }
     }
@@ -2807,6 +2834,7 @@ int main(int argc, char **argv) {
     mqtt_client mqtt;
     console_state console;
     console_init(&console,"/tmp/elegoo_uds");
+    uds_init(&telemetry);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
         setup_mode = 1;
@@ -2839,14 +2867,17 @@ int main(int argc, char **argv) {
 
     while (running) {
         mqtt_tick(&mqtt);
+        uds_tick(&telemetry,uds_path);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
         int max_fd=server;
         if(mqtt.fd>=0){FD_SET(mqtt.fd,&read_set);if(mqtt.fd>max_fd)max_fd=mqtt.fd;}
+        if(telemetry.fd>=0){FD_SET(telemetry.fd,&read_set);if(telemetry.fd>max_fd)max_fd=telemetry.fd;}
         struct timeval wait={1,0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
+        if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
         if(!FD_ISSET(server,&read_set))continue;
         int client = accept(server, NULL, NULL);
         if (client < 0) {
@@ -2864,6 +2895,7 @@ int main(int argc, char **argv) {
             running = 0;
         }
     }
+    uds_close(&telemetry);
     panda_stop(&panda);
     mqtt_close(&mqtt);
     console_destroy(&console);
