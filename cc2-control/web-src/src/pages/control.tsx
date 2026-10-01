@@ -469,8 +469,9 @@ export const Control = () => {
                 }}
               >
                 <Icon n="light" class="text-current" />
-                <span>{t('common.lights')}</span>
-                <small class="text-[10px] opacity-80">{t(v.lightOn ? 'control.on' : 'control.off')}</small>
+                <span>
+                  {t('common.lights')} <small class="opacity-80">{t(v.lightOn ? 'control.on' : 'control.off')}</small>
+                </span>
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
