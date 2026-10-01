@@ -20,17 +20,28 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
   const [step, setStep] = useState(0.1)
   const can = (axis: string) => v.idle && v.homed.includes(axis)
   const move = (axis: string, dir: number) => control(`move:${axis}:${dir * step}`)
+  // The printer only reports "Manual homing" on its next poll: lock the buttons meanwhile and pull the state early.
+  const [homing, setHoming] = useState(false)
+  const home = async (axis: string) => {
+    if (homing) return
+    setHoming(true)
+    if (await control(`home:${axis}`)) {
+      setTimeout(refreshPrinter, 400)
+      setTimeout(refreshPrinter, 1200)
+    }
+    setTimeout(() => setHoming(false), 1500)
+  }
   const pad = 'min-h-11 text-xl'
   return (
     <Card>
       <CardHead icon="control" title="control.movement" />
-      <Button wide class="min-h-12" disabled={!v.idle} onClick={() => control('home:ALL')}>
+      <Button wide class="min-h-12" disabled={!v.idle || homing} onClick={() => home('ALL')}>
         <Icon n="home" />
         {t('common.home_all')}
       </Button>
       <div class="mt-3 grid grid-cols-3 gap-2.5">
         {['X', 'Y', 'Z'].map(a => (
-          <Button key={a} class="min-h-16 flex-col gap-1" disabled={!v.idle} onClick={() => control(`home:${a}`)}>
+          <Button key={a} class="min-h-16 flex-col gap-1" disabled={!v.idle || homing} onClick={() => home(a)}>
             <Icon n="home" class="text-cyan" />
             {t(a === 'X' ? 'common.home_x' : a === 'Y' ? 'common.home_y' : 'common.home_z')}
           </Button>
