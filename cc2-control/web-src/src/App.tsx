@@ -35,7 +35,7 @@ export const App = () => {
       <Sidebar />
       <Topbar />
       <main
-        class={`cc2-main ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin] md:p-4 ${collapsed ? '' : 'md:ml-52'}`}
+        class={`cc2-main @container/page ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin] md:p-4 ${collapsed ? '' : 'md:ml-52'}`}
       >
         <Page />
       </main>

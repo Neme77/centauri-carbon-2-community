@@ -35,7 +35,7 @@ const TABS = [
 const G = { size: 16, strokeWidth: 1 }
 const Dot = () => <i class="inline-block size-2 rounded-full bg-current align-middle" />
 const Field = ({ label, help, htmlFor, children }: { label: Key; help?: Key; htmlFor?: string; children: any }) => (
-  <div class="my-2.5 grid items-center gap-x-3.5 gap-y-1 md:grid-cols-[170px_minmax(220px,480px)]">
+  <div class="my-2.5 grid items-center gap-x-3.5 gap-y-1 @min-[768px]/page:grid-cols-[170px_minmax(220px,480px)]">
     {htmlFor ? (
       <label htmlFor={htmlFor} class="font-semibold">
         {t(label)}
@@ -44,7 +44,7 @@ const Field = ({ label, help, htmlFor, children }: { label: Key; help?: Key; htm
       <span class="font-semibold">{t(label)}</span>
     )}
     {children}
-    {help && <span class="text-[10px] text-muted md:col-start-2">{t(help)}</span>}
+    {help && <span class="text-[10px] text-muted @min-[768px]/page:col-start-2">{t(help)}</span>}
   </div>
 )
 const Kv = ({ k, text, v }: { k?: Key; text?: string; v: any }) => (
@@ -104,7 +104,7 @@ const Connection = () => {
             {t(setup?.configured ? 'settings.change_revalidate' : 'settings.verify')}
           </Button>
         </div>
-        <span class={cn('text-xs md:col-start-2', ready ? 'text-green' : 'text-amber')}>
+        <span class={cn('text-xs @min-[768px]/page:col-start-2', ready ? 'text-green' : 'text-amber')}>
           <Dot />{' '}
           {busy
             ? t('settings.restarting')
@@ -145,7 +145,7 @@ const Integrations = () => {
       notify(tpl(fail, { error: errText(e) }))
     }
   }
-  const row = 'my-2 grid items-center gap-2.5 md:grid-cols-[230px_1fr_auto]'
+  const row = 'my-2 grid items-center gap-2.5 @min-[768px]/page:grid-cols-[230px_1fr_auto]'
   return (
     <Card>
       <CardHead icon="plug" title="settings.integrations" sub="settings.service_configuration_for_local" />
@@ -202,7 +202,7 @@ const Appearance = () => {
     <>
       <Card>
         <CardHead icon="palette" title="settings.appearance" sub="settings.interface_and_display_preferences" />
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-3 @min-[640px]/page:grid-cols-2">
           <label class={lab}>
             {t('settings.language')}
             <Select class="mt-1.5" value={lang} onChange={e => setLanguage(e.currentTarget.value, true)}>

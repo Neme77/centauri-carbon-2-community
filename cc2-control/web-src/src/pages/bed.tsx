@@ -228,7 +228,7 @@ const MeshCard = () => {
           </button>
         </div>
       </div>
-      <div class="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+      <div class="mt-3 grid grid-cols-2 gap-2.5 @min-[768px]/page:grid-cols-4">
         <Stat dot={<Dot c="blue" />} label="bed.minimum" val={st ? signed(st.min) : '—'} />
         <Stat dot={<Dot c="amber" />} label="bed.maximum" val={st ? signed(st.max) : '—'} />
         <Stat
@@ -254,7 +254,7 @@ const MeshCard = () => {
 
 const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => (
   <>
-    <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_1.15fr]">
+    <div class="mt-3 grid gap-3 @min-[640px]/page:grid-cols-[1fr_1.15fr]">
       {[
         ['folder', 'bed.load_current_mesh', 'bed.read_the_saved_mesh_from_printer', reload, false],
         [
@@ -326,7 +326,7 @@ const Screws = () => {
         end={<Tag tone="warning">{t(plan ? 'bed.measured_results' : 'bed.no_measurement')}</Tag>}
       />
       <p class="mb-3 text-xs text-muted">{t('bed.nozzle_load_cell_measurement_at')}</p>
-      <div class="grid gap-3 sm:grid-cols-[.9fr_1.1fr]">
+      <div class="grid gap-3 @min-[640px]/page:grid-cols-[.9fr_1.1fr]">
         <div class="rounded-lg border border-edge p-3">
           <div class="relative grid h-48 grid-cols-2 grid-rows-2 rounded-xl border-2 border-muted">
             <i class="absolute inset-y-2 left-1/2 border-l border-dashed border-edge" />

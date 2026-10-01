@@ -100,7 +100,7 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
         </div>
         <fieldset class="m-0 min-w-0 border-0 p-0">
           <legend class="mb-1.5 mt-3 p-0 text-muted">{t('canvas.quick_colours')}</legend>
-          <div class="grid grid-cols-5 gap-2 sm:grid-cols-8">
+          <div class="grid grid-cols-5 gap-2 @min-[640px]/page:grid-cols-8">
             {PALETTE.map(c => (
               <button
                 key={c}
@@ -179,14 +179,14 @@ export const Canvas = () => {
   ]
   return (
     <Page title="common.canvas" sub="canvas.material_system_overview_and">
-      <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.55fr)_minmax(320px,1fr)]">
+      <div class="grid gap-3.5 @min-[1280px]/page:grid-cols-[minmax(0,2.55fr)_minmax(320px,1fr)]">
         <Card>
-          <div class="grid items-center gap-6 rounded-lg border border-edge bg-field/40 p-4 sm:p-6 md:grid-cols-[1.25fr_1fr]">
-            <div class="flex h-48 items-end justify-center gap-1.5 border-b-8 border-edge pb-9 sm:gap-3">
+          <div class="grid items-center gap-6 rounded-lg border border-edge bg-field/40 p-4 @min-[640px]/page:p-6 @min-[768px]/page:grid-cols-[1.25fr_1fr]">
+            <div class="flex h-48 items-end justify-center gap-1.5 border-b-8 border-edge pb-9 @min-[640px]/page:gap-3">
               {slots.map(s => (
-                <div key={s.i} class="relative flex h-40 w-14 items-center justify-center sm:w-20">
+                <div key={s.i} class="relative flex h-40 w-14 items-center justify-center @min-[640px]/page:w-20">
                   <i
-                    class="block h-36 w-9 rounded-[45%] border border-muted sm:w-12"
+                    class="block h-36 w-9 rounded-[45%] border border-muted @min-[640px]/page:w-12"
                     style={{ background: `repeating-linear-gradient(90deg,${s.colour} 0 3px,#132a38 4px 6px)` }}
                   />
                   <em class="absolute -bottom-7 not-italic text-muted">{s.i + 1}</em>
@@ -205,7 +205,7 @@ export const Canvas = () => {
               </p>
             </div>
           </div>
-          <div class="mt-3.5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div class="mt-3.5 grid grid-cols-2 gap-3 @min-[768px]/page:grid-cols-4">
             {slots.map(s => (
               <Card
                 key={s.i}
@@ -247,7 +247,7 @@ export const Canvas = () => {
             ))}
           </div>
         </Card>
-        <div class="grid content-start gap-3.5 lg:grid-cols-3 xl:grid-cols-1">
+        <div class="grid content-start gap-3.5 @min-[1024px]/page:grid-cols-3 @min-[1280px]/page:grid-cols-1">
           <Card>
             <CardHead icon="info" title="canvas.canvas_status" />
             <Row label="canvas.telemetry" value={t(model ? 'canvas.available' : 'canvas.unavailable')} />
