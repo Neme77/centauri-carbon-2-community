@@ -1758,15 +1758,18 @@ static void gcode_metadata_response(int fd, const char *body, size_t body_len) {
 
 /* Elegoo's print_status does not consistently expose the total layer count.
  * Cache it from the active local G-code instead of leaving demo data in the UI. */
+static long active_gcode_estimated_seconds = -1;
+
 static int active_gcode_total_layers(const char *filename) {
     static char cached_filename[256];
     static int cached_total;
     if (!filename || !filename[0]) {
-        cached_filename[0] = '\0'; cached_total = 0; return 0;
+        cached_filename[0] = '\0'; cached_total = 0; active_gcode_estimated_seconds = -1; return 0;
     }
     if (strcmp(cached_filename, filename) == 0) return cached_total;
     snprintf(cached_filename, sizeof(cached_filename), "%.255s", filename);
     cached_total = 0;
+    active_gcode_estimated_seconds = -1;
 
     char path[PATH_MAX_LOCAL * 2], line[4096];
     if (!gcode_resolved_path(gcode_internal_root, filename, path, sizeof(path))) return 0;
@@ -1774,6 +1777,11 @@ static int active_gcode_total_layers(const char *filename) {
     if (!file) return 0;
     int maximum_layer = -1;
     while (fgets(line, sizeof(line), file)) {
+        if(active_gcode_estimated_seconds < 0){
+            static const char *time_markers[]={"estimated printing time","estimated print time","total print time"};
+            for(size_t i=0;i<sizeof(time_markers)/sizeof(time_markers[0])&&active_gcode_estimated_seconds<0;i++)
+                active_gcode_estimated_seconds=duration_after_marker(line,time_markers[i]);
+        }
         static const char *markers[] = {
             "total layer number", "total_layer_count", "total layers count",
             "total layers", "layer_count:"
@@ -1829,8 +1837,17 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_escape(uuid,sizeof(uuid),mqtt->uuid);json_escape(axes,sizeof(axes),mqtt->homed_axes);
     time_t now=time(NULL);
     long age=mqtt->last_message ? (long)(now-mqtt->last_message) : -1;
-    int total_layers = mqtt->have_total_layers ? mqtt->total_layers :
-                       active_gcode_total_layers(mqtt->filename);
+    int file_layers=active_gcode_total_layers(mqtt->filename);
+    int total_layers=mqtt->have_total_layers ? mqtt->total_layers : file_layers;
+    long remaining=mqtt->remaining_time;
+    const char *remaining_source=remaining>0 ? "mqtt" : "unavailable";
+    int active_job=mqtt->connected&&mqtt->registered&&mqtt->last_message>0&&
+        now-mqtt->last_message<=15&&mqtt->have_machine_status&&mqtt->machine_status==2&&
+        mqtt->filename[0]&&(!strcmp(mqtt->print_state,"printing")||!strcmp(mqtt->print_state,"paused"));
+    if(active_job&&remaining<=0&&active_gcode_estimated_seconds>0&&duration>=0){
+        remaining=active_gcode_estimated_seconds>duration ? active_gcode_estimated_seconds-duration : 0;
+        remaining_source="gcode";
+    }
     char speed_percent[40],flow_percent[40],live_velocity[40];double tune;
     int have_speed=uds_value(&telemetry,U_SPEED_FACTOR,&tune);
     json_number(speed_percent,sizeof(speed_percent),have_speed,have_speed?tune*100:0);
@@ -1845,13 +1862,13 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"chamber\":{\"temperature\":%s},"
         "\"fans\":{\"controller\":%s,\"heater\":%s,\"part\":%s,\"aux\":%.1f,\"box\":%.1f},"
         "\"machine\":{\"status\":%d,\"status_name\":\"%s\",\"sub_status\":%d,\"reason\":%d,\"progress\":%d},"
-        "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"total_duration\":%ld},"
+        "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
-        mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,mqtt->remaining_time,mqtt->total_duration,
+        mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))

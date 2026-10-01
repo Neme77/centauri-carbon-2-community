@@ -66,7 +66,7 @@ export const Job = () => {
   return (
     <Page title="common.job" sub="job.live_progress_camera_and_objects">
       <div class="grid gap-3.5">
-        <div class="grid gap-3.5 @min-[1024px]/page:grid-cols-2">
+        <div class="grid gap-3.5 cc2-lg:grid-cols-2">
           <CameraCard tall />
           <Card class="flex flex-col">
             <CardHead icon="file" title="common.current_job" end={<span class="text-cyan">{tState(v.state)}</span>} />
@@ -79,7 +79,7 @@ export const Job = () => {
               </a>
             )}
             <Progress pct={v.progress} />
-            <div class="mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 @min-[640px]/page:grid-cols-3">
+            <div class="mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 cc2-sm:grid-cols-3">
               {stats.map(([val, label], i) => (
                 <div key={i} class="min-w-0">
                   <strong class="block text-[15px] [overflow-wrap:anywhere]">{val}</strong>
@@ -95,8 +95,8 @@ export const Job = () => {
         <PrintTuning />
         <Card class="min-w-0">
           <CardHead icon="cube" title="job.object_exclusion" end={endLabel} />
-          <div class="grid gap-3.5 @min-[1024px]/page:grid-cols-2">
-            <div class="grid min-h-40 grid-cols-2 content-start gap-3 rounded-md border border-edge p-4 @min-[640px]/page:grid-cols-3 @min-[1024px]/page:grid-cols-2 @min-[1280px]/page:grid-cols-4">
+          <div class="grid gap-3.5 cc2-lg:grid-cols-2">
+            <div class="grid min-h-40 grid-cols-2 content-start gap-3 rounded-md border border-edge p-4 cc2-sm:grid-cols-3 cc2-lg:grid-cols-2 cc2-xl:grid-cols-4">
               {o.list.length === 0 ? (
                 <span class="col-span-full text-muted">{t('job.no_live_object_data')}</span>
               ) : (

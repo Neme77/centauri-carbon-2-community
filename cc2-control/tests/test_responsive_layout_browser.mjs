@@ -63,7 +63,7 @@ const longFilename =
 	"ECC2_0.4_Buddha_Elegoo_PLA_very_long_print_name_with_extended_metadata_0.2_25m47s.gcode";
 const commands = [];
 let failPrinter = false;
-await page.route("**/api/**", async (route) => {
+const mockApi = async (route) => {
 	const req = route.request(),
 		path = new URL(req.url()).pathname;
 	let out = {};
@@ -105,7 +105,8 @@ await page.route("**/api/**", async (route) => {
 		contentType: "application/json",
 		body: JSON.stringify(out),
 	});
-});
+};
+await page.route("**/api/**", mockApi);
 await page.goto(`http://127.0.0.1:${server.address().port}`);
 
 for (const width of [1024, 1280, 1366, 1440, 1920, 320, 360, 390, 740]) {
@@ -129,9 +130,9 @@ for (const width of [1024, 1280, 1366, 1440, 1920, 320, 360, 390, 740]) {
    for (const card of layout.cards) {
     assert.ok(card.left >= layout.mainLeft && card.right <= width, `${name}: card outside main`);
    }
-   if (name === 'control' && width === 1440) {
+   if (name === 'control' && width >= 1024) {
     const columns = await page.locator('main > div.grid').first().evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
-    assert.equal(columns, toggle === 0 ? 2 : 3);
+    assert.equal(columns, width >= 1280 ? 3 : 2);
    }
    if (process.env.CC2_SCREENSHOTS && name === 'control' && width === 1366) {
     fs.mkdirSync(process.env.CC2_SCREENSHOTS, {recursive:true});
@@ -141,6 +142,19 @@ for (const width of [1024, 1280, 1366, 1440, 1920, 320, 360, 390, 740]) {
   }
  }
 }
+// A touch tablet preserves the content-sized grids from the validated mobile build.
+const tablet = await browser.newPage({viewport:{width:1366,height:1024},isMobile:true,hasTouch:true});
+tablet.on('pageerror',e => errors.push(e.message));
+await tablet.route('**/api/**',mockApi);
+await tablet.goto(`http://127.0.0.1:${server.address().port}`);
+await tablet.locator('#cc2-navigation a[href="#control"]').click();
+await tablet.waitForTimeout(350);
+assert.equal(await tablet.evaluate(() => matchMedia('(pointer:coarse)').matches),true);
+assert.equal(await tablet.locator('main > div.grid').first().evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length),2);
+await tablet.getByRole('button',{name:'Collapse menu',exact:true}).click();
+await tablet.waitForTimeout(350);
+assert.equal(await tablet.locator('main > div.grid').first().evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length),2);
+await tablet.close();
 assert.deepEqual(errors, []);
 console.log('PASS all eight pages: desktop sidebar open/collapsed, portrait and landscape containment');
 await browser.close();server.close();

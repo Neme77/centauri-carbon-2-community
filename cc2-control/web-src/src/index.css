@@ -1,5 +1,40 @@
 @import "tailwindcss";
 
+/* Desktop keeps the established viewport grids; touch/narrow layouts follow available space. */
+@custom-variant cc2-sm {
+  @media (hover: hover) and (pointer: fine) {
+    @media (min-width: 640px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 640px) { @slot; }
+  }
+}
+@custom-variant cc2-md {
+  @media (hover: hover) and (pointer: fine) {
+    @media (min-width: 768px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 768px) { @slot; }
+  }
+}
+@custom-variant cc2-lg {
+  @media (hover: hover) and (pointer: fine) {
+    @media (min-width: 1024px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 1024px) { @slot; }
+  }
+}
+@custom-variant cc2-xl {
+  @media (hover: hover) and (pointer: fine) {
+    @media (min-width: 1280px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 1280px) { @slot; }
+  }
+}
+
+
 @theme inline {
   --color-bg: var(--bg); --color-panel: var(--panel); --color-edge: var(--edge);
   --color-fg: var(--text); --color-muted: var(--muted); --color-field: var(--field); --color-ink: var(--ink);

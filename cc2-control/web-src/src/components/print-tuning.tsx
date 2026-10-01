@@ -61,7 +61,7 @@ const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
   return (
     <Card>
       <CardHead icon="settings" title="tuning.title" end={pending || posting ? t('tuning.waiting') : undefined} />
-      <div class="grid gap-4 @min-[640px]/page:grid-cols-2">
+      <div class="grid gap-4 cc2-sm:grid-cols-2">
         {(['speed', 'flow'] as const).map(kind => {
           const min = kind === 'speed' ? 25 : 50
           const max = kind === 'speed' ? 200 : 150

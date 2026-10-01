@@ -139,14 +139,14 @@ export const Files = () => {
   }
 
   const cols =
-    'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-edge px-3 py-2 @min-[768px]/page:grid-cols-[1.6fr_.55fr_.75fr_.75fr_1.25fr]'
+    'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-edge px-3 py-2 cc2-md:grid-cols-[1.6fr_.55fr_.75fr_.75fr_1.25fr]'
   return (
     <Page title="common.files" sub="files.browse_protected_g_code_storage_on">
-      <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 @min-[1280px]/page:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
+      <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 cc2-xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
         <div class="grid min-w-0 content-start gap-3">
           <Card>
-            <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2.5 @min-[768px]/page:grid-cols-[1.6fr_.8fr_1fr_auto]">
-              <div class="relative col-span-3 @min-[768px]/page:col-span-1">
+            <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2.5 cc2-md:grid-cols-[1.6fr_.8fr_1fr_auto]">
+              <div class="relative col-span-3 cc2-md:col-span-1">
                 <Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
                 <Input
                   class="pl-8"
@@ -191,9 +191,9 @@ export const Files = () => {
                   />{' '}
                   {t('common.name')}
                 </span>
-                <span class="hidden @min-[768px]/page:inline">{t('files.size')}</span>
-                <span class="hidden @min-[768px]/page:inline">{t('files.modified')}</span>
-                <span class="hidden @min-[768px]/page:inline">{t('files.storage')}</span>
+                <span class="hidden cc2-md:inline">{t('files.size')}</span>
+                <span class="hidden cc2-md:inline">{t('files.modified')}</span>
+                <span class="hidden cc2-md:inline">{t('files.storage')}</span>
                 <span>{t('files.actions')}</span>
               </div>
               {visible.map(e => (
@@ -225,13 +225,11 @@ export const Files = () => {
                       {e.file.path}
                     </button>
                   </div>
-                  <span class="hidden @min-[768px]/page:inline">{fileSize(e.file.size)}</span>
-                  <span class="hidden @min-[768px]/page:inline">
+                  <span class="hidden cc2-md:inline">{fileSize(e.file.size)}</span>
+                  <span class="hidden cc2-md:inline">
                     {Number(e.file.modified) > 0 ? new Date(Number(e.file.modified) * 1000).toLocaleString() : '—'}
                   </span>
-                  <span class="hidden @min-[768px]/page:inline">
-                    {e.storage === 'usb' ? 'USB' : t('files.internal')}
-                  </span>
+                  <span class="hidden cc2-md:inline">{e.storage === 'usb' ? 'USB' : t('files.internal')}</span>
                   <div class="flex gap-1.5">
                     <Button
                       class="px-2.5"
@@ -244,7 +242,7 @@ export const Files = () => {
                       {t('files.print')}
                     </Button>
                     <Button
-                      class="hidden px-2.5 @min-[640px]/page:inline-flex"
+                      class="hidden px-2.5 cc2-sm:inline-flex"
                       variant="danger"
                       onClick={ev => {
                         ev.stopPropagation()

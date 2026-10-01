@@ -85,7 +85,7 @@ export const Console = () => {
   }
   return (
     <Page title="common.console" sub="console.send_g_code_commands_and_view">
-      <div class="grid gap-3.5 @min-[1280px]/page:grid-cols-[minmax(0,2.3fr)_minmax(330px,1fr)]">
+      <div class="grid gap-3.5 cc2-xl:grid-cols-[minmax(0,2.3fr)_minmax(330px,1fr)]">
         <Card>
           <div class="mb-3 flex flex-wrap items-center gap-2.5">
             <Input

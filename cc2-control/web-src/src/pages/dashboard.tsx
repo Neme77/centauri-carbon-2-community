@@ -95,9 +95,9 @@ export const Dashboard = () => {
   return (
     <div class="grid gap-3.5">
       {editing && <QuickEditor onClose={() => setEditing(false)} />}
-      <div class="grid gap-3.5 @min-[1024px]/page:grid-cols-2">
+      <div class="grid gap-3.5 cc2-lg:grid-cols-2">
         <CameraCard />
-        <div class="grid gap-3.5 @min-[1024px]/page:grid-rows-[1fr_auto]">
+        <div class="grid gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
           <Card class="flex flex-col">
             <CardHead icon="file" title="common.current_job" end={tState(v.state)} />
             <div class="mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]">
@@ -109,14 +109,14 @@ export const Dashboard = () => {
               </a>
             )}
             <Progress pct={v.progress} />
-            <div class="mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 @min-[640px]/page:grid-cols-4">
+            <div class="mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 cc2-sm:grid-cols-4">
               {[
                 [v.elapsedText, t('common.elapsed')],
                 [v.remainingText, tpl('common.remaining_ends_time', { time: v.finishText })],
                 [v.active ? v.layer || '—' : '—', t('common.current_layer')],
                 [v.total, t('common.total_layers')],
               ].map(([val, label], i) => (
-                <div key={i} class="border-edge @min-[640px]/page:border-r @min-[640px]/page:last:border-0">
+                <div key={i} class="border-edge cc2-sm:border-r cc2-sm:last:border-0">
                   <strong class="block text-[15px]">{val}</strong>
                   <small class="text-[11px] text-muted">{label}</small>
                 </div>
@@ -137,7 +137,7 @@ export const Dashboard = () => {
                 </Button>
               }
             />
-            <div class="grid grid-cols-2 gap-2.5 @min-[640px]/page:grid-cols-4">
+            <div class="grid grid-cols-2 gap-2.5 cc2-sm:grid-cols-4">
               {quickActions.map((action, n) => (
                 <Slot key={n} action={action} idle={v.idle} lightOn={v.lightOn} />
               ))}
@@ -146,10 +146,10 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      <div class="grid gap-3.5 @min-[768px]/page:grid-cols-2 @min-[1024px]/page:grid-cols-4">
-        <Card class="@min-[768px]/page:col-span-2">
+      <div class="grid gap-3.5 cc2-md:grid-cols-2 cc2-lg:grid-cols-4">
+        <Card class="cc2-md:col-span-2">
           <CardHead icon="temp" title="dashboard.thermals" end={t('dashboard.live_history_5_minutes')} />
-          <div class="grid items-center gap-4 @min-[640px]/page:grid-cols-[1.6fr_1fr]">
+          <div class="grid items-center gap-4 cc2-sm:grid-cols-[1.6fr_1fr]">
             <ThermalChart />
             <div class="grid gap-3 text-xs">
               {(
@@ -190,7 +190,7 @@ export const Dashboard = () => {
       </div>
 
       <PrintTuning />
-      <div class="grid gap-3.5 @min-[768px]/page:grid-cols-2">
+      <div class="grid gap-3.5 cc2-md:grid-cols-2">
         <Card class="flex flex-col">
           <CardHead icon="target" title="common.position" />
           {(['x', 'y', 'z'] as const).map(a => (
