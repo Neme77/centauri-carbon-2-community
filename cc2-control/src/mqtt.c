@@ -292,18 +292,27 @@ static int boolean_in(const char *object,size_t len,const char *field,int *value
     return 0;
 }
 
-static void update_pair(const char *json,size_t len,const char *object,
+static void update_pair(const char *object,size_t len,
                         const char *field,double *value,int *have) {
-    size_t n; const char *o=object_for(json,len,object,&n);
-    double v; if(o&&number_in(o,n,field,&v)){*value=v;*have=1;}
+    double v; if(object&&number_in(object,len,field,&v)){*value=v;*have=1;}
 }
 
 static void update_state(mqtt_client *c,const char *json,size_t len) {
-    update_pair(json,len,"extruder","temperature",&c->extruder_temp,&c->have_extruder_temp);
-    update_pair(json,len,"extruder","target",&c->extruder_target,&c->have_extruder_target);
-    update_pair(json,len,"heater_bed","temperature",&c->bed_temp,&c->have_bed_temp);
-    update_pair(json,len,"heater_bed","target",&c->bed_target,&c->have_bed_target);
-    update_pair(json,len,"ztemperature_sensor","temperature",&c->chamber_temp,&c->have_chamber_temp);
+    size_t temperature_len=0;double temperature;
+    const char *extruder=object_for(json,len,"extruder",&temperature_len);
+    if(extruder){
+        update_pair(extruder,temperature_len,"temperature",&c->extruder_temp,&c->have_extruder_temp);
+        update_pair(extruder,temperature_len,"target",&c->extruder_target,&c->have_extruder_target);
+        if(number_in(extruder,temperature_len,"filament_detect_enable",&temperature))c->filament_detect_enabled=(int)temperature;
+        if(number_in(extruder,temperature_len,"filament_detected",&temperature))c->filament_detected=(int)temperature;
+    }
+    const char *bed=object_for(json,len,"heater_bed",&temperature_len);
+    if(bed){
+        update_pair(bed,temperature_len,"temperature",&c->bed_temp,&c->have_bed_temp);
+        update_pair(bed,temperature_len,"target",&c->bed_target,&c->have_bed_target);
+    }
+    const char *chamber=object_for(json,len,"ztemperature_sensor",&temperature_len);
+    update_pair(chamber,temperature_len,"temperature",&c->chamber_temp,&c->have_chamber_temp);
     size_t fans_len,fan_len; const char *fans=object_for(json,len,"fans",&fans_len);
     if(fans) {
         const char *o=object_for(fans,fans_len,"controller_fan",&fan_len); double v;
@@ -340,7 +349,6 @@ static void update_state(mqtt_client *c,const char *json,size_t len) {
     o=object_for(json,len,"tool_head",&n);if(o)string_in(o,n,"homed_axes",c->homed_axes,sizeof(c->homed_axes));
     o=object_for(json,len,"external_device",&n);if(o){boolean_in(o,n,"camera",&c->camera);boolean_in(o,n,"u_disk",&c->u_disk);}
     o=object_for(json,len,"led",&n);if(o&&number_in(o,n,"status",&v))c->led_status=(int)v;
-    o=object_for(json,len,"extruder",&n);if(o){if(number_in(o,n,"filament_detect_enable",&v))c->filament_detect_enabled=(int)v;if(number_in(o,n,"filament_detected",&v))c->filament_detected=(int)v;}
     o=object_for(json,len,"canvas_info",&n);if(o&&number_in(o,n,"active_tray_id",&v)){c->canvas_active_tray_id=(int)v;c->have_canvas_active_tray=1;}
     c->last_message=time(NULL); c->messages++;
 }
@@ -381,6 +389,15 @@ static int remaining_length(const unsigned char *p,size_t size,size_t *value,siz
     *value=v;*used=i;return 1;
 }
 
+static int request_topic(const char *topic,size_t len) {
+    static const char *suffixes[]={"/api_request","/api_register"};
+    for(size_t i=0;i<sizeof(suffixes)/sizeof(suffixes[0]);i++){
+        size_t n=strlen(suffixes[i]);
+        if(len>=n&&!memcmp(topic+len-n,suffixes[i],n))return 1;
+    }
+    return 0;
+}
+
 static void consume_packets(mqtt_client *c) {
     size_t offset=0;
     while(c->input_len-offset>=2) {
@@ -394,6 +411,15 @@ static void consume_packets(mqtt_client *c) {
             if(2+topic_len<=remain)serial_from_topic(c,(const char*)body+2,topic_len);
             if(pos<=remain) {
                 const char *payload=(const char*)body+pos;size_t payload_len=remain-pos;
+                c->received_publishes++;
+                /* Wildcard subscriptions echo our requests and other clients'
+                 * commands. They cannot update printer state or freshness. */
+                if(request_topic((const char*)body+2,topic_len)){
+                    c->skipped_requests++;
+                    c->skipped_request_bytes+=(unsigned long)payload_len;
+                    offset+=total;
+                    continue;
+                }
                 capture_diagnostic(c,payload,payload_len);
                 if(contains_text(payload,payload_len,"\"canvas_info\"")&&
                    contains_text(payload,payload_len,"\"canvas_list\"")) {

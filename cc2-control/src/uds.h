@@ -28,5 +28,6 @@ void uds_process(uds_client *c);
 int uds_fresh(const uds_client *c);
 int uds_value(const uds_client *c,enum uds_field field,double *out);
 int uds_message(uds_client *c,const char *json,size_t length);
+int uds_job_matches(const uds_client *c,const char *filename);
 void uds_overlay(const uds_client *c,mqtt_client *view);
 #endif

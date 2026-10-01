@@ -14,6 +14,7 @@ typedef struct {
     time_t last_app_ping; /* CC2 application-level heartbeat, separate from MQTT PINGREQ */
     unsigned long messages;
     unsigned long info_responses;
+    unsigned long received_publishes, skipped_requests, skipped_request_bytes;
     int connected;
     int registered;
     int register_sent;
