@@ -171,6 +171,8 @@
   "common.turn_all_fans_off": "Turn all fans off?",
   "common.turn_all_heaters_off": "Turn all heaters off?",
   "common.waiting_for_camera_stream": "Waiting for camera stream",
+  "common.camera_unavailable": "Camera stream unavailable. Retrying…",
+  "common.camera_retry_now": "Retry now",
   "common.your_cc2_camera_feed": "Your CC2 camera feed",
   "common.your_live_print_camera": "Your live print camera",
   "console.arbitrary_g_code_can_move_axes": "Arbitrary G-code can move axes, heat components, or damage the printer.",

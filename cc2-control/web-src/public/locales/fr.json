@@ -171,6 +171,8 @@
   "common.turn_all_fans_off": "Éteindre tous les ventilateurs ?",
   "common.turn_all_heaters_off": "Éteindre tous les chauffages ?",
   "common.waiting_for_camera_stream": "En attente du flux de la caméra",
+  "common.camera_unavailable": "Flux caméra indisponible. Nouvelle tentative…",
+  "common.camera_retry_now": "Réessayer maintenant",
   "common.your_cc2_camera_feed": "Flux de la caméra CC2",
   "common.your_live_print_camera": "Caméra d’impression en direct",
   "console.arbitrary_g_code_can_move_axes": "Un G-code arbitraire peut déplacer les axes, chauffer des composants ou endommager l’imprimante.",

@@ -171,6 +171,8 @@
   "common.turn_all_fans_off": "关闭所有风扇？",
   "common.turn_all_heaters_off": "关闭所有加热？",
   "common.waiting_for_camera_stream": "等待摄像头画面",
+  "common.camera_unavailable": "摄像头画面不可用，正在重试…",
+  "common.camera_retry_now": "立即重试",
   "common.your_cc2_camera_feed": "你的 CC2 摄像头画面",
   "common.your_live_print_camera": "你的实时打印摄像头",
   "console.arbitrary_g_code_can_move_axes": "任意 G-code 可能移动轴、加热部件，甚至损坏打印机。",
