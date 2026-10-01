@@ -13,7 +13,7 @@ import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
 
 const STEPS = [0.1, 1, 10, 30, 50]
-const I = { size: 16, strokeWidth: 1 }
+const I = { size: 20, strokeWidth: 1 }
 const B = { size: 22, strokeWidth: 1 }
 
 const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
