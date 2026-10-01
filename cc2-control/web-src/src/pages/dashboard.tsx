@@ -32,7 +32,7 @@ const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightO
       title={blocked ? t('common.available_when_idle') : undefined}
       onClick={run}
     >
-      <Icon n={icon} class="size-6 text-cyan" />
+      <Icon n={icon} class="text-cyan" />
       {t(label)}
     </Button>
   )
