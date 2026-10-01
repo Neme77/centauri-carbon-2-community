@@ -225,7 +225,9 @@ export const Topbar = () => {
       <div class="flex items-center gap-2">
         <div class="flex h-11 items-center gap-2 rounded-md border border-edge px-3">
           <PrinterIcon class="hidden size-6 sm:block" />
-          <div>{link[0] === 'green' ? tState(v.state) : '—'}</div>
+          <div>
+            {link[0] === 'green' ? `${tState(v.state)}${v.active ? ` · ${Math.round(v.progress)}%` : ''}` : '—'}
+          </div>
         </div>
         <div class="hidden h-11 items-center gap-2 rounded-md border border-edge px-3 sm:flex">
           <Dot c={link[0]} />
@@ -233,6 +235,11 @@ export const Topbar = () => {
         </div>
         <EStop />
       </div>
+      {v.active && (
+        <div class="absolute inset-x-0 bottom-0 h-1 bg-edge" role="progressbar" aria-valuenow={Math.round(v.progress)}>
+          <i class="block h-full bg-cyan transition-[width]" style={{ width: `${v.progress}%` }} />
+        </div>
+      )}
     </header>
   )
 }
