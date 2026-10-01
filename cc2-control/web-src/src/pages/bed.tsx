@@ -104,13 +104,13 @@ const MeshCard = () => {
   )
   return (
     <Card>
-      <div class="mb-3 flex flex-wrap items-center gap-3">
+      <div class="mb-3 flex min-h-7 flex-wrap items-center gap-3 border-b border-edge pb-2.5">
         <Icon n="cube" class="text-cyan" />
         <div class="mr-auto">
-          <h2 class="text-xl font-semibold">{t('bed.bed_mesh_3d')}</h2>
-          <p class="text-xs text-muted">
+          <h2 class="text-base font-semibold">{t('bed.bed_mesh_3d')}</h2>
+          <small class="text-muted">
             {points.length ? tpl('bed.n_live_probe_points', { n: points.length }) : t('bed.waiting_for_live_mesh_data')}
-          </p>
+          </small>
         </div>
         <label class="flex items-center gap-2 text-xs">
           {t('bed.mesh_profile')}
