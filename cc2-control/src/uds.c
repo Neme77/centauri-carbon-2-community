@@ -218,6 +218,11 @@ void uds_process(uds_client *c){
   }
  }
 }
+int uds_job_matches(const uds_client *c,const char *filename){
+ const char *file=c->filename;
+ if(!strncmp(file,"local/",6))file+=6;
+ return c->have_filename&&*file&&filename&&!strcmp(file,filename);
+}
 void uds_overlay(const uds_client *c,mqtt_client *v){
  double n;
 #define SET(field,value,flag) if(uds_value(c,field,&n)){v->value=n;v->flag=1;}
@@ -232,9 +237,7 @@ void uds_overlay(const uds_client *c,mqtt_client *v){
 #undef SET
  /* MQTT retains job identity/state and safety authority in this first stage.
   * Overlay job counters only when both sources agree on the active file. */
- const char *file=c->filename;
- if(!strncmp(file,"local/",6))file+=6;
- if(c->have_filename&&*file&&!strcmp(file,v->filename)){
+ if(uds_job_matches(c,v->filename)){
   if(uds_value(c,U_LAYER,&n))v->current_layer=(int)n;
   if(uds_value(c,U_PROGRESS,&n))v->progress=(int)(n*100);
   if(uds_value(c,U_DURATION,&n))v->print_duration=(long)n;

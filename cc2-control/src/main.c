@@ -198,7 +198,7 @@ static void memory_values(long *total, long *available) {
 }
 
 static void health_response(int fd, const mqtt_client *mqtt) {
-    char body[512];
+    char body[768];
     char load[96] = "unknown";
     long uptime = read_first_long("/proc/uptime");
     long mem_total, mem_available;
@@ -214,10 +214,11 @@ static void health_response(int fd, const mqtt_client *mqtt) {
         "\"mode\":\"protected-control\",\"uptime_seconds\":%ld,"
         "\"mem_total_kb\":%ld,\"mem_available_kb\":%ld,"
         "\"loadavg\":\"%s\",\"mqtt_connected\":%s,\"mqtt_registered\":%s,"
-        "\"snapshot_received\":%s}\n",
+        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu}\n",
         uptime, mem_total, mem_available, load, mqtt->connected ? "true" : "false",
-        mqtt->registered ? "true" : "false", mqtt->snapshot_len ? "true" : "false");
-    if (length < 0) return;
+        mqtt->registered ? "true" : "false", mqtt->snapshot_len ? "true" : "false",
+        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes);
+    if (length < 0 || (size_t)length >= sizeof(body)) return;
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
 
@@ -1798,19 +1799,32 @@ static int active_gcode_total_layers(const char *filename) {
 }
 
 static void printer_response(int fd, const mqtt_client *mqtt) {
-    mqtt_client view=*mqtt;
-    uds_overlay(&telemetry,&view);
-    mqtt=&view;
+    /* Render from the two caches without copying MQTT transport/history buffers. */
+    double live;
+    int progress=mqtt->progress,current_layer=mqtt->current_layer;
+    long duration=mqtt->print_duration;
+    if(uds_job_matches(&telemetry,mqtt->filename)){
+        if(uds_value(&telemetry,U_PROGRESS,&live))progress=(int)(live*100);
+        if(uds_value(&telemetry,U_LAYER,&live))current_layer=(int)live;
+        if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
+    }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
     char body[4096],filename[520],state[140],uuid[260],axes[40];
-    json_number(et,sizeof(et),mqtt->have_extruder_temp,mqtt->extruder_temp);
-    json_number(eg,sizeof(eg),mqtt->have_extruder_target,mqtt->extruder_target);
-    json_number(bt,sizeof(bt),mqtt->have_bed_temp,mqtt->bed_temp);
-    json_number(bg,sizeof(bg),mqtt->have_bed_target,mqtt->bed_target);
+    if(uds_value(&telemetry,U_ET,&live))json_number(et,sizeof(et),1,live);
+    else json_number(et,sizeof(et),mqtt->have_extruder_temp,mqtt->extruder_temp);
+    if(uds_value(&telemetry,U_EG,&live))json_number(eg,sizeof(eg),1,live);
+    else json_number(eg,sizeof(eg),mqtt->have_extruder_target,mqtt->extruder_target);
+    if(uds_value(&telemetry,U_BT,&live))json_number(bt,sizeof(bt),1,live);
+    else json_number(bt,sizeof(bt),mqtt->have_bed_temp,mqtt->bed_temp);
+    if(uds_value(&telemetry,U_BG,&live))json_number(bg,sizeof(bg),1,live);
+    else json_number(bg,sizeof(bg),mqtt->have_bed_target,mqtt->bed_target);
     json_number(ct,sizeof(ct),mqtt->have_chamber_temp,mqtt->chamber_temp);
-    json_number(cf,sizeof(cf),mqtt->have_controller_fan,mqtt->controller_fan);
-    json_number(hf,sizeof(hf),mqtt->have_heater_fan,mqtt->heater_fan);
-    json_number(pf,sizeof(pf),mqtt->have_part_fan,mqtt->part_fan);
+    if(uds_value(&telemetry,U_CF,&live))json_number(cf,sizeof(cf),1,live*255);
+    else json_number(cf,sizeof(cf),mqtt->have_controller_fan,mqtt->controller_fan);
+    if(uds_value(&telemetry,U_HF,&live))json_number(hf,sizeof(hf),1,live*255);
+    else json_number(hf,sizeof(hf),mqtt->have_heater_fan,mqtt->heater_fan);
+    if(uds_value(&telemetry,U_PF,&live))json_number(pf,sizeof(pf),1,live*255);
+    else json_number(pf,sizeof(pf),mqtt->have_part_fan,mqtt->part_fan);
     json_escape(filename,sizeof(filename),mqtt->filename);json_escape(state,sizeof(state),mqtt->print_state);
     json_escape(uuid,sizeof(uuid),mqtt->uuid);json_escape(axes,sizeof(axes),mqtt->homed_axes);
     time_t now=time(NULL);
@@ -1836,8 +1850,8 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
-        mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,mqtt->progress,
-        mqtt->print_enabled?"true":"false",filename,state,uuid,mqtt->current_layer,total_layers,mqtt->print_duration,mqtt->remaining_time,mqtt->total_duration,
+        mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
+        mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,mqtt->remaining_time,mqtt->total_duration,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
