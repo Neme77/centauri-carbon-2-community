@@ -1817,6 +1817,13 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     long age=mqtt->last_message ? (long)(now-mqtt->last_message) : -1;
     int total_layers = mqtt->have_total_layers ? mqtt->total_layers :
                        active_gcode_total_layers(mqtt->filename);
+    char speed_percent[40],flow_percent[40],live_velocity[40];double tune;
+    int have_speed=uds_value(&telemetry,U_SPEED_FACTOR,&tune);
+    json_number(speed_percent,sizeof(speed_percent),have_speed,have_speed?tune*100:0);
+    int have_flow=uds_value(&telemetry,U_FLOW_FACTOR,&tune);
+    json_number(flow_percent,sizeof(flow_percent),have_flow,have_flow?tune*100:0);
+    int have_velocity=uds_value(&telemetry,U_LIVE_SPEED,&tune);
+    json_number(live_velocity,sizeof(live_velocity),have_velocity,have_velocity?tune:0);
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"
@@ -1826,11 +1833,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"machine\":{\"status\":%d,\"status_name\":\"%s\",\"sub_status\":%d,\"reason\":%d,\"progress\":%d},"
         "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"total_duration\":%ld},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
+        "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,mqtt->progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,mqtt->current_layer,total_layers,mqtt->print_duration,mqtt->remaining_time,mqtt->total_duration,
-        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
+        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
@@ -2665,6 +2673,12 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error));return;
     }
     memcpy(action,body,body_len);action[body_len]='\0';
+    double tune_value;
+    if(strncmp(action,"tune:",5)==0&&
+       !uds_value(&telemetry,strncmp(action,"tune:speed:",11)==0?U_SPEED_FACTOR:U_FLOW_FACTOR,&tune_value)){
+        const char *error="{\"accepted\":false,\"error\":\"Fresh tuning readback is unavailable\"}\n";
+        respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+    }
     if(!control_build_script(action,mqtt,script,sizeof(script),reason,sizeof(reason))||
        console_start(console,script,reason,sizeof(reason))!=0){
         char escaped[300],response[420];json_escape(escaped,sizeof(escaped),reason);

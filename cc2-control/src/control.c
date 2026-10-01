@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static int reject(char *reason,size_t cap,const char *message){snprintf(reason,cap,"%s",message);return 0;}
 static int valid_material_name(const char *name){
@@ -197,9 +198,24 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(strcmp(a,"on")&&strcmp(a,"off"))return reject(reason,reason_cap,"Unknown light state");
         snprintf(script,cap,"SET_PIN PIN=led_pin VALUE=%d",strcmp(a,"on")==0);return 1;
     }
-    if(sscanf(action,"tune:%31[^:]:%lf",a,&value)==2){
-        if(strcmp(a,"speed")==0){if(value<25||value>200)return reject(reason,reason_cap,"Speed must be 25..200 percent");snprintf(script,cap,"M220 S%.0f",value);return 1;}
-        if(strcmp(a,"flow")==0){if(value<50||value>150)return reject(reason,reason_cap,"Flow must be 50..150 percent");snprintf(script,cap,"M221 S%.0f",value);return 1;}
+    if(strncmp(action,"tune:",5)==0){
+        const char *number=NULL;int is_speed=0;
+        if(strncmp(action,"tune:speed:",11)==0){number=action+11;is_speed=1;}
+        else if(strncmp(action,"tune:flow:",10)==0)number=action+10;
+        else return reject(reason,reason_cap,"Unknown tuning action");
+        if(!*number||strspn(number,"0123456789")!=strlen(number))
+            return reject(reason,reason_cap,"Tuning value must be a whole percentage");
+        value=strtod(number,NULL);
+        if(!isfinite(value)||value<(is_speed?25:50)||value>(is_speed?200:150))
+            return reject(reason,reason_cap,is_speed?"Speed must be 25..200 percent":"Flow must be 50..150 percent");
+        time_t now=time(NULL);
+        if(!m->connected||!m->registered||m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Printer telemetry must be connected and fresh");
+        if(!printing(m)||!m->filename[0]||(strcmp(m->print_state,"printing")&&strcmp(m->print_state,"paused")))
+            return reject(reason,reason_cap,"Tuning requires an active or paused print");
+        int n=snprintf(script,cap,"M%d S%.0f",is_speed?220:221,value);
+        if(n<0||(size_t)n>=cap)return reject(reason,reason_cap,"Tuning command exceeds buffer size");
+        return 1;
     }
     if(sscanf(action,"print:%31s",b)==1){
         if(strcmp(b,"pause")==0){if(!printing(m))return reject(reason,reason_cap,"No print is active");snprintf(script,cap,"PAUSE");return 1;}

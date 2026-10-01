@@ -22,6 +22,7 @@ export const openPage = (page: Page, screws = false) => {
 }
 
 // Side menu: collapsed to icons only; the choice is remembered per browser.
+export const mobileMenu = store({ open: false })
 export const menu = store({ collapsed: ls.get('cc2-menu') === 'collapsed' })
 export const toggleMenu = () => {
   const collapsed = !menu.get().collapsed

@@ -460,5 +460,17 @@
   "state.timelapse_generation": "Génération du timelapse",
   "state.unknown": "Inconnu",
   "state.unloading": "Déchargement",
-  "state.upgrade": "Mise à jour"
+  "state.upgrade": "Mise à jour",
+  "tuning.title": "Réglage impression",
+  "tuning.speed": "Vitesse d’impression (%)",
+  "tuning.flow": "Débit (%)",
+  "tuning.actual": "Réel : {value}%",
+  "tuning.apply": "Appliquer",
+  "tuning.reset": "Rétablir 100%",
+  "tuning.range": "Plage : {min}–{max}%",
+  "tuning.live_velocity": "Mouvement instantané : {value} mm/s",
+  "tuning.waiting": "En attente de confirmation…",
+  "tuning.not_confirmed": "La valeur demandée n’a pas été confirmée. Vérifiez la valeur réelle avant de réessayer.",
+  "tuning.manual_note": "La vitesse manuelle peut laisser le nom du mode sur l’écran inchangé. Un mode de l’écran ou le G-code peut remplacer ces valeurs.",
+  "tuning.unavailable": "Les commandes nécessitent une impression active ou en pause et une télémétrie à jour."
 }

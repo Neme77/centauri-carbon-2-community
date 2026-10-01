@@ -460,5 +460,17 @@
   "state.timelapse_generation": "Generazione timelapse",
   "state.unknown": "Sconosciuto",
   "state.unloading": "Scaricamento",
-  "state.upgrade": "Aggiornamento"
+  "state.upgrade": "Aggiornamento",
+  "tuning.title": "Regolazione stampa",
+  "tuning.speed": "Velocità di stampa (%)",
+  "tuning.flow": "Flow (%)",
+  "tuning.actual": "Effettivo: {value}%",
+  "tuning.apply": "Applica",
+  "tuning.reset": "Ripristina 100%",
+  "tuning.range": "Intervallo: {min}–{max}%",
+  "tuning.live_velocity": "Movimento istantaneo: {value} mm/s",
+  "tuning.waiting": "In attesa di conferma…",
+  "tuning.not_confirmed": "Il valore richiesto non è stato confermato. Controlla il valore effettivo prima di riprovare.",
+  "tuning.manual_note": "La velocità manuale può lasciare invariato il nome della modalità sul display. Una modalità del display o il G-code può sovrascrivere questi valori.",
+  "tuning.unavailable": "I controlli richiedono una stampa attiva o in pausa e telemetria aggiornata."
 }

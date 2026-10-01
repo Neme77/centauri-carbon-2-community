@@ -13,6 +13,7 @@ HARNESSES = {
     "test_file_ops.c": BACKEND,
     "test_orca_upload.c": BACKEND,
     "test_uds.c": [ROOT / "src/uds.c"],
+    "test_tuning_api.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
 }
 

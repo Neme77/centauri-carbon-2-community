@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static void expect(int condition,const char *label){
     if(!condition){fprintf(stderr,"FAIL: %s\n",label);exit(1);}
@@ -29,5 +30,19 @@ int main(void){
     expect(!control_build_script("system:fans_off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"fans-off blocked while printing");
     expect(control_build_script("system:heaters_off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"heaters-off remains available while printing");
     expect(control_build_script("system:emergency_stop",&mqtt,script,sizeof(script),reason,sizeof(reason)),"emergency stop remains available while printing");
+    mqtt.connected=mqtt.registered=1;mqtt.last_message=time(NULL);
+    strcpy(mqtt.filename,"cube.gcode");strcpy(mqtt.print_state,"printing");
+    expect(control_build_script("tune:speed:80",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"M220 S80")==0,"speed override while printing");
+    expect(control_build_script("tune:flow:95",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"M221 S95")==0,"flow override while printing");
+    const char *valid[]={"tune:speed:25","tune:speed:200","tune:speed:100","tune:flow:50","tune:flow:150","tune:flow:100"};
+    for(size_t i=0;i<sizeof(valid)/sizeof(valid[0]);i++)expect(control_build_script(valid[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),valid[i]);
+    const char *invalid[]={"tune:speed:24","tune:speed:201","tune:flow:49","tune:flow:151","tune:speed:nan","tune:flow:inf","tune:speed:80.5","tune:speed:80junk","tune:flow:95:M112","tune:flow:95\nM112","tune:speed:","tune:other:100","tune:speed:-80","tune:speed:999999999999999999999999999999999999999999999999999"};
+    for(size_t i=0;i<sizeof(invalid)/sizeof(invalid[0]);i++)expect(!control_build_script(invalid[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),invalid[i]);
+    strcpy(mqtt.print_state,"paused");expect(control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning allowed in pause");
+    mqtt.machine_status=1;expect(!control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked idle");mqtt.machine_status=2;
+    mqtt.last_message=time(NULL)-30;expect(!control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked stale");mqtt.last_message=time(NULL);
+    mqtt.connected=0;expect(!control_build_script("tune:flow:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked disconnected");mqtt.connected=1;
+    mqtt.registered=0;expect(!control_build_script("tune:flow:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked unregistered");mqtt.registered=1;
+    mqtt.filename[0]=0;expect(!control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked without active file");
     return 0;
 }

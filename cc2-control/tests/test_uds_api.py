@@ -72,6 +72,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         printer = get("/api/printer")
         assert printer["extruder"] == {"temperature": 210, "target": 215}
         assert printer["fans"]["part"] == 153
+        assert printer["tuning"] == {"speed_percent": 80, "flow_percent": 95, "live_velocity": None}
         send({"method": "cc2_status", "params": {"eventtime": 2, "status": {
             "extruder": {"temperature": 211}, "gcode_move": {"speed_factor": 1.3}
         }}})

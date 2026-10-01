@@ -460,5 +460,17 @@
   "state.timelapse_generation": "Timelapse generation",
   "state.unknown": "Unknown",
   "state.unloading": "Unloading",
-  "state.upgrade": "Upgrade"
+  "state.upgrade": "Upgrade",
+  "tuning.title": "Print tuning",
+  "tuning.speed": "Print speed (%)",
+  "tuning.flow": "Flow (%)",
+  "tuning.actual": "Actual: {value}%",
+  "tuning.apply": "Apply",
+  "tuning.reset": "Reset 100%",
+  "tuning.range": "Range: {min}–{max}%",
+  "tuning.live_velocity": "Live movement: {value} mm/s",
+  "tuning.waiting": "Waiting for readback…",
+  "tuning.not_confirmed": "The requested value was not confirmed. Check the actual value before retrying.",
+  "tuning.manual_note": "Manual speed changes may leave the display mode label unchanged. A display mode or G-code can override these values.",
+  "tuning.unavailable": "Controls require an active or paused print and fresh telemetry."
 }
