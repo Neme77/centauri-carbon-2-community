@@ -3,6 +3,7 @@
   "app.connecting_to_the_printer": "正在连接打印机…",
   "app.dashboard": "仪表板",
   "app.dismiss": "关闭",
+  "app.print_ended": "打印已结束：{name}",
   "app.emergency_stop": "紧急停止",
   "app.expand_menu": "展开菜单",
   "app.hold_emergency_stop_for_one_second": "按住紧急停止一秒。",

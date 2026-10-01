@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-preact'
 import { Dot } from '@/components/ui/badge'
-import { type Key, t, tState } from '@/lib/i18n'
+import { type Key, t, tState, tpl } from '@/lib/i18n'
 import { control, notify, toast } from '@/lib/api'
 import { health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
@@ -243,6 +243,22 @@ export const TitleSync = () => {
   const v = view(printer.use().data)
   const label = items.find(i => i[0] === page)?.[2] ?? 'app.dashboard'
   document.title = `${v.active ? `${Math.round(v.progress)}% · ` : ''}${t(label)} · Centauri Carbon 2`
+  return null
+}
+
+// The printer reports no end-of-print event, so a print that was active and no longer is has ended (finished or cancelled).
+export const PrintWatcher = () => {
+  const d = printer.use().data
+  const running = useRef<string | null>(null)
+  useEffect(() => {
+    if (!d) return
+    const v = view(d)
+    if (v.active) running.current = v.rawFilename
+    else if (running.current !== null) {
+      notify(tpl('app.print_ended', { name: running.current }))
+      running.current = null
+    }
+  }, [d])
   return null
 }
 

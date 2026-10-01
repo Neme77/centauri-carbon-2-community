@@ -3,6 +3,7 @@
   "app.connecting_to_the_printer": "Connecting to the printer…",
   "app.dashboard": "Dashboard",
   "app.dismiss": "Dismiss",
+  "app.print_ended": "Print ended: {name}",
   "app.emergency_stop": "EMERGENCY STOP",
   "app.expand_menu": "Expand menu",
   "app.hold_emergency_stop_for_one_second": "Hold Emergency Stop for one second.",

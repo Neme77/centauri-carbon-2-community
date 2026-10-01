@@ -1,6 +1,6 @@
 import { i18n } from '@/lib/i18n'
 import { menu, nav, printer } from '@/lib/state'
-import { Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
+import { PrintWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SetupDialog } from '@/pages/setup'
 import { PrintDialog } from '@/pages/print-dialog'
@@ -34,6 +34,7 @@ export const App = () => {
   return (
     <>
       <TitleSync />
+      <PrintWatcher />
       <Sidebar />
       <Topbar />
       <main

@@ -3,6 +3,7 @@
   "app.connecting_to_the_printer": "Connexion à l’imprimante…",
   "app.dashboard": "Tableau de bord",
   "app.dismiss": "Fermer",
+  "app.print_ended": "Impression terminée : {name}",
   "app.emergency_stop": "ARRÊT D'URGENCE",
   "app.expand_menu": "Développer le menu",
   "app.hold_emergency_stop_for_one_second": "Maintenez l'arrêt d'urgence pendant une seconde.",
