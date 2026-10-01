@@ -471,7 +471,7 @@ export const Control = () => {
               >
                 <Icon n="light" class="text-cyan" />
                 <span>
-                  {t('common.lights')} <small>{t(v.lightOn ? 'control.on' : 'control.off')}</small>
+                  {t('common.lights')} {t(v.lightOn ? 'control.on' : 'control.off')}
                 </span>
               </Button>
               <Button
