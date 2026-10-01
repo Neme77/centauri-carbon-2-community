@@ -1,6 +1,6 @@
 import { i18n } from '@/lib/i18n'
-import { menu, nav } from '@/lib/state'
-import { Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
+import { menu, nav, printer } from '@/lib/state'
+import { PrintWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SetupDialog } from '@/pages/setup'
 import { PrintDialog } from '@/pages/print-dialog'
@@ -28,14 +28,17 @@ export const App = () => {
   i18n.use() // re-render the whole tree when the language changes
   const { page } = nav.use()
   const { collapsed } = menu.use()
+  const { data, ok } = printer.use()
+  const stale = !ok || (data && !data.connected) // last known values stay visible, but dimmed
   const Page = pages[page]
   return (
     <>
       <TitleSync />
+      <PrintWatcher />
       <Sidebar />
       <Topbar />
       <main
-        class={`cc2-main ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin] md:p-4 ${collapsed ? '' : 'md:ml-52'}`}
+        class={`cc2-main ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin,opacity] md:p-4 ${collapsed ? '' : 'md:ml-52'} ${stale ? 'opacity-50' : ''}`}
       >
         <Page />
       </main>

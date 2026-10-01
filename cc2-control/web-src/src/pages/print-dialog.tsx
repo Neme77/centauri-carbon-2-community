@@ -156,7 +156,7 @@ const Form = ({ job }: { job: Pending }) => {
           {[0, 1, 2, 3].map(i => (
             <div key={i} class="rounded-lg border border-edge p-2 text-xs [overflow-wrap:anywhere]">
               <div class="mb-1.5 h-2 rounded" style={{ background: canvasColour(tray(i)?.filament_color, i) }} />
-              <strong>Slot {i + 1}</strong>
+              <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
               <div>{slotLabel(tray(i))}</div>
             </div>
           ))}
@@ -181,7 +181,7 @@ const Form = ({ job }: { job: Pending }) => {
         </label>
         {job.tools.map(tool => (
           <label key={tool} class="my-3 grid grid-cols-[1fr_2fr] items-center gap-3">
-            <strong>Filament T{tool}</strong>
+            <strong>{tpl('print.filament_tool_n', { n: tool })}</strong>
             <Select
               disabled={!useCanvas}
               value={map[tool] || ''}
@@ -193,7 +193,7 @@ const Form = ({ job }: { job: Pending }) => {
               <option value="">{t('print.choose_a_spool')}</option>
               {[0, 1, 2, 3].map(i => (
                 <option key={i} value={i}>
-                  Slot {i + 1} · {slotLabel(tray(i))}
+                  {tpl('common.slot_n', { n: i + 1 })} · {slotLabel(tray(i))}
                 </option>
               ))}
             </Select>

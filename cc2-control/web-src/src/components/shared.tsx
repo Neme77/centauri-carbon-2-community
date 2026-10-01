@@ -101,15 +101,19 @@ export const Muted = ({ children, class: c }: { children: ComponentChildren; cla
 // Live MJPEG feed card. The placeholder shows until the first frame; the header only says "Live" while frames arrive, and a dropped stream retries.
 export const CameraCard = ({ tall }: { tall?: boolean }) => {
   const [ready, setReady] = useState(false)
+  const [failed, setFailed] = useState(false)
   const [src, setSrc] = useState(camera())
   const retry = useRef<number | undefined>(undefined)
+  const reload = () => {
+    if (retry.current !== undefined) clearTimeout(retry.current)
+    retry.current = undefined
+    setSrc(camera(`?t=${Date.now()}`))
+  }
   const lost = () => {
     setReady(false)
+    setFailed(true)
     if (retry.current !== undefined) clearTimeout(retry.current)
-    retry.current = window.setTimeout(() => {
-      retry.current = undefined
-      setSrc(camera(`?t=${Date.now()}`))
-    }, 2500)
+    retry.current = window.setTimeout(reload, 2500)
   }
   useEffect(
     () => () => {
@@ -144,14 +148,22 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
             <strong class="block text-[15px] font-medium">
               {t(tall ? 'common.your_live_print_camera' : 'common.your_cc2_camera_feed')}
             </strong>
-            <p class="text-xs">{t('common.waiting_for_camera_stream')}</p>
+            <p class="text-xs">{t(failed ? 'common.camera_unavailable' : 'common.waiting_for_camera_stream')}</p>
+            {failed && (
+              <Button class="mt-2 text-xs" onClick={reload}>
+                {t('common.camera_retry_now')}
+              </Button>
+            )}
           </div>
         )}
         <img
           src={src}
           alt={t('common.cc2_live_camera')}
           class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')}
-          onLoad={() => setReady(true)}
+          onLoad={() => {
+            setReady(true)
+            setFailed(false)
+          }}
           onError={lost}
         />
       </div>

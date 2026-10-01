@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,24 +13,35 @@ import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
 
 const STEPS = [0.1, 1, 10, 30, 50]
-const I = { size: 16, strokeWidth: 1 }
+const I = { size: 20, strokeWidth: 1 }
 const B = { size: 22, strokeWidth: 1 }
 
 const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
   const [step, setStep] = useState(0.1)
   const can = (axis: string) => v.idle && v.homed.includes(axis)
   const move = (axis: string, dir: number) => control(`move:${axis}:${dir * step}`)
+  // The printer only reports "Manual homing" on its next poll: lock the buttons meanwhile and pull the state early.
+  const [homing, setHoming] = useState(false)
+  const home = async (axis: string) => {
+    if (homing) return
+    setHoming(true)
+    if (await control(`home:${axis}`)) {
+      setTimeout(refreshPrinter, 400)
+      setTimeout(refreshPrinter, 1200)
+    }
+    setTimeout(() => setHoming(false), 1500)
+  }
   const pad = 'min-h-11 text-xl'
   return (
     <Card>
       <CardHead icon="control" title="control.movement" />
-      <Button wide class="min-h-12" disabled={!v.idle} onClick={() => control('home:ALL')}>
+      <Button wide class="min-h-12" disabled={!v.idle || homing} onClick={() => home('ALL')}>
         <Icon n="home" />
         {t('common.home_all')}
       </Button>
       <div class="mt-3 grid grid-cols-3 gap-2.5">
         {['X', 'Y', 'Z'].map(a => (
-          <Button key={a} class="min-h-16 flex-col gap-1" disabled={!v.idle} onClick={() => control(`home:${a}`)}>
+          <Button key={a} class="min-h-16 flex-col gap-1" disabled={!v.idle || homing} onClick={() => home(a)}>
             <Icon n="home" class="text-cyan" />
             {t(a === 'X' ? 'common.home_x' : a === 'Y' ? 'common.home_y' : 'common.home_z')}
           </Button>
@@ -137,11 +148,19 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
   )
 }
 
-const Temperatures = ({ d }: { d: any }) => {
+const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const list = presets.use().list
   const [nozzle, setNozzle] = useState('0'),
-    [bed, setBed] = useState('0'),
-    [active, setActive] = useState('')
+    [bed, setBed] = useState('0')
+  const seeded = useRef(false)
+  // Start from the printer's current targets, so Apply never silently sends 0/0 over a running preheat.
+  useEffect(() => {
+    if (seeded.current || !d) return
+    seeded.current = true
+    setNozzle(String(Math.round(Number(d.extruder?.target) || 0)))
+    setBed(String(Math.round(Number(d.heater_bed?.target) || 0)))
+  }, [d])
+  const active = list.find(p => String(p.nozzle) === nozzle && String(p.bed) === bed)?.name
   const apply = async () => {
     const n = Number(nozzle),
       b = Number(bed)
@@ -154,20 +173,24 @@ const Temperatures = ({ d }: { d: any }) => {
       <CardHead icon="temp" title="common.temperatures" />
       {(
         [
-          ['red', 'common.nozzle', d?.extruder?.temperature, nozzle, setNozzle, 300],
-          ['blue', 'common.heated_bed', d?.heater_bed?.temperature, bed, setBed, 120],
+          ['red', 'common.nozzle', d?.extruder, nozzle, setNozzle, 300],
+          ['blue', 'common.heated_bed', d?.heater_bed, bed, setBed, 120],
         ] as const
-      ).map(([dot, label, cur, val, set, max]) => (
+      ).map(([dot, label, heater, val, set, max]) => (
         <div key={label} class="my-4 flex items-center gap-2.5">
           <Dot c={dot} />
           <span>{t(label)}</span>
-          <strong class="ml-auto text-[15px]">{num(cur)} °C</strong>
+          <strong class="ml-auto text-[15px]">
+            {num(heater?.temperature)}
+            {Number(heater?.target) > 0 ? ` / ${num(heater.target)}` : ''} °C
+          </strong>
           <Input
             class="w-18 text-center"
             type="number"
             min="0"
             max={max}
             value={val}
+            disabled={!v.idle}
             aria-label={tpl('control.name_target', { name: t(label) })}
             onInput={e => set(e.currentTarget.value)}
             onKeyDown={e => e.key === 'Enter' && apply()}
@@ -175,22 +198,23 @@ const Temperatures = ({ d }: { d: any }) => {
           <small>°C</small>
         </div>
       ))}
-      <Button wide onClick={apply}>
+      <Button wide disabled={!v.idle} onClick={apply}>
         {t('control.apply_targets')}
       </Button>
+      {!v.idle && <Notice>{t('common.available_when_idle')}</Notice>}
       <div class="mt-4 border-t border-edge pt-3">
         <small class="text-muted">{t('control.temperature_presets')}</small>
-        <div class="mt-2 flex flex-wrap gap-2">
+        <div class="mt-2 flex gap-2">
           {list.map(p => (
             <Button
               key={p.name}
-              class="min-w-20 flex-1 text-xs"
+              class="min-w-0 flex-1 truncate px-1 text-xs"
               variant={active === p.name ? 'active' : 'default'}
+              disabled={!v.idle}
               title={`${p.nozzle} °C nozzle / ${p.bed} °C bed`}
               onClick={() => {
                 setNozzle(String(p.nozzle))
                 setBed(String(p.bed))
-                setActive(p.name)
                 notify(
                   tpl('control.name_targets_nozzle_bed_c_loaded', {
                     name: p.name,
@@ -416,7 +440,7 @@ export const Control = () => {
           <Movement v={v} />
         </div>
         <div class="grid content-start gap-3.5">
-          <Temperatures d={d} />
+          <Temperatures d={d} v={v} />
           <Card>
             <CardHead icon="fan" title="common.fans" />
             {(['part', 'aux', 'box'] as const).map(k => (
@@ -433,9 +457,10 @@ export const Control = () => {
         <div class="grid content-start gap-3.5 lg:col-span-2 lg:grid-cols-2 xl:col-span-1 xl:grid-cols-1">
           <Card>
             <CardHead icon="settings" title="control.machine" />
-            <div class="grid grid-cols-2 gap-2.5">
+            <div class="grid auto-rows-fr grid-cols-2 gap-2.5">
               <Button
-                class={`min-h-16 flex-col gap-1 ${v.lightOn ? 'border-cyan text-cyan' : 'text-muted'}`}
+                class="min-h-16 flex-col gap-1"
+                variant={v.lightOn ? 'active' : 'default'}
                 aria-pressed={v.lightOn}
                 title={t(
                   v.lightOn ? 'control.internal_light_on_press_to_turn' : 'control.internal_light_off_press_to_turn'
@@ -444,9 +469,10 @@ export const Control = () => {
                   if (await control(v.lightOn ? 'light:off' : 'light:on')) setTimeout(refreshPrinter, 250)
                 }}
               >
-                <Icon n="light" class="text-current" />
-                <span>{t('common.lights')}</span>
-                <small class="text-[10px] opacity-80">{t(v.lightOn ? 'control.on' : 'control.off')}</small>
+                <Icon n="light" class="text-cyan" />
+                <span>
+                  {t('common.lights')} {t(v.lightOn ? 'control.on' : 'control.off')}
+                </span>
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
