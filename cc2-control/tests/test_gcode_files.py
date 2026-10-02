@@ -86,7 +86,7 @@ def main():
             inspect = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/inspect",
                 data=b"internal\nmulticolour.gcode", method="POST",
-                headers={"Content-Type": "text/plain"},
+                headers={"X-CC2-Request": "1", "Content-Type": "text/plain"},
             )
             with urllib.request.urlopen(inspect, timeout=1) as response:
                 inspection = json.load(response)
@@ -95,7 +95,7 @@ def main():
             inspect_adaptive = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/inspect",
                 data=b"internal\nadaptive.gcode", method="POST",
-                headers={"Content-Type": "text/plain"},
+                headers={"X-CC2-Request": "1", "Content-Type": "text/plain"},
             )
             with urllib.request.urlopen(inspect_adaptive, timeout=1) as response:
                 adaptive = json.load(response)
@@ -104,7 +104,7 @@ def main():
             metadata_request = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/metadata",
                 data=b"internal\nmetadata.gcode", method="POST",
-                headers={"Content-Type": "text/plain"},
+                headers={"X-CC2-Request": "1", "Content-Type": "text/plain"},
             )
             with urllib.request.urlopen(metadata_request, timeout=1) as response:
                 metadata = json.load(response)
@@ -114,6 +114,7 @@ def main():
             incomplete = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/print",
                 data=b"internal\nmulticolour.gcode\n0:1", method="POST",
+                headers={"X-CC2-Request": "1"},
             )
             try:
                 urllib.request.urlopen(incomplete, timeout=1)
@@ -125,6 +126,7 @@ def main():
             mapped = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/print",
                 data=b"internal\nmulticolour.gcode\n0:1,1:3", method="POST",
+                headers={"X-CC2-Request": "1"},
             )
             try:
                 urllib.request.urlopen(mapped, timeout=1)
@@ -136,6 +138,7 @@ def main():
             full_leveling = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/print",
                 data=b"internal\nadaptive.gcode\n\nB\nfull", method="POST",
+                headers={"X-CC2-Request": "1"},
             )
             try:
                 urllib.request.urlopen(full_leveling, timeout=1)
@@ -147,6 +150,7 @@ def main():
             saved_start = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/print",
                 data=b"internal\nadaptive.gcode\n\nB\nsaved", method="POST",
+                headers={"X-CC2-Request": "1"},
             )
             try:
                 urllib.request.urlopen(saved_start, timeout=1)
@@ -158,6 +162,7 @@ def main():
             adaptive_start = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/print",
                 data=b"internal\nadaptive.gcode\n\nB\nadaptive", method="POST",
+                headers={"X-CC2-Request": "1"},
             )
             try:
                 urllib.request.urlopen(adaptive_start, timeout=1)
@@ -169,7 +174,7 @@ def main():
             request = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/print",
                 data=b"internal\ncube.gcode", method="POST",
-                headers={"Content-Type": "text/plain"},
+                headers={"X-CC2-Request": "1", "Content-Type": "text/plain"},
             )
             try:
                 urllib.request.urlopen(request, timeout=1)
@@ -181,6 +186,7 @@ def main():
             traversal = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/print",
                 data=b"internal\n../escape.gcode", method="POST",
+                headers={"X-CC2-Request": "1"},
             )
             try:
                 urllib.request.urlopen(traversal, timeout=1)

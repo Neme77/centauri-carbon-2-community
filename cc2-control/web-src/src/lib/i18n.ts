@@ -58,7 +58,7 @@ export const tpl = (key: Key, vars: Record<string, string | number>) => {
 function persist(prefs: { language?: string; theme?: string }) {
   void fetch('/api/preferences', {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CC2-Request': '1' },
     body: JSON.stringify(prefs),
   }).catch(() => {})
 }

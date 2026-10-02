@@ -18,7 +18,7 @@ const I = { size: 16, strokeWidth: 1 }
 const metaCache = new Map<string, any>()
 const body = (s: string, p: string) => ({
   method: 'POST',
-  headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+  headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'X-CC2-Request': '1' },
   body: `${s}\n${p}`,
   cache: 'no-store' as const,
 })
@@ -410,6 +410,7 @@ const Upload = ({
           `/api/gcode-files/upload?storage=${encodeURIComponent(storage)}&name=${encodeURIComponent(file.name)}`
         )
         x.setRequestHeader('Content-Type', 'application/octet-stream')
+        x.setRequestHeader('X-CC2-Request', '1')
         x.timeout = 180000
         x.upload.onprogress = ev => {
           if (ev.lengthComputable) {
