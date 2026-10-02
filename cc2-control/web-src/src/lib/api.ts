@@ -6,7 +6,14 @@ export const request = async (path: string, options: RequestInit = {}) => {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 8000)
   try {
-    const response = await fetch(path, { cache: 'no-store', ...options, signal: options.signal ?? controller.signal })
+    const headers = new Headers(options.headers)
+    if (options.method && !['GET', 'HEAD'].includes(options.method.toUpperCase())) headers.set('X-CC2-Request', '1')
+    const response = await fetch(path, {
+      cache: 'no-store',
+      ...options,
+      headers,
+      signal: options.signal ?? controller.signal,
+    })
     const type = response.headers.get('content-type') || ''
     const data = type.includes('json') ? await response.json() : await response.text()
     if (!response.ok) throw Error(data?.error || data || `HTTP ${response.status}`)
