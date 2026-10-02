@@ -23,7 +23,7 @@ import { control, notify, toast } from '@/lib/api'
 import { health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
 // Same query as the compact layout in index.css.
-const COMPACT = '(max-width: 767px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape)'
+const COMPACT = '(max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape)'
 type NavIcon = typeof Gauge | typeof CanvasIcon
 const items: [Page, NavIcon, Key][] = [
   ['dashboard', Gauge, 'app.dashboard'],

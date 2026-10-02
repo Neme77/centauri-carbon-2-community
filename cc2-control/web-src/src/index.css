@@ -99,10 +99,10 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   }
 }
 
-/* Compact layout (drawer menu, full content width): narrow portrait phones and short landscape screens.
+/* Compact layout (drawer menu, full content width): portrait phones and tablets up to 900 px, and short landscape screens.
    Keep this query identical to COMPACT in components/layout.tsx. */
 .cc2-menu-backdrop { display: none; }
-@media (max-width: 767px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
+@media (max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
   .cc2-main { margin-left: 0; padding: 10px; }
   .cc2-main input, .cc2-main select, .cc2-main textarea { font-size: 16px; }
   .cc2-file-row { min-height: 56px; }
