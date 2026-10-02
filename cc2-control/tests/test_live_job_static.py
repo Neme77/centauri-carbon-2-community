@@ -22,7 +22,7 @@ markers = {
     "estimated completion time": "finishTime(remaining)",
     "real G-code metadata": "/api/gcode-files/metadata",
     "real current print object": "m?.current_object",
-    "live thermal history": "a.length > 300",
+    "live thermal history": "times[0] < Date.now() - 300_000",
 }
 for label, marker in markers.items():
     assert marker in ui, f"missing {label}: {marker}"

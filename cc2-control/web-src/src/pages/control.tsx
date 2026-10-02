@@ -169,7 +169,16 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const apply = async () => {
     const n = Number(nozzle),
       b = Number(bed)
-    if (!Number.isFinite(n) || n < 0 || n > 300 || !Number.isFinite(b) || b < 0 || b > 120)
+    if (
+      !nozzle.trim() ||
+      !bed.trim() ||
+      !Number.isFinite(n) ||
+      n < 0 ||
+      n > 300 ||
+      !Number.isFinite(b) ||
+      b < 0 ||
+      b > 120
+    )
       return notify(t('control.invalid_temperature_target'), 'error')
     await control(`preheat:${n}:${b}`)
   }
@@ -334,7 +343,17 @@ const Profiles = () => {
     const n = name.trim().toUpperCase().slice(0, 16),
       nz = Number(nozzle),
       b = Number(bed)
-    if (!/^[A-Z0-9+_-]{1,16}$/.test(n) || nz < 0 || nz > 300 || b < 0 || b > 120)
+    if (
+      !nozzle.trim() ||
+      !bed.trim() ||
+      !Number.isFinite(nz) ||
+      !Number.isFinite(b) ||
+      !/^[A-Z0-9+_-]{1,16}$/.test(n) ||
+      nz < 0 ||
+      nz > 300 ||
+      b < 0 ||
+      b > 120
+    )
       return notify(t('control.invalid_material_profile_values'), 'error')
     const at = list.findIndex(p => p.name.toUpperCase() === n),
       prev = at >= 0 ? list[at] : null
@@ -481,6 +500,7 @@ export const Control = () => {
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
+                disabled={v.printing}
                 onClick={() => control('system:motors_off', t('common.disable_all_motors'))}
               >
                 <Icon n="motors" class="text-cyan" />
@@ -495,6 +515,7 @@ export const Control = () => {
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
+                disabled={v.printing}
                 onClick={() => control('system:fans_off', t('common.turn_all_fans_off'))}
               >
                 <Icon n="fan" class="text-cyan" />

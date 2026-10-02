@@ -37,7 +37,15 @@ export const FanBar = ({ label, pct }: { label: Key; pct: number }) => (
   </div>
 )
 
-export const FanSlider = ({ label, pct, onCommit }: { label: Key; pct: number; onCommit: (v: number) => void }) => {
+export const FanSlider = ({
+  label,
+  pct,
+  onCommit,
+}: {
+  label: Key
+  pct: number
+  onCommit: (v: number) => Promise<boolean>
+}) => {
   const [v, setV] = useState(pct)
   useEffect(() => setV(pct), [pct])
   return (
@@ -51,7 +59,10 @@ export const FanSlider = ({ label, pct, onCommit }: { label: Key; pct: number; o
         value={v}
         aria-label={t(label)}
         onInput={e => setV(+e.currentTarget.value)}
-        onChange={e => onCommit(Math.round(+e.currentTarget.value))}
+        onChange={async e => {
+          const next = Math.round(+e.currentTarget.value)
+          if (!(await onCommit(next))) setV(pct)
+        }}
       />
     </div>
   )

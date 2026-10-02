@@ -48,6 +48,9 @@ export const Files = () => {
       ] as const)
         for (const file of group?.files || []) next.push({ storage, file })
       setEntries(next)
+      const available = new Set(next.map(key))
+      setChecked(current => new Set([...current].filter(k => available.has(k))))
+      setSel(current => (current ? next.find(e => key(e) === key(current)) || null : null))
       setLoaded(true)
       if (announce) notify(t('files.protected_file_list_refreshed'))
     } catch (e) {

@@ -6,7 +6,12 @@ export function canvasModel(data: any) {
   const list = telemetry?.result?.canvas_info?.canvas_list
   if (!Array.isArray(list) || !list.length) return null
   const m = list.find((i: any) => Number(i.connected) === 1) || list[0]
-  return { connected: Number(m.connected) === 1, trays: (Array.isArray(m.tray_list) ? m.tray_list : []) as any[] }
+  return {
+    connected: Number(m.connected) === 1,
+    trays: Array.from({ length: 4 }, (_, slot) =>
+      Array.isArray(m.tray_list) ? m.tray_list.find((tray: any) => Number(tray.tray_id) === slot) : undefined
+    ) as any[],
+  }
 }
 
 export function canvasColour(value: any, index: number): string {

@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
@@ -55,6 +55,8 @@ const Kv = ({ k, text, v }: { k?: Key; text?: string; v: any }) => (
 )
 
 const Connection = () => {
+  const restartTimer = useRef(0)
+  useEffect(() => () => clearTimeout(restartTimer.current), [])
   const { data: h, setup } = health.use()
   const [code, setCode] = useState(''),
     [busy, setBusy] = useState(false)
@@ -71,7 +73,7 @@ const Connection = () => {
       setCode('')
       setBusy(true)
       notify(t('settings.lan_access_code_saved_restarting'))
-      setTimeout(() => location.reload(), 30000)
+      restartTimer.current = window.setTimeout(() => location.reload(), 30000)
     } catch (e) {
       setBusy(false)
       notify(tpl('settings.verification_failed_error', { error: errText(e) }), 'error')
@@ -142,7 +144,7 @@ const Integrations = () => {
       const m = parse ? tpl(ok, { text: parse(await r.json()) }) : t(ok)
       notify(m)
     } catch (e) {
-      notify(tpl(fail, { error: errText(e) }))
+      notify(tpl(fail, { error: errText(e) }), 'error')
     }
   }
   const row = 'my-2 grid items-center gap-2.5 cc2-md:grid-cols-[230px_1fr_auto]'
@@ -193,7 +195,12 @@ const Appearance = () => {
     if (!(await ask(t('settings.restore_interface_preferences'), true))) return
     ;['cc2-language', 'cc2-theme'].forEach(ls.del)
     setTheme('dark', true)
-    void saveQuickActions(QUICK_DEFAULTS)
+    try {
+      await saveQuickActions(QUICK_DEFAULTS)
+    } catch (e) {
+      notify(errText(e), 'error')
+      return
+    }
     setLanguage(detectLanguage(), true)
     notify(t('settings.interface_preferences_restored'))
   }

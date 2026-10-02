@@ -13,7 +13,9 @@ export function matrixFromUds(data: any, profile = 'active'): Pt[] | null {
     const mp = p.mesh_params || {}
     root = { probed_matrix: p.points, mesh_min: [mp.min_x, mp.min_y], mesh_max: [mp.max_x, mp.max_y] }
   }
-  const matrix = root.probed_matrix || root.mesh_matrix || root.matrix
+  const matrix = [root.probed_matrix, root.mesh_matrix, root.matrix].find(
+    m => Array.isArray(m) && m.length && Array.isArray(m[0]) && m[0].length
+  )
   if (!Array.isArray(matrix) || !matrix.length || !Array.isArray(matrix[0])) return null
   const min = Array.isArray(root.mesh_min) ? root.mesh_min : [0, 0]
   const max = Array.isArray(root.mesh_max) ? root.mesh_max : [matrix[0].length - 1, matrix.length - 1]

@@ -36,6 +36,9 @@ const MeshCard = () => {
   const canvas = useRef<HTMLCanvasElement>(null)
   const busy = useRef(false)
   const points: Pt[] = useMemo(() => (data && matrixFromUds(data, profile)) || [], [data, profile])
+  const xs = [...new Set(points.map(p => p.x))].sort((a, b) => a - b)
+  const ys = [...new Set(points.map(p => p.y))].sort((a, b) => b - a)
+  const cells = new Map(points.map(p => [`${p.x},${p.y}`, p.z]))
   const st = meshStats(points),
     root = meshRoot(data)
 
@@ -166,20 +169,20 @@ const MeshCard = () => {
                 <thead>
                   <tr>
                     <th class="p-1 text-left font-normal">Y / X</th>
-                    {Array.from({ length: 11 }, (_, i) => (
-                      <th key={i} class="p-1 text-left font-normal">
-                        {i * 25}
+                    {xs.map(x => (
+                      <th key={x} class="p-1 text-left font-normal">
+                        {Number(x.toFixed(2))}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {Array.from({ length: 11 }, (_, r) => 10 - r).map(y => (
+                  {ys.map(y => (
                     <tr key={y}>
-                      <th class="p-1 text-left">{y * 25}</th>
-                      {Array.from({ length: 11 }, (_, x) => (
+                      <th class="p-1 text-left">{Number(y.toFixed(2))}</th>
+                      {xs.map(x => (
                         <td key={x} class="p-1">
-                          {points[y * 11 + x]?.z.toFixed(3)}
+                          {cells.get(`${x},${y}`)?.toFixed(3) ?? '—'}
                         </td>
                       ))}
                     </tr>
