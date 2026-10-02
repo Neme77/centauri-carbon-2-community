@@ -145,8 +145,8 @@ export const Files = () => {
       <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 cc2-xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
         <div class="grid min-w-0 content-start gap-3">
           <Card>
-            <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2.5 cc2-md:grid-cols-[1.6fr_.8fr_1fr_auto]">
-              <div class="relative col-span-3 cc2-md:col-span-1">
+            <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2.5 cc2-md:grid-cols-[1.6fr_.8fr_1fr_auto]">
+              <div class="relative col-span-2 cc2-md:col-span-1">
                 <Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
                 <Input
                   class="pl-8"
@@ -155,7 +155,7 @@ export const Files = () => {
                   onInput={e => setQ(e.currentTarget.value)}
                 />
               </div>
-              <Select value={loc} onChange={e => setLoc(e.currentTarget.value)}>
+              <Select class="col-span-2 cc2-md:col-span-1" value={loc} onChange={e => setLoc(e.currentTarget.value)}>
                 <option value="all">{t('files.all_files')}</option>
                 <option value="internal">{t('files.internal_memory')}</option>
                 <option value="usb">{t('files.usb_drive')}</option>
@@ -380,7 +380,8 @@ const Upload = ({
   const [storage, setStorage] = useState('internal'),
     [pct, setPct] = useState(-1),
     [over, setOver] = useState(false),
-    [note, setNote] = useState(t('files.maximum_64_mib_no_automatic'))
+    [note, setNote] = useState<string | null>(null), // null = the default hint, translated at render time
+    [picked, setPicked] = useState('')
   const go = async () => {
     const file = pick.current?.files?.[0]
     if (busy || !file) return notify(t('files.choose_a_g_code_file_first'), 'error')
@@ -434,6 +435,7 @@ const Upload = ({
         x.send(file)
       })
       if (pick.current) pick.current.value = ''
+      setPicked('')
       setPct(100)
       setNote(t('files.upload_completed_file_is_ready_in'))
       notify(tpl('files.name_uploaded_to_where', { name: file.name, where: where(storage) }))
@@ -467,6 +469,7 @@ const Upload = ({
           const f = e.dataTransfer?.files
           if (busy || !f?.length || !pick.current) return
           pick.current.files = f
+          setPicked(f[0].name)
           void go()
         }}
       >
@@ -474,10 +477,18 @@ const Upload = ({
           ref={pick}
           type="file"
           accept=".gcode"
-          class="w-full min-w-0"
+          class="hidden"
           disabled={busy}
           aria-label={t('files.select_g_code_file')}
+          onChange={e => setPicked(e.currentTarget.files?.[0]?.name ?? '')}
         />
+        <div class="flex w-full min-w-0 items-center gap-3">
+          <Button disabled={busy} onClick={() => pick.current?.click()}>
+            <FileText {...I} />
+            {t('files.select_g_code_file')}
+          </Button>
+          <span class="min-w-0 truncate text-muted">{picked || t('files.no_file_selected')}</span>
+        </div>
         <label class="flex items-center gap-2">
           {t('files.destination')}{' '}
           <Select class="w-auto" value={storage} disabled={busy} onChange={e => setStorage(e.currentTarget.value)}>
@@ -491,7 +502,7 @@ const Upload = ({
         </Button>
         <small class="text-muted">{t('files.or_drop_a_gcode_file_here')}</small>
         {pct >= 0 && <progress class="w-full" value={pct} max="100" />}
-        <small class="text-center text-muted">{note}</small>
+        <small class="text-center text-muted">{note ?? t('files.maximum_64_mib_no_automatic')}</small>
       </div>
     </Card>
   )
