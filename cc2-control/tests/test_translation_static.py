@@ -57,4 +57,4 @@ for locale, spot_checks in {
 
 assert "navigator.languages" in src and "p.language || detectLanguage()" in src, "browser language fallback missing"
 
-print("PASS: translation loader wiring and Italian/French/Chinese spot-check markers")
+print("PASS: translation loader wiring and spot-check markers")
