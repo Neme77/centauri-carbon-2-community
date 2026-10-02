@@ -140,3 +140,12 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-sidebar > div { display: none; } /* collapse button and version: meaningless for a drawer */
   .cc2-menu-backdrop { inset: 52px 0 0; }
 }
+
+/* Touch: 44 px is the minimum comfortable target. Switches keep their look and get a larger hit area instead. */
+@media (pointer: coarse) {
+  button:not([role="switch"]), select, input:not([type="range"], [type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="hidden"]) {
+    min-height: 44px;
+  }
+  button[role="switch"] { position: relative; }
+  button[role="switch"]::before { content: ""; position: absolute; inset: -11px -4px; }
+}
