@@ -291,31 +291,53 @@ const Extruder = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
 }
 
 const ZOffset = () => {
-  const off = zoffset.use().v
-  const adjust = async (delta: number) => {
-    const next = Math.round((off + delta) * 100) / 100
-    if (Math.abs(next) > 0.5001) return notify(t('control.session_z_offset_is_limited_to'), 'error')
-    if (await control(`zoffset:adjust:${delta}`)) zoffset.set({ v: next })
+  const { v: off, reference, pending } = zoffset.use()
+  const lock = useRef(false)
+  const [busy, setBusy] = useState(false)
+  const send = async (action: string) => {
+    if (lock.current || pending || off === null || reference === null) return
+    lock.current = true
+    setBusy(true)
+    try {
+      if (await control(action)) zoffset.set({ pending: true })
+      await refreshPrinter()
+    } finally {
+      lock.current = false
+      setBusy(false)
+    }
   }
-  const undo = async () => {
-    const u = -off
-    if (Math.abs(u) < 0.0001 || (await control(`zoffset:undo:${u}`))) zoffset.set({ v: 0 })
+  const adjust = (delta: number) => {
+    if (off !== null && reference !== null && Math.abs(off + delta - reference) > 0.5001)
+      return notify(t('control.session_z_offset_is_limited_to'), 'error')
+    return send(`zoffset:adjust:${delta}`)
   }
+  const undo = () =>
+    off !== null && reference !== null && Math.abs(off - reference) >= 0.0001 && send(`zoffset:undo:${reference - off}`)
   return (
     <Card>
       <CardHead icon="z" title="common.live_z_offset" end={<Tag tone="warning">{t('common.session_only')}</Tag>} />
       <small class="text-muted">{t('control.protected_session_adjustment')}</small>
       <div class="my-2 text-3xl">
-        {(off > 0 ? '+' : '') + off.toFixed(2)} <small class="text-sm text-muted">mm</small>
+        {off === null ? '—' : (off > 0 ? '+' : '') + off.toFixed(2)} <small class="text-sm text-muted">mm</small>
       </div>
       <div class="flex gap-2">
         {[-0.05, -0.01, 0.01, 0.05].map(dv => (
-          <Button key={dv} class="flex-1 text-xs" onClick={() => adjust(dv)}>
+          <Button
+            key={dv}
+            class="flex-1 text-xs"
+            disabled={busy || pending || off === null || reference === null}
+            onClick={() => adjust(dv)}
+          >
             {dv < 0 ? '−' : '+'} {Math.abs(dv).toFixed(2)}
           </Button>
         ))}
       </div>
-      <Button wide class="mt-2" onClick={undo}>
+      <Button
+        wide
+        class="mt-2"
+        disabled={busy || pending || off === null || reference === null || Math.abs(off - reference) < 0.0001}
+        onClick={undo}
+      >
         {t('control.undo_session_offset')}
       </Button>
       <Warn>{t('control.live_session_adjustment_it_resets')}</Warn>

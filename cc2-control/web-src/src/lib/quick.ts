@@ -41,7 +41,7 @@ export async function saveQuickActions(actions: string[]) {
   const body = Object.fromEntries(actions.map((a, i) => [`quick${i + 1}`, a]))
   await request('/api/preferences', {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CC2-Request': '1' },
     body: JSON.stringify(body),
   })
   quick.set({ actions })

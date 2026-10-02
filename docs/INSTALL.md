@@ -58,3 +58,44 @@ wget -qO- http://127.0.0.1:7125/server/info
 ```
 
 Do not install files from different releases as a mixed set.
+
+## Protected live Z offset
+
+The UI reads `gcode_move.homing_origin[2]` through the shared firmware telemetry
+cache; it never substitutes zero for missing readback. Protected adjustments
+require fresh readback, a session adjustment within ±0.50 mm of the printer reference, and confirmation of
+the preceding adjustment. A browser reload does not reset the guard. Undo
+restores the firmware reference captured before the first accepted session adjustment and does not write saved firmware settings.
+
+If the firmware does not report this field, the adjustment buttons remain
+disabled. Validate field availability and existing print/calibration offset
+behaviour on the printer before releasing this change. An unconfirmed command
+keeps further adjustments blocked; inspect the firmware state before restarting
+CC2 Control to re-establish readback. This guard applies to protected CC2 Control
+actions, not arbitrary G-code explicitly entered in the expert console.
+
+Live adjustments use Klipper `SET_GCODE_OFFSET Z_ADJUST=... MOVE=1 MOVE_SPEED=5`,
+including during printing, with Z homed. The backend owns the reference across
+browser reloads and clients. A confirmed external offset change establishes a new
+reference; an unconfirmed command stays blocked. Restarting CC2 Control starts
+a new session from current readback. Nothing is written using SAVE_CONFIG.
+
+## Browser host and origin protection
+
+CC2 Control accepts its local IP address, the printer hostname (also with `.local`),
+and loopback `localhost`, with the HTTP service port. OrcaSlicer remains supported. Mutating API requests require the
+`X-CC2-Request: 1` header supplied by the bundled UI; CLI clients must supply
+this header too. Native Orca uploads to `/api/files/local` are the sole exception
+and still require operator confirmation before printing. Browser commands also
+require the same origin. Cross-site requests are
+rejected; the service does not enable CORS.
+
+For a trusted DNS alias, add `--http-host printer.example.local` to the CC2
+Control launcher arguments. Supply only the hostname, without a scheme or port.
+This setting does not provide authentication for other clients on the LAN.
+
+HTTP reception uses eight bounded request slots and a two-second total receive
+deadline. Incomplete headers or small command bodies do not monopolize the
+MQTT/UDS loop. Upload bodies continue in their existing bounded workers. This
+does not make the emergency control a substitute for the printer's physical
+stop: response transmission and firmware operations can still take time.
