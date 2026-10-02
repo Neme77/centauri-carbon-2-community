@@ -33,8 +33,9 @@ export const toggleMenu = () => {
 export const printer = store({ data: null as any, rev: 0, ok: true })
 export const health = store({ data: null as any, setup: null as any })
 export const consoleLog = store({ text: null as string | null }) // null: nothing received yet, the page shows its own placeholder
-export const screwText = store({ text: '' })
+export const screwText = store({ text: '', minGeneration: 0 })
 
+export const thermalTimes = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
 export const thermalHistory = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
 
 export async function refreshPrinter() {
@@ -45,14 +46,25 @@ export async function refreshPrinter() {
       ['bed', data.heater_bed?.temperature],
       ['chamber', data.chamber?.temperature],
     ] as const) {
-      if (Number.isFinite(Number(v))) {
+      if (v !== null && v !== undefined && Number.isFinite(Number(v))) {
         const a = thermalHistory[key]
         a.push(Number(v))
-        if (a.length > 300) a.shift()
+        const times = thermalTimes[key]
+        times.push(Date.now())
+        while (times.length && times[0] < Date.now() - 300_000) {
+          times.shift()
+          a.shift()
+        }
       }
     }
+    zoffset.set({
+      v: typeof data.z_offset?.value === 'number' ? data.z_offset.value : null,
+      pending: Boolean(data.z_offset?.pending),
+      reference: typeof data.z_offset?.reference === 'number' ? data.z_offset.reference : null,
+    })
     printer.set(s => ({ data, rev: s.rev + 1, ok: true }))
   } catch {
+    zoffset.set({ v: null })
     printer.set({ ok: false })
   } // keep the last data, flag the link as down
 }
@@ -76,10 +88,14 @@ export async function refreshSetup() {
 
 export async function refreshConsole() {
   try {
-    const out = String((await request('/api/console')).output || '')
+    const status = await request('/api/console')
+    const out = String(status.output || '')
+    if (status.generation >= screwText.get().minGeneration) {
+      const measured = String(status.command || '').includes('SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE')
+      screwText.set({ text: measured && status.completed && status.success ? out : '' })
+    }
     if ((out || null) !== consoleLog.get().text) {
       consoleLog.set({ text: out || null })
-      screwText.set({ text: out })
     }
   } catch {
     /* offline */
@@ -151,5 +167,5 @@ export const savePresets = (list: any[]) =>
 // Camera and Moonraker live on other ports of the same host.
 export const camera = (q = '') => `http://${location.hostname}:8080/${q}`
 
-// Live Z offset applied in this browser session (mirrors the printer's session offset).
-export const zoffset = store({ v: 0 })
+// Authoritative volatile printer offset; unavailable readback is never shown as zero.
+export const zoffset = store({ v: null as number | null, reference: null as number | null, pending: false })

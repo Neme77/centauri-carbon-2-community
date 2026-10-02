@@ -49,6 +49,7 @@ const EStop = () => {
   const start = (e: Event) => {
     if (e.type === 'keydown' && !['Enter', ' '].includes((e as KeyboardEvent).key)) return
     e.preventDefault()
+    if (e.type === 'keydown' && (e as KeyboardEvent).repeat) return
     cancel()
     fired.current = false
     setHolding(true)
@@ -69,6 +70,7 @@ const EStop = () => {
       onPointerLeave={cancel}
       onKeyDown={start}
       onKeyUp={cancel}
+      onBlur={cancel}
       onContextMenu={e => e.preventDefault()}
       onClick={e => {
         e.preventDefault()

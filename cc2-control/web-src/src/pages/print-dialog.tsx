@@ -66,6 +66,7 @@ export async function checkOrcaPendingPrint() {
   try {
     const job = await request('/api/orca/pending-print')
     if (!job?.pending || !job.filename || !job.generation || job.generation === lastSeen) return
+    lastSeen = job.generation // consume this automatic attempt even when preparation fails
     await startFile('internal', job.filename)
     if (pending.get().job?.path === job.filename) {
       activeGeneration = lastSeen = job.generation
@@ -102,7 +103,7 @@ const Form = ({ job }: { job: Pending }) => {
           : 'print.canvas_not_detected_external'
     )
   )
-  const tray = (i: number) => job.trays.find(x => Number(x.tray_id) === i) || job.trays[i]
+  const tray = (i: number) => job.trays.find(x => x && Number(x.tray_id) === i)
   const available = job.meshAvailable[side],
     forced = !available,
     calibrating = forced || calibrate

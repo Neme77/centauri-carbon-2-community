@@ -82,6 +82,29 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `Collapsed sidebar: ${tab} overflow`)
     if (shots) await page.screenshot({ path: path.join(shots, `1440-collapsed-${tab}.png`), fullPage: true })
   }
+  // Selecting firmware meshes changes visualization only, never printer state.
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.locator('a[href="#bed"]').click()
+  const meshSelect = page.locator('main select:has(option[value="active"])')
+  await page.waitForFunction(() => document.querySelector('main option[value="default1"]')?.disabled === false)
+  await page.getByRole('button', { name: 'Valori', exact: true }).click()
+  await meshSelect.selectOption('default1')
+  await page.waitForFunction(() => document.querySelector('main table')?.textContent.includes('0.160'))
+  assert.equal(await page.locator('main table tbody tr').count(), 2)
+  assert.equal(await page.locator('main table thead th').count(), 4)
+  await meshSelect.selectOption('ADAPTIVE')
+  await page.waitForFunction(() => document.querySelector('main table')?.textContent.includes('0.050'))
+  assert.ok((await page.locator('main table').innerText()).includes('160'))
+  await meshSelect.selectOption('default')
+  await page.waitForFunction(() => document.querySelector('main table tbody')?.querySelectorAll('tr').length === 11)
+  // Missing profiles stay visible but cannot masquerade as the active surface.
+  await page.route('**/api/mesh', async route => {
+    await route.fulfill({ json: { result: { status: { bed_mesh: { mesh_min: [0, 0], mesh_max: [1, 1], probed_matrix: [[0, 0], [0, 0]], profiles: {} } } } } })
+  })
+  await page.getByRole('button', { name: /Carica mesh corrente/ }).click()
+  await page.waitForFunction(() => document.querySelector('main option[value="ADAPTIVE"]')?.disabled === true)
+  await page.unroute('**/api/mesh')
+  await page.locator('a[href="#settings"]').click()
   await page.getByRole('tab').nth(2).click()
   const languages = page.locator('main select:has(option[value="zh"])')
   for (const lang of ['en', 'fr', 'zh', 'it']) {

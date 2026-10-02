@@ -18,7 +18,7 @@ const I = { size: 16, strokeWidth: 1 }
 const metaCache = new Map<string, any>()
 const body = (s: string, p: string) => ({
   method: 'POST',
-  headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+  headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'X-CC2-Request': '1' },
   body: `${s}\n${p}`,
   cache: 'no-store' as const,
 })
@@ -48,6 +48,9 @@ export const Files = () => {
       ] as const)
         for (const file of group?.files || []) next.push({ storage, file })
       setEntries(next)
+      const available = new Set(next.map(key))
+      setChecked(current => new Set([...current].filter(k => available.has(k))))
+      setSel(current => (current ? next.find(e => key(e) === key(current)) || null : null))
       setLoaded(true)
       if (announce) notify(t('files.protected_file_list_refreshed'))
     } catch (e) {
@@ -390,7 +393,7 @@ const Upload = ({
       new TextEncoder().encode(file.name).length >= 256 ||
       !/\.gcode$/i.test(file.name) ||
       file.size === 0 ||
-      file.size > 64 * 1024 * 1024
+      file.size > 128 * 1024 * 1024
     )
       return notify(t('files.choose_a_valid_gcode_file_between'), 'error')
     if (
@@ -410,6 +413,7 @@ const Upload = ({
           `/api/gcode-files/upload?storage=${encodeURIComponent(storage)}&name=${encodeURIComponent(file.name)}`
         )
         x.setRequestHeader('Content-Type', 'application/octet-stream')
+        x.setRequestHeader('X-CC2-Request', '1')
         x.timeout = 180000
         x.upload.onprogress = ev => {
           if (ev.lengthComputable) {
@@ -502,7 +506,7 @@ const Upload = ({
         </Button>
         <small class="text-muted">{t('files.or_drop_a_gcode_file_here')}</small>
         {pct >= 0 && <progress class="w-full" value={pct} max="100" />}
-        <small class="text-center text-muted">{note ?? t('files.maximum_64_mib_no_automatic')}</small>
+        <small class="text-center text-muted">{note ?? t('files.maximum_upload_size_no_automatic')}</small>
       </div>
     </Card>
   )

@@ -213,7 +213,30 @@ export function previewPlugin(): Plugin {
                       probed_matrix: Array.from({ length: 11 }, (_, y) =>
                         Array.from({ length: 11 }, (_, x) => Math.round((x - y) * 0.02 * 1000) / 1000)
                       ),
-                      profiles: {},
+                      profile_name: 'default',
+                      profiles: {
+                        default: {
+                          points: [
+                            [0, 0.02],
+                            [-0.02, 0],
+                          ],
+                          mesh_params: { min_x: 20, min_y: 20, max_x: 235, max_y: 235 },
+                        },
+                        default1: {
+                          points: [
+                            [0.1, 0.12, 0.13],
+                            [0.14, 0.15, 0.16],
+                          ],
+                          mesh_params: { min_x: 30, min_y: 40, max_x: 210, max_y: 220 },
+                        },
+                        ADAPTIVE: {
+                          points: [
+                            [-0.01, 0.01, 0.02],
+                            [0.03, 0.04, 0.05],
+                          ],
+                          mesh_params: { min_x: 90, min_y: 100, max_x: 140, max_y: 160 },
+                        },
+                      },
                     },
                   },
                 },

@@ -27,6 +27,11 @@ int main(void){
     expect(control_build_script("system:fans_off",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strstr(script,"M106 P2 S0"),"fans-off command");
     expect(control_build_script("system:emergency_stop",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"M112")==0,"emergency-stop command");
     mqtt.machine_status=2;
+    expect(control_build_script("object:exclude:pièce (2)",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"EXCLUDE_OBJECT NAME=\"pièce (2)\"")==0,"accented object name and parentheses are quoted safely");
+    expect(control_build_script("object:exclude:测试 (1)",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Chinese object name accepted");
+    expect(!control_build_script("object:exclude:x\"\nM112",&mqtt,script,sizeof(script),reason,sizeof(reason)),"object command injection rejected");
+    expect(!control_build_script("object:exclude:bad\xc0\xaf",&mqtt,script,sizeof(script),reason,sizeof(reason)),"overlong UTF-8 object name rejected");
+
     expect(!control_build_script("system:fans_off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"fans-off blocked while printing");
     expect(control_build_script("system:heaters_off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"heaters-off remains available while printing");
     expect(control_build_script("system:emergency_stop",&mqtt,script,sizeof(script),reason,sizeof(reason)),"emergency stop remains available while printing");
