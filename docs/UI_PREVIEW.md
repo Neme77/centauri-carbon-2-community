@@ -87,3 +87,7 @@ a compact two-column form; cards keep natural heights and compact gaps. The Job 
 compact filename as well. The common page container is capped at 1440 px, so
 large displays do not stretch all cards indefinitely.
 Review every page with the sidebar open and closed before approving the design.
+
+The Job page omits tuning controls already available on Dashboard. Settings
+uses a centered panel and separated, single-line LAN-code controls. Desktop
+mesh statistics and action labels/buttons use compact proportions.

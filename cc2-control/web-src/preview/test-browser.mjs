@@ -46,6 +46,7 @@ try {
       if (await page.locator('#cc2-menu-toggle').isVisible()) await page.locator('#cc2-menu-toggle').click()
       await page.locator(`a[href="#${tab}"]`).click()
       await page.waitForTimeout(150)
+      if (tab === 'job') assert.equal(await page.locator('main .cc2-tuning').count(), 0, 'Job must not duplicate dashboard tuning')
       assert.ok(await page.locator('main').innerText(), `${width} ${tab}: empty page`)
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)
       assert.equal(overflow, false, `${width} ${tab}: horizontal overflow`)

@@ -230,3 +230,13 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-material-presets > div:first-child { flex-wrap: wrap; gap: 4px; }
   .cc2-material-presets > p { font-size: 12px; }
 }
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-mesh-stat strong { font-size: 18px; margin-top: 4px; }
+  .cc2-mesh-stat p { font-size: 11px; }
+  .cc2-mesh-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .cc2-mesh-actions button { padding: 8px 12px; gap: 8px; }
+  .cc2-mesh-actions button > svg { width: 20px; height: 20px; }
+  .cc2-mesh-actions strong { font-size: 12px; }
+  .cc2-mesh-actions small { font-size: 11px; margin-top: 2px; }
+}
