@@ -59,9 +59,9 @@ const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
   }
 
   return (
-    <Card>
+    <Card class="cc2-tuning">
       <CardHead icon="settings" title="tuning.title" end={pending || posting ? t('tuning.waiting') : undefined} />
-      <div class="grid gap-4 cc2-sm:grid-cols-2">
+      <div class="cc2-tuning-fields grid gap-4 cc2-sm:grid-cols-2">
         {(['speed', 'flow'] as const).map(kind => {
           const min = kind === 'speed' ? 25 : 50
           const max = kind === 'speed' ? 200 : 150
@@ -69,7 +69,7 @@ const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
           const valid = /^\d+$/.test(draft[kind]) && Number.isInteger(value) && value >= min && value <= max
           const disabled = !ready || actual[kind] === null || pending !== null || posting
           return (
-            <div key={kind} class="min-w-0">
+            <div key={kind} class="cc2-tuning-field min-w-0">
               <label for={`tune-${kind}`} class="mb-1 block font-medium">
                 {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
               </label>
