@@ -215,7 +215,7 @@
   "control.chamber_fan": "Chamber Fan",
   "control.current_position": "Current Position",
   "control.deleted_name": "Deleted {name}.",
-  "control.emergency_stop_is_always_available": "Emergency Stop is always available in the sidebar.",
+  "control.emergency_stop_is_always_available": "Emergency Stop is always available in the top bar.",
   "control.extrude": "Extrude",
   "control.extruder": "Extruder",
   "control.extrusion_disabled": "Extrusion disabled",
