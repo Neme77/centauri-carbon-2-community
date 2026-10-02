@@ -49,7 +49,7 @@ npm run test:preview
 
 On Linux CI use `npx playwright install --with-deps chromium`.
 The test launches Vite and Chromium together, navigates every page at 1440×900,
-1024×768, 390×844 and 740×390, checks for horizontal overflow and JavaScript
+1024×768, 768×1024, 390×844, 740×390 and 1280×480, checks for horizontal overflow and JavaScript
 errors, repeats the desktop pages with the sidebar collapsed, changes all four
 languages and light/dark themes, exercises scenario controls and a tuning reset,
 rejects hardware actions,
@@ -64,6 +64,9 @@ Remove-Item Env:CC2_SCREENSHOTS
 ```
 
 POSIX shells: `CC2_SCREENSHOTS=/tmp/cc2-preview-screenshots npm run test:preview`.
+The menu test detects the visible drawer toggle instead of assuming a phone
+breakpoint: this covers portrait tablets and short landscape desktop windows too.
+
 Screenshots are review outputs, not approved visual baselines. A passing test
 cannot certify that spacing, alignment, wording or proportions look good. First
 approve the desired screenshots; only then add pixel comparisons against that

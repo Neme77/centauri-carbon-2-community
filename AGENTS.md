@@ -90,7 +90,7 @@ npm run build     # rewrites ../web/index.html and ../web/locales/
   (`test_web_sync_static.py`);
 - to add a colour theme, append an entry to `THEMES` in `web-src/src/lib/i18n.ts` and a `:root[data-theme="<id>"]` block with every token to `web-src/src/index.css` (`test_themes_static.py` checks it); the backend stores any lowercase-hyphenated identifier, so it needs no change;
 - inspect the complete relevant code path before editing;
-- preserve English/Italian/French/Chinese behaviour and persistent UI preferences;
+- preserve language behaviour and persistent UI preferences;
 - route every new user-visible string through `t()` or `tpl()` with an identifier
   (`<group>.<name>`, e.g. `files.upload_file`; `common.` when several pages share it,
   `state.` for the machine states the backend sends in English). `web-src/public/locales/en.json`

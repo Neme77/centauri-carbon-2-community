@@ -31,10 +31,10 @@ try {
   assert.equal((await page.request.post(`${origin}/api/setup`, { data: '123456' })).status(), 403)
   const shots = process.env.CC2_SCREENSHOTS
   if (shots) await mkdir(shots, { recursive: true })
-  for (const [width, height] of [[1440, 900], [1024, 768], [390, 844], [740, 390]]) {
+  for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844], [740, 390], [1280, 480]]) {
     await page.setViewportSize({ width, height })
     for (const tab of ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']) {
-      if (width < height && width < 768) await page.locator('#cc2-menu-toggle').click()
+      if (await page.locator('#cc2-menu-toggle').isVisible()) await page.locator('#cc2-menu-toggle').click()
       await page.locator(`a[href="#${tab}"]`).click()
       await page.waitForTimeout(150)
       assert.ok(await page.locator('main').innerText(), `${width} ${tab}: empty page`)
@@ -78,7 +78,7 @@ try {
   assert.equal((await (await page.request.get(`${origin}/__preview/scenario`)).json()).scene, 'printing')
   assert.deepEqual(errors, [])
   assert.deepEqual(outside, [], 'Preview must never request printer ports or external services')
-  console.log('PASS: isolated preview, all pages at 4 widths, scenario controls, tuning reset, blocked hardware actions and local-only requests')
+  console.log('PASS: isolated preview, all pages at 6 viewport sizes, scenario controls, tuning reset, blocked hardware actions and local-only requests')
 } finally {
   await browser?.close()
   await server.close()
