@@ -393,7 +393,7 @@ const Upload = ({
       new TextEncoder().encode(file.name).length >= 256 ||
       !/\.gcode$/i.test(file.name) ||
       file.size === 0 ||
-      file.size > 64 * 1024 * 1024
+      file.size > 128 * 1024 * 1024
     )
       return notify(t('files.choose_a_valid_gcode_file_between'), 'error')
     if (
@@ -505,7 +505,7 @@ const Upload = ({
         </Button>
         <small class="text-muted">{t('files.or_drop_a_gcode_file_here')}</small>
         {pct >= 0 && <progress class="w-full" value={pct} max="100" />}
-        <small class="text-center text-muted">{note ?? t('files.maximum_64_mib_no_automatic')}</small>
+        <small class="text-center text-muted">{note ?? t('files.maximum_upload_size_no_automatic')}</small>
       </div>
     </Card>
   )
