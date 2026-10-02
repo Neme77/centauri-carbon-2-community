@@ -223,3 +223,10 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-control-columns > div { align-content: start; }
   .cc2-control-columns > div > section { height: auto; }
 }
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-movement .cc2-motion-pad { grid-template-columns: minmax(0, 1.4fr) minmax(110px, .8fr); gap: 12px; margin-block: 12px; padding-top: 12px; }
+  .cc2-motion-pad > div:last-child { padding-left: 12px; }
+  .cc2-material-presets > div:first-child { flex-wrap: wrap; gap: 4px; }
+  .cc2-material-presets > p { font-size: 12px; }
+}

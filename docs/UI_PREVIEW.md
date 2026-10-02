@@ -81,8 +81,9 @@ Page grids now use the available content width as the sidebar opens or closes.
 Desktop thresholds retain practical column widths; touch layouts keep their
 existing thresholds. The desktop header is 60 px high, cards and controls use
 smaller spacing, the camera height is bounded, filenames are limited to two
-lines with a full-name tooltip, and the dashboard pairs camera/quick actions with current print/speed/flow. Control groups movement/extrusion, temperatures/fans, and machine/Z offset
-with natural card heights and compact gaps. The Job page uses a bounded camera and
+lines with a full-name tooltip, and the dashboard pairs camera/quick actions with current print/speed/flow. Control keeps movement in its own column, groups temperatures/fans/material
+presets in the middle and machine/Z offset/extrusion on the right. Presets use
+a compact two-column form; cards keep natural heights and compact gaps. The Job page uses a bounded camera and
 compact filename as well. The common page container is capped at 1440 px, so
 large displays do not stretch all cards indefinitely.
 Review every page with the sidebar open and closed before approving the design.
