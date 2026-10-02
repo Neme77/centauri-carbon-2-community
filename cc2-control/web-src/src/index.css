@@ -157,7 +157,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-sidebar { top: 52px; }
   .cc2-main { margin-top: 52px; padding: 12px; font-size: 13px; }
   .cc2-header-title { height: 40px; }
-  .cc2-header-title h1 { font-size: 22px; bottom: 5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cc2-header-title h1 { font-size: 27px; bottom: 3px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cc2-header-title .cc2-full-brand > svg { top: 35.9px; }
   .cc2-topbar > div:last-child > div, .cc2-topbar > div:last-child > button { height: 36px; font-size: 12px; }
   .cc2-main section { padding: 12px; }
@@ -202,5 +202,30 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
   @container page (min-width: 960px) {
     .cc2-dashboard-bottom { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; }
+  }
+}
+
+/* Keep all routes inside the same bounded content container. */
+.cc2-page-content { min-width: 0; }
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-page-content { max-width: 1440px; margin-inline: auto; }
+  .cc2-job-primary { align-items: stretch; }
+  .cc2-job-primary .cc2-camera-frame { min-height: 0; height: 240px; }
+  .cc2-job-primary > section:last-child { gap: 0; }
+  .cc2-job-primary .cc2-job-stats { margin-bottom: 12px; }
+  .cc2-control-columns { align-items: stretch; }
+  @container page (min-width: 720px) {
+    .cc2-control-columns > div { display: contents; }
+    .cc2-control-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cc2-control-columns > div > section { grid-column: auto; grid-row: auto; }
+  }
+  @container page (min-width: 1020px) {
+    .cc2-control-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cc2-control-columns > div:first-child > section { grid-area: 1 / 1 / 3 / 2; }
+    .cc2-control-columns > div:nth-child(2) > section:first-child { grid-area: 1 / 2; }
+    .cc2-control-columns > div:nth-child(3) > section:first-child { grid-area: 1 / 3; }
+    .cc2-control-columns > div:nth-child(2) > section:last-child { grid-area: 3 / 1; }
+    .cc2-control-columns > div:nth-child(2) > section:nth-child(2) { grid-area: 2 / 2; }
+    .cc2-control-columns > div:nth-child(3) > section:last-child { grid-area: 2 / 3; }
   }
 }

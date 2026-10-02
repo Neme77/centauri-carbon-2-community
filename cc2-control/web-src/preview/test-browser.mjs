@@ -29,6 +29,13 @@ try {
   assert.equal((await page.request.post(`${origin}/api/gcode-files/upload?name=demo.gcode`, { data: 'G28' })).status(), 403)
   assert.equal((await page.request.post(`${origin}/api/console/command`, { data: 'G28' })).status(), 403)
   assert.equal((await page.request.post(`${origin}/api/setup`, { data: '123456' })).status(), 403)
+  const alignedControl = async () => {
+    const rows = await page.locator('.cc2-control-columns').evaluate(e => {
+      const groups = [...e.children].map(g => [...g.children].map(c => c.getBoundingClientRect()))
+      return [Math.abs(groups[1][0].top - groups[2][0].top), Math.abs(groups[1][0].bottom - groups[2][0].bottom), Math.abs(groups[1][1].top - groups[2][1].top), Math.abs(groups[1][1].bottom - groups[2][1].bottom)]
+    })
+    assert.ok(rows.every(d => d < 2), 'Control cards must share desktop row edges')
+  }
   const shots = process.env.CC2_SCREENSHOTS
   if (shots) await mkdir(shots, { recursive: true })
   for (const [width, height] of [[1440, 900], [1366, 640], [1280, 720], [1920, 1080], [1024, 768], [768, 1024], [390, 844], [740, 390], [1280, 480]]) {
@@ -42,6 +49,7 @@ try {
       assert.ok(await page.locator('main').innerText(), `${width} ${tab}: empty page`)
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)
       assert.equal(overflow, false, `${width} ${tab}: horizontal overflow`)
+      if (tab === 'control' && width >= 1280 && height > 500) await alignedControl()
       if (shots) await page.screenshot({ path: path.join(shots, `${width}-${tab}.png`), fullPage: true })
     }
   }
@@ -57,6 +65,7 @@ try {
       await page.locator(`a[href="#${tab}"]`).click()
       await page.waitForTimeout(150)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} collapsed ${tab}: overflow`)
+      if (tab === 'control' && width >= 1280) await alignedControl()
       if (tab === 'dashboard') assert.ok(await page.locator('.cc2-camera-frame').evaluate(e => e.getBoundingClientRect().height <= 241))
       if (shots) await page.screenshot({ path: path.join(shots, `${width}-collapsed-${tab}.png`), fullPage: true })
     }

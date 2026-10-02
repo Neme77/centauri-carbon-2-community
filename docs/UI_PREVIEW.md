@@ -82,5 +82,8 @@ Desktop thresholds retain practical column widths; touch layouts keep their
 existing thresholds. The desktop header is 52 px high, cards and controls use
 smaller spacing, the camera height is bounded, filenames are limited to two
 lines with a full-name tooltip, and speed/flow share a compact dashboard row
-with machine information. Control columns adapt between two and three columns.
+with machine information. Control uses shared desktop rows, with movement spanning the two rows beside
+temperatures/machine and fans/Z offset. The Job page uses a bounded camera and
+compact filename as well. The common page container is capped at 1440 px, so
+large displays do not stretch all cards indefinitely.
 Review every page with the sidebar open and closed before approving the design.
