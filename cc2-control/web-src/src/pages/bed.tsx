@@ -89,7 +89,7 @@ const MeshCard = () => {
   }, [points, view])
 
   const Stat = ({ dot, label, val }: { dot: any; label: Key; val: string }) => (
-    <div class="rounded-lg border border-edge bg-field/60 p-2.5">
+    <div class="cc2-mesh-stat rounded-lg border border-edge bg-field/60 p-2.5">
       <span class="flex items-center gap-2 text-xs">
         {dot}
         {t(label)}
@@ -97,7 +97,7 @@ const MeshCard = () => {
       <strong class="mt-2 block whitespace-nowrap text-2xl font-semibold">
         {val} <small class="text-xs">mm</small>
       </strong>
-      <p class="mt-1 text-[10px] text-muted">
+      <p class="mt-1 text-xs text-muted">
         {profile === 'active' ? t('bed.current_printer_mesh') : `${t('bed.saved_profile')} · ${profile}`}
       </p>
     </div>
@@ -157,7 +157,7 @@ const MeshCard = () => {
       </div>
       <div class="overflow-hidden rounded-lg bg-well">
         {view === 'values' ? (
-          <div class="h-[430px] overflow-auto p-3 font-mono text-[11px] text-well-fg">
+          <div class="h-[430px] overflow-auto p-3 font-mono text-xs text-well-fg">
             {points.length < 4 ? (
               <p class="text-muted">{t('bed.waiting_for_live_mesh_data_2')}</p>
             ) : (
@@ -213,7 +213,7 @@ const MeshCard = () => {
             }}
           />
         )}
-        <div class="p-2 text-center text-[11px] text-muted">
+        <div class="p-2 text-center text-xs text-muted">
           {t('bed.drag_to_rotate_scroll_to_zoom')}{' '}
           <button
             type="button"
@@ -228,7 +228,7 @@ const MeshCard = () => {
           </button>
         </div>
       </div>
-      <div class="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+      <div class="mt-3 grid grid-cols-2 gap-2.5 cc2-md:grid-cols-4">
         <Stat dot={<Dot c="blue" />} label="bed.minimum" val={st ? signed(st.min) : '—'} />
         <Stat dot={<Dot c="amber" />} label="bed.maximum" val={st ? signed(st.max) : '—'} />
         <Stat
@@ -254,7 +254,7 @@ const MeshCard = () => {
 
 const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => (
   <>
-    <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_1.15fr]">
+    <div class="cc2-mesh-actions mt-3 grid gap-3 cc2-sm:grid-cols-[1fr_1.15fr]">
       {[
         ['folder', 'bed.load_current_mesh', 'bed.read_the_saved_mesh_from_printer', reload, false],
         [
@@ -326,7 +326,7 @@ const Screws = () => {
         end={<Tag tone="warning">{t(plan ? 'bed.measured_results' : 'bed.no_measurement')}</Tag>}
       />
       <p class="mb-3 text-xs text-muted">{t('bed.nozzle_load_cell_measurement_at')}</p>
-      <div class="grid gap-3 sm:grid-cols-[.9fr_1.1fr]">
+      <div class="grid gap-3 cc2-sm:grid-cols-[.9fr_1.1fr]">
         <div class="rounded-lg border border-edge p-3">
           <div class="relative grid h-48 grid-cols-2 grid-rows-2 rounded-xl border-2 border-muted">
             <i class="absolute inset-y-2 left-1/2 border-l border-dashed border-edge" />
@@ -346,14 +346,14 @@ const Screws = () => {
                     {n}
                   </b>
                   {name}
-                  <small class="text-[10px] text-muted">{xy}</small>
+                  <small class="text-xs text-muted">{xy}</small>
                   {plan && <span class="mt-0.5 text-[13px] font-bold">{microns(v)}</span>}
                 </div>
               )
             })}
           </div>
-          <div class="mt-1.5 text-center text-[10px] text-muted">{t('bed.top_view_front_edge_at_bottom')}</div>
-          <div class="mt-2 flex justify-between text-[10px] text-muted">
+          <div class="mt-1.5 text-center text-xs text-muted">{t('bed.top_view_front_edge_at_bottom')}</div>
+          <div class="mt-2 flex justify-between text-xs text-muted">
             <span class="flex items-center gap-1">
               <ArrowBigUp size={12} strokeWidth={1} /> Y (back)
             </span>
@@ -366,7 +366,7 @@ const Screws = () => {
           <div class="overflow-hidden rounded-md border border-edge">
             <table class="w-full border-collapse text-xs">
               <thead>
-                <tr class="text-left text-[11px] text-muted">
+                <tr class="text-left text-xs text-muted">
                   <th class="p-2 font-normal">{t('common.position')}</th>
                   <th class="p-2 font-normal">{t('bed.offset')}</th>
                   <th class="p-2 font-normal">{t('bed.adjustment')}</th>

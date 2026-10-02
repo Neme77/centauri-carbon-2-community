@@ -100,7 +100,7 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
         </div>
         <fieldset class="m-0 min-w-0 border-0 p-0">
           <legend class="mb-1.5 mt-3 p-0 text-muted">{t('canvas.quick_colours')}</legend>
-          <div class="grid grid-cols-5 gap-2 sm:grid-cols-8">
+          <div class="grid grid-cols-5 gap-2 cc2-sm:grid-cols-8">
             {PALETTE.map(c => (
               <button
                 key={c}
@@ -179,16 +179,32 @@ export const Canvas = () => {
   ]
   return (
     <Page title="common.canvas" sub="canvas.material_system_overview_and">
-      <div class="grid gap-3.5 xl:grid-cols-[minmax(0,2.55fr)_minmax(320px,1fr)]">
+      <div class="grid gap-3.5 cc2-xl:grid-cols-[minmax(0,2.55fr)_minmax(320px,1fr)]">
         <Card>
-          <div class="grid items-center gap-6 rounded-lg border border-edge bg-field/40 p-4 sm:p-6 md:grid-cols-[1.25fr_1fr]">
-            <div class="flex h-48 items-end justify-center gap-1.5 border-b-8 border-edge pb-9 sm:gap-3">
+          <div class="grid items-center gap-6 rounded-lg border border-edge bg-field/40 p-4 cc2-sm:p-6 cc2-md:grid-cols-[1.25fr_1fr]">
+            <div class="flex h-48 items-end justify-center gap-1.5 border-b-8 border-edge pb-9 cc2-sm:gap-3">
               {slots.map(s => (
-                <div key={s.i} class="relative flex h-40 w-14 items-center justify-center sm:w-20">
-                  <i
-                    class="block h-36 w-9 rounded-[45%] border border-muted sm:w-12"
-                    style={{ background: `repeating-linear-gradient(90deg,${s.colour} 0 3px,#132a38 4px 6px)` }}
-                  />
+                <div key={s.i} class="relative flex h-40 w-14 items-center justify-center cc2-sm:w-20">
+                  <svg viewBox="0 0 100 160" class="h-36 w-full" aria-hidden="true">
+                    <ellipse cx="50" cy="150" rx="36" ry="6" fill="currentColor" opacity="0.12" />
+                    <ellipse cx="64" cy="76" rx="27" ry="67" fill="#334553" stroke="#71828e" stroke-width="2" />
+                    <path d="M35 20H64C88 20 88 132 64 132H35Z" fill={s.colour} />
+                    {[36, 48, 60, 72, 84, 96, 108, 120].map(y => (
+                      <path key={y} d={`M36 ${y}H70`} stroke="#000" stroke-opacity="0.16" stroke-width="1.5" />
+                    ))}
+                    <ellipse cx="36" cy="76" rx="27" ry="67" fill="#273b49" stroke="#84939e" stroke-width="2" />
+                    <ellipse cx="36" cy="76" rx="21" ry="55" fill={s.colour} />
+                    <ellipse cx="36" cy="76" rx="17" ry="44" fill="none" stroke="#fff" stroke-opacity="0.22" />
+                    <ellipse cx="36" cy="76" rx="12" ry="30" fill="#334553" stroke="#84939e" stroke-width="2" />
+                    <ellipse cx="36" cy="76" rx="5" ry="13" fill="#14232e" />
+                    <path
+                      d="M25 30C15 49 15 102 25 122"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-opacity="0.3"
+                      stroke-width="2"
+                    />
+                  </svg>
                   <em class="absolute -bottom-7 not-italic text-muted">{s.i + 1}</em>
                 </div>
               ))}
@@ -205,7 +221,7 @@ export const Canvas = () => {
               </p>
             </div>
           </div>
-          <div class="mt-3.5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div class="mt-3.5 grid grid-cols-2 gap-3 cc2-md:grid-cols-4">
             {slots.map(s => (
               <Card
                 key={s.i}
@@ -247,7 +263,7 @@ export const Canvas = () => {
             ))}
           </div>
         </Card>
-        <div class="grid content-start gap-3.5 lg:grid-cols-3 xl:grid-cols-1">
+        <div class="grid content-start gap-3.5 cc2-lg:grid-cols-3 cc2-xl:grid-cols-1">
           <Card>
             <CardHead icon="info" title="canvas.canvas_status" />
             <Row label="canvas.telemetry" value={t(model ? 'canvas.available' : 'canvas.unavailable')} />

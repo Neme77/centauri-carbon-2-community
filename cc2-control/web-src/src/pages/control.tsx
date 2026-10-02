@@ -33,7 +33,7 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
   }
   const pad = 'min-h-11 text-xl'
   return (
-    <Card>
+    <Card class="cc2-movement">
       <CardHead icon="control" title="control.movement" />
       <Button wide class="min-h-12" disabled={!v.idle || homing} onClick={() => home('ALL')}>
         <Icon n="home" />
@@ -47,7 +47,7 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
           </Button>
         ))}
       </div>
-      <div class="my-4 grid grid-cols-[1.4fr_.65fr] gap-5 border-t border-edge pt-4">
+      <div class="cc2-motion-pad my-4 grid grid-cols-[1.4fr_.65fr] gap-5 border-t border-edge pt-4">
         <div>
           <div class="mb-2 text-[13px]">{t('control.xy_move')}</div>
           <div class="grid grid-cols-3 gap-1.5">
@@ -114,7 +114,12 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
       <small class="text-muted">{t('control.step_size')}</small>
       <div class="my-2 flex gap-2">
         {STEPS.map(s => (
-          <Button key={s} variant={s === step ? 'active' : 'default'} class="flex-1 text-xs" onClick={() => setStep(s)}>
+          <Button
+            key={s}
+            variant={s === step ? 'active' : 'default'}
+            class="min-w-0 flex-1 whitespace-nowrap px-1 text-xs"
+            onClick={() => setStep(s)}
+          >
             {s} mm
           </Button>
         ))}
@@ -362,11 +367,11 @@ const Profiles = () => {
       notify(tpl('control.profile_deletion_failed_error', { error: errText(e) }), 'error')
     }
   }
-  const lab = 'text-[11px] text-muted'
+  const lab = 'text-xs text-muted'
   return (
-    <Card class="mt-3.5">
+    <Card class="cc2-material-presets">
       <CardHead icon="temp" title="control.material_profiles" end={t('control.stored_on_the_printer')} />
-      <div class="grid grid-cols-2 items-end gap-2.5 md:grid-cols-[1.1fr_1.1fr_.7fr_.7fr_auto_auto]">
+      <div class="grid grid-cols-2 items-end gap-2.5">
         <label class={lab}>
           {t('control.profile')}
           <Select class="mt-1.5" value={String(idx)} onChange={e => load(+e.currentTarget.value)}>
@@ -435,7 +440,7 @@ export const Control = () => {
         </>
       }
     >
-      <div class="grid gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
+      <div class="cc2-control-columns grid gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
         <div class="grid content-start gap-3.5">
           <Movement v={v} />
         </div>
@@ -452,9 +457,8 @@ export const Control = () => {
               />
             ))}
           </Card>
-          <Extruder d={d} v={v} />
         </div>
-        <div class="grid content-start gap-3.5 lg:col-span-2 lg:grid-cols-2 xl:col-span-1 xl:grid-cols-1">
+        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1">
           <Card>
             <CardHead icon="settings" title="control.machine" />
             <div class="grid auto-rows-fr grid-cols-2 gap-2.5">
@@ -507,7 +511,12 @@ export const Control = () => {
           <ZOffset />
         </div>
       </div>
-      <Profiles />
+      <div class="cc2-control-bottom mt-3.5 grid items-start gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
+        <Extruder d={d} v={v} />
+        <div class="cc2-xl:col-span-2">
+          <Profiles />
+        </div>
+      </div>
     </Page>
   )
 }

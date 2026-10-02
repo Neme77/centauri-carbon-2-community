@@ -2,8 +2,7 @@
 
 Dashboard and Job expose the effective speed and extrusion multipliers, manual
 whole-percent inputs, and a separate Reset 100% button for each control. Live
-movement in mm/s is shown separately from the speed multiplier. All labels ship
-in English, Italian, French and Simplified Chinese.
+movement in mm/s is shown separately from the speed multiplier. All labels are shipped for all supported languages.
 
 Speed accepts 25–200%; flow accepts 50–150%. These are application limits,
 not a guarantee that every value suits every material or print. Controls require

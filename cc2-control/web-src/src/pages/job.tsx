@@ -1,6 +1,5 @@
 import { Diamond, Pause, Play, Square, TriangleAlert, X } from 'lucide-preact'
 import { cn } from '@/lib/utils'
-import { PrintTuning } from '@/components/print-tuning'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CameraCard, Progress } from '@/components/shared'
@@ -66,11 +65,14 @@ export const Job = () => {
   return (
     <Page title="common.job" sub="job.live_progress_camera_and_objects">
       <div class="grid gap-3.5">
-        <div class="grid gap-3.5 lg:grid-cols-2">
+        <div class="cc2-job-primary grid gap-3.5 cc2-lg:grid-cols-2">
           <CameraCard tall />
           <Card class="flex flex-col">
             <CardHead icon="file" title="common.current_job" end={<span class="text-cyan">{tState(v.state)}</span>} />
-            <div class="mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]">
+            <div
+              title={v.rawFilename || undefined}
+              class="cc2-job-filename mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]"
+            >
               {v.rawFilename || t('common.no_active_file')}
             </div>
             {!v.active && (
@@ -79,11 +81,11 @@ export const Job = () => {
               </a>
             )}
             <Progress pct={v.progress} />
-            <div class="mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 sm:grid-cols-3">
+            <div class="cc2-job-stats mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 cc2-sm:grid-cols-3">
               {stats.map(([val, label], i) => (
                 <div key={i} class="min-w-0">
                   <strong class="block text-[15px] [overflow-wrap:anywhere]">{val}</strong>
-                  <small class="text-[11px] text-muted">{label}</small>
+                  <small class="text-xs text-muted">{label}</small>
                 </div>
               ))}
             </div>
@@ -92,11 +94,10 @@ export const Job = () => {
             </div>
           </Card>
         </div>
-        <PrintTuning />
         <Card class="min-w-0">
           <CardHead icon="cube" title="job.object_exclusion" end={endLabel} />
-          <div class="grid gap-3.5 lg:grid-cols-2">
-            <div class="grid min-h-40 grid-cols-2 content-start gap-3 rounded-md border border-edge p-4 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-4">
+          <div class="grid gap-3.5 cc2-lg:grid-cols-2">
+            <div class="grid min-h-40 grid-cols-2 content-start gap-3 rounded-md border border-edge p-4 cc2-sm:grid-cols-3 cc2-lg:grid-cols-2 cc2-xl:grid-cols-4">
               {o.list.length === 0 ? (
                 <span class="col-span-full text-muted">{t('job.no_live_object_data')}</span>
               ) : (
@@ -112,7 +113,7 @@ export const Job = () => {
                       >
                         {x ? <X size={24} strokeWidth={1} /> : <Diamond size={24} strokeWidth={1} />}
                       </i>
-                      <span class="mt-1 text-[10px] [overflow-wrap:anywhere]">{n}</span>
+                      <span class="mt-1 text-xs [overflow-wrap:anywhere]">{n}</span>
                     </div>
                   )
                 })

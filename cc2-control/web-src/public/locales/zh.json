@@ -215,7 +215,7 @@
   "control.chamber_fan": "腔体风扇",
   "control.current_position": "当前位置",
   "control.deleted_name": "已删除 {name}。",
-  "control.emergency_stop_is_always_available": "紧急停止始终可在侧边栏使用。",
+  "control.emergency_stop_is_always_available": "紧急停止始终可在顶部栏使用。",
   "control.extrude": "挤出",
   "control.extruder": "挤出机",
   "control.extrusion_disabled": "挤出已禁用",

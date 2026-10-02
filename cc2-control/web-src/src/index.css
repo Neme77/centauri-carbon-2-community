@@ -1,5 +1,40 @@
 @import "tailwindcss";
 
+/* Every page follows the content width; desktop thresholds retain useful column widths. */
+@custom-variant cc2-sm {
+  @media (hover: hover) and (pointer: fine) {
+    @container page (min-width: 540px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 640px) { @slot; }
+  }
+}
+@custom-variant cc2-md {
+  @media (hover: hover) and (pointer: fine) {
+    @container page (min-width: 720px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 768px) { @slot; }
+  }
+}
+@custom-variant cc2-lg {
+  @media (hover: hover) and (pointer: fine) {
+    @container page (min-width: 960px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 1024px) { @slot; }
+  }
+}
+@custom-variant cc2-xl {
+  @media (hover: hover) and (pointer: fine) {
+    @container page (min-width: 1020px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 1280px) { @slot; }
+  }
+}
+
+
 @theme inline {
   --color-bg: var(--bg); --color-panel: var(--panel); --color-edge: var(--edge);
   --color-fg: var(--text); --color-muted: var(--muted); --color-field: var(--field); --color-ink: var(--ink);
@@ -56,6 +91,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 
 /* Tailwind's reset gives buttons the default arrow: restore the pointer on everything clickable (utilities still win). */
 @layer base {
+  small { font-size: 12px; } /* Tailwind's reset makes it 80% of its parent, which falls under 10 px inside text-xs */
   button:not(:disabled),
   select:not(:disabled),
   input:is([type="checkbox"], [type="radio"], [type="color"], [type="file"]):not(:disabled) {
@@ -63,9 +99,10 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   }
 }
 
-/* Narrow portrait phones use the full content width. Landscape keeps the icon rail. */
+/* Compact layout (drawer menu, full content width): portrait phones and tablets up to 900 px, and short landscape screens.
+   Keep this query identical to COMPACT in components/layout.tsx. */
 .cc2-menu-backdrop { display: none; }
-@media (max-width: 767px) and (orientation: portrait) {
+@media (max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
   .cc2-main { margin-left: 0; padding: 10px; }
   .cc2-main input, .cc2-main select, .cc2-main textarea { font-size: 16px; }
   .cc2-file-row { min-height: 56px; }
@@ -93,4 +130,125 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   }
   .cc2-topbar > div:last-child { min-width: 0; gap: 4px; }
   .cc2-topbar > div:last-child > div:first-child { padding-inline: 8px; }
+}
+
+/* A short landscape screen cannot spare a 68 px header or 52 px menu rows. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .cc2-topbar { height: 52px; }
+  .cc2-main { margin-top: 52px; }
+  .cc2-sidebar { top: 52px; }
+  .cc2-sidebar nav a { height: 44px; }
+  .cc2-sidebar > div { display: none; } /* collapse button and version: meaningless for a drawer */
+  .cc2-menu-backdrop { inset: 52px 0 0; }
+}
+
+/* Touch: 44 px is the minimum comfortable target. Switches keep their look and get a larger hit area instead. */
+@media (pointer: coarse) {
+  button:not([role="switch"]), select, input:not([type="range"], [type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="hidden"]) {
+    min-height: 44px;
+  }
+  button[role="switch"] { position: relative; }
+  button[role="switch"]::before { content: ""; position: absolute; inset: -11px -4px; }
+}
+
+/* Compact desktop density. Touch targets and compact drawers keep their existing sizing. */
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-topbar { height: 60px; gap: 12px; }
+  .cc2-sidebar { top: 60px; }
+  .cc2-main { margin-top: 60px; padding: 12px; font-size: 13px; }
+  .cc2-header-title { height: 48px; }
+  .cc2-header-title h1 { font-size: 29px; bottom: 5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cc2-header-title .cc2-full-brand > svg { top: 43.2px; }
+  .cc2-topbar > div:last-child > div, .cc2-topbar > div:last-child > button { height: 36px; font-size: 12px; }
+  .cc2-main section { padding: 12px; }
+  .cc2-main section h2 { font-size: 14px; }
+  .cc2-main button:not([role="switch"]), .cc2-main input:not([type="range"], [type="checkbox"], [type="radio"]), .cc2-main select { min-height: 32px; font-size: 13px; }
+  .cc2-dashboard-primary { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: start; }
+  .cc2-camera-frame { height: clamp(180px, 20vw, 240px); aspect-ratio: auto; }
+  .cc2-camera-frame img { object-fit: contain; }
+  .cc2-job-filename { font-size: 17px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .cc2-job-stats { margin-top: 12px; row-gap: 8px; }
+  .cc2-tuning > div:first-child { margin-bottom: 8px; padding-bottom: 8px; }
+  .cc2-tuning-fields { gap: 12px; }
+  .cc2-tuning-field { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: baseline; }
+  .cc2-tuning-field label, .cc2-tuning-field > div { margin-bottom: 4px; font-size: 12px; }
+  .cc2-tuning-field form, .cc2-tuning-field small { grid-column: 1 / -1; }
+  .cc2-tuning-field form { flex-wrap: wrap; gap: 6px; }
+  .cc2-tuning-field input { width: 64px; min-width: 0; }
+  .cc2-tuning-field button { padding-inline: 8px; font-size: 12px; }
+  .cc2-tuning > p { margin-top: 6px; }
+  .cc2-tuning > .mt-3 { margin-top: 8px; font-size: 12px; }
+  .cc2-control-columns { align-items: start; }
+  .cc2-control-columns > div { gap: 12px; }
+}
+/* A narrow desktop content area stacks cards rather than forcing two squeezed columns. */
+@media (hover: hover) and (pointer: fine) {
+  @container page (max-width: 959px) {
+    .cc2-dashboard-primary { grid-template-columns: minmax(0, 1fr); }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 720px) and (max-width: 1019px) {
+    .cc2-control-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cc2-control-columns > div:last-child { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container page (min-width: 1020px) {
+    .cc2-control-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cc2-control-columns > div:last-child { grid-column: auto; grid-template-columns: minmax(0, 1fr); }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 960px) {
+    .cc2-dashboard-bottom { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  }
+}
+
+/* Keep all routes inside the same bounded content container. */
+.cc2-page-content { min-width: 0; }
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-page-content { max-width: 1440px; margin-inline: auto; }
+  .cc2-job-primary { align-items: stretch; }
+  .cc2-job-primary .cc2-camera-frame { min-height: 0; height: 240px; }
+  .cc2-job-primary > section:last-child { gap: 0; }
+  .cc2-job-primary .cc2-job-stats { margin-bottom: 12px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-dashboard-primary > div:last-child { grid-template-rows: auto auto; align-content: start; }
+  .cc2-dashboard-primary > div:last-child > section { height: auto; }
+  .cc2-dashboard-primary .cc2-camera-frame { height: 180px; }
+  .cc2-quick-actions button { flex-direction: row; min-height: 36px; height: auto; padding: 8px; font-size: 12px; }
+  .cc2-control-columns > div { align-content: start; }
+  .cc2-control-columns > div > section { height: auto; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-movement .cc2-motion-pad { grid-template-columns: minmax(0, 1.4fr) minmax(110px, .8fr); gap: 12px; margin-block: 12px; padding-top: 12px; }
+  .cc2-motion-pad > div:last-child { padding-left: 12px; }
+  .cc2-material-presets > div:first-child { flex-wrap: wrap; gap: 4px; }
+  .cc2-material-presets > p { font-size: 12px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-mesh-stat strong { font-size: 18px; margin-top: 4px; }
+  .cc2-mesh-stat p { font-size: 11px; }
+  .cc2-mesh-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .cc2-mesh-actions button { padding: 8px 12px; gap: 8px; }
+  .cc2-mesh-actions button > svg { width: 20px; height: 20px; }
+  .cc2-mesh-actions strong { font-size: 12px; }
+  .cc2-mesh-actions small { font-size: 11px; margin-top: 2px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-control-bottom { margin-top: 12px; gap: 12px; }
+  @container page (min-width: 720px) {
+    .cc2-control-bottom { align-items: stretch; }
+    .cc2-control-bottom > div > section { height: 100%; }
+  }
+  @container page (min-width: 1020px) {
+    .cc2-control-bottom { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cc2-control-bottom > div { grid-column: span 2; }
+  }
 }

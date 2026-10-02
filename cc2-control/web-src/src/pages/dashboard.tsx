@@ -93,40 +93,12 @@ export const Dashboard = () => {
   const [editing, setEditing] = useState(false)
   const target = (x: any) => (Number(x) > 0 ? ` / ${num(x)}` : '')
   return (
-    <div class="grid gap-3.5">
+    <div class="cc2-dashboard grid gap-3.5">
       {editing && <QuickEditor onClose={() => setEditing(false)} />}
-      <div class="grid gap-3.5 lg:grid-cols-2">
-        <CameraCard />
-        <div class="grid gap-3.5 lg:grid-rows-[1fr_auto]">
-          <Card class="flex flex-col">
-            <CardHead icon="file" title="common.current_job" end={tState(v.state)} />
-            <div class="mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]">
-              {v.rawFilename || t('common.no_active_file')}
-            </div>
-            {!v.active && (
-              <a href="#files" class="mb-3 -mt-1 w-fit text-[13px] text-cyan underline underline-offset-2">
-                {t('common.choose_a_file_to_print')}
-              </a>
-            )}
-            <Progress pct={v.progress} />
-            <div class="mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 sm:grid-cols-4">
-              {[
-                [v.elapsedText, t('common.elapsed')],
-                [v.remainingText, tpl('common.remaining_ends_time', { time: v.finishText })],
-                [v.active ? v.layer || '—' : '—', t('common.current_layer')],
-                [v.total, t('common.total_layers')],
-              ].map(([val, label], i) => (
-                <div key={i} class="border-edge sm:border-r sm:last:border-0">
-                  <strong class="block text-[15px]">{val}</strong>
-                  <small class="text-[11px] text-muted">{label}</small>
-                </div>
-              ))}
-            </div>
-            <div class="mt-auto">
-              <JobControls v={v} />
-            </div>
-          </Card>
-          <Card>
+      <div class="cc2-dashboard-primary grid gap-3.5 cc2-lg:grid-cols-2">
+        <div class="cc2-dashboard-camera-column grid content-start gap-3.5">
+          <CameraCard />
+          <Card class="cc2-quick-actions">
             <CardHead
               icon="bolt"
               title="dashboard.quick_actions"
@@ -137,19 +109,53 @@ export const Dashboard = () => {
                 </Button>
               }
             />
-            <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <div class="grid grid-cols-2 gap-2.5 cc2-sm:grid-cols-4">
               {quickActions.map((action, n) => (
                 <Slot key={n} action={action} idle={v.idle} lightOn={v.lightOn} />
               ))}
             </div>
           </Card>
         </div>
+        <div class="grid gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
+          <Card class="flex flex-col">
+            <CardHead icon="file" title="common.current_job" end={tState(v.state)} />
+            <div
+              title={v.rawFilename || undefined}
+              class="cc2-job-filename mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]"
+            >
+              {v.rawFilename || t('common.no_active_file')}
+            </div>
+            {!v.active && (
+              <a href="#files" class="mb-3 -mt-1 w-fit text-[13px] text-cyan underline underline-offset-2">
+                {t('common.choose_a_file_to_print')}
+              </a>
+            )}
+            <Progress pct={v.progress} />
+            <div class="cc2-job-stats mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 cc2-sm:grid-cols-4">
+              {[
+                [v.elapsedText, t('common.elapsed')],
+                [v.remainingText, tpl('common.remaining_ends_time', { time: v.finishText })],
+                [v.active ? v.layer || '—' : '—', t('common.current_layer')],
+                [v.total, t('common.total_layers')],
+              ].map(([val, label], i) => (
+                <div key={i} class="border-edge cc2-sm:border-r cc2-sm:last:border-0">
+                  <strong class="block text-[15px]">{val}</strong>
+                  <small class="text-xs text-muted">{label}</small>
+                </div>
+              ))}
+            </div>
+            <div class="mt-auto">
+              <JobControls v={v} />
+            </div>
+          </Card>
+          <PrintTuning />
+        </div>
       </div>
 
-      <div class="grid gap-3.5 md:grid-cols-2 lg:grid-cols-4">
-        <Card class="md:col-span-2">
+      <div class="grid gap-3.5 cc2-md:grid-cols-2 cc2-lg:grid-cols-4">
+        <Card class="cc2-md:col-span-2">
           <CardHead icon="temp" title="dashboard.thermals" end={t('dashboard.live_history_5_minutes')} />
-          <div class="grid items-center gap-4 sm:grid-cols-[1.6fr_1fr]">
+          <div class="grid items-center gap-4 cc2-sm:grid-cols-[1.6fr_1fr]">
             <ThermalChart />
             <div class="grid gap-3 text-xs">
               {(
@@ -189,37 +195,38 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      <PrintTuning />
-      <div class="grid gap-3.5 md:grid-cols-2">
-        <Card class="flex flex-col">
-          <CardHead icon="target" title="common.position" />
-          {(['x', 'y', 'z'] as const).map(a => (
-            <Row key={a} text={a.toUpperCase()} value={v.pos(a)} />
-          ))}
-          <div class="mt-auto pt-3">
-            <Tag tone={['x', 'y', 'z'].every(a => v.homed.includes(a)) ? 'ok' : 'warning'}>
-              {v.homed ? `${v.homed.toUpperCase()} ${t('common.homed')}` : t('common.not_homed')}
-            </Tag>
-          </div>
-        </Card>
-        <Card>
-          <CardHead icon="monitor" title="dashboard.system" />
-          <Row
-            label="dashboard.service"
-            value={
-              h ? (
-                <>
-                  <Dot /> {t('dashboard.online')}
-                </>
-              ) : (
-                t('common.connecting')
-              )
-            }
-          />
-          <Row label="dashboard.system_uptime" value={h ? duration(h.uptime_seconds) : '—'} />
-          <Row label="dashboard.cpu_load" value={h ? String(h.loadavg).split(/\s+/).slice(0, 3).join(' ') : '—'} />
-          <Row label="dashboard.available_memory" value={h ? `${(h.mem_available_kb / 1024).toFixed(1)} MiB` : '—'} />
-        </Card>
+      <div class="cc2-dashboard-bottom grid gap-3.5">
+        <div class="grid gap-3.5 cc2-md:grid-cols-2">
+          <Card class="flex flex-col">
+            <CardHead icon="target" title="common.position" />
+            {(['x', 'y', 'z'] as const).map(a => (
+              <Row key={a} text={a.toUpperCase()} value={v.pos(a)} />
+            ))}
+            <div class="mt-auto pt-3">
+              <Tag tone={['x', 'y', 'z'].every(a => v.homed.includes(a)) ? 'ok' : 'warning'}>
+                {v.homed ? `${v.homed.toUpperCase()} ${t('common.homed')}` : t('common.not_homed')}
+              </Tag>
+            </div>
+          </Card>
+          <Card>
+            <CardHead icon="monitor" title="dashboard.system" />
+            <Row
+              label="dashboard.service"
+              value={
+                h ? (
+                  <>
+                    <Dot /> {t('dashboard.online')}
+                  </>
+                ) : (
+                  t('common.connecting')
+                )
+              }
+            />
+            <Row label="dashboard.system_uptime" value={h ? duration(h.uptime_seconds) : '—'} />
+            <Row label="dashboard.cpu_load" value={h ? String(h.loadavg).split(/\s+/).slice(0, 3).join(' ') : '—'} />
+            <Row label="dashboard.available_memory" value={h ? `${(h.mem_available_kb / 1024).toFixed(1)} MiB` : '—'} />
+          </Card>
+        </div>
       </div>
     </div>
   )

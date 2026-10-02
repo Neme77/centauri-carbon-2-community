@@ -35,7 +35,7 @@ const TABS = [
 const G = { size: 16, strokeWidth: 1 }
 const Dot = () => <i class="inline-block size-2 rounded-full bg-current align-middle" />
 const Field = ({ label, help, htmlFor, children }: { label: Key; help?: Key; htmlFor?: string; children: any }) => (
-  <div class="my-2.5 grid items-center gap-x-3.5 gap-y-1 md:grid-cols-[170px_minmax(220px,480px)]">
+  <div class="my-2.5 grid items-center gap-x-3.5 gap-y-1 cc2-md:grid-cols-[170px_minmax(220px,480px)]">
     {htmlFor ? (
       <label htmlFor={htmlFor} class="font-semibold">
         {t(label)}
@@ -44,7 +44,7 @@ const Field = ({ label, help, htmlFor, children }: { label: Key; help?: Key; htm
       <span class="font-semibold">{t(label)}</span>
     )}
     {children}
-    {help && <span class="text-[10px] text-muted md:col-start-2">{t(help)}</span>}
+    {help && <span class="text-xs text-muted cc2-md:col-start-2">{t(help)}</span>}
   </div>
 )
 const Kv = ({ k, text, v }: { k?: Key; text?: string; v: any }) => (
@@ -92,19 +92,19 @@ const Connection = () => {
         <Input id="printer-ip" value={location.hostname} readOnly />
       </Field>
       <Field label="settings.lan_access_code" help="settings.first_launch_requires_the_printer" htmlFor="lan-code">
-        <div class="flex">
+        <div class="cc2-lan-code-row flex min-w-0 items-center gap-2">
           <Input
             id="lan-code"
             type="password"
-            class="rounded-r-none"
+            class="min-w-0 flex-1"
             value={code}
             onInput={e => setCode(e.currentTarget.value)}
           />
-          <Button class="rounded-l-none" disabled={busy} onClick={verify}>
+          <Button class="shrink-0 whitespace-nowrap px-3" disabled={busy} onClick={verify}>
             {t(setup?.configured ? 'settings.change_revalidate' : 'settings.verify')}
           </Button>
         </div>
-        <span class={cn('text-xs md:col-start-2', ready ? 'text-green' : 'text-amber')}>
+        <span class={cn('text-xs cc2-md:col-start-2', ready ? 'text-green' : 'text-amber')}>
           <Dot />{' '}
           {busy
             ? t('settings.restarting')
@@ -145,7 +145,7 @@ const Integrations = () => {
       notify(tpl(fail, { error: errText(e) }))
     }
   }
-  const row = 'my-2 grid items-center gap-2.5 md:grid-cols-[230px_1fr_auto]'
+  const row = 'my-2 grid items-center gap-2.5 cc2-md:grid-cols-[230px_1fr_auto]'
   return (
     <Card>
       <CardHead icon="plug" title="settings.integrations" sub="settings.service_configuration_for_local" />
@@ -197,12 +197,12 @@ const Appearance = () => {
     setLanguage(detectLanguage(), true)
     notify(t('settings.interface_preferences_restored'))
   }
-  const lab = 'text-[11px] font-semibold'
+  const lab = 'text-xs font-semibold'
   return (
     <>
       <Card>
         <CardHead icon="palette" title="settings.appearance" sub="settings.interface_and_display_preferences" />
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-3 cc2-sm:grid-cols-2">
           <label class={lab}>
             {t('settings.language')}
             <Select class="mt-1.5" value={lang} onChange={e => setLanguage(e.currentTarget.value, true)}>
@@ -246,44 +246,46 @@ export const Settings = () => {
   const [tab, setTab] = useState(0)
   const h = health.use().data
   return (
-    <Page title="common.settings" sub="settings.configure_your_cc2_printer_and">
-      <Tabs
-        items={TABS.map(([Glyph, label]) => ({ id: label, label: t(label), icon: <Glyph {...G} /> }))}
-        value={TABS[tab][1]}
-        onChange={id => setTab(TABS.findIndex(([, label]) => label === id))}
-      />
-      <div class="max-w-4xl">
-        {tab === 0 && <Connection />}
-        {tab === 1 && <Integrations />}
-        {tab === 2 && <Appearance />}
-        {tab === 3 && (
-          <Card>
-            <CardHead icon="info" title="settings.about" />
-            <p class="mb-4 max-w-2xl text-[13px] leading-relaxed">{t('settings.cc2_control_is_the_local_control')}</p>
-            <div class="grid max-w-2xl grid-cols-[190px_1fr] gap-2 text-xs">
-              <Kv k="settings.version" v={h?.version || '—'} />
-              <Kv
-                text="GitHub"
-                v={
-                  <a
-                    href="https://github.com/Neme77/centauri-carbon-2-community"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center gap-2 font-normal text-cyan underline-offset-2 hover:underline"
-                  >
-                    <GithubIcon class="size-4" />
-                    Neme77/centauri-carbon-2-community
-                  </a>
-                }
-              />
-              <Kv
-                k="settings.libraries"
-                v={<span class="font-normal">{t('settings.preact_tailwind_css_lucide_icons')}</span>}
-              />
-            </div>
-          </Card>
-        )}
-      </div>
-    </Page>
+    <div class="cc2-settings mx-auto max-w-4xl">
+      <Page title="common.settings" sub="settings.configure_your_cc2_printer_and">
+        <Tabs
+          items={TABS.map(([Glyph, label]) => ({ id: label, label: t(label), icon: <Glyph {...G} /> }))}
+          value={TABS[tab][1]}
+          onChange={id => setTab(TABS.findIndex(([, label]) => label === id))}
+        />
+        <div class="max-w-4xl">
+          {tab === 0 && <Connection />}
+          {tab === 1 && <Integrations />}
+          {tab === 2 && <Appearance />}
+          {tab === 3 && (
+            <Card>
+              <CardHead icon="info" title="settings.about" />
+              <p class="mb-4 max-w-2xl text-[13px] leading-relaxed">{t('settings.cc2_control_is_the_local_control')}</p>
+              <div class="grid max-w-2xl grid-cols-[190px_1fr] gap-2 text-xs">
+                <Kv k="settings.version" v={h?.version || '—'} />
+                <Kv
+                  text="GitHub"
+                  v={
+                    <a
+                      href="https://github.com/Neme77/centauri-carbon-2-community"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center gap-2 font-normal text-cyan underline-offset-2 hover:underline"
+                    >
+                      <GithubIcon class="size-4" />
+                      Neme77/centauri-carbon-2-community
+                    </a>
+                  }
+                />
+                <Kv
+                  k="settings.libraries"
+                  v={<span class="font-normal">{t('settings.preact_tailwind_css_lucide_icons')}</span>}
+                />
+              </div>
+            </Card>
+          )}
+        </div>
+      </Page>
+    </div>
   )
 }

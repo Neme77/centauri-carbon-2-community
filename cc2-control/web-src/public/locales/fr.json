@@ -215,7 +215,7 @@
   "control.chamber_fan": "Ventilateur d’enceinte",
   "control.current_position": "Position actuelle",
   "control.deleted_name": "{name} supprimé.",
-  "control.emergency_stop_is_always_available": "L'arrêt d'urgence est toujours disponible dans la barre latérale.",
+  "control.emergency_stop_is_always_available": "L'arrêt d'urgence est toujours disponible dans la barre supérieure.",
   "control.extrude": "Extruder",
   "control.extruder": "Extrudeur",
   "control.extrusion_disabled": "Extrusion désactivée",
