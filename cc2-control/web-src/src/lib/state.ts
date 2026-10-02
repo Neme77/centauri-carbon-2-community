@@ -51,8 +51,14 @@ export async function refreshPrinter() {
         if (a.length > 300) a.shift()
       }
     }
+    zoffset.set({
+      v: typeof data.z_offset?.value === 'number' ? data.z_offset.value : null,
+      pending: Boolean(data.z_offset?.pending),
+      reference: typeof data.z_offset?.reference === 'number' ? data.z_offset.reference : null,
+    })
     printer.set(s => ({ data, rev: s.rev + 1, ok: true }))
   } catch {
+    zoffset.set({ v: null })
     printer.set({ ok: false })
   } // keep the last data, flag the link as down
 }
@@ -151,5 +157,5 @@ export const savePresets = (list: any[]) =>
 // Camera and Moonraker live on other ports of the same host.
 export const camera = (q = '') => `http://${location.hostname}:8080/${q}`
 
-// Live Z offset applied in this browser session (mirrors the printer's session offset).
-export const zoffset = store({ v: 0 })
+// Authoritative volatile printer offset; unavailable readback is never shown as zero.
+export const zoffset = store({ v: null as number | null, reference: null as number | null, pending: false })

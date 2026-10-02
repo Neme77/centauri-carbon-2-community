@@ -97,7 +97,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Z axis must be homed before live offset adjustment");
         if(fabs(value)<0.0005||fabs(value)>0.5001)
             return reject(reason,reason_cap,"Session Z offset undo exceeds the protected range");
-        snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1",value);
+        snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1 MOVE_SPEED=5",value);
         return 1;
     }
     if(sscanf(action,"zoffset:adjust:%lf",&value)==1){
@@ -107,7 +107,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Z axis must be homed before live offset adjustment");
         if(fabs(value)<0.0005||fabs(value)>0.0501)
             return reject(reason,reason_cap,"Each Z offset adjustment must be 0.01 or 0.05 mm");
-        snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1",value);
+        snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1 MOVE_SPEED=5",value);
         return 1;
     }
     if(sscanf(action,"%31[^:]:%31[^:]:%lf",kind,a,&value)==3&&strcmp(kind,"move")==0){
