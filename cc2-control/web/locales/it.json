@@ -229,7 +229,7 @@
   "control.invalid_material_profile_values": "Valori del profilo materiale non validi.",
   "control.invalid_temperature_target": "Temperatura obiettivo non valida.",
   "control.length": "Lunghezza",
-  "control.live_session_adjustment_it_resets": "Offset live letto dal firmware. Le modifiche restano disabilitate finché il movimento precedente non è confermato. Il backend applica il limite ±0,50 mm anche dopo un ricaricamento. Annulla ripristina zero; le impostazioni salvate restano invariate.",
+  "control.live_session_adjustment_it_resets": "Regolazione rispetto al riferimento della stampante, limitata a ±0,50 mm. Annulla ripristina quel riferimento. Ricaricare la pagina conserva la sessione; la calibrazione salvata non cambia.",
   "control.machine": "Macchina",
   "control.material_profiles": "Profili materiali",
   "control.motion_requires_homing_commands": "I movimenti richiedono l’homing. I comandi restano disabilitati finché la stampante non è pronta.",

@@ -229,7 +229,7 @@
   "control.invalid_material_profile_values": "Valeurs du profil de matériau invalides.",
   "control.invalid_temperature_target": "Température cible invalide.",
   "control.length": "Longueur",
-  "control.live_session_adjustment_it_resets": "Décalage actuel lu depuis le firmware. Les modifications sont désactivées jusqu’à confirmation du mouvement précédent. Le serveur impose ±0,50 mm même après rechargement. Annuler rétablit zéro sans modifier les paramètres enregistrés.",
+  "control.live_session_adjustment_it_resets": "Réglage relatif à la référence de l’imprimante, limité à ±0,50 mm. Annuler rétablit cette référence. La session est conservée au rechargement ; la calibration enregistrée reste inchangée.",
   "control.machine": "Machine",
   "control.material_profiles": "Profils de matériaux",
   "control.motion_requires_homing_commands": "Le mouvement nécessite une prise d’origine. Les commandes restent désactivées tant que l’imprimante n’est pas prête.",

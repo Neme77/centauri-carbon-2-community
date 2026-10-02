@@ -63,9 +63,9 @@ Do not install files from different releases as a mixed set.
 
 The UI reads `gcode_move.homing_origin[2]` through the shared firmware telemetry
 cache; it never substitutes zero for missing readback. Protected adjustments
-require fresh readback, an absolute target within ±0.50 mm, and confirmation of
+require fresh readback, a session adjustment within ±0.50 mm of the printer reference, and confirmation of
 the preceding adjustment. A browser reload does not reset the guard. Undo
-restores the live offset to zero and does not write saved firmware settings.
+restores the firmware reference captured before the first accepted session adjustment and does not write saved firmware settings.
 
 If the firmware does not report this field, the adjustment buttons remain
 disabled. Validate field availability and existing print/calibration offset
@@ -73,3 +73,9 @@ behaviour on the printer before releasing this change. An unconfirmed command
 keeps further adjustments blocked; inspect the firmware state before restarting
 CC2 Control to re-establish readback. This guard applies to protected CC2 Control
 actions, not arbitrary G-code explicitly entered in the expert console.
+
+Live adjustments use Klipper `SET_GCODE_OFFSET Z_ADJUST=... MOVE=1 MOVE_SPEED=5`,
+including during printing, with Z homed. The backend owns the reference across
+browser reloads and clients. A confirmed external offset change establishes a new
+reference; an unconfirmed command stays blocked. Restarting CC2 Control starts
+a new session from current readback. Nothing is written using SAVE_CONFIG.

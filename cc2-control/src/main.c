@@ -32,10 +32,14 @@
 static uds_client telemetry;
 static int z_offset_pending;
 static double z_offset_expected;
+static int z_offset_session;
+static double z_offset_reference;
 
 static int z_offset_readback(double *value){
     if(!uds_value(&telemetry,U_Z_OFFSET,value))return 0;
     if(z_offset_pending&&fabs(*value-z_offset_expected)<0.0005)z_offset_pending=0;
+    else if(!z_offset_pending&&z_offset_session&&fabs(*value-z_offset_expected)>=0.0005)
+        z_offset_session=0; /* Firmware/display/G-code changed the reference outside our controls. */
     return 1;
 }
 
@@ -1864,9 +1868,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_number(flow_percent,sizeof(flow_percent),have_flow,have_flow?tune*100:0);
     int have_velocity=uds_value(&telemetry,U_LIVE_SPEED,&tune);
     json_number(live_velocity,sizeof(live_velocity),have_velocity,have_velocity?tune:0);
-    char zoffset[32];double offset;
+    char zoffset[32],zreference[32],zadjustment[32];double offset;
     int have_offset=z_offset_readback(&offset);
     json_number(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
+    double reference=z_offset_session?z_offset_reference:(have_offset?offset:0);
+    json_number(zreference,sizeof(zreference),have_offset,reference);
+    json_number(zadjustment,sizeof(zadjustment),have_offset,have_offset?offset-reference:0);
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"
@@ -1877,12 +1884,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
-        "\"z_offset\":{\"value\":%s,\"pending\":%s},"
+        "\"z_offset\":{\"value\":%s,\"pending\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
-        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
+        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",zreference,zadjustment,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
@@ -2718,19 +2725,19 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
     }
     memcpy(action,body,body_len);action[body_len]='\0';
     int z_action=!strncmp(action,"zoffset:",8);
-    double z_next=0;
+    double z_next=0,z_reference=0;
     if(z_action){
         double current,delta;int end=0;
         const char *argument=!strncmp(action,"zoffset:adjust:",15)?action+15:
             !strncmp(action,"zoffset:undo:",13)?action+13:NULL;
         int valid=argument&&sscanf(argument,"%lf%n",&delta,&end)==1&&!argument[end]&&isfinite(delta);
         if(!valid||!z_offset_readback(&current)||z_offset_pending||
-           fabs(current+delta)>0.5001||
-           (!strncmp(action,"zoffset:undo:",13)&&fabs(current+delta)>0.0005)){
-            const char *error="{\"accepted\":false,\"error\":\"Z offset requires fresh readback, confirmed previous motion and a target within +/-0.50 mm\"}\n";
+           fabs((current+delta)-(z_offset_session?z_offset_reference:current))>0.5001||
+           (!strncmp(action,"zoffset:undo:",13)&&fabs((current+delta)-(z_offset_session?z_offset_reference:current))>0.0005)){
+            const char *error="{\"accepted\":false,\"error\":\"Z offset requires fresh readback, confirmed previous motion and a session adjustment within +/-0.50 mm of the printer reference\"}\n";
             respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
         }
-        z_next=current+delta;
+        z_next=current+delta;z_reference=z_offset_session?z_offset_reference:current;
     }
     double tune_value;
     if(strncmp(action,"tune:",5)==0&&
@@ -2744,7 +2751,7 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
-    if(z_action){z_offset_expected=z_next;z_offset_pending=1;}
+    if(z_action){z_offset_reference=z_reference;z_offset_session=1;z_offset_expected=z_next;z_offset_pending=1;}
     const char *ok="{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }

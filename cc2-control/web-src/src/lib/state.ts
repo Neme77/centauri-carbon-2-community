@@ -54,6 +54,7 @@ export async function refreshPrinter() {
     zoffset.set({
       v: typeof data.z_offset?.value === 'number' ? data.z_offset.value : null,
       pending: Boolean(data.z_offset?.pending),
+      reference: typeof data.z_offset?.reference === 'number' ? data.z_offset.reference : null,
     })
     printer.set(s => ({ data, rev: s.rev + 1, ok: true }))
   } catch {
@@ -157,4 +158,4 @@ export const savePresets = (list: any[]) =>
 export const camera = (q = '') => `http://${location.hostname}:8080/${q}`
 
 // Authoritative volatile printer offset; unavailable readback is never shown as zero.
-export const zoffset = store({ v: null as number | null, pending: false })
+export const zoffset = store({ v: null as number | null, reference: null as number | null, pending: false })

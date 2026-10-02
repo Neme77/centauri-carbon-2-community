@@ -229,7 +229,7 @@
   "control.invalid_material_profile_values": "材料配置数值无效。",
   "control.invalid_temperature_target": "目标温度无效。",
   "control.length": "长度",
-  "control.live_session_adjustment_it_resets": "从固件读取实时偏移。前一次移动确认前无法再次调整。后端限制为 ±0.50 mm，刷新浏览器不会重置限制。撤销恢复为零，不修改已保存的设置。",
+  "control.live_session_adjustment_it_resets": "相对于打印机参考值进行调整，限制为 ±0.50 mm。撤销恢复该参考值。刷新页面保留会话；已保存的校准不变。",
   "control.machine": "机器",
   "control.material_profiles": "材料配置",
   "control.motion_requires_homing_commands": "运动需要先回零。打印机就绪前命令不可用。",

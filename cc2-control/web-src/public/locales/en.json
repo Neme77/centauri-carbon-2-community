@@ -229,7 +229,7 @@
   "control.invalid_material_profile_values": "Invalid material profile values.",
   "control.invalid_temperature_target": "Invalid temperature target.",
   "control.length": "Length",
-  "control.live_session_adjustment_it_resets": "Live printer offset from firmware readback. Changes are disabled until the previous move is confirmed. The backend enforces ±0.50 mm across browser reloads. Undo restores zero; saved settings are unchanged.",
+  "control.live_session_adjustment_it_resets": "Live adjustment relative to the printer reference, limited to ±0.50 mm. Undo restores that reference. Reloading the page preserves the session; saved calibration is unchanged.",
   "control.machine": "Machine",
   "control.material_profiles": "Material Profiles",
   "control.motion_requires_homing_commands": "Motion requires homing. Commands are disabled until the printer is ready.",
