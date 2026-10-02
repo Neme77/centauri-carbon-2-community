@@ -299,6 +299,11 @@ static void json_number(char *out, size_t cap, int have, double value) {
     else snprintf(out, cap, "null");
 }
 
+static void json_z_offset(char *out, size_t cap, int have, double value) {
+    if (have) snprintf(out, cap, "%.3f", fabs(value) < 0.0005 ? 0.0 : value);
+    else snprintf(out, cap, "null");
+}
+
 static void json_escape(char *out,size_t cap,const char *in) {
     size_t n=0;
     while(*in&&n+1<cap){unsigned char ch=(unsigned char)*in++;
@@ -1870,10 +1875,10 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_number(live_velocity,sizeof(live_velocity),have_velocity,have_velocity?tune:0);
     char zoffset[32],zreference[32],zadjustment[32];double offset;
     int have_offset=z_offset_readback(&offset);
-    json_number(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
+    json_z_offset(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
     double reference=z_offset_session?z_offset_reference:(have_offset?offset:0);
-    json_number(zreference,sizeof(zreference),have_offset,reference);
-    json_number(zadjustment,sizeof(zadjustment),have_offset,have_offset?offset-reference:0);
+    json_z_offset(zreference,sizeof(zreference),have_offset,reference);
+    json_z_offset(zadjustment,sizeof(zadjustment),have_offset,have_offset?offset-reference:0);
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"
