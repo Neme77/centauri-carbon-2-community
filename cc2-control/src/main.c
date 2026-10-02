@@ -44,7 +44,7 @@ static int z_offset_readback(double *value){
 }
 
 #define REQUEST_MAX 12288
-#define FILE_UPLOAD_MAX (64UL * 1024UL * 1024UL)
+#define FILE_UPLOAD_MAX (128UL * 1024UL * 1024UL)
 #define UPLOAD_CHUNK 16384
 #define PATH_MAX_LOCAL 512
 #define GCODE_FILES_MAX 128
@@ -849,7 +849,7 @@ static int gcode_upload_start(int fd,const char *request,const char *query,
     }
     size_t len=content_length_from_headers(request);
     if(!len||len>FILE_UPLOAD_MAX||header_length>used||used-header_length>len){
-        const char *e="{\"error\":\"Invalid upload size (maximum 64 MiB)\"}\n";
+        const char *e="{\"error\":\"Invalid upload size (maximum 128 MiB)\"}\n";
         respond(fd,413,"Payload Too Large","application/json",e,strlen(e));return 0;
     }
     if(!upload_slot_acquire()){

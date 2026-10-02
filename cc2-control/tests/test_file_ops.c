@@ -26,12 +26,30 @@ static int run_upload(mqtt_client *mqtt,const char *name,const char *storage,con
     close(pair[1]);
     return atoi(strchr(response,' ')+1);
 }
+static void test_upload_size_limit(mqtt_client *mqtt){
+    const size_t limit=128UL*1024UL*1024UL;
+    expect(FILE_UPLOAD_MAX==limit,"upload limit is 128 MiB");
+    int pair[2];expect(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0,"create oversized upload socket");
+    char request[512];int n=snprintf(request,sizeof(request),
+        "POST /api/gcode-files/upload?storage=internal&name=large.gcode HTTP/1.1\r\nContent-Length: %zu\r\n\r\n",limit+1);
+    expect(!gcode_upload_start(pair[0],request,"storage=internal&name=large.gcode",(size_t)n,(size_t)n,mqtt),"oversized raw upload rejected before worker starts");
+    char response[512];ssize_t got=recv(pair[1],response,sizeof(response)-1,0);expect(got>0,"receive size rejection");response[got]=0;
+    expect(strstr(response,"413 Payload Too Large")&&strstr(response,"maximum 128 MiB"),"raw upload reports updated maximum");
+    close(pair[0]);close(pair[1]);
+    expect(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0,"create oversized multipart socket");
+    n=snprintf(request,sizeof(request),"POST /api/files/local HTTP/1.1\r\nContent-Type: multipart/form-data; boundary=test\r\nContent-Length: %zu\r\n\r\n",limit+8193);
+    expect(!orca_upload_start(pair[0],request,(size_t)n,(size_t)n,mqtt),"oversized multipart body rejected before worker starts");
+    got=recv(pair[1],response,sizeof(response)-1,0);expect(got>0,"receive multipart size rejection");response[got]=0;
+    expect(strstr(response,"413 Payload Too Large")!=NULL,"multipart overhead remains bounded");
+    close(pair[0]);close(pair[1]);
+}
 int main(void){
     char root[]="/tmp/cc2-file-manager-test-XXXXXX";expect(mkdtemp(root)!=NULL,"create test directory");
     gcode_internal_root=root;gcode_usb_root="/tmp/cc2-usb-not-mounted";
     mqtt_client mqtt;memset(&mqtt,0,sizeof(mqtt));strcpy(mqtt.password,"test-code");
     mqtt.connected=mqtt.registered=mqtt.have_machine_status=1;
     mqtt.machine_status=1;mqtt.last_message=time(NULL);
+    test_upload_size_limit(&mqtt);
     expect(run_upload(&mqtt,"cube.gcode","internal","; cube test\n","test-code")==201,"upload into internal memory");
     expect(run_upload(&mqtt,"barca%201.gcode","internal","; spaced name\n","test-code")==201,"upload URL-encoded filename with spaces");
     char path[1024];snprintf(path,sizeof(path),"%s/cube.gcode",root);
