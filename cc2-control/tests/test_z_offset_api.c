@@ -14,6 +14,13 @@ static int command(mqtt_client *mqtt,const char *action){
     char response[700];ssize_t n=recv(pair[1],response,sizeof(response)-1,0);assert(n>0);response[n]=0;
     close(pair[0]);close(pair[1]);return atoi(strchr(response,' ')+1);
 }
+static void check_z_json(mqtt_client *mqtt,const char *expected){
+    int pair[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
+    printer_response(pair[0],mqtt);
+    char response[5000];ssize_t n=recv(pair[1],response,sizeof(response)-1,0);
+    assert(n>0);response[n]=0;assert(strstr(response,expected));
+    close(pair[0]);close(pair[1]);
+}
 static void offset(double value){
     telemetry.values[U_Z_OFFSET]=value;telemetry.present|=UINT32_C(1)<<U_Z_OFFSET;
     telemetry.ready=1;telemetry.fd=0;clock_gettime(CLOCK_MONOTONIC,&telemetry.last_rx);
@@ -39,7 +46,9 @@ int main(void){
     z_offset_session=0;z_offset_pending=0;offset(-0.06);
     assert(command(&mqtt,"zoffset:adjust:-0.02")==202);
     assert(fabs(z_offset_reference+0.06)<0.000001);
-    offset(-0.08);assert(command(&mqtt,"zoffset:undo:0.08")==409);
+    offset(-0.08);
+    check_z_json(&mqtt,"\"z_offset\":{\"value\":-0.080,\"pending\":false,\"reference\":-0.060,\"adjustment\":-0.020}");
+    assert(command(&mqtt,"zoffset:undo:0.08")==409);
     assert(command(&mqtt,"zoffset:undo:0.02")==202);
     offset(-0.06);double actual;assert(z_offset_readback(&actual)&&!z_offset_pending);
     offset(0.12);assert(z_offset_readback(&actual)&&!z_offset_session);
@@ -47,10 +56,15 @@ int main(void){
     assert(fabs(z_offset_reference-0.12)<0.000001);
     offset(0.17);assert(command(&mqtt,"zoffset:undo:-0.05")==202);
     offset(0.12);assert(z_offset_readback(&actual)&&!z_offset_pending);
+    z_offset_session=0;offset(0);assert(command(&mqtt,"zoffset:adjust:-0.02")==202);
+    offset(-0.02);
+    check_z_json(&mqtt,"\"z_offset\":{\"value\":-0.020,\"pending\":false,\"reference\":0.000,\"adjustment\":-0.020}");
+    assert(command(&mqtt,"zoffset:undo:0.02")==202);offset(0);
+    check_z_json(&mqtt,"\"z_offset\":{\"value\":0.000,\"pending\":false,\"reference\":0.000,\"adjustment\":0.000}");
     mqtt.machine_status=2;strcpy(mqtt.print_state,"printing");
     assert(command(&mqtt,"zoffset:adjust:0.01")==202);
     assert(strstr(sent,"MOVE=1 MOVE_SPEED=5"));
-    offset(0.13);assert(z_offset_readback(&actual)&&!z_offset_pending);
+    offset(0.01);assert(z_offset_readback(&actual)&&!z_offset_pending);
     strcpy(mqtt.homed_axes,"");assert(command(&mqtt,"zoffset:adjust:0.01")==409);
     strcpy(mqtt.homed_axes,"xyz");
     uds_client parsed;uds_init(&parsed);parsed.fd=0;

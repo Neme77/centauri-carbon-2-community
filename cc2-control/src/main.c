@@ -301,6 +301,11 @@ static void json_number(char *out, size_t cap, int have, double value) {
     else snprintf(out, cap, "null");
 }
 
+static void json_z_offset(char *out, size_t cap, int have, double value) {
+    if (have) snprintf(out, cap, "%.3f", fabs(value) < 0.0005 ? 0.0 : value);
+    else snprintf(out, cap, "null");
+}
+
 static void json_escape(char *out,size_t cap,const char *in) {
     size_t n=0;
     while(*in&&n+1<cap){unsigned char ch=(unsigned char)*in++;
@@ -1491,6 +1496,47 @@ static void gcode_thumbnail_response(int fd, const char *body, size_t body_len) 
 }
 
 
+/* SLICE_CFG_MODEL=0 enters the vendor preliminary print calibration.
+ * Enable the file's FROM_SLICER calibration independently, while bypassing
+ * that preliminary stage with SLICE_CFG_MODEL=1. Full CC2 calibration is
+ * already performed explicitly below and must not be repeated either. */
+static int build_calibrated_start_script(char *script, size_t cap, int force_full_mesh,
+                                         char print_layout, const char *print_media,
+                                         const char *print_filename, const int *tools,
+                                         const int *trays, size_t slot_count) {
+    size_t used = 0;
+    if (!script || !cap || !print_media || !print_filename ||
+        strchr(print_filename, '\"') || strchr(print_filename, '\\') ||
+        (slot_count && (!tools || !trays))) return -1;
+    int length;
+    if (force_full_mesh) {
+        length = snprintf(script, cap,
+            "BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=0\n"
+            "PRINT_SURFACE_SET PLANE=%d\n"
+            "BED_MESH_CALIBRATE PROFILE=%s BED_TEMP=60\n",
+            print_layout == 'B' ? 1 : 0,
+            print_layout == 'B' ? "default1" : "default");
+    } else {
+        length = snprintf(script, cap,
+            "BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=1\n"
+            "PRINT_SURFACE_SET PLANE=%d\n", print_layout == 'B' ? 1 : 0);
+    }
+    if (length > 0 && (size_t)length < cap) used = (size_t)length;
+    for (size_t index = 0; used && index < slot_count; ++index) {
+        length = snprintf(script + used, cap - used,
+            "CANVAS_SET_COLOR_TABLE T=%d ID=0 CHANNEL=%d\n", tools[index], trays[index]);
+        if (length <= 0 || (size_t)length >= cap - used) { used = 0; break; }
+        used += (size_t)length;
+    }
+    if (used) {
+        length = snprintf(script + used, cap - used,
+            "SDCARD_PRINT_FILE FILENAME=%s/\"%s\" SLICE_CFG_MODEL=1",
+            print_media, print_filename);
+        if (length <= 0 || (size_t)length >= cap - used) used = 0;
+    }
+    return used ? 0 : -1;
+}
+
 static void gcode_start_response(int fd, mqtt_client *mqtt,
                                  const char *body, size_t body_len) {
     char storage[16], filename[PATH_MAX_LOCAL];
@@ -1605,39 +1651,16 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     int calibrated_start = strcmp(leveling, "saved") != 0 || missing_plate_mesh;
     int start_result = -1;
     if (calibrated_start) {
-        char script[4096]; size_t used = 0;
+        char script[4096];
         if (strchr(print_filename, '"') || strchr(print_filename, '\\')) {
             const char *error = "{\"accepted\":false,\"error\":\"Filename is incompatible with calibrated printing\"}\n";
             respond(fd, 422, "Unprocessable Content", "application/json; charset=utf-8", error, strlen(error));
             return;
         }
-        int length;
-        if (force_full_mesh) {
-            length = snprintf(script, sizeof(script),
-                "BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=0\n"
-                "PRINT_SURFACE_SET PLANE=%d\n"
-                "BED_MESH_CALIBRATE PROFILE=%s BED_TEMP=60\n",
-                print_layout == 'B' ? 1 : 0,
-                print_layout == 'B' ? "default1" : "default");
-        } else {
-            length = snprintf(script, sizeof(script),
-                "BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=1\n"
-                "PRINT_SURFACE_SET PLANE=%d\n", print_layout == 'B' ? 1 : 0);
-        }
-        if (length > 0 && (size_t)length < sizeof(script)) used = (size_t)length;
-        for (size_t index = 0; used && index < slot_count; ++index) {
-            length = snprintf(script + used, sizeof(script) - used,
-                "CANVAS_SET_COLOR_TABLE T=%d ID=0 CHANNEL=%d\n", tools[index], trays[index]);
-            if (length <= 0 || (size_t)length >= sizeof(script) - used) { used = 0; break; }
-            used += (size_t)length;
-        }
-        if (used) {
-            length = snprintf(script + used, sizeof(script) - used,
-                "SDCARD_PRINT_FILE FILENAME=%s/\"%s\" SLICE_CFG_MODEL=%d",
-                print_media, print_filename, force_full_mesh ? 1 : 0);
-            if (length <= 0 || (size_t)length >= sizeof(script) - used) used = 0;
-        }
-        if (used) start_result = send_local_gcode_script(script);
+        if (build_calibrated_start_script(script, sizeof(script), force_full_mesh,
+                                          print_layout, print_media, print_filename,
+                                          tools, trays, slot_count) == 0)
+            start_result = send_local_gcode_script(script);
     } else {
         start_result = mqtt_start_print(mqtt, print_media, print_filename, tools, trays,
                                         slot_count, print_layout, 0);
@@ -1872,10 +1895,10 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_number(live_velocity,sizeof(live_velocity),have_velocity,have_velocity?tune:0);
     char zoffset[32],zreference[32],zadjustment[32];double offset;
     int have_offset=z_offset_readback(&offset);
-    json_number(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
+    json_z_offset(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
     double reference=z_offset_session?z_offset_reference:(have_offset?offset:0);
-    json_number(zreference,sizeof(zreference),have_offset,reference);
-    json_number(zadjustment,sizeof(zadjustment),have_offset,have_offset?offset-reference:0);
+    json_z_offset(zreference,sizeof(zreference),have_offset,reference);
+    json_z_offset(zadjustment,sizeof(zadjustment),have_offset,have_offset?offset-reference:0);
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"

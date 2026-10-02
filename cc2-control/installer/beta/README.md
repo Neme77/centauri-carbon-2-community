@@ -1,8 +1,12 @@
-# CC2 Control — Beta @BUILD_ID@, test combinato PR 46 e 51–55
+# CC2 Control — Beta @BUILD_ID@, test combinato PR 46 e 51–56
 
 Aggiornamento di CC2 Control su Community Firmware con CC2 Control già installato.
 La versione API resta 1.1.31; `beta-build.json` identifica esattamente sorgenti,
-PR, compilatore e hash. Questa build combinata attende la validazione hardware.
+PR, compilatore e hash. Questa revisione include il fix della precisione Z e la PR56. Upload, web,
+Canvas, esclusione oggetti e viti sono gia stati provati nella beta precedente;
+restano da verificare Z offset aggiornato, calibrazione A/B e singola mesh adattiva.
+Il refresh automatico della mesh e la coerenza 2D/3D restano da sistemare: questo
+pacchetto non dichiara quel problema risolto.
 
 ## Installazione
 
@@ -63,17 +67,20 @@ il backup e contattare il manutentore per il ripristino assistito.
    conclusa, anche dopo interruzione. La selezione mesh per la visualizzazione
    è distinta dalla calibrazione e non cambia la mesh applicata.
 5. **54 — Z offset:** annotare il riferimento reale ricevuto dalla stampante;
-   fare un piccolo passo, verificare readback, ricaricare la pagina e premere
+   fare passi ±0,01/0,02 mm, verificare valore visibile e readback, ricaricare la pagina e premere
    Annulla. Deve tornare al riferimento originale, anche se diverso da zero.
    Verificare da un secondo client. Non scrive SAVE_CONFIG. I passi con MOVE=1
    muovono Z: osservare il movimento e mantenere adeguata distanza dal piatto.
 6. **55 — Esclusione:** durante una stampa multioggetto, provare nomi UTF-8 e
    parentesi; deve essere escluso solo l'oggetto scelto.
-7. **Mesh A/B e adattiva:** visualizzare A/B, confrontare i valori con il
+7. **56 — Avvio adattivo:** con lo stesso G-code Benchy verificare una sola
+   calibrazione 4×4 entro i limiti dell'oggetto, senza 11×11 preliminare.
+   Verificare anche avvio con mesh salvata A/B e calibrazione completa esplicita.
+8. **Mesh A/B e adattiva:** visualizzare A/B, confrontare i valori con il
    firmware. ADAPTIVE è disponibile solo se esposta dalla stampante. Un profilo
    salvato non dimostra che appartenga al modello corrente o che sarà
    riutilizzato in una ristampa. Non vengono caricate o salvate mesh in automatico.
-8. **Regressioni:** velocità/flow e reset 100%, Pause/Resume, webcam, chamber,
+9. **Regressioni:** velocità/flow e reset 100%, Pause/Resume, webcam, chamber,
    Canvas, stampa completa, target riscaldatori zero a fine stampa e UDS stabile.
 
 Per confrontare le risorse, mantenere stessa fase di stampa e stessi client.
@@ -95,7 +102,7 @@ browser/client, modalità LAN/WAN e output dell'installer.
 
 ## English quick start
 
-Combined experimental updater for PR46 and PR51–55, preserving the approved
+Combined experimental updater for PR46 and PR51–56, preserving the approved
 UI. Extract the ZIP and run the Windows launcher or the shell installer with
 your printer address. Install only while connected and Idle. The updater
 checks hashes, creates a complete backup, preserves settings and verifies

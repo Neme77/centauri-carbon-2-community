@@ -18,6 +18,7 @@ PRS = {
     53: 'fix/calibration-measurement-session',
     54: 'fix/z-offset-readback',
     55: 'fix/exclude-object-unicode-names',
+    56: 'fix/adaptive-start-single-mesh',
 }
 
 
@@ -75,7 +76,8 @@ def main():
         'pull_requests': {str(pr): git('rev-parse', f'origin/{branch}') for pr, branch in PRS.items()},
         'binary_sha256': binary_hash,
         'compiler': subprocess.check_output([args.compiler, '--version'], text=True).splitlines()[0],
-        'hardware_validation': 'pending: combined build must be tested on the printer',
+        'hardware_validation': 'pending: updated Z offset, A/B calibration and single adaptive mesh',
+        'known_issues': ['Active adaptive mesh refresh and 2D/3D synchronization remain under investigation'],
     }
     body = json.dumps(manifest, indent=2) + '\n'
     (payload / 'beta-build.json').write_text(body)
