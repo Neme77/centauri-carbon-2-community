@@ -31,8 +31,10 @@ try {
   assert.equal((await page.request.post(`${origin}/api/setup`, { data: '123456' })).status(), 403)
   const shots = process.env.CC2_SCREENSHOTS
   if (shots) await mkdir(shots, { recursive: true })
-  for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844], [740, 390], [1280, 480]]) {
+  for (const [width, height] of [[1440, 900], [1366, 640], [1280, 720], [1920, 1080], [1024, 768], [768, 1024], [390, 844], [740, 390], [1280, 480]]) {
     await page.setViewportSize({ width, height })
+    const rail = page.locator('#cc2-navigation button[aria-expanded]')
+    if (await rail.isVisible() && await rail.getAttribute('aria-expanded') !== 'true') { await rail.click(); await page.waitForTimeout(200) }
     for (const tab of ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']) {
       if (await page.locator('#cc2-menu-toggle').isVisible()) await page.locator('#cc2-menu-toggle').click()
       await page.locator(`a[href="#${tab}"]`).click()
@@ -43,7 +45,26 @@ try {
       if (shots) await page.screenshot({ path: path.join(shots, `${width}-${tab}.png`), fullPage: true })
     }
   }
+  for (const [width, height] of [[1366, 640], [1280, 720], [1920, 1080], [1024, 768]]) {
+    await page.setViewportSize({ width, height })
+    const rail = page.locator('#cc2-navigation button[aria-expanded]')
+    if (await rail.getAttribute('aria-expanded') !== 'true') await rail.click()
+    await page.waitForTimeout(200)
+    await rail.click()
+    await page.waitForTimeout(200)
+    assert.equal(await page.locator('header').evaluate(e => Math.round(e.getBoundingClientRect().height)), 52)
+    for (const tab of ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']) {
+      await page.locator(`a[href="#${tab}"]`).click()
+      await page.waitForTimeout(150)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} collapsed ${tab}: overflow`)
+      if (tab === 'dashboard') assert.ok(await page.locator('.cc2-camera-frame').evaluate(e => e.getBoundingClientRect().height <= 241))
+      if (shots) await page.screenshot({ path: path.join(shots, `${width}-collapsed-${tab}.png`), fullPage: true })
+    }
+  }
   await page.setViewportSize({ width: 1440, height: 900 })
+  const rail = page.locator('#cc2-navigation button[aria-expanded]')
+  if (await rail.getAttribute('aria-expanded') !== 'true') await rail.click()
+  await page.waitForTimeout(200)
   await page.locator('#cc2-navigation button[aria-expanded]').click()
   for (const tab of ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']) {
     await page.locator(`a[href="#${tab}"]`).click()
@@ -78,7 +99,7 @@ try {
   assert.equal((await (await page.request.get(`${origin}/__preview/scenario`)).json()).scene, 'printing')
   assert.deepEqual(errors, [])
   assert.deepEqual(outside, [], 'Preview must never request printer ports or external services')
-  console.log('PASS: isolated preview, all pages at 6 viewport sizes, scenario controls, tuning reset, blocked hardware actions and local-only requests')
+  console.log('PASS: isolated preview, all pages at 9 viewport sizes and desktop sidebar states, scenario controls, tuning reset, blocked hardware actions and local-only requests')
 } finally {
   await browser?.close()
   await server.close()

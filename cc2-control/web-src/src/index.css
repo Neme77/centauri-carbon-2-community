@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Desktop keeps the established viewport grids; touch/narrow layouts follow available space. */
+/* Every page follows the content width; desktop thresholds retain useful column widths. */
 @custom-variant cc2-sm {
   @media (hover: hover) and (pointer: fine) {
-    @media (min-width: 640px) { @slot; }
+    @container page (min-width: 540px) { @slot; }
   }
   @media (hover: none), (pointer: coarse) {
     @container page (min-width: 640px) { @slot; }
@@ -11,7 +11,7 @@
 }
 @custom-variant cc2-md {
   @media (hover: hover) and (pointer: fine) {
-    @media (min-width: 768px) { @slot; }
+    @container page (min-width: 720px) { @slot; }
   }
   @media (hover: none), (pointer: coarse) {
     @container page (min-width: 768px) { @slot; }
@@ -19,7 +19,7 @@
 }
 @custom-variant cc2-lg {
   @media (hover: hover) and (pointer: fine) {
-    @media (min-width: 1024px) { @slot; }
+    @container page (min-width: 960px) { @slot; }
   }
   @media (hover: none), (pointer: coarse) {
     @container page (min-width: 1024px) { @slot; }
@@ -27,7 +27,7 @@
 }
 @custom-variant cc2-xl {
   @media (hover: hover) and (pointer: fine) {
-    @media (min-width: 1280px) { @slot; }
+    @container page (min-width: 1020px) { @slot; }
   }
   @media (hover: none), (pointer: coarse) {
     @container page (min-width: 1280px) { @slot; }
@@ -149,4 +149,58 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   }
   button[role="switch"] { position: relative; }
   button[role="switch"]::before { content: ""; position: absolute; inset: -11px -4px; }
+}
+
+/* Compact desktop density. Touch targets and compact drawers keep their existing sizing. */
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-topbar { height: 52px; gap: 12px; }
+  .cc2-sidebar { top: 52px; }
+  .cc2-main { margin-top: 52px; padding: 12px; font-size: 13px; }
+  .cc2-header-title { height: 40px; }
+  .cc2-header-title h1 { font-size: 22px; bottom: 5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cc2-header-title .cc2-full-brand > svg { top: 35.9px; }
+  .cc2-topbar > div:last-child > div, .cc2-topbar > div:last-child > button { height: 36px; font-size: 12px; }
+  .cc2-main section { padding: 12px; }
+  .cc2-main section h2 { font-size: 14px; }
+  .cc2-main button:not([role="switch"]), .cc2-main input:not([type="range"], [type="checkbox"], [type="radio"]), .cc2-main select { min-height: 32px; font-size: 13px; }
+  .cc2-dashboard-primary { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: start; }
+  .cc2-camera-frame { height: clamp(180px, 20vw, 240px); aspect-ratio: auto; }
+  .cc2-camera-frame img { object-fit: contain; }
+  .cc2-job-filename { font-size: 17px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .cc2-job-stats { margin-top: 12px; row-gap: 8px; }
+  .cc2-tuning > div:first-child { margin-bottom: 8px; padding-bottom: 8px; }
+  .cc2-tuning-fields { gap: 12px; }
+  .cc2-tuning-field { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: baseline; }
+  .cc2-tuning-field label, .cc2-tuning-field > div { margin-bottom: 4px; font-size: 12px; }
+  .cc2-tuning-field form, .cc2-tuning-field small { grid-column: 1 / -1; }
+  .cc2-tuning-field form { flex-wrap: wrap; gap: 6px; }
+  .cc2-tuning-field input { width: 64px; min-width: 0; }
+  .cc2-tuning-field button { padding-inline: 8px; font-size: 12px; }
+  .cc2-tuning > p { margin-top: 6px; }
+  .cc2-tuning > .mt-3 { margin-top: 8px; font-size: 12px; }
+  .cc2-control-columns { align-items: start; }
+  .cc2-control-columns > div { gap: 12px; }
+}
+/* A narrow desktop content area stacks cards rather than forcing two squeezed columns. */
+@media (hover: hover) and (pointer: fine) {
+  @container page (max-width: 959px) {
+    .cc2-dashboard-primary { grid-template-columns: minmax(0, 1fr); }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 720px) and (max-width: 1019px) {
+    .cc2-control-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cc2-control-columns > div:last-child { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container page (min-width: 1020px) {
+    .cc2-control-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cc2-control-columns > div:last-child { grid-column: auto; grid-template-columns: minmax(0, 1fr); }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 960px) {
+    .cc2-dashboard-bottom { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; }
+  }
 }

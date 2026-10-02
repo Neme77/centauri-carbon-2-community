@@ -2,7 +2,8 @@
 
 This development tool runs the existing CC2 Control interface on a computer,
 using local, deterministic fixtures. It requires no printer, SSH session or
-installation. It does not change the printer firmware, backend or production UI.
+installation. The branch also includes a compact desktop layout proposal. It changes UI sources
+and the normal UI build, without changing the printer backend or control logic.
 
 ## Start
 
@@ -35,7 +36,7 @@ real hardware behaviour. Simulated memory/CPU figures are not measurements.
 The demo mode has no API proxy, ignores `CC2_BACKEND`, and replaces the direct
 camera URL only in the development transform. It refuses to start if camera
 isolation no longer matches the source. `vite build --mode demo` is rejected;
-normal `npm run build` produces the unchanged firmware UI. `npm run dev` remains
+normal `npm run build` produces the UI with the proposed layout changes. `npm run dev` remains
 the separate, existing mode for connecting to a real backend.
 
 ## Browser checks and screenshots
@@ -49,8 +50,10 @@ npm run test:preview
 
 On Linux CI use `npx playwright install --with-deps chromium`.
 The test launches Vite and Chromium together, navigates every page at 1440×900,
-1024×768, 768×1024, 390×844, 740×390 and 1280×480, checks for horizontal overflow and JavaScript
-errors, repeats the desktop pages with the sidebar collapsed, changes all four
+1366×640, 1280×720, 1920×1080, 1024×768, 768×1024, 390×844,
+740×390 and 1280×480, checks for horizontal overflow and JavaScript
+errors, repeats the desktop pages with the sidebar collapsed at five sizes, checks the
+compact desktop header and bounded camera height, changes all four
 languages and light/dark themes, exercises scenario controls and a tuning reset,
 rejects hardware actions,
 and verifies that browser requests stay on the preview origin.
@@ -71,3 +74,13 @@ Screenshots are review outputs, not approved visual baselines. A passing test
 cannot certify that spacing, alignment, wording or proportions look good. First
 approve the desired screenshots; only then add pixel comparisons against that
 baseline. These checks also do not replace real-printer validation.
+
+## Desktop layout proposal
+
+Page grids now use the available content width as the sidebar opens or closes.
+Desktop thresholds retain practical column widths; touch layouts keep their
+existing thresholds. The desktop header is 52 px high, cards and controls use
+smaller spacing, the camera height is bounded, filenames are limited to two
+lines with a full-name tooltip, and speed/flow share a compact dashboard row
+with machine information. Control columns adapt between two and three columns.
+Review every page with the sidebar open and closed before approving the design.
