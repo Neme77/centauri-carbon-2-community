@@ -96,7 +96,26 @@ export const Dashboard = () => {
     <div class="cc2-dashboard grid gap-3.5">
       {editing && <QuickEditor onClose={() => setEditing(false)} />}
       <div class="cc2-dashboard-primary grid gap-3.5 cc2-lg:grid-cols-2">
-        <CameraCard />
+        <div class="cc2-dashboard-camera-column grid content-start gap-3.5">
+          <CameraCard />
+          <Card class="cc2-quick-actions">
+            <CardHead
+              icon="bolt"
+              title="dashboard.quick_actions"
+              end={
+                <Button class="min-h-8 px-2 text-xs text-fg" onClick={() => setEditing(true)}>
+                  <Settings size={14} strokeWidth={1} />
+                  {t('dashboard.edit')}
+                </Button>
+              }
+            />
+            <div class="grid grid-cols-2 gap-2.5 cc2-sm:grid-cols-4">
+              {quickActions.map((action, n) => (
+                <Slot key={n} action={action} idle={v.idle} lightOn={v.lightOn} />
+              ))}
+            </div>
+          </Card>
+        </div>
         <div class="grid gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
           <Card class="flex flex-col">
             <CardHead icon="file" title="common.current_job" end={tState(v.state)} />
@@ -129,23 +148,7 @@ export const Dashboard = () => {
               <JobControls v={v} />
             </div>
           </Card>
-          <Card>
-            <CardHead
-              icon="bolt"
-              title="dashboard.quick_actions"
-              end={
-                <Button class="min-h-8 px-2 text-xs text-fg" onClick={() => setEditing(true)}>
-                  <Settings size={14} strokeWidth={1} />
-                  {t('dashboard.edit')}
-                </Button>
-              }
-            />
-            <div class="grid grid-cols-2 gap-2.5 cc2-sm:grid-cols-4">
-              {quickActions.map((action, n) => (
-                <Slot key={n} action={action} idle={v.idle} lightOn={v.lightOn} />
-              ))}
-            </div>
-          </Card>
+          <PrintTuning />
         </div>
       </div>
 
@@ -193,7 +196,6 @@ export const Dashboard = () => {
       </div>
 
       <div class="cc2-dashboard-bottom grid gap-3.5">
-        <PrintTuning />
         <div class="grid gap-3.5 cc2-md:grid-cols-2">
           <Card class="flex flex-col">
             <CardHead icon="target" title="common.position" />

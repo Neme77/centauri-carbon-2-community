@@ -443,6 +443,7 @@ export const Control = () => {
       <div class="cc2-control-columns grid gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
         <div class="grid content-start gap-3.5">
           <Movement v={v} />
+          <Extruder d={d} v={v} />
         </div>
         <div class="grid content-start gap-3.5">
           <Temperatures d={d} v={v} />
@@ -457,7 +458,6 @@ export const Control = () => {
               />
             ))}
           </Card>
-          <Extruder d={d} v={v} />
         </div>
         <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1">
           <Card>

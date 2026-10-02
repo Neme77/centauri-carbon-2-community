@@ -53,7 +53,7 @@ The test launches Vite and Chromium together, navigates every page at 1440×900,
 1366×640, 1280×720, 1920×1080, 1024×768, 768×1024, 390×844,
 740×390 and 1280×480, checks for horizontal overflow and JavaScript
 errors, repeats the desktop pages with the sidebar collapsed at five sizes, checks the
-compact desktop header and bounded camera height, changes all four
+desktop header, bounded camera height and natural Control card spacing, changes all four
 languages and light/dark themes, exercises scenario controls and a tuning reset,
 rejects hardware actions,
 and verifies that browser requests stay on the preview origin.
@@ -79,11 +79,10 @@ baseline. These checks also do not replace real-printer validation.
 
 Page grids now use the available content width as the sidebar opens or closes.
 Desktop thresholds retain practical column widths; touch layouts keep their
-existing thresholds. The desktop header is 52 px high, cards and controls use
+existing thresholds. The desktop header is 60 px high, cards and controls use
 smaller spacing, the camera height is bounded, filenames are limited to two
-lines with a full-name tooltip, and speed/flow share a compact dashboard row
-with machine information. Control uses shared desktop rows, with movement spanning the two rows beside
-temperatures/machine and fans/Z offset. The Job page uses a bounded camera and
+lines with a full-name tooltip, and the dashboard pairs camera/quick actions with current print/speed/flow. Control groups movement/extrusion, temperatures/fans, and machine/Z offset
+with natural card heights and compact gaps. The Job page uses a bounded camera and
 compact filename as well. The common page container is capped at 1440 px, so
 large displays do not stretch all cards indefinitely.
 Review every page with the sidebar open and closed before approving the design.
