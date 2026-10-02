@@ -482,12 +482,12 @@ const Upload = ({
           aria-label={t('files.select_g_code_file')}
           onChange={e => setPicked(e.currentTarget.files?.[0]?.name ?? '')}
         />
-        <div class="flex w-full min-w-0 items-center gap-3">
+        <div class="flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <Button disabled={busy} onClick={() => pick.current?.click()}>
             <FileText {...I} />
             {t('files.select_g_code_file')}
           </Button>
-          <span class="min-w-0 truncate text-muted">{picked || t('files.no_file_selected')}</span>
+          <span class="max-w-full truncate text-muted">{picked || t('files.no_file_selected')}</span>
         </div>
         <label class="flex items-center gap-2">
           {t('files.destination')}{' '}
