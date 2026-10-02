@@ -9,7 +9,7 @@ required = (
     "canvas.width = Math.round(w * dpr)",
     "canvas.height = Math.round(h * dpr)",
     "ctx.setTransform(dpr, 0, 0, dpr, 0, 0)",
-    "a.length > 300",
+    "times[0] < Date.now() - 300_000",
 )
 
 for marker in required:

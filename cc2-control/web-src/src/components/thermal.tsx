@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { printer, thermalHistory } from '@/lib/state'
+import { printer, thermalHistory, thermalTimes } from '@/lib/state'
 import { t } from '@/lib/i18n'
 
 // Series follow the theme's status colours, like the legend dots next to the chart.
@@ -46,7 +46,7 @@ export const ThermalChart = () => {
       ctx.lineWidth = 1.8
       ctx.beginPath()
       s.forEach((v, i) => {
-        const x = pad.l + ((w - pad.l - pad.r) * i) / Math.max(1, s.length - 1),
+        const x = pad.l + (w - pad.l - pad.r) * Math.max(0, 1 - (Date.now() - thermalTimes[key][i]) / 300_000),
           y = pad.t + ((h - pad.t - pad.b) * (top - v)) / top
         i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)
       })

@@ -1,5 +1,6 @@
 import type { Key } from './i18n'
 import { store } from './store'
+import { request } from './api'
 
 // Dashboard shortcuts: four slots, each one of these actions. Saved on the printer with the other UI preferences.
 export const QUICK_CHOICES: Record<string, [label: Key, icon: string]> = {
@@ -37,11 +38,11 @@ export const setQuickFromServer = (list: unknown) => {
 }
 
 export async function saveQuickActions(actions: string[]) {
-  quick.set({ actions })
   const body = Object.fromEntries(actions.map((a, i) => [`quick${i + 1}`, a]))
-  await fetch('/api/preferences', {
+  await request('/api/preferences', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'X-CC2-Request': '1' },
     body: JSON.stringify(body),
   })
+  quick.set({ actions })
 }
