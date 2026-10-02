@@ -83,7 +83,7 @@ export const Job = () => {
               {stats.map(([val, label], i) => (
                 <div key={i} class="min-w-0">
                   <strong class="block text-[15px] [overflow-wrap:anywhere]">{val}</strong>
-                  <small class="text-[11px] text-muted">{label}</small>
+                  <small class="text-xs text-muted">{label}</small>
                 </div>
               ))}
             </div>
@@ -112,7 +112,7 @@ export const Job = () => {
                       >
                         {x ? <X size={24} strokeWidth={1} /> : <Diamond size={24} strokeWidth={1} />}
                       </i>
-                      <span class="mt-1 text-[10px] [overflow-wrap:anywhere]">{n}</span>
+                      <span class="mt-1 text-xs [overflow-wrap:anywhere]">{n}</span>
                     </div>
                   )
                 })

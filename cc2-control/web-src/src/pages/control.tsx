@@ -367,7 +367,7 @@ const Profiles = () => {
       notify(tpl('control.profile_deletion_failed_error', { error: errText(e) }), 'error')
     }
   }
-  const lab = 'text-[11px] text-muted'
+  const lab = 'text-xs text-muted'
   return (
     <Card class="mt-3.5">
       <CardHead icon="temp" title="control.material_profiles" end={t('control.stored_on_the_printer')} />

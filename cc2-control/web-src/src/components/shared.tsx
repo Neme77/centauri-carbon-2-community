@@ -23,7 +23,7 @@ export const Reading = ({
     {dot && <Dot c={dot} />}
     {t(label)}
     <b class="ml-auto text-[13px] font-semibold">{value}</b>
-    {target && <span class="min-w-6 text-right text-[11px] text-muted">{target}</span>}
+    {target && <span class="min-w-6 text-right text-xs text-muted">{target}</span>}
   </div>
 )
 

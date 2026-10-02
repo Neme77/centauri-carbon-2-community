@@ -118,7 +118,7 @@ export const Dashboard = () => {
               ].map(([val, label], i) => (
                 <div key={i} class="border-edge cc2-sm:border-r cc2-sm:last:border-0">
                   <strong class="block text-[15px]">{val}</strong>
-                  <small class="text-[11px] text-muted">{label}</small>
+                  <small class="text-xs text-muted">{label}</small>
                 </div>
               ))}
             </div>
