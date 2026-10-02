@@ -185,10 +185,26 @@ export const Canvas = () => {
             <div class="flex h-48 items-end justify-center gap-1.5 border-b-8 border-edge pb-9 cc2-sm:gap-3">
               {slots.map(s => (
                 <div key={s.i} class="relative flex h-40 w-14 items-center justify-center cc2-sm:w-20">
-                  <i
-                    class="block h-36 w-9 rounded-[45%] border border-muted cc2-sm:w-12"
-                    style={{ background: `repeating-linear-gradient(90deg,${s.colour} 0 3px,#132a38 4px 6px)` }}
-                  />
+                  <svg viewBox="0 0 100 160" class="h-36 w-full" aria-hidden="true">
+                    <ellipse cx="50" cy="150" rx="36" ry="6" fill="currentColor" opacity="0.12" />
+                    <ellipse cx="64" cy="76" rx="27" ry="67" fill="#334553" stroke="#71828e" stroke-width="2" />
+                    <path d="M35 20H64C88 20 88 132 64 132H35Z" fill={s.colour} />
+                    {[36, 48, 60, 72, 84, 96, 108, 120].map(y => (
+                      <path key={y} d={`M36 ${y}H70`} stroke="#000" stroke-opacity="0.16" stroke-width="1.5" />
+                    ))}
+                    <ellipse cx="36" cy="76" rx="27" ry="67" fill="#273b49" stroke="#84939e" stroke-width="2" />
+                    <ellipse cx="36" cy="76" rx="21" ry="55" fill={s.colour} />
+                    <ellipse cx="36" cy="76" rx="17" ry="44" fill="none" stroke="#fff" stroke-opacity="0.22" />
+                    <ellipse cx="36" cy="76" rx="12" ry="30" fill="#334553" stroke="#84939e" stroke-width="2" />
+                    <ellipse cx="36" cy="76" rx="5" ry="13" fill="#14232e" />
+                    <path
+                      d="M25 30C15 49 15 102 25 122"
+                      fill="none"
+                      stroke="#fff"
+                      stroke-opacity="0.3"
+                      stroke-width="2"
+                    />
+                  </svg>
                   <em class="absolute -bottom-7 not-italic text-muted">{s.i + 1}</em>
                 </div>
               ))}
