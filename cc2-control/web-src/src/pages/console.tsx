@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
+import { copyText } from '@/lib/clipboard'
 import { Activity, Check as CheckIcon, Copy, Send, Trash2, TriangleAlert } from 'lucide-preact'
 import { store } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -105,11 +106,14 @@ export const Console = () => {
               {t('console.clear_output')}
             </Button>
             <Button
-              onClick={() =>
-                navigator.clipboard
-                  .writeText(screen.current?.textContent || '')
-                  .then(() => notify(t('console.console_copied')))
-              }
+              onClick={async () => {
+                try {
+                  await copyText(screen.current?.textContent || '')
+                  notify(t('console.console_copied'))
+                } catch (e) {
+                  notify(errText(e), 'error')
+                }
+              }}
             >
               <Copy {...I} />
               {t('console.copy_log')}

@@ -28,7 +28,7 @@ required_main = (
     'strcmp(leveling, "calibrate")',
     'BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=1',
     'BED_MESH_CALIBRATE PROFILE=%s BED_TEMP=60',
-    'SDCARD_PRINT_FILE FILENAME=%s/\\"%s\\" SLICE_CFG_MODEL=%d',
+    'SDCARD_PRINT_FILE FILENAME=%s/\\"%s\\" SLICE_CFG_MODEL=1',
     'print_media = "local"',
     'GCODE_USB_IMPORT_PREFIX "CC2_USB_"',
     'bounded_number_after_marker(line, "nozzle_temperature", 500.0)',

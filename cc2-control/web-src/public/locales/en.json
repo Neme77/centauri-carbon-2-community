@@ -480,5 +480,6 @@
   "tuning.manual_note": "Manual speed changes may leave the display mode label unchanged. A display mode or G-code can override these values.",
   "tuning.unavailable": "Controls require an active or paused print and fresh telemetry.",
   "bed.calibration_plate_side": "Calibration plate side",
-  "bed.choose_calibration_side": "Choose the mounted plate side"
+  "bed.choose_calibration_side": "Choose the mounted plate side",
+  "console.copy_failed": "Could not copy the console log."
 }

@@ -35,6 +35,7 @@ export const health = store({ data: null as any, setup: null as any })
 export const consoleLog = store({ text: null as string | null }) // null: nothing received yet, the page shows its own placeholder
 export const screwText = store({ text: '', minGeneration: 0 })
 
+export const thermalTimes = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
 export const thermalHistory = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
 
 export async function refreshPrinter() {
@@ -45,10 +46,15 @@ export async function refreshPrinter() {
       ['bed', data.heater_bed?.temperature],
       ['chamber', data.chamber?.temperature],
     ] as const) {
-      if (Number.isFinite(Number(v))) {
+      if (v !== null && v !== undefined && Number.isFinite(Number(v))) {
         const a = thermalHistory[key]
         a.push(Number(v))
-        if (a.length > 300) a.shift()
+        const times = thermalTimes[key]
+        times.push(Date.now())
+        while (times.length && times[0] < Date.now() - 300_000) {
+          times.shift()
+          a.shift()
+        }
       }
     }
     zoffset.set({
