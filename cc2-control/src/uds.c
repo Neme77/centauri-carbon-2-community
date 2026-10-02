@@ -11,7 +11,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\"],\"virtual_sdcard\":[\"progress\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003";
+static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\"],\"virtual_sdcard\":[\"progress\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003";
 static const char heartbeat[]="{\"id\":12,\"method\":\"info\",\"params\":{}}\003";
 static double elapsed(struct timespec a,struct timespec b){return (double)(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/1e9;}
 static struct timespec now_mono(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t;}
@@ -150,6 +150,29 @@ int uds_message(uds_client *c,const char *json,size_t length){
   const char *oe;const char *o=json_member_object(status,se,fields[i].object,'{',&oe);double v;
   if((!older||!(c->present&(UINT32_C(1)<<fields[i].field)))&&o&&numeric(o,oe,fields[i].key,&v)&&v>=fields[i].min&&v<=fields[i].max){
    c->values[fields[i].field]=v;c->present|=UINT32_C(1)<<fields[i].field;
+  }
+ }
+ const char *ge;const char *g=json_member_object(status,se,"gcode_move",'{',&ge);
+ if(g&&(!older||!(c->present&(UINT32_C(1)<<U_Z_OFFSET)))){
+  const char *p=json_member(g,ge,"homing_origin");
+  if(p){
+   c->present&=~(UINT32_C(1)<<U_Z_OFFSET);
+   if(*p=='['){
+    double z=0;int valid=1;p++;
+    for(int axis=0;axis<3;axis++){
+     p=json_skip_space(p,ge);char *q;errno=0;z=strtod(p,&q);
+     if(q==p||q>=ge||errno||!isfinite(z)){valid=0;break;}
+     p=json_skip_space(q,ge);
+     if(axis<2){if(p>=ge||*p!=','){valid=0;break;}p++;}
+     else if(p>=ge||(*p!=','&&*p!=']'))valid=0;
+    }
+    if(valid&&*p==','){
+     p=json_skip_space(p+1,ge);char *q;errno=0;double e=strtod(p,&q);
+     if(q==p||q>=ge||errno||!isfinite(e))valid=0;
+     else{p=json_skip_space(q,ge);if(p>=ge||*p!=']')valid=0;}
+    }
+    if(valid&&fabs(z)<=10){c->values[U_Z_OFFSET]=z;c->present|=UINT32_C(1)<<U_Z_OFFSET;}
+   }
   }
  }
  if(ps){

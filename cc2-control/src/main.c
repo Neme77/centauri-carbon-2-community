@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include <sys/statvfs.h>
 #include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -29,6 +30,14 @@
 #include "uds.h"
 
 static uds_client telemetry;
+static int z_offset_pending;
+static double z_offset_expected;
+
+static int z_offset_readback(double *value){
+    if(!uds_value(&telemetry,U_Z_OFFSET,value))return 0;
+    if(z_offset_pending&&fabs(*value-z_offset_expected)<0.0005)z_offset_pending=0;
+    return 1;
+}
 
 #define REQUEST_MAX 12288
 #define FILE_UPLOAD_MAX (64UL * 1024UL * 1024UL)
@@ -1855,6 +1864,9 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_number(flow_percent,sizeof(flow_percent),have_flow,have_flow?tune*100:0);
     int have_velocity=uds_value(&telemetry,U_LIVE_SPEED,&tune);
     json_number(live_velocity,sizeof(live_velocity),have_velocity,have_velocity?tune:0);
+    char zoffset[32];double offset;
+    int have_offset=z_offset_readback(&offset);
+    json_number(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"
@@ -1865,11 +1877,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
+        "\"z_offset\":{\"value\":%s,\"pending\":%s},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
-        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
+        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
@@ -1878,7 +1891,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
 static void uds_response(int fd){
     static const char *names[U_FIELDS]={"nozzle_temperature","nozzle_target","bed_temperature","bed_target",
         "controller_fan","heater_fan","part_fan","fan1","controller_rpm","heater_rpm","part_rpm","fan1_rpm",
-        "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed"};
+        "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed","z_offset"};
     char body[2048];json_builder b={body,0,sizeof(body),0};
     json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"connections\":%lu,\"disconnects\":%lu,\"last_disconnect\":\"%s\",\"last_errno\":%d,\"ignored_messages\":%lu,\"values\":{",
         telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages,
@@ -2704,6 +2717,21 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error));return;
     }
     memcpy(action,body,body_len);action[body_len]='\0';
+    int z_action=!strncmp(action,"zoffset:",8);
+    double z_next=0;
+    if(z_action){
+        double current,delta;int end=0;
+        const char *argument=!strncmp(action,"zoffset:adjust:",15)?action+15:
+            !strncmp(action,"zoffset:undo:",13)?action+13:NULL;
+        int valid=argument&&sscanf(argument,"%lf%n",&delta,&end)==1&&!argument[end]&&isfinite(delta);
+        if(!valid||!z_offset_readback(&current)||z_offset_pending||
+           fabs(current+delta)>0.5001||
+           (!strncmp(action,"zoffset:undo:",13)&&fabs(current+delta)>0.0005)){
+            const char *error="{\"accepted\":false,\"error\":\"Z offset requires fresh readback, confirmed previous motion and a target within +/-0.50 mm\"}\n";
+            respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+        }
+        z_next=current+delta;
+    }
     double tune_value;
     if(strncmp(action,"tune:",5)==0&&
        !uds_value(&telemetry,strncmp(action,"tune:speed:",11)==0?U_SPEED_FACTOR:U_FLOW_FACTOR,&tune_value)){
@@ -2716,6 +2744,7 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
+    if(z_action){z_offset_expected=z_next;z_offset_pending=1;}
     const char *ok="{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }

@@ -58,3 +58,18 @@ wget -qO- http://127.0.0.1:7125/server/info
 ```
 
 Do not install files from different releases as a mixed set.
+
+## Protected live Z offset
+
+The UI reads `gcode_move.homing_origin[2]` through the shared firmware telemetry
+cache; it never substitutes zero for missing readback. Protected adjustments
+require fresh readback, an absolute target within ±0.50 mm, and confirmation of
+the preceding adjustment. A browser reload does not reset the guard. Undo
+restores the live offset to zero and does not write saved firmware settings.
+
+If the firmware does not report this field, the adjustment buttons remain
+disabled. Validate field availability and existing print/calibration offset
+behaviour on the printer before releasing this change. An unconfirmed command
+keeps further adjustments blocked; inspect the firmware state before restarting
+CC2 Control to re-establish readback. This guard applies to protected CC2 Control
+actions, not arbitrary G-code explicitly entered in the expert console.

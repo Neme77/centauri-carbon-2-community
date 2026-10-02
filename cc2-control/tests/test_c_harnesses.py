@@ -15,6 +15,7 @@ HARNESSES = {
     "test_mqtt_workload.c": [],
     "test_uds.c": [ROOT / "src/uds.c"],
     "test_tuning_api.c": BACKEND,
+    "test_z_offset_api.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
 }
 
