@@ -149,7 +149,10 @@ export const Sidebar = () => {
           !collapsed && 'md:w-52'
         )}
       >
-        <nav class="mt-2 grid gap-0.5" aria-label={t('app.main_navigation')}>
+        <nav
+          class="mt-2 grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto"
+          aria-label={t('app.main_navigation')}
+        >
           {items.map(([p, Glyph, label]) => (
             <a
               key={p}
@@ -168,7 +171,7 @@ export const Sidebar = () => {
             </a>
           ))}
         </nav>
-        <div class="mt-auto hidden border-t border-edge md:block">
+        <div class="mt-auto hidden shrink-0 border-t border-edge md:block">
           <button
             type="button"
             onClick={toggleMenu}

@@ -167,16 +167,16 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
           onError={lost}
         />
       </div>
-      <div class="mt-3 grid gap-2.5 sm:grid-cols-2">
+      <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-2">
         <Button
-          class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs sm:text-sm"
+          class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
           onClick={() => window.open(camera(), 'cc2-camera')}
         >
           <Icon n="open" class="size-4" />
           {t('common.open_in_new_window')}
         </Button>
         <Button
-          class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs sm:text-sm"
+          class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
           onClick={() => window.open(camera(`?snapshot=${Date.now()}`), 'cc2-snapshot')}
         >
           <Icon n="camera" class="size-4" />
