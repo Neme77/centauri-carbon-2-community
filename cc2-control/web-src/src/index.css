@@ -240,3 +240,11 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-mesh-actions strong { font-size: 12px; }
   .cc2-mesh-actions small { font-size: 11px; margin-top: 2px; }
 }
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-control-bottom { margin-top: 12px; gap: 12px; }
+  @container page (min-width: 1020px) {
+    .cc2-control-bottom { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cc2-control-bottom > div { grid-column: span 2; }
+  }
+}

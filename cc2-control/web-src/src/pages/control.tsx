@@ -457,7 +457,6 @@ export const Control = () => {
               />
             ))}
           </Card>
-          <Profiles />
         </div>
         <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1">
           <Card>
@@ -510,7 +509,12 @@ export const Control = () => {
             </Notice>
           </Card>
           <ZOffset />
-          <Extruder d={d} v={v} />
+        </div>
+      </div>
+      <div class="cc2-control-bottom mt-3.5 grid items-start gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
+        <Extruder d={d} v={v} />
+        <div class="cc2-xl:col-span-2">
+          <Profiles />
         </div>
       </div>
     </Page>
