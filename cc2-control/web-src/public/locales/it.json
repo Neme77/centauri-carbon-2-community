@@ -478,5 +478,7 @@
   "tuning.waiting": "In attesa di conferma…",
   "tuning.not_confirmed": "Il valore richiesto non è stato confermato. Controlla il valore effettivo prima di riprovare.",
   "tuning.manual_note": "La velocità manuale può lasciare invariato il nome della modalità sul display. Una modalità del display o il G-code può sovrascrivere questi valori.",
-  "tuning.unavailable": "I controlli richiedono una stampa attiva o in pausa e telemetria aggiornata."
+  "tuning.unavailable": "I controlli richiedono una stampa attiva o in pausa e telemetria aggiornata.",
+  "bed.calibration_plate_side": "Lato del piatto da calibrare",
+  "bed.choose_calibration_side": "Scegli il lato del piatto montato"
 }

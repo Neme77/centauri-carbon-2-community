@@ -478,5 +478,7 @@
   "tuning.waiting": "En attente de confirmation…",
   "tuning.not_confirmed": "La valeur demandée n’a pas été confirmée. Vérifiez la valeur réelle avant de réessayer.",
   "tuning.manual_note": "La vitesse manuelle peut laisser le nom du mode sur l’écran inchangé. Un mode de l’écran ou le G-code peut remplacer ces valeurs.",
-  "tuning.unavailable": "Les commandes nécessitent une impression active ou en pause et une télémétrie à jour."
+  "tuning.unavailable": "Les commandes nécessitent une impression active ou en pause et une télémétrie à jour.",
+  "bed.calibration_plate_side": "Face du plateau à calibrer",
+  "bed.choose_calibration_side": "Choisir la face du plateau montée"
 }

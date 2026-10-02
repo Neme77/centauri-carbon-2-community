@@ -478,5 +478,7 @@
   "tuning.waiting": "等待确认…",
   "tuning.not_confirmed": "请求的值尚未确认。重试前请检查实际值。",
   "tuning.manual_note": "手动调整速度可能不会改变屏幕上的模式名称。屏幕模式或 G-code 可能覆盖这些值。",
-  "tuning.unavailable": "控制需要正在打印或已暂停的任务，以及最新的遥测数据。"
+  "tuning.unavailable": "控制需要正在打印或已暂停的任务，以及最新的遥测数据。",
+  "bed.calibration_plate_side": "校准打印板面",
+  "bed.choose_calibration_side": "选择当前安装的打印板面"
 }

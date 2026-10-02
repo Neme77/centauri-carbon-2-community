@@ -19,14 +19,16 @@ const history: string[] = [] // commands sent in this session, for the arrow-key
 
 export async function sendConsole(command: string) {
   command = command.trim()
-  if (!command) return
+  if (!command) return false
   try {
     await post('/api/console/command', command)
     await refreshConsole()
+    return true
   } catch (e) {
     const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     consoleLog.set(s => ({ text: `${s.text ?? ''}\n[${stamp}]  CC2 Control: command rejected — ${errText(e)}`.trim() }))
     notify(tpl('console.command_rejected_error', { error: errText(e) }), 'error')
+    return false
   }
 }
 
