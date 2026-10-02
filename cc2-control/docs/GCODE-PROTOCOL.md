@@ -42,7 +42,11 @@ does not execute the preparation stage used by ELEGOO LAN/RTM `START_PRINT`.
 
 Calibrated starts therefore reproduce the full preparation locally: they set
 the print surface and slicer-calibration flag, configure the Canvas map and
-start with `SLICE_CFG_MODEL=0`. Slicer bounds in `BED_MESH_CALIBRATE` produce
+start with `SLICE_CFG_MODEL=1`, bypassing the vendor preliminary calibration.
+`EXECUTE_CALIBRATE_FROM_SLICER=1` enables the bounded calibration command
+inside the file independently of `SLICE_CFG_MODEL`. The archived printer
+log from 2026-09-27 shows `SLICE_CFG_MODEL=0` entering `Start print calibration`
+and invoking `BED_MESH_CALIBRATE` with `from_slicer 0`. Slicer bounds in `BED_MESH_CALIBRATE` produce
 an adaptive mesh. If the selected Side A/B profile is absent or is not a full
 11x11 mesh, CC2 Control first runs a full calibration into `default` or
 `default1`, respectively, then starts the file with slicer calibration disabled
