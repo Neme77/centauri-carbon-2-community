@@ -1,0 +1,38 @@
+name: Isolated UI preview
+
+on:
+  pull_request:
+    paths:
+      - 'cc2-control/web-src/**'
+      - '.github/workflows/ui-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: cc2-control/web-src
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Navigate the isolated preview and capture each page
+        run: npm run test:preview
+        env:
+          CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
+      - name: Save screenshots for visual review
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cc2-ui-preview-screenshots
+          path: ${{ runner.temp }}/cc2-preview-screenshots
+          retention-days: 7
