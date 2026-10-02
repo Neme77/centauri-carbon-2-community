@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         # Saving only a theme must not invent a language choice.
         request = urllib.request.Request(
             endpoint, data=b'{"theme":"dark"}', method="PUT",
-            headers={"Content-Type": "application/json"})
+            headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1):
             pass
         with urllib.request.urlopen(endpoint, timeout=1) as response:
@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
 
         request = urllib.request.Request(
             endpoint, data=b'{"language":"it"}', method="PUT",
-            headers={"Content-Type": "application/json"})
+            headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
         assert preferences.read_text(encoding="ascii") == '{"language":"it","theme":"dark","quick1":"home:ALL","quick2":"system:heaters_off","quick3":"system:fans_off","quick4":"system:motors_off"}\n'
@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
 
         request = urllib.request.Request(
             endpoint, data=b'{"language":"it","theme":"light"}', method="PUT",
-            headers={"Content-Type": "application/json"})
+            headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
         assert preferences.read_text(encoding="ascii") == '{"language":"it","theme":"light","quick1":"home:ALL","quick2":"system:heaters_off","quick3":"system:fans_off","quick4":"system:motors_off"}\n'
@@ -71,7 +71,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
 
         request = urllib.request.Request(
             endpoint, data=b'{"quick1":"page:files","quick2":"light:toggle","quick3":"home:Z","quick4":"page:canvas"}', method="PUT",
-            headers={"Content-Type": "application/json"})
+            headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
         with urllib.request.urlopen(endpoint, timeout=1) as response:
@@ -79,7 +79,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
 
         invalid_quick = urllib.request.Request(
             endpoint, data=b'{"quick1":"console:arbitrary"}', method="PUT",
-            headers={"Content-Type": "application/json"})
+            headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         try:
             urllib.request.urlopen(invalid_quick, timeout=1)
             raise AssertionError("unsupported quick action accepted")
@@ -91,7 +91,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         # one it has no translation file for. "fr" is a real, shipped locale.
         request = urllib.request.Request(
             endpoint, data=b'{"language":"fr"}', method="PUT",
-            headers={"Content-Type": "application/json"})
+            headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
         with urllib.request.urlopen(endpoint, timeout=1) as response:
@@ -101,7 +101,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         for theme in ("dracula", "solarized-light"):
             request = urllib.request.Request(
                 endpoint, data=json.dumps({"theme": theme}).encode(), method="PUT",
-                headers={"Content-Type": "application/json"})
+                headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
             with urllib.request.urlopen(request, timeout=1) as response:
                 assert json.load(response) == {"saved": True}
             with urllib.request.urlopen(endpoint, timeout=1) as response:
@@ -112,7 +112,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
                                 b'{"theme":"abcdefghijklmnopqrstuvwxyz"}', b'{"theme":"nord2"}'):
             invalid = urllib.request.Request(
                 endpoint, data=malformed_theme, method="PUT",
-                headers={"Content-Type": "application/json"})
+                headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
             try:
                 urllib.request.urlopen(invalid, timeout=1)
                 raise AssertionError(f"malformed theme accepted: {malformed_theme!r}")
@@ -125,7 +125,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
                           b'{"language":"toolongcode"}', b'{"language":"e1"}'):
             invalid = urllib.request.Request(
                 endpoint, data=malformed, method="PUT",
-                headers={"Content-Type": "application/json"})
+                headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
             try:
                 urllib.request.urlopen(invalid, timeout=1)
                 raise AssertionError(f"malformed language accepted: {malformed!r}")

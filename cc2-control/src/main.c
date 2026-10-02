@@ -28,6 +28,7 @@
 #include "console.h"
 #include "control.h"
 #include "uds.h"
+#include "http_guard.h"
 
 static uds_client telemetry;
 static int z_offset_pending;
@@ -71,6 +72,7 @@ static const char *gcode_internal_root = GCODE_INTERNAL_ROOT;
 static const char *gcode_usb_root = GCODE_USB_ROOT;
 static int setup_mode = 0;
 static int service_http_port = 8081;
+static const char *http_host_alias = NULL;
 static int service_panda_port = 7125;
 static const char default_material_presets[] =
     "[{\"name\":\"PLA\",\"nozzle\":200,\"bed\":60,\"min\":190,\"max\":230},"
@@ -2379,11 +2381,15 @@ static void serve_locale(int fd, const char *web_root, const char *request_path)
 }
 
 static size_t content_length_from_headers(const char *request) {
-    const char *p = strstr(request, "Content-Length:");
-    if (!p) return 0;
-    p += strlen("Content-Length:");
-    while (*p == ' ' || *p == '\t') p++;
-    return (size_t)strtoul(p, NULL, 10);
+    char value[32];int present=http_header(request,"Content-Length",value,sizeof(value));
+    if(!present)return 0;
+    if(present<0)return SIZE_MAX;
+    size_t length=0;
+    for(const char *p=value;*p;p++){
+        if(!isdigit((unsigned char)*p)||length>(SIZE_MAX-(size_t)(*p-'0'))/10)return SIZE_MAX;
+        length=length*10+(size_t)(*p-'0');
+    }
+    return length;
 }
 
 static void setup_status_response(int fd, const mqtt_client *mqtt) {
@@ -2761,29 +2767,29 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }
 
-static int handle_client(int fd, const char *web_root, mqtt_client *mqtt, console_state *console) {
-    char request[REQUEST_MAX + 1];
-    size_t used = 0;
-    while (used < REQUEST_MAX) {
-        ssize_t received = recv(fd, request + used, REQUEST_MAX - used, 0);
-        if (received < 0) {
-            if (errno == EINTR) continue;
-            return 0;
-        }
-        if (received == 0) return 0;
-        used += (size_t)received;
-        request[used] = '\0';
-        char *end = strstr(request,"\r\n\r\n"); size_t separator=4;
-        if(!end){end=strstr(request,"\n\n");separator=2;}
-        if(end){
-            size_t header_len=(size_t)(end-request)+separator;
-            size_t needed=header_len+content_length_from_headers(request);
-            if (strncmp(request,"POST /api/gcode-files/upload?",29)==0 ||
-               strncmp(request,"POST /api/files/local ",22)==0 ||
-               strncmp(request,"POST /api/files/local?",22)==0) break;
-            if(needed>REQUEST_MAX || used>=needed) break;
-        }
-    }
+#define HTTP_PENDING_MAX 8
+typedef struct {
+    int fd;
+    size_t used;
+    struct timespec started;
+    char request[REQUEST_MAX+1];
+} http_pending;
+
+static int http_request_complete(const char *request,size_t used){
+    const char *end=strstr(request,"\r\n\r\n");size_t separator=4;
+    if(!end){end=strstr(request,"\n\n");separator=2;}
+    if(used==REQUEST_MAX)return 1;
+    if(!end)return 0;
+    if(!strncmp(request,"POST /api/gcode-files/upload?",29)||
+       !strncmp(request,"POST /api/files/local ",22)||
+       !strncmp(request,"POST /api/files/local?",22))return 1;
+    size_t header=(size_t)(end-request)+separator;
+    size_t length=content_length_from_headers(request);
+    if(length>REQUEST_MAX-header)return -1;
+    return used>=header+length;
+}
+
+static int handle_client(int fd,char *request,size_t used,const char *web_root,mqtt_client *mqtt,console_state *console){
     if (used == REQUEST_MAX) {
         const char *body = "Request headers too large\n";
         respond(fd, 431, "Request Header Fields Too Large",
@@ -2792,6 +2798,10 @@ static int handle_client(int fd, const char *web_root, mqtt_client *mqtt, consol
     }
     char method[16], path[256], version[16];
     if (sscanf(request, "%15s %255s %15s", method, path, version) != 3) return 0;
+    if(!http_browser_allowed(fd,request,method,path,service_http_port,http_host_alias)){
+        const char *error="{\"error\":\"Untrusted HTTP host or browser origin\"}\n";
+        respond(fd,403,"Forbidden","application/json; charset=utf-8",error,strlen(error));return 0;
+    }
     char *query = strchr(path, '?');
     if (query) *query++ = '\0';
     char *header_end=strstr(request,"\r\n\r\n"); size_t separator=4;
@@ -2890,6 +2900,7 @@ int main(int argc, char **argv) {
     const char *uds_path = "/tmp/elegoo_uds";
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--http-host") == 0 && i + 1 < argc) http_host_alias = argv[++i];
         else if (strcmp(argv[i], "--panda-port") == 0 && i + 1 < argc) panda_port = atoi(argv[++i]);
         else if (strcmp(argv[i], "--web-root") == 0 && i + 1 < argc) web_root = argv[++i];
         else if (strcmp(argv[i], "--uds-socket") == 0 && i + 1 < argc) uds_path = argv[++i];
@@ -2951,6 +2962,9 @@ int main(int argc, char **argv) {
     printf("CC2 Control " CC2_CONTROL_VERSION " + Panda bridge listening on 0.0.0.0:%d (Panda port %d)\n", port, panda_port);
     fflush(stdout);
 
+    http_pending *pending=calloc(HTTP_PENDING_MAX,sizeof(*pending));
+    if(!pending){perror("HTTP receive pool");panda_stop(&panda);close(server);mqtt_close(&mqtt);console_destroy(&console);return 1;}
+    for(int i=0;i<HTTP_PENDING_MAX;i++)pending[i].fd=-1;
     while (running) {
         mqtt_tick(&mqtt);
         uds_tick(&telemetry,uds_path);
@@ -2959,11 +2973,35 @@ int main(int argc, char **argv) {
         int max_fd=server;
         if(mqtt.fd>=0){FD_SET(mqtt.fd,&read_set);if(mqtt.fd>max_fd)max_fd=mqtt.fd;}
         if(telemetry.fd>=0){FD_SET(telemetry.fd,&read_set);if(telemetry.fd>max_fd)max_fd=telemetry.fd;}
-        struct timeval wait={1,0};
+        int receiving=0;
+        for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
+            FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
+        }
+        struct timeval wait={receiving?0:1,receiving?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
         if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
+        struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
+        for(int i=0;i<HTTP_PENDING_MAX;i++){
+            http_pending *p=&pending[i];if(p->fd<0)continue;
+            double age=(double)(now.tv_sec-p->started.tv_sec)+(now.tv_nsec-p->started.tv_nsec)/1e9;
+            if(age>=2){close(p->fd);p->fd=-1;continue;}
+            if(!FD_ISSET(p->fd,&read_set))continue;
+            ssize_t n=recv(p->fd,p->request+p->used,REQUEST_MAX-p->used,0);
+            if(n<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR))continue;
+            if(n<=0){close(p->fd);p->fd=-1;continue;}
+            p->used+=(size_t)n;p->request[p->used]=0;
+            int complete=http_request_complete(p->request,p->used);if(!complete)continue;
+            int fd=p->fd;p->fd=-1;
+            int flags=fcntl(fd,F_GETFL,0);
+            if(flags<0||fcntl(fd,F_SETFL,flags&~O_NONBLOCK)<0){close(fd);continue;}
+            if(complete<0){
+                const char *error="Request body too large\n";
+                respond(fd,413,"Payload Too Large","text/plain; charset=utf-8",error,strlen(error));close(fd);
+            }else if(!handle_client(fd,p->request,p->used,web_root,&mqtt,&console))close(fd);
+        }
+        if(first_run_restart_requested){running=0;continue;}
         if(!FD_ISSET(server,&read_set))continue;
         int client = accept(server, NULL, NULL);
         if (client < 0) {
@@ -2975,12 +3013,19 @@ int main(int argc, char **argv) {
         timeout.tv_usec = 0;
         (void)setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
         (void)setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-        if(!handle_client(client, web_root, &mqtt, &console)) close(client);
+        int slot=-1;
+        for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd<0){slot=i;break;}
+        int flags=fcntl(client,F_GETFL,0);
+        if(slot<0||client>=FD_SETSIZE||flags<0||fcntl(client,F_SETFL,flags|O_NONBLOCK)<0){close(client);continue;}
+        pending[slot].fd=client;pending[slot].used=0;pending[slot].request[0]=0;
+        clock_gettime(CLOCK_MONOTONIC,&pending[slot].started);
         if (first_run_restart_requested) {
             fprintf(stderr, "First-run configuration saved; requesting a clean CC2 Control restart\n");
             running = 0;
         }
     }
+    for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0)close(pending[i].fd);
+    free(pending);
     uds_close(&telemetry);
     panda_stop(&panda);
     mqtt_close(&mqtt);

@@ -79,3 +79,23 @@ including during printing, with Z homed. The backend owns the reference across
 browser reloads and clients. A confirmed external offset change establishes a new
 reference; an unconfirmed command stays blocked. Restarting CC2 Control starts
 a new session from current readback. Nothing is written using SAVE_CONFIG.
+
+## Browser host and origin protection
+
+CC2 Control accepts its local IP address, the printer hostname (also with `.local`),
+and loopback `localhost`, with the HTTP service port. OrcaSlicer remains supported. Mutating API requests require the
+`X-CC2-Request: 1` header supplied by the bundled UI; CLI clients must supply
+this header too. Native Orca uploads to `/api/files/local` are the sole exception
+and still require operator confirmation before printing. Browser commands also
+require the same origin. Cross-site requests are
+rejected; the service does not enable CORS.
+
+For a trusted DNS alias, add `--http-host printer.example.local` to the CC2
+Control launcher arguments. Supply only the hostname, without a scheme or port.
+This setting does not provide authentication for other clients on the LAN.
+
+HTTP reception uses eight bounded request slots and a two-second total receive
+deadline. Incomplete headers or small command bodies do not monopolize the
+MQTT/UDS loop. Upload bodies continue in their existing bounded workers. This
+does not make the emergency control a substitute for the printer's physical
+stop: response transmission and firmware operations can still take time.
