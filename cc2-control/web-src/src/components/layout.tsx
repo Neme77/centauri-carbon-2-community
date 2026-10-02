@@ -22,6 +22,8 @@ import { type Key, t, tState, tpl } from '@/lib/i18n'
 import { control, notify, toast } from '@/lib/api'
 import { health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
+// Same query as the compact layout in index.css.
+const COMPACT = '(max-width: 767px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape)'
 type NavIcon = typeof Gauge | typeof CanvasIcon
 const items: [Page, NavIcon, Key][] = [
   ['dashboard', Gauge, 'app.dashboard'],
@@ -99,7 +101,7 @@ export const Sidebar = () => {
       if (aside.current?.contains(document.activeElement)) document.getElementById('cc2-menu-toggle')?.focus()
       return
     }
-    const media = matchMedia('(max-width: 767px) and (orientation: portrait)')
+    const media = matchMedia(COMPACT)
     const close = () => mobileMenu.set({ open: false })
     const closeOnEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close()
