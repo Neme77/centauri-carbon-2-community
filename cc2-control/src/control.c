@@ -15,9 +15,26 @@ static int valid_material_name(const char *name){
 }
 static int valid_object_name(const char *name){
     size_t n=strlen(name);if(n<1||n>80)return 0;
-    for(size_t i=0;i<n;i++){
-        unsigned char ch=(unsigned char)name[i];
-        if(!isalnum(ch)&&ch!='_'&&ch!='-'&&ch!='.'&&ch!=' ')return 0;
+    for(size_t i=0;i<n;){
+        unsigned char ch=(unsigned char)name[i++];
+        if(ch<128){
+            if(!isalnum(ch)&&ch!='_'&&ch!='-'&&ch!='.'&&ch!=' '&&ch!='('&&ch!=')')return 0;
+            continue;
+        }
+        unsigned int value;size_t extra;
+        if(ch>=0xc2&&ch<=0xdf){value=ch&31;extra=1;}
+        else if(ch>=0xe0&&ch<=0xef){value=ch&15;extra=2;}
+        else if(ch>=0xf0&&ch<=0xf4){value=ch&7;extra=3;}
+        else return 0;
+        if(extra>n-i)return 0;
+        for(size_t k=0;k<extra;k++){
+            unsigned char next=(unsigned char)name[i++];
+            if((next&0xc0)!=0x80)return 0;
+            value=(value<<6)|(next&63);
+        }
+        if((extra==1&&value<0x80)||(extra==2&&value<0x800)||(extra==3&&value<0x10000)||
+           value>0x10ffff||(value>=0xd800&&value<=0xdfff)||(value>=0x80&&value<=0x9f)||
+           value==0x2028||value==0x2029)return 0;
     }
     return 1;
 }
@@ -80,7 +97,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Z axis must be homed before live offset adjustment");
         if(fabs(value)<0.0005||fabs(value)>0.5001)
             return reject(reason,reason_cap,"Session Z offset undo exceeds the protected range");
-        snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1",value);
+        snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1 MOVE_SPEED=5",value);
         return 1;
     }
     if(sscanf(action,"zoffset:adjust:%lf",&value)==1){
@@ -90,7 +107,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Z axis must be homed before live offset adjustment");
         if(fabs(value)<0.0005||fabs(value)>0.0501)
             return reject(reason,reason_cap,"Each Z offset adjustment must be 0.01 or 0.05 mm");
-        snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1",value);
+        snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1 MOVE_SPEED=5",value);
         return 1;
     }
     if(sscanf(action,"%31[^:]:%31[^:]:%lf",kind,a,&value)==3&&strcmp(kind,"move")==0){
