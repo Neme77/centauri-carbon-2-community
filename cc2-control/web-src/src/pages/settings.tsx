@@ -44,7 +44,7 @@ const Field = ({ label, help, htmlFor, children }: { label: Key; help?: Key; htm
       <span class="font-semibold">{t(label)}</span>
     )}
     {children}
-    {help && <span class="text-[10px] text-muted cc2-md:col-start-2">{t(help)}</span>}
+    {help && <span class="text-xs text-muted cc2-md:col-start-2">{t(help)}</span>}
   </div>
 )
 const Kv = ({ k, text, v }: { k?: Key; text?: string; v: any }) => (
@@ -197,7 +197,7 @@ const Appearance = () => {
     setLanguage(detectLanguage(), true)
     notify(t('settings.interface_preferences_restored'))
   }
-  const lab = 'text-[11px] font-semibold'
+  const lab = 'text-xs font-semibold'
   return (
     <>
       <Card>

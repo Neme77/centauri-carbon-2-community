@@ -91,6 +91,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 
 /* Tailwind's reset gives buttons the default arrow: restore the pointer on everything clickable (utilities still win). */
 @layer base {
+  small { font-size: 12px; } /* Tailwind's reset makes it 80% of its parent, which falls under 10 px inside text-xs */
   button:not(:disabled),
   select:not(:disabled),
   input:is([type="checkbox"], [type="radio"], [type="color"], [type="file"]):not(:disabled) {
