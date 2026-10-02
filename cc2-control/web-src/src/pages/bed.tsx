@@ -92,7 +92,7 @@ const MeshCard = () => {
   }, [points, view])
 
   const Stat = ({ dot, label, val }: { dot: any; label: Key; val: string }) => (
-    <div class="rounded-lg border border-edge bg-field/60 p-2.5">
+    <div class="cc2-mesh-stat rounded-lg border border-edge bg-field/60 p-2.5">
       <span class="flex items-center gap-2 text-xs">
         {dot}
         {t(label)}
@@ -257,7 +257,7 @@ const MeshCard = () => {
 
 const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => (
   <>
-    <div class="mt-3 grid gap-3 cc2-sm:grid-cols-[1fr_1.15fr]">
+    <div class="cc2-mesh-actions mt-3 grid gap-3 cc2-sm:grid-cols-[1fr_1.15fr]">
       {[
         ['folder', 'bed.load_current_mesh', 'bed.read_the_saved_mesh_from_printer', reload, false],
         [

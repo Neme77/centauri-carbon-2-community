@@ -215,7 +215,7 @@
   "control.chamber_fan": "Ventola camera",
   "control.current_position": "Posizione corrente",
   "control.deleted_name": "{name} eliminato.",
-  "control.emergency_stop_is_always_available": "L'arresto di emergenza è sempre disponibile nella barra laterale.",
+  "control.emergency_stop_is_always_available": "L'arresto di emergenza è sempre disponibile nella barra superiore.",
   "control.extrude": "Estrudi",
   "control.extruder": "Estrusore",
   "control.extrusion_disabled": "Estrusione disabilitata",

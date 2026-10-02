@@ -149,7 +149,7 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
       />
       <div
         class={cn(
-          'relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
+          'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
           tall ? 'min-h-80' : 'aspect-video'
         )}
       >
