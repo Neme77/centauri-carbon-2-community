@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include <sys/statvfs.h>
 #include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -27,8 +28,21 @@
 #include "console.h"
 #include "control.h"
 #include "uds.h"
+#include "http_guard.h"
 
 static uds_client telemetry;
+static int z_offset_pending;
+static double z_offset_expected;
+static int z_offset_session;
+static double z_offset_reference;
+
+static int z_offset_readback(double *value){
+    if(!uds_value(&telemetry,U_Z_OFFSET,value))return 0;
+    if(z_offset_pending&&fabs(*value-z_offset_expected)<0.0005)z_offset_pending=0;
+    else if(!z_offset_pending&&z_offset_session&&fabs(*value-z_offset_expected)>=0.0005)
+        z_offset_session=0; /* Firmware/display/G-code changed the reference outside our controls. */
+    return 1;
+}
 
 #define REQUEST_MAX 12288
 #define FILE_UPLOAD_MAX (128UL * 1024UL * 1024UL)
@@ -58,6 +72,7 @@ static const char *gcode_internal_root = GCODE_INTERNAL_ROOT;
 static const char *gcode_usb_root = GCODE_USB_ROOT;
 static int setup_mode = 0;
 static int service_http_port = 8081;
+static const char *http_host_alias = NULL;
 static int service_panda_port = 7125;
 static const char default_material_presets[] =
     "[{\"name\":\"PLA\",\"nozzle\":200,\"bed\":60,\"min\":190,\"max\":230},"
@@ -283,6 +298,11 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
 
 static void json_number(char *out, size_t cap, int have, double value) {
     if (have) snprintf(out, cap, "%.1f", value);
+    else snprintf(out, cap, "null");
+}
+
+static void json_z_offset(char *out, size_t cap, int have, double value) {
+    if (have) snprintf(out, cap, "%.3f", fabs(value) < 0.0005 ? 0.0 : value);
     else snprintf(out, cap, "null");
 }
 
@@ -1873,6 +1893,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_number(flow_percent,sizeof(flow_percent),have_flow,have_flow?tune*100:0);
     int have_velocity=uds_value(&telemetry,U_LIVE_SPEED,&tune);
     json_number(live_velocity,sizeof(live_velocity),have_velocity,have_velocity?tune:0);
+    char zoffset[32],zreference[32],zadjustment[32];double offset;
+    int have_offset=z_offset_readback(&offset);
+    json_z_offset(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
+    double reference=z_offset_session?z_offset_reference:(have_offset?offset:0);
+    json_z_offset(zreference,sizeof(zreference),have_offset,reference);
+    json_z_offset(zadjustment,sizeof(zadjustment),have_offset,have_offset?offset-reference:0);
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"
@@ -1883,11 +1909,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
+        "\"z_offset\":{\"value\":%s,\"pending\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
-        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
+        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",zreference,zadjustment,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
@@ -1896,7 +1923,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
 static void uds_response(int fd){
     static const char *names[U_FIELDS]={"nozzle_temperature","nozzle_target","bed_temperature","bed_target",
         "controller_fan","heater_fan","part_fan","fan1","controller_rpm","heater_rpm","part_rpm","fan1_rpm",
-        "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed"};
+        "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed","z_offset"};
     char body[2048];json_builder b={body,0,sizeof(body),0};
     json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"connections\":%lu,\"disconnects\":%lu,\"last_disconnect\":\"%s\",\"last_errno\":%d,\"ignored_messages\":%lu,\"values\":{",
         telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages,
@@ -2372,11 +2399,15 @@ static void serve_locale(int fd, const char *web_root, const char *request_path)
 }
 
 static size_t content_length_from_headers(const char *request) {
-    const char *p = strstr(request, "Content-Length:");
-    if (!p) return 0;
-    p += strlen("Content-Length:");
-    while (*p == ' ' || *p == '\t') p++;
-    return (size_t)strtoul(p, NULL, 10);
+    char value[32];int present=http_header(request,"Content-Length",value,sizeof(value));
+    if(!present)return 0;
+    if(present<0)return SIZE_MAX;
+    size_t length=0;
+    for(const char *p=value;*p;p++){
+        if(!isdigit((unsigned char)*p)||length>(SIZE_MAX-(size_t)(*p-'0'))/10)return SIZE_MAX;
+        length=length*10+(size_t)(*p-'0');
+    }
+    return length;
 }
 
 static void setup_status_response(int fd, const mqtt_client *mqtt) {
@@ -2722,6 +2753,21 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error));return;
     }
     memcpy(action,body,body_len);action[body_len]='\0';
+    int z_action=!strncmp(action,"zoffset:",8);
+    double z_next=0,z_reference=0;
+    if(z_action){
+        double current,delta;int end=0;
+        const char *argument=!strncmp(action,"zoffset:adjust:",15)?action+15:
+            !strncmp(action,"zoffset:undo:",13)?action+13:NULL;
+        int valid=argument&&sscanf(argument,"%lf%n",&delta,&end)==1&&!argument[end]&&isfinite(delta);
+        if(!valid||!z_offset_readback(&current)||z_offset_pending||
+           fabs((current+delta)-(z_offset_session?z_offset_reference:current))>0.5001||
+           (!strncmp(action,"zoffset:undo:",13)&&fabs((current+delta)-(z_offset_session?z_offset_reference:current))>0.0005)){
+            const char *error="{\"accepted\":false,\"error\":\"Z offset requires fresh readback, confirmed previous motion and a session adjustment within +/-0.50 mm of the printer reference\"}\n";
+            respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+        }
+        z_next=current+delta;z_reference=z_offset_session?z_offset_reference:current;
+    }
     double tune_value;
     if(strncmp(action,"tune:",5)==0&&
        !uds_value(&telemetry,strncmp(action,"tune:speed:",11)==0?U_SPEED_FACTOR:U_FLOW_FACTOR,&tune_value)){
@@ -2734,33 +2780,34 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
+    if(z_action){z_offset_reference=z_reference;z_offset_session=1;z_offset_expected=z_next;z_offset_pending=1;}
     const char *ok="{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }
 
-static int handle_client(int fd, const char *web_root, mqtt_client *mqtt, console_state *console) {
-    char request[REQUEST_MAX + 1];
-    size_t used = 0;
-    while (used < REQUEST_MAX) {
-        ssize_t received = recv(fd, request + used, REQUEST_MAX - used, 0);
-        if (received < 0) {
-            if (errno == EINTR) continue;
-            return 0;
-        }
-        if (received == 0) return 0;
-        used += (size_t)received;
-        request[used] = '\0';
-        char *end = strstr(request,"\r\n\r\n"); size_t separator=4;
-        if(!end){end=strstr(request,"\n\n");separator=2;}
-        if(end){
-            size_t header_len=(size_t)(end-request)+separator;
-            size_t needed=header_len+content_length_from_headers(request);
-            if (strncmp(request,"POST /api/gcode-files/upload?",29)==0 ||
-               strncmp(request,"POST /api/files/local ",22)==0 ||
-               strncmp(request,"POST /api/files/local?",22)==0) break;
-            if(needed>REQUEST_MAX || used>=needed) break;
-        }
-    }
+#define HTTP_PENDING_MAX 8
+typedef struct {
+    int fd;
+    size_t used;
+    struct timespec started;
+    char request[REQUEST_MAX+1];
+} http_pending;
+
+static int http_request_complete(const char *request,size_t used){
+    const char *end=strstr(request,"\r\n\r\n");size_t separator=4;
+    if(!end){end=strstr(request,"\n\n");separator=2;}
+    if(used==REQUEST_MAX)return 1;
+    if(!end)return 0;
+    if(!strncmp(request,"POST /api/gcode-files/upload?",29)||
+       !strncmp(request,"POST /api/files/local ",22)||
+       !strncmp(request,"POST /api/files/local?",22))return 1;
+    size_t header=(size_t)(end-request)+separator;
+    size_t length=content_length_from_headers(request);
+    if(length>REQUEST_MAX-header)return -1;
+    return used>=header+length;
+}
+
+static int handle_client(int fd,char *request,size_t used,const char *web_root,mqtt_client *mqtt,console_state *console){
     if (used == REQUEST_MAX) {
         const char *body = "Request headers too large\n";
         respond(fd, 431, "Request Header Fields Too Large",
@@ -2769,6 +2816,10 @@ static int handle_client(int fd, const char *web_root, mqtt_client *mqtt, consol
     }
     char method[16], path[256], version[16];
     if (sscanf(request, "%15s %255s %15s", method, path, version) != 3) return 0;
+    if(!http_browser_allowed(fd,request,method,path,service_http_port,http_host_alias)){
+        const char *error="{\"error\":\"Untrusted HTTP host or browser origin\"}\n";
+        respond(fd,403,"Forbidden","application/json; charset=utf-8",error,strlen(error));return 0;
+    }
     char *query = strchr(path, '?');
     if (query) *query++ = '\0';
     char *header_end=strstr(request,"\r\n\r\n"); size_t separator=4;
@@ -2867,6 +2918,7 @@ int main(int argc, char **argv) {
     const char *uds_path = "/tmp/elegoo_uds";
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--http-host") == 0 && i + 1 < argc) http_host_alias = argv[++i];
         else if (strcmp(argv[i], "--panda-port") == 0 && i + 1 < argc) panda_port = atoi(argv[++i]);
         else if (strcmp(argv[i], "--web-root") == 0 && i + 1 < argc) web_root = argv[++i];
         else if (strcmp(argv[i], "--uds-socket") == 0 && i + 1 < argc) uds_path = argv[++i];
@@ -2928,6 +2980,9 @@ int main(int argc, char **argv) {
     printf("CC2 Control " CC2_CONTROL_VERSION " + Panda bridge listening on 0.0.0.0:%d (Panda port %d)\n", port, panda_port);
     fflush(stdout);
 
+    http_pending *pending=calloc(HTTP_PENDING_MAX,sizeof(*pending));
+    if(!pending){perror("HTTP receive pool");panda_stop(&panda);close(server);mqtt_close(&mqtt);console_destroy(&console);return 1;}
+    for(int i=0;i<HTTP_PENDING_MAX;i++)pending[i].fd=-1;
     while (running) {
         mqtt_tick(&mqtt);
         uds_tick(&telemetry,uds_path);
@@ -2936,11 +2991,35 @@ int main(int argc, char **argv) {
         int max_fd=server;
         if(mqtt.fd>=0){FD_SET(mqtt.fd,&read_set);if(mqtt.fd>max_fd)max_fd=mqtt.fd;}
         if(telemetry.fd>=0){FD_SET(telemetry.fd,&read_set);if(telemetry.fd>max_fd)max_fd=telemetry.fd;}
-        struct timeval wait={1,0};
+        int receiving=0;
+        for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
+            FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
+        }
+        struct timeval wait={receiving?0:1,receiving?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
         if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
+        struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
+        for(int i=0;i<HTTP_PENDING_MAX;i++){
+            http_pending *p=&pending[i];if(p->fd<0)continue;
+            double age=(double)(now.tv_sec-p->started.tv_sec)+(now.tv_nsec-p->started.tv_nsec)/1e9;
+            if(age>=2){close(p->fd);p->fd=-1;continue;}
+            if(!FD_ISSET(p->fd,&read_set))continue;
+            ssize_t n=recv(p->fd,p->request+p->used,REQUEST_MAX-p->used,0);
+            if(n<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR))continue;
+            if(n<=0){close(p->fd);p->fd=-1;continue;}
+            p->used+=(size_t)n;p->request[p->used]=0;
+            int complete=http_request_complete(p->request,p->used);if(!complete)continue;
+            int fd=p->fd;p->fd=-1;
+            int flags=fcntl(fd,F_GETFL,0);
+            if(flags<0||fcntl(fd,F_SETFL,flags&~O_NONBLOCK)<0){close(fd);continue;}
+            if(complete<0){
+                const char *error="Request body too large\n";
+                respond(fd,413,"Payload Too Large","text/plain; charset=utf-8",error,strlen(error));close(fd);
+            }else if(!handle_client(fd,p->request,p->used,web_root,&mqtt,&console))close(fd);
+        }
+        if(first_run_restart_requested){running=0;continue;}
         if(!FD_ISSET(server,&read_set))continue;
         int client = accept(server, NULL, NULL);
         if (client < 0) {
@@ -2952,12 +3031,19 @@ int main(int argc, char **argv) {
         timeout.tv_usec = 0;
         (void)setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
         (void)setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-        if(!handle_client(client, web_root, &mqtt, &console)) close(client);
+        int slot=-1;
+        for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd<0){slot=i;break;}
+        int flags=fcntl(client,F_GETFL,0);
+        if(slot<0||client>=FD_SETSIZE||flags<0||fcntl(client,F_SETFL,flags|O_NONBLOCK)<0){close(client);continue;}
+        pending[slot].fd=client;pending[slot].used=0;pending[slot].request[0]=0;
+        clock_gettime(CLOCK_MONOTONIC,&pending[slot].started);
         if (first_run_restart_requested) {
             fprintf(stderr, "First-run configuration saved; requesting a clean CC2 Control restart\n");
             running = 0;
         }
     }
+    for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0)close(pending[i].fd);
+    free(pending);
     uds_close(&telemetry);
     panda_stop(&panda);
     mqtt_close(&mqtt);
