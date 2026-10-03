@@ -33,7 +33,7 @@ export const toggleMenu = () => {
 export const printer = store({ data: null as any, rev: 0, ok: true })
 export const health = store({ data: null as any, setup: null as any })
 export const consoleLog = store({ text: null as string | null }) // null: nothing received yet, the page shows its own placeholder
-export const screwText = store({ text: '' })
+export const screwText = store({ text: '', minGeneration: 0 })
 
 export const thermalTimes = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
 export const thermalHistory = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
@@ -88,10 +88,14 @@ export async function refreshSetup() {
 
 export async function refreshConsole() {
   try {
-    const out = String((await request('/api/console')).output || '')
+    const status = await request('/api/console')
+    const out = String(status.output || '')
+    if (status.generation >= screwText.get().minGeneration) {
+      const measured = String(status.command || '').includes('SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE')
+      screwText.set({ text: measured && status.completed && status.success ? out : '' })
+    }
     if ((out || null) !== consoleLog.get().text) {
       consoleLog.set({ text: out || null })
-      screwText.set({ text: out })
     }
   } catch {
     /* offline */

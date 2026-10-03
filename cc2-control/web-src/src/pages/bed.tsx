@@ -15,7 +15,7 @@ import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
 import { microns, screwPlan, screwValues } from '@/lib/screws'
-import { usePoll } from '@/lib/poll'
+import { poll, usePoll } from '@/lib/poll'
 import { nav, openPage, refreshConsole, screwText } from '@/lib/state'
 import { sendConsole } from '@/pages/console'
 
@@ -255,57 +255,97 @@ const MeshCard = () => {
   )
 }
 
-const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => (
-  <>
-    <div class="cc2-mesh-actions mt-3 grid gap-3 cc2-sm:grid-cols-[1fr_1.15fr]">
-      {[
-        ['folder', 'bed.load_current_mesh', 'bed.read_the_saved_mesh_from_printer', reload, false],
-        [
-          'bolt',
-          'bed.run_bed_mesh_calibration',
-          'bed.start_a_protected_calibration_when',
-          async () => {
-            if (!(await ask(t('bed.start_a_new_bed_mesh_calibration')))) return
-            await sendConsole('BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60')
-            // The console worker knows exactly when the calibration command has finished.
-            // Poll only that local status while calibration is running, then fetch the new mesh once.
-            const deadline = Date.now() + 15 * 60_000
-            while (Date.now() < deadline) {
-              await new Promise(resolve => setTimeout(resolve, 2500))
+const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => {
+  const [side, setSide] = useState('')
+  const [calibrating, setCalibrating] = useState(false)
+  const lock = useRef(false)
+  const cancelWatch = useRef(() => {})
+  useEffect(() => () => cancelWatch.current(), [])
+  return (
+    <>
+      <label class="mt-3 flex items-center gap-2 text-xs">
+        {t('bed.calibration_plate_side')}
+        <Select value={side} disabled={calibrating} onChange={e => setSide(e.currentTarget.value)}>
+          <option value="">{t('bed.choose_calibration_side')}</option>
+          {PROFILES.slice(0, 2).map(([profile, label]) => (
+            <option key={profile} value={profile}>
+              {t(label)}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <div class="cc2-mesh-actions mt-3 grid gap-3 cc2-sm:grid-cols-[1fr_1.15fr]">
+        {[
+          ['folder', 'bed.load_current_mesh', 'bed.read_the_saved_mesh_from_printer', reload, false],
+          [
+            'bolt',
+            'bed.run_bed_mesh_calibration',
+            'bed.start_a_protected_calibration_when',
+            async () => {
+              if (!side || lock.current) return
+              lock.current = true
+              setCalibrating(true)
               try {
-                const status = await request('/api/console')
-                if (status?.command !== 'BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60') return
-                if (status?.completed) {
-                  if (status.success) reload()
-                  return
-                }
-              } catch {
-                return
+                const label = t(side === 'default1' ? 'bed.side_b_default1' : 'bed.side_a_default')
+                if (!(await ask(`${t('bed.start_a_new_bed_mesh_calibration')}\n\n${label}`))) return
+                const command = `BED_MESH_CALIBRATE PROFILE=${side} BED_TEMP=60`
+                if (!(await sendConsole(command))) return
+                // The console worker knows exactly when the calibration command has finished.
+                // Poll only that local status while calibration is running, then fetch the new mesh once.
+                await new Promise<void>(resolve => {
+                  const deadline = Date.now() + 15 * 60_000
+                  let active = true
+                  const stop = poll(async () => {
+                    if (Date.now() >= deadline) return finish()
+                    try {
+                      const status = await request('/api/console')
+                      if (!active) return
+                      if (status?.command !== command) return finish()
+                      if (status?.completed) {
+                        if (status.success) reload()
+                        finish()
+                      }
+                    } catch {
+                      finish()
+                    }
+                  }, 2500)
+                  const finish = () => {
+                    active = false
+                    stop()
+                    resolve()
+                  }
+                  cancelWatch.current = finish
+                })
+              } finally {
+                lock.current = false
+                setCalibrating(false)
               }
-            }
-          },
-          true,
-        ],
-      ].map(([icon, title, sub, fn, primary]: any) => (
-        <Button
-          key={title}
-          variant={primary ? 'primary' : 'default'}
-          class="h-auto items-start justify-start gap-3.5 p-3 text-left"
-          onClick={fn}
-        >
-          <Icon n={icon} class="size-7" />
-          <span>
-            <strong class="block text-sm">{t(title)}</strong>
-            <small class="mt-1 block whitespace-normal text-xs font-normal">{t(sub)}</small>
-          </span>
-        </Button>
-      ))}
-    </div>
-    <Notice>{note}</Notice>
-  </>
-)
+            },
+            true,
+          ],
+        ].map(([icon, title, sub, fn, primary]: any) => (
+          <Button
+            key={title}
+            variant={primary ? 'primary' : 'default'}
+            class="h-auto items-start justify-start gap-3.5 p-3 text-left"
+            onClick={fn}
+            disabled={primary && (!side || calibrating)}
+          >
+            <Icon n={icon} class="size-7" />
+            <span>
+              <strong class="block text-sm">{t(title)}</strong>
+              <small class="mt-1 block whitespace-normal text-xs font-normal">{t(sub)}</small>
+            </span>
+          </Button>
+        ))}
+      </div>
+      <Notice>{note}</Notice>
+    </>
+  )
+}
 
 const Screws = () => {
+  const measuring = useRef(false)
   usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
   const values = screwValues(screwText.use().text)
   const plan = values ? screwPlan(values) : null
@@ -435,7 +475,18 @@ const Screws = () => {
       <div class="mt-3">
         <Button
           onClick={async () => {
-            if (await control('screws:measure', t('bed.start_the_four_screw_load_cell'))) openPage('bed', true)
+            if (measuring.current) return
+            measuring.current = true
+            try {
+              if (!(await ask(t('bed.start_the_four_screw_load_cell')))) return
+              const previous = await request('/api/console')
+              screwText.set({ text: '', minGeneration: Number(previous.generation) + 1 })
+              if (await control('screws:measure')) openPage('bed', true)
+            } catch (e) {
+              notify(errText(e), 'error')
+            } finally {
+              measuring.current = false
+            }
           }}
         >
           <Icon n="target" class="size-5" />
