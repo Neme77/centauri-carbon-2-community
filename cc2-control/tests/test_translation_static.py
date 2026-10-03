@@ -50,6 +50,11 @@ for locale, spot_checks in {
         "console.unlock_console_to_send_g_code":
             "解锁控制台以发送 G-code…",
     },
+    "ru": {
+        "job.object_exclusion": "Исключение объектов",
+        "console.unlock_console_to_send_g_code":
+            "Разблокируйте консоль, чтобы отправлять G-code…",
+    },
 }.items():
     data = json.loads((LOCALES / f"{locale}.json").read_text(encoding="utf-8"))
     for key, expected in spot_checks.items():

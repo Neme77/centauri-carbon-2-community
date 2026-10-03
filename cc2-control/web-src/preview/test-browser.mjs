@@ -84,7 +84,7 @@ try {
   }
   await page.getByRole('tab').nth(2).click()
   const languages = page.locator('main select:has(option[value="zh"])')
-  for (const lang of ['en', 'fr', 'zh', 'it']) {
+  for (const lang of ['en', 'fr', 'zh', 'ru', 'it']) {
     await languages.selectOption(lang)
     await page.waitForFunction(lang => document.documentElement.lang === lang, lang)
   }
