@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'cc2-control/web-src/**'
+      - 'cc2-control/src/**'
       - '.github/workflows/ui-preview.yml'
   workflow_dispatch:
 
@@ -29,6 +30,8 @@ jobs:
         run: npm run test:preview
         env:
           CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
+      - name: Verify recovery confirmation and native G-code download
+        run: npm run test:recovery
       - name: Save screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v6

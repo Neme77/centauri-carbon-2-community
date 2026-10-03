@@ -61,8 +61,8 @@ with tempfile.TemporaryDirectory(prefix="cc2-smoke-") as temporary:
         else:
             raise AssertionError("cc2-control did not start listening")
 
-        def call(headers, method="GET", payload=None):
-            req = urllib.request.Request(base + "/api/preferences", data=payload, headers=headers, method=method)
+        def call(headers, method="GET", payload=None, endpoint="/api/preferences"):
+            req = urllib.request.Request(base + endpoint, data=payload, headers=headers, method=method)
             try:
                 with urllib.request.urlopen(req, timeout=3) as response:
                     return response.status
@@ -80,6 +80,10 @@ with tempfile.TemporaryDirectory(prefix="cc2-smoke-") as temporary:
         assert call({"Content-Type": "application/json"}, "PUT", payload) == 403
         assert call({"X-CC2-Request": "1", "Content-Type": "application/json"}, "PUT", payload) == 200
         assert call({"Sec-Fetch-Site": "same-origin"}) == 200
+        assert call({}, "POST", b"REBOOT_AFTER_EMERGENCY", "/api/recovery/reboot") == 403
+        assert call({"X-CC2-Request": "1"}, "POST", b"REBOOT_AFTER_EMERGENCY", "/api/recovery/reboot") == 409
+        assert call({"Origin": "http://attacker.example"}, endpoint="/api/gcode-files/download?storage=internal&file=part.gcode") == 403
+        assert call({}, endpoint="/api/gcode-files/download?storage=internal&file=../part.gcode") == 400
         with socket.create_connection(("127.0.0.1", port), timeout=3) as fragmented:
             fragmented.sendall((f"PUT /api/preferences HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\ncontent-length: {len(payload)}\r\nX-CC2-Request: 1\r\n\r\n").encode() + payload[:3])
             assert call({}) == 200
