@@ -13,8 +13,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_COMMIT = '00f1f897496ab913a2419b7c2451f69265513a25'
-SOURCE_SHA256 = '951dd2a6c3627d83b6dca1c226e6bf0251a52c061a67ccdac07e010a7898101a'
+SOURCE_COMMIT = '22970e0a106cd7aa6f30fdd894da00977926276c'
+SOURCE_SHA256 = '547c0cf07b4d88a1d66ecbf8f892b79c6383e9f83cad8b312ea2cb3140a159e1'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
@@ -35,6 +35,19 @@ def validate_arm_elf(path):
     if b'1.1.31' not in path.read_bytes():
         raise RuntimeError('CC2 Control binary does not identify version 1.1.31')
 
+def copy_shell_lf(source, destination):
+    data = source.read_bytes()
+    if data.startswith(b'\xef\xbb\xbf'):
+        data = data[3:]
+    data = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+    if not data.startswith(b'#!'):
+        raise RuntimeError(f'Shell script has no shebang: {source}')
+    destination.write_bytes(data)
+    destination.chmod(0o755)
+
+def prepared_mode(relative):
+    return 0o755 if relative in ('cc2-control', 'start.sh', 'launch.sh', 'cc2-control.init', 'cc2-configure') else 0o644
+
 def main():
     firmware_init = (RUNTIME / 'cc2-control.init').read_text(encoding='utf-8')
     if '/opt/inst/cc2-control/start.sh' not in firmware_init or '/opt/usr/cc2-control/launch.sh' in firmware_init:
@@ -52,7 +65,7 @@ def main():
         # Replace it with the validated persistent-storage launcher before tests
         # and packaging. The runtime copy is the canonical firmware launcher.
         firmware_start = tree / 'firmware-integration/overlay/opt/inst/cc2-control/start.sh'
-        shutil.copy2(RUNTIME / 'start.sh', firmware_start)
+        copy_shell_lf(RUNTIME / 'start.sh', firmware_start)
         subprocess.run(['make', 'clean', 'test', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
         subprocess.run(['make', 'clean', 'all'], cwd=tree, check=True)
         binary = tree / 'dist/cc2-control/cc2-control'
@@ -75,7 +88,7 @@ def main():
         shutil.copy2(tree / 'firmware-integration/overlay/opt/inst/cc2-control/defaults/material-presets.json',
                      OUTPUT / 'defaults/material-presets.json')
     for name in ('start.sh', 'launch.sh', 'cc2-control.init', 'cc2-configure'):
-        shutil.copy2(RUNTIME / name, OUTPUT / name)
+        copy_shell_lf(RUNTIME / name, OUTPUT / name)
     for name in ('cc2-control', 'start.sh', 'launch.sh', 'cc2-configure'):
         (OUTPUT / name).chmod(0o755)
     (OUTPUT / 'cc2-control.init').chmod(0o755)
@@ -85,7 +98,7 @@ def main():
     for path in sorted(p for p in OUTPUT.rglob('*') if p.is_file()):
         files[path.relative_to(OUTPUT).as_posix()] = {
             'sha256': sha256(path),
-            'mode': oct(path.stat().st_mode & 0o777),
+            'mode': oct(prepared_mode(path.relative_to(OUTPUT).as_posix())),
         }
     manifest = {
         'component': 'CC2 Control',
@@ -100,3 +113,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

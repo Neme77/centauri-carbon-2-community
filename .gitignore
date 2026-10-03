@@ -33,3 +33,11 @@ CC2-Control-*-Multiplatform-Hotfix.zip.sha256.txt
 .idea/
 Thumbs.db
 .DS_Store
+
+# Local builder outputs and test inputs
+builder/current/components/cc2-control/prepared/
+builder/current/components/cc2-control/prepared-manifest.json
+builder/current/components/cc2-control/source/source.before-serial-discovery.zip
+builder/current/serial-discovery.patch
+builder/current/tools/squashfs-tools-4.6.1/
+CC2-Control-*-Multiplatform-Update.zip
