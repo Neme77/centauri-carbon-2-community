@@ -33,7 +33,7 @@ def prepare(root,extra=()):
                          'mode':oct(path.stat().st_mode&0o777)}
     manifest_path=root/'manifest.json'
     manifest_path.write_text(json.dumps({'component':'CC2 Control','version':'1.1.31',
-        'source_sha256':b.CC2_CONTROL_SOURCE_SHA256,'files':files}))
+        'source_sha256':b.CC2_CONTROL_SOURCE_SHA256,'source_commit':b.CC2_CONTROL_SOURCE_COMMIT,'files':files}))
     return b.load_cc2_control(component,manifest_path)
 
 def install(root,prepared,manifest):
@@ -69,5 +69,19 @@ for bad in (('web/locales/en.json','web/locales/EN2.json'),
         except RuntimeError:
             continue
         raise AssertionError(f'accepted invalid CC2 Control file set: {bad}')
+
+# A prepared component from the earlier snapshot must fail before installation.
+with tempfile.TemporaryDirectory() as temporary:
+    root=Path(temporary)
+    component,manifest=prepare(root)
+    manifest['source_commit']='0'*40
+    path=root/'manifest.json'
+    path.write_text(json.dumps(manifest))
+    try:
+        b.load_cc2_control(component,path)
+    except RuntimeError as error:
+        assert 'source commit mismatch' in str(error)
+    else:
+        raise AssertionError('stale prepared component accepted')
 
 print('PASS: CC2 Control files, optional locales, permissions, init links and persistent-state separation.')

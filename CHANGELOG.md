@@ -7,6 +7,11 @@ checksums remain attached to each GitHub release.
 
 ### Features
 
+- Firmware builder: pin the complete printer-validated CC2 Control integration
+  from commit `00f1f89`; run all component host tests and reject stale prepared
+  manifests using the source commit and archive checksum. Full OTA validation
+  remains separate from the successful CC2 Control beta tests.
+
 - Translations are keyed by identifier (`files.upload_file`) instead of by the English sentence, so the English text can be reworded without touching the other languages.
 - The interface follows the browser language (English, Italian, French or Chinese) until a language is saved on the printer.
 - Added a Simplified Chinese (`zh`) interface translation, selectable in **Settings → Appearance**.

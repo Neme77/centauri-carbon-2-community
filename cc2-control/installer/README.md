@@ -1,27 +1,66 @@
-# CC2 Control updater launchers
+# CC2 Control updater
 
-Place these launchers beside cc2-control-1.1.31-payload.tar.gz from the matching release. The payload is not stored in Git.
+Updates an existing, configured CC2 Control installation on a Centauri Carbon 2
+with SSH access. The printer must be connected, Idle, and reporting fresh state.
+This is an application updater; it does not flash firmware or install SSH.
 
-Windows:
-    .\Install-CC2-Control.ps1 -PrinterIp 192.0.2.10
+Extract the entire ZIP before running a launcher. Configuration (including the
+LAN code), material presets and UI preferences are preserved. The updater keeps
+a backup, verifies checksums and the running binary, and waits for MQTT registration
+and a printer snapshot. On failure, inspect the output for rollback status.
 
-For an expected SSH host-key change:
-    .\Install-CC2-Control.ps1 -PrinterIp 192.0.2.10 -ResetHostKey
+Windows: double-click `Install-Windows.cmd`, or run:
+
+```powershell
+.\Install-CC2-Control.ps1 -PrinterIp 192.0.2.10
+```
 
 Linux/macOS:
-    sh ./install-cc2-control.sh 192.0.2.10
 
-For an expected SSH host-key change:
-    sh ./install-cc2-control.sh --reset-host-key 192.0.2.10
+```sh
+sh ./install-cc2-control.sh 192.0.2.10
+```
 
-Recovery requires typing the exact printer address. It removes only that address from the default user known_hosts file with ssh-keygen -R. OpenSSH then performs normal verification: verify the new fingerprint through a trusted channel before accepting it. Printer keys are not regenerated.
+Windows requires the OpenSSH client. SSH credentials are requested by OpenSSH.
+After installation, restart the printer while Idle to verify automatic startup
+and realign Canvas. The saved LAN code should not be requested again.
 
-Custom known_hosts files and HostKeyAlias settings require manual recovery.
+## SSH host-key changes
 
-Packaging: include both launchers, this README and the matching release payload in the updater ZIP. These sources replace the launchers in the external release builder; they do not build or modify the payload. Do not mix releases.
+Only for an expected host-key change, add `-ResetHostKey` on Windows or
+`--reset-host-key` on Linux/macOS. Recovery requires typing the exact printer
+address. It removes only that address from the default `known_hosts` file with
+`ssh-keygen -R`; OpenSSH then performs normal verification. Verify the new
+fingerprint through a trusted channel before accepting it. Printer keys are
+not regenerated. Custom `known_hosts` files and `HostKeyAlias` need manual recovery.
+
+## Restore
+
+The updater prints the backup directory and exact restore command. Run it only
+while the printer is connected and Idle. Restore preserves current configuration,
+material presets and UI preferences. Firmware builds remain in `/opt/inst`;
+this updater installs the application in `/opt/usr` and points the service there.
+
+## Rebuild the package
+
+After preparing the ARM component, from the repository root:
+
+```sh
+python3 cc2-control/installer/package.py
+```
+
+The package uses the prepared ARM binary and UI, standalone scripts and source
+archive. It emits a ZIP with explicit payload permissions, checksum files,
+launchers, rollback script and source archive. Generated artifacts are not
+committed. The packaging script does not compile or sign firmware.
 
 Tests from the repository root:
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File cc2-control/tests/test_installer_ssh.ps1
-    python3 cc2-control/tests/test_installer_ssh.py
 
-Tests simulate SSH commands and never connect to a printer.
+```sh
+python3 cc2-control/tests/test_installer_ssh.py
+python3 cc2-control/tests/test_installer_package.py
+```
+
+The serial discovery binary was validated through firmware installation,
+first configuration with one LAN-code entry, and automatic reconnection after
+reboot. Validation of this standalone updater on a printer is a separate step.

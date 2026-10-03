@@ -77,7 +77,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_SHA256='e29b66dcead6c8591061086d4086dfbf178a94d29c2b660f64bd1c726f03fe98'
+CC2_CONTROL_SOURCE_COMMIT='1eb50738648e444d43cb49e6c2809a90524437af'
+CC2_CONTROL_SOURCE_SHA256='3f6c8cb2def6591c0ba8b2a48c1ee559abe0606533fda65bec47f4d02b95e381'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 # Translation files are optional and open-ended (one per language), unlike the
 # fixed files above; names are validated so only web/locales/<code>.json passes.
@@ -109,6 +110,8 @@ def load_cc2_control(component,manifest_path):
  manifest=json.loads(req(manifest_path,'CC2 Control prepared manifest').read_text(encoding='utf-8'))
  if manifest.get('component')!='CC2 Control' or manifest.get('version')!='1.1.31':
   raise RuntimeError('CC2 Control manifest identity mismatch')
+ if manifest.get('source_commit')!=CC2_CONTROL_SOURCE_COMMIT:
+  raise RuntimeError('CC2 Control source commit mismatch')
  if manifest.get('source_sha256')!=CC2_CONTROL_SOURCE_SHA256:
   raise RuntimeError('CC2 Control source hash mismatch in prepared manifest')
  files=manifest.get('files')

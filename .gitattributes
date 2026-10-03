@@ -12,3 +12,9 @@ builder/current/core/firmware_builder.py -text
 
 # Standalone updater shell launchers.
 cc2-control/installer/*.sh text eol=lf
+*.sh text eol=lf
+*.init text eol=lf
+**/cc2-configure text eol=lf
+builder/current/prepare.py text eol=lf
+cc2-control/src/mqtt.c text eol=lf
+cc2-control/src/mqtt.h text eol=lf
