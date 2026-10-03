@@ -53,7 +53,7 @@ The test launches Vite and Chromium together, navigates every page at 1440×900,
 1366×640, 1280×720, 1920×1080, 1024×768, 768×1024, 390×844,
 740×390 and 1280×480, checks for horizontal overflow and JavaScript
 errors, repeats the desktop pages with the sidebar collapsed at five sizes, checks the
-desktop header, bounded camera height and natural Control card spacing, changes all four
+desktop header, bounded camera height and natural Control card spacing, changes all five
 languages and light/dark themes, exercises scenario controls and a tuning reset,
 rejects hardware actions,
 and verifies that browser requests stay on the preview origin.

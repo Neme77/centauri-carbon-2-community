@@ -43,6 +43,15 @@ const labels = {
     'preview.reset': '重置',
     'preview.state': '状态',
   },
+  ru: {
+    'preview.simulation': 'СИМУЛЯЦИЯ — без принтера',
+    'preview.idle': 'Простой',
+    'preview.printing': 'Печать',
+    'preview.paused': 'Пауза',
+    'preview.disconnected': 'Нет связи',
+    'preview.reset': 'Сброс',
+    'preview.state': 'Состояние',
+  },
 }
 const scenarios = ['idle', 'printing', 'paused', 'disconnected'] as const
 type Scenario = (typeof scenarios)[number]
@@ -148,7 +157,7 @@ export function previewPlugin(): Plugin {
           return
         }
         if (path.startsWith('/i18n/')) {
-          const lang = path.match(/^\/i18n\/(en|it|fr|zh)\.json$/)?.[1]
+          const lang = path.match(/^\/i18n\/(en|it|fr|zh|ru)\.json$/)?.[1]
           if (!lang) return reply({ error: 'Unknown preview locale' }, 404)
           res.setHeader('Content-Type', 'application/json')
           res.end(readFileSync(fileURLToPath(new URL(`../public/locales/${lang}.json`, import.meta.url))))
