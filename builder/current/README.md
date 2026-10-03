@@ -24,6 +24,20 @@ The exact CC2 Control source snapshot used by the preparation step is committed
 as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
+The component is pinned to source commit
+`00f1f897496ab913a2419b7c2451f69265513a25`, the maintainer-validated PR57–59
+integration. It includes persistent UDS telemetry, MQTT workload reduction,
+current UI and four languages, speed/flow controls, 128 MiB uploads, live Z offset,
+A/B calibration, adaptive mesh start/rendering, emergency recovery and downloads.
+The runtime identity remains 1.1.31, matching the printer-tested build.
+Preparation runs the complete component host suite before the ARM build and
+records source commit, archive checksum and every installed file checksum.
+Stale prepared manifests from the previous snapshot are rejected: rerun
+`prepare.ps1` before firmware preflight.
+
+CC2 Control validation does not replace full-image validation: the rebuilt V4.2
+OTA package still needs to be tested on the printer before publishing a firmware release.
+
 ## Layout
 
 - `core/firmware_builder.py`: fail-closed image builder;

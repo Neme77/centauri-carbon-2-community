@@ -13,7 +13,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_SHA256 = 'e29b66dcead6c8591061086d4086dfbf178a94d29c2b660f64bd1c726f03fe98'
+SOURCE_COMMIT = '00f1f897496ab913a2419b7c2451f69265513a25'
+SOURCE_SHA256 = '951dd2a6c3627d83b6dca1c226e6bf0251a52c061a67ccdac07e010a7898101a'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
@@ -42,7 +43,7 @@ def main():
         raise RuntimeError('CC2 Control source archive hash mismatch')
     if OUTPUT.exists():
         shutil.rmtree(OUTPUT)
-    with tempfile.TemporaryDirectory(prefix='cc2-control-v128-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='cc2-control-prepare-') as temporary:
         tree = Path(temporary) / 'source'
         tree.mkdir()
         with zipfile.ZipFile(SOURCE) as archive:
@@ -52,25 +53,7 @@ def main():
         # and packaging. The runtime copy is the canonical firmware launcher.
         firmware_start = tree / 'firmware-integration/overlay/opt/inst/cc2-control/start.sh'
         shutil.copy2(RUNTIME / 'start.sh', firmware_start)
-        subprocess.run([sys.executable, 'tests/test_console_completion.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_thermal_chart_layout.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_gcode_files_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_discovery_api_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_light_state_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_launchers_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_translation_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_live_job_static.py'], cwd=tree, check=True)
-        if (tree / 'tests/test_locales_static.py').is_file():
-            subprocess.run([sys.executable, 'tests/test_locales_static.py'], cwd=tree, check=True)
-        subprocess.run(['make', 'clean', 'all', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
-        control_test = Path(temporary) / 'test-control-actions'
-        subprocess.run(['gcc', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-I', 'src',
-                        'tests/test_control_actions.c', 'src/control.c', '-lm', '-o', str(control_test)],
-                       cwd=tree, check=True)
-        subprocess.run([str(control_test)], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_gcode_files.py', 'build/cc2-control'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_preferences_api.py', 'build/cc2-control'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_panda_bridge.py', 'build/cc2-control'], cwd=tree, check=True)
+        subprocess.run(['make', 'clean', 'test', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
         subprocess.run(['make', 'clean', 'all'], cwd=tree, check=True)
         binary = tree / 'dist/cc2-control/cc2-control'
         web = tree / 'dist/cc2-control/web/index.html'
@@ -108,6 +91,7 @@ def main():
         'component': 'CC2 Control',
         'version': '1.1.31',
         'source_sha256': SOURCE_SHA256,
+        'source_commit': SOURCE_COMMIT,
         'files': files,
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
