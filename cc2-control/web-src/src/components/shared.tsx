@@ -109,45 +109,122 @@ export const Muted = ({ children, class: c }: { children: ComponentChildren; cla
   <p class={cn('text-muted', c)}>{children}</p>
 )
 
-// Live MJPEG feed card. The placeholder shows until the first frame; the header only says "Live" while frames arrive, and a dropped stream retries.
+// Each card owns one MJPEG request; stopping the view leaves the printer camera service running.
+const CAMERA_RETRY_MS = [2500, 5000, 10000, 20000, 30000]
+
 export const CameraCard = ({ tall }: { tall?: boolean }) => {
+  const [on, setOn] = useState(false)
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
-  const [src, setSrc] = useState(camera())
+  const [gaveUp, setGaveUp] = useState(false)
+  const [note, setNote] = useState<Key | ''>('')
+  const [src, setSrc] = useState('')
+  const frame = useRef<HTMLDivElement>(null)
+  const img = useRef<HTMLImageElement>(null)
+  const live = useRef(false)
+  const visible = useRef(true)
+  const activeSrc = useRef('')
+  const generation = useRef(0)
   const retry = useRef<number | undefined>(undefined)
-  const reload = () => {
+  const tries = useRef(0)
+  const clearRetry = () => {
     if (retry.current !== undefined) clearTimeout(retry.current)
     retry.current = undefined
-    setSrc(camera(`?t=${Date.now()}`))
   }
-  const lost = () => {
+  const release = () => {
+    activeSrc.current = ''
+    img.current?.removeAttribute('src')
+  }
+  const stop = (why: Key | '' = '') => {
+    live.current = false
+    clearRetry()
+    release()
+    setSrc('')
+    setOn(false)
+    setReady(false)
+    setFailed(false)
+    setGaveUp(false)
+    setNote(why)
+  }
+  const connect = () => {
+    clearRetry()
+    if (!live.current || document.hidden || !visible.current) return
+    release()
+    setReady(false)
+    setFailed(false)
+    const next = camera(`?t=${Date.now()}-${++generation.current}`)
+    activeSrc.current = next
+    setSrc(next)
+  }
+  const start = () => {
+    if (document.hidden || !visible.current) return
+    clearRetry()
+    live.current = true
+    tries.current = 0
+    setNote('')
+    setGaveUp(false)
+    setOn(true)
+    connect()
+  }
+  const current = (element: HTMLImageElement) =>
+    live.current && element === img.current && element.getAttribute('src') === activeSrc.current
+  const lost = (element: HTMLImageElement) => {
+    if (!current(element) || retry.current !== undefined) return
     setReady(false)
     setFailed(true)
-    if (retry.current !== undefined) clearTimeout(retry.current)
-    retry.current = window.setTimeout(reload, 2500)
+    release()
+    setSrc('')
+    if (tries.current >= CAMERA_RETRY_MS.length) {
+      setGaveUp(true)
+      return
+    }
+    retry.current = window.setTimeout(connect, CAMERA_RETRY_MS[tries.current++])
   }
-  useEffect(
-    () => () => {
-      if (retry.current !== undefined) clearTimeout(retry.current)
-      retry.current = undefined
-      setSrc('')
-    },
-    []
-  )
+  useEffect(() => {
+    const hidden = () => {
+      if (document.hidden && live.current) stop('common.camera_paused_hidden')
+    }
+    const leaving = () => {
+      if (live.current) stop('common.camera_paused_hidden')
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      visible.current = entry.isIntersecting
+      if (!entry.isIntersecting && live.current) stop('common.camera_paused_out_of_view')
+    })
+    if (frame.current) observer.observe(frame.current)
+    document.addEventListener('visibilitychange', hidden)
+    window.addEventListener('pagehide', leaving)
+    return () => {
+      document.removeEventListener('visibilitychange', hidden)
+      window.removeEventListener('pagehide', leaving)
+      observer.disconnect()
+      live.current = false
+      clearRetry()
+      release()
+    }
+  }, [])
   return (
     <Card class="flex flex-col">
       <CardHead
         icon="camera"
         title="common.live_camera"
         end={
-          ready ? (
+          on ? (
             <>
-              <Dot /> {t('common.live')}
+              {ready && (
+                <>
+                  <Dot /> {t('common.live')}
+                </>
+              )}
+              <Button class="ml-2 text-xs" onClick={() => stop()}>
+                {t('common.camera_stop')}
+              </Button>
             </>
           ) : undefined
         }
       />
       <div
+        ref={frame}
         class={cn(
           'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
           tall ? 'min-h-80' : 'aspect-video'
@@ -159,29 +236,55 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
             <strong class="block text-[15px] font-medium">
               {t(tall ? 'common.your_live_print_camera' : 'common.your_cc2_camera_feed')}
             </strong>
-            <p class="text-xs">{t(failed ? 'common.camera_unavailable' : 'common.waiting_for_camera_stream')}</p>
-            {failed && (
-              <Button class="mt-2 text-xs" onClick={reload}>
+            <p class="text-xs">
+              {on
+                ? t(
+                    gaveUp
+                      ? 'common.camera_gave_up'
+                      : failed
+                        ? 'common.camera_unavailable'
+                        : 'common.waiting_for_camera_stream'
+                  )
+                : t(note || 'common.camera_off')}
+            </p>
+            {!on && (
+              <Button class="mt-2 text-xs" onClick={start}>
+                {t('common.camera_start')}
+              </Button>
+            )}
+            {on && failed && (
+              <Button class="mt-2 text-xs" onClick={start}>
                 {t('common.camera_retry_now')}
               </Button>
             )}
           </div>
         )}
-        <img
-          src={src}
-          alt={t('common.cc2_live_camera')}
-          class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')}
-          onLoad={() => {
-            setReady(true)
-            setFailed(false)
-          }}
-          onError={lost}
-        />
+        {on && src && (
+          <img
+            key={src}
+            ref={img}
+            src={src}
+            alt={t('common.cc2_live_camera')}
+            class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')}
+            onLoad={event => {
+              if (!current(event.currentTarget)) return
+              clearRetry()
+              tries.current = 0
+              setReady(true)
+              setFailed(false)
+              setGaveUp(false)
+            }}
+            onError={event => lost(event.currentTarget)}
+          />
+        )}
       </div>
       <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-2">
         <Button
           class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
-          onClick={() => window.open(camera(), 'cc2-camera')}
+          onClick={() => {
+            stop()
+            window.open(camera(), 'cc2-camera')
+          }}
         >
           <Icon n="open" class="size-4" />
           {t('common.open_in_new_window')}

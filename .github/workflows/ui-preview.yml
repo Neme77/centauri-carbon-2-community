@@ -34,6 +34,8 @@ jobs:
         run: npm run test:recovery
       - name: Verify adaptive and saved mesh rendering
         run: npm run test:mesh
+      - name: Verify camera streaming lifecycle
+        run: npm run test:camera
       - name: Save screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v6
@@ -41,3 +43,4 @@ jobs:
           name: cc2-ui-preview-screenshots
           path: ${{ runner.temp }}/cc2-preview-screenshots
           retention-days: 7
+
