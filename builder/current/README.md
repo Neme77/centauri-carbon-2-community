@@ -25,10 +25,10 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`214e4ceb79cdc6d378b13faf1f531d4f2694ef6e`, incorporating the validated
+`69e48fa2f0e1e06e9ef37003586216347bf81882`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
-with visibility suspension and bounded reconnection attempts. It includes persistent UDS telemetry, MQTT workload reduction,
-current UI and four languages, speed/flow controls, 128 MiB uploads, live Z offset,
+with visibility suspension and bounded reconnection attempts, and the Russian interface translation. It includes persistent UDS telemetry, MQTT workload reduction,
+current UI and five languages, speed/flow controls, 128 MiB uploads, live Z offset,
 A/B calibration, adaptive mesh start/rendering, emergency recovery and downloads.
 The runtime identity remains 1.1.31, matching the printer-tested build.
 Preparation runs the complete component host suite before the ARM build and
@@ -40,7 +40,7 @@ The maintainer installed the preceding serial-discovery stock V4.2 package and v
 configuration, automatic reconnection after reboot and fresh UDS telemetry.
 Scripts were checked in the rebuilt image for LF, no BOM and mode 755.
 This validation does not cover every printer function or the separately packaged
-standalone updater. The camera streaming changes have browser tests and still
+standalone updater. The camera streaming changes and the Russian translation have browser tests and still
 require printer validation. Private/vendor inputs and signed firmware are not published
 by this source tree.
 
