@@ -25,8 +25,9 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`1eb50738648e444d43cb49e6c2809a90524437af`, incorporating the validated
-PR57–59 integration and authenticated loopback HTTP serial discovery. It includes persistent UDS telemetry, MQTT workload reduction,
+`214e4ceb79cdc6d378b13faf1f531d4f2694ef6e`, incorporating the validated
+PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
+with visibility suspension and bounded reconnection attempts. It includes persistent UDS telemetry, MQTT workload reduction,
 current UI and four languages, speed/flow controls, 128 MiB uploads, live Z offset,
 A/B calibration, adaptive mesh start/rendering, emergency recovery and downloads.
 The runtime identity remains 1.1.31, matching the printer-tested build.
@@ -35,11 +36,12 @@ records source commit, archive checksum and every installed file checksum.
 Stale prepared manifests from the previous snapshot are rejected: rerun
 `prepare.ps1` before firmware preflight.
 
-The maintainer installed the signed stock V4.2 package and verified first
+The maintainer installed the preceding serial-discovery stock V4.2 package and verified first
 configuration, automatic reconnection after reboot and fresh UDS telemetry.
 Scripts were checked in the rebuilt image for LF, no BOM and mode 755.
 This validation does not cover every printer function or the separately packaged
-standalone updater. Private/vendor inputs and signed firmware are not published
+standalone updater. The camera streaming changes have browser tests and still
+require printer validation. Private/vendor inputs and signed firmware are not published
 by this source tree.
 
 Preparation normalizes script line endings and records explicit executable/data
