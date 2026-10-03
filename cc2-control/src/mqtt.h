@@ -52,6 +52,8 @@ typedef struct {
     char serial[64];
     char config_path[256];
     int serial_persisted;
+    time_t last_serial_discovery;
+    unsigned int serial_discovery_attempts;
     char client_id[64];
     char snapshot[12288];
     size_t snapshot_len;

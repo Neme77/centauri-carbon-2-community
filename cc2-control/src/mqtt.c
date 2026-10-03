@@ -292,6 +292,107 @@ static int boolean_in(const char *object,size_t len,const char *field,int *value
     return 0;
 }
 
+/* First-run discovery: do not depend on unsolicited MQTT publishes.
+ * Only loopback is queried, credentials never enter logs, and the complete
+ * HTTP exchange has one 500 ms monotonic deadline. No worker or polling thread. */
+#ifndef CC2_DISCOVERY_PORT
+#define CC2_DISCOVERY_PORT 80
+#endif
+static long discovery_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
+}
+
+static int discovery_wait(int fd, int writing, long deadline) {
+    long left = deadline - discovery_ms();
+    if (left <= 0) return -1;
+    struct timeval timeout = {left / 1000, (left % 1000) * 1000};
+    fd_set set; FD_ZERO(&set); FD_SET(fd, &set);
+    return select(fd + 1, writing ? NULL : &set, writing ? &set : NULL,
+                  NULL, &timeout) > 0 ? 0 : -1;
+}
+
+static int discover_serial_http(mqtt_client *c) {
+    char request[640], response[4096], encoded[sizeof(c->password) * 3];
+    static const char hex[] = "0123456789ABCDEF";
+    size_t used = 0;
+    for (const unsigned char *p = (const unsigned char *)c->password; *p; p++) {
+        if (used + 3 >= sizeof(encoded)) return -1;
+        encoded[used++] = '%'; encoded[used++] = hex[*p >> 4]; encoded[used++] = hex[*p & 15];
+    }
+    encoded[used] = 0;
+    int size = snprintf(request, sizeof(request),
+        "GET /system/info?X-Token=%s HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", encoded);
+    if (size <= 0 || (size_t)size >= sizeof(request)) return -1;
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    if (fd >= FD_SETSIZE || fcntl(fd, F_SETFL, O_NONBLOCK) < 0) { close(fd); return -1; }
+    long deadline = discovery_ms() + 500;
+    struct sockaddr_in address = {0};
+    address.sin_family = AF_INET; address.sin_port = htons(CC2_DISCOVERY_PORT);
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    int result = -1;
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        if (errno != EINPROGRESS || discovery_wait(fd, 1, deadline) < 0) goto done;
+        int error = 0; socklen_t length = sizeof(error);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) < 0 || error) goto done;
+    }
+    used = 0;
+    while (used < (size_t)size) {
+        if (discovery_wait(fd, 1, deadline) < 0) goto done;
+        ssize_t n = send(fd, request + used, (size_t)size - used, MSG_NOSIGNAL);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) goto done;
+        used += (size_t)n;
+    }
+    used = 0;
+    for (;;) {
+        if (used == sizeof(response) - 1 || discovery_wait(fd, 0, deadline) < 0) goto done;
+        ssize_t n = recv(fd, response + used, sizeof(response) - 1 - used, 0);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n < 0) goto done;
+        if (!n) break;
+        used += (size_t)n;
+    }
+    response[used] = 0;
+    int status = 0;
+    if (sscanf(response, "HTTP/%*u.%*u %d", &status) != 1 || status != 200) goto done;
+    const char *body = strstr(response, "\r\n\r\n");
+    if (!body) goto done;
+    body += 4;
+    size_t length = 0;
+    const char *info = object_for(body, strlen(body), "system_info", &length);
+    char serial[sizeof(c->serial)];
+    if (!info || !string_in(info, length, "sn", serial, sizeof(serial)) || !serial[0]) goto done;
+    /* Reject truncation and escapes rather than routing requests to an ambiguous topic. */
+    const char *field = strstr(info, "\"sn\"");
+    if (!field || field >= info + length) goto done;
+    field += 4;
+    while (field < info + length && isspace((unsigned char)*field)) field++;
+    if (field >= info + length || *field++ != ':') goto done;
+    while (field < info + length && isspace((unsigned char)*field)) field++;
+    if (field >= info + length || *field++ != '"') goto done;
+    const char *end = memchr(field, '"', (size_t)(info + length - field));
+    if (!end || (size_t)(end - field) != strlen(serial)) goto done;
+    for (const char *p = serial; *p; p++)
+        if (!isalnum((unsigned char)*p) && *p != '_' && *p != '-') goto done;
+    snprintf(c->serial, sizeof(c->serial), "%s", serial);
+    if (!c->serial_persisted && c->config_path[0]) {
+        FILE *file = fopen(c->config_path, "a");
+        if (file) {
+            int ok = fprintf(file, "\nmqtt_serial=%s\n", serial) > 0;
+            if (fclose(file) != 0) ok = 0;
+            if (ok) c->serial_persisted = 1;
+        }
+    }
+    result = 0;
+done:
+    close(fd);
+    memset(request, 0, sizeof(request));
+    return result;
+}
+
 static void update_pair(const char *object,size_t len,
                         const char *field,double *value,int *have) {
     double v; if(object&&number_in(object,len,field,&v)){*value=v;*have=1;}
@@ -474,6 +575,13 @@ int mqtt_process(mqtt_client *c) {
 void mqtt_tick(mqtt_client *c) {
     time_t now=time(NULL);
     if(c->fd<0){if(now-c->last_connect_attempt>=5)mqtt_connect_local(c);return;}
+    if (c->connected && c->password[0] && !c->serial[0] &&
+        (c->serial_discovery_attempts == 0 ||
+         now - c->last_serial_discovery >= (c->serial_discovery_attempts < 3 ? 10 : 60))) {
+        c->last_serial_discovery = now;
+        c->serial_discovery_attempts++;
+        (void)discover_serial_http(c);
+    }
     if(c->serial[0]&&!c->canvas_discovery_complete) {
         /* The printer initializes Canvas twice during a cold boot.  The MQTT
          * socket can survive the second initialization while the application
