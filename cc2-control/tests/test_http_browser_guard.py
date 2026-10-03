@@ -85,6 +85,19 @@ with tempfile.TemporaryDirectory(prefix="cc2-smoke-") as temporary:
             assert call({}) == 200
             fragmented.sendall(payload[3:])
             assert fragmented.recv(1024).startswith(b"HTTP/1.1 200")
+        crowded = []
+        try:
+            for _ in range(8):
+                client = socket.create_connection(("127.0.0.1", port), timeout=3)
+                client.sendall(b"GET /api/preferences HTTP/1.1\r\nHost:")
+                crowded.append(client)
+            time.sleep(0.1)
+            assert call({}) == 503, "full receive pool must return explicit overload"
+        finally:
+            for client in crowded:
+                client.close()
+        time.sleep(0.1)
+        assert call({}) == 200
         slow = []
         try:
             for _ in range(4):

@@ -291,7 +291,7 @@ const Extruder = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
 }
 
 const ZOffset = () => {
-  const { v: off, reference, pending } = zoffset.use()
+  const { v: off, reference, pending, timedOut } = zoffset.use()
   const lock = useRef(false)
   const [busy, setBusy] = useState(false)
   const send = async (action: string) => {
@@ -341,6 +341,7 @@ const ZOffset = () => {
         {t('control.undo_session_offset')}
       </Button>
       <Warn>{t('control.live_session_adjustment_it_resets')}</Warn>
+      {timedOut && <Notice>{t('control.z_offset_readback_timeout')}</Notice>}
     </Card>
   )
 }
@@ -521,7 +522,7 @@ export const Control = () => {
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
-                disabled={v.printing}
+                disabled={!v.idle}
                 onClick={() => control('system:motors_off', t('common.disable_all_motors'))}
               >
                 <Icon n="motors" class="text-cyan" />
@@ -536,7 +537,7 @@ export const Control = () => {
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
-                disabled={v.printing}
+                disabled={!v.idle}
                 onClick={() => control('system:fans_off', t('common.turn_all_fans_off'))}
               >
                 <Icon n="fan" class="text-cyan" />

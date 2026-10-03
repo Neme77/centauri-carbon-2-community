@@ -481,5 +481,6 @@
   "tuning.unavailable": "Les commandes nécessitent une impression active ou en pause et une télémétrie à jour.",
   "bed.calibration_plate_side": "Face du plateau à calibrer",
   "bed.choose_calibration_side": "Choisir la face du plateau montée",
-  "console.copy_failed": "Impossible de copier le journal de la console."
+  "console.copy_failed": "Impossible de copier le journal de la console.",
+  "control.z_offset_readback_timeout": "Confirmation du décalage Z expirée. Le prochain réglage utilise une nouvelle lecture de l’imprimante."
 }

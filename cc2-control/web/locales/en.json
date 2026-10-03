@@ -481,5 +481,6 @@
   "tuning.unavailable": "Controls require an active or paused print and fresh telemetry.",
   "bed.calibration_plate_side": "Calibration plate side",
   "bed.choose_calibration_side": "Choose the mounted plate side",
-  "console.copy_failed": "Could not copy the console log."
+  "console.copy_failed": "Could not copy the console log.",
+  "control.z_offset_readback_timeout": "Z-offset confirmation timed out. The next adjustment uses a fresh printer reading."
 }

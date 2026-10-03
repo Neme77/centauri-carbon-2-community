@@ -481,5 +481,6 @@
   "tuning.unavailable": "控制需要正在打印或已暂停的任务，以及最新的遥测数据。",
   "bed.calibration_plate_side": "校准打印板面",
   "bed.choose_calibration_side": "选择当前安装的打印板面",
-  "console.copy_failed": "无法复制控制台日志。"
+  "console.copy_failed": "无法复制控制台日志。",
+  "control.z_offset_readback_timeout": "Z 偏移确认超时。下一次调整将使用打印机的最新读数。"
 }

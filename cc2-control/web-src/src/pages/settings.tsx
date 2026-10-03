@@ -193,15 +193,15 @@ const Appearance = () => {
     mode = theme.use().mode
   const restore = async () => {
     if (!(await ask(t('settings.restore_interface_preferences'), true))) return
-    ;['cc2-language', 'cc2-theme'].forEach(ls.del)
-    setTheme('dark', true)
     try {
       await saveQuickActions(QUICK_DEFAULTS)
     } catch (e) {
       notify(errText(e), 'error')
       return
     }
-    setLanguage(detectLanguage(), true)
+    ;['cc2-language', 'cc2-theme'].forEach(ls.del)
+    setTheme('dark', true)
+    await setLanguage(detectLanguage(), true)
     notify(t('settings.interface_preferences_restored'))
   }
   const lab = 'text-xs font-semibold'

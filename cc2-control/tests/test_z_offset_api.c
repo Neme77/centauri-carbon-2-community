@@ -47,7 +47,7 @@ int main(void){
     assert(command(&mqtt,"zoffset:adjust:-0.02")==202);
     assert(fabs(z_offset_reference+0.06)<0.000001);
     offset(-0.08);
-    check_z_json(&mqtt,"\"z_offset\":{\"value\":-0.080,\"pending\":false,\"reference\":-0.060,\"adjustment\":-0.020}");
+    check_z_json(&mqtt,"\"z_offset\":{\"value\":-0.080,\"pending\":false,\"timed_out\":false,\"reference\":-0.060,\"adjustment\":-0.020}");
     assert(command(&mqtt,"zoffset:undo:0.08")==409);
     assert(command(&mqtt,"zoffset:undo:0.02")==202);
     offset(-0.06);double actual;assert(z_offset_readback(&actual)&&!z_offset_pending);
@@ -58,9 +58,9 @@ int main(void){
     offset(0.12);assert(z_offset_readback(&actual)&&!z_offset_pending);
     z_offset_session=0;offset(0);assert(command(&mqtt,"zoffset:adjust:-0.02")==202);
     offset(-0.02);
-    check_z_json(&mqtt,"\"z_offset\":{\"value\":-0.020,\"pending\":false,\"reference\":0.000,\"adjustment\":-0.020}");
+    check_z_json(&mqtt,"\"z_offset\":{\"value\":-0.020,\"pending\":false,\"timed_out\":false,\"reference\":0.000,\"adjustment\":-0.020}");
     assert(command(&mqtt,"zoffset:undo:0.02")==202);offset(0);
-    check_z_json(&mqtt,"\"z_offset\":{\"value\":0.000,\"pending\":false,\"reference\":0.000,\"adjustment\":0.000}");
+    check_z_json(&mqtt,"\"z_offset\":{\"value\":0.000,\"pending\":false,\"timed_out\":false,\"reference\":0.000,\"adjustment\":0.000}");
     mqtt.machine_status=2;strcpy(mqtt.print_state,"printing");
     assert(command(&mqtt,"zoffset:adjust:0.01")==202);
     assert(strstr(sent,"MOVE=1 MOVE_SPEED=5"));
@@ -78,7 +78,14 @@ int main(void){
     int pair[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
     z_offset_pending=0;uds_init(&telemetry);printer_response(pair[0],&mqtt);
     char response[5000];ssize_t n=recv(pair[1],response,sizeof(response)-1,0);assert(n>0);response[n]=0;
-    assert(strstr(response,"\"z_offset\":{\"value\":null,\"pending\":false,\"reference\":null,\"adjustment\":null}"));
+    assert(strstr(response,"\"z_offset\":{\"value\":null,\"pending\":false,\"timed_out\":false,\"reference\":null,\"adjustment\":null}"));
     close(pair[0]);close(pair[1]);
+    z_offset_pending=0;z_offset_session=0;offset(0.06);
+    assert(command(&mqtt,"zoffset:adjust:0.01")==202);
+    z_offset_started.tv_sec-=6;offset(0.09);double readback;
+    assert(z_offset_readback(&readback)&&!z_offset_pending&&!z_offset_session&&z_offset_timed_out);
+    assert(command(&mqtt,"zoffset:adjust:-0.01")==202);
+    assert(fabs(z_offset_reference-0.09)<0.000001&&!z_offset_timed_out);
+
     puts("PASS: Z offset bounds across clients/reloads, pending readback, strict undo, invalid/stale values");
 }
