@@ -25,8 +25,8 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`00f1f897496ab913a2419b7c2451f69265513a25`, the maintainer-validated PR57–59
-integration. It includes persistent UDS telemetry, MQTT workload reduction,
+`1eb50738648e444d43cb49e6c2809a90524437af`, incorporating the validated
+PR57–59 integration and authenticated loopback HTTP serial discovery. It includes persistent UDS telemetry, MQTT workload reduction,
 current UI and four languages, speed/flow controls, 128 MiB uploads, live Z offset,
 A/B calibration, adaptive mesh start/rendering, emergency recovery and downloads.
 The runtime identity remains 1.1.31, matching the printer-tested build.
@@ -35,8 +35,18 @@ records source commit, archive checksum and every installed file checksum.
 Stale prepared manifests from the previous snapshot are rejected: rerun
 `prepare.ps1` before firmware preflight.
 
-CC2 Control validation does not replace full-image validation: the rebuilt V4.2
-OTA package still needs to be tested on the printer before publishing a firmware release.
+The maintainer installed the signed stock V4.2 package and verified first
+configuration, automatic reconnection after reboot and fresh UDS telemetry.
+Scripts were checked in the rebuilt image for LF, no BOM and mode 755.
+This validation does not cover every printer function or the separately packaged
+standalone updater. Private/vendor inputs and signed firmware are not published
+by this source tree.
+
+Preparation normalizes script line endings and records explicit executable/data
+modes so Windows checkout and permission readback cannot produce CRLF or mode
+777 in the image. The standalone updater is generated with
+`python3 cc2-control/installer/package.py` from the repository root; see
+`../../cc2-control/installer/README.md`.
 
 ## Layout
 
@@ -48,3 +58,4 @@ OTA package still needs to be tested on the printer before publishing a firmware
 - `tests/`: host-side validation.
 
 See [`../../docs/BUILD.md`](../../docs/BUILD.md) for the full workflow.
+
