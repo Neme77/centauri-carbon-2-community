@@ -23,3 +23,17 @@ assert 'chmod 755 "$PERSIST"' in firmware
 assert 'chmod 644 "$PERSIST/material-presets.json"' in firmware
 
 print("PASS: launchers preserve Panda compatibility and firmware waits for persistent storage.")
+
+# Both deployed startup paths must wait after the vendor process appears.
+repo = root.parent
+for relative in (
+    "cc2-control/scripts/launch.sh",
+    "cc2-control/scripts/start-firmware.sh",
+    "builder/current/components/cc2-control/runtime/start.sh",
+    "builder/current/components/cc2-control/runtime/launch.sh",
+):
+    launcher = (repo / relative).read_text(encoding="utf-8")
+    guard = "while ! pidof elegoo_printer >/dev/null 2>&1; do"
+    assert guard in launcher, relative
+    assert "sleep 60" in launcher, relative
+    assert launcher.index(guard) < launcher.index("sleep 60") < launcher.index("exec "), relative

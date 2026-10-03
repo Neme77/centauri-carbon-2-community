@@ -5,6 +5,9 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Delay CC2 Control startup for 60 seconds after detecting `elegoo_printer`
+  to give vendor hardware initialization more time to settle.
+
 ### Features
 
 - Firmware builder: pin the complete printer-validated CC2 Control integration
