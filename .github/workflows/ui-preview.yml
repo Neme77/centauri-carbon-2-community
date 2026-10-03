@@ -29,6 +29,8 @@ jobs:
         run: npm run test:preview
         env:
           CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
+      - name: Verify adaptive and saved mesh rendering
+        run: npm run test:mesh
       - name: Save screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v6

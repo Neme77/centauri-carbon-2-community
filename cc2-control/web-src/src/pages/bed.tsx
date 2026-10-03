@@ -16,7 +16,7 @@ import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
 import { microns, screwPlan, screwValues } from '@/lib/screws'
 import { poll, usePoll } from '@/lib/poll'
-import { nav, openPage, refreshConsole, screwText } from '@/lib/state'
+import { printer, nav, openPage, refreshConsole, screwText } from '@/lib/state'
 import { sendConsole } from '@/pages/console'
 
 const I = { size: 16, strokeWidth: 1 }
@@ -35,6 +35,8 @@ const MeshCard = () => {
   const cam = useRef<Cam>(defaultCam())
   const canvas = useRef<HTMLCanvasElement>(null)
   const busy = useRef(false)
+  const queued = useRef(false)
+  const alive = useRef(true)
   const points: Pt[] = useMemo(() => (data && matrixFromUds(data, profile)) || [], [data, profile])
   const xs = [...new Set(points.map(p => p.x))].sort((a, b) => a - b)
   const ys = [...new Set(points.map(p => p.y))].sort((a, b) => b - a)
@@ -53,13 +55,19 @@ const MeshCard = () => {
   }
   useEffect(redraw, [points, view, scale])
   useEffect(() => {
-    addEventListener('resize', redraw)
-    return () => removeEventListener('resize', redraw)
+    const el = canvas.current
+    if (!el) return
+    const observer = new ResizeObserver(redraw)
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [points, view])
 
   const warned = useRef(false) // one error toast per outage, not one every 5 s
   const load = async (manual = false) => {
-    if (busy.current) return
+    if (busy.current) {
+      queued.current = true
+      return
+    }
     busy.current = true
     try {
       const d = await request('/api/mesh')
@@ -71,11 +79,31 @@ const MeshCard = () => {
       warned.current = true
     } finally {
       busy.current = false
+      if (queued.current && alive.current) {
+        queued.current = false
+        void load()
+      }
     }
   }
   useEffect(() => {
+    alive.current = true
     void load()
+    return () => {
+      alive.current = false
+    }
   }, [])
+
+  // Reuse cached printer status; query the mesh only when the print/calibration
+  // phase changes, never on each status poll or while this page is unmounted.
+  const current = printer.use().data
+  const phase = `${current?.machine?.status}/${current?.machine?.sub_status}/${current?.print?.uuid}`
+  const lastPhase = useRef(phase)
+  useEffect(() => {
+    if (phase !== lastPhase.current) {
+      lastPhase.current = phase
+      void load()
+    }
+  }, [phase])
 
   const names = PROFILES.filter(([n]) => root?.profiles?.[n])
   const drag = useRef<{ id: number; x: number; y: number } | null>(null)
