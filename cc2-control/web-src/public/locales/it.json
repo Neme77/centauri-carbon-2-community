@@ -482,5 +482,10 @@
   "bed.calibration_plate_side": "Lato del piatto da calibrare",
   "bed.choose_calibration_side": "Scegli il lato del piatto montato",
   "console.copy_failed": "Impossibile copiare il log della console.",
+  "recovery.restart": "Riavvia stampante",
+  "recovery.confirm": "Riavviare completamente la stampante dopo l’arresto di emergenza? Attendi il ritorno del display e di CC2 Control.",
+  "recovery.requires_emergency": "Disponibile dopo un arresto di emergenza inviato da CC2 Control.",
+  "recovery.restarting": "Riavvio richiesto. Attendi la riconnessione.",
+  "files.download_g_code": "Scarica G-code",
   "control.z_offset_readback_timeout": "Conferma Z-offset scaduta. La prossima regolazione usa una nuova lettura della stampante."
 }

@@ -482,5 +482,10 @@
   "bed.calibration_plate_side": "Calibration plate side",
   "bed.choose_calibration_side": "Choose the mounted plate side",
   "console.copy_failed": "Could not copy the console log.",
+  "recovery.restart": "Restart printer",
+  "recovery.confirm": "Restart the whole printer after the emergency stop? Wait for the display and CC2 Control to reconnect.",
+  "recovery.requires_emergency": "Available after an emergency stop sent from CC2 Control.",
+  "recovery.restarting": "Printer reboot requested. Wait for reconnection.",
+  "files.download_g_code": "Download G-code",
   "control.z_offset_readback_timeout": "Z-offset confirmation timed out. The next adjustment uses a fresh printer reading."
 }

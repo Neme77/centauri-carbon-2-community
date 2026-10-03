@@ -11,6 +11,8 @@ BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", 
 HARNESSES = {
     # test_file_ops.c and test_orca_upload.c include src/main.c themselves.
     "test_file_ops.c": BACKEND,
+    "test_recovery_download.c": BACKEND,
+    "test_emergency_latch.c": [],
     "test_runtime_limits.c": BACKEND,
     "test_mqtt_limits.c": [],
     "test_calibrated_start.c": BACKEND,

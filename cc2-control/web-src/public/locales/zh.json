@@ -482,5 +482,10 @@
   "bed.calibration_plate_side": "校准打印板面",
   "bed.choose_calibration_side": "选择当前安装的打印板面",
   "console.copy_failed": "无法复制控制台日志。",
+  "recovery.restart": "重启打印机",
+  "recovery.confirm": "急停后重启整台打印机？请等待显示屏和 CC2 Control 重新连接。",
+  "recovery.requires_emergency": "仅在 CC2 Control 发送急停命令后可用。",
+  "recovery.restarting": "已请求重启。请等待重新连接。",
+  "files.download_g_code": "下载 G-code",
   "control.z_offset_readback_timeout": "Z 偏移确认超时。下一次调整将使用打印机的最新读数。"
 }

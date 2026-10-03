@@ -8,7 +8,8 @@
     "check": "tsc -p . && biome check .",
     "format": "biome format --write .",
     "preview:ui": "vite --mode demo --host 127.0.0.1",
-    "test:preview": "node preview/test-browser.mjs"
+    "test:preview": "node preview/test-browser.mjs",
+    "test:recovery": "node preview/test-recovery-download.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

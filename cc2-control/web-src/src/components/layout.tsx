@@ -5,6 +5,7 @@ import { HeaderTitle } from '@/components/header-title'
 import { PrinterIcon } from '@/components/printer-icon'
 import {
   Menu,
+  RotateCw,
   Files as FilesIcon,
   Gauge,
   Grid3x3,
@@ -19,8 +20,9 @@ import {
 } from 'lucide-preact'
 import { Dot } from '@/components/ui/badge'
 import { type Key, t, tState, tpl } from '@/lib/i18n'
-import { control, notify, toast } from '@/lib/api'
-import { health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
+import { control, errText, notify, post, toast } from '@/lib/api'
+import { ask } from '@/lib/confirm'
+import { refreshPrinter, health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
 // Same query as the compact layout in index.css.
 const COMPACT = '(max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape)'
@@ -57,7 +59,7 @@ const EStop = () => {
       timer.current = 0
       fired.current = true
       setHolding(false)
-      await control('system:emergency_stop')
+      if (await control('system:emergency_stop')) await refreshPrinter()
     }, 1000)
   }
   return (
@@ -88,6 +90,38 @@ const EStop = () => {
         <TriangleAlert size={20} strokeWidth={1} />
         <span class="hidden md:inline">{t('app.emergency_stop')}</span>
       </span>
+    </button>
+  )
+}
+
+const RestartPrinter = () => {
+  const { data, ok } = printer.use()
+  const [busy, setBusy] = useState(false)
+  const available = ok && data?.recovery?.available && !data?.recovery?.reboot_pending && !busy
+  const restart = async () => {
+    if (!available || !(await ask(t('recovery.confirm'), true))) return
+    setBusy(true)
+    try {
+      await post('/api/recovery/reboot', 'REBOOT_AFTER_EMERGENCY')
+      notify(t('recovery.restarting'))
+      await refreshPrinter()
+    } catch (e) {
+      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button
+      type="button"
+      disabled={!available}
+      onClick={restart}
+      title={t(available ? 'recovery.restart' : 'recovery.requires_emergency')}
+      aria-label={t('recovery.restart')}
+      class="flex h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-edge px-3 disabled:opacity-40 md:px-4"
+    >
+      <RotateCw size={20} strokeWidth={1} />
+      <span class="hidden md:inline">{t('recovery.restart')}</span>
     </button>
   )
 }
@@ -241,6 +275,7 @@ export const Topbar = () => {
           {t(link[1])}
         </div>
         <EStop />
+        <RestartPrinter />
       </div>
       {v.active && (
         <div class="absolute inset-x-0 bottom-0 h-1 bg-edge" role="progressbar" aria-valuenow={Math.round(v.progress)}>

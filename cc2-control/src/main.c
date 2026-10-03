@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
@@ -566,6 +567,8 @@ static int gcode_storage_root(const char *storage, const char **root) {
     if(strcmp(storage,"usb")==0) {*root=gcode_usb_root;return 1;}
     return 0;
 }
+
+#include "gcode_download.h"
 
 /* USB root must actually be a mounted removable filesystem, not a plain
  * directory on internal flash left behind when the drive is unplugged. */
@@ -1899,6 +1902,8 @@ static int active_gcode_total_layers(const char *filename) {
     return cached_total;
 }
 
+#include "recovery.h"
+
 static void printer_response(int fd, const mqtt_client *mqtt) {
     /* Render from the two caches without copying MQTT transport/history buffers. */
     double live;
@@ -1965,11 +1970,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
+        "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
-        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
+        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
@@ -2869,8 +2875,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
                 "text/plain; charset=utf-8", body, strlen(body));
         return 0;
     }
-    char method[16], path[256], version[16];
-    if (sscanf(request, "%15s %255s %15s", method, path, version) != 3) return 0;
+    char method[16], path[2048], version[16];
+    if (sscanf(request, "%15s %2047s %15s", method, path, version) != 3) return 0;
     if(!http_browser_allowed(fd,request,method,path,service_http_port,http_host_alias)){
         const char *error="{\"error\":\"Untrusted HTTP host or browser origin\"}\n";
         respond(fd,403,"Forbidden","application/json; charset=utf-8",error,strlen(error));return 0;
@@ -2932,6 +2938,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         preferences_put_response(fd,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files")==0) {
         gcode_files_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
+        return gcode_download_start(fd,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
         gcode_inspect_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/thumbnail")==0) {
@@ -2954,6 +2962,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         console_clear_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/command")==0) {
         console_command_response(fd,console,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/recovery/reboot")==0) {
+        recovery_reboot_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/control")==0) {
         control_response(fd,console,mqtt,body,body_len);
     } else if (strcmp(method,"GET")!=0 && strcmp(method,"POST")!=0 && strcmp(method,"PUT")!=0) {
@@ -3004,6 +3014,7 @@ int main(int argc, char **argv) {
     mqtt_client mqtt;
     console_state console;
     console_init(&console,"/tmp/elegoo_uds");
+    recovery_console=&console;
     uds_init(&telemetry);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
@@ -3039,6 +3050,7 @@ int main(int argc, char **argv) {
     if(!pending){perror("HTTP receive pool");panda_stop(&panda);close(server);mqtt_close(&mqtt);console_destroy(&console);return 1;}
     for(int i=0;i<HTTP_PENDING_MAX;i++)pending[i].fd=-1;
     while (running) {
+        recovery_tick();
         mqtt_tick(&mqtt);
         uds_tick(&telemetry,uds_path);
         fd_set read_set;
