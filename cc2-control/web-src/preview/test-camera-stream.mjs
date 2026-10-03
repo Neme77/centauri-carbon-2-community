@@ -1,0 +1,111 @@
+import assert from 'node:assert/strict'
+import { createServer as httpServer } from 'node:http'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+import { createServer } from 'vite'
+import { chromium } from 'playwright'
+
+const root = fileURLToPath(new URL('..', import.meta.url))
+process.env.CC2_BACKEND = 'http://127.0.0.1:1'
+const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), mode: 'demo', server: { port: 0, host: '127.0.0.1' } })
+const jpeg = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDm6KKK+xPhD//Z', 'base64')
+let clients = 0, requests = 0, reject = false
+const stream = httpServer((req, res) => {
+  requests++
+  if (reject) { res.writeHead(503); res.end(); return }
+  clients++
+  res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-store' })
+  const frame = () => { res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`); res.write(jpeg); res.write('\r\n') }
+  frame()
+  const timer = setInterval(frame, 100)
+  res.on('close', () => { clearInterval(timer); clients-- })
+})
+let browser
+const wait = async (predicate, label) => {
+  for (let i = 0; i < 100; i++) { if (predicate()) return; await new Promise(r => setTimeout(r, 50)) }
+  throw new Error(label)
+}
+try {
+  await new Promise(r => stream.listen(0, '127.0.0.1', r))
+  await server.listen()
+  const origin = server.resolvedUrls.local[0].replace(/\/$/, '')
+  browser = await chromium.launch({ headless: true, ...(process.env.CC2_BROWSER_PATH ? { executablePath: process.env.CC2_BROWSER_PATH, args: ['--no-sandbox', '--disable-gpu', '--disable-software-rasterizer', '--single-process', '--no-zygote'] } : {}) })
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', e => errors.push(e.message))
+  await context.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
+  await context.route('**/__preview/camera.svg*', r => r.fulfill({ status: 302, headers: { location: `http://127.0.0.1:${stream.address().port}/stream` } }))
+  await page.goto(`${origin}/#dashboard`)
+  const start = page.getByRole('button', { name: 'Start live view', exact: true })
+  const pause = page.locator('.cc2-camera-frame').locator('..').getByRole('button', { name: 'Pause', exact: true })
+  await start.waitFor()
+  assert.equal(requests, 0, 'mount must not open a camera request')
+  const begin = async () => { await start.click(); await wait(() => clients === 1, 'one stream must open') }
+  await begin()
+  await page.locator('.cc2-camera-frame img').waitFor({ state: 'visible' })
+  await pause.click()
+  await wait(() => clients === 0, 'Pause must abort the actual MJPEG request')
+  await begin()
+  await page.goto(`${origin}/#control`)
+  await wait(() => clients === 0, 'section change must close the stream')
+  await page.goto(`${origin}/#dashboard`)
+  await start.waitFor()
+  assert.equal(clients, 0, 'returning to a page requires explicit start')
+  await begin()
+  // Real layout/IntersectionObserver path, without directly calling component functions.
+  await page.setViewportSize({ width: 1440, height: 400 })
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await wait(() => clients === 0, 'scrolling the camera out of view must close the stream')
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await start.scrollIntoViewIfNeeded()
+  await begin()
+  // Headless Chromium does not provide an interactive background tab. Exercise
+  // visibilitychange in the browser, then verify cancellation at the HTTP server.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await wait(() => clients === 0, 'hidden-tab event must close the stream')
+  await page.evaluate(() => {
+    delete document.hidden
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await start.waitFor()
+  assert.equal(clients, 0, 'visible again must not restart streaming automatically')
+  await begin()
+  await page.goto('about:blank')
+  await wait(() => clients === 0, 'leaving the page must close the stream')
+  await page.goto(`${origin}/#dashboard`)
+  await start.waitFor()
+  reject = true
+  await page.clock.install()
+  await start.click()
+  const baseline = requests
+  await page.getByRole('button', { name: 'Retry now', exact: true }).waitFor()
+  const retryNow = page.getByRole('button', { name: 'Retry now', exact: true })
+  await retryNow.click()
+  await wait(() => requests > baseline, 'manual retry must open a new request')
+  for (const delay of [2500, 5000, 10000, 20000, 30000]) {
+    const before = requests
+    await retryNow.waitFor()
+    await page.clock.runFor(delay)
+    await wait(() => requests > before, 'automatic retry must fire')
+  }
+  await page.getByText('Camera stream unavailable. Press Retry to try again.', { exact: true }).waitFor()
+  const exhausted = requests
+  await page.clock.runFor(60000)
+  assert.equal(requests, exhausted, 'retry budget must stop further requests')
+  reject = false
+  await retryNow.click()
+  await wait(() => clients === 1, 'manual retry must recover after budget exhaustion')
+  await pause.click()
+  await wait(() => clients === 0, 'recovered stream must close')
+  assert.deepEqual(errors, [])
+  console.log('PASS: manual start, real MJPEG cancellation, navigation, offscreen/visibility pause, bounded retries and recovery')
+} finally {
+  await browser?.close()
+  await server.close()
+  stream.closeAllConnections()
+  await new Promise(r => stream.close(r))
+}
