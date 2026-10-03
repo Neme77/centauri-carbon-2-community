@@ -10,7 +10,7 @@ const stops = [
   [250, 203, 69],
 ]
 const colour = (z: number, zMin: number, zMax: number, alpha = 1) => {
-  const n = Math.max(0, Math.min(0.9999, (z - zMin) / (zMax - zMin))) * 3,
+  const n = Math.max(0, Math.min(0.9999, zMax > zMin ? (z - zMin) / (zMax - zMin) : 0.5)) * 3,
     k = Math.floor(n),
     f = n - k,
     a = stops[k],
@@ -26,7 +26,7 @@ export const meshStats = (pts: Pt[]) => {
   return { min, max, range: max - min, mean: zs.reduce((s, z) => s + z, 0) / zs.length }
 }
 
-// Renders the 11×11 bed mesh as a 3D surface or a 2D heat map onto the canvas.
+// Renders the actual rectangular mesh as a 3D surface or a 2D heat map onto the canvas.
 export type Labels = { empty: string; min: string; max: string; back: string }
 
 export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '2d', cam: Cam, L: Labels) {
@@ -49,16 +49,30 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     c.fillText(L.empty, w / 2, h / 2)
     return
   }
+  const xs = [...new Set(points.map(p => p.x))].sort((a, b) => a - b)
+  const ys = [...new Set(points.map(p => p.y))].sort((a, b) => a - b)
+  const cells = new Map(points.map(p => [`${p.x},${p.y}`, p]))
   const { min: zMin, max: zMax } = st,
     col = (z: number, a = 1) => colour(z, zMin, zMax, a)
   if (mode === '2d') {
     const side = Math.min(w - 85, h - 70),
       left = (w - side) / 2,
-      top = 22,
-      cell = side / 11
+      top = 22
+    // Plot only the probed region on the bed, including non-square adaptive grids.
     for (const p of points) {
+      const x = xs.indexOf(p.x),
+        y = ys.indexOf(p.y)
+      const x0 = x ? (xs[x - 1] + p.x) / 2 : p.x
+      const x1 = x + 1 < xs.length ? (p.x + xs[x + 1]) / 2 : p.x
+      const y0 = y ? (ys[y - 1] + p.y) / 2 : p.y
+      const y1 = y + 1 < ys.length ? (p.y + ys[y + 1]) / 2 : p.y
       c.fillStyle = col(p.z)
-      c.fillRect(left + (p.x / 25) * cell, top + (10 - p.y / 25) * cell, cell + 0.2, cell + 0.2)
+      c.fillRect(
+        left + (x0 / 250) * side,
+        top + (1 - y1 / 250) * side,
+        ((x1 - x0) / 250) * side + 0.2,
+        ((y1 - y0) / 250) * side + 0.2
+      )
     }
     c.fillStyle = '#a2c9dd'
     c.textAlign = 'center'
@@ -111,9 +125,16 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
   line(project(250, 0, floor), project(250, 250, floor), '#9fc2d4')
   line(project(0, 0, floor), project(0, 0, ceiling), '#9fc2d4')
   const faces: { ps: Pt[]; depth: number }[] = []
-  for (let y = 0; y < 10; y++)
-    for (let x = 0; x < 10; x++) {
-      const ps = [points[y * 11 + x], points[y * 11 + x + 1], points[(y + 1) * 11 + x + 1], points[(y + 1) * 11 + x]]
+  for (let y = 0; y + 1 < ys.length; y++)
+    for (let x = 0; x + 1 < xs.length; x++) {
+      const corners = [
+        cells.get(`${xs[x]},${ys[y]}`),
+        cells.get(`${xs[x + 1]},${ys[y]}`),
+        cells.get(`${xs[x + 1]},${ys[y + 1]}`),
+        cells.get(`${xs[x]},${ys[y + 1]}`),
+      ]
+      if (corners.some(p => !p)) continue
+      const ps = corners as Pt[]
       faces.push({ ps, depth: ps.reduce((s, p) => s + p.x * Math.sin(yaw) + p.y * Math.cos(yaw), 0) / 4 })
     }
   faces.sort((a, b) => b.depth - a.depth)

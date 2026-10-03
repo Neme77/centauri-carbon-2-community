@@ -106,7 +106,7 @@ int mqtt_load_config(mqtt_client *c, const char *path) {
 void mqtt_close(mqtt_client *c) {
     if(c->fd>=0)close(c->fd);
     c->fd=-1; c->connected=0; c->registered=0; c->register_sent=0;
-    c->snapshot_sent=0; c->input_len=0;
+    c->snapshot_sent=0; c->input_len=0;c->discard_remaining=0;
     c->last_registration_request=0; c->last_snapshot_request=0;
     c->registration_attempts=0; c->snapshot_request_attempts=0;
     c->canvas_snapshot_len=0; c->canvas_snapshot[0]='\0';
@@ -402,7 +402,15 @@ static void consume_packets(mqtt_client *c) {
     size_t offset=0;
     while(c->input_len-offset>=2) {
         size_t remain,rn; if(!remaining_length(c->input+offset+1,c->input_len-offset-1,&remain,&rn))break;
-        size_t header=1+rn,total=header+remain; if(c->input_len-offset<total)break;
+        size_t header=1+rn,total=header+remain;
+        if(total>sizeof(c->input)){
+            /* Our subscription requests QoS 0. Drain large publishes in-place
+             * without retaining their payload or reconnecting. */
+            if((c->input[offset]&0xf6)!=0x30){mqtt_close(c);return;}
+            c->discard_remaining=total-(c->input_len-offset);
+            c->oversized_packets++;offset=c->input_len;break;
+        }
+        if(c->input_len-offset<total)break;
         unsigned char type=c->input[offset]>>4;
         if(type==3 && remain>=2) {
             const unsigned char *body=c->input+offset+header;
@@ -423,10 +431,11 @@ static void consume_packets(mqtt_client *c) {
                 capture_diagnostic(c,payload,payload_len);
                 if(contains_text(payload,payload_len,"\"canvas_info\"")&&
                    contains_text(payload,payload_len,"\"canvas_list\"")) {
-                    size_t copy=payload_len<sizeof(c->canvas_snapshot)-1?payload_len:sizeof(c->canvas_snapshot)-1;
-                    memcpy(c->canvas_snapshot,payload,copy);
-                    c->canvas_snapshot[copy]='\0';c->canvas_snapshot_len=copy;
-                    c->canvas_discovery_complete=1;
+                    if(payload_len<sizeof(c->canvas_snapshot)){
+                        memcpy(c->canvas_snapshot,payload,payload_len);
+                        c->canvas_snapshot[payload_len]='\0';c->canvas_snapshot_len=payload_len;
+                        c->canvas_discovery_complete=1;
+                    }else c->oversized_snapshots++;
                 }
                 update_state(c,payload,payload_len);
                 if(contains_text((const char*)body+2,topic_len,"/register_response")) {
@@ -435,8 +444,9 @@ static void consume_packets(mqtt_client *c) {
                 }
                 if(contains_text((const char*)body+2,topic_len,"/api_response")&&
                    contains_text(payload,payload_len,"\"method\":1002")) {
-                    size_t copy=payload_len<sizeof(c->snapshot)-1?payload_len:sizeof(c->snapshot)-1;
-                    memcpy(c->snapshot,payload,copy);c->snapshot[copy]='\0';c->snapshot_len=copy;c->info_responses++;
+                    if(payload_len<sizeof(c->snapshot)){
+                        memcpy(c->snapshot,payload,payload_len);c->snapshot[payload_len]='\0';c->snapshot_len=payload_len;c->info_responses++;
+                    }else c->oversized_snapshots++;
                 }
             }
         }
@@ -447,6 +457,13 @@ static void consume_packets(mqtt_client *c) {
 
 int mqtt_process(mqtt_client *c) {
     if(c->fd<0)return -1;
+    if(c->discard_remaining){
+        size_t want=c->discard_remaining<sizeof(c->input)?c->discard_remaining:sizeof(c->input);
+        ssize_t n=recv(c->fd,c->input,want,0);
+        if(n>0){c->discard_remaining-=(size_t)n;return 0;}
+        if(n<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR))return 0;
+        mqtt_close(c);return -1;
+    }
     if(c->input_len==sizeof(c->input)){mqtt_close(c);return -1;}
     ssize_t n=recv(c->fd,c->input+c->input_len,sizeof(c->input)-c->input_len,0);
     if(n==0){mqtt_close(c);return -1;}

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { createServer } from 'vite'
@@ -107,6 +107,40 @@ try {
   }
   await Promise.all([page.waitForEvent('load'), page.locator('#preview-reset').click()])
   assert.equal((await (await page.request.get(`${origin}/__preview/scenario`)).json()).scene, 'printing')
+  const labels = JSON.parse(await readFile(path.join(root, 'public/locales/it.json'), 'utf8'))
+  await Promise.all([page.waitForEvent('load'), page.locator('#preview-scene').selectOption('paused')])
+  await page.locator('#cc2-navigation a[href="#control"]').click()
+  assert.ok(await page.getByRole('button', { name: labels['common.motors_off'], exact: true }).isDisabled())
+  assert.ok(await page.getByRole('button', { name: labels['common.fans_off'], exact: true }).isDisabled())
+  let offsetPending = true
+  await page.route('**/api/printer', async route => {
+    const response = await route.fetch()
+    const data = await response.json()
+    data.z_offset = { value: 0.06, reference: 0.06, pending: offsetPending, timed_out: !offsetPending }
+    await route.fulfill({ response, json: data })
+  })
+  await page.reload()
+  await page.getByRole('button', { name: '+ 0.01', exact: true }).waitFor()
+  assert.ok(await page.getByRole('button', { name: '+ 0.01', exact: true }).isDisabled())
+  offsetPending = false
+  await page.reload()
+  await page.getByText(labels['control.z_offset_readback_timeout'], { exact: true }).waitFor()
+  assert.ok(await page.getByRole('button', { name: '+ 0.01', exact: true }).isEnabled())
+  await page.locator('#cc2-navigation a[href="#settings"]').click()
+  await page.getByRole('tab').nth(2).click()
+  await page.locator('main select:has(option[value="light"])').selectOption('light')
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'light')
+  await page.route('**/api/preferences', async route => {
+    if (route.request().method() === 'PUT' && route.request().postDataJSON()?.quick1) {
+      return route.fulfill({ status: 500, json: { error: 'Simulated quick-action save failure' } })
+    }
+    await route.continue()
+  })
+  await page.getByRole('button', { name: labels['settings.restore_defaults'], exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: labels['common.confirm'], exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: 'Simulated quick-action save failure' }).waitFor()
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light')
+  assert.equal(await page.evaluate(() => document.documentElement.lang), 'it')
   assert.deepEqual(errors, [])
   assert.deepEqual(outside, [], 'Preview must never request printer ports or external services')
   console.log('PASS: isolated preview, all pages at 9 viewport sizes and desktop sidebar states, scenario controls, tuning reset, blocked hardware actions and local-only requests')

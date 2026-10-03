@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <poll.h>
+#include <stdint.h>
 #include <sys/statvfs.h>
 #include <limits.h>
 #include <math.h>
@@ -19,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
@@ -35,8 +38,17 @@ static int z_offset_pending;
 static double z_offset_expected;
 static int z_offset_session;
 static double z_offset_reference;
+static struct timespec z_offset_started;
+static int z_offset_timed_out;
+static void z_offset_expire(void){
+    struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
+    if(z_offset_pending && now.tv_sec-z_offset_started.tv_sec>=5){
+        z_offset_pending=0;z_offset_session=0;z_offset_timed_out=1;
+    }
+}
 
 static int z_offset_readback(double *value){
+    z_offset_expire();
     if(!uds_value(&telemetry,U_Z_OFFSET,value))return 0;
     if(z_offset_pending&&fabs(*value-z_offset_expected)<0.0005)z_offset_pending=0;
     else if(!z_offset_pending&&z_offset_session&&fabs(*value-z_offset_expected)>=0.0005)
@@ -229,10 +241,10 @@ static void health_response(int fd, const mqtt_client *mqtt) {
         "\"mode\":\"protected-control\",\"uptime_seconds\":%ld,"
         "\"mem_total_kb\":%ld,\"mem_available_kb\":%ld,"
         "\"loadavg\":\"%s\",\"mqtt_connected\":%s,\"mqtt_registered\":%s,"
-        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu}\n",
+        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu}\n",
         uptime, mem_total, mem_available, load, mqtt->connected ? "true" : "false",
         mqtt->registered ? "true" : "false", mqtt->snapshot_len ? "true" : "false",
-        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes);
+        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots);
     if (length < 0 || (size_t)length >= sizeof(body)) return;
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
@@ -556,6 +568,8 @@ static int gcode_storage_root(const char *storage, const char **root) {
     return 0;
 }
 
+#include "gcode_download.h"
+
 /* USB root must actually be a mounted removable filesystem, not a plain
  * directory on internal flash left behind when the drive is unplugged. */
 static int gcode_storage_writable(const char *storage, const char *root) {
@@ -690,7 +704,42 @@ typedef struct {
     char storage[16];
     char name[PATH_MAX_LOCAL];
     const mqtt_client *mqtt;
+    struct timespec started;
 } gcode_upload_job;
+#define UPLOAD_TOTAL_SECONDS 300
+#define UPLOAD_STORAGE_MARGIN (16ULL*1024*1024)
+static int (*upload_statvfs)(const char *,struct statvfs *)=statvfs;
+static int upload_has_space(const char *root,size_t length,unsigned copies){
+    struct statvfs st;
+    if(upload_statvfs(root,&st))return 0;
+    uint64_t block=st.f_frsize?st.f_frsize:st.f_bsize;
+    if(!block)return 0;
+    uint64_t available=st.f_bavail>UINT64_MAX/block?UINT64_MAX:(uint64_t)st.f_bavail*block;
+    uint64_t required=(uint64_t)length*copies+UPLOAD_STORAGE_MARGIN;
+    return available>=required;
+}
+static int upload_space_guard(int fd,const char *root,size_t length,unsigned copies){
+    if(upload_has_space(root,length,copies))return 1;
+    const char *error="{\"error\":\"Insufficient free space for upload and storage reserve\"}\n";
+    respond(fd,507,"Insufficient Storage","application/json",error,strlen(error));return 0;
+}
+static int upload_seconds_left(const gcode_upload_job *job){
+    struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
+    long elapsed=now.tv_sec-job->started.tv_sec;
+    return elapsed>=UPLOAD_TOTAL_SECONDS?0:UPLOAD_TOTAL_SECONDS-(int)elapsed;
+}
+static ssize_t upload_receive(gcode_upload_job *job,void *buffer,size_t length){
+    for(;;){
+        int left=upload_seconds_left(job);if(!left){errno=ETIMEDOUT;return -1;}
+        struct pollfd p={job->fd,POLLIN,0};
+        int ready=poll(&p,1,(left<20?left:20)*1000);
+        if(ready<0&&errno==EINTR)continue;
+        if(ready<=0){errno=ETIMEDOUT;return -1;}
+        ssize_t n=recv(job->fd,buffer,length,MSG_DONTWAIT);
+        if(n<0&&(errno==EINTR||errno==EAGAIN||errno==EWOULDBLOCK))continue;
+        return n;
+    }
+}
 /* One upload at a time. The connection thread takes the slot and the upload
  * worker releases it, so this is an atomic flag: a mutex must be unlocked by
  * the thread that locked it. */
@@ -773,6 +822,7 @@ static void *gcode_upload_worker(void *arg){
     if(snprintf(temporary,sizeof(temporary),"%s/.cc2-upload-XXXXXX",root)>=(int)sizeof(temporary)){
         error="Temporary path too long";goto done;
     }
+    if(!upload_has_space(root,job->content_length,1)){code=507;status="Insufficient Storage";error="Insufficient free space";goto done;}
     output=mkstemp(temporary);
     if(output<0){code=507;status="Insufficient Storage";error="Cannot create temporary file";goto done;}
     (void)fchmod(output,0644);
@@ -789,9 +839,9 @@ static void *gcode_upload_worker(void *arg){
     while(received<job->content_length){
         size_t required=job->content_length-received;
         if(required>sizeof(chunk))required=sizeof(chunk);
-        ssize_t n=recv(job->fd,chunk,required,0);
+        ssize_t n=upload_receive(job,chunk,required);
         if(n<0&&errno==EINTR)continue;
-        if(n<=0){error="Upload interrupted or timed out";goto done;}
+        if(n<=0){if(n<0&&errno==ETIMEDOUT){code=408;status="Request Timeout";}error="Upload interrupted or timed out";goto done;}
         size_t offset=0;
         while(offset<(size_t)n){
             ssize_t written=write(output,chunk+offset,(size_t)n-offset);
@@ -801,6 +851,7 @@ static void *gcode_upload_worker(void *arg){
         }
         received+=(size_t)n;
     }
+    if(!upload_seconds_left(job)){code=408;status="Request Timeout";error="Upload deadline exceeded";goto done;}
     if(fsync(output)!=0){code=507;status="Insufficient Storage";error="Cannot finalize upload";goto done;}
     if(close(output)!=0){output=-1;error="Cannot close uploaded file";goto done;}
     output=-1;
@@ -854,12 +905,14 @@ static int gcode_upload_start(int fd,const char *request,const char *query,
         const char *e="{\"error\":\"Invalid upload size (maximum 128 MiB)\"}\n";
         respond(fd,413,"Payload Too Large","application/json",e,strlen(e));return 0;
     }
+    if(!upload_space_guard(fd,root,len,1))return 0;
     if(!upload_slot_acquire()){
         const char *e="{\"error\":\"Another upload is running\"}\n";
         respond(fd,409,"Conflict","application/json",e,strlen(e));return 0;
     }
     gcode_upload_job *job=calloc(1,sizeof(*job));
     if(!job){upload_slot_release();return 0;}
+    clock_gettime(CLOCK_MONOTONIC,&job->started);
     job->fd=fd;job->initial_length=used;job->header_length=header_length;
     job->content_length=len;memcpy(job->initial,request,used);
     snprintf(job->storage,sizeof(job->storage),"%s",storage);
@@ -952,7 +1005,8 @@ static int orca_part_headers(FILE *f,long start,long *data_offset,
         if(n==2){*data_offset=ftell(f);return disposition;}
         if(!strncasecmp(line,"Content-Disposition:",20)){
             if(!strstr(line,"form-data"))return 0;
-            const char *a=strstr(line,"name=\"");
+            const char *a=line;
+            while((a=strstr(a,"name=\"")) && a>line && a[-1]!=';' && !isspace((unsigned char)a[-1]))a+=5;
             if(!a)return 0;
             a+=6;const char *end=strchr(a,'"');
             if(!end || (size_t)(end-a)>=32)return 0;
@@ -982,6 +1036,7 @@ static void *orca_upload_worker(void *arg){
     if(!gcode_storage_writable("internal",root)){status=507;status_text="Insufficient Storage";error="Internal storage unavailable";goto fail;}
     if(!orca_get_boundary((const char *)job->initial,boundary)){error="Missing multipart boundary";goto fail;}
     if(snprintf(spool,sizeof(spool),"%s/.cc2-orca-body-XXXXXX",root)>=(int)sizeof(spool)){error="Storage path too long";goto fail;}
+    if(!upload_has_space(root,job->content_length,2)){status=507;status_text="Insufficient Storage";error="Insufficient free space for multipart upload";goto fail;}
     output=mkstemp(spool);
     if(output<0){status=507;status_text="Insufficient Storage";error="Cannot spool upload";goto fail;}
     bytes=job->initial_length-job->header_length;
@@ -993,9 +1048,9 @@ static void *orca_upload_worker(void *arg){
     while(bytes<job->content_length){
         size_t want=job->content_length-bytes;
         if(want>sizeof(chunk))want=sizeof(chunk);
-        ssize_t n=recv(job->fd,chunk,want,0);
+        ssize_t n=upload_receive(job,chunk,want);
         if(n<0&&errno==EINTR)continue;
-        if(n<=0){error="Incomplete upload";goto fail;}
+        if(n<=0){if(n<0&&errno==ETIMEDOUT){status=408;status_text="Request Timeout";}error="Incomplete or timed out upload";goto fail;}
         size_t off=0;while(off<(size_t)n){ssize_t w=write(output,chunk+off,(size_t)n-off);
             if(w<0&&errno==EINTR)continue;
             if(w<=0){error="Cannot write upload";goto fail;}off+=(size_t)w;}
@@ -1043,12 +1098,13 @@ static void *orca_upload_worker(void *arg){
     struct stat st;
     if(lstat(destination,&st)==0){status=409;status_text="Conflict";error="File already exists";goto fail;}
     if(errno!=ENOENT){error="Cannot inspect destination";goto fail;}
+    if(!upload_has_space(root,(size_t)(file_end-file_start),1)){status=507;status_text="Insufficient Storage";error="Insufficient free space for G-code file";goto fail;}
     output=mkstemp(temporary);
     if(output<0){status=507;status_text="Insufficient Storage";error="Cannot create G-code file";goto fail;}
     (void)fchmod(output,0644);
     if(fseek(input,file_start,SEEK_SET)!=0){error="Cannot seek file data";goto fail;}
     long left=file_end-file_start;
-    while(left>0){size_t want=left>(long)sizeof(chunk)?sizeof(chunk):(size_t)left;
+    while(left>0){if(!upload_seconds_left(job)){error="Upload deadline exceeded";goto fail;}size_t want=left>(long)sizeof(chunk)?sizeof(chunk):(size_t)left;
         if(fread(chunk,1,want,input)!=want){error="Cannot read file data";goto fail;}
         size_t off=0;while(off<want){ssize_t w=write(output,chunk+off,want-off);
             if(w<0&&errno==EINTR)continue;
@@ -1132,12 +1188,14 @@ static int orca_upload_start(int fd,const char *request,size_t used,size_t heade
         const char *msg="{\"error\":\"Invalid upload length\"}\n";
         respond(fd,413,"Payload Too Large","application/json",msg,strlen(msg));return 0;
     }
+    if(!upload_space_guard(fd,gcode_internal_root,length,2))return 0;
     if(!upload_slot_acquire()){
         const char *msg="{\"error\":\"Another upload is running\"}\n";
         respond(fd,409,"Conflict","application/json",msg,strlen(msg));return 0;
     }
     gcode_upload_job *job=calloc(1,sizeof(*job));
     if(!job){upload_slot_release();return 0;}
+    clock_gettime(CLOCK_MONOTONIC,&job->started);
     job->fd=fd;job->initial_length=used;job->header_length=header_length;
     job->content_length=length;job->mqtt=mqtt;memcpy(job->initial,request,used);
     struct timeval timeout={20,0};
@@ -1844,6 +1902,8 @@ static int active_gcode_total_layers(const char *filename) {
     return cached_total;
 }
 
+#include "recovery.h"
+
 static void printer_response(int fd, const mqtt_client *mqtt) {
     /* Render from the two caches without copying MQTT transport/history buffers. */
     double live;
@@ -1909,12 +1969,13 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
-        "\"z_offset\":{\"value\":%s,\"pending\":%s,\"reference\":%s,\"adjustment\":%s},"
+        "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
+        "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
-        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",zreference,zadjustment,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
+        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
@@ -2780,7 +2841,7 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
-    if(z_action){z_offset_reference=z_reference;z_offset_session=1;z_offset_expected=z_next;z_offset_pending=1;}
+    if(z_action){z_offset_reference=z_reference;z_offset_session=1;z_offset_expected=z_next;z_offset_pending=1;z_offset_timed_out=0;clock_gettime(CLOCK_MONOTONIC,&z_offset_started);}
     const char *ok="{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }
@@ -2814,8 +2875,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
                 "text/plain; charset=utf-8", body, strlen(body));
         return 0;
     }
-    char method[16], path[256], version[16];
-    if (sscanf(request, "%15s %255s %15s", method, path, version) != 3) return 0;
+    char method[16], path[2048], version[16];
+    if (sscanf(request, "%15s %2047s %15s", method, path, version) != 3) return 0;
     if(!http_browser_allowed(fd,request,method,path,service_http_port,http_host_alias)){
         const char *error="{\"error\":\"Untrusted HTTP host or browser origin\"}\n";
         respond(fd,403,"Forbidden","application/json; charset=utf-8",error,strlen(error));return 0;
@@ -2877,6 +2938,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         preferences_put_response(fd,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files")==0) {
         gcode_files_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
+        return gcode_download_start(fd,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
         gcode_inspect_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/thumbnail")==0) {
@@ -2899,6 +2962,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         console_clear_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/command")==0) {
         console_command_response(fd,console,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/recovery/reboot")==0) {
+        recovery_reboot_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/control")==0) {
         control_response(fd,console,mqtt,body,body_len);
     } else if (strcmp(method,"GET")!=0 && strcmp(method,"POST")!=0 && strcmp(method,"PUT")!=0) {
@@ -2949,6 +3014,7 @@ int main(int argc, char **argv) {
     mqtt_client mqtt;
     console_state console;
     console_init(&console,"/tmp/elegoo_uds");
+    recovery_console=&console;
     uds_init(&telemetry);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
@@ -2984,6 +3050,7 @@ int main(int argc, char **argv) {
     if(!pending){perror("HTTP receive pool");panda_stop(&panda);close(server);mqtt_close(&mqtt);console_destroy(&console);return 1;}
     for(int i=0;i<HTTP_PENDING_MAX;i++)pending[i].fd=-1;
     while (running) {
+        recovery_tick();
         mqtt_tick(&mqtt);
         uds_tick(&telemetry,uds_path);
         fd_set read_set;
@@ -3034,7 +3101,11 @@ int main(int argc, char **argv) {
         int slot=-1;
         for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd<0){slot=i;break;}
         int flags=fcntl(client,F_GETFL,0);
-        if(slot<0||client>=FD_SETSIZE||flags<0||fcntl(client,F_SETFL,flags|O_NONBLOCK)<0){close(client);continue;}
+        if(slot<0){
+            const char overload[]="HTTP/1.1 503 Service Unavailable\r\nRetry-After: 2\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            (void)send(client,overload,sizeof(overload)-1,MSG_NOSIGNAL|MSG_DONTWAIT);close(client);continue;
+        }
+        if(client>=FD_SETSIZE||flags<0||fcntl(client,F_SETFL,flags|O_NONBLOCK)<0){close(client);continue;}
         pending[slot].fd=client;pending[slot].used=0;pending[slot].request[0]=0;
         clock_gettime(CLOCK_MONOTONIC,&pending[slot].started);
         if (first_run_restart_requested) {

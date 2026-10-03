@@ -37,6 +37,8 @@ int main(void){
  snprintf(file,sizeof(file),"%s/print.gcode",path);assert(access(file,F_OK)==0);
  assert(strcmp(orca_pending_filename,"print.gcode")==0);
  assert(orca_pending_generation>0);
+ assert(upload(&mqtt,"pending-conflict.gcode","G28\n",1,0)==409);
+ snprintf(file,sizeof(file),"%s/pending-conflict.gcode",path);assert(access(file,F_OK)!=0);
  puts("PASS print=true saves file and queues Canvas confirmation without starting");
  assert(upload(&mqtt,"bad.gcode","G28\n",0,1)==415);
  puts("PASS non-multipart rejected");

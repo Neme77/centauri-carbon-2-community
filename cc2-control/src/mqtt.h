@@ -8,6 +8,8 @@ typedef struct {
     int fd;
     unsigned char input[16384];
     size_t input_len;
+    size_t discard_remaining;
+    unsigned long oversized_packets, oversized_snapshots;
     time_t last_connect_attempt;
     time_t last_message;
     time_t last_ping;
