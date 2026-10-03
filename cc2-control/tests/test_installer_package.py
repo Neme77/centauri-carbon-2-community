@@ -44,8 +44,20 @@ with tempfile.TemporaryDirectory() as tmp:
         assert (target/'cc2-control').read_bytes()==(bytes(binary) if scenario=='success' else b'OLD')
         for name in keep:assert (target/name).read_text()=='KEEP '+name
         assert not (fixture/'lock').exists()
+        if scenario == 'success':
+            # Firmware installations keep their binary in /opt/inst; their
+            # /opt/usr backup contains configuration only.
+            backup = next(target.parent.glob('cc2-control-backup-*'))
+            (backup/'installation/cc2-control').unlink()
+            restore = (backup/'restore.sh').read_text().replace('/opt/usr/cc2-control',str(target)).replace('/etc/init.d/cc2-control',str(init)).replace('/tmp/cc2-control-install.lock',str(fixture/'lock'))
+            (backup/'restore.sh').write_text(restore)
+            result = subprocess.run(['sh',str(backup/'restore.sh')],env=dict(os.environ,PATH=str(commands)+':'+os.environ['PATH']),capture_output=True,text=True,timeout=10)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert not (target/'cc2-control').exists()
+            for name in keep: assert (target/name).read_text() == 'KEEP '+name
+            assert marker.exists() and not (fixture/'lock').exists()
     (prepared/'cc2-control').write_bytes(b'wrong architecture')
     try:pkg.package(prepared,ROOT/'scripts',source,output)
     except ValueError:pass
     else:raise AssertionError('Non-ARM binary accepted')
-print('PASS: package checksums/modes, ARM guard, Idle rejection, config preservation, install and rollback simulation')
+print('PASS: package checksums/modes, ARM guard, Idle rejection, config preservation, install/rollback simulation and configuration-only firmware backup restore')

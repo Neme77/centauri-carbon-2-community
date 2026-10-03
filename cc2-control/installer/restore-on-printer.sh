@@ -4,7 +4,7 @@ BACKUP=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 TARGET=/opt/usr/cc2-control
 INIT=/etc/init.d/cc2-control
 LOCK=/tmp/cc2-control-install.lock
-test -f "$BACKUP/installation/cc2-control"
+test -d "$BACKUP/installation"
 test -f "$BACKUP/init.before"
 STATUS=$(wget -qO- http://127.0.0.1:8081/api/printer)
 case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Restore requires connected Idle printer.' >&2; exit 1;; esac
