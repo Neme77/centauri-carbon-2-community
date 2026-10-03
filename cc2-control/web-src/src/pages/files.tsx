@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
-import { FileText, Play, RefreshCw, Search, Trash2, Upload as UploadIcon } from 'lucide-preact'
+import { Download, FileText, Play, RefreshCw, Search, Trash2, Upload as UploadIcon } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,15 @@ import { startFile } from '@/pages/print-dialog'
 
 type Entry = { storage: 'internal' | 'usb'; file: any }
 const key = (e: { storage: string; path?: string; file?: any }) => `${e.storage}\n${e.path ?? e.file.path}`
+// Let the browser stream/save the attachment; never buffer a large G-code in a Blob.
+const download = (entry: Entry) => {
+  const link = document.createElement('a')
+  link.href = `/api/gcode-files/download?storage=${entry.storage}&file=${encodeURIComponent(entry.file.path)}`
+  link.download = entry.file.path.split('/').pop() || 'download.gcode'
+  document.body.append(link)
+  link.click()
+  link.remove()
+}
 const where = (s: string) => t(s === 'usb' ? 'files.usb_drive' : 'files.internal_memory')
 const I = { size: 16, strokeWidth: 1 }
 const metaCache = new Map<string, any>()
@@ -236,6 +245,17 @@ export const Files = () => {
                   <div class="flex gap-1.5">
                     <Button
                       class="px-2.5"
+                      title={t('files.download_g_code')}
+                      aria-label={t('files.download_g_code')}
+                      onClick={ev => {
+                        ev.stopPropagation()
+                        download(e)
+                      }}
+                    >
+                      <Download {...I} />
+                    </Button>
+                    <Button
+                      class="px-2.5"
                       onClick={ev => {
                         ev.stopPropagation()
                         startFile(e.storage, e.file.path)
@@ -360,6 +380,10 @@ const Detail = ({
       <Button wide variant="primary" class="mt-4" disabled={!entry} onClick={() => entry && onPrint(entry)}>
         <Play {...I} />
         {t('files.start_protected_print')}
+      </Button>
+      <Button wide class="mt-2" disabled={!entry} onClick={() => entry && download(entry)}>
+        <Download {...I} />
+        {t('files.download_g_code')}
       </Button>
       <Button wide variant="danger" class="mt-2" disabled={!entry} onClick={() => entry && onDelete(entry)}>
         <Trash2 {...I} />
