@@ -10,7 +10,7 @@ Community firmware, local printer control and reproducible build tools for the *
 | Component          |                                                                                         Version |
 | ------------------ | ----------------------------------------------------------------------------------------------: |
 | Community firmware |                 [V4.2-R5](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2-R5) |
-| CC2 Control        | [1.1.31](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2-R5) |
+| CC2 Control        | [1.1.31fix](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.1.31fix) |
 
 Release binaries, standalone updaters, source archives and checksums are kept with the corresponding GitHub Release. The canonical development source is kept directly on `develop`.
 
@@ -18,8 +18,8 @@ Release binaries, standalone updaters, source archives and checksums are kept wi
 
 <p align="center">
   <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2_V4_2_STOCK_20261004_135126_9cead4b7.zip.sig"><img alt="Download Community Firmware V4.2-R5" src="https://img.shields.io/badge/Download-Firmware%20V4.2--R5-00b8d9?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Multiplatform-Update.zip"><img alt="Download CC2 Control 1.1.31 updater" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.31-22c55e?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Source.zip"><img alt="Download CC2 Control 1.1.31 source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.31-6f42c1?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31fix/CC2-Control-1.1.31fix-Multiplatform-Update.zip"><img alt="Download CC2 Control 1.1.31 updater" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.31-22c55e?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31fix/CC2-Control-1.1.31fix-Source.zip"><img alt="Download CC2 Control 1.1.31 source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.31-6f42c1?style=for-the-badge"></a>
 </p>
 
 <p align="center">
@@ -34,8 +34,8 @@ Release binaries, standalone updaters, source archives and checksums are kept wi
 | Choose this file                                                                                                                                                                                                      | When to use it                                                                                          |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [`CC2_V4_2_STOCK_20261004_135126_9cead4b7.zip.sig`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2_V4_2_STOCK_20261004_135126_9cead4b7.zip.sig)                                     | New installation or complete Community Firmware V4.2-R5 update                                             |
-| [`CC2-Control-1.1.31-R5-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Multiplatform-Update.zip)                               | Existing Community Firmware installation: update only CC2 Control, without reflashing the full firmware |
-| [`CC2-Control-1.1.31-R5-Source.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Source.zip) | CC2 Control source; updater packaging tools are in `cc2-control/installer/`                                            |
+| [`CC2-Control-1.1.31fix-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31fix/CC2-Control-1.1.31fix-Multiplatform-Update.zip)                               | Existing Community Firmware installation: update only CC2 Control, without reflashing the full firmware |
+| [`CC2-Control-1.1.31fix-Source.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31fix/CC2-Control-1.1.31fix-Source.zip) | CC2 Control source; updater packaging tools are in `cc2-control/installer/`                                            |
 | [`CC2-Builder-V4.2-R5-CC2-Control-1.1.31.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Builder-V4.2-R5-CC2-Control-1.1.31.zip)                               | Firmware builder R5                                                                                     |
 | [`SHA256SUMS_V4_2_R5_RELEASE.txt`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/SHA256SUMS_V4_2_R5_RELEASE.txt)                                                                                             | Verify downloaded release files                                                                         |
 
@@ -45,7 +45,7 @@ If your printer already runs an earlier Community Firmware release, you do not n
 
 Use the standalone updater:
 
-[`CC2-Control-1.1.31-R5-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Multiplatform-Update.zip)
+[`CC2-Control-1.1.31fix-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31fix/CC2-Control-1.1.31fix-Multiplatform-Update.zip)
 
 The standalone updater replaces only CC2 Control and preserves the persistent LAN access code, material presets and interface preferences. CC2 Control 1.1.31 also adds LAN-code revalidation and OrcaSlicer Moonraker-agent Canvas filament synchronization. After the update, CC2 Control realigns its local services automatically, so an additional printer reboot or full power cycle should not be necessary.
 
@@ -98,7 +98,7 @@ First and foremost, a special thank you to **[@Surfoo](https://github.com/Surfoo
 
 A huge thank you to **DamiBFryta**, our dedicated beta tester, for ideas, testing and debugging throughout the project.
 
-Thank you to **[@beanbo](https://github.com/beanbo)** for printer sub-states, refusal reporting, Canvas auto-refill and print history ([#67](https://github.com/Neme77/centauri-carbon-2-community/pull/67)), and camera ownership across CC2 pages ([#71](https://github.com/Neme77/centauri-carbon-2-community/pull/71)).
+Thank you to **[@beanbo](https://github.com/beanbo)** for printer sub-states, refusal reporting, Canvas auto-refill and print history ([#67](https://github.com/Neme77/centauri-carbon-2-community/pull/67)), camera ownership across CC2 pages ([#71](https://github.com/Neme77/centauri-carbon-2-community/pull/71)), and the Files upload card, newest-file selection and clearer upload errors ([#78](https://github.com/Neme77/centauri-carbon-2-community/pull/78), [#80](https://github.com/Neme77/centauri-carbon-2-community/pull/80)).
 
 Thank you to **[@Skcycos](https://github.com/Skcycos)** for the Simplified Chinese translation ([#26](https://github.com/Neme77/centauri-carbon-2-community/pull/26)), **[@beanbo](https://github.com/beanbo)** for the Russian translation ([#63](https://github.com/Neme77/centauri-carbon-2-community/pull/63)), and **[@Surfoo](https://github.com/Surfoo)** for the French translation and JSON localization system ([#15](https://github.com/Neme77/centauri-carbon-2-community/pull/15)). Their work makes CC2 Control accessible to more users.
 
@@ -180,3 +180,5 @@ AI-assisted changes are reviewed and validated before being included in a releas
 
 Project code is provided under GPL-3.0-only where the contributors have the right to license it. Vendor firmware and third-party components keep their own terms. See [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).
 
+
+The **1.1.31fix** standalone update includes stable 3D mesh framing, bounded Canvas discovery, clearer filament mapping, and File Manager upload/listing fixes. Its internal service version remains 1.1.31. The firmware and builder downloads above remain V4.2-R5.
