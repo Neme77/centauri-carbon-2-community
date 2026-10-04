@@ -3076,7 +3076,11 @@ static int http_request_complete(const char *request,size_t used){
 }
 
 static int handle_client(int fd,char *request,size_t used,const char *web_root,mqtt_client *mqtt,console_state *console){
-    if (used == REQUEST_MAX) {
+    /* A full initial read may contain a valid header followed by upload bytes.
+     * Reject only oversized headers, not a streaming body's first chunk. */
+    const char *request_header_end = strstr(request, "\r\n\r\n");
+    if (!request_header_end) request_header_end = strstr(request, "\n\n");
+    if (used == REQUEST_MAX && !request_header_end) {
         const char *body = "Request headers too large\n";
         respond(fd, 431, "Request Header Fields Too Large",
                 "text/plain; charset=utf-8", body, strlen(body));
