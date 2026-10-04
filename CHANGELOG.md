@@ -3,7 +3,19 @@
 This file records user-visible project changes. Signed artifacts and exact
 checksums remain attached to each GitHub release.
 
-## Unreleased
+## CC2 Control 1.1.31fix — 2026-10-04
+
+- Restore and stabilize 3D mesh viewing, including meshes with large height offsets and camera rotation.
+- Bound automatic Canvas discovery across MQTT reconnects and expose diagnostic counters; explicit Sync remains available.
+- Identify G-code tools by colour and material during Canvas print setup.
+- Fix intermittent uploads when headers and file data arrive together; report duplicate-file refusals clearly.
+- List the newest 128 G-code files and show when older files are hidden; move upload controls above the file list.
+- Windows launcher includes explicit SSH host-key recovery and forwards command-line arguments.
+- Printer-tested installer includes all merged fixes; the thumbnail-priority experiment was discarded.
+
+Internal service version remains 1.1.31. This standalone update does not replace the V4.2-R5 firmware release.
+
+## Earlier integrated changes
 
 - Files lists the 128 newest G-code files of a storage instead of an arbitrary 128, and says when older files are hidden.
 - A browser upload refused by the printer, for example because the file already exists, reports that error instead of a network error.
