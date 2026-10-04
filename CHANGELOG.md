@@ -5,6 +5,7 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Show the G-code upload card above the Files list (above the file details on wide layouts), so a long list no longer pushes it out of reach.
 - Frame the 3D bed mesh around its actual height range so meshes with large positive or negative offsets remain visible.
 - Bound automatic Canvas discovery across MQTT reconnects, allow explicit Sync recovery and expose discovery counters in MQTT diagnostics.
 
