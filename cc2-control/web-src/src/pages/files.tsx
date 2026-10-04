@@ -154,139 +154,139 @@ export const Files = () => {
     'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-edge px-3 py-2 cc2-md:grid-cols-[1.6fr_.55fr_.75fr_.75fr_1.25fr]'
   return (
     <Page title="common.files" sub="files.browse_protected_g_code_storage_on">
-      <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 cc2-xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)]">
-        <div class="grid min-w-0 content-start gap-3">
-          <Card>
-            <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2.5 cc2-md:grid-cols-[1.6fr_.8fr_1fr_auto]">
-              <div class="relative col-span-2 cc2-md:col-span-1">
-                <Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-                <Input
-                  class="pl-8"
-                  placeholder={t('files.search_files')}
-                  value={q}
-                  onInput={e => setQ(e.currentTarget.value)}
-                />
-              </div>
-              <Select class="col-span-2 cc2-md:col-span-1" value={loc} onChange={e => setLoc(e.currentTarget.value)}>
-                <option value="all">{t('files.all_files')}</option>
-                <option value="internal">{t('files.internal_memory')}</option>
-                <option value="usb">{t('files.usb_drive')}</option>
-              </Select>
-              <Select value={sort} onChange={e => setSort(e.currentTarget.value)}>
-                <option value="newest">{t('files.newest_first')}</option>
-                <option value="name">{t('common.name')}</option>
-                <option value="size">{t('files.size')}</option>
-              </Select>
-              <Button onClick={() => refresh(true)} aria-label={t('files.refresh')}>
-                <RefreshCw {...I} />
+      {/* Upload comes first so a long file list never pushes it out of reach: above the list in one column,
+          above the details in two (the list spans both rows of the left column). */}
+      <div class="grid grid-cols-[minmax(0,1fr)] gap-3.5 cc2-xl:grid-cols-[minmax(0,2.5fr)_minmax(330px,.95fr)] cc2-xl:grid-rows-[auto_1fr]">
+        <div class="cc2-xl:col-start-2 cc2-xl:row-start-1">
+          <Upload busy={busy} setBusy={setBusy} refresh={refresh} />
+        </div>
+        <Card class="cc2-xl:col-start-1 cc2-xl:row-span-2 cc2-xl:row-start-1">
+          <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2.5 cc2-md:grid-cols-[1.6fr_.8fr_1fr_auto]">
+            <div class="relative col-span-2 cc2-md:col-span-1">
+              <Search {...I} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+              <Input
+                class="pl-8"
+                placeholder={t('files.search_files')}
+                value={q}
+                onInput={e => setQ(e.currentTarget.value)}
+              />
+            </div>
+            <Select class="col-span-2 cc2-md:col-span-1" value={loc} onChange={e => setLoc(e.currentTarget.value)}>
+              <option value="all">{t('files.all_files')}</option>
+              <option value="internal">{t('files.internal_memory')}</option>
+              <option value="usb">{t('files.usb_drive')}</option>
+            </Select>
+            <Select value={sort} onChange={e => setSort(e.currentTarget.value)}>
+              <option value="newest">{t('files.newest_first')}</option>
+              <option value="name">{t('common.name')}</option>
+              <option value="size">{t('files.size')}</option>
+            </Select>
+            <Button onClick={() => refresh(true)} aria-label={t('files.refresh')}>
+              <RefreshCw {...I} />
+            </Button>
+          </div>
+          {checked.size > 0 && (
+            <div class="my-3 flex items-center gap-2">
+              <strong>{tpl('files.n_selected', { n: checked.size })}</strong>
+              <Button onClick={() => bulk('copy')}>{t('files.copy_selected')}</Button>
+              <Button variant="danger" onClick={() => bulk('delete')}>
+                {t('files.delete_selected')}
               </Button>
             </div>
-            {checked.size > 0 && (
-              <div class="my-3 flex items-center gap-2">
-                <strong>{tpl('files.n_selected', { n: checked.size })}</strong>
-                <Button onClick={() => bulk('copy')}>{t('files.copy_selected')}</Button>
-                <Button variant="danger" onClick={() => bulk('delete')}>
-                  {t('files.delete_selected')}
-                </Button>
-              </div>
-            )}
-            <div class="mt-3.5 overflow-hidden rounded-lg border border-edge">
-              <div class={cn(cols, 'min-h-11 text-muted')}>
-                <span>
+          )}
+          <div class="mt-3.5 overflow-hidden rounded-lg border border-edge">
+            <div class={cn(cols, 'min-h-11 text-muted')}>
+              <span>
+                <input
+                  type="checkbox"
+                  title={t('files.select_all_shown_files')}
+                  checked={visible.length > 0 && visible.every(e => checked.has(key(e)))}
+                  onChange={e => {
+                    for (const x of visible) toggle(key(x), e.currentTarget.checked)
+                  }}
+                />{' '}
+                {t('common.name')}
+              </span>
+              <span class="hidden cc2-md:inline">{t('files.size')}</span>
+              <span class="hidden cc2-md:inline">{t('files.modified')}</span>
+              <span class="hidden cc2-md:inline">{t('files.storage')}</span>
+              <span>{t('files.actions')}</span>
+            </div>
+            {visible.map(e => (
+              // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: whole-row click is a mouse shortcut; keyboard users select through the file name button
+              <div
+                key={key(e)}
+                onClick={() => setSel(e)}
+                class={cn(
+                  cols,
+                  'cc2-file-row min-h-16 cursor-pointer',
+                  sel && key(sel) === key(e) && 'bg-field outline outline-1 -outline-offset-1 outline-cyan'
+                )}
+              >
+                <div class="cc2-file-identity flex min-w-0 items-center gap-2.5 font-semibold">
                   <input
                     type="checkbox"
-                    title={t('files.select_all_shown_files')}
-                    checked={visible.length > 0 && visible.every(e => checked.has(key(e)))}
-                    onChange={e => {
-                      for (const x of visible) toggle(key(x), e.currentTarget.checked)
-                    }}
-                  />{' '}
-                  {t('common.name')}
-                </span>
-                <span class="hidden cc2-md:inline">{t('files.size')}</span>
-                <span class="hidden cc2-md:inline">{t('files.modified')}</span>
-                <span class="hidden cc2-md:inline">{t('files.storage')}</span>
-                <span>{t('files.actions')}</span>
-              </div>
-              {visible.map(e => (
-                // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: whole-row click is a mouse shortcut; keyboard users select through the file name button
-                <div
-                  key={key(e)}
-                  onClick={() => setSel(e)}
-                  class={cn(
-                    cols,
-                    'cc2-file-row min-h-16 cursor-pointer',
-                    sel && key(sel) === key(e) && 'bg-field outline outline-1 -outline-offset-1 outline-cyan'
-                  )}
-                >
-                  <div class="cc2-file-identity flex min-w-0 items-center gap-2.5 font-semibold">
-                    <input
-                      type="checkbox"
-                      title={t('files.select_file')}
-                      checked={checked.has(key(e))}
-                      onClick={ev => ev.stopPropagation()}
-                      onChange={ev => toggle(key(e), ev.currentTarget.checked)}
-                    />
-                    <FileText {...I} class="shrink-0" />
-                    <button
-                      type="button"
-                      class="cc2-file-name min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline"
-                      title={e.file.path}
-                      onClick={() => setSel(e)}
-                    >
-                      {e.file.path}
-                    </button>
-                  </div>
-                  <span class="hidden cc2-md:inline">{fileSize(e.file.size)}</span>
-                  <span class="hidden cc2-md:inline">
-                    {Number(e.file.modified) > 0 ? new Date(Number(e.file.modified) * 1000).toLocaleString() : '—'}
-                  </span>
-                  <span class="hidden cc2-md:inline">{e.storage === 'usb' ? 'USB' : t('files.internal')}</span>
-                  <div class="flex gap-1.5">
-                    <Button
-                      class="px-2.5"
-                      title={t('files.download_g_code')}
-                      aria-label={t('files.download_g_code')}
-                      onClick={ev => {
-                        ev.stopPropagation()
-                        download(e)
-                      }}
-                    >
-                      <Download {...I} />
-                    </Button>
-                    <Button
-                      class="px-2.5"
-                      onClick={ev => {
-                        ev.stopPropagation()
-                        startFile(e.storage, e.file.path)
-                      }}
-                    >
-                      <Play {...I} />
-                      {t('files.print')}
-                    </Button>
-                    <Button
-                      class="hidden px-2.5 cc2-sm:inline-flex"
-                      variant="danger"
-                      onClick={ev => {
-                        ev.stopPropagation()
-                        remove(e)
-                      }}
-                    >
-                      {t('common.delete')}
-                    </Button>
-                  </div>
-                  {sel && key(sel) === key(e) && <div class="cc2-file-expanded col-span-2 hidden">{e.file.path}</div>}
+                    title={t('files.select_file')}
+                    checked={checked.has(key(e))}
+                    onClick={ev => ev.stopPropagation()}
+                    onChange={ev => toggle(key(e), ev.currentTarget.checked)}
+                  />
+                  <FileText {...I} class="shrink-0" />
+                  <button
+                    type="button"
+                    class="cc2-file-name min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline"
+                    title={e.file.path}
+                    onClick={() => setSel(e)}
+                  >
+                    {e.file.path}
+                  </button>
                 </div>
-              ))}
-              {!visible.length && (
-                <div class="p-4 text-muted">{t(loaded ? 'files.no_matching_g_code_files' : 'files.loading_files')}</div>
-              )}
-            </div>
-          </Card>
-          <div>
-            <Upload busy={busy} setBusy={setBusy} refresh={refresh} />
+                <span class="hidden cc2-md:inline">{fileSize(e.file.size)}</span>
+                <span class="hidden cc2-md:inline">
+                  {Number(e.file.modified) > 0 ? new Date(Number(e.file.modified) * 1000).toLocaleString() : '—'}
+                </span>
+                <span class="hidden cc2-md:inline">{e.storage === 'usb' ? 'USB' : t('files.internal')}</span>
+                <div class="flex gap-1.5">
+                  <Button
+                    class="px-2.5"
+                    title={t('files.download_g_code')}
+                    aria-label={t('files.download_g_code')}
+                    onClick={ev => {
+                      ev.stopPropagation()
+                      download(e)
+                    }}
+                  >
+                    <Download {...I} />
+                  </Button>
+                  <Button
+                    class="px-2.5"
+                    onClick={ev => {
+                      ev.stopPropagation()
+                      startFile(e.storage, e.file.path)
+                    }}
+                  >
+                    <Play {...I} />
+                    {t('files.print')}
+                  </Button>
+                  <Button
+                    class="hidden px-2.5 cc2-sm:inline-flex"
+                    variant="danger"
+                    onClick={ev => {
+                      ev.stopPropagation()
+                      remove(e)
+                    }}
+                  >
+                    {t('common.delete')}
+                  </Button>
+                </div>
+                {sel && key(sel) === key(e) && <div class="cc2-file-expanded col-span-2 hidden">{e.file.path}</div>}
+              </div>
+            ))}
+            {!visible.length && (
+              <div class="p-4 text-muted">{t(loaded ? 'files.no_matching_g_code_files' : 'files.loading_files')}</div>
+            )}
           </div>
-        </div>
+        </Card>
         <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path)} onDelete={remove} />
       </div>
     </Page>
