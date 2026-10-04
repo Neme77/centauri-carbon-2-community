@@ -5,7 +5,9 @@ import { Dot } from '@/components/ui/badge'
 import { Card, CardHead } from '@/components/ui/card'
 import { Icon } from '@/components/icons'
 import { type Key, t } from '@/lib/i18n'
-import { camera } from '@/lib/state'
+import { post } from '@/lib/api'
+import { usePoll } from '@/lib/poll'
+import { camera, printer, refreshPrinter } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 
 export const Reading = ({
@@ -110,9 +112,13 @@ export const Muted = ({ children, class: c }: { children: ComponentChildren; cla
 )
 
 // Each card owns one MJPEG request; stopping the view leaves the printer camera service running.
+// Live view runs on one CC2 Control page at a time: starting it claims the camera, and a page that sees
+// another viewer in /api/printer stops its own stream and offers to take it back, instead of retrying.
 const CAMERA_RETRY_MS = [2500, 5000, 10000, 20000, 30000]
+const viewerId = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')
 
-export const CameraCard = ({ tall }: { tall?: boolean }) => {
+export const CameraCard = ({ tall, standalone }: { tall?: boolean; standalone?: boolean }) => {
   const [on, setOn] = useState(false)
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -127,6 +133,12 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
   const generation = useRef(0)
   const retry = useRef<number | undefined>(undefined)
   const tries = useRef(0)
+  const viewer = useRef('')
+  if (!viewer.current) viewer.current = viewerId()
+  const claimed = useRef(0) // when the backend confirmed this page's claim; 0 while it has none
+  const starts = useRef(0)
+  const { data, at } = printer.use()
+  const owner = data?.camera_viewer
   const clearRetry = () => {
     if (retry.current !== undefined) clearTimeout(retry.current)
     retry.current = undefined
@@ -137,6 +149,7 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
   }
   const stop = (why: Key | '' = '') => {
     live.current = false
+    claimed.current = 0
     clearRetry()
     release()
     setSrc('')
@@ -156,15 +169,24 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
     activeSrc.current = next
     setSrc(next)
   }
-  const start = () => {
+  const start = async () => {
     if (document.hidden || !visible.current) return
+    const attempt = ++starts.current
     clearRetry()
     live.current = true
     tries.current = 0
+    claimed.current = 0
     setNote('')
     setGaveUp(false)
     setOn(true)
-    connect()
+    try {
+      await post('/api/camera/claim', viewer.current)
+      if (attempt === starts.current) claimed.current = performance.now()
+    } catch {
+      /* stream anyway: without a confirmed claim this page just does not watch for other viewers */
+    }
+    // Not when paused, hidden or unmounted while claiming, or when a newer start took over.
+    if (live.current && attempt === starts.current) connect()
   }
   const current = (element: HTMLImageElement) =>
     live.current && element === img.current && element.getAttribute('src') === activeSrc.current
@@ -180,6 +202,12 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
     }
     retry.current = window.setTimeout(connect, CAMERA_RETRY_MS[tries.current++])
   }
+  // Another page claimed the camera after this one: hand the stream over. Replies to requests sent before
+  // this page's claim was confirmed still show the previous viewer, so they are ignored.
+  useEffect(() => {
+    if (live.current && claimed.current && at >= claimed.current && owner && owner !== viewer.current)
+      stop('common.camera_taken_over')
+  }, [owner, at])
   useEffect(() => {
     const hidden = () => {
       if (document.hidden && live.current) stop('common.camera_paused_hidden')
@@ -194,6 +222,7 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
     if (frame.current) observer.observe(frame.current)
     document.addEventListener('visibilitychange', hidden)
     window.addEventListener('pagehide', leaving)
+    if (standalone) void start() // opening the camera window is the explicit start
     return () => {
       document.removeEventListener('visibilitychange', hidden)
       window.removeEventListener('pagehide', leaving)
@@ -227,7 +256,7 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
         ref={frame}
         class={cn(
           'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
-          tall ? 'min-h-80' : 'aspect-video'
+          standalone ? 'min-h-[calc(100dvh_-_7rem)]' : tall ? 'min-h-80' : 'aspect-video'
         )}
       >
         {!ready && (
@@ -249,7 +278,7 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
             </p>
             {!on && (
               <Button class="mt-2 text-xs" onClick={start}>
-                {t('common.camera_start')}
+                {t(note === 'common.camera_taken_over' ? 'common.camera_watch_here' : 'common.camera_start')}
               </Button>
             )}
             {on && failed && (
@@ -278,25 +307,41 @@ export const CameraCard = ({ tall }: { tall?: boolean }) => {
           />
         )}
       </div>
-      <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-2">
-        <Button
-          class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
-          onClick={() => {
-            stop()
-            window.open(camera(), 'cc2-camera')
-          }}
-        >
-          <Icon n="open" class="size-4" />
-          {t('common.open_in_new_window')}
-        </Button>
-        <Button
-          class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
-          onClick={() => window.open(camera(`?snapshot=${Date.now()}`), 'cc2-snapshot')}
-        >
-          <Icon n="camera" class="size-4" />
-          {t('common.snapshot')}
-        </Button>
-      </div>
+      {!standalone && (
+        <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-2">
+          <Button
+            class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
+            onClick={() => {
+              stop()
+              // A CC2 Control camera window rather than the raw stream, so it follows the one-viewer rule.
+              window.open('#camera', 'cc2-camera')
+            }}
+          >
+            <Icon n="open" class="size-4" />
+            {t('common.open_in_new_window')}
+          </Button>
+          <Button
+            class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
+            onClick={() => window.open(camera(`?snapshot=${Date.now()}`), 'cc2-snapshot')}
+          >
+            <Icon n="camera" class="size-4" />
+            {t('common.snapshot')}
+          </Button>
+        </div>
+      )}
     </Card>
+  )
+}
+
+// The separate camera window (#camera): the camera card alone, under the same one-viewer rule.
+export const CameraWindow = () => {
+  usePoll(refreshPrinter, 1500)
+  useEffect(() => {
+    document.title = t('common.live_camera')
+  })
+  return (
+    <main class="mx-auto max-w-[2000px] p-3 md:p-4">
+      <CameraCard tall standalone />
+    </main>
   )
 }

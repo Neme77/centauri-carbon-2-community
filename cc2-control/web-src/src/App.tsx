@@ -2,6 +2,7 @@ import { i18n } from '@/lib/i18n'
 import { menu, nav, printer } from '@/lib/state'
 import { PrintWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CameraWindow } from '@/components/shared'
 import { SetupDialog } from '@/pages/setup'
 import { PrintDialog } from '@/pages/print-dialog'
 import { Dashboard } from '@/pages/dashboard'
@@ -26,11 +27,12 @@ const pages = {
 
 export const App = () => {
   i18n.use() // re-render the whole tree when the language changes
-  const { page } = nav.use()
+  const { page, camera } = nav.use()
   const { collapsed } = menu.use()
   const { data, ok } = printer.use()
   const stale = !ok || (data && !data.connected) // last known values stay visible, but dimmed
   const Page = pages[page]
+  if (camera) return <CameraWindow />
   return (
     <>
       <TitleSync />

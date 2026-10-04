@@ -78,6 +78,43 @@ try {
   await wait(() => clients === 0, 'leaving the page must close the stream')
   await page.goto(`${origin}/#dashboard`)
   await start.waitFor()
+  // One viewer at a time: another page starting live view takes the stream, the first page hands it over
+  // without reconnecting by itself, and Watch here takes it back.
+  const other = await context.newPage()
+  other.on('pageerror', e => errors.push(e.message))
+  await other.goto(`${origin}/#dashboard`)
+  const watchHere = page.getByRole('button', { name: 'Watch here', exact: true })
+  const otherWatchHere = other.getByRole('button', { name: 'Watch here', exact: true })
+  await begin()
+  await other.getByRole('button', { name: 'Start live view', exact: true }).click()
+  await other.locator('.cc2-camera-frame img').waitFor({ state: 'visible' })
+  await watchHere.waitFor()
+  await page.getByText('Live view is open in another window or on another device', { exact: true }).waitFor()
+  await wait(() => clients === 1, 'the previous viewer must close its stream')
+  const handedOver = requests
+  await new Promise(r => setTimeout(r, 4000))
+  assert.equal(requests, handedOver, 'a page that handed the stream over must not reconnect by itself')
+  assert.equal(clients, 1, 'only the new viewer streams')
+  await watchHere.click()
+  await otherWatchHere.waitFor()
+  await page.locator('.cc2-camera-frame img').waitFor({ state: 'visible' })
+  await wait(() => clients === 1, 'Watch here must leave a single stream')
+  // The separate camera window is a CC2 Control page under the same rule, not the raw stream.
+  const [popup] = await Promise.all([
+    context.waitForEvent('page'),
+    page.getByRole('button', { name: 'Open in new window', exact: true }).click(),
+  ])
+  popup.on('pageerror', e => errors.push(e.message))
+  await popup.locator('.cc2-camera-frame img').waitFor({ state: 'visible' })
+  assert.ok(new URL(popup.url()).hash === '#camera', 'the camera window opens the #camera view')
+  await start.waitFor()
+  await wait(() => clients === 1, 'only the camera window streams')
+  await otherWatchHere.click()
+  await popup.getByRole('button', { name: 'Watch here', exact: true }).waitFor()
+  await wait(() => clients === 1, 'the camera window must hand the stream over')
+  await popup.close()
+  await other.close()
+  await wait(() => clients === 0, 'closing the pages must close the stream')
   reject = true
   await page.clock.install()
   await start.click()
@@ -102,7 +139,7 @@ try {
   await pause.click()
   await wait(() => clients === 0, 'recovered stream must close')
   assert.deepEqual(errors, [])
-  console.log('PASS: manual start, real MJPEG cancellation, navigation, offscreen/visibility pause, bounded retries and recovery')
+  console.log('PASS: manual start, real MJPEG cancellation, navigation, offscreen/visibility pause, one viewer at a time with handover and camera window, bounded retries and recovery')
 } finally {
   await browser?.close()
   await server.close()

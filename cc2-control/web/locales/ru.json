@@ -180,6 +180,8 @@
   "common.camera_paused_hidden": "Трансляция приостановлена, пока вкладка браузера была скрыта",
   "common.camera_paused_out_of_view": "Трансляция приостановлена: панель камеры вне экрана",
   "common.camera_gave_up": "Видеопоток недоступен. Нажмите «Повторить», чтобы попробовать снова.",
+  "common.camera_taken_over": "Трансляция открыта в другом окне или на другом устройстве",
+  "common.camera_watch_here": "Смотреть здесь",
   "common.your_cc2_camera_feed": "Камера вашего CC2",
   "common.your_live_print_camera": "Камера печати в реальном времени",
   "console.arbitrary_g_code_can_move_axes": "Произвольный G-code может двигать оси, нагревать узлы или повредить принтер.",

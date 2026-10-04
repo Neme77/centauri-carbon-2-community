@@ -28,6 +28,10 @@ checksums remain attached to each GitHub release.
 - The interface follows the browser language (English, Italian, French, Chinese or Russian) until a language is saved on the printer.
 - Added a Simplified Chinese (`zh`) interface translation, selectable in **Settings → Appearance**.
 - Added a Russian (`ru`) interface translation, selectable in **Settings → Appearance**.
+- The live camera plays on one CC2 Control page at a time: starting it on another
+  page or device pauses the previous one, which offers **Watch here**. **Open in
+  new window** opens a CC2 Control camera window under the same rule instead of
+  the raw camera stream.
 - Redesigned web interface: full-width header with the emergency stop, a side
   menu that collapses to icons, a link for every section (`#files`, `#bed`…) and
   Lucide icons throughout.

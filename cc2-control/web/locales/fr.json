@@ -180,6 +180,8 @@
   "common.camera_paused_hidden": "Direct en pause pendant que cet onglet du navigateur était masqué",
   "common.camera_paused_out_of_view": "Direct en pause car le panneau caméra est hors de vue",
   "common.camera_gave_up": "Flux caméra indisponible. Appuyez sur Réessayer pour retenter.",
+  "common.camera_taken_over": "Le direct est ouvert dans une autre fenêtre ou sur un autre appareil",
+  "common.camera_watch_here": "Regarder ici",
   "common.your_cc2_camera_feed": "Flux de la caméra CC2",
   "common.your_live_print_camera": "Caméra d’impression en direct",
   "console.arbitrary_g_code_can_move_axes": "Un G-code arbitraire peut déplacer les axes, chauffer des composants ou endommager l’imprimante.",

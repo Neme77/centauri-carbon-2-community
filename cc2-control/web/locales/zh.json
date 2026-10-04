@@ -180,6 +180,8 @@
   "common.camera_paused_hidden": "浏览器标签页隐藏时已暂停实时画面",
   "common.camera_paused_out_of_view": "摄像头面板不可见时已暂停实时画面",
   "common.camera_gave_up": "摄像头画面不可用。请点击重试再次尝试。",
+  "common.camera_taken_over": "实时画面已在其他窗口或设备上打开",
+  "common.camera_watch_here": "在此观看",
   "common.your_cc2_camera_feed": "你的 CC2 摄像头画面",
   "common.your_live_print_camera": "你的实时打印摄像头",
   "console.arbitrary_g_code_can_move_axes": "任意 G-code 可能移动轴、加热部件，甚至损坏打印机。",

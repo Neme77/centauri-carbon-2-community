@@ -77,3 +77,16 @@ Example response:
 - `GET /server/database/item?namespace=lane_data` exposes the cached Canvas trays as read-only AFC lanes for OrcaSlicer's Moonraker printer agent.
 
 No additional polling, process, thread, or MQTT subscription is created by these endpoints.
+
+## Live camera viewer
+
+The web UI shows the camera (`ai_camera` on port 8080) on one CC2 Control page at a time.
+
+- `POST /api/camera/claim` with a text body of 8–40 characters from `0-9`, `a-z` and `-` (the page's random
+  viewer id) makes that page the current viewer and returns `{"viewer":"<id>"}`. Like other commands it requires
+  `X-CC2-Request: 1`; an invalid id is rejected with 400.
+- `GET /api/printer` reports the current viewer as `camera_viewer` (`null` until a page claims the camera; the
+  value is kept in memory only).
+
+A page streaming live view stops when `camera_viewer` names another page, and offers to take the camera back. The
+camera service itself is unchanged: other clients connected directly to port 8080 are not affected.

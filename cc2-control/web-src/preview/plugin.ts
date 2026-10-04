@@ -61,6 +61,7 @@ export function previewPlugin(): Plugin {
   let speed = 100
   let flow = 100
   let preferences: Record<string, unknown> = { language: 'it', theme: 'dark' }
+  let cameraViewer: string | null = null
   const reset = () => {
     speed = 100
     flow = 100
@@ -102,6 +103,7 @@ export function previewPlugin(): Plugin {
       motion: { x: 128, y: 128, z: active ? 28.6 : 5, speed: 3000, speed_mode: 1, homed_axes: 'xyz' },
       tuning: { speed_percent: speed, flow_percent: flow, live_velocity: scene === 'printing' ? 74.8 : 0 },
       hardware: { camera: true, usb: true, light: 1, filament_detection: true, filament_detected: true },
+      camera_viewer: cameraViewer,
     }
   }
   return {
@@ -289,8 +291,8 @@ export function previewPlugin(): Plugin {
           res.end(cameraSvg)
           return
         }
-        // Only simulated tuning, pause/resume/cancel and preferences can change in-memory state.
-        if (!['/__preview/scenario', '/api/control', '/api/preferences'].includes(path))
+        // Only simulated tuning, pause/resume/cancel, preferences and the camera viewer can change in-memory state.
+        if (!['/__preview/scenario', '/api/control', '/api/preferences', '/api/camera/claim'].includes(path))
           return reply({ error: 'Operation disabled in isolated preview' }, 403)
         let body = ''
         let oversized = false
@@ -319,6 +321,12 @@ export function previewPlugin(): Plugin {
                 return reply({ error: 'Unknown language' }, 400)
               preferences = { ...preferences, ...value }
               return reply(preferences)
+            }
+            if (path === '/api/camera/claim' && req.method === 'POST') {
+              const viewer = body.trim()
+              if (!/^[0-9a-z-]{8,40}$/.test(viewer)) return reply({ error: 'Invalid camera viewer' }, 400)
+              cameraViewer = viewer
+              return reply({ viewer })
             }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()
