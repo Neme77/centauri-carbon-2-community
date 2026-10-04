@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory() as tmp:
         files={pathlib.Path(n).name:z.read(n) for n in z.namelist()}
         for line in files['SHA256SUMS'].decode().splitlines():
             digest,name=line.split('  ',1);assert hashlib.sha256(files[name]).hexdigest()==digest
-    for scenario in ('success','busy','rollback'):
+    for scenario in ('success','delayed','busy','rollback'):
         fixture=base/scenario;fixture.mkdir();stage=fixture/'stage';stage.mkdir()
         with tarfile.open(fileobj=io.BytesIO(files['cc2-control-1.1.31-payload.tar.gz']),mode='r:gz') as t:
             for m in t.getmembers():
@@ -31,6 +31,19 @@ with tempfile.TemporaryDirectory() as tmp:
         commands=fixture/'bin';commands.mkdir()
         state=2 if scenario=='busy' else 1
         (commands/'wget').write_text('#!/bin/sh\ncase "$*" in *api/printer*) echo \'{"connected":true,"machine":{"status":'+str(state)+',"x":0},"last_message_age":0,"x":0}\';; *) echo \'{"service":"cc2-control","version":"1.1.31","mqtt_registered":true,"snapshot_received":true}\';; esac\n')
+        if scenario == 'delayed':
+            # Simulate health becoming available after the 60-second launcher
+            # delay. The old 30-attempt limit must fail this scenario.
+            counter = fixture / 'health-attempts'
+            wget = commands / 'wget'
+            text = wget.read_text()
+            text = text.replace('case "$*" in',
+                'if [ -f "' + str(marker) + '" ]; then\n'
+                '  case "$*" in *api/health*)\n'
+                '    n=$(cat "' + str(counter) + '" 2>/dev/null || echo 0)\n'
+                '    n=$((n+1)); echo "$n" > "' + str(counter) + '"\n'
+                '    [ "$n" -gt 35 ] || exit 1;; esac\nfi\ncase "$*" in')
+            wget.write_text(text)
         (commands/'pidof').write_text('#!/bin/sh\nif [ -f "'+str(marker)+'" ]; then echo 999; else exit 1; fi\n')
         (commands/'sleep').write_text('#!/bin/sh\nexit 0\n')
         for p in commands.iterdir():p.chmod(0o755)
@@ -40,8 +53,9 @@ with tempfile.TemporaryDirectory() as tmp:
         if scenario=='rollback':script=script.replace(hashlib.sha256(binary).hexdigest(),'0'*64)
         path=fixture/'run.sh';path.write_text(script)
         result=subprocess.run(['sh',str(path)],env=dict(os.environ,PATH=str(commands)+':'+os.environ['PATH']),capture_output=True,text=True,timeout=10)
-        assert (result.returncode==0)==(scenario=='success'),result.stdout+result.stderr
-        assert (target/'cc2-control').read_bytes()==(bytes(binary) if scenario=='success' else b'OLD')
+        assert (result.returncode==0)==(scenario in ('success','delayed')),result.stdout+result.stderr
+        assert (target/'cc2-control').read_bytes()==(bytes(binary) if scenario in ('success','delayed') else b'OLD')
+        if scenario == 'delayed': assert int(counter.read_text()) == 36
         for name in keep:assert (target/name).read_text()=='KEEP '+name
         assert not (fixture/'lock').exists()
         if scenario == 'success':

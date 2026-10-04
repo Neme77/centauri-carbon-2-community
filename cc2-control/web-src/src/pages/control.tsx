@@ -530,6 +530,7 @@ export const Control = () => {
               </Button>
               <Button
                 class="min-h-16 flex-col gap-1"
+                disabled={!v.idle}
                 onClick={() => control('system:heaters_off', t('common.turn_all_heaters_off'))}
               >
                 <Icon n="temp" class="text-cyan" />

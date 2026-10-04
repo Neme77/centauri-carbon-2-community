@@ -7,7 +7,8 @@ This is an application updater; it does not flash firmware or install SSH.
 Extract the entire ZIP before running a launcher. Configuration (including the
 LAN code), material presets and UI preferences are preserved. The updater keeps
 a backup, verifies checksums and the running binary, and waits for MQTT registration
-and a printer snapshot. On failure, inspect the output for rollback status.
+and a printer snapshot for up to 240 seconds, including the launcher delay.
+On failure, inspect the output for rollback status.
 
 Windows: double-click `Install-Windows.cmd`, or run:
 

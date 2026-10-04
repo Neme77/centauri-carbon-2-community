@@ -138,7 +138,13 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         else return reject(reason,reason_cap,"Unknown heater");
         snprintf(script,cap,"SET_HEATER_TEMPERATURE HEATER=%s TARGET=%.1f",a,value);return 1;
     }
-    if(strcmp(action,"heaters:off")==0){snprintf(script,cap,"TURN_OFF_HEATERS");return 1;}
+    if(strcmp(action,"heaters:off")==0||strcmp(action,"system:heaters_off")==0){
+        time_t now=time(NULL);
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+           m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Heaters off requires the printer to be idle with fresh telemetry");
+        snprintf(script,cap,"TURN_OFF_HEATERS");return 1;
+    }
     if(sscanf(action,"fan:%31[^:]:%lf",a,&value)==2){
         if(value<0||value>100)return reject(reason,reason_cap,"Fan value must be 0..100 percent");
         int pwm=(int)lround(value*2.55);
@@ -201,9 +207,6 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(printing(m))return reject(reason,reason_cap,"All off is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"All off requires the printer to be idle");
         snprintf(script,cap,"TURN_OFF_HEATERS\nM106 S0\nM106 P2 S0\nSET_CAVITY_FAN SPEED=0\nM84");return 1;
-    }
-    if(strcmp(action,"system:heaters_off")==0){
-        snprintf(script,cap,"TURN_OFF_HEATERS");return 1;
     }
     if(strcmp(action,"system:fans_off")==0){
         if(printing(m))return reject(reason,reason_cap,"Fans off is blocked while printing");

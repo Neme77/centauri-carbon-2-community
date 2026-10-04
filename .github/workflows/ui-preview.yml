@@ -36,6 +36,8 @@ jobs:
         run: npm run test:mesh
       - name: Verify camera streaming lifecycle
         run: npm run test:camera
+      - name: Verify Quick Actions light telemetry and heater shutdown guards
+        run: npm run test:quick
       - name: Save screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v6

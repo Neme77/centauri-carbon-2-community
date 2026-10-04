@@ -20,19 +20,31 @@ import { JobControls } from '@/pages/job'
 const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightOn: boolean }) => {
   const [label, icon] = QUICK_CHOICES[action]
   const blocked = !idle && !quickAlwaysAvailable(action)
-  const run = () => {
+  const isLight = action === 'light:toggle'
+  const run = async () => {
     if (action.startsWith('page:')) return openPage(action.slice(5) as Page)
-    if (action === 'light:toggle') return control(lightOn ? 'light:off' : 'light:on')
+    if (isLight) {
+      if (await control(lightOn ? 'light:off' : 'light:on')) setTimeout(refreshPrinter, 250)
+      return
+    }
     return control(action, QUICK_ASK[action] ? t(QUICK_ASK[action]) : '')
   }
   return (
     <Button
       class="min-h-18 flex-col"
       disabled={blocked}
-      title={blocked ? t('common.available_when_idle') : undefined}
+      variant={isLight && lightOn ? 'active' : 'default'}
+      aria-pressed={isLight ? lightOn : undefined}
+      title={
+        blocked
+          ? t('common.available_when_idle')
+          : isLight
+            ? t(lightOn ? 'control.internal_light_on_press_to_turn' : 'control.internal_light_off_press_to_turn')
+            : undefined
+      }
       onClick={run}
     >
-      <Icon n={icon} class="text-cyan" />
+      <Icon n={icon} class={isLight && !lightOn ? 'text-muted' : 'text-cyan'} />
       {t(label)}
     </Button>
   )
