@@ -98,6 +98,8 @@ A huge thank you to **DamiBFryta**, our dedicated beta tester, for ideas, testin
 
 Thank you to **@beanbo** for printer sub-states, refusal reporting, Canvas auto-refill and print history ([#67](https://github.com/Neme77/centauri-carbon-2-community/pull/67)), and camera ownership across CC2 pages ([#71](https://github.com/Neme77/centauri-carbon-2-community/pull/71)). Thank you to **@surfoo** for the UI rewrite and continuing interface contributions.
 
+Thank you to **[@Skcycos](https://github.com/Skcycos)** for the Simplified Chinese translation ([#26](https://github.com/Neme77/centauri-carbon-2-community/pull/26)), **[@beanbo](https://github.com/beanbo)** for the Russian translation ([#63](https://github.com/Neme77/centauri-carbon-2-community/pull/63)), and **[@Surfoo](https://github.com/Surfoo)** for the French translation and JSON localization system ([#15](https://github.com/Neme77/centauri-carbon-2-community/pull/15)). Their work makes CC2 Control accessible to more users.
+
 ## Source layout
 
 | Path                                   | Contents                                                    |
