@@ -335,6 +335,7 @@
   "files.select_file": "Seleziona file",
   "files.select_files_from_only_one_storage": "Seleziona file da una sola posizione di archiviazione.",
   "files.select_g_code_file": "Seleziona file G-code",
+  "files.showing_newest_n_of_total": "{where}: mostrati i {n} file G-code più recenti su {total}. Elimina i file vecchi per vedere gli altri.",
   "files.size": "Dimensione",
   "files.start_protected_print": "Avvia stampa protetta",
   "files.stopped_after_n_files_error": "Interrotto dopo {n} file: {error}",

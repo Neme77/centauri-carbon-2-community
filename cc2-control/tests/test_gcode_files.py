@@ -19,10 +19,64 @@ def free_port():
         return probe.getsockname()[1]
 
 
+def check_newest_files_listed(binary):
+    """More files than the list holds: the newest ones must be listed,
+    whatever order the directory returns them in."""
+    with tempfile.TemporaryDirectory(prefix="cc2-gcode-many-") as temporary:
+        root = Path(temporary)
+        internal = root / "internal"
+        internal.mkdir()
+        base = 1_700_000_000
+        # Newest first: a directory that returns entries in creation order (or
+        # its reverse, like tmpfs) cannot satisfy the test by accident.
+        for index in reversed(range(200)):
+            path = internal / f"part-{(index * 7919) % 200:03d}.gcode"
+            path.write_text("G28\n", encoding="ascii")
+            os.utime(path, (base + index, base + index))
+        newest = {f"part-{(index * 7919) % 200:03d}.gcode" for index in range(72, 200)}
+        port = free_port()
+        process = subprocess.Popen(
+            [str(binary), "--port", str(port), "--web-root", str(root),
+             "--config", str(root / "missing.conf"),
+             "--presets", str(root / "presets.json"),
+             "--gcode-internal", str(internal), "--gcode-usb", str(root / "usb")],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            endpoint = f"http://127.0.0.1:{port}/api/gcode-files"
+            for _ in range(30):
+                try:
+                    with urllib.request.urlopen(endpoint, timeout=1) as response:
+                        payload = json.load(response)
+                    break
+                except Exception:
+                    if process.poll() is not None:
+                        stdout, stderr = process.communicate()
+                        raise AssertionError(f"server stopped\n{stdout}\n{stderr}")
+                    time.sleep(0.1)
+            else:
+                raise AssertionError("server did not expose /api/gcode-files")
+            listing = payload["internal"]
+            assert listing["truncated"] is True
+            assert listing["count"] == 128 and listing["total"] == 200
+            assert {item["path"] for item in listing["files"]} == newest
+            times = [item["modified"] for item in listing["files"]]
+            assert times == sorted(times, reverse=True) and times[0] == base + 199
+            assert payload["usb"]["total"] == 0
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3)
+
+
 def main():
     if len(sys.argv) != 2:
         raise SystemExit("usage: test_gcode_files.py PATH_TO_CC2_CONTROL")
     binary = Path(sys.argv[1]).resolve()
+    check_newest_files_listed(binary)
     with tempfile.TemporaryDirectory(prefix="cc2-gcode-test-") as temporary:
         root = Path(temporary)
         internal = root / "internal"
@@ -74,6 +128,8 @@ def main():
                 raise AssertionError("server did not expose /api/gcode-files")
 
             assert payload["internal"]["available"] is True
+            assert payload["internal"]["truncated"] is False
+            assert payload["internal"]["count"] == payload["internal"]["total"] == 4
             assert payload["usb"]["available"] is True
             assert {item["path"] for item in payload["internal"]["files"]} == {
                 "adaptive.gcode", "cube.gcode", "metadata.gcode", "multicolour.gcode"

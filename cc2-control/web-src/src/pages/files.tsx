@@ -46,17 +46,25 @@ export const Files = () => {
   const [sel, setSel] = useState<Entry | null>(null)
   const [busy, setBusy] = useState(false),
     [loaded, setLoaded] = useState(false)
+  // Storages whose list the backend cut to its newest files.
+  const [cut, setCut] = useState<{ storage: string; n: number; total: number }[]>([])
 
   const refresh = async (announce = false) => {
     try {
       const data = await request('/api/gcode-files'),
-        next: Entry[] = []
+        next: Entry[] = [],
+        partial: typeof cut = []
       for (const [storage, group] of [
         ['internal', data.internal],
         ['usb', data.usb],
-      ] as const)
-        for (const file of group?.files || []) next.push({ storage, file })
+      ] as const) {
+        const files = group?.files || []
+        for (const file of files) next.push({ storage, file })
+        if (group?.truncated)
+          partial.push({ storage, n: files.length, total: Math.max(Number(group.total) || 0, files.length) })
+      }
       setEntries(next)
+      setCut(partial)
       const available = new Set(next.map(key))
       setChecked(current => new Set([...current].filter(k => available.has(k))))
       setSel(current => (current ? next.find(e => key(e) === key(current)) || null : null))
@@ -286,6 +294,11 @@ export const Files = () => {
               <div class="p-4 text-muted">{t(loaded ? 'files.no_matching_g_code_files' : 'files.loading_files')}</div>
             )}
           </div>
+          {cut.map(c => (
+            <p key={c.storage} class="mt-2.5 text-muted">
+              {tpl('files.showing_newest_n_of_total', { where: where(c.storage), n: c.n, total: c.total })}
+            </p>
+          ))}
         </Card>
         <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path)} onDelete={remove} />
       </div>

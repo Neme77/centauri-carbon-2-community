@@ -148,6 +148,18 @@ the previous page stops on its next existing printer-state poll. Brief overlap d
 A page streaming live view stops when `camera_viewer` names another page, and offers to take the camera back. The
 camera service itself is unchanged: other clients connected directly to port 8080 are not affected.
 
+## G-code file list and uploads
+
+`GET /api/gcode-files` lists each storage (`internal`, `usb`) as
+`{"available":…,"truncated":…,"count":…,"total":…,"files":[…]}`, newest first. A storage
+lists at most 128 files: when it holds more, the newest 128 are listed, `truncated` is `true`
+and `total` counts every G-code file found. The scan examines at most 4096 directory entries
+per storage; beyond that `truncated` is `true` and `total` covers only the entries examined.
+
+`POST /api/gcode-files/upload` never overwrites a file. When it rejects an upload after the
+headers, for example with 409 because the name exists, it first reads the rest of the
+request body, so a browser receives the error instead of a reset connection.
+
 ## Timelapse print option
 
 `POST /api/gcode-files/print` accepts an optional sixth newline-separated field after storage,

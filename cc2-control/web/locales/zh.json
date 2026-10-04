@@ -335,6 +335,7 @@
   "files.select_file": "选择文件",
   "files.select_files_from_only_one_storage": "只能选择同一存储位置的文件。",
   "files.select_g_code_file": "选择 G-code 文件",
+  "files.showing_newest_n_of_total": "{where}：仅显示最新的 {n} 个 G-code 文件（共 {total} 个）。删除旧文件后可查看其余文件。",
   "files.size": "大小",
   "files.start_protected_print": "开始受保护打印",
   "files.stopped_after_n_files_error": "处理 {n} 个文件后停止：{error}",
