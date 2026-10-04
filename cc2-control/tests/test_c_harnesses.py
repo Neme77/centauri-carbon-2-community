@@ -19,6 +19,8 @@ HARNESSES = {
     "test_calibrated_start.c": BACKEND,
     "test_orca_upload.c": BACKEND,
     "test_mqtt_workload.c": [],
+    "test_printer_replies.c": [],
+    "test_history_api.c": BACKEND,
     "test_uds.c": [ROOT / "src/uds.c"],
     "test_tuning_api.c": BACKEND,
     "test_z_offset_api.c": BACKEND,

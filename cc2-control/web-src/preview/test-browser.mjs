@@ -42,7 +42,7 @@ try {
     await page.setViewportSize({ width, height })
     const rail = page.locator('#cc2-navigation button[aria-expanded]')
     if (await rail.isVisible() && await rail.getAttribute('aria-expanded') !== 'true') { await rail.click(); await page.waitForTimeout(200) }
-    for (const tab of ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']) {
+    for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']) {
       if (await page.locator('#cc2-menu-toggle').isVisible()) await page.locator('#cc2-menu-toggle').click()
       await page.locator(`a[href="#${tab}"]`).click()
       await page.waitForTimeout(150)
@@ -62,7 +62,7 @@ try {
     await rail.click()
     await page.waitForTimeout(200)
     assert.equal(await page.locator('header').evaluate(e => Math.round(e.getBoundingClientRect().height)), 60)
-    for (const tab of ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']) {
+    for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']) {
       await page.locator(`a[href="#${tab}"]`).click()
       await page.waitForTimeout(150)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} collapsed ${tab}: overflow`)
@@ -76,7 +76,7 @@ try {
   if (await rail.getAttribute('aria-expanded') !== 'true') await rail.click()
   await page.waitForTimeout(200)
   await page.locator('#cc2-navigation button[aria-expanded]').click()
-  for (const tab of ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']) {
+  for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']) {
     await page.locator(`a[href="#${tab}"]`).click()
     await page.waitForTimeout(200)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `Collapsed sidebar: ${tab} overflow`)
@@ -108,7 +108,48 @@ try {
   await Promise.all([page.waitForEvent('load'), page.locator('#preview-reset').click()])
   assert.equal((await (await page.request.get(`${origin}/__preview/scenario`)).json()).scene, 'printing')
   const labels = JSON.parse(await readFile(path.join(root, 'public/locales/it.json'), 'utf8'))
+  // Print history: rendering needs an idle printer, a rendered video becomes a download.
+  const refreshed = page.waitForResponse(r => r.url().endsWith('/api/history/refresh') && r.request().method() === 'POST')
+  await page.locator('#cc2-navigation a[href="#history"]').click()
+  assert.equal((await refreshed).status(), 202, 'Opening History asks the printer once')
+  await page.getByText('CC2_Preview_Vase_PETG.gcode', { exact: true }).waitFor()
+  const create = page.getByRole('button', { name: labels['history.create_video'], exact: true })
+  const downloads = page.locator('main button', { hasText: labels['history.download_video'] })
+  assert.equal(await create.count(), 2)
+  assert.ok(await create.first().isDisabled(), 'Rendering a video requires an idle printer')
+  assert.equal(await downloads.count(), 1)
+  await page.getByText(labels['history.previous_attempt_failed'], { exact: true }).waitFor()
+  // Canvas auto refill follows the printer's readback.
+  await page.locator('#cc2-navigation a[href="#canvas"]').click()
+  const refill = page.locator('main button[aria-pressed]')
+  await refill.waitFor()
+  await page.waitForFunction(() => document.querySelector('main button[aria-pressed]')?.textContent.includes(' '))
+  assert.equal(await refill.getAttribute('aria-pressed'), 'false')
+  const toggled = page.waitForResponse(r => r.url().endsWith('/api/canvas/auto-refill'))
+  await refill.click()
+  assert.equal((await toggled).request().postData(), 'on')
+  await page.waitForFunction(() => document.querySelector('main button[aria-pressed]')?.getAttribute('aria-pressed') === 'true')
+  await Promise.all([page.waitForEvent('load'), page.locator('#preview-scene').selectOption('idle')])
+  await page.locator('#cc2-navigation a[href="#history"]').click()
+  await create.first().waitFor()
+  assert.ok(await create.first().isEnabled())
+  await create.first().click()
+  await page.getByRole('dialog').getByRole('button', { name: labels['common.confirm'], exact: true }).click()
+  await downloads.nth(1).waitFor()
+  // A printer refusal reported by /api/printer is shown once, with the vendor meaning of its code.
+  await page.route('**/api/printer', async route => {
+    const response = await route.fetch()
+    const data = await response.json()
+    data.printer_error = { sequence: 7, method: 1020, code: 1026, age: 0 }
+    await route.fulfill({ response, json: data })
+  })
+  await page.reload()
+  await page.getByRole('alert').filter({ hasText: labels['printer.bed_mesh_missing'] }).waitFor()
+  await page.unroute('**/api/printer')
   await Promise.all([page.waitForEvent('load'), page.locator('#preview-scene').selectOption('paused')])
+  // Sub-state: a paused job is still machine state "Printing"; the vendor sub-state says "Paused".
+  await page.locator('#cc2-navigation a[href="#dashboard"]').click()
+  await page.getByText(`${labels['state.printing']} · ${labels['substate.paused']}`, { exact: true }).first().waitFor()
   await page.locator('#cc2-navigation a[href="#control"]').click()
   assert.ok(await page.getByRole('button', { name: labels['common.motors_off'], exact: true }).isDisabled())
   assert.ok(await page.getByRole('button', { name: labels['common.fans_off'], exact: true }).isDisabled())
@@ -143,7 +184,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'it')
   assert.deepEqual(errors, [])
   assert.deepEqual(outside, [], 'Preview must never request printer ports or external services')
-  console.log('PASS: isolated preview, all pages at 9 viewport sizes and desktop sidebar states, scenario controls, tuning reset, blocked hardware actions and local-only requests')
+  console.log('PASS: isolated preview, all pages at 9 viewport sizes and desktop sidebar states, scenario controls, tuning reset, history, auto refill, printer refusals, sub-states, blocked hardware actions and local-only requests')
 } finally {
   await browser?.close()
   await server.close()
