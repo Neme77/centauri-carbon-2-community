@@ -180,6 +180,8 @@
   "common.camera_paused_hidden": "Live view paused while this browser tab was hidden",
   "common.camera_paused_out_of_view": "Live view paused because the camera panel is out of view",
   "common.camera_gave_up": "Camera stream unavailable. Press Retry to try again.",
+  "common.camera_taken_over": "Live view is open in another window or on another device",
+  "common.camera_watch_here": "Watch here",
   "common.your_cc2_camera_feed": "Your CC2 camera feed",
   "common.your_live_print_camera": "Your live print camera",
   "console.arbitrary_g_code_can_move_axes": "Arbitrary G-code can move axes, heat components, or damage the printer.",
@@ -568,5 +570,11 @@
   "history.the_printer_is_creating_the_video": "The printer is creating the video.",
   "history.previous_attempt_failed": "Previous attempt failed",
   "history.no_time_lapse": "No time-lapse",
-  "history.show_more_n_of_total": "Show {n} more of {total}"
+  "history.show_more_n_of_total": "Show {n} more of {total}",
+  "print.enable_timelapse": "Enable timelapse",
+  "history.clear_history": "Clear history",
+  "history.delete_entry": "Delete entry",
+  "history.delete_named": "Delete {name}",
+  "history.confirm_delete": "Delete these {n} print-history entries? This cannot be undone. G-code files and videos are not deleted.",
+  "history.delete_requested": "History deletion requested."
 }

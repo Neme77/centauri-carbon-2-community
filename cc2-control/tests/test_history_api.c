@@ -85,18 +85,18 @@ int main(void){
     m.auto_refill=0;assert(get(canvas_response,reply,sizeof(reply))==200&&strstr(reply,"\"auto_refill\":false,\"telemetry\":{"));
     m.have_auto_refill=0;assert(get(canvas_response,reply,sizeof(reply))==200&&strstr(reply,"\"auto_refill\":null"));
     /* /api/printer carries the latest printer refusal of our own requests. */
-    assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":null}"));
+    assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":null,\"camera_viewer\":null}"));
     m.reply_errors=3;m.reply_error_method=1020;m.reply_error_code=1026;m.reply_error_time=time(NULL);
     assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":{\"sequence\":3,\"method\":1020,\"code\":1026,\"age\":"));
     /* History: nothing cached yet, then a refresh publishes 1036 once. */
     assert(get(history_response,reply,sizeof(reply))==200);
-    assert(strstr(reply,"{\"available\":false,\"pending\":false,\"generating\":false,\"age\":-1,\"error_code\":-1,\"reply\":null}"));
+    assert(strstr(reply,"{\"available\":false,\"pending\":false,\"generating\":false,\"deleting\":false,\"age\":-1,\"error_code\":-1,\"reply\":null}"));
     assert(call(refresh,"",reply,sizeof(reply))==202);published(payload,sizeof(payload));assert(!strcmp(payload,"{\"method\":1036,\"id\":1036}"));
     assert(call(refresh,"",reply,sizeof(reply))==202);published(payload,sizeof(payload));assert(!*payload);
     assert(get(history_response,reply,sizeof(reply))==200&&strstr(reply,"\"pending\":true"));
     const char *history="{\"id\":1036,\"method\":1036,\"result\":{\"error_code\":0,\"history_task_list\":["
-        "{\"task_id\":\"t-ready\",\"task_name\":\"Part one.gcode\",\"time_lapse_video_status\":2,\"time_lapse_video_url\":\"video/Part one.mp4\"},"
-        "{\"task_id\":\"t-frames\",\"task_name\":\"Part two.gcode\",\"time_lapse_video_status\":1,\"time_lapse_video_url\":\"picture/Part two\"},"
+        "{\"task_id\":\"t-ready\",\"task_status\":1,\"task_name\":\"Part one.gcode\",\"time_lapse_video_status\":2,\"time_lapse_video_url\":\"video/Part one.mp4\"},"
+        "{\"task_id\":\"t-frames\",\"task_status\":2,\"task_name\":\"Part two.gcode\",\"time_lapse_video_status\":1,\"time_lapse_video_url\":\"picture/Part two\"},"
         "{\"task_id\":\"t-none\",\"task_name\":\"Part three.gcode\",\"time_lapse_video_status\":0,\"time_lapse_video_url\":\"\"},"
         "{\"task_id\":\"t-escape\",\"task_name\":\"x\",\"time_lapse_video_status\":2,\"time_lapse_video_url\":\"video/a\\\"b.mp4\"},"
         "{\"task_id\":\"t-nested\",\"task_name\":\"x\",\"time_lapse_video_status\":2,\"time_lapse_video_url\":\"video/../x.mp4\"}]}}";
@@ -113,6 +113,24 @@ int main(void){
     assert(timelapse_file("X",file,sizeof(file))&&!strcmp(file,"video/X.mp4"));
     const char *unsafe[]={"","picture/","picture/.hidden","video/../x.mp4","picture/a/b","picture/a\\b","picture/a\"b","picture/a\nb"};
     for(size_t i=0;i<sizeof(unsafe)/sizeof(*unsafe);i++)assert(!timelapse_file(unsafe[i],file,sizeof(file)));
+    /* History deletion: explicit terminal IDs, idle/fresh state, no overlap. */
+    m.machine_status=2;m.have_machine_status=1;m.last_message=time(NULL);
+    assert(call(history_delete_response,"t-ready",reply,sizeof(reply))==409);
+    m.machine_status=1;m.last_message=time(NULL)-16;
+    assert(call(history_delete_response,"t-ready",reply,sizeof(reply))==409);
+    m.last_message=time(NULL);
+    assert(call(history_delete_response,"../x",reply,sizeof(reply))==400);
+    assert(call(history_delete_response,"t-ready\nt-ready",reply,sizeof(reply))==400);
+    assert(call(history_delete_response,"t-unknown",reply,sizeof(reply))==409);
+    assert(call(history_delete_response,"t-none",reply,sizeof(reply))==409); /* missing terminal status */
+    assert(call(history_delete_response,"t-ready\nt-frames",reply,sizeof(reply))==202);
+    published(payload,sizeof(payload));assert(!strcmp(payload,"{\"method\":1038,\"id\":1038,\"params\":{\"list\":[\"t-ready\",\"t-frames\"]}}"));
+    assert(get(history_response,reply,sizeof(reply))==200&&strstr(reply,"\"deleting\":true"));
+    assert(call(history_delete_response,"t-ready",reply,sizeof(reply))==409);
+    assert(call(timelapse_generate_response,"t-frames",reply,sizeof(reply))==409&&strstr(reply,"deletion is pending"));
+    m.history_delete_requested=0;m.history_received=time(NULL)-61;
+    assert(call(history_delete_response,"t-ready",reply,sizeof(reply))==409);
+    m.history_received=time(NULL);
     /* Rendering: known task with frames, idle printer, one at a time. */
     assert(call(timelapse_generate_response,"../x",reply,sizeof(reply))==400);
     assert(call(timelapse_generate_response,"t-unknown",reply,sizeof(reply))==404);

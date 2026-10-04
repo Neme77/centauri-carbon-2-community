@@ -5,6 +5,11 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Select timelapse recording in the print popup, including calibrated starts.
+- Delete individual or loaded completed print-history entries with confirmation and Idle guards.
+- Coordinate live camera viewing across CC2 Control windows; failed ownership requests do not open a stream.
+- Follow native timelapse rendering until machine state 12 ends before refreshing history.
+
 - Keep object-query UDS sessions open, match response IDs and reject incomplete
   replies to reduce connection churn when opening Job. One supervised print
   completed without recurrence of the observed vendor dispatcher crash; its

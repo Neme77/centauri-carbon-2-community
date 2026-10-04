@@ -29,9 +29,9 @@ still use the app's usual localStorage on the localhost origin.
 
 Camera and file thumbnails are local SVG placeholders. File metadata, bed mesh,
 Canvas, print history and job objects are fixtures. Tuning, pause/resume/cancel,
-Canvas auto refill and time-lapse rendering modify only fixtures (rendering only
+Canvas auto refill, camera ownership, history-record deletion and time-lapse rendering modify only fixtures (rendering only
 in the idle state); reset restores them. All other commands, console commands,
-uploads, deletion, print start, video downloads, setup and unsupported endpoints are blocked. This previews their layout, not
+uploads, file deletion, print start, video downloads, setup and unsupported endpoints are blocked. This previews their layout, not
 real hardware behaviour. Simulated memory/CPU figures are not measurements.
 
 The demo mode has no API proxy, ignores `CC2_BACKEND`, and replaces the direct
@@ -93,3 +93,6 @@ Review every page with the sidebar open and closed before approving the design.
 The Job page omits tuning controls already available on Dashboard. Settings
 uses a centered panel and separated, single-line LAN-code controls. Desktop
 mesh statistics and action labels/buttons use compact proportions.
+
+`npm run test:print-history` exercises the real print popup with intercepted start requests and
+confirmed/cancelled history deletion against isolated fixtures, including printing guards.

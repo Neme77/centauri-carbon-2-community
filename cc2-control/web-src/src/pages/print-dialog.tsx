@@ -93,6 +93,7 @@ const Form = ({ job }: { job: Pending }) => {
   const [map, setMap] = useState<Record<number, string>>({})
   const [side, setSide] = useState<'A' | 'B'>('A')
   const [calibrate, setCalibrate] = useState(false)
+  const [timelapse, setTimelapse] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(
     t(
@@ -128,7 +129,7 @@ const Form = ({ job }: { job: Pending }) => {
     try {
       const result = await post(
         '/api/gcode-files/print',
-        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}`
+        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}`
       )
       const g = activeGeneration
       activeGeneration = 0
@@ -235,6 +236,15 @@ const Form = ({ job }: { job: Pending }) => {
             </div>
           </fieldset>
         </div>
+        <label class={label}>
+          <input
+            type="checkbox"
+            checked={timelapse}
+            disabled={busy}
+            onChange={e => setTimelapse(e.currentTarget.checked)}
+          />
+          {t('print.enable_timelapse')}
+        </label>
         <div class="min-h-7 text-[13px] text-muted" role="status">
           {note}
         </div>

@@ -14,3 +14,5 @@ References inspected for this update:
 - https://github.com/OpenCentauri/cc-fw-tools
 - https://github.com/OpenCentauri/cc-fw-tools/blob/main/LICENSE
 - https://github.com/OpenCentauri/cc-fw-tools/releases
+
+The timelapse print flag (`config.delay_video`) and delete-task method number 1038 follow the same SDK adapter. The 1019 print-configuration request and 1038 `params.list` payload were checked against the CC2 vendor executable already used by this builder; the history-delete handler inspected removes records rather than video or G-code files. Native hardware behavior still requires printer validation.

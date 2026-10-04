@@ -12,7 +12,8 @@
     "test:recovery": "node preview/test-recovery-download.mjs",
     "test:mesh": "node preview/test-adaptive-mesh.mjs",
     "test:camera": "node preview/test-camera-stream.mjs",
-    "test:quick": "node preview/test-quick-actions.mjs"
+    "test:quick": "node preview/test-quick-actions.mjs",
+    "test:print-history": "node preview/test-print-history.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

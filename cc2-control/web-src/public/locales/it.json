@@ -180,6 +180,8 @@
   "common.camera_paused_hidden": "Diretta sospesa mentre questa scheda del browser era nascosta",
   "common.camera_paused_out_of_view": "Diretta sospesa perché il riquadro camera non è visibile",
   "common.camera_gave_up": "Flusso della telecamera non disponibile. Premi Riprova per ritentare.",
+  "common.camera_taken_over": "La diretta è aperta in un’altra finestra o su un altro dispositivo",
+  "common.camera_watch_here": "Guarda qui",
   "common.your_cc2_camera_feed": "Flusso della telecamera CC2",
   "common.your_live_print_camera": "Telecamera di stampa in tempo reale",
   "console.arbitrary_g_code_can_move_axes": "Comandi G-code arbitrari possono muovere gli assi, riscaldare componenti o danneggiare la stampante.",
@@ -568,5 +570,11 @@
   "history.the_printer_is_creating_the_video": "La stampante sta creando il video.",
   "history.previous_attempt_failed": "Il tentativo precedente non è riuscito",
   "history.no_time_lapse": "Nessun timelapse",
-  "history.show_more_n_of_total": "Mostra altri {n} su {total}"
+  "history.show_more_n_of_total": "Mostra altri {n} su {total}",
+  "print.enable_timelapse": "Abilita timelapse",
+  "history.clear_history": "Cancella cronologia",
+  "history.delete_entry": "Cancella voce",
+  "history.delete_named": "Cancella {name}",
+  "history.confirm_delete": "Cancellare queste {n} voci della cronologia? Non è possibile annullare. I file G-code e i video non vengono eliminati.",
+  "history.delete_requested": "Cancellazione della cronologia richiesta."
 }

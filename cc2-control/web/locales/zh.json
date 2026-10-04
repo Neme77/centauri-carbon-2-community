@@ -180,6 +180,8 @@
   "common.camera_paused_hidden": "浏览器标签页隐藏时已暂停实时画面",
   "common.camera_paused_out_of_view": "摄像头面板不可见时已暂停实时画面",
   "common.camera_gave_up": "摄像头画面不可用。请点击重试再次尝试。",
+  "common.camera_taken_over": "实时画面已在其他窗口或设备上打开",
+  "common.camera_watch_here": "在此观看",
   "common.your_cc2_camera_feed": "你的 CC2 摄像头画面",
   "common.your_live_print_camera": "你的实时打印摄像头",
   "console.arbitrary_g_code_can_move_axes": "任意 G-code 可能移动轴、加热部件，甚至损坏打印机。",
@@ -568,5 +570,11 @@
   "history.the_printer_is_creating_the_video": "打印机正在生成视频。",
   "history.previous_attempt_failed": "上次生成失败",
   "history.no_time_lapse": "无延时摄影",
-  "history.show_more_n_of_total": "再显示 {n} 条（共 {total} 条）"
+  "history.show_more_n_of_total": "再显示 {n} 条（共 {total} 条）",
+  "print.enable_timelapse": "启用延时摄影",
+  "history.clear_history": "清除历史记录",
+  "history.delete_entry": "删除记录",
+  "history.delete_named": "删除 {name}",
+  "history.confirm_delete": "删除这 {n} 条打印历史记录？此操作无法撤销。G-code 文件和视频不会被删除。",
+  "history.delete_requested": "已请求删除历史记录。"
 }

@@ -123,7 +123,8 @@ code returned to CC2 Control's own requests, or `null`:
   2 MP4 ready, 3 rendering failed.
 - `POST /api/history/timelapse` with a `task_id` as body sends method 1051 to render that job's frames into
   an MP4. It requires status 1 or 3, an Idle printer with fresh telemetry, and no other rendering in progress
-  (`generating`). The printer replies when rendering ends; CC2 Control then requests the history again.
+  (`generating`). The printer acknowledges immediately, then renders in machine state 12. CC2 Control
+  requests the history again when it leaves that state. A bounded fallback handles missing state updates.
 - `GET /api/history/timelapse?task=<task_id>` streams a ready MP4 (`video/mp4`, attachment). CC2 Control
   fetches it from the printer's own HTTP service on loopback with the LAN access code, which never reaches
   the browser, and shares the two-transfer limit of G-code downloads. That service sends `Content-Length`
@@ -132,3 +133,43 @@ code returned to CC2 Control's own requests, or `null`:
 
 The printer lists its last 50 jobs (`result.total` was 50 on the tested printer) and ignores
 `offset`/`limit` parameters.
+
+## Live camera viewer
+
+The web UI coordinates live camera viewing between CC2 Control pages. A new viewer takes over;
+the previous page stops on its next existing printer-state poll. Brief overlap during handover is possible.
+
+- `POST /api/camera/claim` with a text body of 8–40 characters from `0-9`, `a-z` and `-` (the page's random
+  viewer id) makes that page the current viewer and returns `{"viewer":"<id>"}`. Like other commands it requires
+  `X-CC2-Request: 1`; an invalid id is rejected with 400.
+- `GET /api/printer` reports the current viewer as `camera_viewer` (`null` until a page claims the camera; the
+  value is kept in memory only).
+
+A page streaming live view stops when `camera_viewer` names another page, and offers to take the camera back. The
+camera service itself is unchanged: other clients connected directly to port 8080 are not affected.
+
+## Timelapse print option
+
+`POST /api/gcode-files/print` accepts an optional sixth newline-separated field after storage,
+filename, Canvas mapping, plate side and leveling mode: `1` enables timelapse for this print,
+`0` disables it. Omission defaults to `0`; other values are rejected with 400.
+The print popup exposes this selection for each job, initially unchecked.
+
+Saved-mesh starts include the flag as native method 1020 `config.delay_video`.
+Calibrated starts first send method 1019 with `params.config.delay_video` and a unique request ID.
+A matching successful acknowledgement is required within 1.5 seconds before the existing calibrated
+G-code start runs; rejection, disconnect or timeout prevents the start. Both modes require printer validation.
+
+## Delete print-history entries
+
+`POST /api/history/delete` takes one task ID per line, at most 50 distinct safe IDs of up to 64
+characters. It deletes only completed/stopped entries present in a history fetched within 60 seconds.
+It requires connected, registered and fresh Idle state, and no pending deletion or video rendering.
+The existing mutation header is required. Invalid IDs return 400; stale/busy/missing entries return 409.
+An accepted request sends native method 1038 with `params.list` and returns 202 with the selected count.
+A successful native reply triggers a history refresh; 202 alone is not confirmation of deletion.
+`GET /api/history` also reports `deleting` while the bounded native reply wait is pending.
+
+The UI asks for confirmation before deleting one entry or all completed entries in the loaded list.
+The firmware handler inspected for this integration deletes database records; it does not remove
+G-code files or timelapse files. This is a history operation, not a storage cleanup tool.

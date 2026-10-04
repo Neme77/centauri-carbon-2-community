@@ -84,9 +84,14 @@ typedef struct {
     int history_error;
     time_t history_received, history_requested;
     int history_refresh_due;
+    /* 1051 is acknowledged at once; rendering then runs in machine state 12. */
     time_t timelapse_requested;
+    int timelapse_rendering;
     unsigned long oversized_replies;
     unsigned char *large;
+    time_t history_delete_requested;
+    unsigned long print_config_id, print_config_reply_id;
+    int print_config_error;
     size_t large_len, large_need;
     unsigned char large_flags;
 } mqtt_client;
@@ -100,9 +105,11 @@ void mqtt_tick(mqtt_client *client);
 int mqtt_request_canvas(mqtt_client *client);
 int mqtt_set_auto_refill(mqtt_client *client, int enabled);
 int mqtt_request_history(mqtt_client *client);
+int mqtt_delete_history(mqtt_client *client, const char *params);
+int mqtt_prepare_timelapse(mqtt_client *client, int enabled);
 int mqtt_generate_timelapse(mqtt_client *client, const char *url);
 int mqtt_start_print(mqtt_client *client, const char *storage_media, const char *filename,
                      const int *tools, const int *trays, size_t slot_count,
-                     char print_layout, int bedlevel_force);
+                     char print_layout, int bedlevel_force, int timelapse);
 
 #endif

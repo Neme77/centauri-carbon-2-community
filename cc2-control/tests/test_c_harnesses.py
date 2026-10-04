@@ -20,6 +20,7 @@ HARNESSES = {
     "test_orca_upload.c": BACKEND,
     "test_mqtt_workload.c": [],
     "test_printer_replies.c": [],
+    "test_print_options.c": [],
     "test_history_api.c": BACKEND,
     "test_uds.c": [ROOT / "src/uds.c"],
     "test_tuning_api.c": BACKEND,

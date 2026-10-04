@@ -77,10 +77,33 @@ int main(void){
     /* A failed history request keeps the previous list. */
     say(own,"{\"id\":1036,\"method\":1036,\"result\":{\"error_code\":1013}}");
     assert(c.history_error==1013&&c.history_len==strlen(large)&&c.reply_error_method==1036&&c.reply_errors==2);
+    c.history_delete_requested=time(NULL);c.history_refresh_due=0;
+    say(own,"{\"id\":1038,\"method\":1038,\"result\":{\"error_code\":0}}");
+    assert(!c.history_delete_requested&&c.history_refresh_due);
+    c.history_delete_requested=time(NULL);c.history_refresh_due=0;
+    say(own,"{\"id\":1038,\"method\":1038,\"result\":{\"error_code\":1013}}");
+    assert(!c.history_delete_requested&&!c.history_refresh_due&&c.reply_error_method==1038);
     /* A finished render clears the in-flight flag and refreshes the history. */
+    /* The printer only acknowledges 1051 at once (with the future path) and renders in
+     * machine state 12: the history is listed again when it leaves that state. */
+    char listed[256];
+    c.last_app_ping=time(NULL);c.last_ping=time(NULL);c.history_refresh_due=0;c.history_requested=0;
+    c.canvas_refresh_due=0; /* the 2004 read-back above is checked by the tick test below */
     c.timelapse_requested=time(NULL);
     say(own,"{\"id\":1051,\"method\":1051,\"result\":{\"error_code\":0,\"url\":\"video/Part 1.mp4\"}}");
-    assert(!c.timelapse_requested&&c.history_refresh_due);
+    mqtt_tick(&c);assert(c.timelapse_requested&&!c.timelapse_rendering&&!c.history_refresh_due&&!c.history_requested);
+    say("elegoo/SN/api_status","{\"machine_status\":{\"status\":12,\"sub_status\":3020}}");
+    mqtt_tick(&c);assert(c.timelapse_rendering&&c.timelapse_requested&&!c.history_requested);
+    say("elegoo/SN/api_status","{\"machine_status\":{\"status\":1,\"sub_status\":0}}");
+    mqtt_tick(&c);assert(!c.timelapse_requested&&!c.timelapse_rendering&&c.history_requested);
+    sent(listed,sizeof(listed));assert(!strcmp(listed,"{\"method\":1036,\"id\":1036}"));
+    /* Never seen rendering within 30 s: list anyway. A refusal ends the wait at once. */
+    c.history_requested=0;c.timelapse_requested=time(NULL)-31;
+    mqtt_tick(&c);assert(!c.timelapse_requested);sent(listed,sizeof(listed));assert(!strcmp(listed,"{\"method\":1036,\"id\":1036}"));
+    c.history_requested=0;c.timelapse_requested=time(NULL);
+    say(own,"{\"id\":1051,\"method\":1051,\"result\":{\"error_code\":1012}}");
+    assert(!c.timelapse_requested&&c.reply_error_method==1051&&c.reply_error_code==1012);
+    mqtt_tick(&c);assert(recv(peer,listed,sizeof(listed),MSG_DONTWAIT)<0);
     free(large);
     /* Requests are published as JSON-RPC on our api_request topic. */
     char payload[1024];

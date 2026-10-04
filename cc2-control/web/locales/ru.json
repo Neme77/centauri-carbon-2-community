@@ -180,6 +180,8 @@
   "common.camera_paused_hidden": "Трансляция приостановлена, пока вкладка браузера была скрыта",
   "common.camera_paused_out_of_view": "Трансляция приостановлена: панель камеры вне экрана",
   "common.camera_gave_up": "Видеопоток недоступен. Нажмите «Повторить», чтобы попробовать снова.",
+  "common.camera_taken_over": "Трансляция открыта в другом окне или на другом устройстве",
+  "common.camera_watch_here": "Смотреть здесь",
   "common.your_cc2_camera_feed": "Камера вашего CC2",
   "common.your_live_print_camera": "Камера печати в реальном времени",
   "console.arbitrary_g_code_can_move_axes": "Произвольный G-code может двигать оси, нагревать узлы или повредить принтер.",
@@ -568,5 +570,11 @@
   "history.the_printer_is_creating_the_video": "Принтер создаёт видео.",
   "history.previous_attempt_failed": "Прошлая попытка не удалась",
   "history.no_time_lapse": "Нет таймлапса",
-  "history.show_more_n_of_total": "Показать ещё {n} из {total}"
+  "history.show_more_n_of_total": "Показать ещё {n} из {total}",
+  "print.enable_timelapse": "Включить таймлапс",
+  "history.clear_history": "Очистить историю",
+  "history.delete_entry": "Удалить запись",
+  "history.delete_named": "Удалить {name}",
+  "history.confirm_delete": "Удалить эти {n} записей истории печати? Это действие нельзя отменить. Файлы G-code и видео не удаляются.",
+  "history.delete_requested": "Запрошено удаление истории."
 }

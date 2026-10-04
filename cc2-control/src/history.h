@@ -74,17 +74,77 @@ static int percent_encode(char *out,size_t cap,const char *in) {
 static void history_response(int fd,const mqtt_client *mqtt) {
     time_t now=time(NULL);
     int pending=mqtt->history_requested&&now-mqtt->history_requested<10;
-    int generating=mqtt->timelapse_requested&&now-mqtt->timelapse_requested<300;
+    int generating=mqtt->timelapse_requested&&now-mqtt->timelapse_requested<600;
+    int deleting=mqtt->history_delete_requested&&now-mqtt->history_delete_requested<10;
     long age=mqtt->history_received?(long)(now-mqtt->history_received):-1;
     size_t cap=(mqtt->history?mqtt->history_len:0)+256;
     char *body=malloc(cap);
     if(!body){const char *error="{\"error\":\"Out of memory\"}\n";respond(fd,503,"Service Unavailable","application/json",error,strlen(error));return;}
     int length=snprintf(body,cap,
-        "{\"available\":%s,\"pending\":%s,\"generating\":%s,\"age\":%ld,\"error_code\":%d,\"reply\":%s}\n",
-        mqtt->history?"true":"false",pending?"true":"false",generating?"true":"false",age,
+        "{\"available\":%s,\"pending\":%s,\"generating\":%s,\"deleting\":%s,\"age\":%ld,\"error_code\":%d,\"reply\":%s}\n",
+        mqtt->history?"true":"false",pending?"true":"false",generating?"true":"false",deleting?"true":"false",age,
         mqtt->history_error,mqtt->history?mqtt->history:"null");
     if(length>0&&(size_t)length<cap)respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
     free(body);
+}
+
+/* Delete terminal entries explicitly named by the operator, never file paths.
+ * The vendor 1038 handler takes params.list and removes task records from its
+ * cache/database. Rendering/printing and stale state fail closed. */
+static int history_terminal_task(const mqtt_client *mqtt,const char *id) {
+    if(!mqtt->history)return 0;
+    const char *end=mqtt->history+mqtt->history_len,*root=json_skip_space(mqtt->history,end);
+    const char *root_end,*result_end,*list_end;
+    if(root>=end||*root!='{'||!(root_end=json_container_end(root,end)))return 0;
+    const char *result=json_member_object(root,root_end,"result",'{',&result_end);
+    const char *list=result?json_member_object(result,result_end,"history_task_list",'[',&list_end):NULL;
+    if(!list)return 0;
+    for(const char *item=json_next_element(list,list_end);item;) {
+        const char *item_end=json_container_end(item,list_end),*text;int length,status;
+        if(!item_end)return 0;
+        if(json_member_raw_string(item,item_end,"task_id",&text,&length)&&
+           (size_t)length==strlen(id)&&!memcmp(text,id,(size_t)length))
+            return json_member_int(item,item_end,"task_status",&status)&&status>=1&&status<=3;
+        item=json_next_element(item_end,list_end);
+    }
+    return 0;
+}
+static void history_delete_response(int fd,mqtt_client *mqtt,const char *body,size_t len) {
+    const char *error=NULL;int code=400;time_t now=time(NULL);
+    if(!mqtt->connected||!mqtt->registered||!mqtt->have_machine_status||mqtt->machine_status!=1||
+       !mqtt->last_message||now-mqtt->last_message>15||now<mqtt->last_message) {
+        error="History deletion requires fresh Idle printer state";code=409;
+    }else if((mqtt->timelapse_requested&&now-mqtt->timelapse_requested<600)||
+             (mqtt->history_delete_requested&&now-mqtt->history_delete_requested<10)) {
+        error="A history operation is already pending";code=409;
+    }else if(!mqtt->history||!mqtt->history_received||now-mqtt->history_received>60) {
+        error="Refresh the print history before deleting entries";code=409;
+    }
+    char ids[50][72],params[3600];size_t count=0,used=9;
+    memcpy(params,"{\"list\":[",9);
+    if(!error){
+        while(len&&isspace((unsigned char)*body)){body++;len--;}
+        while(len&&isspace((unsigned char)body[len-1]))len--;
+        const char *end=body+len;
+        for(const char *line=body;line<end;){
+            const char *next=memchr(line,'\n',(size_t)(end-line));if(!next)next=end;
+            if(count==50||!history_task_id(line,(size_t)(next-line),ids[count])){error="Invalid history task selection";break;}
+            for(size_t i=0;i<count;i++)if(!strcmp(ids[i],ids[count])){error="Duplicate history task ID";break;}
+            if(error)break;
+            if(!history_terminal_task(mqtt,ids[count])){error="History entry is missing or still active";code=409;break;}
+            int n=snprintf(params+used,sizeof(params)-used,"%s\"%s\"",count?",":"",ids[count]);
+            if(n<0||(size_t)n>=sizeof(params)-used){error="History selection is too large";break;}
+            used+=(size_t)n;count++;line=next<end?next+1:end;
+        }
+        if(!count&&!error)error="Select at least one history task";
+    }
+    if(!error){
+        memcpy(params+used,"]}",3);
+        if(mqtt_delete_history(mqtt,params)){error="MQTT API client is not ready";code=503;}
+    }
+    char reply[256];
+    if(error){int n=snprintf(reply,sizeof(reply),"{\"accepted\":false,\"error\":\"%s\"}\n",error);respond(fd,code,code==400?"Bad Request":code==409?"Conflict":"Service Unavailable","application/json",reply,(size_t)n);}
+    else{int n=snprintf(reply,sizeof(reply),"{\"accepted\":true,\"method\":1038,\"count\":%zu}\n",count);respond(fd,202,"Accepted","application/json",reply,(size_t)n);}
 }
 
 static void history_refresh_response(int fd,mqtt_client *mqtt) {
@@ -107,7 +167,9 @@ static void timelapse_generate_response(int fd,mqtt_client *mqtt,const char *bod
     else if(video!=1&&video!=3)error="{\"accepted\":false,\"error\":\"This print has no time-lapse frames to render\"}\n";
     else if(!mqtt->have_machine_status||mqtt->machine_status!=1||!mqtt->last_message||now-mqtt->last_message>15)
         error="{\"accepted\":false,\"error\":\"Rendering a time-lapse video requires an idle printer\"}\n";
-    else if(mqtt->timelapse_requested&&now-mqtt->timelapse_requested<300)
+    else if(mqtt->history_delete_requested&&now-mqtt->history_delete_requested<10)
+        error="{\"accepted\":false,\"error\":\"History deletion is pending\"}\n";
+    else if(mqtt->timelapse_requested&&now-mqtt->timelapse_requested<600)
         error="{\"accepted\":false,\"error\":\"A time-lapse video is already being rendered\"}\n";
     else if(mqtt_generate_timelapse(mqtt,url)!=0){error="{\"accepted\":false,\"error\":\"MQTT API client is not ready\"}\n";status=503;}
     if(error){respond(fd,status,status==400?"Bad Request":status==404?"Not Found":status==503?"Service Unavailable":"Conflict","application/json; charset=utf-8",error,strlen(error));return;}

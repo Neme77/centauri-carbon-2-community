@@ -180,6 +180,8 @@
   "common.camera_paused_hidden": "Direct en pause pendant que cet onglet du navigateur était masqué",
   "common.camera_paused_out_of_view": "Direct en pause car le panneau caméra est hors de vue",
   "common.camera_gave_up": "Flux caméra indisponible. Appuyez sur Réessayer pour retenter.",
+  "common.camera_taken_over": "Le direct est ouvert dans une autre fenêtre ou sur un autre appareil",
+  "common.camera_watch_here": "Regarder ici",
   "common.your_cc2_camera_feed": "Flux de la caméra CC2",
   "common.your_live_print_camera": "Caméra d’impression en direct",
   "console.arbitrary_g_code_can_move_axes": "Un G-code arbitraire peut déplacer les axes, chauffer des composants ou endommager l’imprimante.",
@@ -568,5 +570,11 @@
   "history.the_printer_is_creating_the_video": "L’imprimante crée la vidéo.",
   "history.previous_attempt_failed": "La tentative précédente a échoué",
   "history.no_time_lapse": "Pas de timelapse",
-  "history.show_more_n_of_total": "Afficher {n} de plus sur {total}"
+  "history.show_more_n_of_total": "Afficher {n} de plus sur {total}",
+  "print.enable_timelapse": "Activer le timelapse",
+  "history.clear_history": "Effacer l’historique",
+  "history.delete_entry": "Supprimer cette entrée",
+  "history.delete_named": "Supprimer {name}",
+  "history.confirm_delete": "Supprimer ces {n} entrées de l’historique ? Cette action est irréversible. Les fichiers G-code et les vidéos ne sont pas supprimés.",
+  "history.delete_requested": "Suppression de l’historique demandée."
 }

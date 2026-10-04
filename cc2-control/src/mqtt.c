@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -120,7 +121,7 @@ void mqtt_close(mqtt_client *c) {
     /* A setting reported on the previous session is no longer current. Keep
      * status deltas sticky within a session, but require readback on reconnect. */
     c->have_auto_refill=0;
-    c->history_requested=0; c->timelapse_requested=0;
+    c->history_requested=0; c->timelapse_requested=0; c->timelapse_rendering=0; c->history_delete_requested=0;
 }
 
 static int mqtt_publish(mqtt_client *c,const char *topic,const char *payload) {
@@ -188,7 +189,7 @@ static int mqtt_json_escape(char *out, size_t capacity, const char *value) {
 
 int mqtt_start_print(mqtt_client *c, const char *storage_media, const char *filename,
                      const int *tools, const int *trays, size_t slot_count,
-                     char print_layout, int bedlevel_force) {
+                     char print_layout, int bedlevel_force, int timelapse) {
     char topic[256], escaped_filename[1024], payload[2200];
     if (!c || c->fd < 0 || !c->connected || !c->registered || !c->serial[0]) return -1;
     if (!storage_media || (strcmp(storage_media, "local") != 0 &&
@@ -200,9 +201,9 @@ int mqtt_start_print(mqtt_client *c, const char *storage_media, const char *file
     int length = snprintf(payload, sizeof(payload),
         "{\"method\":1020,\"id\":1020,\"params\":{"
         "\"storage_media\":\"%s\",\"filename\":\"%s\",\"config\":{"
-        "\"delay_video\":false,\"printer_check\":false,\"print_layout\":\"%c\","
+        "\"delay_video\":%s,\"printer_check\":false,\"print_layout\":\"%c\","
         "\"bedlevel_force\":%s,\"slot_map\":[", storage_media, escaped_filename,
-        print_layout, bedlevel_force ? "true" : "false");
+        timelapse ? "true" : "false", print_layout, bedlevel_force ? "true" : "false");
     if (length < 0 || (size_t)length >= sizeof(payload)) return -1;
     size_t used = (size_t)length;
     for (size_t index = 0; index < slot_count; ++index) {
@@ -222,7 +223,7 @@ int mqtt_start_print(mqtt_client *c, const char *storage_media, const char *file
 /* One JSON-RPC request on our registered api_request topic. The id repeats the
  * method, like the 1002/2005 requests, so the reply names what it answers. */
 static int publish_request(mqtt_client *c, int method, const char *params) {
-    char topic[256], payload[1400];
+    char topic[256], payload[4096];
     if (!c || c->fd < 0 || !c->connected || !c->registered || !c->serial[0]) return -1;
     int length = snprintf(topic, sizeof(topic), "elegoo/%s/%s/api_request", c->serial, c->client_id);
     if (length < 0 || (size_t)length >= sizeof(topic)) return -1;
@@ -230,6 +231,37 @@ static int publish_request(mqtt_client *c, int method, const char *params) {
                     : snprintf(payload, sizeof(payload), "{\"method\":%d,\"id\":%d}", method, method);
     if (length < 0 || (size_t)length >= sizeof(payload)) return -1;
     return mqtt_publish(c, topic, payload);
+}
+
+/* Set the timelapse configuration for calibrated G-code starts (vendor 1019).
+ * A matching acknowledgement is required before the caller starts the file. */
+int mqtt_prepare_timelapse(mqtt_client *c,int enabled) {
+    char topic[256],payload[192];
+    if(!c||c->fd<0||!c->connected||!c->registered||!c->serial[0])return -1;
+    if(++c->print_config_id>1000000000UL)c->print_config_id=1;
+    unsigned long id=20000UL+c->print_config_id;
+    c->print_config_reply_id=0;c->print_config_error=-1;
+    int n=snprintf(topic,sizeof(topic),"elegoo/%s/%s/api_request",c->serial,c->client_id);
+    if(n<0||(size_t)n>=sizeof(topic))return -1;
+    n=snprintf(payload,sizeof(payload),"{\"method\":1019,\"id\":%lu,\"params\":{\"config\":{\"delay_video\":%s}}}",id,enabled?"true":"false");
+    if(n<0||(size_t)n>=sizeof(payload)||mqtt_publish(c,topic,payload))return -1;
+    struct timespec ts;clock_gettime(CLOCK_MONOTONIC,&ts);
+    long long deadline=(long long)ts.tv_sec*1000+ts.tv_nsec/1000000+1500;
+    while(c->fd>=0){
+        if(c->print_config_reply_id==id)return c->print_config_error==0?0:-1;
+        clock_gettime(CLOCK_MONOTONIC,&ts);
+        long long left=deadline-((long long)ts.tv_sec*1000+ts.tv_nsec/1000000);
+        if(left<=0)return -1;
+        struct pollfd p={c->fd,POLLIN,0};int ready=poll(&p,1,(int)left);
+        if(ready<0&&errno==EINTR)continue;
+        if(ready<=0||!(p.revents&POLLIN)||mqtt_process(c)<0)return -1;
+    }
+    return -1;
+}
+
+int mqtt_delete_history(mqtt_client *c,const char *params) {
+    if(publish_request(c,1038,params))return -1;
+    c->history_delete_requested=time(NULL);return 0;
 }
 
 /* 2004 is SET_AUTO_REFILL in ELEGOO's elegoo-link CC2 adapter: {"auto_refill":bool}. */
@@ -246,7 +278,7 @@ int mqtt_request_history(mqtt_client *c) {
     return 0;
 }
 
-/* 1051 renders the stored frames of one task into an MP4 and replies when it is done. */
+/* 1051 acknowledges a render request; machine state 12 reports its progress. */
 int mqtt_generate_timelapse(mqtt_client *c, const char *url) {
     char escaped[600], params[640];
     if (!url || !*url || mqtt_json_escape(escaped, sizeof(escaped), url) != 0) return -1;
@@ -254,6 +286,7 @@ int mqtt_generate_timelapse(mqtt_client *c, const char *url) {
     if (length < 0 || (size_t)length >= sizeof(params)) return -1;
     if (publish_request(c, 1051, params) != 0) return -1;
     c->timelapse_requested = time(NULL);
+    c->timelapse_rendering = 0;
     return 0;
 }
 
@@ -565,8 +598,11 @@ static int handle_own_reply(mqtt_client *c,const char *payload,size_t len) {
     if(!method||code<0)return 0;
     time_t now=time(NULL);
     if(code){c->reply_error_method=method;c->reply_error_code=code;c->reply_error_time=now;c->reply_errors++;}
+    if(method==1019){double id;if(number_in(payload,len,"id",&id)&&id==20000.0+c->print_config_id){c->print_config_reply_id=(unsigned long)id;c->print_config_error=(int)code;}}
+    if(method==1038){c->history_delete_requested=0;if(!code)c->history_refresh_due=1;}
     if(method==2004&&!code)c->canvas_refresh_due=1; /* read the new setting back */
-    if(method==1051){c->timelapse_requested=0;c->history_refresh_due=1;}
+    /* The 1051 reply only acknowledges the request; mqtt_tick follows the rendering. */
+    if(method==1051&&code){c->timelapse_requested=0;c->timelapse_rendering=0;}
     if(method!=1036)return 0;
     c->history_requested=0;c->history_error=code;c->history_received=now;
     if(!code){
@@ -708,6 +744,15 @@ void mqtt_tick(mqtt_client *c) {
         time_t interval=c->canvas_request_attempts<6?10:60;
         if(c->last_canvas_request==0||now-c->last_canvas_request>=interval)
             (void)mqtt_request_canvas(c);
+    }
+    /* The printer renders a requested time-lapse in machine state 12 after
+     * acknowledging 1051; list the history again once it leaves that state (or
+     * if it never entered it within 30 s, or after 10 minutes in any case). */
+    if(c->timelapse_requested){
+        if(c->have_machine_status&&c->machine_status==12&&now-c->timelapse_requested<600)c->timelapse_rendering=1;
+        else if(c->timelapse_rendering||now-c->timelapse_requested>=30){
+            c->timelapse_requested=0;c->timelapse_rendering=0;c->history_refresh_due=1;
+        }
     }
     /* Follow-ups requested by replies: read auto refill back, list new videos.
      * Discovery can complete from a status delta that omits auto_refill; one full

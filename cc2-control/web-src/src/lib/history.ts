@@ -18,6 +18,7 @@ export const history = store({
   available: false,
   pending: false,
   generating: false,
+  deleting: false,
   error: -1, // printer error_code of the last reply; -2: too large for CC2 Control
 })
 
@@ -46,6 +47,7 @@ export async function refreshHistory() {
       available: Boolean(d?.available),
       pending: Boolean(d?.pending),
       generating: Boolean(d?.generating),
+      deleting: Boolean(d?.deleting),
       error: Number.isFinite(Number(d?.error_code)) ? Number(d.error_code) : -1,
     })
   } catch {
@@ -57,3 +59,5 @@ export async function refreshHistory() {
 export const requestHistory = () => post('/api/history/refresh')
 export const renderTimelapse = (id: string) => post('/api/history/timelapse', id)
 export const timelapseUrl = (id: string) => `/api/history/timelapse?task=${encodeURIComponent(id)}`
+
+export const deleteHistory = (ids: string[]) => post('/api/history/delete', ids.join('\n'))

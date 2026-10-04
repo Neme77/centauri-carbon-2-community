@@ -88,8 +88,10 @@ const ERRORS: Record<number, Key> = {
 // The vendor methods CC2 Control sends over MQTT, as the request the user made.
 const REQUESTS: Record<number, Key> = {
   1002: 'printer.status_request',
+  1019: 'print.enable_timelapse',
   1020: 'printer.print_start',
   1036: 'printer.history_request',
+  1038: 'history.clear_history',
   1051: 'printer.timelapse_rendering',
   2004: 'printer.auto_refill_change',
   2005: 'printer.canvas_request',

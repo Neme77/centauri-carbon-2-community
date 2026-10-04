@@ -1615,13 +1615,18 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     }
     const char *layout_line = memchr(mapping, '\n', mapping_len);
     size_t map_len = layout_line ? (size_t)(layout_line - mapping) : mapping_len;
-    const char *level_line = NULL; size_t layout_len = 0, level_len = 0;
+    const char *level_line = NULL, *video_line = NULL; size_t layout_len = 0, level_len = 0, video_len = 0;
     if (layout_line) {
         layout_line++;
         size_t remaining = mapping_len - (size_t)(layout_line - mapping);
         level_line = memchr(layout_line, '\n', remaining);
         layout_len = level_line ? (size_t)(level_line - layout_line) : remaining;
-        if (level_line) { level_line++; level_len = mapping_len - (size_t)(level_line - mapping); }
+        if (level_line) {
+            level_line++;size_t rest=mapping_len-(size_t)(level_line-mapping);
+            video_line=memchr(level_line,'\n',rest);
+            level_len=video_line?(size_t)(video_line-level_line):rest;
+            if(video_line){video_line++;video_len=mapping_len-(size_t)(video_line-mapping);}
+        }
     }
     char print_layout = 'A';
     if (layout_len) {
@@ -1631,6 +1636,14 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
             return;
         }
         print_layout = layout_line[0];
+    }
+    int timelapse=0;
+    if(video_line){
+        if(video_len!=1||(video_line[0]!='0'&&video_line[0]!='1')){
+            const char *error="{\"accepted\":false,\"error\":\"Invalid timelapse option\"}\n";
+            respond(fd,400,"Bad Request","application/json",error,strlen(error));return;
+        }
+        timelapse=video_line[0]=='1';
     }
     char leveling[16] = "saved";
     if (level_len) {
@@ -1718,13 +1731,14 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
             respond(fd, 422, "Unprocessable Content", "application/json; charset=utf-8", error, strlen(error));
             return;
         }
-        if (build_calibrated_start_script(script, sizeof(script), force_full_mesh,
+        if (mqtt_prepare_timelapse(mqtt,timelapse)==0 &&
+            build_calibrated_start_script(script, sizeof(script), force_full_mesh,
                                           print_layout, print_media, print_filename,
                                           tools, trays, slot_count) == 0)
             start_result = send_local_gcode_script(script);
     } else {
         start_result = mqtt_start_print(mqtt, print_media, print_filename, tools, trays,
-                                        slot_count, print_layout, 0);
+                                        slot_count, print_layout, 0, timelapse);
     }
     if (start_result != 0) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot send the printer start request\"}\n";
@@ -1734,9 +1748,9 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     char accepted[PATH_MAX_LOCAL * 2 + 128], escaped[PATH_MAX_LOCAL * 2];
     json_escape(escaped, sizeof(escaped), print_filename);
     int accepted_len = snprintf(accepted, sizeof(accepted),
-        "{\"accepted\":true,\"method\":1020,\"storage_media\":\"%s\",\"filename\":\"%s\",\"imported_from_usb\":%s,\"print_layout\":\"%c\",\"leveling\":\"%s\"}\n",
+        "{\"accepted\":true,\"method\":1020,\"storage_media\":\"%s\",\"filename\":\"%s\",\"imported_from_usb\":%s,\"print_layout\":\"%c\",\"leveling\":\"%s\",\"timelapse\":%s}\n",
         print_media, escaped, strcmp(storage, "usb") == 0 ? "true" : "false",
-        print_layout, leveling);
+        print_layout, leveling, timelapse ? "true" : "false");
     if (accepted_len > 0 && (size_t)accepted_len < sizeof(accepted))
         respond(fd, 202, "Accepted", "application/json; charset=utf-8", accepted, (size_t)accepted_len);
 }
@@ -1907,6 +1921,33 @@ static int active_gcode_total_layers(const char *filename) {
 
 #include "recovery.h"
 
+/* The page that last started live view. The UI streams the camera from one
+ * page at a time: a page that sees another viewer in /api/printer stops its own
+ * stream. Only the main loop touches it, so it needs no lock. */
+static char camera_viewer[41];
+
+static int camera_viewer_valid(const char *id, size_t length) {
+    if (length < 8 || length >= sizeof(camera_viewer)) return 0;
+    for (size_t i = 0; i < length; ++i)
+        if (!(isdigit((unsigned char)id[i]) || (id[i] >= 'a' && id[i] <= 'z') || id[i] == '-')) return 0;
+    return 1;
+}
+
+static void camera_claim_response(int fd, const char *body, size_t length) {
+    while (length && isspace((unsigned char)body[length - 1])) length--;
+    if (!camera_viewer_valid(body, length)) {
+        static const char error[] = "{\"error\":\"Invalid camera viewer\"}\n";
+        respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, sizeof(error) - 1);
+        return;
+    }
+    memcpy(camera_viewer, body, length);
+    camera_viewer[length] = '\0';
+    char reply[64];
+    int n = snprintf(reply, sizeof(reply), "{\"viewer\":\"%s\"}\n", camera_viewer);
+    if (n > 0 && (size_t)n < sizeof(reply))
+        respond(fd, 200, "OK", "application/json; charset=utf-8", reply, (size_t)n);
+}
+
 static void printer_response(int fd, const mqtt_client *mqtt) {
     /* Render from the two caches without copying MQTT transport/history buffers. */
     double live;
@@ -1966,6 +2007,9 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     char printer_error[160]="null";
     if(mqtt->reply_errors)snprintf(printer_error,sizeof(printer_error),"{\"sequence\":%lu,\"method\":%d,\"code\":%d,\"age\":%ld}",
         mqtt->reply_errors,mqtt->reply_error_method,mqtt->reply_error_code,(long)(now-mqtt->reply_error_time));
+    char viewer[sizeof(camera_viewer)+2];
+    if(camera_viewer[0])snprintf(viewer,sizeof(viewer),"\"%s\"",camera_viewer);
+    else snprintf(viewer,sizeof(viewer),"null");
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"
@@ -1979,12 +2023,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"printer_error\":%s}\n",
+        "\"printer_error\":%s,\"camera_viewer\":%s}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
-        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",printer_error);
+        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",printer_error,viewer);
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -3005,6 +3049,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         uds_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/printer")==0) {
         printer_response(fd, mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/camera/claim")==0) {
+        camera_claim_response(fd, body, body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/snapshot")==0) {
         snapshot_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mqtt-diagnostic")==0) {
@@ -3024,6 +3070,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         history_response(fd, mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/history/refresh")==0) {
         history_refresh_response(fd, mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/history/delete")==0) {
+        history_delete_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/history/timelapse")==0) {
         timelapse_generate_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/history/timelapse")==0) {

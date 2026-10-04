@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { Download, Film, RefreshCw } from 'lucide-preact'
+import { Download, Film, RefreshCw, Trash2 } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
@@ -7,7 +7,15 @@ import { errText, notify } from '@/lib/api'
 import { ask } from '@/lib/confirm'
 import { type Key, t, tpl } from '@/lib/i18n'
 import { duration, fileSize } from '@/lib/format'
-import { history, refreshHistory, renderTimelapse, requestHistory, type Task, timelapseUrl } from '@/lib/history'
+import {
+  history,
+  refreshHistory,
+  renderTimelapse,
+  requestHistory,
+  deleteHistory,
+  type Task,
+  timelapseUrl,
+} from '@/lib/history'
 import { printerError } from '@/lib/machine'
 import { usePoll } from '@/lib/poll'
 import { printer, view } from '@/lib/state'
@@ -78,7 +86,23 @@ export const History = () => {
   const [shown, setShown] = useState(STEP)
   const [failure, setFailure] = useState('')
   // Reads come from CC2 Control's memory; only Refresh and opening the page ask the printer.
-  usePoll(refreshHistory, h.pending || h.generating ? 2000 : 30000)
+  const [deleting, setDeleting] = useState(false)
+  const locked = deleting || h.deleting || h.generating || h.pending
+  const completed = h.tasks.filter(task => task.status >= 1 && task.status <= 3)
+  usePoll(refreshHistory, h.pending || h.generating || h.deleting ? 2000 : 30000)
+  const remove = async (tasks: Task[]) => {
+    if (!tasks.length || !(await ask(tpl('history.confirm_delete', { n: tasks.length }), true))) return
+    setDeleting(true)
+    try {
+      await deleteHistory(tasks.map(task => task.id))
+      notify(t('history.delete_requested'))
+      await refreshHistory()
+    } catch (e) {
+      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
   const refresh = async () => {
     try {
       setFailure('')
@@ -115,10 +139,20 @@ export const History = () => {
           icon="file"
           title="history.print_jobs"
           end={
-            <Button class="min-h-8 px-2 text-xs text-fg" disabled={h.pending} onClick={refresh}>
-              <RefreshCw {...I} />
-              {t('history.refresh')}
-            </Button>
+            <div class="flex flex-wrap justify-end gap-2">
+              <Button
+                class="min-h-8 px-2 text-xs"
+                disabled={!v.idle || locked || !completed.length}
+                onClick={() => remove(completed)}
+              >
+                <Trash2 {...I} />
+                {t('history.clear_history')}
+              </Button>
+              <Button class="min-h-8 px-2 text-xs text-fg" disabled={h.pending} onClick={refresh}>
+                <RefreshCw {...I} />
+                {t('history.refresh')}
+              </Button>
+            </div>
           }
         />
         {status && <p class="py-3 text-muted">{status}</p>}
@@ -147,7 +181,18 @@ export const History = () => {
                     <Tag tone={tone}>{t(label)}</Tag>
                   </span>
                   <div class="justify-self-end">
-                    <Video task={task} idle={v.idle} busy={h.generating} />
+                    <div class="flex items-center justify-end gap-2">
+                      <Video task={task} idle={v.idle} busy={locked} />
+                      <Button
+                        class="px-2"
+                        title={t('history.delete_entry')}
+                        aria-label={tpl('history.delete_named', { name: task.name })}
+                        disabled={!v.idle || locked || task.status < 1 || task.status > 3}
+                        onClick={() => remove([task])}
+                      >
+                        <Trash2 {...I} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )

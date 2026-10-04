@@ -167,3 +167,19 @@ A healthy updated system reports the installed CC2 Control version and reaches h
 ## Acknowledgements
 
 Thanks to **Barry Green** for extensive remote hardware testing and feedback during the CC2 Control development cycle.
+
+### Timelapse selection and history deletion
+
+Select **Enable timelapse** in the print popup for each job that should record frames.
+After completion, use **Create video** in History if the printer reports unrendered frames,
+then **Download** when the MP4 is ready. Saved-mesh and calibrated starts both send an explicit
+recording choice; this build is intended for printer validation of both paths.
+
+History offers confirmed deletion of one completed/stopped record or all completed/stopped records
+in the loaded list (the printer currently returns its last 50 jobs). Refresh first if the cached list
+is older than one minute. Deletion is unavailable during printing or video generation. It removes
+history records, not G-code or video files; download any video you want before deleting its record.
+
+Starting live camera view in another CC2 Control tab/device hands it over on the previous page's next
+printer-state poll. **Watch here** takes it back explicitly. The camera window follows the same rule.
+Failed ownership requests leave streaming stopped. Direct Elegoo clients remain independent.
