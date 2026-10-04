@@ -3,6 +3,10 @@
 This file records user-visible project changes. Signed artifacts and exact
 checksums remain attached to each GitHub release.
 
+## Unreleased
+
+- Bed Levelling has a build-plate library: save each plate's mesh and Z offset once and mount the plate again later. A plate whose mesh is not in its side's slot is written there and the printer restarts.
+
 ## CC2 Control 1.1.31fix — 2026-10-04
 
 - Restore and stabilize 3D mesh viewing, including meshes with large height offsets and camera rotation.

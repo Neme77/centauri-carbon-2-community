@@ -41,7 +41,8 @@ Example response:
     "material_presets": true,
     "persistent_ui_preferences": true,
     "print_history": true,
-    "canvas_auto_refill": true
+    "canvas_auto_refill": true,
+    "bed_plates": true
   },
   "endpoints": {
     "printer": "/api/printer",
@@ -51,6 +52,7 @@ Example response:
     "console": "/api/console",
     "preferences": "/api/preferences",
     "history": "/api/history",
+    "plates": "/api/plates",
     "discovery": "/api/v1/system/info"
   },
   "runtime": {
@@ -185,3 +187,46 @@ A successful native reply triggers a history refresh; 202 alone is not confirmat
 The UI asks for confirmation before deleting one entry or all completed entries in the loaded list.
 The firmware handler inspected for this integration deletes database records; it does not remove
 G-code files or timelapse files. This is a history operation, not a storage cleanup tool.
+
+## Build-plate library
+
+CC2 Control keeps named plate surfaces in `bed-plates.json` (`--plates FILE`, next to the UI preferences):
+each one has a side, the 11 × 11 mesh the printer measured for it and a Z offset of up to ±1 mm.
+Printer facts this relies on, read from the V4.2 firmware and its logs:
+
+- Every print loads the mesh of its side: Side A uses profile `default`, Side B `default1` (`G180 S7`).
+  A `BED_MESH_PROFILE LOAD` sent before a print is therefore replaced; a plate has to be in that slot.
+- `BED_MESH_PROFILE SAVE=default` is refused by the firmware, and the firmware's own `RESTART` left its
+  printer service hung until a reboot in a test on the user's printer. A slot is therefore written by
+  replacing that one `[bed_mesh …]` section of `/opt/usr/cfg/autosave.cfg` (`--autosave FILE`) in the
+  firmware's own format and rebooting the printer, which reads the file at start.
+- The stock print start adds a per-side offset with `SET_GCODE_OFFSET BED_ROUGHNESS=…` (A −0.06, B −0.015) and
+  keeps the value last set with `SET_GCODE_OFFSET Z=…`. A restart clears it. The plate Z offset is that value.
+- The touchscreen's Z offset setting keeps its own value, 0 when the screen program starts, and sends it with
+  `SET_GCODE_OFFSET Z=… MOVE=1`; it never reads the printer's offset, so a press there replaces the plate value.
+
+Endpoints (all changes are `POST` with a text body, one field per line, and need `X-CC2-Request: 1`):
+
+- `GET /api/plates` returns the library, which plate is mounted, whether its Z offset has been applied, a
+  mount waiting for the printer restart, the last mount result (`mounted`, `verify_failed`,
+  `reboot_failed`) and, per plate, whether its mesh is the one now saved for its side (`in_printer`).
+- `/api/plates/save` (`A|B`, name, Z) stores the mesh the printer keeps for that side as a new plate. The
+  slot in `autosave.cfg` and in printer memory must agree.
+- `/api/plates/mount` (id) mounts a plate whose mesh is already in its slot and applies its Z offset with
+  `SET_GCODE_OFFSET Z=` (no movement). Any other plate answers 409 with `"reboot_required": true`; sending
+  the id and a second line `REBOOT` writes the slot (the previous file becomes `autosave_backup.cfg`, a copy
+  is kept as `bed-plates.json.autosave.bak`) and reboots the printer. The next CC2 Control process checks the
+  slot in the file and in printer memory before it reports the plate mounted. If the reboot cannot be
+  started, the previous file is put back.
+- `/api/plates/edit` (id, name, Z) renames a plate or changes its Z offset; the mounted plate's new offset is
+  applied at once when the printer is idle.
+- `/api/plates/recapture` (id) gives the mounted plate the mesh now saved for its side, after a new
+  calibration. `/api/plates/delete` (id) and `/api/plates/unmount` change only the library.
+
+Changes that touch the printer require a connected, registered, idle printer with fresh MQTT and printer
+service telemetry, no command or file transfer of CC2 Control in progress and no pending restart. The mounted
+plate's Z offset is applied again once the printer is idle after CC2 Control starts or the printer service
+restarts, which CC2 Control recognises by a new `/tmp/elegoo_uds` socket file; a reconnect to the same service,
+such as after a receive timeout during a busy print start, keeps it applied. Names are
+1–64 UTF-8 bytes without quotes, backslashes or control characters; a library file that cannot be read keeps
+the library closed rather than being overwritten. Requires printer validation.

@@ -42,6 +42,8 @@ jobs:
         run: npm run test:print-history
       - name: Verify G-code filament labels and Canvas mapping
         run: npm run test:filaments
+      - name: Verify build-plate library controls
+        run: npm run test:plates
       - name: Browser upload and same-name reload
         run: npm run test:upload
       - name: Save screenshots for visual review

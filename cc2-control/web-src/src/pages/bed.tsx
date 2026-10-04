@@ -16,8 +16,10 @@ import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
 import { microns, screwPlan, screwValues } from '@/lib/screws'
 import { poll, usePoll } from '@/lib/poll'
-import { printer, nav, openPage, refreshConsole, screwText } from '@/lib/state'
+import { type BedTab, printer, nav, openPage, refreshConsole, screwText } from '@/lib/state'
+import { meshProfile, platePoints, plates, refreshPlates } from '@/lib/plates'
 import { sendConsole } from '@/pages/console'
+import { Plates } from '@/pages/bed-plates'
 
 const I = { size: 16, strokeWidth: 1 }
 const PROFILES: [string, Key][] = [
@@ -29,7 +31,14 @@ type View = '3d' | '2d' | 'values'
 
 const MeshCard = () => {
   const [data, setData] = useState<any>(null)
-  const [profile, setProfile] = useState('active')
+  const { profile } = meshProfile.use()
+  const setProfile = (value: string) => meshProfile.set({ profile: value })
+  const library = plates.use().data
+  const plate = profile.startsWith('plate:') ? library?.plates.find(p => `plate:${p.id}` === profile) : undefined
+  // A deleted plate falls back to the printer's active mesh.
+  useEffect(() => {
+    if (library && profile.startsWith('plate:') && !plate) setProfile('active')
+  }, [library, profile, plate])
   const [view, setView] = useState<View>('3d')
   const [scale, setScale] = useState(1)
   const cam = useRef<Cam>(defaultCam())
@@ -37,7 +46,11 @@ const MeshCard = () => {
   const busy = useRef(false)
   const queued = useRef(false)
   const alive = useRef(true)
-  const points: Pt[] = useMemo(() => (data && matrixFromUds(data, profile)) || [], [data, profile])
+  const points: Pt[] = useMemo(
+    () => (plate ? platePoints(plate.mesh) : (data && matrixFromUds(data, profile)) || []),
+    [data, profile, plate]
+  )
+  const shown = plate ? tpl('plates.plate_option', { name: plate.name }) : `${t('bed.saved_profile')} · ${profile}`
   const xs = [...new Set(points.map(p => p.x))].sort((a, b) => a - b)
   const ys = [...new Set(points.map(p => p.y))].sort((a, b) => b - a)
   const cells = new Map(points.map(p => [`${p.x},${p.y}`, p.z]))
@@ -88,6 +101,7 @@ const MeshCard = () => {
   useEffect(() => {
     alive.current = true
     void load()
+    void refreshPlates() // saved plates are offered next to the printer profiles
     return () => {
       alive.current = false
     }
@@ -128,9 +142,7 @@ const MeshCard = () => {
       <strong class="mt-2 block whitespace-nowrap text-2xl font-semibold">
         {val} <small class="text-xs">mm</small>
       </strong>
-      <p class="mt-1 text-xs text-muted">
-        {profile === 'active' ? t('bed.current_printer_mesh') : `${t('bed.saved_profile')} · ${profile}`}
-      </p>
+      <p class="mt-1 text-xs text-muted">{profile === 'active' ? t('bed.current_printer_mesh') : shown}</p>
     </div>
   )
   return (
@@ -155,6 +167,15 @@ const MeshCard = () => {
                 {t(l)}
               </option>
             ))}
+            {!!library?.plates.length && (
+              <optgroup label={t('bed.build_plates')}>
+                {library.plates.map(p => (
+                  <option key={p.id} value={`plate:${p.id}`}>
+                    {tpl('plates.plate_option', { name: p.name })}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </Select>
         </label>
         <div class="flex">
@@ -275,7 +296,9 @@ const MeshCard = () => {
           points.length
             ? profile === 'active'
               ? `${t('bed.active_mesh_loaded')}${root?.profile_name ? ` · ${root.profile_name}` : ''}.`
-              : `${t('bed.saved_mesh_loaded')} · ${profile}.`
+              : plate
+                ? `${shown}.`
+                : `${t('bed.saved_mesh_loaded')} · ${profile}.`
             : t('bed.waiting_for_the_printer_mesh')
         }
       />
@@ -509,7 +532,7 @@ const Screws = () => {
               if (!(await ask(t('bed.start_the_four_screw_load_cell')))) return
               const previous = await request('/api/console')
               screwText.set({ text: '', minGeneration: Number(previous.generation) + 1 })
-              if (await control('screws:measure')) openPage('bed', true)
+              if (await control('screws:measure')) openPage('bed', 'screws')
             } catch (e) {
               notify(errText(e), 'error')
             } finally {
@@ -526,21 +549,24 @@ const Screws = () => {
 }
 
 export const Bed = () => {
-  const { screws } = nav.use()
+  const { bed } = nav.use()
   return (
     <Page title="common.bed_levelling" sub="bed.mesh_saved_profiles_and_four_screw">
       <Tabs
         items={[
           { id: 'mesh', label: t('bed.mesh_saved_profiles'), icon: <Icon n="grid" /> },
+          { id: 'plates', label: t('bed.build_plates'), icon: <Icon n="layers" /> },
           { id: 'screws', label: t('bed.screw_levelling'), icon: <Icon n="target" /> },
         ]}
-        value={screws ? 'screws' : 'mesh'}
-        onChange={id => openPage('bed', id === 'screws')}
+        value={bed}
+        onChange={id => openPage('bed', id as BedTab)}
       />
-      {screws ? (
+      {bed === 'screws' ? (
         <div class="max-w-4xl">
           <Screws />
         </div>
+      ) : bed === 'plates' ? (
+        <Plates />
       ) : (
         <MeshCard />
       )}

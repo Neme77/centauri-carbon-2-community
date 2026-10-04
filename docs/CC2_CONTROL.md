@@ -24,6 +24,8 @@ Protected actions include jogging and homing, live Z-offset adjustment, temperat
 
 CC2 Control retains the unified Bed Mesh, saved Side A / Side B profiles, active mesh state and four-screw measurement under one **Bed Levelling** workflow.
 
+**Build Plates** keeps a library of plate surfaces, each with the mesh the printer measured for it and its own Z offset. Calibrate the mesh once with a plate mounted, save it, and mount it again later from the list. A plate whose mesh is already in the printer's Side A or Side B slot mounts at once; any other plate is written to that slot and the printer restarts (about 1.5 minutes) after a confirmation. The plate Z offset is applied on top of the printer's own plate offset and again after every restart. Tune it with Live Z Offset in CC2 Control rather than on the printer screen: the screen's Z offset setting does not know the plate offset, and its first press replaces it. See `cc2-control/docs/API.md` for the exact behaviour.
+
 Four-screw corrections are displayed in **microns**. A guarded **Optimized reference adjustment** suggestion may be shown when it reduces the largest required correction and remains inside the protected movement range. The suggestion is advisory only; CC2 Control does not move or turn screws automatically.
 
 ## Quick Actions and global Emergency Stop

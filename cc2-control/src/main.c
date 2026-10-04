@@ -85,6 +85,8 @@ static volatile sig_atomic_t first_run_restart_requested = 0;
 static const char *material_presets_path = "./material-presets.json";
 static const char *mqtt_config_path = "./cc2-control.conf";
 static const char *ui_preferences_path = "./ui-preferences.json";
+static const char *plates_path = "./bed-plates.json";
+static const char *printer_autosave_path = "/opt/usr/cfg/autosave.cfg";
 static const char *gcode_internal_root = GCODE_INTERNAL_ROOT;
 static const char *gcode_usb_root = GCODE_USB_ROOT;
 static int setup_mode = 0;
@@ -164,7 +166,7 @@ static int send_local_gcode_script(const char *script) {
 
 static int saved_plate_mesh_exists(char print_layout) {
     const char *profile = print_layout == 'B' ? "default1" : "default";
-    FILE *file = fopen("/opt/usr/cfg/autosave.cfg", "rb");
+    FILE *file = fopen(printer_autosave_path, "rb");
     if (!file) return 0;
     char line[256], marker[64];
     snprintf(marker, sizeof(marker), "[bed_mesh %s]", profile);
@@ -286,7 +288,8 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"material_presets\":true,"
             "\"persistent_ui_preferences\":true,"
             "\"print_history\":true,"
-            "\"canvas_auto_refill\":true"
+            "\"canvas_auto_refill\":true,"
+            "\"bed_plates\":true"
         "},"
         "\"endpoints\":{"
             "\"printer\":\"/api/printer\","
@@ -296,6 +299,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"console\":\"/api/console\","
             "\"preferences\":\"/api/preferences\","
             "\"history\":\"/api/history\","
+            "\"plates\":\"/api/plates\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
         "\"runtime\":{"
@@ -2624,6 +2628,8 @@ static void mesh_response(int fd) {
     respond(fd,200,"OK","application/json; charset=utf-8",result,used); free(result);
 }
 
+#include "plates.h"
+
 static void serve_index(int fd, const char *web_root) {
     char path[PATH_MAX_LOCAL];
     if (snprintf(path, sizeof(path), "%s/index.html", web_root) >= (int)sizeof(path)) {
@@ -3218,6 +3224,20 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
         mesh_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/plates")==0) {
+        plates_get_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/save")==0) {
+        plates_save_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/recapture")==0) {
+        plates_recapture_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/edit")==0) {
+        plates_edit_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/delete")==0) {
+        plates_delete_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/mount")==0) {
+        plates_mount_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/unmount")==0) {
+        plates_unmount_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/console")==0) {
         console_status_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/clear")==0) {
@@ -3252,10 +3272,12 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--config") == 0 && i + 1 < argc) mqtt_config_path = argv[++i];
         else if (strcmp(argv[i], "--presets") == 0 && i + 1 < argc) material_presets_path = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
+        else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
+        else if (strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) printer_autosave_path = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
             return 2;
         }
     }
@@ -3278,6 +3300,8 @@ int main(int argc, char **argv) {
     console_init(&console,"/tmp/elegoo_uds");
     recovery_console=&console;
     uds_init(&telemetry);
+    plates_load();
+    if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
         setup_mode = 1;
@@ -3316,6 +3340,7 @@ int main(int argc, char **argv) {
         mqtt_tick(&mqtt);
         object_query_path = uds_path;
         uds_tick(&telemetry,uds_path);
+        plates_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
         int max_fd=server;

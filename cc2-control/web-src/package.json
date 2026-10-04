@@ -15,7 +15,8 @@
     "test:camera": "node preview/test-camera-stream.mjs",
     "test:quick": "node preview/test-quick-actions.mjs",
     "test:print-history": "node preview/test-print-history.mjs",
-    "test:filaments": "node preview/test-filament-mapping.mjs"
+    "test:filaments": "node preview/test-filament-mapping.mjs",
+    "test:plates": "node preview/test-bed-plates.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
