@@ -77,14 +77,26 @@ Then reload `http://PRINTER-IP:8081` and complete the initial setup with the new
 
 ## Features
 
-- local web dashboard on port `8081`;
-- live status, camera, temperatures, fans and motion controls;
-- G-code/3MF file management, thumbnails and OrcaSlicer integration;
-- Canvas material slots, colours, presets and spool selection;
-- Side A / Side B mesh handling, adaptive probing and screw levelling;
-- object exclusion, protected console and global emergency stop;
-- Internationalized interface with persistent themes;
-- Panda/Moonraker compatibility endpoint on port `7125`.
+| Area | What you can do |
+| --- | --- |
+| Dashboard and print tuning | Monitor temperatures, fans, print progress and live movement; adjust **print speed (25–200%)** and **extrusion flow (50–150%)** during an active or paused print with fresh telemetry. |
+| File manager | Browse internal and USB storage, search and sort files, inspect model thumbnails and print metadata, upload G-code, **download G-code to your computer**, delete files and start a protected print. |
+| Canvas and print continuity | View four material slots, colours and presets; select, load or unload a spool; enable **Auto refill** so the printer can continue from another slot holding the same filament when one spool runs out. |
+| Print popup and timelapse | Choose filament-slot mapping and bed side before printing, use a saved mesh or a calibrated start, and **enable timelapse recording for that print**. |
+| History | Review jobs recorded by the printer, including start time, duration and result; download ready timelapse videos and render recorded frames into a video while Idle. Delete individual records or clear loaded completed records with confirmation; G-code files are preserved. |
+| Camera | Start live viewing on request, take snapshots and open the viewer in a separate window. CC2 coordinates camera ownership between its pages and windows and releases the viewer when it closes; the vendor camera service remains active. |
+| Printer control | Home and move axes, set nozzle and bed targets, use material temperature presets, control fans and lights, extrude filament and adjust the live session Z offset. |
+| Bed levelling | View the mesh in 2D or interactive 3D, inspect values and saved profiles, choose Side A / Side B, use adaptive probing and measure four-screw adjustment with the nozzle load cell. |
+| Quick Actions and safety | Configure dashboard shortcuts with real light-state feedback; use object exclusion, a protected console and global emergency stop. Heater-off actions require fresh Idle telemetry. |
+| Printer status and connection | See native machine sub-states and refusal messages; obtain telemetry through persistent UDS sessions, discover the printer serial automatically using saved LAN credentials, and revalidate a changed LAN code. |
+| Slicer and integrations | Upload from OrcaSlicer and use the Panda/Moonraker compatibility endpoint on port `7125`, including Canvas filament synchronization. The local control dashboard runs on port `8081`. |
+| Interface | Use English, Italian, French, Chinese or Russian; choose Light, Dark, Dracula, Nord, Monokai or Solarized Light themes; save appearance preferences and collapse the navigation menu. |
+
+## Community contributions
+
+A huge thank you to **DamiBFryta**, our dedicated beta tester, for ideas, testing and debugging throughout the project.
+
+Thank you to **@beanbo** for printer sub-states, refusal reporting, Canvas auto-refill and print history ([#67](https://github.com/Neme77/centauri-carbon-2-community/pull/67)), and camera ownership across CC2 pages ([#71](https://github.com/Neme77/centauri-carbon-2-community/pull/71)). Thank you to **@surfoo** for the UI rewrite and continuing interface contributions.
 
 ## Source layout
 
