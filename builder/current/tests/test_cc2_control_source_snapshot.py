@@ -17,7 +17,7 @@ with zipfile.ZipFile(prepare.SOURCE) as archive:
                  'tests/test_recovery_download.c', 'tests/test_object_query.c',
                  'tests/test_control_actions.c', 'tests/test_installer_package.py',
                  'web-src/src/pages/dashboard.tsx', 'web-src/src/pages/control.tsx',
-                 'web-src/preview/test-quick-actions.mjs'):
+                 'web-src/preview/test-quick-actions.mjs', 'tests/test_camera_viewer_api.py'):
         assert archive.read(name) == (BASE.parents[1] / 'cc2-control' / name).read_bytes(), name
     for lang in ('en', 'it', 'fr', 'zh', 'ru'):
         source = archive.read(f'web-src/public/locales/{lang}.json')

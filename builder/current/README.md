@@ -25,9 +25,9 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`69e48fa2f0e1e06e9ef37003586216347bf81882`, incorporating the validated
+`fd1a593b0eec0aeae4e1fc4843b66d1b7eb99436`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
-with visibility suspension and bounded reconnection attempts, and the Russian interface translation. It includes persistent UDS telemetry, MQTT workload reduction,
+with visibility suspension and bounded reconnection attempts, the Russian interface translation and one live camera viewer at a time. It includes persistent UDS telemetry, MQTT workload reduction,
 current UI and five languages, speed/flow controls, 128 MiB uploads, live Z offset,
 A/B calibration, adaptive mesh start/rendering, emergency recovery and downloads.
 The runtime identity remains 1.1.31, matching the printer-tested build.
