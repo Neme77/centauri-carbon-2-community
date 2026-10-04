@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/field'
+import { PasswordInput } from '@/components/ui/field'
 import { Dialog } from '@/components/ui/dialog'
 import { errText, notify, post, request } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
@@ -10,7 +10,7 @@ export const SetupDialog = () => {
   const [open, setOpen] = useState(false),
     [code, setCode] = useState(''),
     [busy, setBusy] = useState(false),
-    [state, setState] = useState(t('common.checking_configuration'))
+    [state, setState] = useState('')
   useEffect(() => {
     request('/api/setup')
       .then(d => setOpen(Boolean(d.required)))
@@ -50,8 +50,7 @@ export const SetupDialog = () => {
       <form onSubmit={submit}>
         <h2 class="mb-2 text-2xl font-semibold">{t('setup.connect_cc2_control')}</h2>
         <p class="mb-4 leading-relaxed text-muted">{t('setup.enter_the_lan_access_code_shown')}</p>
-        <Input
-          type="password"
+        <PasswordInput
           autoComplete="off"
           required
           class="mb-3"
