@@ -31,7 +31,7 @@ def main():
         (usb / "folder").mkdir(parents=True)
         (internal / "cube.gcode").write_text("G28\n", encoding="ascii")
         (internal / "multicolour.gcode").write_text(
-            "; T9 and BED_MESH_CALIBRATE FROM_SLICER=1 in comments are ignored\nT0\nG1 X1\nT1\nG1 X2\n",
+            "; filament_colour = #FF0000;#00FF00\n; filament_type = PLA;PETG\n; T9 and BED_MESH_CALIBRATE FROM_SLICER=1 in comments are ignored\nT0\nG1 X1\nT1\nG1 X2\n",
             encoding="ascii",
         )
         (internal / "adaptive.gcode").write_text(
@@ -90,7 +90,7 @@ def main():
             )
             with urllib.request.urlopen(inspect, timeout=1) as response:
                 inspection = json.load(response)
-            assert inspection == {"tools": [0, 1], "multicolour": True, "adaptive_mesh": False}
+            assert inspection == {"tools": [0, 1], "multicolour": True, "adaptive_mesh": False, "filaments": [{"tool": 0, "color": "#FF0000", "material": "PLA"}, {"tool": 1, "color": "#00FF00", "material": "PETG"}]}
 
             inspect_adaptive = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/inspect",
@@ -99,7 +99,7 @@ def main():
             )
             with urllib.request.urlopen(inspect_adaptive, timeout=1) as response:
                 adaptive = json.load(response)
-            assert adaptive == {"tools": [0], "multicolour": False, "adaptive_mesh": True}
+            assert adaptive == {"tools": [0], "multicolour": False, "adaptive_mesh": True, "filaments": [{"tool": 0, "color": "", "material": ""}]}
 
             metadata_request = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/metadata",

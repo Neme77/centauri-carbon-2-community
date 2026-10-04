@@ -576,5 +576,7 @@
   "history.delete_entry": "Delete entry",
   "history.delete_named": "Delete {name}",
   "history.confirm_delete": "Delete these {n} print-history entries? This cannot be undone. G-code files and videos are not deleted.",
-  "history.delete_requested": "History deletion requested."
+  "history.delete_requested": "History deletion requested.",
+  "print.file_filament": "Filament in G-code",
+  "print.file_filament_unknown": "Colour/material not provided by the file"
 }

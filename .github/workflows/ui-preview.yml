@@ -40,6 +40,8 @@ jobs:
         run: npm run test:quick
       - name: Verify timelapse selection and history deletion controls
         run: npm run test:print-history
+      - name: Verify G-code filament labels and Canvas mapping
+        run: npm run test:filaments
       - name: Save screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v6

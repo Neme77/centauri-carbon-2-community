@@ -22,7 +22,9 @@ with zipfile.ZipFile(prepare.SOURCE) as archive:
                  'web-src/src/lib/machine.ts', 'web-src/src/lib/history.ts',
                  'web-src/src/pages/history.tsx', 'web-src/src/pages/print-dialog.tsx',
                  'tests/test_print_options.c', 'tests/test_camera_viewer_api.py',
-                 'web-src/preview/test-print-history.mjs'):
+                 'web-src/preview/test-print-history.mjs', 'web-src/preview/test-browser.mjs',
+                 'web-src/preview/test-filament-mapping.mjs', 'tests/test_filament_metadata.c',
+                 'tests/test_gcode_files.py', 'tests/test_c_harnesses.py'):
         assert archive.read(name) == (BASE.parents[1] / 'cc2-control' / name).read_bytes(), name
     for lang in ('en', 'it', 'fr', 'zh', 'ru'):
         source = archive.read(f'web-src/public/locales/{lang}.json')

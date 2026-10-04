@@ -17,6 +17,7 @@ HARNESSES = {
     "test_runtime_limits.c": BACKEND,
     "test_mqtt_limits.c": [],
     "test_calibrated_start.c": BACKEND,
+    "test_filament_metadata.c": BACKEND,
     "test_orca_upload.c": BACKEND,
     "test_mqtt_workload.c": [],
     "test_printer_replies.c": [],

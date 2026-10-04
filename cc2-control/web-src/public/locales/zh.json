@@ -576,5 +576,7 @@
   "history.delete_entry": "删除记录",
   "history.delete_named": "删除 {name}",
   "history.confirm_delete": "删除这 {n} 条打印历史记录？此操作无法撤销。G-code 文件和视频不会被删除。",
-  "history.delete_requested": "已请求删除历史记录。"
+  "history.delete_requested": "已请求删除历史记录。",
+  "print.file_filament": "G-code 中的耗材",
+  "print.file_filament_unknown": "文件未提供颜色或材料信息"
 }
