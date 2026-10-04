@@ -9,35 +9,35 @@ Community firmware, local printer control and reproducible build tools for the *
 
 | Component          |                                                                                         Version |
 | ------------------ | ----------------------------------------------------------------------------------------------: |
-| Community firmware |                 [V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2) |
-| CC2 Control        | [1.1.31](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.1.31) |
+| Community firmware |                 [V4.2-R5](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2-R5) |
+| CC2 Control        | [1.1.31](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2-R5) |
 
 Release binaries, standalone updaters, source archives and checksums are kept with the corresponding GitHub Release. The canonical development source is kept directly on `develop`.
 
 ## Downloads
 
 <p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig"><img alt="Download Community Firmware V4.2" src="https://img.shields.io/badge/Download-Firmware%20V4.2-00b8d9?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip"><img alt="Download CC2 Control 1.1.31 updater" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.31-22c55e?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip"><img alt="Download CC2 Control 1.1.31 source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.31-6f42c1?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2_V4_2_STOCK_20261004_135126_9cead4b7.zip.sig"><img alt="Download Community Firmware V4.2-R5" src="https://img.shields.io/badge/Download-Firmware%20V4.2--R5-00b8d9?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Multiplatform-Update.zip"><img alt="Download CC2 Control 1.1.31 updater" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.31-22c55e?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Source.zip"><img alt="Download CC2 Control 1.1.31 source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.31-6f42c1?style=for-the-badge"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip"><img alt="Download firmware builder R4" src="https://img.shields.io/badge/Builder-Firmware%20R4-f59e0b?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt"><img alt="Download SHA256 checksums" src="https://img.shields.io/badge/Verify-SHA256SUMS-64748b?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Builder-V4.2-R5-CC2-Control-1.1.31.zip"><img alt="Download firmware builder R5" src="https://img.shields.io/badge/Builder-Firmware%20R5-f59e0b?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/SHA256SUMS_V4_2_R5_RELEASE.txt"><img alt="Download SHA256 checksums" src="https://img.shields.io/badge/Verify-SHA256SUMS-64748b?style=for-the-badge"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2"><strong>Release notes, checksums and all V4.2 downloads</strong></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2-R5"><strong>Release notes, checksums and all V4.2-R5 downloads</strong></a>
 </p>
 
 | Choose this file                                                                                                                                                                                                      | When to use it                                                                                          |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [`CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig)                                     | New installation or complete Community Firmware V4.2 update                                             |
-| [`CC2-Control-1.1.31-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip)                               | Existing Community Firmware installation: update only CC2 Control, without reflashing the full firmware |
-| [`CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip) | Complete CC2 Control source and reproducible updater builder                                            |
-| [`CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip)                               | Firmware builder R4                                                                                     |
-| [`SHA256SUMS_V4_2.txt`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt)                                                                                             | Verify downloaded release files                                                                         |
+| [`CC2_V4_2_STOCK_20261004_135126_9cead4b7.zip.sig`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2_V4_2_STOCK_20261004_135126_9cead4b7.zip.sig)                                     | New installation or complete Community Firmware V4.2-R5 update                                             |
+| [`CC2-Control-1.1.31-R5-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Multiplatform-Update.zip)                               | Existing Community Firmware installation: update only CC2 Control, without reflashing the full firmware |
+| [`CC2-Control-1.1.31-R5-Source.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Source.zip) | CC2 Control source; updater packaging tools are in `cc2-control/installer/`                                            |
+| [`CC2-Builder-V4.2-R5-CC2-Control-1.1.31.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Builder-V4.2-R5-CC2-Control-1.1.31.zip)                               | Firmware builder R5                                                                                     |
+| [`SHA256SUMS_V4_2_R5_RELEASE.txt`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/SHA256SUMS_V4_2_R5_RELEASE.txt)                                                                                             | Verify downloaded release files                                                                         |
 
 ## Already running an older Community Firmware?
 
@@ -45,7 +45,7 @@ If your printer already runs an earlier Community Firmware release, you do not n
 
 Use the standalone updater:
 
-[`CC2-Control-1.1.31-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip)
+[`CC2-Control-1.1.31-R5-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2-R5/CC2-Control-1.1.31-R5-Multiplatform-Update.zip)
 
 The standalone updater replaces only CC2 Control and preserves the persistent LAN access code, material presets and interface preferences. CC2 Control 1.1.31 also adds LAN-code revalidation and OrcaSlicer Moonraker-agent Canvas filament synchronization. After the update, CC2 Control realigns its local services automatically, so an additional printer reboot or full power cycle should not be necessary.
 
@@ -112,20 +112,43 @@ Historical versions are preserved through Git tags, GitHub Releases and Git hist
 
 ### Dashboard
 
+Live telemetry, on-demand camera viewing and configurable Quick Actions.
+
 <p align="center">
-  <img src="docs/images/v4.2/dashboard-light-theme.jpg" alt="CC2 Control dashboard" width="1000">
+  <img src="docs/images/dashboard.jpg" alt="CC2 Control dashboard with live camera controls, Quick Actions and thermal telemetry" width="1000">
 </p>
 
-### Bed Levelling
+### Printer control and files
 
 <table>
   <tr>
-    <td align="center"><strong>Dark theme</strong></td>
-    <td align="center"><strong>Light theme</strong></td>
+    <td align="center"><strong>Printer control</strong></td>
+    <td align="center"><strong>G-code files</strong></td>
   </tr>
   <tr>
-    <td><img src="docs/images/v4.2/bed-levelling-dark-theme.jpg" alt="Bed Levelling dark theme"></td>
-    <td><img src="docs/images/v4.2/bed-levelling-light-theme.jpg" alt="Bed Levelling light theme"></td>
+    <td><img src="docs/images/control.jpg" alt="Movement, temperatures, fans, lights and live Z-offset controls"></td>
+    <td><img src="docs/images/files.jpg" alt="G-code file browser with model preview and protected print actions"></td>
+  </tr>
+</table>
+
+### Canvas
+
+Material slots, spool selection and automatic refill controls.
+
+<p align="center">
+  <img src="docs/images/canvas.jpg" alt="Canvas material slots and auto-refill controls" width="1000">
+</p>
+
+### Bed levelling
+
+<table>
+  <tr>
+    <td align="center"><strong>3D bed mesh</strong></td>
+    <td align="center"><strong>Four-screw levelling</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/bed-mesh.jpg" alt="Interactive 3D bed mesh with probe points and height range"></td>
+    <td><img src="docs/images/screw-levelling.jpg" alt="Four-screw levelling with measurement positions and adjustment results"></td>
   </tr>
 </table>
 
@@ -140,3 +163,4 @@ AI-assisted changes are reviewed and validated before being included in a releas
 ## License and notices
 
 Project code is provided under GPL-3.0-only where the contributors have the right to license it. Vendor firmware and third-party components keep their own terms. See [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).
+
