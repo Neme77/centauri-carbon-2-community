@@ -25,7 +25,7 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`c225fbdb531b8d604abd54e8b405c1952510648c`, incorporating the validated
+`0e32002ed5b7c86ab5d475c4fb767e7fce5afb49`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,
@@ -62,3 +62,6 @@ modes so Windows checkout and permission readback cannot produce CRLF or mode
 
 See [`../../docs/BUILD.md`](../../docs/BUILD.md) for the full workflow.
 
+
+The current test integration adds confirmed history-record deletion, per-print timelapse selection
+and coordinated live camera ownership. Hardware validation is pending before release.
