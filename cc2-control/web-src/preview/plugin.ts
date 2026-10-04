@@ -239,7 +239,12 @@ export function previewPlugin(): Plugin {
                 snapshot_received: true,
               })
             case '/api/setup':
-              return reply({ configured: true, snapshot_received: true, required: false })
+              // CC2_PREVIEW_SETUP=1 shows the first-run "Connect CC2 Control" dialog.
+              return reply({
+                configured: true,
+                snapshot_received: true,
+                required: process.env.CC2_PREVIEW_SETUP === '1',
+              })
             case '/api/version':
               return reply({ api: '0.1', server: 'CC2 UI preview', text: 'Simulation' })
             case '/api/material-presets':
