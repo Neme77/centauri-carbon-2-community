@@ -17,14 +17,15 @@ with zipfile.ZipFile(prepare.SOURCE) as archive:
                  'tests/test_recovery_download.c', 'tests/test_object_query.c',
                  'tests/test_control_actions.c', 'tests/test_installer_package.py',
                  'web-src/src/pages/dashboard.tsx', 'web-src/src/pages/control.tsx',
-                 'web-src/preview/test-quick-actions.mjs'):
+                 'web-src/preview/test-quick-actions.mjs', 'src/history.h', 'web-src/src/lib/machine.ts',
+                 'web-src/src/pages/history.tsx', 'tests/test_printer_replies.c', 'tests/test_history_api.c'):
         assert archive.read(name) == (BASE.parents[1] / 'cc2-control' / name).read_bytes(), name
     for lang in ('en', 'it', 'fr', 'zh', 'ru'):
         source = archive.read(f'web-src/public/locales/{lang}.json')
         assert source == archive.read(f'web/locales/{lang}.json')
     assert 'make' in (BASE / 'prepare.py').read_text()
     assert "'test', 'CROSS=', 'CC=gcc'" in (BASE / 'prepare.py').read_text()
-print('PASS: pinned snapshot matches canonical backend, rebuilt UI, five locales and new regressions.')
+print('PASS: pinned snapshot matches canonical backend, rebuilt UI, five locales, print history and new regressions.')
 
 
 # Builder runtime launchers are outside the standalone component snapshot.
