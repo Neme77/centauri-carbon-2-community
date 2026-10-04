@@ -14,6 +14,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#define DISCOVERY_LIMIT 9U
+#define DISCOVERY_SETTLE_SECONDS 15
+
 static int send_all(int fd, const void *data, size_t size) {
     const unsigned char *p = data;
     while (size) {
@@ -168,6 +171,36 @@ int mqtt_request_canvas(mqtt_client *c) {
     return result;
 }
 
+/* Bound each automatic discovery phase independently. Transport reconnects must
+ * not restart an exhausted budget. Explicit Sync is the recovery action. */
+int mqtt_sync_canvas(mqtt_client *c) {
+    if(!c||c->fd<0||!c->connected||!c->serial[0])return -1;
+    c->automatic_registration_attempts=0;
+    c->automatic_snapshot_attempts=0;
+    c->automatic_canvas_attempts=0;
+    c->discovery_ready_at=time(NULL)+DISCOVERY_SETTLE_SECONDS;
+    return c->registered ? mqtt_request_canvas(c) : 0;
+}
+
+static int discovery_due(unsigned int attempts,time_t last,time_t now) {
+    return attempts<DISCOVERY_LIMIT && (!last || now-last>=(attempts<6?10:60));
+}
+
+size_t mqtt_discovery_diagnostic(const mqtt_client *c,char *out,size_t capacity) {
+    const char *state=!c->connected?"disconnected":c->canvas_discovery_complete?"complete":
+        (!c->registered&&c->automatic_registration_attempts>=DISCOVERY_LIMIT)||
+        (c->registered&&c->automatic_canvas_attempts>=DISCOVERY_LIMIT)?"exhausted; use Sync":
+        time(NULL)<c->discovery_ready_at?"settling":"discovering";
+    int n=snprintf(out,capacity,
+        "Canvas discovery: %s\nMQTT connections: %lu\nAutomatic registration: %u/%u\n"
+        "Automatic snapshot: %u/%u\nAutomatic Canvas: %u/%u\n"
+        "Session registration/snapshot/Canvas requests: %u/%u/%u\n",
+        state,c->mqtt_connections,c->automatic_registration_attempts,DISCOVERY_LIMIT,
+        c->automatic_snapshot_attempts,DISCOVERY_LIMIT,c->automatic_canvas_attempts,DISCOVERY_LIMIT,
+        c->registration_attempts,c->snapshot_request_attempts,c->canvas_request_attempts);
+    return n<0||!capacity?0:(size_t)n<capacity?(size_t)n:capacity-1;
+}
+
 static int mqtt_json_escape(char *out, size_t capacity, const char *value) {
     size_t used = 0;
     for (const unsigned char *cursor = (const unsigned char *)value; *cursor; ++cursor) {
@@ -306,7 +339,7 @@ int mqtt_connect_local(mqtt_client *c) {
     if(n!=4||ack[0]!=0x20||ack[1]!=2||ack[3]!=0){mqtt_close(c);return -1;}
     if(send_subscribe(c)<0){mqtt_close(c);return -1;}
     int flags=fcntl(fd,F_GETFL,0); if(flags>=0)fcntl(fd,F_SETFL,flags|O_NONBLOCK);
-    c->connected=1; c->last_ping=now; c->last_app_ping=0; c->input_len=0;
+    c->connected=1; c->mqtt_connections++; c->discovery_ready_at=now+DISCOVERY_SETTLE_SECONDS; c->last_ping=now; c->last_app_ping=0; c->input_len=0;
     return 0;
 }
 
@@ -721,29 +754,24 @@ void mqtt_tick(mqtt_client *c) {
         c->serial_discovery_attempts++;
         (void)discover_serial_http(c);
     }
-    if(c->serial[0]&&!c->canvas_discovery_complete) {
-        /* The printer initializes Canvas twice during a cold boot.  The MQTT
-         * socket can survive the second initialization while the application
-         * registration is silently discarded.  Keep registering until Canvas
-         * discovery completes instead of treating one publish as final. */
-        time_t interval=c->registration_attempts<6?10:60;
-        if(c->last_registration_request==0||now-c->last_registration_request>=interval)
+    /* Delay automatic discovery after every successful MQTT connection, not
+     * only cold boot. Heartbeats and passive telemetry continue independently. */
+    if(now>=c->discovery_ready_at && !c->canvas_discovery_complete) {
+        if(c->serial[0] && discovery_due(c->automatic_registration_attempts,c->last_registration_request,now)) {
+            c->automatic_registration_attempts++;
             (void)send_registration(c);
-    }
-    if(c->registered&&!c->canvas_discovery_complete) {
-        /* A snapshot received during the first hardware phase can become
-         * stale.  Refresh it while discovery is pending so the final printer
-         * initialization always produces a new application-level exchange. */
-        time_t interval=c->snapshot_request_attempts<6?10:60;
-        if(c->last_snapshot_request==0||now-c->last_snapshot_request>=interval)
+            c->last_registration_request=now;
+        }
+        if(c->registered && discovery_due(c->automatic_snapshot_attempts,c->last_snapshot_request,now)) {
+            c->automatic_snapshot_attempts++;
             (void)send_snapshot_request(c);
-    }
-    if(c->registered&&!c->canvas_discovery_complete) {
-        /* Canvas hardware can become ready well after elegoo_printer and MQTT.
-         * Try quickly during startup, then fall back to one request per minute. */
-        time_t interval=c->canvas_request_attempts<6?10:60;
-        if(c->last_canvas_request==0||now-c->last_canvas_request>=interval)
+            c->last_snapshot_request=now;
+        }
+        if(c->registered && discovery_due(c->automatic_canvas_attempts,c->last_canvas_request,now)) {
+            c->automatic_canvas_attempts++;
             (void)mqtt_request_canvas(c);
+            c->last_canvas_request=now;
+        }
     }
     /* The printer renders a requested time-lapse in machine state 12 after
      * acknowledging 1051; list the history again once it leaves that state (or

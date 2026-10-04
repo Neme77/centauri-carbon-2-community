@@ -20,6 +20,7 @@ HARNESSES = {
     "test_filament_metadata.c": BACKEND,
     "test_orca_upload.c": BACKEND,
     "test_mqtt_workload.c": [],
+    "test_canvas_discovery.c": [],
     "test_printer_replies.c": [],
     "test_print_options.c": [],
     "test_history_api.c": BACKEND,
