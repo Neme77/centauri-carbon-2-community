@@ -104,11 +104,17 @@ def cc2_control_destinations(root,manifest):
   destinations[relative]=app/relative
  return destinations
 
+def cc2_control_version():
+ """VERSION of the pinned source snapshot; the archive hash is checked before it is trusted."""
+ source=req(Path(__file__).resolve().parent.parent/'components/cc2-control/source/source.zip','CC2 Control source snapshot')
+ reqhash(source,CC2_CONTROL_SOURCE_SHA256,'CC2 Control source snapshot')
+ with zipfile.ZipFile(source) as z: return z.read('VERSION').decode('utf-8').strip()
+
 def load_cc2_control(component,manifest_path):
  component=Path(component); manifest_path=Path(manifest_path)
  if not component.is_dir(): raise RuntimeError(f'Missing prepared CC2 Control directory: {component}')
  manifest=json.loads(req(manifest_path,'CC2 Control prepared manifest').read_text(encoding='utf-8'))
- if manifest.get('component')!='CC2 Control' or not manifest.get('version'):
+ if manifest.get('component')!='CC2 Control' or manifest.get('version')!=cc2_control_version():
   raise RuntimeError('CC2 Control manifest identity mismatch')
  if manifest.get('source_commit')!=CC2_CONTROL_SOURCE_COMMIT:
   raise RuntimeError('CC2 Control source commit mismatch')
