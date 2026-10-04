@@ -5,6 +5,8 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Files lists the 128 newest G-code files of a storage instead of an arbitrary 128, and says when older files are hidden.
+- A browser upload refused by the printer, for example because the file already exists, reports that error instead of a network error.
 - Show the G-code upload card above the Files list (above the file details on wide layouts), so a long list no longer pushes it out of reach.
 - Frame the 3D bed mesh around its actual height range so meshes with large positive or negative offsets remain visible.
 - Bound automatic Canvas discovery across MQTT reconnects, allow explicit Sync recovery and expose discovery counters in MQTT diagnostics.

@@ -26,6 +26,26 @@ static int run_upload(mqtt_client *mqtt,const char *name,const char *storage,con
     close(pair[1]);
     return atoi(strchr(response,' ')+1);
 }
+/* A browser sends the headers first and the body after them. A rejected
+ * upload must read that body before answering: closing with unread input
+ * resets the connection, and the browser shows a network error instead. */
+static void test_rejected_upload_drains_body(mqtt_client *mqtt){
+    enum{BODY=1024*1024};
+    static char body[BODY];memset(body,'G',sizeof(body));
+    int pair[2];expect(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0,"create drained upload socket");
+    struct timeval timeout={10,0};
+    setsockopt(pair[1],SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
+    setsockopt(pair[1],SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
+    char req[256];int len=snprintf(req,sizeof(req),"POST /api/gcode-files/upload?storage=internal&name=cube.gcode HTTP/1.1\r\nHost: test\r\nContent-Length: %d\r\n\r\n",BODY);
+    expect(gcode_upload_start(pair[0],req,"storage=internal&name=cube.gcode",(size_t)len,(size_t)len,mqtt),"duplicate upload handed to worker");
+    size_t sent=0;
+    while(sent<sizeof(body)){ssize_t n=send(pair[1],body+sent,sizeof(body)-sent,MSG_NOSIGNAL);if(n<=0)break;sent+=(size_t)n;}
+    expect(sent==sizeof(body),"server reads the whole rejected body");
+    char response[600];ssize_t size=recv(pair[1],response,sizeof(response)-1,0);
+    expect(size>0,"receive drained upload response");response[size]=0;
+    expect(strstr(response,"409 Conflict")&&strstr(response,"File already exists"),"duplicate reported after the body");
+    close(pair[1]);
+}
 static void test_upload_size_limit(mqtt_client *mqtt){
     const size_t limit=128UL*1024UL*1024UL;
     expect(FILE_UPLOAD_MAX==limit,"upload limit is 128 MiB");
@@ -55,6 +75,8 @@ int main(void){
     char path[1024];snprintf(path,sizeof(path),"%s/cube.gcode",root);
     struct stat statbuf;expect(stat(path,&statbuf)==0&&statbuf.st_size==12,"uploaded file finalized");
     expect(run_upload(&mqtt,"cube.gcode","internal","duplicate","test-code")==409,"reject duplicate without overwrite");
+    test_rejected_upload_drains_body(&mqtt);
+    expect(stat(path,&statbuf)==0&&statbuf.st_size==12,"duplicate left the original intact");
     expect(run_upload(&mqtt,"no-code.gcode","internal","no-auth","")==201,"upload without access code");
     expect(run_upload(&mqtt,"..%2Fetc.gcode","internal","bad-path","test-code")==400,"reject URL-encoded slash");
     expect(run_upload(&mqtt,"new.gcode","usb","test","test-code")==400,"reject unavailable USB");

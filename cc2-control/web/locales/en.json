@@ -335,6 +335,7 @@
   "files.select_file": "Select file",
   "files.select_files_from_only_one_storage": "Select files from only one storage location.",
   "files.select_g_code_file": "Select G-code file",
+  "files.showing_newest_n_of_total": "{where}: showing the {n} newest of {total} G-code files. Delete old files to list the rest.",
   "files.size": "Size",
   "files.start_protected_print": "Start Protected Print",
   "files.stopped_after_n_files_error": "Stopped after {n} files: {error}",

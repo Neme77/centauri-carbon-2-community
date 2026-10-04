@@ -33,4 +33,16 @@ try{
   assert.equal((await deleted).status(),200)
   console.log('PASS: browser upload / delete round',i+1)
  }
+ // The same name again shows the server's refusal. The reset that hid it is
+ // timing-dependent and does not occur on loopback; tests/test_file_ops.c
+ // checks that the whole rejected body is read.
+ for(const expected of [201,409]){
+  await page.locator('input[type=file]').setInputFiles({name:'duplicate.gcode',mimeType:'application/octet-stream',buffer})
+  await page.getByRole('button',{name:'Upload G-code',exact:true}).click()
+  const waiting=page.waitForResponse(r=>r.url().includes('/api/gcode-files/upload?'))
+  await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click()
+  assert.equal((await waiting).status(),expected)
+ }
+ await page.getByText('Upload failed: File already exists').first().waitFor()
+ console.log('PASS: same-name upload reports the conflict')
 }finally{await browser.close();proc.kill();await rm(dir,{recursive:true,force:true})}

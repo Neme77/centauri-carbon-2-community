@@ -62,6 +62,7 @@ static int z_offset_readback(double *value){
 #define PATH_MAX_LOCAL 512
 #define GCODE_FILES_MAX 128
 #define GCODE_SCAN_DEPTH_MAX 4
+#define GCODE_SCAN_ENTRIES_MAX 4096
 #define GCODE_JSON_CAP (192 * 1024)
 #define GCODE_TOOLS_MAX 16
 #define GCODE_THUMBNAIL_SCAN_MAX (4 * 1024 * 1024)
@@ -342,6 +343,8 @@ typedef struct {
 typedef struct {
     gcode_file_entry files[GCODE_FILES_MAX];
     size_t count;
+    size_t total;   /* G-code files found, listed or not */
+    size_t scanned; /* directory entries examined */
     int available;
     int truncated;
 } gcode_file_list;
@@ -401,9 +404,37 @@ static int safe_relative_path(const char *relative) {
     return 1;
 }
 
+static int compare_gcode_files(const void *left, const void *right) {
+    const gcode_file_entry *a = (const gcode_file_entry *)left;
+    const gcode_file_entry *b = (const gcode_file_entry *)right;
+    if (a->modified != b->modified) return a->modified < b->modified ? 1 : -1;
+    return strcasecmp(a->relative_path, b->relative_path);
+}
+
+/* Keep the newest GCODE_FILES_MAX files in whatever order readdir returns
+ * them. On ext4 that order follows name hashes, so keeping the first files
+ * found would hide arbitrary ones, often the latest upload. */
+static void add_gcode_file(gcode_file_list *list, const char *relative,
+                           const struct stat *status) {
+    gcode_file_entry candidate;
+    snprintf(candidate.relative_path, sizeof(candidate.relative_path), "%s", relative);
+    candidate.size = (long long)status->st_size;
+    candidate.modified = (long long)status->st_mtime;
+    list->total++;
+    if (list->count < GCODE_FILES_MAX) {
+        list->files[list->count++] = candidate;
+        return;
+    }
+    list->truncated = 1;
+    size_t oldest = 0;
+    for (size_t index = 1; index < list->count; ++index)
+        if (compare_gcode_files(&list->files[index], &list->files[oldest]) > 0) oldest = index;
+    if (compare_gcode_files(&candidate, &list->files[oldest]) < 0) list->files[oldest] = candidate;
+}
+
 static void scan_gcode_directory(const char *root, const char *relative,
                                  unsigned int depth, gcode_file_list *list) {
-    if (depth > GCODE_SCAN_DEPTH_MAX || list->count >= GCODE_FILES_MAX) {
+    if (depth > GCODE_SCAN_DEPTH_MAX || list->scanned >= GCODE_SCAN_ENTRIES_MAX) {
         list->truncated = 1;
         return;
     }
@@ -420,6 +451,11 @@ static void scan_gcode_directory(const char *root, const char *relative,
     struct dirent *item;
     while ((item = readdir(directory)) != NULL) {
         if (item->d_name[0] == '.') continue;
+        if (list->scanned >= GCODE_SCAN_ENTRIES_MAX) {
+            list->truncated = 1;
+            break;
+        }
+        list->scanned++;
         char child_relative[PATH_MAX_LOCAL];
         int relative_length = relative[0]
             ? snprintf(child_relative, sizeof(child_relative), "%s/%s", relative, item->d_name)
@@ -442,28 +478,10 @@ static void scan_gcode_directory(const char *root, const char *relative,
             else list->truncated = 1;
         } else if (S_ISREG(status.st_mode) && is_gcode_filename(item->d_name) &&
                    safe_relative_path(child_relative)) {
-            if (list->count >= GCODE_FILES_MAX) {
-                list->truncated = 1;
-                break;
-            }
-            gcode_file_entry *entry = &list->files[list->count++];
-            snprintf(entry->relative_path, sizeof(entry->relative_path), "%s", child_relative);
-            entry->size = (long long)status.st_size;
-            entry->modified = (long long)status.st_mtime;
-        }
-        if (list->count >= GCODE_FILES_MAX) {
-            list->truncated = 1;
-            break;
+            add_gcode_file(list, child_relative, &status);
         }
     }
     closedir(directory);
-}
-
-static int compare_gcode_files(const void *left, const void *right) {
-    const gcode_file_entry *a = (const gcode_file_entry *)left;
-    const gcode_file_entry *b = (const gcode_file_entry *)right;
-    if (a->modified != b->modified) return a->modified < b->modified ? 1 : -1;
-    return strcasecmp(a->relative_path, b->relative_path);
 }
 
 static void collect_gcode_files(const char *root, gcode_file_list *list) {
@@ -481,10 +499,10 @@ static void collect_gcode_files(const char *root, gcode_file_list *list) {
 static void append_gcode_storage(json_builder *builder, const char *name,
                                  const gcode_file_list *list) {
     json_builder_string(builder, name);
-    json_builder_printf(builder, ":{\"available\":%s,\"truncated\":%s,\"count\":%lu,\"files\":[",
+    json_builder_printf(builder, ":{\"available\":%s,\"truncated\":%s,\"count\":%lu,\"total\":%lu,\"files\":[",
                         list->available ? "true" : "false",
                         list->truncated ? "true" : "false",
-                        (unsigned long)list->count);
+                        (unsigned long)list->count, (unsigned long)list->total);
     for (size_t index = 0; index < list->count; ++index) {
         const gcode_file_entry *entry = &list->files[index];
         if (index) json_builder_printf(builder, ",");
@@ -747,6 +765,18 @@ static ssize_t upload_receive(gcode_upload_job *job,void *buffer,size_t length){
         return n;
     }
 }
+/* Read and drop the rest of a rejected body before answering. Closing a
+ * socket with unread input resets the connection, and a browser then reports
+ * a network error instead of the response. */
+static void upload_discard(gcode_upload_job *job,size_t received,unsigned char *buffer,size_t capacity){
+    while(received<job->content_length){
+        size_t want=job->content_length-received;
+        if(want>capacity)want=capacity;
+        ssize_t n=upload_receive(job,buffer,want);
+        if(n<=0)return;
+        received+=(size_t)n;
+    }
+}
 /* One upload at a time. The connection thread takes the slot and the upload
  * worker releases it, so this is an atomic flag: a mutex must be unlocked by
  * the thread that locked it. */
@@ -812,6 +842,8 @@ static void *gcode_upload_worker(void *arg){
     int code=400;const char *status="Bad Request";
     int output=-1;char destination[PATH_MAX_LOCAL*2],temporary[PATH_MAX_LOCAL*2];
     temporary[0]=0;
+    size_t received=job->initial_length-job->header_length;
+    unsigned char chunk[UPLOAD_CHUNK];
     if(!gcode_storage_root(job->storage,&root)||!gcode_storage_writable(job->storage,root)){
         error="Storage unavailable or not writable";goto done;
     }
@@ -833,7 +865,6 @@ static void *gcode_upload_worker(void *arg){
     output=mkstemp(temporary);
     if(output<0){code=507;status="Insufficient Storage";error="Cannot create temporary file";goto done;}
     (void)fchmod(output,0644);
-    size_t received=job->initial_length-job->header_length;
     if(received>job->content_length){error="Invalid upload body";goto done;}
     {size_t offset=0;
      while(offset<received){
@@ -842,13 +873,13 @@ static void *gcode_upload_worker(void *arg){
         if(n<=0){code=507;status="Insufficient Storage";error="Cannot write upload";goto done;}
         offset+=(size_t)n;
      }}
-    unsigned char chunk[UPLOAD_CHUNK];
     while(received<job->content_length){
         size_t required=job->content_length-received;
         if(required>sizeof(chunk))required=sizeof(chunk);
         ssize_t n=upload_receive(job,chunk,required);
         if(n<0&&errno==EINTR)continue;
         if(n<=0){if(n<0&&errno==ETIMEDOUT){code=408;status="Request Timeout";}error="Upload interrupted or timed out";goto done;}
+        received+=(size_t)n;
         size_t offset=0;
         while(offset<(size_t)n){
             ssize_t written=write(output,chunk+offset,(size_t)n-offset);
@@ -856,7 +887,6 @@ static void *gcode_upload_worker(void *arg){
             if(written<=0){code=507;status="Insufficient Storage";error="Cannot write upload";goto done;}
             offset+=(size_t)written;
         }
-        received+=(size_t)n;
     }
     if(!upload_seconds_left(job)){code=408;status="Request Timeout";error="Upload deadline exceeded";goto done;}
     if(fsync(output)!=0){code=507;status="Insufficient Storage";error="Cannot finalize upload";goto done;}
@@ -881,6 +911,9 @@ static void *gcode_upload_worker(void *arg){
 done:
     if(output>=0)close(output);
     if(temporary[0])unlink(temporary);
+    /* A rejected body is drained while the slot is still held, so only one
+     * drain runs at a time; a stalled client (408) is not waited for again. */
+    if(code!=201&&code!=408)upload_discard(job,received,chunk,sizeof(chunk));
     /* Free the upload slot before answering: a client may start its next
      * upload as soon as it reads this response. */
     upload_slot_release();

@@ -335,6 +335,7 @@
   "files.select_file": "Выбрать файл",
   "files.select_files_from_only_one_storage": "Выбирайте файлы только из одного хранилища.",
   "files.select_g_code_file": "Выбрать файл G-code",
+  "files.showing_newest_n_of_total": "{where}: показаны {n} самых новых из {total} файлов G-code. Удалите старые файлы, чтобы увидеть остальные.",
   "files.size": "Размер",
   "files.start_protected_print": "Запустить печать",
   "files.stopped_after_n_files_error": "Остановлено, обработано файлов: {n}. Ошибка: {error}",
