@@ -2132,12 +2132,13 @@ static void snapshot_response(int fd, const mqtt_client *mqtt) {
 }
 
 static void mqtt_diagnostic_response(int fd, const mqtt_client *mqtt) {
-    if(mqtt->diagnostic_len)
-        respond(fd,200,"OK","text/plain; charset=utf-8",mqtt->diagnostic,mqtt->diagnostic_len);
-    else {
-        const char *body="No MQTT payloads captured yet\n";
-        respond(fd,200,"OK","text/plain; charset=utf-8",body,strlen(body));
-    }
+    size_t cap=mqtt->diagnostic_len+512;
+    char *body=malloc(cap);
+    if(!body){respond(fd,503,"Service Unavailable","text/plain","Diagnostic unavailable\n",23);return;}
+    size_t n=mqtt_discovery_diagnostic(mqtt,body,cap);
+    if(mqtt->diagnostic_len){memcpy(body+n,mqtt->diagnostic,mqtt->diagnostic_len);n+=mqtt->diagnostic_len;}
+    respond(fd,200,"OK","text/plain; charset=utf-8",body,n);
+    free(body);
 }
 
 static void canvas_response(int fd, const mqtt_client *mqtt) {
@@ -2299,7 +2300,7 @@ static void orca_lane_data_response(int fd, const mqtt_client *mqtt) {
 }
 
 static void canvas_refresh_response(int fd, mqtt_client *mqtt) {
-    if(mqtt_request_canvas(mqtt)!=0) {
+    if(mqtt_sync_canvas(mqtt)!=0) {
         const char *body="{\"accepted\":false,\"error\":\"MQTT API client is not ready\"}\n";
         respond(fd,503,"Service Unavailable","application/json; charset=utf-8",body,strlen(body));return;
     }

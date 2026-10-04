@@ -68,6 +68,10 @@ typedef struct {
     time_t last_canvas_request;
     unsigned int canvas_request_attempts;
     int canvas_discovery_complete;
+    /* Automatic discovery budget survives transport reconnects; Sync rearms it. */
+    unsigned int automatic_registration_attempts, automatic_snapshot_attempts, automatic_canvas_attempts;
+    unsigned long mqtt_connections;
+    time_t discovery_ready_at;
     int canvas_active_tray_id;
     int have_canvas_active_tray;
     /* Publishing a request is not acceptance: the printer answers on
@@ -103,6 +107,8 @@ void mqtt_close(mqtt_client *client);
 int mqtt_process(mqtt_client *client);
 void mqtt_tick(mqtt_client *client);
 int mqtt_request_canvas(mqtt_client *client);
+int mqtt_sync_canvas(mqtt_client *client);
+size_t mqtt_discovery_diagnostic(const mqtt_client *client, char *out, size_t capacity);
 int mqtt_set_auto_refill(mqtt_client *client, int enabled);
 int mqtt_request_history(mqtt_client *client);
 int mqtt_delete_history(mqtt_client *client, const char *params);
