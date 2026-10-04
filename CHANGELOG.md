@@ -5,6 +5,8 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Bound automatic Canvas discovery across MQTT reconnects, allow explicit Sync recovery and expose discovery counters in MQTT diagnostics.
+
 - Print setup shows each G-code tool’s filament colour and material beside its Canvas slot selector, with an explicit fallback when metadata is missing.
 
 - Select timelapse recording in the print popup, including calibrated starts.
