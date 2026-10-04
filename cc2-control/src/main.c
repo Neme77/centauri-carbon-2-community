@@ -2203,48 +2203,112 @@ static long long monotonic_ms(void) {
     return (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL;
 }
 
-static int uds_query_json(const char *query, char **result_out, size_t *length_out) {
-    int uds = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (uds < 0) return -1;
-    struct timeval timeout = {2, 0};
-    setsockopt(uds, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    setsockopt(uds, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-    struct sockaddr_un address; memset(&address, 0, sizeof(address));
-    address.sun_family = AF_UNIX;
-    snprintf(address.sun_path, sizeof(address.sun_path), "%s", "/tmp/elegoo_uds");
-    if (connect(uds, (struct sockaddr *)&address, sizeof(address)) < 0 ||
-        send_all(uds, query, strlen(query)) != 0) {
-        close(uds);
-        return -1;
-    }
+/* Separate from telemetry: object replies can be much larger than subscriptions.
+ * Keep successful RPC sessions open to avoid printer-side reactor churn. */
+static int object_query_fd = -1;
+static const char *object_query_path = "/tmp/elegoo_uds";
+static long long object_query_retry_ms;
+static unsigned long object_query_id = 1000;
+static char *object_query_buffer;
+static size_t object_query_used, object_query_capacity;
 
-    size_t capacity = 16384, used = 0;
-    char *result = malloc(capacity + 1);
-    if (!result) { close(uds); return -2; }
+static void object_query_close(void) {
+    if (object_query_fd >= 0) close(object_query_fd);
+    object_query_fd = -1;
+    free(object_query_buffer);
+    object_query_buffer = NULL;
+    object_query_used = object_query_capacity = 0;
+}
+
+static int object_query_wait(short events, long long deadline) {
     for (;;) {
-        if (used == capacity) {
-            if (capacity >= EXCLUDE_OBJECT_RESPONSE_MAX) {
-                free(result); close(uds); return -3;
-            }
-            size_t next = capacity * 2;
-            if (next > EXCLUDE_OBJECT_RESPONSE_MAX) next = EXCLUDE_OBJECT_RESPONSE_MAX;
-            char *grown = realloc(result, next + 1);
-            if (!grown) { free(result); close(uds); return -2; }
-            result = grown; capacity = next;
-        }
-        ssize_t n = recv(uds, result + used, capacity - used, 0);
-        if (n <= 0) break;
-        size_t previous = used;
-        used += (size_t)n;
-        char *terminator = memchr(result + previous, 3, used - previous);
-        if (terminator) { used = (size_t)(terminator - result); break; }
+        long long remaining = deadline - monotonic_ms();
+        if (remaining <= 0) return -1;
+        struct pollfd p = {object_query_fd, events, 0};
+        int rc = poll(&p, 1, (int)remaining);
+        if (rc < 0 && errno == EINTR) continue;
+        if (rc <= 0 || !(p.revents & events)) return -1;
+        return 0;
     }
-    close(uds);
-    if (!used) { free(result); return -1; }
-    result[used] = '\0';
-    *result_out = result;
-    *length_out = used;
-    return 0;
+}
+
+static int uds_query_json(const char *query, char **result_out, size_t *length_out) {
+    *result_out = NULL; *length_out = 0;
+    long long now = monotonic_ms(), deadline = now + 2000;
+    if (object_query_fd < 0) {
+        if (now < object_query_retry_ms) return -1;
+        struct sockaddr_un address; memset(&address, 0, sizeof(address));
+        address.sun_family = AF_UNIX;
+        if (strlen(object_query_path) >= sizeof(address.sun_path)) return -1;
+        strcpy(address.sun_path, object_query_path);
+        object_query_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (object_query_fd < 0) goto failed;
+        if (fcntl(object_query_fd, F_SETFL, O_NONBLOCK) < 0) goto failed;
+        if (connect(object_query_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+            if (errno != EINPROGRESS || object_query_wait(POLLOUT, deadline)) goto failed;
+            int error = 0; socklen_t length = sizeof(error);
+            if (getsockopt(object_query_fd, SOL_SOCKET, SO_ERROR, &error, &length) || error) goto failed;
+        }
+    }
+    /* Replace the fixed caller ID with a unique session request ID. */
+    const char *rest = strchr(query, ',');
+    if (!rest || object_query_id == ULONG_MAX) goto failed;
+    unsigned long id = ++object_query_id;
+    char request[512];
+    int size = snprintf(request, sizeof(request), "{\"id\":%lu%s", id, rest);
+    if (size < 0 || (size_t)size >= sizeof(request)) goto failed;
+    size_t sent = 0;
+    while (sent < (size_t)size) {
+        if (object_query_wait(POLLOUT, deadline)) goto failed;
+        ssize_t n = send(object_query_fd, request + sent, (size_t)size - sent, MSG_NOSIGNAL);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) goto failed;
+        sent += (size_t)n;
+    }
+    for (;;) {
+        if (monotonic_ms() >= deadline) goto failed;
+        char *terminator = object_query_used ? memchr(object_query_buffer, 3, object_query_used) : NULL;
+        if (terminator) {
+            size_t length = (size_t)(terminator - object_query_buffer);
+            const char *end = object_query_buffer + length;
+            const char *root = json_skip_space(object_query_buffer, end);
+            const char *root_end = root < end && *root == '{' ? json_container_end(root, end) : NULL;
+            const char *value = root_end && json_skip_space(root_end, end) == end ?
+                json_member(root, root_end, "id") : NULL;
+            char *number_end = NULL;
+            unsigned long received = value ? strtoul(value, &number_end, 10) : 0;
+            int matches = value && isdigit((unsigned char)*value) && received == id &&
+                number_end < root_end && (*number_end == ',' || *number_end == '}' || isspace((unsigned char)*number_end));
+            char *result = matches ? malloc(length + 1) : NULL;
+            if (matches && !result) goto failed;
+            if (matches) { memcpy(result, object_query_buffer, length); result[length] = 0; }
+            size_t consumed = length + 1;
+            memmove(object_query_buffer, object_query_buffer + consumed, object_query_used - consumed);
+            object_query_used -= consumed;
+            if (matches) { *result_out = result; *length_out = length; return 0; }
+            continue; /* Notifications and responses to other IDs are not our reply. */
+        }
+        if (object_query_used == object_query_capacity) {
+            if (object_query_capacity >= EXCLUDE_OBJECT_RESPONSE_MAX) goto failed;
+            size_t next = object_query_capacity ? object_query_capacity * 2 : 16384;
+            if (next > EXCLUDE_OBJECT_RESPONSE_MAX) next = EXCLUDE_OBJECT_RESPONSE_MAX;
+            char *result = object_query_buffer;
+            char *grown = realloc(result, next + 1);
+            if (!grown) goto failed;
+            object_query_buffer = grown; object_query_capacity = next;
+        }
+        if (object_query_wait(POLLIN, deadline)) goto failed;
+        ssize_t n = recv(object_query_fd, object_query_buffer + object_query_used,
+            object_query_capacity - object_query_used, 0);
+        if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (n <= 0) goto failed;
+        object_query_used += (size_t)n;
+        object_query_buffer[object_query_used] = 0;
+    }
+failed:
+    object_query_close();
+    object_query_retry_ms = monotonic_ms() + 5000;
+    return -1;
 }
 
 static const char *exclude_object_payload(char *json, size_t length) {
@@ -3052,6 +3116,7 @@ int main(int argc, char **argv) {
     while (running) {
         recovery_tick();
         mqtt_tick(&mqtt);
+        object_query_path = uds_path;
         uds_tick(&telemetry,uds_path);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
@@ -3115,6 +3180,7 @@ int main(int argc, char **argv) {
     }
     for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0)close(pending[i].fd);
     free(pending);
+    object_query_close();
     uds_close(&telemetry);
     panda_stop(&panda);
     mqtt_close(&mqtt);

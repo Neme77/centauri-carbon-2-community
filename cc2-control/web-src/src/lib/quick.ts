@@ -27,9 +27,8 @@ export const QUICK_ASK: Record<string, Key> = {
   'system:fans_off': 'common.turn_all_fans_off',
   'system:motors_off': 'common.disable_all_motors',
 }
-// Navigation, lights and "heaters off" stay usable while the printer is busy; the rest need an idle printer.
-export const quickAlwaysAvailable = (action: string) =>
-  action.startsWith('page:') || action === 'system:heaters_off' || action === 'light:toggle'
+// Navigation and lights stay usable while the printer is busy; the rest need an idle printer.
+export const quickAlwaysAvailable = (action: string) => action.startsWith('page:') || action === 'light:toggle'
 
 export const quick = store({ actions: QUICK_DEFAULTS })
 

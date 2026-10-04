@@ -74,7 +74,9 @@ for file in cc2-control start.sh launch.sh web/index.html build-info.json; do
 done
 "$INIT" start
 tries=0
-while [ "$tries" -lt 30 ]; do
+# The launcher waits up to 120 seconds for the vendor process, then 60
+# seconds for hardware initialization. Leave time for MQTT registration too.
+while [ "$tries" -lt 120 ]; do
     RESULT=$(wget -qO- http://127.0.0.1:8081/api/health 2>/dev/null || true)
     case "$RESULT" in *'"service":"cc2-control"'*'"version":"1.1.31"'*)
         RUN_PID=$(pidof cc2-control 2>/dev/null || true)

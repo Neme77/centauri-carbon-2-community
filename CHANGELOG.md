@@ -5,6 +5,15 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Keep object-query UDS sessions open, match response IDs and reject incomplete
+  replies to reduce connection churn when opening Job. One supervised print
+  completed without recurrence of the observed vendor dispatcher crash; its
+  underlying cause remains unconfirmed.
+- Show the real internal-light state in Dashboard Quick Actions.
+- Require fresh idle telemetry for all-heaters-off commands and disable their
+  buttons during printing.
+- Let the standalone updater wait up to 240 seconds for startup and registration.
+
 - Delay CC2 Control startup for 60 seconds after detecting `elegoo_printer`
   to give vendor hardware initialization more time to settle.
 

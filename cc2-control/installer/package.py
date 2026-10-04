@@ -36,7 +36,7 @@ def package(prepared, scripts, source, output):
     files['build-info.json'] = (json.dumps({
         'version': VERSION, 'binary_sha256': binary_hash,
         'source_archive_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
-        'change': 'first-run loopback HTTP serial discovery',
+        'change': 'CC2 Control application updater',
     }, indent=2) + '\n').encode()
     files['SHA256SUMS'] = ''.join(hashlib.sha256(data).hexdigest() + '  ' + name + '\n'
         for name, data in sorted(files.items())).encode()
