@@ -3,6 +3,10 @@
 This file records user-visible project changes. Signed artifacts and exact
 checksums remain attached to each GitHub release.
 
+## Unreleased
+
+- An OrcaSlicer upload whose name already exists is saved as `name (1).gcode` and so on instead of being refused with HTTP 409; nothing is overwritten.
+
 ## CC2 Control 1.1.31fix — 2026-10-04
 
 - Restore and stabilize 3D mesh viewing, including meshes with large height offsets and camera rotation.
