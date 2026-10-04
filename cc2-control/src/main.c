@@ -1315,6 +1315,60 @@ static int gcode_detect_tools(const char *root, const char *relative,
     return 0;
 }
 
+/* Slicer filament lists use tool indices, not physical Canvas slot indices.
+ * Read bounded comment metadata only; never interpret it as commands. */
+typedef struct { char color[10]; char material[65]; } gcode_filament_info;
+
+static int gcode_read_filaments(const char *root, const char *relative,
+                                gcode_filament_info info[GCODE_TOOLS_MAX]) {
+    char path[PATH_MAX_LOCAL * 2], line[4096];
+    memset(info, 0, sizeof(*info) * GCODE_TOOLS_MAX);
+    if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
+    FILE *file = fopen(path, "r");
+    if (!file) return -1;
+    size_t scanned = 0;
+    while (scanned < 256 * 1024 && fgets(line, sizeof(line), file)) {
+        scanned += strlen(line);
+        /* Discard truncated lines rather than assigning partial metadata. */
+        if (!strchr(line, '\n') && !feof(file)) {
+            int ch; while (scanned < 256 * 1024 && (ch = fgetc(file)) != EOF && ch != '\n') scanned++;
+            continue;
+        }
+        char *cursor = line;
+        while (isspace((unsigned char)*cursor)) cursor++;
+        if (*cursor++ != ';') continue;
+        while (isspace((unsigned char)*cursor)) cursor++;
+        char *equals = strchr(cursor, '=');
+        if (!equals) continue;
+        char *key_end = equals;
+        while (key_end > cursor && isspace((unsigned char)key_end[-1])) key_end--;
+        *key_end = '\0';
+        int color = strcmp(cursor, "filament_colour") == 0 || strcmp(cursor, "filament_color") == 0;
+        if (!color && strcmp(cursor, "filament_type") != 0) continue;
+        cursor = equals + 1;
+        for (int tool = 0; tool < GCODE_TOOLS_MAX; tool++) {
+            char *end = strpbrk(cursor, ";,\r\n");
+            if (!end) end = cursor + strlen(cursor);
+            char *next = (*end == ';' || *end == ',') ? end + 1 : NULL;
+            while (cursor < end && isspace((unsigned char)*cursor)) cursor++;
+            while (end > cursor && isspace((unsigned char)end[-1])) end--;
+            if (end - cursor >= 2 && *cursor == '"' && end[-1] == '"') { cursor++; end--; }
+            size_t length = (size_t)(end - cursor);
+            if (color) {
+                int valid = (length == 7 || length == 9) && *cursor == '#';
+                for (size_t i = 1; valid && i < length; i++) valid = isxdigit((unsigned char)cursor[i]);
+                if (valid) { memcpy(info[tool].color, cursor, length); info[tool].color[length] = '\0'; }
+            } else if (length && length < sizeof(info[tool].material)) {
+                memcpy(info[tool].material, cursor, length); info[tool].material[length] = '\0';
+            }
+            if (!next) break;
+            cursor = next;
+        }
+    }
+    int failed = ferror(file); fclose(file);
+    return failed ? -1 : 0;
+}
+
 static int gcode_has_adaptive_mesh(const char *root, const char *relative, int *adaptive) {
     char path[PATH_MAX_LOCAL * 2], line[4096];
     if (!adaptive || !gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
@@ -1388,13 +1442,31 @@ static void gcode_inspect_response(int fd, const char *body, size_t body_len) {
         respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
-    char response[256]; size_t used = 0;
+    gcode_filament_info filaments[GCODE_TOOLS_MAX];
+    if (gcode_read_filaments(root, filename, filaments) != 0) {
+        const char *error = "{\"error\":\"Cannot inspect filament metadata\"}\n";
+        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
+    char response[4096]; size_t used = 0;
     int length = snprintf(response, sizeof(response), "{\"tools\":[");
     if (length < 0 || (size_t)length >= sizeof(response)) return;
     used = (size_t)length;
     for (size_t index = 0; index < count; ++index) {
         length = snprintf(response + used, sizeof(response) - used,
                           "%s%d", index ? "," : "", tools[index]);
+        if (length < 0 || (size_t)length >= sizeof(response) - used) return;
+        used += (size_t)length;
+    }
+    length = snprintf(response + used, sizeof(response) - used, "],\"filaments\":[");
+    if (length < 0 || (size_t)length >= sizeof(response) - used) return;
+    used += (size_t)length;
+    for (size_t index = 0; index < count; index++) {
+        int tool = tools[index]; char material[130];
+        json_escape(material, sizeof(material), filaments[tool].material);
+        length = snprintf(response + used, sizeof(response) - used,
+            "%s{\"tool\":%d,\"color\":\"%s\",\"material\":\"%s\"}",
+            index ? "," : "", tool, filaments[tool].color, material);
         if (length < 0 || (size_t)length >= sizeof(response) - used) return;
         used += (size_t)length;
     }

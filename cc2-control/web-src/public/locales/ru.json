@@ -576,5 +576,7 @@
   "history.delete_entry": "Удалить запись",
   "history.delete_named": "Удалить {name}",
   "history.confirm_delete": "Удалить эти {n} записей истории печати? Это действие нельзя отменить. Файлы G-code и видео не удаляются.",
-  "history.delete_requested": "Запрошено удаление истории."
+  "history.delete_requested": "Запрошено удаление истории.",
+  "print.file_filament": "Филамент в G-code",
+  "print.file_filament_unknown": "Цвет/материал не указаны в файле"
 }

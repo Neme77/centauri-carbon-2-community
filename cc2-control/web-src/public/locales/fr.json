@@ -576,5 +576,7 @@
   "history.delete_entry": "Supprimer cette entrée",
   "history.delete_named": "Supprimer {name}",
   "history.confirm_delete": "Supprimer ces {n} entrées de l’historique ? Cette action est irréversible. Les fichiers G-code et les vidéos ne sont pas supprimés.",
-  "history.delete_requested": "Suppression de l’historique demandée."
+  "history.delete_requested": "Suppression de l’historique demandée.",
+  "print.file_filament": "Filament du G-code",
+  "print.file_filament_unknown": "Couleur/matériau non indiqués dans le fichier"
 }

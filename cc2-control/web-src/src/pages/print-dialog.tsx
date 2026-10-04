@@ -13,6 +13,7 @@ type Pending = {
   storage: string
   path: string
   tools: number[]
+  filaments: { tool: number; color: string; material: string }[]
   meshAvailable: { A: boolean; B: boolean }
   trays: any[]
   connected: boolean
@@ -48,6 +49,7 @@ export async function startFile(storage: string, path: string) {
         storage,
         path,
         tools,
+        filaments: Array.isArray(inspection.filaments) ? inspection.filaments : [],
         meshAvailable: { A: Boolean(profiles.default), B: Boolean(profiles.default1) },
         trays: model?.trays || [],
         connected: Boolean(model?.connected),
@@ -183,7 +185,29 @@ const Form = ({ job }: { job: Pending }) => {
         </label>
         {job.tools.map(tool => (
           <label key={tool} class="my-3 grid grid-cols-[1fr_2fr] items-center gap-3">
-            <strong>{tpl('print.filament_tool_n', { n: tool })}</strong>
+            <div>
+              <strong>{tpl('print.filament_tool_n', { n: tool })}</strong>
+              {(() => {
+                const filament = job.filaments.find(f => f.tool === tool)
+                const color = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(filament?.color || '') ? filament?.color : null
+                return (
+                  <div class="mt-1 text-xs text-muted">
+                    <div>{t('print.file_filament')}</div>
+                    <div class="flex items-center gap-2">
+                      {color && (
+                        <span
+                          class="inline-block size-4 shrink-0 rounded border border-edge"
+                          style={{ background: color }}
+                        />
+                      )}
+                      <span>
+                        {[filament?.material, color].filter(Boolean).join(' · ') || t('print.file_filament_unknown')}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
             <Select
               disabled={!useCanvas}
               value={map[tool] || ''}

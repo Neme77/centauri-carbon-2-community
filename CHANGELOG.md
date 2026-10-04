@@ -5,6 +5,8 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Print setup shows each G-code tool’s filament colour and material beside its Canvas slot selector, with an explicit fallback when metadata is missing.
+
 - Select timelapse recording in the print popup, including calibrated starts.
 - Delete individual or loaded completed print-history entries with confirmation and Idle guards.
 - Coordinate live camera viewing across CC2 Control windows; failed ownership requests do not open a stream.
