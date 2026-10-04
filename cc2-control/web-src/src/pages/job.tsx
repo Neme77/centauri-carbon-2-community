@@ -4,7 +4,8 @@ import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CameraCard, Progress } from '@/components/shared'
 import { control } from '@/lib/api'
-import { t, tState, tpl } from '@/lib/i18n'
+import { t, tpl } from '@/lib/i18n'
+import { stateText } from '@/lib/machine'
 import { duration } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
 import { printer, refreshPrinter, view } from '@/lib/state'
@@ -68,7 +69,7 @@ export const Job = () => {
         <div class="cc2-job-primary grid gap-3.5 cc2-lg:grid-cols-2">
           <CameraCard tall />
           <Card class="flex flex-col">
-            <CardHead icon="file" title="common.current_job" end={<span class="text-cyan">{tState(v.state)}</span>} />
+            <CardHead icon="file" title="common.current_job" end={<span class="text-cyan">{stateText(v)}</span>} />
             <div
               title={v.rawFilename || undefined}
               class="cc2-job-filename mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]"

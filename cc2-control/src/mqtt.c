@@ -80,6 +80,7 @@ static char *trim(char *s) {
 void mqtt_init(mqtt_client *c) {
     memset(c,0,sizeof(*c)); c->fd=-1;
     c->canvas_active_tray_id=-1;
+    c->history_error=-1;
     snprintf(c->client_id,sizeof(c->client_id),"cc2-control-%ld",(long)getpid());
     strcpy(c->username,"elegoo");
     strcpy(c->topic,"elegoo/+/api_status");
@@ -113,6 +114,10 @@ void mqtt_close(mqtt_client *c) {
     c->canvas_discovery_complete=0; c->canvas_request_attempts=0;
     c->last_canvas_request=0;
     c->last_app_ping=0;
+    /* Replies to requests sent on this session can no longer arrive. */
+    free(c->large); c->large=NULL; c->large_len=0; c->large_need=0;
+    c->canvas_refresh_due=0; c->history_refresh_due=0; c->auto_refill_probed=0;
+    c->history_requested=0; c->timelapse_requested=0;
 }
 
 static int mqtt_publish(mqtt_client *c,const char *topic,const char *payload) {
@@ -209,6 +214,44 @@ int mqtt_start_print(mqtt_client *c, const char *storage_media, const char *file
     length = snprintf(payload + used, sizeof(payload) - used, "]}}}");
     if (length < 0 || (size_t)length >= sizeof(payload) - used) return -1;
     return mqtt_publish(c, topic, payload);
+}
+
+/* One JSON-RPC request on our registered api_request topic. The id repeats the
+ * method, like the 1002/2005 requests, so the reply names what it answers. */
+static int publish_request(mqtt_client *c, int method, const char *params) {
+    char topic[256], payload[1400];
+    if (!c || c->fd < 0 || !c->connected || !c->registered || !c->serial[0]) return -1;
+    int length = snprintf(topic, sizeof(topic), "elegoo/%s/%s/api_request", c->serial, c->client_id);
+    if (length < 0 || (size_t)length >= sizeof(topic)) return -1;
+    length = params ? snprintf(payload, sizeof(payload), "{\"method\":%d,\"id\":%d,\"params\":%s}", method, method, params)
+                    : snprintf(payload, sizeof(payload), "{\"method\":%d,\"id\":%d}", method, method);
+    if (length < 0 || (size_t)length >= sizeof(payload)) return -1;
+    return mqtt_publish(c, topic, payload);
+}
+
+/* 2004 is SET_AUTO_REFILL in ELEGOO's elegoo-link CC2 adapter: {"auto_refill":bool}. */
+int mqtt_set_auto_refill(mqtt_client *c, int enabled) {
+    return publish_request(c, 2004, enabled ? "{\"auto_refill\":true}" : "{\"auto_refill\":false}");
+}
+
+/* 1036 returns the whole print task list (no paging on LAN); one request in flight is enough. */
+int mqtt_request_history(mqtt_client *c) {
+    time_t now = time(NULL);
+    if (c && c->history_requested && now - c->history_requested < 5) return 0;
+    if (publish_request(c, 1036, NULL) != 0) return -1;
+    c->history_requested = now;
+    return 0;
+}
+
+/* 1051 renders the stored frames of one task into an MP4 and replies when it is done. */
+int mqtt_generate_timelapse(mqtt_client *c, const char *url) {
+    char escaped[600], params[640];
+    if (!url || !*url || mqtt_json_escape(escaped, sizeof(escaped), url) != 0) return -1;
+    int length = snprintf(params, sizeof(params), "{\"url\":\"%s\"}", escaped);
+    if (length < 0 || (size_t)length >= sizeof(params)) return -1;
+    if (publish_request(c, 1051, params) != 0) return -1;
+    c->timelapse_requested = time(NULL);
+    return 0;
 }
 
 int mqtt_connect_local(mqtt_client *c) {
@@ -450,7 +493,11 @@ static void update_state(mqtt_client *c,const char *json,size_t len) {
     o=object_for(json,len,"tool_head",&n);if(o)string_in(o,n,"homed_axes",c->homed_axes,sizeof(c->homed_axes));
     o=object_for(json,len,"external_device",&n);if(o){boolean_in(o,n,"camera",&c->camera);boolean_in(o,n,"u_disk",&c->u_disk);}
     o=object_for(json,len,"led",&n);if(o&&number_in(o,n,"status",&v))c->led_status=(int)v;
-    o=object_for(json,len,"canvas_info",&n);if(o&&number_in(o,n,"active_tray_id",&v)){c->canvas_active_tray_id=(int)v;c->have_canvas_active_tray=1;}
+    o=object_for(json,len,"canvas_info",&n);
+    if(o){
+        if(number_in(o,n,"active_tray_id",&v)){c->canvas_active_tray_id=(int)v;c->have_canvas_active_tray=1;}
+        int refill;if(boolean_in(o,n,"auto_refill",&refill)){c->auto_refill=refill;c->have_auto_refill=1;}
+    }
     c->last_message=time(NULL); c->messages++;
 }
 
@@ -499,6 +546,73 @@ static int request_topic(const char *topic,size_t len) {
     return 0;
 }
 
+/* The printer answers our api_request on .../<client_id>/api_response only. */
+static int own_reply_topic(const mqtt_client *c,const char *topic,size_t len) {
+    char suffix[96];int n=snprintf(suffix,sizeof(suffix),"/%s/api_response",c->client_id);
+    return n>0&&(size_t)n<sizeof(suffix)&&len>(size_t)n&&!memcmp(topic+len-(size_t)n,suffix,(size_t)n);
+}
+
+/* Records a refusal (non-zero result.error_code) of one of our requests and
+ * keeps the 1036 print history. Returns 1 when the reply carries no live state. */
+static int handle_own_reply(mqtt_client *c,const char *payload,size_t len) {
+    double v;size_t n;int method=0,code=-1;
+    if(number_in(payload,len,"method",&v))method=(int)v;
+    const char *result=object_for(payload,len,"result",&n);
+    if(result&&number_in(result,n,"error_code",&v))code=(int)v;
+    if(!method||code<0)return 0;
+    time_t now=time(NULL);
+    if(code){c->reply_error_method=method;c->reply_error_code=code;c->reply_error_time=now;c->reply_errors++;}
+    if(method==2004&&!code)c->canvas_refresh_due=1; /* read the new setting back */
+    if(method==1051){c->timelapse_requested=0;c->history_refresh_due=1;}
+    if(method!=1036)return 0;
+    c->history_requested=0;c->history_error=code;c->history_received=now;
+    if(!code){
+        char *copy=malloc(len+1);
+        if(copy){memcpy(copy,payload,len);copy[len]='\0';free(c->history);c->history=copy;c->history_len=len;}
+        else c->history_error=-2;
+    }
+    return 1;
+}
+
+static void handle_publish(mqtt_client *c,unsigned char flags,const unsigned char *body,size_t remain) {
+    if(remain<2)return;
+    size_t topic_len=((size_t)body[0]<<8)|body[1],pos=2+topic_len;
+    int qos=(flags>>1)&3; if(qos&&pos+2<=remain)pos+=2;
+    const char *topic=(const char*)body+2;
+    if(2+topic_len<=remain)serial_from_topic(c,topic,topic_len);
+    if(pos>remain)return;
+    const char *payload=(const char*)body+pos;size_t payload_len=remain-pos;
+    c->received_publishes++;
+    /* Wildcard subscriptions echo our requests and other clients'
+     * commands. They cannot update printer state or freshness. */
+    if(request_topic(topic,topic_len)){
+        c->skipped_requests++;
+        c->skipped_request_bytes+=(unsigned long)payload_len;
+        return;
+    }
+    if(own_reply_topic(c,topic,topic_len)&&handle_own_reply(c,payload,payload_len))return;
+    capture_diagnostic(c,payload,payload_len);
+    if(contains_text(payload,payload_len,"\"canvas_info\"")&&
+       contains_text(payload,payload_len,"\"canvas_list\"")) {
+        if(payload_len<sizeof(c->canvas_snapshot)){
+            memcpy(c->canvas_snapshot,payload,payload_len);
+            c->canvas_snapshot[payload_len]='\0';c->canvas_snapshot_len=payload_len;
+            c->canvas_discovery_complete=1;
+        }else c->oversized_snapshots++;
+    }
+    update_state(c,payload,payload_len);
+    if(contains_text(topic,topic_len,"/register_response")) {
+        if(contains_text(payload,payload_len,"\"error\":\"ok\"")||
+           contains_text(payload,payload_len,"already registered"))c->registered=1;
+    }
+    if(contains_text(topic,topic_len,"/api_response")&&
+       contains_text(payload,payload_len,"\"method\":1002")) {
+        if(payload_len<sizeof(c->snapshot)){
+            memcpy(c->snapshot,payload,payload_len);c->snapshot[payload_len]='\0';c->snapshot_len=payload_len;c->info_responses++;
+        }else c->oversized_snapshots++;
+    }
+}
+
 static void consume_packets(mqtt_client *c) {
     size_t offset=0;
     while(c->input_len-offset>=2) {
@@ -508,49 +622,23 @@ static void consume_packets(mqtt_client *c) {
             /* Our subscription requests QoS 0. Drain large publishes in-place
              * without retaining their payload or reconnecting. */
             if((c->input[offset]&0xf6)!=0x30){mqtt_close(c);return;}
+            /* Except a reply to our own request (the print history), kept up to MQTT_REPLY_MAX. */
+            const unsigned char *body=c->input+offset+header;
+            size_t have=c->input_len-offset-header,topic_len=have>=2?((size_t)body[0]<<8)|body[1]:0;
+            if(have<2+topic_len&&header+2+topic_len<=sizeof(c->input))break; /* topic still arriving */
+            if(have>=2+topic_len&&own_reply_topic(c,(const char*)body+2,topic_len)){
+                if(remain<=MQTT_REPLY_MAX&&(c->large=malloc(remain+1))){
+                    memcpy(c->large,body,have);c->large_len=have;c->large_need=remain;c->large_flags=c->input[offset];
+                    offset=c->input_len;break;
+                }
+                c->oversized_replies++;
+                if(c->history_requested){c->history_requested=0;c->history_error=-2;c->history_received=time(NULL);}
+            }
             c->discard_remaining=total-(c->input_len-offset);
             c->oversized_packets++;offset=c->input_len;break;
         }
         if(c->input_len-offset<total)break;
-        unsigned char type=c->input[offset]>>4;
-        if(type==3 && remain>=2) {
-            const unsigned char *body=c->input+offset+header;
-            size_t topic_len=((size_t)body[0]<<8)|body[1],pos=2+topic_len;
-            int qos=(c->input[offset]>>1)&3; if(qos&&pos+2<=remain)pos+=2;
-            if(2+topic_len<=remain)serial_from_topic(c,(const char*)body+2,topic_len);
-            if(pos<=remain) {
-                const char *payload=(const char*)body+pos;size_t payload_len=remain-pos;
-                c->received_publishes++;
-                /* Wildcard subscriptions echo our requests and other clients'
-                 * commands. They cannot update printer state or freshness. */
-                if(request_topic((const char*)body+2,topic_len)){
-                    c->skipped_requests++;
-                    c->skipped_request_bytes+=(unsigned long)payload_len;
-                    offset+=total;
-                    continue;
-                }
-                capture_diagnostic(c,payload,payload_len);
-                if(contains_text(payload,payload_len,"\"canvas_info\"")&&
-                   contains_text(payload,payload_len,"\"canvas_list\"")) {
-                    if(payload_len<sizeof(c->canvas_snapshot)){
-                        memcpy(c->canvas_snapshot,payload,payload_len);
-                        c->canvas_snapshot[payload_len]='\0';c->canvas_snapshot_len=payload_len;
-                        c->canvas_discovery_complete=1;
-                    }else c->oversized_snapshots++;
-                }
-                update_state(c,payload,payload_len);
-                if(contains_text((const char*)body+2,topic_len,"/register_response")) {
-                    if(contains_text(payload,payload_len,"\"error\":\"ok\"")||
-                       contains_text(payload,payload_len,"already registered"))c->registered=1;
-                }
-                if(contains_text((const char*)body+2,topic_len,"/api_response")&&
-                   contains_text(payload,payload_len,"\"method\":1002")) {
-                    if(payload_len<sizeof(c->snapshot)){
-                        memcpy(c->snapshot,payload,payload_len);c->snapshot[payload_len]='\0';c->snapshot_len=payload_len;c->info_responses++;
-                    }else c->oversized_snapshots++;
-                }
-            }
-        }
+        if((c->input[offset]>>4)==3)handle_publish(c,c->input[offset],c->input+offset+header,remain);
         offset+=total;
     }
     if(offset){memmove(c->input,c->input+offset,c->input_len-offset);c->input_len-=offset;}
@@ -558,6 +646,18 @@ static void consume_packets(mqtt_client *c) {
 
 int mqtt_process(mqtt_client *c) {
     if(c->fd<0)return -1;
+    if(c->large){
+        ssize_t n=recv(c->fd,c->large+c->large_len,c->large_need-c->large_len,0);
+        if(n==0){mqtt_close(c);return -1;}
+        if(n<0){if(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR)return 0;mqtt_close(c);return -1;}
+        c->large_len+=(size_t)n;
+        if(c->large_len==c->large_need){
+            unsigned char *packet=c->large;size_t size=c->large_need;
+            c->large=NULL;c->large_len=0;c->large_need=0;
+            packet[size]=0;handle_publish(c,c->large_flags,packet,size);free(packet);
+        }
+        return 0;
+    }
     if(c->discard_remaining){
         size_t want=c->discard_remaining<sizeof(c->input)?c->discard_remaining:sizeof(c->input);
         ssize_t n=recv(c->fd,c->input,want,0);
@@ -606,6 +706,14 @@ void mqtt_tick(mqtt_client *c) {
         if(c->last_canvas_request==0||now-c->last_canvas_request>=interval)
             (void)mqtt_request_canvas(c);
     }
+    /* Follow-ups requested by replies: read auto refill back, list new videos.
+     * Discovery can complete from a status delta that omits auto_refill; one full
+     * Canvas reply per session reports it. */
+    if(c->registered&&c->canvas_discovery_complete&&!c->have_auto_refill&&!c->auto_refill_probed){
+        c->auto_refill_probed=1;c->canvas_refresh_due=1;
+    }
+    if(c->registered&&c->canvas_refresh_due){c->canvas_refresh_due=0;(void)mqtt_request_canvas(c);}
+    if(c->registered&&c->history_refresh_due){c->history_refresh_due=0;(void)mqtt_request_history(c);}
     /* The official CC2 client keeps its *application* registration alive with
      * a JSON PING on its api_request topic.  MQTT PINGREQ only keeps the
      * broker's TCP session alive and is not a substitute for this heartbeat.

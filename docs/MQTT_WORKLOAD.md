@@ -27,6 +27,22 @@ unchanged. Periodic startup snapshot requests already stop after Canvas discover
 there is no continuous full-snapshot polling to remove in the steady state.
 Chamber, Canvas, job state, safety and Panda retain their MQTT inputs.
 
+## Printer replies, auto refill and print history
+
+- Replies on CC2 Control's own `<client>/api_response` topic are scanned for
+  `method` and `result.error_code`; a non-zero code is kept as `printer_error`.
+- Canvas: one 2005 request per MQTT session while the printer has not reported
+  `auto_refill` (discovery can complete from a status delta that omits it), and
+  one after an accepted auto-refill change, to read the new value back.
+- History: one 1036 request when the History page opens or Refresh is pressed,
+  at most one in flight; nothing polls the printer. The printer lists its last
+  50 jobs (19.6 KB, answered in 0.2 s on the tested printer), more than the
+  16 KiB input buffer: a reply addressed to CC2 Control is assembled on the heap
+  up to 256 KiB and freed after parsing; only the latest successful history
+  (within the same bound) is kept. Large publishes for other clients are drained as before.
+- Time-lapse rendering (1051) is sent only while Idle, one at a time. Downloads
+  use the existing two-transfer worker limit (64 KiB stack, 16 KiB buffer).
+
 ## Host verification
 
 Host C tests exercise fragmented and coalesced MQTT packets through `mqtt_process`,

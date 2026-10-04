@@ -111,7 +111,7 @@ await page.goto(`http://127.0.0.1:${server.address().port}`);
 
 for (const width of [1024, 1280, 1366, 1440, 1920, 320, 360, 390, 740]) {
  await page.setViewportSize({ width, height: width === 740 ? 360 : 900 });
- for (const name of ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']) {
+ for (const name of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']) {
   if (width < 640) await page.getByRole('button', {name: 'Expand menu', exact: true}).click();
   await page.locator(`#cc2-navigation a[href="#${name}"]`).click();
   for (let toggle = 0; toggle < (width >= 768 ? 2 : 1); toggle++) {

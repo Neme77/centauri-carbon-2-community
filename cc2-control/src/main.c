@@ -241,10 +241,10 @@ static void health_response(int fd, const mqtt_client *mqtt) {
         "\"mode\":\"protected-control\",\"uptime_seconds\":%ld,"
         "\"mem_total_kb\":%ld,\"mem_available_kb\":%ld,"
         "\"loadavg\":\"%s\",\"mqtt_connected\":%s,\"mqtt_registered\":%s,"
-        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu}\n",
+        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu,\"mqtt_oversized_replies\":%lu}\n",
         uptime, mem_total, mem_available, load, mqtt->connected ? "true" : "false",
         mqtt->registered ? "true" : "false", mqtt->snapshot_len ? "true" : "false",
-        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots);
+        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots,mqtt->oversized_replies);
     if (length < 0 || (size_t)length >= sizeof(body)) return;
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
@@ -279,7 +279,9 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"orca_print\":true,"
             "\"panda_compat\":%s,"
             "\"material_presets\":true,"
-            "\"persistent_ui_preferences\":true"
+            "\"persistent_ui_preferences\":true,"
+            "\"print_history\":true,"
+            "\"canvas_auto_refill\":true"
         "},"
         "\"endpoints\":{"
             "\"printer\":\"/api/printer\","
@@ -288,6 +290,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"files\":\"/api/gcode-files\","
             "\"console\":\"/api/console\","
             "\"preferences\":\"/api/preferences\","
+            "\"history\":\"/api/history\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
         "\"runtime\":{"
@@ -1959,6 +1962,10 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     double reference=z_offset_session?z_offset_reference:(have_offset?offset:0);
     json_z_offset(zreference,sizeof(zreference),have_offset,reference);
     json_z_offset(zadjustment,sizeof(zadjustment),have_offset,have_offset?offset-reference:0);
+    /* The latest refusal of one of our MQTT requests (start, auto refill, history, time-lapse). */
+    char printer_error[160]="null";
+    if(mqtt->reply_errors)snprintf(printer_error,sizeof(printer_error),"{\"sequence\":%lu,\"method\":%d,\"code\":%d,\"age\":%ld}",
+        mqtt->reply_errors,mqtt->reply_error_method,mqtt->reply_error_code,(long)(now-mqtt->reply_error_time));
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"
@@ -1971,12 +1978,13 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
-        "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s}}\n",
+        "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
+        "\"printer_error\":%s}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
-        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false");
+        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",printer_error);
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -2022,9 +2030,10 @@ static void canvas_response(int fd, const mqtt_client *mqtt) {
         char *body=malloc(cap);
         if(!body)return;
         int length=snprintf(body,cap,
-            "{\"available\":true,\"active_tray_id\":%d,\"machine_status\":%d,\"telemetry\":%.*s}\n",
-            mqtt->have_canvas_active_tray?mqtt->canvas_active_tray_id:-1,
-            mqtt->machine_status,(int)mqtt->canvas_snapshot_len,mqtt->canvas_snapshot);
+            "{\"available\":true,\"active_tray_id\":%d,\"machine_status\":%d,\"auto_refill\":%s,\"telemetry\":%.*s}\n",
+            mqtt->have_canvas_active_tray?mqtt->canvas_active_tray_id:-1,mqtt->machine_status,
+            mqtt->have_auto_refill?(mqtt->auto_refill?"true":"false"):"null",
+            (int)mqtt->canvas_snapshot_len,mqtt->canvas_snapshot);
         if(length>0&&(size_t)length<cap)
             respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
         free(body);
@@ -2181,6 +2190,23 @@ static void canvas_refresh_response(int fd, mqtt_client *mqtt) {
     const char *body="{\"accepted\":true,\"method\":2005}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",body,strlen(body));
 }
+
+/* Canvas auto refill: switch to another slot with the same filament when one runs out.
+ * Only offered once the printer has reported the setting (fail closed on old firmware). */
+static void canvas_auto_refill_response(int fd,mqtt_client *mqtt,const char *body,size_t body_len){
+    while(body_len&&isspace((unsigned char)*body)){body++;body_len--;}
+    while(body_len&&isspace((unsigned char)body[body_len-1]))body_len--;
+    int enabled=body_len==2&&!memcmp(body,"on",2)?1:body_len==3&&!memcmp(body,"off",3)?0:-1;
+    const char *error=NULL;int status=409;
+    if(enabled<0){error="{\"accepted\":false,\"error\":\"Use on or off\"}\n";status=400;}
+    else if(!mqtt->have_auto_refill)error="{\"accepted\":false,\"error\":\"The printer has not reported Canvas auto refill\"}\n";
+    else if(mqtt_set_auto_refill(mqtt,enabled)!=0){error="{\"accepted\":false,\"error\":\"MQTT API client is not ready\"}\n";status=503;}
+    if(error){respond(fd,status,status==400?"Bad Request":status==503?"Service Unavailable":"Conflict","application/json; charset=utf-8",error,strlen(error));return;}
+    const char *ok="{\"accepted\":true,\"method\":2004}\n";
+    respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
+}
+
+#include "history.h"
 
 #define EXCLUDE_OBJECT_RESPONSE_MAX (256UL * 1024UL)
 
@@ -2928,6 +2954,16 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         canvas_response(fd, mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/canvas/refresh")==0) {
         canvas_refresh_response(fd, mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/canvas/auto-refill")==0) {
+        canvas_auto_refill_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/history")==0) {
+        history_response(fd, mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/history/refresh")==0) {
+        history_refresh_response(fd, mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/history/timelapse")==0) {
+        timelapse_generate_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/history/timelapse")==0) {
+        return timelapse_download_start(fd,mqtt,query);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/material-presets")==0) {
         presets_get_response(fd);
     } else if (strcmp(method,"PUT")==0 && strcmp(path,"/api/material-presets")==0) {

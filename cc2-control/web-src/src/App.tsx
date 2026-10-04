@@ -1,6 +1,6 @@
 import { i18n } from '@/lib/i18n'
 import { menu, nav, printer } from '@/lib/state'
-import { PrintWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
+import { PrintWatcher, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SetupDialog } from '@/pages/setup'
 import { PrintDialog } from '@/pages/print-dialog'
@@ -8,6 +8,7 @@ import { Dashboard } from '@/pages/dashboard'
 import { Control } from '@/pages/control'
 import { Job } from '@/pages/job'
 import { Files } from '@/pages/files'
+import { History } from '@/pages/history'
 import { Bed } from '@/pages/bed'
 import { Canvas } from '@/pages/canvas'
 import { Console } from '@/pages/console'
@@ -18,6 +19,7 @@ const pages = {
   control: Control,
   job: Job,
   files: Files,
+  history: History,
   bed: Bed,
   canvas: Canvas,
   console: Console,
@@ -35,6 +37,7 @@ export const App = () => {
     <>
       <TitleSync />
       <PrintWatcher />
+      <RefusalWatcher />
       <Sidebar />
       <Topbar />
       <main
