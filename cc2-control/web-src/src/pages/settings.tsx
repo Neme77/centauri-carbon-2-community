@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
-import { Input, Select } from '@/components/ui/field'
+import { Input, PasswordInput, Select } from '@/components/ui/field'
 import { Tabs } from '@/components/ui/tabs'
 import { GithubIcon } from '@/components/github-icon'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2 } from 'lucide-preact'
@@ -95,9 +95,8 @@ const Connection = () => {
       </Field>
       <Field label="settings.lan_access_code" help="settings.first_launch_requires_the_printer" htmlFor="lan-code">
         <div class="cc2-lan-code-row flex min-w-0 items-center gap-2">
-          <Input
+          <PasswordInput
             id="lan-code"
-            type="password"
             class="min-w-0 flex-1"
             value={code}
             onInput={e => setCode(e.currentTarget.value)}

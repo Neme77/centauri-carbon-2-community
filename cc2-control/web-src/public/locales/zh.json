@@ -117,6 +117,8 @@
   "common.canvas": "Canvas",
   "common.cc2_live_camera": "CC2 实时摄像头",
   "common.checking_configuration": "正在检查配置…",
+  "common.hide_password": "隐藏密码",
+  "common.show_password": "显示密码",
   "common.choose_a_file_to_print": "选择要打印的文件",
   "common.command_accepted": "命令已接受",
   "common.confirm": "确认",

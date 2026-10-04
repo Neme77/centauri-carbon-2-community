@@ -25,7 +25,7 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`7d4a0c6aa2414669845a6630bf7e47032f66ee6c`, incorporating the validated
+`8eabeecbc0945da9f13f022d035b8391b629200a`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,

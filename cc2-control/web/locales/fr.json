@@ -117,6 +117,8 @@
   "common.canvas": "Canvas",
   "common.cc2_live_camera": "Caméra en direct CC2",
   "common.checking_configuration": "Vérification de la configuration…",
+  "common.hide_password": "Masquer le mot de passe",
+  "common.show_password": "Afficher le mot de passe",
   "common.choose_a_file_to_print": "Choisir un fichier à imprimer",
   "common.command_accepted": "Commande acceptée",
   "common.confirm": "Confirmer",
