@@ -26,11 +26,14 @@ try {
       const r = this.canvas.getBoundingClientRect()
       if (this.__closed && this.__vertices?.every(([x,y]) => x >= 0 && x <= r.width && y >= 0 && y <= r.height))
         this.canvas.__visibleFaces = (this.canvas.__visibleFaces || 0) + 1
-      if (this.__closed) this.canvas.__faces = (this.canvas.__faces || 0) + 1
+      if (this.__closed) {
+        this.canvas.__faces = (this.canvas.__faces || 0) + 1;
+        (this.canvas.__polygons ||= []).push(this.__vertices.map(p => [...p]))
+      }
       return fill.apply(this, args)
     }
     const descriptor = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width')
-    Object.defineProperty(HTMLCanvasElement.prototype, 'width', { ...descriptor, set(value) { this.__faces = 0; this.__visibleFaces = 0; this.__labels = []; descriptor.set.call(this, value) } })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'width', { ...descriptor, set(value) { this.__faces = 0; this.__visibleFaces = 0; this.__labels = []; this.__polygons = []; descriptor.set.call(this, value) } })
   })
   let rows = 4, cols = 4, flat = false, phase = 2075, requests = 0, offset = 0, spread = 1
   const matrix = (n, m, constant = false) => Array.from({ length: n }, (_, y) => Array.from({ length: m }, (_, x) => constant ? 0.06 + offset : 0.06 + offset + (x - y) * 0.005 * spread))
@@ -53,6 +56,21 @@ try {
   const canvas = page.locator('main canvas')
   const faces = async n => page.waitForFunction(n => document.querySelector('main canvas')?.__faces === n, n)
   await faces(9)
+  // Pointer rotation must preserve pixels per world unit, rather than refit/zoom.
+  const projectedUnit = async yaw => canvas.evaluate((c, yaw) => {
+    const p = c.__polygons[0]
+    return (p[1][0] - p[0][0]) / (((143.8521 - 99.8421) / 3) * Math.cos(yaw))
+  }, yaw)
+  const initialUnit = await projectedUnit(-0.28)
+  const box = await canvas.boundingBox()
+  const cx = Math.round(box.x + box.width / 2), cy = Math.round(box.y + box.height / 2)
+  await page.mouse.move(cx, cy); await page.mouse.down()
+  await page.mouse.move(cx + 80, cy, { steps: 4 })
+  assert.ok(Math.abs(await projectedUnit(0.12) - initialUnit) < 0.001, 'yaw drag must not change zoom')
+  await page.mouse.move(cx + 80, cy + 50, { steps: 4 })
+  assert.ok(Math.abs(await projectedUnit(0.12) - initialUnit) < 0.001, 'pitch drag must not change zoom')
+  await page.mouse.up()
+  await page.getByRole('button', { name: 'Reset view', exact: true }).click()
   const profile = page.locator('main select').first()
   await profile.selectOption('default'); await faces(100)
   await profile.selectOption('default1'); await faces(100)

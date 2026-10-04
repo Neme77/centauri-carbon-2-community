@@ -85,12 +85,13 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     zSpan = Math.max(0.42, (zMax - zMin) * 1.4),
     zGain = 0.42 / zSpan
   const { yaw, pitch, zoom, scale } = cam
-  // Fit the complete frame with room for labels; user zoom remains intentional.
-  const extent = Math.abs(Math.cos(yaw)) + Math.abs(Math.sin(yaw)),
+  // Fit at the reference angle so dragging rotates without changing the zoom.
+  const frame = defaultCam()
+  const extent = Math.abs(Math.cos(frame.yaw)) + Math.abs(Math.sin(frame.yaw)),
     unit =
       Math.min(
         Math.max(1, w - 140) / (250 * extent),
-        Math.max(1, h - 90) / (250 * extent * Math.sin(pitch) + 189 * scale)
+        Math.max(1, h - 90) / (250 * extent * Math.sin(frame.pitch) + 189 * scale)
       ) * zoom,
     origin = { x: w / 2, y: (h - 20) / 2 }
   const project = (x: number, y: number, z: number) => {
