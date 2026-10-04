@@ -61,10 +61,61 @@ export function previewPlugin(): Plugin {
   let speed = 100
   let flow = 100
   let preferences: Record<string, unknown> = { language: 'it', theme: 'dark' }
+  let cameraViewer: string | null = null
+  let deleted = new Set<string>()
+  let autoRefill = false
+  let videos: Record<string, number> = {}
   const reset = () => {
     speed = 100
     flow = 100
+    autoRefill = false
+    videos = {}
+    deleted = new Set()
+    cameraViewer = null
   }
+  // Print history as the printer reports it through /api/history (fixed times keep screenshots stable).
+  const job = (
+    id: string,
+    name: string,
+    begin: number,
+    minutes: number,
+    status: number,
+    video: number,
+    url: string
+  ) => ({
+    task_id: id,
+    task_name: name,
+    begin_time: begin,
+    end_time: begin + minutes * 60,
+    task_status: status,
+    time_lapse_video_status: videos[id] ?? video,
+    time_lapse_video_size: (videos[id] ?? video) === 2 ? 4839487 : 0,
+    time_lapse_video_duration: (videos[id] ?? video) === 2 ? 12 : 0,
+    time_lapse_video_url: url,
+  })
+  const tasks = () =>
+    [
+      job(
+        'preview-1',
+        'CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode',
+        1790895600,
+        26,
+        1,
+        2,
+        'video/CC2_Preview_Buddha.mp4'
+      ),
+      job(
+        'preview-2',
+        'A_very_long_filename_for_testing_mobile_portrait_wrapping_and_desktop_sidebar_proportions.gcode',
+        1790809200,
+        94,
+        1,
+        1,
+        'picture/A_very_long_filename'
+      ),
+      job('preview-3', 'Preview_USB.gcode', 1790722800, 12, 2, 0, ''),
+      job('preview-4', 'CC2_Preview_Vase_PETG.gcode', 1790636400, 211, 1, 3, 'picture/CC2_Preview_Vase_PETG'),
+    ].filter(task => !deleted.has(task.task_id))
   const printer = () => {
     const active = scene === 'printing' || scene === 'paused'
     return {
@@ -102,6 +153,8 @@ export function previewPlugin(): Plugin {
       motion: { x: 128, y: 128, z: active ? 28.6 : 5, speed: 3000, speed_mode: 1, homed_axes: 'xyz' },
       tuning: { speed_percent: speed, flow_percent: flow, live_velocity: scene === 'printing' ? 74.8 : 0 },
       hardware: { camera: true, usb: true, light: 1, filament_detection: true, filament_detected: true },
+      printer_error: null,
+      camera_viewer: cameraViewer,
     }
   }
   return {
@@ -250,8 +303,18 @@ export function previewPlugin(): Plugin {
                   },
                 },
               })
+            case '/api/history':
+              return reply({
+                available: true,
+                pending: false,
+                generating: false,
+                age: 1,
+                error_code: 0,
+                reply: { id: 1036, method: 1036, result: { error_code: 0, history_task_list: tasks() } },
+              })
             case '/api/canvas':
               return reply({
+                auto_refill: autoRefill,
                 result: {
                   canvas_info: {
                     canvas_list: [
@@ -289,9 +352,18 @@ export function previewPlugin(): Plugin {
           res.end(cameraSvg)
           return
         }
-        // Only simulated tuning, pause/resume/cancel and preferences can change in-memory state.
-        if (!['/__preview/scenario', '/api/control', '/api/preferences'].includes(path))
-          return reply({ error: 'Operation disabled in isolated preview' }, 403)
+        // Only simulated tuning, pause/resume/cancel, preferences, auto refill and video rendering change in-memory state.
+        const simulated = [
+          '/__preview/scenario',
+          '/api/control',
+          '/api/preferences',
+          '/api/canvas/auto-refill',
+          '/api/history/refresh',
+          '/api/history/delete',
+          '/api/camera/claim',
+          '/api/history/timelapse',
+        ]
+        if (!simulated.includes(path)) return reply({ error: 'Operation disabled in isolated preview' }, 403)
         let body = ''
         let oversized = false
         req.on('data', chunk => {
@@ -319,6 +391,36 @@ export function previewPlugin(): Plugin {
                 return reply({ error: 'Unknown language' }, 400)
               preferences = { ...preferences, ...value }
               return reply(preferences)
+            }
+            if (path === '/api/camera/claim' && req.method === 'POST') {
+              const viewer = body.trim()
+              if (!/^[0-9a-z-]{8,40}$/.test(viewer)) return reply({ error: 'Invalid camera viewer' }, 400)
+              cameraViewer = viewer
+              return reply({ viewer })
+            }
+            if (path === '/api/history/delete' && req.method === 'POST') {
+              const ids = body.trim().split('\n')
+              if (scene !== 'idle') return reply({ error: 'An idle printer is required' }, 409)
+              if (!ids.length || ids.some(id => !tasks().some(task => task.task_id === id)))
+                return reply({ error: 'Invalid history entry' }, 400)
+              for (const id of ids) deleted.add(id)
+              return reply({ accepted: true, method: 1038, count: ids.length, simulated: true }, 202)
+            }
+            if (path === '/api/canvas/auto-refill' && req.method === 'POST') {
+              if (!['on', 'off'].includes(body.trim())) return reply({ error: 'Use on or off' }, 400)
+              autoRefill = body.trim() === 'on'
+              return reply({ accepted: true, method: 2004, simulated: true }, 202)
+            }
+            if (path === '/api/history/refresh' && req.method === 'POST')
+              return reply({ accepted: true, method: 1036, simulated: true }, 202)
+            if (path === '/api/history/timelapse' && req.method === 'POST') {
+              const task = tasks().find(x => x.task_id === body.trim())
+              if (!task || ![1, 3].includes(task.time_lapse_video_status))
+                return reply({ accepted: false, error: 'This print has no time-lapse frames to render' }, 409)
+              if (scene !== 'idle')
+                return reply({ accepted: false, error: 'Rendering a time-lapse video requires an idle printer' }, 409)
+              videos[task.task_id] = 2
+              return reply({ accepted: true, method: 1051, simulated: true }, 202)
             }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()

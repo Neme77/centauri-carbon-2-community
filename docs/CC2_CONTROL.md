@@ -117,7 +117,24 @@ CC2 Control supports native four-slot ELEGOO Canvas discovery and protected load
 
 User-defined material presets are stored under `/opt/usr/cc2-control`.
 
+**Canvas → Canvas controls → Auto refill** shows and changes the Canvas setting that continues a print from another slot holding the same filament when a spool runs out (vendor method 2004). The switch appears only after the printer has reported the setting, and it changes only when the printer reports the new value.
+
 The G-code library lists printable files from internal memory and USB storage, including nested folders and thumbnails where available. USB jobs are validated and imported before the printer's native print-start workflow is used.
+
+## Printer sub-states and refusals
+
+Next to the machine state, the dashboard, Job and Control pages and the top bar (on wider screens) show what the printer is doing within it, for example **Printing · Heating bed**, **Printing · Paused** or **Manual homing · Failed**. The meaning of each vendor sub-state code depends on the state, as in ELEGOO's SDK.
+
+Requests CC2 Control sends over MQTT (print start, Canvas auto refill, history, time-lapse rendering) are answered by the printer after the HTTP request has returned. When the printer refuses one, every open page shows the reason once, for example *Print start refused by the printer: the printer is busy (code 1009)*.
+
+## Print history and time-lapse videos
+
+**History** lists the print jobs recorded by the printer, newest first, with start time, duration, result and time-lapse. Opening the page or pressing **Refresh** sends one request (vendor method 1036); nothing polls the printer in the background.
+
+- **Download** streams a rendered time-lapse MP4 from the printer through CC2 Control; the browser never receives the LAN access code.
+- **Create video** renders the stored frames of a job into an MP4 (vendor method 1051). It is available only while the printer is Idle, one video at a time, and keeps the printer busy for several minutes.
+
+The printer lists its last 50 jobs (about 20 KB on the tested printer); replies larger than 256 KiB would not be loaded.
 
 ## Discovery API v1
 
@@ -150,3 +167,19 @@ A healthy updated system reports the installed CC2 Control version and reaches h
 ## Acknowledgements
 
 Thanks to **Barry Green** for extensive remote hardware testing and feedback during the CC2 Control development cycle.
+
+### Timelapse selection and history deletion
+
+Select **Enable timelapse** in the print popup for each job that should record frames.
+After completion, use **Create video** in History if the printer reports unrendered frames,
+then **Download** when the MP4 is ready. Saved-mesh and calibrated starts both send an explicit
+recording choice; this build is intended for printer validation of both paths.
+
+History offers confirmed deletion of one completed/stopped record or all completed/stopped records
+in the loaded list (the printer currently returns its last 50 jobs). Refresh first if the cached list
+is older than one minute. Deletion is unavailable during printing or video generation. It removes
+history records, not G-code or video files; download any video you want before deleting its record.
+
+Starting live camera view in another CC2 Control tab/device hands it over on the previous page's next
+printer-state poll. **Watch here** takes it back explicitly. The camera window follows the same rule.
+Failed ownership requests leave streaming stopped. Direct Elegoo clients remain independent.

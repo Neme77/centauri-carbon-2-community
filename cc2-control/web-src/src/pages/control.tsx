@@ -7,7 +7,8 @@ import { Input, Select } from '@/components/ui/field'
 import { Icon } from '@/components/icons'
 import { FanSlider, Notice, Warn } from '@/components/shared'
 import { control, errText, notify } from '@/lib/api'
-import { t, tState, tpl } from '@/lib/i18n'
+import { t, tpl } from '@/lib/i18n'
+import { stateText } from '@/lib/machine'
 import { num } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
@@ -477,7 +478,7 @@ export const Control = () => {
       sub="control.movement_temperatures_and_machine"
       tags={
         <>
-          {tag(d ? tState(v.state) : t('common.connecting'))}
+          {tag(d ? stateText(v) : t('common.connecting'))}
           {tag(v.homed ? `${v.homed.toUpperCase()} ${t('common.homed')}` : t('common.not_homed'))}
         </>
       }

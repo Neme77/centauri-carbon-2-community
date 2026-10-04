@@ -1,14 +1,20 @@
 import { store, ls } from './store'
 import { request } from './api'
 import { duration, finishTime } from './format'
+import { subState } from './machine'
 
-export type Page = 'dashboard' | 'control' | 'job' | 'files' | 'bed' | 'canvas' | 'console' | 'settings'
-const PAGES: Page[] = ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']
+export type Page = 'dashboard' | 'control' | 'job' | 'files' | 'history' | 'bed' | 'canvas' | 'console' | 'settings'
+const PAGES: Page[] = ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']
 
 // Routes live in the URL hash (#files, #bed/screws): the backend only serves /, so no server change is needed.
+// #camera is the separate camera window opened from the camera card; it is not a menu page.
 const route = () => {
   const [p, sub] = location.hash.slice(1).split('/')
-  return { page: (PAGES.includes(p as Page) ? p : 'dashboard') as Page, screws: p === 'bed' && sub === 'screws' }
+  return {
+    page: (PAGES.includes(p as Page) ? p : 'dashboard') as Page,
+    screws: p === 'bed' && sub === 'screws',
+    camera: p === 'camera',
+  }
 }
 export const nav = store(route())
 addEventListener('hashchange', () => {
@@ -17,7 +23,7 @@ addEventListener('hashchange', () => {
 })
 export const openPage = (page: Page, screws = false) => {
   const hash = `#${page}${screws ? '/screws' : ''}`
-  if (location.hash === hash) nav.set({ page, screws })
+  if (location.hash === hash) nav.set({ page, screws, camera: false })
   else location.hash = hash
 }
 
@@ -30,7 +36,8 @@ export const toggleMenu = () => {
   menu.set({ collapsed })
 }
 
-export const printer = store({ data: null as any, rev: 0, ok: true })
+// `at`: performance.now() when the request behind `data` was sent, so a reply predating a change can be told apart.
+export const printer = store({ data: null as any, rev: 0, ok: true, at: 0 })
 export const health = store({ data: null as any, setup: null as any })
 export const consoleLog = store({ text: null as string | null }) // null: nothing received yet, the page shows its own placeholder
 export const screwText = store({ text: '', minGeneration: 0 })
@@ -39,6 +46,7 @@ export const thermalTimes = { nozzle: [] as number[], bed: [] as number[], chamb
 export const thermalHistory = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
 
 export async function refreshPrinter() {
+  const sent = performance.now()
   try {
     const data = await request('/api/printer')
     for (const [key, v] of [
@@ -63,7 +71,7 @@ export async function refreshPrinter() {
       timedOut: Boolean(data.z_offset?.timed_out),
       reference: typeof data.z_offset?.reference === 'number' ? data.z_offset.reference : null,
     })
-    printer.set(s => ({ data, rev: s.rev + 1, ok: true }))
+    printer.set(s => ({ data, rev: s.rev + 1, ok: true, at: sent }))
   } catch {
     zoffset.set({ v: null })
     printer.set({ ok: false })
@@ -119,6 +127,7 @@ export function view(d: any) {
   const homed = String(d?.motion?.homed_axes || '')
   return {
     state,
+    detail: subState(d?.machine),
     rawFilename,
     layer,
     total,

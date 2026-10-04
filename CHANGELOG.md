@@ -5,6 +5,11 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Select timelapse recording in the print popup, including calibrated starts.
+- Delete individual or loaded completed print-history entries with confirmation and Idle guards.
+- Coordinate live camera viewing across CC2 Control windows; failed ownership requests do not open a stream.
+- Follow native timelapse rendering until machine state 12 ends before refreshing history.
+
 - Keep object-query UDS sessions open, match response IDs and reject incomplete
   replies to reduce connection churn when opening Job. One supervised print
   completed without recurrence of the observed vendor dispatcher crash; its
@@ -39,6 +44,12 @@ checksums remain attached to each GitHub release.
 - Every message, machine state and accessible name is translated in Italian,
   French, Chinese and Russian.
 - Four more colour themes (Dracula, Nord, Monokai, Solarized Light) next to Light and Dark, chosen in **Settings → Appearance** and saved on the printer like the language; `/api/preferences` now accepts any lowercase-hyphenated theme identifier.
+- The machine state is followed by what the printer is doing within it (**Printing · Heating bed**, **Manual homing · Failed**…), using the vendor sub-state codes.
+- Printer refusals of MQTT requests are shown with the vendor meaning of their code (busy, print file missing, no bed levelling data…) instead of passing silently after `202 Accepted`; `/api/printer` reports the latest one as `printer_error`.
+- Invalidate the Canvas auto-refill readback on MQTT disconnect and request it
+  again after registration, so external changes made while offline are shown.
+- **Canvas → Auto refill** shows and changes the Canvas setting that continues from another slot with the same filament when a spool runs out.
+- New **History** page: the print jobs recorded by the printer with start time, duration and result; ready time-lapse videos can be downloaded and recorded frames rendered into a video while the printer is Idle. The LAN access code stays on the printer.
 
 ### Removed
 

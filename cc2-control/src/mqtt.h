@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <time.h>
 
+/* Replies addressed to this client that exceed input[] (the print history can)
+ * are assembled on the heap up to this size; larger ones are drained as before. */
+#define MQTT_REPLY_MAX (256U * 1024U)
+
 typedef struct {
     int fd;
     unsigned char input[16384];
@@ -66,6 +70,30 @@ typedef struct {
     int canvas_discovery_complete;
     int canvas_active_tray_id;
     int have_canvas_active_tray;
+    /* Publishing a request is not acceptance: the printer answers on
+     * <client>/api_response with result.error_code. Last non-zero code: */
+    int reply_error_method, reply_error_code;
+    unsigned long reply_errors;
+    time_t reply_error_time;
+    /* canvas_info.auto_refill: full 2005 replies carry it, status deltas may not. */
+    int auto_refill, have_auto_refill;
+    int canvas_refresh_due, auto_refill_probed;
+    /* Latest successful 1036 (print task history) reply to our own request. */
+    char *history;
+    size_t history_len;
+    int history_error;
+    time_t history_received, history_requested;
+    int history_refresh_due;
+    /* 1051 is acknowledged at once; rendering then runs in machine state 12. */
+    time_t timelapse_requested;
+    int timelapse_rendering;
+    unsigned long oversized_replies;
+    unsigned char *large;
+    time_t history_delete_requested;
+    unsigned long print_config_id, print_config_reply_id;
+    int print_config_error;
+    size_t large_len, large_need;
+    unsigned char large_flags;
 } mqtt_client;
 
 void mqtt_init(mqtt_client *client);
@@ -75,8 +103,13 @@ void mqtt_close(mqtt_client *client);
 int mqtt_process(mqtt_client *client);
 void mqtt_tick(mqtt_client *client);
 int mqtt_request_canvas(mqtt_client *client);
+int mqtt_set_auto_refill(mqtt_client *client, int enabled);
+int mqtt_request_history(mqtt_client *client);
+int mqtt_delete_history(mqtt_client *client, const char *params);
+int mqtt_prepare_timelapse(mqtt_client *client, int enabled);
+int mqtt_generate_timelapse(mqtt_client *client, const char *url);
 int mqtt_start_print(mqtt_client *client, const char *storage_media, const char *filename,
                      const int *tools, const int *trays, size_t slot_count,
-                     char print_layout, int bedlevel_force);
+                     char print_layout, int bedlevel_force, int timelapse);
 
 #endif

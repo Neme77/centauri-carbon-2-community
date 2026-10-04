@@ -9,6 +9,7 @@ import {
   Files as FilesIcon,
   Gauge,
   Grid3x3,
+  History,
   ListChecks,
   Settings,
   SlidersHorizontal,
@@ -22,6 +23,7 @@ import { Dot } from '@/components/ui/badge'
 import { type Key, t, tState, tpl } from '@/lib/i18n'
 import { control, errText, notify, post, toast } from '@/lib/api'
 import { ask } from '@/lib/confirm'
+import { printerError, printerRequest } from '@/lib/machine'
 import { refreshPrinter, health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
 // Same query as the compact layout in index.css.
@@ -32,6 +34,7 @@ const items: [Page, NavIcon, Key][] = [
   ['control', SlidersHorizontal, 'common.control'],
   ['job', ListChecks, 'common.job'],
   ['files', FilesIcon, 'common.files'],
+  ['history', History, 'common.history'],
   ['bed', Grid3x3, 'common.bed_levelling'],
   ['canvas', CanvasIcon, 'common.canvas'],
   ['console', SquareTerminal, 'common.console'],
@@ -267,7 +270,15 @@ export const Topbar = () => {
         <div class="flex h-11 items-center gap-2 rounded-md border border-edge px-3">
           <PrinterIcon class="hidden size-6 sm:block" />
           <div>
-            {link[0] === 'green' ? `${tState(v.state)}${v.active ? ` · ${Math.round(v.progress)}%` : ''}` : '—'}
+            {link[0] === 'green' ? (
+              <>
+                {tState(v.state)}
+                {v.detail && <span class="hidden md:inline"> · {v.detail}</span>}
+                {v.active ? ` · ${Math.round(v.progress)}%` : ''}
+              </>
+            ) : (
+              '—'
+            )}
           </div>
         </div>
         <div class="hidden h-11 items-center gap-2 rounded-md border border-edge px-3 sm:flex">
@@ -308,6 +319,28 @@ export const PrintWatcher = () => {
       running.current = null
     }
   }, [d])
+  return null
+}
+
+// The printer answers CC2 Control's MQTT requests after the HTTP request has returned; each new refusal
+// is shown once. An old refusal seen when the page opens is not news.
+export const RefusalWatcher = () => {
+  const refusal = printer.use().data?.printer_error
+  const seen = useRef<number | null>(null)
+  useEffect(() => {
+    if (!refusal || refusal.sequence === seen.current) return
+    const first = seen.current === null
+    seen.current = refusal.sequence
+    if (first && Number(refusal.age) > 15) return
+    notify(
+      tpl('printer.refused', {
+        request: printerRequest(Number(refusal.method)),
+        error: printerError(Number(refusal.code)),
+        code: Number(refusal.code),
+      }),
+      'error'
+    )
+  }, [refusal?.sequence])
   return null
 }
 

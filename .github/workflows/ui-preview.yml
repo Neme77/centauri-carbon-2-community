@@ -38,6 +38,8 @@ jobs:
         run: npm run test:camera
       - name: Verify Quick Actions light telemetry and heater shutdown guards
         run: npm run test:quick
+      - name: Verify timelapse selection and history deletion controls
+        run: npm run test:print-history
       - name: Save screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v6
@@ -45,4 +47,3 @@ jobs:
           name: cc2-ui-preview-screenshots
           path: ${{ runner.temp }}/cc2-preview-screenshots
           retention-days: 7
-
