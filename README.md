@@ -94,7 +94,7 @@ Then reload `http://PRINTER-IP:8081` and complete the initial setup with the new
 
 ## Community contributions
 
-First and foremost, a special thank you to **[@Surfoo](https://github.com/Surfoo)** for the outstanding work on the complete UI rewrite, the care put into its design and usability, and the continuing interface improvements. His contribution has transformed the CC2 Control experience.
+First and foremost, a special thank you to **[@Surfoo](https://github.com/Surfoo)** for redesigning the entire CC2 Control graphical interface. His outstanding work reshaped the layout, visual design and user experience across the whole application, with great care for usability and detail. Thank you also for the continuing interface improvements.
 
 A huge thank you to **DamiBFryta**, our dedicated beta tester, for ideas, testing and debugging throughout the project.
 
