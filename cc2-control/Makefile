@@ -1,6 +1,9 @@
 CROSS ?= arm-linux-gnueabihf-
 CC := $(CROSS)gcc
-CFLAGS := -Os -std=c11 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -pthread $(EXTRA_CFLAGS)
+# CC2 Control's version lives in VERSION and the community firmware release in FIRMWARE_VERSION; nothing else writes them.
+VERSION := $(shell cat VERSION)
+FIRMWARE_VERSION := $(shell cat FIRMWARE_VERSION)
+CFLAGS := -Os -std=c11 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -DCC2_CONTROL_VERSION=\"$(VERSION)\" -DCC2_COMMUNITY_FIRMWARE_VERSION=\"$(FIRMWARE_VERSION)\" -pthread $(EXTRA_CFLAGS)
 LDFLAGS := -Wl,--gc-sections -s -static -pthread
 
 # Host sanitizer builds, e.g. `make clean test CROSS= CC=gcc SANITIZE=address,undefined`
@@ -23,7 +26,7 @@ all: dist
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(TARGET): src/main.c src/gcode_download.h src/history.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h | $(BUILD)
+$(TARGET): src/main.c src/gcode_download.h src/history.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h VERSION FIRMWARE_VERSION | $(BUILD)
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o $@ $(LDFLAGS) -lm
 
 $(UDS_PROBE): tools/uds_probe.c | $(BUILD)

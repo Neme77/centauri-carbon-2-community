@@ -14,7 +14,7 @@ class InstallerSshTests(unittest.TestCase):
             root = Path(directory)
             script = root / INSTALLER.name
             shutil.copyfile(INSTALLER, script)
-            (root / "cc2-control-1.1.31-payload.tar.gz").touch()
+            (root / "cc2-control-payload.tar.gz").touch()
             tools = root / "tools"
             tools.mkdir()
             trace = root / "trace"

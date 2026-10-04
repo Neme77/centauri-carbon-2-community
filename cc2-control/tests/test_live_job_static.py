@@ -46,4 +46,4 @@ assert 'setup.saved_restarting_cc2_control_and' in ui
 assert 'n < 60' in ui
 assert "for(const [temp,color]of [[28" not in ui
 assert "Read during inspection" not in ui
-print("PASS: CC2 Control 1.1.31 stable live-job and safety markers")
+print("PASS: CC2 Control stable live-job and safety markers")

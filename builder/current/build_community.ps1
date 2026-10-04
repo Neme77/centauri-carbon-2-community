@@ -1,4 +1,4 @@
-# CC2 builder v4.2 launcher: community signing.
+# CC2 builder launcher: community signing.
 [CmdletBinding()]
 param(
     [string]$Distro = 'Ubuntu',

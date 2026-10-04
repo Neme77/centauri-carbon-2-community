@@ -71,8 +71,12 @@ static int z_offset_readback(double *value){
 #define GCODE_USB_ROOT "/mnt/exUDISK"
 #define GCODE_USB_IMPORT_PREFIX "CC2_USB_"
 
-#define CC2_CONTROL_VERSION "1.1.31"
-#define CC2_COMMUNITY_FIRMWARE_VERSION "4.2"
+#ifndef CC2_CONTROL_VERSION /* the Makefile sets it from VERSION */
+#define CC2_CONTROL_VERSION "0.0.0-dev"
+#endif
+#ifndef CC2_COMMUNITY_FIRMWARE_VERSION /* the Makefile sets it from FIRMWARE_VERSION */
+#define CC2_COMMUNITY_FIRMWARE_VERSION "0.0-dev"
+#endif
 #define CC2_DISCOVERY_API_VERSION 1
 
 static volatile sig_atomic_t running = 1;

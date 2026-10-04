@@ -22,7 +22,7 @@ function ssh.exe {
 try {
     New-Item -ItemType Directory -Path $temporary | Out-Null
     Copy-Item (Join-Path $PSScriptRoot '..\installer\Install-CC2-Control.ps1') $installer
-    New-Item -ItemType File -Path (Join-Path $temporary 'cc2-control-1.1.31-payload.tar.gz') | Out-Null
+    New-Item -ItemType File -Path (Join-Path $temporary 'cc2-control-payload.tar.gz') | Out-Null
 
     $cases = @(
         @{ Name='normal'; Reset=$false; Answer=''; KeyExit=0; Fails=$false; Calls='scp|ssh' },
