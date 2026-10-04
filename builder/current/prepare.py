@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, validate and stage CC2 Control 1.1.31 for firmware V4.2."""
+"""Build, validate and stage CC2 Control for firmware V4.2."""
 import hashlib
 import json
 from pathlib import Path
@@ -13,11 +13,14 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_COMMIT = 'e197a4b8e41a8bc01c5affd4816ca33fdce073e1'
-SOURCE_SHA256 = '8324c5cbbe097137b7709ece4e6ae1f5769ce79f77ea7749b095f2ad27487886'
+SOURCE_COMMIT = 'f0a71b69d3b1c34e48acf3451bdc084eca391cd9'
+SOURCE_SHA256 = 'cf8024bbdcc89107358b9d4c6ac8e3663ebb9f062147806b2b22735f44d8a21c'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
+# The version is written once, in cc2-control/VERSION, and travels inside the pinned snapshot.
+with zipfile.ZipFile(SOURCE) as _snapshot:
+    VERSION = _snapshot.read('VERSION').decode().strip()
 
 def sha256(path):
     h = hashlib.sha256()
@@ -32,8 +35,8 @@ def validate_arm_elf(path):
         raise RuntimeError('CC2 Control output is not a 32-bit little-endian ELF')
     if struct.unpack_from('<H', data, 18)[0] != 40:
         raise RuntimeError('CC2 Control output is not an ARM executable')
-    if b'1.1.31' not in path.read_bytes():
-        raise RuntimeError('CC2 Control binary does not identify version 1.1.31')
+    if VERSION.encode() not in path.read_bytes():
+        raise RuntimeError(f'CC2 Control binary does not identify version {VERSION}')
 
 def copy_shell_lf(source, destination):
     data = source.read_bytes()
@@ -102,13 +105,13 @@ def main():
         }
     manifest = {
         'component': 'CC2 Control',
-        'version': '1.1.31',
+        'version': VERSION,
         'source_sha256': SOURCE_SHA256,
         'source_commit': SOURCE_COMMIT,
         'files': files,
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-    print('CC2 Control 1.1.31 prepared:', OUTPUT)
+    print(f'CC2 Control {VERSION} prepared:', OUTPUT)
     print('Manifest:', MANIFEST)
 
 if __name__ == '__main__':

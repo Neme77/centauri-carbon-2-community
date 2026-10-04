@@ -12,7 +12,7 @@ Contributions, test reports and focused bug fixes are welcome.
 
 ## Repository conventions
 
-- Current files use stable paths; version numbers belong in source constants, release tags and the changelog, not in working filenames.
+- Current files use stable paths. The CC2 Control version is written only in `cc2-control/VERSION`; release tags and the changelog name releases (see [`RELEASING.md`](RELEASING.md)), not working filenames.
 - Generated firmware, binaries, credentials and private signing keys are never committed.
 - Do not rewrite published history to tidy commit counts. Use a focused branch and squash it when merging if appropriate.
 - Keep vendor material separate and record its origin and checksum.

@@ -2,7 +2,7 @@ param([string]$PrinterIp, [switch]$ResetHostKey)
 $ErrorActionPreference = 'Stop'
 if (-not $PrinterIp) { $PrinterIp = Read-Host 'Printer IP address' }
 if ($PrinterIp -notmatch '^[A-Za-z0-9.-]+$') { throw 'Invalid printer address.' }
-$archive = Join-Path $PSScriptRoot 'cc2-control-1.1.31-payload.tar.gz'
+$archive = Join-Path $PSScriptRoot 'cc2-control-payload.tar.gz'
 if (-not (Test-Path $archive)) { throw 'The updater payload archive is missing.' }
 foreach ($tool in 'ssh.exe', 'scp.exe') {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is required. Enable Windows OpenSSH Client." }
@@ -24,8 +24,8 @@ if ($ResetHostKey) {
         throw 'Host-key reset failed. No installation was performed.'
     }
 }
-& scp.exe $archive "${target}:/tmp/cc2-control-1.1.31-payload.tar.gz"
+& scp.exe $archive "${target}:/tmp/cc2-control-payload.tar.gz"
 if ($LASTEXITCODE) { throw 'Payload upload failed.' }
-& ssh.exe $target 'mkdir -p /tmp/cc2-control-1.1.31 && tar -xzf /tmp/cc2-control-1.1.31-payload.tar.gz -C /tmp/cc2-control-1.1.31 && chmod 755 /tmp/cc2-control-1.1.31/install-on-printer.sh /tmp/cc2-control-1.1.31/cc2-control && sh /tmp/cc2-control-1.1.31/install-on-printer.sh'
+& ssh.exe $target 'mkdir -p /tmp/cc2-control-update && tar -xzf /tmp/cc2-control-payload.tar.gz -C /tmp/cc2-control-update && chmod 755 /tmp/cc2-control-update/install-on-printer.sh /tmp/cc2-control-update/cc2-control && sh /tmp/cc2-control-update/install-on-printer.sh'
 if ($LASTEXITCODE) { throw 'Installation failed; inspect the SSH output for restoration status.' }
-Write-Host "CC2 Control 1.1.31 installed: http://${PrinterIp}:8081" -ForegroundColor Green
+Write-Host "CC2 Control installed: http://${PrinterIp}:8081" -ForegroundColor Green

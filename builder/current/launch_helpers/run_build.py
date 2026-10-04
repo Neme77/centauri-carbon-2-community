@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the v4.2 builder with fixed local inputs and separate logs/outputs."""
+"""Run the builder with fixed local inputs and separate logs/outputs."""
 import argparse
 import datetime
 import hashlib
@@ -8,7 +8,7 @@ import subprocess
 import sys
 import uuid
 
-BUILDER_SHA256 = 'b5c925c9d6b794d1117789172bd3ebcab9befc73f46760177381ededf12e94ae'
+BUILDER_SHA256 = '4f7486179d248acae2c54496d4871da21a01d09f3c6336d72e27022b5f8fb31a'
 
 def sha256(path):
     h = hashlib.sha256()
@@ -51,7 +51,7 @@ def build_arguments(root, mode, preflight=False, check_key=False, keep_work=Fals
     if missing:
         raise FileNotFoundError('File mancanti:\n' + '\n'.join(missing))
     if sha256(builder) != BUILDER_SHA256:
-        raise RuntimeError('Builder diverso dalla v4.2 prevista. Non avvio la costruzione.')
+        raise RuntimeError('Builder diverso da quello previsto. Non avvio la costruzione.')
     return command, output, root / 'logs' / (stem + '_' + action + '.log')
 
 def run(root, mode, preflight=False, check_key=False, keep_work=False):
@@ -63,7 +63,7 @@ def run(root, mode, preflight=False, check_key=False, keep_work=False):
     print('Log:', log, flush=True)
     # stderr is merged in Python, avoiding PowerShell 5 native-stderr handling issues.
     with log.open('x', encoding='utf-8') as dst:
-        dst.write('CC2 v4.2 launcher; signing mode=' + mode + '\n')
+        dst.write('CC2 launcher; signing mode=' + mode + '\n')
         dst.flush()
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, encoding='utf-8', errors='replace', bufsize=1)

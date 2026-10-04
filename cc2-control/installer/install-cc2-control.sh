@@ -15,7 +15,7 @@ case "$PRINTER_IP" in *[!A-Za-z0-9.-]*|'') echo 'Invalid printer address.' >&2; 
 command -v ssh >/dev/null || { echo 'ssh is required.' >&2; exit 2; }
 command -v scp >/dev/null || { echo 'scp is required.' >&2; exit 2; }
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-ARCHIVE="$HERE/cc2-control-1.1.31-payload.tar.gz"
+ARCHIVE="$HERE/cc2-control-payload.tar.gz"
 test -f "$ARCHIVE" || { echo 'Payload archive is missing.' >&2; exit 2; }
 TARGET="root@$PRINTER_IP"
 if [ "$RESET_HOST_KEY" -eq 1 ]; then
@@ -37,6 +37,6 @@ if [ "$RESET_HOST_KEY" -eq 1 ]; then
         exit 1
     }
 fi
-scp "$ARCHIVE" "$TARGET:/tmp/cc2-control-1.1.31-payload.tar.gz"
-ssh "$TARGET" 'mkdir -p /tmp/cc2-control-1.1.31 && tar -xzf /tmp/cc2-control-1.1.31-payload.tar.gz -C /tmp/cc2-control-1.1.31 && chmod 755 /tmp/cc2-control-1.1.31/install-on-printer.sh /tmp/cc2-control-1.1.31/cc2-control && sh /tmp/cc2-control-1.1.31/install-on-printer.sh'
-echo "CC2 Control 1.1.31 installed: http://$PRINTER_IP:8081"
+scp "$ARCHIVE" "$TARGET:/tmp/cc2-control-payload.tar.gz"
+ssh "$TARGET" 'mkdir -p /tmp/cc2-control-update && tar -xzf /tmp/cc2-control-payload.tar.gz -C /tmp/cc2-control-update && chmod 755 /tmp/cc2-control-update/install-on-printer.sh /tmp/cc2-control-update/cc2-control && sh /tmp/cc2-control-update/install-on-printer.sh'
+echo "CC2 Control installed: http://$PRINTER_IP:8081"

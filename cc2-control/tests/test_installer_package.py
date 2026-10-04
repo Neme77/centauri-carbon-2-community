@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory() as tmp:
             digest,name=line.split('  ',1);assert hashlib.sha256(files[name]).hexdigest()==digest
     for scenario in ('success','delayed','busy','rollback'):
         fixture=base/scenario;fixture.mkdir();stage=fixture/'stage';stage.mkdir()
-        with tarfile.open(fileobj=io.BytesIO(files['cc2-control-1.1.31-payload.tar.gz']),mode='r:gz') as t:
+        with tarfile.open(fileobj=io.BytesIO(files['cc2-control-payload.tar.gz']),mode='r:gz') as t:
             for m in t.getmembers():
                 p=stage/m.name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(t.extractfile(m).read());p.chmod(m.mode)
                 assert m.mode==(0o755 if m.name=='cc2-control' or m.name.endswith(('.sh','.init')) else 0o644)
@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory() as tmp:
         (stage/'cc2-control.init').write_bytes(init.read_bytes())
         commands=fixture/'bin';commands.mkdir()
         state=2 if scenario=='busy' else 1
-        (commands/'wget').write_text('#!/bin/sh\ncase "$*" in *api/printer*) echo \'{"connected":true,"machine":{"status":'+str(state)+',"x":0},"last_message_age":0,"x":0}\';; *) echo \'{"service":"cc2-control","version":"1.1.31","mqtt_registered":true,"snapshot_received":true}\';; esac\n')
+        (commands/'wget').write_text('#!/bin/sh\ncase "$*" in *api/printer*) echo \'{"connected":true,"machine":{"status":'+str(state)+',"x":0},"last_message_age":0,"x":0}\';; *) echo \'{"service":"cc2-control","version":"'+pkg.VERSION+'","mqtt_registered":true,"snapshot_received":true}\';; esac\n')
         if scenario == 'delayed':
             # Simulate health becoming available after the 60-second launcher
             # delay. The old 30-attempt limit must fail this scenario.

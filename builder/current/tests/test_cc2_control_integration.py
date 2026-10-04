@@ -32,7 +32,7 @@ def prepare(root,extra=()):
         files[relative]={'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
                          'mode':oct(path.stat().st_mode&0o777)}
     manifest_path=root/'manifest.json'
-    manifest_path.write_text(json.dumps({'component':'CC2 Control','version':'1.1.31',
+    manifest_path.write_text(json.dumps({'component':'CC2 Control','version':b.cc2_control_version(),
         'source_sha256':b.CC2_CONTROL_SOURCE_SHA256,'source_commit':b.CC2_CONTROL_SOURCE_COMMIT,'files':files}))
     return b.load_cc2_control(component,manifest_path)
 
@@ -83,5 +83,19 @@ with tempfile.TemporaryDirectory() as temporary:
         assert 'source commit mismatch' in str(error)
     else:
         raise AssertionError('stale prepared component accepted')
+
+# A manifest whose version differs from the pinned snapshot's VERSION is rejected.
+with tempfile.TemporaryDirectory() as temporary:
+    root=Path(temporary)
+    component,manifest=prepare(root)
+    manifest['version']='0.0.0'
+    path=root/'manifest.json'
+    path.write_text(json.dumps(manifest))
+    try:
+        b.load_cc2_control(component,path)
+    except RuntimeError as error:
+        assert 'identity mismatch' in str(error)
+    else:
+        raise AssertionError('manifest with another version accepted')
 
 print('PASS: CC2 Control files, optional locales, permissions, init links and persistent-state separation.')

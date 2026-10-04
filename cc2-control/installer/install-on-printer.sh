@@ -78,7 +78,7 @@ tries=0
 # seconds for hardware initialization. Leave time for MQTT registration too.
 while [ "$tries" -lt 120 ]; do
     RESULT=$(wget -qO- http://127.0.0.1:8081/api/health 2>/dev/null || true)
-    case "$RESULT" in *'"service":"cc2-control"'*'"version":"1.1.31"'*)
+    case "$RESULT" in *'"service":"cc2-control"'*'"version":"@VERSION@"'*)
         RUN_PID=$(pidof cc2-control 2>/dev/null || true)
         case "$RUN_PID" in ''|*' '*) ;; *)
             RUN_HASH=$(sha256sum "/proc/$RUN_PID/exe" 2>/dev/null | awk '{print $1}')

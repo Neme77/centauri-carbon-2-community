@@ -12,7 +12,7 @@ import zipfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-VERSION = '1.1.31'
+VERSION = (HERE.parent / 'VERSION').read_text().strip()
 
 def package(prepared, scripts, source, output):
     binary = (prepared / 'cc2-control').read_bytes()
@@ -31,7 +31,7 @@ def package(prepared, scripts, source, output):
     if 'web/index.html' not in files or 'web/locales/en.json' not in files:
         raise ValueError('Prepared UI is incomplete')
     for name in ('install-on-printer.sh', 'restore-on-printer.sh'):
-        text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash)
+        text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash).replace('@VERSION@', VERSION)
         files[name] = text.encode()
     files['build-info.json'] = (json.dumps({
         'version': VERSION, 'binary_sha256': binary_hash,
@@ -50,7 +50,7 @@ def package(prepared, scripts, source, output):
                 archive.addfile(entry, io.BytesIO(data))
     public = {name: (HERE / name).read_bytes() for name in
               ('Install-CC2-Control.ps1', 'Install-Windows.cmd', 'install-cc2-control.sh', 'README.md')}
-    public[f'cc2-control-{VERSION}-payload.tar.gz'] = payload.getvalue()
+    public['cc2-control-payload.tar.gz'] = payload.getvalue()
     public['cc2-control-sources.zip'] = source.read_bytes()
     public['SHA256SUMS'] = ''.join(hashlib.sha256(data).hexdigest() + '  ' + name + '\n'
         for name, data in sorted(public.items())).encode()
@@ -70,6 +70,6 @@ if __name__ == '__main__':
     parser.add_argument('--prepared', type=Path, default=ROOT / 'builder/current/components/cc2-control/prepared')
     parser.add_argument('--scripts', type=Path, default=HERE.parent / 'scripts')
     parser.add_argument('--source', type=Path, default=ROOT / 'builder/current/components/cc2-control/source/source.zip')
-    parser.add_argument('--output', type=Path, default=ROOT / 'output/CC2-Control-1.1.31-Serial-Discovery-Multiplatform-Update.zip')
+    parser.add_argument('--output', type=Path, default=ROOT / f'output/CC2-Control-{VERSION}-Multiplatform-Update.zip')
     args = parser.parse_args()
     package(args.prepared, args.scripts, args.source, args.output)
