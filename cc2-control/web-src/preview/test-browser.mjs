@@ -137,13 +137,18 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: labels['common.confirm'], exact: true }).click()
   await downloads.nth(1).waitFor()
   // A printer refusal reported by /api/printer is shown once, with the vendor meaning of its code.
+  let reportRefusal = false
   await page.route('**/api/printer', async route => {
     const response = await route.fetch()
     const data = await response.json()
-    data.printer_error = { sequence: 7, method: 1020, code: 1026, age: 0 }
+    if (reportRefusal) data.printer_error = { sequence: 7, method: 1020, code: 1026, age: 0 }
     await route.fulfill({ response, json: data })
   })
   await page.reload()
+  // Preferences and the Italian dictionary load asynchronously after mounting.
+  // Report a new refusal only once the localized UI is ready, as during normal use.
+  await create.first().waitFor()
+  reportRefusal = true
   await page.getByRole('alert').filter({ hasText: labels['printer.bed_mesh_missing'] }).waitFor()
   await page.unroute('**/api/printer')
   await Promise.all([page.waitForEvent('load'), page.locator('#preview-scene').selectOption('paused')])
