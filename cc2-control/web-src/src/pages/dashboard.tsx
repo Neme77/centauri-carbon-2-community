@@ -11,7 +11,8 @@ import { CameraCard, FanBar, Progress, Row } from '@/components/shared'
 import { ThermalChart } from '@/components/thermal'
 import { control, errText, notify } from '@/lib/api'
 import { QUICK_ASK, QUICK_CHOICES, quick, quickAlwaysAvailable, saveQuickActions } from '@/lib/quick'
-import { t, tState, tpl } from '@/lib/i18n'
+import { t, tpl } from '@/lib/i18n'
+import { stateText } from '@/lib/machine'
 import { num, duration } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
 import { health, openPage, type Page, printer, refreshHealth, refreshPrinter, view, zoffset } from '@/lib/state'
@@ -130,7 +131,7 @@ export const Dashboard = () => {
         </div>
         <div class="grid gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
           <Card class="flex flex-col">
-            <CardHead icon="file" title="common.current_job" end={tState(v.state)} />
+            <CardHead icon="file" title="common.current_job" end={stateText(v)} />
             <div
               title={v.rawFilename || undefined}
               class="cc2-job-filename mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]"

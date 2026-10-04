@@ -47,6 +47,7 @@ export function canvasHex(value: any, index: number) {
 
 export const canvas = store({
   model: null as ReturnType<typeof canvasModel>,
+  autoRefill: null as boolean | null, // null until the printer has reported the setting
   slot: 0,
   checked: '',
   optimistic: {} as Record<number, { colour: string; material: string; until: number }>,
@@ -54,8 +55,12 @@ export const canvas = store({
 
 export async function refreshCanvas() {
   try {
-    const model = canvasModel(await request('/api/canvas'))
-    canvas.set({ model, checked: new Date().toLocaleTimeString() })
+    const data = await request('/api/canvas')
+    canvas.set({
+      model: canvasModel(data),
+      autoRefill: typeof data?.auto_refill === 'boolean' ? data.auto_refill : null,
+      checked: new Date().toLocaleTimeString(),
+    })
   } catch {
     /* keep last */
   }

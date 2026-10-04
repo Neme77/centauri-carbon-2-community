@@ -1,9 +1,10 @@
 import { store, ls } from './store'
 import { request } from './api'
 import { duration, finishTime } from './format'
+import { subState } from './machine'
 
-export type Page = 'dashboard' | 'control' | 'job' | 'files' | 'bed' | 'canvas' | 'console' | 'settings'
-const PAGES: Page[] = ['dashboard', 'control', 'job', 'files', 'bed', 'canvas', 'console', 'settings']
+export type Page = 'dashboard' | 'control' | 'job' | 'files' | 'history' | 'bed' | 'canvas' | 'console' | 'settings'
+const PAGES: Page[] = ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']
 
 // Routes live in the URL hash (#files, #bed/screws): the backend only serves /, so no server change is needed.
 const route = () => {
@@ -119,6 +120,7 @@ export function view(d: any) {
   const homed = String(d?.motion?.homed_axes || '')
   return {
     state,
+    detail: subState(d?.machine),
     rawFilename,
     layer,
     total,

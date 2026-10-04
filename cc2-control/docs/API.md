@@ -39,7 +39,9 @@ Example response:
     "orca_print": true,
     "panda_compat": true,
     "material_presets": true,
-    "persistent_ui_preferences": true
+    "persistent_ui_preferences": true,
+    "print_history": true,
+    "canvas_auto_refill": true
   },
   "endpoints": {
     "printer": "/api/printer",
@@ -48,6 +50,7 @@ Example response:
     "files": "/api/gcode-files",
     "console": "/api/console",
     "preferences": "/api/preferences",
+    "history": "/api/history",
     "discovery": "/api/v1/system/info"
   },
   "runtime": {
@@ -77,3 +80,57 @@ Example response:
 - `GET /server/database/item?namespace=lane_data` exposes the cached Canvas trays as read-only AFC lanes for OrcaSlicer's Moonraker printer agent.
 
 No additional polling, process, thread, or MQTT subscription is created by these endpoints.
+
+## Printer replies to MQTT requests
+
+Print starts without calibration (method 1020), Canvas auto refill (2004), the print history (1036) and
+time-lapse rendering (1051) are published to the printer's MQTT API. HTTP `202 Accepted` means the request
+was sent; the printer answers later with `result.error_code`. `GET /api/printer` reports the latest non-zero
+code returned to CC2 Control's own requests, or `null`:
+
+```json
+"printer_error": {"sequence": 3, "method": 1020, "code": 1009, "age": 2}
+```
+
+`sequence` grows with every refusal and `age` is in seconds. Code meanings follow ELEGOO's elegoo-link SDK
+(see `NOTICE.md`), for example 1009 printer busy, 1021 print file not found, 1026 bed levelling data missing.
+`machine.sub_status` in the same response is the vendor sub-state; its meaning depends on `machine.status`.
+
+## Canvas auto refill
+
+- `GET /api/canvas` adds `"auto_refill": true|false`, or `null` until the printer has reported the setting
+  (full Canvas replies carry it; status deltas may not).
+- `POST /api/canvas/auto-refill` with body `on` or `off` sends method 2004. It answers `409` while the printer
+  has not reported the setting. After the printer accepts the change, CC2 Control requests the Canvas state
+  again so the new value is read back from the printer.
+
+## Print history and time-lapse videos
+
+- `POST /api/history/refresh` sends method 1036 (one request in flight at a time).
+- `GET /api/history` returns what CC2 Control holds; it never contacts the printer:
+
+  ```json
+  {"available": true, "pending": false, "generating": false, "age": 4, "error_code": 0,
+   "reply": {"id": 1036, "method": 1036, "result": {"error_code": 0, "history_task_list": [
+     {"task_id": "...", "task_name": "part.gcode", "begin_time": 1790895600, "end_time": 1790897160,
+      "task_status": 1, "time_lapse_video_status": 2, "time_lapse_video_url": "video/part.gcode20260101120000.mp4",
+      "time_lapse_video_size": 4839487, "time_lapse_video_duration": 12}]}}}
+  ```
+
+  `reply` is the printer's latest successful reply, unchanged. `error_code` is the code of the latest reply
+  (`-1` none yet, `-2` larger than the 256 KiB CC2 Control keeps). `task_status`: 1 completed, 2 and 3
+  stopped, 4 printing, 5 paused. `time_lapse_video_status`: 0 not recorded, 1 frames not rendered yet,
+  2 MP4 ready, 3 rendering failed.
+- `POST /api/history/timelapse` with a `task_id` as body sends method 1051 to render that job's frames into
+  an MP4. It requires status 1 or 3, an Idle printer with fresh telemetry, and no other rendering in progress
+  (`generating`). The printer acknowledges at once (`result.url` is the future video path) and renders in
+  machine state 12 (Timelapse generation, sub-state 3020); when it leaves that state CC2 Control requests
+  the history again (also after 30 s if rendering never started, and after 10 minutes at most).
+- `GET /api/history/timelapse?task=<task_id>` streams a ready MP4 (`video/mp4`, attachment). CC2 Control
+  fetches it from the printer's own HTTP service on loopback with the LAN access code, which never reaches
+  the browser, and shares the two-transfer limit of G-code downloads. That service sends `Content-Length`
+  together with chunked framing and keeps the connection open after the response; CC2 Control relays the
+  chunked framing and ends the transfer at the last chunk.
+
+The printer lists its last 50 jobs (`result.total` was 50 on the tested printer) and ignores
+`offset`/`limit` parameters.

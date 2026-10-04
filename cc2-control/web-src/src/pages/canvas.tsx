@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
-import { ArrowBigDown, ArrowBigUp, Check, Info, Palette, RefreshCw } from 'lucide-preact'
+import { ArrowBigDown, ArrowBigUp, Check, Info, Palette, RefreshCw, Repeat } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -128,8 +128,9 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
 }
 
 export const Canvas = () => {
-  const { model, slot, optimistic, checked } = canvas.use()
+  const { model, autoRefill, slot, optimistic, checked } = canvas.use()
   const [dialog, setDialog] = useState(false)
+  const [refillBusy, setRefillBusy] = useState(false)
   // Refresh while the page is open, except behind the material dialog.
   useEffect(() => (dialog ? undefined : poll(refreshCanvas, 2000)), [dialog])
   const ok = Boolean(model?.connected)
@@ -139,6 +140,20 @@ export const Canvas = () => {
       setTimeout(refreshCanvas, 600)
     } catch (e) {
       notify(errText(e), 'error')
+    }
+  }
+  // Readback comes from the printer: CC2 Control asks for the Canvas state again once the change is accepted.
+  const toggleRefill = async () => {
+    if (autoRefill === null) return
+    setRefillBusy(true)
+    try {
+      await post('/api/canvas/auto-refill', autoRefill ? 'off' : 'on')
+      notify(t('common.command_accepted'))
+      setTimeout(refreshCanvas, 1500)
+    } catch (e) {
+      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+    } finally {
+      setRefillBusy(false)
     }
   }
   const slots = [0, 1, 2, 3].map(i => {
@@ -288,6 +303,26 @@ export const Canvas = () => {
                   </small>
                 </Button>
               ))}
+            </div>
+            <div class="mt-3 border-t border-edge pt-3">
+              <Button
+                wide
+                class="justify-between"
+                disabled={!ok || autoRefill === null || refillBusy}
+                aria-pressed={autoRefill === true}
+                onClick={toggleRefill}
+              >
+                <span class="flex items-center gap-2">
+                  <Repeat {...I} />
+                  {t('canvas.auto_refill')}
+                </span>
+                <small class={autoRefill ? 'text-cyan' : 'text-muted'}>
+                  {autoRefill === null
+                    ? t('canvas.auto_refill_not_reported')
+                    : t(autoRefill ? 'canvas.auto_refill_on' : 'canvas.auto_refill_off')}
+                </small>
+              </Button>
+              <p class="mt-2 text-[13px] text-muted">{t('canvas.auto_refill_hint')}</p>
             </div>
           </Card>
           <Card>
