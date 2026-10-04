@@ -131,17 +131,28 @@ try {
   }
   reject = true
   await page.clock.install()
+  await page.evaluate(() => {
+    window.__cc2CameraErrors = 0
+    document.addEventListener('error', e => {
+      if (e.target instanceof HTMLImageElement && e.target.closest('.cc2-camera-frame'))
+        window.__cc2CameraErrors++
+    }, true)
+  })
   await start.click()
   const baseline = requests
   await page.getByRole('button', { name: 'Retry now', exact: true }).waitFor()
   const retryNow = page.getByRole('button', { name: 'Retry now', exact: true })
+  const firstError = await page.evaluate(() => window.__cc2CameraErrors)
   await retryNow.click()
   await wait(() => requests > baseline, 'manual retry must open a new request')
+  await page.waitForFunction(n => window.__cc2CameraErrors > n, firstError)
   for (const delay of [2500, 5000, 10000, 20000, 30000]) {
     const before = requests
+    const failures = await page.evaluate(() => window.__cc2CameraErrors)
     await retryNow.waitFor()
     await page.clock.runFor(delay)
     await wait(() => requests > before, 'automatic retry must fire')
+    await page.waitForFunction(n => window.__cc2CameraErrors > n, failures)
   }
   await page.getByText('Camera stream unavailable. Press Retry to try again.', { exact: true }).waitFor()
   const exhausted = requests
