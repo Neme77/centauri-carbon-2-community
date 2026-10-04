@@ -80,15 +80,29 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     c.fillText(`${L.back} ↑`, w / 2, 13)
     return
   }
+  // Frame absolute probe offsets without changing their reported Z values.
+  const zCentre = (zMin + zMax) / 2,
+    zSpan = Math.max(0.42, (zMax - zMin) * 1.4),
+    zGain = 0.42 / zSpan
   const { yaw, pitch, zoom, scale } = cam
-  const unit = Math.min(w / 365, h / 285) * zoom,
-    origin = { x: w * 0.49, y: h * 0.59 }
+  // Fit at the reference angle so dragging rotates without changing the zoom.
+  const frame = defaultCam()
+  const extent = Math.abs(Math.cos(frame.yaw)) + Math.abs(Math.sin(frame.yaw)),
+    unit =
+      Math.min(
+        Math.max(1, w - 140) / (250 * extent),
+        Math.max(1, h - 90) / (250 * extent * Math.sin(frame.pitch) + 189 * scale)
+      ) * zoom,
+    origin = { x: w / 2, y: (h - 20) / 2 }
   const project = (x: number, y: number, z: number) => {
     x -= 125
     y -= 125
     const xx = x * Math.cos(yaw) - y * Math.sin(yaw),
       yy = x * Math.sin(yaw) + y * Math.cos(yaw)
-    return { x: origin.x + xx * unit, y: origin.y - yy * unit * Math.sin(pitch) - z * unit * 450 * scale }
+    return {
+      x: origin.x + xx * unit,
+      y: origin.y - yy * unit * Math.sin(pitch) - (z - zCentre) * zGain * unit * 450 * scale,
+    }
   }
   const line = (a: any, b: any, color = '#245064', width = 1) => {
     c.strokeStyle = color
@@ -98,8 +112,8 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     c.lineTo(b.x, b.y)
     c.stroke()
   }
-  const floor = -0.18,
-    ceiling = 0.24
+  const floor = zCentre - zSpan / 2,
+    ceiling = zCentre + zSpan / 2
   for (let i = 0; i <= 5; i++) {
     const t = i * 50
     line(project(t, 0, floor), project(t, 250, floor))
@@ -113,7 +127,8 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     p = project(250, t, floor)
     c.fillText(String(t), p.x + 20, p.y + 4)
   }
-  for (let z = floor; z <= ceiling + 0.001; z += 0.105) {
+  for (let i = 0; i <= 4; i++) {
+    const z = floor + (zSpan * i) / 4
     line(project(0, 0, z), project(0, 250, z), '#1f4557')
     line(project(0, 250, z), project(250, 250, z), '#1f4557')
     const p = project(0, 0, z)

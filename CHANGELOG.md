@@ -5,6 +5,7 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Frame the 3D bed mesh around its actual height range so meshes with large positive or negative offsets remain visible.
 - Bound automatic Canvas discovery across MQTT reconnects, allow explicit Sync recovery and expose discovery counters in MQTT diagnostics.
 
 - Print setup shows each G-code tool’s filament colour and material beside its Canvas slot selector, with an explicit fallback when metadata is missing.

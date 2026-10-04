@@ -8,7 +8,7 @@ import subprocess
 import sys
 import uuid
 
-BUILDER_SHA256 = '89507e642f67dc226e3ede4bbacb85eb125bd7f778179569befccf378902657b'
+BUILDER_SHA256 = '65076c2e9647ff52333c80c0e1ef40e114d9a317b5d56ac8eda7e7f43e5f3f5a'
 
 def sha256(path):
     h = hashlib.sha256()

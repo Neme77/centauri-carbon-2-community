@@ -25,13 +25,14 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`45f254fdcaaddb5cd005afbcb218f82d24db9b72`, incorporating the validated
+`f4beeb3f5149ffc1973bb89be3d903fe62b5d3e3`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,
 current UI and five languages, speed/flow controls, 128 MiB uploads, live Z offset,
 A/B calibration, adaptive mesh start/rendering, emergency recovery and downloads.
 The Canvas print popup identifies each G-code filament by its colour and material before slot mapping.
+The 3D bed mesh frames absolute positive and negative probe offsets using the actual height range.
 Automatic Canvas discovery is bounded across MQTT reconnects, with explicit Sync recovery and diagnostic counters.
 The runtime identity remains 1.1.31, matching the printer-tested build.
 Preparation runs the complete component host suite before the ARM build and
