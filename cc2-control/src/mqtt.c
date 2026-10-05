@@ -187,7 +187,7 @@ static int discovery_due(unsigned int attempts,time_t last,time_t now) {
 }
 
 size_t mqtt_discovery_diagnostic(const mqtt_client *c,char *out,size_t capacity) {
-    const char *state=!c->connected?"disconnected":c->canvas_discovery_complete?"complete":
+    const char *state=!c->connected?"disconnected":c->canvas_discovery_complete&&c->registered?"complete":
         (!c->registered&&c->automatic_registration_attempts>=DISCOVERY_LIMIT)||
         (c->registered&&c->automatic_canvas_attempts>=DISCOVERY_LIMIT)?"exhausted; use Sync":
         time(NULL)<c->discovery_ready_at?"settling":"discovering";
@@ -755,8 +755,10 @@ void mqtt_tick(mqtt_client *c) {
         (void)discover_serial_http(c);
     }
     /* Delay automatic discovery after every successful MQTT connection, not
-     * only cold boot. Heartbeats and passive telemetry continue independently. */
-    if(now>=c->discovery_ready_at && !c->canvas_discovery_complete) {
+     * only cold boot. Heartbeats and passive telemetry continue independently.
+     * Another client's Canvas reply can complete Canvas discovery during the
+     * delay; registration, which every request needs, still follows. */
+    if(now>=c->discovery_ready_at && (!c->canvas_discovery_complete || !c->registered)) {
         if(c->serial[0] && discovery_due(c->automatic_registration_attempts,c->last_registration_request,now)) {
             c->automatic_registration_attempts++;
             (void)send_registration(c);
