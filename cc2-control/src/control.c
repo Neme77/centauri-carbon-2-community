@@ -244,3 +244,21 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     }
     return reject(reason,reason_cap,"Unknown or unsupported control action");
 }
+
+int control_idle_motors_due(control_idle_motors *s,const control_idle_sample *in,time_t now){
+    /* The board fan runs while a stepper is enabled or a heater has a target,
+     * so with both targets at zero it reports energised steppers. Unknown
+     * telemetry, any job (a paused print included) or a running console
+     * command restarts the wait, and so does any movement. */
+    int idle=in->valid&&in->machine_status==1&&!in->console_busy&&
+        strcmp(in->print_state,"printing")!=0&&strcmp(in->print_state,"paused")!=0&&
+        in->nozzle_target<=0.0&&in->bed_target<=0.0&&in->velocity<0.1&&in->board_fan>0.0;
+    if(!idle){s->holding=0;return 0;}
+    if(!s->holding||fabs(in->x-s->x)>0.01||fabs(in->y-s->y)>0.01||fabs(in->z-s->z)>0.01){
+        s->holding=1;s->released=0;s->since=now;s->x=in->x;s->y=in->y;s->z=in->z;
+        return 0;
+    }
+    if(s->released||now-s->since<CONTROL_IDLE_MOTORS_SECONDS)return 0;
+    s->released=1;
+    return 1;
+}
