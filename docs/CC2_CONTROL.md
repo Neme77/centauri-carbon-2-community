@@ -44,6 +44,8 @@ CC2 Control can be loaded directly in OrcaSlicer as the printer Device page. V4.
 
 For Canvas prints, the spool-selection popup can also appear inside the OrcaSlicer Device view without requiring a manual refresh.
 
+Uploads never overwrite a file. When OrcaSlicer sends a name that already exists, for example after re-slicing the same model, CC2 Control saves the upload as `name (1).gcode`, then `name (2).gcode` and so on, up to 99 copies. An upload-and-print then confirms that copy. Browser uploads still refuse an existing name, so the operator can choose another one.
+
 ## LAN access-code revalidation
 
 If the LAN access code is changed on the printer, open **Settings → Connection**, enter the replacement code and select **Change / Revalidate**. CC2 Control writes the new credential atomically and restarts only its own service so MQTT, Canvas and snapshot state can be established again without rebooting or power-cycling the printer.

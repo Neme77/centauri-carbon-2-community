@@ -977,6 +977,29 @@ static int orca_file_name_ok(const char *name){
         if(*p<32||*p==127||*p=='/'||*p=='\\'||*p==':'||*p=='?'||*p=='#')return 0;
     return 1;
 }
+/* OrcaSlicer cannot rename a refused upload, and re-slicing the same model
+ * repeats its name. A taken name is therefore saved as "name (1).gcode",
+ * "name (2).gcode" and so on; an existing file is never overwritten. */
+#define ORCA_NAME_COPIES_MAX 99
+static int orca_copy_name(char out[PATH_MAX_LOCAL],const char *name,unsigned copy){
+    size_t length=strlen(name);
+    if(length<6)return 0;
+    int n=copy?snprintf(out,PATH_MAX_LOCAL,"%.*s (%u)%s",(int)(length-6),name,copy,name+length-6)
+              :snprintf(out,PATH_MAX_LOCAL,"%s",name);
+    return n>0&&n<PATH_MAX_LOCAL&&n<=NAME_MAX;
+}
+/* The first free name from copy number `first` on: its number, -1 when none
+ * fits, or -2 when the destination cannot be inspected. */
+static int orca_free_name(const char *root,const char *name,unsigned first,
+                          char chosen[PATH_MAX_LOCAL],char *destination,size_t capacity){
+    for(unsigned copy=first;copy<=ORCA_NAME_COPIES_MAX;copy++){
+        struct stat st;
+        if(!orca_copy_name(chosen,name,copy)||
+           snprintf(destination,capacity,"%s/%s",root,chosen)>=(int)capacity)return -1;
+        if(lstat(destination,&st)!=0)return errno==ENOENT?(int)copy:-2;
+    }
+    return -1;
+}
 static int orca_get_boundary(const char *request,char boundary[80]){
     const char *p=request;
     while(*p){
@@ -1068,7 +1091,8 @@ static void *orca_upload_worker(void *arg){
     int status=400;const char *status_text="Bad Request";
     int output=-1,reserve=-1;
     char spool[PATH_MAX_LOCAL*2]="",temporary[PATH_MAX_LOCAL*2]="",destination[PATH_MAX_LOCAL*2]="";
-    char filename[PATH_MAX_LOCAL]="";
+    char filename[PATH_MAX_LOCAL]="",saved[PATH_MAX_LOCAL]="";
+    int copy=0;
     FILE *input=NULL;
     size_t bytes=0;long file_start=-1,file_end=-1;
     char boundary[80];
@@ -1133,11 +1157,10 @@ static void *orca_upload_worker(void *arg){
         pthread_mutex_unlock(&orca_pending_mutex);
         if(occupied){status=409;status_text="Conflict";error="Another upload-and-print awaits Canvas confirmation";goto fail;}
     }
-    if(snprintf(destination,sizeof(destination),"%s/%s",root,filename)>=(int)sizeof(destination)||
-       snprintf(temporary,sizeof(temporary),"%s/.cc2-orca-file-XXXXXX",root)>=(int)sizeof(temporary)){error="Storage path too long";goto fail;}
-    struct stat st;
-    if(lstat(destination,&st)==0){status=409;status_text="Conflict";error="File already exists";goto fail;}
-    if(errno!=ENOENT){error="Cannot inspect destination";goto fail;}
+    if(snprintf(temporary,sizeof(temporary),"%s/.cc2-orca-file-XXXXXX",root)>=(int)sizeof(temporary)){error="Storage path too long";goto fail;}
+    copy=orca_free_name(root,filename,0,saved,destination,sizeof(destination));
+    if(copy==-2){error="Cannot inspect destination";goto fail;}
+    if(copy<0){status=409;status_text="Conflict";error="File already exists";goto fail;}
     if(!upload_has_space(root,(size_t)(file_end-file_start),1)){status=507;status_text="Insufficient Storage";error="Insufficient free space for G-code file";goto fail;}
     output=mkstemp(temporary);
     if(output<0){status=507;status_text="Insufficient Storage";error="Cannot create G-code file";goto fail;}
@@ -1154,10 +1177,15 @@ static void *orca_upload_worker(void *arg){
     }
     if(fsync(output)!=0 || close(output)!=0){output=-1;status=507;status_text="Insufficient Storage";error="Cannot finalize G-code file";goto fail;}output=-1;
     /* Recheck before publication; upload-only may continue during printing. */
-    if(lstat(destination,&st)==0){status=409;status_text="Conflict";error="File already exists";goto fail;}
     if(!(print_requested ? gcode_idle_for_mutation(job->mqtt) : gcode_ready_for_upload(job->mqtt))){status=409;status_text="Conflict";error="Printer state changed during upload";goto fail;}
-    reserve=open(destination,O_WRONLY|O_CREAT|O_EXCL,0600);
-    if(reserve<0){status=errno==EEXIST?409:507;status_text=status==409?"Conflict":"Insufficient Storage";error="Cannot reserve destination";goto fail;}
+    /* O_EXCL is the authoritative check: a name taken since the scan moves
+     * the file on to the next free copy name. */
+    while((reserve=open(destination,O_WRONLY|O_CREAT|O_EXCL,0600))<0){
+        if(errno!=EEXIST){status=507;status_text="Insufficient Storage";error="Cannot reserve destination";goto fail;}
+        copy=orca_free_name(root,filename,(unsigned)copy+1,saved,destination,sizeof(destination));
+        if(copy==-2){error="Cannot inspect destination";goto fail;}
+        if(copy<0){status=409;status_text="Conflict";error="File already exists";goto fail;}
+    }
     close(reserve);reserve=-1;
     if(rename(temporary,destination)!=0){unlink(destination);status=507;status_text="Insufficient Storage";error="Cannot publish file";goto fail;}
     temporary[0]=0;
@@ -1172,14 +1200,14 @@ static void *orca_upload_worker(void *arg){
             error="Upload finished, but another print is awaiting Canvas confirmation";
             status=409;status_text="Conflict";goto fail;
         }
-        snprintf(orca_pending_filename,sizeof(orca_pending_filename),"%s",filename);
+        snprintf(orca_pending_filename,sizeof(orca_pending_filename),"%s",saved);
         orca_pending_created=time(NULL);
         pending_generation=++orca_pending_generation;
         if(!pending_generation)pending_generation=++orca_pending_generation;
         pthread_mutex_unlock(&orca_pending_mutex);
     }
     {char safe_name[PATH_MAX_LOCAL*2];
-     json_escape(safe_name,sizeof(safe_name),filename);
+     json_escape(safe_name,sizeof(safe_name),saved);
      int n=snprintf(reply,sizeof(reply),"{\"files\":{\"local\":{\"name\":\"%s\",\"origin\":\"local\",\"size\":%ld,\"refs\":{\"resource\":\"/api/files/local/%s\"}}},\"done\":true,\"uploaded\":true,\"printed\":false,\"awaiting_canvas\":%s,\"generation\":%lu}\n",safe_name,file_end-file_start,safe_name,print_requested?"true":"false",pending_generation);
      if(n>0&&(size_t)n<sizeof(reply)){reply_len=n;status=201;status_text="Created";}}
     goto cleanup;
