@@ -59,6 +59,8 @@
   "bed.side_a_default": "A 面 · 默认",
   "bed.side_b_default1": "B 面 · 默认 1",
   "bed.start_a_new_bed_mesh_calibration": "在 60 °C 下开始新的热床网格校准？",
+  "bed.calibration_homes_first": "打印机尚未回零，将先对 X、Y、Z 回零。",
+  "bed.homing_did_not_finish": "回零未完成，未开始校准。",
   "bed.start_a_protected_calibration_when": "空闲时开始受保护校准。",
   "bed.start_the_four_screw_load_cell": "开始四点螺丝测力测量？",
   "bed.the_firmware_did_not_expose_bed": "固件未提供热床网格数据",

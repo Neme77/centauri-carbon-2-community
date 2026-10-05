@@ -59,6 +59,8 @@
   "bed.side_a_default": "Lato A · default",
   "bed.side_b_default1": "Lato B · default1",
   "bed.start_a_new_bed_mesh_calibration": "Avviare una nuova calibrazione della mesh del piatto a 60 °C?",
+  "bed.calibration_homes_first": "Homing non eseguito: la stampante esegue prima l’homing di X, Y e Z.",
+  "bed.homing_did_not_finish": "L’homing non è terminato, quindi la calibrazione non è stata avviata.",
   "bed.start_a_protected_calibration_when": "Avvia una calibrazione protetta a stampante inattiva.",
   "bed.start_the_four_screw_load_cell": "Avviare la misurazione con la cella di carico sulle quattro viti?",
   "bed.the_firmware_did_not_expose_bed": "Il firmware non ha esposto i dati della mesh del piatto",

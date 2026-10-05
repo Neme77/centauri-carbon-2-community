@@ -25,7 +25,7 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`8e71cfd7f8c66215376ab98eae13263ed8809c0d`, incorporating the validated
+`cd98aa35e0372aed76900ecb0c2448ed389d4544`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,
@@ -36,7 +36,7 @@ The 3D bed mesh frames absolute positive and negative probe offsets using the ac
 Automatic Canvas discovery is bounded across MQTT reconnects, with explicit Sync recovery and diagnostic counters; registration still follows when another client's Canvas reply completes discovery first.
 Files lists the newest 128 G-code files of each storage with their total, and refused browser uploads report the error.
 An OrcaSlicer upload with a taken name is saved as a numbered copy instead of being refused.
-Bed Levelling keeps a build-plate library with each plate's mesh and Z offset; mounting a plate whose mesh is not in its side's slot writes that slot and restarts the printer.
+A bed mesh calibration from Bed Levelling homes X, Y and Z first when the printer is not homed.
 The runtime identity remains 1.1.31, matching the printer-tested build.
 Preparation runs the complete component host suite before the ARM build and
 records source commit, archive checksum and every installed file checksum.
