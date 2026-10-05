@@ -67,5 +67,51 @@ int main(void){
     mqtt.connected=0;expect(!control_build_script("tune:flow:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked disconnected");mqtt.connected=1;
     mqtt.registered=0;expect(!control_build_script("tune:flow:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked unregistered");mqtt.registered=1;
     mqtt.filename[0]=0;expect(!control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked without active file");
+
+    /* After homing or calibration the steppers stay energised and keep the
+     * board fan running; they are released after ten stationary idle minutes. */
+    const time_t limit=CONTROL_IDLE_MOTORS_SECONDS;
+    control_idle_motors idle={0};
+    control_idle_sample held={.valid=1,.machine_status=1,.print_state="",.board_fan=1.0,.x=52.5,.y=264.0,.z=50.0};
+    control_idle_sample s=held;
+    expect(!control_idle_motors_due(&idle,&s,1000),"idle release starts its wait");
+    expect(!control_idle_motors_due(&idle,&s,1000+limit-1),"idle release waits the full period");
+    expect(control_idle_motors_due(&idle,&s,1000+limit),"idle release is due after the full period");
+    expect(!control_idle_motors_due(&idle,&s,1000+limit+1)&&!control_idle_motors_due(&idle,&s,1000+3*limit),"idle release is sent once per stationary period");
+    s.x+=0.1;
+    expect(!control_idle_motors_due(&idle,&s,1000+3*limit+1),"movement after an unconfirmed release restarts the wait");
+    expect(control_idle_motors_due(&idle,&s,1000+4*limit+1),"idle release retries after another full period");
+
+    idle=(control_idle_motors){0};s=held;
+    expect(!control_idle_motors_due(&idle,&s,0),"idle release armed before movement");
+    s.z-=0.2;
+    expect(!control_idle_motors_due(&idle,&s,limit-1)&&!control_idle_motors_due(&idle,&s,2*limit-2),"movement restarts the idle wait");
+    expect(control_idle_motors_due(&idle,&s,2*limit-1),"idle release counts from the last movement");
+
+    idle=(control_idle_motors){0};s=held;
+    expect(!control_idle_motors_due(&idle,&s,0),"idle release armed before steppers are released");
+    s.board_fan=0.0;
+    expect(!control_idle_motors_due(&idle,&s,limit),"no release once the board fan has stopped");
+    s.board_fan=1.0;
+    expect(!control_idle_motors_due(&idle,&s,limit+1)&&control_idle_motors_due(&idle,&s,2*limit+1),"re-enabled steppers start a new wait");
+
+    const char *blockers[]={"stale telemetry","printing","paused print","calibrating","console command",
+        "nozzle target","bed target","moving"};
+    for(int i=0;i<(int)(sizeof(blockers)/sizeof(blockers[0]));i++){
+        idle=(control_idle_motors){0};s=held;
+        expect(!control_idle_motors_due(&idle,&s,0),"idle release armed before a blocker");
+        if(i==0)s.valid=0;
+        else if(i==1)s.machine_status=2;
+        else if(i==2){s.machine_status=1;s.print_state="paused";}
+        else if(i==3)s.machine_status=5;
+        else if(i==4)s.console_busy=1;
+        else if(i==5)s.nozzle_target=140.0;
+        else if(i==6)s.bed_target=60.0;
+        else s.velocity=5.0;
+        expect(!control_idle_motors_due(&idle,&s,limit)&&!control_idle_motors_due(&idle,&s,3*limit),blockers[i]);
+        s=held;
+        expect(!control_idle_motors_due(&idle,&s,3*limit+1),"the wait restarts once the blocker clears");
+        expect(control_idle_motors_due(&idle,&s,4*limit+1),"release follows a full period after the blocker");
+    }
     return 0;
 }
