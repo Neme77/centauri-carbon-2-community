@@ -42,6 +42,17 @@ int main(void){
  /* Sync can rearm an exhausted registration without an application session. */
  c.registered=0;c.canvas_discovery_complete=0;c.automatic_registration_attempts=9;
  assert(!mqtt_sync_canvas(&c));clock_now+=15;mqtt_tick(&c);drain();assert(c.automatic_registration_attempts==1);
+ /* Another client's Canvas reply completes discovery during the settle delay of an
+  * unregistered session: registration still follows, Canvas requests do not. */
+ mqtt_close(&c);close(peer);mqtt_init(&c);strcpy(c.serial,"TEST");attach();
+ c.canvas_discovery_complete=1;
+ clock_now+=15;mqtt_tick(&c);drain();
+ assert(c.automatic_registration_attempts==1&&!c.automatic_snapshot_attempts&&!c.automatic_canvas_attempts);
+ mqtt_discovery_diagnostic(&c,status,sizeof(status));assert(!strstr(status,"Canvas discovery: complete"));
+ clock_now+=10;mqtt_tick(&c);drain();assert(c.automatic_registration_attempts==2);
+ c.registered=1;clock_now+=60;mqtt_tick(&c);drain();
+ assert(c.automatic_registration_attempts==2&&!c.automatic_snapshot_attempts&&!c.automatic_canvas_attempts);
+ mqtt_discovery_diagnostic(&c,status,sizeof(status));assert(strstr(status,"Canvas discovery: complete"));
  mqtt_close(&c);close(peer);assert(mqtt_sync_canvas(&c)==-1);
  return 0;
 }

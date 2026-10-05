@@ -25,7 +25,7 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`7e4cc0d7a59fe16330268a287cea0cc2352fe402`, incorporating the validated
+`b24d445f298610647e62d51e07cac07f3e778fb6`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,
@@ -33,10 +33,9 @@ current UI and five languages, speed/flow controls, 128 MiB uploads, live Z offs
 A/B calibration, adaptive mesh start/rendering, emergency recovery and downloads.
 The Canvas print popup identifies each G-code filament by its colour and material before slot mapping.
 The 3D bed mesh frames absolute positive and negative probe offsets using the actual height range.
-Automatic Canvas discovery is bounded across MQTT reconnects, with explicit Sync recovery and diagnostic counters.
+Automatic Canvas discovery is bounded across MQTT reconnects, with explicit Sync recovery and diagnostic counters; registration still follows when another client's Canvas reply completes discovery first.
 Files lists the newest 128 G-code files of each storage with their total, and refused browser uploads report the error.
 An OrcaSlicer upload with a taken name is saved as a numbered copy instead of being refused.
-A bed mesh calibration from Bed Levelling homes X, Y and Z first when the printer is not homed.
 The runtime identity remains 1.1.31, matching the printer-tested build.
 Preparation runs the complete component host suite before the ARM build and
 records source commit, archive checksum and every installed file checksum.
