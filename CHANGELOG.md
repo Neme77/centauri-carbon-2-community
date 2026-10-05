@@ -5,6 +5,7 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Bed mesh calibration from Bed Levelling homes X, Y and Z first when the printer is not homed, instead of being refused by the console.
 - An OrcaSlicer upload whose name already exists is saved as `name (1).gcode` and so on instead of being refused with HTTP 409; nothing is overwritten.
 
 ## CC2 Control 1.1.31fix — 2026-10-04
