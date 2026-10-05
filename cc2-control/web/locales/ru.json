@@ -59,6 +59,8 @@
   "bed.side_a_default": "Сторона A · default",
   "bed.side_b_default1": "Сторона B · default1",
   "bed.start_a_new_bed_mesh_calibration": "Запустить новую калибровку сетки стола при 60 °C?",
+  "bed.calibration_homes_first": "Оси не запаркованы, поэтому сначала принтер запаркует X, Y и Z.",
+  "bed.homing_did_not_finish": "Парковка не завершилась, калибровка не запущена.",
   "bed.start_a_protected_calibration_when": "Защищённая калибровка, только в простое.",
   "bed.start_the_four_screw_load_cell": "Запустить замер четырёх винтов тензодатчиком?",
   "bed.the_firmware_did_not_expose_bed": "Прошивка не передала данные сетки стола",

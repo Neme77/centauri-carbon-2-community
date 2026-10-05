@@ -59,6 +59,8 @@
   "bed.side_a_default": "Side A · default",
   "bed.side_b_default1": "Side B · default1",
   "bed.start_a_new_bed_mesh_calibration": "Start a new bed mesh calibration at 60 °C?",
+  "bed.calibration_homes_first": "The printer is not homed, so it homes X, Y and Z first.",
+  "bed.homing_did_not_finish": "Homing did not finish, so the calibration was not started.",
   "bed.start_a_protected_calibration_when": "Start a protected calibration when idle.",
   "bed.start_the_four_screw_load_cell": "Start the four-screw load-cell measurement?",
   "bed.the_firmware_did_not_expose_bed": "The firmware did not expose bed mesh data",

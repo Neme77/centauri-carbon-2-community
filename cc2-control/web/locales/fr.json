@@ -59,6 +59,8 @@
   "bed.side_a_default": "Face A · default",
   "bed.side_b_default1": "Face B · default1",
   "bed.start_a_new_bed_mesh_calibration": "Lancer un nouvel étalonnage du maillage du plateau à 60 °C ?",
+  "bed.calibration_homes_first": "L’origine n’est pas prise : l’imprimante prend d’abord l’origine de X, Y et Z.",
+  "bed.homing_did_not_finish": "La prise d’origine n’a pas abouti ; l’étalonnage n’a pas été lancé.",
   "bed.start_a_protected_calibration_when": "Démarrer une calibration protégée à l’arrêt.",
   "bed.start_the_four_screw_load_cell": "Lancer la mesure par cellule de charge sur les quatre vis ?",
   "bed.the_firmware_did_not_expose_bed": "Le firmware n'a pas exposé les données du maillage du plateau",
