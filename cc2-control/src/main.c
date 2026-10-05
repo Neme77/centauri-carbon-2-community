@@ -3118,6 +3118,21 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }
 
+/* Release the steppers the firmware leaves energised once the printer has
+ * stood idle with its heaters off; see control_idle_motors_due(). */
+static control_idle_motors idle_motors;
+static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
+    control_idle_sample s={0};
+    s.valid=gcode_idle_for_mutation(mqtt)&&mqtt->have_position&&
+        uds_value(&telemetry,U_CF,&s.board_fan)&&uds_value(&telemetry,U_EG,&s.nozzle_target)&&
+        uds_value(&telemetry,U_BG,&s.bed_target)&&uds_value(&telemetry,U_LIVE_SPEED,&s.velocity);
+    s.machine_status=mqtt->machine_status;s.print_state=mqtt->print_state;
+    s.x=mqtt->x;s.y=mqtt->y;s.z=mqtt->z;
+    pthread_mutex_lock(&console->lock);s.console_busy=console->busy;pthread_mutex_unlock(&console->lock);
+    if(control_idle_motors_due(&idle_motors,&s,recovery_clock())&&send_local_gcode_script("M84")!=0)
+        idle_motors.holding=0; /* Not delivered: wait a full period before trying again. */
+}
+
 #define HTTP_PENDING_MAX 8
 typedef struct {
     int fd;
@@ -3358,6 +3373,7 @@ int main(int argc, char **argv) {
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
         if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
+        idle_motors_tick(&mqtt,&console);
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
         for(int i=0;i<HTTP_PENDING_MAX;i++){
             http_pending *p=&pending[i];if(p->fd<0)continue;

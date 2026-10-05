@@ -32,6 +32,12 @@ The dashboard now provides operational Quick Actions for Home All, All Heaters O
 
 A global Emergency Stop remains accessible from every page and requires a deliberate one-second press-and-hold before execution.
 
+## Idle motor release
+
+The CC2 firmware's `idle_timeout` only switches the heaters off; unlike stock Klipper it never releases the steppers. After homing, calibration or jogging they stay energised, and the mainboard fan (`controller_fan board_cooling_fan`, which runs while any stepper is enabled) keeps spinning indefinitely although the part, auxiliary and chamber fans read 0 %. On V4.2-R5 the fan was still at 100 % (about 6 700 rpm) half an hour after a Bed Mesh calibration, and `M84` stopped it at once.
+
+CC2 Control therefore sends `M84` once the printer has stood Idle for ten minutes with both heater targets at zero, no movement and no console command running, like Klipper's default `idle_timeout`. Printing, a paused print, any other machine state or stale telemetry restarts the wait, and the release is sent once per stationary period. Afterwards the axes must be homed again before manual moves.
+
 ## Settings and themes
 
 Settings are split into compact Connection, Safety, Integrations, Appearance and About panels.
