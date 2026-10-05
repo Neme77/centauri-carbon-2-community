@@ -283,12 +283,52 @@ const MeshCard = () => {
   )
 }
 
+// Probing needs homed axes, and the console refuses commands that may move an unhomed printer.
+const homedXYZ = (axes: unknown) => typeof axes === 'string' && ['x', 'y', 'z'].every(a => axes.includes(a))
+
 const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => {
   const [side, setSide] = useState('')
   const [calibrating, setCalibrating] = useState(false)
   const lock = useRef(false)
   const cancelWatch = useRef(() => {})
   useEffect(() => () => cancelWatch.current(), [])
+  // Polls `check` until it answers true or false (undefined: keep waiting); a thrown error, the time
+  // limit or leaving the page answers false.
+  const waitFor = (check: () => Promise<boolean | undefined>, limit: number, every: number) =>
+    new Promise<boolean>(resolve => {
+      const deadline = Date.now() + limit
+      let active = true
+      const stop = poll(async () => {
+        if (Date.now() >= deadline) return finish(false)
+        try {
+          const done = await check()
+          if (active && done !== undefined) finish(done)
+        } catch {
+          finish(false)
+        }
+      }, every)
+      const finish = (done: boolean) => {
+        if (!active) return
+        active = false
+        stop()
+        resolve(done)
+      }
+      cancelWatch.current = () => finish(false)
+    })
+  // The console worker knows exactly when its command has finished and whether it succeeded.
+  const consoleDone = (command: string) => async () => {
+    const status = await request('/api/console')
+    if (status?.command !== command) return false
+    return status?.completed ? Boolean(status.success) : undefined
+  }
+  // The console checks homing against the printer state, which follows G28 a moment later.
+  const homedNow = async () => {
+    try {
+      return homedXYZ((await request('/api/printer'))?.motion?.homed_axes) ? true : undefined
+    } catch {
+      return undefined
+    }
+  }
   return (
     <>
       <label class="mt-3 flex items-center gap-2 text-xs">
@@ -315,35 +355,23 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
               setCalibrating(true)
               try {
                 const label = t(side === 'default1' ? 'bed.side_b_default1' : 'bed.side_a_default')
-                if (!(await ask(`${t('bed.start_a_new_bed_mesh_calibration')}\n\n${label}`))) return
+                const home = !homedXYZ(printer.get().data?.motion?.homed_axes)
+                const homing = home ? `\n\n${t('bed.calibration_homes_first')}` : ''
+                if (!(await ask(`${t('bed.start_a_new_bed_mesh_calibration')}\n\n${label}${homing}`))) return
+                if (home) {
+                  if (!(await sendConsole('G28'))) return
+                  if (
+                    !(await waitFor(consoleDone('G28'), 5 * 60_000, 2500)) ||
+                    !(await waitFor(homedNow, 30_000, 1000))
+                  ) {
+                    notify(t('bed.homing_did_not_finish'), 'error')
+                    return
+                  }
+                }
                 const command = `BED_MESH_CALIBRATE PROFILE=${side} BED_TEMP=60`
                 if (!(await sendConsole(command))) return
-                // The console worker knows exactly when the calibration command has finished.
-                // Poll only that local status while calibration is running, then fetch the new mesh once.
-                await new Promise<void>(resolve => {
-                  const deadline = Date.now() + 15 * 60_000
-                  let active = true
-                  const stop = poll(async () => {
-                    if (Date.now() >= deadline) return finish()
-                    try {
-                      const status = await request('/api/console')
-                      if (!active) return
-                      if (status?.command !== command) return finish()
-                      if (status?.completed) {
-                        if (status.success) reload()
-                        finish()
-                      }
-                    } catch {
-                      finish()
-                    }
-                  }, 2500)
-                  const finish = () => {
-                    active = false
-                    stop()
-                    resolve()
-                  }
-                  cancelWatch.current = finish
-                })
+                // Poll only the local console status while calibration is running, then fetch the new mesh once.
+                if (await waitFor(consoleDone(command), 15 * 60_000, 2500)) reload()
               } finally {
                 lock.current = false
                 setCalibrating(false)
