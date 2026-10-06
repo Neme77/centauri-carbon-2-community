@@ -64,6 +64,12 @@ jobs:
           git add --intent-to-add ../web
           git diff --exit-code -- ../web
 
+      - name: Install browser for print-temperature regression
+        run: npx playwright install --with-deps chromium
+
+      - name: Print-temperature browser regression
+        run: npm run test:print-temperatures
+
   sanitizers:
     name: CC2 Control (${{ matrix.sanitize }} sanitizer)
     runs-on: ubuntu-26.04
