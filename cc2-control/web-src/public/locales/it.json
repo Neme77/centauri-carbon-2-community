@@ -583,5 +583,6 @@
   "history.confirm_delete": "Cancellare queste {n} voci della cronologia? Non è possibile annullare. I file G-code e i video non vengono eliminati.",
   "history.delete_requested": "Cancellazione della cronologia richiesta.",
   "print.file_filament": "Filamento nel G-code",
-  "print.file_filament_unknown": "Colore/materiale non indicati nel file"
+  "print.file_filament_unknown": "Colore/materiale non indicati nel file",
+  "print.analysing_file": "Analisi del file in corso…"
 }
