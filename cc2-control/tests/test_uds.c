@@ -67,6 +67,21 @@ int main(void){
  uds_tick(&c,"/unused");assert(read(pair[1],out,sizeof(out)-1)<0);
  c.last_rx.tv_sec-=6;uds_tick(&c,"/unused");
  assert(c.fd==-1&&!strcmp(c.last_disconnect,"receive_timeout"));close(pair[1]);
- puts("PASS UDS initial/delta merge, ordering, scaling, job matching, stale fallback, fragmented frames and silence-only probes");
+ /* exclude_object values are kept as raw JSON, so /api/exclude-objects needs no query. */
+ uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
+ char live[1024];assert(uds_exclude_status(&c,live,sizeof(live))<0);
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":5,\"status\":{\"exclude_object\":{\"current_object\":\"B\"}}}}");
+ message(&c,"{\"id\":11,\"result\":{\"eventtime\":4,\"status\":{\"exclude_object\":{\"excluded_objects\":[\"A \\\"x\\\"\"],\"current_object\":\"A\"}}}}");
+ assert(!strcmp(c.current_object,"\"B\"")&&!strcmp(c.excluded_objects,"[\"A \\\"x\\\"\"]"));
+ assert(uds_exclude_status(&c,live,sizeof(live))>0);
+ assert(!strcmp(live,"{\"result\":{\"status\":{\"exclude_object\":{\"excluded_objects\":[\"A \\\"x\\\"\"],\"current_object\":\"B\"}}}}"));
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":6,\"status\":{\"exclude_object\":{\"current_object\":null}}}}");
+ assert(!strcmp(c.current_object,"null")&&uds_exclude_status(&c,live,10)<0);
+ char big[9100];int length=snprintf(big,sizeof(big),"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":7,\"status\":{\"exclude_object\":{\"excluded_objects\":[\"");
+ memset(big+length,'a',8300);length+=8300;
+ length+=snprintf(big+length,sizeof(big)-(size_t)length,"\"]}}}}");
+ assert(uds_message(&c,big,(size_t)length)&&!c.have_excluded_objects&&uds_exclude_status(&c,live,sizeof(live))<0);
+ uds_close(&c);assert(!c.have_current_object);close(pair[1]);
+ puts("PASS UDS initial/delta merge, ordering, scaling, job matching, stale fallback, fragmented frames, silence-only probes and exclude_object state");
  return 0;
 }

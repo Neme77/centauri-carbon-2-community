@@ -15,6 +15,9 @@ const model = (d: any) =>
   (d?.result && (d.result.status?.exclude_object || d.result.exclude_object)) || d?.status?.exclude_object || null
 
 export async function refreshObjects() {
+  // Objects exist only during a print, and every printer request this route might
+  // make stays in the firmware's memory: an idle Job page asks for nothing.
+  if (!view(printer.get().data).active) return
   try {
     const m = model(await request('/api/exclude-objects'))
     const has = Boolean(m && Array.isArray(m.objects))

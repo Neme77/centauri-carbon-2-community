@@ -53,7 +53,10 @@ and `elegoo_printer` died about 11 hours after each boot. On 2026-10-05 the
 kernel's OOM killer stopped it while the printer was idle. On 2026-10-06 it died
 while a time-lapse render needed memory. Do not poll this socket. Read changing
 values from the subscription, and send one-shot requests only for user actions
-or once per job.
+or once per job. For the same reason the subscription carries
+`exclude_object.excluded_objects` and `current_object` for the Job page, which
+used to query them every two seconds; the object list itself, which can reach
+hundreds of kilobytes, is still queried once per job.
 
 This first stage does not change UI controls, MQTT request schedules, or Panda
 telemetry. It does not yet establish a CPU/RAM reduction. Compare those metrics

@@ -11,7 +11,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\"],\"virtual_sdcard\":[\"progress\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003";
+static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003";
 static const char heartbeat[]="{\"id\":12,\"method\":\"info\",\"params\":{}}\003";
 static double elapsed(struct timespec a,struct timespec b){return (double)(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/1e9;}
 static struct timespec now_mono(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t;}
@@ -90,6 +90,18 @@ static int filename_read(const char *o,const char *e,char *out,size_t cap){
   out[n++]=(char)ch;
  }
  out[n]=0;return 1;
+}
+/* Keeps one exclude_object value as raw JSON, an array or string (open) or null,
+ * so /api/exclude-objects can repeat it without querying the printer. A value
+ * that does not fit is forgotten, which sends that route back to its query. */
+static void exclude_value(const char *o,const char *e,const char *key,char open,char *out,size_t cap,int *have,int older){
+ const char *v=json_member(o,e,key),*end=NULL;
+ if(!v||(older&&*have))return;
+ if(*v==open)end=open=='['?json_container_end(v,e):json_string_end(v,e);
+ else if(e-v>=4&&!memcmp(v,"null",4))end=v+4;
+ size_t n=end?(size_t)(end-v):0;
+ if(!end||n>=cap){*have=0;return;}
+ memcpy(out,v,n);out[n]=0;*have=1;
 }
 static const struct {const char *object,*key;enum uds_field field;double min,max;} fields[]={
  {"extruder","temperature",U_ET,-100,1000},{"extruder","target",U_EG,0,1000},
@@ -181,12 +193,21 @@ int uds_message(uds_client *c,const char *json,size_t length){
    c->values[U_LAYER]=layer;c->present|=UINT32_C(1)<<U_LAYER;
   }
  }
+ const char *xe;const char *x=json_member_object(status,se,"exclude_object",'{',&xe);
+ if(x){
+  exclude_value(x,xe,"excluded_objects",'[',c->excluded_objects,sizeof(c->excluded_objects),&c->have_excluded_objects,older);
+  exclude_value(x,xe,"current_object",'"',c->current_object,sizeof(c->current_object),&c->have_current_object,older);
+ }
  if(!older)c->eventtime=event;
  c->messages++;c->last_rx=now_mono();if(initial)c->ready=1;
  return 1;
 }
 void uds_init(uds_client *c){memset(c,0,sizeof(*c));c->fd=-1;}
-void uds_close(uds_client *c){if(c->fd>=0)close(c->fd);c->fd=-1;c->ready=0;c->present=0;c->used=c->sent=0;c->have_filename=0;}
+void uds_close(uds_client *c){
+ if(c->fd>=0)close(c->fd);
+ c->fd=-1;c->ready=0;c->present=0;c->used=c->sent=0;c->have_filename=0;
+ c->have_excluded_objects=c->have_current_object=0;
+}
 static void uds_disconnect(uds_client *c,const char *reason,int error){
  c->disconnects++;c->last_disconnect=reason;c->last_errno=error;uds_close(c);
 }
@@ -269,4 +290,13 @@ void uds_overlay(const uds_client *c,mqtt_client *v){
   if(uds_value(c,U_PROGRESS,&n))v->progress=(int)(n*100);
   if(uds_value(c,U_DURATION,&n))v->print_duration=(long)n;
  }
+}
+/* Writes the subscribed exclude_object state as an objects/query reply, so a
+ * dashboard polling it sends no request to the printer. Returns its length, or
+ * -1 while the stream is stale or has not reported both values. */
+int uds_exclude_status(const uds_client *c,char *out,size_t cap){
+ if(!uds_fresh(c)||!c->have_excluded_objects||!c->have_current_object)return -1;
+ int n=snprintf(out,cap,"{\"result\":{\"status\":{\"exclude_object\":{\"excluded_objects\":%s,\"current_object\":%s}}}}",
+  c->excluded_objects,c->current_object);
+ return n>0&&(size_t)n<cap?n:-1;
 }
