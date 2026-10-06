@@ -214,9 +214,13 @@ void uds_tick(uds_client *c,const char *path){
   else if(n==0||(errno!=EAGAIN&&errno!=EWOULDBLOCK&&errno!=EINTR))uds_disconnect(c,"subscribe_send",n<0?errno:0);
   return;
  }
- /* The stream may be silent when idle. A small read-only heartbeat distinguishes
-  * an unchanged cache from a dead peer; it never queries the object snapshot. */
- if(elapsed(now,c->last_ping)>=2){
+ /* elegoo_printer keeps every request received on this socket in memory (about
+  * 1.5 KB each), so a fixed two-second heartbeat exhausted the printer's RAM in
+  * about 11 hours. Sensor noise keeps a healthy stream at about two notifications
+  * per second even when idle, so only a stream silent for three seconds is probed.
+  * The read-only info reply still distinguishes an unchanged cache from a dead
+  * peer before the five-second receive timeout. */
+ if(elapsed(now,c->last_rx)>=3&&elapsed(now,c->last_ping)>=2){
   ssize_t n=send(c->fd,heartbeat,sizeof(heartbeat)-1,MSG_NOSIGNAL);
   if(n!=(ssize_t)(sizeof(heartbeat)-1)){uds_disconnect(c,"heartbeat_send",n<0?errno:0);return;}
   c->last_ping=now;

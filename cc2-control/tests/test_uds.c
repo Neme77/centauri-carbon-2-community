@@ -52,6 +52,21 @@ int main(void){
  assert(write(pair[1],bad,strlen(bad))==(ssize_t)strlen(bad));uds_process(&c);
  assert(c.fd==-1&&c.disconnects==1&&!strcmp(c.last_disconnect,"invalid_json"));close(pair[1]);
  uds_init(&c);uds_tick(&c,"/nonexistent/cc2-test-socket");assert(c.fd==-1);
- puts("PASS UDS initial/delta merge, ordering, scaling, job matching, stale fallback and fragmented frames");
+ /* elegoo_printer keeps every request in memory: only a silent stream is probed. */
+ uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
+ assert(!fcntl(c.fd,F_SETFL,O_NONBLOCK)&&!fcntl(pair[1],F_SETFL,O_NONBLOCK));
+ clock_gettime(CLOCK_MONOTONIC,&c.last_rx);c.last_ping=c.last_rx;
+ char out[4096];ssize_t got;
+ uds_tick(&c,"/unused");got=read(pair[1],out,sizeof(out)-1);assert(got>0);out[got]=0;
+ assert(strstr(out,"objects/subscribe")&&!strstr(out,"\"method\":\"info\""));
+ c.last_ping.tv_sec-=10;uds_tick(&c,"/unused");assert(read(pair[1],out,sizeof(out)-1)<0);
+ c.last_rx.tv_sec-=3;uds_tick(&c,"/unused");got=read(pair[1],out,sizeof(out)-1);assert(got>0);out[got]=0;
+ assert(strstr(out,"\"method\":\"info\""));
+ uds_tick(&c,"/unused");assert(read(pair[1],out,sizeof(out)-1)<0);
+ message(&c,"{\"id\":12,\"result\":{\"state\":\"ready\"}}");c.last_ping.tv_sec-=10;
+ uds_tick(&c,"/unused");assert(read(pair[1],out,sizeof(out)-1)<0);
+ c.last_rx.tv_sec-=6;uds_tick(&c,"/unused");
+ assert(c.fd==-1&&!strcmp(c.last_disconnect,"receive_timeout"));close(pair[1]);
+ puts("PASS UDS initial/delta merge, ordering, scaling, job matching, stale fallback, fragmented frames and silence-only probes");
  return 0;
 }

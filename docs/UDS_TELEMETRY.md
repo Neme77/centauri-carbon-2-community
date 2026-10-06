@@ -9,7 +9,11 @@ cache. Notifications contain changed fields only. Initial responses arriving
 after a newer notification fill missing fields without replacing newer values.
 The client handles split/coalesced ETX-delimited frames, disconnects on oversized
 or invalid frames, and retries connections at most once every five seconds.
-A small read-only `info` heartbeat every two seconds detects a silent dead peer.
+Only a stream that has been silent for three seconds gets a read-only `info`
+request, at most one every two seconds, so the five-second receive timeout still
+separates an unchanged cache from a dead peer. A healthy printer sends about two
+notifications per second even when idle, because temperatures are reported to
+0.01 °C, so in practice no request is sent. See "Firmware request retention".
 
 `GET /api/uds` exposes connection/freshness status and nullable values, including
 speed/flow factors, live velocity, fan fractions/RPM, progress and elapsed times.
@@ -25,6 +29,31 @@ The physical identity of `fan_generic fan1` still needs validation, so its value
 are exposed as `fan1`/`fan1_rpm` only in `/api/uds`. A null total layer
 count is not guessed; the existing G-code metadata fallback remains in place.
 UDS `total_duration` is exposed as `total_elapsed`; it is not an ETA.
+
+## Firmware request retention
+
+The printer's `elegoo_printer` keeps every request it receives on
+`/tmp/elegoo_uds` in memory: the request text, the reply fields and a reactor
+callback are never freed, about 1.5 KB per request. Measured on 2026-10-06 with
+V4.2-R5 (`elegoo_printer` MD5 `06071f7b3ca6f809d5a329e1a9466f4c`, Klippy
+`v0.12.0-458-gd886c176`):
+
+- two dumps of the firmware heap taken three minutes apart held 2431 and 2518
+  copies of the heartbeat request, one for each request sent since boot, and
+  the heap grew by 128 KB in between;
+- every other method sent on the socket (`objects/query`, `gcode/script` and the
+  touchscreen's own requests) was retained the same way;
+- CC2 Control's MQTT pings left no copies, MQTT status polling at about 17
+  requests per minute did not change the growth rate, and the subscription's
+  notifications were not retained.
+
+The first version of this client sent `info` every two seconds, around the clock.
+On the 111 MB printer without swap that grew the firmware by about 3 MB per hour,
+and `elegoo_printer` died about 11 hours after each boot. On 2026-10-05 the
+kernel's OOM killer stopped it while the printer was idle. On 2026-10-06 it died
+while a time-lapse render needed memory. Do not poll this socket. Read changing
+values from the subscription, and send one-shot requests only for user actions
+or once per job.
 
 This first stage does not change UI controls, MQTT request schedules, or Panda
 telemetry. It does not yet establish a CPU/RAM reduction. Compare those metrics
