@@ -583,5 +583,18 @@
   "history.confirm_delete": "Delete these {n} print-history entries? This cannot be undone. G-code files and videos are not deleted.",
   "history.delete_requested": "History deletion requested.",
   "print.file_filament": "Filament in G-code",
-  "print.file_filament_unknown": "Colour/material not provided by the file"
+  "print.file_filament_unknown": "Colour/material not provided by the file",
+  "control.pid_title": "PID calibration",
+  "control.pid_target": "Calibration temperature: {heater}",
+  "control.pid_start": "Calibrate {heater}",
+  "control.pid_calibrate": "Calibrate",
+  "control.pid_invalid_target": "Hotend: 150–300 °C. Bed: 40–120 °C.",
+  "control.pid_confirm": "Calibrate {heater} at {target} °C? The heater will cycle for several minutes.",
+  "control.pid_save": "Save PID and restart",
+  "control.pid_save_confirm": "Save the calibrated PID values? SAVE_CONFIG writes the printer configuration and restarts it.",
+  "control.pid_unavailable": "PID status unavailable.",
+  "control.pid_running": "A command is running. Wait for completion.",
+  "control.pid_completed": "Calibration completed. Save to apply the new values.",
+  "control.pid_failed": "Calibration failed or completion was not confirmed. Check the console.",
+  "control.pid_help": "Calibrate one heater at a time. Saving restarts the printer."
 }
