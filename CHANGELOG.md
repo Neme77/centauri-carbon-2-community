@@ -9,6 +9,8 @@ checksums remain attached to each GitHub release.
 - An OrcaSlicer upload whose name already exists is saved as `name (1).gcode` and so on instead of being refused with HTTP 409; nothing is overwritten.
 - CC2 Control registers with the printer even when another app's Canvas reply arrives first after it connects. Before, it then never registered, so print and Canvas commands were refused and the updater rolled back.
 - The mainboard fan no longer runs on forever after homing or calibration. The firmware never releases idle motors, and that fan runs while they are powered, although every fan in the UI reads 0 %. CC2 Control now sends `M84` after ten idle minutes with the heaters off, as stock Klipper does.
+- The printer no longer runs out of memory about 11 hours after each boot. Its firmware keeps every request received on its local socket in memory, and CC2 Control asked it for `info` every two seconds. Now it asks only when the telemetry stream has been silent for three seconds; a working printer sends about two updates per second.
+- The Job page no longer queries the printer every two seconds for print objects: the excluded and current objects come from the telemetry stream, the object list is asked once per job, and an idle Job page asks for nothing. Before a print defines its objects, the page says no objects are reported instead of "Object status unavailable".
 
 ## CC2 Control 1.1.31fix — 2026-10-04
 

@@ -2395,11 +2395,12 @@ static void canvas_auto_refill_response(int fd,mqtt_client *mqtt,const char *bod
 static char *exclude_objects_cache = NULL;
 static size_t exclude_objects_cache_len = 0;
 static char exclude_objects_cache_job[256] = "";
+static long long exclude_objects_asked_ms = LLONG_MIN / 2, exclude_objects_wait_ms = 5000;
 
 /* The object list is cached for the whole job above.  The excluded/current
- * fields are small but still require a synchronous UDS round trip.  Share a
- * very short-lived copy between HTTP clients so several dashboards cannot
- * multiply that printer-side work. */
+ * fields come from the telemetry subscription; while it is unavailable they
+ * need a synchronous UDS round trip.  Share a very short-lived copy between
+ * HTTP clients so several dashboards cannot multiply that printer-side work. */
 static char *exclude_dynamic_cache = NULL;
 static size_t exclude_dynamic_cache_len = 0;
 static char exclude_dynamic_cache_job[256] = "";
@@ -2538,9 +2539,13 @@ static int cache_exclude_objects(const char *job) {
     const char *payload = exclude_object_payload(response, response_len);
     if (!payload) { free(response); return -1; }
     const char *payload_end = json_container_end(payload, response + response_len);
-    const char *objects = json_member(payload, payload_end, "objects");
-    if (!objects || *objects != '[') { free(response); return -1; }
-    const char *objects_end = json_container_end(objects, payload_end);
+    const char *objects = json_member(payload, payload_end, "objects"), *objects_end = NULL;
+    /* The printer reports null until a job defines its objects. */
+    if (objects && payload_end - objects >= 4 && memcmp(objects, "null", 4) == 0) {
+        objects = "[]"; objects_end = objects + 2;
+    } else if (objects && *objects == '[') {
+        objects_end = json_container_end(objects, payload_end);
+    }
     if (!objects_end) { free(response); return -1; }
     size_t objects_len = (size_t)(objects_end - objects);
     char *copy = malloc(objects_len + 1);
@@ -2556,24 +2561,43 @@ static int cache_exclude_objects(const char *job) {
 
 static void exclude_objects_response(int fd, const mqtt_client *mqtt) {
     const char *job = mqtt ? mqtt->filename : "";
-    if (!exclude_objects_cache || strcmp(exclude_objects_cache_job, job) != 0) {
-        if (cache_exclude_objects(job) != 0) {
-            const char *error = "{\"available\":false,\"error\":\"Object definitions unavailable\"}\n";
-            respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));
-            return;
-        }
+    long long now_ms = monotonic_ms();
+    /* The printer keeps every UDS request in memory, so the list is asked once
+     * per job and at most every five seconds. An empty list may predate the job's
+     * EXCLUDE_OBJECT_DEFINE: it is asked again after 5 s, doubling to 5 min, or
+     * after 5 s once the stream reports a current object. */
+    int new_job = !exclude_objects_cache || strcmp(exclude_objects_cache_job, job) != 0;
+    int empty = !new_job && strcmp(exclude_objects_cache, "[]") == 0;
+    int in_object = telemetry.have_current_object && telemetry.current_object[0] == '"';
+    long long since = now_ms - exclude_objects_asked_ms;
+    if (since >= 5000 && (new_job || (empty && (in_object || since >= exclude_objects_wait_ms)))) {
+        exclude_objects_asked_ms = now_ms;
+        exclude_objects_wait_ms = new_job || exclude_objects_wait_ms < 5000 ? 5000 :
+            exclude_objects_wait_ms >= 150000 ? 300000 : exclude_objects_wait_ms * 2;
+        if (cache_exclude_objects(job) == 0) new_job = 0;
+    }
+    if (new_job) {
+        const char *error = "{\"available\":false,\"error\":\"Object definitions unavailable\"}\n";
+        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));
+        return;
     }
 
     static const char query[] =
         "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"exclude_object\":[\"excluded_objects\",\"current_object\"]}}}\003";
     char *dynamic = NULL; size_t dynamic_len = 0;
     int dynamic_owned = 0;
-    long long now_ms = monotonic_ms();
+    /* The subscription carries the excluded and current objects; the query below
+     * is only the fallback while that stream is unavailable. */
+    char live[sizeof(telemetry.excluded_objects) + sizeof(telemetry.current_object) + 96];
+    int live_len = uds_exclude_status(&telemetry, live, sizeof(live));
     int cache_fresh = exclude_dynamic_cache &&
         strcmp(exclude_dynamic_cache_job, job) == 0 &&
         now_ms > 0 && exclude_dynamic_cache_ms > 0 &&
         now_ms - exclude_dynamic_cache_ms < 1000;
-    if (cache_fresh) {
+    if (live_len > 0) {
+        dynamic = live;
+        dynamic_len = (size_t)live_len;
+    } else if (cache_fresh) {
         dynamic = exclude_dynamic_cache;
         dynamic_len = exclude_dynamic_cache_len;
     } else {

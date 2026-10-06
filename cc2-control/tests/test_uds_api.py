@@ -79,6 +79,36 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         value = wait_for("/api/uds", lambda x: x["values"]["speed_factor"] == 1.3)
         assert value["values"]["nozzle_target"] == 215
         assert value["values"]["part_rpm"] == 8700
+        # elegoo_printer keeps every request it receives in memory, so a stream
+        # that keeps notifying is never probed; a silent one gets one info request.
+        peer.settimeout(0.1)
+        try:
+            while peer.recv(4096):
+                pass
+        except socket.timeout:
+            pass
+        received = b""
+        for step in range(8):
+            send({"method": "cc2_status", "params": {"eventtime": 3 + step, "status": {
+                "extruder": {"temperature": 212 + step}
+            }}})
+            last_notification = time.monotonic()
+            while time.monotonic() - last_notification < 0.5:
+                try:
+                    received += peer.recv(4096)
+                except socket.timeout:
+                    pass
+        assert b'"method":"info"' not in received, received
+        peer.settimeout(6)
+        while b'"method":"info"' not in received:
+            chunk = peer.recv(4096)
+            assert chunk, "the client closed the stream instead of probing it"
+            received += chunk
+        silence = time.monotonic() - last_notification
+        assert 2.9 <= silence <= 4.8, silence
+        send({"id": 12, "result": {"state": "ready"}})
+        value = wait_for("/api/uds", lambda x: x["fresh"])
+        assert value["connections"] == 1 and value["disconnects"] == 0
         peer.close()
         peer = None
         wait_for("/api/uds", lambda x: not x["fresh"])
@@ -93,7 +123,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         value = wait_for("/api/uds", lambda x: x["fresh"])
         assert value["values"]["nozzle_temperature"] == 30
         assert value["values"]["speed_factor"] is None
-        print("PASS UDS subscription, HTTP cache, delta preservation, disconnect fallback and reconnect")
+        print("PASS UDS subscription, HTTP cache, delta preservation, silence-only probe, disconnect fallback and reconnect")
     finally:
         if peer is not None:
             peer.close()

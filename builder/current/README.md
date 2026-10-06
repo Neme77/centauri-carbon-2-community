@@ -25,7 +25,7 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`8b3f6ca3f71593428f9ccf06f8b9e2e49b500c23`, incorporating the validated
+`f8c35d7fa1f6d72520ed45bd65261a656169c5ec`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,
@@ -38,6 +38,7 @@ Files lists the newest 128 G-code files of each storage with their total, and re
 An OrcaSlicer upload with a taken name is saved as a numbered copy instead of being refused.
 A bed mesh calibration from Bed Levelling homes X, Y and Z first when the printer is not homed.
 Motors left energised after homing or calibration are released after ten idle minutes, so the mainboard fan stops.
+Telemetry asks the printer only when its stream falls silent, and the Job page reads object state from that stream, because the firmware keeps every request on its local socket in memory.
 The runtime identity remains 1.1.31, matching the printer-tested build.
 Preparation runs the complete component host suite before the ARM build and
 records source commit, archive checksum and every installed file checksum.
