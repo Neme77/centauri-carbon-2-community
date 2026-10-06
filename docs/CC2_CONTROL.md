@@ -91,6 +91,8 @@ For labelled multi-object G-code, CC2 Control displays detected print objects an
 
 The action is protected by confirmation and is irreversible for the current print. Availability depends on object labels being present in the sliced G-code.
 
+The Job page asks for objects only while a print is active. The excluded and current objects come from the UDS telemetry subscription. The object list is asked once per job; an empty list is asked again after a growing delay, because objects are defined only when the G-code starts. The printer's firmware keeps every request on its local socket in memory, so this route must not query it on every poll (see [UDS telemetry](UDS_TELEMETRY.md)).
+
 ## Protected expert console
 
 The console is protected by an explicit unlock/confirmation workflow and is blocked while printing.

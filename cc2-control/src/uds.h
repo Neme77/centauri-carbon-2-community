@@ -16,6 +16,9 @@ typedef struct {
  uint32_t present;
  char filename[512];
  int have_filename;
+ /* exclude_object values as raw JSON (array or string, or null). */
+ char excluded_objects[8192], current_object[512];
+ int have_excluded_objects, have_current_object;
  struct timespec last_rx, retry, last_ping;
  unsigned long messages, connections, disconnects, ignored_messages;
  const char *last_disconnect, *parse_error;
@@ -30,4 +33,5 @@ int uds_value(const uds_client *c,enum uds_field field,double *out);
 int uds_message(uds_client *c,const char *json,size_t length);
 int uds_job_matches(const uds_client *c,const char *filename);
 void uds_overlay(const uds_client *c,mqtt_client *view);
+int uds_exclude_status(const uds_client *c,char *out,size_t cap);
 #endif

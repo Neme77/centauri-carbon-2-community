@@ -17,7 +17,8 @@
     "test:print-history": "node preview/test-print-history.mjs",
     "test:filaments": "node preview/test-filament-mapping.mjs",
     "test:plates": "node preview/test-bed-plates.mjs",
-    "test:calibration": "node preview/test-mesh-calibration.mjs"
+    "test:calibration": "node preview/test-mesh-calibration.mjs",
+    "test:job-objects": "node preview/test-job-objects.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
