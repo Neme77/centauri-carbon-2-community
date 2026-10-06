@@ -10,7 +10,7 @@ spec.loader.exec_module(prepare)
 assert prepare.SOURCE_SHA256 == hashlib.sha256(prepare.SOURCE.read_bytes()).hexdigest()
 with zipfile.ZipFile(prepare.SOURCE) as archive:
     assert archive.testzip() is None
-    for name in ('VERSION', 'FIRMWARE_VERSION', 'src/main.c', 'src/control.c', 'src/mqtt.c', 'src/uds.c', 'src/recovery.h',
+    for name in ('VERSION', 'FIRMWARE_VERSION', 'src/main.c', 'tests/test_pid_api.c', 'web-src/preview/test-pid.mjs', 'docs/API.md', 'src/control.c', 'src/mqtt.c', 'src/uds.c', 'src/recovery.h',
                  'src/gcode_download.h', 'web/index.html', 'web-src/src/lib/meshdraw.ts',
                  'web-src/src/pages/bed.tsx', 'web-src/src/components/shared.tsx', 'web-src/src/lib/i18n.ts',
                  'web-src/preview/test-camera-stream.mjs', 'tests/test_runtime_limits.c',
