@@ -125,6 +125,7 @@ static void restart_service(void) {
 static void new_process(void) { /* what a CC2 Control restart forgets */
     plates_reboot_requested = 0; plates_z_valid = 0; plates_result = ""; reboot_pending = 0; reboot_guard = NULL;
     plates_seen_connections = ULONG_MAX; plates_next_tick_ms = 0; ran[0] = 0;
+    plates_background_close(); plates_attempts=0; plates_attempt_id[0]=0; plates_attempt_service_known=0;
     plates_load();
 }
 
@@ -241,6 +242,9 @@ static void test_http(void) {
 
     /* A plate already in its slot mounts at once: only the offset changes. */
     char body[64]; snprintf(body, sizeof(body), "%s", smooth);
+    memory_a.points[0]+=0.01;
+    assert(call(MOUNT,&mqtt,body)==409 && strstr(response,"reboot_required") && !ran[0]);
+    memory_a=a;
     assert(call(MOUNT, &mqtt, body) == 200 && strstr(response, "\"reboot\":false"));
     assert(!strcmp(ran, "SET_GCODE_OFFSET Z=-0.020") && !strcmp(plates.current, smooth) && !reboot_pending);
     assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"z_applied\":true"));
@@ -290,6 +294,30 @@ static void test_http(void) {
     assert(length == before_length && !memcmp(now, before, length)); free(now);
     assert(!strcmp(plates.current, smooth)); /* it was mounted before the attempt */
 
+    /* Unrelated firmware configuration updates survive a failed reboot. */
+    snprintf(body,sizeof(body),"%s\nREBOOT",smooth);
+    assert(call(MOUNT,&mqtt,body)==202);
+    FILE *concurrent=fopen(printer_autosave_path,"ab");assert(concurrent);
+    fputs("#*# [heater_bed]\n#*# pid_Kp = 123.45\n",concurrent);fclose(concurrent);
+    assert(plates_reboot_guard());
+    mqtt.connected=0;assert(!plates_reboot_guard());fresh(&mqtt);
+    mqtt.last_message-=16;assert(!plates_reboot_guard());fresh(&mqtt);
+    telemetry.last_rx.tv_sec-=20;assert(!plates_reboot_guard());fresh(&mqtt);
+    reboot_pending=0;reboot_error="launch_failed";plates_tick(&mqtt);
+    now=slurp(printer_autosave_path,&length);
+    assert(strstr(now,"pid_Kp = 123.45") && autosave_slot('A',&read)==1 && plate_mesh_equal(&read,&recalibrated,1));free(now);
+    write_autosave(&recalibrated,&b);
+
+    /* Failed rollback keeps both recovery metadata and the backup. */
+    assert(call(MOUNT,&mqtt,body)==202);
+    char blocked[PATH_MAX_LOCAL];snprintf(blocked,sizeof(blocked),"%s.cc2-new",printer_autosave_path);
+    assert(mkdir(blocked,0700)==0);
+    reboot_pending=0;reboot_error="launch_failed";plates_tick(&mqtt);
+    assert(!plates_available && plates.pending[0] && access(copy,F_OK)==0 && strstr(plates_error,"rollback failed"));
+    assert(rmdir(blocked)==0);plates_available=1;
+    assert(plates_restore_mesh()==0);plates.pending[0]=0;assert(plates_save()==0);
+    fresh(&mqtt);
+
     /* A print started on the screen while the reboot waited: the guard cancels it. */
     snprintf(body, sizeof(body), "%s\nREBOOT", smooth);
     assert(call(MOUNT, &mqtt, body) == 202 && reboot_guard == plates_reboot_guard);
@@ -335,6 +363,14 @@ static void test_http(void) {
     plates_tick(&mqtt);
     assert(!plates.pending[0] && !plates.current[0] && !strcmp(plates_result, "verify_failed"));
 
+    /* Repeated native query failures stop after three attempts. */
+    snprintf(plates.current,sizeof(plates.current),"%s",smooth);plates_z_valid=0;
+    plates_attempts=0;uds_down=1;
+    for(int attempt=0;attempt<3;attempt++){fresh(&mqtt);plates_tick(&mqtt);}
+    assert(plates_attempts==3 && !strcmp(plates_result,"verify_failed"));
+    fresh(&mqtt);telemetry.connections++;plates_tick(&mqtt);assert(plates_attempts==3);
+    uds_down=0;plates_attempts=0;
+
     /* Side B without a saved mesh gets its section appended. */
     write_autosave(&other, NULL); memory_has_b = 0; memory_a = other;
     snprintf(body, sizeof(body), "%s\nREBOOT", textured);
@@ -353,6 +389,29 @@ static void test_http(void) {
     free(before);
 }
 
+static void test_background_transport(void) {
+    int pair[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
+    plates_uds=uds_query_json;plates_background_close();
+    plates_background.fd=pair[0];plates_background.buffer=malloc(65537);assert(plates_background.buffer);
+    snprintf(plates_background.request,sizeof(plates_background.request),"%s",plates_profiles_query);
+    plates_background.sent=strlen(plates_profiles_query);plates_background.id=203;
+    plates_background.deadline=monotonic_ms()+2000;
+    char *reply=NULL;size_t length=0;long long before=monotonic_ms();
+    assert(plates_background_step(plates_profiles_query,&reply,&length)==0 && monotonic_ms()-before<100);
+    const char *part="{\"id\":0}\003{\"id\":203,\"result\":";
+    assert(write(pair[1],part,strlen(part))==(ssize_t)strlen(part));
+    assert(plates_background_step(plates_profiles_query,&reply,&length)==0);
+    assert(write(pair[1],"{}}\003",4)==4);
+    assert(plates_background_step(plates_profiles_query,&reply,&length)==1);
+    assert(strstr(reply,"\"id\":203") && !plates_background_active());free(reply);close(pair[1]);
+    assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
+    plates_background.fd=pair[0];plates_background.buffer=malloc(65537);assert(plates_background.buffer);
+    snprintf(plates_background.request,sizeof(plates_background.request),"%s",plates_profiles_query);
+    plates_background.sent=strlen(plates_profiles_query);plates_background.id=203;plates_background.deadline=monotonic_ms()-1;
+    assert(plates_background_step(plates_profiles_query,&reply,&length)==-1 && !plates_background_active());
+    close(pair[1]);plates_uds=fake_uds;
+}
+
 int main(void) {
     char directory[] = "/tmp/cc2-plates-XXXXXX";
     assert(mkdtemp(directory));
@@ -369,6 +428,7 @@ int main(void) {
     test_autosave();
     test_store();
     test_http();
+    test_background_transport();
     printf("PASS: plate library\n");
     return 0;
 }
