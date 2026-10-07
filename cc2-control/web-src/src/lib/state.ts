@@ -6,13 +6,14 @@ import { subState } from './machine'
 export type Page = 'dashboard' | 'control' | 'job' | 'files' | 'history' | 'bed' | 'canvas' | 'console' | 'settings'
 const PAGES: Page[] = ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']
 
-// Routes live in the URL hash (#files, #bed/screws): the backend only serves /, so no server change is needed.
+// Routes live in the URL hash (#files, #bed/plates, #bed/screws): the backend only serves /, so no server change is needed.
 // #camera is the separate camera window opened from the camera card; it is not a menu page.
+export type BedTab = 'mesh' | 'plates' | 'screws'
 const route = () => {
   const [p, sub] = location.hash.slice(1).split('/')
   return {
     page: (PAGES.includes(p as Page) ? p : 'dashboard') as Page,
-    screws: p === 'bed' && sub === 'screws',
+    bed: (p === 'bed' && (sub === 'plates' || sub === 'screws') ? sub : 'mesh') as BedTab,
     camera: p === 'camera',
   }
 }
@@ -21,9 +22,9 @@ addEventListener('hashchange', () => {
   nav.set(route())
   window.scrollTo(0, 0)
 })
-export const openPage = (page: Page, screws = false) => {
-  const hash = `#${page}${screws ? '/screws' : ''}`
-  if (location.hash === hash) nav.set({ page, screws, camera: false })
+export const openPage = (page: Page, bed: BedTab = 'mesh') => {
+  const hash = `#${page}${page === 'bed' && bed !== 'mesh' ? `/${bed}` : ''}`
+  if (location.hash === hash) nav.set({ page, bed, camera: false })
   else location.hash = hash
 }
 

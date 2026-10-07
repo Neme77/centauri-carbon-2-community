@@ -41,8 +41,9 @@ static void test_rejected_upload_drains_body(mqtt_client *mqtt){
     size_t sent=0;
     while(sent<sizeof(body)){ssize_t n=send(pair[1],body+sent,sizeof(body)-sent,MSG_NOSIGNAL);if(n<=0)break;sent+=(size_t)n;}
     expect(sent==sizeof(body),"server reads the whole rejected body");
-    char response[600];ssize_t size=recv(pair[1],response,sizeof(response)-1,0);
-    expect(size>0,"receive drained upload response");response[size]=0;
+    char response[600];size_t used=0;ssize_t size;
+    while(used<sizeof(response)-1 && (size=recv(pair[1],response+used,sizeof(response)-1-used,0))>0)used+=(size_t)size;
+    expect(used>0,"receive drained upload response");response[used]=0;
     expect(strstr(response,"409 Conflict")&&strstr(response,"File already exists"),"duplicate reported after the body");
     close(pair[1]);
 }

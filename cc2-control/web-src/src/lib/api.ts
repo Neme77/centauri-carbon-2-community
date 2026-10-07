@@ -19,7 +19,9 @@ export const request = async (path: string, options: RequestInit = {}) => {
     })
     const type = response.headers.get('content-type') || ''
     const data = type.includes('json') ? await response.json() : await response.text()
-    if (!response.ok) throw Error(data?.error || data || `HTTP ${response.status}`)
+    // The reply stays on the error for callers that act on its fields (e.g. reboot_required).
+    if (!response.ok)
+      throw Object.assign(Error(data?.error || data || `HTTP ${response.status}`), { status: response.status, data })
     return data
   } finally {
     clearTimeout(timeout)

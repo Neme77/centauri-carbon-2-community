@@ -44,4 +44,5 @@ exec "$BASE/cc2-control" \
     --web-root "$BASE/web" \
     --config "$PERSIST/cc2-control.conf" \
     --presets "$PERSIST/material-presets.json" \
-    --preferences "$PERSIST/ui-preferences.json"
+    --preferences "$PERSIST/ui-preferences.json" \
+    --plates "$PERSIST/bed-plates.json"
