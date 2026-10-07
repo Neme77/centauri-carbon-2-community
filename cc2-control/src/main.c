@@ -2209,7 +2209,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
-    char body[4096],filename[520],state[140],uuid[260],axes[40];
+    char body[6144],filename[520],state[140],uuid[260],axes[40];
     if(uds_value(&telemetry,U_ET,&live))json_number(et,sizeof(et),1,live);
     else json_number(et,sizeof(et),mqtt->have_extruder_temp,mqtt->extruder_temp);
     if(uds_value(&telemetry,U_EG,&live))json_number(eg,sizeof(eg),1,live);
@@ -2257,6 +2257,16 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     char printer_error[160]="null";
     if(mqtt->reply_errors)snprintf(printer_error,sizeof(printer_error),"{\"sequence\":%lu,\"method\":%d,\"code\":%d,\"age\":%ld}",
         mqtt->reply_errors,mqtt->reply_error_method,mqtt->reply_error_code,(long)(now-mqtt->reply_error_time));
+    char printer_report[1280]="null";
+    if(telemetry.report_sequence){
+        struct timespec received_now;clock_gettime(CLOCK_MONOTONIC,&received_now);
+        long report_age=received_now.tv_sec-telemetry.report_received.tv_sec;
+        snprintf(printer_report,sizeof(printer_report),
+            "{\"event_id\":\"%ld.%09ld-%lu\",\"sequence\":%lu,\"code\":%d,\"level\":%d,\"message\":%s,\"age\":%ld}",
+            (long)telemetry.report_identity.tv_sec,telemetry.report_identity.tv_nsec,telemetry.report_sequence,
+            telemetry.report_sequence,telemetry.report_code,telemetry.report_level,
+            telemetry.report_message,report_age<0?0:report_age);
+    }
     char viewer[sizeof(camera_viewer)+2];
     if(camera_viewer[0])snprintf(viewer,sizeof(viewer),"\"%s\"",camera_viewer);
     else snprintf(viewer,sizeof(viewer),"null");
@@ -2273,12 +2283,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"printer_error\":%s,\"camera_viewer\":%s}\n",
+        "\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
-        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",printer_error,viewer);
+        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",printer_report,printer_error,viewer);
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }

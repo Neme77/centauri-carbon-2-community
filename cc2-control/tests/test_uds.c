@@ -33,6 +33,28 @@ int main(void){
  assert(c.ignored_messages==2&&c.messages==saved_messages&&c.fd>=0);
  assert(c.last_rx.tv_sec==saved_rx.tv_sec&&c.last_rx.tv_nsec==saved_rx.tv_nsec);
  assert(uds_value(&c,U_SPEED_FACTOR,&v)&&v==0.5);
+ /* Native reports must neither refresh sensors nor claim a current fault. */
+ message(&c,"{\"id\":0,\"report\":{\"error_code\":1264,\"error_level\":2,\"message\":\"Clog\\n\\u00e8 <script>\"}}");
+ assert(c.report_sequence==1&&c.report_code==1264&&c.report_level==2);
+ message(&c,"{\"report\":{\"error_code\":1264,\"error_level\":2,\"message\":\"Clog\\n\\u00e8 <script>\"}}");
+ assert(c.report_sequence==1);
+ assert(!strcmp(c.report_message,"\"Clog\\n\\u00e8 <script>\""));
+ assert(c.messages==saved_messages&&c.last_rx.tv_sec==saved_rx.tv_sec&&c.last_rx.tv_nsec==saved_rx.tv_nsec);
+ message(&c,"{\"report\":{\"error_code\":0,\"error_level\":0,\"message\":\"ok\"}}");
+ assert(c.report_sequence==1&&c.report_code==1264);
+ message(&c,"{\"report\":{\"error_code\":1.5,\"error_level\":2}}");
+ message(&c,"{\"report\":{\"error_code\":803,\"error_level\":9}}");
+ assert(c.report_sequence==1);
+ message(&c,"{\"report\":{\"error_code\":9999,\"error_level\":1,\"message\":\"bad\\q\"}}");
+ assert(c.report_sequence==2&&c.report_code==9999&&!strcmp(c.report_message,"null"));
+ char huge_report[1300];memset(huge_report,'x',sizeof(huge_report));
+ const char *prefix="{\"report\":{\"error_code\":803,\"error_level\":2,\"message\":\"";
+ memcpy(huge_report,prefix,strlen(prefix));strcpy(huge_report+1200,"\"}}");message(&c,huge_report);
+ assert(c.report_sequence==3&&!strcmp(c.report_message,"null"));
+ message(&c,"{\"report\":{\"error_code\":0,\"error_level\":3,\"message\":\"Resume\"}}");
+ assert(c.report_sequence==4&&c.report_level==3);
+ message(&c,"{\"id\":13,\"error\":{\"message\":\"unsupported endpoint\"}}");
+ assert(c.fd>=0&&c.report_sequence==4);
  assert(!uds_message(&c,"{\"id\":11,\"error\":{}}",strlen("{\"id\":11,\"error\":{}}")));
  assert(!strcmp(c.parse_error,"subscription_error"));
  assert(!uds_message(&c,"{\"id\":12,\"error\":{}}",strlen("{\"id\":12,\"error\":{}}")));
@@ -46,6 +68,7 @@ int main(void){
  assert(!uds_value(&c,U_LAYER,&v)&&!uds_value(&c,U_PROGRESS,&v));
  close(pair[1]);uds_process(&c);assert(c.fd==-1&&!c.ready&&!c.present);
  assert(c.disconnects==1&&!strcmp(c.last_disconnect,"peer_closed"));
+ assert(c.report_sequence==4&&!strcmp(c.report_message,"\"Resume\""));
  uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
  assert(!fcntl(c.fd,F_SETFL,O_NONBLOCK));
  const char *bad="{broken\003";
@@ -58,7 +81,7 @@ int main(void){
  clock_gettime(CLOCK_MONOTONIC,&c.last_rx);c.last_ping=c.last_rx;
  char out[4096];ssize_t got;
  uds_tick(&c,"/unused");got=read(pair[1],out,sizeof(out)-1);assert(got>0);out[got]=0;
- assert(strstr(out,"objects/subscribe")&&!strstr(out,"\"method\":\"info\""));
+ assert(strstr(out,"objects/subscribe")&&strstr(out,"gcode/subscribe_report")&&!strstr(out,"\"method\":\"info\""));
  c.last_ping.tv_sec-=10;uds_tick(&c,"/unused");assert(read(pair[1],out,sizeof(out)-1)<0);
  c.last_rx.tv_sec-=3;uds_tick(&c,"/unused");got=read(pair[1],out,sizeof(out)-1);assert(got>0);out[got]=0;
  assert(strstr(out,"\"method\":\"info\""));

@@ -11,7 +11,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003";
+static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003"
+ "{\"id\":13,\"method\":\"gcode/subscribe_report\",\"params\":{\"response_template\":{\"method\":\"cc2_report\"}}}\003";
 static const char heartbeat[]="{\"id\":12,\"method\":\"info\",\"params\":{}}\003";
 static double elapsed(struct timespec a,struct timespec b){return (double)(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/1e9;}
 static struct timespec now_mono(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t;}
@@ -119,10 +120,46 @@ static const struct {const char *object,*key;enum uds_field field;double min,max
  {"print_stats","print_duration",U_DURATION,0,INT_MAX},
  {"print_stats","total_duration",U_TOTAL_DURATION,0,INT_MAX}
 };
+/* Preserve a bounded JSON string without decoding Unicode. Reject invalid escapes
+ * and controls before reflecting it in an API response; oversize text becomes null. */
+static void report_text(const char *o,const char *end,char *out,size_t cap){
+ strcpy(out,"null");
+ const char *v=json_member(o,end,"message");
+ if(!v||*v!='"')return;
+ const char *e=json_string_end(v,end);
+ if(!e||(size_t)(e-v)>=cap)return;
+ for(const char *p=v+1;p<e-1;p++){
+  if((unsigned char)*p<32)return;
+  if(*p!='\\')continue;
+  if(++p>=e-1)return;
+  if(*p=='u'){
+   for(int i=0;i<4;i++)if(++p>=e-1||!isxdigit((unsigned char)*p))return;
+  }else if(!strchr("\"\\/bfnrt",*p))return;
+ }
+ memcpy(out,v,(size_t)(e-v));out[e-v]=0;
+}
+static int vendor_report(uds_client *c,const char *root,const char *end){
+ const char *e;const char *o=json_member_object(root,end,"report",'{',&e);
+ double code,level;
+ if(!o||!numeric(o,e,"error_code",&code)||code<0||code>INT_MAX||floor(code)!=code||
+    !numeric(o,e,"error_level",&level)||level<0||level>3||floor(level)!=level)return 0;
+ /* Ordinary successful output must not overwrite the last warning/error.
+  * RESUME (3) is a new event, not a guaranteed global fault clearance. */
+ if(code==0&&level==0)return 1;
+ char text[sizeof(c->report_message)];report_text(o,e,text,sizeof(text));
+ if(c->report_sequence&&c->report_code==(int)code&&c->report_level==(int)level&&
+    !strcmp(c->report_message,text))return 1;
+ c->report_code=(int)code;c->report_level=(int)level;
+ c->report_sequence++;c->report_received=now_mono();
+ clock_gettime(CLOCK_REALTIME,&c->report_identity);
+ memcpy(c->report_message,text,sizeof(text));
+ return 1;
+}
 int uds_message(uds_client *c,const char *json,size_t length){
  const char *end=json+length,*root=json_skip_space(json,end),*ce,*se;
  c->parse_error="invalid_json";
  if(root>=end||*root!='{'||json_container_end(root,end)!=end)return 0;
+ if(vendor_report(c,root,end))return 1;
  double id=0;int initial=numeric(root,end,"id",&id)&&id==11;
  if(initial&&json_member(root,end,"error")){c->parse_error="subscription_error";return 0;}
  const char *container=json_member_object(root,end,initial?"result":"params",'{',&ce);

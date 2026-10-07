@@ -73,6 +73,9 @@ jobs:
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures
 
+      - name: Native printer report interaction regression
+        run: npm run test:printer-reports
+
       - name: Install browser for file-dialog regression
         run: npx playwright install --with-deps chromium
 

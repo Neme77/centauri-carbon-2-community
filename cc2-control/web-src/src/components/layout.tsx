@@ -374,3 +374,52 @@ export const Toast = () => {
     </div>
   ) : null
 }
+
+// No extra poll: retain the latest native event in the existing printer response.
+export const PrinterReport = () => {
+  const { data, ok } = printer.use()
+  const report = data?.printer_report
+  const storageKey = 'cc2-printer-report-seen'
+  const eventId = report?.event_id ?? (report ? String(report.sequence) : '')
+  const [dismissed, setDismissed] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(storageKey)
+    } catch {
+      return null
+    }
+  })
+  useEffect(() => {
+    if (!report || (report.level !== 1 && report.level !== 2)) return
+    try {
+      localStorage.setItem(storageKey, eventId)
+    } catch {
+      // Storage restrictions must not prevent showing printer errors.
+    }
+  }, [eventId, report?.level])
+  if (!report || (report.level !== 1 && report.level !== 2) || dismissed === eventId) return null
+  const title =
+    report.level === 3
+      ? 'printer.report_resume'
+      : report.level === 2
+        ? 'printer.report_critical'
+        : report.level === 1
+          ? 'printer.report_warning'
+          : 'printer.report_info'
+  return (
+    <section role="alert" data-testid="printer-report" class="mb-4 rounded-lg border border-warning bg-panel p-4">
+      <div class="flex items-start justify-between gap-3">
+        <strong>
+          {t(title)} · {tpl('printer.report_code', { code: report.code })}
+        </strong>
+        <button type="button" aria-label={t('printer.report_dismiss')} onClick={() => setDismissed(eventId)}>
+          <X size={18} />
+        </button>
+      </div>
+      {report.message && <p class="mt-2 whitespace-pre-wrap break-words">{report.message}</p>}
+      <p class="mt-2 text-xs text-muted">
+        {tpl('printer.report_last', { seconds: report.age })} {t('printer.report_history')}
+      </p>
+      {(!ok || !data.connected) && <p class="text-xs text-muted">{t('printer.report_disconnected')}</p>}
+    </section>
+  )
+}
