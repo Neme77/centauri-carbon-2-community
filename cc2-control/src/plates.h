@@ -176,13 +176,21 @@ static void plates_sync_directory(const char *path) {
 
 /* Atomic replacement; with `backup`, the old file is kept under that name the way
  * the firmware's own SAVE_CONFIG keeps autosave_backup.cfg. */
+static char *plates_read_file(const char *path,size_t limit,size_t *length);
 static int plates_replace_file(const char *path, const char *backup, const char *data, size_t length, mode_t mode) {
     char temporary[PATH_MAX_LOCAL];
     if (snprintf(temporary, sizeof(temporary), "%s.cc2-new", path) >= (int)sizeof(temporary) ||
         plates_write_new(temporary, data, length, mode) != 0) return -1;
-    if (backup && rename(path, backup) != 0) { unlink(temporary); return -1; }
+    if (backup) {
+        size_t old_length=0;char *old=plates_read_file(path,AUTOSAVE_FILE_MAX,&old_length);
+        char backup_new[PATH_MAX_LOCAL]={0};
+        int ok=old && snprintf(backup_new,sizeof(backup_new),"%s.cc2-new",backup)<(int)sizeof(backup_new) &&
+            plates_write_new(backup_new,old,old_length,mode)==0 && rename(backup_new,backup)==0;
+        free(old);
+        if(!ok){if(backup_new[0])unlink(backup_new);unlink(temporary);return -1;}
+        plates_sync_directory(backup);
+    }
     if (rename(temporary, path) != 0) {
-        if (backup) (void)rename(backup, path);
         unlink(temporary); return -1;
     }
     plates_sync_directory(path);
@@ -435,11 +443,9 @@ static int plates_json_params(const char *obj, const char *end, plate_mesh *m) {
 }
 
 /* 1 slot in memory, 0 absent from memory, -1 query failed. Memory carries no offset. */
-static int plates_memory_slot(char side, plate_mesh *mesh) {
-    static const char query[] =
-        "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":[\"profiles\"]}}}\003";
-    char *reply = NULL; size_t length = 0;
-    if (plates_uds(query, &reply, &length) != 0 || !reply) return -1;
+static const char plates_profiles_query[] =
+    "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":[\"profiles\"]}}}\003";
+static int plates_memory_reply(char side,plate_mesh *mesh,const char *reply,size_t length) {
     const char *end = reply + length, *root = json_skip_space(reply, end), *root_end, *e1, *e2, *e3, *e4, *e5, *e6;
     int found = -1;
     if (root < end && *root == '{' && (root_end = json_container_end(root, end))) {
@@ -455,25 +461,30 @@ static int plates_memory_slot(char side, plate_mesh *mesh) {
         else if (params && points && plates_json_points(points, e5, mesh) && plates_json_params(params, e6, mesh) &&
                  plate_mesh_valid(mesh)) found = 1;
     }
-    free(reply);
     return found;
+}
+static int plates_memory_slot(char side,plate_mesh *mesh) {
+    char *reply=NULL;size_t length=0;
+    if(plates_uds(plates_profiles_query,&reply,&length)!=0||!reply)return -1;
+    int found=plates_memory_reply(side,mesh,reply,length);free(reply);return found;
 }
 
 /* SET_GCODE_OFFSET Z= without MOVE: nothing moves, the next move uses the new offset. */
-static int plates_apply_z(double z) {
-    char query[192], *reply = NULL; size_t length = 0;
-    snprintf(query, sizeof(query),
-             "{\"id\":204,\"method\":\"gcode/script\",\"params\":{\"script\":\"SET_GCODE_OFFSET Z=%.3f\"}}\003", z);
-    if (plates_uds(query, &reply, &length) != 0 || !reply) return -1;
+static int plates_accept_z(double z,const char *reply,size_t length) {
     const char *end = reply + length, *root = json_skip_space(reply, end);
     const char *root_end = root < end && *root == '{' ? json_container_end(root, end) : NULL;
     int ok = root_end && json_member(root, root_end, "result") && !json_member(root, root_end, "error");
-    free(reply);
     if (!ok) return -1;
     plates_z_valid = 1; plates_z_applied = z;
     plates_z_service_known = stat(object_query_path, &plates_z_service) == 0;
     z_offset_session = 0; /* live adjustments now start from the plate value */
     return 0;
+}
+static int plates_apply_z(double z) {
+    char query[192],*reply=NULL;size_t length=0;
+    snprintf(query,sizeof(query),"{\"id\":204,\"method\":\"gcode/script\",\"params\":{\"script\":\"SET_GCODE_OFFSET Z=%.3f\"}}\003",z);
+    if(plates_uds(query,&reply,&length)!=0||!reply)return -1;
+    int result=plates_accept_z(z,reply,length);free(reply);return result;
 }
 
 /* The printer service binds a new socket file each time it starts, so finding the
@@ -608,6 +619,8 @@ static void plates_new_id(char out[PLATE_ID_LEN + 1]) {
     } while (plate_find(out));
 }
 
+static int plates_background_active(void);
+
 /* ---- HTTP ------------------------------------------------------------------------ */
 
 static int plates_console_busy(void) {
@@ -703,6 +716,7 @@ static int plates_capture(int fd, char side, plate_mesh *mesh) {
 }
 
 static int plates_open(int fd) {
+    if (plates_background_active()) { plates_fail(fd,409,"Plate verification is still running");return 0; }
     if (!plates_available) { plates_fail(fd, 503, plates_error); return 0; }
     if (plates.pending[0]) { plates_fail(fd, 409, "A plate change is waiting for the printer restart"); return 0; }
     return 1;
@@ -804,7 +818,10 @@ static void plates_unmount_response(int fd) {
 
 /* A print started from the screen or a slicer while the reboot waited must not be cut off. */
 static int plates_reboot_guard(void) {
-    return plates_mqtt && plates_mqtt->have_machine_status && plates_mqtt->machine_status == 1;
+    time_t now=time(NULL);const mqtt_client *m=plates_mqtt;
+    return m && m->connected && m->registered && m->have_machine_status && m->machine_status==1 &&
+        m->last_message>0 && now>=m->last_message && now-m->last_message<=15 && uds_fresh(&telemetry) &&
+        !plates_console_busy() && !atomic_load(&upload_busy) && !atomic_load(&active_downloads) && !z_offset_pending;
 }
 
 /* id [\n REBOOT]: mount a plate. Its Z offset applies at once. A mesh that is not in
@@ -829,7 +846,13 @@ static void plates_mount_response(int fd, const mqtt_client *mqtt, const char *b
         free(file); plates_fail(fd, 503, "The printer mesh file has an unexpected format"); return;
     }
     char old_current[PLATE_ID_LEN + 1]; memcpy(old_current, plates.current, sizeof(old_current));
-    if (found && plate_mesh_equal(&slot, &p->mesh, 1)) {
+    int matches=found && plate_mesh_equal(&slot,&p->mesh,1);
+    if(matches){
+        plate_mesh memory;int live=plates_memory_slot(p->side,&memory);
+        if(live<0){free(file);plates_fail(fd,503,"Cannot verify the printer mesh in memory");return;}
+        matches=live==1 && plate_mesh_equal(&memory,&p->mesh,0);
+    }
+    if (matches) {
         free(file);
         if (plates_apply_z(p->z) != 0) { plates_fail(fd, 503, "Cannot apply the plate Z offset"); return; }
         memcpy(plates.current, p->id, sizeof(plates.current));
@@ -877,17 +900,147 @@ static void plates_mount_response(int fd, const mqtt_client *mqtt, const char *b
 
 /* recovery_tick gave up on the restart, or its guard saw the printer busy: memory still
  * holds the old mesh, so the file goes back. */
+/* Restore only the slot we wrote. Unrelated SAVE_CONFIG changes survive.
+ * Refuse to overwrite a slot changed by another actor or an unreadable file. */
+static int plates_restore_mesh(void) {
+    const plate_entry *p=plate_find(plates.pending);
+    char copy[PATH_MAX_LOCAL];size_t old_length=0,current_length=0;
+    plates_autosave_copy_path(copy,sizeof(copy));
+    char *old=plates_read_file(copy,AUTOSAVE_FILE_MAX,&old_length);
+    char *current=plates_read_file(printer_autosave_path,AUTOSAVE_FILE_MAX,&current_length);
+    int ok=0;char *restored=NULL;size_t restored_length=0;
+    if(!p||!old||!current)goto done;
+    size_t start,end,old_start=0,old_end=0;plate_mesh written;int unknown;
+    const char *slot=plate_slot(p->side);
+    if(autosave_section(current,current_length,slot,&start,&end)!=1 ||
+       !autosave_mesh(current,start,end,&written,&unknown)||unknown||!plate_mesh_equal(&written,&p->mesh,1))goto done;
+    int old_found=autosave_section(old,old_length,slot,&old_start,&old_end);
+    if(old_found<0)goto done;
+    size_t expected_length=0;char *expected=autosave_with_mesh(old,old_length,slot,&p->mesh,&expected_length);
+    if(!expected)goto done;
+    if(expected_length==current_length && !memcmp(expected,current,current_length)){
+        restored=malloc(old_length+1);if(restored){memcpy(restored,old,old_length+1);restored_length=old_length;}
+    }else{
+        size_t section_length=old_found?old_end-old_start:0;
+        restored_length=start+section_length+current_length-end;
+        restored=malloc(restored_length+1);
+        if(restored){memcpy(restored,current,start);if(section_length)memcpy(restored+start,old+old_start,section_length);
+            memcpy(restored+start+section_length,current+end,current_length-end);restored[restored_length]=0;}
+    }
+    free(expected);
+    if(!restored)goto done;
+    size_t again_length=0;char *again=plates_read_file(printer_autosave_path,AUTOSAVE_FILE_MAX,&again_length);
+    int unchanged=again && again_length==current_length && !memcmp(again,current,current_length);free(again);
+    if(unchanged)ok=plates_replace_file(printer_autosave_path,NULL,restored,restored_length,autosave_mode())==0;
+ done:
+    free(restored);free(old);free(current);return ok?0:-1;
+}
 static void plates_restart_failed(void) {
-    reboot_guard = NULL;
-    char copy[PATH_MAX_LOCAL]; size_t length = 0;
-    plates_autosave_copy_path(copy, sizeof(copy));
-    char *text = plates_read_file(copy, AUTOSAVE_FILE_MAX, &length);
-    if (text && length) (void)plates_replace_file(printer_autosave_path, NULL, text, length, autosave_mode());
-    free(text);
-    plates_reboot_requested = 0; plates.pending[0] = 0;
-    memcpy(plates.current, plates_previous_current, sizeof(plates.current));
-    (void)plates_save();
-    plates_result = "reboot_failed";
+    reboot_guard=NULL;
+    if(plates_restore_mesh()!=0){
+        plates_reboot_requested=0;plates_available=0;
+        plates_error="Mesh rollback failed; backups and pending mount were retained";
+        plates_result="reboot_failed";return;
+    }
+    plates_reboot_requested=0;plates.pending[0]=0;
+    memcpy(plates.current,plates_previous_current,sizeof(plates.current));
+    if(plates_save()!=0){plates_available=0;plates_error="Cannot record the mesh rollback";}
+    plates_result="reboot_failed";
+}
+
+/* Automatic recovery never waits in poll/read. One short-lived UDS transaction,
+ * at most 64 KiB of reply data and three attempts per plate/service generation. */
+typedef struct {int fd,connecting,id;size_t sent,used;long long deadline;char request[512];char *buffer;} plates_exchange;
+static plates_exchange plates_background={.fd=-1};
+static int plates_background_active(void){return plates_background.fd>=0;}
+static unsigned plates_attempts;
+static char plates_attempt_id[PLATE_ID_LEN+1];
+static double plates_attempt_z;
+static struct stat plates_attempt_service;
+static int plates_attempt_service_known;
+static void plates_background_close(void){
+    if(plates_background.fd>=0)close(plates_background.fd);
+    free(plates_background.buffer);memset(&plates_background,0,sizeof(plates_background));plates_background.fd=-1;
+}
+/* 1 completed, 0 still pending, -1 failed. The caller owns a completed reply. */
+static int plates_background_step(const char *query,char **reply,size_t *length){
+    *reply=NULL;*length=0;
+    /* Existing unit fixtures use their in-memory firmware; production uses the
+     * nonblocking transport below. */
+    if(plates_uds!=uds_query_json)return plates_uds(query,reply,length)==0?1:-1;
+    plates_exchange *x=&plates_background;
+    if(x->fd<0){
+        if(strlen(query)>=sizeof(x->request)||strlen(object_query_path)>=sizeof(((struct sockaddr_un *)0)->sun_path))return -1;
+        x->fd=socket(AF_UNIX,SOCK_STREAM,0);if(x->fd<0)return -1;
+        if(fcntl(x->fd,F_SETFL,O_NONBLOCK)<0)goto failed;
+        x->buffer=malloc(65537);if(!x->buffer)goto failed;
+        snprintf(x->request,sizeof(x->request),"%s",query);x->id=strstr(query,"gcode/script")?204:203;
+        x->deadline=monotonic_ms()+2000;
+        struct sockaddr_un address;memset(&address,0,sizeof(address));address.sun_family=AF_UNIX;
+        snprintf(address.sun_path,sizeof(address.sun_path),"%s",object_query_path);
+        if(connect(x->fd,(struct sockaddr *)&address,sizeof(address))<0){if(errno!=EINPROGRESS)goto failed;x->connecting=1;}
+    }
+    if(strcmp(x->request,query))goto failed;
+    if(x->connecting){
+        struct pollfd pfd={x->fd,POLLOUT,0};int ready=poll(&pfd,1,0);
+        if(ready<0&&errno!=EINTR)goto failed;
+        if(ready<=0){if(monotonic_ms()>=x->deadline)goto failed;return 0;}
+        int error=0;socklen_t size=sizeof(error);
+        if(getsockopt(x->fd,SOL_SOCKET,SO_ERROR,&error,&size)||error)goto failed;
+        x->connecting=0;
+    }
+    size_t wanted=strlen(x->request);
+    if(x->sent<wanted){
+        if(monotonic_ms()>=x->deadline)goto failed;
+        ssize_t n=send(x->fd,x->request+x->sent,wanted-x->sent,MSG_NOSIGNAL|MSG_DONTWAIT);
+        if(n<0&&(errno==EINTR||errno==EAGAIN||errno==EWOULDBLOCK))return 0;
+        if(n<=0)goto failed;
+        x->sent+=(size_t)n;
+        if(x->sent<wanted)return 0;
+    }
+    for(int turn=0;turn<4;turn++){
+        char *separator=x->used?memchr(x->buffer,3,x->used):NULL;
+        if(separator){
+            size_t frame=(size_t)(separator-x->buffer);const char *end=x->buffer+frame;
+            const char *root=json_skip_space(x->buffer,end),*root_end=root<end&&*root=='{'?json_container_end(root,end):NULL;
+            int id=-1;
+            if(root_end&&json_member_int(root,root_end,"id",&id)&&id==x->id){
+                char *body=malloc(frame+1);if(!body)goto failed;
+                memcpy(body,x->buffer,frame);body[frame]=0;*reply=body;*length=frame;plates_background_close();return 1;
+            }
+            memmove(x->buffer,x->buffer+frame+1,x->used-frame-1);x->used-=frame+1;continue;
+        }
+        if(x->used==65536)goto failed;
+        ssize_t n=recv(x->fd,x->buffer+x->used,65536-x->used,MSG_DONTWAIT);
+        if(n<0&&(errno==EINTR||errno==EAGAIN||errno==EWOULDBLOCK))break;
+        if(n<=0)goto failed;
+        x->used+=(size_t)n;
+    }
+    if(monotonic_ms()>=x->deadline)goto failed;
+    return 0;
+ failed:
+    plates_background_close();return -1;
+}
+static int plates_memory_background(char side,plate_mesh *mesh){
+    char *reply=NULL;size_t length=0;int result=plates_background_step(plates_profiles_query,&reply,&length);
+    if(!result)return -2;
+    if(result<0)return -1;
+    int found=plates_memory_reply(side,mesh,reply,length);free(reply);return found;
+}
+static int plates_z_background(double z){
+    char query[192],*reply=NULL;size_t length=0;
+    snprintf(query,sizeof(query),"{\"id\":204,\"method\":\"gcode/script\",\"params\":{\"script\":\"SET_GCODE_OFFSET Z=%.3f\"}}\003",z);
+    int result=plates_background_step(query,&reply,&length);
+    if(!result)return -2;
+    if(result<0)return -1;
+    int ok=plates_accept_z(z,reply,length);free(reply);return ok;
+}
+static void plates_background_failed(long long now){
+    plates_attempts++;plates_next_tick_ms=now+(plates_attempts==1?5000:15000);
+    if(plates_attempts>=3){
+        plates_result="verify_failed";
+        if(plates.pending[0]){plates.pending[0]=0;plates.current[0]=0;if(plates_save()!=0){plates_available=0;plates_error="Cannot record failed plate verification";}}
+    }
 }
 
 /* Main loop: undo a write whose restart failed, verify a mount after the restart and
@@ -895,33 +1048,47 @@ static void plates_restart_failed(void) {
 static void plates_tick(const mqtt_client *mqtt) {
     if (telemetry.connections != plates_seen_connections) {
         plates_seen_connections = telemetry.connections;
-        if (!plates_service_unchanged()) plates_z_valid = 0;
+        if (!plates_service_unchanged()){
+            struct stat service;
+            int known=stat(object_query_path,&service)==0;
+            int changed=known && (!plates_attempt_service_known || service.st_dev!=plates_attempt_service.st_dev ||
+                service.st_ino!=plates_attempt_service.st_ino || service.st_ctim.tv_sec!=plates_attempt_service.st_ctim.tv_sec ||
+                service.st_ctim.tv_nsec!=plates_attempt_service.st_ctim.tv_nsec);
+            plates_z_valid=0;plates_background_close();
+            if(changed)plates_attempts=0;
+            if(known){plates_attempt_service=service;plates_attempt_service_known=1;}
+        }
     }
     if (plates_reboot_requested) {
         if (!reboot_pending) plates_restart_failed();
         return;
     }
-    if (!plates_available) return;
+    if (!plates_available) {plates_background_close();return;}
     const plate_entry *current = plates.current[0] ? plate_find(plates.current) : NULL;
     int z_due = current && (!plates_z_valid || !plate_close(plates_z_applied, current->z));
     long long now = monotonic_ms();
-    if ((!plates.pending[0] && !z_due) || now < plates_next_tick_ms || plates_printer_ready(mqtt) || z_offset_pending)
-        return;
+    if(current && (strcmp(plates_attempt_id,current->id)||!plate_close(plates_attempt_z,current->z))){
+        snprintf(plates_attempt_id,sizeof(plates_attempt_id),"%s",current->id);plates_attempt_z=current->z;
+        plates_attempts=0;plates_background_close();
+    }
+    if ((!plates.pending[0] && !z_due) || plates_printer_ready(mqtt) || z_offset_pending){plates_background_close();return;}
+    if(plates_attempts>=3 || (now<plates_next_tick_ms && plates_background.fd<0))return;
     plates_next_tick_ms = now + 5000;
     if (plates.pending[0]) {
         const plate_entry *p = plate_find(plates.pending); /* plates_load and plates_open keep it present */
         plate_mesh file, memory;
-        int in_memory = p ? plates_memory_slot(p->side, &memory) : 0;
-        if (in_memory < 0) return; /* ask again in 5 s */
+        int in_memory=p?plates_memory_background(p->side,&memory):0;
+        if(in_memory==-2)return;
+        if(in_memory<0){plates_background_failed(now);return;}
         int ok = p && autosave_slot(p->side, &file) == 1 && plate_mesh_equal(&file, &p->mesh, 1) &&
                  in_memory == 1 && plate_mesh_equal(&memory, &p->mesh, 0);
         plates.pending[0] = 0;
         if (!ok) plates.current[0] = 0;
-        (void)plates_save();
+        if(plates_save()!=0){plates_available=0;plates_error="Cannot record plate verification";plates_result="verify_failed";return;}
         plates_result = ok ? "mounted" : "verify_failed";
         if (!ok) return;
         current = plate_find(plates.current);
         plates_z_valid = 0;
     }
-    if (current) (void)plates_apply_z(current->z);
+    if(current){int applied=plates_z_background(current->z);if(applied==-1)plates_background_failed(now);else if(applied==0)plates_attempts=0;}
 }

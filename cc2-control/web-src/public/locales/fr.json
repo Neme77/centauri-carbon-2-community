@@ -584,7 +584,6 @@
   "history.delete_requested": "Suppression de l’historique demandée.",
   "print.file_filament": "Filament du G-code",
   "print.file_filament_unknown": "Couleur/matériau non indiqués dans le fichier",
-  "print.analysing_file": "Analyse du fichier en cours…",
   "bed.build_plates": "Plaques",
   "plates.title": "Bibliothèque de plaques",
   "plates.subtitle": "Mesurez une plaque une fois ; en la remontant, son maillage et son décalage Z sont chargés.",
@@ -632,5 +631,6 @@
   "plates.adaptive_note": "Les impressions qui nivellent d’abord le plateau mesurent un maillage neuf ; le décalage Z de la plaque s’applique toujours.",
   "plates.plate_option": "Plaque · {name}",
   "plates.loading": "Chargement de la bibliothèque de plaques…",
-  "plates.offline": "CC2 Control ne répond pas ; l’imprimante redémarre peut-être."
+  "plates.offline": "CC2 Control ne répond pas ; l’imprimante redémarre peut-être.",
+  "print.analysing_file": "Analyse du fichier en cours…"
 }

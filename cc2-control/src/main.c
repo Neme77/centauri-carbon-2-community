@@ -3206,6 +3206,7 @@ static void console_command_response(int fd, console_state *console, const mqtt_
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error)); return;
     }
     memcpy(command,body,body_len); command[body_len]='\0';
+    if(plates_background_active() && strcmp(command,"M112")){plates_fail(fd,409,"Plate verification is still running");return;}
     if (!console_command_allowed(console,command,mqtt,reason,sizeof(reason)) ||
         console_start(console,command,reason,sizeof(reason)) != 0) {
         char escaped[300],response[420]; json_escape(escaped,sizeof(escaped),reason);
@@ -3225,6 +3226,7 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error));return;
     }
     memcpy(action,body,body_len);action[body_len]='\0';
+    if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
     int z_action=!strncmp(action,"zoffset:",8);
     double z_next=0,z_reference=0;
     if(z_action){
@@ -3395,7 +3397,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/copy")==0) {
         gcode_copy_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/print")==0) {
-        gcode_start_response(fd,mqtt,body,body_len);
+        if(plates_background_active())plates_fail(fd,409,"Plate verification is still running");
+        else gcode_start_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/exclude-objects")==0) {
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
@@ -3526,7 +3529,8 @@ int main(int argc, char **argv) {
         for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
             FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
         }
-        struct timeval wait={receiving?0:1,receiving?100000:0};
+        int short_wait=receiving||plates_background_active();
+        struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);

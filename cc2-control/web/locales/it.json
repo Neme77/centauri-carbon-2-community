@@ -584,7 +584,6 @@
   "history.delete_requested": "Cancellazione della cronologia richiesta.",
   "print.file_filament": "Filamento nel G-code",
   "print.file_filament_unknown": "Colore/materiale non indicati nel file",
-  "print.analysing_file": "Analisi del file in corso…",
   "bed.build_plates": "Piatti",
   "plates.title": "Libreria dei piatti",
   "plates.subtitle": "Misura un piatto una volta: rimontandolo si caricano la sua mesh e il suo offset Z.",
@@ -632,5 +631,6 @@
   "plates.adaptive_note": "Le stampe che livellano prima il piatto misurano una mesh nuova; l’offset Z del piatto si applica comunque.",
   "plates.plate_option": "Piatto · {name}",
   "plates.loading": "Caricamento della libreria dei piatti…",
-  "plates.offline": "CC2 Control non risponde; la stampante potrebbe essere in riavvio."
+  "plates.offline": "CC2 Control non risponde; la stampante potrebbe essere in riavvio.",
+  "print.analysing_file": "Analisi del file in corso…"
 }

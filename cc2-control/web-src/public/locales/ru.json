@@ -584,7 +584,6 @@
   "history.delete_requested": "Запрошено удаление истории.",
   "print.file_filament": "Филамент в G-code",
   "print.file_filament_unknown": "Цвет/материал не указаны в файле",
-  "print.analysing_file": "Анализ файла…",
   "bed.build_plates": "Столы",
   "plates.title": "Библиотека столов",
   "plates.subtitle": "Измерьте стол один раз: при повторной установке подтянутся его сетка и Z-offset.",
@@ -632,5 +631,6 @@
   "plates.adaptive_note": "Если перед печатью включено выравнивание, принтер снимает свежую сетку, а Z-offset стола всё равно применяется.",
   "plates.plate_option": "Стол · {name}",
   "plates.loading": "Загрузка библиотеки столов…",
-  "plates.offline": "CC2 Control не отвечает; возможно, принтер перезагружается."
+  "plates.offline": "CC2 Control не отвечает; возможно, принтер перезагружается.",
+  "print.analysing_file": "Анализ файла…"
 }

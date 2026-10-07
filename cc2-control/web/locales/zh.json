@@ -584,7 +584,6 @@
   "history.delete_requested": "已请求删除历史记录。",
   "print.file_filament": "G-code 中的耗材",
   "print.file_filament_unknown": "文件未提供颜色或材料信息",
-  "print.analysing_file": "正在分析文件…",
   "bed.build_plates": "打印板",
   "plates.title": "打印板库",
   "plates.subtitle": "打印板只需测量一次；重新装上时会载入它的网格和 Z 偏移。",
@@ -632,5 +631,6 @@
   "plates.adaptive_note": "打印前先调平的打印会测量新的网格；打印板的 Z 偏移仍然有效。",
   "plates.plate_option": "打印板 · {name}",
   "plates.loading": "正在载入打印板库…",
-  "plates.offline": "CC2 Control 无响应；打印机可能正在重启。"
+  "plates.offline": "CC2 Control 无响应；打印机可能正在重启。",
+  "print.analysing_file": "正在分析文件…"
 }

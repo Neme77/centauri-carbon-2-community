@@ -584,7 +584,6 @@
   "history.delete_requested": "History deletion requested.",
   "print.file_filament": "Filament in G-code",
   "print.file_filament_unknown": "Colour/material not provided by the file",
-  "print.analysing_file": "Analysing file…",
   "bed.build_plates": "Build Plates",
   "plates.title": "Build Plate Library",
   "plates.subtitle": "Measure a plate once; mounting it again loads its mesh and Z offset.",
@@ -632,5 +631,6 @@
   "plates.adaptive_note": "Prints that level the bed first probe a fresh mesh; the plate Z offset still applies.",
   "plates.plate_option": "Plate · {name}",
   "plates.loading": "Loading the plate library…",
-  "plates.offline": "CC2 Control is not answering; the printer may be restarting."
+  "plates.offline": "CC2 Control is not answering; the printer may be restarting.",
+  "print.analysing_file": "Analysing file…"
 }
