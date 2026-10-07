@@ -64,6 +64,12 @@ jobs:
           git add --intent-to-add ../web
           git diff --exit-code -- ../web
 
+      - name: Install browser for file-dialog regression
+        run: npx playwright install --with-deps chromium
+
+      - name: Slow file-analysis browser regression
+        run: npm run test:filaments
+
   sanitizers:
     name: CC2 Control (${{ matrix.sanitize }} sanitizer)
     runs-on: ubuntu-26.04

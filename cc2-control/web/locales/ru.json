@@ -584,6 +584,7 @@
   "history.delete_requested": "Запрошено удаление истории.",
   "print.file_filament": "Филамент в G-code",
   "print.file_filament_unknown": "Цвет/материал не указаны в файле",
+  "print.analysing_file": "Анализ файла…",
   "bed.build_plates": "Столы",
   "plates.title": "Библиотека столов",
   "plates.subtitle": "Измерьте стол один раз: при повторной установке подтянутся его сетка и Z-offset.",

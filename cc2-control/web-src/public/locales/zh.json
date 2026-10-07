@@ -584,6 +584,7 @@
   "history.delete_requested": "已请求删除历史记录。",
   "print.file_filament": "G-code 中的耗材",
   "print.file_filament_unknown": "文件未提供颜色或材料信息",
+  "print.analysing_file": "正在分析文件…",
   "bed.build_plates": "打印板",
   "plates.title": "打印板库",
   "plates.subtitle": "打印板只需测量一次；重新装上时会载入它的网格和 Z 偏移。",

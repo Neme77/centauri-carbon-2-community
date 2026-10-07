@@ -4,7 +4,10 @@ import { ask } from './confirm'
 
 export const request = async (path: string, options: RequestInit = {}) => {
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), 8000)
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    /\/api\/gcode-files\/(metadata|inspect)$/.test(path) ? 120000 : 8000
+  )
   try {
     const headers = new Headers(options.headers)
     if (options.method && !['GET', 'HEAD'].includes(options.method.toUpperCase())) headers.set('X-CC2-Request', '1')
