@@ -19,7 +19,8 @@
     "test:plates": "node preview/test-bed-plates.mjs",
     "test:calibration": "node preview/test-mesh-calibration.mjs",
     "test:job-objects": "node preview/test-job-objects.mjs",
-    "test:pid": "node preview/test-pid.mjs"
+    "test:pid": "node preview/test-pid.mjs",
+    "test:print-temperatures": "node preview/test-print-temperatures.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

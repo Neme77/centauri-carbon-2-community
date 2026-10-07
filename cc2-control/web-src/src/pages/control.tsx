@@ -157,18 +157,28 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
 
 const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const list = presets.use().list
+  const canSet = Boolean(d?.connected) && (v.idle || v.printing || v.paused)
   const [nozzle, setNozzle] = useState('0'),
     [bed, setBed] = useState('0')
   const seeded = useRef(false)
   // Start from the printer's current targets, so Apply never silently sends 0/0 over a running preheat.
   useEffect(() => {
-    if (seeded.current || !d) return
+    if (
+      seeded.current ||
+      !d?.connected ||
+      d.extruder?.target == null ||
+      d.heater_bed?.target == null ||
+      !Number.isFinite(Number(d.extruder?.target)) ||
+      !Number.isFinite(Number(d.heater_bed?.target))
+    )
+      return
     seeded.current = true
     setNozzle(String(Math.round(Number(d.extruder?.target) || 0)))
     setBed(String(Math.round(Number(d.heater_bed?.target) || 0)))
   }, [d])
   const active = list.find(p => String(p.nozzle) === nozzle && String(p.bed) === bed)?.name
   const apply = async () => {
+    if (!canSet || !seeded.current) return
     const n = Number(nozzle),
       b = Number(bed)
     if (
@@ -182,7 +192,7 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
       b > 120
     )
       return notify(t('control.invalid_temperature_target'), 'error')
-    await control(`preheat:${n}:${b}`)
+    await control(`heaters:set:${n}:${b}`)
   }
   return (
     <Card>
@@ -206,7 +216,7 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
             min="0"
             max={max}
             value={val}
-            disabled={!v.idle}
+            disabled={!canSet}
             aria-label={tpl('control.name_target', { name: t(label) })}
             onInput={e => set(e.currentTarget.value)}
             onKeyDown={e => e.key === 'Enter' && apply()}
@@ -214,10 +224,10 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
           <small>°C</small>
         </div>
       ))}
-      <Button wide disabled={!v.idle} onClick={apply}>
+      <Button wide disabled={!canSet} onClick={apply}>
         {t('control.apply_targets')}
       </Button>
-      {!v.idle && <Notice>{t('common.available_when_idle')}</Notice>}
+      {!canSet && <Notice>{t('common.available_when_idle')}</Notice>}
       <div class="mt-4 border-t border-edge pt-3">
         <small class="text-muted">{t('control.temperature_presets')}</small>
         <div class="mt-2 flex gap-2">

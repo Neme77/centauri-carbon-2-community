@@ -146,6 +146,18 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         else return reject(reason,reason_cap,"Unknown homing selection");
         return 1;
     }
+    if(strncmp(action,"heaters:set:",12)==0){
+        time_t now=time(NULL);int end=0;
+        if(!m->connected||!m->registered||!m->have_machine_status||
+           (m->machine_status!=1&&m->machine_status!=2)||m->last_message<=0||
+           now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Temperature targets require fresh idle or printing telemetry");
+        if(sscanf(action,"heaters:set:%lf:%lf%n",&value,&value2,&end)!=2||action[end]||
+           !isfinite(value)||!isfinite(value2)||value<0||value>300||value2<0||value2>120)
+            return reject(reason,reason_cap,"Invalid temperature targets");
+        snprintf(script,cap,"SET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=%.1f",value,value2);
+        return 1;
+    }
     if(sscanf(action,"%31[^:]:%31[^:]:%lf",kind,a,&value)==3&&strcmp(kind,"heater")==0){
         if(strcmp(a,"extruder")==0){if(value<0||value>300)return reject(reason,reason_cap,"Nozzle target must be 0..300 C");}
         else if(strcmp(a,"heater_bed")==0){if(value<0||value>120)return reject(reason,reason_cap,"Bed target must be 0..120 C");}

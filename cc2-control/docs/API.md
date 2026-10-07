@@ -188,6 +188,21 @@ The UI asks for confirmation before deleting one entry or all completed entries 
 The firmware handler inspected for this integration deletes database records; it does not remove
 G-code files or timelapse files. This is a history operation, not a storage cleanup tool.
 
+## Temperature targets during printing
+
+`POST /api/control` accepts `heaters:set:<nozzle>:<bed>`, with nozzle 0–300 °C
+and bed 0–120 °C. It requires connected, registered MQTT, a known idle or printing
+machine state and a message received within 15 seconds. Finite values and full
+request syntax are checked. The command sends two SET_HEATER_TEMPERATURE lines
+without MOVE, PAUSE, M109 or M190; it does not wait for heating or alter print
+state. A paused print is accepted while the native machine remains in printing
+state. Other firmware operations remain blocked.
+
+The Control temperature inputs and Apply targets button are available for idle,
+printing and paused jobs. Initial fields require reported printer targets.
+Preheat presets and calibration remain restricted to idle operation. A later
+G-code heater command can replace the manually selected target, as on Klipper.
+Manual temperature targets were validated during an active print on a physical CC2.
 ## Heater PID calibration
 
 `GET /api/pid` returns the selected heater, busy/ready/failed flags and the last

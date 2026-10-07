@@ -70,6 +70,9 @@ jobs:
       - name: PID browser interaction regression
         run: npm run test:pid
 
+      - name: Printing temperature interaction regression
+        run: npm run test:print-temperatures
+
       - name: Install browser for file-dialog regression
         run: npx playwright install --with-deps chromium
 
