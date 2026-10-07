@@ -18,6 +18,8 @@ static pid_t launch_printer_reboot(void) {
     _exit(127);
 }
 static pid_t (*reboot_launcher)(void) = launch_printer_reboot;
+/* Optional last check before a requested reboot starts (plates.h: the printer must still be idle). */
+static int (*reboot_guard)(void);
 
 static int recovery_available(void) {
     return recovery_console && atomic_load(&recovery_console->emergency_sent);
@@ -32,6 +34,10 @@ static time_t recovery_clock(void) {
 static void recovery_tick(void) {
     if (!reboot_pending) return;
     if (!reboot_launched && recovery_clock() >= reboot_due) {
+        if (reboot_guard && !reboot_guard()) {
+            reboot_guard = NULL; reboot_pending = 0; reboot_error = "printer_busy";
+            return;
+        }
         reboot_launched=1;
         reboot_pid = reboot_launcher();
         if (reboot_pid < 0) {

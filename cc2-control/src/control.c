@@ -66,6 +66,20 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Object name exceeds command length");
         return 1;
     }
+    if(strncmp(action,"pid:",4)==0) {
+        time_t now=time(NULL);int end=0;
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+           m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"PID calibration requires fresh idle telemetry");
+        if(strcmp(action,"pid:save")==0){snprintf(script,cap,"SAVE_CONFIG");return 1;}
+        if(sscanf(action,"pid:%31[^:]:%lf%n",a,&value,&end)!=2||action[end]||!isfinite(value))
+            return reject(reason,reason_cap,"Invalid PID calibration request");
+        int hotend=!strcmp(a,"extruder"),bed=!strcmp(a,"heater_bed");
+        if((!hotend&&!bed)||value<(hotend?150:40)||value>(hotend?300:120))
+            return reject(reason,reason_cap,"PID target outside heater limits");
+        snprintf(script,cap,"PID_CALIBRATE HEATER=%s TARGET=%.1f\nTURN_OFF_HEATERS",a,value);
+        return 1;
+    }
     /* Stage 2: guarded four-corner measurement, never called by print start. */
     if(strcmp(action,"screws:measure")==0){
         if(printing(m))return reject(reason,reason_cap,"Screw measurement is blocked while printing");
