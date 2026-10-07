@@ -26,7 +26,7 @@ typedef struct {
  /* Last vendor event, retained across disconnects; never implies an active fault. */
  unsigned long report_sequence;
  int report_code, report_level;
- struct timespec report_received;
+ struct timespec report_received, report_identity;
  char report_message[1024]; /* validated JSON string, or null */
 } uds_client;
 void uds_init(uds_client *c);

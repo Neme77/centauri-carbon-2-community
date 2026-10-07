@@ -41,7 +41,8 @@ Example response:
     "material_presets": true,
     "persistent_ui_preferences": true,
     "print_history": true,
-    "canvas_auto_refill": true
+    "canvas_auto_refill": true,
+    "bed_plates": true
   },
   "endpoints": {
     "printer": "/api/printer",
@@ -51,6 +52,7 @@ Example response:
     "console": "/api/console",
     "preferences": "/api/preferences",
     "history": "/api/history",
+    "plates": "/api/plates",
     "discovery": "/api/v1/system/info"
   },
   "runtime": {
@@ -189,11 +191,16 @@ G-code files or timelapse files. This is a history operation, not a storage clea
 ### Native printer reports
 
 `GET /api/printer` also returns `printer_report`: null until a vendor event is
-received, then `{sequence, code, level, message, age}`. This is the last received
+received, then `{event_id, sequence, code, level, message, age}`. This is the last received
 event, not an assertion that a fault is still active. `age` is monotonic seconds.
 It survives UDS disconnects but resets when CC2 Control restarts. `message` is
 native text or null if missing, invalid or longer than 1023 encoded JSON bytes.
-The UI renders text, never HTML, and dismissal only hides the event locally.
+The UI renders text, never HTML. Only WARNING and CRITICAL produce an alert;
+RESUME reports remain available in the API. The browser remembers the last shown
+event across reloads. Consecutive identical native reports retain their event ID;
+a warning following a RESUME is a new event, even with the same error code.
+The vendor stream does not provide an authoritative occurrence ID, so repeated
+identical warnings without an intervening transition cannot be distinguished.
 
 The existing socket subscribes once per connection to `gcode/subscribe_report`.
 No periodic error query is added. Ordinary code-zero INFO output does not replace
@@ -207,3 +214,6 @@ Protocol provenance: ELEGOO's published [webhooks.cpp](https://github.com/elegoo
 and [error levels](https://github.com/elegooofficial/CentauriCarbon2/blob/5a2ea7fc03e707552701b1a69f463699cbd39230/elegoo/common/exception_handler.h).
 This snapshot predates deployed firmware; real-printer event delivery remains
 required validation. Displaying a report does not diagnose an unreported stop.
+
+Physical validation: a simulated spaghetti-detection event displayed correctly;
+the old message did not reappear after page refresh or a printer reboot.

@@ -379,8 +379,24 @@ export const Toast = () => {
 export const PrinterReport = () => {
   const { data, ok } = printer.use()
   const report = data?.printer_report
-  const [dismissed, setDismissed] = useState<number | null>(null)
-  if (!report || dismissed === report.sequence) return null
+  const storageKey = 'cc2-printer-report-seen'
+  const eventId = report?.event_id ?? (report ? String(report.sequence) : '')
+  const [dismissed, setDismissed] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(storageKey)
+    } catch {
+      return null
+    }
+  })
+  useEffect(() => {
+    if (!report || (report.level !== 1 && report.level !== 2)) return
+    try {
+      localStorage.setItem(storageKey, eventId)
+    } catch {
+      // Storage restrictions must not prevent showing printer errors.
+    }
+  }, [eventId, report?.level])
+  if (!report || (report.level !== 1 && report.level !== 2) || dismissed === eventId) return null
   const title =
     report.level === 3
       ? 'printer.report_resume'
@@ -395,7 +411,7 @@ export const PrinterReport = () => {
         <strong>
           {t(title)} · {tpl('printer.report_code', { code: report.code })}
         </strong>
-        <button type="button" aria-label={t('printer.report_dismiss')} onClick={() => setDismissed(report.sequence)}>
+        <button type="button" aria-label={t('printer.report_dismiss')} onClick={() => setDismissed(eventId)}>
           <X size={18} />
         </button>
       </div>

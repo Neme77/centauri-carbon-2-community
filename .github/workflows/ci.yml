@@ -64,6 +64,24 @@ jobs:
           git add --intent-to-add ../web
           git diff --exit-code -- ../web
 
+      - name: Install browser for PID interaction regression
+        run: npx playwright install --with-deps chromium
+
+      - name: PID browser interaction regression
+        run: npm run test:pid
+
+      - name: Printing temperature interaction regression
+        run: npm run test:print-temperatures
+
+      - name: Native printer report interaction regression
+        run: npm run test:printer-reports
+
+      - name: Install browser for file-dialog regression
+        run: npx playwright install --with-deps chromium
+
+      - name: Slow file-analysis browser regression
+        run: npm run test:filaments
+
   sanitizers:
     name: CC2 Control (${{ matrix.sanitize }} sanitizer)
     runs-on: ubuntu-26.04

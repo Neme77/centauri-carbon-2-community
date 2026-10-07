@@ -10,24 +10,7 @@ spec.loader.exec_module(prepare)
 assert prepare.SOURCE_SHA256 == hashlib.sha256(prepare.SOURCE.read_bytes()).hexdigest()
 with zipfile.ZipFile(prepare.SOURCE) as archive:
     assert archive.testzip() is None
-    for name in ('VERSION', 'FIRMWARE_VERSION', 'src/main.c', 'src/control.c', 'src/mqtt.c', 'src/uds.c', 'src/recovery.h',
-                 'src/gcode_download.h', 'web/index.html', 'web-src/src/lib/meshdraw.ts',
-                 'web-src/src/pages/bed.tsx', 'web-src/src/components/shared.tsx', 'web-src/src/lib/i18n.ts',
-                 'web-src/preview/test-camera-stream.mjs', 'tests/test_runtime_limits.c',
-                 'tests/test_recovery_download.c', 'tests/test_object_query.c',
-                 'tests/test_control_actions.c', 'tests/test_installer_package.py',
-                 'web-src/src/pages/dashboard.tsx', 'web-src/src/pages/control.tsx',
-                 'web-src/preview/test-quick-actions.mjs', 'src/history.h',
-                 'tests/test_printer_replies.c', 'tests/test_history_api.c',
-                 'web-src/src/lib/machine.ts', 'web-src/src/lib/history.ts',
-                 'web-src/src/pages/history.tsx', 'web-src/src/pages/print-dialog.tsx',
-                 'tests/test_print_options.c', 'tests/test_camera_viewer_api.py',
-                 'web-src/preview/test-print-history.mjs', 'web-src/preview/test-browser.mjs',
-                 'web-src/preview/test-filament-mapping.mjs', 'web-src/preview/test-adaptive-mesh.mjs', 'tests/test_filament_metadata.c',
-                 'tests/test_gcode_files.py', 'tests/test_c_harnesses.py', 'tests/test_canvas_discovery.c',
-                 'src/mqtt.h', 'src/uds.h', 'tests/test_uds.c',
-                 'web-src/src/components/layout.tsx', 'web-src/src/App.tsx',
-                 'web-src/preview/test-printer-reports.mjs', 'docs/API.md'):
+    for name in ('VERSION', 'FIRMWARE_VERSION', 'src/main.c', 'src/plates.h', 'tests/test_plates.c', 'tests/test_file_ops.c', 'tests/test_file_analysis.c', 'tests/test_file_analysis_http.py', 'docs/API.md', 'src/control.c', 'src/mqtt.c', 'src/uds.c', 'src/recovery.h', 'src/gcode_download.h', 'web/index.html', 'web-src/src/lib/meshdraw.ts', 'web-src/src/pages/bed.tsx', 'web-src/src/components/shared.tsx', 'web-src/src/lib/i18n.ts', 'web-src/preview/test-camera-stream.mjs', 'tests/test_runtime_limits.c', 'tests/test_recovery_download.c', 'tests/test_object_query.c', 'tests/test_control_actions.c', 'tests/test_installer_package.py', 'web-src/src/pages/dashboard.tsx', 'web-src/src/pages/control.tsx', 'web-src/preview/test-quick-actions.mjs', 'src/history.h', 'tests/test_printer_replies.c', 'tests/test_history_api.c', 'web-src/src/lib/machine.ts', 'web-src/src/lib/history.ts', 'web-src/src/pages/history.tsx', 'web-src/src/pages/print-dialog.tsx', 'tests/test_print_options.c', 'tests/test_camera_viewer_api.py', 'web-src/preview/test-print-history.mjs', 'web-src/preview/test-browser.mjs', 'web-src/preview/test-filament-mapping.mjs', 'web-src/preview/test-adaptive-mesh.mjs', 'tests/test_filament_metadata.c', 'tests/test_gcode_files.py', 'tests/test_c_harnesses.py', 'tests/test_canvas_discovery.c', 'src/mqtt.h', 'tests/test_pid_api.c', 'web-src/preview/test-pid.mjs', 'web-src/preview/test-print-temperatures.mjs', 'src/uds.h', 'tests/test_uds.c', 'web-src/src/components/layout.tsx', 'web-src/src/App.tsx', 'web-src/preview/test-printer-reports.mjs'):
         assert archive.read(name) == (BASE.parents[1] / 'cc2-control' / name).read_bytes(), name
     for lang in ('en', 'it', 'fr', 'zh', 'ru'):
         source = archive.read(f'web-src/public/locales/{lang}.json')

@@ -5,7 +5,7 @@ with SSH access. The printer must be connected, Idle, and reporting fresh state.
 This is an application updater; it does not flash firmware or install SSH.
 
 Extract the entire ZIP before running a launcher. Configuration (including the
-LAN code), material presets and UI preferences are preserved. The updater keeps
+LAN code), material presets, UI preferences and the plate library are preserved. The updater keeps
 a backup, verifies checksums and the running binary, and waits for MQTT registration
 and a printer snapshot for up to 240 seconds, including the launcher delay.
 On failure, inspect the output for rollback status.
@@ -39,7 +39,7 @@ not regenerated. Custom `known_hosts` files and `HostKeyAlias` need manual recov
 
 The updater prints the backup directory and exact restore command. Run it only
 while the printer is connected and Idle. Restore preserves current configuration,
-material presets and UI preferences. Firmware builds remain in `/opt/inst`;
+material presets, UI preferences and the plate library. Firmware builds remain in `/opt/inst`;
 this updater installs the application in `/opt/usr` and points the service there.
 
 ## Rebuild the package

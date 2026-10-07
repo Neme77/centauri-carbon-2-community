@@ -5,6 +5,7 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
+- Bed Levelling has a build-plate library: save each plate's mesh and Z offset once and mount the plate again later. A plate whose mesh is not in its side's slot is written there and the printer restarts.
 - Bed mesh calibration from Bed Levelling homes X, Y and Z first when the printer is not homed, instead of being refused by the console.
 - An OrcaSlicer upload whose name already exists is saved as `name (1).gcode` and so on instead of being refused with HTTP 409; nothing is overwritten.
 - CC2 Control registers with the printer even when another app's Canvas reply arrives first after it connects. Before, it then never registered, so print and Canvas commands were refused and the updater rolled back.

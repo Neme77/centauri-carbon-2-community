@@ -146,9 +146,13 @@ static int vendor_report(uds_client *c,const char *root,const char *end){
  /* Ordinary successful output must not overwrite the last warning/error.
   * RESUME (3) is a new event, not a guaranteed global fault clearance. */
  if(code==0&&level==0)return 1;
+ char text[sizeof(c->report_message)];report_text(o,e,text,sizeof(text));
+ if(c->report_sequence&&c->report_code==(int)code&&c->report_level==(int)level&&
+    !strcmp(c->report_message,text))return 1;
  c->report_code=(int)code;c->report_level=(int)level;
  c->report_sequence++;c->report_received=now_mono();
- report_text(o,e,c->report_message,sizeof(c->report_message));
+ clock_gettime(CLOCK_REALTIME,&c->report_identity);
+ memcpy(c->report_message,text,sizeof(text));
  return 1;
 }
 int uds_message(uds_client *c,const char *json,size_t length){

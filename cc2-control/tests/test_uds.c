@@ -36,6 +36,8 @@ int main(void){
  /* Native reports must neither refresh sensors nor claim a current fault. */
  message(&c,"{\"id\":0,\"report\":{\"error_code\":1264,\"error_level\":2,\"message\":\"Clog\\n\\u00e8 <script>\"}}");
  assert(c.report_sequence==1&&c.report_code==1264&&c.report_level==2);
+ message(&c,"{\"report\":{\"error_code\":1264,\"error_level\":2,\"message\":\"Clog\\n\\u00e8 <script>\"}}");
+ assert(c.report_sequence==1);
  assert(!strcmp(c.report_message,"\"Clog\\n\\u00e8 <script>\""));
  assert(c.messages==saved_messages&&c.last_rx.tv_sec==saved_rx.tv_sec&&c.last_rx.tv_nsec==saved_rx.tv_nsec);
  message(&c,"{\"report\":{\"error_code\":0,\"error_level\":0,\"message\":\"ok\"}}");

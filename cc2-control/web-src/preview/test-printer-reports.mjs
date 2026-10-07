@@ -13,12 +13,13 @@ try {
   const page = await browser.newPage()
   let sequence = 1
   let connected = true
+  let level = 2
   await page.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
   await page.route('**/api/printer', async route => {
     const response = await route.fetch()
     const data = await response.json()
     data.connected = connected
-    data.printer_report = { sequence, code: 1264, level: 2, message: 'Filament clog <script>window.injected=1</script>', age: 5 }
+    data.printer_report = { event_id: `test-${sequence}`, sequence, code: 1264, level, message: 'Filament clog <script>window.injected=1</script>', age: 5 }
     await route.fulfill({ json: data })
   })
   await page.goto(server.resolvedUrls.local[0])
@@ -33,7 +34,15 @@ try {
   await alert.getByText('Printer disconnected; the last report is retained.').waitFor()
   await alert.getByRole('button', { name: 'Dismiss this report' }).click()
   assert.equal(await alert.count(), 0)
+  await page.reload()
+  await page.waitForTimeout(4000)
+  assert.equal(await alert.count(), 0, 'refresh must not replay an acknowledged event')
   sequence++
+  await alert.waitFor()
+  level = 3; sequence++
+  await page.waitForTimeout(4000)
+  assert.equal(await alert.count(), 0, 'resume is not an alarm')
+  level = 1; sequence++
   await alert.waitFor()
   console.log('PASS: native reports persist, render as text, survive disconnect and can be dismissed')
 } finally {

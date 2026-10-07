@@ -16,7 +16,13 @@ try {
   const errors = [], starts = []
   page.on('pageerror', e => errors.push(e.message))
   await page.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
-  await page.route('**/api/gcode-files/inspect', r => r.fulfill({ json: { tools: [0, 2], filaments: [{ tool: 0, color: '#FF0000', material: 'PLA' }, { tool: 2, color: '#00FF00', material: 'PETG' }] } }))
+  let analyses = 0, releaseAnalysis, markStarted
+  const hold = new Promise(resolve => { releaseAnalysis = resolve })
+  const started = new Promise(resolve => { markStarted = resolve })
+  await page.route('**/api/gcode-files/inspect', async r => {
+    analyses++; markStarted(); await hold
+    return r.fulfill({ json: { tools: [0, 2], filaments: [{ tool: 0, color: '#FF0000', material: 'PLA' }, { tool: 2, color: '#00FF00', material: 'PETG' }] } })
+  })
   await page.route('**/api/canvas', r => r.fulfill({ json: { telemetry: { result: { canvas_info: { canvas_list: [{ connected: 1, tray_list: [] }] } } } } }))
   await page.route('**/api/mesh', r => r.fulfill({ json: { result: { status: { bed_mesh: { profiles: { default: {} } } } } } }))
   await page.route('**/api/gcode-files/print', r => {
@@ -27,6 +33,12 @@ try {
   await page.goto(`${origin}/#files`)
   await page.selectOption('#preview-scene', 'idle')
   await page.getByRole('button', { name: 'Print', exact: true }).first().click()
+  await started
+  await page.getByText("Analysing file\u2026", { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Print', exact: true }).first().click()
+  assert.equal(analyses, 1, 'duplicate clicks cannot queue another analysis')
+  assert.equal(starts.length, 0, 'analysis cannot start a print')
+  releaseAnalysis()
   const dialog = page.getByRole('dialog')
   await dialog.waitFor()
   assert.match(await dialog.innerText(), /PLA · #FF0000/)
@@ -42,7 +54,7 @@ try {
   await dialog.waitFor()
   assert.equal(await dialog.getByText('Colour/material not provided by the file', { exact: true }).count(), 2)
   assert.deepEqual(errors, [])
-  console.log('PASS: file filament labels, sparse tool mapping and missing-metadata fallback')
+  console.log('PASS: slow analysis indicator, duplicate-click guard, confirmation, filament labels and mapping')
 } finally {
   await browser?.close()
   await server.close()

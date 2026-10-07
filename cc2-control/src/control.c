@@ -66,6 +66,20 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Object name exceeds command length");
         return 1;
     }
+    if(strncmp(action,"pid:",4)==0) {
+        time_t now=time(NULL);int end=0;
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+           m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"PID calibration requires fresh idle telemetry");
+        if(strcmp(action,"pid:save")==0){snprintf(script,cap,"SAVE_CONFIG");return 1;}
+        if(sscanf(action,"pid:%31[^:]:%lf%n",a,&value,&end)!=2||action[end]||!isfinite(value))
+            return reject(reason,reason_cap,"Invalid PID calibration request");
+        int hotend=!strcmp(a,"extruder"),bed=!strcmp(a,"heater_bed");
+        if((!hotend&&!bed)||value<(hotend?150:40)||value>(hotend?300:120))
+            return reject(reason,reason_cap,"PID target outside heater limits");
+        snprintf(script,cap,"PID_CALIBRATE HEATER=%s TARGET=%.1f\nTURN_OFF_HEATERS",a,value);
+        return 1;
+    }
     /* Stage 2: guarded four-corner measurement, never called by print start. */
     if(strcmp(action,"screws:measure")==0){
         if(printing(m))return reject(reason,reason_cap,"Screw measurement is blocked while printing");
@@ -130,6 +144,18 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(strcmp(a,"ALL")==0)snprintf(script,cap,"G28\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f",homing_extruder_restore_target(m));
         else if(strlen(a)==1&&strchr("XYZ",a[0]))snprintf(script,cap,"G28 %c\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f",a[0],homing_extruder_restore_target(m));
         else return reject(reason,reason_cap,"Unknown homing selection");
+        return 1;
+    }
+    if(strncmp(action,"heaters:set:",12)==0){
+        time_t now=time(NULL);int end=0;
+        if(!m->connected||!m->registered||!m->have_machine_status||
+           (m->machine_status!=1&&m->machine_status!=2)||m->last_message<=0||
+           now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Temperature targets require fresh idle or printing telemetry");
+        if(sscanf(action,"heaters:set:%lf:%lf%n",&value,&value2,&end)!=2||action[end]||
+           !isfinite(value)||!isfinite(value2)||value<0||value>300||value2<0||value2>120)
+            return reject(reason,reason_cap,"Invalid temperature targets");
+        snprintf(script,cap,"SET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=%.1f",value,value2);
         return 1;
     }
     if(sscanf(action,"%31[^:]:%31[^:]:%lf",kind,a,&value)==3&&strcmp(kind,"heater")==0){
