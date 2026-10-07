@@ -25,7 +25,9 @@ with zipfile.ZipFile(prepare.SOURCE) as archive:
                  'web-src/preview/test-print-history.mjs', 'web-src/preview/test-browser.mjs',
                  'web-src/preview/test-filament-mapping.mjs', 'web-src/preview/test-adaptive-mesh.mjs', 'tests/test_filament_metadata.c',
                  'tests/test_gcode_files.py', 'tests/test_c_harnesses.py', 'tests/test_canvas_discovery.c',
-                 'src/mqtt.h'):
+                 'src/mqtt.h', 'src/uds.h', 'tests/test_uds.c',
+                 'web-src/src/components/layout.tsx', 'web-src/src/App.tsx',
+                 'web-src/preview/test-printer-reports.mjs', 'docs/API.md'):
         assert archive.read(name) == (BASE.parents[1] / 'cc2-control' / name).read_bytes(), name
     for lang in ('en', 'it', 'fr', 'zh', 'ru'):
         source = archive.read(f'web-src/public/locales/{lang}.json')
