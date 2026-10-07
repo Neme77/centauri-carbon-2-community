@@ -1,0 +1,85 @@
+CC2 Control 1.1.31 - TEST COMBINATO UDS #88 + Reactor O0
+
+BASE: develop 1ef85ea1faebb17904815c09785ea79ce31ae55d, con la mitigazione UDS di beanbo
+e le successive PR validate (piatti, file grandi, PID, temperature e report).
+Include tutte le modifiche unite fino a questo commit, UI e traduzioni incluse.
+Grazie a beanbo per analisi, misure e riduzione delle richieste UDS; restano tutti
+i crediti dei contributor presenti nei sorgenti e nella documentazione.
+
+CONTENUTO
+- PR #88: heartbeat solo dopo 3 secondi di silenzio, oggetti dal flusso UDS.
+- Reactor O0: rilascio callback, protezioni timer/poll e pulizia in eccezione,
+  esattamente i sorgenti qualificati con libco nativa. Non e una soluzione
+  certificata all OOM/803; la request_log interna vendor non viene limitata.
+- Attesa CC2 di 60 secondi, configurazione LAN e preferenze conservate.
+- Windows: -ResetHostKey %* presente; nessun bypass della verifica OpenSSH.
+
+QUESTO E UN TEST, NON UNA RELEASE PUBBLICA
+Installare solo su CC2 con binario Elegoo SHA256:
+c21126e78a63ac9140e7347c56f363d5e513495c58c06fc17e8ef97846f3c0a3
+e libco SHA256:
+14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403
+L installer rifiuta altre versioni. Non usare un generico firmware ufficiale.
+
+BUILD SUL PC DI GINO
+Questo ZIP contiene i sorgenti, non binari ARM gia compilati.
+Estrarre in una nuova cartella. Non sovrascrivere il repository di lavoro.
+Dalla radice del repository eseguire:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\experimental\combined-test\Build-ARM.ps1
+Richiede Ubuntu WSL, make, gcc host e la toolchain GCC 6.5.0/glibc 2.23 in:
+/opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf-*
+Esegue i test CC2, compila CC2/sonda ARM e Reactor con -O0, verifica simboli,
+unwinding e versioni delle dipendenze, quindi produce in output:
+CC2-Control-1.1.31-UDS88-Reactor-O0-Test.zip
+Questo ZIP generato e quello da condividere col collaboratore.
+
+INSTALLAZIONE
+1. Attendere fine stampa e raffreddamento: nozzle <=50, bed <=45, target 0.
+2. Se e attivo il vecchio test temporaneo, riavviare la stampante e attendere
+   che MQTT e UDS siano collegati. Il reboot rimuove il vecchio bind mount.
+3. Estrarre lo ZIP INSTALLER generato, quindi eseguire Install-Windows.cmd.
+   Oppure:
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Combined.ps1 -PrinterIp 192.168.1.103
+4. Attendere INSTALLAZIONE COMBINATA PASS e conservare il percorso backup.
+5. Ctrl+F5, una Home All, controllo PID e UDS, poi stampa breve supervisionata.
+6. Solo dopo esito positivo, stampa lunga con raccolta gia esistente.
+
+PERSISTENZA
+Modifica esclusivamente la riga normale di avvio in /opt/bin/run_printer.sh per richiamare un
+launcher con attesa del montaggio /opt/usr. Non modifica il binario vendor
+originale: lo esegue da una copia verificata con il modulo del test.
+Il test combinato RESTA ATTIVO dopo un reboot; a differenza dei test precedenti,
+un semplice reboot NON e il ripristino del test combinato.
+Se /etc/init.d non e scrivibile l installer si ferma senza cambiare servizi:
+in quel caso serve l integrazione in una nuova immagine firmware.
+Un firmware OTA puo sovrascrivere l init e disattivare il test: verificare dopo
+ogni aggiornamento. Non effettuare OTA durante questa qualificazione.
+
+RIPRISTINO
+A macchina inattiva e fredda:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Restore-Originale.ps1 -PrinterIp 192.168.1.103 -BackupPath /opt/usr/cc2-combined-backup-PERCORSO
+Oppure via SSH: sh /opt/usr/cc2-combined-backup-PERCORSO/restore.sh
+Ripristina printer init, CC2 precedente e i file del precedente test se esistenti.
+Non eseguire riavvii dei servizi durante una stampa o con riscaldatori attivi.
+
+CONTROLLO DOPO IL RIAVVIO
+pidof elegoo_printer cc2-control
+PID=$(pidof elegoo_printer)
+grep 'libcc2-reactor-v2.so' /proc/$PID/maps
+cat /opt/usr/cc2-reactor-runtime-v2/activation.marker
+cat /opt/usr/cc2-reactor-runtime-v2/reactor-state.txt
+wget -qO- http://127.0.0.1:8081/api/health
+wget -qO- http://127.0.0.1:8081/api/uds
+
+LIMITI DI VALIDAZIONE
+Il modello ARM O0 ha passato timer/callback/eccezioni con libco nativa.
+Il modulo integrato ha passato Home All e una stampa breve con AI e timelapse.
+Questa installazione persistente combinata e nuova: reboot, stampa lunga e
+assenza di regressioni devono ancora essere verificati su entrambe le macchine.
+Non corregge ancora la velocita residua UDS 50.5; non la forza artificialmente a 0.
+Non modifica kernel, dual trust, LAN/WAN, stack camera o allocatore vendor.
+
+La patch resta sperimentale e provvisoria: i sorgenti pubblici ELEGOO
+non corrispondono al firmware distribuito. Il builder standard non la abilita
+automaticamente. I test lunghi incoraggiano ulteriori verifiche, non certificano
+la risoluzione di ogni OOM/803.

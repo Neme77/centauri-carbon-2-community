@@ -128,3 +128,20 @@ jobs:
 
       - name: Launcher tests
         run: python3 builder/current/launch_helpers/tests/test_launcher.py
+
+  reactor-fixtures:
+    name: Experimental reactor (host fixtures)
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Bridge with UBSan (mocked vendor ABI)
+        run: |
+          g++ -std=c++11 -O0 -g -Wall -Wextra -fsanitize=undefined -fno-sanitize-recover=all experimental/combined-test/reactor/bridge_test.cpp -o /tmp/cc2-reactor-bridge
+          /tmp/cc2-reactor-bridge
+      - name: Installer and archive simulations
+        run: |
+          python3 experimental/combined-test/test_installer.py
+          python3 experimental/combined-test/test_package.py
+      - name: Shell syntax
+        run: |
+          for script in experimental/combined-test/*.sh; do sh -n "$script"; done
