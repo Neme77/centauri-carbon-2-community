@@ -583,5 +583,13 @@
   "history.confirm_delete": "Delete these {n} print-history entries? This cannot be undone. G-code files and videos are not deleted.",
   "history.delete_requested": "History deletion requested.",
   "print.file_filament": "Filament in G-code",
-  "print.file_filament_unknown": "Colour/material not provided by the file"
+  "print.file_filament_unknown": "Colour/material not provided by the file",
+  "printer.report_warning": "Last printer warning",
+  "printer.report_critical": "Last critical printer report",
+  "printer.report_resume": "Printer resume report",
+  "printer.report_code": "Code {code}",
+  "printer.report_dismiss": "Dismiss this report",
+  "printer.report_last": "Received {seconds} s ago.",
+  "printer.report_history": "This is the last reported event; it does not confirm the current fault state.",
+  "printer.report_disconnected": "Printer disconnected; the last report is retained."
 }

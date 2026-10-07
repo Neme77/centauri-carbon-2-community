@@ -583,5 +583,13 @@
   "history.confirm_delete": "Supprimer ces {n} entrées de l’historique ? Cette action est irréversible. Les fichiers G-code et les vidéos ne sont pas supprimés.",
   "history.delete_requested": "Suppression de l’historique demandée.",
   "print.file_filament": "Filament du G-code",
-  "print.file_filament_unknown": "Couleur/matériau non indiqués dans le fichier"
+  "print.file_filament_unknown": "Couleur/matériau non indiqués dans le fichier",
+  "printer.report_warning": "Dernier avertissement de l’imprimante",
+  "printer.report_critical": "Dernier rapport critique de l’imprimante",
+  "printer.report_resume": "Rapport de reprise de l’imprimante",
+  "printer.report_code": "Code {code}",
+  "printer.report_dismiss": "Masquer ce rapport",
+  "printer.report_last": "Reçu il y a {seconds} s.",
+  "printer.report_history": "Dernier événement signalé ; il ne confirme pas l’état actuel du défaut.",
+  "printer.report_disconnected": "Imprimante déconnectée ; le dernier rapport est conservé."
 }

@@ -374,3 +374,34 @@ export const Toast = () => {
     </div>
   ) : null
 }
+
+// No extra poll: retain the latest native event in the existing printer response.
+export const PrinterReport = () => {
+  const { data, ok } = printer.use()
+  const report = data?.printer_report
+  const [dismissed, setDismissed] = useState<number | null>(null)
+  if (!report || dismissed === report.sequence) return null
+  const title =
+    report.level === 3
+      ? 'printer.report_resume'
+      : report.level === 2
+        ? 'printer.report_critical'
+        : 'printer.report_warning'
+  return (
+    <section role="alert" data-testid="printer-report" class="mb-4 rounded-lg border border-warning bg-panel p-4">
+      <div class="flex items-start justify-between gap-3">
+        <strong>
+          {t(title)} · {tpl('printer.report_code', { code: report.code })}
+        </strong>
+        <button type="button" aria-label={t('printer.report_dismiss')} onClick={() => setDismissed(report.sequence)}>
+          <X size={18} />
+        </button>
+      </div>
+      {report.message && <p class="mt-2 whitespace-pre-wrap break-words">{report.message}</p>}
+      <p class="mt-2 text-xs text-muted">
+        {tpl('printer.report_last', { seconds: report.age })} {t('printer.report_history')}
+      </p>
+      {(!ok || !data.connected) && <p class="text-xs text-muted">{t('printer.report_disconnected')}</p>}
+    </section>
+  )
+}

@@ -55,3 +55,5 @@ jobs:
           name: cc2-ui-preview-screenshots
           path: ${{ runner.temp }}/cc2-preview-screenshots
           retention-days: 7
+      - name: Printer report browser regression
+        run: npm run test:printer-reports

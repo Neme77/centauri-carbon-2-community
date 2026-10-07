@@ -185,3 +185,25 @@ A successful native reply triggers a history refresh; 202 alone is not confirmat
 The UI asks for confirmation before deleting one entry or all completed entries in the loaded list.
 The firmware handler inspected for this integration deletes database records; it does not remove
 G-code files or timelapse files. This is a history operation, not a storage cleanup tool.
+
+### Native printer reports
+
+`GET /api/printer` also returns `printer_report`: null until a vendor event is
+received, then `{sequence, code, level, message, age}`. This is the last received
+event, not an assertion that a fault is still active. `age` is monotonic seconds.
+It survives UDS disconnects but resets when CC2 Control restarts. `message` is
+native text or null if missing, invalid or longer than 1023 encoded JSON bytes.
+The UI renders text, never HTML, and dismissal only hides the event locally.
+
+The existing socket subscribes once per connection to `gcode/subscribe_report`.
+No periodic error query is added. Ordinary code-zero INFO output does not replace
+an event. WARNING (1), CRITICAL (2) and RESUME (3) retain vendor semantics;
+a resume report does not establish that all faults are cleared. Unknown numeric
+codes remain visible. MQTT request refusals stay separate in `printer_error`.
+Reports do not refresh sensor telemetry. An unsupported subscription response
+is ignored without disconnecting the status stream.
+
+Protocol provenance: ELEGOO's published [webhooks.cpp](https://github.com/elegooofficial/CentauriCarbon2/blob/5a2ea7fc03e707552701b1a69f463699cbd39230/elegoo/webhooks.cpp)
+and [error levels](https://github.com/elegooofficial/CentauriCarbon2/blob/5a2ea7fc03e707552701b1a69f463699cbd39230/elegoo/common/exception_handler.h).
+This snapshot predates deployed firmware; real-printer event delivery remains
+required validation. Displaying a report does not diagnose an unreported stop.

@@ -88,6 +88,13 @@ int main(void){
     assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":null,\"camera_viewer\":null}"));
     m.reply_errors=3;m.reply_error_method=1020;m.reply_error_code=1026;m.reply_error_time=time(NULL);
     assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":{\"sequence\":3,\"method\":1020,\"code\":1026,\"age\":"));
+    uds_init(&telemetry);
+    const char *report="{\"report\":{\"error_code\":1264,\"error_level\":2,\"message\":\"Clog\\n\\u00e8\"}}";
+    assert(uds_message(&telemetry,report,strlen(report)));
+    assert(get(printer_response,reply,sizeof(reply))==200);
+    assert(strstr(reply,"\"printer_report\":{\"sequence\":1,\"code\":1264,\"level\":2,\"message\":\"Clog\\n\\u00e8\",\"age\":"));
+    uds_close(&telemetry);
+    assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_report\":{\"sequence\":1,"));
     /* History: nothing cached yet, then a refresh publishes 1036 once. */
     assert(get(history_response,reply,sizeof(reply))==200);
     assert(strstr(reply,"{\"available\":false,\"pending\":false,\"generating\":false,\"deleting\":false,\"age\":-1,\"error_code\":-1,\"reply\":null}"));
