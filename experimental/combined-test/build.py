@@ -15,7 +15,7 @@ import zipfile
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 CC2 = ROOT / 'cc2-control'
-SOURCE_COMMIT = '24cf5222301bc1657db2153e637b52217380f509'
+SOURCE_COMMIT = '1ef85ea1faebb17904815c09785ea79ce31ae55d'
 PREFIX = Path('/opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf')
 def run(args, **kw):
     return subprocess.run([str(a) for a in args], check=True, **kw)

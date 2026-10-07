@@ -1,6 +1,7 @@
 CC2 Control 1.1.31 - TEST COMBINATO UDS #88 + Reactor O0
 
-BASE: develop 24cf5222301bc1657db2153e637b52217380f509, con PR #88 di beanbo.
+BASE: develop 1ef85ea1faebb17904815c09785ea79ce31ae55d, con la mitigazione UDS di beanbo
+e le successive PR validate (piatti, file grandi, PID, temperature e report).
 Include tutte le modifiche unite fino a questo commit, UI e traduzioni incluse.
 Grazie a beanbo per analisi, misure e riduzione delle richieste UDS; restano tutti
 i crediti dei contributor presenti nei sorgenti e nella documentazione.
@@ -44,7 +45,7 @@ INSTALLAZIONE
 6. Solo dopo esito positivo, stampa lunga con raccolta gia esistente.
 
 PERSISTENZA
-Modifica esclusivamente la riga di avvio del printer init per richiamare un
+Modifica esclusivamente la riga normale di avvio in /opt/bin/run_printer.sh per richiamare un
 launcher con attesa del montaggio /opt/usr. Non modifica il binario vendor
 originale: lo esegue da una copia verificata con il modulo del test.
 Il test combinato RESTA ATTIVO dopo un reboot; a differenza dei test precedenti,
@@ -77,3 +78,8 @@ Questa installazione persistente combinata e nuova: reboot, stampa lunga e
 assenza di regressioni devono ancora essere verificati su entrambe le macchine.
 Non corregge ancora la velocita residua UDS 50.5; non la forza artificialmente a 0.
 Non modifica kernel, dual trust, LAN/WAN, stack camera o allocatore vendor.
+
+La patch resta sperimentale e provvisoria: i sorgenti pubblici ELEGOO
+non corrispondono al firmware distribuito. Il builder standard non la abilita
+automaticamente. I test lunghi incoraggiano ulteriori verifiche, non certificano
+la risoluzione di ogni OOM/803.

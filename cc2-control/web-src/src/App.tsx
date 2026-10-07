@@ -1,6 +1,6 @@
 import { i18n } from '@/lib/i18n'
 import { menu, nav, printer } from '@/lib/state'
-import { PrintWatcher, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
+import { PrintWatcher, PrinterReport, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CameraWindow } from '@/components/shared'
 import { SetupDialog } from '@/pages/setup'
@@ -46,6 +46,7 @@ export const App = () => {
         class={`cc2-main ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin,opacity] md:p-4 ${collapsed ? '' : 'md:ml-52'} ${stale ? 'opacity-50' : ''}`}
       >
         <div class="cc2-page-content @container/page">
+          <PrinterReport />
           <Page />
         </div>
       </main>

@@ -7,4 +7,5 @@ exec "$BASE/cc2-control" \
     --web-root "$BASE/web" \
     --config "$BASE/cc2-control.conf" \
     --presets "$BASE/material-presets.json" \
-    --preferences "$BASE/ui-preferences.json"
+    --preferences "$BASE/ui-preferences.json" \
+    --plates "$BASE/bed-plates.json"

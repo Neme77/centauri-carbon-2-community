@@ -51,3 +51,30 @@ the runtime module's benefit. No definitive OOM/803 resolution is claimed.
 The combined experimental installer packages the unchanged develop CC2 source
 with this module. The PID panel, file-analysis worker and plate library belong
 to separate work and are not bundled by this branch.
+
+## Completed long-print reports, 2026-10-07
+
+These are user reports, not instrumented tests performed by CI:
+
+- Gino reports a complex 108 MB print lasting over seven hours, with live view,
+  AI and timelapse enabled. He subsequently clarified that MemAvailable varied
+  by about 200–300 KB below the starting value during the process and at the end.
+- The collaborator reports roughly twenty hours of printing across two long
+  jobs (about ten hours and more than eight hours), with very little memory
+  decrease and roughly 31–32 MB available again at idle after the jobs.
+- With the earlier reduced-UDS-polling mitigation, that collaborator reports
+  starting above 30 MB and reaching roughly 25–26 MB at idle after long jobs,
+  with limited recovery. He reports improved stability with the combined O0
+  runtime and current CC2 changes.
+
+This comparison strengthens the evidence for the combined configuration, but
+workload, firmware and feature settings were not held constant in a controlled
+A/B experiment. It does not isolate the runtime's incremental effect or prove
+that every OOM/803 cause has been eliminated. request_log remains unbounded.
+
+The branch is now aligned with develop and includes the merged CC2 features.
+The exact executable/libco compatibility gates, O0 build, cold/idle preflight,
+activation verification and per-printer rollback remain unchanged. The runtime
+is opt-in and is not enabled by standard firmware builds. Published ELEGOO
+sources are older than deployed firmware; reassess the provisional runtime when
+matching sources or an official fix become available.

@@ -85,6 +85,8 @@ static volatile sig_atomic_t first_run_restart_requested = 0;
 static const char *material_presets_path = "./material-presets.json";
 static const char *mqtt_config_path = "./cc2-control.conf";
 static const char *ui_preferences_path = "./ui-preferences.json";
+static const char *plates_path = "./bed-plates.json";
+static const char *printer_autosave_path = "/opt/usr/cfg/autosave.cfg";
 static const char *gcode_internal_root = GCODE_INTERNAL_ROOT;
 static const char *gcode_usb_root = GCODE_USB_ROOT;
 static int setup_mode = 0;
@@ -164,7 +166,7 @@ static int send_local_gcode_script(const char *script) {
 
 static int saved_plate_mesh_exists(char print_layout) {
     const char *profile = print_layout == 'B' ? "default1" : "default";
-    FILE *file = fopen("/opt/usr/cfg/autosave.cfg", "rb");
+    FILE *file = fopen(printer_autosave_path, "rb");
     if (!file) return 0;
     char line[256], marker[64];
     snprintf(marker, sizeof(marker), "[bed_mesh %s]", profile);
@@ -286,7 +288,8 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"material_presets\":true,"
             "\"persistent_ui_preferences\":true,"
             "\"print_history\":true,"
-            "\"canvas_auto_refill\":true"
+            "\"canvas_auto_refill\":true,"
+            "\"bed_plates\":true"
         "},"
         "\"endpoints\":{"
             "\"printer\":\"/api/printer\","
@@ -296,6 +299,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"console\":\"/api/console\","
             "\"preferences\":\"/api/preferences\","
             "\"history\":\"/api/history\","
+            "\"plates\":\"/api/plates\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
         "\"runtime\":{"
@@ -1486,31 +1490,41 @@ static int gcode_request_file(const char *body, size_t body_len,
     return 1;
 }
 
+typedef struct { int valid; struct stat stamp; char path[PATH_MAX_LOCAL*2]; size_t length; char response[4096]; } analysis_cache;
+static analysis_cache analysis_cached[2];
+static _Thread_local analysis_cache *analysis_capture;
+static void analysis_respond(int fd,int code,const char *status,const char *type,const char *body,size_t length) {
+    if(analysis_capture && code==200 && length<sizeof(analysis_capture->response)) {
+        memcpy(analysis_capture->response,body,length);analysis_capture->length=length;
+    }
+    respond(fd,code,status,type,body,length);
+}
+
 static void gcode_inspect_response(int fd, const char *body, size_t body_len) {
     char storage[16], filename[PATH_MAX_LOCAL];
     const char *root, *media;
     if (!gcode_request_file(body, body_len, storage, filename, NULL, NULL, &root, &media) ||
         !gcode_file_is_printable(root, filename)) {
         const char *error = "{\"error\":\"File is unavailable or unsafe\"}\n";
-        respond(fd, 404, "Not Found", "application/json; charset=utf-8", error, strlen(error));
+        analysis_respond(fd, 404, "Not Found", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
     (void)media;
     int tools[GCODE_TOOLS_MAX], adaptive = 0; size_t count = 0;
     if (gcode_detect_tools(root, filename, tools, &count) != 0) {
         const char *error = "{\"error\":\"Cannot inspect the G-code file\"}\n";
-        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        analysis_respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
     if (gcode_has_adaptive_mesh(root, filename, &adaptive) != 0) {
         const char *error = "{\"error\":\"Cannot inspect bed leveling commands\"}\n";
-        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        analysis_respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
     gcode_filament_info filaments[GCODE_TOOLS_MAX];
     if (gcode_read_filaments(root, filename, filaments) != 0) {
         const char *error = "{\"error\":\"Cannot inspect filament metadata\"}\n";
-        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        analysis_respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
     char response[4096]; size_t used = 0;
@@ -1539,7 +1553,7 @@ static void gcode_inspect_response(int fd, const char *body, size_t body_len) {
                       "],\"multicolour\":%s,\"adaptive_mesh\":%s}\n",
                       count > 1 ? "true" : "false", adaptive ? "true" : "false");
     if (length > 0 && (size_t)length < sizeof(response) - used)
-        respond(fd, 200, "OK", "application/json; charset=utf-8", response, used + (size_t)length);
+        analysis_respond(fd, 200, "OK", "application/json; charset=utf-8", response, used + (size_t)length);
 }
 
 static int parse_slot_map(const char *text, size_t length,
@@ -1958,19 +1972,21 @@ static void gcode_metadata_response(int fd, const char *body, size_t body_len) {
     if (!gcode_request_file(body, body_len, storage, filename, NULL, NULL, &root, &media) ||
         !gcode_resolved_path(root, filename, path, sizeof(path))) {
         const char *error = "{\"error\":\"File is unavailable or unsafe\"}\n";
-        respond(fd, 404, "Not Found", "application/json; charset=utf-8", error, strlen(error));
+        analysis_respond(fd, 404, "Not Found", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
     (void)media;
     FILE *file = fopen(path, "r");
     if (!file) {
         const char *error = "{\"error\":\"Cannot open G-code file\"}\n";
-        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        analysis_respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
     int layers = 0, maximum_layer = -1; long estimated = -1;
     double filament = -1.0, nozzle = -1.0, bed = -1.0;
     while (fgets(line, sizeof(line), file)) {
+        const char *comment=line;while(isspace((unsigned char)*comment))comment++;
+        if(*comment!=';')continue;
         static const char *layer_markers[] = {"total layer number", "total_layer_count", "total layers count", "total layers", "layer_count:"};
         for (size_t index = 0; index < sizeof(layer_markers)/sizeof(layer_markers[0]); ++index) {
             int value = positive_integer_after(line, layer_markers[index]); if (value > layers) layers = value;
@@ -2003,34 +2019,107 @@ static void gcode_metadata_response(int fd, const char *body, size_t body_len) {
     if (nozzle >= 0) snprintf(nozzle_value, sizeof(nozzle_value), "%.1f", nozzle); else snprintf(nozzle_value, sizeof(nozzle_value), "null");
     if (bed >= 0) snprintf(bed_value, sizeof(bed_value), "%.1f", bed); else snprintf(bed_value, sizeof(bed_value), "null");
     int length = snprintf(response, sizeof(response), "{\"layers\":%s,\"estimated_seconds\":%s,\"filament_grams\":%s,\"nozzle_temperature\":%s,\"bed_temperature\":%s}\n", layer_value, time_value, filament_value, nozzle_value, bed_value);
-    if (length > 0 && (size_t)length < sizeof(response)) respond(fd, 200, "OK", "application/json; charset=utf-8", response, (size_t)length);
+    if (length > 0 && (size_t)length < sizeof(response)) analysis_respond(fd, 200, "OK", "application/json; charset=utf-8", response, (size_t)length);
+}
+
+/* Four pending requests and one 128-KiB worker stack, independent of file size.
+ * The worker owns each accepted socket. No MQTT or printer state is accessed. */
+#define ANALYSIS_QUEUE_MAX 4
+typedef struct {int fd,kind;unsigned generation;size_t length;char body[PATH_MAX_LOCAL+32];} analysis_job;
+static analysis_job analysis_queue[ANALYSIS_QUEUE_MAX];
+static pthread_mutex_t analysis_mutex=PTHREAD_MUTEX_INITIALIZER;
+static size_t analysis_head,analysis_count;
+static int analysis_running;
+static char active_analysis_filename[PATH_MAX_LOCAL];
+static int active_analysis_pending, active_analysis_ready, active_analysis_layers;
+static unsigned active_analysis_generation;
+static long active_analysis_seconds = -1;
+static void active_gcode_scan(const char *filename,int *layers,long *seconds);
+static int analysis_same_file(const struct stat *a,const struct stat *b) {
+    return a->st_dev==b->st_dev && a->st_ino==b->st_ino && a->st_size==b->st_size &&
+        a->st_mtim.tv_sec==b->st_mtim.tv_sec && a->st_mtim.tv_nsec==b->st_mtim.tv_nsec &&
+        a->st_ctim.tv_sec==b->st_ctim.tv_sec && a->st_ctim.tv_nsec==b->st_ctim.tv_nsec;
+}
+static void *analysis_worker(void *unused) {
+    (void)unused;
+    for(;;) {
+        pthread_mutex_lock(&analysis_mutex);
+        if(!analysis_count){analysis_running=0;pthread_mutex_unlock(&analysis_mutex);return NULL;}
+        analysis_job job=analysis_queue[analysis_head];
+        analysis_head=(analysis_head+1)%ANALYSIS_QUEUE_MAX;analysis_count--;
+        pthread_mutex_unlock(&analysis_mutex);
+        if(job.kind==2) {
+            int layers=0;long seconds=-1;
+            active_gcode_scan(job.body,&layers,&seconds);
+            pthread_mutex_lock(&analysis_mutex);
+            if(job.generation==active_analysis_generation && !strcmp(job.body,active_analysis_filename)) {
+                active_analysis_layers=layers;active_analysis_seconds=seconds;active_analysis_ready=1;
+            }
+            active_analysis_pending=0;
+            pthread_mutex_unlock(&analysis_mutex);
+            continue;
+        }
+        char storage[16],name[PATH_MAX_LOCAL],path[PATH_MAX_LOCAL*2];
+        const char *root,*media;struct stat before,after;
+        int keyed=gcode_request_file(job.body,job.length,storage,name,NULL,NULL,&root,&media) &&
+            gcode_resolved_path(root,name,path,sizeof(path)) && stat(path,&before)==0;
+        analysis_cache *cache=&analysis_cached[job.kind];
+        if(keyed && cache->valid && !strcmp(path,cache->path) && analysis_same_file(&before,&cache->stamp)) {
+            respond(job.fd,200,"OK","application/json; charset=utf-8",cache->response,cache->length);
+        } else {
+            cache->valid=0;cache->length=0;analysis_capture=cache;
+            if(job.kind)gcode_metadata_response(job.fd,job.body,job.length);
+            else gcode_inspect_response(job.fd,job.body,job.length);
+            analysis_capture=NULL;
+            if(keyed && cache->length && stat(path,&after)==0 && analysis_same_file(&before,&after)) {
+                snprintf(cache->path,sizeof(cache->path),"%s",path);cache->stamp=after;cache->valid=1;
+            }
+        }
+        close(job.fd);
+    }
+}
+static int analysis_start(int fd,int kind,const char *body,size_t length) {
+    if(length>=sizeof(analysis_queue[0].body)) {
+        const char *error="{\"error\":\"File request too large\"}\n";
+        respond(fd,400,"Bad Request","application/json",error,strlen(error));return 0;
+    }
+    pthread_mutex_lock(&analysis_mutex);
+    if(analysis_count==ANALYSIS_QUEUE_MAX) {
+        pthread_mutex_unlock(&analysis_mutex);
+        const char *error="{\"error\":\"File analysis busy; retry shortly\"}\n";
+        respond(fd,503,"Service Unavailable","application/json",error,strlen(error));return 0;
+    }
+    analysis_job *job=&analysis_queue[(analysis_head+analysis_count)%ANALYSIS_QUEUE_MAX];
+    job->fd=fd;job->kind=kind;job->generation=active_analysis_generation;job->length=length;memcpy(job->body,body,length);job->body[length]=0;
+    struct timeval timeout={5,0};setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
+    analysis_count++;
+    if(!analysis_running) {
+        pthread_attr_t attr;pthread_t thread;
+        int ok=pthread_attr_init(&attr);
+        if(ok==0){ok=pthread_attr_setstacksize(&attr,128*1024);if(ok==0)ok=pthread_create(&thread,&attr,analysis_worker,NULL);pthread_attr_destroy(&attr);}
+        if(ok){analysis_count--;pthread_mutex_unlock(&analysis_mutex);const char *error="{\"error\":\"Cannot start file analysis\"}\n";respond(fd,503,"Service Unavailable","application/json",error,strlen(error));return 0;}
+        analysis_running=1;pthread_detach(thread);
+    }
+    pthread_mutex_unlock(&analysis_mutex);return 1;
 }
 
 /* Elegoo's print_status does not consistently expose the total layer count.
  * Cache it from the active local G-code instead of leaving demo data in the UI. */
 static long active_gcode_estimated_seconds = -1;
 
-static int active_gcode_total_layers(const char *filename) {
-    static char cached_filename[256];
-    static int cached_total;
-    if (!filename || !filename[0]) {
-        cached_filename[0] = '\0'; cached_total = 0; active_gcode_estimated_seconds = -1; return 0;
-    }
-    if (strcmp(cached_filename, filename) == 0) return cached_total;
-    snprintf(cached_filename, sizeof(cached_filename), "%.255s", filename);
-    cached_total = 0;
-    active_gcode_estimated_seconds = -1;
-
+static void active_gcode_scan(const char *filename,int *layers,long *seconds) {
     char path[PATH_MAX_LOCAL * 2], line[4096];
-    if (!gcode_resolved_path(gcode_internal_root, filename, path, sizeof(path))) return 0;
+    if (!gcode_resolved_path(gcode_internal_root, filename, path, sizeof(path))) return;
     FILE *file = fopen(path, "r");
-    if (!file) return 0;
+    if (!file) return;
     int maximum_layer = -1;
     while (fgets(line, sizeof(line), file)) {
-        if(active_gcode_estimated_seconds < 0){
+        const char *comment=line;while(isspace((unsigned char)*comment))comment++;
+        if(*comment!=';')continue;
+        if(*seconds < 0){
             static const char *time_markers[]={"estimated printing time","estimated print time","total print time"};
-            for(size_t i=0;i<sizeof(time_markers)/sizeof(time_markers[0])&&active_gcode_estimated_seconds<0;i++)
-                active_gcode_estimated_seconds=duration_after_marker(line,time_markers[i]);
+            for(size_t i=0;i<sizeof(time_markers)/sizeof(time_markers[0])&&*seconds<0;i++)
+                *seconds=duration_after_marker(line,time_markers[i]);
         }
         static const char *markers[] = {
             "total layer number", "total_layer_count", "total layers count",
@@ -2038,7 +2127,7 @@ static int active_gcode_total_layers(const char *filename) {
         };
         for (size_t index = 0; index < sizeof(markers)/sizeof(markers[0]); ++index) {
             int value = positive_integer_after(line, markers[index]);
-            if (value > cached_total) cached_total = value;
+            if (value > *layers) *layers = value;
         }
         const char *layer = find_case_insensitive(line, ";LAYER:");
         if (layer) {
@@ -2052,8 +2141,32 @@ static int active_gcode_total_layers(const char *filename) {
         }
     }
     fclose(file);
-    if (!cached_total && maximum_layer >= 0) cached_total = maximum_layer + 1;
-    return cached_total;
+    if (!*layers && maximum_layer >= 0) *layers = maximum_layer + 1;
+}
+
+static int active_gcode_total_layers(const char *filename) {
+    int layers=0,submit=0;active_gcode_estimated_seconds=-1;
+    pthread_mutex_lock(&analysis_mutex);
+    if(!filename || !filename[0]) {
+        if(active_analysis_filename[0])active_analysis_generation++;
+        active_analysis_filename[0]=0;active_analysis_ready=0;
+    } else {
+        if(strcmp(filename,active_analysis_filename)) {
+            active_analysis_generation++;
+            snprintf(active_analysis_filename,sizeof(active_analysis_filename),"%s",filename);
+            active_analysis_ready=0;
+        }
+        if(active_analysis_ready) {
+            layers=active_analysis_layers;active_gcode_estimated_seconds=active_analysis_seconds;
+        } else if(!active_analysis_pending) {
+            active_analysis_pending=1;submit=1;
+        }
+    }
+    pthread_mutex_unlock(&analysis_mutex);
+    if(submit && !analysis_start(-1,2,filename,strlen(filename))) {
+        pthread_mutex_lock(&analysis_mutex);active_analysis_pending=0;pthread_mutex_unlock(&analysis_mutex);
+    }
+    return layers;
 }
 
 #include "recovery.h"
@@ -2096,7 +2209,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
-    char body[4096],filename[520],state[140],uuid[260],axes[40];
+    char body[6144],filename[520],state[140],uuid[260],axes[40];
     if(uds_value(&telemetry,U_ET,&live))json_number(et,sizeof(et),1,live);
     else json_number(et,sizeof(et),mqtt->have_extruder_temp,mqtt->extruder_temp);
     if(uds_value(&telemetry,U_EG,&live))json_number(eg,sizeof(eg),1,live);
@@ -2144,6 +2257,16 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     char printer_error[160]="null";
     if(mqtt->reply_errors)snprintf(printer_error,sizeof(printer_error),"{\"sequence\":%lu,\"method\":%d,\"code\":%d,\"age\":%ld}",
         mqtt->reply_errors,mqtt->reply_error_method,mqtt->reply_error_code,(long)(now-mqtt->reply_error_time));
+    char printer_report[1280]="null";
+    if(telemetry.report_sequence){
+        struct timespec received_now;clock_gettime(CLOCK_MONOTONIC,&received_now);
+        long report_age=received_now.tv_sec-telemetry.report_received.tv_sec;
+        snprintf(printer_report,sizeof(printer_report),
+            "{\"event_id\":\"%ld.%09ld-%lu\",\"sequence\":%lu,\"code\":%d,\"level\":%d,\"message\":%s,\"age\":%ld}",
+            (long)telemetry.report_identity.tv_sec,telemetry.report_identity.tv_nsec,telemetry.report_sequence,
+            telemetry.report_sequence,telemetry.report_code,telemetry.report_level,
+            telemetry.report_message,report_age<0?0:report_age);
+    }
     char viewer[sizeof(camera_viewer)+2];
     if(camera_viewer[0])snprintf(viewer,sizeof(viewer),"\"%s\"",camera_viewer);
     else snprintf(viewer,sizeof(viewer),"null");
@@ -2160,12 +2283,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"printer_error\":%s,\"camera_viewer\":%s}\n",
+        "\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
-        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",printer_error,viewer);
+        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",printer_report,printer_error,viewer);
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -2676,6 +2799,8 @@ static void mesh_response(int fd) {
     respond(fd,200,"OK","application/json; charset=utf-8",result,used); free(result);
 }
 
+#include "plates.h"
+
 static void serve_index(int fd, const char *web_root) {
     char path[PATH_MAX_LOCAL];
     if (snprintf(path, sizeof(path), "%s/index.html", web_root) >= (int)sizeof(path)) {
@@ -3091,6 +3216,7 @@ static void console_command_response(int fd, console_state *console, const mqtt_
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error)); return;
     }
     memcpy(command,body,body_len); command[body_len]='\0';
+    if(plates_background_active() && strcmp(command,"M112")){plates_fail(fd,409,"Plate verification is still running");return;}
     if (!console_command_allowed(console,command,mqtt,reason,sizeof(reason)) ||
         console_start(console,command,reason,sizeof(reason)) != 0) {
         char escaped[300],response[420]; json_escape(escaped,sizeof(escaped),reason);
@@ -3099,6 +3225,45 @@ static void console_command_response(int fd, console_state *console, const mqtt_
     }
     const char *ok="{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
+}
+
+/* Compact PID readback: reuse console reports without polling the firmware. */
+static int pid_completed_report(const char *output) {
+    const char *p=output;
+    while((p=strstr(p,"\"command\""))) {
+        p+=9;while(isspace((unsigned char)*p))p++;
+        if(*p!=':')continue;
+        p++;
+        while(isspace((unsigned char)*p))p++;
+        if(strncmp(p,"\"pid_calibrate\"",15))continue;
+        const char *line=strchr(p,'\n'),*result=strstr(p,"\"result\"");
+        if(!result||(line&&result>=line))continue;
+        result+=8;while(isspace((unsigned char)*result))result++;
+        if(*result!=':')continue;
+        result++;
+        while(isspace((unsigned char)*result))result++;
+        if(!strncmp(result,"\"completed\"",11))return 1;
+    }
+    return 0;
+}
+static int pid_ready_locked(const console_state *console) {
+    return !console->busy && console->completed && console->success &&
+        !strncmp(console->command,"PID_CALIBRATE HEATER=",21) && pid_completed_report(console->output);
+}
+static void pid_status_response(int fd,console_state *console) {
+    char body[512],kp[40],ki[40],kd[40];
+    pthread_mutex_lock(&console->lock);
+    int selected=!strncmp(console->command,"PID_CALIBRATE HEATER=",21);
+    int ready=pid_ready_locked(console),busy=console->busy;
+    double p=number_after_marker(console->output,"pid_Kp="),i=number_after_marker(console->output,"pid_Ki="),d=number_after_marker(console->output,"pid_Kd=");
+    json_number(kp,sizeof(kp),ready&&isfinite(p)&&p>=0,p);
+    json_number(ki,sizeof(ki),ready&&isfinite(i)&&i>=0,i);
+    json_number(kd,sizeof(kd),ready&&isfinite(d)&&d>=0,d);
+    const char *heater=selected?(strstr(console->command,"HEATER=extruder ")?"extruder":"heater_bed"):"";
+    int n=snprintf(body,sizeof(body),"{\"busy\":%s,\"heater\":\"%s\",\"ready\":%s,\"failed\":%s,\"kp\":%s,\"ki\":%s,\"kd\":%s}\n",
+        busy?"true":"false",heater,ready?"true":"false",selected&&console->completed&&!ready?"true":"false",kp,ki,kd);
+    pthread_mutex_unlock(&console->lock);
+    respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
 static void control_response(int fd,console_state *console,const mqtt_client *mqtt,const char *body,size_t body_len){
@@ -3110,6 +3275,11 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error));return;
     }
     memcpy(action,body,body_len);action[body_len]='\0';
+    if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
+    if(!strcmp(action,"pid:save")) {
+        pthread_mutex_lock(&console->lock);int ready=pid_ready_locked(console);pthread_mutex_unlock(&console->lock);
+        if(!ready){const char *error="{\"error\":\"Complete a PID calibration before saving\"}\n";respond(fd,409,"Conflict","application/json",error,strlen(error));return;}
+    }
     int z_action=!strncmp(action,"zoffset:",8);
     double z_next=0,z_reference=0;
     if(z_action){
@@ -3270,21 +3440,38 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
         return gcode_download_start(fd,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
-        gcode_inspect_response(fd,body,body_len);
+        return analysis_start(fd,0,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/thumbnail")==0) {
         gcode_thumbnail_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/metadata")==0) {
-        gcode_metadata_response(fd,body,body_len);
+        return analysis_start(fd,1,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/delete")==0) {
         gcode_delete_response(fd,request,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/copy")==0) {
         gcode_copy_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/print")==0) {
-        gcode_start_response(fd,mqtt,body,body_len);
+        if(plates_background_active())plates_fail(fd,409,"Plate verification is still running");
+        else gcode_start_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/exclude-objects")==0) {
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
         mesh_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/plates")==0) {
+        plates_get_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/save")==0) {
+        plates_save_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/recapture")==0) {
+        plates_recapture_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/edit")==0) {
+        plates_edit_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/delete")==0) {
+        plates_delete_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/mount")==0) {
+        plates_mount_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/unmount")==0) {
+        plates_unmount_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/pid")==0) {
+        pid_status_response(fd,console);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/console")==0) {
         console_status_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/clear")==0) {
@@ -3319,10 +3506,12 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--config") == 0 && i + 1 < argc) mqtt_config_path = argv[++i];
         else if (strcmp(argv[i], "--presets") == 0 && i + 1 < argc) material_presets_path = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
+        else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
+        else if (strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) printer_autosave_path = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
             return 2;
         }
     }
@@ -3345,6 +3534,8 @@ int main(int argc, char **argv) {
     console_init(&console,"/tmp/elegoo_uds");
     recovery_console=&console;
     uds_init(&telemetry);
+    plates_load();
+    if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
         setup_mode = 1;
@@ -3383,6 +3574,7 @@ int main(int argc, char **argv) {
         mqtt_tick(&mqtt);
         object_query_path = uds_path;
         uds_tick(&telemetry,uds_path);
+        plates_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
         int max_fd=server;
@@ -3392,7 +3584,8 @@ int main(int argc, char **argv) {
         for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
             FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
         }
-        struct timeval wait={receiving?0:1,receiving?100000:0};
+        int short_wait=receiving||plates_background_active();
+        struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
@@ -3402,13 +3595,18 @@ int main(int argc, char **argv) {
         for(int i=0;i<HTTP_PENDING_MAX;i++){
             http_pending *p=&pending[i];if(p->fd<0)continue;
             double age=(double)(now.tv_sec-p->started.tv_sec)+(now.tv_nsec-p->started.tv_nsec)/1e9;
-            if(age>=2){close(p->fd);p->fd=-1;continue;}
-            if(!FD_ISSET(p->fd,&read_set))continue;
-            ssize_t n=recv(p->fd,p->request+p->used,REQUEST_MAX-p->used,0);
-            if(n<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR))continue;
+            /* Probe every pending nonblocking socket before expiring it.
+             * Readiness is a scheduling hint: an empty/stale select result
+             * must not discard bytes that are already queued on the socket. */
+            ssize_t n=recv(p->fd,p->request+p->used,REQUEST_MAX-p->used,MSG_DONTWAIT);
+            if(n<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR)){
+                if(age>=2){close(p->fd);p->fd=-1;}
+                continue;
+            }
             if(n<=0){close(p->fd);p->fd=-1;continue;}
             p->used+=(size_t)n;p->request[p->used]=0;
-            int complete=http_request_complete(p->request,p->used);if(!complete)continue;
+            int complete=http_request_complete(p->request,p->used);
+            if(!complete){if(age>=2){close(p->fd);p->fd=-1;}continue;}
             int fd=p->fd;p->fd=-1;
             int flags=fcntl(fd,F_GETFL,0);
             if(flags<0||fcntl(fd,F_SETFL,flags&~O_NONBLOCK)<0){close(fd);continue;}

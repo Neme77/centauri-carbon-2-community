@@ -65,6 +65,49 @@ export function previewPlugin(): Plugin {
   let deleted = new Set<string>()
   let autoRefill = false
   let videos: Record<string, number> = {}
+  // Build-plate library: which simulated plate mesh each printer side slot holds, as /api/plates reports it.
+  const plateMesh = (tilt: number) => ({
+    x_count: 11,
+    y_count: 11,
+    min_x: 6,
+    max_x: 246,
+    min_y: 6,
+    max_y: 246,
+    mesh_x_pps: 3,
+    mesh_y_pps: 3,
+    algo: 'bicubic',
+    tension: 0.2,
+    offset: 0,
+    points: Array.from({ length: 11 }, (_, y) =>
+      Array.from({ length: 11 }, (_, x) => Math.round((0.3 + tilt * (x - 5) * 0.01 - (y - 5) ** 2 * 0.003) * 1e6) / 1e6)
+    ),
+  })
+  type PreviewPlate = { id: string; name: string; side: 'A' | 'B'; z_offset: number; measured: number; tilt: number }
+  let plates: PreviewPlate[] = []
+  let plateSlots: Record<'A' | 'B', number> = { A: 1, B: 2 }
+  let plateCurrent = ''
+  let plateResult = ''
+  const resetPlates = () => {
+    plates = [
+      { id: 'a1b2c3d4e5f60718', name: 'Smooth PEI', side: 'A', z_offset: -0.02, measured: 1790800000, tilt: 1 },
+      { id: '0f1e2d3c4b5a6978', name: 'Textured PEI', side: 'B', z_offset: 0.01, measured: 1790700000, tilt: 2 },
+      { id: '1234567890abcdef', name: 'Cool Plate', side: 'A', z_offset: 0, measured: 1790600000, tilt: 3 },
+    ]
+    plateSlots = { A: 1, B: 2 }
+    plateCurrent = 'a1b2c3d4e5f60718'
+    plateResult = ''
+  }
+  resetPlates()
+  const plateLibrary = () => ({
+    available: true,
+    error: '',
+    current: plateCurrent,
+    pending: '',
+    result: plateResult,
+    z_applied: Boolean(plateCurrent),
+    slots: { A: plateSlots.A ? 'mesh' : 'empty', B: plateSlots.B ? 'mesh' : 'empty' },
+    plates: plates.map(({ tilt, ...p }) => ({ ...p, in_printer: plateSlots[p.side] === tilt, mesh: plateMesh(tilt) })),
+  })
   const reset = () => {
     speed = 100
     flow = 100
@@ -72,6 +115,7 @@ export function previewPlugin(): Plugin {
     videos = {}
     deleted = new Set()
     cameraViewer = null
+    resetPlates()
   }
   // Print history as the printer reports it through /api/history (fixed times keep screenshots stable).
   const job = (
@@ -308,6 +352,8 @@ export function previewPlugin(): Plugin {
                   },
                 },
               })
+            case '/api/plates':
+              return reply(plateLibrary())
             case '/api/history':
               return reply({
                 available: true,
@@ -367,6 +413,12 @@ export function previewPlugin(): Plugin {
           '/api/history/delete',
           '/api/camera/claim',
           '/api/history/timelapse',
+          '/api/plates/save',
+          '/api/plates/edit',
+          '/api/plates/delete',
+          '/api/plates/recapture',
+          '/api/plates/mount',
+          '/api/plates/unmount',
         ]
         if (!simulated.includes(path)) return reply({ error: 'Operation disabled in isolated preview' }, 403)
         let body = ''
@@ -426,6 +478,53 @@ export function previewPlugin(): Plugin {
                 return reply({ accepted: false, error: 'Rendering a time-lapse video requires an idle printer' }, 409)
               videos[task.task_id] = 2
               return reply({ accepted: true, method: 1051, simulated: true }, 202)
+            }
+            if (path.startsWith('/api/plates/') && req.method === 'POST') {
+              const lines = body.replace(/\n+$/, '').split('\n')
+              const plate = plates.find(p => p.id === lines[0])
+              const idleOnly = ['/api/plates/save', '/api/plates/mount', '/api/plates/recapture'].includes(path)
+              if (idleOnly && scene !== 'idle') return reply({ ok: false, error: 'The printer must be idle' }, 409)
+              if (path === '/api/plates/unmount') {
+                plateCurrent = ''
+                return reply({ mounted: false })
+              }
+              if (path === '/api/plates/save') {
+                const [side, name, z] = lines as ['A' | 'B', string, string]
+                if (plates.some(p => p.name === name))
+                  return reply({ ok: false, error: 'A plate with this name already exists' }, 409)
+                const id = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+                plates.push({ id, name, side, z_offset: Number(z), measured: 1790900000, tilt: plateSlots[side] })
+                return reply({ saved: true, id }, 201)
+              }
+              if (!plate) return reply({ ok: false, error: 'Unknown plate' }, 404)
+              if (path === '/api/plates/edit') {
+                plate.name = lines[1]
+                plate.z_offset = Number(lines[2])
+                return reply({ saved: true, applied: plateCurrent === plate.id && scene === 'idle' })
+              }
+              if (path === '/api/plates/delete') {
+                plates = plates.filter(p => p !== plate)
+                if (plateCurrent === plate.id) plateCurrent = ''
+                return reply({ deleted: true })
+              }
+              if (path === '/api/plates/recapture') {
+                plate.tilt = plateSlots[plate.side]
+                return reply({ saved: true })
+              }
+              if (plateSlots[plate.side] !== plate.tilt && lines[1] !== 'REBOOT')
+                return reply(
+                  {
+                    ok: false,
+                    reboot_required: true,
+                    error: 'Writing this mesh to the printer needs a printer restart',
+                  },
+                  409
+                )
+              const reboot = plateSlots[plate.side] !== plate.tilt
+              plateSlots[plate.side] = plate.tilt // the simulated restart is instant
+              plateCurrent = plate.id
+              plateResult = 'mounted'
+              return reply({ mounted: true, reboot }, reboot ? 202 : 200)
             }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()

@@ -4,7 +4,10 @@ import { ask } from './confirm'
 
 export const request = async (path: string, options: RequestInit = {}) => {
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), 8000)
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    /\/api\/gcode-files\/(metadata|inspect)$/.test(path) ? 120000 : 8000
+  )
   try {
     const headers = new Headers(options.headers)
     if (options.method && !['GET', 'HEAD'].includes(options.method.toUpperCase())) headers.set('X-CC2-Request', '1')
@@ -16,7 +19,9 @@ export const request = async (path: string, options: RequestInit = {}) => {
     })
     const type = response.headers.get('content-type') || ''
     const data = type.includes('json') ? await response.json() : await response.text()
-    if (!response.ok) throw Error(data?.error || data || `HTTP ${response.status}`)
+    // The reply stays on the error for callers that act on its fields (e.g. reboot_required).
+    if (!response.ok)
+      throw Object.assign(Error(data?.error || data || `HTTP ${response.status}`), { status: response.status, data })
     return data
   } finally {
     clearTimeout(timeout)

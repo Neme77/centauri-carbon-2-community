@@ -13,6 +13,7 @@ HARNESSES = {
     "test_exclude_objects.c": BACKEND,
     # test_file_ops.c and test_orca_upload.c include src/main.c themselves.
     "test_file_ops.c": BACKEND,
+    "test_file_analysis.c": BACKEND,
     "test_recovery_download.c": BACKEND,
     "test_emergency_latch.c": [],
     "test_runtime_limits.c": BACKEND,
@@ -27,7 +28,9 @@ HARNESSES = {
     "test_history_api.c": BACKEND,
     "test_uds.c": [ROOT / "src/uds.c"],
     "test_tuning_api.c": BACKEND,
+    "test_pid_api.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
+    "test_plates.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
 }
 
@@ -35,5 +38,5 @@ with tempfile.TemporaryDirectory(prefix="cc2-c-harness-") as temporary:
     for name, sources in HARNESSES.items():
         binary = pathlib.Path(temporary) / name[:-2]
         subprocess.run(["cc", *FLAGS, str(ROOT / "tests" / name), *map(str, sources), "-o", str(binary), "-lm"], check=True)
-        subprocess.run([str(binary)], cwd=temporary, check=True, stdout=subprocess.DEVNULL)
+        subprocess.run([str(binary)], cwd=temporary, check=True)
         print(f"PASS: {name}")

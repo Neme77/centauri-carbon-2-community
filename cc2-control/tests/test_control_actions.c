@@ -14,6 +14,21 @@ int main(void){
     memset(&mqtt,0,sizeof(mqtt));
     mqtt.have_machine_status=1; mqtt.machine_status=1;
     mqtt.connected=mqtt.registered=1; mqtt.last_message=time(NULL);
+    expect(control_build_script("heaters:set:205:60",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
+        !strcmp(script,"SET_HEATER_TEMPERATURE HEATER=extruder TARGET=205.0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60.0"),"temperature targets accepted idle without waiting");
+    mqtt.machine_status=2;
+    expect(control_build_script("heaters:set:215:65",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets accepted during print");
+    strcpy(mqtt.print_state,"paused");
+    expect(control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets accepted for paused print");
+    expect(!control_build_script("preheat:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"preheat remains blocked during print");
+    const char *bad_targets[]={"heaters:set:nan:60","heaters:set:210:inf","heaters:set:-1:60","heaters:set:301:60","heaters:set:200:121","heaters:set:200:60junk","heaters:set:200:60\nM112","heaters:set:200"};
+    for(size_t i=0;i<sizeof(bad_targets)/sizeof(bad_targets[0]);i++)expect(!control_build_script(bad_targets[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),bad_targets[i]);
+    mqtt.last_message-=30;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected stale");mqtt.last_message=time(NULL);
+    mqtt.connected=0;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected disconnected");mqtt.connected=1;
+    mqtt.registered=0;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected unregistered");mqtt.registered=1;
+    mqtt.have_machine_status=0;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected unknown state");mqtt.have_machine_status=1;
+    mqtt.machine_status=3;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected during other operation");
+    mqtt.machine_status=1; mqtt.print_state[0]=0;
     expect(control_build_script("home:ALL",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"G28\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=0.0")==0,"home switches nozzle off when previous target is unavailable");
     mqtt.have_extruder_target=1; mqtt.extruder_target=205.0;
     expect(control_build_script("home:X",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"G28 X\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=205.0")==0,"home restores previous nozzle target");

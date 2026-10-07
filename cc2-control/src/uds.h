@@ -23,6 +23,11 @@ typedef struct {
  unsigned long messages, connections, disconnects, ignored_messages;
  const char *last_disconnect, *parse_error;
  int last_errno;
+ /* Last vendor event, retained across disconnects; never implies an active fault. */
+ unsigned long report_sequence;
+ int report_code, report_level;
+ struct timespec report_received, report_identity;
+ char report_message[1024]; /* validated JSON string, or null */
 } uds_client;
 void uds_init(uds_client *c);
 void uds_close(uds_client *c);

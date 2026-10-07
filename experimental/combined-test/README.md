@@ -23,9 +23,10 @@ machine-specific backups, checks activation and fresh UDS, and rolls back on
 failure. Persistent startup edits only the normal command in the real vendor
 `/opt/bin/run_printer.sh`, preserving `LD_BIND_NOW=1` and arguments.
 
-This is a draft experiment, not enabled by the standard firmware builder. The
-combined test installer builds the current branch's CC2 plus the runtime;
-it does not add separate PID, plate-library or file-analysis work.
+This remains an experimental, opt-in workaround; the standard firmware builder
+does not enable it automatically. The combined installer builds the aligned
+CC2 sources, including the merged plate library, PID, printing-temperature,
+large-file and native-report changes, together with the O0 runtime.
 No vendor executable, shared library, private key or prebuilt module is included.
 Native builds require the owner's GCC 6.5.0/glibc 2.23 toolchain and a local copy
 of the exact printer libco under `reactor/vendor-link/`. Do not commit that copy.
@@ -38,4 +39,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\experimental\combined-
 
 Read `LEGGIMI.txt` before installing. `VALIDATION.md` and `reactor/VERIFICATION.md`
 separate host fixture checks, native ARM qualification and real-printer reports.
-Long-duration validation and comparison against PR #88 alone remain pending.
+User-reported long-print observations and the comparison with reduced UDS
+polling are recorded in `VALIDATION.md`. They are encouraging evidence, not a
+controlled attribution study or a guarantee against OOM/803.
+
+The published ELEGOO source snapshot predates the deployed firmware. This is a
+provisional workaround for one qualified vendor executable. When aligned sources
+or an official correction become available, reassess this workaround against
+the actual fix; matching sources alone do not guarantee greater efficiency.

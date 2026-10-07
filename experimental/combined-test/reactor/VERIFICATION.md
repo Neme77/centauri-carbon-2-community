@@ -35,7 +35,8 @@ User ran the VFP qualification on native ARM/libco: O1 reproduced a disabled tim
 ## Later integration evidence
 
 See `../VALIDATION.md` for user-reported persistent boot, successful Home All,
-a completed short AI/timelapse print and the ongoing two-hour memory observation.
+completed short and long prints, plus a collaborator comparison with reduced
+UDS polling.
 The original risks remain: native ABI compatibility is limited to the exact
 fingerprinted executable, request_log is unbounded, and long-print reliability
-and incremental benefit over reduced socket polling are not established.
+and incremental benefit over reduced socket polling are not definitively established.
