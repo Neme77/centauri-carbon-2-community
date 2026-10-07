@@ -25,5 +25,5 @@ for name in ('start.sh', 'launch.sh'):
     launcher = (BASE / 'components/cc2-control/runtime' / name).read_text()
     guard = "while ! pidof elegoo_printer >/dev/null 2>&1; do"
     assert guard in launcher, name
-    assert 'sleep 60' in launcher, name
-    assert launcher.index(guard) < launcher.index('sleep 60') < launcher.index('exec '), name
+    assert 'sleep 30' in launcher, name
+    assert launcher.index(guard) < launcher.index('sleep 30') < launcher.index('exec '), name
