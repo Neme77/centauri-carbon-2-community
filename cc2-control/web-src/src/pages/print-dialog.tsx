@@ -3,7 +3,7 @@ import { store } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/field'
 import { Dialog } from '@/components/ui/dialog'
-import { errText, notify, post, request } from '@/lib/api'
+import { errText, notify, post, request, toast } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { canvasColour, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
@@ -32,9 +32,13 @@ async function clearOrcaPending(generation: number) {
   }
 }
 
+let fileAnalysisPending = false
+
 // Opens the confirmation dialog; a print is never started without the operator confirming the mapping.
 export async function startFile(storage: string, path: string) {
-  if (pending.get().job) return
+  if (pending.get().job || fileAnalysisPending) return
+  fileAnalysisPending = true
+  notify(t('print.analysing_file'))
   try {
     const [inspection, canvasData, meshData] = await Promise.all([
       post('/api/gcode-files/inspect', `${storage}\n${path}`),
@@ -55,9 +59,12 @@ export async function startFile(storage: string, path: string) {
         connected: Boolean(model?.connected),
       },
     })
+    toast.set(s => ({ ...s, text: '' }))
   } catch (e) {
     pending.set({ job: null })
     notify(tpl('print.cannot_prepare_print_error', { error: errText(e) }), 'error')
+  } finally {
+    fileAnalysisPending = false
   }
 }
 
