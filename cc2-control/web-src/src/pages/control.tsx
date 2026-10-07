@@ -610,10 +610,10 @@ export const Control = () => {
       }
     >
       <div class="cc2-control-columns grid gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
-        <div class="grid content-start gap-3.5">
+        <div class="grid content-start gap-3.5 cc2-xl:grid-rows-[1fr]">
           <Movement v={v} />
         </div>
-        <div class="grid content-start gap-3.5">
+        <div class="grid content-start gap-3.5 cc2-xl:grid-rows-[auto_auto_1fr]">
           <Temperatures d={d} v={v} />
           <Card>
             <CardHead icon="fan" title="common.fans" />
@@ -628,7 +628,7 @@ export const Control = () => {
           </Card>
           <PidCalibration d={d} />
         </div>
-        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1">
+        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:grid-rows-[auto_1fr]">
           <Card>
             <CardHead icon="settings" title="control.machine" />
             <div class="grid auto-rows-fr grid-cols-2 gap-2.5">

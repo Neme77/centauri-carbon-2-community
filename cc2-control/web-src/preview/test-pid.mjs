@@ -19,7 +19,7 @@ try {
  await page.route('**/api/pid', r => r.fulfill({ json: pid }))
  await page.route('**/api/control', r => { const a = r.request().postData(); actions.push(a); pid = { ...pid, ready: false, busy: true, heater: a.includes('heater_bed') ? 'heater_bed' : 'extruder' }; return r.fulfill({ status: 202, json: { accepted: true } }) })
  await page.goto(`${server.resolvedUrls.local[0]}#control`)
- const card = page.locator('.cc2-pid'), start = card.getByRole('button', { name: 'Calibrate Nozzle', exact: true }), save = card.getByRole('button', { name: 'Save PID and restart', exact: true })
+ const card = page.locator('.cc2-pid'), start = card.getByRole('button', { name: 'Calibrate Nozzle', exact: true }), save = card.getByRole('button', { name: 'Save PID', exact: true })
  await card.waitFor(); assert.ok(await start.isDisabled()); assert.ok(await save.isDisabled())
  machine = 1; await start.waitFor(); await page.waitForFunction(() => !document.querySelector('.cc2-pid button').disabled)
  await card.getByRole('spinbutton', { name: 'Calibration temperature: Nozzle' }).fill('301'); await start.click(); assert.equal(actions.length, 0)

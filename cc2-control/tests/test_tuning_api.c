@@ -20,6 +20,15 @@ static void read_printer(mqtt_client *m,char *out,size_t cap){
  ssize_t n=recv(peers[1],out,cap-1,0);assert(n>0);out[n]=0;
  close(peers[0]);close(peers[1]);
 }
+static void wait_active(mqtt_client *m){
+ for(int i=0;i<5000;i++){
+  (void)active_gcode_total_layers(m->filename);
+  pthread_mutex_lock(&analysis_mutex);int ready=active_analysis_ready&&!strcmp(active_analysis_filename,m->filename);pthread_mutex_unlock(&analysis_mutex);
+  if(ready)return;
+  struct timespec pause={0,1000000};nanosleep(&pause,NULL);
+ }
+ assert(!"active file scan did not complete");
+}
 static void test_gcode_remaining(void){
  char directory[]="/tmp/cc2-eta-test-XXXXXX";assert(mkdtemp(directory));
  const char *old_root=gcode_internal_root;gcode_internal_root=directory;
@@ -28,7 +37,7 @@ static void test_gcode_remaining(void){
  fputs("; total layer number: 617\nG1 X1\n; estimated printing time (normal mode) = 1h 9m 56s\n",file);fclose(file);
  mqtt_client m;memset(&m,0,sizeof(m));m.connected=m.registered=m.have_machine_status=1;
  m.last_message=time(NULL);m.machine_status=2;strcpy(m.print_state,"printing");strcpy(m.filename,"orca.gcode");m.print_duration=60;
- char response[6000];read_printer(&m,response,sizeof(response));
+ char response[6000];wait_active(&m);read_printer(&m,response,sizeof(response));
  assert(strstr(response,"\"remaining\":4136,\"remaining_source\":\"gcode\""));
  assert(strstr(response,"\"total_layers\":617"));
  assert(m.remaining_time==0&&m.print_duration==60);
@@ -38,11 +47,11 @@ static void test_gcode_remaining(void){
  assert(strstr(response,"\"total_layers\":700"));
  m.remaining_time=0;m.have_total_layers=0;m.last_message-=30;
  read_printer(&m,response,sizeof(response));assert(strstr(response,"\"remaining_source\":\"unavailable\""));
- m.last_message=time(NULL);strcpy(m.filename,"missing.gcode");
+ m.last_message=time(NULL);strcpy(m.filename,"missing.gcode");wait_active(&m);
  read_printer(&m,response,sizeof(response));assert(strstr(response,"\"remaining_source\":\"unavailable\""));
  snprintf(path,sizeof(path),"%s/elegoo.gcode",directory);file=fopen(path,"w");assert(file);
  fputs("; total layer number: 227\n; estimated printing time (normal mode) = 25m 47s\n",file);fclose(file);
- strcpy(m.filename,"elegoo.gcode");read_printer(&m,response,sizeof(response));
+ strcpy(m.filename,"elegoo.gcode");wait_active(&m);read_printer(&m,response,sizeof(response));
  assert(strstr(response,"\"remaining\":1487,\"remaining_source\":\"gcode\""));
  m.print_duration=2000;read_printer(&m,response,sizeof(response));assert(strstr(response,"\"remaining\":0,"));
  m.machine_status=1;strcpy(m.print_state,"complete");m.print_duration=60;
@@ -67,7 +76,7 @@ int main(void){
  m.have_extruder_temp=m.have_extruder_target=m.have_part_fan=1;
  m.extruder_temp=205;m.extruder_target=210;m.part_fan=100;
  m.current_layer=7;m.progress=10;m.print_duration=80;
- char response[6000];read_printer(&m,response,sizeof(response));
+ char response[6000];wait_active(&m);read_printer(&m,response,sizeof(response));
  assert(strstr(response,"\"extruder\":{\"temperature\":210.0,\"target\":215.0}"));
  assert(strstr(response,"\"part\":153.0"));
  assert(strstr(response,"\"current_layer\":12")&&strstr(response,"\"duration\":99"));
