@@ -631,5 +631,6 @@
   "plates.adaptive_note": "打印前先调平的打印会测量新的网格；打印板的 Z 偏移仍然有效。",
   "plates.plate_option": "打印板 · {name}",
   "plates.loading": "正在载入打印板库…",
-  "plates.offline": "CC2 Control 无响应；打印机可能正在重启。"
+  "plates.offline": "CC2 Control 无响应；打印机可能正在重启。",
+  "print.analysing_file": "正在分析文件…"
 }

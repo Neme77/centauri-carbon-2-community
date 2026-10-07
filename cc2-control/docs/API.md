@@ -255,3 +255,30 @@ pending mount and backups for recovery instead of reporting a successful rollbac
 Host regressions cover disk/memory disagreement, stale reboot guards, concurrent PID
 updates, failed rollback, bounded retries across reconnects, and fragmented/late UDS
 replies. These checks do not substitute for validation on the physical printer.
+## Bounded asynchronous G-code analysis
+
+Metadata and inspection scans run on one worker with a 128 KiB stack and a queue
+limited to four pending requests. Two fixed response caches occupy approximately
+10 KiB and are invalidated when the file identity/stat changes. Files are scanned
+in bounded buffers; the whole G-code is not loaded into memory. A full queue
+returns an error instead of creating additional threads or unbounded work.
+
+The same worker handles active-job G-code analysis so `/api/printer` does not
+scan a large file on the HTTP/MQTT/UDS event loop. The current job returns cached
+values as they become available; switching jobs prevents old results from being
+published for the new file.
+
+The browser allows up to 120 seconds only for metadata/inspect and rejects
+duplicate preparation clicks while showing an analysis message. Other API
+timeouts remain unchanged. No print starts before the operator confirms it.
+
+HTTP receive handling probes sockets without blocking before expiring incomplete
+requests. A complete queued request survives an event-loop scheduling stall; an
+incomplete request still expires. This also covers the observed WSL1 readiness
+behaviour without increasing the global HTTP timeout.
+
+Host regressions cover 106+ MiB files, trailing metadata, cache invalidation,
+active-job transitions, concurrent health/UDS traffic and scheduling stalls.
+The owner reported successful large-file selection and an ongoing 108 MB print
+with the experimental callback active. This CC2 change neither requires nor
+modifies that module, but standalone printer validation without it is pending.

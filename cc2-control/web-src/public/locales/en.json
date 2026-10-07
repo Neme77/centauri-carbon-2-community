@@ -631,5 +631,6 @@
   "plates.adaptive_note": "Prints that level the bed first probe a fresh mesh; the plate Z offset still applies.",
   "plates.plate_option": "Plate · {name}",
   "plates.loading": "Loading the plate library…",
-  "plates.offline": "CC2 Control is not answering; the printer may be restarting."
+  "plates.offline": "CC2 Control is not answering; the printer may be restarting.",
+  "print.analysing_file": "Analysing file…"
 }

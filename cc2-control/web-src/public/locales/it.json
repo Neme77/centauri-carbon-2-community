@@ -631,5 +631,6 @@
   "plates.adaptive_note": "Le stampe che livellano prima il piatto misurano una mesh nuova; l’offset Z del piatto si applica comunque.",
   "plates.plate_option": "Piatto · {name}",
   "plates.loading": "Caricamento della libreria dei piatti…",
-  "plates.offline": "CC2 Control non risponde; la stampante potrebbe essere in riavvio."
+  "plates.offline": "CC2 Control non risponde; la stampante potrebbe essere in riavvio.",
+  "print.analysing_file": "Analisi del file in corso…"
 }
