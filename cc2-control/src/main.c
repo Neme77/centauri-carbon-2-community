@@ -3217,6 +3217,45 @@ static void console_command_response(int fd, console_state *console, const mqtt_
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }
 
+/* Compact PID readback: reuse console reports without polling the firmware. */
+static int pid_completed_report(const char *output) {
+    const char *p=output;
+    while((p=strstr(p,"\"command\""))) {
+        p+=9;while(isspace((unsigned char)*p))p++;
+        if(*p!=':')continue;
+        p++;
+        while(isspace((unsigned char)*p))p++;
+        if(strncmp(p,"\"pid_calibrate\"",15))continue;
+        const char *line=strchr(p,'\n'),*result=strstr(p,"\"result\"");
+        if(!result||(line&&result>=line))continue;
+        result+=8;while(isspace((unsigned char)*result))result++;
+        if(*result!=':')continue;
+        result++;
+        while(isspace((unsigned char)*result))result++;
+        if(!strncmp(result,"\"completed\"",11))return 1;
+    }
+    return 0;
+}
+static int pid_ready_locked(const console_state *console) {
+    return !console->busy && console->completed && console->success &&
+        !strncmp(console->command,"PID_CALIBRATE HEATER=",21) && pid_completed_report(console->output);
+}
+static void pid_status_response(int fd,console_state *console) {
+    char body[512],kp[40],ki[40],kd[40];
+    pthread_mutex_lock(&console->lock);
+    int selected=!strncmp(console->command,"PID_CALIBRATE HEATER=",21);
+    int ready=pid_ready_locked(console),busy=console->busy;
+    double p=number_after_marker(console->output,"pid_Kp="),i=number_after_marker(console->output,"pid_Ki="),d=number_after_marker(console->output,"pid_Kd=");
+    json_number(kp,sizeof(kp),ready&&isfinite(p)&&p>=0,p);
+    json_number(ki,sizeof(ki),ready&&isfinite(i)&&i>=0,i);
+    json_number(kd,sizeof(kd),ready&&isfinite(d)&&d>=0,d);
+    const char *heater=selected?(strstr(console->command,"HEATER=extruder ")?"extruder":"heater_bed"):"";
+    int n=snprintf(body,sizeof(body),"{\"busy\":%s,\"heater\":\"%s\",\"ready\":%s,\"failed\":%s,\"kp\":%s,\"ki\":%s,\"kd\":%s}\n",
+        busy?"true":"false",heater,ready?"true":"false",selected&&console->completed&&!ready?"true":"false",kp,ki,kd);
+    pthread_mutex_unlock(&console->lock);
+    respond(fd,200,"OK","application/json",body,(size_t)n);
+}
+
 static void control_response(int fd,console_state *console,const mqtt_client *mqtt,const char *body,size_t body_len){
     char action[160],script[700],reason[256];
     while(body_len&&isspace((unsigned char)*body)){body++;body_len--;}
@@ -3227,6 +3266,10 @@ static void control_response(int fd,console_state *console,const mqtt_client *mq
     }
     memcpy(action,body,body_len);action[body_len]='\0';
     if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
+    if(!strcmp(action,"pid:save")) {
+        pthread_mutex_lock(&console->lock);int ready=pid_ready_locked(console);pthread_mutex_unlock(&console->lock);
+        if(!ready){const char *error="{\"error\":\"Complete a PID calibration before saving\"}\n";respond(fd,409,"Conflict","application/json",error,strlen(error));return;}
+    }
     int z_action=!strncmp(action,"zoffset:",8);
     double z_next=0,z_reference=0;
     if(z_action){
@@ -3417,6 +3460,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_mount_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/unmount")==0) {
         plates_unmount_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/pid")==0) {
+        pid_status_response(fd,console);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/console")==0) {
         console_status_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/clear")==0) {

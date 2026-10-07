@@ -188,6 +188,23 @@ The UI asks for confirmation before deleting one entry or all completed entries 
 The firmware handler inspected for this integration deletes database records; it does not remove
 G-code files or timelapse files. This is a history operation, not a storage cleanup tool.
 
+## Heater PID calibration
+
+`GET /api/pid` returns the selected heater, busy/ready/failed flags and the last
+reported Kp/Ki/Kd values. It reads the existing console output rather than querying
+the printer. The Control panel polls this cached state only while visible.
+
+`POST /api/control` accepts `pid:extruder:<temperature>` (150–300 °C),
+`pid:heater_bed:<temperature>` (40–120 °C) and `pid:save`, with the usual browser
+mutation marker and connected/fresh/idle controls. Calibration runs
+`PID_CALIBRATE` followed by `TURN_OFF_HEATERS`. Saving requires a successful
+console calibration with the native `pid_calibrate: completed` report; it sends
+`SAVE_CONFIG`, persisting the values. The UI
+requires confirmation for calibration and saving.
+
+Hotend calibration and PID persistence were validated on a physical CC2.
+No restart was observed after saving. Immediate application of the new PID
+coefficients has not been independently verified.
 ## Build-plate library
 
 CC2 Control keeps named plate surfaces in `bed-plates.json` (`--plates FILE`, next to the UI preferences):

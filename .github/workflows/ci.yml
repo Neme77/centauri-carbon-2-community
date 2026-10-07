@@ -64,6 +64,12 @@ jobs:
           git add --intent-to-add ../web
           git diff --exit-code -- ../web
 
+      - name: Install browser for PID interaction regression
+        run: npx playwright install --with-deps chromium
+
+      - name: PID browser interaction regression
+        run: npm run test:pid
+
       - name: Install browser for file-dialog regression
         run: npx playwright install --with-deps chromium
 

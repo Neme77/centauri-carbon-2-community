@@ -6,8 +6,9 @@ import { Dot, Pip, Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
 import { Icon } from '@/components/icons'
 import { FanSlider, Notice, Warn } from '@/components/shared'
-import { control, errText, notify } from '@/lib/api'
+import { control, errText, notify, request } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
+import { store } from '@/lib/store'
 import { stateText } from '@/lib/machine'
 import { num } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
@@ -248,6 +249,131 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   )
 }
 
+type PidStatus = {
+  busy: boolean
+  heater: string
+  ready: boolean
+  failed: boolean
+  kp: number | null
+  ki: number | null
+  kd: number | null
+}
+const pidStatus = store({ data: null as PidStatus | null, ok: false })
+const refreshPid = async () => {
+  try {
+    pidStatus.set({ data: await request('/api/pid'), ok: true })
+  } catch {
+    pidStatus.set({ ok: false })
+  }
+}
+const PidCalibration = ({ d }: { d: any }) => {
+  usePoll(refreshPid, 3000)
+  const { data: status, ok } = pidStatus.use()
+  const connected = printer.use().ok
+  const [hotend, setHotend] = useState('200'),
+    [bed, setBed] = useState('60')
+  const [sending, setSending] = useState(false)
+  const lock = useRef(false)
+  const idle =
+    connected && d?.connected && d?.machine?.status === 1 && d?.last_message_age >= 0 && d?.last_message_age <= 15
+  const can = idle && ok && !status?.busy && !sending
+  const send = async (heater: string, target: string) => {
+    if (lock.current || !can) return
+    const value = Number(target),
+      isHotend = heater === 'extruder'
+    if (!target.trim() || !Number.isFinite(value) || value < (isHotend ? 150 : 40) || value > (isHotend ? 300 : 120))
+      return notify(t('control.pid_invalid_target'), 'error')
+    lock.current = true
+    setSending(true)
+    try {
+      if (
+        await control(
+          `pid:${heater}:${value}`,
+          tpl('control.pid_confirm', { heater: t(isHotend ? 'common.nozzle' : 'common.heated_bed'), target: value })
+        )
+      )
+        await refreshPid()
+    } finally {
+      lock.current = false
+      setSending(false)
+    }
+  }
+  const save = async () => {
+    if (lock.current || !can || !status?.ready) return
+    lock.current = true
+    setSending(true)
+    try {
+      if (await control('pid:save', t('control.pid_save_confirm'))) await refreshPid()
+    } finally {
+      lock.current = false
+      setSending(false)
+    }
+  }
+  return (
+    <Card class="cc2-pid">
+      <CardHead icon="temp" title="control.pid_title" />
+      {(
+        [
+          ['extruder', 'common.nozzle', hotend, setHotend, 150, 300],
+          ['heater_bed', 'common.heated_bed', bed, setBed, 40, 120],
+        ] as const
+      ).map(([heater, label, value, set, min, max]) => (
+        <div key={heater} class="my-3 grid grid-cols-[minmax(0,1fr)_6rem_auto] items-center gap-2">
+          <span>{t(label)}</span>
+          <label class="flex items-center gap-1">
+            <Input
+              type="number"
+              min={min}
+              max={max}
+              value={value}
+              disabled={!can}
+              aria-label={tpl('control.pid_target', { heater: t(label) })}
+              onInput={e => set(e.currentTarget.value)}
+            />
+            <small>°C</small>
+          </label>
+          <Button
+            disabled={!can}
+            onClick={() => send(heater, value)}
+            aria-label={tpl('control.pid_start', { heater: t(label) })}
+          >
+            {t('control.pid_calibrate')}
+          </Button>
+        </div>
+      ))}
+      <p role="status" class="text-xs text-muted">
+        {t(
+          !ok
+            ? 'control.pid_unavailable'
+            : status?.busy
+              ? 'control.pid_running'
+              : status?.ready
+                ? 'control.pid_completed'
+                : status?.failed
+                  ? 'control.pid_failed'
+                  : 'control.pid_help'
+        )}
+      </p>
+      {ok && status?.ready && (
+        <div class="mt-3 rounded border border-edge p-2 text-xs">
+          <strong>{t(status.heater === 'extruder' ? 'common.nozzle' : 'common.heated_bed')}</strong>
+          <div class="mt-1 grid grid-cols-3 gap-2">
+            {(['kp', 'ki', 'kd'] as const).map(k => (
+              <span key={k}>
+                {k.toUpperCase()} <strong>{status[k] === null ? '—' : status[k].toFixed(3)}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <Button wide class="mt-3" disabled={!can || !status?.ready} onClick={save}>
+        {t('control.pid_save')}
+      </Button>
+      {!idle && <Notice>{t('common.available_when_idle')}</Notice>}
+    </Card>
+  )
+}
+
 const Extruder = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const [len, setLen] = useState('10')
   const ok = v.idle && Number(d?.extruder?.temperature) >= 170
@@ -484,10 +610,10 @@ export const Control = () => {
       }
     >
       <div class="cc2-control-columns grid gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
-        <div class="grid content-start gap-3.5">
+        <div class="grid content-start gap-3.5 cc2-xl:grid-rows-[1fr]">
           <Movement v={v} />
         </div>
-        <div class="grid content-start gap-3.5">
+        <div class="grid content-start gap-3.5 cc2-xl:grid-rows-[auto_auto_1fr]">
           <Temperatures d={d} v={v} />
           <Card>
             <CardHead icon="fan" title="common.fans" />
@@ -500,8 +626,9 @@ export const Control = () => {
               />
             ))}
           </Card>
+          <PidCalibration d={d} />
         </div>
-        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1">
+        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:grid-rows-[auto_1fr]">
           <Card>
             <CardHead icon="settings" title="control.machine" />
             <div class="grid auto-rows-fr grid-cols-2 gap-2.5">
