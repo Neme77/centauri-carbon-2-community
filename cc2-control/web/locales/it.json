@@ -591,5 +591,6 @@
   "printer.report_dismiss": "Nascondi questo report",
   "printer.report_last": "Ricevuto {seconds} s fa.",
   "printer.report_history": "È l’ultimo evento segnalato; non conferma lo stato attuale del problema.",
-  "printer.report_disconnected": "Stampante disconnessa; l’ultimo report resta disponibile."
+  "printer.report_disconnected": "Stampante disconnessa; l’ultimo report resta disponibile.",
+  "printer.report_info": "Ultimo report della stampante"
 }

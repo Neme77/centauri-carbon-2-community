@@ -386,7 +386,9 @@ export const PrinterReport = () => {
       ? 'printer.report_resume'
       : report.level === 2
         ? 'printer.report_critical'
-        : 'printer.report_warning'
+        : report.level === 1
+          ? 'printer.report_warning'
+          : 'printer.report_info'
   return (
     <section role="alert" data-testid="printer-report" class="mb-4 rounded-lg border border-warning bg-panel p-4">
       <div class="flex items-start justify-between gap-3">

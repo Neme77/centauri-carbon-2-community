@@ -591,5 +591,6 @@
   "printer.report_dismiss": "Masquer ce rapport",
   "printer.report_last": "Reçu il y a {seconds} s.",
   "printer.report_history": "Dernier événement signalé ; il ne confirme pas l’état actuel du défaut.",
-  "printer.report_disconnected": "Imprimante déconnectée ; le dernier rapport est conservé."
+  "printer.report_disconnected": "Imprimante déconnectée ; le dernier rapport est conservé.",
+  "printer.report_info": "Dernier rapport de l’imprimante"
 }
