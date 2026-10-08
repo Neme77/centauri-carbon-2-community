@@ -36,5 +36,5 @@ for relative in (
     launcher = (root / relative).read_text(encoding="utf-8")
     guard = "while ! pidof elegoo_printer >/dev/null 2>&1; do"
     assert guard in launcher, relative
-    assert "sleep 60" in launcher, relative
-    assert launcher.index(guard) < launcher.index("sleep 60") < launcher.index("exec "), relative
+    assert "sleep 30" in launcher, relative
+    assert launcher.index(guard) < launcher.index("sleep 30") < launcher.index("exec "), relative
