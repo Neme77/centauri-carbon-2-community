@@ -236,6 +236,29 @@ static void test_print(void) {
     puts("PASS: a print is charged per feeding tray, with retractions, flow and a clean end");
 }
 
+static void test_first_tray(void) {
+    reset();
+    const char *w = create("material=PETG\ncolor=#FFFFFF\nnet=1000\ndensity=1.27");
+    const char *x = create("material=TPU\ncolor=#000000\nnet=1000\ndensity=1.21");
+    assign(2, w); assign(4, x);
+    enable();
+    /* The printer names the first tray once it has loaded it: the load's extrusion moves to that tray. */
+    printer("printing", "start.gcode", -1); service("local/start.gcode", 0, 1); tick();
+    service("local/start.gcode", 18, 40); tick();
+    assert(near(spool_find(x)->remaining, 1000 - grams(x, 18)));
+    printer("printing", "start.gcode", 2); service("local/start.gcode", 198, 70); tick();
+    assert(near(spool_find(x)->remaining, 1000) && near(spool_find(w)->remaining, 1000 - grams(w, 198)));
+    assert(near(spools.job.mm[SPOOL_EXTERNAL], 0) && near(spools.job.mm[2], 198));
+    /* Later, between trays, the last one keeps the charge as before. */
+    printer("printing", "start.gcode", -1); service("local/start.gcode", 250, 80); tick();
+    assert(near(spools.job.mm[2], 250) && near(spools.job.mm[SPOOL_EXTERNAL], 0));
+    printer("complete", "start.gcode", -1); tick(); advance(9000); tick();
+    const spool_event *e = &spools.log[spools.log_count - 1];
+    assert(e->kind == 'p' && !strcmp(e->spool, w) && e->slot == 2 && near(e->mm, 250));
+    assert(!strcmp(spools.log[spools.log_count - 2].spool, x) && spools.log[spools.log_count - 2].kind == 'n');
+    puts("PASS: what a print extrudes before the printer names its first tray is that tray's");
+}
+
 static void test_restart_and_reprint(void) {
     reset();
     const char *a = create("material=PLA\ncolor=#2850DF\nnet=1000");
@@ -399,6 +422,7 @@ int main(void) {
     test_values();
     test_library();
     test_print();
+    test_first_tray();
     test_restart_and_reprint();
     test_questions();
     test_runout();

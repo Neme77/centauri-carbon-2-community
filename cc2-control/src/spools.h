@@ -37,6 +37,7 @@
 #define SPOOL_MATCH_MS 30000LL   /* then the printer service's job is this print, whatever its name */
 #define SPOOL_FRESH_START 300.0  /* seconds: a print this young is counted from its start */
 #define SPOOL_DENSITY 1.24       /* g/cm3 for usage of trays without a spool, and new spools */
+#define SPOOL_LOAD_MM 2000.0     /* at most this much is extruded before the printer names the first tray */
 
 typedef struct {
     char id[SPOOL_ID_LEN + 1];
@@ -541,6 +542,14 @@ static void spools_account(const mqtt_client *mqtt, long long now) {
             int tray = spools_active_tray(mqtt);
             /* Between two Canvas trays nothing feeds; keep charging the last one. */
             if (tray < 0 && job->last_tray >= 0) tray = job->last_tray;
+            /* The printer names the first tray only once it has loaded it, so what the load extruded went to
+             * the external holder: it came from this tray. A print from the external holder never names one. */
+            if (tray >= 0 && job->last_tray < 0 && job->mm[SPOOL_EXTERNAL] != 0 &&
+                fabs(job->mm[SPOOL_EXTERNAL]) <= SPOOL_LOAD_MM) {
+                double load = job->mm[SPOOL_EXTERNAL];
+                spools_charge(SPOOL_EXTERNAL, -load);
+                spools_charge(tray, load);
+            }
             if (tray >= 0) job->last_tray = tray;
             if (!uds_value(&telemetry, U_FLOW_FACTOR, &flow) || flow <= 0) flow = 1;
             /* filament_used counts G-code travel; the flow override scales the real feed. */

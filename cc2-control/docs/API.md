@@ -301,8 +301,9 @@ Consumption is measured, not taken from slicer estimates. The UDS subscription c
 Klipper: purges and filament changes are included, moves made while paused are not, retractions count
 negative). While MQTT reports `printing` or `paused`, every change is charged to the spool in the tray that
 feeds the extruder (`canvas_info.active_tray_id`; between two trays the last one, `-1` without Canvas trays
-the external holder). Millimetres become grams with that spool's diameter and density and the current
-`gcode_move.extrude_factor`. A print that is cancelled or fails is therefore charged with what it really used.
+the external holder). The printer names the first tray of a print only once it has loaded it, so what the
+load extruded is then moved from the external holder to that tray. Millimetres become grams with that
+spool's diameter and density and the current `gcode_move.extrude_factor`. A print that is cancelled or fails is therefore charged with what it really used.
 The end of a print is logged 8 s after MQTT reports it, so the last readings are counted; a restart of
 CC2 Control continues the count of a print in progress from the saved file, and the same file printed again
 is recognised by `total_duration` starting over. A print joined more than five minutes after its start is
