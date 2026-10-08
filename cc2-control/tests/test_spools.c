@@ -34,6 +34,12 @@ static void service(const char *file, double used, double duration) {
     telemetry.present |= (UINT32_C(1) << U_FILAMENT_USED) | (UINT32_C(1) << U_TOTAL_DURATION);
 }
 
+/* The printer service's Canvas channel, which arrives with filament_used. */
+static void channel(int cid) {
+    telemetry.values[U_CANVAS_CHANNEL] = cid;
+    telemetry.present |= UINT32_C(1) << U_CANVAS_CHANNEL;
+}
+
 /* Four trays: status and filament of each, as the printer publishes them. */
 static int tray_status[4] = {1, 1, 1, 1};
 static const char *tray_type[4] = {"PLA", "PLA", "PETG", "PLA"};
@@ -259,6 +265,33 @@ static void test_first_tray(void) {
     puts("PASS: what a print extrudes before the printer names its first tray is that tray's");
 }
 
+static void test_service_channel(void) {
+    reset();
+    const char *a = create("material=PLA\ncolor=#2850DF\nnet=1000");
+    const char *r = create("material=PLA\ncolor=#F72221\nnet=1000");
+    assign(0, a); assign(3, r);
+    enable();
+    /* MQTT still names tray 0 when the printer service has switched to tray 3: the purge is tray 3's. */
+    printer("printing", "two.gcode", 0); service("local/two.gcode", 0, 1); channel(0); tick();
+    service("local/two.gcode", 100, 20); tick();
+    channel(3); service("local/two.gcode", 250, 40); tick();
+    assert(near(spools.job.mm[0], 100) && near(spools.job.mm[3], 150));
+    /* Between channels the last one keeps the charge, as with MQTT. */
+    channel(-1); service("local/two.gcode", 240, 45); tick();
+    assert(near(spools.job.mm[3], 140) && near(spools.job.mm[0], 100));
+    /* At the end MQTT drops the file name while it still says printing; the printer service says complete. */
+    channel(3); service("local/two.gcode", 300, 60); tick();
+    printer("printing", "", -1);
+    snprintf(telemetry.print_state, sizeof(telemetry.print_state), "complete");
+    telemetry.have_print_state = 1;
+    tick(); advance(9000); tick();
+    assert(!spools.job.active);
+    const spool_event *e = &spools.log[spools.log_count - 1];
+    assert(e->kind == 'p' && !strcmp(e->spool, r) && e->slot == 3 && near(e->mm, 200) && !strcmp(e->result, "complete"));
+    assert(near(spool_find(a)->remaining, 1000 - grams(a, 100)));
+    puts("PASS: the printer service's channel and end state win over MQTT's");
+}
+
 static void test_restart_and_reprint(void) {
     reset();
     const char *a = create("material=PLA\ncolor=#2850DF\nnet=1000");
@@ -423,6 +456,7 @@ int main(void) {
     test_library();
     test_print();
     test_first_tray();
+    test_service_channel();
     test_restart_and_reprint();
     test_questions();
     test_runout();

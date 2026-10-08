@@ -66,7 +66,14 @@ int main(void){
  assert(uds_value(&c,U_SPEED_FACTOR,&v)&&v==1.3&&c.used==0);
  message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":6,\"status\":{\"print_stats\":{\"filename\":\"local/next.gcode\"}}}}");
  assert(!uds_value(&c,U_LAYER,&v)&&!uds_value(&c,U_PROGRESS,&v));
- close(pair[1]);uds_process(&c);assert(c.fd==-1&&!c.ready&&!c.present);
+ /* The Canvas channel and how the print stands arrive in the same stream as filament_used. */
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":7,\"status\":{\"canvas_dev\":{\"active_cid\":2},\"print_stats\":{\"state\":\"printing\"}}}}");
+ assert(uds_value(&c,U_CANVAS_CHANNEL,&v)&&v==2&&!strcmp(uds_print_state(&c),"printing"));
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":8,\"status\":{\"canvas_dev\":{\"active_cid\":-1},\"print_stats\":{\"state\":\"complete\"}}}}");
+ assert(uds_value(&c,U_CANVAS_CHANNEL,&v)&&v==-1&&!strcmp(uds_print_state(&c),"complete"));
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":9,\"status\":{\"canvas_dev\":{\"active_cid\":99},\"print_stats\":{\"state\":\"Bad <b>\"}}}}");
+ assert(uds_value(&c,U_CANVAS_CHANNEL,&v)&&v==-1&&!strcmp(uds_print_state(&c),"complete"));
+ close(pair[1]);uds_process(&c);assert(c.fd==-1&&!c.ready&&!c.present&&!uds_print_state(&c));
  assert(c.disconnects==1&&!strcmp(c.last_disconnect,"peer_closed"));
  assert(c.report_sequence==4&&!strcmp(c.report_message,"\"Resume\""));
  uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];

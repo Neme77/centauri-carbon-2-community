@@ -299,12 +299,16 @@ until it is switched on; the inventory can be edited either way.
 Consumption is measured, not taken from slicer estimates. The UDS subscription carries
 `print_stats.filament_used`, the net extruder travel of the current print in millimetres (the vendor port of
 Klipper: purges and filament changes are included, moves made while paused are not, retractions count
-negative). While MQTT reports `printing` or `paused`, every change is charged to the spool in the tray that
-feeds the extruder (`canvas_info.active_tray_id`; between two trays the last one, `-1` without Canvas trays
-the external holder). The printer names the first tray of a print only once it has loaded it, so what the
-load extruded is then moved from the external holder to that tray. Millimetres become grams with that
-spool's diameter and density and the current `gcode_move.extrude_factor`. A print that is cancelled or fails is therefore charged with what it really used.
-The end of a print is logged 8 s after MQTT reports it, so the last readings are counted; a restart of
+negative), and in the same stream the Canvas channel that feeds the extruder, `canvas_dev.active_cid`.
+While MQTT reports `printing` or `paused`, every change is charged to the spool in that tray (between two
+trays the last one, `-1` without Canvas trays the external holder). MQTT's `canvas_info.active_tray_id`
+stands in only when the UDS stream lacks the channel: it reports a colour change seconds late, when much of
+the new colour's purge would already be charged to the old spool. The printer names the first tray of a
+print only once it has loaded it, so what the load extruded is then moved from the external holder to that
+tray. Millimetres become grams with that spool's diameter and density and the current
+`gcode_move.extrude_factor`. A print that is cancelled or fails is therefore charged with what it really used.
+The end of a print is logged 8 s after MQTT reports it, so the last readings are counted, with the result
+UDS `print_stats.state` gives (MQTT can drop the file name before it reports the end); a restart of
 CC2 Control continues the count of a print in progress from the saved file, and the same file printed again
 is recognised by `total_duration` starting over. A print joined more than five minutes after its start is
 counted from then.

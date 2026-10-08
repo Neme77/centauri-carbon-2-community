@@ -234,9 +234,23 @@ static void spools_new_id(char out[SPOOL_ID_LEN + 1]) {
 }
 
 /* The tray that feeds the extruder: 0..3, or -1 (none or the external holder). */
+/* The tray that feeds the extruder, -1 for none. The printer service's own channel comes in the same stream
+ * as filament_used, so a colour change is charged from the moment it happens; MQTT's canvas_info reports it
+ * seconds later, by when the new colour's purge is well under way. */
 static int spools_active_tray(const mqtt_client *mqtt) {
+    double channel;
+    if (uds_value(&telemetry, U_CANVAS_CHANNEL, &channel)) return channel >= 0 && channel < 4 ? (int)channel : -1;
     return mqtt->have_canvas_active_tray && mqtt->canvas_active_tray_id >= 0 && mqtt->canvas_active_tray_id < 4
                ? mqtt->canvas_active_tray_id : -1;
+}
+
+/* How a print ended: the printer service's print_stats.state, else MQTT's; empty while it still prints.
+ * At the end MQTT can drop the file name while its state still says printing. */
+static const char *spools_end_state(const mqtt_client *mqtt) {
+    const char *state = uds_print_state(&telemetry);
+    if (!state || !strcmp(state, "printing") || !strcmp(state, "paused") || !strcmp(state, "standby"))
+        state = mqtt->print_state;
+    return strcmp(state, "printing") && strcmp(state, "paused") ? state : "";
 }
 
 /* A change the UI must see. `urgent` saves it in this main-loop turn. */
@@ -516,10 +530,10 @@ static void spools_account(const mqtt_client *mqtt, long long now) {
     if (printing && !job->active) spools_job_start(mqtt);
     if (!job->active) return;
     if (printing) job->ending_ms = 0;
-    else if (fresh && !job->ending_ms) {
-        job->ending_ms = now;
-        spool_clean(job->result, sizeof(job->result), mqtt->print_state, strlen(mqtt->print_state));
-        if (!job->result[0]) snprintf(job->result, sizeof(job->result), "ended");
+    else if (fresh) {
+        if (!job->ending_ms) job->ending_ms = now;
+        const char *end = spools_end_state(mqtt);
+        if (end[0]) spool_clean(job->result, sizeof(job->result), end, strlen(end));
     }
     double used, duration, flow;
     if (uds_value(&telemetry, U_FILAMENT_USED, &used) && spools_job_file(job, now)) {
@@ -556,7 +570,7 @@ static void spools_account(const mqtt_client *mqtt, long long now) {
             spools_charge(tray >= 0 ? tray : SPOOL_EXTERNAL, delta * flow);
         }
     }
-    if (job->ending_ms && now - job->ending_ms >= SPOOL_END_MS) spools_job_finish(job->result);
+    if (job->ending_ms && now - job->ending_ms >= SPOOL_END_MS) spools_job_finish(job->result[0] ? job->result : "ended");
 }
 
 /* ---- the library file ---------------------------------------------------------------------- */

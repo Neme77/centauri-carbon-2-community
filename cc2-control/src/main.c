@@ -2335,7 +2335,7 @@ static void uds_response(int fd){
     static const char *names[U_FIELDS]={"nozzle_temperature","nozzle_target","bed_temperature","bed_target",
         "controller_fan","heater_fan","part_fan","fan1","controller_rpm","heater_rpm","part_rpm","fan1_rpm",
         "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed","z_offset",
-        "filament_used"};
+        "filament_used","canvas_channel"};
     char body[2048];json_builder b={body,0,sizeof(body),0};
     json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"connections\":%lu,\"disconnects\":%lu,\"last_disconnect\":\"%s\",\"last_errno\":%d,\"ignored_messages\":%lu,\"values\":{",
         telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages,
@@ -2345,7 +2345,10 @@ static void uds_response(int fd){
         json_builder_printf(&b,"%s\"%s\":",i?",":"",names[i]);
         if(have)json_builder_printf(&b,"%.6f",value);else json_builder_printf(&b,"null");
     }
-    json_builder_printf(&b,"}}\n");
+    const char *state=uds_print_state(&telemetry);
+    json_builder_printf(&b,"},\"print_state\":");
+    if(state)json_builder_printf(&b,"\"%s\"",state);else json_builder_printf(&b,"null");
+    json_builder_printf(&b,"}\n");
     if(!b.failed)respond(fd,200,"OK","application/json",body,b.length);
 }
 
