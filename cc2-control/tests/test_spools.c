@@ -215,9 +215,9 @@ static void test_print(void) {
     assert(near(spool_find(b)->remaining, 1000 - grams(b, 500)));
     service("local/cube.gcode", 1490, 91); tick(); /* a retraction gives filament back */
     assert(near(spool_find(b)->remaining, 1000 - grams(b, 490)));
-    /* Between trays nothing feeds: the last tray keeps the charge. */
+    /* Between trays the extruder pulls in the next filament: that waits for the tray named next. */
     printer("printing", "cube.gcode", -1); service("local/cube.gcode", 1500, 95); tick();
-    assert(near(spool_find(b)->remaining, 1000 - grams(b, 500)));
+    assert(near(spool_find(b)->remaining, 1000 - grams(b, 490)) && near(spools.job.between, 10));
     /* The flow override scales what really leaves the spool. */
     telemetry.values[U_FLOW_FACTOR] = 0.5; telemetry.present |= UINT32_C(1) << U_FLOW_FACTOR;
     printer("printing", "cube.gcode", 1); service("local/cube.gcode", 1700, 100); tick();
@@ -226,10 +226,11 @@ static void test_print(void) {
     /* Paused: print_stats stop, nothing ends. */
     printer("paused", "cube.gcode", 1); tick(); advance(60000); tick();
     assert(spools.job.active);
-    /* The end is logged after a grace period that lets the last reading in. */
+    /* The end is logged after a grace period that lets the last reading in; with no tray named it waits,
+     * and the end gives it to the last tray. */
     printer("complete", "cube.gcode", -1); tick();
     service("local/cube.gcode", 1710, 120); tick();
-    assert(spools.job.active && near(spool_find(b)->remaining, 1000 - grams(b, 610)));
+    assert(spools.job.active && near(spools.job.between, 10) && near(spool_find(b)->remaining, 1000 - grams(b, 600)));
     advance(9000); tick();
     assert(!spools.job.active);
     const spool_event *e = &spools.log[spools.log_count - 2], *f = &spools.log[spools.log_count - 1];
@@ -255,9 +256,13 @@ static void test_first_tray(void) {
     printer("printing", "start.gcode", 2); service("local/start.gcode", 198, 70); tick();
     assert(near(spool_find(x)->remaining, 1000) && near(spool_find(w)->remaining, 1000 - grams(w, 198)));
     assert(near(spools.job.mm[SPOOL_EXTERNAL], 0) && near(spools.job.mm[2], 198));
-    /* Later, between trays, the last one keeps the charge as before. */
+    /* Later, between trays, the moves wait for the next tray; the print ends first, so the last tray gets them. */
     printer("printing", "start.gcode", -1); service("local/start.gcode", 250, 80); tick();
-    assert(near(spools.job.mm[2], 250) && near(spools.job.mm[SPOOL_EXTERNAL], 0));
+    assert(near(spools.job.mm[2], 198) && near(spools.job.between, 52) && near(spools.job.mm[SPOOL_EXTERNAL], 0));
+    /* A restart keeps what waits. */
+    assert(spools_save() == 0);
+    spools_load(); spools_canvas_seen = 0;
+    assert(spools.job.active && saved_near(spools.job.between, 52) && spools.job.last_tray == 2);
     printer("complete", "start.gcode", -1); tick(); advance(9000); tick();
     const spool_event *e = &spools.log[spools.log_count - 1];
     assert(e->kind == 'p' && !strcmp(e->spool, w) && e->slot == 2 && near(e->mm, 250));
@@ -276,19 +281,20 @@ static void test_service_channel(void) {
     service("local/two.gcode", 100, 20); tick();
     channel(3); service("local/two.gcode", 250, 40); tick();
     assert(near(spools.job.mm[0], 100) && near(spools.job.mm[3], 150));
-    /* Between channels the last one keeps the charge, as with MQTT. */
-    channel(-1); service("local/two.gcode", 240, 45); tick();
-    assert(near(spools.job.mm[3], 140) && near(spools.job.mm[0], 100));
+    /* Tray 3 is cut and pulled back unseen; the extruder pulls in tray 0's filament before the printer names it. */
+    channel(-1); service("local/two.gcode", 267.5, 45); tick();
+    assert(near(spools.job.mm[3], 150) && near(spools.job.between, 17.5));
+    channel(0); service("local/two.gcode", 300, 50); tick();
+    assert(near(spools.job.mm[0], 150) && near(spools.job.between, 0) && near(spools.job.mm[3], 150));
     /* At the end MQTT drops the file name while it still says printing; the printer service says complete. */
-    channel(3); service("local/two.gcode", 300, 60); tick();
     printer("printing", "", -1);
     snprintf(telemetry.print_state, sizeof(telemetry.print_state), "complete");
     telemetry.have_print_state = 1;
     tick(); advance(9000); tick();
     assert(!spools.job.active);
     const spool_event *e = &spools.log[spools.log_count - 1];
-    assert(e->kind == 'p' && !strcmp(e->spool, r) && e->slot == 3 && near(e->mm, 200) && !strcmp(e->result, "complete"));
-    assert(near(spool_find(a)->remaining, 1000 - grams(a, 100)));
+    assert(e->kind == 'p' && !strcmp(e->spool, r) && e->slot == 3 && near(e->mm, 150) && !strcmp(e->result, "complete"));
+    assert(near(spool_find(a)->remaining, 1000 - grams(a, 150)));
     puts("PASS: the printer service's channel and end state win over MQTT's");
 }
 

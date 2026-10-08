@@ -300,8 +300,10 @@ Consumption is measured, not taken from slicer estimates. The UDS subscription c
 `print_stats.filament_used`, the net extruder travel of the current print in millimetres (the vendor port of
 Klipper: purges and filament changes are included, moves made while paused are not, retractions count
 negative), and in the same stream the Canvas channel that feeds the extruder, `canvas_dev.active_cid`.
-While MQTT reports `printing` or `paused`, every change is charged to the spool in that tray (between two
-trays the last one, `-1` without Canvas trays the external holder). MQTT's `canvas_info.active_tray_id`
+While MQTT reports `printing` or `paused`, every change is charged to the spool in that tray; `-1` without
+Canvas trays is the external holder. Between two trays the old filament is cut and pulled back without
+extruder moves that count, and the extruder pulls in the next one, so what it moves then waits for the tray
+named next (when the print ends first, the last tray takes it). MQTT's `canvas_info.active_tray_id`
 stands in only when the UDS stream lacks the channel: it reports a colour change seconds late, when much of
 the new colour's purge would already be charged to the old spool. The printer names the first tray of a
 print only once it has loaded it, so what the load extruded is then moved from the external holder to that

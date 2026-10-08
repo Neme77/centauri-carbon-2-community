@@ -73,6 +73,7 @@ typedef struct {
     int active, baseline, last_tray;
     char file[256], uuid[128];
     double used, duration;          /* the last print_stats.filament_used and total_duration */
+    double between;                 /* mm extruded since the last tray stopped feeding, for the next one */
     double mm[SPOOL_SLOTS], grams[SPOOL_SLOTS];
     char spool[SPOOL_SLOTS][SPOOL_ID_LEN + 1];
     long long started, started_ms, ending_ms;
@@ -325,6 +326,9 @@ static void spools_job_start(const mqtt_client *mqtt) {
 }
 
 static void spools_job_finish(const char *result) {
+    spool_job *job = &spools.job;
+    /* A print that ends between trays, in its last unload, leaves that to the last tray. */
+    if (job->active && job->between != 0 && job->last_tray >= 0) spools_charge(job->last_tray, job->between);
     for (int i = 0; i < SPOOL_SLOTS; ++i) spools_job_split(i, result);
     memset(&spools.job, 0, sizeof(spools.job));
     spools.job.last_tray = -1;
@@ -554,20 +558,30 @@ static void spools_account(const mqtt_client *mqtt, long long now) {
         job->used = used;
         if (delta != 0) {
             int tray = spools_active_tray(mqtt);
-            /* Between two Canvas trays nothing feeds; keep charging the last one. */
-            if (tray < 0 && job->last_tray >= 0) tray = job->last_tray;
-            /* The printer names the first tray only once it has loaded it, so what the load extruded went to
-             * the external holder: it came from this tray. A print from the external holder never names one. */
-            if (tray >= 0 && job->last_tray < 0 && job->mm[SPOOL_EXTERNAL] != 0 &&
-                fabs(job->mm[SPOOL_EXTERNAL]) <= SPOOL_LOAD_MM) {
-                double load = job->mm[SPOOL_EXTERNAL];
-                spools_charge(SPOOL_EXTERNAL, -load);
-                spools_charge(tray, load);
-            }
-            if (tray >= 0) job->last_tray = tray;
             if (!uds_value(&telemetry, U_FLOW_FACTOR, &flow) || flow <= 0) flow = 1;
             /* filament_used counts G-code travel; the flow override scales the real feed. */
-            spools_charge(tray >= 0 ? tray : SPOOL_EXTERNAL, delta * flow);
+            double mm = delta * flow;
+            if (tray < 0 && job->last_tray >= 0) {
+                /* Between two trays the old filament is cut and pulled back unseen, and the extruder pulls in
+                 * the next one: what it moves now waits for the tray named next, or at the end the last one. */
+                job->between += mm;
+                spools_dirty = 1;
+            } else {
+                /* The printer names the first tray only once it has loaded it, so what the load extruded went
+                 * to the external holder: it came from this tray. A print from the external holder names none. */
+                if (tray >= 0 && job->last_tray < 0 && job->mm[SPOOL_EXTERNAL] != 0 &&
+                    fabs(job->mm[SPOOL_EXTERNAL]) <= SPOOL_LOAD_MM) {
+                    double load = job->mm[SPOOL_EXTERNAL];
+                    spools_charge(SPOOL_EXTERNAL, -load);
+                    spools_charge(tray, load);
+                }
+                if (tray >= 0 && job->between != 0) {
+                    spools_charge(tray, job->between);
+                    job->between = 0;
+                }
+                if (tray >= 0) job->last_tray = tray;
+                spools_charge(tray >= 0 ? tray : SPOOL_EXTERNAL, mm);
+            }
         }
     }
     if (job->ending_ms && now - job->ending_ms >= SPOOL_END_MS) spools_job_finish(job->result[0] ? job->result : "ended");
@@ -638,8 +652,8 @@ static int spools_save(void) {
     json_builder_string(&b, job->file);
     json_builder_printf(&b, ",\"uuid\":");
     json_builder_string(&b, job->uuid);
-    json_builder_printf(&b, ",\"used\":%.3f,\"duration\":%.1f,\"started\":%lld,\"result\":", job->used, job->duration,
-                        job->started);
+    json_builder_printf(&b, ",\"used\":%.3f,\"duration\":%.1f,\"between\":%.3f,\"started\":%lld,\"result\":", job->used,
+                        job->duration, job->between, job->started);
     json_builder_string(&b, job->result);
     json_builder_printf(&b, ",\"slots\":[");
     for (int i = 0; i < SPOOL_SLOTS; ++i)
@@ -782,6 +796,9 @@ static int spools_parse_job(const char *obj, const char *end, spool_job *job) {
         !plates_member_double(obj, end, "duration", &job->duration) || job->duration < -1 || job->duration > 1e9 ||
         !spools_time_member(obj, end, "started", &job->started) ||
         !spools_text_member(obj, end, "result", job->result, sizeof(job->result), sizeof(job->result) - 1, 1)) return 0;
+    /* Files written before the count between trays have none. */
+    double between;
+    if (plates_member_double(obj, end, "between", &between) && fabs(between) <= 1e9) job->between = between;
     /* A name that cannot be restored only loses the print in progress. */
     if (!spools_raw_member(obj, end, "file", job->file, sizeof(job->file)) ||
         !spools_raw_member(obj, end, "uuid", job->uuid, sizeof(job->uuid))) job->active = 0;
