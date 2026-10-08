@@ -17,6 +17,9 @@ notifications per second even when idle, because temperatures are reported to
 
 `GET /api/uds` exposes connection/freshness status and nullable values, including
 speed/flow factors, live velocity, fan fractions/RPM, progress and elapsed times.
+`print_stats.filament_used` (`filament_used`, net extruder travel of the current
+print in mm) feeds spool tracking; like the other job counters it is forgotten when
+the print's file name changes.
 `--uds-socket PATH` selects a socket for testing; the default is
 `/tmp/elegoo_uds`.
 

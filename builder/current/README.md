@@ -40,6 +40,7 @@ A bed mesh calibration from Bed Levelling homes X, Y and Z first when the printe
 Motors left energised after homing or calibration are released after ten idle minutes, so the mainboard fan stops.
 Telemetry asks the printer only when its stream falls silent, and the Job page reads object state from that stream, because the firmware keeps every request on its local socket in memory.
 Bed Levelling keeps a build-plate library with each plate's mesh and Z offset; mounting a plate whose mesh is not in its side's slot writes that slot and restarts the printer.
+Spools tracks filament spools per Canvas slot from the printer's measured extrusion and asks which spool new filament belongs to.
 The runtime identity remains 1.1.31, matching the printer-tested build.
 Preparation runs the complete component host suite before the ARM build and
 records source commit, archive checksum and every installed file checksum.

@@ -450,7 +450,10 @@ static void spools_canvas(const mqtt_client *mqtt, long long now) {
             s->absent_ms = s->runout_ms = 0;
             s->seen = *t;
             spools_dirty = 1;
-        } else if (present) {
+        } else if (!present) {
+            /* Still empty, as after a restart: a spool or question left there goes after the delay. */
+            if ((s->spool[0] || s->question) && !s->absent_ms && !s->runout_ms) s->absent_ms = now;
+        } else {
             if (!spool_tray_same(&s->seen, t)) {
                 const spool_entry *sp = spool_find(s->spool);
                 if (!sp || (now >= s->accept_ms && !spool_fits(sp, t))) spools_ask(i, s->question == 1 ? 1 : 2);

@@ -23,6 +23,7 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Spool,
   SquareTerminal,
   Thermometer,
   Zap,
@@ -57,6 +58,7 @@ const icons = {
   light: Lightbulb,
   info: Info,
   motors: Power,
+  spool: Spool,
 }
 
 // Lucide icons (plus the Canvas glyph, drawn the same way), with a 1 px stroke everywhere.

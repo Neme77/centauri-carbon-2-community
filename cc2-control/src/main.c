@@ -1355,16 +1355,43 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL])
     return 0;
 }
 
+/* "; filament used [mm] = a, b, ...": the slicer's length per tool (OrcaSlicer and
+ * PrusaSlicer write it near the end). A later line replaces an earlier one. */
+static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOOLS_MAX]) {
+    static const char marker[] = "filament used [mm]";
+    double values[GCODE_TOOLS_MAX];
+    int count = 0;
+    for (comment++; *comment == ' ' || *comment == '\t'; comment++) {}
+    if (strncmp(comment, marker, sizeof(marker) - 1)) return;
+    for (comment += sizeof(marker) - 1; *comment == ' ' || *comment == '\t'; comment++) {}
+    if (*comment++ != '=') return;
+    while (count < GCODE_TOOLS_MAX) {
+        char *end; errno = 0;
+        double value = strtod(comment, &end);
+        if (end == comment || errno || !isfinite(value) || value < 0 || value > 1e9) return;
+        values[count++] = value;
+        while (*end == ' ' || *end == '\t') end++;
+        if (*end != ',') { if (*end && *end != '\r' && *end != '\n') return; break; }
+        comment = end + 1;
+    }
+    for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool) lengths[tool] = tool < count ? values[tool] : -1;
+}
+
+/* `lengths`, when given, receives each tool's slicer filament length in mm, or -1. */
 static int gcode_detect_tools(const char *root, const char *relative,
-                              int tools[GCODE_TOOLS_MAX], size_t *tool_count) {
+                              int tools[GCODE_TOOLS_MAX], size_t *tool_count, double *lengths) {
     char path[PATH_MAX_LOCAL * 2], line[2048];
     if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
     FILE *file = fopen(path, "r");
     if (!file) return -1;
     int present[GCODE_TOOLS_MAX] = {0};
+    if (lengths) for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool) lengths[tool] = -1;
     while (fgets(line, sizeof(line), file)) {
         char *comment = strchr(line, ';');
-        if (comment) *comment = '\0';
+        if (comment) {
+            if (lengths) gcode_filament_lengths(comment, lengths);
+            *comment = '\0';
+        }
         for (char *cursor = line; *cursor; ++cursor) {
             if ((*cursor != 'T' && *cursor != 't') ||
                 (cursor != line && !isspace((unsigned char)cursor[-1]))) continue;
@@ -1514,7 +1541,8 @@ static void gcode_inspect_response(int fd, const char *body, size_t body_len) {
     }
     (void)media;
     int tools[GCODE_TOOLS_MAX], adaptive = 0; size_t count = 0;
-    if (gcode_detect_tools(root, filename, tools, &count) != 0) {
+    double lengths[GCODE_TOOLS_MAX];
+    if (gcode_detect_tools(root, filename, tools, &count, lengths) != 0) {
         const char *error = "{\"error\":\"Cannot inspect the G-code file\"}\n";
         analysis_respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
@@ -1544,11 +1572,13 @@ static void gcode_inspect_response(int fd, const char *body, size_t body_len) {
     if (length < 0 || (size_t)length >= sizeof(response) - used) return;
     used += (size_t)length;
     for (size_t index = 0; index < count; index++) {
-        int tool = tools[index]; char material[130];
+        int tool = tools[index]; char material[130], mm[32] = "";
         json_escape(material, sizeof(material), filaments[tool].material);
+        /* The slicer's filament length is only sent when the file states it. */
+        if (lengths[tool] >= 0) snprintf(mm, sizeof(mm), ",\"mm\":%.1f", lengths[tool]);
         length = snprintf(response + used, sizeof(response) - used,
-            "%s{\"tool\":%d,\"color\":\"%s\",\"material\":\"%s\"}",
-            index ? "," : "", tool, filaments[tool].color, material);
+            "%s{\"tool\":%d,\"color\":\"%s\",\"material\":\"%s\"%s}",
+            index ? "," : "", tool, filaments[tool].color, material, mm);
         if (length < 0 || (size_t)length >= sizeof(response) - used) return;
         used += (size_t)length;
     }
@@ -1833,7 +1863,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     }
     if (slot_count) {
         int detected[GCODE_TOOLS_MAX]; size_t detected_count = 0;
-        if (gcode_detect_tools(root, filename, detected, &detected_count) != 0 ||
+        if (gcode_detect_tools(root, filename, detected, &detected_count, NULL) != 0 ||
             detected_count != slot_count) {
             const char *error = "{\"accepted\":false,\"error\":\"Canvas mapping does not match this G-code\"}\n";
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));

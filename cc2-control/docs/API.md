@@ -290,6 +290,64 @@ Host regressions cover disk/memory disagreement, stale reboot guards, concurrent
 updates, failed rollback, bounded retries across reconnects, and fragmented/late UDS
 replies. These checks do not substitute for validation on the physical printer.
 
+## Spool tracking
+
+CC2 Control keeps a filament inventory in `spools.json` (`--spools FILE`, next to the plate library). Each
+spool sits in one place: a Canvas slot 0–3, the external spool holder (slot 4), or storage. Tracking is off
+until it is switched on; the inventory can be edited either way.
+
+Consumption is measured, not taken from slicer estimates. The UDS subscription carries
+`print_stats.filament_used`, the net extruder travel of the current print in millimetres (the vendor port of
+Klipper: purges and filament changes are included, moves made while paused are not, retractions count
+negative). While MQTT reports `printing` or `paused`, every change is charged to the spool in the tray that
+feeds the extruder (`canvas_info.active_tray_id`; between two trays the last one, `-1` without Canvas trays
+the external holder). Millimetres become grams with that spool's diameter and density and the current
+`gcode_move.extrude_factor`. A print that is cancelled or fails is therefore charged with what it really used.
+The end of a print is logged 8 s after MQTT reports it, so the last readings are counted; a restart of
+CC2 Control continues the count of a print in progress from the saved file, and the same file printed again
+is recognised by `total_duration` starting over. A print joined more than five minutes after its start is
+counted from then.
+
+The Canvas reports a status per tray: 0 no filament at its feeder, 1 inserted and pre-loaded, 2 feeding the
+extruder. CC2 Control compares every tray report with the previous one:
+
+- filament inserted (0 → 1/2) or changed on the touchscreen opens a question for that tray, shown on every
+  open page through `/api/printer` `spools.questions`. The tray stays unbound until it is answered; what it
+  extrudes meanwhile is kept (`question_mm`) and charged to the spool that is chosen;
+- within 30 s of an assignment, a tray report counts as that spool's own filament, so writing the spool's
+  material and colour to the tray asks nothing;
+- a tray that stays empty for 15 s gives its spool back to storage; an empty report shorter than that with
+  the same filament afterwards is ignored;
+- a tray that empties while it feeds a print (2 → 0) has run out: once the printer has moved to another tray
+  or the print has ended, its spool is set to zero and the log shows how far the count was off.
+
+Switching tracking on checks every binding against the trays, so spools swapped while it was off are asked
+about again instead of being charged for another spool's filament.
+
+Endpoints (changes are `POST` with `key=value` lines and need `X-CC2-Request: 1`):
+
+- `GET /api/spools` returns `enabled`, every slot with its spool, the spool it held before (`last`), an open
+  question (`inserted` or `changed`), the printer's report of the tray, the print being counted with each
+  tray's millimetres and grams, the spools, and the newest 150 log entries (prints, run-outs, corrections,
+  additions).
+- `/api/spools/enable` (`on` or `off`).
+- `/api/spools/save` creates a spool (no `id`) or edits one: `name`, `brand`, `material`, `color` (`#RRGGBB`),
+  `diameter`, `density`, `net`, `tare` (empty spool weight), `low` (warning level), `price`, `note`,
+  `archived` (`0`/`1`). `remaining` is accepted only when creating; `slot` puts a new spool straight into a
+  tray and answers its question.
+- `/api/spools/assign` (`slot`, `spool`; an empty `spool` empties the slot). A spool sits in one place, so it
+  leaves any other slot.
+- `/api/spools/dismiss` (`slot`) answers a question with "no spool": the tray's use is not counted.
+- `/api/spools/adjust` (`id` and `remaining` or `gross`): a weigh-in. `gross` subtracts the spool's `tare`.
+- `/api/spools/delete` (`id`). Log entries keep the id.
+
+Texts are UTF-8 without quotes, backslashes or control characters (name, brand and note up to 96 bytes,
+material up to 32). The file is replaced atomically after each change, and while printing at most every two
+minutes (sooner after 5 g); a file that cannot be read keeps the library closed rather than being
+overwritten. `POST /api/gcode-files/inspect` adds each tool's slicer length (`mm`) when the file states
+`; filament used [mm] = …`, so the print dialog can compare it with the spool the tool would draw from.
+Requires printer validation.
+
 ## Bounded asynchronous G-code analysis
 
 Metadata and inspection scans run on one worker with a 128 KiB stack and a queue

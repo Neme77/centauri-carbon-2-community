@@ -10,9 +10,10 @@ import { Dialog } from '@/components/ui/dialog'
 import { Row } from '@/components/shared'
 import { control, errText, notify, post } from '@/lib/api'
 import { type Key, t, tpl } from '@/lib/i18n'
-import { poll } from '@/lib/poll'
+import { poll, usePoll } from '@/lib/poll'
 import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
 import { presets } from '@/lib/state'
+import { findSpool, g, openChooser, refreshSpools, spoolLabel, spools } from '@/lib/spools'
 
 const I = { size: 16, strokeWidth: 1 }
 const PALETTE = [
@@ -64,6 +65,8 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
     if (await control(`canvas:material:${slot}:${p.name}:${hex}:${min}:${max}`)) {
       setTimeout(refreshCanvas, 700)
       setTimeout(refreshCanvas, 2000)
+      // With spool tracking on, the second question: which spool now carries this filament?
+      if (spools.get().data?.enabled) openChooser(slot, 'material', { material: p.name, color: `#${hex}` })
     } else refreshCanvas()
   }
   return (
@@ -129,10 +132,13 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
 
 export const Canvas = () => {
   const { model, autoRefill, slot, optimistic, checked } = canvas.use()
+  const library = spools.use().data
+  const tracking = Boolean(library?.available && library.enabled)
   const [dialog, setDialog] = useState(false)
   const [refillBusy, setRefillBusy] = useState(false)
   // Refresh while the page is open, except behind the material dialog.
   useEffect(() => (dialog ? undefined : poll(refreshCanvas, 2000)), [dialog])
+  usePoll(refreshSpools, 10000)
   const ok = Boolean(model?.connected)
   const sync = async () => {
     try {
@@ -162,12 +168,21 @@ export const Canvas = () => {
     const saved = optimistic[i]
     const pend = saved && Date.now() < saved.until && canvasHex(tel, i) !== saved.colour ? saved : undefined // drop it once expired or confirmed by telemetry
     const raw = pend ? pend.colour : tel
+    // With tracking on, the remaining weight is the spool's count; the printer reports none.
+    const held = tracking && library ? library.slots[i] : null
+    const spool = held ? findSpool(library, held.spool) : null
     return {
       i,
       colour: canvasColour(raw, i),
       raw,
       material: pend ? pend.material : (tray && (tray.filament_name || tray.filament_type)) || '—',
-      remaining: tray && tray.remaining_percent !== undefined ? `${tray.remaining_percent}%` : '—',
+      remaining: spool
+        ? `${g(spool.remaining)} g`
+        : tray && tray.remaining_percent !== undefined
+          ? `${tray.remaining_percent}%`
+          : '—',
+      held,
+      spool,
     }
   })
   const ctl: [typeof ArrowBigUp, Key, () => void, string][] = [
@@ -255,8 +270,30 @@ export const Canvas = () => {
                 <div class="mt-auto">
                   <Row label="canvas.material" value={s.material} />
                   <Row label="canvas.color" value={s.raw || '—'} />
+                  {s.held && (
+                    <Row
+                      label="spools.spool"
+                      value={
+                        s.spool
+                          ? spoolLabel(s.spool)
+                          : t(s.held.question ? 'spools.question_tag' : 'spools.not_assigned')
+                      }
+                    />
+                  )}
                   <Row label="canvas.remaining" value={s.remaining} />
                 </div>
+                {s.held && (
+                  <Button
+                    class="mt-2 text-xs"
+                    variant={s.held.question ? 'primary' : 'ghost'}
+                    onClick={e => {
+                      e.stopPropagation()
+                      openChooser(s.i, s.held?.question ? 'question' : 'manual')
+                    }}
+                  >
+                    {t('spools.choose')}
+                  </Button>
+                )}
                 <Button class="mt-3.5" disabled={!ok} onClick={() => canvas.set({ slot: s.i })}>
                   {ok ? (
                     s.i === slot ? (

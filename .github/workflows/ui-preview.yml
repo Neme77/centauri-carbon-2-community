@@ -44,6 +44,10 @@ jobs:
         run: npm run test:filaments
       - name: Verify build-plate library controls
         run: npm run test:plates
+      - name: Verify spool tracking, the slot question and the print check
+        run: npm run test:spools
+        env:
+          CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
       - name: Verify mesh calibration homes an unhomed printer first
         run: npm run test:calibration
       - name: Verify the Job page asks for objects only during a print

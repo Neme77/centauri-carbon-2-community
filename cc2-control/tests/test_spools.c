@@ -321,6 +321,15 @@ static void test_runout(void) {
     tray_status[1] = 1; publish_trays(); tick();
     tray_status[1] = 0; publish_trays(); tick(); advance(16000); tick();
     assert(!spools.slots[1].spool[0] && spool_find(b)->remaining > 900);
+    /* A restart while a spool's tray is empty still gives the spool back. */
+    assign(1, b);
+    assert(spools_save() == 0);
+    spools_load(); spools_canvas_seen = 0;
+    assert(!strcmp(spools.slots[1].spool, b) && spools.slots[1].seen.status == 0);
+    publish_trays(); tick();
+    assert(!strcmp(spools.slots[1].spool, b));
+    advance(16000); tick();
+    assert(!spools.slots[1].spool[0] && !strcmp(spools.slots[1].last, b));
     puts("PASS: a run-out empties the spool once the printer moves on; an unload does not");
 }
 

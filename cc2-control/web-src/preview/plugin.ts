@@ -108,6 +108,104 @@ export function previewPlugin(): Plugin {
     slots: { A: plateSlots.A ? 'mesh' : 'empty', B: plateSlots.B ? 'mesh' : 'empty' },
     plates: plates.map(({ tilt, ...p }) => ({ ...p, in_printer: plateSlots[p.side] === tilt, mesh: plateMesh(tilt) })),
   })
+  // Spool library as /api/spools reports it; tracking starts off so other previews never see its questions.
+  const trayColors = ['#EF5350', '#42A5F5', '#FDD835', '#66BB6A']
+  type PreviewSpool = Record<string, any> & { id: string }
+  let spoolsOn = false
+  let spoolRevision = 1
+  let spoolList: PreviewSpool[] = []
+  let spoolSlots: { spool: string; last: string; question: string; question_since: number }[] = []
+  let spoolLog: Record<string, any>[] = []
+  const spool = (id: string, name: string, material: string, color: string, remaining: number, extra = {}) => ({
+    id,
+    name,
+    brand: 'ELEGOO',
+    material,
+    color,
+    diameter: 1.75,
+    density: material === 'PETG' ? 1.27 : 1.24,
+    net: 1000,
+    remaining,
+    tare: 150,
+    low: 100,
+    price: 0,
+    note: '',
+    created: 1790000000,
+    used: 1790890000,
+    archived: false,
+    ...extra,
+  })
+  const resetSpools = () => {
+    spoolsOn = false
+    spoolRevision++
+    spoolList = [
+      spool('aa00000000000001', 'Red PLA', 'PLA', '#EF5350', 640),
+      spool('aa00000000000002', 'Blue PLA', 'PLA', '#42A5F5', 820),
+      spool('aa00000000000003', 'Green PLA', 'PLA', '#66BB6A', 95),
+      spool('aa00000000000004', 'Black PETG', 'PETG', '#16191D', 1000, { used: 0 }),
+      spool('aa00000000000005', 'Old white PLA', 'PLA', '#F5F5F5', 30, { archived: true }),
+    ]
+    spoolSlots = ['aa00000000000001', 'aa00000000000002', '', 'aa00000000000003', ''].map(id => ({
+      spool: id,
+      last: '',
+      question: '',
+      question_since: 0,
+    }))
+    spoolLog = [
+      {
+        time: 1790890000,
+        spool: 'aa00000000000001',
+        slot: 0,
+        kind: 'print',
+        grams: -18.4,
+        mm: 6170,
+        job: 'CC2_Preview_Vase_PETG.gcode',
+        result: 'complete',
+      },
+      { time: 1790000000, spool: 'aa00000000000004', slot: -1, kind: 'new', grams: 1000, mm: 0, job: '', result: '' },
+    ]
+  }
+  resetSpools()
+  const spoolLibrary = () => {
+    const active = scene === 'printing' || scene === 'paused'
+    return {
+      available: true,
+      error: '',
+      enabled: spoolsOn,
+      revision: spoolRevision,
+      canvas: true,
+      active_tray: active ? 0 : -1,
+      slots: spoolSlots.map((s, slot) => ({
+        slot,
+        ...s,
+        question_mm: 0,
+        runout: false,
+        printer:
+          slot < 4
+            ? {
+                status: active && slot === 0 ? 2 : 1,
+                type: 'PLA',
+                name: 'PLA',
+                color: trayColors[slot],
+                brand: '',
+                code: '',
+              }
+            : null,
+      })),
+      job: {
+        active,
+        file: active ? 'CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode' : '',
+        started: 1790899000,
+        slots: Array.from({ length: 5 }, (_, slot) => ({
+          mm: active && slot === 0 ? 3210 : 0,
+          grams: active && slot === 0 ? 9.57 : 0,
+          spool: active && slot === 0 ? spoolSlots[0].spool : '',
+        })),
+      },
+      spools: spoolList,
+      log: spoolLog,
+    }
+  }
   const reset = () => {
     speed = 100
     flow = 100
@@ -116,6 +214,7 @@ export function previewPlugin(): Plugin {
     deleted = new Set()
     cameraViewer = null
     resetPlates()
+    resetSpools()
   }
   // Print history as the printer reports it through /api/history (fixed times keep screenshots stable).
   const job = (
@@ -199,6 +298,11 @@ export function previewPlugin(): Plugin {
       hardware: { camera: true, usb: true, light: 1, filament_detection: true, filament_detected: true },
       printer_error: null,
       camera_viewer: cameraViewer,
+      spools: {
+        enabled: spoolsOn,
+        revision: spoolRevision,
+        questions: spoolsOn ? spoolSlots.flatMap((s, slot) => (s.question ? [slot] : [])) : [],
+      },
     }
   }
   return {
@@ -354,6 +458,8 @@ export function previewPlugin(): Plugin {
               })
             case '/api/plates':
               return reply(plateLibrary())
+            case '/api/spools':
+              return reply(spoolLibrary())
             case '/api/history':
               return reply({
                 available: true,
@@ -419,6 +525,13 @@ export function previewPlugin(): Plugin {
           '/api/plates/recapture',
           '/api/plates/mount',
           '/api/plates/unmount',
+          '/api/spools/enable',
+          '/api/spools/save',
+          '/api/spools/delete',
+          '/api/spools/assign',
+          '/api/spools/dismiss',
+          '/api/spools/adjust',
+          '/__preview/spool-insert',
         ]
         if (!simulated.includes(path)) return reply({ error: 'Operation disabled in isolated preview' }, 403)
         let body = ''
@@ -525,6 +638,96 @@ export function previewPlugin(): Plugin {
               plateCurrent = plate.id
               plateResult = 'mounted'
               return reply({ mounted: true, reboot }, reboot ? 202 : 200)
+            }
+            // Spool library: the same key=value lines as spools.h, with only the checks the UI relies on.
+            if ((path.startsWith('/api/spools/') || path === '/__preview/spool-insert') && req.method === 'POST') {
+              const form = Object.fromEntries(
+                body
+                  .replace(/\n+$/, '')
+                  .split('\n')
+                  .filter(Boolean)
+                  .map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)])
+              )
+              const changed = () => {
+                spoolRevision++
+                return reply({ ok: true })
+              }
+              if (path === '/__preview/spool-insert') {
+                // Simulates filament inserted into a tray: it asks which spool it is.
+                const s = spoolSlots[Number(form.slot)]
+                s.last = s.spool || s.last
+                s.spool = ''
+                s.question = 'inserted'
+                s.question_since = Math.floor(Date.now() / 1000)
+                return changed()
+              }
+              if (path === '/api/spools/enable') {
+                if (!['on', 'off'].includes(body.trim())) return reply({ ok: false, error: 'Use on or off' }, 400)
+                spoolsOn = body.trim() === 'on'
+                spoolRevision++
+                return reply({ ok: true, enabled: spoolsOn })
+              }
+              const found = spoolList.find(s => s.id === form.id)
+              if (path === '/api/spools/save') {
+                if (form.id && !found) return reply({ ok: false, error: 'Unknown spool' }, 404)
+                const numbers = ['diameter', 'density', 'net', 'remaining', 'tare', 'low', 'price']
+                const fields = Object.fromEntries(
+                  Object.entries(form)
+                    .filter(([k]) => k !== 'id' && k !== 'slot')
+                    .map(([k, v]) => [k, numbers.includes(k) ? Number(v) : k === 'archived' ? v === '1' : v])
+                )
+                if (found) {
+                  Object.assign(found, fields)
+                  if (found.archived) for (const s of spoolSlots) if (s.spool === found.id) s.spool = ''
+                  spoolRevision++
+                  return reply({ ok: true, id: found.id })
+                }
+                const id = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+                const fresh = { ...spool(id, '', 'PLA', '#000000', 1000, { used: 0, created: 1790900000 }), ...fields }
+                if (form.remaining === undefined) fresh.remaining = fresh.net
+                spoolList.push(fresh)
+                if (form.slot !== undefined) {
+                  const s = spoolSlots[Number(form.slot)]
+                  Object.assign(s, { spool: id, question: '', question_since: 0 })
+                }
+                spoolRevision++
+                return reply({ ok: true, id }, 201)
+              }
+              if (path === '/api/spools/assign') {
+                const s = spoolSlots[Number(form.slot)]
+                if (!s) return reply({ ok: false, error: 'Invalid assignment' }, 400)
+                if (form.spool && !spoolList.some(x => x.id === form.spool))
+                  return reply({ ok: false, error: 'Unknown spool' }, 404)
+                for (const other of spoolSlots)
+                  if (other !== s && form.spool && other.spool === form.spool) other.spool = ''
+                if (s.spool && s.spool !== form.spool) s.last = s.spool
+                Object.assign(s, { spool: form.spool, question: '', question_since: 0 })
+                return changed()
+              }
+              if (path === '/api/spools/dismiss') {
+                Object.assign(spoolSlots[Number(form.slot)], { question: '', question_since: 0 })
+                return changed()
+              }
+              if (!found) return reply({ ok: false, error: 'Unknown spool' }, 404)
+              if (path === '/api/spools/delete') {
+                spoolList = spoolList.filter(s => s !== found)
+                for (const s of spoolSlots) if (s.spool === found.id) s.spool = ''
+                return changed()
+              }
+              const before = found.remaining
+              found.remaining = form.gross !== undefined ? Number(form.gross) - found.tare : Number(form.remaining)
+              spoolLog.unshift({
+                time: Math.floor(Date.now() / 1000),
+                spool: found.id,
+                slot: -1,
+                kind: 'correction',
+                grams: found.remaining - before,
+                mm: 0,
+                job: '',
+                result: form.gross !== undefined ? 'weighed' : 'set',
+              })
+              spoolRevision++
+              return reply({ ok: true, remaining: found.remaining })
             }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()

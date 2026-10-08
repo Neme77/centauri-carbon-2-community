@@ -3,8 +3,29 @@ import { request } from './api'
 import { duration, finishTime } from './format'
 import { subState } from './machine'
 
-export type Page = 'dashboard' | 'control' | 'job' | 'files' | 'history' | 'bed' | 'canvas' | 'console' | 'settings'
-const PAGES: Page[] = ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']
+export type Page =
+  | 'dashboard'
+  | 'control'
+  | 'job'
+  | 'files'
+  | 'history'
+  | 'bed'
+  | 'canvas'
+  | 'spools'
+  | 'console'
+  | 'settings'
+const PAGES: Page[] = [
+  'dashboard',
+  'control',
+  'job',
+  'files',
+  'history',
+  'bed',
+  'canvas',
+  'spools',
+  'console',
+  'settings',
+]
 
 // Routes live in the URL hash (#files, #bed/plates, #bed/screws): the backend only serves /, so no server change is needed.
 // #camera is the separate camera window opened from the camera card; it is not a menu page.
