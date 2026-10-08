@@ -14,6 +14,15 @@ int main(void){
     memset(&mqtt,0,sizeof(mqtt));
     mqtt.have_machine_status=1; mqtt.machine_status=1;
     mqtt.connected=mqtt.registered=1; mqtt.last_message=time(NULL);
+    expect(control_build_script("canvas:material:1:PLA:2850DF:190:230",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
+        !strcmp(script,"CANVAS_SET_FILAMENT_INFO CHANNEL=1 COLOR=0x2850DF detailed_type=\"PLA\" MANUFACTURER=\"Generic\" nozzle_max_temp=230 nozzle_min_temp=190 TYPE=\"PLA\" CODE=Generic"),"Canvas material without a maker is generic");
+    expect(control_build_script("canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
+        !strcmp(script,"CANVAS_SET_FILAMENT_INFO CHANNEL=1 COLOR=0x2850DF detailed_type=\"PLA Matte\" MANUFACTURER=\"Elegoo\" nozzle_max_temp=230 nozzle_min_temp=190 TYPE=\"PLA\" CODE=Generic"),"Canvas material names a spool's line and maker");
+    const char *bad_materials[]={"canvas:material:1:PLA:2850DF:190:230junk","canvas:material:1:PLA:2850DF:190:230:PLA Matte",
+        "canvas:material:1:PLA:2850DF:190:230:PLA \"x\":Elegoo","canvas:material:1:PLA:2850DF:190:230:PLA Matte:El;ego",
+        "canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo:more","canvas:material:1:PLA:2850DF:190:230: PLA:Elegoo",
+        "canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo\nM112"};
+    for(size_t i=0;i<sizeof(bad_materials)/sizeof(bad_materials[0]);i++)expect(!control_build_script(bad_materials[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),bad_materials[i]);
     expect(control_build_script("heaters:set:205:60",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
         !strcmp(script,"SET_HEATER_TEMPERATURE HEATER=extruder TARGET=205.0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60.0"),"temperature targets accepted idle without waiting");
     mqtt.machine_status=2;

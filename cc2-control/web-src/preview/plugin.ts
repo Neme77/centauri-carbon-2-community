@@ -150,6 +150,8 @@ export function previewPlugin(): Plugin {
       spool('aa00000000000007', 'Sunlu PETG Orange', 'PETG', '#FB8C00', 410, { brand: 'Sunlu' }),
       // No colour in the name: its row is labelled with a colour word.
       spool('aa00000000000008', '', 'PETG', '#7E57C2', 250, { brand: 'Sunlu' }),
+      // The blue of slot 2 from another maker: the tray names ELEGOO, so its question leaves this one out.
+      spool('aa00000000000009', 'Polymaker PLA Blue', 'PLA', '#42A5F5', 700, { brand: 'Polymaker' }),
     ]
     spoolSlots = ['aa00000000000001', 'aa00000000000002', '', 'aa00000000000003', ''].map(id => ({
       spool: id,

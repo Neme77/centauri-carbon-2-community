@@ -490,7 +490,9 @@ const SpoolChooser = ({
       'spools.current'
     )
     const last = lib.spools.find(s => s.id === state.last)
-    if (last && last.remaining > 0 && suits(last, want)) add(last, 'spools.was_here')
+    // The spool that was there is the likeliest answer when filament goes back in; it is preselected only
+    // when it suits what the printer now reports.
+    if (last && last.remaining > 0) add(last, 'spools.was_here')
     if (want)
       for (const s of lib.spools.filter(x => !x.archived && slotOf(lib, x.id) < 0 && suits(x, want)).sort(bySuit(want)))
         add(s, 'spools.same_filament')
@@ -498,7 +500,9 @@ const SpoolChooser = ({
   }, [lib, slot])
   // Preselect the tray's spool, else the one it held, else the likeliest spool; with none, a question
   // most likely means a new spool.
-  const best = options.find(o => o.hint === 'spools.was_here') || options.find(o => o.hint === 'spools.same_filament')
+  const best =
+    options.find(o => o.hint === 'spools.was_here' && suits(o.spool, want)) ||
+    options.find(o => o.hint === 'spools.same_filament')
   const [choice, setChoice] = useState(() => state.spool || best?.spool.id || (reason === 'manual' ? '' : 'new'))
   const [browse, setBrowse] = useState(false)
   const [query, setQuery] = useState('')
@@ -563,7 +567,16 @@ const SpoolChooser = ({
       if (canWrite && write && preset) {
         const min = Number(preset.min || Math.max(120, preset.nozzle - 20)),
           max = Number(preset.max || Math.min(320, preset.nozzle + 20))
-        await control(`canvas:material:${slot}:${preset.name}:${chosen.color.slice(1)}:${min}:${max}`)
+        // The spool's product line and maker go along, so the printer names the tray as the inventory does
+        // and the next question suggests this spool; the backend takes only plain ASCII words for them.
+        const plain = (v: string) => /^[A-Za-z0-9+_.-](?:[A-Za-z0-9 +_.-]{0,30}[A-Za-z0-9+_.-])?$/.test(v)
+        const line = chosen.material.trim(),
+          maker = chosen.brand.trim()
+        await control(
+          `canvas:material:${slot}:${preset.name}:${chosen.color.slice(1)}:${min}:${max}:${
+            isLineOf(line, preset.name) && plain(line) ? line : preset.name
+          }:${plain(maker) ? maker : 'Generic'}`
+        )
       }
     })
   const radio = 'mt-0.5 shrink-0 accent-cyan'
@@ -615,7 +628,7 @@ const SpoolChooser = ({
             </span>
           </label>
         ))}
-        {want && !options.some(o => o.hint !== 'spools.current' || suits(o.spool, want)) && (
+        {want && !options.some(o => suits(o.spool, want)) && (
           <p class="text-xs text-muted">{t('spools.no_suitable')}</p>
         )}
         <Button

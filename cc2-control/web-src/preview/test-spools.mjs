@@ -43,19 +43,19 @@ try {
   // Off by default: the inventory is there, the trays and questions are not.
   await page.getByText('Tracking is off', { exact: false }).waitFor()
   assert.equal(await page.getByRole('heading', { name: 'In the Printer' }).count(), 0)
-  await page.getByRole('button', { name: 'In use (7)' }).waitFor()
+  await page.getByRole('button', { name: 'In use (8)' }).waitFor()
   await page.getByRole('button', { name: 'Archived (1)' }).waitFor()
-  // Manufacturer > kind > colour: the two sealed black spools share a row, and Sunlu with two spools
-  // goes to "Other". Colours follow the colour wheel, neutrals first; a spool without a colour in its
+  // Manufacturer > kind > colour: the two sealed black spools share a row; Sunlu and Polymaker, with fewer
+  // than three spools each, go to "Other". Colours follow the colour wheel, neutrals first; a spool without a colour in its
   // name gets a colour word.
-  await page.getByText('Spools: 7 · 4.2 kg · colours running low: 1', { exact: true }).waitFor()
+  await page.getByText('Spools: 8 · 4.9 kg · colours running low: 1', { exact: true }).waitFor()
   assert.deepEqual(
     await page.locator('[data-brand]').evaluateAll(list => list.map(e => e.getAttribute('data-brand'))),
     ['elegoo', 'other']
   )
   assert.deepEqual(await texts('[data-brand] > button > b'), ['ELEGOO', 'Other'])
-  assert.deepEqual(await texts('[data-kind] > div > b'), ['PETG', 'PLA', 'Sunlu PETG'])
-  assert.deepEqual(await texts('[data-stack] > button > b'), ['Black', 'Red', 'Green', 'Blue', 'Orange', 'Purple'])
+  assert.deepEqual(await texts('[data-kind] > div > b'), ['PETG', 'PLA', 'Polymaker PLA', 'Sunlu PETG'])
+  assert.deepEqual(await texts('[data-stack] > button > b'), ['Black', 'Red', 'Green', 'Blue', 'Blue', 'Orange', 'Purple'])
   await stack('Black').getByText('×2', { exact: true }).waitFor()
   assert.equal(await page.locator('[data-spool]').count(), 0, 'colour rows start closed')
 
@@ -162,14 +162,17 @@ try {
   await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
   await toast('Command accepted')
   assert.deepEqual(posts.at(-1), ['/api/spools/assign', 'slot=2\nspool=aa00000000000004'])
-  assert.deepEqual(controls, ['canvas:material:2:PETG:16191D:220:260'])
+  assert.deepEqual(controls, ['canvas:material:2:PETG:16191D:220:260:PETG:ELEGOO'])
   await dialog.waitFor({ state: 'detached' })
 
   // "Not now" keeps the question open without asking again, and the menu marks it.
   await insert(1)
   await dialog.getByRole('heading', { name: 'New filament in Slot 2' }).waitFor()
-  // The spool that was there fits what the tray reports (ELEGOO PLA Matte in its blue) and is preselected.
+  // The spool that was there fits what the tray reports (ELEGOO PLA Matte in its blue) and is preselected;
+  // Polymaker's blue PLA is another maker's, so it is not suggested.
   assert.ok(await dialog.getByRole('radio', { name: /Blue PLA/ }).isChecked())
+  assert.equal(await dialog.locator('input[name="cc2-spool-choice"]').count(), 2)
+  assert.equal(await dialog.getByRole('radio', { name: /Polymaker/ }).count(), 0)
   await dialog.getByRole('button', { name: 'Not now', exact: true }).click()
   await dialog.waitFor({ state: 'detached' })
   await page.waitForTimeout(3500)

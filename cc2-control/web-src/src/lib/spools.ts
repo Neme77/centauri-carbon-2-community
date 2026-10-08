@@ -295,18 +295,22 @@ export function spoolHierarchy(list: Spool[]): SpoolBrand[] {
 export const matches = (s: Spool, query: string) =>
   !query.trim() || [s.name, s.brand, s.material, s.note, s.color].some(v => norm(v).includes(norm(query)))
 
-// Whether a spool could be the filament a tray reports. A tray that names a product line ("PLA Matte") takes that
-// line or the plain type; one that names only its type ("PLA") takes any line of it. Colours need only read alike,
-// as a colour picked by hand rarely matches the tray's value exactly.
-export const suits = (s: Spool, tray: { type: string; name?: string; color: string } | null) => {
+// Whether a spool could be the filament a tray reports: its maker, type and colour as chosen on the printer.
+// A tray that names a product line ("PLA Matte") takes that line or the plain type; one that names only its
+// type ("PLA") takes any line of it. A named maker takes its own spools and those with no maker recorded;
+// "Generic" names none. Colours need only read alike, as a colour picked by hand rarely matches the tray's
+// value exactly.
+export const suits = (s: Spool, tray: { type: string; name?: string; color: string; brand?: string } | null) => {
   if (!tray) return true
   const m = s.material.trim().toLowerCase(),
     type = tray.type.trim().toLowerCase(),
-    line = (tray.name || '').trim().toLowerCase()
+    line = (tray.name || '').trim().toLowerCase(),
+    maker = (tray.brand || '').trim()
   const material = !type || (line && line !== type ? m === line || m === type : isLineOf(s.material, tray.type))
   const colour =
     !tray.color || s.color.toUpperCase() === tray.color.toUpperCase() || colourWord(s.color) === colourWord(tray.color)
-  return Boolean(material && colour)
+  const brand = !maker || /^generic$/i.test(maker) || !s.brand.trim() || norm(s.brand) === norm(maker)
+  return Boolean(material && colour && brand)
 }
 
 // The likeliest answers first: the tray's very colour, its product line and brand, then opened spools,
