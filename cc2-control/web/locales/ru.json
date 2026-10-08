@@ -797,5 +797,7 @@
   "spools.colour_purple": "фиолетовый",
   "spools.colour_pink": "розовый",
   "spools.colour_brown": "коричневый",
-  "spools.colour_beige": "бежевый"
+  "spools.colour_beige": "бежевый",
+  "spools.no_suitable": "На складе нет катушки с таким пластиком. Выберите из всех катушек или добавьте новую.",
+  "spools.chosen": "Выбрано: {name}"
 }

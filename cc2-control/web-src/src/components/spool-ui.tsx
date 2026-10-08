@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
+import { ChevronDown } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,7 @@ import { type Key, t, tpl } from '@/lib/i18n'
 import { presets, printer, view } from '@/lib/state'
 import {
   assignSpool,
+  bySuit,
   colourWord,
   densityFor,
   dismissSlot,
@@ -19,6 +21,7 @@ import {
   isLow,
   isSealed,
   MATERIALS,
+  matches,
   openChooser,
   percent,
   refreshSpools,
@@ -26,14 +29,17 @@ import {
   type Spool,
   type SpoolFields,
   type SpoolLibrary,
+  type SpoolStack,
   type SpoolSummary,
   type SpoolTray,
   saveSpool,
   slotOf,
   spoolChooser,
   spoolGrams,
+  spoolHierarchy,
   spoolLabel,
   spools,
+  suits,
   twinKey,
 } from '@/lib/spools'
 
@@ -320,6 +326,133 @@ export const SpoolWatcher = () => {
 // `count`: identical sealed spools in storage are interchangeable, so they are offered once.
 type Option = { spool: Spool; hint: Key | null; where: number; count: number }
 
+// The spools of one colour to choose from: opened ones each, identical sealed ones in storage once.
+const stackChoices = (lib: SpoolLibrary, stack: SpoolStack) => {
+  const out: { spool: Spool; count: number }[] = []
+  for (const spool of stack.spools) {
+    const free = isSealed(spool) && slotOf(lib, spool.id) < 0
+    const twin = free
+      ? out.find(o => isSealed(o.spool) && slotOf(lib, o.spool.id) < 0 && twinKey(o.spool) === twinKey(spool))
+      : null
+    if (twin) twin.count++
+    else out.push({ spool, count: 1 })
+  }
+  return out
+}
+
+// Every spool as the inventory groups them, manufacturer > kind > colour; a colour opens to its spools.
+const SpoolTree = ({
+  lib,
+  slot,
+  query,
+  choice,
+  choose,
+}: {
+  lib: SpoolLibrary
+  slot: number
+  query: string
+  choice: string
+  choose: (id: string) => void
+}) => {
+  const brands = useMemo(() => spoolHierarchy(lib.spools.filter(s => !s.archived && matches(s, query))), [lib, query])
+  const [open, setOpen] = useState<string[]>([])
+  const searching = Boolean(query.trim())
+  if (!brands.length) return <p class="text-xs text-muted">{t('spools.no_match')}</p>
+  return (
+    <div class="grid gap-3" data-testid="spool-tree">
+      {brands.map(brand => (
+        <div
+          key={brand.other ? '~other' : brand.key}
+          class="grid gap-1.5"
+          data-brand={brand.other ? 'other' : brand.key}
+        >
+          {(brand.label || brand.other) && (
+            <b class="text-xs">{brand.other ? t('spools.other_brands') : brand.label}</b>
+          )}
+          {brand.kinds.map(kind => (
+            <div key={kind.key} class="grid gap-1" data-kind={kind.key}>
+              <span class="text-[11px] text-muted">{kind.label}</span>
+              {kind.stacks.map(stack => {
+                const shown = searching || open.includes(stack.key) || stack.spools.some(s => s.id === choice)
+                return (
+                  <div key={stack.key} class="rounded-md border border-edge" data-stack={stack.key}>
+                    <button
+                      type="button"
+                      class="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-field"
+                      aria-expanded={shown}
+                      onClick={() => setOpen(shown ? open.filter(k => k !== stack.key) : [...open, stack.key])}
+                    >
+                      <Swatch color={stack.color} />
+                      <b class="min-w-0 text-[13px] [overflow-wrap:anywhere]">
+                        {stack.label || t(colourWord(stack.color))}
+                      </b>
+                      {stack.spools.length > 1 && <span class="text-muted">×{stack.spools.length}</span>}
+                      <span class="ml-auto whitespace-nowrap tabular-nums">{g(stack.grams)} g</span>
+                      <ChevronDown
+                        size={14}
+                        strokeWidth={1.5}
+                        class={cn('shrink-0 transition-transform', !shown && '-rotate-90')}
+                      />
+                    </button>
+                    {shown && (
+                      <div class="grid gap-0.5 border-t border-edge p-1">
+                        {stackChoices(lib, stack).map(({ spool: s, count }) => {
+                          const where = slotOf(lib, s.id)
+                          const sealed = isSealed(s)
+                          return (
+                            <label
+                              key={s.id}
+                              class={cn(
+                                'flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1.5 text-xs',
+                                choice === s.id ? 'bg-field ring-1 ring-cyan' : 'hover:bg-field/60'
+                              )}
+                            >
+                              <input
+                                type="radio"
+                                name="cc2-spool-tree"
+                                class="accent-cyan"
+                                aria-label={[
+                                  spoolLabel(s),
+                                  `${g(s.remaining)} g`,
+                                  count > 1 ? tpl('spools.n_sealed', { n: count }) : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                                checked={choice === s.id}
+                                onChange={() => choose(s.id)}
+                              />
+                              {sealed && <Tag>{t('spools.sealed')}</Tag>}
+                              <span class="whitespace-nowrap tabular-nums">
+                                <b>{g(s.remaining)} g</b>
+                                {!sealed && <span class="text-muted"> {tpl('spools.of_net', { net: g(s.net) })}</span>}
+                              </span>
+                              {count > 1 && <span class="text-muted">×{count}</span>}
+                              {where >= 0 && (
+                                <Tag tone={where === slot ? 'ok' : 'warning'}>
+                                  {where === slot
+                                    ? t('spools.current')
+                                    : tpl('spools.moves_from', { place: placeName(where) })}
+                                </Tag>
+                              )}
+                              {!sealed && isLow(s) && (
+                                <Tag tone="warning">{t(s.remaining <= 0 ? 'spools.empty' : 'spools.low_tag')}</Tag>
+                              )}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const SpoolChooser = ({
   lib,
   slot,
@@ -335,6 +468,8 @@ const SpoolChooser = ({
   const tray = slot < EXTERNAL && state.printer && state.printer.status !== 0 ? state.printer : null
   const want = prefill ? { type: prefill.material, color: prefill.color } : tray
   const idle = view(printer.use().data).idle
+  // The likely answers: the tray's spool, the one it held, and spools in storage with the filament it reports.
+  // Everything else is one step away, in the inventory's order.
   const options = useMemo(() => {
     const out: Option[] = []
     // Every spool counts once, also one that was folded into a twin's option.
@@ -354,34 +489,22 @@ const SpoolChooser = ({
       lib.spools.find(s => s.id === state.spool),
       'spools.current'
     )
-    add(
-      lib.spools.find(s => s.id === state.last),
-      'spools.was_here'
-    )
-    const free = lib.spools.filter(s => slotOf(lib, s.id) < 0)
-    for (const s of free) if (want && fits(s, want)) add(s, 'spools.same_filament')
-    for (const s of [...free].sort((a, b) => b.used - a.used)) add(s, null)
-    for (const s of lib.spools) add(s, null)
+    const last = lib.spools.find(s => s.id === state.last)
+    if (last && last.remaining > 0 && suits(last, want)) add(last, 'spools.was_here')
+    if (want)
+      for (const s of lib.spools.filter(x => !x.archived && slotOf(lib, x.id) < 0 && suits(x, want)).sort(bySuit(want)))
+        add(s, 'spools.same_filament')
     return out
   }, [lib, slot])
-  // Preselect the tray's spool, else the one it held if the filament fits it, else a fitting spool.
-  const last = options.find(o => o.hint === 'spools.was_here'),
-    fitting = options.find(o => o.hint === 'spools.same_filament')
-  const [choice, setChoice] = useState(
-    () =>
-      state.spool ||
-      (last && (!want || fits(last.spool, want))
-        ? last.spool.id
-        : fitting
-          ? fitting.spool.id
-          : options.length
-            ? ''
-            : 'new')
-  )
-  const [all, setAll] = useState(false)
+  // Preselect the tray's spool, else the one it held, else the likeliest spool; with none, a question
+  // most likely means a new spool.
+  const best = options.find(o => o.hint === 'spools.was_here') || options.find(o => o.hint === 'spools.same_filament')
+  const [choice, setChoice] = useState(() => state.spool || best?.spool.id || (reason === 'manual' ? '' : 'new'))
+  const [browse, setBrowse] = useState(false)
+  const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState(() => draftFrom(null, tray, prefill))
-  const chosen = options.find(o => o.spool.id === choice)?.spool || null
+  const chosen = (choice && lib.spools.find(s => s.id === choice)) || null
   // Writing the spool's filament to the tray keeps the printer and the slicer in step with the inventory.
   const preset = chosen
     ? presets
@@ -394,7 +517,7 @@ const SpoolChooser = ({
     : null
   const canWrite = Boolean(chosen && slot < EXTERNAL && reason !== 'material' && preset && idle && !fits(chosen, tray))
   const [write, setWrite] = useState(true)
-  const shown = all ? options : options.slice(0, 6)
+  const total = lib.spools.filter(s => !s.archived).length
   const title: Key =
     reason === 'question'
       ? state.question === 'changed'
@@ -461,7 +584,7 @@ const SpoolChooser = ({
       )}
       <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0">
         <legend class="mb-2 p-0 text-[13px] font-semibold">{t('spools.which_spool')}</legend>
-        {shown.map(({ spool: s, hint, where, count }) => (
+        {options.map(({ spool: s, hint, where, count }) => (
           <label
             key={s.id}
             class={cn(
@@ -492,10 +615,33 @@ const SpoolChooser = ({
             </span>
           </label>
         ))}
-        {options.length > shown.length && (
-          <Button variant="ghost" class="justify-self-start text-xs" onClick={() => setAll(true)}>
-            {tpl('spools.show_all', { n: options.length })}
-          </Button>
+        {want && !options.some(o => o.hint !== 'spools.current' || suits(o.spool, want)) && (
+          <p class="text-xs text-muted">{t('spools.no_suitable')}</p>
+        )}
+        <Button
+          variant="ghost"
+          class="justify-self-start text-xs"
+          aria-expanded={browse}
+          onClick={() => setBrowse(!browse)}
+        >
+          {tpl('spools.show_all', { n: total })}
+          <ChevronDown
+            size={14}
+            strokeWidth={1.5}
+            class={cn('shrink-0 transition-transform', !browse && '-rotate-90')}
+          />
+        </Button>
+        {browse && (
+          <div class="grid gap-2.5 rounded-lg border border-edge p-2.5">
+            <Input
+              type="search"
+              placeholder={t('spools.search')}
+              aria-label={t('spools.search')}
+              value={query}
+              onInput={e => setQuery(e.currentTarget.value)}
+            />
+            <SpoolTree lib={lib} slot={slot} query={query} choice={choice} choose={setChoice} />
+          </div>
         )}
         <label
           class={cn(
@@ -541,6 +687,11 @@ const SpoolChooser = ({
           </label>
         )}
       </fieldset>
+      {chosen && !options.some(o => o.spool.id === chosen.id) && (
+        <p class="mt-3 text-[13px]" role="status">
+          {tpl('spools.chosen', { name: `${spoolLabel(chosen)} · ${g(chosen.remaining)} g` })}
+        </p>
+      )}
       {canWrite && (
         <label class="mt-3 flex items-center gap-2 text-[13px]">
           <input type="checkbox" checked={write} onChange={e => setWrite(e.currentTarget.checked)} />

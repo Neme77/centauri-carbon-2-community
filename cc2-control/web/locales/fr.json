@@ -797,5 +797,7 @@
   "spools.colour_purple": "violet",
   "spools.colour_pink": "rose",
   "spools.colour_brown": "marron",
-  "spools.colour_beige": "beige"
+  "spools.colour_beige": "beige",
+  "spools.no_suitable": "Aucune bobine de l’inventaire n’a ce filament. Choisissez-en une parmi toutes les bobines ou ajoutez-en une nouvelle.",
+  "spools.chosen": "Choisie : {name}"
 }

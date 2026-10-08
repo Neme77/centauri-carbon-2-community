@@ -797,5 +797,7 @@
   "spools.colour_purple": "紫色",
   "spools.colour_pink": "粉色",
   "spools.colour_brown": "棕色",
-  "spools.colour_beige": "米色"
+  "spools.colour_beige": "米色",
+  "spools.no_suitable": "库存中没有这种耗材的耗材卷。请从全部耗材卷中选择，或添加新的耗材卷。",
+  "spools.chosen": "已选择：{name}"
 }

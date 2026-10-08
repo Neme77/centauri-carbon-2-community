@@ -109,7 +109,8 @@ export function previewPlugin(): Plugin {
     plates: plates.map(({ tilt, ...p }) => ({ ...p, in_printer: plateSlots[p.side] === tilt, mesh: plateMesh(tilt) })),
   })
   // Spool library as /api/spools reports it; tracking starts off so other previews never see its questions.
-  const trayColors = ['#EF5350', '#42A5F5', '#FDD835', '#66BB6A']
+  // Slot 3 reports a purple no spool has, so its question suggests nothing.
+  const trayColors = ['#EF5350', '#42A5F5', '#8E24AA', '#66BB6A']
   type PreviewSpool = Record<string, any> & { id: string }
   let spoolsOn = false
   let spoolRevision = 1

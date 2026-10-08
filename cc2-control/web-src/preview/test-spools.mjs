@@ -149,9 +149,15 @@ try {
   dialog = page.getByRole('dialog')
   await dialog.getByRole('heading', { name: 'New filament in Slot 3' }).waitFor()
   await dialog.getByText('The printer reports', { exact: true }).waitFor()
-  // The three identical sealed black spools are one choice.
-  await dialog.getByText('sealed ×3', { exact: true }).waitFor()
-  await dialog.getByRole('radio', { name: /Black PETG/ }).check()
+  // The tray reports purple PLA and no spool has it: nothing unrelated is suggested, a new spool is preselected.
+  await dialog.getByText('No spool in the inventory has this filament.', { exact: false }).waitFor()
+  assert.equal(await dialog.locator('input[name="cc2-spool-choice"]').count(), 1)
+  assert.ok(await dialog.getByRole('radio', { name: /New spool/ }).isChecked())
+  // Every spool is one step away, grouped as in the inventory; the three sealed black spools are one choice.
+  await dialog.getByRole('button', { name: /^Show all \d+ spools$/ }).click()
+  await dialog.locator('[data-stack]').filter({ hasText: 'Black' }).getByRole('button').click()
+  await dialog.getByRole('radio', { name: 'Black PETG · 1000 g · sealed ×3' }).check()
+  await dialog.getByText('Chosen: Black PETG · 1000 g', { exact: true }).waitFor()
   assert.ok(await dialog.getByLabel("Also set Slot 3 on the printer to this spool's material and colour").isChecked())
   await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
   await toast('Command accepted')
@@ -162,7 +168,8 @@ try {
   // "Not now" keeps the question open without asking again, and the menu marks it.
   await insert(1)
   await dialog.getByRole('heading', { name: 'New filament in Slot 2' }).waitFor()
-  await dialog.getByRole('radio', { name: /Blue PLA/ }).waitFor() // the spool that was there is offered
+  // The spool that was there fits what the tray reports (ELEGOO PLA Matte in its blue) and is preselected.
+  assert.ok(await dialog.getByRole('radio', { name: /Blue PLA/ }).isChecked())
   await dialog.getByRole('button', { name: 'Not now', exact: true }).click()
   await dialog.waitFor({ state: 'detached' })
   await page.waitForTimeout(3500)
@@ -184,6 +191,14 @@ try {
   assert.equal(route, '/api/spools/save')
   assert.match(created, /^name=Fresh blue\n.*\ncolor=#42A5F5\n.*\nslot=1$/s)
   await slot(1).getByText('Fresh blue', { exact: true }).waitFor()
+  // Slot 4 holds the only green PLA: choosing again offers just that spool, a new one or none.
+  await slot(3).getByRole('button', { name: 'Choose spool' }).click()
+  dialog = page.getByRole('dialog')
+  assert.ok(await dialog.getByRole('radio', { name: /Green PLA/ }).isChecked())
+  assert.equal(await dialog.locator('input[name="cc2-spool-choice"]').count(), 3)
+  assert.equal(await dialog.getByText('No spool in the inventory has this filament.', { exact: false }).count(), 0)
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await dialog.waitFor({ state: 'detached' })
 
   // The print dialog shows each tool's spool and warns when it holds less than the file needs.
   await page.route('**/api/gcode-files/inspect', r =>
@@ -230,6 +245,9 @@ try {
   dialog = page.getByRole('dialog')
   await dialog.getByRole('heading', { name: 'Spool in Slot 3' }).waitFor()
   assert.ok((await dialog.boundingBox()).width <= 390, 'the question fits a phone')
+  await dialog.getByRole('button', { name: /^Show all \d+ spools$/ }).click()
+  await dialog.locator('[data-stack]').filter({ hasText: 'Black' }).getByRole('button').click()
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'tree overflow')
   if (shots) await page.screenshot({ path: path.join(shots, 'spools-chooser-phone.png') })
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.setViewportSize({ width: 1440, height: 1000 })

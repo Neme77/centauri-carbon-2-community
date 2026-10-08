@@ -797,5 +797,7 @@
   "spools.colour_purple": "Purple",
   "spools.colour_pink": "Pink",
   "spools.colour_brown": "Brown",
-  "spools.colour_beige": "Beige"
+  "spools.colour_beige": "Beige",
+  "spools.no_suitable": "No spool in the inventory has this filament. Pick one from all spools or add a new one.",
+  "spools.chosen": "Chosen: {name}"
 }
