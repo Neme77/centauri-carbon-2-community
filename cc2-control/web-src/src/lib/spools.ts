@@ -1,5 +1,6 @@
 import { store } from './store'
 import { post, request } from './api'
+import type { Key } from './i18n'
 
 // Spool library kept by CC2 Control (/api/spools). Spools sit in the four Canvas trays (slots 0-3) or on
 // the external spool holder (slot 4) and are charged with the filament the printer extrudes from them.
@@ -132,13 +133,167 @@ export const spoolLabel = (s: Spool) => s.name || [s.brand, s.material].filter(B
 export const slotOf = (lib: SpoolLibrary, id: string) => lib.slots.find(x => x.spool === id)?.slot ?? -1
 export const findSpool = (lib: SpoolLibrary | null, id: string) => (id && lib?.spools.find(s => s.id === id)) || null
 
-// Whether a tray reports this spool's material and colour, as the backend judges it.
+// A material or one of its product lines: "PLA Matte", "PLA+" and "PLA-CF" are lines of "PLA".
+export const isLineOf = (material: string, type: string) => {
+  const m = material.toLowerCase(),
+    base = type.toLowerCase()
+  return base !== '' && m.startsWith(base) && ['', ' ', '-', '+'].includes(m.charAt(base.length))
+}
+
+// Whether a tray reports this spool's material and colour, as the backend judges it: a product line
+// also fits a tray that only reports its base type.
 export const fits = (s: Spool, tray: { type: string; name?: string; color: string } | null) => {
   if (!tray) return false
-  const m = s.material.toLowerCase()
-  const material = !tray.type || m === tray.type.toLowerCase() || m === (tray.name || '').toLowerCase()
+  const material =
+    !tray.type || s.material.toLowerCase() === (tray.name || '').toLowerCase() || isLineOf(s.material, tray.type)
   return material && (!tray.color || s.color.toUpperCase() === tray.color.toUpperCase())
 }
+
+/* ---- the inventory hierarchy: manufacturer > kind > colour > spool ------------------------- */
+
+const norm = (s: string) => s.trim().toLocaleLowerCase().replace(/ё/g, 'е')
+
+// Hue in degrees (-1 for white, grey and black) and lightness of a #RRGGBB colour.
+const hsl = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16) / 255)
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b),
+    light = (max + min) / 2,
+    d = max - min
+  if (!Number.isFinite(d) || d < 0.08 || d / (1 - Math.abs(2 * light - 1) || 1) < 0.15) return { hue: -1, light }
+  const h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return { hue: h * 60, light }
+}
+
+// A plain colour word for a colour: names a spool from a tray, which reports only the colour value, and tells
+// apart spools whose names hold no colour.
+export const colourWord = (hex: string): Key => {
+  const { hue: h, light } = hsl(hex)
+  if (h < 0) return light > 0.85 ? 'spools.colour_white' : light < 0.2 ? 'spools.colour_black' : 'spools.colour_grey'
+  if (h >= 15 && h < 45 && light < 0.4) return 'spools.colour_brown'
+  if (h >= 20 && h < 60 && light > 0.75) return 'spools.colour_beige'
+  if ((h >= 330 || h < 15) && light > 0.75) return 'spools.colour_pink'
+  if (h < 15 || h >= 330) return 'spools.colour_red'
+  if (h < 40) return 'spools.colour_orange'
+  if (h < 70) return 'spools.colour_yellow'
+  if (h < 165) return 'spools.colour_green'
+  if (h < 195) return 'spools.colour_cyan'
+  if (h < 250) return 'spools.colour_blue'
+  if (h < 290 || light < 0.6) return 'spools.colour_purple'
+  return 'spools.colour_pink'
+}
+
+// The colour part of a spool's name: the words that are neither its brand nor its material.
+export const colourName = (s: Spool) => {
+  const drop = new Set(`${s.brand} ${s.material}`.split(/\s+/).map(norm).filter(Boolean))
+  return s.name
+    .split(/\s+/)
+    .filter(word => word && !drop.has(norm(word)))
+    .join(' ')
+}
+// Still full: an unopened spool, so identical ones are interchangeable.
+export const isSealed = (s: Spool) => s.remaining >= s.net - 1
+// One colour row: the same brand, material and colour name, and colours that read alike. Colour values picked
+// by hand for one colour differ a little; a name without a colour word ("PLA Matte" with material PLA) does
+// not put red and blue spools on one row.
+const colourKey = (s: Spool) => `${norm(colourName(s))}|${colourWord(s.color)}`
+// Spools that differ only in how much is left: the same product, colour value and size.
+export const twinKey = (s: Spool) =>
+  `${norm(s.brand)}|${norm(s.material)}|${colourKey(s)}|${s.color.toUpperCase()}|${s.net}`
+
+// Colour-wheel order: whites, greys and blacks first (light to dark), then by hue from red.
+const wheel = (hex: string) => {
+  const { hue, light } = hsl(hex)
+  return hue < 0 ? [0, 1 - light] : [1, hue + (1 - light)]
+}
+const byWheel = (a: string, b: string) => {
+  const [x, y] = [wheel(a), wheel(b)]
+  return x[0] - y[0] || x[1] - y[1]
+}
+
+// `label`: the colour part of the spools' name, empty when it has none (the page shows the colour word).
+export type SpoolStack = { key: string; label: string; color: string; spools: Spool[]; grams: number; low: boolean }
+export type SpoolKind = { key: string; label: string; stacks: SpoolStack[]; count: number; grams: number }
+// `other`: the brands with fewer than three spools; `label` is empty when no brand has three.
+export type SpoolBrand = {
+  key: string
+  label: string
+  other: boolean
+  kinds: SpoolKind[]
+  count: number
+  grams: number
+}
+
+const total = (list: Spool[]) => list.reduce((sum, s) => sum + Math.max(0, s.remaining), 0)
+
+const kindsOf = (list: Spool[], withBrand: boolean): SpoolKind[] => {
+  const kinds = new Map<string, Spool[]>()
+  for (const s of list) {
+    const key = `${withBrand ? `${norm(s.brand)}|` : ''}${norm(s.material)}`
+    kinds.set(key, [...(kinds.get(key) || []), s])
+  }
+  return [...kinds]
+    .map(([key, spools]) => {
+      const stacks = new Map<string, Spool[]>()
+      for (const s of spools) stacks.set(colourKey(s), [...(stacks.get(colourKey(s)) || []), s])
+      const first = spools[0]
+      return {
+        key,
+        label: withBrand ? [first.brand, first.material].filter(Boolean).join(' ') : first.material,
+        count: spools.length,
+        grams: total(spools),
+        stacks: [...stacks]
+          .map(([colour, members]) => {
+            // Opened spools first, emptiest first, so they are used up before a new one is opened.
+            const ordered = [...members].sort(
+              (a, b) => Number(isSealed(a)) - Number(isSealed(b)) || a.remaining - b.remaining
+            )
+            const grams = total(ordered)
+            return {
+              key: `${key}|${colour}`,
+              label: colourName(ordered[0]),
+              color: ordered[0].color,
+              spools: ordered,
+              grams,
+              low: !ordered[0].archived && grams <= Math.max(...ordered.map(s => s.low)),
+            }
+          })
+          .sort((a, b) => byWheel(a.color, b.color) || a.label.localeCompare(b.label)),
+      }
+    })
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+// Manufacturers with three spools or more, the biggest first, then "Other" for the rest.
+export function spoolHierarchy(list: Spool[]): SpoolBrand[] {
+  const brands = new Map<string, Spool[]>()
+  for (const s of list) brands.set(norm(s.brand), [...(brands.get(norm(s.brand)) || []), s])
+  const main = [...brands].filter(([key, spools]) => key && spools.length >= 3)
+  const rest = list.filter(s => !main.some(([key]) => key === norm(s.brand)))
+  const out: SpoolBrand[] = main
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .map(([key, spools]) => ({
+      key,
+      label: spools[0].brand,
+      other: false,
+      kinds: kindsOf(spools, false),
+      count: spools.length,
+      grams: total(spools),
+    }))
+  if (rest.length)
+    out.push({
+      key: '',
+      label: '',
+      other: out.length > 0,
+      kinds: kindsOf(rest, true),
+      count: rest.length,
+      grams: total(rest),
+    })
+  return out
+}
+
+export const matches = (s: Spool, query: string) =>
+  !query.trim() || [s.name, s.brand, s.material, s.note, s.color].some(v => norm(v).includes(norm(query)))
 
 // Requests carry key=value lines (see spools.h).
 const lines = (fields: Record<string, string | number | boolean | undefined>) =>

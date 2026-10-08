@@ -9,12 +9,15 @@ import { type Key, t, tpl } from '@/lib/i18n'
 import { presets, printer, view } from '@/lib/state'
 import {
   assignSpool,
+  colourWord,
   densityFor,
   dismissSlot,
   EXTERNAL,
   fits,
   g,
+  isLineOf,
   isLow,
+  isSealed,
   MATERIALS,
   openChooser,
   percent,
@@ -31,6 +34,7 @@ import {
   spoolGrams,
   spoolLabel,
   spools,
+  twinKey,
 } from '@/lib/spools'
 
 export const placeName = (slot: number) =>
@@ -103,13 +107,18 @@ export const draftFrom = (
       note: s.note,
       densityTouched: true,
     }
-  const material = prefill?.material || tray?.type || 'PLA'
+  // A tray reports a product line ("PLA Matte") besides its type ("PLA"): the spool keeps the line as its
+  // material, which still fits the tray. Trays report a colour value only, so the name gets a colour word.
+  const line = tray && isLineOf(tray.name, tray.type) ? tray.name : ''
+  const material = prefill?.material || line || tray?.type || 'PLA'
   const brand = tray?.brand && !/^generic$/i.test(tray.brand) ? tray.brand : ''
+  const color = (prefill?.color || tray?.color || '#2196F3').toUpperCase()
+  const product = prefill ? material : tray?.name || material
   return {
-    name: tray?.name && tray.name !== tray.type ? [brand, tray.name].filter(Boolean).join(' ') : '',
+    name: prefill || tray ? [brand, product, t(colourWord(color))].filter(Boolean).join(' ') : '',
     brand,
     material,
-    color: (prefill?.color || tray?.color || '#2196F3').toUpperCase(),
+    color,
     net: '1000',
     remaining: '1000',
     tare: '',
@@ -308,7 +317,8 @@ export const SpoolWatcher = () => {
   ) : null
 }
 
-type Option = { spool: Spool; hint: Key | null; where: number }
+// `count`: identical sealed spools in storage are interchangeable, so they are offered once.
+type Option = { spool: Spool; hint: Key | null; where: number; count: number }
 
 const SpoolChooser = ({
   lib,
@@ -327,9 +337,18 @@ const SpoolChooser = ({
   const idle = view(printer.use().data).idle
   const options = useMemo(() => {
     const out: Option[] = []
+    // Every spool counts once, also one that was folded into a twin's option.
+    const seen = new Set<string>()
     const add = (spool: Spool | undefined | null, hint: Key | null) => {
-      if (!spool || spool.archived || out.some(o => o.spool.id === spool.id)) return
-      out.push({ spool, hint, where: slotOf(lib, spool.id) })
+      if (!spool || spool.archived || seen.has(spool.id)) return
+      seen.add(spool.id)
+      const where = slotOf(lib, spool.id)
+      const twin =
+        where < 0 && isSealed(spool)
+          ? out.find(o => o.where < 0 && o.hint === hint && isSealed(o.spool) && twinKey(o.spool) === twinKey(spool))
+          : null
+      if (twin) twin.count++
+      else out.push({ spool, hint, where, count: 1 })
     }
     add(
       lib.spools.find(s => s.id === state.spool),
@@ -442,7 +461,7 @@ const SpoolChooser = ({
       )}
       <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0">
         <legend class="mb-2 p-0 text-[13px] font-semibold">{t('spools.which_spool')}</legend>
-        {shown.map(({ spool: s, hint, where }) => (
+        {shown.map(({ spool: s, hint, where, count }) => (
           <label
             key={s.id}
             class={cn(
@@ -466,6 +485,7 @@ const SpoolChooser = ({
             </span>
             <span class="flex shrink-0 flex-col items-end gap-1">
               {hint && <Tag tone={hint === 'spools.same_filament' ? 'ok' : 'default'}>{t(hint)}</Tag>}
+              {count > 1 && <Tag>{tpl('spools.n_sealed', { n: count })}</Tag>}
               {where >= 0 && where !== slot && (
                 <Tag tone="warning">{tpl('spools.moves_from', { place: placeName(where) })}</Tag>
               )}

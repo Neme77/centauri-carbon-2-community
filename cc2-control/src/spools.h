@@ -374,9 +374,17 @@ static int spool_tray_same(const spool_tray *a, const spool_tray *b) {
            !strcmp(a->brand, b->brand) && !strcmp(a->code, b->code);
 }
 
+/* A product line such as "PLA Matte", "PLA+" or "PLA-CF" belongs to the base type "PLA". */
+static int spool_base_type(const char *material, const char *type) {
+    size_t n = strlen(type);
+    return n && !strncasecmp(material, type, n) &&
+           (!material[n] || material[n] == ' ' || material[n] == '-' || material[n] == '+');
+}
+
 /* Whether a tray reports this spool's material and colour (nothing reported fits). */
 static int spool_fits(const spool_entry *s, const spool_tray *t) {
-    int material = !t->type[0] || !strcasecmp(s->material, t->type) || !strcasecmp(s->material, t->name);
+    int material = !t->type[0] || !strcasecmp(s->material, t->type) || !strcasecmp(s->material, t->name) ||
+                   spool_base_type(s->material, t->type);
     return material && (!t->color[0] || !strcmp(s->color, t->color));
 }
 

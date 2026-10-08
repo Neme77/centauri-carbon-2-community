@@ -5,7 +5,7 @@ checksums remain attached to each GitHub release.
 
 ## Unreleased
 
-- A new Spools page tracks filament spools in the Canvas slots and on the external holder, charged with what the printer really extrudes, purges and cancelled prints included. New filament in a slot asks on every open page which spool it is; a spool that runs out is set to zero; weigh-ins correct the count; the print dialog warns when a spool holds less than the file needs. Off until switched on.
+- A new Spools page tracks filament spools in the Canvas slots and on the external holder, charged with what the printer really extrudes, purges and cancelled prints included. New filament in a slot asks on every open page which spool it is; a spool that runs out is set to zero; weigh-ins correct the count; the print dialog warns when a spool holds less than the file needs. The inventory is grouped by manufacturer, kind and colour, with identical spools on one row. Off until switched on.
 - PID calibration and printer error reports are translated into Russian and Chinese; they were shown in English.
 - Bed Levelling has a build-plate library: save each plate's mesh and Z offset once and mount the plate again later. A plate whose mesh is not in its side's slot is written there and the printer restarts.
 - Bed mesh calibration from Bed Levelling homes X, Y and Z first when the printer is not homed, instead of being refused by the console.

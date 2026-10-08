@@ -133,6 +133,22 @@ static void test_values(void) {
            !spool_number("", 0, 1, &v) && !spool_number("-1", 0, 1, &v) && !spool_number("nan", 0, 1, &v));
     /* One metre of 1.75 mm PLA weighs 2.98 g. */
     assert(fabs(spool_grams_at(1000, 1.75, 1.24) - 2.9826) < 0.0001);
+    /* A product line fits a tray that reports only its base type, or its own name. */
+    spool_entry line = {.material = "PLA Basic", .color = "#262626"};
+    spool_tray plain = {.have = 1, .status = 1, .type = "PLA", .name = "PLA", .color = "#262626"};
+    assert(spool_fits(&line, &plain));
+    snprintf(line.material, sizeof(line.material), "PLA+");
+    assert(spool_fits(&line, &plain));
+    snprintf(line.material, sizeof(line.material), "Rapid PLA+");
+    snprintf(plain.name, sizeof(plain.name), "Rapid PLA+");
+    assert(spool_fits(&line, &plain));
+    snprintf(line.material, sizeof(line.material), "PLAX");
+    assert(!spool_fits(&line, &plain));
+    snprintf(line.material, sizeof(line.material), "PETG Basic");
+    assert(!spool_fits(&line, &plain));
+    snprintf(line.material, sizeof(line.material), "PLA Matte");
+    snprintf(plain.color, sizeof(plain.color), "#FFFFFF");
+    assert(!spool_fits(&line, &plain));
     puts("PASS: spool text, colours, numbers and grams");
 }
 

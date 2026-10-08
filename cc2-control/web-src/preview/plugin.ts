@@ -144,6 +144,11 @@ export function previewPlugin(): Plugin {
       spool('aa00000000000003', 'Green PLA', 'PLA', '#66BB6A', 95),
       spool('aa00000000000004', 'Black PETG', 'PETG', '#16191D', 1000, { used: 0 }),
       spool('aa00000000000005', 'Old white PLA', 'PLA', '#F5F5F5', 30, { archived: true }),
+      // A sealed twin stacks with the first black spool; a brand with fewer than three spools goes to "Other".
+      spool('aa00000000000006', 'Black PETG', 'PETG', '#16191D', 1000, { used: 0 }),
+      spool('aa00000000000007', 'Sunlu PETG Orange', 'PETG', '#FB8C00', 410, { brand: 'Sunlu' }),
+      // No colour in the name: its row is labelled with a colour word.
+      spool('aa00000000000008', '', 'PETG', '#7E57C2', 250, { brand: 'Sunlu' }),
     ]
     spoolSlots = ['aa00000000000001', 'aa00000000000002', '', 'aa00000000000003', ''].map(id => ({
       spool: id,
@@ -185,9 +190,10 @@ export function previewPlugin(): Plugin {
             ? {
                 status: active && slot === 0 ? 2 : 1,
                 type: 'PLA',
-                name: 'PLA',
+                // Slot 2 reports an RFID spool: a brand and a product line besides the type.
+                name: slot === 1 ? 'PLA Matte' : 'PLA',
                 color: trayColors[slot],
-                brand: '',
+                brand: slot === 1 ? 'ELEGOO' : '',
                 code: '',
               }
             : null,

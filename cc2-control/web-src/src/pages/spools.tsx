@@ -1,5 +1,7 @@
-import { useRef, useState } from 'preact/hooks'
+import { useMemo, useRef, useState } from 'preact/hooks'
+import { ChevronDown, History as HistoryIcon, Pencil, Scale } from 'lucide-preact'
 import { cn } from '@/lib/utils'
+import { ls } from '@/lib/store'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
@@ -15,6 +17,7 @@ import { printer, view } from '@/lib/state'
 import {
   adjustSpool,
   assignSpool,
+  colourWord,
   deleteSpool,
   EXTERNAL,
   findSpool,
@@ -22,15 +25,20 @@ import {
   g,
   gramsFor,
   isLow,
+  isSealed,
+  matches,
   openChooser,
+  percent,
   refreshSpools,
   type Spool,
   type SpoolEvent,
   type SpoolLibrary,
   type SpoolSlot,
+  type SpoolStack,
   saveSpool,
   setTracking,
   slotOf,
+  spoolHierarchy,
   spoolLabel,
   spools,
 } from '@/lib/spools'
@@ -156,6 +164,7 @@ const SlotCard = ({ lib, s, busy, act }: { lib: SpoolLibrary; s: SpoolSlot; busy
       ) : (
         <span class="text-xs text-muted">{t(s.question ? 'spools.question_hint' : 'spools.no_spool')}</span>
       )}
+      {external && <span class="text-xs text-muted">{t('spools.external_hint')}</span>}
       <div class="mt-auto flex flex-wrap gap-2 pt-1">
         <Button
           class="text-xs"
@@ -262,85 +271,154 @@ const History = ({ lib, events, spool }: { lib: SpoolLibrary; events: SpoolEvent
     <Notice>{t('spools.no_history')}</Notice>
   )
 
-const SpoolCard = ({
+const kg = (grams: number) => (grams / 1000).toFixed(1)
+// Compact buttons for the inventory rows; `!` wins over the Button's own size classes.
+const small = 'min-h-7! px-2! py-0.5! text-xs'
+const icon = 'min-h-7! px-1.5! py-0.5!'
+const I = { size: 16, strokeWidth: 1 }
+
+// One spool of a colour, shown when its stack is opened. The stack above already names the brand, kind and
+// colour, so a row keeps to what tells identical spools apart: sealed or how much is left, the slot, the
+// last use and the note.
+const SpoolRow = ({
   lib,
   s,
   busy,
-  act,
   edit,
   weigh,
 }: {
   lib: SpoolLibrary
   s: Spool
   busy: boolean
-  act: Act
   edit: () => void
   weigh: () => void
 }) => {
   const [open, setOpen] = useState(false)
   const where = slotOf(lib, s.id)
+  const low = !s.archived && isLow(s)
+  const sealed = isSealed(s)
   return (
-    <div class="rounded-lg border border-edge bg-field/40 p-3" data-spool={s.id}>
-      <div class="flex flex-wrap items-center gap-2">
-        <Swatch color={s.color} class="size-5" />
-        <strong class="mr-auto min-w-0 text-sm [overflow-wrap:anywhere]">{spoolLabel(s)}</strong>
-        <Tag tone={where >= 0 ? 'ok' : 'default'}>{where >= 0 ? placeName(where) : t('spools.in_storage')}</Tag>
-        {!s.archived && isLow(s) && <Tag tone="warning">{t(s.remaining <= 0 ? 'spools.empty' : 'spools.low_tag')}</Tag>}
+    <div class="grid gap-1.5 rounded-md border border-edge bg-panel px-2.5 py-2" data-spool={s.id}>
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
+        {sealed && <Tag>{t('spools.sealed')}</Tag>}
+        {where >= 0 && <Tag tone="ok">{placeName(where)}</Tag>}
+        {low && <Tag tone="warning">{t(s.remaining <= 0 ? 'spools.empty' : 'spools.low_tag')}</Tag>}
+        <span class="whitespace-nowrap tabular-nums">
+          <b class={cn('text-[13px]', low && 'text-amber')}>{g(s.remaining)} g</b>
+          {!sealed && <span class="text-muted"> {tpl('spools.of_net', { net: g(s.net) })}</span>}
+        </span>
+        <span class="ml-auto flex gap-1">
+          <Button class={icon} title={t('spools.weigh')} aria-label={t('spools.weigh')} disabled={busy} onClick={weigh}>
+            <Scale {...I} />
+          </Button>
+          <Button class={icon} title={t('spools.edit')} aria-label={t('spools.edit')} disabled={busy} onClick={edit}>
+            <Pencil {...I} />
+          </Button>
+          <Button
+            class={icon}
+            title={t('common.history')}
+            aria-label={t('common.history')}
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            <HistoryIcon {...I} />
+          </Button>
+        </span>
       </div>
-      <div class="mt-1 text-xs text-muted [overflow-wrap:anywhere]">
-        {[s.name ? s.brand : '', s.material, s.color, `${s.diameter} mm`, `${s.density} g/cm³`]
-          .filter(Boolean)
-          .join(' · ')}
+      <div class="h-1 overflow-hidden rounded-full bg-edge">
+        <i class={cn('block h-full rounded-full', low ? 'bg-amber' : 'bg-cyan')} style={{ width: `${percent(s)}%` }} />
       </div>
-      <div class="mt-2">
-        <SpoolMeter spool={s} />
-      </div>
-      <div class="mt-1.5 flex flex-wrap gap-x-3 text-xs text-muted">
-        <span>{tpl('spools.last_used', { date: day(s.used) })}</span>
-        {s.tare > 0 && <span>{tpl('spools.tare_short', { grams: g(s.tare) })}</span>}
-      </div>
-      {s.note && <div class="mt-1 text-xs [overflow-wrap:anywhere]">{s.note}</div>}
-      <div class="mt-3 flex flex-wrap gap-2">
-        <Button class="text-xs" disabled={busy} onClick={weigh}>
-          {t('spools.weigh')}
-        </Button>
-        <Button class="text-xs" disabled={busy} onClick={edit}>
-          {t('spools.edit')}
-        </Button>
-        <Button class="text-xs" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {t('common.history')}
-        </Button>
-        <Button
-          class="text-xs"
-          variant="ghost"
-          disabled={busy}
-          onClick={() =>
-            act(async () => {
-              await saveSpool({ id: s.id, archived: !s.archived })
-              notify(t(s.archived ? 'spools.restored_toast' : 'spools.archived_toast'))
-            })
-          }
-        >
-          {t(s.archived ? 'spools.restore' : 'spools.archive')}
-        </Button>
-        <Button
-          class="text-xs"
-          variant="danger"
-          disabled={busy}
-          onClick={() =>
-            act(async () => {
-              if (!(await ask(tpl('spools.delete_confirm', { name: spoolLabel(s) }), true))) return
-              await deleteSpool(s.id)
-              notify(t('spools.deleted_toast'))
-            })
-          }
-        >
-          {t('common.delete')}
-        </Button>
-      </div>
-      {open && (
-        <div class="mt-3">
-          <History lib={lib} events={lib.log.filter(e => e.spool === s.id)} />
+      {(s.used > 0 || s.note) && (
+        <div class="flex min-w-0 gap-x-3 text-xs text-muted">
+          {s.used > 0 && <span class="whitespace-nowrap">{tpl('spools.last_used', { date: day(s.used) })}</span>}
+          {s.note && (
+            <span class="min-w-0 truncate" title={s.note}>
+              {s.note}
+            </span>
+          )}
+        </div>
+      )}
+      {open && <History lib={lib} events={lib.log.filter(e => e.spool === s.id)} />}
+    </div>
+  )
+}
+
+// Identical spools of one colour as a single row: how many, how full each one is, where they are.
+const StackRow = ({
+  lib,
+  stack,
+  busy,
+  expanded,
+  edit,
+  weigh,
+  copy,
+}: {
+  lib: SpoolLibrary
+  stack: SpoolStack
+  busy: boolean
+  expanded: boolean
+  edit: (s: Spool) => void
+  weigh: (s: Spool) => void
+  copy: (s: Spool) => void
+}) => {
+  const [open, setOpen] = useState(false)
+  const shown = open || expanded
+  const places = stack.spools.map(s => slotOf(lib, s.id)).filter(slot => slot >= 0)
+  const bars = stack.spools.slice(0, 10)
+  return (
+    <div class="rounded-md border border-edge bg-field/40" data-stack={stack.key}>
+      <button
+        type="button"
+        class="flex w-full flex-wrap items-center gap-x-2.5 gap-y-1 px-2.5 py-2 text-left hover:bg-field"
+        aria-expanded={shown}
+        onClick={() => setOpen(!open)}
+      >
+        <Swatch color={stack.color} class="size-5" />
+        <b class="min-w-0 text-[13px] [overflow-wrap:anywhere]">{stack.label || t(colourWord(stack.color))}</b>
+        {stack.spools.length > 1 && <span class="text-xs text-muted">×{stack.spools.length}</span>}
+        <span class="flex h-4 items-end gap-0.5" aria-hidden="true">
+          {bars.map(s => (
+            <i key={s.id} class="relative block h-4 w-1.5 overflow-hidden rounded-sm bg-edge">
+              <i
+                class={cn('absolute inset-x-0 bottom-0', isLow(s) ? 'bg-amber' : 'bg-cyan')}
+                style={{ height: `${percent(s)}%` }}
+              />
+            </i>
+          ))}
+          {stack.spools.length > bars.length && (
+            <span class="text-[11px] text-muted">+{stack.spools.length - bars.length}</span>
+          )}
+        </span>
+        <span class="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          {places.map(slot => (
+            <Tag key={slot} tone="ok">
+              {placeName(slot)}
+            </Tag>
+          ))}
+          {stack.low && <Tag tone="warning">{t('spools.low_tag')}</Tag>}
+          <b class="text-[13px] tabular-nums">{g(stack.grams)} g</b>
+          <ChevronDown
+            size={16}
+            strokeWidth={1.5}
+            class={cn('shrink-0 transition-transform', !shown && '-rotate-90')}
+          />
+        </span>
+      </button>
+      {shown && (
+        <div class="grid gap-1.5 border-t border-edge p-2">
+          {stack.spools.map(s => (
+            <SpoolRow key={s.id} lib={lib} s={s} busy={busy} edit={() => edit(s)} weigh={() => weigh(s)} />
+          ))}
+          {!stack.spools[0].archived && (
+            <Button
+              variant="ghost"
+              class={cn(small, 'justify-self-start')}
+              disabled={busy}
+              onClick={() => copy(stack.spools[0])}
+            >
+              {t('spools.add_same')}
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -349,16 +427,25 @@ const SpoolCard = ({
 
 const SpoolForm = ({
   spool,
+  template,
   busy,
   act,
   close,
 }: {
   spool: Spool | null
+  template: Spool | null
   busy: boolean
   act: Act
   close: () => void
 }) => {
-  const [draft, setDraft] = useState(() => draftFrom(spool))
+  // "Add another like this": the same spool, full.
+  const [draft, setDraft] = useState(() =>
+    spool
+      ? draftFrom(spool)
+      : template
+        ? { ...draftFrom(template), remaining: draftFrom(template).net }
+        : draftFrom(null)
+  )
   const save = () =>
     act(async () => {
       const problem = draftProblem(draft, !spool)
@@ -372,7 +459,38 @@ const SpoolForm = ({
       <h2 class="mb-4 text-xl font-semibold">{t(spool ? 'spools.edit_spool' : 'spools.new_spool')}</h2>
       <SpoolEditor draft={draft} set={setDraft} create={!spool} />
       {!spool && <p class="mt-3 text-xs text-muted">{t('spools.new_spool_storage')}</p>}
-      <div class="mt-5 flex justify-end gap-2.5">
+      <div class="mt-5 flex flex-wrap justify-end gap-2.5">
+        {spool && (
+          <span class="mr-auto flex flex-wrap gap-2">
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() =>
+                act(async () => {
+                  await saveSpool({ id: spool.id, archived: !spool.archived })
+                  notify(t(spool.archived ? 'spools.restored_toast' : 'spools.archived_toast'))
+                  close()
+                })
+              }
+            >
+              {t(spool.archived ? 'spools.restore' : 'spools.archive')}
+            </Button>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() =>
+                act(async () => {
+                  if (!(await ask(tpl('spools.delete_confirm', { name: spoolLabel(spool) }), true))) return
+                  await deleteSpool(spool.id)
+                  notify(t('spools.deleted_toast'))
+                  close()
+                })
+              }
+            >
+              {t('common.delete')}
+            </Button>
+          </span>
+        )}
         <Button onClick={close} disabled={busy}>
           {t('common.cancel')}
         </Button>
@@ -465,27 +583,56 @@ const Weigh = ({ spool, busy, act, close }: { spool: Spool; busy: boolean; act: 
   )
 }
 
+// Folded manufacturer sections are remembered per browser.
+const FOLDED = 'cc2-spools-folded'
+
+// Manufacturer > kind > colour > spool. Manufacturers with fewer than three spools share "Other".
 const Inventory = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: Act }) => {
   const [archived, setArchived] = useState(false)
-  const [editing, setEditing] = useState<Spool | 'new' | null>(null)
+  const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState<{ spool: Spool | null; template: Spool | null } | null>(null)
   const [weighing, setWeighing] = useState<Spool | null>(null)
-  const loaded = (s: Spool) => (slotOf(lib, s.id) >= 0 ? 0 : 1)
-  const list = lib.spools
-    .filter(s => s.archived === archived)
-    .sort((a, b) => loaded(a) - loaded(b) || b.used - a.used || b.created - a.created)
+  const [folded, setFolded] = useState<string[]>(() => {
+    try {
+      const list = JSON.parse(ls.get(FOLDED) || '[]')
+      return Array.isArray(list) ? list.map(String) : []
+    } catch {
+      return []
+    }
+  })
+  const fold = (key: string) => {
+    const next = folded.includes(key) ? folded.filter(k => k !== key) : [...folded, key]
+    setFolded(next)
+    ls.set(FOLDED, JSON.stringify(next))
+  }
+  const pool = lib.spools.filter(s => s.archived === archived)
+  const list = pool.filter(s => matches(s, query))
+  const brands = useMemo(() => spoolHierarchy(list), [lib, archived, query])
+  const stacks = brands.flatMap(b => b.kinds.flatMap(k => k.stacks))
+  const searching = Boolean(query.trim())
   const count = (a: boolean) => lib.spools.filter(s => s.archived === a).length
+  const handlers = {
+    edit: (s: Spool) => setEditing({ spool: s, template: null }),
+    weigh: (s: Spool) => setWeighing(s),
+    copy: (s: Spool) => setEditing({ spool: null, template: s }),
+  }
   return (
     <Card>
       <CardHead
         icon="layers"
         title="spools.inventory"
         end={
-          <Button variant="primary" class="text-xs" disabled={busy} onClick={() => setEditing('new')}>
+          <Button
+            variant="primary"
+            class="text-xs"
+            disabled={busy}
+            onClick={() => setEditing({ spool: null, template: null })}
+          >
             {t('spools.add')}
           </Button>
         }
       />
-      <div class="mb-3 flex gap-1.5">
+      <div class="mb-2 flex flex-wrap items-center gap-1.5">
         {[false, true].map(a => (
           <Button
             key={String(a)}
@@ -497,23 +644,94 @@ const Inventory = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: 
             {tpl(a ? 'spools.archived_n' : 'spools.active_n', { n: count(a) })}
           </Button>
         ))}
+        <Input
+          type="search"
+          class="w-full cc2-sm:ml-auto cc2-sm:w-64"
+          placeholder={t('spools.search')}
+          aria-label={t('spools.search')}
+          value={query}
+          onInput={e => setQuery(e.currentTarget.value)}
+        />
       </div>
-      <div class="grid gap-2.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
-        {list.map(s => (
-          <SpoolCard
-            key={s.id}
-            lib={lib}
-            s={s}
-            busy={busy}
-            act={act}
-            edit={() => setEditing(s)}
-            weigh={() => setWeighing(s)}
-          />
-        ))}
+      {pool.length > 0 && (
+        <p class="mb-3 text-xs text-muted">
+          {tpl('spools.summary', {
+            n: pool.length,
+            kg: kg(pool.reduce((sum, s) => sum + Math.max(0, s.remaining), 0)),
+            low: archived
+              ? 0
+              : spoolHierarchy(pool)
+                  .flatMap(b => b.kinds.flatMap(k => k.stacks))
+                  .filter(s => s.low).length,
+          })}
+        </p>
+      )}
+      <div class="grid gap-2.5">
+        {brands.map(brand => {
+          const key = brand.other ? '~other' : brand.key
+          const header = brand.label || brand.other
+          const open = searching || !header || !folded.includes(key)
+          return (
+            <section key={key} class="rounded-lg border border-edge" data-brand={brand.other ? 'other' : brand.key}>
+              {header && (
+                <button
+                  type="button"
+                  class="flex w-full flex-wrap items-baseline gap-x-2.5 px-3 py-2.5 text-left hover:bg-field"
+                  aria-expanded={open}
+                  onClick={() => fold(key)}
+                >
+                  <ChevronDown
+                    size={16}
+                    strokeWidth={1.5}
+                    class={cn('shrink-0 self-center transition-transform', !open && '-rotate-90')}
+                  />
+                  <b class="text-sm">{brand.other ? t('spools.other_brands') : brand.label}</b>
+                  <span class="text-xs text-muted">
+                    {tpl('spools.count_weight', { n: brand.count, kg: kg(brand.grams) })}
+                  </span>
+                </button>
+              )}
+              {open && (
+                <div class={cn('grid gap-3.5 p-3', header && 'border-t border-edge')}>
+                  {brand.kinds.map(kind => (
+                    <div key={kind.key} class="grid gap-1.5" data-kind={kind.key}>
+                      <div class="flex flex-wrap items-baseline gap-x-2 text-xs">
+                        <b class="text-[13px]">{kind.label}</b>
+                        <span class="text-muted">
+                          {tpl('spools.count_weight', { n: kind.count, kg: kg(kind.grams) })}
+                        </span>
+                      </div>
+                      <div class="grid items-start gap-1.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
+                        {kind.stacks.map(stack => (
+                          <StackRow
+                            key={stack.key}
+                            lib={lib}
+                            stack={stack}
+                            busy={busy}
+                            expanded={searching}
+                            {...handlers}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        })}
       </div>
-      {!list.length && <Notice>{t(archived ? 'spools.no_archived' : 'spools.empty_list')}</Notice>}
+      {!stacks.length && (
+        <Notice>{t(searching ? 'spools.no_match' : archived ? 'spools.no_archived' : 'spools.empty_list')}</Notice>
+      )}
       {editing && (
-        <SpoolForm spool={editing === 'new' ? null : editing} busy={busy} act={act} close={() => setEditing(null)} />
+        <SpoolForm
+          spool={editing.spool}
+          template={editing.template}
+          busy={busy}
+          act={act}
+          close={() => setEditing(null)}
+        />
       )}
       {weighing && <Weigh spool={weighing} busy={busy} act={act} close={() => setWeighing(null)} />}
     </Card>

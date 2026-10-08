@@ -324,6 +324,10 @@ extruder. CC2 Control compares every tray report with the previous one:
 Switching tracking on checks every binding against the trays, so spools swapped while it was off are asked
 about again instead of being charged for another spool's filament.
 
+A tray report fits a spool when the colour is the same and the spool's material equals the tray's type or
+name, or is a product line of that type: `PLA Matte`, `PLA-CF` and `PLA+` fit a tray that reports `PLA`.
+A change to a filament that still fits the bound spool asks nothing.
+
 Endpoints (changes are `POST` with `key=value` lines and need `X-CC2-Request: 1`):
 
 - `GET /api/spools` returns `enabled`, every slot with its spool, the spool it held before (`last`), an open
