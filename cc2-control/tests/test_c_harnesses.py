@@ -31,6 +31,7 @@ HARNESSES = {
     "test_pid_api.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,
+    "test_spools.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
 }
 

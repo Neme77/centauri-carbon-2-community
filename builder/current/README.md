@@ -25,7 +25,7 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`54c5ec6657f1d42b83451c80c5b0209c818c9aab`, incorporating the validated
+`19899cad9d447fc901e394779a54cdcb6f963ef5`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,
@@ -40,6 +40,7 @@ A bed mesh calibration from Bed Levelling homes X, Y and Z first when the printe
 Motors left energised after homing or calibration are released after ten idle minutes, so the mainboard fan stops.
 Telemetry asks the printer only when its stream falls silent, and the Job page reads object state from that stream, because the firmware keeps every request on its local socket in memory.
 Bed Levelling keeps a build-plate library with each plate's mesh and Z offset; mounting a plate whose mesh is not in its side's slot writes that slot and restarts the printer.
+Spools tracks filament spools per Canvas slot from the printer's measured extrusion and asks which spool new filament belongs to.
 The runtime identity remains 1.1.31, matching the printer-tested build.
 Preparation runs the complete component host suite before the ARM build and
 records source commit, archive checksum and every installed file checksum.

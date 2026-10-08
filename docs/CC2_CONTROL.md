@@ -133,6 +133,19 @@ User-defined material presets are stored under `/opt/usr/cc2-control`.
 
 The G-code library lists printable files from internal memory and USB storage, including nested folders and thumbnails where available. USB jobs are validated and imported before the printer's native print-start workflow is used.
 
+## Spools
+
+**Spools** keeps a filament inventory and knows which spool sits in which Canvas slot or on the external spool holder. It is off until **Turn on spool tracking** is pressed on that page; the inventory can be edited either way.
+
+- While printing, each spool is charged with the filament the printer actually extrudes from its slot, as the printer service reports it, including purges between colours and prints that are cancelled or fail. Slicer estimates are not used for the count.
+- Inserting filament into a slot, or changing a slot's filament on the printer screen, opens **Which spool is it?** on every open page: a spool from the inventory, a new one with the filament the printer reports, or no spool. It suggests the spool that was there and the spools whose maker, material and colour match what is set for the slot on the printer; every other spool is one click away, grouped as in the inventory and searchable. Filament put back after even a few seconds asks again, as another spool can go in that fast. The question can wait: what the slot extrudes meanwhile is charged to the spool chosen later. After choosing a material and colour on the Canvas page, the same question follows. Choosing a spool whose filament differs from the slot's can also write the spool's maker, product line and colour to the slot.
+- A spool that runs out while printing is set to zero once the printer moves on; a spool taken out of the printer goes back to storage with its remaining weight.
+- **Weigh** corrects a spool: the scale reading minus its empty spool weight, or the filament left. Each spool keeps a history of prints, run-outs and corrections, and warns when it falls below its warning level.
+- The inventory is grouped by manufacturer, then by kind (the material as entered, such as PLA Matte or PETG) and colour. Manufacturers with fewer than three spools share **Other**. Identical spools form one row with their count, fill levels, slots and total weight; opening the row lists them, opened spools first, emptiest first. A colour is marked as running low only when all its spools together fall below the warning level. **Add another like this** copies a spool as a new full one, and the slot question offers identical sealed spools once.
+- The print dialog shows the spool each tool would draw from, its remaining weight and, when the file states its filament length, roughly how much the print needs.
+
+The inventory is kept in `spools.json` under `/opt/usr/cc2-control`. The count is only as good as the remaining weight entered for each spool; weigh a spool to correct it. Moves made while a print is paused, such as a manual filament change, are not counted, nor is filament loaded outside a print.
+
 ## Printer sub-states and refusals
 
 Next to the machine state, the dashboard, Job and Control pages and the top bar (on wider screens) show what the printer is doing within it, for example **Printing · Heating bed**, **Printing · Paused** or **Manual homing · Failed**. The meaning of each vendor sub-state code depends on the state, as in ELEGOO's SDK.

@@ -85,7 +85,8 @@ def main():
         (usb / "folder").mkdir(parents=True)
         (internal / "cube.gcode").write_text("G28\n", encoding="ascii")
         (internal / "multicolour.gcode").write_text(
-            "; filament_colour = #FF0000;#00FF00\n; filament_type = PLA;PETG\n; T9 and BED_MESH_CALIBRATE FROM_SLICER=1 in comments are ignored\nT0\nG1 X1\nT1\nG1 X2\n",
+            "; filament_colour = #FF0000;#00FF00\n; filament_type = PLA;PETG\n; T9 and BED_MESH_CALIBRATE FROM_SLICER=1 in comments are ignored\nT0\nG1 X1\nT1\nG1 X2\n"
+            "; filament used [mm] = 1.0, 2.0\n; filament used [mm] = 1234.56, 78.9\n",
             encoding="ascii",
         )
         (internal / "adaptive.gcode").write_text(
@@ -146,7 +147,7 @@ def main():
             )
             with urllib.request.urlopen(inspect, timeout=1) as response:
                 inspection = json.load(response)
-            assert inspection == {"tools": [0, 1], "multicolour": True, "adaptive_mesh": False, "filaments": [{"tool": 0, "color": "#FF0000", "material": "PLA"}, {"tool": 1, "color": "#00FF00", "material": "PETG"}]}
+            assert inspection == {"tools": [0, 1], "multicolour": True, "adaptive_mesh": False, "filaments": [{"tool": 0, "color": "#FF0000", "material": "PLA", "mm": 1234.6}, {"tool": 1, "color": "#00FF00", "material": "PETG", "mm": 78.9}]}
 
             inspect_adaptive = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/gcode-files/inspect",

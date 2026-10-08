@@ -16,6 +16,8 @@ assert '--preferences "$BASE/ui-preferences.json"' in hotfix
 assert '--preferences "$PERSIST/ui-preferences.json"' in firmware
 assert '--plates "$BASE/bed-plates.json"' in hotfix, "persistent launcher does not keep the plate library"
 assert '--plates "$PERSIST/bed-plates.json"' in firmware, "firmware launcher does not keep the plate library"
+assert '--spools "$BASE/spools.json"' in hotfix, "persistent launcher does not keep the spool library"
+assert '--spools "$PERSIST/spools.json"' in firmware, "firmware launcher does not keep the spool library"
 mount_guard = "while ! grep -q ' /opt/usr ' /proc/mounts; do"
 assert mount_guard in firmware, "firmware launcher does not wait for the persistent UDISK mount"
 assert firmware.index(mount_guard) < firmware.index('mkdir -p "$PERSIST"'), (

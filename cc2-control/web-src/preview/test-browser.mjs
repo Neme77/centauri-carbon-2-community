@@ -42,7 +42,7 @@ try {
     await page.setViewportSize({ width, height })
     const rail = page.locator('#cc2-navigation button[aria-expanded]')
     if (await rail.isVisible() && await rail.getAttribute('aria-expanded') !== 'true') { await rail.click(); await page.waitForTimeout(200) }
-    for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']) {
+    for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'spools', 'console', 'settings']) {
       if (await page.locator('#cc2-menu-toggle').isVisible()) await page.locator('#cc2-menu-toggle').click()
       await page.locator(`a[href="#${tab}"]`).click()
       await page.waitForTimeout(150)
@@ -62,7 +62,7 @@ try {
     await rail.click()
     await page.waitForTimeout(200)
     assert.equal(await page.locator('header').evaluate(e => Math.round(e.getBoundingClientRect().height)), 60)
-    for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']) {
+    for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'spools', 'console', 'settings']) {
       await page.locator(`a[href="#${tab}"]`).click()
       await page.waitForTimeout(150)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} collapsed ${tab}: overflow`)
@@ -76,7 +76,7 @@ try {
   if (await rail.getAttribute('aria-expanded') !== 'true') await rail.click()
   await page.waitForTimeout(200)
   await page.locator('#cc2-navigation button[aria-expanded]').click()
-  for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'console', 'settings']) {
+  for (const tab of ['dashboard', 'control', 'job', 'files', 'history', 'bed', 'canvas', 'spools', 'console', 'settings']) {
     await page.locator(`a[href="#${tab}"]`).click()
     await page.waitForTimeout(200)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `Collapsed sidebar: ${tab} overflow`)

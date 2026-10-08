@@ -7,16 +7,19 @@ import { errText, notify, post, request, toast } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { canvasColour, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
-import { openPage } from '@/lib/state'
+import { openPage, printer } from '@/lib/state'
+import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
 
 type Pending = {
   storage: string
   path: string
   tools: number[]
-  filaments: { tool: number; color: string; material: string }[]
+  // mm: the slicer's filament length for the tool, when the file states it.
+  filaments: { tool: number; color: string; material: string; mm?: number }[]
   meshAvailable: { A: boolean; B: boolean }
   trays: any[]
   connected: boolean
+  spools: SpoolLibrary | null
 }
 const pending = store({ job: null as Pending | null })
 let activeGeneration = 0,
@@ -40,10 +43,11 @@ export async function startFile(storage: string, path: string) {
   fileAnalysisPending = true
   notify(t('print.analysing_file'))
   try {
-    const [inspection, canvasData, meshData] = await Promise.all([
+    const [inspection, canvasData, meshData, library] = await Promise.all([
       post('/api/gcode-files/inspect', `${storage}\n${path}`),
       request('/api/canvas').catch(() => ({ available: false })),
       request('/api/mesh').catch(() => null),
+      printer.get().data?.spools?.enabled ? request('/api/spools').catch(() => null) : null,
     ])
     const tools: number[] = Array.isArray(inspection.tools) && inspection.tools.length ? inspection.tools : [0]
     const model = canvasModel(canvasData),
@@ -57,6 +61,7 @@ export async function startFile(storage: string, path: string) {
         meshAvailable: { A: Boolean(profiles.default), B: Boolean(profiles.default1) },
         trays: model?.trays || [],
         connected: Boolean(model?.connected),
+        spools: library?.available && library.enabled ? library : null,
       },
     })
     toast.set(s => ({ ...s, text: '' }))
@@ -117,6 +122,19 @@ const Form = ({ job }: { job: Pending }) => {
   const available = job.meshAvailable[side],
     forced = !available,
     calibrating = forced || calibrate
+  // Spool tracking: the spool each tool would draw from, and whether it holds what the slicer expects.
+  const supply = (tool: number) => {
+    const lib = job.spools
+    const slot = useCanvas ? (map[tool] === undefined || map[tool] === '' ? -1 : Number(map[tool])) : EXTERNAL
+    if (!lib || slot < 0) return null
+    const spool = findSpool(lib, lib.slots[slot]?.spool || '')
+    const mm = Number(job.filaments.find(f => f.tool === tool)?.mm)
+    return { spool, need: spool && mm > 0 ? spoolGrams(spool, mm) : null }
+  }
+  const short = job.tools.some(tool => {
+    const s = supply(tool)
+    return s?.spool && s.need !== null && s.need > s.spool.remaining
+  })
 
   const close = () => {
     if (busy) return
@@ -215,23 +233,39 @@ const Form = ({ job }: { job: Pending }) => {
                 )
               })()}
             </div>
-            <Select
-              disabled={!useCanvas}
-              value={map[tool] || ''}
-              onChange={e => {
-                const v = e.currentTarget.value
-                setMap(m => ({ ...m, [tool]: v }))
-              }}
-            >
-              <option value="">{t('print.choose_a_spool')}</option>
-              {[0, 1, 2, 3].map(i => (
-                <option key={i} value={i}>
-                  {tpl('common.slot_n', { n: i + 1 })} · {slotLabel(tray(i))}
-                </option>
-              ))}
-            </Select>
+            <div class="grid gap-1">
+              <Select
+                disabled={!useCanvas}
+                value={map[tool] || ''}
+                onChange={e => {
+                  const v = e.currentTarget.value
+                  setMap(m => ({ ...m, [tool]: v }))
+                }}
+              >
+                <option value="">{t('print.choose_a_spool')}</option>
+                {[0, 1, 2, 3].map(i => (
+                  <option key={i} value={i}>
+                    {tpl('common.slot_n', { n: i + 1 })} · {slotLabel(tray(i))}
+                  </option>
+                ))}
+              </Select>
+              {(() => {
+                const s = supply(tool)
+                if (!s) return null
+                if (!s.spool) return <span class="text-xs text-muted">{t('spools.print_no_spool')}</span>
+                const vars = { name: spoolLabel(s.spool), remaining: g(s.spool.remaining) }
+                return s.need === null ? (
+                  <span class="text-xs text-muted">{tpl('spools.print_left', vars)}</span>
+                ) : (
+                  <span class={s.need > s.spool.remaining ? 'text-xs text-red' : 'text-xs text-muted'}>
+                    {tpl('spools.print_need', { ...vars, need: g(s.need) })}
+                  </span>
+                )
+              })()}
+            </div>
           </label>
         ))}
+        {short && <div class="my-2 text-[13px] text-red">{t('spools.print_short')}</div>}
         <div class="my-4 grid gap-3 sm:grid-cols-[1fr_1.35fr]">
           <fieldset class="rounded-lg border border-edge p-3">
             <legend class="px-1.5 font-semibold text-cyan">{t('print.build_plate_side')}</legend>

@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Spool,
   SquareTerminal,
   TriangleAlert,
   X,
@@ -37,6 +38,7 @@ const items: [Page, NavIcon, Key][] = [
   ['history', History, 'common.history'],
   ['bed', Grid3x3, 'common.bed_levelling'],
   ['canvas', CanvasIcon, 'common.canvas'],
+  ['spools', Spool, 'spools.title'],
   ['console', SquareTerminal, 'common.console'],
   ['settings', Settings, 'common.settings'],
 ]
@@ -132,6 +134,8 @@ const RestartPrinter = () => {
 export const Sidebar = () => {
   const { page } = nav.use()
   const h = health.use().data
+  // Trays whose new filament still waits for "which spool is this?".
+  const questions = printer.use().data?.spools?.questions?.length || 0
   const { collapsed } = menu.use()
   const { open } = mobileMenu.use()
   const aside = useRef<HTMLElement>(null)
@@ -202,12 +206,19 @@ export const Sidebar = () => {
               aria-current={page === p ? 'page' : undefined}
               title={t(label)}
               class={cn(
-                'flex h-13 items-center justify-center gap-3.5 border-l-4 border-transparent hover:bg-field',
+                'relative flex h-13 items-center justify-center gap-3.5 border-l-4 border-transparent hover:bg-field',
                 !collapsed && 'md:justify-start md:px-4',
                 page === p && 'border-cyan bg-field text-cyan'
               )}
             >
               <Glyph size={24} strokeWidth={1} class="shrink-0" />
+              {p === 'spools' && questions > 0 && (
+                <i
+                  class="absolute left-9 top-2.5 size-2.5 rounded-full bg-amber"
+                  title={t('spools.question_tag')}
+                  aria-hidden="true"
+                />
+              )}
               <span class={cn('hidden', !collapsed && 'md:inline')}>{t(label)}</span>
             </a>
           ))}

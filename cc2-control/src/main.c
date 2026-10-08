@@ -86,6 +86,7 @@ static const char *material_presets_path = "./material-presets.json";
 static const char *mqtt_config_path = "./cc2-control.conf";
 static const char *ui_preferences_path = "./ui-preferences.json";
 static const char *plates_path = "./bed-plates.json";
+static const char *spools_path = "./spools.json";
 static const char *printer_autosave_path = "/opt/usr/cfg/autosave.cfg";
 static const char *gcode_internal_root = GCODE_INTERNAL_ROOT;
 static const char *gcode_usb_root = GCODE_USB_ROOT;
@@ -289,7 +290,8 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"persistent_ui_preferences\":true,"
             "\"print_history\":true,"
             "\"canvas_auto_refill\":true,"
-            "\"bed_plates\":true"
+            "\"bed_plates\":true,"
+            "\"spool_tracking\":true"
         "},"
         "\"endpoints\":{"
             "\"printer\":\"/api/printer\","
@@ -300,6 +302,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"preferences\":\"/api/preferences\","
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
+            "\"spools\":\"/api/spools\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
         "\"runtime\":{"
@@ -1352,16 +1355,43 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL])
     return 0;
 }
 
+/* "; filament used [mm] = a, b, ...": the slicer's length per tool (OrcaSlicer and
+ * PrusaSlicer write it near the end). A later line replaces an earlier one. */
+static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOOLS_MAX]) {
+    static const char marker[] = "filament used [mm]";
+    double values[GCODE_TOOLS_MAX];
+    int count = 0;
+    for (comment++; *comment == ' ' || *comment == '\t'; comment++) {}
+    if (strncmp(comment, marker, sizeof(marker) - 1)) return;
+    for (comment += sizeof(marker) - 1; *comment == ' ' || *comment == '\t'; comment++) {}
+    if (*comment++ != '=') return;
+    while (count < GCODE_TOOLS_MAX) {
+        char *end; errno = 0;
+        double value = strtod(comment, &end);
+        if (end == comment || errno || !isfinite(value) || value < 0 || value > 1e9) return;
+        values[count++] = value;
+        while (*end == ' ' || *end == '\t') end++;
+        if (*end != ',') { if (*end && *end != '\r' && *end != '\n') return; break; }
+        comment = end + 1;
+    }
+    for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool) lengths[tool] = tool < count ? values[tool] : -1;
+}
+
+/* `lengths`, when given, receives each tool's slicer filament length in mm, or -1. */
 static int gcode_detect_tools(const char *root, const char *relative,
-                              int tools[GCODE_TOOLS_MAX], size_t *tool_count) {
+                              int tools[GCODE_TOOLS_MAX], size_t *tool_count, double *lengths) {
     char path[PATH_MAX_LOCAL * 2], line[2048];
     if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
     FILE *file = fopen(path, "r");
     if (!file) return -1;
     int present[GCODE_TOOLS_MAX] = {0};
+    if (lengths) for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool) lengths[tool] = -1;
     while (fgets(line, sizeof(line), file)) {
         char *comment = strchr(line, ';');
-        if (comment) *comment = '\0';
+        if (comment) {
+            if (lengths) gcode_filament_lengths(comment, lengths);
+            *comment = '\0';
+        }
         for (char *cursor = line; *cursor; ++cursor) {
             if ((*cursor != 'T' && *cursor != 't') ||
                 (cursor != line && !isspace((unsigned char)cursor[-1]))) continue;
@@ -1511,7 +1541,8 @@ static void gcode_inspect_response(int fd, const char *body, size_t body_len) {
     }
     (void)media;
     int tools[GCODE_TOOLS_MAX], adaptive = 0; size_t count = 0;
-    if (gcode_detect_tools(root, filename, tools, &count) != 0) {
+    double lengths[GCODE_TOOLS_MAX];
+    if (gcode_detect_tools(root, filename, tools, &count, lengths) != 0) {
         const char *error = "{\"error\":\"Cannot inspect the G-code file\"}\n";
         analysis_respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
@@ -1541,11 +1572,13 @@ static void gcode_inspect_response(int fd, const char *body, size_t body_len) {
     if (length < 0 || (size_t)length >= sizeof(response) - used) return;
     used += (size_t)length;
     for (size_t index = 0; index < count; index++) {
-        int tool = tools[index]; char material[130];
+        int tool = tools[index]; char material[130], mm[32] = "";
         json_escape(material, sizeof(material), filaments[tool].material);
+        /* The slicer's filament length is only sent when the file states it. */
+        if (lengths[tool] >= 0) snprintf(mm, sizeof(mm), ",\"mm\":%.1f", lengths[tool]);
         length = snprintf(response + used, sizeof(response) - used,
-            "%s{\"tool\":%d,\"color\":\"%s\",\"material\":\"%s\"}",
-            index ? "," : "", tool, filaments[tool].color, material);
+            "%s{\"tool\":%d,\"color\":\"%s\",\"material\":\"%s\"%s}",
+            index ? "," : "", tool, filaments[tool].color, material, mm);
         if (length < 0 || (size_t)length >= sizeof(response) - used) return;
         used += (size_t)length;
     }
@@ -1830,7 +1863,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     }
     if (slot_count) {
         int detected[GCODE_TOOLS_MAX]; size_t detected_count = 0;
-        if (gcode_detect_tools(root, filename, detected, &detected_count) != 0 ||
+        if (gcode_detect_tools(root, filename, detected, &detected_count, NULL) != 0 ||
             detected_count != slot_count) {
             const char *error = "{\"accepted\":false,\"error\":\"Canvas mapping does not match this G-code\"}\n";
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
@@ -2198,6 +2231,8 @@ static void camera_claim_response(int fd, const char *body, size_t length) {
         respond(fd, 200, "OK", "application/json; charset=utf-8", reply, (size_t)n);
 }
 
+static void spools_summary(char *out, size_t cap);
+
 static void printer_response(int fd, const mqtt_client *mqtt) {
     /* Render from the two caches without copying MQTT transport/history buffers. */
     double live;
@@ -2270,6 +2305,8 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     char viewer[sizeof(camera_viewer)+2];
     if(camera_viewer[0])snprintf(viewer,sizeof(viewer),"\"%s\"",camera_viewer);
     else snprintf(viewer,sizeof(viewer),"null");
+    char spool_state[128];
+    spools_summary(spool_state,sizeof(spool_state));
     int length=snprintf(body,sizeof(body),
         "{\"connected\":%s,\"messages\":%lu,\"last_message_age\":%ld,"
         "\"extruder\":{\"temperature\":%s,\"target\":%s},"
@@ -2283,12 +2320,13 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
-        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",printer_report,printer_error,viewer);
+        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
+        printer_error,viewer);
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -2296,7 +2334,8 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
 static void uds_response(int fd){
     static const char *names[U_FIELDS]={"nozzle_temperature","nozzle_target","bed_temperature","bed_target",
         "controller_fan","heater_fan","part_fan","fan1","controller_rpm","heater_rpm","part_rpm","fan1_rpm",
-        "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed","z_offset"};
+        "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed","z_offset",
+        "filament_used","canvas_channel"};
     char body[2048];json_builder b={body,0,sizeof(body),0};
     json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"connections\":%lu,\"disconnects\":%lu,\"last_disconnect\":\"%s\",\"last_errno\":%d,\"ignored_messages\":%lu,\"values\":{",
         telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages,
@@ -2306,7 +2345,10 @@ static void uds_response(int fd){
         json_builder_printf(&b,"%s\"%s\":",i?",":"",names[i]);
         if(have)json_builder_printf(&b,"%.6f",value);else json_builder_printf(&b,"null");
     }
-    json_builder_printf(&b,"}}\n");
+    const char *state=uds_print_state(&telemetry);
+    json_builder_printf(&b,"},\"print_state\":");
+    if(state)json_builder_printf(&b,"\"%s\"",state);else json_builder_printf(&b,"null");
+    json_builder_printf(&b,"}\n");
     if(!b.failed)respond(fd,200,"OK","application/json",body,b.length);
 }
 
@@ -2800,6 +2842,7 @@ static void mesh_response(int fd) {
 }
 
 #include "plates.h"
+#include "spools.h"
 
 static void serve_index(int fd, const char *web_root) {
     char path[PATH_MAX_LOCAL];
@@ -3470,6 +3513,20 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_mount_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/unmount")==0) {
         plates_unmount_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spools")==0) {
+        spools_get_response(fd,mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/enable")==0) {
+        spools_enable_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/save")==0) {
+        spools_save_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/delete")==0) {
+        spools_delete_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/assign")==0) {
+        spools_assign_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/dismiss")==0) {
+        spools_dismiss_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/adjust")==0) {
+        spools_adjust_response(fd,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/pid")==0) {
         pid_status_response(fd,console);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/console")==0) {
@@ -3507,11 +3564,12 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--presets") == 0 && i + 1 < argc) material_presets_path = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
+        else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
         else if (strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) printer_autosave_path = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--spools FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
             return 2;
         }
     }
@@ -3536,6 +3594,8 @@ int main(int argc, char **argv) {
     uds_init(&telemetry);
     plates_load();
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
+    spools_load();
+    if (!spools_available) fprintf(stderr, "Spool library disabled: %s (%s)\n", spools_error, spools_path);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
         setup_mode = 1;
@@ -3591,6 +3651,7 @@ int main(int argc, char **argv) {
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
         if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
         idle_motors_tick(&mqtt,&console);
+        spools_tick(&mqtt);
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
         for(int i=0;i<HTTP_PENDING_MAX;i++){
             http_pending *p=&pending[i];if(p->fd<0)continue;
@@ -3644,6 +3705,7 @@ int main(int argc, char **argv) {
     }
     for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0)close(pending[i].fd);
     free(pending);
+    spools_flush();
     object_query_close();
     uds_close(&telemetry);
     panda_stop(&panda);

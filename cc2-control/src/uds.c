@@ -11,7 +11,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003"
+static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"state\",\"info\",\"print_duration\",\"total_duration\",\"filament_used\"],\"canvas_dev\":[\"active_cid\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003"
  "{\"id\":13,\"method\":\"gcode/subscribe_report\",\"params\":{\"response_template\":{\"method\":\"cc2_report\"}}}\003";
 static const char heartbeat[]="{\"id\":12,\"method\":\"info\",\"params\":{}}\003";
 static double elapsed(struct timespec a,struct timespec b){return (double)(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/1e9;}
@@ -92,6 +92,14 @@ static int filename_read(const char *o,const char *e,char *out,size_t cap){
  }
  out[n]=0;return 1;
 }
+/* A short lowercase word, such as print_stats.state; anything else is ignored. */
+static int word_read(const char *o,const char *e,const char *key,char *out,size_t cap){
+ const char *p=json_member(o,e,key);if(!p||*p!='"')return 0;
+ const char *end=json_string_end(p,e);if(!end)return 0;
+ size_t n=0;
+ for(p++;p<end-1;p++){if(!((*p>='a'&&*p<='z')||*p=='_')||n+1>=cap)return 0;out[n++]=*p;}
+ out[n]=0;return n>0;
+}
 /* Keeps one exclude_object value as raw JSON, an array or string (open) or null,
  * so /api/exclude-objects can repeat it without querying the printer. A value
  * that does not fit is forgotten, which sends that route back to its query. */
@@ -118,7 +126,12 @@ static const struct {const char *object,*key;enum uds_field field;double min,max
  {"motion_report","live_velocity",U_LIVE_SPEED,0,10000},
  {"virtual_sdcard","progress",U_PROGRESS,0,1},
  {"print_stats","print_duration",U_DURATION,0,INT_MAX},
- {"print_stats","total_duration",U_TOTAL_DURATION,0,INT_MAX}
+ {"print_stats","total_duration",U_TOTAL_DURATION,0,INT_MAX},
+ /* Net extruder travel of the current print in mm; retractions can make it dip. */
+ {"print_stats","filament_used",U_FILAMENT_USED,-1e6,1e9},
+ /* The Canvas channel that feeds the extruder, -1 for none. It arrives with filament_used,
+  * so a colour change is seen when it happens; MQTT canvas_info reports it seconds later. */
+ {"canvas_dev","active_cid",U_CANVAS_CHANNEL,-1,31}
 };
 /* Preserve a bounded JSON string without decoding Unicode. Reject invalid escapes
  * and controls before reflecting it in an API response; oversize text becomes null. */
@@ -190,10 +203,14 @@ int uds_message(uds_client *c,const char *json,size_t length){
   int valid=filename_read(ps,pe,filename,sizeof(filename));
   if(!valid||(c->have_filename&&strcmp(filename,c->filename))){
    c->present&=~((UINT32_C(1)<<U_PROGRESS)|(UINT32_C(1)<<U_LAYER)|
-       (UINT32_C(1)<<U_DURATION)|(UINT32_C(1)<<U_TOTAL_DURATION));
+       (UINT32_C(1)<<U_DURATION)|(UINT32_C(1)<<U_TOTAL_DURATION)|(UINT32_C(1)<<U_FILAMENT_USED));
   }
   c->have_filename=valid;
   if(valid)strcpy(c->filename,filename);
+ }
+ char state[sizeof(c->print_state)];
+ if(ps&&(!older||!c->have_print_state)&&word_read(ps,pe,"state",state,sizeof(state))){
+  strcpy(c->print_state,state);c->have_print_state=1;
  }
  for(size_t i=0;i<sizeof(fields)/sizeof(fields[0]);i++){
   const char *oe;const char *o=json_member_object(status,se,fields[i].object,'{',&oe);double v;
@@ -242,7 +259,7 @@ int uds_message(uds_client *c,const char *json,size_t length){
 void uds_init(uds_client *c){memset(c,0,sizeof(*c));c->fd=-1;}
 void uds_close(uds_client *c){
  if(c->fd>=0)close(c->fd);
- c->fd=-1;c->ready=0;c->present=0;c->used=c->sent=0;c->have_filename=0;
+ c->fd=-1;c->ready=0;c->present=0;c->used=c->sent=0;c->have_filename=c->have_print_state=0;
  c->have_excluded_objects=c->have_current_object=0;
 }
 static void uds_disconnect(uds_client *c,const char *reason,int error){
@@ -253,6 +270,7 @@ int uds_value(const uds_client *c,enum uds_field field,double *out){
  if(!uds_fresh(c)||field<0||field>=U_FIELDS||!(c->present&(UINT32_C(1)<<field)))return 0;
  *out=c->values[field];return 1;
 }
+const char *uds_print_state(const uds_client *c){return uds_fresh(c)&&c->have_print_state?c->print_state:NULL;}
 void uds_tick(uds_client *c,const char *path){
  struct timespec now=now_mono();
  if(c->fd>=0&&elapsed(now,c->last_rx)>5)uds_disconnect(c,"receive_timeout",0);

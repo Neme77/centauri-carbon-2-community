@@ -17,6 +17,13 @@ notifications per second even when idle, because temperatures are reported to
 
 `GET /api/uds` exposes connection/freshness status and nullable values, including
 speed/flow factors, live velocity, fan fractions/RPM, progress and elapsed times.
+`print_stats.filament_used` (`filament_used`, net extruder travel of the current
+print in mm) feeds spool tracking; like the other job counters it is forgotten when
+the print's file name changes. Spool tracking also reads `canvas_dev.active_cid`
+(`canvas_channel`, the Canvas channel feeding the extruder, `-1` for none), which
+changes in the same stream as `filament_used` when the printer switches colours,
+and `print_stats.state` (`print_state`, a lowercase word such as `complete` or
+`cancelled`, or null) to log how a print ended.
 `--uds-socket PATH` selects a socket for testing; the default is
 `/tmp/elegoo_uds`.
 

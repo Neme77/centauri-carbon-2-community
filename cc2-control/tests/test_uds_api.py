@@ -56,6 +56,9 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         subscription = json.loads(request.split(b"\x03")[0])
         assert subscription["method"] == "objects/subscribe"
         assert "gcode/script" not in request.decode()
+        # Spool tracking charges filament_used to the Canvas channel reported in the same stream.
+        objects = subscription["params"]["objects"]
+        assert objects["canvas_dev"] == ["active_cid"] and {"state", "filament_used"} <= set(objects["print_stats"])
         send({"id": 11, "result": {"eventtime": 1, "status": {
             "extruder": {"temperature": 210, "target": 215},
             "fan": {"speed": 0.6, "rpm": 8700},
@@ -78,6 +81,12 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         }}})
         value = wait_for("/api/uds", lambda x: x["values"]["speed_factor"] == 1.3)
         assert value["values"]["nozzle_target"] == 215
+        assert value["values"]["canvas_channel"] is None and value["print_state"] is None
+        send({"method": "cc2_status", "params": {"eventtime": 2.5, "status": {
+            "canvas_dev": {"active_cid": 3}, "print_stats": {"state": "printing"}
+        }}})
+        value = wait_for("/api/uds", lambda x: x["values"]["canvas_channel"] == 3)
+        assert value["print_state"] == "printing"
         assert value["values"]["part_rpm"] == 8700
         # elegoo_printer keeps every request it receives in memory, so a stream
         # that keeps notifying is never probed; a silent one gets one info request.

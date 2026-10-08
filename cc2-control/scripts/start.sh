@@ -8,4 +8,5 @@ exec "$BASE/cc2-control" \
     --config "$BASE/cc2-control.conf" \
     --presets "$BASE/material-presets.json" \
     --preferences "$BASE/ui-preferences.json" \
-    --plates "$BASE/bed-plates.json"
+    --plates "$BASE/bed-plates.json" \
+    --spools "$BASE/spools.json"
