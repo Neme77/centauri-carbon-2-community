@@ -66,7 +66,7 @@ cp "$STAGE/web/locales/"*.json "$TARGET/web/locales/"
 cp "$STAGE/build-info.json" "$TARGET/build-info.json"
 chmod 755 "$TARGET/start.sh" "$TARGET/launch.sh" "$INIT"
 chmod 644 "$TARGET/web/index.html" "$TARGET/web/locales/"*.json "$TARGET/build-info.json"
-# Configuration, material presets, UI preferences and the plate library are never replaced.
+# Configuration, material presets, UI preferences, the plate library and the spool library are never replaced.
 for file in cc2-control start.sh launch.sh web/index.html build-info.json; do
     BEFORE=$(sha256sum "$STAGE/$file" | awk '{print $1}')
     AFTER=$(sha256sum "$TARGET/$file" | awk '{print $1}')

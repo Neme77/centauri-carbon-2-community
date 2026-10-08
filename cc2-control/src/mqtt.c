@@ -669,7 +669,7 @@ static void handle_publish(mqtt_client *c,unsigned char flags,const unsigned cha
         if(payload_len<sizeof(c->canvas_snapshot)){
             memcpy(c->canvas_snapshot,payload,payload_len);
             c->canvas_snapshot[payload_len]='\0';c->canvas_snapshot_len=payload_len;
-            c->canvas_discovery_complete=1;
+            c->canvas_discovery_complete=1;c->canvas_revision++;
         }else c->oversized_snapshots++;
     }
     update_state(c,payload,payload_len);

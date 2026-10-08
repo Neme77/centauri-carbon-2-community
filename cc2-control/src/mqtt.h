@@ -65,6 +65,7 @@ typedef struct {
     size_t diagnostic_len;
     char canvas_snapshot[8192];
     size_t canvas_snapshot_len;
+    unsigned long canvas_revision; /* counts captured snapshots, so readers can tell a new one */
     time_t last_canvas_request;
     unsigned int canvas_request_attempts;
     int canvas_discovery_complete;

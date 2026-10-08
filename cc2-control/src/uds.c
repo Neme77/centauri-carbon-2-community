@@ -11,7 +11,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003"
+static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"print_stats\":[\"filename\",\"info\",\"print_duration\",\"total_duration\",\"filament_used\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003"
  "{\"id\":13,\"method\":\"gcode/subscribe_report\",\"params\":{\"response_template\":{\"method\":\"cc2_report\"}}}\003";
 static const char heartbeat[]="{\"id\":12,\"method\":\"info\",\"params\":{}}\003";
 static double elapsed(struct timespec a,struct timespec b){return (double)(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/1e9;}
@@ -118,7 +118,9 @@ static const struct {const char *object,*key;enum uds_field field;double min,max
  {"motion_report","live_velocity",U_LIVE_SPEED,0,10000},
  {"virtual_sdcard","progress",U_PROGRESS,0,1},
  {"print_stats","print_duration",U_DURATION,0,INT_MAX},
- {"print_stats","total_duration",U_TOTAL_DURATION,0,INT_MAX}
+ {"print_stats","total_duration",U_TOTAL_DURATION,0,INT_MAX},
+ /* Net extruder travel of the current print in mm; retractions can make it dip. */
+ {"print_stats","filament_used",U_FILAMENT_USED,-1e6,1e9}
 };
 /* Preserve a bounded JSON string without decoding Unicode. Reject invalid escapes
  * and controls before reflecting it in an API response; oversize text becomes null. */
@@ -190,7 +192,7 @@ int uds_message(uds_client *c,const char *json,size_t length){
   int valid=filename_read(ps,pe,filename,sizeof(filename));
   if(!valid||(c->have_filename&&strcmp(filename,c->filename))){
    c->present&=~((UINT32_C(1)<<U_PROGRESS)|(UINT32_C(1)<<U_LAYER)|
-       (UINT32_C(1)<<U_DURATION)|(UINT32_C(1)<<U_TOTAL_DURATION));
+       (UINT32_C(1)<<U_DURATION)|(UINT32_C(1)<<U_TOTAL_DURATION)|(UINT32_C(1)<<U_FILAMENT_USED));
   }
   c->have_filename=valid;
   if(valid)strcpy(c->filename,filename);

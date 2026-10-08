@@ -7,7 +7,7 @@
 /* Owned by the HTTP/MQTT event loop; workers never access this cache. */
 enum uds_field { U_ET,U_EG,U_BT,U_BG,U_CF,U_HF,U_PF,U_AF,
  U_CRPM,U_HRPM,U_PRPM,U_ARPM,U_SPEED_FACTOR,U_FLOW_FACTOR,
- U_LIVE_SPEED,U_PROGRESS,U_LAYER,U_DURATION,U_TOTAL_DURATION,U_Z_OFFSET,U_FIELDS };
+ U_LIVE_SPEED,U_PROGRESS,U_LAYER,U_DURATION,U_TOTAL_DURATION,U_Z_OFFSET,U_FILAMENT_USED,U_FIELDS };
 typedef struct {
  int fd, ready;
  size_t used, sent;
