@@ -467,13 +467,12 @@ static void spools_canvas(const mqtt_client *mqtt, long long now) {
             s->seen.status = 0;
             spools_dirty = 1;
         } else if (!was && present) {
-            int back = (s->runout_ms || (s->absent_ms && now - s->absent_ms < SPOOL_ABSENT_MS)) &&
-                       spool_tray_same(&s->seen, t);
-            if (!back) {
-                if (s->runout_ms) spools_runout(i);
-                else if (s->absent_ms) spools_release(i, 1, "removed");
-                spools_ask(i, 1);
-            }
+            /* Filament inserted asks every time, however soon: another spool goes in within seconds, and the
+             * tray keeps reporting the filament it had until someone edits it. The question suggests the
+             * spool that was there. A spool that ran out is empty, whatever comes in after it. */
+            if (s->runout_ms) spools_runout(i);
+            else if (s->spool[0] || s->question) spools_release(i, 1, "removed");
+            spools_ask(i, 1);
             s->absent_ms = s->runout_ms = 0;
             s->seen = *t;
             spools_dirty = 1;

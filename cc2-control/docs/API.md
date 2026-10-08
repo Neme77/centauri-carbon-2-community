@@ -320,13 +320,15 @@ extruder. CC2 Control compares every tray report with the previous one:
 
 - filament inserted (0 → 1/2) or changed on the touchscreen opens a question for that tray, shown on every
   open page through `/api/printer` `spools.questions`. The tray stays unbound until it is answered; what it
-  extrudes meanwhile is kept (`question_mm`) and charged to the spool that is chosen;
+  extrudes meanwhile is kept (`question_mm`) and charged to the spool that is chosen. Filament put back
+  after any time out of the tray asks as well: another spool goes in within seconds, and the tray keeps
+  reporting the filament it had until someone edits it; the spool that was there is kept as `last`;
 - within 30 s of an assignment, a tray report counts as that spool's own filament, so writing the spool's
   material and colour to the tray asks nothing;
-- a tray that stays empty for 15 s gives its spool back to storage; an empty report shorter than that with
-  the same filament afterwards is ignored;
-- a tray that empties while it feeds a print (2 → 0) has run out: once the printer has moved to another tray
-  or the print has ended, its spool is set to zero and the log shows how far the count was off.
+- a tray that stays empty for 15 s gives its spool back to storage;
+- a tray that empties while it feeds a print (2 → 0) has run out: once the printer has moved to another tray,
+  the print has ended or new filament is put in, its spool is set to zero and the log shows how far the
+  count was off.
 
 Switching tracking on checks every binding against the trays, so spools swapped while it was off are asked
 about again instead of being charged for another spool's filament.

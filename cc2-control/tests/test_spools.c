@@ -334,10 +334,13 @@ static void test_questions(void) {
     const char *c = create("material=PETG\ncolor=#FFAA00\nnet=1000\ndensity=1.27");
     assign(1, a);
     enable();
-    /* Taken out while idle: back to storage after 15 s; quick blips are ignored. */
+    /* Taken out and put back within seconds still asks: another spool can go in that fast, and the tray keeps
+     * reporting the filament it had. The spool that was there is remembered for the answer. */
     tray_status[1] = 0; publish_trays(); tick();
     advance(5000); tray_status[1] = 1; publish_trays(); tick();
-    assert(!strcmp(spools.slots[1].spool, a) && !spools.slots[1].question);
+    assert(!spools.slots[1].spool[0] && spools.slots[1].question == 1 && !strcmp(spools.slots[1].last, a));
+    assign(1, a);
+    /* Taken out while idle: back to storage after 15 s. */
     tray_status[1] = 0; publish_trays(); tick(); advance(16000); tick();
     assert(!spools.slots[1].spool[0] && !strcmp(spools.slots[1].last, a) && near(spool_find(a)->remaining, 1000));
     /* New filament: a question, shown to every page through /api/printer. */
@@ -395,6 +398,21 @@ static void test_runout(void) {
     const spool_event *r = &spools.log[spools.log_count - 1], *p = &spools.log[spools.log_count - 2];
     assert(r->kind == 'r' && near(r->grams, -(40 - grams(a, 9500))) && p->kind == 'p' && near(p->mm, 9500) &&
            !strcmp(p->result, "runout"));
+    /* A new spool in the tray that ran out, before the printer moved on: the old one is still empty, and the
+     * new one is asked about although the tray reports the same filament. */
+    tray_status[0] = 1; publish_trays(); tick();
+    assert(spools.slots[0].question == 1 && !strcmp(spools.slots[0].last, a));
+    assign(0, b);
+    tray_status[0] = 2; publish_trays();
+    printer("printing", "long.gcode", 0); service("local/long.gcode", 9600, 960); tick();
+    tray_status[0] = 0; publish_trays(); tick();
+    assert(spools.slots[0].runout_ms && !strcmp(spools.slots[0].spool, b));
+    advance(5000); tray_status[0] = 1; publish_trays(); tick();
+    assert(near(spool_find(b)->remaining, 0) && !spools.slots[0].spool[0] && spools.slots[0].question == 1 &&
+           !strcmp(spools.slots[0].last, b) && spools.log[spools.log_count - 1].kind == 'r');
+    b = create("material=PLA\ncolor=#09CC3A\nnet=1000");
+    assign(1, b);
+    printer("printing", "long.gcode", 1);
     /* Unloaded first and then taken out is not a run-out. */
     tray_status[1] = 1; publish_trays(); tick();
     tray_status[1] = 0; publish_trays(); tick(); advance(16000); tick();
