@@ -14,6 +14,14 @@ Community firmware, local printer control and reproducible build tools for the *
 
 Release binaries, standalone updaters, source archives and checksums are kept with the corresponding GitHub Release. The canonical development source is kept directly on `develop`.
 
+## Next release candidate
+
+V4.3 integrates the experimental O0 callback runtime and all merged features
+through PR97, including spool inventory. It is in preparation, not a published
+or hardware-validated complete firmware. See [candidate notes](docs/RELEASE_CANDIDATE.md)
+for both installation routes and the original vendor retention issue.
+The download links below remain the previous published release.
+
 ## Downloads
 
 <p align="center">

@@ -16,7 +16,7 @@ idle_cold || { echo 'STOP: macchina non inattiva/fredda o dati non freschi'; exi
 PREFERENCES="$BACKUP/preferences-at-restore-$$"
 mkdir "$PREFERENCES"
 chmod 700 "$PREFERENCES"
-for name in cc2-control.conf material-presets.json ui-preferences.json; do
+for name in cc2-control.conf material-presets.json ui-preferences.json spools.json; do
     if [ -f "$TARGET/$name" ]; then cp -p "$TARGET/$name" "$PREFERENCES/$name"; fi
 done
 "$INIT" stop
@@ -25,7 +25,7 @@ sleep 3
 if pidof cc2-control elegoo_printer >/dev/null 2>&1; then echo 'STOP: processo ancora attivo'; exit 1; fi
 rm -rf "$TARGET" "$BASE"
 cp -a "$BACKUP/cc2-control" "$TARGET"
-for name in cc2-control.conf material-presets.json ui-preferences.json; do
+for name in cc2-control.conf material-presets.json ui-preferences.json spools.json; do
     rm -f "$TARGET/$name"
     if [ -f "$PREFERENCES/$name" ]; then cp -p "$PREFERENCES/$name" "$TARGET/$name"; fi
 done

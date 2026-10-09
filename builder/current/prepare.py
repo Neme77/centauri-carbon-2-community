@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, validate and stage CC2 Control for firmware V4.2."""
+"""Build, validate and stage CC2 Control for the current community firmware."""
 import hashlib
 import json
 from pathlib import Path
@@ -13,8 +13,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_COMMIT = '19899cad9d447fc901e394779a54cdcb6f963ef5'
-SOURCE_SHA256 = '27c509b8c4657209170539ccf0032857e4dcc1d64b1206d1297a377f25c580e6'
+SOURCE_COMMIT='b4093abf7f90a7769a8dc13bc04e6b132a172553'
+SOURCE_SHA256='eca9457d27a5c07cb2eaae2e9c7abe383990f3eab7db296952f2617d43dc59fb'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
@@ -70,7 +70,8 @@ def main():
         firmware_start = tree / 'firmware-integration/overlay/opt/inst/cc2-control/start.sh'
         copy_shell_lf(RUNTIME / 'start.sh', firmware_start)
         subprocess.run(['make', 'clean', 'test', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
-        subprocess.run(['make', 'clean', 'all'], cwd=tree, check=True)
+        compiler='/opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf-gcc'
+        subprocess.run(['make', 'clean', 'all', 'CROSS=', 'CC='+compiler], cwd=tree, check=True)
         binary = tree / 'dist/cc2-control/cc2-control'
         web = tree / 'dist/cc2-control/web/index.html'
         validate_arm_elf(binary)

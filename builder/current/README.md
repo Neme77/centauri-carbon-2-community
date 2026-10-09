@@ -25,7 +25,7 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`19899cad9d447fc901e394779a54cdcb6f963ef5`, incorporating the validated
+`c5cf6ac14c7716bf8f7938786a1eb8920f00287e`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,
@@ -41,7 +41,8 @@ Motors left energised after homing or calibration are released after ten idle mi
 Telemetry asks the printer only when its stream falls silent, and the Job page reads object state from that stream, because the firmware keeps every request on its local socket in memory.
 Bed Levelling keeps a build-plate library with each plate's mesh and Z offset; mounting a plate whose mesh is not in its side's slot writes that slot and restarts the printer.
 Spools tracks filament spools per Canvas slot from the printer's measured extrusion and asks which spool new filament belongs to.
-The runtime identity remains 1.1.31, matching the printer-tested build.
+The release candidate reads the canonical version files.
+Latest spool tracking and full firmware callback integration require hardware validation.
 Preparation runs the complete component host suite before the ARM build and
 records source commit, archive checksum and every installed file checksum.
 Stale prepared manifests from the previous snapshot are rejected: rerun
@@ -75,3 +76,11 @@ See [`../../docs/BUILD.md`](../../docs/BUILD.md) for the full workflow.
 
 The current test integration adds confirmed history-record deletion, per-print timelapse selection
 and coordinated live camera ownership. Hardware validation is pending before release.
+
+## Release candidate pipeline
+
+See [candidate notes](../../docs/RELEASE_CANDIDATE.md).
+Build-Release.ps1 imports restricted inputs from the qualified previous builder,
+builds the O0 updater, prepares CC2 and matching reactor files, checks component
+equality and runs key check, preflight and firmware build. Use -UpdaterOnly to
+omit the signing/image stages. No private inputs are in the kit.

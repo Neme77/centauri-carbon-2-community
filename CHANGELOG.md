@@ -1,9 +1,18 @@
 # Changelog
 
+- Clarify that the dashboard effective Z offset includes firmware bed compensation and live adjustments, rather than the saved probe calibration.
+
 This file records user-visible project changes. Signed artifacts and exact
 checksums remain attached to each GitHub release.
 
-## Unreleased
+## Community Firmware V4.3 / CC2 Control 1.2.0 — candidate
+
+- Integrate the fingerprint-gated experimental O0 callback runtime for vendor memory retention, with native preflight, fallback and a disable switch. The request log remains unbounded; full-image hardware validation is pending.
+- Provide a standalone CC2 + callback updater without reflashing; preserve spool inventory during rollback. Firmware and updater use matching CC2/module binaries.
+- Analyze large G-code asynchronously with bounded queue/cache; correct expiry of queued complete HTTP requests.
+- Add hotend/bed PID calibration, printing temperature changes, and printer error popups that do not recur solely from historical events.
+- Align Control and start CC2 30 seconds after the vendor process appears.
+
 
 - A new Spools page tracks filament spools in the Canvas slots and on the external holder, charged with what the printer really extrudes, purges and cancelled prints included. New filament in a slot asks on every open page which spool it is; a spool that runs out is set to zero; weigh-ins correct the count; the print dialog warns when a spool holds less than the file needs. The inventory is grouped by manufacturer, kind and colour, with identical spools on one row. Off until switched on.
 - PID calibration and printer error reports are translated into Russian and Chinese; they were shown in English.
@@ -12,7 +21,7 @@ checksums remain attached to each GitHub release.
 - An OrcaSlicer upload whose name already exists is saved as `name (1).gcode` and so on instead of being refused with HTTP 409; nothing is overwritten.
 - CC2 Control registers with the printer even when another app's Canvas reply arrives first after it connects. Before, it then never registered, so print and Canvas commands were refused and the updater rolled back.
 - The mainboard fan no longer runs on forever after homing or calibration. The firmware never releases idle motors, and that fan runs while they are powered, although every fan in the UI reads 0 %. CC2 Control now sends `M84` after ten idle minutes with the heaters off, as stock Klipper does.
-- The printer no longer runs out of memory about 11 hours after each boot. Its firmware keeps every request received on its local socket in memory, and CC2 Control asked it for `info` every two seconds. Now it asks only when the telemetry stream has been silent for three seconds; a working printer sends about two updates per second.
+- Reduce requests that feed memory retention in the vendor firmware. CC2 Control previously asked it for `info` every two seconds. Now it asks only when the telemetry stream has been silent for three seconds; a working printer sends about two updates per second.
 - The Job page no longer queries the printer every two seconds for print objects: the excluded and current objects come from the telemetry stream, the object list is asked once per job, and an idle Job page asks for nothing. Before a print defines its objects, the page says no objects are reported instead of "Object status unavailable".
 
 ## CC2 Control 1.1.31fix — 2026-10-04
