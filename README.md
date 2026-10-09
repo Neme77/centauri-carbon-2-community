@@ -14,13 +14,18 @@ Community firmware, local printer control and reproducible build tools for the *
 
 Release binaries, standalone updaters, source archives and checksums are kept with the corresponding GitHub Release. The canonical development source is kept directly on `develop`.
 
-## Next release candidate
+## Experimental pre-release V4.3
 
-V4.3 integrates the experimental O0 callback runtime and all merged features
-through PR97, including spool inventory. It is in preparation, not a published
-or hardware-validated complete firmware. See [candidate notes](docs/RELEASE_CANDIDATE.md)
-for both installation routes and the original vendor retention issue.
-The download links below remain the previous published release.
+[V4.3 is available as a pre-release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3), with CC2 Control 1.2.0, the experimental O0 callback runtime,
+all merged features through PR97, and the first-boot preparation fix.
+The release includes complete signed firmware, a standalone callback updater,
+the updated source builder, and checksums. The notes explain the original
+vendor retention issue, test evidence, installation routes, and limitations.
+
+The attached tested binaries predate the effective-Z-offset wording correction;
+the updated source builder includes it and requires rebuilding to include that
+wording in binaries. The stable download links below remain V4.2-R5 and 1.1.31fix.
+See [candidate notes](docs/RELEASE_CANDIDATE.md) for details.
 
 ## Downloads
 

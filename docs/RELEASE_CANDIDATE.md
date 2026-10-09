@@ -1,4 +1,4 @@
-# Community Firmware V4.3 — release candidate
+# Community Firmware V4.3 — experimental pre-release
 
 This candidate includes all merged work through PR97 (filament inventory and
 spool tracking), plus the experimental O0 callback runtime integration.
@@ -95,10 +95,7 @@ inputs, never prepared components or source. Existing signing/input hashes
 remain mandatory. Qualified ARM GCC 6.5.0/glibc 2.23 and pinned SquashFS 4.6.1
 are required. The same driver can build only the standalone updater.
 
-This is a **candidate, not an already built or hardware-validated firmware**.
-Signed firmware, ARM binaries and checksums become real release assets only
-after the owner's build succeeds. No private keys or vendor firmware are in
-this source kit. Before publication, record the actual firmware hash and test
+The [experimental pre-release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3) includes the owner's tested firmware and updater, with the exact hashes recorded below. The source builder is distinct from those binaries and includes the later UI wording clarification. No private keys or vendor firmware are in this source kit. For any rebuilt image, record its own firmware hash and test
 installation, reboot, callback maps/PID, UDS, homing, PID, temperatures, plate
 management, large files, spool tracking and a supervised print. See
 [TESTING.md](TESTING.md). Do not label prior-image tests as tests of this image.

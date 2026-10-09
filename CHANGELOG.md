@@ -1,13 +1,13 @@
 # Changelog
 
-- Clarify that the dashboard effective Z offset includes firmware bed compensation and live adjustments, rather than the saved probe calibration.
-
 This file records user-visible project changes. Signed artifacts and exact
 checksums remain attached to each GitHub release.
 
-## Community Firmware V4.3 / CC2 Control 1.2.0 — candidate
+## Community Firmware V4.3 / CC2 Control 1.2.0 — pre-release, 2026-10-09
 
-- Integrate the fingerprint-gated experimental O0 callback runtime for vendor memory retention, with native preflight, fallback and a disable switch. The request log remains unbounded; full-image hardware validation is pending.
+- Publish the tested signed firmware, standalone callback updater, updated source builder and checksums. The source includes the effective-Z-offset wording clarification; the attached tested binaries predate that wording change.
+
+- Integrate the fingerprint-gated experimental O0 callback runtime for vendor memory retention, with native preflight, fallback and a disable switch. The request log remains unbounded; encouraging hardware reports do not prove every OOM/803 cause is resolved.
 - Provide a standalone CC2 + callback updater without reflashing; preserve spool inventory during rollback. Firmware and updater use matching CC2/module binaries.
 - Analyze large G-code asynchronously with bounded queue/cache; correct expiry of queued complete HTTP requests.
 - Add hotend/bed PID calibration, printing temperature changes, and printer error popups that do not recur solely from historical events.
