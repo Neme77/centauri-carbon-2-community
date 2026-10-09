@@ -15,6 +15,9 @@ export const QUICK_CHOICES: Record<string, [label: Key, icon: string]> = {
   'page:control': ['common.control', 'control'],
   'page:files': ['common.files', 'folder'],
   'page:bed': ['common.bed_levelling', 'grid'],
+  'calibration:shaper': ['control.shaper_title', 'settings'],
+  'calibration:hotend': ['control.quick_pid_hotend', 'temp'],
+  'calibration:bed': ['control.quick_pid_bed', 'temp'],
   'page:canvas': ['common.canvas', 'canvas'],
 }
 export const QUICK_DEFAULTS = ['home:ALL', 'system:heaters_off', 'system:fans_off', 'system:motors_off']
@@ -28,7 +31,8 @@ export const QUICK_ASK: Record<string, Key> = {
   'system:motors_off': 'common.disable_all_motors',
 }
 // Navigation and lights stay usable while the printer is busy; the rest need an idle printer.
-export const quickAlwaysAvailable = (action: string) => action.startsWith('page:') || action === 'light:toggle'
+export const quickAlwaysAvailable = (action: string) =>
+  action.startsWith('page:') || action.startsWith('calibration:') || action === 'light:toggle'
 
 export const quick = store({ actions: QUICK_DEFAULTS })
 
@@ -45,3 +49,6 @@ export async function saveQuickActions(actions: string[]) {
   })
   quick.set({ actions })
 }
+
+// Calibration shortcuts open guarded controls; they never start motion or heating.
+export const calibrationFocus = store({ target: '', revision: 0 })

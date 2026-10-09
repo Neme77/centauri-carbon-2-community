@@ -807,5 +807,7 @@
   "control.shaper_confirm": "Avviare la calibrazione delle vibrazioni? La stampante si muoverà rapidamente.",
   "control.shaper_running": "Calibrazione delle vibrazioni in corso.",
   "control.shaper_completed": "Comando completato. Verifica i risultati della stampante: non sono stati salvati automaticamente.",
-  "control.shaper_check_output": "Verifica i messaggi della stampante nella console."
+  "control.shaper_check_output": "Verifica i messaggi della stampante nella console.",
+  "control.quick_pid_hotend": "PID hotend",
+  "control.quick_pid_bed": "PID piatto"
 }

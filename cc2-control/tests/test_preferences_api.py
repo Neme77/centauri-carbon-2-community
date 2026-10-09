@@ -131,6 +131,13 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
                 raise AssertionError(f"malformed language accepted: {malformed!r}")
             except urllib.error.HTTPError as error:
                 assert error.code == 400
+        shortcuts = ["calibration:shaper", "calibration:hotend", "calibration:bed", "page:control"]
+        update = urllib.request.Request(endpoint, data=json.dumps({f"quick{i+1}": action for i, action in enumerate(shortcuts)}).encode(), method="PUT", headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
+        with urllib.request.urlopen(update, timeout=1) as response:
+            assert json.load(response) == {"saved": True}
+        with urllib.request.urlopen(endpoint, timeout=1) as response:
+            assert json.load(response)["quick_actions"] == shortcuts
+        assert all(action in preferences.read_text() for action in shortcuts)
         print("PASS: persistent UI language and theme API")
     finally:
         process.terminate()

@@ -807,5 +807,7 @@
   "control.shaper_confirm": "Start vibration calibration? The printer will move rapidly.",
   "control.shaper_running": "Vibration calibration is running.",
   "control.shaper_completed": "Command completed. Review the printer output; results have not been saved automatically.",
-  "control.shaper_check_output": "Review the printer output in the console."
+  "control.shaper_check_output": "Review the printer output in the console.",
+  "control.quick_pid_hotend": "Hotend PID",
+  "control.quick_pid_bed": "Bed PID"
 }

@@ -13,6 +13,7 @@ import { t, tpl } from '@/lib/i18n'
 import { store } from '@/lib/store'
 import { stateText } from '@/lib/machine'
 import { num } from '@/lib/format'
+import { calibrationFocus } from '@/lib/quick'
 import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
 
@@ -669,6 +670,16 @@ export const Control = () => {
   usePoll(refreshPrinter, 1500)
   const d = printer.use().data
   const v = view(d)
+  const focus = calibrationFocus.use()
+  useEffect(() => {
+    if (!focus.target) return
+    const card = document.querySelector(focus.target === 'shaper' ? '.cc2-shaper' : '.cc2-pid')
+    card?.scrollIntoView({ block: 'center' })
+    if (focus.target !== 'shaper') {
+      const inputs = card?.querySelectorAll<HTMLInputElement>('input')
+      inputs?.[focus.target === 'hotend' ? 0 : 1]?.focus({ preventScroll: true })
+    }
+  }, [focus.target, focus.revision])
   const tag = (s: string) => (
     <Tag tone="warning">
       <Pip /> {s}
