@@ -31,7 +31,7 @@ try {
  const boxes=await Promise.all(['.cc2-shaper','.cc2-pid','.cc2-tuning'].map(s=>row.locator(s).boundingBox()))
  assert.ok(boxes[0].x<boxes[1].x && boxes[1].x<boxes[2].x)
  const fans=await page.locator('.cc2-fans').boundingBox()
- const z=await page.locator('section').filter({has:page.getByRole('heading',{name:'Live Z offset',exact:true})}).boundingBox()
+ const z=await page.locator('section').filter({has:page.getByRole('heading',{name:'Live Z Offset',exact:true})}).boundingBox()
  assert.ok(Math.abs(fans.y-z.y)<2,'fans align with Z offset')
  assert.ok(boxes.every(b=>Math.abs(b.y+b.height-boxes[0].y-boxes[0].height)<2),'desktop card bottoms align')
  await start.click();await page.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal(commands.length,0)
