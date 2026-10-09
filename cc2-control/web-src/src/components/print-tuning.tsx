@@ -10,7 +10,7 @@ type Kind = 'speed' | 'flow'
 const percent = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const display = (v: number | null) => (v === null ? '—' : String(Math.round(v * 10) / 10))
 
-const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
+const TuningForm = ({ d, rev, ok, compact }: { d: any; rev: number; ok: boolean; compact: boolean }) => {
   const [draft, setDraft] = useState({ speed: '', flow: '' })
   const [pending, setPending] = useState<{ kind: Kind; value: number; rev: number } | null>(null)
   const sending = useRef(false)
@@ -61,7 +61,7 @@ const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
   return (
     <Card class="cc2-tuning">
       <CardHead icon="settings" title="tuning.title" end={pending || posting ? t('tuning.waiting') : undefined} />
-      <div class="cc2-tuning-fields grid gap-4 cc2-sm:grid-cols-2">
+      <div class={compact ? 'cc2-tuning-fields grid gap-3' : 'cc2-tuning-fields grid gap-4 cc2-sm:grid-cols-2'}>
         {(['speed', 'flow'] as const).map(kind => {
           const min = kind === 'speed' ? 25 : 50
           const max = kind === 'speed' ? 200 : 150
@@ -111,7 +111,15 @@ const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
   )
 }
 
-export const PrintTuning = () => {
+export const PrintTuning = ({ compact = false }: { compact?: boolean }) => {
   const { data, rev, ok } = printer.use()
-  return <TuningForm key={String(data?.print?.uuid || data?.print?.filename || 'idle')} d={data} rev={rev} ok={ok} />
+  return (
+    <TuningForm
+      key={String(data?.print?.uuid || data?.print?.filename || 'idle')}
+      d={data}
+      rev={rev}
+      ok={ok}
+      compact={compact}
+    />
+  )
 }

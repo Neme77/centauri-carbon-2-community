@@ -800,5 +800,12 @@
   "spools.colour_beige": "beige",
   "spools.no_suitable": "Aucune bobine de l’inventaire n’a ce filament. Choisissez-en une parmi toutes les bobines ou ajoutez-en une nouvelle.",
   "spools.chosen": "Choisie : {name}",
-  "dashboard.effective_z_offset": "Décalage Z effectif"
+  "dashboard.effective_z_offset": "Décalage Z effectif",
+  "control.shaper_title": "Input Shaper",
+  "control.shaper_start": "Calibrer les vibrations",
+  "control.shaper_help": "Effectuez d’abord la prise d’origine complète. La calibration déplace rapidement l’imprimante : dégagez le plateau. Les résultats ne sont pas enregistrés automatiquement.",
+  "control.shaper_confirm": "Démarrer la calibration des vibrations ? L’imprimante se déplacera rapidement.",
+  "control.shaper_running": "Calibration des vibrations en cours.",
+  "control.shaper_completed": "Commande terminée. Vérifiez les résultats : ils ne sont pas enregistrés automatiquement.",
+  "control.shaper_check_output": "Vérifiez les messages de l’imprimante dans la console."
 }

@@ -6,7 +6,9 @@ import { Dot, Pip, Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
 import { Icon } from '@/components/icons'
 import { FanSlider, Notice, Warn } from '@/components/shared'
-import { control, errText, notify, request } from '@/lib/api'
+import { control, errText, notify, post, request } from '@/lib/api'
+import { PrintTuning } from '@/components/print-tuning'
+import { ask } from '@/lib/confirm'
 import { t, tpl } from '@/lib/i18n'
 import { store } from '@/lib/store'
 import { stateText } from '@/lib/machine'
@@ -255,6 +257,70 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
           ))}
         </div>
       </div>
+    </Card>
+  )
+}
+
+const InputShaper = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
+  const [status, setStatus] = useState<any>(null)
+  const [sending, setSending] = useState(false)
+  const lock = useRef(false)
+  const refresh = async () => {
+    try {
+      setStatus(await request('/api/console'))
+    } catch {
+      setStatus(null)
+    }
+  }
+  usePoll(refresh, 3000)
+  const idle =
+    printer.use().ok &&
+    d?.connected &&
+    d?.machine?.status === 1 &&
+    d?.last_message_age >= 0 &&
+    d?.last_message_age <= 15
+  const homed = ['x', 'y', 'z'].every(a => v.homed.includes(a))
+  const can = idle && homed && status && !status.busy && !sending
+  const start = async () => {
+    if (!can || lock.current) return
+    lock.current = true
+    setSending(true)
+    try {
+      if (!(await ask(t('control.shaper_confirm')))) return
+      await post('/api/console/command', 'SHAPER_CALIBRATE')
+      await refresh()
+      notify(t('common.command_accepted'))
+    } catch (e) {
+      notify(errText(e), 'error')
+    } finally {
+      lock.current = false
+      setSending(false)
+    }
+  }
+  const own = status?.command === 'SHAPER_CALIBRATE'
+  return (
+    <Card class="cc2-shaper">
+      <CardHead icon="settings" title="control.shaper_title" />
+      <p class="mb-3 text-xs text-muted">{t('control.shaper_help')}</p>
+      <Button wide disabled={!can} onClick={start}>
+        {t('control.shaper_start')}
+      </Button>
+      {!idle && <Notice>{t('common.available_when_idle')}</Notice>}
+      {idle && !homed && <Notice>{t('control.motion_requires_homing_commands')}</Notice>}
+      {own && (
+        <p role="status" class="mt-3 text-xs text-muted">
+          {t(
+            status.busy
+              ? 'control.shaper_running'
+              : status.completed && status.success
+                ? 'control.shaper_completed'
+                : 'control.shaper_check_output'
+          )}
+        </p>
+      )}
+      {own && status.output && (
+        <pre class="mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs">{status.output}</pre>
+      )}
     </Card>
   )
 }
@@ -636,7 +702,6 @@ export const Control = () => {
               />
             ))}
           </Card>
-          <PidCalibration d={d} />
         </div>
         <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:grid-rows-[auto_1fr]">
           <Card>
@@ -693,6 +758,11 @@ export const Control = () => {
           </Card>
           <ZOffset />
         </div>
+      </div>
+      <div class="cc2-control-calibrations mt-3.5 grid items-start gap-3.5 cc2-xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)]">
+        <InputShaper d={d} v={v} />
+        <PidCalibration d={d} />
+        <PrintTuning compact />
       </div>
       <div class="cc2-control-bottom mt-3.5 grid items-start gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
         <Extruder d={d} v={v} />
