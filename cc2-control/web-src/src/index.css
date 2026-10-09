@@ -163,7 +163,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-main section { padding: 12px; }
   .cc2-main section h2 { font-size: 14px; }
   .cc2-main button:not([role="switch"]), .cc2-main input:not([type="range"], [type="checkbox"], [type="radio"]), .cc2-main select { min-height: 32px; font-size: 13px; }
-  .cc2-dashboard-primary { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: start; }
+  .cc2-dashboard-primary { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: stretch; }
   .cc2-camera-frame { height: clamp(180px, 20vw, 240px); aspect-ratio: auto; }
   .cc2-camera-frame img { object-fit: contain; }
   .cc2-job-filename { font-size: 17px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
@@ -218,7 +218,8 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
   .cc2-dashboard-primary > div:last-child { grid-template-rows: auto auto; align-content: start; }
   .cc2-dashboard-primary > div:last-child > section { height: auto; }
-  .cc2-dashboard-primary .cc2-camera-frame { height: 180px; }
+  .cc2-dashboard-camera-column { grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; }
+  .cc2-dashboard-primary .cc2-camera-frame { height: auto; min-height: 180px; flex: 1 0 auto; }
   .cc2-quick-actions button { flex-direction: row; min-height: 36px; height: auto; padding: 8px; font-size: 12px; }
   .cc2-control-columns > div { align-content: start; }
   .cc2-control-columns > div > section { height: auto; }
