@@ -4,6 +4,15 @@ BACKUP=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 TARGET=/opt/usr/cc2-control
 INIT=/etc/init.d/cc2-control
 LOCK=/tmp/cc2-control-install.lock
+wait_stopped() {
+    stop_wait=0
+    while pidof cc2-control >/dev/null 2>&1; do
+        [ "$stop_wait" -lt 20 ] || return 1
+        sleep 1
+        stop_wait=$((stop_wait + 1))
+    done
+    return 0
+}
 test -d "$BACKUP/installation"
 test -f "$BACKUP/init.before"
 STATUS=$(wget -qO- http://127.0.0.1:8081/api/printer)
@@ -14,7 +23,7 @@ case "$AGE" in ''|*[!0-9]*) exit 1;; esac
 mkdir "$LOCK" || exit 1
 trap 'rmdir "$LOCK"' 0
 "$INIT" stop
-if pidof cc2-control >/dev/null; then echo 'Service did not stop.' >&2; exit 1; fi
+if ! wait_stopped; then echo 'Service did not stop.' >&2; exit 1; fi
 # Keep current preferences and access configuration when reverting binaries.
 for keep in cc2-control.conf material-presets.json ui-preferences.json bed-plates.json spools.json; do
     if [ -f "$TARGET/$keep" ]; then cp -p "$TARGET/$keep" "$BACKUP/$keep.restore-current"; fi

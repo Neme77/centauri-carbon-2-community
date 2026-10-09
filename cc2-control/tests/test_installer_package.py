@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory() as tmp:
         files={pathlib.Path(n).name:z.read(n) for n in z.namelist()}
         for line in files['SHA256SUMS'].decode().splitlines():
             digest,name=line.split('  ',1);assert hashlib.sha256(files[name]).hexdigest()==digest
-    for scenario in ('success','delayed','busy','rollback'):
+    for scenario in ('success','delayed','stop-delayed','busy','rollback'):
         fixture=base/scenario;fixture.mkdir();stage=fixture/'stage';stage.mkdir()
         with tarfile.open(fileobj=io.BytesIO(files['cc2-control-payload.tar.gz']),mode='r:gz') as t:
             for m in t.getmembers():
@@ -46,6 +46,12 @@ with tempfile.TemporaryDirectory() as tmp:
             wget.write_text(text)
         (commands/'pidof').write_text('#!/bin/sh\nif [ -f "'+str(marker)+'" ]; then echo 999; else exit 1; fi\n')
         (commands/'sleep').write_text('#!/bin/sh\nexit 0\n')
+        if scenario == 'stop-delayed':
+            marker.touch()
+            stopping=fixture/'stopping'
+            init.write_text('#!/bin/sh\ncase "$1" in start) touch "'+str(marker)+'";; stop) touch "'+str(stopping)+'";; esac\n')
+            (stage/'cc2-control.init').write_bytes(init.read_bytes())
+            (commands/'sleep').write_text('#!/bin/sh\nif [ -f "'+str(stopping)+'" ]; then rm -f "'+str(marker)+'" "'+str(stopping)+'"; fi\n')
         for p in commands.iterdir():p.chmod(0o755)
         (stage/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(stage).as_posix()+'\n' for p in sorted(stage.rglob('*')) if p.is_file() and p.name!='SHA256SUMS'))
         script=(stage/'install-on-printer.sh').read_text().replace('/opt/usr/cc2-control',str(target)).replace('/etc/init.d/cc2-control',str(init)).replace('/tmp/cc2-control-install.lock',str(fixture/'lock')).replace('/proc/$RUN_PID/exe',str(target/'cc2-control'))
@@ -53,8 +59,8 @@ with tempfile.TemporaryDirectory() as tmp:
         if scenario=='rollback':script=script.replace(hashlib.sha256(binary).hexdigest(),'0'*64)
         path=fixture/'run.sh';path.write_text(script)
         result=subprocess.run(['sh',str(path)],env=dict(os.environ,PATH=str(commands)+':'+os.environ['PATH']),capture_output=True,text=True,timeout=10)
-        assert (result.returncode==0)==(scenario in ('success','delayed')),result.stdout+result.stderr
-        assert (target/'cc2-control').read_bytes()==(bytes(binary) if scenario in ('success','delayed') else b'OLD')
+        assert (result.returncode==0)==(scenario in ('success','delayed','stop-delayed')),result.stdout+result.stderr
+        assert (target/'cc2-control').read_bytes()==(bytes(binary) if scenario in ('success','delayed','stop-delayed') else b'OLD')
         if scenario == 'delayed': assert int(counter.read_text()) == 36
         for name in keep:assert (target/name).read_text()=='KEEP '+name
         assert not (fixture/'lock').exists()
