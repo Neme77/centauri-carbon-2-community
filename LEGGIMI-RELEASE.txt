@@ -1,0 +1,38 @@
+V4.3 + CC2 Control: candidato di release dal repository aggiornato, PR97 inclusa.
+Le versioni sono definite soltanto in cc2-control/VERSION e FIRMWARE_VERSION.
+
+Questo ZIP contiene IL BUILDER E I SORGENTI, non un firmware gia compilato.
+Estrarre in una cartella nuova. Non sovrascrivere il builder precedente.
+Toolchain ARM richiesta: GCC 6.5.0/glibc 2.23 gia qualificata in
+/opt/cc2-cross/toolchain-out. SquashFS 4.6.1 e gli input privati/vendor del
+precedente builder restano necessari. Nessuna chiave privata e in questo ZIP.
+
+DA POWERSHELL NELLA CARTELLA ESTRATTA
+Per firmware completo e aggiornamento standalone:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\current\Build-Release.ps1 -ExistingBuilder "D:\PERCORSO\BUILDER-PRECEDENTE" -PrinterIp 192.168.1.103
+Sostituire il percorso con la cartella che contiene core, keys, components,
+original_firmware e tools del builder gia usato con successo.
+La copia degli input e locale al PC; il recupero libco dalla stampante e sola lettura.
+
+Per generare SOLTANTO l aggiornamento standalone senza firmware o chiavi:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\builder\current\Build-Release.ps1 -UpdaterOnly -PrinterIp 192.168.1.103
+
+OUTPUT
+Aggiornamento standalone: output nella radice del kit.
+Firmware firmato: builder/current/output, con checksum e log in builder/current/logs.
+Usare soltanto i file prodotti dopo BUILD PASS, non fixture dei test.
+Prima di pubblicare, testare sulla stampante l immagine firmware effettiva.
+Il callback O0 e quello qualificato; l integrazione di avvio nel firmware e nuova.
+
+INSTALLER STANDALONE
+Estrarre lo ZIP aggiornamento prodotto, stampante inattiva e fredda, target zero,
+MQTT/UDS freschi, quindi Install-Windows.cmd. Conservare il proprio backup.
+Se il callback e gia attivo, ripristinare prima con il backup della stessa
+stampante; il reboot non basta. Il ripristino mantiene anche spools.json.
+Non usare i percorsi di backup di un altro tester.
+
+NOTE PUBBLICHE DI RELEASE: docs/RELEASE_CANDIDATE.md
+La patch callback e sperimentale e provvisoria: introdotta per il difetto di
+ritenzione nel firmware originale Elegoo. Non certifica la soluzione di ogni
+OOM/803 e non limita ancora request_log. Riscontri lunghi incoraggianti non
+sostituiscono la verifica di questa nuova immagine e della funzione Spools.

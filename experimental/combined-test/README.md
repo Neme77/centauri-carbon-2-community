@@ -23,8 +23,9 @@ machine-specific backups, checks activation and fresh UDS, and rolls back on
 failure. Persistent startup edits only the normal command in the real vendor
 `/opt/bin/run_printer.sh`, preserving `LD_BIND_NOW=1` and arguments.
 
-This remains an experimental, opt-in workaround; the standard firmware builder
-does not enable it automatically. The combined installer builds the aligned
+This remains an experimental workaround. The standalone route is opt-in;
+the new complete firmware candidate adds compatibility gates, native preflight
+and a disable switch. See ../../docs/RELEASE_CANDIDATE.md. The combined installer builds the aligned
 CC2 sources, including the merged plate library, PID, printing-temperature,
 large-file and native-report changes, together with the O0 runtime.
 No vendor executable, shared library, private key or prebuilt module is included.

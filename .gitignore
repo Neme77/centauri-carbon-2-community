@@ -41,3 +41,9 @@ builder/current/components/cc2-control/source/source.before-serial-discovery.zip
 builder/current/serial-discovery.patch
 builder/current/tools/squashfs-tools-4.6.1/
 CC2-Control-*-Multiplatform-Update.zip
+builder/current/components/reactor/prepared/
+builder/current/components/reactor/prepared-manifest.json
+experimental/combined-test/reactor/vendor-link/
+experimental/combined-test/reactor/libcc2-reactor-v2.so
+experimental/combined-test/reactor/cc2-reactor-bridge-test
+experimental/combined-test/reactor/symbols-debug.txt

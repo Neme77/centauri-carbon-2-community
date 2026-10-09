@@ -15,7 +15,9 @@ import zipfile
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 CC2 = ROOT / 'cc2-control'
-SOURCE_COMMIT = '1ef85ea1faebb17904815c09785ea79ce31ae55d'
+SOURCE_COMMIT = 'b4093abf7f90a7769a8dc13bc04e6b132a172553'
+VERSION = (CC2 / 'VERSION').read_text().strip()
+FIRMWARE_VERSION = (CC2 / 'FIRMWARE_VERSION').read_text().strip()
 PREFIX = Path('/opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf')
 def run(args, **kw):
     return subprocess.run([str(a) for a in args], check=True, **kw)
@@ -89,17 +91,29 @@ def main():
     files['reactor/cc2-reactor-bridge-test']=bridge.read_bytes()
     for name in ('launcher.sh','preflight.sh'):
         files['reactor/'+name]=(HERE/name).read_bytes()
+    component=ROOT/'builder/current/components/reactor'
+    prepared=component/'prepared';prepared.mkdir(parents=True,exist_ok=True)
+    component_files={name[8:]:data for name,data in files.items() if name.startswith('reactor/')}
+    component_files['SHA256SUMS']=''.join(digest(data)+'  '+name+'\n' for name,data in sorted(component_files.items())).encode()
+    for name,data in component_files.items():
+        (prepared/name).write_bytes(data)
+    manifest={'optimization':'O0','gcc':'6.5.0','glibc':'2.23',
+        'vendor_sha256':'c21126e78a63ac9140e7347c56f363d5e513495c58c06fc17e8ef97846f3c0a3',
+        'libco_sha256':'14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403',
+        'sources':{name:digest((reactor/name).read_bytes()) for name in ('reactor_module.cpp','bridge_test.cpp','co_routine.h','fingerprints.h')},
+        'files':{name:digest(data) for name,data in sorted(component_files.items())}}
+    (component/'prepared-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     files['reactor/SHA256SUMS']=''.join(digest(data)+'  '+name[8:]+'\n'
         for name,data in sorted(files.items()) if name.startswith('reactor/')).encode()
     binary_hash=digest(files['cc2-control'])
     for name in ('install-combined.sh','restore-combined.sh','common.sh','boot-launcher.sh'):
         files[name]=(HERE/name).read_text().replace('@CC2_SHA256@',binary_hash).encode()
     source=source_zip()
-    files['build-info.json']=(json.dumps({'version':'1.1.31','test':'combined-uds-reactor-o0',
+    files['build-info.json']=(json.dumps({'version':VERSION,'firmware_version':FIRMWARE_VERSION,'test':'combined-uds-reactor-o0',
         'base_commit':SOURCE_COMMIT,'cc2_sha256':binary_hash,'reactor_sha256':digest(module.read_bytes()),
         'source_archive_sha256':digest(source),
         'reactor_optimization':'O0','changes':['PR88 reduced socket polling',
-        'callback, timer, poll and exception cleanup bridge'],'hardware_validation':'experimental; long print pending'},indent=2)+'\n').encode()
+        'callback, timer, poll and exception cleanup bridge'],'hardware_validation':'experimental; encouraging previous long-print reports; this release requires hardware validation'},indent=2)+'\n').encode()
     files['SHA256SUMS']=''.join(digest(data)+'  '+name+'\n' for name,data in sorted(files.items())).encode()
     payload=io.BytesIO()
     with gzip.GzipFile(fileobj=payload,mode='wb',mtime=0) as zipped:
@@ -112,7 +126,7 @@ def main():
     for name in ('Install-Combined.ps1','Install-Windows.cmd','Restore-Originale.ps1','LEGGIMI.txt'):
         public[name]=(HERE/name).read_bytes()
     public['SHA256SUMS']=''.join(digest(data)+'  '+name+'\n' for name,data in sorted(public.items())).encode()
-    out=ROOT/'output/CC2-Control-1.1.31-UDS88-Reactor-O0-Test.zip';out.parent.mkdir(exist_ok=True)
+    out=ROOT/'output'/('CC2-Control-'+VERSION+'-Callback-O0-Update.zip');out.parent.mkdir(exist_ok=True)
     with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as archive:
         for name,data in sorted(public.items()):archive.writestr(out.stem+'/'+name,data)
     print('BUILD PASS. Installer completo:',out)

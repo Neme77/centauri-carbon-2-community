@@ -1,6 +1,6 @@
-CC2 Control 1.1.31 - TEST COMBINATO UDS #88 + Reactor O0
+CC2 Control 1.2.0 - TEST COMBINATO UDS #88 + Reactor O0
 
-BASE: develop 1ef85ea1faebb17904815c09785ea79ce31ae55d, con la mitigazione UDS di beanbo
+BASE sorgenti CC2: c5cf6ac14c7716bf8f7938786a1eb8920f00287e, dopo PR97, con la mitigazione UDS di beanbo
 e le successive PR validate (piatti, file grandi, PID, temperature e report).
 Include tutte le modifiche unite fino a questo commit, UI e traduzioni incluse.
 Grazie a beanbo per analisi, misure e riduzione delle richieste UDS; restano tutti
@@ -11,7 +11,7 @@ CONTENUTO
 - Reactor O0: rilascio callback, protezioni timer/poll e pulizia in eccezione,
   esattamente i sorgenti qualificati con libco nativa. Non e una soluzione
   certificata all OOM/803; la request_log interna vendor non viene limitata.
-- Attesa CC2 di 60 secondi, configurazione LAN e preferenze conservate.
+- Attesa CC2 di 30 secondi, configurazione LAN e preferenze conservate.
 - Windows: -ResetHostKey %* presente; nessun bypass della verifica OpenSSH.
 
 QUESTO E UN TEST, NON UNA RELEASE PUBBLICA
@@ -22,7 +22,7 @@ e libco SHA256:
 L installer rifiuta altre versioni. Non usare un generico firmware ufficiale.
 
 BUILD SUL PC DI GINO
-Questo ZIP contiene i sorgenti, non binari ARM gia compilati.
+Il kit builder contiene i sorgenti. Lo ZIP UPDATE generato contiene i binari ARM.
 Estrarre in una nuova cartella. Non sovrascrivere il repository di lavoro.
 Dalla radice del repository eseguire:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\experimental\combined-test\Build-ARM.ps1
@@ -30,13 +30,14 @@ Richiede Ubuntu WSL, make, gcc host e la toolchain GCC 6.5.0/glibc 2.23 in:
 /opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf-*
 Esegue i test CC2, compila CC2/sonda ARM e Reactor con -O0, verifica simboli,
 unwinding e versioni delle dipendenze, quindi produce in output:
-CC2-Control-1.1.31-UDS88-Reactor-O0-Test.zip
+CC2-Control-1.2.0-Callback-O0-Update.zip
 Questo ZIP generato e quello da condividere col collaboratore.
 
 INSTALLAZIONE
 1. Attendere fine stampa e raffreddamento: nozzle <=50, bed <=45, target 0.
-2. Se e attivo il vecchio test temporaneo, riavviare la stampante e attendere
-   che MQTT e UDS siano collegati. Il reboot rimuove il vecchio bind mount.
+2. Se e attivo un callback persistente, usare prima il ripristino del relativo
+   backup di QUESTA stampante. Un reboot non lo rimuove. Per i soli vecchi test
+   con bind mount temporaneo, il reboot rimuove il mount. Attendere MQTT/UDS freschi.
 3. Estrarre lo ZIP INSTALLER generato, quindi eseguire Install-Windows.cmd.
    Oppure:
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Combined.ps1 -PrinterIp 192.168.1.103
@@ -74,12 +75,18 @@ wget -qO- http://127.0.0.1:8081/api/uds
 LIMITI DI VALIDAZIONE
 Il modello ARM O0 ha passato timer/callback/eccezioni con libco nativa.
 Il modulo integrato ha passato Home All e una stampa breve con AI e timelapse.
-Questa installazione persistente combinata e nuova: reboot, stampa lunga e
-assenza di regressioni devono ancora essere verificati su entrambe le macchine.
+Build precedenti persistenti hanno superato reboot e stampe lunghe secondo
+i report dei tester. Questa release aggiornata e l immagine firmware nuova
+richiedono una verifica hardware propria, inclusa la funzione Spools.
 Non corregge ancora la velocita residua UDS 50.5; non la forza artificialmente a 0.
 Non modifica kernel, dual trust, LAN/WAN, stack camera o allocatore vendor.
 
 La patch resta sperimentale e provvisoria: i sorgenti pubblici ELEGOO
-non corrispondono al firmware distribuito. Il builder standard non la abilita
-automaticamente. I test lunghi incoraggiano ulteriori verifiche, non certificano
+non corrispondono al firmware distribuito. Il firmware candidato la integra con un interruttore di disabilitazione;
+richiede nuova validazione hardware. I test lunghi incoraggiano ulteriori verifiche, non certificano
 la risoluzione di ogni OOM/803.
+
+Questo updater include anche inventario bobine PR97. Il ripristino conserva
+spools.json insieme a configurazione, preset e preferenze attuali.
+Se il callback e gia attivo, usare prima il ripristino della stessa stampante.
+Lo ZIP sorgenti e distinto dallo ZIP installer generato: condividere quest ultimo.

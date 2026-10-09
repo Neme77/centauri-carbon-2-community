@@ -74,7 +74,8 @@ that every OOM/803 cause has been eliminated. request_log remains unbounded.
 
 The branch is now aligned with develop and includes the merged CC2 features.
 The exact executable/libco compatibility gates, O0 build, cold/idle preflight,
-activation verification and per-printer rollback remain unchanged. The runtime
-is opt-in and is not enabled by standard firmware builds. Published ELEGOO
+activation verification and per-printer rollback remain unchanged. The standalone runtime
+is opt-in. The new complete firmware candidate has a separate boot integration;
+that image is not validated by these historical reports. Published ELEGOO
 sources are older than deployed firmware; reassess the provisional runtime when
 matching sources or an official fix become available.

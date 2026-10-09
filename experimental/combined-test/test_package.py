@@ -46,7 +46,7 @@ class PackagingTests(unittest.TestCase):
                 return subprocess.CompletedProcess(args,0,stdout)
             module.ROOT=root;module.CC2=cc2;module.HERE=kit;module.run=mock_run
             with contextlib.redirect_stdout(io.StringIO()):module.main()
-            archive=root/'output/CC2-Control-1.1.31-UDS88-Reactor-O0-Test.zip'
+            archive=root/'output'/('CC2-Control-'+module.VERSION+'-Callback-O0-Update.zip')
             with zipfile.ZipFile(archive) as public:
                 prefix=archive.stem+'/'
                 checks=public.read(prefix+'SHA256SUMS').decode().splitlines()

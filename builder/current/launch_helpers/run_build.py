@@ -7,8 +7,13 @@ from pathlib import Path
 import subprocess
 import sys
 import uuid
+import zipfile
 
-BUILDER_SHA256='840b2534efec3e10cd443ba0eeb3166af0b939b4e859f25fb89d75c1a7d078db'
+SOURCE = Path(__file__).resolve().parents[1] / 'components/cc2-control/source/source.zip'
+with zipfile.ZipFile(SOURCE) as snapshot:
+    FIRMWARE_VERSION = snapshot.read('FIRMWARE_VERSION').decode().strip()
+
+BUILDER_SHA256='d7549c3375c2c93f80f0f61f0d9e76f1b8abb03ca595885f8ab6bbdcf7514a73'
 
 def sha256(path):
     h = hashlib.sha256()
@@ -30,7 +35,7 @@ def build_arguments(root, mode, preflight=False, check_key=False, keep_work=Fals
     output = None
     action = 'check_key' if check_key else ('preflight' if preflight else 'build')
     stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:8]
-    stem = 'CC2_V4_2_' + mode.upper() + '_' + stamp
+    stem = 'CC2_V' + FIRMWARE_VERSION.replace('.', '_') + '_' + mode.upper() + '_' + stamp
     if check_key:
         command.append('--check-signing-key-only')
     else:
