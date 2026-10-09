@@ -10,7 +10,7 @@ type Kind = 'speed' | 'flow'
 const percent = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const display = (v: number | null) => (v === null ? '—' : String(Math.round(v * 10) / 10))
 
-const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
+const TuningForm = ({ d, rev, ok, compact }: { d: any; rev: number; ok: boolean; compact: boolean }) => {
   const [draft, setDraft] = useState({ speed: '', flow: '' })
   const [pending, setPending] = useState<{ kind: Kind; value: number; rev: number } | null>(null)
   const sending = useRef(false)
@@ -61,7 +61,7 @@ const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
   return (
     <Card class="cc2-tuning">
       <CardHead icon="settings" title="tuning.title" end={pending || posting ? t('tuning.waiting') : undefined} />
-      <div class="cc2-tuning-fields grid gap-4 cc2-sm:grid-cols-2">
+      <div class={compact ? 'cc2-tuning-fields grid gap-3' : 'cc2-tuning-fields grid gap-4 cc2-sm:grid-cols-2'}>
         {(['speed', 'flow'] as const).map(kind => {
           const min = kind === 'speed' ? 25 : 50
           const max = kind === 'speed' ? 200 : 150
@@ -70,10 +70,12 @@ const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
           const disabled = !ready || actual[kind] === null || pending !== null || posting
           return (
             <div key={kind} class="cc2-tuning-field min-w-0">
-              <label for={`tune-${kind}`} class="mb-1 block font-medium">
-                {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
-              </label>
-              <div class="mb-2 text-sm text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</div>
+              <div class={compact ? 'mb-2 flex flex-wrap items-center justify-between gap-1' : ''}>
+                <label for={`tune-${kind}`} class="mb-1 block font-medium">
+                  {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
+                </label>
+                <div class="mb-2 text-sm text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</div>
+              </div>
               <form
                 class="flex flex-wrap gap-2"
                 onSubmit={e => {
@@ -100,18 +102,26 @@ const TuningForm = ({ d, rev, ok }: { d: any; rev: number; ok: boolean }) => {
                   {t('tuning.reset')}
                 </Button>
               </form>
-              <small class="mt-1 block text-muted">{tpl('tuning.range', { min, max })}</small>
+              {!compact && <small class="mt-1 block text-muted">{tpl('tuning.range', { min, max })}</small>}
             </div>
           )
         })}
       </div>
-      <div class="mt-3 text-sm">{tpl('tuning.live_velocity', { value: display(live) })}</div>
+      {!compact && <div class="mt-3 text-sm">{tpl('tuning.live_velocity', { value: display(live) })}</div>}
       <p class="mt-2 text-xs text-muted">{t(ready ? 'tuning.manual_note' : 'tuning.unavailable')}</p>
     </Card>
   )
 }
 
-export const PrintTuning = () => {
+export const PrintTuning = ({ compact = false }: { compact?: boolean }) => {
   const { data, rev, ok } = printer.use()
-  return <TuningForm key={String(data?.print?.uuid || data?.print?.filename || 'idle')} d={data} rev={rev} ok={ok} />
+  return (
+    <TuningForm
+      key={String(data?.print?.uuid || data?.print?.filename || 'idle')}
+      d={data}
+      rev={rev}
+      ok={ok}
+      compact={compact}
+    />
+  )
 }

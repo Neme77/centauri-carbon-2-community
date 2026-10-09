@@ -22,7 +22,8 @@
     "test:job-objects": "node preview/test-job-objects.mjs",
     "test:pid": "node preview/test-pid.mjs",
     "test:print-temperatures": "node preview/test-print-temperatures.mjs",
-    "test:printer-reports": "node preview/test-printer-reports.mjs"
+    "test:printer-reports": "node preview/test-printer-reports.mjs",
+    "test:control-calibrations": "node preview/test-control-calibrations.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

@@ -30,11 +30,22 @@ try {
   assert.equal((await page.request.post(`${origin}/api/console/command`, { data: 'G28' })).status(), 403)
   assert.equal((await page.request.post(`${origin}/api/setup`, { data: '123456' })).status(), 403)
   const naturalControl = async () => {
-    const gaps = await page.locator('.cc2-control-columns').evaluate(e => [...e.children].flatMap(g => {
-      const cards = [...g.children].map(c => c.getBoundingClientRect())
-      return cards.slice(1).map((c, i) => c.top - cards[i].bottom)
-    }))
-    assert.ok(gaps.every(d => d >= 8 && d <= 16), 'Control groups must retain natural heights and compact gaps')
+    const layout = await page.locator('.cc2-control-columns').evaluate(e => {
+      const groups = [...e.children]
+      if (getComputedStyle(groups[1]).display === 'contents') {
+        const temperatures = groups[1].children[0].getBoundingClientRect()
+        const fans = groups[1].children[1].getBoundingClientRect()
+        const machine = groups[2].children[0].getBoundingClientRect()
+        const offset = groups[2].children[1].getBoundingClientRect()
+        return { grid: true, rowGap: parseFloat(getComputedStyle(e).rowGap), gaps: [fans.top - temperatures.bottom, offset.top - machine.bottom], aligned: Math.abs(fans.top - offset.top) < 2 }
+      }
+      return { grid: false, rowGap: 0, gaps: groups.flatMap(g => {
+        const cards = [...g.children].map(c => c.getBoundingClientRect())
+        return cards.slice(1).map((c, i) => c.top - cards[i].bottom)
+      }), aligned: true }
+    })
+    assert.ok(layout.gaps.every(d => d >= 8) && (layout.grid ? layout.rowGap >= 8 && layout.rowGap <= 16 : layout.gaps.every(d => d <= 16)), 'Control rows retain compact gaps')
+    assert.ok(layout.aligned, 'Fans align with live Z offset')
   }
   const shots = process.env.CC2_SCREENSHOTS
   if (shots) await mkdir(shots, { recursive: true })
@@ -67,7 +78,7 @@ try {
       await page.waitForTimeout(150)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} collapsed ${tab}: overflow`)
       if (tab === 'control' && width >= 1280) await naturalControl()
-      if (tab === 'dashboard') assert.ok(await page.locator('.cc2-camera-frame').evaluate(e => e.getBoundingClientRect().height <= 241))
+      if (tab === 'dashboard') assert.ok(await page.locator('.cc2-camera-frame').evaluate(e => e.getBoundingClientRect().height >= 180))
       if (shots) await page.screenshot({ path: path.join(shots, `${width}-collapsed-${tab}.png`), fullPage: true })
     }
   }

@@ -69,6 +69,9 @@ jobs:
 
       - name: PID browser interaction regression
         run: npm run test:pid
+      - name: Control calibration layout and actions
+        working-directory: cc2-control/web-src
+        run: npm run test:control-calibrations
 
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures

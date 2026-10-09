@@ -3125,7 +3125,8 @@ static int quick_action_valid(const char *action) {
     static const char *allowed[] = {
         "home:ALL", "home:X", "home:Y", "home:Z",
         "system:heaters_off", "system:fans_off", "system:motors_off",
-        "light:toggle", "page:control", "page:files", "page:bed", "page:canvas"
+        "light:toggle", "page:control", "page:files", "page:bed", "page:canvas",
+        "calibration:shaper", "calibration:hotend", "calibration:bed"
     };
     for (size_t index = 0; index < sizeof(allowed) / sizeof(allowed[0]); ++index)
         if (strcmp(action, allowed[index]) == 0) return 1;

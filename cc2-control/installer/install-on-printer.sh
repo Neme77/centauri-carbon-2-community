@@ -4,6 +4,15 @@ STAGE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 TARGET=/opt/usr/cc2-control
 INIT=/etc/init.d/cc2-control
 LOCK=/tmp/cc2-control-install.lock
+wait_stopped() {
+    stop_wait=0
+    while pidof cc2-control >/dev/null 2>&1; do
+        [ "$stop_wait" -lt 20 ] || return 1
+        sleep 1
+        stop_wait=$((stop_wait + 1))
+    done
+    return 0
+}
 EXPECTED=@BINARY_SHA256@
 mkdir "$LOCK" || { echo 'Another installation is active.' >&2; exit 1; }
 CHANGED=0
@@ -16,7 +25,7 @@ finish() {
     set +e
     if [ "$PASSED" -eq 0 ] && [ "$STOPPED" -eq 1 ]; then
         "$INIT" stop >/dev/null 2>&1
-        if pidof cc2-control >/dev/null; then
+        if ! wait_stopped; then
             echo "Cannot restore while service is running. Backup: $BACKUP" >&2
         else
             if [ "$CHANGED" -eq 1 ]; then
@@ -52,7 +61,7 @@ STATUS=$(wget -qO- http://127.0.0.1:8081/api/printer)
 case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Printer state changed; update cancelled.' >&2; exit 1;; esac
 STOPPED=1
 "$INIT" stop
-if pidof cc2-control >/dev/null; then echo 'Service did not stop; update cancelled.' >&2; exit 1; fi
+if ! wait_stopped; then echo 'Service did not stop; update cancelled.' >&2; exit 1; fi
 CHANGED=1
 cp "$STAGE/cc2-control" "$TARGET/cc2-control.new"
 chmod 755 "$TARGET/cc2-control.new"

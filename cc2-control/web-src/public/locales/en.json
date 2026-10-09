@@ -800,5 +800,14 @@
   "spools.colour_beige": "Beige",
   "spools.no_suitable": "No spool in the inventory has this filament. Pick one from all spools or add a new one.",
   "spools.chosen": "Chosen: {name}",
-  "dashboard.effective_z_offset": "Effective Z offset"
+  "dashboard.effective_z_offset": "Effective Z offset",
+  "control.shaper_title": "Input Shaper",
+  "control.shaper_start": "Calibrate vibrations",
+  "control.shaper_help": "Home all axes first. Calibration moves the printer rapidly; keep the bed clear. Results are not saved automatically.",
+  "control.shaper_confirm": "Start vibration calibration? The printer will move rapidly.",
+  "control.shaper_running": "Vibration calibration is running.",
+  "control.shaper_completed": "Command completed. Review the printer output; results have not been saved automatically.",
+  "control.shaper_check_output": "Review the printer output in the console.",
+  "control.quick_pid_hotend": "Hotend PID",
+  "control.quick_pid_bed": "Bed PID"
 }

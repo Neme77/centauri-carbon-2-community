@@ -10,7 +10,7 @@ import { Icon } from '@/components/icons'
 import { CameraCard, FanBar, Progress, Row } from '@/components/shared'
 import { ThermalChart } from '@/components/thermal'
 import { control, errText, notify } from '@/lib/api'
-import { QUICK_ASK, QUICK_CHOICES, quick, quickAlwaysAvailable, saveQuickActions } from '@/lib/quick'
+import { calibrationFocus, QUICK_ASK, QUICK_CHOICES, quick, quickAlwaysAvailable, saveQuickActions } from '@/lib/quick'
 import { t, tpl } from '@/lib/i18n'
 import { stateText } from '@/lib/machine'
 import { num, duration } from '@/lib/format'
@@ -23,6 +23,10 @@ const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightO
   const blocked = !idle && !quickAlwaysAvailable(action)
   const isLight = action === 'light:toggle'
   const run = async () => {
+    if (action.startsWith('calibration:')) {
+      calibrationFocus.set(s => ({ target: action.slice(12), revision: s.revision + 1 }))
+      return openPage('control')
+    }
     if (action.startsWith('page:')) return openPage(action.slice(5) as Page)
     if (isLight) {
       if (await control(lightOn ? 'light:off' : 'light:on')) setTimeout(refreshPrinter, 250)
@@ -109,7 +113,7 @@ export const Dashboard = () => {
     <div class="cc2-dashboard grid gap-3.5">
       {editing && <QuickEditor onClose={() => setEditing(false)} />}
       <div class="cc2-dashboard-primary grid gap-3.5 cc2-lg:grid-cols-2">
-        <div class="cc2-dashboard-camera-column grid content-start gap-3.5">
+        <div class="cc2-dashboard-camera-column grid content-start gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
           <CameraCard />
           <Card class="cc2-quick-actions">
             <CardHead
