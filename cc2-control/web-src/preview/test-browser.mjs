@@ -37,14 +37,14 @@ try {
         const fans = groups[1].children[1].getBoundingClientRect()
         const machine = groups[2].children[0].getBoundingClientRect()
         const offset = groups[2].children[1].getBoundingClientRect()
-        return { grid: true, gaps: [fans.top - temperatures.bottom, offset.top - machine.bottom], aligned: Math.abs(fans.top - offset.top) < 2 }
+        return { grid: true, rowGap: parseFloat(getComputedStyle(e).rowGap), gaps: [fans.top - temperatures.bottom, offset.top - machine.bottom], aligned: Math.abs(fans.top - offset.top) < 2 }
       }
-      return { grid: false, gaps: groups.flatMap(g => {
+      return { grid: false, rowGap: 0, gaps: groups.flatMap(g => {
         const cards = [...g.children].map(c => c.getBoundingClientRect())
         return cards.slice(1).map((c, i) => c.top - cards[i].bottom)
       }), aligned: true }
     })
-    assert.ok(layout.gaps.every(d => d >= 8) && (layout.grid ? Math.min(...layout.gaps) <= 16 : layout.gaps.every(d => d <= 16)), 'Control rows retain compact gaps')
+    assert.ok(layout.gaps.every(d => d >= 8) && (layout.grid ? layout.rowGap >= 8 && layout.rowGap <= 16 : layout.gaps.every(d => d <= 16)), 'Control rows retain compact gaps')
     assert.ok(layout.aligned, 'Fans align with live Z offset')
   }
   const shots = process.env.CC2_SCREENSHOTS
