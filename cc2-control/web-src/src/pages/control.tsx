@@ -686,12 +686,12 @@ export const Control = () => {
       }
     >
       <div class="cc2-control-columns grid gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
-        <div class="grid content-start gap-3.5 cc2-xl:grid-rows-[1fr]">
+        <div class="grid content-start gap-3.5 ">
           <Movement v={v} />
         </div>
-        <div class="grid content-start gap-3.5 cc2-xl:grid-rows-[auto_auto_1fr]">
+        <div class="grid content-start gap-3.5 cc2-xl:grid-rows-[auto_1fr]">
           <Temperatures d={d} v={v} />
-          <Card>
+          <Card class="cc2-fans cc2-xl:self-center">
             <CardHead icon="fan" title="common.fans" />
             {(['part', 'aux', 'box'] as const).map(k => (
               <FanSlider
@@ -703,7 +703,7 @@ export const Control = () => {
             ))}
           </Card>
         </div>
-        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:grid-rows-[auto_1fr]">
+        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 ">
           <Card>
             <CardHead icon="settings" title="control.machine" />
             <div class="grid auto-rows-fr grid-cols-2 gap-2.5">
@@ -759,7 +759,7 @@ export const Control = () => {
           <ZOffset />
         </div>
       </div>
-      <div class="cc2-control-calibrations mt-3.5 grid items-start gap-3.5 cc2-xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div class="cc2-control-calibrations mt-3.5 grid items-end gap-3.5 cc2-xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)]">
         <InputShaper d={d} v={v} />
         <PidCalibration d={d} />
         <PrintTuning compact />

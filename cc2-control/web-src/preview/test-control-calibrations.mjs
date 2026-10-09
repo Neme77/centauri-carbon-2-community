@@ -22,7 +22,7 @@ try {
  await page.waitForFunction(()=>!document.querySelector('.cc2-shaper button')?.disabled)
  const boxes=await Promise.all(['.cc2-shaper','.cc2-pid','.cc2-tuning'].map(s=>row.locator(s).boundingBox()))
  assert.ok(boxes[0].x<boxes[1].x && boxes[1].x<boxes[2].x)
- assert.ok(boxes.every(b=>Math.abs(b.y-boxes[0].y)<2),'desktop row aligns')
+ assert.ok(boxes.every(b=>Math.abs(b.y+b.height-boxes[0].y-boxes[0].height)<2),'desktop card bottoms align')
  await start.click();await page.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal(commands.length,0)
  await start.click();await page.getByRole('button',{name:'Confirm',exact:true}).click()
  await page.waitForFunction(()=>document.querySelector('.cc2-shaper').textContent.includes('Measuring...'))
