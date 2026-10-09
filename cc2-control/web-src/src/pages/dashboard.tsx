@@ -109,7 +109,7 @@ export const Dashboard = () => {
     <div class="cc2-dashboard grid gap-3.5">
       {editing && <QuickEditor onClose={() => setEditing(false)} />}
       <div class="cc2-dashboard-primary grid gap-3.5 cc2-lg:grid-cols-2">
-        <div class="cc2-dashboard-camera-column grid content-start gap-3.5 cc2-lg:grid-rows-[1fr_auto] cc2-lg:[&_.cc2-camera-frame]:flex-1">
+        <div class="cc2-dashboard-camera-column grid content-start gap-3.5 cc2-lg:grid-rows-[1fr_auto] cc2-lg:[&_.cc2-camera-frame]:grow cc2-lg:[&_.cc2-camera-frame]:shrink-0 cc2-lg:[&_.cc2-camera-frame]:basis-auto">
           <CameraCard />
           <Card class="cc2-quick-actions">
             <CardHead
