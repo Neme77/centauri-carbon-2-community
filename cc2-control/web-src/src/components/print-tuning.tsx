@@ -70,10 +70,12 @@ const TuningForm = ({ d, rev, ok, compact }: { d: any; rev: number; ok: boolean;
           const disabled = !ready || actual[kind] === null || pending !== null || posting
           return (
             <div key={kind} class="cc2-tuning-field min-w-0">
-              <label for={`tune-${kind}`} class="mb-1 block font-medium">
-                {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
-              </label>
-              <div class="mb-2 text-sm text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</div>
+              <div class={compact ? 'mb-2 flex flex-wrap items-center justify-between gap-1' : ''}>
+                <label for={`tune-${kind}`} class="mb-1 block font-medium">
+                  {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
+                </label>
+                <div class="mb-2 text-sm text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</div>
+              </div>
               <form
                 class="flex flex-wrap gap-2"
                 onSubmit={e => {
@@ -100,12 +102,12 @@ const TuningForm = ({ d, rev, ok, compact }: { d: any; rev: number; ok: boolean;
                   {t('tuning.reset')}
                 </Button>
               </form>
-              <small class="mt-1 block text-muted">{tpl('tuning.range', { min, max })}</small>
+              {!compact && <small class="mt-1 block text-muted">{tpl('tuning.range', { min, max })}</small>}
             </div>
           )
         })}
       </div>
-      <div class="mt-3 text-sm">{tpl('tuning.live_velocity', { value: display(live) })}</div>
+      {!compact && <div class="mt-3 text-sm">{tpl('tuning.live_velocity', { value: display(live) })}</div>}
       <p class="mt-2 text-xs text-muted">{t(ready ? 'tuning.manual_note' : 'tuning.unavailable')}</p>
     </Card>
   )
