@@ -197,7 +197,7 @@ export const Dashboard = () => {
           <FanBar label="dashboard.chamber" pct={v.fan('box')} />
         </Card>
         <Card class="flex flex-col">
-          <CardHead icon="z" title="common.live_z_offset" />
+          <CardHead icon="z" title="dashboard.effective_z_offset" />
           <div class="my-2 text-3xl">
             {off === null ? '—' : (off > 0 ? '+' : '') + off.toFixed(2)} <small class="text-sm text-muted">mm</small>
           </div>

@@ -290,7 +290,7 @@
   "dashboard.system": "Système",
   "dashboard.system_uptime": "Temps de fonctionnement",
   "dashboard.thermals": "Températures",
-  "dashboard.z_offset_page_only": "Lecture actuelle de l’imprimante ; les valeurs indisponibles sont indiquées par —.",
+  "dashboard.z_offset_page_only": "Inclut la compensation du plateau du firmware et les ajustements en direct ; ce n’est pas la calibration enregistrée de la sonde.",
   "files.actions": "Actions",
   "files.all_files": "Tous les fichiers",
   "files.bed_temperature": "Température du plateau",
@@ -799,5 +799,6 @@
   "spools.colour_brown": "marron",
   "spools.colour_beige": "beige",
   "spools.no_suitable": "Aucune bobine de l’inventaire n’a ce filament. Choisissez-en une parmi toutes les bobines ou ajoutez-en une nouvelle.",
-  "spools.chosen": "Choisie : {name}"
+  "spools.chosen": "Choisie : {name}",
+  "dashboard.effective_z_offset": "Décalage Z effectif"
 }
