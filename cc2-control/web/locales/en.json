@@ -290,7 +290,7 @@
   "dashboard.system": "System",
   "dashboard.system_uptime": "System Uptime",
   "dashboard.thermals": "Thermals",
-  "dashboard.z_offset_page_only": "Live printer readback; unavailable values are shown as —.",
+  "dashboard.z_offset_page_only": "Includes firmware bed compensation and live adjustments; this is not the saved probe calibration.",
   "files.actions": "Actions",
   "files.all_files": "All files",
   "files.bed_temperature": "Bed Temperature",
@@ -799,5 +799,6 @@
   "spools.colour_brown": "Brown",
   "spools.colour_beige": "Beige",
   "spools.no_suitable": "No spool in the inventory has this filament. Pick one from all spools or add a new one.",
-  "spools.chosen": "Chosen: {name}"
+  "spools.chosen": "Chosen: {name}",
+  "dashboard.effective_z_offset": "Effective Z offset"
 }

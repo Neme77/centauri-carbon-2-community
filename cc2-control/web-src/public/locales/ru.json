@@ -290,7 +290,7 @@
   "dashboard.system": "Система",
   "dashboard.system_uptime": "Время работы",
   "dashboard.thermals": "Температуры",
-  "dashboard.z_offset_page_only": "Значения считываются с принтера; недоступные показаны как —.",
+  "dashboard.z_offset_page_only": "Включает компенсацию стола прошивки и текущие корректировки; это не сохранённая калибровка датчика.",
   "files.actions": "Действия",
   "files.all_files": "Все файлы",
   "files.bed_temperature": "Температура стола",
@@ -799,5 +799,6 @@
   "spools.colour_brown": "коричневый",
   "spools.colour_beige": "бежевый",
   "spools.no_suitable": "На складе нет катушки с таким пластиком. Выберите из всех катушек или добавьте новую.",
-  "spools.chosen": "Выбрано: {name}"
+  "spools.chosen": "Выбрано: {name}",
+  "dashboard.effective_z_offset": "Текущее смещение Z"
 }

@@ -290,7 +290,7 @@
   "dashboard.system": "系统",
   "dashboard.system_uptime": "系统运行时间",
   "dashboard.thermals": "温度",
-  "dashboard.z_offset_page_only": "打印机实时读数；不可用时显示 —。",
+  "dashboard.z_offset_page_only": "包含固件的平台补偿和实时调整；并非已保存的探针校准值。",
   "files.actions": "操作",
   "files.all_files": "全部文件",
   "files.bed_temperature": "热床温度",
@@ -799,5 +799,6 @@
   "spools.colour_brown": "棕色",
   "spools.colour_beige": "米色",
   "spools.no_suitable": "库存中没有这种耗材的耗材卷。请从全部耗材卷中选择，或添加新的耗材卷。",
-  "spools.chosen": "已选择：{name}"
+  "spools.chosen": "已选择：{name}",
+  "dashboard.effective_z_offset": "实际 Z 偏移"
 }
