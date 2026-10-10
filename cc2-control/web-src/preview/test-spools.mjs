@@ -229,7 +229,7 @@ try {
   await page.goto(`${origin}/#files`)
   await page.getByRole('button', { name: 'Print', exact: true }).first().click()
   dialog = page.getByRole('dialog')
-  await dialog.locator('select').first().selectOption('0')
+  await dialog.getByRole('group', { name: 'Filament T0', exact: true }).getByRole('radio', { name: /Slot 1/ }).check()
   await dialog.getByText('Red PLA: 550 g left, the file needs about 895 g', { exact: true }).waitFor()
   await dialog.getByText('A spool holds less filament than the file needs.', { exact: false }).waitFor()
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()

@@ -10,7 +10,7 @@ int main(void){
  char path[512];snprintf(path,sizeof(path),"%s/large.gcode",root);FILE *f=fopen(path,"w");assert(f);
  char block[32768];memset(block,' ',sizeof(block));for(size_t i=0;i<sizeof(block);i+=16)memcpy(block+i,"G1 X1 Y1 E0.1\n  ",16);
  for(int i=0;i<3400;i++)assert(fwrite(block,1,sizeof(block),f)==sizeof(block));
- fputs("\n; total layer number: 227\nT3\n",f);assert(!fclose(f));
+ fputs("\n; total layer number: 227\nT3\n; filament_colour = ;;;#ABCDEF\n; filament_type = ;;;PETG\n",f);assert(!fclose(f));
  /* Active-job fallback returns immediately and shares the existing worker. */
  struct timespec begin,end;clock_gettime(CLOCK_MONOTONIC,&begin);
  assert(active_gcode_total_layers("large.gcode")==0);
@@ -40,7 +40,7 @@ int main(void){
  char reply[8192];read_reply(health[1],reply,sizeof(reply));assert(strstr(reply,"200 OK"));close(health[1]);
  read_reply(pair[1],reply,sizeof(reply));assert(strstr(reply,"\"layers\":227"));close(pair[1]);
  assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));assert(analysis_start(pair[0],0,body,strlen(body)));
- read_reply(pair[1],reply,sizeof(reply));assert(strstr(reply,"\"tools\":[3]"));close(pair[1]);
+ read_reply(pair[1],reply,sizeof(reply));assert(strstr(reply,"\"tools\":[3]"));assert(strstr(reply,"\"color\":\"#ABCDEF\""));assert(strstr(reply,"\"material\":\"PETG\""));close(pair[1]);
  /* Replacement at the same filename invalidates both cached responses. */
  f=fopen(path,"w");assert(f);fputs("; total layer number: 12\nT1\n",f);fclose(f);
  assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));assert(analysis_start(pair[0],1,body,strlen(body)));
