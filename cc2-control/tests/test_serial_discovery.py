@@ -14,12 +14,13 @@ with tempfile.TemporaryDirectory() as directory:
 int main(int argc,char **argv){
  signal(SIGPIPE,SIG_IGN); mqtt_client c; mqtt_init(&c); strcpy(c.password,"a.b_-9");
  snprintf(c.config_path,sizeof(c.config_path),"%s",argv[1]);
- c.connected=1; c.fd=socket(AF_INET,SOCK_STREAM,0);
+ int peers[2]; if(socketpair(AF_UNIX,SOCK_STREAM,0,peers))return 1;
+ c.connected=1; c.fd=peers[0];
  if(argc>2)strcpy(c.serial,"EXISTING");
  mqtt_tick(&c); unsigned int attempts=c.serial_discovery_attempts;
  mqtt_tick(&c);
  printf("%s %u %u\\n",c.serial,attempts,c.serial_discovery_attempts);
- close(c.fd); return 0;
+ close(c.fd); close(peers[1]); return 0;
 }''')
     binary=directory/'probe'
     subprocess.run(['gcc','-std=c11','-D_POSIX_C_SOURCE=200809L',f'-DCC2_DISCOVERY_PORT={port}', '-I'+str(ROOT/'src'),str(harness),'-o',str(binary)],check=True)

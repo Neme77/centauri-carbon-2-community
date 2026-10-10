@@ -50,16 +50,18 @@ export const canvas = store({
   autoRefill: null as boolean | null, // null until the printer has reported the setting
   slot: 0,
   checked: '',
+  eject: { available: false, running: false, slot: -1, result: 'unavailable', travel: 0 },
   optimistic: {} as Record<number, { colour: string; material: string; until: number }>,
 })
 
 export async function refreshCanvas() {
   try {
-    const data = await request('/api/canvas')
+    const [data, eject] = await Promise.all([request('/api/canvas'), request('/api/canvas/eject').catch(() => null)])
     canvas.set({
       model: canvasModel(data),
       autoRefill: typeof data?.auto_refill === 'boolean' ? data.auto_refill : null,
       checked: new Date().toLocaleTimeString(),
+      eject: eject || { available: false, running: false, slot: -1, result: 'unavailable', travel: 0 },
     })
   } catch {
     /* keep last */

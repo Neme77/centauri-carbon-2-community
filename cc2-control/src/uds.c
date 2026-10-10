@@ -197,7 +197,7 @@ int uds_message(uds_client *c,const char *json,size_t length){
  int older=c->messages&&event<c->eventtime;
  if(older&&!initial){c->parse_error="out_of_order_event";return 0;}
  /* Initial snapshots can follow an earlier notification with the same time. */
- const char *pe;const char *ps=json_member_object(status,se,"print_stats",'{',&pe);
+ const char *pe=NULL;const char *ps=json_member_object(status,se,"print_stats",'{',&pe);
  if(ps&&(!older||!c->have_filename)&&json_member(ps,pe,"filename")){
   char filename[sizeof(c->filename)];
   int valid=filename_read(ps,pe,filename,sizeof(filename));
