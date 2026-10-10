@@ -1,11 +1,10 @@
 import { useState } from 'preact/hooks'
 import { store } from '@/lib/store'
 import { Button } from '@/components/ui/button'
-import { Select } from '@/components/ui/field'
 import { Dialog } from '@/components/ui/dialog'
 import { errText, notify, post, request, toast } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
-import { canvasColour, canvasModel } from '@/lib/canvas'
+import { canvasHex, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
 import { openPage, printer } from '@/lib/state'
 import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
@@ -94,6 +93,18 @@ export async function checkOrcaPendingPrint() {
   }
 }
 
+// Missing Canvas colours are unknown, not the shared helper's decorative fallback.
+const slotColour = (tray: any, index: number) => {
+  const value = tray?.filament_color
+  if (value === undefined || value === null || value === '') return null
+  if (Array.isArray(value) && value.length >= 3 && value.slice(0, 3).every(Number.isFinite))
+    return canvasHex(value, index)
+  if (typeof value === 'number' && Number.isFinite(value)) return canvasHex(value, index)
+  if (typeof value === 'string' && /^(?:#?[0-9a-f]{6}(?:[0-9a-f]{2})?|0x[0-9a-f]{6,8})$/i.test(value.trim()))
+    return canvasHex(value, index)
+  return null
+}
+
 const slotLabel = (tray: any) => (tray && (tray.filament_name || tray.filament_type)) || t('print.not_reported')
 
 export const PrintDialog = () => {
@@ -176,7 +187,7 @@ const Form = ({ job }: { job: Pending }) => {
   }
   const label = 'my-3 flex items-center gap-2 text-[13px]'
   return (
-    <Dialog onClose={close} locked={busy} width={680}>
+    <Dialog onClose={close} locked={busy} width={820}>
       <form onSubmit={submit}>
         <div class="text-xs text-muted">CANVAS · {t('print.print_setup')}</div>
         <h2 class="my-2 text-xl font-semibold">{t('print.choose_print_spool')}</h2>
@@ -184,7 +195,7 @@ const Form = ({ job }: { job: Pending }) => {
         <div class="my-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[0, 1, 2, 3].map(i => (
             <div key={i} class="rounded-lg border border-edge p-2 text-xs [overflow-wrap:anywhere]">
-              <div class="mb-1.5 h-2 rounded" style={{ background: canvasColour(tray(i)?.filament_color, i) }} />
+              <div class="mb-1.5 h-2 rounded" style={{ background: slotColour(tray(i), i) || 'var(--edge)' }} />
               <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
               <div>{slotLabel(tray(i))}</div>
             </div>
@@ -209,61 +220,79 @@ const Form = ({ job }: { job: Pending }) => {
           {t('print.use_elegoo_canvas')}
         </label>
         {job.tools.map(tool => (
-          <label key={tool} class="my-3 grid grid-cols-[1fr_2fr] items-center gap-3">
-            <div>
-              <strong>{tpl('print.filament_tool_n', { n: tool })}</strong>
-              {(() => {
-                const filament = job.filaments.find(f => f.tool === tool)
-                const color = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(filament?.color || '') ? filament?.color : null
-                return (
-                  <div class="mt-1 text-xs text-muted">
-                    <div>{t('print.file_filament')}</div>
-                    <div class="flex items-center gap-2">
-                      {color && (
-                        <span
-                          class="inline-block size-4 shrink-0 rounded border border-edge"
-                          style={{ background: color }}
-                        />
-                      )}
-                      <span>
-                        {[filament?.material, color].filter(Boolean).join(' · ') || t('print.file_filament_unknown')}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
-            <div class="grid gap-1">
-              <Select
-                disabled={!useCanvas}
-                value={map[tool] || ''}
-                onChange={e => {
-                  const v = e.currentTarget.value
-                  setMap(m => ({ ...m, [tool]: v }))
-                }}
-              >
-                <option value="">{t('print.choose_a_spool')}</option>
-                {[0, 1, 2, 3].map(i => (
-                  <option key={i} value={i}>
-                    {tpl('common.slot_n', { n: i + 1 })} · {slotLabel(tray(i))}
-                  </option>
-                ))}
-              </Select>
-              {(() => {
-                const s = supply(tool)
-                if (!s) return null
-                if (!s.spool) return <span class="text-xs text-muted">{t('spools.print_no_spool')}</span>
-                const vars = { name: spoolLabel(s.spool), remaining: g(s.spool.remaining) }
-                return s.need === null ? (
-                  <span class="text-xs text-muted">{tpl('spools.print_left', vars)}</span>
-                ) : (
-                  <span class={s.need > s.spool.remaining ? 'text-xs text-red' : 'text-xs text-muted'}>
-                    {tpl('spools.print_need', { ...vars, need: g(s.need) })}
+          <fieldset key={tool} class="my-4 min-w-0 rounded-lg border border-edge p-3">
+            <legend class="px-1.5 font-semibold">{tpl('print.filament_tool_n', { n: tool })}</legend>
+            {(() => {
+              const filament = job.filaments.find(f => f.tool === tool)
+              const color = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(filament?.color || '') ? filament?.color : null
+              return (
+                <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+                  <span>{t('print.file_filament')}:</span>
+                  {color && (
+                    <span
+                      class="inline-block size-4 shrink-0 rounded border border-edge"
+                      style={{ background: color }}
+                    />
+                  )}
+                  <span>
+                    {[filament?.material, color].filter(Boolean).join(' · ') || t('print.file_filament_unknown')}
                   </span>
+                </div>
+              )
+            })()}
+            <div class="mb-2 text-xs text-muted">{t('print.choose_a_spool')}</div>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[0, 1, 2, 3].map(i => {
+                const color = slotColour(tray(i), i)
+                const selected = map[tool] === String(i)
+                return (
+                  <label
+                    key={i}
+                    class={`flex min-w-0 items-start gap-2 rounded-lg border p-2 text-xs ${selected && useCanvas ? 'border-cyan bg-cyan/10' : 'border-edge'} ${useCanvas ? 'cursor-pointer' : 'opacity-50'}`}
+                  >
+                    <input
+                      type="radio"
+                      name={`tool-${tool}-slot`}
+                      value={String(i)}
+                      checked={selected}
+                      disabled={!useCanvas || busy}
+                      onChange={e => {
+                        setMap(m => ({ ...m, [tool]: e.currentTarget.value }))
+                        setNote(t('print.choose_the_spool_and_confirm_the'))
+                      }}
+                      class="mt-0.5 shrink-0"
+                    />
+                    <span class="grid min-w-0 gap-1 [overflow-wrap:anywhere]">
+                      <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
+                      <span class="flex items-center gap-1.5">
+                        {color && (
+                          <span
+                            class="inline-block size-4 shrink-0 rounded border border-edge"
+                            style={{ background: color }}
+                          />
+                        )}
+                        <span>{slotLabel(tray(i))}</span>
+                      </span>
+                      <span class="text-muted">{color || t('print.not_reported')}</span>
+                    </span>
+                  </label>
                 )
-              })()}
+              })}
             </div>
-          </label>
+            {(() => {
+              const s = supply(tool)
+              if (!s) return null
+              if (!s.spool) return <span class="text-xs text-muted">{t('spools.print_no_spool')}</span>
+              const vars = { name: spoolLabel(s.spool), remaining: g(s.spool.remaining) }
+              return s.need === null ? (
+                <span class="text-xs text-muted">{tpl('spools.print_left', vars)}</span>
+              ) : (
+                <span class={s.need > s.spool.remaining ? 'text-xs text-red' : 'text-xs text-muted'}>
+                  {tpl('spools.print_need', { ...vars, need: g(s.need) })}
+                </span>
+              )
+            })()}
+          </fieldset>
         ))}
         {short && <div class="my-2 text-[13px] text-red">{t('spools.print_short')}</div>}
         <div class="my-4 grid gap-3 sm:grid-cols-[1fr_1.35fr]">

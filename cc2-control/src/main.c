@@ -1418,19 +1418,17 @@ static int gcode_detect_tools(const char *root, const char *relative,
  * Read bounded comment metadata only; never interpret it as commands. */
 typedef struct { char color[10]; char material[65]; } gcode_filament_info;
 
-static int gcode_read_filaments(const char *root, const char *relative,
-                                gcode_filament_info info[GCODE_TOOLS_MAX]) {
-    char path[PATH_MAX_LOCAL * 2], line[4096];
-    memset(info, 0, sizeof(*info) * GCODE_TOOLS_MAX);
-    if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
-    FILE *file = fopen(path, "r");
-    if (!file) return -1;
+#define GCODE_FILAMENT_SCAN_BYTES (256L * 1024)
+
+static void gcode_scan_filaments(FILE *file, size_t budget,
+                                 gcode_filament_info info[GCODE_TOOLS_MAX]) {
+    char line[4096];
     size_t scanned = 0;
-    while (scanned < 256 * 1024 && fgets(line, sizeof(line), file)) {
+    while (scanned < budget && fgets(line, sizeof(line), file)) {
         scanned += strlen(line);
         /* Discard truncated lines rather than assigning partial metadata. */
         if (!strchr(line, '\n') && !feof(file)) {
-            int ch; while (scanned < 256 * 1024 && (ch = fgetc(file)) != EOF && ch != '\n') scanned++;
+            int ch; while (scanned < budget && (ch = fgetc(file)) != EOF && ch != '\n') scanned++;
             continue;
         }
         char *cursor = line;
@@ -1464,7 +1462,39 @@ static int gcode_read_filaments(const char *root, const char *relative,
             cursor = next;
         }
     }
-    int failed = ferror(file); fclose(file);
+}
+
+static int gcode_read_filaments(const char *root, const char *relative,
+                                gcode_filament_info info[GCODE_TOOLS_MAX]) {
+    char path[PATH_MAX_LOCAL * 2];
+    memset(info, 0, sizeof(*info) * GCODE_TOOLS_MAX);
+    if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
+    FILE *file = fopen(path, "r");
+    if (!file) return -1;
+    gcode_scan_filaments(file, GCODE_FILAMENT_SCAN_BYTES, info);
+    int failed = ferror(file);
+    /* Orca/Prusa-style config comments can follow the entire print. Seek to a
+     * bounded footer rather than scanning large files again. Later valid values
+     * take precedence, and a partial first line is never treated as metadata. */
+    if (!failed && fseek(file, 0, SEEK_END) == 0) {
+        long size = ftell(file);
+        if (size > GCODE_FILAMENT_SCAN_BYTES) {
+            long start = size - GCODE_FILAMENT_SCAN_BYTES;
+            if (start < GCODE_FILAMENT_SCAN_BYTES) start = GCODE_FILAMENT_SCAN_BYTES;
+            if (fseek(file, start - 1, SEEK_SET) != 0) failed = 1;
+            else {
+                int ch = fgetc(file);
+                if (ch != '\n') {
+                    while ((ch = fgetc(file)) != EOF && ch != '\n') {}
+                }
+                long position = ftell(file);
+                if (position < 0) failed = 1;
+                else if (position < size) gcode_scan_filaments(file, (size_t)(size - position), info);
+            }
+        } else if (size < 0) failed = 1;
+    } else if (!failed) failed = 1;
+    failed |= ferror(file);
+    fclose(file);
     return failed ? -1 : 0;
 }
 
