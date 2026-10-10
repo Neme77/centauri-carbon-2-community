@@ -23,7 +23,8 @@
     "test:pid": "node preview/test-pid.mjs",
     "test:print-temperatures": "node preview/test-print-temperatures.mjs",
     "test:printer-reports": "node preview/test-printer-reports.mjs",
-    "test:control-calibrations": "node preview/test-control-calibrations.mjs"
+    "test:control-calibrations": "node preview/test-control-calibrations.mjs",
+    "test:canvas-eject": "node preview/test-canvas-eject.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

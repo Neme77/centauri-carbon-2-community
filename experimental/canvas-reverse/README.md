@@ -37,6 +37,12 @@ The 01.03.02.51 and 02.00.02.00 packages contain an identical CANVAS library. Th
 - `validation.json`: new 02.01.00.00 compatibility, ARM and patcher verification results.
 - `verify_extended.py`: reproduces the 800 comparison cases using the recognized 02.01.00.00 original library (requires the same optional Capstone/Unicorn dependencies as `verify_arm.py`).
 
+The repository builder suite also runs `builder/current/tests/test_canvas_reverse.py`.
+It checks the CLI with synthetic files and a temporary test-only manifest, so CI
+needs no vendor binaries. Run it from the repository root with
+`python3 -m unittest discover -s builder/current/tests -p 'test_canvas_reverse.py'`.
+Actual ARM comparison reproduction still requires a recognized original library.
+
 ## Check a local backup
 
 Copy the actual installed library from the printer using an established access method for that release. Its location in the inspected firmware images is `/opt/lib/libelegoo_extras.so`. Keep that original backup unchanged. The following commands operate on local files on your computer; they do not install anything on the printer.

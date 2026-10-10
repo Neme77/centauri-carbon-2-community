@@ -12,7 +12,7 @@ import { control, errText, notify, post } from '@/lib/api'
 import { type Key, t, tpl } from '@/lib/i18n'
 import { poll, usePoll } from '@/lib/poll'
 import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
-import { presets } from '@/lib/state'
+import { presets, printer, view } from '@/lib/state'
 import { findSpool, g, openChooser, refreshSpools, spoolLabel, spools } from '@/lib/spools'
 
 const I = { size: 16, strokeWidth: 1 }
@@ -131,7 +131,10 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
 }
 
 export const Canvas = () => {
-  const { model, autoRefill, slot, optimistic, checked } = canvas.use()
+  const { model, autoRefill, slot, optimistic, checked, eject } = canvas.use()
+  const machine = printer.use().data
+  const idle = view(machine).idle && !view(machine).paused && machine?.connected && machine.last_message_age <= 15
+  const [ejectPending, setEjectPending] = useState(false)
   const library = spools.use().data
   const tracking = Boolean(library?.available && library.enabled)
   const [dialog, setDialog] = useState(false)
@@ -140,6 +143,40 @@ export const Canvas = () => {
   useEffect(() => (dialog ? undefined : poll(refreshCanvas, 2000)), [dialog])
   usePoll(refreshSpools, 10000)
   const ok = Boolean(model?.connected)
+  const startEject = async () => {
+    if (ejectPending || eject.running || !eject.available || !idle) return
+    setEjectPending(true)
+    try {
+      await control(`canvas:eject:${slot}`, tpl('canvas.eject_confirm', { slot: slot + 1 }))
+      await refreshCanvas()
+    } finally {
+      setEjectPending(false)
+    }
+  }
+  const cancelEject = async () => {
+    try {
+      await post('/api/canvas/eject/cancel')
+      notify(t('canvas.eject_stop_requested'))
+    } catch (e) {
+      notify(errText(e), 'error')
+    }
+  }
+  const ejectResults: Record<string, Key> = {
+    unavailable: 'canvas.eject_unavailable',
+    running: 'canvas.eject_running',
+    complete: 'canvas.eject_complete',
+    empty: 'canvas.eject_empty',
+    cancelled: 'canvas.eject_cancelled',
+    disconnected: 'canvas.eject_disconnected',
+    stale: 'canvas.eject_stale',
+    blocked: 'canvas.eject_blocked',
+    fault: 'canvas.eject_fault',
+    stalled: 'canvas.eject_stalled',
+    travel_limit: 'canvas.eject_travel_limit',
+    timed_out: 'canvas.eject_timed_out',
+    command_failed: 'canvas.eject_command_failed',
+    stop_failed: 'canvas.eject_stop_failed',
+  }
   const sync = async () => {
     try {
       await post('/api/canvas/refresh')
@@ -330,7 +367,12 @@ export const Canvas = () => {
             <CardHead icon="settings" title={ok ? 'canvas.canvas_controls' : 'canvas.controls_unavailable'} />
             <div class="grid gap-2">
               {ctl.map(([Glyph, label, fn]) => (
-                <Button key={label} class="justify-between" disabled={!ok} onClick={fn}>
+                <Button
+                  key={label}
+                  class="justify-between"
+                  disabled={!ok || eject.running || ejectPending}
+                  onClick={fn}
+                >
                   <span class="flex items-center gap-2">
                     <Glyph {...I} />
                     {t(label)}
@@ -341,11 +383,27 @@ export const Canvas = () => {
                 </Button>
               ))}
             </div>
+            <div class="cc2-canvas-eject mt-3 border-t border-edge pt-3">
+              <Button
+                wide
+                disabled={eject.running ? false : !ok || !idle || !eject.available || ejectPending}
+                onClick={eject.running ? cancelEject : startEject}
+              >
+                {t(eject.running ? 'canvas.eject_stop' : 'canvas.eject')}
+                {!eject.running && ` (${slot + 1})`}
+              </Button>
+              <p class="mt-2 text-[13px] text-muted">{t('canvas.eject_hint')}</p>
+              <p role="status" class="mt-2 text-[13px]">
+                {t(ejectResults[eject.result] || 'canvas.eject_fault')}
+                {eject.slot >= 0 &&
+                  ` · ${tpl('common.slot_n', { n: eject.slot + 1 })} · ${Math.round(eject.travel)} mm`}
+              </p>
+            </div>
             <div class="mt-3 border-t border-edge pt-3">
               <Button
                 wide
                 class="justify-between"
-                disabled={!ok || autoRefill === null || refillBusy}
+                disabled={!ok || autoRefill === null || refillBusy || eject.running || ejectPending}
                 aria-pressed={autoRefill === true}
                 onClick={toggleRefill}
               >

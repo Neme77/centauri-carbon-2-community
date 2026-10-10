@@ -1,5 +1,17 @@
 # Current firmware builder
 
+## Optional Canvas ejection component
+
+The complete touchscreen/web ejection implementation is opt-in with
+`--canvas-eject-component /path/to/component` and `--patchelf /path/to/patchelf`
+on the core builder invocation. It qualifies the exact 02.01 Canvas library
+and existing community GUI, preserves vendor executable code and dynamic
+symbol ABI, and audits the installed and re-extracted image. Source provenance,
+ARM module checks and normal firmware/signing checks remain required.
+Build and printer-validation instructions are in
+[experimental/canvas-eject](../../experimental/canvas-eject/README.md).
+Physical printer validation is pending; this component is not release-qualified.
+
 This directory contains the current firmware assembly logic and its host-side
 tests. Working filenames are stable; release numbers are recorded in Git tags,
 the changelog and source constants.

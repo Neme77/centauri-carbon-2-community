@@ -3,7 +3,8 @@
 
 web/index.html and web/locales are build artifacts of web-src/ (CI rebuilds them and fails on a diff);
 this catches a locale added or removed in web-src/public/locales without a build.
-The firmware builder takes web/ from `make dist`, so there is no second copy to keep in sync.
+The firmware builder takes web/ from `make dist`; the integration overlay also
+carries the same committed UI for consumers using that overlay directly.
 """
 from pathlib import Path
 
@@ -17,6 +18,9 @@ names = sorted(p.name for p in LOCALES.glob("*.json"))
 assert names, "no locale files in web-src/public/locales"
 assert names == sorted(p.name for p in (web / "locales").glob("*.json")), "web/locales differs from web-src/public/locales: run npm run build"
 pairs += [(LOCALES / n, web / "locales" / n) for n in names]
+overlay = root / "firmware-integration/overlay/opt/inst/cc2-control/web"
+pairs += [(web / "index.html", overlay / "index.html")]
+pairs += [(web / "locales" / n, overlay / "locales" / n) for n in names]
 
 for source, copy in pairs:
     assert source.read_bytes() == copy.read_bytes(), f"{copy.relative_to(root)} differs from {source.relative_to(root)}"

@@ -186,6 +186,19 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         else return reject(reason,reason_cap,"Unknown fan");
         return 1;
     }
+    if(strncmp(action,"canvas:eject:",13)==0){
+        int end=0;time_t now=time(NULL);
+        if(sscanf(action,"canvas:eject:%d%n",&slot,&end)!=1||action[end]||slot<0||slot>3)
+            return reject(reason,reason_cap,"Canvas slot must be 1..4");
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+           !strcmp(m->print_state,"paused")||m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Canvas ejection requires fresh idle telemetry");
+        /* Stock ignores EJECT. SPEED=0 makes an unmodified handler stop safely.
+         * The qualified runtime supplies its own finite travel and speed. */
+        int n=snprintf(script,cap,"CANVAS_MOTOR_CONTROL CHANNEL=%d EJECT=1 SPEED=0 DISTANCE=0 TIMEOUT=1",slot);
+        if(n<0||(size_t)n>=cap)return reject(reason,reason_cap,"Canvas command exceeds buffer size");
+        return 1;
+    }
     if(sscanf(action,"canvas:load:%d",&slot)==1){
         if(printing(m))return reject(reason,reason_cap,"Canvas loading is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Canvas loading requires the printer to be idle");
