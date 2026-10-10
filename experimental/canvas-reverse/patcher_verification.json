@@ -1,0 +1,89 @@
+{
+  "results": [
+    {
+      "ota_version": "01.03.01.89",
+      "check_only_passed": true,
+      "output_hash_verified": true,
+      "changes_within_24_byte_block": true,
+      "changed_bytes": 14,
+      "existing_output_protected": true,
+      "input_unchanged": true,
+      "wrong_version_rejected": true,
+      "already_patched_recognized": true,
+      "arm_reproduction": {
+        "compatible_versions": [
+          "01.03.01.89"
+        ],
+        "cases_passed": 80,
+        "original_bug_reproduced": true,
+        "forward_behaviour_preserved": true,
+        "branch_destinations_verified": true
+      }
+    },
+    {
+      "ota_version": "01.03.02.36",
+      "check_only_passed": true,
+      "output_hash_verified": true,
+      "changes_within_24_byte_block": true,
+      "changed_bytes": 14,
+      "existing_output_protected": true,
+      "input_unchanged": true,
+      "wrong_version_rejected": true,
+      "already_patched_recognized": true,
+      "arm_reproduction": {
+        "compatible_versions": [
+          "01.03.02.36"
+        ],
+        "cases_passed": 80,
+        "original_bug_reproduced": true,
+        "forward_behaviour_preserved": true,
+        "branch_destinations_verified": true
+      }
+    },
+    {
+      "ota_version": "01.03.02.51",
+      "check_only_passed": true,
+      "output_hash_verified": true,
+      "changes_within_24_byte_block": true,
+      "changed_bytes": 14,
+      "existing_output_protected": true,
+      "input_unchanged": true,
+      "wrong_version_rejected": true,
+      "already_patched_recognized": true,
+      "arm_reproduction": {
+        "compatible_versions": [
+          "01.03.02.51",
+          "02.00.02.00"
+        ],
+        "cases_passed": 80,
+        "original_bug_reproduced": true,
+        "forward_behaviour_preserved": true,
+        "branch_destinations_verified": true
+      }
+    },
+    {
+      "ota_version": "02.00.02.00",
+      "check_only_passed": true,
+      "output_hash_verified": true,
+      "changes_within_24_byte_block": true,
+      "changed_bytes": 14,
+      "existing_output_protected": true,
+      "input_unchanged": true,
+      "wrong_version_rejected": true,
+      "already_patched_recognized": true,
+      "arm_reproduction": {
+        "compatible_versions": [
+          "01.03.02.51",
+          "02.00.02.00"
+        ],
+        "cases_passed": 80,
+        "original_bug_reproduced": true,
+        "forward_behaviour_preserved": true,
+        "branch_destinations_verified": true
+      }
+    }
+  ],
+  "unknown_input_rejected_without_output": true,
+  "source_patch_applies_to_inspected_source": true,
+  "physical_printer_validation": false
+}
