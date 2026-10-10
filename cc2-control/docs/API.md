@@ -1,5 +1,38 @@
 # CC2 Control Discovery API v1
 
+## Optional full Canvas ejection
+
+`GET /api/canvas/eject` returns the qualified runtime's current state:
+
+```json
+{"available":true,"running":true,"slot":2,"result":"running","travel":150.25}
+```
+
+Slots are zero-based, with `-1` before an operation. Travel is absolute measured
+movement in millimeters. Without a live, valid runtime record the response is
+`available:false`, `running:false`, `slot:-1`, `result:"unavailable"`, `travel:0`.
+No credential or printer protocol address is exposed.
+
+To start, `POST /api/control` with plain text `canvas:eject:0` through
+`canvas:eject:3`. Normal nozzle unload must finish first. The backend requires
+an available runtime, no running ejection, connected/registered printer and
+idle MQTT telemetry no more than 15 seconds old; the runtime independently
+checks the nozzle, active channel, faults and fresh inlet status before motion.
+HTTP acceptance means queued command, not physical completion. Poll readback
+for the actual result. Ordinary packages cannot enable ejection by sending a
+raw motor command: the UI command's zero speed falls back to a stock stop.
+
+`POST /api/canvas/eject/cancel` requests cancellation without waiting for the
+serial console worker. It returns 202 while an ejection is running, 409 if
+none is running, and 500 if the local stop request cannot be created. Continue
+reading status until physical stop handling produces a final result.
+
+Results: `running`, `complete`, `empty`, `cancelled`, `disconnected`, `stale`,
+`blocked`, `fault`, `stalled`, `travel_limit`, `timed_out`, `command_failed`,
+`stop_failed`, or `unavailable`. Only `complete` confirms a cleared inlet
+sensor followed by stopped-motor readback. `empty` means it was already clear.
+See [component and hardware qualification](../../experimental/canvas-eject/README.md).
+
 Canonical endpoint:
 
     GET /api/v1/system/info

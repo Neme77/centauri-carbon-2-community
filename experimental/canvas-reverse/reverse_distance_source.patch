@@ -1,0 +1,11 @@
+--- a/elegoo/extras/mmu.cpp
++++ b/elegoo/extras/mmu.cpp
+@@ -3418,7 +3418,7 @@
+         {
+             reactor->pause(get_monotonic() + 0.1);
+             // SPDLOG_INFO("{}   {}",fabs(canvas_protocol->get_canvas_status().mcu_status.ch_position[channel] - cur_pos) ,dis  );
+-            if(fabs(canvas_protocol->get_canvas_status().mcu_status.ch_position[channel] - cur_pos) > dis)
++            if(fabs(canvas_protocol->get_canvas_status().mcu_status.ch_position[channel] - cur_pos) > fabs(static_cast<double>(dis)))
+             {
+                 SPDLOG_INFO("send motor stop!");
+                 canvas_protocol->feeders_filament_stop(channel);
