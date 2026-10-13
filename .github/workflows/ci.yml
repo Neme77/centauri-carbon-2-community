@@ -73,6 +73,9 @@ jobs:
         working-directory: cc2-control/web-src
         run: npm run test:control-calibrations
 
+      - name: Canvas ejection prototype interaction regression
+        run: npm run test:canvas-eject
+
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures
 

@@ -3429,6 +3429,8 @@ static void pid_status_response(int fd,console_state *console) {
     respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
+#include "canvas_eject.h"
+
 static void control_response(int fd,console_state *console,mqtt_client *mqtt,const char *body,size_t body_len){
     char action[160],script[700],reason[256];
     while(body_len&&isspace((unsigned char)*body)){body++;body_len--;}
@@ -3438,6 +3440,13 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error));return;
     }
     memcpy(action,body,body_len);action[body_len]='\0';
+    if(!strncmp(action,"canvas:eject:",13)){
+        canvas_eject_status status=canvas_eject_read();
+        if(!status.available||status.running){
+            const char *error="{\"accepted\":false,\"error\":\"Canvas ejection is unavailable or already running\"}\n";
+            respond(fd,409,"Conflict","application/json",error,strlen(error));return;
+        }
+    }
     if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
     if(!strncmp(action,"light:",6)){
         if(strcmp(action,"light:on")&&strcmp(action,"light:off")){
@@ -3590,6 +3599,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/server/database/item")==0 &&
                query && strcmp(query,"namespace=lane_data")==0) {
         orca_lane_data_response(fd, mqtt);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/canvas/eject")==0) {
+        canvas_eject_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/canvas/eject/cancel")==0) {
+        canvas_eject_cancel_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/canvas")==0) {
         mqtt->canvas_watch_until=time(NULL)+15;
         canvas_response(fd, mqtt);

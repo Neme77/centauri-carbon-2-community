@@ -79,8 +79,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_COMMIT='d9f8ef38463246b8b2f6f0c67075b298ebe1e640'
-CC2_CONTROL_SOURCE_SHA256='83451d6e27035db024427239526db811b9b40cf9e93aadba68b02ad0b3f2cc37'
+CC2_CONTROL_SOURCE_COMMIT='35937a00a46f24c794e1e4309a9fc4dd96d54262'
+CC2_CONTROL_SOURCE_SHA256='88d59406e83c5a2389af9c51e8d120e1c20532f56409544db356cb4570342bfd'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 # Translation files are optional and open-ended (one per language), unlike the
 # fixed files above; names are validated so only web/locales/<code>.json passes.
@@ -452,6 +452,8 @@ def main():
  ap.add_argument('--sshd-init',default=str(here/'components'/'ssh'/'sshd.init'))
  ap.add_argument('--sshd-config',default=str(here/'components'/'ssh'/'sshd_config'))
  ap.add_argument('--dual-payload',default=str(here/'dualtrust'/'dual_verify.bin'))
+ ap.add_argument('--canvas-eject-component', help='Opt-in qualified Canvas full-ejection component')
+ ap.add_argument('--patchelf',default='patchelf')
  ap.add_argument('--zoffset-patcher',default=str(here/'patches'/'z-offset'/'patch_zoffset.py'))
  ap.add_argument('--dual-patcher',default=str(here/'dualtrust'/'apply_dualtrust.py'))
  ap.add_argument('--sig-tool',default=str(here/'tools'/'cc2_sig_tool_v1.1.py'))
@@ -484,6 +486,12 @@ def main():
  reactor=importlib.util.module_from_spec(spec); spec.loader.exec_module(reactor)
  reactor_component=here/'components/reactor'
  reactor.load(reactor_component)
+ canvas=None
+ if a.canvas_eject_component:
+  spec=importlib.util.spec_from_file_location('canvas_eject_component',here/'core/canvas_eject_component.py')
+  canvas=importlib.util.module_from_spec(spec); spec.loader.exec_module(canvas)
+  canvas.require_firmware_base('02.01.01.07')
+  canvas.load(a.canvas_eject_component)
  mk=find_squash_tool(a.mksquashfs,'mksquashfs'); un=find_squash_tool(a.unsquashfs,'unsquashfs')
  for cmd in ('openssl','cpio'):
   if not shutil.which(cmd): raise RuntimeError(f'Missing required command: {cmd}')
@@ -526,6 +534,7 @@ def main():
    if p.exists() or p.is_symlink(): p.unlink()
   patch_dual(daemon,dual)
   install_cc2_control(root,cc2_component,cc2_manifest)
+  if canvas: canvas.install(root,a.canvas_eject_component,a.patchelf)
   reactor.install(root,reactor_component)
   # Verify intended rootfs surface before compression.
   reqhash(gui,EXPECTED['patched_gui'],'installed patched GUI'); reqhash(root/'usr/sbin/sshd',EXPECTED['sshd'],'installed sshd')
@@ -534,6 +543,7 @@ def main():
   reqhash(daemon,EXPECTED['daemon_dual'],'installed Dual Trust daemon')
   audit_cc2_control(root,cc2_component,cc2_manifest)
   reactor.audit(root,reactor_component)
+  if canvas: canvas.audit(root,a.canvas_eject_component)
   banner('REBUILD SQUASHFS'); new=work/'rootfs.new'; log=run([mk,root,new,'-comp','xz','-b','262144','-noappend','-no-tailends','-exports','-all-root'],capture=True)
   if 'Failed to read file' in log: raise RuntimeError('mksquashfs reported Failed to read file')
   shutil.copyfile(new,cpio/'rootfs'); root_hash=sha256(cpio/'rootfs'); print('rootfs SHA256:',root_hash)
@@ -546,6 +556,7 @@ def main():
   reqhash(vr/'opt/inst/daemon-000/daemon-000',EXPECTED['daemon_dual'],'rebuilt Dual Trust daemon')
   audit_cc2_control(vr,cc2_component,cc2_manifest)
   reactor.audit(vr,reactor_component)
+  if canvas: canvas.audit(vr,a.canvas_eject_component)
   reqhash(vr/'etc/init.d/sshd',EXPECTED['sshd_init'],'rebuilt sshd init')
   reqhash(vr/'etc/ssh/sshd_config',EXPECTED['sshd_config'],'rebuilt sshd config')
   for n in ('S50sshd','K50sshd'):

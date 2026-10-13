@@ -1,0 +1,62 @@
+{
+  "official_base": "02.01.01.07",
+  "status": "offline_candidates_only_not_installable",
+  "stock_printer_sha256": "8039081f9c4b01e720d838d4ab6e4515a8979b9a71a33bd4164321c282e06074",
+  "release_printer_sha256": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+  "stock_gui_sha256": "24d0e561287a4b5a87c8ec698c98f60acf2c70511114b36224b4eb9249283abd",
+  "community_gui_sha256": "5f3122852044f6750dbd36aeb2ebcbd0ea8c5e99f48a52c186def1f66c3ec58a",
+  "functions": {
+    "_ZN6elegoo6extras6Canvas24CMD_canvas_motor_controlESt10shared_ptrI12GCodeCommandE": {
+      "address": "0x5f1c9c",
+      "size": 1972,
+      "entry": "10482de908b08de2",
+      "exported": false
+    },
+    "_ZN6elegoo6extras14CanvasProtocol23PARSE_CANVAS_ALL_STATUSERKSt6vectorIhSaIhEE": {
+      "address": "0x5c7e4c",
+      "size": 1692,
+      "entry": "10482de908b08de2",
+      "exported": false
+    },
+    "_ZN6elegoo6extras6Canvas21auto_prefeed_filamentEv": {
+      "address": "0x5dfdfc",
+      "size": 2172,
+      "entry": "30482de9028b2ded",
+      "exported": false
+    },
+    "_ZN6elegoo6extras6Canvas12handle_readyEv": {
+      "address": "0x5d116c",
+      "size": 25100,
+      "entry": "30482de90cb08de2",
+      "exported": false
+    },
+    "_ZN6elegoo6extras6Canvas15handle_shutdownEv": {
+      "address": "0x5d7378",
+      "size": 32,
+      "entry": "04b02de500b08de2",
+      "exported": false
+    },
+    "_ZN6elegoo6extras14CanvasProtocol23feeder_filament_controlEhRKNS0_11FeederMotorEb": {
+      "address": "0x5c544c",
+      "size": 648,
+      "entry": "10482de908b08de2",
+      "exported": false
+    },
+    "_ZN6elegoo6extras14CanvasProtocol21feeders_filament_stopEhbb": {
+      "address": "0x5c5160",
+      "size": 696,
+      "entry": "10482de908b08de2",
+      "exported": false
+    }
+  },
+  "gui_candidates": {
+    "create_filament_multi_view": "0x40b24",
+    "filament_view": "0x24ec00"
+  },
+  "blockers": [
+    "Canvas functions are in the ET_EXEC printer, absent from .dynsym; old dlsym/library integration cannot be reused.",
+    "Protocol sensor/connection fields and GUI selection layout need semantic qualification, not just address matching.",
+    "Design runtime activation compatible with the unchanged reactor/executable fingerprint and signing guards.",
+    "Build with GCC 6.5.0/glibc 2.23 and test the four slots and physical cancellation."
+  ]
+}

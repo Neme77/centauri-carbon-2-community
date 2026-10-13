@@ -1,0 +1,33 @@
+{
+  "method": "Unicorn ARM instruction emulation of actual original/patched 44-byte comparison and branch blocks",
+  "results": [
+    {
+      "ota_version": "01.03.01.89",
+      "comparison_cases_passed": 80,
+      "original_negative_distance_failure_reproduced": true,
+      "forward_behaviour_preserved": true,
+      "conditional_branch_destinations_verified": true
+    },
+    {
+      "ota_version": "01.03.02.36",
+      "comparison_cases_passed": 80,
+      "original_negative_distance_failure_reproduced": true,
+      "forward_behaviour_preserved": true,
+      "conditional_branch_destinations_verified": true
+    },
+    {
+      "ota_version": "01.03.02.51",
+      "comparison_cases_passed": 80,
+      "original_negative_distance_failure_reproduced": true,
+      "forward_behaviour_preserved": true,
+      "conditional_branch_destinations_verified": true
+    },
+    {
+      "ota_version": "02.00.02.00",
+      "comparison_cases_passed": 80,
+      "original_negative_distance_failure_reproduced": true,
+      "forward_behaviour_preserved": true,
+      "conditional_branch_destinations_verified": true
+    }
+  ]
+}

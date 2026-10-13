@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-10",
+  "version": "02.01.00.00",
+  "stock_archive_verified_against_community_builder": true,
+  "input_sha256": "33b40a530c8c1ffe27e63a7d9f0fd68f3ccfae2cec44edfce10566831b085c41",
+  "output_sha256": "99850496248afce83e19d8feae0ee45375195fee6fbe24d0afdfec88c66eea83",
+  "file_size": 25587544,
+  "function_size": 2060,
+  "file_offset": 13342688,
+  "file_offset_hex": "0xcb97e0",
+  "original_bug_reproduced": true,
+  "arm_comparison_cases_passed": 800,
+  "forward_comparisons_unchanged": true,
+  "branch_targets_verified": true,
+  "bytes_outside_patch_unchanged": true,
+  "patcher_checks": [
+    "original ZIP rejects new library",
+    "check-only leaves files unchanged",
+    "apply changes only intended 24-byte block and preserves original",
+    "existing output overwrite refused",
+    "input overwrite refused",
+    "wrong requested version refused",
+    "already patched input identified and second application refused",
+    "truncated library refused without output",
+    "altered library refused without output"
+  ],
+  "hardware_tested": false,
+  "installed_on_printer": false,
+  "scope": "manual reverse-distance comparison only; no sensor-based eject or UI buttons",
+  "source_archive_url": "https://github.com/suchmememanyskill/cc2-firmwares/raw/refs/heads/main/cc2-02.01.00.00-0ba7e15363653ade503eff80d9d3493a-release-abroad.zip.sig"
+}

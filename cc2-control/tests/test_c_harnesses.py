@@ -32,6 +32,7 @@ HARNESSES = {
     "test_uds_diagnostic.c": BACKEND,
     "test_tuning_api.c": BACKEND,
     "test_pid_api.c": BACKEND,
+    "test_canvas_eject_api.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,
     "test_spools.c": BACKEND,
