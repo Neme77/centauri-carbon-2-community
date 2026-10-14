@@ -1,3 +1,9 @@
+## Community 4.4 firmware base
+
+`builder/current/` targets only official OTA **02.01.01.07**. Its pinned patch addresses, vendor hashes and runtime bindings are incompatible with the firmware inputs used by previous builders. Use the exact official package `cc2_eeb001_02.01.01.07_20260922210235.zip.sig`; unknown or older inputs are rejected. Vendor files and signing material remain local external inputs.
+
+The native 792-byte Dual Trust payload is generated from assembly/public-key source during reactor preparation and must reproduce the qualified SHA-256. The library and bridge keep the qualified GCC 6.5.0/glibc 2.23 requirements; emulator tests are separate from full printer validation.
+
 # Build guide
 
 ## CC2 Control

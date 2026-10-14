@@ -30,12 +30,12 @@ class FirmwareReactorTests(unittest.TestCase):
             (component/'firmware-launcher.sh').write_bytes((BUILDER/'components/reactor/firmware-launcher.sh').read_bytes())
             data=bytearray(64);data[:6]=b'\x7fELF\x01\x01';struct.pack_into('<H',data,18,40)
             for name in reactor.FILES[:2]:(prepared/name).write_bytes(data)
-            for name in ('launcher.sh','preflight.sh'):(prepared/name).write_bytes((REPO/'experimental/combined-test'/name).read_bytes())
+            for name in ('launcher.sh','preflight.sh'):(prepared/name).write_bytes((REPO/'experimental/firmware-port'/name).read_bytes())
             hashes={name:reactor.digest(prepared/name) for name in reactor.FILES[:-1]}
             (prepared/'SHA256SUMS').write_text(''.join(hashes[name]+'  '+name+'\n' for name in sorted(hashes)))
             hashes['SHA256SUMS']=reactor.digest(prepared/'SHA256SUMS')
             manifest={'optimization':'O0','gcc':'6.5.0','glibc':'2.23','vendor_sha256':reactor.VENDOR_SHA256,'libco_sha256':reactor.LIBCO_SHA256,
-                'files':hashes,'sources':{name:reactor.digest(REPO/'experimental/combined-test/reactor'/name) for name in ('reactor_module.cpp','bridge_test.cpp','co_routine.h','fingerprints.h')}}
+                'files':hashes,'sources':{name:reactor.digest(REPO/'experimental/firmware-port/reactor'/name) for name in ('reactor_module.cpp','bridge_test.cpp','co_routine.h','fingerprints.h')}}
             path=component/'prepared-manifest.json';path.write_text(json.dumps(manifest))
             reactor.load(component)
             root=component/'rootfs'

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
-import { ArrowBigDown, ArrowBigUp, Check, Info, Palette, RefreshCw, Repeat } from 'lucide-preact'
+import { ArrowBigDown, ArrowBigUp, Check, Info, Palette, RefreshCw, Repeat, BrushCleaning } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -132,13 +132,39 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
 
 export const Canvas = () => {
   const { model, autoRefill, slot, optimistic, checked, eject } = canvas.use()
-  const machine = printer.use().data
-  const idle = view(machine).idle && !view(machine).paused && machine?.connected && machine.last_message_age <= 15
+  const printerState = printer.use()
+  const machine = printerState.data
+  const idle = Boolean(
+    printerState.ok &&
+      view(machine).idle &&
+      !view(machine).paused &&
+      machine?.connected &&
+      machine.last_message_age <= 15
+  )
   const [ejectPending, setEjectPending] = useState(false)
   const library = spools.use().data
   const tracking = Boolean(library?.available && library.enabled)
   const [dialog, setDialog] = useState(false)
   const [refillBusy, setRefillBusy] = useState(false)
+  const [resetBusy, setResetBusy] = useState(false)
+  const resetAll = async () => {
+    if (resetBusy || !idle || !model?.connected) return
+    if (!(await ask(t('canvas.reset_all_confirm'), true))) return
+    setResetBusy(true)
+    try {
+      if (await control('canvas:reset-all')) {
+        canvas.set({ optimistic: {} })
+        setTimeout(refreshCanvas, 700)
+        setTimeout(() => {
+          void post('/api/canvas/refresh')
+            .then(refreshCanvas)
+            .catch(e => notify(errText(e), 'error'))
+        }, 2000)
+      }
+    } finally {
+      setResetBusy(false)
+    }
+  }
   // Refresh while the page is open, except behind the material dialog.
   useEffect(() => (dialog ? undefined : poll(refreshCanvas, 2000)), [dialog])
   usePoll(refreshSpools, 10000)
@@ -210,7 +236,9 @@ export const Canvas = () => {
     const spool = held ? findSpool(library, held.spool) : null
     return {
       i,
-      colour: canvasColour(raw, i),
+      present: Number(tray?.status) > 0,
+      colour:
+        Number(tray?.status) > 0 && raw !== undefined && raw !== null && raw !== '' ? canvasColour(raw, i) : '#334553',
       raw,
       material: pend ? pend.material : (tray && (tray.filament_name || tray.filament_type)) || '—',
       remaining: spool
@@ -252,7 +280,7 @@ export const Canvas = () => {
             <div class="flex h-48 items-end justify-center gap-1.5 border-b-8 border-edge pb-9 cc2-sm:gap-3">
               {slots.map(s => (
                 <div key={s.i} class="relative flex h-40 w-14 items-center justify-center cc2-sm:w-20">
-                  <svg viewBox="0 0 100 160" class="h-36 w-full" aria-hidden="true">
+                  <svg viewBox="0 0 100 160" class={cn('h-36 w-full', !s.present && 'opacity-40')} aria-hidden="true">
                     <ellipse cx="50" cy="150" rx="36" ry="6" fill="currentColor" opacity="0.12" />
                     <ellipse cx="64" cy="76" rx="27" ry="67" fill="#334553" stroke="#71828e" stroke-width="2" />
                     <path d="M35 20H64C88 20 88 132 64 132H35Z" fill={s.colour} />
@@ -301,8 +329,9 @@ export const Canvas = () => {
               >
                 <h3 class="text-base font-semibold">{tpl('common.slot_n', { n: s.i + 1 })}</h3>
                 <div
-                  class="mx-auto my-2 mb-4 size-24 rounded-full border-[18px] bg-bg"
-                  style={{ borderColor: s.colour, boxShadow: `0 0 18px ${s.colour}66` }}
+                  class={cn('mx-auto my-2 mb-4 size-24 rounded-full border-[18px] bg-bg', !s.present && 'opacity-40')}
+                  data-slot-present={s.present}
+                  style={{ borderColor: s.colour, boxShadow: s.present ? `0 0 18px ${s.colour}66` : 'none' }}
                 />
                 <div class="mt-auto">
                   <Row label="canvas.material" value={s.material} />
@@ -383,6 +412,10 @@ export const Canvas = () => {
                 </Button>
               ))}
             </div>
+            <Button wide class="mt-3" disabled={!ok || !idle || resetBusy} onClick={resetAll}>
+              <BrushCleaning {...I} />
+              {t('canvas.reset_all')}
+            </Button>
             <div class="cc2-canvas-eject mt-3 border-t border-edge pt-3">
               <Button
                 wide

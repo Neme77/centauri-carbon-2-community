@@ -88,5 +88,6 @@ int main(void){
  assert(strstr(response,"\"extruder\":{\"temperature\":205.0,\"target\":210.0}"));
  assert(strstr(response,"\"part\":100.0"));
  assert(request_tune(&m,"tune:flow:100")==409&&!sent_script[0]);
+ wait_active(&m); /* Join the prior scan through its completion mutex before changing roots. */
  uds_close(&telemetry);close(pair[1]);test_gcode_remaining();puts("PASS tuning API readback gate and protected command dispatch");return 0;
 }

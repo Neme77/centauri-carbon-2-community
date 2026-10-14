@@ -1,4 +1,5 @@
 #include "../src/control.h"
+#include "../src/console.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,15 +11,48 @@ static void expect(int condition,const char *label){
 }
 
 int main(void){
-    mqtt_client mqtt; char script[512],reason[256];
+    mqtt_client mqtt; char script[700],reason[256];
     memset(&mqtt,0,sizeof(mqtt));
     mqtt.have_machine_status=1; mqtt.machine_status=1;
     mqtt.connected=mqtt.registered=1; mqtt.last_message=time(NULL);
+    expect(control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset accepted idle");
+    expect(strlen(script)<CONSOLE_COMMAND_MAX,"Canvas reset fits console transport without truncation");
+    for(int i=0;i<4;i++){
+        char expected[160];snprintf(expected,sizeof(expected),"CANVAS_SET_FILAMENT_INFO CHANNEL=%d COLOR= detailed_type=\"\" MANUFACTURER= nozzle_max_temp= nozzle_min_temp= TYPE=\"\" CODE=",i);
+        expect(strstr(script,expected)!=NULL,"Canvas reset clears each native slot");
+    }
+    expect(strchr(script,'\n')&&strstr(script,"CANVAS_UNLOAD")==NULL,"Canvas reset does not unload filament");
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,100,reason,sizeof(reason)),"Canvas reset rejects truncated batch");
+    expect(!control_build_script("canvas:reset-all:extra",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset action must match exactly");
+    mqtt.machine_status=2;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected during printing");
+    strcpy(mqtt.print_state,"paused");
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected during pause");
+    mqtt.machine_status=1; mqtt.have_machine_status=0;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected without machine status");
+    mqtt.have_machine_status=1; mqtt.last_message-=30;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected stale");
+    mqtt.last_message=time(NULL);mqtt.print_state[0]='\0';
+    mqtt.connected=0;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected disconnected");
+    mqtt.connected=1;mqtt.registered=0;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected unregistered");
+    mqtt.registered=1;mqtt.last_message=0;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected missing timestamp");
+    mqtt.last_message=time(NULL)+30;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected future timestamp");
+    mqtt.last_message=time(NULL);
+    expect(control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset accepted after fresh telemetry recovers");
     expect(control_build_script("canvas:material:1:PLA:2850DF:190:230",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
         !strcmp(script,"CANVAS_SET_FILAMENT_INFO CHANNEL=1 COLOR=0x2850DF detailed_type=\"PLA\" MANUFACTURER=\"Generic\" nozzle_max_temp=230 nozzle_min_temp=190 TYPE=\"PLA\" CODE=Generic"),"Canvas material without a maker is generic");
     expect(control_build_script("canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
         !strcmp(script,"CANVAS_SET_FILAMENT_INFO CHANNEL=1 COLOR=0x2850DF detailed_type=\"PLA Matte\" MANUFACTURER=\"Elegoo\" nozzle_max_temp=230 nozzle_min_temp=190 TYPE=\"PLA\" CODE=Generic"),"Canvas material names a spool's line and maker");
-    const char *bad_materials[]={"canvas:material:1:PLA:2850DF:190:230junk","canvas:material:1:PLA:2850DF:190:230:PLA Matte",
+    expect(control_build_script("canvas:material:1:PLA MATTE:2850DF:190:230",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
+        strstr(script,"detailed_type=\"PLA MATTE\"")&&strstr(script,"TYPE=\"PLA MATTE\""),"Canvas profile accepts internal spaces and quotes the name");
+    const char *bad_materials[]={"canvas:material:1: PLA:2850DF:190:230","canvas:material:1:PLA :2850DF:190:230",
+        "canvas:material:1:PLA;M112:2850DF:190:230","canvas:material:1:PLA\nM112:2850DF:190:230",
+        "canvas:material:1:PLA\"MATTE:2850DF:190:230","canvas:material:1:12345678901234567:2850DF:190:230",
+        "canvas:material:1:PLA:2850DF:190:230junk","canvas:material:1:PLA:2850DF:190:230:PLA Matte",
         "canvas:material:1:PLA:2850DF:190:230:PLA \"x\":Elegoo","canvas:material:1:PLA:2850DF:190:230:PLA Matte:El;ego",
         "canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo:more","canvas:material:1:PLA:2850DF:190:230: PLA:Elegoo",
         "canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo\nM112"};

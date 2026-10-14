@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Centauri Carbon 2 02.01.00.00 unified Dual-Trust firmware builder.
+"""Centauri Carbon 2 02.01.01.07 unified Dual-Trust firmware builder.
 
 Builds the following chain (full OTA install still requires validation):
- official stock .zip.sig -> verify/decode stock SWU -> Z-offset + OpenSSH + Dual Trust v2 + HTTP/upload v1 + frozen MQTT v2/webcam reference + CC2 Control -> rebuilt SWU
+ official stock .zip.sig -> verify/decode stock SWU -> Z-offset + OpenSSH + Dual Trust v2 + HTTP/upload v1 + relocated MQTT v2/webcam guards + CC2 Control -> rebuilt SWU
  -> encrypted/signed ELEG 0x80 -> encrypted/signed manifest ELEG 0x83
  -> ZIP -> plain signed outer ELEG 0x04.
 
-The tool is intentionally fail-closed and pinned to the known CC2 02.01.00.00
-stock/component hashes recovered from the validated development pipeline.
-This builder uses ZIP_STORED and Dual Trust v2. Historical image hashes
+The tool is intentionally fail-closed and pinned to the known CC2 02.01.01.07
+stock/component hashes recovered from the verified official OTA.
+This is an experimental hardware-test candidate, not a validated release.
+This builder uses ZIP_STORED and the relocated Dual Trust wrapper. Historical image hashes
 are informational only: v2 intentionally changes daemon contents.
 """
 import shlex
@@ -23,24 +24,24 @@ OFF_PAYLOAD_SIZE=0x0B0; OFF_SHA256=0x0E0; OFF_RSA=0x100; RSA_SIZE=256
 CPIO_FILES=["sw-description","resource","uboot","boot0","kernel","rootfs","cpio_item_md5"]
 MD5_FILES=["sw-description","resource","uboot","boot0","kernel","rootfs"]
 EXPECTED={
- "stock_swu":"5ca67416fd59b98ecb3e2f96af518cb650d628d214b3a90a9d3d92cd6bb7f444",
+ "stock_swu":"0654a0de241415d5e168fae21faf4384a34dbbf59968ef48dc5102c3e4d1ba9a",
  "sw-description":"6598586ada5e7e9256316c63b801579e65e797d2a77e13ab360f09b3581ae2fb",
  "resource":"aacfe9a9d847f4be3e4b5a16f7c16cba93a60e25ba371efb77568568b0b37aad",
- "uboot":"c2b29efac7d547bffabfcb583aeaca623adaa851d093266b8fb11baef47c92d5",
+ "uboot":"769d55b96ed4dff486ff5b79f35d61a36d68c444f49f19e44059e2472d468f72",
  "boot0":"b18b3f31b3d378b56b4d01b1863a6b9f0f61211ba1f4ad8e7b672ff54887ec41",
- "kernel":"a61fdd2413992e57022a71e0f7b18ac37ec6feada4faadb80e902cd3c9241bf3",
- "stock_rootfs":"a9b583656cf1a275ba8695dc53f1b7e2f18a7d2c15e5224acb961c6f240451e2",
- "stock_gui":"a231c26bc965b0e2ee5edbf4fc1ca4018fed009da601a7e7dc267a0c81e7fb08",
- "patched_gui":"afa2b1f181d18dc4803a60ee61fb3fc454f1e91afa12743bc1a1e5e386e439ff",
+ "kernel":"e1ca036e667f1976fb1a1944b6922df8a1c26d5870912dd8273e0fcc3bb4efec",
+ "stock_rootfs":"20375a79e1ee2748f43fd39a62e5a48b23b945ed048dbe52a54d0a1f37b1acae",
+ "stock_gui":"24d0e561287a4b5a87c8ec698c98f60acf2c70511114b36224b4eb9249283abd",
+ "patched_gui":"5f3122852044f6750dbd36aeb2ebcbd0ea8c5e99f48a52c186def1f66c3ec58a",
  "sshd":"7746b7085a1539f0a8db1aea89a97ea0ed7e8e5e722fecd476fdedfa1e7a002c",
  "sshd_init":"69b42d5f0adf20eeffd5218bc9e955af1d3590d68a07c21ad90128ea7a6930d8",
  "sshd_config":"0b8f561d681101fff24bb5f65f469f6ea8f838d5c12576f104b73c85392eb066",
- "daemon_stock":"b760fd80bb03de28ac348756a9a1c5311066377876570d2fdfd45fb562d91cdb",
- "dual_payload":"33d013ca4a63334fdbbd0adb77bd10f81e2e21c3ac41229e216eb17e5949d06f",
- "daemon_dual":"3af6104d0ac76cc043ecf38985e1b00a0d5ceace0a4f4b66820e21f4735a98c7",
+ "daemon_stock":"6fed6657e814f010fef87b40c5932d8fa7c5e9c044d7376f25fc2318daeb10f9",
+ "dual_payload":"04b9f093f439c336476f2a34f109b088b05e6c42a4f1baf2f10e798ed927aa75",
+ "daemon_dual":"83433b14e49d1e8aa9523282ead03618378573f4b66de1ad8f7f3c444b11aada",
 
- "stock_outer":"219fc28e9845f5d70e3a4499b60404d80368e5aa7e52eafb3e5e9c17c5e02926",
- "stock_inner":"03d0c633cbd7842a6e259f38574d0b99bb8b72036add6b7a23b22b00d9b36331",
+ "stock_outer":"278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406",
+ "stock_inner":"5ae3d2e392fa47d7b0bc42981389fd84d702ad069d535c1392d50a7d32ca977b",
  "aes_key":"70adfb48a2156086ad2495cfc121557f455dd5373450017d8da1dcacd7cf1009",
  "zoffset_patcher":"a233e6eb18993bf2fa82534ceca3e351ccf7069654c7f28c01b1eadb6a2bc8a4",
  "dual_patcher":"32c2e71964b9194da02182d145cf656e8b788cd9460d8b12e8a27a74d2d252cd",
@@ -78,8 +79,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_COMMIT='4a6ffbdc6cb3195b5fe90d79f519cc6abb0acfe5'
-CC2_CONTROL_SOURCE_SHA256='acb7a64cea70cbb743048f640ce8925a7a1143881ce0a613c26c1f8f73c7b4f3'
+CC2_CONTROL_SOURCE_COMMIT='35937a00a46f24c794e1e4309a9fc4dd96d54262'
+CC2_CONTROL_SOURCE_SHA256='88d59406e83c5a2389af9c51e8d120e1c20532f56409544db356cb4570342bfd'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 # Translation files are optional and open-ended (one per language), unlike the
 # fixed files above; names are validated so only web/locales/<code>.json passes.
@@ -229,7 +230,7 @@ def decode_stock_package(stock_pkg,aes_key,work):
  reqhash(stock_pkg,EXPECTED['stock_outer'],'official stock outer .zip.sig')
  x=validate_eleg(stock_pkg,0x04,encrypted=False)
  verify_signature(stock_pkg,STOCK_PUBLIC)
- if '02.01.00.00' not in x['filename']: raise RuntimeError(f"Unexpected stock embedded filename: {x['filename']}")
+ if '02.01.01.07' not in x['filename']: raise RuntimeError(f"Unexpected stock embedded filename: {x['filename']}")
  outer_zip=work/'stock_outer.zip'; outer_zip.write_bytes(x['payload'])
  if not zipfile.is_zipfile(outer_zip): raise RuntimeError('Stock outer payload is not a ZIP')
  with zipfile.ZipFile(outer_zip,'r') as z:
@@ -293,19 +294,17 @@ def verify_squashfs(mk,un,work,manifest=None):
  print('[OK] SquashFS Tools 4.6.1 round-trip')
 
 def patch_zoffset(gui):
- reqhash(gui,EXPECTED['stock_gui'],'stock GUI'); data=bytearray(Path(gui).read_bytes()); off=0x63C5C
- if data[off:off+4]!=bytes.fromhex('63 e7 00 eb'): raise RuntimeError('Z-offset original bytes mismatch')
- data[off:off+4]=bytes.fromhex('00 01 00 ea'); Path(gui).write_bytes(data); os.chmod(gui,0o775); reqhash(gui,EXPECTED['patched_gui'],'patched GUI')
+ reqhash(gui,EXPECTED['stock_gui'],'stock GUI')
+ module=port_module('patch_zoffset44')
+ data=module.patch(Path(gui).read_bytes())
+ Path(gui).write_bytes(data); os.chmod(gui,0o775)
+ reqhash(gui,EXPECTED['patched_gui'],'patched GUI')
 
 def patch_dual(daemon,payload):
- reqhash(daemon,EXPECTED['daemon_stock'],'stock update daemon'); reqhash(payload,EXPECTED['dual_payload'],'Dual Trust payload')
- data=bytearray(Path(daemon).read_bytes()); pl=Path(payload).read_bytes()
- if len(pl)!=PAYLOAD_SIZE or data[HOOK_OFFSET:HOOK_OFFSET+4]!=STOCK_HOOK or any(data[INJECT_OFFSET:INJECT_OFFSET+PAYLOAD_SIZE]): raise RuntimeError('Dual Trust precondition failed')
- fs=int.from_bytes(data[ELF_FILESZ_OFFSET:ELF_FILESZ_OFFSET+4],'little'); ms=int.from_bytes(data[ELF_MEMSZ_OFFSET:ELF_MEMSZ_OFFSET+4],'little')
- if (fs,ms)!=(OLD_SEGMENT_SIZE,OLD_SEGMENT_SIZE): raise RuntimeError('Unexpected daemon ELF segment size')
- if int.from_bytes(data[0xC8:0xCC],'little')!=0x1EB0: raise RuntimeError('Unexpected RW segment size')
- data[0xC8:0xCC]=(0x1EF4).to_bytes(4,'little')
- data[ELF_FILESZ_OFFSET:ELF_FILESZ_OFFSET+4]=NEW_SEGMENT_SIZE.to_bytes(4,'little'); data[ELF_MEMSZ_OFFSET:ELF_MEMSZ_OFFSET+4]=NEW_SEGMENT_SIZE.to_bytes(4,'little'); data[INJECT_OFFSET:INJECT_OFFSET+PAYLOAD_SIZE]=pl; data[HOOK_OFFSET:HOOK_OFFSET+4]=DUAL_HOOK; Path(daemon).write_bytes(data)
+ reqhash(daemon,EXPECTED['daemon_stock'],'stock update daemon')
+ reqhash(payload,EXPECTED['dual_payload'],'Dual Trust payload')
+ data=port_module('patch_dual44').patch(Path(daemon).read_bytes())
+ Path(daemon).write_bytes(data)
  reqhash(daemon,EXPECTED['daemon_dual'],'Dual Trust daemon')
 
 
@@ -392,56 +391,61 @@ def patch_http_upload(printer):
  reqhash(printer,PRINTER_PATCHED_SHA256,'HTTP/upload combined v1 installed')
 
 
-# V3.8 installs the exact field-tested binary as a pinned external component.
-# MQTT v1 sources are not available in this source snapshot. Do not claim a
-# source-only reconstruction of that step. Firmware/private keys stay external.
-PRINTER_RELEASE_SHA256="c21126e78a63ac9140e7347c56f363d5e513495c58c06fc17e8ef97846f3c0a3"
-PRINTER_RELEASE_MD5="06071f7b3ca6f809d5a329e1a9466f4c"
-PRINTER_RELEASE_SIZE=18099452
-PRINTER_RELEASE_DEFAULT=Path(__file__).resolve().parent.parent/'components/printer/elegoo_printer_v3_8'
+# New vendor executable plus the reviewed HTTP and LAN/WAN patch chain.
+PRINTER_RELEASE_SHA256="19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745"
+PRINTER_RELEASE_MD5="c29e0574fb1693dbb3c516acbf2ad624"
+PRINTER_RELEASE_SIZE=29274740
+PRINTER_RELEASE_DEFAULT=BASE/'components/printer/elegoo_printer_44_reference'
 
 def validate_release_printer(data):
  if len(data)!=PRINTER_RELEASE_SIZE or hashlib.sha256(data).hexdigest()!=PRINTER_RELEASE_SHA256 or hashlib.md5(data).hexdigest()!=PRINTER_RELEASE_MD5:
-  raise RuntimeError('V3.8 requires the exact field-tested MQTT v2 + webcam binary (MD5 06071f7b...)')
- # Ten HTTP/upload v1 regions remain byte-identical. The network startup block
- # at 0x5b9124 was intentionally extended by MQTT coexistence; the whole-file
- # hash above pins that block as well. No optional unchecked patch is accepted.
- m=load_http_upload_manifest()
- for patch in m['variant']['patches']:
-  if patch['offset']==0x5a9124: continue
-  off=patch['offset']; expected=bytes.fromhex(patch['after'])
-  if data[off:off+len(expected)]!=expected:
-   raise RuntimeError('V3.8 HTTP/upload guard regression')
- if data[0x5b3ca8:0x5b3cac]!=bytes.fromhex('97d7feeb'):
-  raise RuntimeError('V3.8 WAN webcam branch mismatch')
+  raise RuntimeError('New vendor patch chain result differs from pinned target')
  return data
 
 def install_release_printer(printer,reference):
- # This operates only on the builder's extracted rootfs, never on a live printer.
- printer=Path(printer)
- reqhash(printer,PRINTER_PATCHED_SHA256,'V3.7 HTTP/upload intermediate')
- data=validate_release_printer(Path(reference).read_bytes())
- printer.write_bytes(data)
- reqhash(printer,PRINTER_RELEASE_SHA256,'V3.8 MQTT/webcam installed')
+ # Optional offline API; normal builds reconstruct directly from the official OTA.
+ manifest=json.loads((PORT_DIR/'network44-manifest.json').read_text())
+ reqhash(printer,manifest['input_sha256'],'HTTP intermediate')
+ Path(printer).write_bytes(validate_release_printer(Path(reference).read_bytes()))
 
-REACTOR_HELPER_SHA256='2592b4b7a803c2f6efb6d68c6fe2e2b4241e8aeabba70c818b59c6890a62d070'
+REACTOR_HELPER_SHA256='170851f47569d9f02072403ffda497e3135c1e01574e0a95a543a0f451f31b84'
 
 def firmware_version():
  source=BASE/'components/cc2-control/source/source.zip'
  reqhash(source,CC2_CONTROL_SOURCE_SHA256,'CC2 Control source snapshot')
  with zipfile.ZipFile(source) as z: return z.read('FIRMWARE_VERSION').decode().strip()
 
+PORT_DIR=BASE.parents[1]/"experimental/firmware-port"
+CAMERA_RELEASE_SHA256="ec5633b17de329d5b18c3f8d8de6ebf389391a04193536d976ba167022d07b99"
+PORT_HASHES={'patch_camera44.py': '63ef66a15ed9a12d67fb0c6d919d249da7d5047f4d123cb184580abc06912e63', 'camera44-manifest.json': 'b32224bf3d2901395f8558b2ce4cd4e13d78ee16ee9faffaaf6783bfb49658ab', 'patch_zoffset44.py': '76519510503e2762b2878250a326bc0272c1411042d0627ab106db813a380e10', 'patch_dual44.py': '1281d7ea80e1629fd657678a7d06d9d6333eb4937c4ce092c0ca1425c92b7366', 'dual44-manifest.json': '4d8f775c924e31d1df01b14ad600e687bdb40a452d6fa98fa5a72d2b4b52eefc', 'dual_verify_44.bin': '04b9f093f439c336476f2a34f109b088b05e6c42a4f1baf2f10e798ed927aa75', 'patch_http44.py': '64c9f93dc3f4a52e9153252d184b2d837f1c1bc3a15e3af2ee933fd11f75e915', 'http44-manifest.json': '3e65a1ca3a051dad2cb661b4f6c1b4519a55f733c87e283968968e4a368e3bd4', 'patch_network44.py': '46098ae68477e4791b862ac1aac577b8b5dfcf93497de62e5ae3f7f8bc5cd482', 'network44-manifest.json': '34d90437d1310a3662943ec7b445b5c55fc351d94c6a27108a9f5151357631b9'}
+
+def validate_port_inputs():
+ for name,expected in PORT_HASHES.items(): reqhash(PORT_DIR/name,expected,'new OTA port '+name)
+
+def port_module(name):
+ validate_port_inputs()
+ spec=importlib.util.spec_from_file_location(name,PORT_DIR/(name+'.py'))
+ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ return module
+
+def patch_printer44(printer):
+ with tempfile.TemporaryDirectory(prefix='cc2-printer44-') as temporary:
+  intermediate=Path(temporary)/'http';final=Path(temporary)/'network'
+  port_module('patch_http44').apply(printer,intermediate)
+  port_module('patch_network44').apply(intermediate,final)
+  reqhash(final,PRINTER_RELEASE_SHA256,'new vendor with HTTP/LAN/WAN patches')
+  Path(printer).write_bytes(final.read_bytes())
+
 def main():
- ap=argparse.ArgumentParser(description='CC2 02.01.00.00 Dual-Trust firmware builder with CC2 Control and Panda compatibility')
+ ap=argparse.ArgumentParser(description='CC2 02.01.01.07 Dual-Trust firmware builder with CC2 Control and Panda compatibility')
  here=Path(__file__).resolve().parent.parent
- ap.add_argument('stock_package',nargs='?',default=str(here/'original_firmware'/'cc2_eeb001_02.01.00.00_20260707170825.zip.sig'),help='official stock .zip.sig (default: original_firmware/...)')
+ ap.add_argument('stock_package',nargs='?',default=str(here/'original_firmware'/'cc2_eeb001_02.01.01.07_20260922210235.zip.sig'),help='official stock .zip.sig (default: original_firmware/...)')
  ap.add_argument('--signing-mode',choices=['stock','community'],default='community',help='stock: initial install; community: later updates')
  ap.add_argument('--private-key',help='Private key for selected mode; explicit path required in stock mode')
  ap.add_argument('--check-signing-key-only',action='store_true',help='Check key pair and sign/verify a local challenge; no firmware or AES required')
  ap.add_argument('--aes-key',default=str(here/'keys'/'cc2_aes_key_v1.bin'))
  ap.add_argument('--toolchain-manifest',help='Explicit local build manifest; hashes checked in addition to version and round-trip')
  ap.add_argument('--mksquashfs'); ap.add_argument('--unsquashfs')
- ap.add_argument('--printer-reference',default=str(PRINTER_RELEASE_DEFAULT),help='Exact field-tested V3.8 printer component; hash-pinned')
  ap.add_argument('--cc2-control-dir',default=str(here/'components/cc2-control/prepared'),help='Prepared CC2 Control component directory')
  ap.add_argument('--cc2-control-manifest',default=str(here/'components/cc2-control/prepared-manifest.json'),help='Prepared CC2 Control manifest')
  ap.add_argument('--sshd',default=str(here/'components'/'ssh'/'sshd'))
@@ -474,9 +478,7 @@ def main():
  reqhash(sshd,EXPECTED['sshd'],'sshd'); reqhash(init,EXPECTED['sshd_init'],'sshd.init'); reqhash(conf,EXPECTED['sshd_config'],'sshd_config'); reqhash(dual,EXPECTED['dual_payload'],'Dual Trust payload')
  zpatch=req(a.zoffset_patcher,'Z-offset patcher'); dpatch=req(a.dual_patcher,'Dual Trust patcher'); sigtool=req(a.sig_tool,'cc2_sig_tool_v1.1.py')
  reqhash(zpatch,EXPECTED['zoffset_patcher'],'Z-offset patcher'); reqhash(dpatch,EXPECTED['dual_patcher'],'Dual Trust patcher'); reqhash(sigtool,EXPECTED['sig_tool'],'cc2_sig_tool v1.1')
- load_http_upload_manifest()
- printer_reference=req(a.printer_reference,'V3.8 printer reference')
- validate_release_printer(printer_reference.read_bytes())
+ validate_port_inputs()
  cc2_component,cc2_manifest=load_cc2_control(a.cc2_control_dir,a.cc2_control_manifest)
  reactor_helper=here/'core/reactor_component.py'
  reqhash(reactor_helper,REACTOR_HELPER_SHA256,'Reactor integration helper')
@@ -488,6 +490,7 @@ def main():
  if a.canvas_eject_component:
   spec=importlib.util.spec_from_file_location('canvas_eject_component',here/'core/canvas_eject_component.py')
   canvas=importlib.util.module_from_spec(spec); spec.loader.exec_module(canvas)
+  canvas.require_firmware_base('02.01.01.07')
   canvas.load(a.canvas_eject_component)
  mk=find_squash_tool(a.mksquashfs,'mksquashfs'); un=find_squash_tool(a.unsquashfs,'unsquashfs')
  for cmd in ('openssl','cpio'):
@@ -510,11 +513,14 @@ def main():
   printer=root/'opt/bin/elegoo_printer'
   daemon=root/'opt/inst/daemon-000/daemon-000'
   reqhash(gui,EXPECTED['stock_gui'],'stock GUI')
-  reqhash(printer,'c968ad1430f331bf0a20d5e54bdc8c1428a223b5977c3320c1287e301ec447e5','stock elegoo_printer')
+  reqhash(printer,'8039081f9c4b01e720d838d4ab6e4515a8979b9a71a33bd4164321c282e06074','stock elegoo_printer')
   reqhash(daemon,EXPECTED['daemon_stock'],'stock update daemon')
   patch_zoffset(gui)
-  patch_http_upload(printer)
-  install_release_printer(printer,printer_reference)
+  patch_printer44(printer)
+  camera=root/'opt/bin/ai_camera'
+  camera_patched=work/'ai_camera.coexist'
+  port_module('patch_camera44').apply(camera,camera_patched)
+  camera.write_bytes(camera_patched.read_bytes())
   (root/'usr/sbin').mkdir(parents=True,exist_ok=True); shutil.copy2(sshd,root/'usr/sbin/sshd'); os.chmod(root/'usr/sbin/sshd',0o755)
   (root/'etc/init.d').mkdir(parents=True,exist_ok=True); shutil.copy2(init,root/'etc/init.d/sshd'); os.chmod(root/'etc/init.d/sshd',0o755)
   (root/'etc/ssh').mkdir(parents=True,exist_ok=True); shutil.copy2(conf,root/'etc/ssh/sshd_config'); os.chmod(root/'etc/ssh/sshd_config',0o644)
@@ -532,7 +538,8 @@ def main():
   reactor.install(root,reactor_component)
   # Verify intended rootfs surface before compression.
   reqhash(gui,EXPECTED['patched_gui'],'installed patched GUI'); reqhash(root/'usr/sbin/sshd',EXPECTED['sshd'],'installed sshd')
-  reqhash(printer,PRINTER_RELEASE_SHA256,'installed V3.8 elegoo_printer')
+  reqhash(camera,CAMERA_RELEASE_SHA256,'installed coexistence camera')
+  reqhash(printer,PRINTER_RELEASE_SHA256,'installed patched elegoo_printer')
   reqhash(daemon,EXPECTED['daemon_dual'],'installed Dual Trust daemon')
   audit_cc2_control(root,cc2_component,cc2_manifest)
   reactor.audit(root,reactor_component)
@@ -544,7 +551,8 @@ def main():
   # Re-extract and audit the critical files after SquashFS creation.
   vr=work/'verify_rootfs'; run([un,'-d',vr,cpio/'rootfs'],capture=True)
   reqhash(vr/'opt/bin/ec-eeb001-gui',EXPECTED['patched_gui'],'rebuilt patched GUI'); reqhash(vr/'usr/sbin/sshd',EXPECTED['sshd'],'rebuilt sshd')
-  reqhash(vr/'opt/bin/elegoo_printer',PRINTER_RELEASE_SHA256,'rebuilt V3.8 elegoo_printer')
+  reqhash(vr/'opt/bin/ai_camera',CAMERA_RELEASE_SHA256,'rebuilt coexistence camera')
+  reqhash(vr/'opt/bin/elegoo_printer',PRINTER_RELEASE_SHA256,'rebuilt patched elegoo_printer')
   reqhash(vr/'opt/inst/daemon-000/daemon-000',EXPECTED['daemon_dual'],'rebuilt Dual Trust daemon')
   audit_cc2_control(vr,cc2_component,cc2_manifest)
   reactor.audit(vr,reactor_component)
@@ -556,9 +564,9 @@ def main():
    if not p.is_symlink() or os.readlink(p)!='../init.d/sshd': raise RuntimeError(f'Invalid rebuilt SSH symlink: {p}')
   banner('REBUILD SWU'); data=''.join(f'{md5(cpio/n)}  {n}\n' for n in MD5_FILES).encode('ascii')
   if len(data)!=254: raise RuntimeError('cpio_item_md5 format mismatch')
-  (cpio/'cpio_item_md5').write_bytes(data); swu=work/('CC2_02.01.00.00_V'+fw_tag+'_CC2_CONTROL.swu')
+  (cpio/'cpio_item_md5').write_bytes(data); swu=work/('CC2_02.01.01.07_V'+fw_tag+'_CC2_CONTROL.swu')
   # Match the historical WSL1-safe build path: real printf | cpio pipeline.
-  # Restore the metadata used by the validated historical 02.01.00.00 build.
+  # Restore the metadata used by the validated historical 02.01.01.07 build.
   for n in CPIO_FILES:
    os.chown(cpio/n,1004,1002)
   modes={'sw-description':0o775,'resource':0o664,'uboot':0o664,'boot0':0o664,'kernel':0o644,'rootfs':0o664,'cpio_item_md5':0o664}
@@ -572,11 +580,11 @@ def main():
   swu_hash=sha256(swu); print('SWU SHA256:',swu_hash)
   g_swu=golden_report('rebuilt SWU',swu,'swu') if (a.golden_check or a.require_golden) else None
   banner('SIGN/PACK OTA CHAIN')
-  swusig_name='CC2_02.01.00.00_V'+fw_tag+'_CC2_CONTROL_'+release_tag+'.swu.sig'; swusig=work/swusig_name
+  swusig_name='CC2_02.01.01.07_V'+fw_tag+'_CC2_CONTROL_'+release_tag+'.swu.sig'; swusig=work/swusig_name
   eleg_encrypted(swu.read_bytes(),swusig,aes,priv,swusig_name[:-4],0x80); check_eleg(swusig,0x80)
   swusig_hash=sha256(swusig)
   g_swusig=golden_report('SWU.SIG',swusig,'swusig') if (a.golden_check or a.require_golden) else None
-  manifest_obj={"packages":[{"file":swusig_name,"hash":swusig_hash}],"version":"02.01.00.00","update_class":"00.00.00.00"}
+  manifest_obj={"packages":[{"file":swusig_name,"hash":swusig_hash}],"version":"02.01.01.07","update_class":"00.00.00.00"}
   manifest=json.dumps(manifest_obj,separators=(',',':')).encode('utf-8'); mansig=work/'ota-package-list.json.sig'
   eleg_encrypted(manifest,mansig,aes,priv,'ota-package-list.json',0x83); check_eleg(mansig,0x83)
   z=work/('CC2_FULL_V'+fw_tag+'_'+release_tag+'.zip')

@@ -2,10 +2,12 @@ import { useState } from 'preact/hooks'
 import { store } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
+import { Select } from '@/components/ui/field'
 import { errText, notify, post, request, toast } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { canvasHex, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
+import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
 import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
 
@@ -19,6 +21,10 @@ type Pending = {
   trays: any[]
   connected: boolean
   spools: SpoolLibrary | null
+  // The build-plate library, and the file's first-layer bed temperature and nozzle diameter when it states them.
+  plates: PlateLibrary | null
+  bedTemp: number | null
+  nozzleDiameter: number | null
 }
 const pending = store({ job: null as Pending | null })
 let activeGeneration = 0,
@@ -42,11 +48,12 @@ export async function startFile(storage: string, path: string) {
   fileAnalysisPending = true
   notify(t('print.analysing_file'))
   try {
-    const [inspection, canvasData, meshData, library] = await Promise.all([
+    const [inspection, canvasData, meshData, library, plateLibrary] = await Promise.all([
       post('/api/gcode-files/inspect', `${storage}\n${path}`),
       request('/api/canvas').catch(() => ({ available: false })),
       request('/api/mesh').catch(() => null),
       printer.get().data?.spools?.enabled ? request('/api/spools').catch(() => null) : null,
+      request('/api/plates').catch(() => null),
     ])
     const tools: number[] = Array.isArray(inspection.tools) && inspection.tools.length ? inspection.tools : [0]
     const model = canvasModel(canvasData),
@@ -61,6 +68,9 @@ export async function startFile(storage: string, path: string) {
         trays: model?.trays || [],
         connected: Boolean(model?.connected),
         spools: library?.available && library.enabled ? library : null,
+        plates: plateLibrary?.available ? plateLibrary : null,
+        bedTemp: typeof inspection.bed_temperature === 'number' ? inspection.bed_temperature : null,
+        nozzleDiameter: typeof inspection.nozzle_diameter === 'number' ? inspection.nozzle_diameter : null,
       },
     })
     toast.set(s => ({ ...s, text: '' }))
@@ -133,6 +143,29 @@ const Form = ({ job }: { job: Pending }) => {
   const available = job.meshAvailable[side],
     forced = !available,
     calibrating = forced || calibrate
+  // The mounted plate's measurement for a print on its saved mesh (nearest to the file's bed temperature unless
+  // chosen) and the nozzle on the printer (the installed one, or the only one matching the file's diameter).
+  const [measure, setMeasure] = useState<string | null>(null)
+  const [nozzle, setNozzle] = useState<string | null>(null)
+  const lib = job.plates
+  const mounted = lib?.plates.find(p => p.id === lib.current)
+  const plateHere = mounted?.side === side ? mounted : undefined
+  const sameSize = (diameter: number) => job.nozzleDiameter !== null && Math.abs(diameter - job.nozzleDiameter) < 0.001
+  const installed = lib?.nozzles.find(n => n.id === lib.nozzle)
+  const matching = lib?.nozzles.filter(n => sameSize(n.diameter)) || []
+  const nozzleId =
+    nozzle ??
+    (job.nozzleDiameter === null || (installed && sameSize(installed.diameter)) || matching.length !== 1
+      ? lib?.nozzle || ''
+      : matching[0].id)
+  const chosenNozzle = lib?.nozzles.find(n => n.id === nozzleId)
+  const nearest = plateHere ? nearestMeasure(plateHere, job.bedTemp, nozzleId) : null
+  const measureId =
+    plateHere && !calibrating
+      ? measure !== null && plateHere.measures.some(m => m.id === measure && usable(m))
+        ? measure
+        : nearest?.id || ''
+      : ''
   // Spool tracking: the spool each tool would draw from, and whether it holds what the slicer expects.
   const supply = (tool: number) => {
     const lib = job.spools
@@ -167,7 +200,7 @@ const Form = ({ job }: { job: Pending }) => {
     try {
       const result = await post(
         '/api/gcode-files/print',
-        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}`
+        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}\n${measureId}\n${nozzleId}`
       )
       const g = activeGeneration
       activeGeneration = 0
@@ -307,6 +340,50 @@ const Form = ({ job }: { job: Pending }) => {
             <div class="text-xs text-amber">
               {t(available ? 'print.a_saved_mesh_is_available_for' : 'print.this_build_plate_side_has_no')}
             </div>
+            {plateHere && !calibrating && (
+              <label class="mt-2 grid gap-1 text-xs">
+                {tpl('print.plate_mesh', { name: plateHere.name })}
+                <Select value={measureId} disabled={busy} onChange={e => setMeasure(e.currentTarget.value)}>
+                  {plateHere.measures.map(m => (
+                    <option key={m.id} value={m.id} disabled={!usable(m)}>
+                      {[
+                        `${m.temp} °C`,
+                        nozzleName(lib, m.nozzle),
+                        m.slot ? t('print.measure_in_slot') : m.profile ? '' : t('print.measure_not_in_printer'),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </option>
+                  ))}
+                </Select>
+                {job.bedTemp !== null && (
+                  <span class="text-muted">{tpl('print.file_bed_temperature', { temp: job.bedTemp })}</span>
+                )}
+              </label>
+            )}
+            {mounted && !plateHere && (
+              <div class="mt-2 text-xs text-muted">
+                {tpl('print.mounted_other_side', { name: mounted.name, side: mounted.side })}
+              </div>
+            )}
+            {!!lib?.nozzles.length && (
+              <label class="mt-2 grid gap-1 text-xs">
+                {t('common.nozzle')}
+                <Select value={nozzleId} disabled={busy} onChange={e => setNozzle(e.currentTarget.value)}>
+                  {!nozzleId && <option value="">{t('common.not_set')}</option>}
+                  {lib.nozzles.map(n => (
+                    <option key={n.id} value={n.id}>
+                      {n.name}
+                    </option>
+                  ))}
+                </Select>
+                {chosenNozzle && job.nozzleDiameter !== null && !sameSize(chosenNozzle.diameter) && (
+                  <span class="text-amber">
+                    {tpl('print.file_nozzle_differs', { diameter: job.nozzleDiameter.toFixed(2) })}
+                  </span>
+                )}
+              </label>
+            )}
           </fieldset>
           <fieldset class="rounded-lg border border-edge p-3">
             <legend class="px-1.5 font-semibold text-cyan">{t('print.bed_preparation')}</legend>

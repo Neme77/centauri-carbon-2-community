@@ -18,7 +18,7 @@ names = sorted(p.name for p in LOCALES.glob("*.json"))
 assert names, "no locale files in web-src/public/locales"
 assert names == sorted(p.name for p in (web / "locales").glob("*.json")), "web/locales differs from web-src/public/locales: run npm run build"
 pairs += [(LOCALES / n, web / "locales" / n) for n in names]
-overlay = root / "firmware-integration/overlay/opt/inst/cc2-control/web"
+overlay = root / "firmware-integration/overlay/opt/usr/cc2-control/web"
 pairs += [(web / "index.html", overlay / "index.html")]
 pairs += [(web / "locales" / n, overlay / "locales" / n) for n in names]
 

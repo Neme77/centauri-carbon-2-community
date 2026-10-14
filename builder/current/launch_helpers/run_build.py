@@ -13,7 +13,7 @@ SOURCE = Path(__file__).resolve().parents[1] / 'components/cc2-control/source/so
 with zipfile.ZipFile(SOURCE) as snapshot:
     FIRMWARE_VERSION = snapshot.read('FIRMWARE_VERSION').decode().strip()
 
-BUILDER_SHA256='a5d7f6ede45872f8168da4849fb3ef96c7527227c1b13b93e79260c17419028a'
+BUILDER_SHA256='7016bbeea787e28ffa3be767dd22f2b79ebd5718b1e1b4860dd51fb7e3877a4b'
 
 def sha256(path):
     h = hashlib.sha256()
@@ -39,7 +39,7 @@ def build_arguments(root, mode, preflight=False, check_key=False, keep_work=Fals
     if check_key:
         command.append('--check-signing-key-only')
     else:
-        firmware = root / 'original_firmware/cc2_eeb001_02.01.00.00_20260707170825.zip.sig'
+        firmware = root / 'original_firmware/cc2_eeb001_02.01.01.07_20260922210235.zip.sig'
         aes = root / 'keys/cc2_aes_key_v1.bin'
         mk = root / 'tools/squashfs-tools-4.6.1/bin/mksquashfs'
         un = root / 'tools/squashfs-tools-4.6.1/bin/unsquashfs'

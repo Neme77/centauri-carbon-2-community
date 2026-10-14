@@ -29,7 +29,7 @@ try {
   await new Promise(r => stream.listen(0, '127.0.0.1', r))
   await server.listen()
   const origin = server.resolvedUrls.local[0].replace(/\/$/, '')
-  browser = await chromium.launch({ headless: true, ...(process.env.CC2_BROWSER_PATH ? { executablePath: process.env.CC2_BROWSER_PATH, args: ['--no-sandbox', '--disable-gpu', '--disable-software-rasterizer', '--single-process', '--no-zygote'] } : {}) })
+  browser = await chromium.launch({ headless: true, ...(process.env.CC2_BROWSER_PATH ? { executablePath: process.env.CC2_BROWSER_PATH, args: ['--no-sandbox'] } : {}) })
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
   const page = await context.newPage()
   const errors = []
@@ -53,13 +53,15 @@ try {
   await start.waitFor()
   assert.equal(clients, 0, 'returning to a page requires explicit start')
   await begin()
-  // Real layout/IntersectionObserver path, without directly calling component functions.
+  // Scrolling must preserve the existing stream without restarting it.
+  const requestsBeforeScroll = requests
   await page.setViewportSize({ width: 1440, height: 400 })
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-  await wait(() => clients === 0, 'scrolling the camera out of view must close the stream')
+  await page.waitForTimeout(800)
+  assert.equal(clients, 1, 'scrolling out of view keeps the stream open')
+  assert.equal(requests, requestsBeforeScroll, 'scrolling does not restart the stream')
   await page.setViewportSize({ width: 1440, height: 1000 })
-  await start.scrollIntoViewIfNeeded()
-  await begin()
+  await page.evaluate(() => window.scrollTo(0, 0))
   // Headless Chromium does not provide an interactive background tab. Exercise
   // visibilitychange in the browser, then verify cancellation at the HTTP server.
   await page.evaluate(() => {
@@ -164,7 +166,7 @@ try {
   await pause.click()
   await wait(() => clients === 0, 'recovered stream must close')
   assert.deepEqual(errors, [])
-  console.log('PASS: manual start, real MJPEG cancellation, navigation, offscreen/visibility pause, one viewer at a time with handover and camera window, bounded retries and recovery')
+  console.log('PASS: manual start, real MJPEG cancellation, navigation, uninterrupted scrolling, hidden-tab pause, one viewer at a time with handover and camera window, bounded retries and recovery')
 } finally {
   await browser?.close()
   await server.close()

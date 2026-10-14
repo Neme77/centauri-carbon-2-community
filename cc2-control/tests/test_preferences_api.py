@@ -138,6 +138,15 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         with urllib.request.urlopen(endpoint, timeout=1) as response:
             assert json.load(response)["quick_actions"] == shortcuts
         assert all(action in preferences.read_text() for action in shortcuts)
+        # The new shipped languages persist on the printer like existing ones.
+        for language in ("pl", "cs"):
+            update = urllib.request.Request(endpoint, data=json.dumps({"language": language}).encode(), method="PUT",
+                headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
+            with urllib.request.urlopen(update, timeout=1) as response:
+                assert json.load(response) == {"saved": True}
+            with urllib.request.urlopen(endpoint, timeout=1) as response:
+                assert json.load(response)["language"] == language
+            assert json.loads(preferences.read_text(encoding="ascii"))["language"] == language
         print("PASS: persistent UI language and theme API")
     finally:
         process.terminate()

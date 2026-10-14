@@ -7,9 +7,9 @@ import shutil
 import struct
 
 FILES=('libcc2-reactor-v2.so','cc2-reactor-bridge-test','launcher.sh','preflight.sh','SHA256SUMS')
-VENDOR_SHA256='c21126e78a63ac9140e7347c56f363d5e513495c58c06fc17e8ef97846f3c0a3'
+VENDOR_SHA256='19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745'
 LIBCO_SHA256='14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403'
-FIRMWARE_LAUNCHER_SHA256='7e88f889d941eba70c2ec19de593a4aea0064af71914497633070397f4a7f700'
+FIRMWARE_LAUNCHER_SHA256='8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636373fdaac43'
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -29,7 +29,7 @@ def load(component):
     for name,expected in manifest.get('sources',{}).items():
         if name not in ('reactor_module.cpp','bridge_test.cpp','co_routine.h','fingerprints.h'):
             raise RuntimeError('Unexpected reactor source')
-        if digest(repo/'experimental/combined-test/reactor'/name)!=expected:
+        if digest(repo/'experimental/firmware-port/reactor'/name)!=expected:
             raise RuntimeError('Stale reactor build: source changed')
     if len(manifest.get('sources',{}))!=4:
         raise RuntimeError('Missing reactor source provenance')
@@ -41,7 +41,7 @@ def load(component):
         if len(data)<20 or data[:6]!=b'\x7fELF\x01\x01' or struct.unpack_from('<H',data,18)[0]!=40:
             raise RuntimeError('Reactor component is not ARM32: '+name)
     for name in ('launcher.sh','preflight.sh'):
-        canonical=repo/'experimental/combined-test'/name
+        canonical=repo/'experimental/firmware-port'/name
         if digest(canonical)!=manifest['files'][name]:
             raise RuntimeError('Stale reactor launcher: '+name)
     expected=''.join(manifest['files'][name]+'  '+name+'\n' for name in sorted(FILES) if name!='SHA256SUMS')

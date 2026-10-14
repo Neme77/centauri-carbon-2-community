@@ -8,7 +8,7 @@ if [ "${1:-}" = --prepare-only ]; then
     PREPARE_ONLY=1
     shift
 fi
-EXPECTED=c21126e78a63ac9140e7347c56f363d5e513495c58c06fc17e8ef97846f3c0a3
+EXPECTED=19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745
 fallback() {
     logger -t cc2-reactor 'Experimental callback disabled or unavailable; starting vendor binary'
     [ "$PREPARE_ONLY" -eq 0 ] || exit 0

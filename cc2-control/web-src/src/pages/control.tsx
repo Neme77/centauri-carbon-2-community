@@ -162,7 +162,8 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const list = presets.use().list
   const canSet = Boolean(d?.connected) && (v.idle || v.printing || v.paused)
   const [nozzle, setNozzle] = useState('0'),
-    [bed, setBed] = useState('0')
+    [bed, setBed] = useState('0'),
+    [selected, setSelected] = useState('')
   const seeded = useRef(false)
   // Start from the printer's current targets, so Apply never silently sends 0/0 over a running preheat.
   useEffect(() => {
@@ -179,7 +180,8 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
     setNozzle(String(Math.round(Number(d.extruder?.target) || 0)))
     setBed(String(Math.round(Number(d.heater_bed?.target) || 0)))
   }, [d])
-  const active = list.find(p => String(p.nozzle) === nozzle && String(p.bed) === bed)?.name
+  const matches = (p: any) => String(p.nozzle) === nozzle && String(p.bed) === bed
+  const active = (list.find(p => p.name === selected && matches(p)) || list.find(matches))?.name || ''
   const apply = async () => {
     if (!canSet || !seeded.current) return
     const n = Number(nozzle),
@@ -233,15 +235,16 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
       {!canSet && <Notice>{t('common.available_when_idle')}</Notice>}
       <div class="mt-4 border-t border-edge pt-3">
         <small class="text-muted">{t('control.temperature_presets')}</small>
-        <div class="mt-2 flex gap-2">
-          {list.map(p => (
-            <Button
-              key={p.name}
-              class="min-w-0 flex-1 truncate px-1 text-xs"
-              variant={active === p.name ? 'active' : 'default'}
-              disabled={!v.idle}
-              title={`${p.nozzle} °C nozzle / ${p.bed} °C bed`}
-              onClick={() => {
+        <div class="mt-2">
+          <Select
+            class="cc2-preheat-presets text-sm"
+            aria-label={t('control.temperature_presets')}
+            value={active}
+            disabled={!canSet || !v.idle}
+            onChange={e => {
+              const p = list.find(p => p.name === e.currentTarget.value)
+              if (p) {
+                setSelected(p.name)
                 setNozzle(String(p.nozzle))
                 setBed(String(p.bed))
                 notify(
@@ -251,11 +254,18 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
                     bed: p.bed,
                   })
                 )
-              }}
-            >
-              {p.name}
-            </Button>
-          ))}
+              }
+            }}
+          >
+            <option value="" disabled class="bg-field text-fg">
+              {t('control.profile')}
+            </option>
+            {list.map(p => (
+              <option key={p.name} value={p.name} class="bg-field text-fg">
+                {p.name} · {p.nozzle}/{p.bed} °C
+              </option>
+            ))}
+          </Select>
         </div>
       </div>
     </Card>
@@ -567,7 +577,7 @@ const Profiles = () => {
   }
   useEffect(() => load(Math.min(idx, list.length - 1)), [list])
   const save = async () => {
-    const n = name.trim().toUpperCase().slice(0, 16),
+    const n = name.trim().toUpperCase(),
       nz = Number(nozzle),
       b = Number(bed)
     if (
@@ -575,7 +585,7 @@ const Profiles = () => {
       !bed.trim() ||
       !Number.isFinite(nz) ||
       !Number.isFinite(b) ||
-      !/^[A-Z0-9+_-]{1,16}$/.test(n) ||
+      !/^[A-Z0-9+_-](?:[A-Z0-9 +_-]{0,14}[A-Z0-9+_-])?$/.test(n) ||
       nz < 0 ||
       nz > 300 ||
       b < 0 ||
@@ -702,16 +712,20 @@ export const Control = () => {
         </div>
         <div class="grid content-start gap-3.5 cc2-xl:contents">
           <Temperatures d={d} v={v} />
-          <Card class="cc2-fans cc2-xl:col-start-2 cc2-xl:row-start-2">
+          <Card class="cc2-fans flex flex-col cc2-xl:col-start-2 cc2-xl:row-start-2">
             <CardHead icon="fan" title="common.fans" />
-            {(['part', 'aux', 'box'] as const).map(k => (
-              <FanSlider
-                key={k}
-                label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
-                pct={v.fan(k)}
-                onCommit={n => control(`fan:${k}:${n}`)}
-              />
-            ))}
+            <div class="cc2-fan-controls flex flex-1 flex-col justify-center gap-5">
+              {(['part', 'aux', 'box'] as const).map(k => (
+                <FanSlider
+                  key={k}
+                  label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
+                  pct={v.fan(k)}
+                  disabled={!d?.connected}
+                  onCommit={n => control(`fan:${k}:${n}`)}
+                />
+              ))}
+            </div>
+            <p class="mt-4 border-t border-edge pt-3 text-xs text-muted">{t('control.fan_enter_hint')}</p>
           </Card>
         </div>
         <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:contents">

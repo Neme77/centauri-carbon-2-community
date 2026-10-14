@@ -18,3 +18,11 @@ cc2-control/installer/*.sh text eol=lf
 builder/current/prepare.py text eol=lf
 cc2-control/src/mqtt.c text eol=lf
 cc2-control/src/mqtt.h text eol=lf
+
+# OTA 02.01.01.07 qualification inputs: preserve exact SHA-256 bytes.
+experimental/firmware-port/patch_*.py -text
+experimental/firmware-port/*-manifest.json -text
+experimental/firmware-port/dual44-manifest.json -text
+experimental/firmware-port/http44-manifest.json -text
+experimental/firmware-port/network44-manifest.json -text
+experimental/firmware-port/cc2_community_release_public.pem -text

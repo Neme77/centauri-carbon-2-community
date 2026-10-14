@@ -23,7 +23,7 @@
         "noLabelWithoutControl": {
           "level": "error",
           "options": {
-            "inputComponents": ["Input", "Select", "Switch"]
+            "inputComponents": ["Input", "Select", "Switch", "NozzleSelect"]
           }
         }
       }

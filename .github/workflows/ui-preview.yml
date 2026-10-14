@@ -36,6 +36,14 @@ jobs:
         run: npm run test:mesh
       - name: Verify camera streaming lifecycle
         run: npm run test:camera
+      - name: Verify Polish and Czech language selection and layouts
+        run: npm run test:languages
+      - name: Verify Canvas reset confirmation and empty-slot rendering
+        run: npm run test:canvas-reset
+      - name: Verify numeric fan input and Control panel layout
+        run: npm run test:fans
+      - name: Verify material names and themed preheat selector
+        run: npm run test:materials
       - name: Verify Quick Actions light telemetry and heater shutdown guards
         run: npm run test:quick
       - name: Verify timelapse selection and history deletion controls

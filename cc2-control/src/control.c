@@ -9,8 +9,8 @@
 
 static int reject(char *reason,size_t cap,const char *message){snprintf(reason,cap,"%s",message);return 0;}
 static int valid_material_name(const char *name){
-    size_t n=strlen(name);if(n<1||n>16)return 0;
-    for(size_t i=0;i<n;i++)if(!isalnum((unsigned char)name[i])&&name[i]!='-'&&name[i]!='+'&&name[i]!='_')return 0;
+    size_t n=strlen(name);if(n<1||n>16||name[0]==' '||name[n-1]==' ')return 0;
+    for(size_t i=0;i<n;i++)if(!isalnum((unsigned char)name[i])&&name[i]!=' '&&name[i]!='-'&&name[i]!='+'&&name[i]!='_')return 0;
     return 1;
 }
 /* A product line or maker for a Canvas tray: ASCII words, quoted in the script, so no quotes or colons. */
@@ -211,6 +211,24 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(slot<0||slot>3)return reject(reason,reason_cap,"Canvas slot must be 1..4");
         snprintf(script,cap,"CANVAS_UNLOAD_FILAMENT CHANNEL=%d",slot);return 1;
     }
+    /* Stock display reset_multi_filament_set resets the four channels by
+     * sending empty material fields through CANVAS_SET_FILAMENT_INFO. */
+    if(!strcmp(action,"canvas:reset-all")){
+        time_t now=time(NULL);
+        if(!m->connected||!m->registered||m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Printer telemetry must be connected and fresh");
+        if(printing(m))return reject(reason,reason_cap,"Canvas material editing is blocked while printing");
+        if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Canvas material editing requires the printer to be idle");
+        size_t used=0;
+        for(int channel=0;channel<4;channel++){
+            int n=snprintf(script+used,cap-used,
+                "%sCANVAS_SET_FILAMENT_INFO CHANNEL=%d COLOR= detailed_type=\"\" MANUFACTURER= nozzle_max_temp= nozzle_min_temp= TYPE=\"\" CODE=",
+                channel?"\n":"",channel);
+            if(n<0||(size_t)n>=cap-used)return reject(reason,reason_cap,"Canvas reset command is too long");
+            used+=(size_t)n;
+        }
+        return 1;
+    }
     /* Optionally followed by a spool's product line and maker, so the tray names the spool as the inventory does. */
     char line[48],maker[48];int short_end=-1,long_end=-1;
     int fields=sscanf(action,"canvas:material:%d:%31[^:]:%15[^:]:%d:%d%n:%47[^:]:%47[^:]%n",&slot,a,colour,&min_temp,&max_temp,&short_end,line,maker,&long_end);
@@ -219,7 +237,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(printing(m))return reject(reason,reason_cap,"Canvas material editing is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Canvas material editing requires the printer to be idle");
         if(slot<0||slot>3)return reject(reason,reason_cap,"Canvas slot must be 1..4");
-        if(!valid_material_name(a))return reject(reason,reason_cap,"Material name may contain only letters, numbers, +, - and _");
+        if(!valid_material_name(a))return reject(reason,reason_cap,"Material name may contain only letters, numbers, internal spaces, +, - and _");
         if(strlen(colour)!=6||strspn(colour,"0123456789abcdefABCDEF")!=6)return reject(reason,reason_cap,"Canvas colour must be six hexadecimal digits");
         if(min_temp<120||max_temp>320||min_temp>=max_temp)return reject(reason,reason_cap,"Invalid Canvas nozzle temperature range");
         if(fields==7&&(!valid_filament_label(line)||!valid_filament_label(maker)))
@@ -268,7 +286,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     if(strcmp(action,"system:emergency_stop")==0){snprintf(script,cap,"M112");return 1;}
     if(sscanf(action,"light:%31s",a)==1){
         if(strcmp(a,"on")&&strcmp(a,"off"))return reject(reason,reason_cap,"Unknown light state");
-        snprintf(script,cap,"SET_PIN PIN=led_pin VALUE=%d",strcmp(a,"on")==0);return 1;
+        return reject(reason,reason_cap,"Light control requires the native printer API");
     }
     if(strncmp(action,"tune:",5)==0){
         const char *number=NULL;int is_speed=0;

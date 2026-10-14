@@ -18,6 +18,8 @@ typedef struct {
     time_t last_message;
     time_t last_ping;
     time_t last_app_ping; /* CC2 application-level heartbeat, separate from MQTT PINGREQ */
+    time_t app_ping_pending_since;
+    unsigned long registration_recoveries;
     unsigned long messages;
     unsigned long info_responses;
     unsigned long received_publishes, skipped_requests, skipped_request_bytes;
@@ -67,6 +69,8 @@ typedef struct {
     size_t canvas_snapshot_len;
     unsigned long canvas_revision; /* counts captured snapshots, so readers can tell a new one */
     time_t last_canvas_request;
+    time_t canvas_watch_until;
+    time_t canvas_material_read_at;
     unsigned int canvas_request_attempts;
     int canvas_discovery_complete;
     /* Automatic discovery budget survives transport reconnects; Sync rearms it. */
@@ -97,6 +101,8 @@ typedef struct {
     time_t history_delete_requested;
     unsigned long print_config_id, print_config_reply_id;
     int print_config_error;
+    unsigned long light_request_id, light_reply_id;
+    int light_error;
     size_t large_len, large_need;
     unsigned char large_flags;
 } mqtt_client;
@@ -111,6 +117,7 @@ int mqtt_request_canvas(mqtt_client *client);
 int mqtt_sync_canvas(mqtt_client *client);
 size_t mqtt_discovery_diagnostic(const mqtt_client *client, char *out, size_t capacity);
 int mqtt_set_auto_refill(mqtt_client *client, int enabled);
+int mqtt_set_light(mqtt_client *client, int enabled);
 int mqtt_request_history(mqtt_client *client);
 int mqtt_delete_history(mqtt_client *client, const char *params);
 int mqtt_prepare_timelapse(mqtt_client *client, int enabled);

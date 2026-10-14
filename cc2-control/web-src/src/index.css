@@ -79,7 +79,7 @@
   --cyan: #1c78bc; --green: #5f7000; --amber: #946c00; --red: #dc322f; --blue: #1c78bc;
   --well: #002b36; --well-fg: #eee8d5;
 }
-/* Inter (SIL OFL, see fonts/OFL.txt): variable 400–700, Latin + Latin-1 only, inlined by the build so it needs no request. */
+/* Inter (SIL OFL, see fonts/OFL.txt): variable 400â€“700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
@@ -252,4 +252,18 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
     .cc2-control-bottom { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .cc2-control-bottom > div { grid-column: span 2; }
   }
+}
+
+/* Control preview: numeric fan targets and matched desktop card edges. */
+.cc2-fan-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto; align-items: center; gap: 12px; }
+.cc2-fan-row > input[type="range"] { min-width: 0; width: 100%; }
+.cc2-fan-value input { padding-inline: 4px; }
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 1020px) {
+    .cc2-control-columns { align-items: stretch; }
+  }
+}
+@media (max-width: 420px) {
+  .cc2-fan-row { gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
+  .cc2-fan-row > span:first-child { grid-column: 1 / -1; }
 }

@@ -73,6 +73,9 @@ jobs:
         working-directory: cc2-control/web-src
         run: npm run test:control-calibrations
 
+      - name: Canvas ejection prototype interaction regression
+        run: npm run test:canvas-eject
+
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures
 
@@ -148,3 +151,14 @@ jobs:
       - name: Shell syntax
         run: |
           for script in experimental/combined-test/*.sh; do sh -n "$script"; done
+
+  payload-44:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install GNU ARM binutils
+        run: sudo apt-get update && sudo apt-get install -y binutils-arm-linux-gnueabihf
+      - name: Reproduce qualified 4.4 Dual Trust payload
+        run: python3 experimental/firmware-port/assemble_dual44_gnu.py --prefix arm-linux-gnueabihf
+      - name: Check 4.4 source pins and base requirements
+        run: python3 builder/current/tests/test_44_port_static.py

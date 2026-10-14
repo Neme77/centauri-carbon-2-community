@@ -12,7 +12,9 @@ static void attach(void){
  c.discovery_ready_at=clock_now+15;
  fcntl(peer,F_SETFL,fcntl(peer,F_GETFL,0)|O_NONBLOCK);
 }
-static void drain(void){char data[8192];while(recv(peer,data,sizeof(data),0)>0){} }
+/* This harness models a healthy registered printer. Missing/foreign PONGs
+ * and mode transition recovery are exercised in test_mqtt_registration.c. */
+static void drain(void){char data[8192];while(recv(peer,data,sizeof(data),0)>0){} c.app_ping_pending_since=0; }
 int main(void){
  assert(discovery_due(5,1000,1010));
  assert(!discovery_due(6,1000,1059)&&discovery_due(6,1000,1060));
@@ -39,6 +41,17 @@ int main(void){
  /* A passive Canvas snapshot ends automatic discovery; no budget reset needed. */
  c.canvas_discovery_complete=1;c.have_auto_refill=1;
  clock_now+=60;mqtt_tick(&c);drain();assert(c.automatic_canvas_attempts==1);
+ /* Finished discovery still refreshes while watched, at most once per 10 s. */
+ unsigned int requests=c.canvas_request_attempts;
+ c.canvas_watch_until=clock_now+15;mqtt_tick(&c);drain();
+ assert(c.canvas_request_attempts==requests+1);
+ clock_now+=9;mqtt_tick(&c);drain();assert(c.canvas_request_attempts==requests+1);
+ clock_now++;mqtt_tick(&c);drain();assert(c.canvas_request_attempts==requests+2);
+ clock_now+=20;mqtt_tick(&c);drain();assert(c.canvas_request_attempts==requests+2);
+ /* Material readback is deferred until the printer has processed the edit. */
+ requests=c.canvas_request_attempts;c.canvas_material_read_at=clock_now+1;
+ mqtt_tick(&c);drain();assert(c.canvas_request_attempts==requests);
+ clock_now++;mqtt_tick(&c);drain();assert(c.canvas_request_attempts==requests+1&&!c.canvas_material_read_at);
  /* Sync can rearm an exhausted registration without an application session. */
  c.registered=0;c.canvas_discovery_complete=0;c.automatic_registration_attempts=9;
  assert(!mqtt_sync_canvas(&c));clock_now+=15;mqtt_tick(&c);drain();assert(c.automatic_registration_attempts==1);

@@ -52,6 +52,24 @@ const labels = {
     'preview.reset': 'Сброс',
     'preview.state': 'Состояние',
   },
+  pl: {
+    'preview.simulation': 'SYMULACJA — bez drukarki',
+    'preview.idle': 'Bezczynna',
+    'preview.printing': 'Drukowanie',
+    'preview.paused': 'Wstrzymano',
+    'preview.disconnected': 'Rozłączona',
+    'preview.reset': 'Resetuj',
+    'preview.state': 'Stan',
+  },
+  cs: {
+    'preview.simulation': 'SIMULACE — bez tiskárny',
+    'preview.idle': 'Nečinná',
+    'preview.printing': 'Tisk',
+    'preview.paused': 'Pozastaveno',
+    'preview.disconnected': 'Odpojeno',
+    'preview.reset': 'Obnovit',
+    'preview.state': 'Stav',
+  },
 }
 const scenarios = ['idle', 'printing', 'paused', 'disconnected'] as const
 type Scenario = (typeof scenarios)[number]
@@ -82,32 +100,139 @@ export function previewPlugin(): Plugin {
       Array.from({ length: 11 }, (_, x) => Math.round((0.3 + tilt * (x - 5) * 0.01 - (y - 5) ** 2 * 0.003) * 1e6) / 1e6)
     ),
   })
-  type PreviewPlate = { id: string; name: string; side: 'A' | 'B'; z_offset: number; measured: number; tilt: number }
+  // A measurement is a mesh measured on a plate at a bed temperature; `profile`: the printer keeps it as its own profile.
+  type PreviewPlate = { id: string; name: string; side: 'A' | 'B'; z_offset: number; measure: string }
+  type PreviewMeasure = {
+    id: string
+    plate: string
+    temp: number
+    nozzle: string
+    measured: number
+    tilt: number
+    profile: boolean
+  }
+  type PreviewNozzle = { id: string; name: string; diameter: number; z_offset: number }
   let plates: PreviewPlate[] = []
+  let measures: PreviewMeasure[] = []
+  let nozzles: PreviewNozzle[] = []
+  let plateNozzle = ''
   let plateSlots: Record<'A' | 'B', number> = { A: 1, B: 2 }
   let plateCurrent = ''
   let plateResult = ''
+  // The calibration CC2 Control runs; in the preview each POST /__preview/calibration-step moves it one stage on.
+  const idleCalibration = () => ({
+    stage: 'off',
+    side: 'A' as 'A' | 'B',
+    temp: 0,
+    soak: 0,
+    remaining: 0,
+    bed: 25 as number | null,
+    plate: '',
+    nozzle: '',
+    measure: '',
+    result: '',
+    error: '',
+    detail: '',
+  })
+  let calibration = idleCalibration()
+  let nextTilt = 6
+  const newId = () => Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
   const resetPlates = () => {
     plates = [
-      { id: 'a1b2c3d4e5f60718', name: 'Smooth PEI', side: 'A', z_offset: -0.02, measured: 1790800000, tilt: 1 },
-      { id: '0f1e2d3c4b5a6978', name: 'Textured PEI', side: 'B', z_offset: 0.01, measured: 1790700000, tilt: 2 },
-      { id: '1234567890abcdef', name: 'Cool Plate', side: 'A', z_offset: 0, measured: 1790600000, tilt: 3 },
+      { id: 'a1b2c3d4e5f60718', name: 'Smooth PEI', side: 'A', z_offset: -0.02, measure: 'aa00000000000060' },
+      { id: '0f1e2d3c4b5a6978', name: 'Textured PEI', side: 'B', z_offset: 0.01, measure: 'bb00000000000060' },
+      { id: '1234567890abcdef', name: 'Cool Plate', side: 'A', z_offset: 0, measure: 'cc00000000000060' },
     ]
+    const brass = 'dd00000000000004'
+    measures = [
+      {
+        id: 'aa00000000000060',
+        plate: 'a1b2c3d4e5f60718',
+        temp: 60,
+        nozzle: brass,
+        measured: 1790800000,
+        tilt: 1,
+        profile: true,
+      },
+      {
+        id: 'aa00000000000080',
+        plate: 'a1b2c3d4e5f60718',
+        temp: 80,
+        nozzle: brass,
+        measured: 1790810000,
+        tilt: 4,
+        profile: true,
+      },
+      {
+        id: 'aa00000000000100',
+        plate: 'a1b2c3d4e5f60718',
+        temp: 100,
+        nozzle: '',
+        measured: 1790820000,
+        tilt: 5,
+        profile: false,
+      },
+      {
+        id: 'bb00000000000060',
+        plate: '0f1e2d3c4b5a6978',
+        temp: 60,
+        nozzle: '',
+        measured: 1790700000,
+        tilt: 2,
+        profile: true,
+      },
+      {
+        id: 'cc00000000000060',
+        plate: '1234567890abcdef',
+        temp: 60,
+        nozzle: '',
+        measured: 1790600000,
+        tilt: 3,
+        profile: false,
+      },
+    ]
+    nozzles = [
+      { id: brass, name: '0.4 brass', diameter: 0.4, z_offset: 0 },
+      { id: 'dd00000000000006', name: '0.6 hardened', diameter: 0.6, z_offset: 0.02 },
+    ]
+    plateNozzle = brass
     plateSlots = { A: 1, B: 2 }
     plateCurrent = 'a1b2c3d4e5f60718'
     plateResult = ''
+    calibration = idleCalibration()
   }
   resetPlates()
-  const plateLibrary = () => ({
-    available: true,
-    error: '',
-    current: plateCurrent,
-    pending: '',
-    result: plateResult,
-    z_applied: Boolean(plateCurrent),
-    slots: { A: plateSlots.A ? 'mesh' : 'empty', B: plateSlots.B ? 'mesh' : 'empty' },
-    plates: plates.map(({ tilt, ...p }) => ({ ...p, in_printer: plateSlots[p.side] === tilt, mesh: plateMesh(tilt) })),
-  })
+  const plateMeasures = (p: PreviewPlate) =>
+    measures.filter(m => m.plate === p.id).sort((a, b) => a.temp - b.temp || a.measured - b.measured)
+  const plateBase = (p: PreviewPlate) => measures.find(m => m.id === p.measure) || plateMeasures(p)[0]
+  const plateLibrary = () => {
+    const current = plates.find(p => p.id === plateCurrent)
+    const installed = nozzles.find(n => n.id === plateNozzle)
+    return {
+      available: true,
+      error: '',
+      current: plateCurrent,
+      pending: '',
+      result: plateResult,
+      z_applied: Boolean(current),
+      z_effective: current ? Math.round((current.z_offset + (installed?.z_offset || 0)) * 1000) / 1000 : null,
+      nozzle: plateNozzle,
+      mesh_profile: 'default',
+      print_mesh: { state: 'off', measure: '', result: '' },
+      calibration,
+      slots: { A: plateSlots.A ? 'mesh' : 'empty', B: plateSlots.B ? 'mesh' : 'empty' },
+      nozzles,
+      plates: plates.map(p => ({
+        ...p,
+        in_printer: plateSlots[p.side] === plateBase(p).tilt,
+        measures: plateMeasures(p).map(({ plate, tilt, ...m }) => ({
+          ...m,
+          slot: plateSlots[p.side] === tilt,
+          mesh: plateMesh(tilt),
+        })),
+      })),
+    }
+  }
   // Spool library as /api/spools reports it; tracking starts off so other previews never see its questions.
   // Slot 3 reports a purple no spool has, so its question suggests nothing.
   const trayColors = ['#EF5350', '#42A5F5', '#8E24AA', '#66BB6A']
@@ -531,9 +656,18 @@ export function previewPlugin(): Plugin {
           '/api/plates/save',
           '/api/plates/edit',
           '/api/plates/delete',
-          '/api/plates/recapture',
           '/api/plates/mount',
           '/api/plates/unmount',
+          '/api/plates/measure',
+          '/api/plates/measure/delete',
+          '/api/plates/keep',
+          '/api/plates/nozzle',
+          '/api/plates/nozzle/delete',
+          '/api/plates/nozzle/select',
+          '/api/plates/measure/edit',
+          '/api/plates/calibrate',
+          '/api/plates/calibrate/cancel',
+          '/__preview/calibration-step',
           '/api/spools/enable',
           '/api/spools/save',
           '/api/spools/delete',
@@ -601,22 +735,168 @@ export function previewPlugin(): Plugin {
               videos[task.task_id] = 2
               return reply({ accepted: true, method: 1051, simulated: true }, 202)
             }
+            if (path === '/__preview/calibration-step' && req.method === 'POST') {
+              const c = calibration
+              if (body.trim() === 'fail' && c.stage !== 'off')
+                calibration = { ...c, stage: 'off', result: 'failed', error: c.stage }
+              else if (c.stage === 'homing') calibration = { ...c, stage: 'heating', bed: 25 }
+              else if (c.stage === 'heating') calibration = { ...c, stage: 'soaking', bed: c.temp, remaining: c.soak }
+              else if (c.stage === 'soaking') calibration = { ...c, stage: 'probing', remaining: 0 }
+              else if (c.stage === 'probing') {
+                plateSlots[c.side] = nextTilt++ // the printer saved a new side mesh
+                calibration = c.plate ? { ...c, stage: 'saving' } : { ...c, stage: 'off', result: 'done', bed: 25 }
+              } else if (c.stage === 'saving') {
+                const plate = plates.find(p => p.id === c.plate)
+                if (!plate) return reply({ error: 'Unknown plate' }, 404)
+                let m = measures.find(x => x.plate === plate.id && x.temp === c.temp && x.nozzle === c.nozzle)
+                if (!m) {
+                  m = {
+                    id: newId(),
+                    plate: plate.id,
+                    temp: c.temp,
+                    nozzle: c.nozzle,
+                    measured: 0,
+                    tilt: 0,
+                    profile: true,
+                  }
+                  measures.push(m)
+                }
+                Object.assign(m, { tilt: plateSlots[plate.side], measured: 1790990000, profile: true })
+                plate.measure = m.id
+                plateCurrent = plate.id
+                calibration = { ...c, stage: 'off', result: 'saved', measure: m.id, bed: 25 }
+              }
+              return reply(calibration)
+            }
             if (path.startsWith('/api/plates/') && req.method === 'POST') {
               const lines = body.replace(/\n+$/, '').split('\n')
               const plate = plates.find(p => p.id === lines[0])
-              const idleOnly = ['/api/plates/save', '/api/plates/mount', '/api/plates/recapture'].includes(path)
-              if (idleOnly && scene !== 'idle') return reply({ ok: false, error: 'The printer must be idle' }, 409)
+              const idleOnly = [
+                '/api/plates/save',
+                '/api/plates/mount',
+                '/api/plates/measure',
+                '/api/plates/keep',
+                '/api/plates/calibrate',
+              ]
+              if (idleOnly.includes(path) && scene !== 'idle')
+                return reply({ ok: false, error: 'The printer must be idle' }, 409)
+              // Before a side mesh is replaced, the measurement it holds keeps a printer profile.
+              const keep = (side: 'A' | 'B') => {
+                const held = measures.find(
+                  m => m.tilt === plateSlots[side] && plates.find(p => p.id === m.plate)?.side === side
+                )
+                if (held) held.profile = true
+                return held
+              }
               if (path === '/api/plates/unmount') {
                 plateCurrent = ''
                 return reply({ mounted: false })
               }
+              if (path === '/api/plates/calibrate') {
+                if (calibration.stage !== 'off')
+                  return reply({ ok: false, error: 'A bed mesh calibration is already running' }, 409)
+                const [side, temp, soak, nozzle = '', plateId = ''] = lines as [
+                  'A' | 'B',
+                  string,
+                  string,
+                  string?,
+                  string?,
+                ]
+                keep(side)
+                calibration = {
+                  ...idleCalibration(),
+                  stage: 'homing',
+                  side,
+                  temp: Number(temp),
+                  soak: Number(soak) * 60,
+                  nozzle,
+                  plate: plateId,
+                }
+                return reply({ started: true }, 202)
+              }
+              if (path === '/api/plates/calibrate/cancel') {
+                if (['probing', 'saving'].includes(calibration.stage))
+                  return reply(
+                    { ok: false, error: 'The probing has started; use the emergency stop to interrupt it' },
+                    409
+                  )
+                if (calibration.stage !== 'off') calibration = { ...calibration, stage: 'off', result: 'cancelled' }
+                return reply({ cancelled: true })
+              }
+              if (path === '/api/plates/measure/edit') {
+                const [id, temp, nozzle = ''] = lines
+                const m = measures.find(x => x.id === id)
+                if (!m) return reply({ ok: false, error: 'Unknown measurement' }, 404)
+                if (
+                  measures.some(x => x !== m && x.plate === m.plate && x.temp === Number(temp) && x.nozzle === nozzle)
+                )
+                  return reply(
+                    { ok: false, error: 'The plate already has a measurement at this temperature with this nozzle' },
+                    409
+                  )
+                Object.assign(m, { temp: Number(temp), nozzle })
+                return reply({ saved: true })
+              }
+              if (path === '/api/plates/keep') {
+                const held = keep(lines[0] as 'A' | 'B')
+                return reply({ measure: held?.id || '', profile: Boolean(held) })
+              }
+              if (path === '/api/plates/nozzle') {
+                const [id, name, diameter, z] = lines
+                if (nozzles.some(n => n.name === name && n.id !== id))
+                  return reply({ ok: false, error: 'A nozzle with this name already exists' }, 409)
+                const found = nozzles.find(n => n.id === id)
+                if (id && !found) return reply({ ok: false, error: 'Unknown nozzle' }, 404)
+                const fields = { name, diameter: Number(diameter), z_offset: Number(z) }
+                if (found) Object.assign(found, fields)
+                else nozzles.push({ id: newId(), ...fields })
+                return reply({
+                  saved: true,
+                  id: found?.id || nozzles[nozzles.length - 1].id,
+                  applied: scene === 'idle',
+                })
+              }
+              if (path === '/api/plates/nozzle/delete') {
+                nozzles = nozzles.filter(n => n.id !== lines[0])
+                for (const m of measures) if (m.nozzle === lines[0]) m.nozzle = ''
+                if (plateNozzle === lines[0]) plateNozzle = ''
+                return reply({ deleted: true })
+              }
+              if (path === '/api/plates/nozzle/select') {
+                plateNozzle = lines[0] || ''
+                return reply({ selected: true, applied: scene === 'idle' })
+              }
               if (path === '/api/plates/save') {
-                const [side, name, z] = lines as ['A' | 'B', string, string]
+                const [side, name, z, temp, nozzle] = lines as ['A' | 'B', string, string, string, string?]
                 if (plates.some(p => p.name === name))
                   return reply({ ok: false, error: 'A plate with this name already exists' }, 409)
-                const id = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
-                plates.push({ id, name, side, z_offset: Number(z), measured: 1790900000, tilt: plateSlots[side] })
-                return reply({ saved: true, id }, 201)
+                const id = newId(),
+                  measure = newId()
+                plates.push({ id, name, side, z_offset: Number(z), measure })
+                measures.push({
+                  id: measure,
+                  plate: id,
+                  temp: Number(temp || 60),
+                  nozzle: nozzle || '',
+                  measured: 1790900000,
+                  tilt: plateSlots[side],
+                  profile: true,
+                })
+                return reply({ saved: true, id, measure, profile: true }, 201)
+              }
+              if (path === '/api/plates/measure/delete') {
+                const gone = measures.find(m => m.id === lines[0])
+                if (!gone) return reply({ ok: false, error: 'Unknown measurement' }, 404)
+                const owner = plates.find(p => p.id === gone.plate)
+                if (!owner || measures.filter(m => m.plate === owner.id).length < 2)
+                  return reply(
+                    { ok: false, error: 'A plate keeps at least one measurement; delete the plate instead' },
+                    409
+                  )
+                measures = measures.filter(m => m !== gone)
+                if (owner.measure === gone.id)
+                  owner.measure = plateMeasures(owner).reduce((a, b) => (b.measured > a.measured ? b : a)).id
+                return reply({ deleted: true })
               }
               if (!plate) return reply({ ok: false, error: 'Unknown plate' }, 404)
               if (path === '/api/plates/edit') {
@@ -626,14 +906,29 @@ export function previewPlugin(): Plugin {
               }
               if (path === '/api/plates/delete') {
                 plates = plates.filter(p => p !== plate)
+                measures = measures.filter(m => m.plate !== plate.id)
                 if (plateCurrent === plate.id) plateCurrent = ''
                 return reply({ deleted: true })
               }
-              if (path === '/api/plates/recapture') {
-                plate.tilt = plateSlots[plate.side]
-                return reply({ saved: true })
+              if (path === '/api/plates/measure') {
+                // The side mesh just calibrated becomes the plate's measurement at that temperature.
+                const [, temp, nozzle = ''] = lines
+                let m = measures.find(x => x.plate === plate.id && x.temp === Number(temp) && x.nozzle === nozzle)
+                if (!m) {
+                  m = { id: newId(), plate: plate.id, temp: Number(temp), nozzle, measured: 0, tilt: 0, profile: true }
+                  measures.push(m)
+                }
+                Object.assign(m, { tilt: plateSlots[plate.side], measured: 1790950000, profile: true })
+                plate.measure = m.id
+                plateCurrent = plate.id
+                plateResult = 'mounted'
+                return reply({ saved: true, measure: m.id, profile: true, applied: true })
               }
-              if (plateSlots[plate.side] !== plate.tilt && lines[1] !== 'REBOOT')
+              const reboot = lines.includes('REBOOT')
+              const chosen = lines.slice(1).find(x => x !== 'REBOOT')
+              const base = chosen ? measures.find(m => m.id === chosen && m.plate === plate.id) : plateBase(plate)
+              if (!base) return reply({ ok: false, error: 'Unknown measurement' }, 404)
+              if (plateSlots[plate.side] !== base.tilt && !reboot)
                 return reply(
                   {
                     ok: false,
@@ -642,11 +937,14 @@ export function previewPlugin(): Plugin {
                   },
                   409
                 )
-              const reboot = plateSlots[plate.side] !== plate.tilt
-              plateSlots[plate.side] = plate.tilt // the simulated restart is instant
+              const restart = plateSlots[plate.side] !== base.tilt
+              if (restart) keep(plate.side)
+              plateSlots[plate.side] = base.tilt // the simulated restart is instant
+              base.profile = true
+              plate.measure = base.id
               plateCurrent = plate.id
               plateResult = 'mounted'
-              return reply({ mounted: true, reboot }, reboot ? 202 : 200)
+              return reply({ mounted: true, reboot: restart }, restart ? 202 : 200)
             }
             // Spool library: the same key=value lines as spools.h, with only the checks the UI relies on.
             if ((path.startsWith('/api/spools/') || path === '/__preview/spool-insert') && req.method === 'POST') {

@@ -13,8 +13,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_COMMIT='4a6ffbdc6cb3195b5fe90d79f519cc6abb0acfe5'
-SOURCE_SHA256='acb7a64cea70cbb743048f640ce8925a7a1143881ce0a613c26c1f8f73c7b4f3'
+SOURCE_COMMIT='35937a00a46f24c794e1e4309a9fc4dd96d54262'
+SOURCE_SHA256='88d59406e83c5a2389af9c51e8d120e1c20532f56409544db356cb4570342bfd'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
@@ -71,7 +71,7 @@ def main():
         copy_shell_lf(RUNTIME / 'start.sh', firmware_start)
         subprocess.run(['make', 'clean', 'test', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
         compiler='/opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf-gcc'
-        subprocess.run(['make', 'clean', 'all', 'CROSS=', 'CC='+compiler], cwd=tree, check=True)
+        subprocess.run(['make', 'clean', 'all', 'CROSS=', 'CC='+compiler, 'EXTRA_CFLAGS=-mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard'], cwd=tree, check=True)
         binary = tree / 'dist/cc2-control/cc2-control'
         web = tree / 'dist/cc2-control/web/index.html'
         validate_arm_elf(binary)

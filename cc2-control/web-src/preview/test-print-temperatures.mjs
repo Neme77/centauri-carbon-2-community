@@ -26,7 +26,7 @@ try {
   await nozzle.waitFor()
   await page.waitForFunction(label => document.querySelector(`input[aria-label="${label}"]`)?.value === '205', targetLabel('common.nozzle'))
   assert.ok(await nozzle.isEnabled()); assert.ok(await bed.isEnabled())
-  assert.ok(await page.getByRole('button', { name: 'PLA', exact: true }).first().isDisabled())
+  assert.ok(await page.locator('.cc2-preheat-presets').isDisabled())
   await nozzle.fill('210'); await bed.fill('65')
   const firstReply = page.waitForResponse(r => r.url().endsWith('/api/control'))
   await apply.click(); await firstReply

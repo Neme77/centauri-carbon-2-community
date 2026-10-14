@@ -14,6 +14,13 @@ spec=importlib.util.spec_from_file_location('canvas_component',BASE/'core/canvas
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 SOURCE=BASE.parents[1]/'experimental/canvas-eject'
 class CanvasComponentTests(unittest.TestCase):
+    def test_new_base_is_refused_before_loading_legacy_component(self):
+        m.require_firmware_base('02.01.00.00')
+        for base in ('02.01.01.07', 'unknown', ''):
+            with self.assertRaisesRegex(RuntimeError, 'not qualified'):
+                m.require_firmware_base(base)
+        builder=(BASE/'core/firmware_builder.py').read_text()
+        self.assertLess(builder.index("canvas.require_firmware_base('02.01.01.07')"), builder.index('canvas.load(a.canvas_eject_component)'))
     def elf_fixture(self,path,prefix=b'\0',address=0x100,code=b'12345678',value=0x100):
         strings=b'\0.shstrtab\0.text\0.dynstr\0.dynsym\0'
         names=prefix+b'function\0'

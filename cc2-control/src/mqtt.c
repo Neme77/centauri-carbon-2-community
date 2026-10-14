@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/select.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -16,6 +17,7 @@
 
 #define DISCOVERY_LIMIT 9U
 #define DISCOVERY_SETTLE_SECONDS 15
+#define APPLICATION_REPLY_TIMEOUT 30
 
 static int send_all(int fd, const void *data, size_t size) {
     const unsigned char *p = data;
@@ -118,6 +120,7 @@ void mqtt_close(mqtt_client *c) {
     c->canvas_discovery_complete=0; c->canvas_request_attempts=0;
     c->last_canvas_request=0;
     c->last_app_ping=0;
+    c->app_ping_pending_since=0;
     /* Replies to requests sent on this session can no longer arrive. */
     free(c->large); c->large=NULL; c->large_len=0; c->large_need=0;
     c->canvas_refresh_due=0; c->history_refresh_due=0; c->auto_refill_probed=0;
@@ -186,6 +189,23 @@ static int discovery_due(unsigned int attempts,time_t last,time_t now) {
     return attempts<DISCOVERY_LIMIT && (!last || now-last>=(attempts<6?10:60));
 }
 
+/* A LAN/WAN strategy restart can forget the application client while the
+ * broker socket stays alive. Renew registration, not the TCP connection or
+ * any printer action. Each recovery has the normal bounded discovery budget. */
+static void recover_registration(mqtt_client *c) {
+    if(!c->connected || !c->registered)return;
+    c->registered=0;c->register_sent=0;c->snapshot_sent=0;
+    c->last_registration_request=0;c->last_snapshot_request=0;
+    c->automatic_registration_attempts=0;c->automatic_snapshot_attempts=0;
+    c->automatic_canvas_attempts=0;
+    c->canvas_discovery_complete=0;c->canvas_snapshot_len=0;c->canvas_snapshot[0]='\0';
+    c->snapshot_len=0;c->snapshot[0]='\0';
+    c->have_auto_refill=0;c->auto_refill_probed=0;
+    c->last_app_ping=0;c->app_ping_pending_since=0;
+    c->discovery_ready_at=time(NULL)+DISCOVERY_SETTLE_SECONDS;
+    c->registration_recoveries++;
+}
+
 size_t mqtt_discovery_diagnostic(const mqtt_client *c,char *out,size_t capacity) {
     const char *state=!c->connected?"disconnected":c->canvas_discovery_complete&&c->registered?"complete":
         (!c->registered&&c->automatic_registration_attempts>=DISCOVERY_LIMIT)||
@@ -194,10 +214,11 @@ size_t mqtt_discovery_diagnostic(const mqtt_client *c,char *out,size_t capacity)
     int n=snprintf(out,capacity,
         "Canvas discovery: %s\nMQTT connections: %lu\nAutomatic registration: %u/%u\n"
         "Automatic snapshot: %u/%u\nAutomatic Canvas: %u/%u\n"
-        "Session registration/snapshot/Canvas requests: %u/%u/%u\n",
+        "Session registration/snapshot/Canvas requests: %u/%u/%u\n"
+        "Application registration recoveries: %lu\n",
         state,c->mqtt_connections,c->automatic_registration_attempts,DISCOVERY_LIMIT,
         c->automatic_snapshot_attempts,DISCOVERY_LIMIT,c->automatic_canvas_attempts,DISCOVERY_LIMIT,
-        c->registration_attempts,c->snapshot_request_attempts,c->canvas_request_attempts);
+        c->registration_attempts,c->snapshot_request_attempts,c->canvas_request_attempts,c->registration_recoveries);
     return n<0||!capacity?0:(size_t)n<capacity?(size_t)n:capacity-1;
 }
 
@@ -288,6 +309,33 @@ int mqtt_prepare_timelapse(mqtt_client *c,int enabled) {
         struct pollfd p={c->fd,POLLIN,0};int ready=poll(&p,1,(int)left);
         if(ready<0&&errno==EINTR)continue;
         if(ready<=0||!(p.revents&POLLIN)||mqtt_process(c)<0)return -1;
+    }
+    return -1;
+}
+
+/* Native 1029 runs SET_PIN and synchronizes led_state with the printer UI.
+ * Direct G-code changes the physical light without that UI notification. */
+int mqtt_set_light(mqtt_client *c,int enabled) {
+    char topic[256],payload[192];
+    if(!c||(enabled!=0&&enabled!=1)||c->fd<0||!c->connected||!c->registered||!c->serial[0])return -1;
+    if(++c->light_request_id>1000000000UL)c->light_request_id=1;
+    unsigned long id=30000UL+c->light_request_id;
+    c->light_reply_id=0;c->light_error=-1;
+    int n=snprintf(topic,sizeof(topic),"elegoo/%s/%s/api_request",c->serial,c->client_id);
+    if(n<0||(size_t)n>=sizeof(topic))return -1;
+    n=snprintf(payload,sizeof(payload),"{\"method\":1029,\"id\":%lu,\"params\":{\"power\":%d}}",id,enabled);
+    if(n<0||(size_t)n>=sizeof(payload)||mqtt_publish(c,topic,payload))return -1;
+    struct timespec ts;clock_gettime(CLOCK_MONOTONIC,&ts);
+    long long deadline=(long long)ts.tv_sec*1000+ts.tv_nsec/1000000+1500;
+    while(c->fd>=0){
+        if(c->light_reply_id==id)return c->light_error==0?0:-1;
+        clock_gettime(CLOCK_MONOTONIC,&ts);
+        long long left=deadline-((long long)ts.tv_sec*1000+ts.tv_nsec/1000000);
+        if(left<=0){recover_registration(c);return -1;}
+        struct pollfd p={c->fd,POLLIN,0};int ready=poll(&p,1,(int)left);
+        if(ready<0&&errno==EINTR)continue;
+        if(ready==0){recover_registration(c);return -1;}
+        if(ready<0||!(p.revents&POLLIN)||mqtt_process(c)<0)return -1;
     }
     return -1;
 }
@@ -425,6 +473,30 @@ static int discovery_wait(int fd, int writing, long deadline) {
                   NULL, &timeout) > 0 ? 0 : -1;
 }
 
+#ifndef CC2_FACTORY_ID_PATH
+#define CC2_FACTORY_ID_PATH "/mnt/private/ELEGOO.txt"
+#endif
+/* ConfigManager::load_sn_info uses the first comma-separated field as SN.
+ * Read only that field; the following authentication material is never loaded. */
+static int discover_serial_factory(mqtt_client *c){
+ FILE *file=fopen(CC2_FACTORY_ID_PATH,"r");if(!file)return -1;
+ char serial[sizeof(c->serial)];size_t used=0;int ch,valid=1;
+ while((ch=fgetc(file))!=EOF&&ch!=','){
+  if(used+1>=sizeof(serial)||!(isalnum((unsigned char)ch)||ch=='_'||ch=='-')){valid=0;break;}
+  serial[used++]=(char)ch;
+ }
+ fclose(file);
+ if(!valid||ch!=','||!used)return -1;
+ serial[used]=0;snprintf(c->serial,sizeof(c->serial),"%s",serial);
+ if(c->config_path[0]){
+  FILE *config=fopen(c->config_path,"a");
+  if(config){int ok=fprintf(config,"\nmqtt_serial=%s\n",serial)>0;
+   if(fclose(config))ok=0;
+   if(ok)c->serial_persisted=1;}
+ }
+ return 0;
+}
+
 static int discover_serial_http(mqtt_client *c) {
     char request[640], response[4096], encoded[sizeof(c->password) * 3];
     static const char hex[] = "0123456789ABCDEF";
@@ -466,6 +538,25 @@ static int discover_serial_http(mqtt_client *c) {
         if (n < 0) goto done;
         if (!n) break;
         used += (size_t)n;
+        response[used] = 0;
+        /* A complete length-framed reply need not close its TCP connection. */
+        const char *header_end=strstr(response,"\r\n\r\n");
+        if(header_end){
+            const char *line=strstr(response,"\r\n");
+            size_t body_length=0;int framed=0;
+            while(line&&line<header_end){
+                line+=2;
+                if(!strncasecmp(line,"Content-Length:",15)){
+                    const char *value=line+15;while(*value==' '||*value=='\t')value++;
+                    char *tail;errno=0;unsigned long length=strtoul(value,&tail,10);
+                    while(*tail==' '||*tail=='\t')tail++;
+                    if(errno||tail==value||strncmp(tail,"\r\n",2)||length>=sizeof(response))goto done;
+                    body_length=(size_t)length;framed=1;
+                }
+                line=strstr(line,"\r\n");
+            }
+            if(framed&&used-(size_t)(header_end+4-response)>=body_length)break;
+        }
     }
     response[used] = 0;
     int status = 0;
@@ -617,8 +708,8 @@ static int request_topic(const char *topic,size_t len) {
 
 /* The printer answers our api_request on .../<client_id>/api_response only. */
 static int own_reply_topic(const mqtt_client *c,const char *topic,size_t len) {
-    char suffix[96];int n=snprintf(suffix,sizeof(suffix),"/%s/api_response",c->client_id);
-    return n>0&&(size_t)n<sizeof(suffix)&&len>(size_t)n&&!memcmp(topic+len-(size_t)n,suffix,(size_t)n);
+    char expected[256];int n=snprintf(expected,sizeof(expected),"elegoo/%s/%s/api_response",c->serial,c->client_id);
+    return n>0&&(size_t)n<sizeof(expected)&&len==(size_t)n&&!memcmp(topic,expected,len);
 }
 
 /* Records a refusal (non-zero result.error_code) of one of our requests and
@@ -632,6 +723,7 @@ static int handle_own_reply(mqtt_client *c,const char *payload,size_t len) {
     time_t now=time(NULL);
     if(code){c->reply_error_method=method;c->reply_error_code=code;c->reply_error_time=now;c->reply_errors++;}
     if(method==1019){double id;if(number_in(payload,len,"id",&id)&&id==20000.0+c->print_config_id){c->print_config_reply_id=(unsigned long)id;c->print_config_error=(int)code;}}
+    if(method==1029){double id;if(number_in(payload,len,"id",&id)&&id==30000.0+c->light_request_id){c->light_reply_id=(unsigned long)id;c->light_error=code;}}
     if(method==1038){c->history_delete_requested=0;if(!code)c->history_refresh_due=1;}
     if(method==2004&&!code)c->canvas_refresh_due=1; /* read the new setting back */
     /* The 1051 reply only acknowledges the request; mqtt_tick follows the rendering. */
@@ -662,6 +754,17 @@ static void handle_publish(mqtt_client *c,unsigned char flags,const unsigned cha
         c->skipped_request_bytes+=(unsigned long)payload_len;
         return;
     }
+    char type[16];
+    if(string_in(payload,payload_len,"type",type,sizeof(type))&&!strcmp(type,"PONG")) {
+        if(!own_reply_topic(c,topic,topic_len))return;
+        c->app_ping_pending_since=0;
+        /* The dashboard uses last_message for three missed 10 s
+         * heartbeats. Preserve the pre-watchdog freshness update;
+         * a PONG contains no state fields to overwrite telemetry. */
+        capture_diagnostic(c,payload,payload_len);
+        update_state(c,payload,payload_len);
+        return;
+    }
     if(own_reply_topic(c,topic,topic_len)&&handle_own_reply(c,payload,payload_len))return;
     capture_diagnostic(c,payload,payload_len);
     if(contains_text(payload,payload_len,"\"canvas_info\"")&&
@@ -674,8 +777,14 @@ static void handle_publish(mqtt_client *c,unsigned char flags,const unsigned cha
     }
     update_state(c,payload,payload_len);
     if(contains_text(topic,topic_len,"/register_response")) {
-        if(contains_text(payload,payload_len,"\"error\":\"ok\"")||
-           contains_text(payload,payload_len,"already registered"))c->registered=1;
+        char expected[256],client[64];
+        int n=snprintf(expected,sizeof(expected),"elegoo/%s/%s/register_response",c->serial,c->client_id);
+        if(n>0&&(size_t)n<sizeof(expected)&&topic_len==(size_t)n&&
+           !memcmp(topic,expected,topic_len)&&
+           string_in(payload,payload_len,"client_id",client,sizeof(client))&&
+           !strcmp(client,c->client_id)&&
+           (contains_text(payload,payload_len,"\"error\":\"ok\"")||
+            contains_text(payload,payload_len,"already registered")))c->registered=1;
     }
     if(contains_text(topic,topic_len,"/api_response")&&
        contains_text(payload,payload_len,"\"method\":1002")) {
@@ -747,12 +856,16 @@ int mqtt_process(mqtt_client *c) {
 void mqtt_tick(mqtt_client *c) {
     time_t now=time(NULL);
     if(c->fd<0){if(now-c->last_connect_attempt>=5)mqtt_connect_local(c);return;}
+    /* The broker can survive a LAN/WAN transition while the printer forgets
+     * our application registration. Renew once, then use bounded discovery. */
+    if(c->registered&&c->app_ping_pending_since&&
+       now-c->app_ping_pending_since>=APPLICATION_REPLY_TIMEOUT)recover_registration(c);
     if (c->connected && c->password[0] && !c->serial[0] &&
         (c->serial_discovery_attempts == 0 ||
          now - c->last_serial_discovery >= (c->serial_discovery_attempts < 3 ? 10 : 60))) {
         c->last_serial_discovery = now;
         c->serial_discovery_attempts++;
-        (void)discover_serial_http(c);
+        if(discover_serial_factory(c)!=0)(void)discover_serial_http(c);
     }
     /* Delay automatic discovery after every successful MQTT connection, not
      * only cold boot. Heartbeats and passive telemetry continue independently.
@@ -790,13 +903,20 @@ void mqtt_tick(mqtt_client *c) {
     if(c->registered&&c->canvas_discovery_complete&&!c->have_auto_refill&&!c->auto_refill_probed){
         c->auto_refill_probed=1;c->canvas_refresh_due=1;
     }
+    /* Poll only while a browser is consuming Canvas, not throughout a print.
+     * New firmware may stop sending unsolicited slot deltas after discovery. */
+    if(c->registered&&c->canvas_discovery_complete&&now<c->canvas_watch_until&&
+       now-c->last_canvas_request>=10){
+        (void)mqtt_request_canvas(c);
+        c->last_canvas_request=now;
+    }
+    if(c->registered&&c->canvas_material_read_at&&now>=c->canvas_material_read_at){c->canvas_material_read_at=0;c->canvas_refresh_due=1;}
     if(c->registered&&c->canvas_refresh_due){c->canvas_refresh_due=0;(void)mqtt_request_canvas(c);}
     if(c->registered&&c->history_refresh_due){c->history_refresh_due=0;(void)mqtt_request_history(c);}
     /* The official CC2 client keeps its *application* registration alive with
      * a JSON PING on its api_request topic.  MQTT PINGREQ only keeps the
      * broker's TCP session alive and is not a substitute for this heartbeat.
-     * Do not change request IDs, print commands or registration behaviour
-     * in this isolated experiment. */
+     * Only our own PONG clears the pending heartbeat. Commands are never replayed. */
     if(c->registered && c->serial[0] &&
        (c->last_app_ping==0 || now-c->last_app_ping>=10)) {
         char heartbeat_topic[256];
@@ -808,6 +928,7 @@ void mqtt_tick(mqtt_client *c) {
             return;
         }
         c->last_app_ping=now;
+        if(!c->app_ping_pending_since)c->app_ping_pending_since=now;
     }
     if(now-c->last_ping>=20){unsigned char ping[2]={0xC0,0};if(send(c->fd,ping,2,MSG_NOSIGNAL)!=2){mqtt_close(c);return;}c->last_ping=now;}
 }

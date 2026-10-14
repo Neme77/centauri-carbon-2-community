@@ -67,6 +67,12 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         value = wait_for("/api/uds", lambda x: x["fresh"])
         assert value["values"]["speed_factor"] == 0.8
         assert value["values"]["extrude_factor"] == 0.95
+        assert value["homed_axes"] is None and value["light"] is None
+        send({"method": "cc2_status", "params": {"eventtime": 1.1, "status": {
+            "toolhead": {"homed_axes": "xyz"}, "output_pin led_pin": {"value": 1}
+        }}})
+        value = wait_for("/api/uds", lambda x: x.get("homed_axes") == "xyz")
+        assert value["light"] is True
         send({"id": 0, "report": {"message": "vendor report"}})
         send({"method": "other_notification", "params": {}})
         value = wait_for("/api/uds", lambda x: x["ignored_messages"] == 2)
@@ -121,6 +127,8 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         peer.close()
         peer = None
         wait_for("/api/uds", lambda x: not x["fresh"])
+        value = get("/api/uds")
+        assert value["homed_axes"] is None and value["light"] is None
         assert get("/api/printer")["extruder"]["temperature"] is None
         # Accept the automatic reconnection and confirm the old cache is reset.
         peer, _ = listener.accept()
@@ -132,6 +140,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         value = wait_for("/api/uds", lambda x: x["fresh"])
         assert value["values"]["nozzle_temperature"] == 30
         assert value["values"]["speed_factor"] is None
+        assert value["homed_axes"] is None and value["light"] is None
         print("PASS UDS subscription, HTTP cache, delta preservation, silence-only probe, disconnect fallback and reconnect")
     finally:
         if peer is not None:

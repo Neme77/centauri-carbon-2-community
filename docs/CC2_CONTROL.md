@@ -48,6 +48,8 @@ CC2 Control keeps the original Dark theme and adds a persistent monochrome **Lig
 
 ## OrcaSlicer Device integration
 
+For the step-by-step connection settings and filament-sync workflow, read [OrcaSlicer and Canvas sync](ORCASLICER.md) ([Italiano](ORCASLICER.it.md)).
+
 CC2 Control can be loaded directly in OrcaSlicer as the printer Device page. V4.2 supports the same dashboard and control UI there, together with the upload and print workflow.
 
 For Canvas prints, the spool-selection popup can also appear inside the OrcaSlicer Device view without requiring a manual refresh.

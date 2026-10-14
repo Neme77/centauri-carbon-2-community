@@ -11,11 +11,18 @@ EXTRAS='33b40a530c8c1ffe27e63a7d9f0fd68f3ccfae2cec44edfce10566831b085c41'
 GUI='afa2b1f181d18dc4803a60ee61fb3fc454f1e91afa12743bc1a1e5e386e439ff'
 NAMES=('libcc2-canvas-eject.so','libcc2-canvas-screen.so')
 DEST='/opt/inst/canvas-eject'
+
+def require_firmware_base(base):
+    # New firmware embeds Canvas in the printer executable, not the old library.
+    if base != '02.01.00.00':
+        raise RuntimeError('Canvas ejection adapter is not qualified for this firmware base; native port and printer tests are pending')
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def load(component):
     component=Path(component);m=json.loads((component/'manifest.json').read_text())
     if m.get('gcc')!='6.5.0' or set(m.get('files',{}))!=set(NAMES):raise RuntimeError('Unqualified Canvas component')
     source=Path(__file__).resolve().parents[3]/'experimental/canvas-eject'
+    if set(m.get('sources',{})) != {'runtime.cpp','screen.cpp','eject.h','hook.h','qualified.h'}:
+        raise RuntimeError('Missing Canvas source provenance')
     if set(m.get('sources',{}))!={'runtime.cpp','screen.cpp','eject.h','hook.h','qualified.h'}:raise RuntimeError('Incomplete Canvas provenance')
     for name,value in m['sources'].items():
         if digest(source/name)!=value:raise RuntimeError('Stale Canvas module: '+name)

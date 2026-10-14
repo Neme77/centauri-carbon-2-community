@@ -9,6 +9,7 @@ import { errText, notify, post, tpl } from '@/lib/api'
 import { usePoll } from '@/lib/poll'
 import { camera, printer, refreshPrinter } from '@/lib/state'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/field'
 
 export const Reading = ({
   dot,
@@ -43,29 +44,108 @@ export const FanSlider = ({
   label,
   pct,
   onCommit,
+  disabled = false,
 }: {
   label: Key
   pct: number
   onCommit: (v: number) => Promise<boolean>
+  disabled?: boolean
 }) => {
   const [v, setV] = useState(pct)
-  useEffect(() => setV(pct), [pct])
+  const [draft, setDraft] = useState(String(pct))
+  const [busy, setBusy] = useState(false)
+  const editing = useRef(false)
+  const dragging = useRef(false)
+  const sending = useRef(false)
+  const latest = useRef(pct)
+  latest.current = pct
+  useEffect(() => {
+    if (editing.current || dragging.current || sending.current) return
+    setV(pct)
+    setDraft(String(pct))
+  }, [pct])
+  const restore = () => {
+    setV(latest.current)
+    setDraft(String(latest.current))
+  }
+  const commit = async (next: number) => {
+    if (disabled || sending.current) return
+    sending.current = true
+    setBusy(true)
+    try {
+      if (await onCommit(next)) {
+        setV(next)
+        setDraft(String(next))
+      } else restore()
+    } finally {
+      sending.current = false
+      setBusy(false)
+    }
+  }
   return (
-    <div class="my-4 grid grid-cols-[1fr_2.5rem_1fr] items-center gap-2 text-[13px]">
+    <div class="cc2-fan-row text-[13px]">
       <span>{t(label)}</span>
-      <b>{v}%</b>
       <input
         type="range"
         min="0"
         max="100"
         value={v}
+        disabled={disabled || busy}
         aria-label={t(label)}
-        onInput={e => setV(+e.currentTarget.value)}
-        onChange={async e => {
+        onInput={e => {
+          dragging.current = true
           const next = Math.round(+e.currentTarget.value)
-          if (!(await onCommit(next))) setV(pct)
+          setV(next)
+          setDraft(String(next))
+        }}
+        onChange={e => {
+          dragging.current = false
+          const next = Math.round(+e.currentTarget.value)
+          void commit(next)
         }}
       />
+      <form
+        class="cc2-fan-value flex items-center gap-1.5"
+        noValidate
+        onSubmit={e => {
+          e.preventDefault()
+          const next = Number(draft)
+          if (!draft.trim() || !Number.isInteger(next) || next < 0 || next > 100)
+            return notify(t('control.invalid_fan_percent'), 'error')
+          void commit(next)
+        }}
+      >
+        <Input
+          class="w-14 text-center tabular-nums"
+          type="number"
+          inputMode="numeric"
+          min="0"
+          max="100"
+          step="1"
+          value={draft}
+          disabled={disabled || busy}
+          aria-label={tpl('control.fan_percent', { name: t(label) })}
+          onFocus={() => {
+            editing.current = true
+          }}
+          onBlur={() => {
+            editing.current = false
+            restore()
+          }}
+          onInput={e => {
+            setDraft(e.currentTarget.value)
+            const next = Number(e.currentTarget.value)
+            if (e.currentTarget.value.trim() && Number.isInteger(next) && next >= 0 && next <= 100) setV(next)
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              restore()
+            }
+          }}
+        />
+        <span class="text-muted">%</span>
+      </form>
     </div>
   )
 }
@@ -125,10 +205,8 @@ export const CameraCard = ({ tall, standalone }: { tall?: boolean; standalone?: 
   const [gaveUp, setGaveUp] = useState(false)
   const [note, setNote] = useState<Key | ''>('')
   const [src, setSrc] = useState('')
-  const frame = useRef<HTMLDivElement>(null)
   const img = useRef<HTMLImageElement>(null)
   const live = useRef(false)
-  const visible = useRef(true)
   const activeSrc = useRef('')
   const generation = useRef(0)
   const retry = useRef<number | undefined>(undefined)
@@ -161,7 +239,7 @@ export const CameraCard = ({ tall, standalone }: { tall?: boolean; standalone?: 
   }
   const connect = () => {
     clearRetry()
-    if (!live.current || document.hidden || !visible.current) return
+    if (!live.current || document.hidden) return
     release()
     setReady(false)
     setFailed(false)
@@ -170,7 +248,7 @@ export const CameraCard = ({ tall, standalone }: { tall?: boolean; standalone?: 
     setSrc(next)
   }
   const start = async () => {
-    if (document.hidden || !visible.current) return
+    if (document.hidden) return
     const attempt = ++starts.current
     clearRetry()
     live.current = true
@@ -220,18 +298,12 @@ export const CameraCard = ({ tall, standalone }: { tall?: boolean; standalone?: 
     const leaving = () => {
       if (live.current) stop('common.camera_paused_hidden')
     }
-    const observer = new IntersectionObserver(([entry]) => {
-      visible.current = entry.isIntersecting
-      if (!entry.isIntersecting && live.current) stop('common.camera_paused_out_of_view')
-    })
-    if (frame.current) observer.observe(frame.current)
     document.addEventListener('visibilitychange', hidden)
     window.addEventListener('pagehide', leaving)
     if (standalone) void start() // opening the camera window is the explicit start
     return () => {
       document.removeEventListener('visibilitychange', hidden)
       window.removeEventListener('pagehide', leaving)
-      observer.disconnect()
       live.current = false
       clearRetry()
       release()
@@ -258,7 +330,6 @@ export const CameraCard = ({ tall, standalone }: { tall?: boolean; standalone?: 
         }
       />
       <div
-        ref={frame}
         class={cn(
           'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
           standalone ? 'min-h-[calc(100dvh_-_7rem)]' : tall ? 'min-h-80' : 'aspect-video'

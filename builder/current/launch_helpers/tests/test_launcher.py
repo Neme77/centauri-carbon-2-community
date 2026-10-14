@@ -6,7 +6,7 @@ s=importlib.util.spec_from_file_location('launcher',ROOT/'launch_helpers/run_bui
 with tempfile.TemporaryDirectory(prefix='cc2 launch test ') as td:
  r=Path(td)
  builder=r/'core/firmware_builder.py';builder.parent.mkdir();builder.write_bytes((ROOT/'core/firmware_builder.py').read_bytes())
- for name in ['keys/cc2_stock_private.pem','keys/cc2_community_release_private.pem','keys/cc2_aes_key_v1.bin','original_firmware/cc2_eeb001_02.01.00.00_20260707170825.zip.sig','tools/squashfs-tools-4.6.1/bin/mksquashfs','tools/squashfs-tools-4.6.1/bin/unsquashfs']:
+ for name in ['keys/cc2_stock_private.pem','keys/cc2_community_release_private.pem','keys/cc2_aes_key_v1.bin','original_firmware/cc2_eeb001_02.01.01.07_20260922210235.zip.sig','tools/squashfs-tools-4.6.1/bin/mksquashfs','tools/squashfs-tools-4.6.1/bin/unsquashfs']:
   p=r/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('TEST PLACEHOLDER')
  for mode in ['stock','community']:
   for pre,key in [(False,False),(True,False),(False,True)]:
@@ -15,6 +15,7 @@ with tempfile.TemporaryDirectory(prefix='cc2 launch test ') as td:
    assert cmd[cmd.index('--private-key')+1]==str(r/('keys/cc2_stock_private.pem' if mode=='stock' else 'keys/cc2_community_release_private.pem'))
    assert (out is None)==(pre or key)
    if key:assert '--aes-key' not in cmd and '--check-signing-key-only' in cmd
+   else:assert str(r/'original_firmware/cc2_eeb001_02.01.01.07_20260922210235.zip.sig') in cmd
    if pre:assert '--preflight-only' in cmd
    assert ' ' in str(r) and str(builder) in cmd
  try:m.build_arguments(r,'stock',True,True)

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dot, Tag } from '@/components/ui/badge'
-import { Select } from '@/components/ui/field'
+import { Input, Select } from '@/components/ui/field'
 import { Tabs } from '@/components/ui/tabs'
 import { Icon } from '@/components/icons'
 import { Notice } from '@/components/shared'
@@ -15,11 +15,23 @@ import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
 import { microns, screwPlan, screwValues } from '@/lib/screws'
-import { poll, usePoll } from '@/lib/poll'
+import { usePoll } from '@/lib/poll'
 import { type BedTab, printer, nav, openPage, refreshConsole, screwText } from '@/lib/state'
-import { meshProfile, platePoints, plates, refreshPlates } from '@/lib/plates'
-import { sendConsole } from '@/pages/console'
-import { Plates } from '@/pages/bed-plates'
+import {
+  type Calibration,
+  calibrate,
+  findMeasure,
+  meshProfile,
+  nozzleName,
+  plateBase,
+  type PlateLibrary,
+  platePoints,
+  plates,
+  refreshPlates,
+  stopCalibration,
+  tempOk,
+} from '@/lib/plates'
+import { NozzleSelect, Plates } from '@/pages/bed-plates'
 
 const I = { size: 16, strokeWidth: 1 }
 const PROFILES: [string, Key][] = [
@@ -34,11 +46,15 @@ const MeshCard = () => {
   const { profile } = meshProfile.use()
   const setProfile = (value: string) => meshProfile.set({ profile: value })
   const library = plates.use().data
-  const plate = profile.startsWith('plate:') ? library?.plates.find(p => `plate:${p.id}` === profile) : undefined
-  // A deleted plate falls back to the printer's active mesh.
+  const found = profile.startsWith('measure:') ? findMeasure(library, profile.slice(8)) : null
+  // A deleted measurement falls back to the printer's active mesh; an older `plate:` choice shows the plate's mesh.
   useEffect(() => {
-    if (library && profile.startsWith('plate:') && !plate) setProfile('active')
-  }, [library, profile, plate])
+    if (!library) return
+    if (profile.startsWith('plate:')) {
+      const p = library.plates.find(x => `plate:${x.id}` === profile)
+      setProfile(p ? `measure:${plateBase(p).id}` : 'active')
+    } else if (profile.startsWith('measure:') && !found) setProfile('active')
+  }, [library, profile, found])
   const [view, setView] = useState<View>('3d')
   const [scale, setScale] = useState(1)
   const cam = useRef<Cam>(defaultCam())
@@ -47,10 +63,12 @@ const MeshCard = () => {
   const queued = useRef(false)
   const alive = useRef(true)
   const points: Pt[] = useMemo(
-    () => (plate ? platePoints(plate.mesh) : (data && matrixFromUds(data, profile)) || []),
-    [data, profile, plate]
+    () => (found ? platePoints(found.measure.mesh) : (data && matrixFromUds(data, profile)) || []),
+    [data, profile, found]
   )
-  const shown = plate ? tpl('plates.plate_option', { name: plate.name }) : `${t('bed.saved_profile')} · ${profile}`
+  const shown = found
+    ? tpl('plates.measure_option', { name: found.plate.name, temp: found.measure.temp })
+    : `${t('bed.saved_profile')} · ${profile}`
   const xs = [...new Set(points.map(p => p.x))].sort((a, b) => a - b)
   const ys = [...new Set(points.map(p => p.y))].sort((a, b) => b - a)
   const cells = new Map(points.map(p => [`${p.x},${p.y}`, p.z]))
@@ -167,15 +185,15 @@ const MeshCard = () => {
                 {t(l)}
               </option>
             ))}
-            {!!library?.plates.length && (
-              <optgroup label={t('bed.build_plates')}>
-                {library.plates.map(p => (
-                  <option key={p.id} value={`plate:${p.id}`}>
-                    {tpl('plates.plate_option', { name: p.name })}
+            {library?.plates.map(p => (
+              <optgroup key={p.id} label={tpl('plates.plate_option', { name: p.name })}>
+                {p.measures.map(m => (
+                  <option key={m.id} value={`measure:${m.id}`}>
+                    {[`${m.temp} °C`, nozzleName(library, m.nozzle)].filter(Boolean).join(' · ')}
                   </option>
                 ))}
               </optgroup>
-            )}
+            ))}
           </Select>
         </label>
         <div class="flex">
@@ -296,7 +314,7 @@ const MeshCard = () => {
           points.length
             ? profile === 'active'
               ? `${t('bed.active_mesh_loaded')}${root?.profile_name ? ` · ${root.profile_name}` : ''}.`
-              : plate
+              : found
                 ? `${shown}.`
                 : `${t('bed.saved_mesh_loaded')} · ${profile}.`
             : t('bed.waiting_for_the_printer_mesh')
@@ -306,109 +324,195 @@ const MeshCard = () => {
   )
 }
 
-// Probing needs homed axes, and the console refuses commands that may move an unhomed printer.
+// An unhomed printer is homed first.
 const homedXYZ = (axes: unknown) => typeof axes === 'string' && ['x', 'y', 'z'].every(a => axes.includes(a))
+const soakOk = (text: string) => /^\d{1,2}$/.test(text.trim()) && Number(text) <= 60
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+const FAILED: Record<string, Key> = {
+  homing: 'bed.homing_did_not_finish',
+  heating: 'bed.cal_failed_heating',
+  busy: 'bed.cal_failed_busy',
+  telemetry: 'bed.cal_failed_telemetry',
+  probing: 'bed.cal_failed_probing',
+}
+
+// What the calibration CC2 Control runs on the printer is doing; it can be stopped until the probing starts.
+const CalibrationProgress = ({ job, lib }: { job: Calibration; lib: PlateLibrary }) => {
+  const [stopping, setStopping] = useState(false)
+  const text =
+    job.stage === 'homing'
+      ? t('bed.cal_homing')
+      : job.stage === 'heating'
+        ? tpl('bed.cal_heating', { bed: job.bed === null ? '—' : Math.round(job.bed), temp: job.temp })
+        : job.stage === 'soaking'
+          ? tpl('bed.cal_soaking', { temp: job.temp, left: clock(job.remaining) })
+          : job.stage === 'probing'
+            ? tpl('bed.cal_probing', { side: job.side, temp: job.temp })
+            : tpl('bed.cal_saving', { name: lib.plates.find(p => p.id === job.plate)?.name || '' })
+  return (
+    <Notice icon="bolt">
+      <span class="flex flex-wrap items-center gap-x-3 gap-y-1" data-calibration={job.stage}>
+        <span>{text}</span>
+        <small class="text-muted">{t('bed.cal_runs_on_printer')}</small>
+        {['homing', 'heating', 'soaking'].includes(job.stage) && (
+          <Button
+            class="ml-auto min-h-7 px-2 text-xs"
+            disabled={stopping}
+            onClick={async () => {
+              setStopping(true)
+              try {
+                await stopCalibration()
+              } catch (e) {
+                notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+              } finally {
+                setStopping(false)
+                void refreshPlates()
+              }
+            }}
+          >
+            {t('bed.cal_stop')}
+          </Button>
+        )}
+      </span>
+    </Notice>
+  )
+}
 
 const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => {
   const [side, setSide] = useState('')
-  const [calibrating, setCalibrating] = useState(false)
+  const [temp, setTemp] = useState('60')
+  const [soak, setSoak] = useState('10')
+  const [nozzle, setNozzle] = useState<string | null>(null)
+  // The plate the result is saved to: null follows the mounted plate of that side, '' saves to none.
+  const [target, setTarget] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
+  const library = plates.use().data
+  const job = library?.calibration
+  const running = Boolean(job && job.stage !== 'off')
+  // The calibration runs on the printer; the page only follows it, faster while it runs.
+  usePoll(refreshPlates, running ? 2000 : 30000)
+  const plateSide = side === 'default1' ? 'B' : side === 'default' ? 'A' : null
+  const candidates = library?.available ? library.plates.filter(p => p.side === plateSide) : []
+  const plateId =
+    target !== null && (target === '' || candidates.some(p => p.id === target))
+      ? target
+      : candidates.find(p => p.id === library?.current)?.id || ''
+  const nozzleId = nozzle ?? library?.nozzle ?? ''
+  const busy = starting || running
   const lock = useRef(false)
-  const cancelWatch = useRef(() => {})
-  useEffect(() => () => cancelWatch.current(), [])
-  // Polls `check` until it answers true or false (undefined: keep waiting); a thrown error, the time
-  // limit or leaving the page answers false.
-  const waitFor = (check: () => Promise<boolean | undefined>, limit: number, every: number) =>
-    new Promise<boolean>(resolve => {
-      const deadline = Date.now() + limit
-      let active = true
-      const stop = poll(async () => {
-        if (Date.now() >= deadline) return finish(false)
-        try {
-          const done = await check()
-          if (active && done !== undefined) finish(done)
-        } catch {
-          finish(false)
-        }
-      }, every)
-      const finish = (done: boolean) => {
-        if (!active) return
-        active = false
-        stop()
-        resolve(done)
-      }
-      cancelWatch.current = () => finish(false)
-    })
-  // The console worker knows exactly when its command has finished and whether it succeeded.
-  const consoleDone = (command: string) => async () => {
-    const status = await request('/api/console')
-    if (status?.command !== command) return false
-    return status?.completed ? Boolean(status.success) : undefined
-  }
-  // The console checks homing against the printer state, which follows G28 a moment later.
-  const homedNow = async () => {
+  // The end of a run seen by this page: the new mesh is read once and the outcome told.
+  const seen = useRef<string | null>(null)
+  useEffect(() => {
+    if (!job) return
+    const before = seen.current
+    seen.current = job.stage
+    if (before === null || before === 'off' || job.stage !== 'off') return
+    reload()
+    const plate = library?.plates.find(p => p.id === job.plate)
+    if (job.result === 'saved') notify(tpl('bed.measure_saved', { name: plate?.name || '', temp: job.temp }))
+    else if (job.result === 'done') notify(t('bed.cal_done'))
+    else if (job.result === 'cancelled') notify(t('bed.cal_cancelled'))
+    else if (job.result === 'failed' && job.error === 'saving')
+      notify(tpl('bed.measure_not_saved', { error: job.detail }), 'error')
+    else if (job.result === 'failed') notify(t(FAILED[job.error] || 'bed.cal_failed_probing'), 'error')
+  }, [job?.stage])
+  const start = async () => {
+    if (!side || !plateSide || lock.current || running) return
+    if (!tempOk(temp)) return notify(t('common.invalid_bed_temperature'), 'error')
+    if (!soakOk(soak)) return notify(t('bed.invalid_soak'), 'error')
+    lock.current = true
+    setStarting(true)
     try {
-      return homedXYZ((await request('/api/printer'))?.motion?.homed_axes) ? true : undefined
-    } catch {
-      return undefined
+      const degrees = Number(temp),
+        minutes = Number(soak)
+      const plate = candidates.find(p => p.id === plateId)
+      const lines = [t(side === 'default1' ? 'bed.side_b_default1' : 'bed.side_a_default')]
+      const nozzleLabel = nozzleName(library, nozzleId)
+      if (nozzleLabel) lines.push(tpl('bed.calibration_uses_nozzle', { name: nozzleLabel }))
+      if (plate) lines.push(tpl('bed.calibration_saves_to', { name: plate.name, temp: degrees }))
+      if (minutes) lines.push(tpl('bed.calibration_soak', { temp: degrees, minutes }))
+      const homing = homedXYZ(printer.get().data?.motion?.homed_axes) ? '' : `\n\n${t('bed.calibration_homes_first')}`
+      const question = tpl('bed.start_a_new_bed_mesh_calibration', { temp: degrees })
+      if (!(await ask(`${question}\n\n${lines.join('\n')}${homing}`))) return
+      await calibrate(plateSide, degrees, minutes, nozzleId, plate?.id || '')
+      await refreshPlates()
+    } catch (e) {
+      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+    } finally {
+      lock.current = false
+      setStarting(false)
     }
   }
   return (
     <>
-      <label class="mt-3 flex items-center gap-2 text-xs">
-        {t('bed.calibration_plate_side')}
-        <Select value={side} disabled={calibrating} onChange={e => setSide(e.currentTarget.value)}>
-          <option value="">{t('bed.choose_calibration_side')}</option>
-          {PROFILES.slice(0, 2).map(([profile, label]) => (
-            <option key={profile} value={profile}>
-              {t(label)}
-            </option>
-          ))}
-        </Select>
-      </label>
+      <div class="mt-3 grid gap-2 text-xs cc2-sm:grid-cols-2 cc2-lg:grid-cols-[1.3fr_7rem_6rem_1fr_1.3fr]">
+        <label class="grid gap-1">
+          {t('bed.calibration_plate_side')}
+          <Select value={side} disabled={busy} onChange={e => setSide(e.currentTarget.value)}>
+            <option value="">{t('bed.choose_calibration_side')}</option>
+            {PROFILES.slice(0, 2).map(([profile, label]) => (
+              <option key={profile} value={profile}>
+                {t(label)}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label class="grid gap-1">
+          {t('common.bed_temperature_c')}
+          <Input
+            type="number"
+            min="40"
+            max="110"
+            step="1"
+            value={temp}
+            disabled={busy}
+            onInput={e => setTemp(e.currentTarget.value)}
+          />
+        </label>
+        <label class="grid gap-1">
+          {t('bed.soak_minutes')}
+          <Input
+            type="number"
+            min="0"
+            max="60"
+            step="1"
+            value={soak}
+            disabled={busy}
+            onInput={e => setSoak(e.currentTarget.value)}
+          />
+        </label>
+        {library && (
+          <label class="grid gap-1">
+            {t('common.nozzle')}
+            <NozzleSelect lib={library} value={nozzleId} disabled={busy} onChange={setNozzle} />
+          </label>
+        )}
+        {library?.available && (
+          <label class="grid gap-1">
+            {t('bed.calibration_plate')}
+            <Select value={plateId} disabled={busy || !plateSide} onChange={e => setTarget(e.currentTarget.value)}>
+              <option value="">{t('bed.no_plate')}</option>
+              {candidates.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+        )}
+      </div>
+      {running && job && library && <CalibrationProgress job={job} lib={library} />}
       <div class="cc2-mesh-actions mt-3 grid gap-3 cc2-sm:grid-cols-[1fr_1.15fr]">
         {[
           ['folder', 'bed.load_current_mesh', 'bed.read_the_saved_mesh_from_printer', reload, false],
-          [
-            'bolt',
-            'bed.run_bed_mesh_calibration',
-            'bed.start_a_protected_calibration_when',
-            async () => {
-              if (!side || lock.current) return
-              lock.current = true
-              setCalibrating(true)
-              try {
-                const label = t(side === 'default1' ? 'bed.side_b_default1' : 'bed.side_a_default')
-                const home = !homedXYZ(printer.get().data?.motion?.homed_axes)
-                const homing = home ? `\n\n${t('bed.calibration_homes_first')}` : ''
-                if (!(await ask(`${t('bed.start_a_new_bed_mesh_calibration')}\n\n${label}${homing}`))) return
-                if (home) {
-                  if (!(await sendConsole('G28'))) return
-                  if (
-                    !(await waitFor(consoleDone('G28'), 5 * 60_000, 2500)) ||
-                    !(await waitFor(homedNow, 30_000, 1000))
-                  ) {
-                    notify(t('bed.homing_did_not_finish'), 'error')
-                    return
-                  }
-                }
-                const command = `BED_MESH_CALIBRATE PROFILE=${side} BED_TEMP=60`
-                if (!(await sendConsole(command))) return
-                // Poll only the local console status while calibration is running, then fetch the new mesh once.
-                if (await waitFor(consoleDone(command), 15 * 60_000, 2500)) reload()
-              } finally {
-                lock.current = false
-                setCalibrating(false)
-              }
-            },
-            true,
-          ],
+          ['bolt', 'bed.run_bed_mesh_calibration', 'bed.start_a_protected_calibration_when', start, true],
         ].map(([icon, title, sub, fn, primary]: any) => (
           <Button
             key={title}
             variant={primary ? 'primary' : 'default'}
             class="h-auto items-start justify-start gap-3.5 p-3 text-left"
             onClick={fn}
-            disabled={primary && (!side || calibrating)}
+            disabled={primary && (!side || busy)}
           >
             <Icon n={icon} class="size-7" />
             <span>

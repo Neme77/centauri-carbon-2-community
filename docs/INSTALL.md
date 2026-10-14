@@ -1,5 +1,7 @@
 # Installation
 
+Start with the step-by-step [first setup and LAN-code guide](FIRST_RUN.md) ([Italiano](FIRST_RUN.it.md)). For slicer connection and filament import, see [OrcaSlicer and Canvas sync](ORCASLICER.md) ([Italiano](ORCASLICER.it.md)).
+
 Always install artifacts and follow instructions from the same GitHub release.
 
 ## Full firmware

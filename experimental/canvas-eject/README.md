@@ -1,5 +1,7 @@
 # Full Canvas filament ejection
 
+> Current develop / V4.4 trial: see [TRIAL.md](TRIAL.md). The new-base native port is pending; the builder refuses installing the legacy adapter on 02.01.01.07.
+
 This optional component adds **Eject slot** to the CC2 touchscreen filament
 page and the CC2 Control web Canvas page. First use the normal **Unload**
 operation to withdraw filament from the nozzle. Then select the spool slot and

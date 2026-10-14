@@ -39,7 +39,9 @@ int main(void){
  n=frame(packet,"elegoo/test/client/api_request_extra","{\"machine_status\":{\"status\":1}}");
  assert(send_all(peers[1],packet,n)==0);assert(mqtt_process(&c)==0);
  assert(c.machine_status==1&&c.skipped_requests==2&&c.messages==2);
- n=frame(packet,"elegoo/test/register_response","{\"error\":\"ok\"}");
+ char registration[192];snprintf(registration,sizeof(registration),"{\"error\":\"ok\",\"client_id\":\"%s\"}",c.client_id);
+ char register_topic[192];snprintf(register_topic,sizeof(register_topic),"elegoo/test/%s/register_response",c.client_id);
+ n=frame(packet,register_topic,registration);
  n+=frame(packet+n,"elegoo/test/client/api_response",
   "{\"method\":1002,\"extruder\":{\"temperature\":205},\"canvas_info\":{\"canvas_list\":[]}}");
  assert(send_all(peers[1],packet,n)==0);assert(mqtt_process(&c)==0);

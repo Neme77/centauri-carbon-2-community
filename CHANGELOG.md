@@ -3,6 +3,31 @@
 This file records user-visible project changes. Signed artifacts and exact
 checksums remain attached to each GitHub release.
 
+## Unreleased
+
+- Bed mesh calibration takes a bed temperature (40–110 °C, 60 by default), a soak time (10 minutes by default; the firmware itself probes as soon as the bed reads the temperature) and a nozzle, and can save the result to a build plate. It runs on CC2 Control, so the page may be closed, and can be stopped until the probing starts. A plate keeps one measurement per temperature and nozzle; a print started from CC2 Control uses the one nearest to the file's bed temperature (or the one chosen in the print dialog), loaded during the print start without a restart. A nozzle list adds each nozzle's Z correction to the plate's Z offset, so one mesh serves every nozzle; a measurement's temperature and nozzle can be corrected later.
+
+## Community Firmware V4.4 / CC2 Control 1.2.3 — 2026-10-13
+
+Built on official **02.01.01.07 only**. [Official release and verified downloads](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4): complete signed firmware, public source builder and SHA-256 checksums. CC2 Control 1.2.3 is included in the compatible firmware; no standalone application updater is supplied. Do not install this new application separately on V4.3.
+
+- Port the existing firmware patches to the new base, retaining the qualified O0 callback runtime, authentication, native camera integration and protected live Z offset.
+- Correct LAN/WAN transitions and registration recovery. Native light commands receive correlated acknowledgements and synchronize the printer display; own-printer PONG freshness keeps the connection indicator aligned with the link.
+- Preserve UDS telemetry and homing/light readback; expose homed axes and light in diagnostics. Keep Canvas on the bounded MQTT path, without the full Canvas UDS experiment.
+- Restore Input Shaper tools and add PID/Input Shaper Quick Actions; keep guarded hotend/bed PID calibration and fresh-state checks.
+- Align Control panel cards and add fan percentage inputs (0–100) applied with Enter alongside the sliders, with input validation and readback.
+- Accept internal spaces in material profile names, including Canvas commands, retaining the 16-character limit and command-character guards. Replace the crowded preheat button row with a full-width themed selector; selection loads targets and Apply sends them. Card dimensions and alignment are preserved.
+- Add confirmed reset of material, colour and temperature records for all four Canvas slots while idle. It does not unload filament or delete the spool inventory. Empty slot icons are dimmed and neutral according to printer status.
+- Keep live camera streaming while the page scrolls; retain manual stop, hidden-tab/navigation suspension and viewer handover.
+- Improve G-code filament colour parsing and Canvas print mapping explanations.
+- Add complete Polish and Czech UI translations and language preference tests. The interface now supports English, Italian, French, Simplified Chinese, Russian, Polish and Czech, with six themes.
+- Retain spool tracking, the existing build-plate library, saved A/B meshes, adaptive/2D/3D mesh display, four-screw tramming, print tuning, native reports, history/timelapse, file management, Orca upload/print and filament sync, emergency recovery and the Panda Breath bridge.
+- Add English/Italian first-installation and OrcaSlicer/Canvas guides linked directly from the homepage, with contributor and beta-tester acknowledgements.
+
+**Reported beta validation:** 40-hour active printing sessions without reported problems and more than 20 confirmed long tests. Minor beta-reported issues were corrected. The latest updated builder was installed and positively tested by the maintainer. These reports cover the beta cycle; final release provenance and checksums must identify the exact published artifact.
+
+PR103/104 and the experimental full Canvas UDS 1.2.4 variant remain excluded. The existing build-plate library is included; the temperature/nozzle mesh and soaked-calibration extension from PR104 is not.
+
 ## Community Firmware V4.3 / CC2 Control 1.2.0 — pre-release, 2026-10-09
 
 - Publish the tested signed firmware, standalone callback updater, updated source builder and checksums. The source includes the effective-Z-offset wording clarification; the attached tested binaries predate that wording change.
