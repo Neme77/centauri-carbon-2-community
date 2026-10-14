@@ -46,8 +46,10 @@ The `Canvas` protocol pointer is at `+0x0`, reactor at `+0x20`, and print-state
 | Signed current feed channel | `0x610` |
 | Toolhead filament sensor | `0x61a` |
 
-The status hook timestamps actual all-status frames, serialized with sample
-reads. It rejects vectors shorter than the parser's required payload. These
+The status hook timestamps and sequences actual all-status frames, serialized
+with sample reads. Stop confirmation records the sequence after the command
+ACK and requires a subsequently received fresh, connected stationary frame.
+It rejects vectors shorter than the parser's required payload. These
 are inlet signals; absence is not a measurement of external tube length.
 The stock boot-initialized flag is at protocol `+0x94c`; the first initialization
 frame does not qualify telemetry. A subsequent regular frame is required.

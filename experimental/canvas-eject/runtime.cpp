@@ -17,6 +17,7 @@ const char *state_path="/tmp/cc2-canvas-eject.state",*cancel_path="/tmp/cc2-canv
 std::mutex frames,preload;
 std::atomic<bool> active{false},ready{false};
 double last_frame=0;
+uint64_t frame_sequence=0;
 int selected=-1;
 using Command=void(*)(void*,void*);
 Command old_motor;
@@ -41,6 +42,7 @@ struct IO {
         std::lock_guard<std::mutex> lock(frames);
         void *s=static_cast<unsigned char *>(protocol)+0xe8;
         eject::Sample out;out.fresh=last_frame>0&&clock_now()-last_frame<=0.5;
+        out.sequence=frame_sequence;
         out.connected=load<uint8_t>(s,0x64)==1;
         auto &state=*reinterpret_cast<std::string *>(static_cast<unsigned char *>(self)+0x2f4);
         out.idle=ready&&(state=="standby"||state=="complete"||state=="cancelled");
@@ -56,14 +58,8 @@ struct IO {
     // Use the same feeder transport as stock motor control. Rocker direction
     // commands are maintenance operations, not part of stock filament moves.
     bool reverse(){const int16_t motor[3]={-1200,15,100};return move(protocol,slot,motor,true);}
-    bool stop(){
-        if(!stop_motor(protocol,slot,true,true))return false;
-        // The ACK precedes the next status packet. Confirm physical stop before
-        // reporting a result, including on cancellation and failed travel.
-        double deadline=clock_now()+1;
-        do{wait();auto s=sample();if(s.fresh&&!s.moving)return true;}while(clock_now()<deadline);
-        return false;
-    }
+    bool request_stop(){return stop_motor(protocol,slot,true,true);}
+    bool stop(){return eject::stop_and_confirm(*this);}
     void publish(eject::Result r,double mm){::publish(r,mm);}
 };
 void motor(void *self,void *shared){
@@ -86,7 +82,7 @@ void parse(void *self,const void *data){
     old_parse(self,data);
     // Stock's first-frame initialization uses a distinct parsing path. Only
     // a later regular frame can qualify sensor/position data for ejection.
-    if(initialized)last_frame=clock_now();
+    if(initialized){last_frame=clock_now();++frame_sequence;}
 }
 void prefeed(void *self){std::lock_guard<std::mutex> lock(preload);if(!active)old_prefeed(self);}
 void on_ready(void *self){old_ready(self);ready=true;selected=-1;publish(eject::empty,0);}

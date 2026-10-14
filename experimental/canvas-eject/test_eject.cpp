@@ -16,7 +16,49 @@ struct Mock {
     bool stop(){stops++;return stop_ok;}
     void publish(eject::Result r,double){published=r;}
 };
+struct StopMock {
+    eject::Sample s;
+    double time=0;int polls=0,requests=0;
+    bool ack=true,advance=false,connected=true,fresh=true,ack_advance=false;
+    int moving_until=0;
+    StopMock(){s.sequence=10;s.fresh=s.connected=true;s.moving=false;}
+    bool request_stop(){requests++;if(ack_advance)s.sequence++;return ack;}
+    eject::Sample sample(){return s;}
+    double now(){return time;}
+    void wait(){
+        time+=0.1;polls++;
+        if(advance){s.sequence++;s.moving=polls<=moving_until;s.connected=connected;s.fresh=fresh;}
+    }
+};
+// Exercise the runtime's shared stop path after reverse has been requested,
+// when cancellation arrives before any moving frame becomes visible.
+struct CancelMock : Mock {
+    bool cached_only=true;
+    CancelMock(){s.sequence=10;}
+    bool cancelled(){return moves>0;}
+    bool request_stop(){stops++;return stop_ok;}
+    bool stop(){return eject::stop_and_confirm(*this);}
+    void wait(){time+=0.1;polls++;if(!cached_only)++s.sequence;}
+};
 int main(){
+    // This older but still-fresh stationary frame must not confirm a stop.
+    StopMock old;assert(!eject::stop_and_confirm(old));assert(old.requests==1&&old.polls>=10);
+    // A stationary frame received during the ACK is also insufficient: require
+    // one received after the ACK returns, as in the actual adapter.
+    StopMock during_ack;during_ack.ack_advance=true;
+    assert(!eject::stop_and_confirm(during_ack));
+    CancelMock immediate;assert(eject::run(immediate)==eject::stop_failed);
+    assert(immediate.moves==1&&immediate.stops==2&&immediate.published==eject::stop_failed);
+    CancelMock confirmed;confirmed.cached_only=false;
+    assert(eject::run(confirmed)==eject::cancelled);
+    assert(confirmed.moves==1&&confirmed.stops==1&&confirmed.published==eject::cancelled);
+    StopMock next;next.advance=true;assert(eject::stop_and_confirm(next));assert(next.polls==1);
+    StopMock moving;moving.advance=true;moving.moving_until=3;
+    assert(eject::stop_and_confirm(moving));assert(moving.polls==4);
+    StopMock disconnected;disconnected.advance=true;disconnected.connected=false;
+    assert(!eject::stop_and_confirm(disconnected));
+    StopMock stale;stale.advance=true;stale.fresh=false;assert(!eject::stop_and_confirm(stale));
+    StopMock no_ack;no_ack.ack=false;assert(!eject::stop_and_confirm(no_ack));assert(!no_ack.polls);
     Mock ok;assert(eject::run(ok)==eject::complete);assert(ok.moves==1&&ok.stops==1);
     Mock absent;absent.s.present=false;assert(eject::run(absent)==eject::empty);assert(absent.moves==0&&absent.stops==0);
     Mock head;head.s.head_present=true;assert(eject::run(head)==eject::blocked);assert(head.moves==0);
@@ -32,5 +74,5 @@ int main(){
     d.s.position=0;m.begin(d.s,0);d.s.position=-1;assert(m.update(d.s,90,false)==eject::timed_out);
     d.s.fresh=false;assert(m.update(d.s,91,false)==eject::stale);
     d.s.fresh=true;d.s.connected=false;assert(m.update(d.s,92,false)==eject::disconnected);
-    puts("PASS sensor eject, empty/nozzle/print guards, cancellation, disconnect, stall, limits and exception cleanup");
+    puts("PASS post-ACK stop frames, cached-frame cancellation refusal, sensor eject, guards, limits and exception cleanup");
 }

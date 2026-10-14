@@ -20,6 +20,12 @@ slot. While running, either interface's button requests a stop. Screen slots
 The adapter targets the exact stock **02.01.00.00** Canvas library and its
 community Z-offset-patched GUI, identified in [ABI.md](ABI.md). It is opt-in;
 the ordinary web package reports ejection unavailable without the component.
+Community V4.4 uses **02.01.01.07**, which is not qualified by these bindings.
+It requires separate native activation, ABI/sensor/GUI verification, qualified
+ARM builds and the physical tests below. The existing 02.01.00.00 fingerprints
+must not be reused as evidence of compatibility. Ejection remains opt-in until
+those checks are complete; no published firmware is enabled by this change.
+
 Unknown firmware hashes, stale component builds and mismatching hook entries
 are rejected. This is experimental source, not a released or printer-validated
 firmware image.
@@ -43,7 +49,10 @@ or operation on 02.01.00.00. Complete the printer checks below before release.
   0.5 mm position progress. The vendor auto-prefeed callback is suppressed
   during ejection to prevent it opposing the reverse move.
 - Every path after starting, including exceptions, requests motor stop. A stop ACK is followed by up to one second of status checks
-  for physical stop. Completion also rechecks sensor clearance. Failure to
+  for physical stop. Confirmation requires a fresh, connected, stationary
+  frame with a sequence newer than the frame recorded after the stop ACK.
+  Cached stationary telemetry, even if still fresh, cannot confirm stop.
+  Completion also rechecks sensor clearance. Failure to
   acknowledge stop reports `stop_failed`; it never reports success.
 
 The routine uses the same feeder transport as stock motor control. It does not

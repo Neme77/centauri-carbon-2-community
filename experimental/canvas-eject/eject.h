@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <cstdint>
 
 namespace eject {
 enum Result { running, complete, empty, cancelled, disconnected, stale, blocked,
@@ -13,7 +14,20 @@ struct Sample {
     bool fresh=false, connected=false, idle=false, head_present=true, present=true, fault=false, moving=false;
     int active=-1;
     double position=0;
+    uint64_t sequence=0; // advances only for a valid regular status frame
 };
+// An ACK does not prove physical stop. Only a status frame received after the
+// ACK may confirm it; an older stationary sample can precede the reverse move.
+template<class IO> bool stop_and_confirm(IO &io) {
+    if(!io.request_stop())return false;
+    const uint64_t baseline=io.sample().sequence;
+    const double deadline=io.now()+1;
+    do {
+        io.wait();const Sample s=io.sample();
+        if(s.fresh&&s.connected&&s.sequence>baseline&&!s.moving)return true;
+    }while(io.now()<deadline);
+    return false;
+}
 struct Machine {
     double started=0, last_motion=0, origin=0, progress=0;
     bool moving=false;
