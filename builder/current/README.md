@@ -4,7 +4,7 @@ The separate Canvas-ejection prototype is under qualification: [trial status](..
 
 This builder works **only with the new official CC2 firmware base `02.01.01.07`**, identified by the exact input SHA-256 pins. Provide `cc2_eeb001_02.01.01.07_20260922210235.zip.sig` in `original_firmware/`; do not substitute the firmware input from older builders. The 4.4 patch addresses and ELF layouts are specific to this base. The checks refuse unknown inputs.
 
-CC2 Control 1.2.3 includes the aligned Control panel, Enter-to-apply fan percentages, confirmed four-slot Canvas material reset, persistent camera viewing while scrolling and seven UI languages (English, Italian, French, Chinese, Russian, Polish and Czech). Canvas retains the bounded MQTT path; the experimental full Canvas UDS cache is excluded.
+CC2 Control 1.2.3 includes the aligned Control panel, Enter-to-apply fan percentages, confirmed four-slot Canvas material reset, persistent camera viewing while scrolling and eight UI languages (English, Italian, French, Chinese, Russian, Polish, Czech and Hungarian). Canvas retains the bounded MQTT path; the experimental full Canvas UDS cache is excluded.
 
 Existing validated callback O0, light/display acknowledgement, authenticated LAN/WAN fallback, application registration recovery, own-PONG freshness, UDS homing/light diagnostics, Z offset, PID/Input Shaper and Orca Canvas synchronization remain included. The source snapshot and launcher checksum are updated together.
 
@@ -43,7 +43,7 @@ as `components/cc2-control/source/source.zip`; the unpacked canonical source is
 available at the repository root under `cc2-control/`.
 
 The component is pinned to source commit
-`35937a00a46f24c794e1e4309a9fc4dd96d54262`, incorporating the validated
+`364acb674844a436e02d25998d1b19573d24ec5e`, incorporating the validated
 PR57–59 integration and authenticated loopback HTTP serial discovery, plus manual camera streaming
 with visibility suspension and bounded reconnection attempts, the Russian interface translation,
 printer sub-states and refusals, Canvas auto refill and the print history with time-lapse videos. It includes persistent UDS telemetry, MQTT workload reduction,
