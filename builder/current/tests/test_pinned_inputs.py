@@ -13,7 +13,11 @@ BASE=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('builder_pins',BASE/'core/firmware_builder.py')
 b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
 
+launcher_spec=importlib.util.spec_from_file_location('launcher_pins',BASE/'launch_helpers/run_build.py')
+launcher=importlib.util.module_from_spec(launcher_spec);launcher_spec.loader.exec_module(launcher)
+
 pinned={
+    'core/firmware_builder.py':launcher.BUILDER_SHA256,
     'components/ssh/sshd.init':b.EXPECTED['sshd_init'],
     'components/ssh/sshd_config':b.EXPECTED['sshd_config'],
     'patches/z-offset/patch_zoffset.py':b.EXPECTED['zoffset_patcher'],

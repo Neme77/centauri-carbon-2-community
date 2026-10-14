@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "description": "Minimal manual reverse-distance comparison fix; offline only; no hardware validation",
+  "libraries": [
+    {
+      "ota_version": "01.03.01.89",
+      "input_sha256": "47014365b0fafb6064acc56e040b4e1250315083e702bdbb3117d5cf76d7ba99",
+      "output_sha256": "94f81d641bc323edfe7b587663d8506bb13aa311230852b3b95e0f8ff2d8ed01",
+      "file_offset": 13378804,
+      "virtual_address": 13378804,
+      "original_hex": "c76bb4ee10faf1ee0130a0c30030a0d37330efe6000053e3",
+      "patched_hex": "c77bb0eec76bb4ee10faf1ee0130a0c30030a0d3000053e3",
+      "function": "_ZN6elegoo6extras6Canvas24CMD_canvas_motor_controlESt10shared_ptrI12GCodeCommandE",
+      "function_size": 2064
+    },
+    {
+      "ota_version": "01.03.02.36",
+      "input_sha256": "a10546c1d5494e6097570a2cc0c13b6f231b6f4262fe25f8b276c8d9ec2dd234",
+      "output_sha256": "c0db79e30d355c21f0439cb97dfd2b53bf9d073117b366d98e26b2d83079ff1e",
+      "file_offset": 13294980,
+      "virtual_address": 13294980,
+      "original_hex": "c76bb4ee10faf1ee0130a0c30030a0d37330efe6000053e3",
+      "patched_hex": "c77bb0eec76bb4ee10faf1ee0130a0c30030a0d3000053e3",
+      "function": "_ZN6elegoo6extras6Canvas24CMD_canvas_motor_controlESt10shared_ptrI12GCodeCommandE",
+      "function_size": 2064
+    },
+    {
+      "ota_version": "01.03.02.51",
+      "input_sha256": "b026f039f77a9c8eee54646f1de95385e991b6d79dfcbdc36697678b670dfccd",
+      "output_sha256": "89d8f5a7003a95d005a876f0151f9cfa0dffa4c7772ef05c6532d7b77601f38c",
+      "file_offset": 13298852,
+      "virtual_address": 13298852,
+      "original_hex": "c76bb4ee10faf1ee0130a0c30030a0d37330efe6000053e3",
+      "patched_hex": "c77bb0eec76bb4ee10faf1ee0130a0c30030a0d3000053e3",
+      "function": "_ZN6elegoo6extras6Canvas24CMD_canvas_motor_controlESt10shared_ptrI12GCodeCommandE",
+      "function_size": 2064
+    },
+    {
+      "ota_version": "02.00.02.00",
+      "input_sha256": "b026f039f77a9c8eee54646f1de95385e991b6d79dfcbdc36697678b670dfccd",
+      "output_sha256": "89d8f5a7003a95d005a876f0151f9cfa0dffa4c7772ef05c6532d7b77601f38c",
+      "file_offset": 13298852,
+      "virtual_address": 13298852,
+      "original_hex": "c76bb4ee10faf1ee0130a0c30030a0d37330efe6000053e3",
+      "patched_hex": "c77bb0eec76bb4ee10faf1ee0130a0c30030a0d3000053e3",
+      "function": "_ZN6elegoo6extras6Canvas24CMD_canvas_motor_controlESt10shared_ptrI12GCodeCommandE",
+      "function_size": 2064
+    },
+    {
+      "ota_version": "02.01.00.00",
+      "input_sha256": "33b40a530c8c1ffe27e63a7d9f0fd68f3ccfae2cec44edfce10566831b085c41",
+      "output_sha256": "99850496248afce83e19d8feae0ee45375195fee6fbe24d0afdfec88c66eea83",
+      "file_offset": 13342688,
+      "virtual_address": 13342688,
+      "original_hex": "c76bb4ee10faf1ee0130a0c30030a0d37330efe6000053e3",
+      "patched_hex": "c77bb0eec76bb4ee10faf1ee0130a0c30030a0d3000053e3",
+      "function": "_ZN6elegoo6extras6Canvas24CMD_canvas_motor_controlESt10shared_ptrI12GCodeCommandE",
+      "function_size": 2060
+    }
+  ]
+}
