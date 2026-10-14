@@ -21,7 +21,7 @@ Community firmware, local printer control and reproducible build tools for the *
 | --- | --- | --- |
 | First installation, printer IP and LAN access code | [First setup](docs/FIRST_RUN.md) | [Prima installazione](docs/FIRST_RUN.it.md) |
 | OrcaSlicer connection, upload and Canvas filament sync | [OrcaSlicer guide](docs/ORCASLICER.md) | [Guida OrcaSlicer](docs/ORCASLICER.it.md) |
-| All V4.4 improvements and retained features | [Changelog](CHANGELOG.md#community-firmware-v44--cc2-control-123--2026-10-13) | [Novità della release](CHANGELOG.md#unreleased) |
+| All V4.4 improvements and retained features | [Changelog](CHANGELOG.md#community-firmware-v44--cc2-control-123--2026-10-13) | [Novità della release](CHANGELOG.md#community-firmware-v44--cc2-control-123--2026-10-13) |
 
 ## V4.4 — now available
 
@@ -36,7 +36,7 @@ Community firmware, local printer control and reproducible build tools for the *
 | Camera | Live viewing continues while scrolling; hidden-tab, navigation and viewer-ownership controls remain active. |
 | Languages | English, Italian, French, Simplified Chinese, Russian, **Polish and Czech**. |
 
-The O0 callback runtime, protected live Z offset, spool inventory, build-plate library, mesh tools, history/timelapse, file uploads/downloads and Panda Breath compatibility are retained. PR103/104 and the experimental full Canvas UDS variant are not included in this candidate.
+The O0 callback runtime, protected live Z offset, spool inventory, build-plate library, mesh tools, history/timelapse, file uploads/downloads and Panda Breath compatibility are retained. PR103/104 and the experimental full Canvas UDS variant are not included in the published V4.4 firmware.
 
 ## Long-print results and callback patch
 
@@ -71,6 +71,12 @@ These are positive integration results, rather than a controlled measurement att
 
 **There is no standalone CC2 Control updater for V4.4 in this release.** Do not install the new application separately on V4.3. For V4.4, use the complete signed firmware above. A factory reset is not required.
 
+## Original ELEGOO firmware
+
+[Download original CC2 02.01.01.07](https://public.suchmeme.nl/cc2-02.01.01.07-1cbee81a985601d1944cea50773793ba-release-abroad.zip.sig) · [Return-to-stock notes](docs/FIRST_RUN.md#return-to-original-elegoo-firmware) · [Istruzioni in italiano](docs/FIRST_RUN.it.md#tornare-al-firmware-originale-elegoo).
+
+The externally hosted package matches the exact official V4.4 base: SHA-256 `278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406`. **ELEGOO blocks downgrades to older firmware.** This is the original package for the same 02.01.01.07 version, not a downgrade tool. The maintainer confirmed a successful return from V4.4 to this same-version original firmware on the printer. A factory reset does not replace the firmware.
+
 <details>
 <summary>Previous releases and historical downloads</summary>
 
@@ -81,6 +87,10 @@ These are positive integration results, rather than a controlled measurement att
 These releases keep their original assets, checksums and validation records. They are not the current V4.4 downloads.
 
 </details>
+
+## SSH access
+
+Community Firmware defaults: username **`root`**, password **`MTY4ODE2`**. Connect with `ssh root@PRINTER-IP` using the printer’s local IP. This password is separate from the LAN access code; if you changed it, use your replacement. [English SSH reference](docs/FIRST_RUN.md#ssh-access-reference) · [Riferimento SSH in italiano](docs/FIRST_RUN.it.md#riferimento-per-laccesso-ssh).
 
 ## Changed the printer LAN access code?
 
@@ -116,6 +126,8 @@ Our sincere thanks to the contributors whose code, ideas, translations and valid
 | **[@beanbo](https://github.com/beanbo)** | Spool inventory, the original build-plate library, persistent UDS subscriptions, printer states/refusals, Canvas auto-refill, camera handover, history, upload improvements, idle motor release and Russian translation. Selected PRs: [#97](https://github.com/Neme77/centauri-carbon-2-community/pull/97), [#83](https://github.com/Neme77/centauri-carbon-2-community/pull/83) → [#89](https://github.com/Neme77/centauri-carbon-2-community/pull/89), [#88](https://github.com/Neme77/centauri-carbon-2-community/pull/88), [#67](https://github.com/Neme77/centauri-carbon-2-community/pull/67). |
 | **[@efiten](https://github.com/efiten)** | Original OrcaSlicer/Canvas filament-sync implementation proposal, analysis and printer-side validation: [#8](https://github.com/Neme77/centauri-carbon-2-community/pull/8), integrated through [#12](https://github.com/Neme77/centauri-carbon-2-community/pull/12). |
 | **[@Skcycos](https://github.com/Skcycos)** | Simplified Chinese interface translation: [#26](https://github.com/Neme77/centauri-carbon-2-community/pull/26). |
+
+**Upcoming CC2 Control translation:** thanks to **[@pezso92](https://github.com/pezso92)** for the complete Hungarian interface (**Magyar**), all 879 source entries and preserved placeholders in [#115](https://github.com/Neme77/centauri-carbon-2-community/pull/115). Maintainer integration retains his original commits and adds builder packaging and language tests. Hungarian is for the next update; the published V4.4 firmware still ships seven languages.
 
 Special recognition to **Surfoo** for reshaping the interface and its development foundations, and to **beanbo** for the extensive additions to everyday printing and printer integration. Thank you to every contributor for the care, time and follow-through behind these improvements.
 

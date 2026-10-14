@@ -76,6 +76,9 @@ jobs:
       - name: Canvas ejection prototype interaction regression
         run: npm run test:canvas-eject
 
+      - name: Hungarian language selection, persistence and mobile layouts
+        run: npm run test:hungarian
+
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures
 

@@ -19,20 +19,24 @@ Open the project's [GitHub Releases](https://github.com/Neme77/centauri-carbon-2
 
 Use files from the same release. V4.4 uses the new 02.01.01.07 base; an older builder or firmware input is not interchangeable. This project is for the **Centauri Carbon 2**, not the first Centauri Carbon.
 
-For an optional checksum check in PowerShell:
+Before installation, verify the checksum in PowerShell:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\YOUR-FIRMWARE.zip.sig'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\CC2_V4_4_STOCK_20261013_001035_414d6629.zip.sig'
 ```
 
-Compare the result with the checksum published for that exact firmware file.
+For the published V4.4 firmware above, the expected SHA-256 is `fa06d40104ba9d90df4ffd6c5183626995f2e6c823763c684cd823e8fe53a729`. Compare it with [SHA256SUMS.txt](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4/SHA256SUMS.txt). If it differs, download the file again and do not install it.
 
 ## 2. Install and allow the printer to start
 
-1. With the printer idle, use the signed `.zip.sig` file through its supported firmware-update procedure, following that release's installation instructions. Keep the signed file intact.
-2. Let the update and its normal reboot finish. Do not interrupt power during the update.
-3. Reconnect the printer to your local network if necessary and find its **IP address** on the printer's network screen.
-4. Wait for printer services to finish starting before completing CC2 Control setup. The release keeps a delayed CC2 Control startup to allow vendor initialization.
+1. Download **`CC2_V4_4_STOCK_20261013_001035_414d6629.zip.sig`** from the [V4.4 release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4) and verify its checksum. This complete package includes the base firmware; the source-builder ZIP is not an installation file.
+2. With the printer idle, copy the signed **`.zip.sig` unchanged into the root directory of a USB drive** the printer can read. Do not extract it, rename it to `update.bin`, or copy only its inner files.
+3. Insert the USB drive into the printer. On the display, open **Settings → Check for Updates → Offline Update** and select the signed package. Labels can differ with the display language. Confirm installation on the printer.
+4. Let installation and the normal reboot finish. Keep power connected and leave the USB drive inserted until the update is complete.
+5. Reconnect to the local network if needed, read the printer IP on its network screen and allow services to finish starting before opening CC2 Control.
+6. After startup, check the printer base version **02.01.01.07** and CC2 Control **1.2.3**. The printer display shows the vendor base, while Community Firmware **V4.4** is the project release name.
+
+The USB menu path is documented in the [OpenCentauri CC2 update procedure](https://docs.opencentauri.cc/software/updates-cc2/#updating-locally-via-usb).
 
 A factory reset is not required for this update. Existing CC2 Control credentials, material profiles and interface preferences are normally retained; a factory reset can change the LAN access code.
 
@@ -58,6 +62,10 @@ Successful setup does not require an additional manual power cycle. A clean setu
 
 Open **Settings → Appearance**. The interface supports **English, Italian, French, Simplified Chinese, Russian, Polish and Czech**. Themes: **Dark, Light, Dracula, Nord, Monokai and Solarized Light**. Saved preferences are shared by the browser and OrcaSlicer's embedded CC2 Control page.
 
+## If the page does not open
+
+Check that the printer has completed startup, that its IP has not changed, and that the browser uses `http://PRINTER-IP:8081`. The computer must be able to reach that local address. If CC2 Control opens but remains waiting for the printer, recheck the current LAN code; a factory reset may have changed it. Do not reset the whole printer merely to re-enter the code.
+
 ## If the LAN code changes
 
 Open **Settings → Connection**, enter the replacement code and select **Change / Revalidate**, then confirm. CC2 Control saves it and restarts its own service. This button completes the replacement; there is no separate “Save changes” step for the LAN code in this interface.
@@ -65,6 +73,27 @@ Open **Settings → Connection**, enter the replacement code and select **Change
 If it still does not connect, recheck the current code on the display, the IP address and network access. A code saved successfully does not by itself mean the printer has accepted it: wait for **Printer connected**.
 
 For service restart or connection-configuration recovery over SSH, see [Installation troubleshooting](INSTALL.md#recovery-if-the-old-code-blocks-configuration-access). A configuration reset is a recovery option, not a routine first-installation step.
+
+## SSH access reference
+
+The Community Firmware provides local SSH access for maintenance:
+
+| Setting | Default |
+| --- | --- |
+| Username | `root` |
+| Password | `MTY4ODE2` |
+
+From PowerShell or a terminal, run `ssh root@PRINTER-IP`, replacing `PRINTER-IP` with the printer’s local IP, and enter the password when prompted. Password entry is not displayed. If you have changed the root password, use your own replacement. This is the SSH password, separate from the printer LAN access code used by CC2 Control. These credentials refer to the Community Firmware; SSH is not required for normal browser setup.
+
+## Return to original ELEGOO firmware
+
+[Download original CC2 02.01.01.07 firmware](https://public.suchmeme.nl/cc2-02.01.01.07-1cbee81a985601d1944cea50773793ba-release-abroad.zip.sig). This is an externally hosted mirror of the official package, not an ELEGOO-hosted download. Its bytes match the exact official base pinned by the V4.4 builder.
+
+SHA-256: `278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406`.
+
+**ELEGOO blocks downgrades to older firmware.** This link provides the original **same-version 02.01.01.07** package; it does not enable a downgrade to 02.01.00.00 or earlier. Reinstalling the stock package is a separate operation from a factory reset, which does not replace the installed firmware.
+
+Use the same USB/offline-update procedure above with the original package. File identity has been verified, and the maintainer confirmed a successful return from V4.4 to this same-version original firmware on the printer. If the printer refuses the package, stop and record its message; do not change version metadata or bypass its checks. Original firmware does not include CC2 Control or community features.
 
 ## Next
 

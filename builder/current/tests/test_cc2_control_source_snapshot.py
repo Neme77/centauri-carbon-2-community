@@ -18,12 +18,17 @@ with zipfile.ZipFile(prepare.SOURCE) as archive:
         assert archive.read('firmware-integration/overlay/opt/usr/cc2-control/web/' + name) == archive.read('web/' + name), name
     for name in ('VERSION', 'FIRMWARE_VERSION', 'src/main.c', 'src/plates.h', 'tests/test_plates.c', 'tests/test_file_ops.c', 'tests/test_file_analysis.c', 'tests/test_file_analysis_http.py', 'docs/API.md', 'src/control.c', 'src/mqtt.c', 'src/uds.c', 'src/recovery.h', 'src/gcode_download.h', 'web/index.html', 'web-src/src/lib/meshdraw.ts', 'web-src/src/pages/bed.tsx', 'web-src/src/components/shared.tsx', 'web-src/src/lib/i18n.ts', 'web-src/preview/test-camera-stream.mjs', 'tests/test_runtime_limits.c', 'tests/test_recovery_download.c', 'tests/test_object_query.c', 'tests/test_control_actions.c', 'tests/test_installer_package.py', 'web-src/src/pages/dashboard.tsx', 'web-src/src/pages/control.tsx', 'web-src/preview/test-quick-actions.mjs', 'src/history.h', 'tests/test_printer_replies.c', 'tests/test_history_api.c', 'web-src/src/lib/machine.ts', 'web-src/src/lib/history.ts', 'web-src/src/pages/history.tsx', 'web-src/src/pages/print-dialog.tsx', 'tests/test_print_options.c', 'tests/test_camera_viewer_api.py', 'web-src/preview/test-print-history.mjs', 'web-src/preview/test-browser.mjs', 'web-src/preview/test-filament-mapping.mjs', 'web-src/preview/test-adaptive-mesh.mjs', 'tests/test_filament_metadata.c', 'tests/test_gcode_files.py', 'tests/test_c_harnesses.py', 'tests/test_canvas_discovery.c', 'src/mqtt.h', 'tests/test_pid_api.c', 'web-src/preview/test-pid.mjs', 'web-src/preview/test-print-temperatures.mjs', 'src/uds.h', 'tests/test_uds.c', 'web-src/src/components/layout.tsx', 'web-src/src/App.tsx', 'web-src/preview/test-printer-reports.mjs'):
         assert archive.read(name) == (BASE.parents[1] / 'cc2-control' / name).read_bytes(), name
-    for lang in ('en', 'it', 'fr', 'zh', 'ru', 'pl', 'cs'):
-        source = archive.read(f'web-src/public/locales/{lang}.json')
-        assert source == archive.read(f'web/locales/{lang}.json')
+    locales = sorted((BASE.parents[1] / 'cc2-control/web-src/public/locales').glob('*.json'))
+    assert 'hu.json' in [p.name for p in locales]
+    assert sorted(p.split('/')[-1] for p in archive.namelist() if p.startswith('web-src/public/locales/') and p.endswith('.json')) == [p.name for p in locales]
+    assert sorted(p.split('/')[-1] for p in archive.namelist() if p.startswith('web/locales/') and p.endswith('.json')) == [p.name for p in locales]
+    for locale in locales:
+        source = archive.read(f'web-src/public/locales/{locale.name}')
+        assert source == locale.read_bytes(), locale.name
+        assert source == archive.read(f'web/locales/{locale.name}'), locale.name
     assert 'make' in (BASE / 'prepare.py').read_text()
     assert "'test', 'CROSS=', 'CC=gcc'" in (BASE / 'prepare.py').read_text()
-print('PASS: pinned snapshot matches canonical backend, rebuilt UI, seven locales and new regressions.')
+print('PASS: pinned snapshot matches canonical backend, rebuilt UI, all shipped locales including Hungarian and new regressions.')
 
 
 # Builder runtime launchers are outside the standalone component snapshot.

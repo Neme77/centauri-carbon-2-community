@@ -19,20 +19,24 @@ Aprire i [rilasci GitHub del progetto](https://github.com/Neme77/centauri-carbon
 
 Usare i file della stessa release. La 4.4 utilizza la nuova base 02.01.01.07: builder e input firmware delle versioni precedenti non sono intercambiabili. Il progetto riguarda la **Centauri Carbon 2**, non la prima Centauri Carbon.
 
-Per verificare facoltativamente il checksum da PowerShell:
+Prima dell’installazione, verificare il checksum da PowerShell:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\NOME-FIRMWARE.zip.sig'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\CC2_V4_4_STOCK_20261013_001035_414d6629.zip.sig'
 ```
 
-Confrontare il risultato con il checksum pubblicato per quel preciso file firmware.
+Per il firmware V4.4 indicato sopra, lo SHA-256 atteso è `fa06d40104ba9d90df4ffd6c5183626995f2e6c823763c684cd823e8fe53a729`. Confrontarlo con [SHA256SUMS.txt](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4/SHA256SUMS.txt). Se non coincide, riscaricare il file e non installarlo.
 
 ## 2. Installare e attendere l'avvio
 
-1. A stampante inattiva, installare il file firmato `.zip.sig` attraverso la procedura di aggiornamento supportata dalla stampante, seguendo le istruzioni della release. Conservare il file firmato integro.
-2. Lasciare terminare l'aggiornamento e il normale riavvio. Non interrompere l'alimentazione durante l'aggiornamento.
-3. Se necessario, ricollegare la stampante alla rete locale e leggere il suo **indirizzo IP** nella schermata di rete del display.
-4. Attendere l'inizializzazione dei servizi prima di configurare CC2 Control. Il suo avvio è ritardato per consentire ai servizi originali di partire.
+1. Scaricare **`CC2_V4_4_STOCK_20261013_001035_414d6629.zip.sig`** dalla [release V4.4](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4) e verificarne il checksum. Il pacchetto completo include la base firmware; lo ZIP del builder sorgente non è un file di installazione.
+2. A stampante inattiva, copiare il file firmato **`.zip.sig` integro nella cartella principale della chiavetta USB**, leggibile dalla stampante. Non estrarlo, non rinominarlo in `update.bin` e non copiare soltanto i file contenuti al suo interno.
+3. Inserire la chiavetta nella stampante. Sul display aprire **Impostazioni → Verifica aggiornamenti → Aggiornamento offline** e selezionare il pacchetto firmato. Le etichette possono variare con la lingua del display. Confermare l’installazione sulla stampante.
+4. Lasciare terminare l’installazione e il normale riavvio. Non interrompere l’alimentazione e lasciare inserita la chiavetta fino al completamento.
+5. Se necessario, ricollegare la stampante alla rete locale, leggere l’indirizzo IP nella schermata di rete e attendere l’avvio dei servizi prima di aprire CC2 Control.
+6. Dopo l’avvio verificare la base della stampante **02.01.01.07** e CC2 Control **1.2.3**. Il display mostra la versione della base vendor; **Community Firmware V4.4** è il nome del rilascio del progetto.
+
+Il percorso USB è documentato nella [procedura OpenCentauri per CC2](https://docs.opencentauri.cc/software/updates-cc2/#updating-locally-via-usb).
 
 Il ripristino di fabbrica non è necessario per questo aggiornamento. Credenziali CC2 Control, profili materiale e preferenze dell'interfaccia vengono normalmente conservati; il ripristino di fabbrica può cambiare il codice LAN.
 
@@ -58,6 +62,10 @@ Dopo una configurazione riuscita non serve un ulteriore spegnimento manuale. Una
 
 Aprire **Impostazioni → Aspetto**. Le lingue dell'interfaccia sono **inglese, italiano, francese, cinese semplificato, russo, polacco e ceco**. Temi: **Dark, Light, Dracula, Nord, Monokai e Solarized Light**. Le preferenze salvate sono condivise tra browser e pagina CC2 Control incorporata in OrcaSlicer.
 
+## Se la pagina non si apre
+
+Verificare che l’avvio sia terminato, che l’indirizzo IP non sia cambiato e che il browser utilizzi `http://IP-STAMPANTE:8081`. Il computer deve poter raggiungere quell’indirizzo locale. Se CC2 Control si apre ma rimane in attesa della stampante, ricontrollare il codice LAN attuale: un ripristino di fabbrica può averlo cambiato. Non ripristinare tutta la stampante soltanto per reinserire il codice.
+
 ## Se cambia il codice LAN
 
 Aprire **Impostazioni → Connessione**, inserire il nuovo codice, premere **Cambia / Rivalida** e confermare. CC2 Control lo salva e riavvia il proprio servizio. Per il codice LAN questo pulsante completa la modifica: non c'è un ulteriore passaggio “Salva modifiche”.
@@ -65,6 +73,27 @@ Aprire **Impostazioni → Connessione**, inserire il nuovo codice, premere **Cam
 Se non si riconnette, ricontrollare codice attuale sul display, IP e raggiungibilità della stampante. Un codice salvato non significa ancora che sia stato accettato: attendere **Stampante connessa**.
 
 Per riavviare il servizio o recuperare una configurazione bloccata tramite SSH, consultare [la guida di installazione](INSTALL.md#recovery-if-the-old-code-blocks-configuration-access). Il reset della configurazione è un'opzione di recupero, non un passaggio normale della prima installazione.
+
+## Riferimento per l’accesso SSH
+
+Il Community Firmware permette l’accesso SSH locale per la manutenzione:
+
+| Parametro | Valore predefinito |
+| --- | --- |
+| Utente | `root` |
+| Password | `MTY4ODE2` |
+
+Da PowerShell o da un terminale eseguire `ssh root@IP-STAMPANTE`, sostituendo `IP-STAMPANTE` con l’indirizzo locale della stampante, e inserire la password quando richiesta. Durante la digitazione la password non viene mostrata. Se la password di root è stata cambiata, utilizzare quella personalizzata. È la password SSH, distinta dal codice LAN usato da CC2 Control. Questi riferimenti riguardano il Community Firmware; SSH non serve per la normale configurazione dal browser.
+
+## Tornare al firmware originale ELEGOO
+
+[Scarica il firmware originale CC2 02.01.01.07](https://public.suchmeme.nl/cc2-02.01.01.07-1cbee81a985601d1944cea50773793ba-release-abroad.zip.sig). Il file è ospitato su un mirror esterno, non su un server ELEGOO. I suoi byte coincidono con la base ufficiale verificata dal builder V4.4.
+
+SHA-256: `278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406`.
+
+**ELEGOO ha bloccato il downgrade alle versioni precedenti.** Questo link fornisce il firmware originale della **stessa versione 02.01.01.07**; non permette di tornare alla 02.01.00.00 o a versioni più vecchie. Reinstallare il firmware originale è diverso dal ripristino di fabbrica: quest’ultimo non sostituisce il firmware installato.
+
+Utilizzare la stessa procedura USB/aggiornamento offline descritta sopra con il pacchetto originale. L’identità del file è verificata e il maintainer ha confermato sulla stampante il ritorno dalla V4.4 al firmware originale della stessa versione. Se la stampante rifiuta il pacchetto, fermarsi e annotare il messaggio; non modificare la versione del file né aggirare i controlli. Il firmware originale non include CC2 Control o le funzioni community.
 
 ## Passo successivo
 

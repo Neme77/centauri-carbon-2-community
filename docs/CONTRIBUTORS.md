@@ -55,6 +55,10 @@ Thank you to **[@beanbo](https://github.com/beanbo)** for the continued temperat
 
 Both extensions remain under review and are **excluded from this V4.4 release candidate**. The four-slot material-data reset included in V4.4 is a different operation from full physical filament ejection.
 
+## Translation for the next CC2 Control update
+
+Thank you to **[@pezso92](https://github.com/pezso92)** for the complete **Hungarian (Magyar)** translation in [#115](https://github.com/Neme77/centauri-carbon-2-community/pull/115): 879 entries, matching source keys and dynamic placeholders. The maintainer’s packaging/test follow-up preserves the original translation commits and author credit. This contribution is for the next update and is not part of the already published V4.4 assets.
+
 ## Beta testers
 
 Special thanks to **DamiBFryta**, our very first beta tester, for being reliable, impartial and always available throughout development.

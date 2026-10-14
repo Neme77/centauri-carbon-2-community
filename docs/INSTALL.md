@@ -6,18 +6,34 @@ Always install artifacts and follow instructions from the same GitHub release.
 
 ## Full firmware
 
-1. Verify the downloaded firmware checksum against the release checksum file.
-2. Install the signed package using the printer's supported update procedure.
-3. Allow the normal update reboot to complete.
-4. Wait until the printer has completed hardware initialisation.
-5. Open `http://PRINTER-IP:8081` and enter the printer LAN access code.
-6. Allow several seconds for CC2 Control to register and realign its services.
+For V4.4, install the [complete signed firmware](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4/CC2_V4_4_STOCK_20261013_001035_414d6629.zip.sig). Verify SHA-256, copy the unchanged `.zip.sig` to the USB root, then use **Settings → Check for Updates → Offline Update** on the printer. Do not unpack it or use the source-builder ZIP as an update. Let installation and reboot complete, then open `http://PRINTER-IP:8081`. A factory reset is not required.
 
-V4.2 with CC2 Control 1.1.30 does not require an additional manual power cycle. If the printer or Canvas is not ready, wait for initialisation to finish before attempting control actions.
+The [English first-installation guide](FIRST_RUN.md) and [Italian guide](FIRST_RUN.it.md) contain the exact filename/checksum, USB steps, LAN-code setup and startup checks.
 
-## CC2 Control-only update
+## CC2 Control-only updates
 
-Use the multiplatform updater attached to the relevant release. It supports Windows, Linux and macOS over SSH and preserves persistent settings unless the release notes explicitly say otherwise.
+**V4.4 has no standalone CC2 Control updater.** The new application is included in the compatible complete firmware; do not install it separately on V4.3. Historical standalone updaters apply only to the firmware versions documented in their own release.
+
+## Original firmware and downgrade restriction
+
+[Download original CC2 02.01.01.07 firmware](https://public.suchmeme.nl/cc2-02.01.01.07-1cbee81a985601d1944cea50773793ba-release-abroad.zip.sig). This is an externally hosted mirror of the official package, not an ELEGOO-hosted download. Its bytes match the exact official base pinned by the V4.4 builder.
+
+SHA-256: `278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406`.
+
+**ELEGOO blocks downgrades to older firmware.** This link provides the original **same-version 02.01.01.07** package; it does not enable a downgrade to 02.01.00.00 or earlier. Reinstalling the stock package is a separate operation from a factory reset, which does not replace the installed firmware.
+
+Use the same USB/offline-update procedure in the first-installation guide with the original package. File identity has been verified, and the maintainer confirmed a successful return from V4.4 to this same-version original firmware on the printer. If the printer refuses the package, stop and record its message; do not change version metadata or bypass its checks. Original firmware does not include CC2 Control or community features.
+
+## SSH access reference
+
+The Community Firmware provides local SSH access for maintenance:
+
+| Setting | Default |
+| --- | --- |
+| Username | `root` |
+| Password | `MTY4ODE2` |
+
+From PowerShell or a terminal, run `ssh root@PRINTER-IP`, replacing `PRINTER-IP` with the printer’s local IP, and enter the password when prompted. Password entry is not displayed. If you have changed the root password, use your own replacement. This is the SSH password, separate from the printer LAN access code used by CC2 Control. These credentials refer to the Community Firmware; SSH is not required for normal browser setup.
 
 ## Changing the printer LAN access code
 
