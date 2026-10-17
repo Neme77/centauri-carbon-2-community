@@ -90,6 +90,7 @@ static int plates_reboot_requested;
 static const mqtt_client *plates_mqtt; /* main()'s client, read by the reboot guard */
 static char plates_previous_current[PLATE_ID_LEN + 1];
 static unsigned long plates_seen_connections = ULONG_MAX;
+static int plates_pending_stage; /* stored slot, load, active matrix, offset */
 static int plates_z_valid;
 static double plates_z_applied;
 static struct stat plates_z_service; /* the printer service's socket when the offset was applied */
@@ -584,6 +585,39 @@ static int plates_memory_slot(char side,plate_mesh *mesh) {
     int found=plates_memory_reply(side,mesh,reply,length);free(reply);return found;
 }
 
+/* Read the actually applied mesh, not just the stored profiles. */
+static const char plates_active_query[] =
+    "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":[\"profile_name\",\"probed_matrix\",\"mesh_min\",\"mesh_max\"]}}}\003";
+static int plates_pair(const char *obj, const char *end, const char *key, double *x, double *y) {
+    const char *p = json_member(obj, end, key);
+    if (!p || *p != '[') return 0;
+    p = json_skip_space(p + 1, end);
+    if (!plates_json_double(p, end, x, &p)) return 0;
+    p = json_skip_space(p, end);
+    if (p >= end || *p++ != ',') return 0;
+    p = json_skip_space(p, end);
+    if (!plates_json_double(p, end, y, &p)) return 0;
+    p = json_skip_space(p, end);
+    return p < end && *p == ']';
+}
+static int plates_active_reply(char side, const plate_mesh *expected, const char *reply, size_t length) {
+    const char *end=reply+length, *root=json_skip_space(reply,end), *e0,*e1,*e2,*e3;
+    if (root>=end || *root!='{' || !(e0=json_container_end(root,end))) return 0;
+    const char *result=json_member_object(root,e0,"result",'{',&e1);
+    const char *status=result?json_member_object(result,e1,"status",'{',&e2):NULL;
+    const char *bed=status?json_member_object(status,e2,"bed_mesh",'{',&e3):NULL;
+    const char *name=NULL; int count=0;
+    if (!bed || !json_member_raw_string(bed,e3,"profile_name",&name,&count) ||
+        (size_t)count!=strlen(plate_slot(side)) || memcmp(name,plate_slot(side),(size_t)count)) return 0;
+    const char *points=json_member(bed,e3,"probed_matrix");
+    plate_mesh actual=*expected;
+    return points && plates_json_points(points,e3,&actual) &&
+        plates_pair(bed,e3,"mesh_min",&actual.min_x,&actual.min_y) &&
+        plates_pair(bed,e3,"mesh_max",&actual.max_x,&actual.max_y) &&
+        plate_mesh_valid(&actual) && plate_mesh_equal(expected,&actual,0);
+}
+static int plates_activate_slot(char side, const plate_mesh *expected);
+
 /* A gcode/script reply without an error. */
 static int plates_reply_ok(const char *reply, size_t length) {
     const char *end = reply + length, *root = json_skip_space(reply, end);
@@ -600,6 +634,15 @@ static int plates_script(const char *script) {
     int ok = plates_reply_ok(reply, length);
     free(reply);
     return ok ? 0 : -1;
+}
+
+/* An RPC acknowledgement alone does not prove which matrix the printer applies. */
+static int plates_activate_slot(char side, const plate_mesh *expected) {
+    char script[80], *reply=NULL; size_t length=0;
+    snprintf(script,sizeof(script),"BED_MESH_PROFILE LOAD=%s",plate_slot(side));
+    if (plates_script(script)!=0) return 0;
+    if (plates_uds(plates_active_query,&reply,&length)!=0 || !reply) return 0;
+    int ok=plates_active_reply(side,expected,reply,length); free(reply); return ok;
 }
 
 /* SET_GCODE_OFFSET Z= without MOVE: nothing moves, the next move uses the new offset. */
@@ -892,6 +935,7 @@ static int plates_consistent(void) {
 /* A missing file is an empty library; anything unreadable keeps the library closed.
  * A version 1 file is rewritten once, with each plate's mesh as a measurement. */
 static void plates_load(void) {
+    plates_pending_stage = 0;
     memset(&plates, 0, sizeof(plates));
     plates_available = 0;
     size_t length = 0;
@@ -1446,6 +1490,13 @@ static int plates_reboot_guard(void) {
  * one it mounted with last. Its Z offset applies at once. A mesh that is not in its
  * slot is written to autosave.cfg and needs a printer restart, which REBOOT
  * confirms; without it the reply only says that a restart is required. */
+/* A failed activation must never leave a green mounted claim for a different mesh. */
+static void plates_mount_unverified(void) {
+    plates.current[0]=0; plates.pending[0]=0; plates_pending_stage=0;
+    plates_z_valid=0; plates_result="verify_failed";
+    if (plates_save()!=0) { plates_available=0; plates_error="Cannot record unverified plate activation"; }
+}
+
 static void plates_mount_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
     char fields[3][PLATE_NAME_MAX + 1]; const char *reason, *chosen = NULL;
     int count = plates_fields(body, length, fields, 3), reboot = 0;
@@ -1479,13 +1530,20 @@ static void plates_mount_response(int fd, const mqtt_client *mqtt, const char *b
     }
     if (matches) {
         free(file);
-        if (plates_apply_z(plate_z_now(p)) != 0) { plates_fail(fd, 503, "Cannot apply the plate Z offset"); return; }
+        /* Profile creation may itself load the side slot. Always finish with an explicit,
+         * verified side-slot activation, including when the cc2_ profile already exists. */
+        if (!plates_has_profile(base)) (void)plates_store_profile(p->side, base);
+        if (!plates_activate_slot(p->side, &base->mesh)) {
+            plates_mount_unverified(); plates_fail(fd, 503, "Cannot verify the active plate mesh"); return;
+        }
+        if (plates_apply_z(plate_z_now(p)) != 0) {
+            plates_mount_unverified(); plates_fail(fd, 503, "Cannot apply the plate Z offset"); return;
+        }
         plates_begin();
         memcpy(plates.current, p->id, sizeof(plates.current));
         memcpy(p->measure, base->id, sizeof(p->measure));
-        if (!plates_commit(fd)) return;
+        if (!plates_commit(fd)) { plates_mount_unverified(); return; }
         plates_result = "mounted";
-        if (!plates_has_profile(base)) (void)plates_store_profile(p->side, base);
         plates_reply(fd, 200, "{\"mounted\":true,\"reboot\":false}\n");
         return;
     }
@@ -1512,6 +1570,7 @@ static void plates_mount_response(int fd, const mqtt_client *mqtt, const char *b
     plates_begin();
     memcpy(plates.current, p->id, sizeof(plates.current));
     memcpy(plates.pending, p->id, sizeof(plates.pending));
+    plates_pending_stage=0;
     memcpy(p->measure, base->id, sizeof(p->measure));
     if (plates_save() != 0 || plates_replace_file(printer_autosave_path, backup, updated, new_length, autosave_mode()) != 0) {
         plates = plates_undo;
@@ -1590,7 +1649,7 @@ static void plates_exchange_close(plates_exchange *x){
     if(x->fd>=0)close(x->fd);
     free(x->buffer);memset(x,0,sizeof(*x));x->fd=-1;
 }
-static void plates_background_close(void){plates_exchange_close(&plates_background);}
+static void plates_background_close(void){plates_exchange_close(&plates_background);plates_pending_stage=0;}
 /* 1 completed, 0 still pending, -1 failed. The caller owns a completed reply. */
 static int plates_exchange_step(plates_exchange *x,const char *query,char **reply,size_t *length){
     *reply=NULL;*length=0;
@@ -1667,6 +1726,7 @@ static int plates_z_background(double z){
     int ok=plates_accept_z(z,reply,length);free(reply);return ok;
 }
 static void plates_background_failed(long long now){
+    plates_pending_stage=0;
     plates_attempts++;plates_next_tick_ms=now+(plates_attempts==1?5000:15000);
     if(plates_attempts>=3){
         plates_result="verify_failed";
@@ -2007,26 +2067,50 @@ static void plates_tick(const mqtt_client *mqtt) {
         snprintf(plates_attempt_id,sizeof(plates_attempt_id),"%s",current->id);plates_attempt_z=z;
         plates_attempts=0;plates_background_close();
     }
-    if ((!plates.pending[0] && !z_due) || plates_printer_ready(mqtt) || z_offset_pending){plates_background_close();return;}
+    if ((!plates.pending[0] && !z_due) || plates_printer_ready(mqtt) || z_offset_pending){
+        plates_background_close(); plates_pending_stage=0; return;
+    }
     if(plates_attempts>=3 || (now<plates_next_tick_ms && plates_background.fd<0))return;
     plates_next_tick_ms = now + 5000;
     if (plates.pending[0]) {
-        const plate_entry *p = plate_find(plates.pending); /* plates_load and plates_open keep it present */
-        const plate_measure *base = p ? plate_base(p) : NULL;
-        plate_mesh file, memory;
-        int in_memory=base?plates_memory_background(p->side,&memory):0;
-        if(in_memory==-2)return;
-        if(in_memory<0){plates_background_failed(now);return;}
-        int ok = base && autosave_slot(p->side, &file) == 1 && plate_mesh_equal(&file, &base->mesh, 1) &&
-                 in_memory == 1 && plate_mesh_equal(&memory, &base->mesh, 0);
-        plates.pending[0] = 0;
-        if (!ok) plates.current[0] = 0;
-        if(plates_save()!=0){plates_available=0;plates_error="Cannot record plate verification";plates_result="verify_failed";return;}
-        plates_result = ok ? "mounted" : "verify_failed";
-        if (!ok) return;
-        current = plate_find(plates.current);
-        z = current ? plate_z_now(current) : 0;
-        plates_z_valid = 0;
+        const plate_entry *p=plate_find(plates.pending);
+        const plate_measure *base=p?plate_base(p):NULL;
+        if (!base) { plates_mount_unverified(); return; }
+        /* At most four bounded nonblocking transactions; each stage retains its
+         * in-flight exchange. Busy/stale telemetry resets verification above. */
+        for (int step=0; step<4; ++step) {
+            int result;
+            if (plates_pending_stage==0) {
+                plate_mesh file,memory;
+                result=plates_memory_background(p->side,&memory);
+                if (result==-2) return;
+                if (result<0) { plates_background_failed(now); return; }
+                if (result!=1 || autosave_slot(p->side,&file)!=1 ||
+                    !plate_mesh_equal(&file,&base->mesh,1) || !plate_mesh_equal(&memory,&base->mesh,0)) {
+                    plates_mount_unverified(); return;
+                }
+            } else if (plates_pending_stage<3) {
+                char query[192], *reply=NULL; size_t length=0;
+                if (plates_pending_stage==1)
+                    snprintf(query,sizeof(query),"{\"id\":204,\"method\":\"gcode/script\",\"params\":{\"script\":\"BED_MESH_PROFILE LOAD=%s\"}}\003",plate_slot(p->side));
+                else snprintf(query,sizeof(query),"%s",plates_active_query);
+                result=plates_background_step(query,&reply,&length);
+                if (!result) return;
+                if (result<0) { plates_background_failed(now); return; }
+                int ok=plates_pending_stage==1 ? plates_reply_ok(reply,length) : plates_active_reply(p->side,&base->mesh,reply,length);
+                free(reply);
+                if (!ok) { plates_mount_unverified(); return; }
+            } else {
+                result=plates_z_background(plate_z_now(p));
+                if (result==-2) return;
+                if (result<0) { plates_background_failed(now); return; }
+                plates.pending[0]=0; plates_pending_stage=0;
+                if (plates_save()!=0) { plates_mount_unverified(); return; }
+                plates_attempts=0; plates_result="mounted"; return;
+            }
+            plates_pending_stage++; plates_next_tick_ms=now;
+        }
+        return;
     }
     if(current){int applied=plates_z_background(z);if(applied==-1)plates_background_failed(now);else if(applied==0)plates_attempts=0;}
 }

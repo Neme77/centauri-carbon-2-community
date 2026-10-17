@@ -934,5 +934,11 @@
   "plates.created_without_mesh": "Plate profile created. Calibrate it before mounting.",
   "plates.include_existing_mesh": "Include the existing mesh for this side",
   "plates.empty_profile_hint": "Create the profile first, then calibrate and select it as the destination.",
-  "plates.calibrate_plate": "Calibrate this plate"
+  "plates.calibrate_plate": "Calibrate this plate",
+  "plates.mesh_selector": "Library mesh",
+  "plates.mesh_choose": "Choose a saved measurement",
+  "plates.mesh_apply": "Mount and activate",
+  "plates.mesh_active": "Active mesh on the printer",
+  "plates.mesh_scope": "Selection alone sends no commands. Confirm the physical plate before applying. A restart is requested only when needed. Print startup still follows its side and levelling options.",
+  "plates.mesh_confirm": "Confirm the installed plate: {name}, side {side}, measurement at {temp} °C. Its mesh and plate/nozzle Z offset will be applied."
 }

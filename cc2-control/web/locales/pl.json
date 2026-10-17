@@ -934,5 +934,11 @@
   "plates.created_without_mesh": "Profil płyty utworzony. Skalibruj ją przed zamontowaniem.",
   "plates.include_existing_mesh": "Dołącz istniejącą siatkę tej strony",
   "plates.empty_profile_hint": "Najpierw utwórz profil, potem skalibruj i wybierz go jako miejsce zapisu.",
-  "plates.calibrate_plate": "Kalibruj tę płytę"
+  "plates.calibrate_plate": "Kalibruj tę płytę",
+  "plates.mesh_selector": "Siatka z biblioteki",
+  "plates.mesh_choose": "Wybierz zapisany pomiar",
+  "plates.mesh_apply": "Zamontuj i aktywuj",
+  "plates.mesh_active": "Aktywna siatka drukarki",
+  "plates.mesh_scope": "Sam wybór nie wysyła poleceń. Przed zastosowaniem potwierdź fizycznie zamontowaną płytę. Restart jest wymagany tylko w razie potrzeby. Start druku nadal uwzględnia wybraną stronę i opcje poziomowania.",
+  "plates.mesh_confirm": "Potwierdź zamontowaną płytę: {name}, strona {side}, pomiar przy {temp} °C. Zostaną zastosowane siatka i przesunięcie Z płyty/dyszy."
 }

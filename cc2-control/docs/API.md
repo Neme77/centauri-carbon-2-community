@@ -502,3 +502,27 @@ the old message did not reappear after page refresh or a printer reboot.
 `POST /api/control` with body `canvas:reset-all` resets the material, colour and nozzle-temperature fields for slots 0–3 using the printer's native `CANVAS_SET_FILAMENT_INFO` commands. It does not unload filament or delete the spool inventory. The UI requests explicit confirmation and refreshes Canvas readback after submission.
 
 Requires connected, registered MQTT telemetry no older than 15 seconds, a valid timestamp and a known Idle machine state. Printing, paused printing, missing/stale telemetry and invalid command length are rejected. The four-command batch fits the existing console limit; acceptance reports submission rather than a confirmed firmware result.
+
+### Explicit custom plate mesh activation
+
+The Build Plate Library selector lists each plate's saved measurements by side,
+temperature and timestamp. Selecting an entry is inert. **Mount and activate**
+asks the user to confirm the physically installed plate, then uses the existing
+plate/measurement mount endpoint and its idle/fresh/transfer/calibration guards.
+A changed side-slot mesh retains its explicit restart confirmation. The print
+popup's official A/B selection and the graph's visualization selector are unchanged.
+
+An immediate mount now loads its verified side slot and reads back the actual
+`bed_mesh.profile_name`, `probed_matrix`, `mesh_min` and `mesh_max` before applying
+Z and reporting mounted. A stored profile alone or an empty RPC acknowledgement
+is insufficient. Pending mounts after restart perform the same checks through
+bounded, nonblocking transactions before reporting success. Failed verification
+clears the mounted claim; no mesh load is added to ordinary idle recovery after
+a later print. The active profile label reflects printer telemetry. Print start
+can still select the side slot or probe a new/adaptive mesh according to its
+options; an idle selection is not a replacement for choosing the physical side.
+
+Test qualification is separate from printer qualification. The regression model
+keeps stored profiles and the active matrix independent and covers successful,
+ignored/refused loads, missing/wrong matrix data, busy/stale guards and pending
+post-restart activation. A controlled V4.4 printer trial is required before release.

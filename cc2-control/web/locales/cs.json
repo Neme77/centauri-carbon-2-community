@@ -934,5 +934,11 @@
   "plates.created_without_mesh": "Profil podložky vytvořen. Před nasazením ji kalibrujte.",
   "plates.include_existing_mesh": "Zahrnout existující síť této strany",
   "plates.empty_profile_hint": "Nejprve vytvořte profil, poté kalibrujte a vyberte jej jako cíl uložení.",
-  "plates.calibrate_plate": "Kalibrovat tuto podložku"
+  "plates.calibrate_plate": "Kalibrovat tuto podložku",
+  "plates.mesh_selector": "Síť z knihovny",
+  "plates.mesh_choose": "Vyberte uložené měření",
+  "plates.mesh_apply": "Nasadit a aktivovat",
+  "plates.mesh_active": "Aktivní síť tiskárny",
+  "plates.mesh_scope": "Samotný výběr neodesílá příkazy. Před použitím potvrďte skutečně nasazenou desku. Restart je vyžádán pouze v případě potřeby. Zahájení tisku se nadále řídí zvolenou stranou a možnostmi vyrovnání.",
+  "plates.mesh_confirm": "Potvrďte nasazenou desku: {name}, strana {side}, měření při {temp} °C. Použije se síť a posun Z desky/trysky."
 }

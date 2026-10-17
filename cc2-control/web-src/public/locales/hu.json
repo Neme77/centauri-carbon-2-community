@@ -914,5 +914,11 @@
   "updates.idle": "Tétlen",
   "updates.selected": "Kiválasztott verzió:",
   "updates.reload": "CC2 Control újratöltése",
-  "updates.notes_in_english": "Kiadási megjegyzések angolul (magyar fordítás nem érhető el)"
+  "updates.notes_in_english": "Kiadási megjegyzések angolul (magyar fordítás nem érhető el)",
+  "plates.mesh_selector": "Háló a könyvtárból",
+  "plates.mesh_choose": "Válasszon mentett mérést",
+  "plates.mesh_apply": "Felszerelés és aktiválás",
+  "plates.mesh_active": "A nyomtató aktív hálója",
+  "plates.mesh_scope": "A kiválasztás önmagában nem küld parancsot. Alkalmazás előtt erősítse meg a felszerelt lapot. Újraindítás csak szükség esetén kell. A nyomtatás továbbra is a kiválasztott oldalt és szintezési beállításokat használja.",
+  "plates.mesh_confirm": "Erősítse meg a felszerelt lapot: {name}, {side} oldal, mérés {temp} °C-on. A háló és a lap/fúvóka Z-eltolása lesz alkalmazva."
 }

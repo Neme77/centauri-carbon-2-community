@@ -263,7 +263,7 @@ const PlateCard = ({
   const [z, setZ] = useState(p.z_offset.toFixed(3))
   const base = plateBase(p)
   const [temp, setTemp] = useState(String(base?.temp ?? 60))
-  const mounted = lib.current === p.id
+  const mounted = lib.current === p.id && !lib.pending
   const locked = busy || Boolean(lib.pending) || !lib.available
   const adjustment = mounted && live !== null && reference !== null ? live - reference : 0
   const idleOnly = idle ? undefined : t('common.available_when_idle')
@@ -607,6 +607,65 @@ const SaveForm = ({ lib, idle, busy, act }: { lib: PlateLibrary; idle: boolean; 
   )
 }
 
+// Selection is inert; the explicit action mounts and verifies the chosen measure.
+const MeshSelector = ({ lib, idle, busy, act }: { lib: PlateLibrary; idle: boolean; busy: boolean; act: Act }) => {
+  const [choice, setChoice] = useState('')
+  const chosen = findMeasure(lib, choice)
+  const active = lib.mesh_profile?.startsWith('cc2_') ? findMeasure(lib, lib.mesh_profile.slice(4)) : null
+  const activeLabel = active
+    ? `${active.plate.name} · ${active.measure.temp} °C`
+    : lib.mesh_profile === 'default'
+      ? t('print.side_a')
+      : lib.mesh_profile === 'default1'
+        ? t('print.side_b')
+        : lib.mesh_profile || t('common.not_set')
+  const locked = busy || !idle || !lib.available || Boolean(lib.pending) || lib.calibration.stage !== 'off'
+  const apply = async () => {
+    if (locked || !chosen) return
+    const { plate, measure } = chosen
+    if (!(await ask(tpl('plates.mesh_confirm', { name: plate.name, side: plate.side, temp: measure.temp })))) return
+    await mount(plate, measure)
+  }
+  return (
+    <div class="mt-3 rounded-md border border-edge p-3" data-mesh-selector>
+      <div class="flex flex-col gap-3 cc2-sm:flex-row cc2-sm:items-end">
+        <label class="grid min-w-0 flex-1 gap-1 text-xs">
+          {t('plates.mesh_selector')}
+          <Select
+            aria-label={t('plates.mesh_selector')}
+            value={chosen ? choice : ''}
+            disabled={busy}
+            onChange={e => setChoice(e.currentTarget.value)}
+          >
+            <option value="">{t('plates.mesh_choose')}</option>
+            {lib.plates.map(p => (
+              <optgroup key={p.id} label={`${p.name} · ${tpl('plates.side_n', { side: p.side })}`}>
+                {p.measures.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {p.name} · {tpl('plates.side_n', { side: p.side })} · {m.temp} °C · {savedOn(m.measured)}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+        </label>
+        <Button
+          variant="primary"
+          disabled={locked || !chosen}
+          title={!idle ? t('common.available_when_idle') : undefined}
+          onClick={() => act(apply)}
+        >
+          {t('plates.mesh_apply')}
+        </Button>
+      </div>
+      <p class="mt-2 text-xs">
+        {t('plates.mesh_active')}: <b>{activeLabel}</b>
+      </p>
+      <p class="mt-2 text-xs text-muted">{t('plates.mesh_scope')}</p>
+    </div>
+  )
+}
+
 // What happened to the measurement chosen for the latest print started here.
 const PrintMeshNotice = ({ lib }: { lib: PlateLibrary }) => {
   const { state, measure, result } = lib.print_mesh
@@ -625,7 +684,7 @@ export const Plates = () => {
   const v = view(printer.use().data)
   const { busy, act } = useAct()
   usePoll(refreshPlates, rebooting || lib?.pending || (lib && lib.print_mesh.state !== 'off') ? 4000 : 20000)
-  const current = lib?.plates.find(p => p.id === lib.current)
+  const current = lib?.pending ? undefined : lib?.plates.find(p => p.id === lib.current)
   const waiting = lib?.plates.find(p => p.id === lib.pending)
   const installed = lib?.nozzles.find(n => n.id === lib.nozzle)
   return (
@@ -687,6 +746,7 @@ export const Plates = () => {
                 })}
               </Notice>
             )}
+            <MeshSelector lib={lib} idle={v.idle && ok} busy={busy || rebooting} act={act} />
             <PrintMeshNotice lib={lib} />
             <div class="mt-3 grid gap-2.5 cc2-lg:grid-cols-2">
               {lib.plates.map(p => (

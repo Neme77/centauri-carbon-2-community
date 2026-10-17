@@ -934,5 +934,11 @@
   "plates.created_without_mesh": "Profil de plateau créé. Calibrez-le avant de le monter.",
   "plates.include_existing_mesh": "Inclure le maillage existant de cette face",
   "plates.empty_profile_hint": "Créez le profil, puis calibrez en le sélectionnant comme destination.",
-  "plates.calibrate_plate": "Calibrer ce plateau"
+  "plates.calibrate_plate": "Calibrer ce plateau",
+  "plates.mesh_selector": "Maillage de la bibliothèque",
+  "plates.mesh_choose": "Choisir une mesure enregistrée",
+  "plates.mesh_apply": "Monter et activer",
+  "plates.mesh_active": "Maillage actif sur l’imprimante",
+  "plates.mesh_scope": "La sélection seule n’envoie aucune commande. Confirmez le plateau installé avant application. Un redémarrage est demandé si nécessaire. Le démarrage suit toujours le côté et les options de nivellement choisis.",
+  "plates.mesh_confirm": "Confirmez le plateau installé : {name}, côté {side}, mesure à {temp} °C. Le maillage et le décalage Z du plateau/de la buse seront appliqués."
 }

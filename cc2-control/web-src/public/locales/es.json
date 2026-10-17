@@ -914,5 +914,11 @@
   "updates.idle": "Inactivo",
   "updates.selected": "Version seleccionada:",
   "updates.reload": "Recargar CC2 Control",
-  "updates.notes_in_english": "Notas de la versión (Inglés; traducción no disponible)"
+  "updates.notes_in_english": "Notas de la versión (Inglés; traducción no disponible)",
+  "plates.mesh_selector": "Malla de la biblioteca",
+  "plates.mesh_choose": "Elegir una medición guardada",
+  "plates.mesh_apply": "Montar y activar",
+  "plates.mesh_active": "Malla activa en la impresora",
+  "plates.mesh_scope": "La selección por sí sola no envía comandos. Confirma la placa instalada antes de aplicar. Se pide reiniciar solo si es necesario. La impresión sigue el lado y las opciones de nivelación elegidos.",
+  "plates.mesh_confirm": "Confirma la placa instalada: {name}, lado {side}, medición a {temp} °C. Se aplicarán la malla y el desplazamiento Z de placa/boquilla."
 }

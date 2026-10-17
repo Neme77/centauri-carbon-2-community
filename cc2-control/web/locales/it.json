@@ -934,5 +934,11 @@
   "plates.created_without_mesh": "Profilo piatto creato. Calibralo prima di montarlo.",
   "plates.include_existing_mesh": "Includi la mesh già presente per questo lato",
   "plates.empty_profile_hint": "Crea prima il profilo, poi calibra selezionandolo come destinazione.",
-  "plates.calibrate_plate": "Calibra questo piatto"
+  "plates.calibrate_plate": "Calibra questo piatto",
+  "plates.mesh_selector": "Mesh della libreria",
+  "plates.mesh_choose": "Scegli una misura salvata",
+  "plates.mesh_apply": "Monta e attiva",
+  "plates.mesh_active": "Mesh attiva sulla stampante",
+  "plates.mesh_scope": "La selezione da sola non invia comandi. Conferma il piatto fisicamente montato prima di applicare. Il riavvio viene richiesto solo se necessario. La stampa segue comunque il lato e le opzioni di livellamento scelti.",
+  "plates.mesh_confirm": "Conferma il piatto installato: {name}, lato {side}, misura a {temp} °C. Verranno applicati la mesh e l’offset Z del piatto/ugello."
 }

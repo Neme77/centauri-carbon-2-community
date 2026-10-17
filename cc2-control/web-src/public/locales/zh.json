@@ -900,5 +900,11 @@
   "updates.idle": "空闲",
   "updates.selected": "所选版本：",
   "updates.reload": "重新加载 CC2 Control",
-  "updates.notes_in_english": "发行说明为英语：暂无翻译"
+  "updates.notes_in_english": "发行说明为英语：暂无翻译",
+  "plates.mesh_selector": "库中的网床",
+  "plates.mesh_choose": "选择已保存的测量",
+  "plates.mesh_apply": "安装并激活",
+  "plates.mesh_active": "打印机当前网床",
+  "plates.mesh_scope": "仅选择不会发送指令。应用前请确认实际安装的打印板。仅在必要时请求重启。打印启动仍遵循所选板面和调平选项。",
+  "plates.mesh_confirm": "请确认已安装的打印板：{name}，{side} 面，{temp} °C 下的测量。将应用网床及打印板/喷嘴 Z 偏移。"
 }

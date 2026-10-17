@@ -107,6 +107,19 @@ jobs:
       - name: Signed update panel confirmations and mobile layouts
         run: npm run test:updates
 
+      - name: Library mesh selection and guarded activation
+        run: npm run test:mesh-selector
+        env:
+          CC2_MESH_SCREENSHOTS: /tmp/cc2-mesh-preview
+
+      - name: Save mesh selector screenshots
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: mesh-library-selector-preview
+          path: /tmp/cc2-mesh-preview/
+          if-no-files-found: ignore
+
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures
 

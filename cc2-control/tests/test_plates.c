@@ -6,6 +6,9 @@
 /* The printer as plates.h sees it: autosave.cfg on disk, profiles in memory, G-code it ran. */
 static plate_mesh memory_a, memory_b;
 static int memory_has_b = 1, uds_down;
+static plate_mesh active_mesh;
+static char active_profile[32]="default";
+static int refuse_mesh_load, ignore_mesh_load, corrupt_active_matrix, missing_active_matrix;
 static char ran[256];            /* the last SET_GCODE_OFFSET */
 static char profile_log[1024];   /* BED_MESH_PROFILE scripts, separated by '|' */
 static int fake_uds(const char *query, char **reply, size_t *length) {
@@ -18,6 +21,17 @@ static int fake_uds(const char *query, char **reply, size_t *length) {
         else {
             size_t used = strlen(profile_log);
             snprintf(profile_log + used, sizeof(profile_log) - used, "%s%.*s", used ? "|" : "", n, script);
+        }
+        if (!strncmp(script,"BED_MESH_PROFILE LOAD=",22)) {
+            if (refuse_mesh_load) {
+                free(b.data); *reply=strdup("{\"id\":204,\"error\":{\"message\":\"refused\"}}");
+                *length=strlen(*reply); return 0;
+            }
+            if (!ignore_mesh_load) {
+                const char *name=script+22;
+                if (!strncmp(name,"default1",8)) { active_mesh=memory_b; snprintf(active_profile,sizeof(active_profile),"default1"); }
+                else if (!strncmp(name,"default",7)) { active_mesh=memory_a; snprintf(active_profile,sizeof(active_profile),"default"); }
+            }
         }
         /* SAVE copies the loaded slot to a profile and writes autosave.cfg at once. */
         const char *load = strstr(script, "LOAD="), *save = strstr(script, "SAVE=");
@@ -34,6 +48,20 @@ static int fake_uds(const char *query, char **reply, size_t *length) {
             free(file); free(updated);
         }
         json_builder_printf(&b, "{\"id\":7,\"result\":{}}");
+    } else if (strstr(query,"\"profile_name\"")) {
+        json_builder_printf(&b,"{\"id\":203,\"result\":{\"status\":{\"bed_mesh\":{\"profile_name\":\"%s\",\"mesh_min\":[%.9g,%.9g],\"mesh_max\":[%.9g,%.9g]",
+            active_profile,active_mesh.min_x,active_mesh.min_y,active_mesh.max_x,active_mesh.max_y);
+        if (!missing_active_matrix) {
+            json_builder_printf(&b,",\"probed_matrix\":[");
+            for(int r=0;r<active_mesh.y_count;r++) {
+                json_builder_printf(&b,"%s[",r?",":"");
+                for(int c=0;c<active_mesh.x_count;c++)
+                    json_builder_printf(&b,"%s%.17g",c?",":"",active_mesh.points[r*active_mesh.x_count+c]+(corrupt_active_matrix && !r && !c?0.01:0));
+                json_builder_printf(&b,"]");
+            }
+            json_builder_printf(&b,"]");
+        }
+        json_builder_printf(&b,"}}}}");
     } else {
         assert(strstr(query, "\"bed_mesh\":[\"profiles\"]"));
         json_builder_printf(&b, "{\"id\":7,\"result\":{\"eventtime\":12.5,\"status\":{\"bed_mesh\":{\"profiles\":{");
@@ -478,7 +506,9 @@ static void test_http(void) {
     assert(autosave_slot('B', &read) == 1 && plate_mesh_equal(&read, &b, 1));
     assert(autosave_slot('A', &read) == 1 && plate_mesh_equal(&read, &other, 1));
     memory_b = b; memory_has_b = 1;
+    active_mesh=memory_a; snprintf(active_profile,sizeof(active_profile),"default");
     new_process(); fresh(&mqtt); plates_tick(&mqtt);
+    assert(!strcmp(active_profile,"default1") && plate_mesh_equal(&active_mesh,&memory_b,0));
     assert(!strcmp(plates_result, "mounted") && !strcmp(plates.current, textured) && !strcmp(ran, "SET_GCODE_OFFSET Z=0.020"));
 
     assert(call(UNMOUNT, &mqtt, NULL) == 200 && !plates.current[0]);
@@ -489,6 +519,40 @@ static void test_http(void) {
     assert(call(DELETE, &mqtt, body) == 404);
     new_process(); assert(plates.count == 1 && !strcmp(plates.plates[0].id, smooth) && plates.measure_count == 1);
     free(before);
+}
+
+/* Stored A/B profiles and the active mesh are independent firmware state. */
+static void test_active_mount(void) {
+    mqtt_client mqtt={0}; unlink(plates_path); new_process(); fresh(&mqtt);
+    memory_a=grid(0.6); memory_b=grid(-0.3); memory_has_b=1; write_autosave(&memory_a,&memory_b);
+    assert(call(SAVE,&mqtt,"A\nPlate A\n0\n60\n")==201);
+    char a[17]; snprintf(a,sizeof(a),"%s",plates.plates[0].id);
+    assert(call(SAVE,&mqtt,"B\nPlate B\n0\n60\n")==201);
+    char b[17]; snprintf(b,sizeof(b),"%s",plates.plates[1].id);
+    assert(plates_has_profile(plate_base(plate_find(a))) && plates_has_profile(plate_base(plate_find(b))));
+    active_mesh=memory_a; snprintf(active_profile,sizeof(active_profile),"default"); profile_log[0]=0;
+    assert(call(MOUNT,&mqtt,b)==200 && !strcmp(active_profile,"default1"));
+    assert(plate_mesh_equal(&active_mesh,&memory_b,0) && !strcmp(plates.current,b) && !reboot_pending);
+    assert(strstr(profile_log,"BED_MESH_PROFILE LOAD=default1"));
+    size_t length; char *before=slurp(printer_autosave_path,&length);
+    /* Acknowledged-but-ignored loads, missing data and a wrong matrix cannot mount. */
+    ignore_mesh_load=1;
+    assert(call(MOUNT,&mqtt,a)==503 && !plates.current[0] && !strcmp(plates_result,"verify_failed"));
+    ignore_mesh_load=0; corrupt_active_matrix=1;
+    assert(call(MOUNT,&mqtt,a)==503 && !plates.current[0]);
+    corrupt_active_matrix=0; missing_active_matrix=1;
+    assert(call(MOUNT,&mqtt,a)==503 && !plates.current[0]);
+    missing_active_matrix=0; refuse_mesh_load=1;
+    assert(call(MOUNT,&mqtt,a)==503 && !plates.current[0]);
+    refuse_mesh_load=0;
+    assert(call(MOUNT,&mqtt,a)==200 && !strcmp(active_profile,"default"));
+    size_t after_length; char *after=slurp(printer_autosave_path,&after_length);
+    assert(length==after_length && !memcmp(before,after,length)); free(before); free(after);
+    profile_log[0]=0; mqtt.machine_status=2;
+    assert(call(MOUNT,&mqtt,b)==409 && !profile_log[0]); fresh(&mqtt);
+    mqtt.last_message-=16;
+    assert(call(MOUNT,&mqtt,b)==409 && !profile_log[0]); fresh(&mqtt);
+    printf("PASS: mounting stored B from active A loads and verifies the actual matrix; refusal/mismatch/missing data fail closed; busy/stale printer untouched\n");
 }
 
 /* Measurements at several bed temperatures, nozzles and the choice a print makes. */
@@ -906,11 +970,13 @@ int main(void) {
     object_query_path = service_socket;
     plates_uds = fake_uds;
     uds_init(&telemetry);
+    if (getenv("CC2_TEST_ACTIVE_ONLY")) { test_active_mount(); return 0; }
     test_names_and_numbers();
     test_autosave();
     test_store();
     test_version_1();
     test_http();
+    test_active_mount();
     test_measures();
     test_calibration_job();
     test_empty_plate();
