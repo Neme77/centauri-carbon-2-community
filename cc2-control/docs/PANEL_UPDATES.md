@@ -20,3 +20,25 @@ packages. See [English instructions](APPLICATION_UPDATES.md) and
 does not depend on the printer's curl. The stable and experimental Canvas UDS
 channels remain separate. Printer qualification is pending; firmware updating
 through the original display path remains a separate future task.
+
+## Update notification in the header
+
+A bell beside Emergency Stop indicates a newer CC2 Control version compatible
+with the installed firmware and the selected update channel. Open it to see the
+version, then choose **Open updates** to reach Settings → Updates directly.
+Download and installation still require explicit confirmation and the LAN code;
+the notification never installs packages or changes printer firmware.
+
+While the main panel is open, it checks the small signed GitHub catalog on
+startup and reuses a successful check for six hours. The shared scheduler sleeps
+in hidden tabs. Failed automatic checks stay silent and retry after at least
+fifteen minutes; navigating between pages does not bypass this delay. Manual
+**Check for updates** remains available in Settings. The existing backend
+signature verifier validates both manual and automatic catalogs.
+
+The emergency stop is slightly narrower on desktop; compact headers retain
+44-pixel action targets and accessible labels. Its one-second hold is unchanged.
+Validation includes browser interactions at widths from 320 to 1920 pixels,
+channel/firmware/version filtering, shared cache, silent network/signature
+failures, direct tab navigation and the emergency hold. Printer validation of
+this notification is separate from these browser checks.

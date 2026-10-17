@@ -934,5 +934,10 @@
   "plates.created_without_mesh": "Plate profile created. Calibrate it before mounting.",
   "plates.include_existing_mesh": "Include the existing mesh for this side",
   "plates.empty_profile_hint": "Create the profile first, then calibrate and select it as the destination.",
-  "plates.calibrate_plate": "Calibrate this plate"
+  "plates.calibrate_plate": "Calibrate this plate",
+  "updates.notifications": "Update notifications",
+  "updates.notice_available": "CC2 Control {version} available",
+  "updates.open": "Open updates",
+  "updates.notice_manual": "Download and installation require your confirmation in Settings.",
+  "updates.dismiss": "Close"
 }

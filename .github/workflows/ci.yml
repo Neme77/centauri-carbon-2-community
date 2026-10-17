@@ -107,6 +107,9 @@ jobs:
       - name: Signed update panel confirmations and mobile layouts
         run: npm run test:updates
 
+      - name: Update notification, compatibility, cache and mobile header
+        run: npm run test:update-notice
+
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures
 

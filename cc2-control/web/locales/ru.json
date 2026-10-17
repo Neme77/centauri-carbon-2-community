@@ -900,5 +900,10 @@
   "updates.idle": "Простой",
   "updates.selected": "Выбранная версия:",
   "updates.reload": "Перезагрузить страницу CC2 Control",
-  "updates.notes_in_english": "Примечания к выпуску на английском: перевод недоступен"
+  "updates.notes_in_english": "Примечания к выпуску на английском: перевод недоступен",
+  "updates.notifications": "Уведомления об обновлениях",
+  "updates.notice_available": "Доступна версия CC2 Control {version}",
+  "updates.open": "Открыть обновления",
+  "updates.notice_manual": "Загрузка и установка требуют подтверждения в настройках.",
+  "updates.dismiss": "Закрыть"
 }

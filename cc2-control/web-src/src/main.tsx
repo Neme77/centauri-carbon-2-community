@@ -2,6 +2,7 @@ import { render } from 'preact'
 import './index.css'
 import { App } from './App'
 import { setTheme, theme, loadUiPreferences } from '@/lib/i18n'
+import { checkUpdateNotice, UPDATE_RETRY_INTERVAL } from '@/lib/updates'
 import { poll } from '@/lib/poll'
 import { loadPresets, nav, refreshHealth, refreshPrinter } from '@/lib/state'
 import { checkOrcaPendingPrint } from '@/pages/print-dialog'
@@ -14,6 +15,7 @@ poll(refreshPrinter, 3000)
 if (!nav.get().camera) {
   void loadPresets()
   poll(refreshHealth, 30000)
+  poll(checkUpdateNotice, UPDATE_RETRY_INTERVAL)
   // An OrcaSlicer "Upload and Print" must be noticed even when its embedded WebView reports the page as hidden,
   // and its timers can be throttled, so this one keeps running when hidden and also checks on interaction.
   poll(checkOrcaPendingPrint, 1500, { hidden: true })

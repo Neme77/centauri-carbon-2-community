@@ -934,5 +934,10 @@
   "plates.created_without_mesh": "Profil de plateau créé. Calibrez-le avant de le monter.",
   "plates.include_existing_mesh": "Inclure le maillage existant de cette face",
   "plates.empty_profile_hint": "Créez le profil, puis calibrez en le sélectionnant comme destination.",
-  "plates.calibrate_plate": "Calibrer ce plateau"
+  "plates.calibrate_plate": "Calibrer ce plateau",
+  "updates.notifications": "Notifications de mise à jour",
+  "updates.notice_available": "CC2 Control {version} disponible",
+  "updates.open": "Ouvrir les mises à jour",
+  "updates.notice_manual": "Le téléchargement et l’installation nécessitent votre confirmation dans les paramètres.",
+  "updates.dismiss": "Fermer"
 }

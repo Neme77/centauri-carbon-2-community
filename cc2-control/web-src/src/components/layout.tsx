@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { cn } from '@/lib/utils'
 import { CanvasIcon } from '@/components/canvas-icon'
+import { UpdateNotice } from '@/components/update-notice'
 import { HeaderTitle } from '@/components/header-title'
 import { PrinterIcon } from '@/components/printer-icon'
 import {
@@ -83,7 +84,7 @@ const EStop = () => {
         e.preventDefault()
         if (!fired.current) notify(t('app.hold_emergency_stop_for_one_second'))
       }}
-      class="relative flex h-11 touch-none select-none items-center justify-center overflow-hidden rounded-md border border-red bg-red/10 px-3 font-bold text-red md:px-4"
+      class="cc2-emergency-stop relative flex h-11 shrink-0 touch-none select-none items-center justify-center overflow-hidden rounded-md border border-red bg-red/10 px-2 font-bold text-red md:px-3"
     >
       <i
         class={cn(
@@ -91,9 +92,9 @@ const EStop = () => {
           holding ? 'w-full transition-[width] duration-1000 ease-linear' : 'w-0'
         )}
       />
-      <span class="relative flex items-center gap-2">
+      <span class="relative flex items-center gap-1.5">
         <TriangleAlert size={20} strokeWidth={1} />
-        <span class="hidden md:inline">{t('app.emergency_stop')}</span>
+        <span class="cc2-header-action-label hidden md:inline">{t('app.emergency_stop')}</span>
       </span>
     </button>
   )
@@ -126,7 +127,7 @@ const RestartPrinter = () => {
       class="flex h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-edge px-3 disabled:opacity-40 md:px-4"
     >
       <RotateCw size={20} strokeWidth={1} />
-      <span class="hidden md:inline">{t('recovery.restart')}</span>
+      <span class="cc2-header-action-label hidden md:inline">{t('recovery.restart')}</span>
     </button>
   )
 }
@@ -277,8 +278,8 @@ export const Topbar = () => {
         <Menu size={22} strokeWidth={1} />
       </button>
       <HeaderTitle />
-      <div class="flex items-center gap-2">
-        <div class="flex h-11 items-center gap-2 rounded-md border border-edge px-3">
+      <div class="cc2-header-actions flex shrink-0 items-center gap-2">
+        <div class="cc2-header-status flex h-11 items-center gap-2 rounded-md border border-edge px-3">
           <PrinterIcon class="hidden size-6 sm:block" />
           <div>
             {link[0] === 'green' ? (
@@ -296,6 +297,7 @@ export const Topbar = () => {
           <Dot c={link[0]} />
           {t(link[1])}
         </div>
+        <UpdateNotice />
         <EStop />
         <RestartPrinter />
       </div>

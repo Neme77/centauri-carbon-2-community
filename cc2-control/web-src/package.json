@@ -31,6 +31,7 @@
     "test:spanish": "node preview/test-spanish.mjs",
     "test:materials": "node preview/test-material-presets.mjs",
     "test:list-pages": "node preview/test-files-history-pages.mjs",
+    "test:update-notice": "node preview/test-update-notice.mjs",
     "test:updates": "node preview/test-updates.mjs",
     "test:control-interactions": "node preview/test-control-interactions.mjs",
     "test:canvas-states": "node preview/test-canvas-states.mjs",

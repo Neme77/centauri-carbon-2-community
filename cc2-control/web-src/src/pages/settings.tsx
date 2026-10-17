@@ -26,7 +26,7 @@ import {
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
 import { usePoll } from '@/lib/poll'
-import { health, refreshHealth, refreshSetup } from '@/lib/state'
+import { health, nav, openSettings, type SettingsTab, refreshHealth, refreshSetup } from '@/lib/state'
 import { Updates } from './Updates'
 
 const TABS = [
@@ -36,6 +36,7 @@ const TABS = [
   [Info, 'settings.about'],
   [RefreshCw, 'updates.title'],
 ] as const
+const TAB_ROUTES: SettingsTab[] = ['connection', 'integrations', 'appearance', 'about', 'updates']
 const G = { size: 16, strokeWidth: 1 }
 const Dot = () => <i class="inline-block size-2 rounded-full bg-current align-middle" />
 const Field = ({ label, help, htmlFor, children }: { label: Key; help?: Key; htmlFor?: string; children: any }) => (
@@ -283,7 +284,7 @@ const Appearance = () => {
 export const Settings = () => {
   usePoll(refreshHealth, 5000)
   usePoll(refreshSetup, 5000)
-  const [tab, setTab] = useState(0)
+  const tab = TAB_ROUTES.indexOf(nav.use().settings)
   const h = health.use().data
   return (
     <div class="cc2-settings mx-auto max-w-4xl">
@@ -291,7 +292,7 @@ export const Settings = () => {
         <Tabs
           items={TABS.map(([Glyph, label]) => ({ id: label, label: t(label), icon: <Glyph {...G} /> }))}
           value={TABS[tab][1]}
-          onChange={id => setTab(TABS.findIndex(([, label]) => label === id))}
+          onChange={id => openSettings(TAB_ROUTES[TABS.findIndex(([, label]) => label === id)])}
         />
         <div class="max-w-4xl">
           {tab === 0 && <Connection />}

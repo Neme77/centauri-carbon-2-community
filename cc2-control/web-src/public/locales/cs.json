@@ -934,5 +934,10 @@
   "plates.created_without_mesh": "Profil podložky vytvořen. Před nasazením ji kalibrujte.",
   "plates.include_existing_mesh": "Zahrnout existující síť této strany",
   "plates.empty_profile_hint": "Nejprve vytvořte profil, poté kalibrujte a vyberte jej jako cíl uložení.",
-  "plates.calibrate_plate": "Kalibrovat tuto podložku"
+  "plates.calibrate_plate": "Kalibrovat tuto podložku",
+  "updates.notifications": "Oznámení o aktualizacích",
+  "updates.notice_available": "K dispozici je CC2 Control {version}",
+  "updates.open": "Otevřít aktualizace",
+  "updates.notice_manual": "Stažení a instalace vyžadují vaše potvrzení v Nastavení.",
+  "updates.dismiss": "Zavřít"
 }

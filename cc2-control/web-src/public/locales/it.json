@@ -934,5 +934,10 @@
   "plates.created_without_mesh": "Profilo piatto creato. Calibralo prima di montarlo.",
   "plates.include_existing_mesh": "Includi la mesh già presente per questo lato",
   "plates.empty_profile_hint": "Crea prima il profilo, poi calibra selezionandolo come destinazione.",
-  "plates.calibrate_plate": "Calibra questo piatto"
+  "plates.calibrate_plate": "Calibra questo piatto",
+  "updates.notifications": "Notifiche aggiornamenti",
+  "updates.notice_available": "CC2 Control {version} disponibile",
+  "updates.open": "Vai agli aggiornamenti",
+  "updates.notice_manual": "Download e installazione richiedono la tua conferma nelle Impostazioni.",
+  "updates.dismiss": "Chiudi"
 }

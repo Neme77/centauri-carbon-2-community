@@ -268,3 +268,13 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-fan-row { gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
   .cc2-fan-row > span:first-child { grid-column: 1 / -1; }
 }
+
+/* The bell shares the emergency-action area; touch targets remain 44 px. */
+.cc2-emergency-stop { min-width: 44px; font-size: 12px; }
+@media (max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
+  .cc2-header-action-label { display: none; }
+  .cc2-header-actions { min-width: 0; flex-shrink: 1; }
+  .cc2-header-status { min-width: 0; }
+  .cc2-header-status > div { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .cc2-portrait-brand { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+}

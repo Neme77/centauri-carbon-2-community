@@ -900,5 +900,10 @@
   "updates.idle": "空闲",
   "updates.selected": "所选版本：",
   "updates.reload": "重新加载 CC2 Control",
-  "updates.notes_in_english": "发行说明为英语：暂无翻译"
+  "updates.notes_in_english": "发行说明为英语：暂无翻译",
+  "updates.notifications": "更新通知",
+  "updates.notice_available": "CC2 Control {version} 可用",
+  "updates.open": "打开更新",
+  "updates.notice_manual": "下载和安装需要在设置中确认。",
+  "updates.dismiss": "关闭"
 }

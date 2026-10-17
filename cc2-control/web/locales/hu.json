@@ -914,5 +914,10 @@
   "updates.idle": "Tétlen",
   "updates.selected": "Kiválasztott verzió:",
   "updates.reload": "CC2 Control újratöltése",
-  "updates.notes_in_english": "Kiadási megjegyzések angolul (magyar fordítás nem érhető el)"
+  "updates.notes_in_english": "Kiadási megjegyzések angolul (magyar fordítás nem érhető el)",
+  "updates.notifications": "Frissítési értesítések",
+  "updates.notice_available": "Elérhető: CC2 Control {version}",
+  "updates.open": "Frissítések megnyitása",
+  "updates.notice_manual": "A letöltéshez és telepítéshez megerősítés szükséges a Beállításokban.",
+  "updates.dismiss": "Bezárás"
 }

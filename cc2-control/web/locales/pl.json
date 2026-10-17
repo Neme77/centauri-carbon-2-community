@@ -934,5 +934,10 @@
   "plates.created_without_mesh": "Profil płyty utworzony. Skalibruj ją przed zamontowaniem.",
   "plates.include_existing_mesh": "Dołącz istniejącą siatkę tej strony",
   "plates.empty_profile_hint": "Najpierw utwórz profil, potem skalibruj i wybierz go jako miejsce zapisu.",
-  "plates.calibrate_plate": "Kalibruj tę płytę"
+  "plates.calibrate_plate": "Kalibruj tę płytę",
+  "updates.notifications": "Powiadomienia o aktualizacjach",
+  "updates.notice_available": "Dostępna wersja CC2 Control {version}",
+  "updates.open": "Otwórz aktualizacje",
+  "updates.notice_manual": "Pobieranie i instalacja wymagają potwierdzenia w Ustawieniach.",
+  "updates.dismiss": "Zamknij"
 }
