@@ -456,7 +456,6 @@
   "settings.mqtt_connection": "MQTT 连接",
   "settings.network_and_device_access_settings": "网络与设备访问设置",
   "settings.octo_klipper_test_endpoint": "Octo/Klipper 测试端点",
-  "settings.orca_compatibility_ready_text": "Orca 兼容性就绪：{text}",
   "settings.orca_compatibility_unavailable": "Orca 兼容性不可用：{error}",
   "settings.orca_sync_ready": "CC2 Moonraker 已响应，可读取 {count} 个 Canvas 槽位的数据。请在 OrcaSlicer 中将打印机代理设置为 Moonraker。",
   "settings.orca_sync_pending": "CC2 Moonraker 已响应，但尚无 Canvas 槽位数据。请检查 Canvas 状态后重试。",

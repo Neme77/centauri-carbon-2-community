@@ -500,7 +500,6 @@
   "settings.mqtt_connection": "MQTT-kapcsolat",
   "settings.network_and_device_access_settings": "Hálózati és eszközhozzáférési beállítások",
   "settings.octo_klipper_test_endpoint": "Octo/Klipper tesztvégpont",
-  "settings.orca_compatibility_ready_text": "Az Orca-kompatibilitás kész: {text}",
   "settings.orca_compatibility_unavailable": "Az Orca-kompatibilitás nem érhető el: {error}",
   "settings.orca_sync_ready": "A CC2 Moonraker-végpont válaszol, és {count} Canvas-rekesz adata elérhető. Az OrcaSlicer nyomtatóügynöke legyen Moonraker.",
   "settings.orca_sync_pending": "A CC2 Moonraker-végpont válaszol, de nem érhetők el a Canvas-rekeszek adatai. Ellenőrizd a Canvas állapotát, majd próbáld újra.",

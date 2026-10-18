@@ -456,7 +456,6 @@
   "settings.mqtt_connection": "Připojení MQTT",
   "settings.network_and_device_access_settings": "Nastavení sítě a přístupu k zařízení",
   "settings.octo_klipper_test_endpoint": "Testovací endpoint Octo/Klipper",
-  "settings.orca_compatibility_ready_text": "Kompatibilita s Orca připravena: {text}",
   "settings.orca_compatibility_unavailable": "Kompatibilita s Orca nedostupná: {error}",
   "settings.orca_sync_ready": "Rozhraní CC2 Moonraker odpovídá a poskytuje údaje o {count} pozicích Canvas. V OrcaSlicer nastavte agenta tiskárny na Moonraker.",
   "settings.orca_sync_pending": "Rozhraní CC2 Moonraker odpovídá, ale údaje o pozicích Canvas nejsou dostupné. Zkontrolujte stav Canvas a zkuste to znovu.",

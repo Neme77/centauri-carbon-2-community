@@ -456,7 +456,6 @@
   "settings.mqtt_connection": "MQTT Connection",
   "settings.network_and_device_access_settings": "Network and device access settings",
   "settings.octo_klipper_test_endpoint": "Octo/Klipper test endpoint",
-  "settings.orca_compatibility_ready_text": "Orca compatibility ready: {text}",
   "settings.orca_compatibility_unavailable": "Orca compatibility unavailable: {error}",
   "settings.orca_sync_ready": "CC2 Moonraker responds with {count} Canvas slot records. Set OrcaSlicer's printer agent to Moonraker.",
   "settings.orca_sync_pending": "CC2 Moonraker responds, but no Canvas slot records are available. Check Canvas status and try again.",
