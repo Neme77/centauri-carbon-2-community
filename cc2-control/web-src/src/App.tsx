@@ -14,6 +14,7 @@ import { History } from '@/pages/history'
 import { Bed } from '@/pages/bed'
 import { Canvas } from '@/pages/canvas'
 import { Spools } from '@/pages/spools'
+import { PandaBreath } from '@/pages/pandabreath'
 import { Console } from '@/pages/console'
 import { Settings } from '@/pages/settings'
 
@@ -26,6 +27,7 @@ const pages = {
   bed: Bed,
   canvas: Canvas,
   spools: Spools,
+  pandabreath: PandaBreath,
   console: Console,
   settings: Settings,
 }

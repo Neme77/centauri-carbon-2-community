@@ -12,6 +12,7 @@ export type Page =
   | 'bed'
   | 'canvas'
   | 'spools'
+  | 'pandabreath'
   | 'console'
   | 'settings'
 const PAGES: Page[] = [
@@ -23,6 +24,7 @@ const PAGES: Page[] = [
   'bed',
   'canvas',
   'spools',
+  'pandabreath',
   'console',
   'settings',
 ]

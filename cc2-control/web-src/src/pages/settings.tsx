@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
-import { Input, PasswordInput, Select } from '@/components/ui/field'
+import { Input, PasswordInput, Select, Switch } from '@/components/ui/field'
 import { Tabs } from '@/components/ui/tabs'
 import { GithubIcon } from '@/components/github-icon'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2, Archive, FileDown } from 'lucide-preact'
@@ -27,6 +27,7 @@ import {
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
 import { usePoll } from '@/lib/poll'
+import { pandabreath, setPandaBreathEnabled, setPandaBreathHost } from '@/lib/pandabreath'
 import { health, nav, openSettings, type SettingsTab, refreshHealth, refreshSetup } from '@/lib/state'
 import { Updates } from './Updates'
 import { Backup } from './Backup'
@@ -192,6 +193,12 @@ const Integrations = () => {
     }
   }
   const row = 'my-2 grid items-center gap-2.5 cc2-md:grid-cols-[230px_1fr_auto]'
+  const db = pandabreath.use()
+  const [dbHost, setDbHost] = useState(db.host)
+  const saveDbHost = () => {
+    if (setPandaBreathHost(dbHost)) notify(t('settings.pandabreath_address_saved'))
+    else notify(t('settings.pandabreath_address_invalid'), 'error')
+  }
   return (
     <Card>
       <CardHead icon="plug" title="settings.integrations" sub="settings.service_configuration_for_local" />
@@ -219,6 +226,32 @@ const Integrations = () => {
           {t('settings.test_orca')}
         </Button>
       </div>
+      <div class={row}>
+        <b>{t('settings.pandabreath_page')}</b>
+        <span class="text-muted">{t('settings.pandabreath_page_description')}</span>
+        <Switch
+          on={db.enabled}
+          label={t('settings.pandabreath_page')}
+          onClick={() => setPandaBreathEnabled(!db.enabled)}
+        />
+      </div>
+      {db.enabled && (
+        <div class={row}>
+          <label for="pandabreath-host">
+            <b>{t('settings.pandabreath_address')}</b>
+          </label>
+          <Input
+            id="pandabreath-host"
+            value={dbHost}
+            placeholder="dragonbreath.local"
+            spellcheck={false}
+            autocapitalize="off"
+            onInput={e => setDbHost(e.currentTarget.value)}
+            onKeyDown={e => e.key === 'Enter' && saveDbHost()}
+          />
+          <Button onClick={saveDbHost}>{t('settings.save_address')}</Button>
+        </div>
+      )}
     </Card>
   )
 }

@@ -127,6 +127,8 @@ wget -qO- http://127.0.0.1:7125/printer/objects/list
 
 The bridge also exposes object queries and WebSocket compatibility required by supported clients.
 
+**Settings → Integrations → Panda Breath page** (off by default) adds a menu page that embeds the Panda Breath's own web page in a sandboxed frame. The address defaults to `dragonbreath.local`, the mDNS name of the DragonBreath firmware; with the stock firmware, enter the device's IP address. CC2 Control does not contact the device: the browser loads the page directly, so it must be on the Panda Breath's network. Both settings are stored in the browser. Tested with DragonBreath firmware only.
+
 ## Canvas, material presets and G-code library
 
 CC2 Control supports native four-slot ELEGOO Canvas discovery and protected load, unload, material-editing and spool-mapping workflows.

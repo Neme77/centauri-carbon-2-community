@@ -8,6 +8,7 @@ import {
   Menu,
   RotateCw,
   Files as FilesIcon,
+  Flame,
   Gauge,
   Grid3x3,
   History,
@@ -26,6 +27,7 @@ import { type Key, t, tState, tpl } from '@/lib/i18n'
 import { control, errText, notify, post, toast } from '@/lib/api'
 import { ask } from '@/lib/confirm'
 import { printerError, printerRequest } from '@/lib/machine'
+import { pandabreath } from '@/lib/pandabreath'
 import { refreshPrinter, health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
 // Same query as the compact layout in index.css.
@@ -40,6 +42,7 @@ const items: [Page, NavIcon, Key][] = [
   ['bed', Grid3x3, 'common.bed_levelling'],
   ['canvas', CanvasIcon, 'common.canvas'],
   ['spools', Spool, 'spools.title'],
+  ['pandabreath', Flame, 'common.pandabreath'],
   ['console', SquareTerminal, 'common.console'],
   ['settings', Settings, 'common.settings'],
 ]
@@ -139,6 +142,7 @@ export const Sidebar = () => {
   const questions = printer.use().data?.spools?.questions?.length || 0
   const { collapsed } = menu.use()
   const { open } = mobileMenu.use()
+  const { enabled: pandabreathOn } = pandabreath.use() // optional page, off unless turned on
   const aside = useRef<HTMLElement>(null)
   useEffect(() => {
     if (!open) {
@@ -199,30 +203,32 @@ export const Sidebar = () => {
           class="mt-2 grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto"
           aria-label={t('app.main_navigation')}
         >
-          {items.map(([p, Glyph, label]) => (
-            <a
-              key={p}
-              href={`#${p}`}
-              onClick={() => mobileMenu.set({ open: false })}
-              aria-current={page === p ? 'page' : undefined}
-              title={t(label)}
-              class={cn(
-                'relative flex h-13 items-center justify-center gap-3.5 border-l-4 border-transparent hover:bg-field',
-                !collapsed && 'md:justify-start md:px-4',
-                page === p && 'border-cyan bg-field text-cyan'
-              )}
-            >
-              <Glyph size={24} strokeWidth={1} class="shrink-0" />
-              {p === 'spools' && questions > 0 && (
-                <i
-                  class="absolute left-9 top-2.5 size-2.5 rounded-full bg-amber"
-                  title={t('spools.question_tag')}
-                  aria-hidden="true"
-                />
-              )}
-              <span class={cn('hidden', !collapsed && 'md:inline')}>{t(label)}</span>
-            </a>
-          ))}
+          {items
+            .filter(([p]) => p !== 'pandabreath' || pandabreathOn)
+            .map(([p, Glyph, label]) => (
+              <a
+                key={p}
+                href={`#${p}`}
+                onClick={() => mobileMenu.set({ open: false })}
+                aria-current={page === p ? 'page' : undefined}
+                title={t(label)}
+                class={cn(
+                  'relative flex h-13 items-center justify-center gap-3.5 border-l-4 border-transparent hover:bg-field',
+                  !collapsed && 'md:justify-start md:px-4',
+                  page === p && 'border-cyan bg-field text-cyan'
+                )}
+              >
+                <Glyph size={24} strokeWidth={1} class="shrink-0" />
+                {p === 'spools' && questions > 0 && (
+                  <i
+                    class="absolute left-9 top-2.5 size-2.5 rounded-full bg-amber"
+                    title={t('spools.question_tag')}
+                    aria-hidden="true"
+                  />
+                )}
+                <span class={cn('hidden', !collapsed && 'md:inline')}>{t(label)}</span>
+              </a>
+            ))}
         </nav>
         <div class="mt-auto hidden shrink-0 border-t border-edge md:block">
           <button
