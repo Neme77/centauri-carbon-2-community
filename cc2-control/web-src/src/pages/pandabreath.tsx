@@ -1,7 +1,7 @@
 import { ExternalLink } from 'lucide-preact'
 import { Card, Page } from '@/components/ui/card'
 import { t, tpl } from '@/lib/i18n'
-import { pandabreath } from '@/lib/pandabreath'
+import { pandabreath, pandabreathHost, pandabreathName } from '@/lib/pandabreath'
 import { openSettings } from '@/lib/state'
 
 const I = { size: 16, strokeWidth: 1 }
@@ -9,12 +9,14 @@ const I = { size: 16, strokeWidth: 1 }
 // The Panda Breath's own page, embedded as is. The frame is sandboxed to what that page needs: scripts and
 // its own storage (control token), forms, prompts (token entry) and links that open a new tab.
 export const PandaBreath = () => {
-  const { enabled, host } = pandabreath.use()
-  if (!enabled)
+  const s = pandabreath.use()
+  const name = pandabreathName(s)
+  const host = pandabreathHost(s)
+  if (!s.enabled)
     return (
-      <Page title="common.pandabreath">
+      <Page title={name}>
         <Card>
-          <p class="text-muted">{t('pandabreath.disabled')}</p>
+          <p class="text-muted">{tpl('pandabreath.disabled', { name: t(name) })}</p>
           <button type="button" class="mt-2 text-cyan hover:underline" onClick={() => openSettings('integrations')}>
             {t('pandabreath.open_integrations')}
           </button>
@@ -24,7 +26,7 @@ export const PandaBreath = () => {
   const url = `http://${host}/`
   return (
     <Page
-      title="common.pandabreath"
+      title={name}
       sub="pandabreath.description"
       tags={
         <a
@@ -41,11 +43,11 @@ export const PandaBreath = () => {
       <iframe
         key={url}
         src={url}
-        title={t('common.pandabreath')}
+        title={t(name)}
         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"
         class="block h-[calc(100dvh-12rem)] min-h-[480px] w-full rounded-lg border border-edge bg-panel"
       />
-      <p class="mt-2 text-xs text-muted">{tpl('pandabreath.frame_note', { host })}</p>
+      <p class="mt-2 text-xs text-muted">{tpl('pandabreath.frame_note', { host, name: t(name) })}</p>
     </Page>
   )
 }
