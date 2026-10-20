@@ -21,6 +21,7 @@ Community firmware, local printer control and reproducible build tools for the *
 | --- | --- | --- |
 | First installation, printer IP and LAN access code | [First setup](docs/FIRST_RUN.md) | [Prima installazione](docs/FIRST_RUN.it.md) |
 | OrcaSlicer connection, upload and Canvas filament sync | [OrcaSlicer guide](docs/ORCASLICER.md) | [Guida OrcaSlicer](docs/ORCASLICER.it.md) |
+| Camera freezes, MJPEG troubleshooting and safe checks | [Camera diagnostics](docs/CAMERA_DIAGNOSTICS.md) | [Guida (English)](docs/CAMERA_DIAGNOSTICS.md) |
 | Latest complete firmware and retained features | [Changelog](CHANGELOG.md#community-firmware-v441--cc2-control-1210--2026-10-14) | [Novità della release](CHANGELOG.md#community-firmware-v441--cc2-control-1210--2026-10-14) |
 
 ## V4.4.1 — complete firmware with CC2 Control 1.2.10

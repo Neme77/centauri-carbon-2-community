@@ -216,3 +216,7 @@ history records, not G-code or video files; download any video you want before d
 Starting live camera view in another CC2 Control tab/device hands it over on the previous page's next
 printer-state poll. **Watch here** takes it back explicitly. The camera window follows the same rule.
 Failed ownership requests leave streaming stopped. Direct Elegoo clients remain independent.
+
+If the MJPEG stream freezes, follow the [read-only camera diagnostic guide](CAMERA_DIAGNOSTICS.md)
+before restarting processes or changing printer/network settings. The documented
+vendor `ai_camera` investigation is distinct from the CC2 Control viewer's ownership behavior.
