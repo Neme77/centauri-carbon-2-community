@@ -1,0 +1,15 @@
+name: Camera one-boot R2 trial
+on:
+  push:
+    branches: [test/camera-one-boot-r1]
+    paths:
+      - 'experimental/camera-boot-reap-r1/**'
+      - '.github/workflows/camera-one-boot.yml'
+permissions:
+  contents: read
+jobs:
+  boot-fixtures:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 experimental/camera-boot-reap-r1/test_boot.py
