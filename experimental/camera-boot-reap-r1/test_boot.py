@@ -54,6 +54,7 @@ echo 'libhv.so => /opt/lib/libhv.so'
 ''', True)
         (self.proc / 'exe').symlink_to(self.camera)
         (self.proc / 'maps').write_text('fixture, no trial mapping\n')
+        (self.proc / 'status').write_text('State:\tS (sleeping)\nVmSize:\t100 kB\nVmRSS:\t50 kB\nThreads:\t7\n')
         shutil.copyfile(noop, self.source / 'libcc2-camera-reap-r2.so')
         helper = '#!/bin/sh\n[ "${TEST_HELPER_FAIL:-0}" = 0 ] || exit 1\necho fixture-runtime-check\n'
         write(self.source / 'cc2-camera-reap-check', helper, True)
@@ -129,6 +130,28 @@ with tempfile.TemporaryDirectory(prefix='cc2-boot-tests-') as temporary:
     assert second == ['0', '0', 'unset'], second
     f.run('rollback')
     assert f.init.read_bytes() == ORIGINAL
+
+    # Status must bind the marker to the current PID and reject forced-LAN activation.
+    f = Fixture(parent, noop); f.run('stage')
+    (f.proc / 'maps').write_text(str(f.base / 'libcc2-camera-reap-r2.so') + '\n')
+    marker = f.root / 'tmp/cc2-camera-reap.status'
+    marker.write_text('trial=R2 pid=12345 patched=1 enable_lan_once=0 spawned=1 reaped=0\n')
+    f.run('status')
+    marker.write_text('trial=R2 pid=12345 patched=1 enable_lan_once=1 spawned=1 reaped=0\n')
+    f.run('status', expected=1)
+    marker.write_text('trial=R2 pid=99999 patched=1 enable_lan_once=0 spawned=1 reaped=0\n')
+    f.run('status', expected=1)
+
+    # The inserted startup line falls back to the native camera if /opt/usr payload is absent.
+    f = Fixture(parent, noop); f.run('stage')
+    shutil.move(f.base, f.root / 'payload-not-mounted')
+    result = subprocess.run(['sh', str(f.init), 'start'], env=f.env, text=True, capture_output=True, timeout=15)
+    assert result.returncode == 0 and f.launches.read_text().splitlines() == ['unset|unset|unset'], result
+
+    # No duplicate camera on an already running service, even if a trial was armed.
+    f = Fixture(parent, noop); f.run('stage')
+    result = subprocess.run(['sh', str(f.base / 'boot-camera.sh')], env=f.env, text=True, capture_output=True, timeout=15)
+    assert result.returncode != 0 and not f.launches.exists() and not (f.base / 'armed').exists()
     f.run('rollback')
     assert f.init.read_bytes() == ORIGINAL
 
