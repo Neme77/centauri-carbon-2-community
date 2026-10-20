@@ -554,6 +554,7 @@
   "canvas.unload_restart_busy": "Ponowne uruchomienie anulowano, ponieważ drukarka stała się zajęta. Uruchom ją ponownie później, aby zastosować odległość.",
   "canvas.unload_restart_failed": "Nie udało się ponownie uruchomić drukarki. Uruchom ją ponownie później, aby zastosować odległość.",
   "canvas.unload_above_range": "Konfiguracja drukarki ustawia {value} mm, więcej niż {max} mm akceptowane przez oryginalne oprogramowanie, więc zmieniono ją poza CC2 Control. Zapisanie tutaj ją zastąpi.",
+  "canvas.unload_extended": "Ta drukarka używa programu z limitem wycofania podniesionym do {max} mm. Przed powrotem do oryginalnego programu ustaw najwyżej {stock} mm, inaczej drukarka się nie uruchomi.",
   "canvas.unload_not_editable": "Plik autosave.cfg tej drukarki ma układ, którego CC2 Control nie edytuje, więc odległości nie można tu zmienić.",
   "substate.receiving_file": "Odbieranie pliku",
   "substate.heating_nozzle": "Nagrzewanie dyszy",

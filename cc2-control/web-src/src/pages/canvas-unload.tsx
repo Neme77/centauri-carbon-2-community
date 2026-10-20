@@ -7,13 +7,16 @@ import { ask } from '@/lib/confirm'
 import { type Key, t, tpl } from '@/lib/i18n'
 
 const I = { size: 16, strokeWidth: 1 }
+const STOCK_MAX = 350 // what the stock firmware accepts
 
 // GET /api/canvas/unload: [canvas_dev] unload_fila_dist as configured by the printer and as overridden from here
 // (autosave.cfg). The printer reads it at start-up, so a saved value stays pending until the next restart.
+// `extended`: the printer runs the program with the firmware's 350 mm limit raised, so max is higher.
 type Unload = {
   editable: boolean
   min: number
   max: number
+  extended?: boolean
   configured: number | null
   override: number | null
   pending_restart: boolean
@@ -135,6 +138,9 @@ export const CanvasUnload = ({ idle }: { idle: boolean }) => {
       <p class="mt-2 text-[13px] text-muted">
         {edited && !valid ? tpl('canvas.unload_invalid', { min, max }) : tpl('canvas.unload_hint', { min, max })}
       </p>
+      {state.extended && (
+        <p class="mt-2 text-[13px] text-cyan">{tpl('canvas.unload_extended', { max, stock: STOCK_MAX })}</p>
+      )}
       {configured !== null && configured > max && (
         <p class="mt-2 text-[13px] text-amber">{tpl('canvas.unload_above_range', { value: configured, max })}</p>
       )}

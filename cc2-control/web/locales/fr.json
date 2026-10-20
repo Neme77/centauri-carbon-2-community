@@ -554,6 +554,7 @@
   "canvas.unload_restart_busy": "Le redémarrage a été annulé car l'imprimante est devenue occupée. Redémarrez-la plus tard pour appliquer la distance.",
   "canvas.unload_restart_failed": "Impossible de redémarrer l'imprimante. Redémarrez-la plus tard pour appliquer la distance.",
   "canvas.unload_above_range": "La configuration de l'imprimante définit {value} mm, plus que les {max} mm acceptés par le firmware d'origine : elle a donc été modifiée en dehors de CC2 Control. Enregistrer ici la remplace.",
+  "canvas.unload_extended": "Cette imprimante utilise le programme dont la limite de retrait est portée à {max} mm. Avant de revenir à un programme d'origine, réglez {stock} mm ou moins, sinon l'imprimante ne démarrera pas.",
   "canvas.unload_not_editable": "Le fichier autosave.cfg de cette imprimante a une structure que CC2 Control ne modifie pas : la distance ne peut pas être changée ici.",
   "substate.receiving_file": "Réception du fichier",
   "substate.heating_nozzle": "Chauffe de la buse",
