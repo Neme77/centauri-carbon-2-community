@@ -131,6 +131,9 @@ with tempfile.TemporaryDirectory(prefix='cc2-boot-tests-') as temporary:
     f.run('rollback')
     assert f.init.read_bytes() == ORIGINAL
 
+    f.run('rollback')
+    assert f.init.read_bytes() == ORIGINAL
+
     # Status must bind the marker to the current PID and reject forced-LAN activation.
     f = Fixture(parent, noop); f.run('stage')
     (f.proc / 'maps').write_text(str(f.base / 'libcc2-camera-reap-r2.so') + '\n')
