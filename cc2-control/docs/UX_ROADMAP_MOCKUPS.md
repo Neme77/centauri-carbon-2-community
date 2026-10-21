@@ -8,7 +8,7 @@ All displayed values are illustrative. The preview uses no external assets, prin
 
 - Emphasizes the current job state, progress, remaining time, elapsed time, and layer count.
 - Groups nozzle and bed actual/target temperatures, fan percentage, connection, and camera state.
-- Keeps print and camera actions visible while preserving the existing behavior and safety guards.
+- Shows print and camera actions as layout placeholders; implementation should retain existing behavior and safety guards.
 
 ## Canvas
 
