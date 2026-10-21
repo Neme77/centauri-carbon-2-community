@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Sélectionné",
   "job.bed_map_missing": "{n} objets n’ont pas de position exploitable sur le plateau. Sélectionnez-les dans la liste.",
   "job.bed_map_choose": "Sélectionnez un objet sur le plan ou dans la liste.",
-  "job.bed_map_close": "Fermer le plan du plateau"
+  "job.bed_map_close": "Fermer le plan du plateau",
+  "files.sort": "Trier par",
+  "app.print_progress": "Progression de l'impression",
+  "app.sidebar": "Menu latéral"
 }

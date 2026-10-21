@@ -201,7 +201,7 @@ export const Console = () => {
             </div>
           </details>
         </Card>
-        <div class="grid content-start gap-3">
+        <div class="grid content-start gap-3.5">
           <Card>
             <CardHead icon="lock" title="console.protected_terminal" />
             <div
@@ -226,7 +226,7 @@ export const Console = () => {
               </div>
             </div>
             <div class="mt-3 border-t border-edge pt-3">
-              <h3 class="mb-2 font-semibold">{t('console.unlock_expert_mode')}</h3>
+              <h3 class="mb-2 text-base font-semibold">{t('console.unlock_expert_mode')}</h3>
               <Button wide variant="primary" onClick={toggleExpert}>
                 <Icon n={on ? 'lock' : 'unlock'} />
                 <span>{t(on ? 'console.lock_console' : 'console.unlock_console')}</span>

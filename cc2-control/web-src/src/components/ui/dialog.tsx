@@ -4,6 +4,11 @@ import { useEffect, useRef } from 'preact/hooks'
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
+// Every dialog title: same size and weight; callers set the margin that fits what follows (subtitle, eyebrow, content).
+export const DialogTitle = ({ children, class: c = '' }: { children: ComponentChildren; class?: string }) => (
+  <h2 class={`text-xl font-semibold ${c}`}>{children}</h2>
+)
+
 // Modal shell: Escape / backdrop click close it unless `locked`; focus moves in, stays in (Tab is trapped) and returns on close.
 export const Dialog = ({
   onClose,

@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks'
 import { Settings } from 'lucide-preact'
 import { PrintTuning } from '@/components/print-tuning'
 import { Card, CardHead } from '@/components/ui/card'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/field'
 import { Button } from '@/components/ui/button'
 import { Dot, Tag } from '@/components/ui/badge'
@@ -68,7 +68,7 @@ const QuickEditor = ({ onClose }: { onClose: () => void }) => {
   }
   return (
     <Dialog onClose={onClose} width={440}>
-      <h2 class="mb-1 text-xl font-semibold">{t('dashboard.configure_quick_actions')}</h2>
+      <DialogTitle class="mb-1">{t('dashboard.configure_quick_actions')}</DialogTitle>
       <p class="mb-4 text-muted">{t('dashboard.choose_four_protected_actions_or')}</p>
       {slots.map((action, n) => (
         <div key={n} class="my-2.5 grid grid-cols-[70px_1fr] items-center gap-2.5">

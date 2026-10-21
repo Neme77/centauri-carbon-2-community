@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Selected",
   "job.bed_map_missing": "{n} objects have no usable bed position. Select them from the list.",
   "job.bed_map_choose": "Select an object on the map or in the list.",
-  "job.bed_map_close": "Close bed map"
+  "job.bed_map_close": "Close bed map",
+  "files.sort": "Sort by",
+  "app.print_progress": "Print progress",
+  "app.sidebar": "Side menu"
 }

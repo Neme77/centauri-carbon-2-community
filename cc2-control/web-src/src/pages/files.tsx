@@ -203,12 +203,17 @@ export const Files = () => {
                 onInput={e => setQ(e.currentTarget.value)}
               />
             </div>
-            <Select class="col-span-2 cc2-md:col-span-1" value={loc} onChange={e => setLoc(e.currentTarget.value)}>
+            <Select
+              aria-label={t('files.storage')}
+              class="col-span-2 cc2-md:col-span-1"
+              value={loc}
+              onChange={e => setLoc(e.currentTarget.value)}
+            >
               <option value="all">{t('files.all_files')}</option>
               <option value="internal">{t('files.internal_memory')}</option>
               <option value="usb">{t('files.usb_drive')}</option>
             </Select>
-            <Select value={sort} onChange={e => setSort(e.currentTarget.value)}>
+            <Select aria-label={t('files.sort')} value={sort} onChange={e => setSort(e.currentTarget.value)}>
               <option value="newest">{t('files.newest_first')}</option>
               <option value="name">{t('common.name')}</option>
               <option value="size">{t('files.size')}</option>
@@ -235,6 +240,7 @@ export const Files = () => {
                 <input
                   type="checkbox"
                   title={t('files.select_all_shown_files')}
+                  aria-label={t('files.select_all_shown_files')}
                   checked={visible.length > 0 && visible.every(e => checked.has(key(e)))}
                   onChange={e => {
                     for (const x of visible) toggle(key(x), e.currentTarget.checked)
@@ -262,6 +268,7 @@ export const Files = () => {
                   <input
                     type="checkbox"
                     title={t('files.select_file')}
+                    aria-label={t('files.select_file')}
                     checked={checked.has(key(e))}
                     onClick={ev => ev.stopPropagation()}
                     onChange={ev => toggle(key(e), ev.currentTarget.checked)}

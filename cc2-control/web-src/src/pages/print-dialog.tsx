@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import { store } from '@/lib/store'
 import { Button } from '@/components/ui/button'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/field'
 import { errText, notify, post, request, toast } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
@@ -268,7 +268,7 @@ const Form = ({ job }: { job: Pending }) => {
     <Dialog onClose={close} locked={busy} width={820}>
       <form onSubmit={submit}>
         <div class="text-xs text-muted">CANVAS · {t('print.print_setup')}</div>
-        <h2 class="my-2 text-xl font-semibold">{t('print.choose_print_spool')}</h2>
+        <DialogTitle class="my-2">{t('print.choose_print_spool')}</DialogTitle>
         <div class="mb-4 text-muted [overflow-wrap:anywhere]">{job.path}</div>
         <div class="my-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[0, 1, 2, 3].map(i => (

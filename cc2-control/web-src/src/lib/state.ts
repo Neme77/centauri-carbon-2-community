@@ -47,6 +47,7 @@ export const nav = store(route())
 addEventListener('hashchange', () => {
   nav.set(route())
   window.scrollTo(0, 0)
+  document.querySelector('main')?.focus({ preventScroll: true }) // announces the new page to screen readers
 })
 export const openPage = (page: Page, bed: BedTab = 'mesh') => {
   const hash = `#${page}${page === 'bed' && bed !== 'mesh' ? `/${bed}` : ''}`

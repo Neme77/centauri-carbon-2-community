@@ -191,6 +191,7 @@ export const Sidebar = () => {
 
       <aside
         id="cc2-navigation"
+        aria-label={t('app.sidebar')}
         ref={aside}
         class={cn(
           'cc2-sidebar',
@@ -200,7 +201,7 @@ export const Sidebar = () => {
         )}
       >
         <nav
-          class="mt-2 grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto"
+          class="mt-2 grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto overflow-x-hidden"
           aria-label={t('app.main_navigation')}
         >
           {items
@@ -215,8 +216,7 @@ export const Sidebar = () => {
                   aria-current={page === p ? 'page' : undefined}
                   title={t(label)}
                   class={cn(
-                    'relative flex h-13 items-center justify-center gap-3.5 border-l-4 border-transparent hover:bg-field',
-                    !collapsed && 'md:justify-start md:px-4',
+                    'relative flex h-13 items-center gap-3.5 border-l-4 border-transparent pl-[14px] hover:bg-field', // same icon x collapsed or not
                     page === p && 'border-cyan bg-field text-cyan'
                   )}
                 >
@@ -228,7 +228,7 @@ export const Sidebar = () => {
                       aria-hidden="true"
                     />
                   )}
-                  <span class={cn('hidden', !collapsed && 'md:inline')}>{t(label)}</span>
+                  <span class={cn('hidden whitespace-nowrap', !collapsed && 'md:inline')}>{t(label)}</span>
                 </a>
               )
             })}
@@ -239,19 +239,20 @@ export const Sidebar = () => {
             onClick={toggleMenu}
             aria-expanded={!collapsed}
             title={t(collapsed ? 'app.expand_menu' : 'app.collapse_menu')}
-            class={cn(
-              'flex h-11 w-full items-center justify-center gap-3.5 text-muted hover:bg-field hover:text-fg',
-              !collapsed && 'md:justify-start md:px-5'
-            )}
+            class={cn('flex h-11 w-full items-center gap-3.5 pl-[19px] text-muted hover:bg-field hover:text-fg')}
           >
             {collapsed ? <PanelLeftOpen size={22} strokeWidth={1} /> : <PanelLeftClose size={22} strokeWidth={1} />}
-            {!collapsed && <span>{t('app.collapse_menu')}</span>}
+            {!collapsed && <span class="whitespace-nowrap">{t('app.collapse_menu')}</span>}
           </button>
-          {!collapsed && (
-            <div class="px-5 pb-3 text-center text-xs text-muted">
-              {t('app.version')} <b class="font-medium tabular-nums text-fg">{h ? `${h.version}` : '—'}</b>
-            </div>
-          )}
+          {/* Always rendered so the button above keeps the same y when the menu collapses. */}
+          <div
+            class={cn(
+              'h-7 overflow-hidden whitespace-nowrap px-5 pb-3 text-center text-xs text-muted',
+              collapsed && 'invisible'
+            )}
+          >
+            {t('app.version')} <b class="font-medium tabular-nums text-fg">{h ? `${h.version}` : '—'}</b>
+          </div>
         </div>
       </aside>
     </>
@@ -311,7 +312,12 @@ export const Topbar = () => {
         <RestartPrinter />
       </div>
       {v.active && (
-        <div class="absolute inset-x-0 bottom-0 h-1 bg-edge" role="progressbar" aria-valuenow={Math.round(v.progress)}>
+        <div
+          class="absolute inset-x-0 bottom-0 h-1 bg-edge"
+          role="progressbar"
+          aria-label={t('app.print_progress')}
+          aria-valuenow={Math.round(v.progress)}
+        >
           <i class="block h-full bg-cyan transition-[width]" style={{ width: `${v.progress}%` }} />
         </div>
       )}

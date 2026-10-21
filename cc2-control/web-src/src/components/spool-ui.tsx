@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { ChevronDown } from 'lucide-preact'
 import { cn } from '@/lib/utils'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input, Select } from '@/components/ui/field'
 import { Tag } from '@/components/ui/badge'
@@ -583,7 +583,7 @@ const SpoolChooser = ({
   return (
     <Dialog onClose={() => !busy && close()} locked={busy} width={700}>
       <div class="text-xs text-muted">{t('spools.title')}</div>
-      <h2 class="my-2 text-xl font-semibold">{tpl(title, { place: placeName(slot) })}</h2>
+      <DialogTitle class="my-2">{tpl(title, { place: placeName(slot) })}</DialogTitle>
       {tray && (
         <div class="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-edge bg-field/60 px-3 py-2 text-xs">
           <span class="text-muted">{t('spools.printer_reports')}</span>

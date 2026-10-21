@@ -184,7 +184,7 @@ export const Backup = () => {
         )}
         {preview && (
           <div class="my-3 rounded border border-edge p-3">
-            <h3 class="mb-2 font-semibold">{t('backup.preview')}</h3>
+            <h3 class="mb-2 text-base font-semibold">{t('backup.preview')}</h3>
             <p class="break-words text-sm text-muted">
               {tpl('backup.source', {
                 version: preview.version,

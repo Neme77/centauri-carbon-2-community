@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Seleccionado",
   "job.bed_map_missing": "{n} objetos no tienen una posición válida en la placa. Selecciónalos en la lista.",
   "job.bed_map_choose": "Selecciona un objeto en el mapa o en la lista.",
-  "job.bed_map_close": "Cerrar mapa de la placa"
+  "job.bed_map_close": "Cerrar mapa de la placa",
+  "files.sort": "Ordenar por",
+  "app.print_progress": "Progreso de la impresión",
+  "app.sidebar": "Menú lateral"
 }

@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Vybráno",
   "job.bed_map_missing": "{n} objektů nemá platnou polohu na podložce. Vyberte je ze seznamu.",
   "job.bed_map_choose": "Vyberte objekt na mapě nebo v seznamu.",
-  "job.bed_map_close": "Zavřít mapu podložky"
+  "job.bed_map_close": "Zavřít mapu podložky",
+  "files.sort": "Seřadit podle",
+  "app.print_progress": "Průběh tisku",
+  "app.sidebar": "Boční menu"
 }

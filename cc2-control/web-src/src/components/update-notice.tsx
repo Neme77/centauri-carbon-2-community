@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import { Bell, X } from 'lucide-preact'
 import { Button } from '@/components/ui/button'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { t, tpl } from '@/lib/i18n'
 import { health, openSettings } from '@/lib/state'
 import { compatible, newer, status, updateCatalog, updateChannel } from '@/lib/updates'
@@ -44,7 +44,7 @@ export const UpdateNotice = () => {
       {open && (
         <Dialog width={440} onClose={() => setOpen(false)}>
           <div class="mb-4 flex items-start justify-between gap-3">
-            <h2 class="text-lg font-semibold">{t('updates.notifications')}</h2>
+            <DialogTitle>{t('updates.notifications')}</DialogTitle>
             <Button
               variant="ghost"
               class="shrink-0 px-2"

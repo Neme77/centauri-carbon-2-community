@@ -6,7 +6,7 @@ import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
 import { Input } from '@/components/ui/field'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Notice, Warn } from '@/components/shared'
 import { draftFields, draftFrom, draftProblem, placeName, SpoolEditor, SpoolMeter, Swatch } from '@/components/spool-ui'
 import { errText, notify } from '@/lib/api'
@@ -199,7 +199,7 @@ const InPrinter = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: 
   return (
     <Card>
       <CardHead icon="canvas" title="spools.in_printer" />
-      <div class="grid gap-2.5 cc2-sm:grid-cols-2 cc2-lg:grid-cols-3 cc2-xl:grid-cols-5">
+      <div class="grid gap-3.5 cc2-sm:grid-cols-2 cc2-lg:grid-cols-3 cc2-xl:grid-cols-5">
         {lib.slots.map(s => (
           <SlotCard key={s.slot} lib={lib} s={s} busy={busy} act={act} />
         ))}
@@ -456,7 +456,7 @@ const SpoolForm = ({
     })
   return (
     <Dialog onClose={close} locked={busy} width={680}>
-      <h2 class="mb-4 text-xl font-semibold">{t(spool ? 'spools.edit_spool' : 'spools.new_spool')}</h2>
+      <DialogTitle class="mb-4">{t(spool ? 'spools.edit_spool' : 'spools.new_spool')}</DialogTitle>
       <SpoolEditor draft={draft} set={setDraft} create={!spool} />
       {!spool && <p class="mt-3 text-xs text-muted">{t('spools.new_spool_storage')}</p>}
       <div class="mt-5 flex flex-wrap justify-end gap-2.5">
@@ -523,7 +523,7 @@ const Weigh = ({ spool, busy, act, close }: { spool: Spool; busy: boolean; act: 
     })
   return (
     <Dialog onClose={close} locked={busy} width={520}>
-      <h2 class="mb-1 text-xl font-semibold">{t('spools.weigh_title')}</h2>
+      <DialogTitle class="mb-1">{t('spools.weigh_title')}</DialogTitle>
       <p class="mb-4 text-xs text-muted [overflow-wrap:anywhere]">
         {spoolLabel(spool)} · {tpl('spools.counted_now', { grams: g(spool.remaining) })}
       </p>
@@ -666,7 +666,7 @@ const Inventory = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: 
           })}
         </p>
       )}
-      <div class="grid gap-2.5">
+      <div class="grid gap-3.5">
         {brands.map(brand => {
           const key = brand.other ? '~other' : brand.key
           const header = brand.label || brand.other

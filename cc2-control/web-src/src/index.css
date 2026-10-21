@@ -82,7 +82,8 @@
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400â€“700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+main:focus { outline: none; } /* focus lands here after navigation, it is not a control */
 input[type=range], input[type=checkbox], input[type=radio], progress { accent-color: var(--cyan); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -159,7 +160,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-header-title { height: 48px; }
   .cc2-header-title h1 { font-size: 29px; bottom: 5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cc2-header-title .cc2-full-brand > svg { top: 43.2px; }
-  .cc2-topbar > div:last-child > div, .cc2-topbar > div:last-child > button { height: 36px; font-size: 12px; }
+  .cc2-topbar > div:last-child > :is(div, button):not([role="presentation"]) { height: 36px; font-size: 12px; }
   .cc2-main section { padding: 12px; }
   .cc2-main section h2 { font-size: 14px; }
   .cc2-main button:not([role="switch"]), .cc2-main input:not([type="range"], [type="checkbox"], [type="radio"]), .cc2-main select { min-height: 32px; font-size: 13px; }

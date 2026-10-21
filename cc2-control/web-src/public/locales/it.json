@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Selezionato",
   "job.bed_map_missing": "{n} oggetti non hanno una posizione valida sul piatto. Selezionali dall’elenco.",
   "job.bed_map_choose": "Seleziona un oggetto sulla mappa o nell’elenco.",
-  "job.bed_map_close": "Chiudi mappa del piatto"
+  "job.bed_map_close": "Chiudi mappa del piatto",
+  "files.sort": "Ordina per",
+  "app.print_progress": "Avanzamento della stampa",
+  "app.sidebar": "Menu laterale"
 }

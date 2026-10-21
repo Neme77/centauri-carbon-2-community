@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/field'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { errText, notify, post, request } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 
@@ -48,7 +48,7 @@ export const SetupDialog = () => {
   return (
     <Dialog locked>
       <form onSubmit={submit}>
-        <h2 class="mb-2 text-2xl font-semibold">{t('setup.connect_cc2_control')}</h2>
+        <DialogTitle class="mb-2">{t('setup.connect_cc2_control')}</DialogTitle>
         <p class="mb-4 leading-relaxed text-muted">{t('setup.enter_the_lan_access_code_shown')}</p>
         <PasswordInput
           autoComplete="off"

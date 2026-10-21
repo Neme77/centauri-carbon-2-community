@@ -1,6 +1,6 @@
 import { X } from 'lucide-preact'
 import { Button } from '@/components/ui/button'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { t, tpl } from '@/lib/i18n'
 import { objects } from '@/lib/objects'
 import { BED_SIZE, onBed } from '@/lib/object-layout'
@@ -25,7 +25,7 @@ export const ObjectBedMap = ({
   return (
     <Dialog onClose={onClose} width={880} class="max-w-[calc(100vw-2rem)]" label={t('job.bed_map')}>
       <div class="mb-3 flex items-center justify-between gap-3 border-b border-edge pb-3">
-        <h2 class="text-lg font-semibold">{t('job.bed_map')}</h2>
+        <DialogTitle>{t('job.bed_map')}</DialogTitle>
         <Button onClick={onClose} aria-label={t('job.bed_map_close')}>
           <X size={18} />
         </Button>

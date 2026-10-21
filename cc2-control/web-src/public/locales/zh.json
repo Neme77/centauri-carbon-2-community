@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "已选择",
   "job.bed_map_missing": "{n} 个对象没有有效的平台位置。请从列表中选择。",
   "job.bed_map_choose": "请在地图或列表中选择对象。",
-  "job.bed_map_close": "关闭平台地图"
+  "job.bed_map_close": "关闭平台地图",
+  "files.sort": "排序方式",
+  "app.print_progress": "打印进度",
+  "app.sidebar": "侧边菜单"
 }

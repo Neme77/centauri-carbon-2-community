@@ -6,7 +6,7 @@ import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pip, Tag } from '@/components/ui/badge'
 import { Select } from '@/components/ui/field'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Row } from '@/components/shared'
 import { CanvasUnload } from './canvas-unload'
 import { control, errText, notify, post } from '@/lib/api'
@@ -74,7 +74,7 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
   return (
     <Dialog onClose={onClose}>
       <form onSubmit={submit}>
-        <h2 class="mb-4 text-xl font-semibold">{t('canvas.choose_material_and_colour')}</h2>
+        <DialogTitle class="mb-4">{t('canvas.choose_material_and_colour')}</DialogTitle>
         <label htmlFor="material-profile" class="mb-1.5 mt-3 block text-muted">
           {t('canvas.material_profile')}
         </label>
@@ -465,7 +465,7 @@ export const Canvas = () => {
           </Card>
         </div>
       </div>
-      <Card data-canvas-timeline>
+      <Card data-canvas-timeline class="mt-3.5">
         <CardHead
           icon="history"
           title="canvas.timeline_title"
