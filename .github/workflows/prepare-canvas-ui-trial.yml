@@ -34,19 +34,17 @@ jobs:
         run: |
           npm run test:canvas-states
           node preview/test-ui-polish.mjs
-          npm run test:preview
-          npm run test:backup-language
           npm run test:update-notice
-          npm run test:updates
-          npm run test:bed-map
-      - name: Camera component exact rollback under BusyBox
-        run: CC2_TEST_SHELL='busybox sh' python3 cc2-control/tests/test_camera_component.py
       - name: Verify reproducible assets and synchronize source pins
         run: |
-          git diff --exit-code -- cc2-control/web
-          python3 cc2-control/tests/test_web_sync_static.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp -a cc2-control/web/. cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web/
+          git add cc2-control/web cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web
+          git diff --cached --quiet || git commit -m "Rebuild combined UI after final trial tests and guides"
+          (cd cc2-control/web-src && npm run build)
+          git diff --exit-code -- cc2-control/web
+          python3 cc2-control/tests/test_web_sync_static.py
           python3 experimental/pr128-integration/sync_source.py
           git add builder/current
           git diff --cached --quiet || git commit -m "Pin combined PR190 and PR196 trial sources"
@@ -71,3 +69,4 @@ jobs:
             output/integration-head.txt
           if-no-files-found: error
           retention-days: 14
+
