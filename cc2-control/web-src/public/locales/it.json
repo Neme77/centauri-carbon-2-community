@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "I comandi che aggirano la cinematica restano bloccati",
   "console.lock_console": "Blocca la console",
   "console.locked": "Bloccato",
-  "console.messages_received": "Messaggi ricevuti",
+  "console.messages_received": "Messaggi ricevuti:",
   "console.motion_commands_require_homing": "I comandi di movimento richiedono l’homing",
   "console.only_send_commands_you_understand": "Invia soltanto comandi che conosci.",
   "console.printer_status": "Stato stampante",

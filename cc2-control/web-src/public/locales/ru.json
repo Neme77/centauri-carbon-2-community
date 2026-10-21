@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Команды обхода кинематики заблокированы",
   "console.lock_console": "Заблокировать консоль",
   "console.locked": "Заблокирована",
-  "console.messages_received": "Получено сообщений",
+  "console.messages_received": "Получено сообщений:",
   "console.motion_commands_require_homing": "Команды движения требуют парковки",
   "console.only_send_commands_you_understand": "Отправляйте только понятные вам команды.",
   "console.printer_status": "Состояние принтера",

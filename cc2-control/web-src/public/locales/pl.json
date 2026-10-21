@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Polecenia omijające kinematykę pozostają zablokowane",
   "console.lock_console": "Zablokuj konsolę",
   "console.locked": "Zablokowana",
-  "console.messages_received": "Odebrane wiadomości",
+  "console.messages_received": "Odebrane wiadomości:",
   "console.motion_commands_require_homing": "Polecenia ruchu wymagają bazowania",
   "console.only_send_commands_you_understand": "Wysyłaj tylko polecenia, które rozumiesz.",
   "console.printer_status": "Stan drukarki",

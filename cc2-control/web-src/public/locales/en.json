@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Kinematic-bypass commands remain blocked",
   "console.lock_console": "Lock console",
   "console.locked": "Locked",
-  "console.messages_received": "Messages received",
+  "console.messages_received": "Messages received:",
   "console.motion_commands_require_homing": "Motion commands require homing",
   "console.only_send_commands_you_understand": "Only send commands you understand.",
   "console.printer_status": "Printer status",

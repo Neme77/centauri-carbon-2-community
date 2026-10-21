@@ -274,7 +274,7 @@ export const Console = () => {
           <Activity {...I} /> CC2 {t('common.connected')} <Pip hollow /> {tState(v.state)}
         </span>
         <span>
-          {t('console.messages_received')}: {d?.messages || 0}
+          {t('console.messages_received')} {d?.messages || 0}
         </span>
       </div>
     </Page>

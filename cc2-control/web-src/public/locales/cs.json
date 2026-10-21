@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Příkazy obcházející kinematiku zůstávají blokovány",
   "console.lock_console": "Zamknout konzoli",
   "console.locked": "Zamčeno",
-  "console.messages_received": "Přijaté zprávy",
+  "console.messages_received": "Přijaté zprávy:",
   "console.motion_commands_require_homing": "Příkazy pohybu vyžadují referencování",
   "console.only_send_commands_you_understand": "Odesílejte jen příkazy, kterým rozumíte.",
   "console.printer_status": "Stav tiskárny",

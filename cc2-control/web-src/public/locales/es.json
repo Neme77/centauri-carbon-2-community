@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Los comandos de derivacion cinematica permanecen bloqueados",
   "console.lock_console": "Bloquear consola",
   "console.locked": "Bloqueada",
-  "console.messages_received": "Mensajes recibidos",
+  "console.messages_received": "Mensajes recibidos:",
   "console.motion_commands_require_homing": "Los comandos de movimiento requieren estar en el origen",
   "console.only_send_commands_you_understand": "Envie solo comandos que entienda.",
   "console.printer_status": "Estado de la impresora",

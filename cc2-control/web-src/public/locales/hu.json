@@ -253,7 +253,7 @@
   "console.kinematic_bypass_commands_remain": "A mozgásvédelmet megkerülő parancsok továbbra is tiltva vannak",
   "console.lock_console": "Konzol zárolása",
   "console.locked": "Zárolva",
-  "console.messages_received": "Fogadott üzenetek",
+  "console.messages_received": "Fogadott üzenetek:",
   "console.motion_commands_require_homing": "Mozgatáshoz előbb alaphelyzetbe kell állítani a tengelyeket",
   "console.only_send_commands_you_understand": "Csak olyan parancsot küldj, amelynek érted a hatását.",
   "console.printer_status": "Nyomtató állapota",

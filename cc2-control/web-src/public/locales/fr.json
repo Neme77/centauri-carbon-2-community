@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Les commandes contournant la cinématique restent bloquées",
   "console.lock_console": "Verrouiller la console",
   "console.locked": "Verrouillé",
-  "console.messages_received": "Messages reçus",
+  "console.messages_received": "Messages reçus :",
   "console.motion_commands_require_homing": "Les commandes de mouvement nécessitent une prise d’origine",
   "console.only_send_commands_you_understand": "N’envoyez que des commandes que vous comprenez.",
   "console.printer_status": "État de l’imprimante",
