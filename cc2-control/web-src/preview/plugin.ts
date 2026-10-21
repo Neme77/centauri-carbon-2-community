@@ -78,7 +78,7 @@ export function previewPlugin(): Plugin {
   let scene: Scenario = 'printing'
   let speed = 100
   let flow = 100
-  let preferences: Record<string, unknown> = { language: 'it', theme: 'dark' }
+  let preferences: Record<string, unknown> = { language: 'en', theme: 'dark' }
   let cameraViewer: string | null = null
   let deleted = new Set<string>()
   let autoRefill = false

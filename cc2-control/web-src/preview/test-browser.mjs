@@ -7,6 +7,7 @@ import { chromium } from 'playwright'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const labels = JSON.parse(await readFile(path.join(root, 'public/locales/it.json'), 'utf8'))
+const en = JSON.parse(await readFile(path.join(root, 'public/locales/en.json'), 'utf8')) // the demo starts in English; the language loop below ends on Italian
 // An accidental proxy would fail the API and browser checks below.
 process.env.CC2_BACKEND = 'http://127.0.0.1:1'
 const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), mode: 'demo', server: { port: 0, host: '127.0.0.1' } })
@@ -52,21 +53,21 @@ try {
   })
   await page.locator('#cc2-navigation a[href="#settings"]').click()
   await page.getByRole('tab').nth(1).click()
-  const orcaTest = page.getByRole('button', { name: labels['settings.test_orca'], exact: true })
+  const orcaTest = page.getByRole('button', { name: en['settings.test_orca'], exact: true })
   await orcaTest.click()
-  await page.getByText(labels['settings.orca_sync_ready'].replace('{count}', '2'), { exact: true }).waitFor()
+  await page.getByText(en['settings.orca_sync_ready'].replace('{count}', '2'), { exact: true }).waitFor()
   assert.equal(infoCalls, 1)
   assert.equal(laneCalls, 1)
   orcaState = 'empty'
   await orcaTest.click()
-  await page.getByText(labels['settings.orca_sync_pending'], { exact: true }).waitFor()
+  await page.getByText(en['settings.orca_sync_pending'], { exact: true }).waitFor()
   orcaState = 'disconnected'
   await orcaTest.click()
-  await page.getByText(labels['settings.orca_sync_disconnected'], { exact: true }).waitFor()
+  await page.getByText(en['settings.orca_sync_disconnected'], { exact: true }).waitFor()
   assert.equal(laneCalls, 2, 'Disconnected printer must not request Canvas lanes')
   orcaState = 'malformed'
   await orcaTest.click()
-  await page.getByText(labels['settings.orca_sync_pending'], { exact: true }).waitFor()
+  await page.getByText(en['settings.orca_sync_pending'], { exact: true }).waitFor()
   orcaState = 'failure'
   await orcaTest.click()
   await page.getByRole('alert').filter({ hasText: 'Mock lane_data failure' }).waitFor()
