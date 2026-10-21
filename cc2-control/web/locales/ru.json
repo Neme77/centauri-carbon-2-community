@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Команды обхода кинематики заблокированы",
   "console.lock_console": "Заблокировать консоль",
   "console.locked": "Заблокирована",
-  "console.messages_received": "Получено сообщений",
+  "console.messages_received": "Получено сообщений:",
   "console.motion_commands_require_homing": "Команды движения требуют парковки",
   "console.only_send_commands_you_understand": "Отправляйте только понятные вам команды.",
   "console.printer_status": "Состояние принтера",
@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Выбрано",
   "job.bed_map_missing": "У {n} объектов нет корректной позиции на столе. Выберите их в списке.",
   "job.bed_map_choose": "Выберите объект на карте или в списке.",
-  "job.bed_map_close": "Закрыть карту стола"
+  "job.bed_map_close": "Закрыть карту стола",
+  "files.sort": "Сортировка",
+  "app.print_progress": "Ход печати",
+  "app.sidebar": "Боковое меню"
 }

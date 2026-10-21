@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Polecenia omijające kinematykę pozostają zablokowane",
   "console.lock_console": "Zablokuj konsolę",
   "console.locked": "Zablokowana",
-  "console.messages_received": "Odebrane wiadomości",
+  "console.messages_received": "Odebrane wiadomości:",
   "console.motion_commands_require_homing": "Polecenia ruchu wymagają bazowania",
   "console.only_send_commands_you_understand": "Wysyłaj tylko polecenia, które rozumiesz.",
   "console.printer_status": "Stan drukarki",
@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Wybrany",
   "job.bed_map_missing": "{n} obiektów nie ma prawidłowej pozycji na stole. Wybierz je z listy.",
   "job.bed_map_choose": "Wybierz obiekt na mapie lub na liście.",
-  "job.bed_map_close": "Zamknij mapę stołu"
+  "job.bed_map_close": "Zamknij mapę stołu",
+  "files.sort": "Sortuj według",
+  "app.print_progress": "Postęp wydruku",
+  "app.sidebar": "Menu boczne"
 }

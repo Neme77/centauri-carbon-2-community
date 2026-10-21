@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "Příkazy obcházející kinematiku zůstávají blokovány",
   "console.lock_console": "Zamknout konzoli",
   "console.locked": "Zamčeno",
-  "console.messages_received": "Přijaté zprávy",
+  "console.messages_received": "Přijaté zprávy:",
   "console.motion_commands_require_homing": "Příkazy pohybu vyžadují referencování",
   "console.only_send_commands_you_understand": "Odesílejte jen příkazy, kterým rozumíte.",
   "console.printer_status": "Stav tiskárny",
@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Vybráno",
   "job.bed_map_missing": "{n} objektů nemá platnou polohu na podložce. Vyberte je ze seznamu.",
   "job.bed_map_choose": "Vyberte objekt na mapě nebo v seznamu.",
-  "job.bed_map_close": "Zavřít mapu podložky"
+  "job.bed_map_close": "Zavřít mapu podložky",
+  "files.sort": "Seřadit podle",
+  "app.print_progress": "Průběh tisku",
+  "app.sidebar": "Boční menu"
 }

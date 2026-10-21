@@ -253,7 +253,7 @@
   "console.kinematic_bypass_commands_remain": "A mozgásvédelmet megkerülő parancsok továbbra is tiltva vannak",
   "console.lock_console": "Konzol zárolása",
   "console.locked": "Zárolva",
-  "console.messages_received": "Fogadott üzenetek",
+  "console.messages_received": "Fogadott üzenetek:",
   "console.motion_commands_require_homing": "Mozgatáshoz előbb alaphelyzetbe kell állítani a tengelyeket",
   "console.only_send_commands_you_understand": "Csak olyan parancsot küldj, amelynek érted a hatását.",
   "console.printer_status": "Nyomtató állapota",
@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "Kiválasztva",
   "job.bed_map_missing": "{n} objektumnak nincs érvényes helye a tárgyasztalon. Válassza ki őket a listából.",
   "job.bed_map_choose": "Válasszon objektumot a térképen vagy a listában.",
-  "job.bed_map_close": "Tárgyasztaltérkép bezárása"
+  "job.bed_map_close": "Tárgyasztaltérkép bezárása",
+  "files.sort": "Rendezés",
+  "app.print_progress": "Nyomtatás előrehaladása",
+  "app.sidebar": "Oldalmenü"
 }

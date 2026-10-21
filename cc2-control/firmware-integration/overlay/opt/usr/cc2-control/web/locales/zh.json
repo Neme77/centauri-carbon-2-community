@@ -226,7 +226,7 @@
   "console.kinematic_bypass_commands_remain": "运动学绕过类命令仍被阻止",
   "console.lock_console": "锁定控制台",
   "console.locked": "已锁定",
-  "console.messages_received": "已接收消息",
+  "console.messages_received": "已接收消息：",
   "console.motion_commands_require_homing": "运动命令需要先回零",
   "console.only_send_commands_you_understand": "只发送你理解的命令。",
   "console.printer_status": "打印机状态",
@@ -1036,5 +1036,8 @@
   "job.bed_map_selected": "已选择",
   "job.bed_map_missing": "{n} 个对象没有有效的平台位置。请从列表中选择。",
   "job.bed_map_choose": "请在地图或列表中选择对象。",
-  "job.bed_map_close": "关闭平台地图"
+  "job.bed_map_close": "关闭平台地图",
+  "files.sort": "排序方式",
+  "app.print_progress": "打印进度",
+  "app.sidebar": "侧边菜单"
 }
