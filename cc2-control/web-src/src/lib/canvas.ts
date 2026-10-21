@@ -53,6 +53,7 @@ export type CanvasSlotControl = {
   state: CanvasSlotState
   load: boolean
   unload: boolean
+  recovery_load?: boolean
   reason_load: string
   reason_unload: string
 }

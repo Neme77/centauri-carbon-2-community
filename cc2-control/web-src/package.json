@@ -37,7 +37,7 @@
     "test:update-notice": "node preview/test-update-notice.mjs",
     "test:updates": "node preview/test-updates.mjs",
     "test:control-interactions": "node preview/test-control-interactions.mjs",
-    "test:canvas-states": "node preview/test-canvas-states.mjs",
+    "test:canvas-states": "node preview/test-canvas-states.mjs && node preview/test-canvas-recovery-load.mjs",
     "test:object-layout": "node preview/test-object-layout.mjs && node preview/test-object-selection.mjs",
     "test:mesh-side-labels": "node preview/test-mesh-side-labels.mjs",
     "test:plate-flow": "node preview/test-empty-plate-flow.mjs",

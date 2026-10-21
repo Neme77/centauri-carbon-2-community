@@ -12,6 +12,7 @@ HARNESSES = {
     "test_panda_metadata.c": [],
     "test_backup.c": BACKEND,
     "test_canvas_state.c": [ROOT / "src/control.c"],
+    "test_canvas_recovery_load.c": [ROOT / "src/control.c"],
     "test_app_update_guards.c": BACKEND,
     "test_gcode_metadata.c": [],
     "test_object_query.c": BACKEND,

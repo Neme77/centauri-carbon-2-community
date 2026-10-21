@@ -51,7 +51,8 @@
         const load=fresh&&!busy&&kind==='present'&&!state.headLoaded&&state.activeTray===-1
         const unload=fresh&&!busy&&kind==='loaded'
         const transitionReason=state.headLoaded&&state.activeTray===-1?'unassigned_head':'transition'
-        return {slot:t.tray_id,state:kind,load,unload,reason_load:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='loaded'?'already_loaded':kind==='transition'?transitionReason:load?'none':'head_occupied',reason_unload:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='transition'?transitionReason:unload?'none':'not_loaded'}
+        const recovery_load=fresh&&!busy&&state.headLoaded&&state.activeTray===-1&&t.status===1&&state.trays.length===4&&state.trays.every(t=>t.status===0||t.status===1)
+        return {slot:t.tray_id,state:kind,load,unload,recovery_load,reason_load:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='loaded'?'already_loaded':kind==='transition'?transitionReason:load?'none':'head_occupied',reason_unload:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='transition'?transitionReason:unload?'none':'not_loaded'}
       }),telemetry:{result:{canvas_info:{canvas_list:[{canvas_id:0,connected:1,tray_list:state.trays}]}}}})
     if (path === '/api/canvas/unload/restart' && options.method === 'POST') {
       if (String(options.body) !== 'RESTART') return reply({ ok: false, error: 'Explicit restart confirmation required' }, 400)
@@ -91,6 +92,8 @@
       const action = String(options.body)
       state.commands.push(action)
       if (state.reject || !state.connected) return reply({ error: 'Comando rifiutato nella simulazione' }, 409)
+      const recovery=action.match(/^canvas:recover-load:([0-3])$/)
+      if(recovery&&state.status===1&&state.canvasFresh&&state.headLoaded&&state.activeTray===-1&&state.trays[Number(recovery[1])]?.status===1&&state.trays.length===4&&state.trays.every(t=>t.status===0||t.status===1))return reply({accepted:true,simulated:true})
       if (action === 'canvas:reset-all') {
         if (state.status !== 1) return reply({error:'Stampante occupata'},409)
         state.trays.forEach(t=>Object.assign(t,{filament_color:'',filament_name:'',filament_type:'',min_nozzle_temp:0,max_nozzle_temp:0}))

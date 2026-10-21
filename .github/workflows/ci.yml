@@ -88,6 +88,9 @@ jobs:
         working-directory: cc2-control/web-src
         run: npm run test:control-calibrations
 
+      - name: Canvas states and explicit recovery loading
+        run: npm run test:canvas-states
+
       - name: Hungarian language selection, persistence and mobile layouts
         run: npm run test:hungarian
 

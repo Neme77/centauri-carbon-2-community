@@ -1,0 +1,36 @@
+name: Synchronize Canvas recovery loading snapshot
+on:
+  push:
+    branches: [feature/canvas-state-recovery-load]
+    paths: [.github/workflows/sync-canvas-recovery-load.yml]
+  pull_request:
+    paths: [.github/workflows/sync-canvas-recovery-load.yml]
+permissions:
+  contents: write
+concurrency:
+  group: canvas-recovery-load-source-snapshot
+  cancel-in-progress: false
+jobs:
+  synchronize:
+    if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: feature/canvas-state-recovery-load
+      - name: Synchronize canonical source archive and pins
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current
+          git diff --cached --quiet || git commit -m "Pin Canvas recovery loading in canonical source snapshot"
+      - name: Verify builder and generated assets
+        run: |
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+          python3 cc2-control/tests/test_web_sync_static.py
+          python3 cc2-control/tests/test_locales_static.py
+      - name: Publish verified snapshot
+        run: git push origin HEAD:refs/heads/feature/canvas-state-recovery-load

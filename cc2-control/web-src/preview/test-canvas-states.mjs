@@ -78,15 +78,14 @@ try {
   assert.equal(await load.isDisabled(), true, 'another loaded channel prevents loading')
   assert.equal(await unload.isDisabled(), true, 'only the loaded channel can unload')
   // Captured reboot case: head sensor true, active_cid -1, all slots present.
-  // Guidance is explanatory only: it cannot identify a feeding slot or send a command.
+  // The dedicated recovery action never changes ordinary Load/Unload policy.
   await page.evaluate(() => {
     window.__CC2_PREVIEW.activeTray = -1
     window.__CC2_PREVIEW.trays.forEach(t => { t.status = 1 })
   })
   const recovery = page.locator('[data-canvas-recovery]')
   await recovery.getByText('Canvas state needs recovery', { exact: true }).waitFor()
-  assert.match(await recovery.textContent(), /ELEGOO display/)
-  assert.match(await recovery.textContent(), /extra purging/)
+  assert.match(await recovery.textContent(), /any present slot/)
   assert.match(await recovery.textContent(), /external spool/)
   assert.equal(await load.isDisabled(), true)
   assert.equal(await unload.isDisabled(), true)

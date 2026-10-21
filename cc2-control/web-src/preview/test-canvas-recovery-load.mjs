@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+import { fixture, launchOptions } from './fixture.mjs'
+const demo=await fixture(),browser=await chromium.launch(launchOptions)
+try {
+ const page=await browser.newPage({viewport:{width:1440,height:1000}})
+ await page.addInitScript(()=>localStorage.setItem('cc2-fixture-preferences','{"language":"en"}'))
+ await page.goto(demo.url+'#canvas')
+ const recover=page.locator('[data-canvas-recovery-load]')
+ const commands=()=>page.evaluate(()=>window.__CC2_PREVIEW.commands)
+ await page.locator('[data-canvas-slot="1"]').getByRole('button',{name:'Select slot',exact:true}).click()
+ assert.equal(await recover.count(),0,'no recovery action in normal state')
+ await page.evaluate(()=>{window.__CC2_PREVIEW.headLoaded=true;window.__CC2_PREVIEW.activeTray=-1;window.__CC2_PREVIEW.trays.forEach(t=>{t.status=1})})
+ await recover.waitFor();await page.waitForFunction(()=>!document.querySelector('[data-canvas-recovery-load]').disabled)
+ assert.match(await recover.textContent(),/slot 2/)
+ await recover.click();await page.getByRole('button',{name:'Confirm',exact:true}).waitFor()
+ assert.match(await page.getByRole('dialog').textContent(),/heat the nozzle/)
+ assert.deepEqual(await commands(),[],'opening confirmation sends nothing')
+ await page.getByRole('dialog').getByRole('button',{name:'Cancel',exact:true}).click()
+ assert.deepEqual(await commands(),[],'cancellation sends nothing')
+ await page.locator('[data-canvas-slot="3"]').getByRole('button',{name:'Select slot',exact:true}).click()
+ assert.match(await recover.textContent(),/slot 4/,'any present slot can be selected, not just last-used')
+ await recover.click();await page.getByRole('button',{name:'Confirm',exact:true}).click()
+ await page.waitForFunction(()=>window.__CC2_PREVIEW.commands.length===1)
+ assert.deepEqual(await commands(),['canvas:recover-load:3'])
+ assert.equal(await recover.isDisabled(),true,'one request, no automatic repeated load')
+ await page.locator('[data-canvas-slot="3"]').getByText('Transition · waiting for confirmation',{exact:true}).waitFor()
+ await page.locator('[data-canvas-recovery-feedback]').getByText(/No automatic retry/).waitFor()
+ assert.equal(await page.locator('[data-canvas-action="canvas.load"]').isDisabled(),true)
+ assert.equal(await page.locator('[data-canvas-action="canvas.unload"]').isDisabled(),true)
+ await page.evaluate(()=>{window.__CC2_PREVIEW.activeTray=3;window.__CC2_PREVIEW.trays[3].status=2})
+ await page.locator('[data-canvas-slot="3"]').getByText('Loaded to head',{exact:true}).waitFor()
+ assert.equal(await recover.count(),0,'fresh native status, not command acceptance, completes recovery')
+ assert.equal(await page.locator('[data-canvas-action="canvas.unload"]').isDisabled(),false)
+ for(const status of [2,13,1]){
+  await page.evaluate(status=>{const s=window.__CC2_PREVIEW;s.status=status;s.activeTray=-1;s.headLoaded=true;s.trays.forEach(t=>{t.status=1});s.canvasFresh=status!==1},status)
+  await page.waitForTimeout(2300)
+  assert.equal(await recover.count(),0,'busy or unavailable state cannot offer recovery')
+ }
+ await page.reload();await page.locator('[data-canvas-slot="0"]').waitFor()
+ await page.evaluate(()=>{const s=window.__CC2_PREVIEW;s.headLoaded=true;s.activeTray=-1;s.trays[0].status=0})
+ await recover.waitFor();assert.equal(await recover.isDisabled(),true,'empty selected slot cannot recover')
+ for(const width of [1440,768,390]){await page.setViewportSize({width,height:1000});await page.waitForTimeout(100);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))}
+ console.log('PASS: actual recovery button, slot selection, confirmation/cancel, one request, no optimistic recovery, native confirmation and unavailable/busy/empty guards')
+}finally{await browser.close();await demo.cleanup()}

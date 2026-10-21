@@ -1,48 +1,17 @@
-# CC2 Control 1.2.19 — complete update
+# Combined CC2 Control trial — PR #190 and #196
 
-**FULL PRINTER REBOOT REQUIRED: this update includes the camera fix.
-After installation, manually reboot the complete printer while it is idle.
-Refreshing the page or restarting only CC2 Control does not activate the patch.**
+Traditional application-only update. The trial keeps version 1.2.19 and is not a new release. It combines explicit Canvas recovery (#190) with Surfoo's UI/accessibility refinements (#196).
 
-Includes camera fixes from PR #183 and unreliable G-code date handling from
-PR #185. Camera library bytes match the seven-hour printing observation with
-AI enabled and working streaming. The new combined installer requires a complete
-printer acceptance test before stable-channel publication.
+The installed camera patch is preserved: it is not bundled, reinstalled or reactivated. Preferences, plate and spool libraries remain in place. Installation restarts only CC2 Control; a printer restart is used below to reproduce the Canvas condition.
 
-Install only while connected, idle and cool (nozzle/bed at most 50 °C, targets
-zero). Close live viewers first. The LAN code authorizes installation through
-the panel and is not included in this package.
+Install while connected, idle and cold (nozzle/bed at most 50 °C, both targets zero). Close live views. Upload the signed .cc2update in Settings → Updates, or use the Windows installer in the ZIP. Keep the printed backup path and refresh the page afterwards.
 
-In the panel use Settings → Updates → upload the signed .cc2update file, or
-extract the multiplatform ZIP and run the installer for your operating system.
-Keep the backup path shown at completion.
+## Checks
 
-Camera checks pin the executable, startup file, libraries and dependencies;
-unknown configurations are refused. ai_camera is not replaced and the stream
-limit is unchanged. A recognized previous personal R2 installation and its
-activation preference are preserved. No automatic camera restart or reboot occurs.
+1. Expand/collapse the sidebar: icons and the toggle should stay aligned. Check Files, Console, Spools and normal dialogs on desktop and mobile. Without an available update the bell opens Updates; with a notification, check the entire popup is visible.
+2. Complete a normal Canvas load, leave the filament loaded, and normally restart the idle printer, following the already-observed reproduction procedure.
+3. If head presence is reported with no assigned slot, select any present slot. Recover by loading slot N asks for confirmation: this is a real native load and may heat the nozzle and purge. Use Canvas filament after checking its path.
+4. Cancel sends no load. After confirming, observe native loading, coherent final readback and restored normal actions. Delivery alone never means recovery completed.
+5. Check the existing local/Matrix video and preferences, then report results before merging. Do not automatically repeat a failed load.
 
-After reboot, check version 1.2.19, printer connection, local and Matrix video.
-For a new camera installation run:
-
-```sh
-sh /opt/usr/cc2-control/camera/manage.sh status
-```
-
-For the existing personal installation use:
-
-```sh
-sh /opt/usr/cc2-camera-recovery-r2/manage.sh status
-```
-
-Application backup restoration also restores the previous camera startup when
-this update changed it, refusing unrelated later startup edits. Restore only
-while idle and cool, then reboot the whole printer to change in-memory patches.
-
-Obviously unreliable file dates are displayed as unavailable without rewriting
-G-code or original timestamps. The clock still needs a reachable time source,
-including on networks that block cloud access.
-
-Thanks to tharje for camera diagnosis, reproduction and analysis, and to the
-community beta testers. Specific AI detections and expired RTC sessions are not
-qualified merely by observing a print with AI options enabled.
+Use the installer's traditional rollback while idle and cold if needed. This trial does not change the public update channel.

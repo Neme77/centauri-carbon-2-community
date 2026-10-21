@@ -63,6 +63,17 @@ static inline int canvas_reported_status(const mqtt_client *m,int slot) {
  }
  return found;
 }
+/* Explicit native-load recovery is separate from ordinary Load/Unload.
+ * A lost head/channel association is not an empty head or a completed load. */
+static inline int canvas_recovery_load_allowed(const mqtt_client *m,int slot) {
+ time_t now=time(NULL);
+ if(!canvas_source_valid(m)||now-m->last_message>15||!m->have_machine_status||m->machine_status!=1||
+    !m->canvas_direct_idle||m->canvas_direct_active!=-1||!m->canvas_head_loaded||
+    canvas_reported_status(m,slot)!=1)return 0;
+ /* An incomplete tray set or a reported loaded channel is another ambiguity. */
+ for(int i=0;i<4;i++){int status=canvas_reported_status(m,i);if(status!=0&&status!=1)return 0;}
+ return 1;
+}
 static inline canvas_slot_view canvas_slot_policy(const mqtt_client *m,int slot) {
  canvas_slot_view v={CV_UNKNOWN,0,0,CR_UNAVAILABLE,CR_UNAVAILABLE};
  if(!canvas_source_valid(m))return v;

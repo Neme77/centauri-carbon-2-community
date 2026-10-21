@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import { ArrowBigDown, ArrowBigUp, Check, Info, Palette, RefreshCw, Repeat, BrushCleaning, Trash2 } from 'lucide-preact'
 import { cn } from '@/lib/utils'
@@ -133,6 +133,9 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
 }
 
 export const Canvas = () => {
+  const recoverySending = useRef(false)
+  const [recoveryBusy, setRecoveryBusy] = useState(false)
+  const [recoverySent, setRecoverySent] = useState(false)
   const { model, controls, autoRefill, slot, optimistic, checked } = canvas.use()
   const { events } = canvasTimeline.use()
   const library = spools.use().data
@@ -165,6 +168,21 @@ export const Canvas = () => {
   usePoll(refreshSpools, 10000)
   const ok = Boolean(model?.connected)
   const selected = controls.find(c => c.slot === slot)
+  const recoverLoad = async () => {
+    if (recoverySending.current || recoverySent || !ok || !idle || selected?.recovery_load !== true) return
+    const chosen = slot
+    recoverySending.current = true
+    setRecoveryBusy(true)
+    try {
+      if (await control(`canvas:recover-load:${chosen}`, tpl('canvas.recovery_load_confirm', { slot: chosen + 1 }))) {
+        setRecoverySent(true)
+        void refreshCanvas()
+      }
+    } finally {
+      recoverySending.current = false
+      setRecoveryBusy(false)
+    }
+  }
   const stateLabels = {
     empty: 'canvas.state_empty',
     present: 'canvas.state_present',
@@ -389,6 +407,19 @@ export const Canvas = () => {
               <div role="status" data-canvas-recovery class="mb-3 rounded-md border border-edge bg-field p-3 text-sm">
                 <p class="font-semibold">{t('canvas.recovery_title')}</p>
                 <p class="mt-2 text-muted">{t('canvas.recovery_hint')}</p>
+                <Button
+                  wide
+                  class="mt-3"
+                  data-canvas-recovery-load
+                  disabled={selected?.recovery_load !== true || recoveryBusy || recoverySent}
+                  onClick={recoverLoad}
+                >
+                  <ArrowBigUp {...I} />
+                  {tpl('canvas.recovery_load_slot', { slot: slot + 1 })}
+                </Button>
+                <p class="mt-2 text-xs text-muted" data-canvas-recovery-feedback>
+                  {t(recoverySent ? 'canvas.recovery_load_sent' : 'canvas.recovery_load_select')}
+                </p>
               </div>
             )}
             <div class="grid gap-2">

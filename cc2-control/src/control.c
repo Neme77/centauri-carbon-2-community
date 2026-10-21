@@ -187,6 +187,14 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         else return reject(reason,reason_cap,"Unknown fan");
         return 1;
     }
+    if(!strncmp(action,"canvas:recover-load:",20)){
+        if(strlen(action)!=21||action[20]<'0'||action[20]>'3')
+            return reject(reason,reason_cap,"Invalid Canvas recovery slot");
+        slot=action[20]-'0';
+        if(!canvas_recovery_load_allowed(m,slot))
+            return reject(reason,reason_cap,"Canvas recovery requires fresh idle telemetry, a present slot and an unassigned head");
+        snprintf(script,cap,"CANVAS_LOAD_FILAMENT CHANNEL=%d",slot);return 1;
+    }
     if(sscanf(action,"canvas:load:%d",&slot)==1){
         if(printing(m))return reject(reason,reason_cap,"Canvas loading is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Canvas loading requires the printer to be idle");
