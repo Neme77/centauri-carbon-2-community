@@ -1,0 +1,13 @@
+import {readFileSync} from 'node:fs';
+import {createPublicKey,verify,createHash} from 'node:crypto';
+const [out,metadata]=process.argv.slice(2),info=JSON.parse(readFileSync(metadata));
+const key=createPublicKey({key:Buffer.concat([Buffer.from('302a300506032b6570032100','hex'),Buffer.from(info.public_key,'hex')]),format:'der',type:'spki'});
+const app=readFileSync(out+'/CC2-Control-1.2.19-V4.4.cc2update'),n=app.readUInt32BE(8);
+if(app.subarray(0,8).toString()!=='CC2UPD1\n'||!verify(null,Buffer.concat([app.subarray(0,20),app.subarray(84,84+n)]),key,app.subarray(20,84)))throw Error('Application signature refused');
+const m=Object.fromEntries(app.subarray(84,84+n).toString().trim().split('\n').map(x=>x.split('=')));
+if(m.version!=='1.2.19'||m.firmware!=='4.4'||Number(m.size)!==app.length-84-n||m.sha512!==createHash('sha512').update(app.subarray(84+n)).digest('hex'))throw Error('Application payload refused');
+const cat=readFileSync(out+'/update-channel.cc2catalog');
+if(cat.subarray(0,8).toString()!=='CC2CAT1\n'||!verify(null,Buffer.concat([cat.subarray(0,8),cat.subarray(72)]),key,cat.subarray(8,72)))throw Error('Catalog signature refused');
+const index=JSON.parse(cat.subarray(72)),entry=index.releases[0];
+if(entry.version!=='1.2.19'||entry.firmware!=='4.4'||entry.channel!=='stable'||entry.size!==app.length||index.expires<=Date.now()/1000||Object.keys(entry.notes_i18n).length!==9)throw Error('Catalog contents refused');
+console.log('PASS: exact CI payload, application/catalog signatures, firmware family, nine notes and expiry');
