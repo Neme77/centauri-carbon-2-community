@@ -17,7 +17,7 @@ jobs:
       - name: Synchronize only the canonical source archive and references
         run: |
           python3 experimental/pr128-integration/sync_source.py
-          python3 -m unittest discover -s builder/current/tests -p test_cc2_control_source_snapshot.py
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
