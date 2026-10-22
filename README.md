@@ -3,6 +3,19 @@
 Community firmware, local printer control and reproducible build tools for the
 **ELEGOO Centauri Carbon 2**, maintained by **Neme77**.
 
+<p align="center">
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.1/CC2_V4_4_1_STOCK_20261014_205610_dd82af94.zip.sig"><img src="https://img.shields.io/badge/DOWNLOAD-Firmware%20V4.4.1-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download complete firmware V4.4.1"></a>
+  &nbsp;
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/DOWNLOAD-CC2%20Control%201.2.19-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download CC2 Control 1.2.19 multiplatform update"></a>
+</p>
+
+| **🖨️ Complete firmware · V4.4.1** | **🔄 CC2 Control · 1.2.19** |
+| --- | --- |
+| [**Download signed firmware**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.1/CC2_V4_4_1_STOCK_20261014_205610_dd82af94.zip.sig) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.1) | [**Download Windows / macOS / Linux package**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-Multiplatform-Update.zip) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4) |
+| First installation. Includes CC2 Control **1.2.10**; then update the application to **1.2.19**. | For community firmware **V4.4/V4.4.1**. Includes the camera stability and recovery fixes. |
+
+**Updating from the CC2 Control panel?** [Download the signed `.cc2update` file](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-V4.4.cc2update) and select it in **Settings → Updates**. After installing **1.2.19**, **reboot the complete printer while idle** to activate the camera fixes.
+
 [Italiano](README.it.md) · [Documentation](docs/README.md) · [Downloads](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Screenshots](docs/SCREENSHOTS.md)
 
 > Independent community project, not affiliated with or supported by ELEGOO.

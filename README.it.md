@@ -3,6 +3,19 @@
 Firmware community, controllo locale e strumenti per costruire il firmware
 della **ELEGOO Centauri Carbon 2**, mantenuti da **Neme77**.
 
+<p align="center">
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.1/CC2_V4_4_1_STOCK_20261014_205610_dd82af94.zip.sig"><img src="https://img.shields.io/badge/SCARICA-Firmware%20V4.4.1-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il firmware completo V4.4.1"></a>
+  &nbsp;
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/SCARICA-CC2%20Control%201.2.19-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il pacchetto multipiattaforma CC2 Control 1.2.19"></a>
+</p>
+
+| **🖨️ Firmware completo · V4.4.1** | **🔄 CC2 Control · 1.2.19** |
+| --- | --- |
+| [**Scarica il firmware firmato**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.1/CC2_V4_4_1_STOCK_20261014_205610_dd82af94.zip.sig) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.1) | [**Scarica il pacchetto Windows / macOS / Linux**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-Multiplatform-Update.zip) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4) |
+| Prima installazione. Include CC2 Control **1.2.10**; aggiorna poi l’applicazione alla **1.2.19**. | Per firmware community **V4.4/V4.4.1**. Include i fix di stabilità e recupero della webcam. |
+
+**Aggiorni dal pannello di CC2 Control?** [Scarica il file firmato `.cc2update`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-V4.4.cc2update) e selezionalo in **Impostazioni → Aggiornamenti**. Dopo l’installazione della **1.2.19**, **riavvia completamente la stampante inattiva** per attivare i fix webcam.
+
 [English](README.md) · [Documentazione](docs/README.md) · [Download](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Immagini](docs/SCREENSHOTS.md)
 
 > Progetto indipendente, non affiliato né supportato da ELEGOO.
