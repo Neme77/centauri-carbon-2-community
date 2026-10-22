@@ -3834,6 +3834,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         spools_adjust_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman")==0) {
         spoolman_config_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/catalog/refresh")==0) {
+        spoolman_catalog_refresh_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spoolman/catalog")==0) {
+        spoolman_catalog_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/pid")==0) {
         pid_status_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/monitor/clear")==0) {

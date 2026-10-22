@@ -24,11 +24,13 @@
 #define SPOOLMAN_PATH_MAX 128
 
 typedef struct {
-    char spool_id[SPOOL_ID_LEN + 1];       /* the local spool this result is for */
+    char spool_id[SPOOL_ID_LEN + 1];       /* the local spool this result is for; empty when is_new */
     double sent_grams;                      /* > 0: this many grams were confirmed sent, subtract from spoolman_unsent */
     int have_pull;                          /* a fresh read of the Spoolman spool came back */
+    int is_new;                             /* a Spoolman spool with no local entry yet -- create one */
+    char spoolman_id[SPOOLMAN_ID_MAX + 1];  /* used only when is_new */
     char material[SPOOL_MATERIAL_MAX + 1], name[SPOOL_TEXT_MAX + 1], color[8];
-    double remaining;
+    double remaining, net, density;
 } spoolman_result;
 
 static pthread_mutex_t spoolman_outbox_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -48,6 +50,8 @@ typedef struct {
         char spoolman_id[SPOOLMAN_ID_MAX + 1];
         double grams;   /* pending usage to report; 0 = pull only, no push */
     } jobs[SPOOLS_MAX];
+    int known_count;                                      /* every spoolman_id already linked locally */
+    char known_ids[SPOOLS_MAX][SPOOLMAN_ID_MAX + 1];
 } spoolman_job_batch;
 
 static int spoolman_parse_url(const char *url, char *host, size_t host_cap, int *port, char *base, size_t base_cap) {
@@ -166,6 +170,71 @@ static int spoolman_double_field(const char *json, const char *key, double *out)
     return 1;
 }
 
+#define SPOOLMAN_CATALOG_MAX 200
+#define SPOOLMAN_CATALOG_BODY_MAX 65536
+
+typedef struct {
+    char spoolman_id[SPOOLMAN_ID_MAX + 1];
+    char name[SPOOL_TEXT_MAX + 1], material[SPOOL_MATERIAL_MAX + 1], color[8];
+    double remaining, net, density;
+} spoolman_catalog_entry;
+
+static pthread_mutex_t spoolman_catalog_mutex = PTHREAD_MUTEX_INITIALIZER;
+static spoolman_catalog_entry spoolman_catalog[SPOOLMAN_CATALOG_MAX];
+static int spoolman_catalog_count;
+static int spoolman_catalog_loading;
+static char spoolman_catalog_error[128] = "Not fetched yet";
+
+/* One top-level {...} object from a [...] array, string-escaping aware. Returns
+ * a pointer just past the object, or NULL at the end of the array. */
+static const char *spoolman_next_object(const char *p, char *out, size_t cap) {
+    while (*p == ' ' || *p == ',' || *p == '\n' || *p == '\r' || *p == '\t') p++;
+    if (*p != '{') return NULL;
+    const char *start = p;
+    int depth = 0, in_str = 0;
+    for (; *p; p++) {
+        if (in_str) { if (*p == '\\' && p[1]) { p++; continue; } if (*p == '"') in_str = 0; continue; }
+        if (*p == '"') { in_str = 1; continue; }
+        if (*p == '{') depth++;
+        else if (*p == '}') { if (--depth == 0) { p++; break; } }
+    }
+    size_t len = (size_t)(p - start);
+    if (len >= cap) return NULL;
+    memcpy(out, start, len); out[len] = 0;
+    return p;
+}
+
+static int spoolman_parse_catalog(const char *json, spoolman_catalog_entry *out, int max) {
+    const char *p = strchr(json, '[');
+    if (!p) return 0;
+    p++;
+    int count = 0;
+    char obj[SPOOLMAN_BODY_MAX];
+    while (count < max && (p = spoolman_next_object(p, obj, sizeof(obj)))) {
+        spoolman_catalog_entry *e = &out[count];
+        memset(e, 0, sizeof(*e));
+        double id_val = 0;
+        if (!spoolman_double_field(obj, "\"id\"", &id_val)) continue;
+        snprintf(e->spoolman_id, sizeof(e->spoolman_id), "%.0f", id_val);
+        const char *filament = strstr(obj, "\"filament\"");
+        if (filament) {
+            spoolman_field(filament, "\"material\"", e->material, sizeof(e->material));
+            spoolman_field(filament, "\"name\"", e->name, sizeof(e->name));
+            char color[8] = "";
+            if (spoolman_field(filament, "\"color_hex\"", color + 1, sizeof(color) - 1) && color[1]) {
+                color[0] = '#';
+                for (char *c = color + 1; *c; ++c) *c = (char)toupper((unsigned char)*c);
+                snprintf(e->color, sizeof(e->color), "%s", color);
+            }
+            if (!spoolman_double_field(filament, "\"density\"", &e->density)) e->density = SPOOL_DENSITY;
+            spoolman_double_field(filament, "\"weight\"", &e->net);
+        }
+        spoolman_double_field(obj, "\"remaining_weight\"", &e->remaining);
+        count++;
+    }
+    return count;
+}
+
 /* Runs off the main thread. Only touches spoolman_outbox (its own mutex) and
  * the stack-local copy of what to send -- never `spools`. */
 static void *spoolman_worker(void *arg) {
@@ -176,7 +245,7 @@ static void *spoolman_worker(void *arg) {
     for (int i = 0; i < batch->count; ++i) {
         spoolman_result r; memset(&r, 0, sizeof(r));
         snprintf(r.spool_id, sizeof(r.spool_id), "%s", batch->jobs[i].spool_id);
-        char reply[SPOOLMAN_BODY_MAX], path[SPOOLMAN_PATH_MAX + 32];
+        char reply[SPOOLMAN_BODY_MAX], path[SPOOLMAN_PATH_MAX + 64];
         if (batch->jobs[i].grams > 0) {
             char body[64];
             snprintf(body, sizeof(body), "{\"use_weight\":%.3f}", batch->jobs[i].grams);
@@ -205,6 +274,38 @@ static void *spoolman_worker(void *arg) {
             pthread_mutex_unlock(&spoolman_outbox_mutex);
         }
     }
+    /* Auto-import: any Spoolman spool with no local entry yet gets one, so
+     * connecting Spoolman is enough -- nothing to create by hand. */
+    {
+        char *list_body = malloc(SPOOLMAN_CATALOG_BODY_MAX);
+        if (list_body) {
+            char list_path[SPOOLMAN_PATH_MAX + 32];
+            snprintf(list_path, sizeof(list_path), "%s/api/v1/spool", base);
+            if (spoolman_request(host, port, batch->basic_auth, "GET", list_path, NULL, list_body, SPOOLMAN_CATALOG_BODY_MAX) == 200) {
+                static spoolman_catalog_entry entries[SPOOLMAN_CATALOG_MAX];
+                int n = spoolman_parse_catalog(list_body, entries, SPOOLMAN_CATALOG_MAX);
+                for (int i = 0; i < n; ++i) {
+                    int known = 0;
+                    for (int k = 0; k < batch->known_count; ++k)
+                        if (!strcmp(batch->known_ids[k], entries[i].spoolman_id)) { known = 1; break; }
+                    if (known) continue;
+                    spoolman_result r; memset(&r, 0, sizeof(r));
+                    r.is_new = 1;
+                    memcpy(r.spoolman_id, entries[i].spoolman_id, sizeof(r.spoolman_id));
+                    snprintf(r.material, sizeof(r.material), "%s", entries[i].material);
+                    snprintf(r.name, sizeof(r.name), "%s", entries[i].name);
+                    snprintf(r.color, sizeof(r.color), "%s", entries[i].color);
+                    r.remaining = entries[i].remaining;
+                    r.net = entries[i].net > 0 ? entries[i].net : entries[i].remaining;
+                    r.density = entries[i].density > 0 ? entries[i].density : SPOOL_DENSITY;
+                    pthread_mutex_lock(&spoolman_outbox_mutex);
+                    if (spoolman_outbox_count < SPOOLS_MAX) spoolman_outbox[spoolman_outbox_count++] = r;
+                    pthread_mutex_unlock(&spoolman_outbox_mutex);
+                }
+            }
+            free(list_body);
+        }
+    }
     pthread_mutex_lock(&spoolman_outbox_mutex);
     spoolman_worker_running = 0;
     pthread_mutex_unlock(&spoolman_outbox_mutex);
@@ -225,6 +326,26 @@ static void spoolman_tick(long long now) {
     pthread_mutex_unlock(&spoolman_outbox_mutex);
 
     for (int i = 0; i < count; ++i) {
+        if (drained[i].is_new) {
+            if (spool_find_by_spoolman_id(drained[i].spoolman_id) || spools.count >= SPOOLS_MAX) continue;
+            /* Built off to the side, then copied in -- spools_new_id() checks the array
+             * for a free id, so the slot must not already "contain itself" while empty. */
+            spool_entry s; memset(&s, 0, sizeof(s));
+            spools_new_id(s.id);
+            snprintf(s.spoolman_id, sizeof(s.spoolman_id), "%s", drained[i].spoolman_id);
+            snprintf(s.material, sizeof(s.material), "%s", drained[i].material[0] ? drained[i].material : "PLA");
+            snprintf(s.name, sizeof(s.name), "%s", drained[i].name);
+            snprintf(s.color, sizeof(s.color), "%s", drained[i].color[0] ? drained[i].color : "#808080");
+            s.diameter = 1.75;
+            s.density = drained[i].density > 0 ? drained[i].density : SPOOL_DENSITY;
+            s.net = drained[i].net > 0 ? drained[i].net : 1000;
+            s.remaining = drained[i].remaining;
+            s.created = (long long)spools_wall(NULL);
+            spools.spools[spools.count++] = s;
+            spools_log('n', s.id, -1, s.remaining, 0, "", "");
+            spools_touch(1);
+            continue;
+        }
         spool_entry *sp = spool_find(drained[i].spool_id);
         if (!sp) continue;
         if (drained[i].sent_grams > 0) {
@@ -249,12 +370,13 @@ static void spoolman_tick(long long now) {
     for (int i = 0; i < spools.count && batch->count < SPOOLS_MAX; ++i) {
         spool_entry *sp = &spools.spools[i];
         if (!sp->spoolman_id[0]) continue;
+        if (batch->known_count < SPOOLS_MAX)
+            snprintf(batch->known_ids[batch->known_count++], SPOOLMAN_ID_MAX + 1, "%s", sp->spoolman_id);
         batch->jobs[batch->count].grams = sp->spoolman_unsent > 0 ? sp->spoolman_unsent : 0;
         snprintf(batch->jobs[batch->count].spool_id, sizeof(batch->jobs[batch->count].spool_id), "%s", sp->id);
         snprintf(batch->jobs[batch->count].spoolman_id, sizeof(batch->jobs[batch->count].spoolman_id), "%s", sp->spoolman_id);
         batch->count++;
     }
-    if (!batch->count) { free(batch); spoolman_last_tick_ms = now; return; }
     pthread_t thread;
     pthread_mutex_lock(&spoolman_outbox_mutex);
     if (pthread_create(&thread, NULL, spoolman_worker, batch) == 0) { spoolman_worker_running = 1; pthread_detach(thread); }
@@ -284,4 +406,77 @@ static void spoolman_config_response(int fd, const char *body, size_t length) {
     if (url) snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "%s", url);
     if (auth) snprintf(spools.spoolman_basic_auth, sizeof(spools.spoolman_basic_auth), "%s", auth);
     if (spools_commit(fd, before)) spools_reply(fd, 200, "{\"ok\":true}\n");
+}
+
+/* ---- Spoolman catalog: the browser's own picker, instead of typing an id blind ------------- */
+
+static void *spoolman_catalog_worker(void *arg) {
+    char url[SPOOLMAN_URL_MAX + 1], auth[SPOOLMAN_AUTH_MAX + 1];
+    memcpy(url, arg, sizeof(url)); memcpy(auth, (char *)arg + sizeof(url), sizeof(auth));
+    free(arg);
+    char host[SPOOLMAN_HOST_MAX], base[SPOOLMAN_PATH_MAX], path[SPOOLMAN_PATH_MAX + 64]; int port;
+    char *body = malloc(SPOOLMAN_CATALOG_BODY_MAX);
+    const char *error = NULL;
+    int count = 0;
+    static spoolman_catalog_entry parsed[SPOOLMAN_CATALOG_MAX];
+    if (!body) error = "Out of memory";
+    else if (!spoolman_parse_url(url, host, sizeof(host), &port, base, sizeof(base))) error = "Invalid URL";
+    else {
+        snprintf(path, sizeof(path), "%s/api/v1/spool", base);
+        int status = spoolman_request(host, port, auth, "GET", path, NULL, body, SPOOLMAN_CATALOG_BODY_MAX);
+        if (status != 200) error = "Could not reach Spoolman";
+        else count = spoolman_parse_catalog(body, parsed, SPOOLMAN_CATALOG_MAX);
+    }
+    free(body);
+    pthread_mutex_lock(&spoolman_catalog_mutex);
+    if (error) snprintf(spoolman_catalog_error, sizeof(spoolman_catalog_error), "%s", error);
+    else { spoolman_catalog_error[0] = 0; spoolman_catalog_count = count; memcpy(spoolman_catalog, parsed, (size_t)count * sizeof(parsed[0])); }
+    spoolman_catalog_loading = 0;
+    pthread_mutex_unlock(&spoolman_catalog_mutex);
+    return NULL;
+}
+
+/* POST /api/spoolman/catalog/refresh -- starts (or no-ops if one is already running) a fetch. */
+static void spoolman_catalog_refresh_response(int fd) {
+    if (!spools_open(fd)) return;
+    if (!spools.spoolman_url[0]) { spools_fail(fd, 400, "Set the Spoolman server URL first"); return; }
+    pthread_mutex_lock(&spoolman_catalog_mutex);
+    int already = spoolman_catalog_loading;
+    if (!already) spoolman_catalog_loading = 1;
+    pthread_mutex_unlock(&spoolman_catalog_mutex);
+    if (!already) {
+        char *arg = malloc(sizeof(spools.spoolman_url) + sizeof(spools.spoolman_basic_auth));
+        if (arg) {
+            memcpy(arg, spools.spoolman_url, sizeof(spools.spoolman_url));
+            memcpy(arg + sizeof(spools.spoolman_url), spools.spoolman_basic_auth, sizeof(spools.spoolman_basic_auth));
+            pthread_t thread;
+            if (pthread_create(&thread, NULL, spoolman_catalog_worker, arg) == 0) pthread_detach(thread);
+            else { free(arg); pthread_mutex_lock(&spoolman_catalog_mutex); spoolman_catalog_loading = 0; pthread_mutex_unlock(&spoolman_catalog_mutex); }
+        }
+    }
+    spools_reply(fd, 202, "{\"ok\":true}\n");
+}
+
+/* GET /api/spoolman/catalog -- the cached result of the last refresh. */
+static void spoolman_catalog_response(int fd) {
+    pthread_mutex_lock(&spoolman_catalog_mutex);
+    size_t cap = 16384;
+    json_builder b = {malloc(cap), 0, cap, 0};
+    if (!b.data) { pthread_mutex_unlock(&spoolman_catalog_mutex); spools_fail(fd, 500, "Out of memory"); return; }
+    json_builder_printf(&b, "{\"loading\":%s,\"error\":", spoolman_catalog_loading ? "true" : "false");
+    json_builder_string(&b, spoolman_catalog_error);
+    json_builder_printf(&b, ",\"spools\":[");
+    for (int i = 0; i < spoolman_catalog_count; ++i) {
+        const spoolman_catalog_entry *e = &spoolman_catalog[i];
+        json_builder_printf(&b, "%s{\"id\":\"%s\",\"name\":", i ? "," : "", e->spoolman_id);
+        json_builder_string(&b, e->name);
+        json_builder_printf(&b, ",\"material\":");
+        json_builder_string(&b, e->material);
+        json_builder_printf(&b, ",\"color\":\"%s\",\"remaining\":%.1f}", e->color, e->remaining);
+    }
+    json_builder_printf(&b, "]}\n");
+    pthread_mutex_unlock(&spoolman_catalog_mutex);
+    if (b.failed) spools_fail(fd, 500, "Catalog response is too large");
+    else respond(fd, 200, "OK", "application/json; charset=utf-8", b.data, b.length);
+    free(b.data);
 }

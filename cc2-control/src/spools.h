@@ -213,6 +213,14 @@ static spool_entry *spool_find(const char *id) {
     return NULL;
 }
 
+/* For Spoolman auto-import (spoolman.h): is this Spoolman spool already linked to a local one? */
+static spool_entry *spool_find_by_spoolman_id(const char *spoolman_id) {
+    if (!spoolman_id || !spoolman_id[0]) return NULL;
+    for (int i = 0; i < spools.count; ++i)
+        if (spools.spools[i].spoolman_id[0] && !strcmp(spools.spools[i].spoolman_id, spoolman_id)) return &spools.spools[i];
+    return NULL;
+}
+
 /* Ids are copied between fields of the one store, which snprintf may not overlap. */
 static void spool_copy_id(char out[SPOOL_ID_LEN + 1], const char *id) {
     size_t n = id ? strnlen(id, SPOOL_ID_LEN) : 0;
