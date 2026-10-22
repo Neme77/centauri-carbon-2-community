@@ -36,7 +36,7 @@
   --blue: #166fa8;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: #0c1218; color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
+body { margin: 0; background: #0c1218; color: var(--text); font: 14px/1.45 "Segoe UI", Arial, sans-serif; }
 button { font: inherit; color: inherit; }
 .preview-shell { width: min(100%, 1440px); margin: 0 auto; padding: 18px; }
 .preview-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; color: var(--muted); font-size: 12px; }
@@ -46,6 +46,7 @@ button { font: inherit; color: inherit; }
 .preview-button[aria-pressed="true"] { border-color: var(--cyan); background: var(--field); color: var(--cyan); }
 .preview-note { margin-left: auto; }
 #device {
+  position: relative;
   --preview-bg: var(--bg);
   width: 100%;
   min-height: 720px;
@@ -90,7 +91,7 @@ button { font: inherit; color: inherit; }
 .update-indicator { position: relative; width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--edge); border-radius: 6px; color: var(--cyan); font-size: 17px; }
 .update-indicator::after { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; content: ""; border-radius: 50%; background: var(--amber); }
 .header-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 10px; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel); font-size: 12px; white-space: nowrap; }
-.header-action.stop { border-color: color-mix(in srgb, var(--red) 55%, var(--edge)); color: var(--red); background: color-mix(in srgb, var(--red) 8%, var(--panel)); font-weight: 600; }
+.header-action.stop { border-color: var(--red); color: var(--red); background: var(--panel); font-weight: 600; }
 .header-action .glyph { font-size: 17px; line-height: 1; }
 .top-progress { position: absolute; right: 0; bottom: -1px; left: 0; height: 3px; background: var(--edge); }
 .top-progress > i { display: block; width: 68%; height: 100%; background: var(--cyan); }
@@ -104,7 +105,7 @@ button { font: inherit; color: inherit; }
 .sidebar { display: flex; flex-direction: column; border-right: 1px solid var(--edge); background: var(--panel); }
 .sidebar-label { padding: 18px 16px 8px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
 .nav-list { display: grid; gap: 2px; padding: 0 0 10px; }
-.nav-item { display: flex; align-items: center; gap: 13px; height: 50px; padding: 0 14px; border-left: 4px solid transparent; color: var(--muted); font-size: 13px; }
+.nav-item { display: flex; align-items: center; gap: 13px; height: 50px; padding: 0 14px; border-left: 4px solid transparent; color: var(--muted); font-size: 14px; }
 .nav-item.current { border-left-color: var(--cyan); background: var(--field); color: var(--cyan); }
 .nav-glyph { display: inline-grid; width: 20px; place-items: center; color: currentColor; font-size: 16px; }
 .sidebar-bottom { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--edge); color: var(--muted); font-size: 11px; }
@@ -114,7 +115,7 @@ button { font: inherit; color: inherit; }
 .card { min-width: 0; padding: 14px; border: 1px solid var(--edge); border-radius: 8px; background: var(--panel); }
 .card-head { display: flex; align-items: center; gap: 10px; min-height: 28px; margin-bottom: 12px; padding-bottom: 9px; border-bottom: 1px solid var(--edge); }
 .card-icon { display: inline-grid; width: 19px; place-items: center; color: var(--cyan); font-size: 16px; }
-.card-title { margin: 0; font-size: 15px; line-height: 1.35; font-weight: 600; }
+.card-title { margin: 0; font-size: 16px; line-height: 1.35; font-weight: 600; }
 .card-end { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .camera-frame { position: relative; display: grid; min-height: 180px; aspect-ratio: 16 / 9; place-items: center; overflow: hidden; border: 1px solid var(--edge); border-radius: 6px; background: #02090e; }
 .camera-grid { position: absolute; inset: 0; opacity: .45; background-image: linear-gradient(#17445b 1px, transparent 1px), linear-gradient(90deg, #17445b 1px, transparent 1px); background-size: 36px 36px; transform: perspective(240px) rotateX(50deg) scale(1.35); transform-origin: center 80%; }
@@ -137,7 +138,7 @@ button { font: inherit; color: inherit; }
 .job-stat { min-width: 0; padding-right: 8px; border-right: 1px solid var(--edge); }
 .job-stat:last-child { border-right: 0; }
 .stat-value { display: block; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.stat-label { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.stat-label { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.35; }
 .job-actions { display: flex; gap: 7px; padding-top: 10px; border-top: 1px solid var(--edge); }
 .tuning-row { display: grid; grid-template-columns: 82px minmax(0, 1fr) 42px; align-items: center; gap: 9px; margin: 11px 0; font-size: 12px; }
 .tuning-track { height: 6px; overflow: hidden; border-radius: 4px; background: var(--edge); }
@@ -223,7 +224,6 @@ button { font: inherit; color: inherit; }
   #device[data-viewport="mobile"] .topbar { gap: 5px; padding-inline: 5px; }
   #device[data-viewport="mobile"] .header-actions { gap: 3px; }
   #device[data-viewport="mobile"] .menu-toggle { width: 40px; flex-basis: 40px; }
-  #device[data-viewport="mobile"] .status-box { display: none; }
   #device[data-viewport="mobile"] .job-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #device[data-viewport="mobile"] .job-stat:nth-child(2) { border-right: 0; }
   #device[data-viewport="mobile"] .reading { grid-template-columns: 10px minmax(0, 1fr) auto; font-size: 11px; }
@@ -258,7 +258,7 @@ button { font: inherit; color: inherit; }
         <span class="brand-title">Centauri Carbon 2<span class="brand-divider">/</span><span class="brand-subtitle">Control Center</span></span>
       </div>
       <div class="header-actions" aria-label="Printer status and actions">
-        <div class="status-box"><span class="status-dot" aria-hidden="true"></span><strong>Idle</strong><span class="connection-label">Printer connected</span></div>
+        <div class="status-box"><span class="status-dot" aria-hidden="true"></span><strong>Printing · 68%</strong><span class="connection-label">Printer connected</span></div>
         <div class="update-indicator" aria-label="Update available">↻</div>
         <span class="header-action stop"><span class="glyph" aria-hidden="true">!</span>Emergency stop</span>
         <span class="header-action"><span class="glyph" aria-hidden="true">↻</span>Restart</span>
