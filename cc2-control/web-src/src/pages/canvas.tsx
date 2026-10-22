@@ -329,7 +329,7 @@ export const Canvas = () => {
             ))}
           </div>
           <div class="grid justify-items-end gap-2">
-            <Tag tone={ok ? 'ok' : 'warning'}>
+            <Tag class="cc2-canvas-connection" tone={ok ? 'ok' : 'warning'}>
               <Pip />
               {t(ok ? 'common.connected' : 'canvas.not_detected')}
             </Tag>

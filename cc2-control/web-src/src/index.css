@@ -423,3 +423,6 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 
 [data-canvas-action-reason] { min-height:4.35em; }
 @container page (min-width:720px) { [data-canvas-action-reason] { min-height:1.45em; } }
+
+/* The status pill sits on the page background, so retain its panel contrast. */
+.cc2-canvas-overview .cc2-canvas-connection { background:var(--panel); }

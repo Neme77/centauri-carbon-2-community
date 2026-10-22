@@ -49,6 +49,13 @@ try {
       const b=document.querySelector('[data-canvas-timeline]').getBoundingClientRect()
       return { page:document.documentElement.scrollHeight, width:innerWidth, scroll:document.documentElement.scrollWidth, settings:a.height, history:b.height, sideBySide:Math.abs(a.top-b.top)<1 }
     })
+    const contrast = await page.locator('.cc2-canvas-connection').evaluate(e=>{
+      const style=getComputedStyle(e)
+      const lum=colour=>colour.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4).reduce((a,v,i)=>a+v*[0.2126,0.7152,0.0722][i],0)
+      const a=lum(style.color),b=lum(style.backgroundColor)
+      return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)
+    })
+    assert(contrast>=4.5, `Connection badge contrast ${contrast}: ${theme}`)
     assert(geometry.scroll <= width, JSON.stringify(geometry))
     if (geometry.sideBySide) assert(Math.abs(geometry.settings-geometry.history)<1, JSON.stringify(geometry))
     await page.evaluate(()=>window.scrollTo(0,0)); await page.screenshot({ path:path.join(output, `${width}-${tracking?'tracking':'no-tracking'}-${theme}.png`), fullPage:true })
