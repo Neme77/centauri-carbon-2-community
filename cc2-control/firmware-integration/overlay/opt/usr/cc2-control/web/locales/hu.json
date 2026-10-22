@@ -1061,7 +1061,7 @@
   "experiments.intro": "Az opcionális funkciók függetlenek a frissítésektől. Kezdetben ki vannak kapcsolva; a választások frissítéskor megmaradnak.",
   "experiments.invalid": "A beállítások nem olvashatók biztonságosan. A meglévő fájl nem lett felülírva.",
   "experiments.lan_code": "LAN-kód a kísérleti funkciókhoz",
-  "experiments.normal_required": "A Vezérlés oldalon válaszd a Normal módot, és várd meg a sikeres befejezést a letiltás vagy Canvas-forrásváltás előtt. A kijelzett mód kérés, nem ellenőrzött regiszterérték.",
+  "experiments.normal_required": "A Vezérlés oldalon válaszd a Normal módot, és várd meg a sikeres befejezést az alkalmazás frissítése, letiltás vagy Canvas-forrásváltás előtt. A kijelzett mód kérés, nem ellenőrzött regiszterérték.",
   "experiments.pullback_separate": "A 350 mm feletti visszahúzás külön firmware-kísérlet marad. A kamerajavítás az összesített frissítések része.",
   "experiments.quiet_hint": "Quiet / Normal gombok a Vezérlés oldalon. Quiet: legfeljebb 80 mm/s és 2000 mm/s² a G-code-ban; a szeletelő felülírhatja a kezdeti korlátokat. Normal: rögzített 500 / 20000 korlát.",
   "experiments.quiet_off_confirm": "Elrejted a Quiet / Normal gombokat? A Normal módnak előbb sikeresen be kell fejeződnie. A többi választás megmarad.",

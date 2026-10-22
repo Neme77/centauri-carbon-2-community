@@ -1061,7 +1061,7 @@
   "experiments.intro": "可选功能独立于应用更新。初始均关闭，更新后保留您的选择。",
   "experiments.invalid": "无法安全读取实验设置。现有文件未被覆盖。",
   "experiments.lan_code": "实验功能局域网访问码",
-  "experiments.normal_required": "禁用此选项或切换 Canvas 来源前，请在控制页选择 Normal 并等待成功完成。显示的模式是请求结果，并非已验证的驱动寄存器。",
+  "experiments.normal_required": "更新应用、禁用此选项或切换 Canvas 来源前，请在控制页选择 Normal 并等待成功完成。显示的模式是请求结果，并非已验证的驱动寄存器。",
   "experiments.pullback_separate": "超过 350 mm 的回抽仍是独立固件实验。摄像头修复仍包含在累积应用更新中。",
   "experiments.quiet_hint": "在控制页显示 Quiet / Normal。Quiet 要求 G-code 不超过 80 mm/s 和 2000 mm/s²；切片器可能覆盖初始限制。Normal 恢复固定限制 500 / 20000。",
   "experiments.quiet_off_confirm": "隐藏 Quiet / Normal 控制？必须先成功完成 Normal。其他实验选择会保留。",

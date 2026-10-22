@@ -1061,7 +1061,7 @@
   "experiments.intro": "Les fonctions optionnelles sont indépendantes des mises à jour. Elles sont désactivées initialement ; vos choix sont conservés lors des mises à jour.",
   "experiments.invalid": "Lecture sûre des paramètres impossible. Le fichier existant n’a pas été écrasé.",
   "experiments.lan_code": "Code LAN pour les fonctions expérimentales",
-  "experiments.normal_required": "Dans Contrôle, sélectionnez Normal et attendez sa réussite avant de désactiver ou changer la source Canvas. Le mode affiché est une demande, pas une lecture vérifiée des registres.",
+  "experiments.normal_required": "Dans Contrôle, sélectionnez Normal et attendez sa réussite avant une mise à jour, une désactivation ou un changement de source Canvas. Le mode affiché est une demande, pas une lecture vérifiée des registres.",
   "experiments.pullback_separate": "Le retrait supérieur à 350 mm reste une expérience firmware séparée. Le correctif caméra reste inclus dans les mises à jour cumulatives.",
   "experiments.quiet_hint": "Affiche Quiet / Normal dans Contrôle. Quiet nécessite un G-code limité à 80 mm/s et 2000 mm/s² : le trancheur peut remplacer les limites initiales. Normal rétablit les limites fixes 500 / 20000.",
   "experiments.quiet_off_confirm": "Masquer Quiet / Normal ? Normal doit d’abord se terminer sans erreur. Les autres choix sont conservés.",

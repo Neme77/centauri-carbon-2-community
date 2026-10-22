@@ -38,7 +38,7 @@ G-code deve rispettarli per tutta la stampa. Normal ripristina i valori fissi
 500/20000, non eventuali limiti personalizzati precedenti. La modalità mostrata
 è una richiesta, non una lettura verificata dei registri del driver.
 
-Prima di spegnere l’opzione, o cambiare sorgente Canvas mentre è accesa,
+Prima di aggiornare l’app, spegnere l’opzione o cambiare sorgente Canvas mentre è accesa,
 selezionare Normal in Controllo e attendere il completamento del comando senza
 errori sulla connessione UDS attuale. Il salvataggio delle preferenze non invia
 quel comando al posto dell’utente. Anche un comando completato non certifica

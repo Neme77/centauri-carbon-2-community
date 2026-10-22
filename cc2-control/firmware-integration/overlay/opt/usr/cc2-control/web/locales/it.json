@@ -1061,7 +1061,7 @@
   "experiments.intro": "Le funzioni opzionali sono indipendenti dagli aggiornamenti dell’app. Partono entrambe disattivate; le scelte vengono conservate aggiornando CC2 Control.",
   "experiments.invalid": "Impossibile leggere in sicurezza le impostazioni sperimentali. Il file esistente non è stato sovrascritto.",
   "experiments.lan_code": "Codice LAN per le funzioni sperimentali",
-  "experiments.normal_required": "In Controllo seleziona Normal e attendi il completamento senza errori prima di disabilitare l’opzione o cambiare sorgente Canvas. La modalità mostrata indica una richiesta, non registri del driver verificati.",
+  "experiments.normal_required": "In Controllo seleziona Normal e attendi il completamento senza errori prima di aggiornare l’app, disabilitare l’opzione o cambiare sorgente Canvas. La modalità mostrata indica una richiesta, non registri del driver verificati.",
   "experiments.pullback_separate": "La retrazione oltre 350 mm resta una prova firmware separata. Il fix webcam rimane incluso negli aggiornamenti cumulativi dell’app.",
   "experiments.quiet_hint": "Mostra Quiet / Normal in Controllo. Quiet richiede G-code preparati entro 80 mm/s e 2000 mm/s²: lo slicer può sovrascrivere i limiti iniziali. Normal ripristina i limiti fissi 500 / 20000.",
   "experiments.quiet_off_confirm": "Nascondere i controlli Quiet / Normal? Prima deve essere completato Normal senza errori. Le altre scelte sperimentali vengono conservate.",

@@ -1061,7 +1061,7 @@
   "experiments.intro": "Optional features are independent of application updates. Both start disabled; your choices are kept when updating CC2 Control.",
   "experiments.invalid": "Experimental settings could not be read safely. Existing storage has not been overwritten.",
   "experiments.lan_code": "LAN code for experimental features",
-  "experiments.normal_required": "In Control, select Normal and wait for successful completion before disabling this option or changing the Canvas source. The displayed mode records a request, not verified driver registers.",
+  "experiments.normal_required": "In Control, select Normal and wait for successful completion before app updates, disabling this option or changing the Canvas source. The displayed mode records a request, not verified driver registers.",
   "experiments.pullback_separate": "Extended pull-back above 350 mm remains a separate firmware experiment. The camera fix stays part of cumulative application updates.",
   "experiments.quiet_hint": "Show Quiet / Normal controls in Control. Quiet requires G-code sliced within 80 mm/s and 2000 mm/s²: the slicer can override the initial limits. Normal restores fixed limits of 500 / 20000.",
   "experiments.quiet_off_confirm": "Hide the Quiet / Normal controls? Normal must have completed successfully first. Other experimental choices are kept.",

@@ -41,7 +41,7 @@ the slicer, so test G-code must respect those limits throughout. Normal restores
 fixed 500/20000 values, not custom previous limits. The reported mode records a
 request; it is not verified TMC register telemetry.
 
-Before disabling these controls, or changing Canvas source while they are
+Before an application update, disabling these controls, or changing Canvas source while they are
 enabled, the user must explicitly request Normal on the current UDS connection
 and wait for its Console command to complete successfully. The settings endpoint
 never sends this command itself. This prevents hiding controls or losing the

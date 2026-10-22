@@ -51,6 +51,7 @@ int main(void) {
     experiments_load(); assert(experiments.canvas_uds && !experiments.quiet_motors);
     put("quiet-motors:on", 200); assert(experiments.canvas_uds && experiments.quiet_motors);
     assert(!motor_mode_requested && !command_state.command[0]); /* Enabling controls moves nothing. */
+    assert(!app_update_ready(&machine, &command_state)); /* App restart must not lose a Quiet session. */
     put("quiet-motors:off", 409); put("canvas-uds:off", 409);
     int stream[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, stream)); telemetry.fd = stream[0]; telemetry.connections = 9;
     motor_mode_requested = "normal"; motor_mode_connection = 8;
@@ -60,6 +61,7 @@ int main(void) {
                                                  sizeof(command_state.command), reason, sizeof(reason)));
     command_state.completed = 1; command_state.success = 0; put("quiet-motors:off", 409);
     command_state.success = 1;
+    assert(app_update_ready(&machine, &command_state));
     put("quiet-motors:off", 200); assert(!experiments.quiet_motors && experiments.canvas_uds);
     put("canvas-uds:off", 200); assert(!experiments.canvas_uds && !telemetry.canvas_enabled);
     close(stream[1]);

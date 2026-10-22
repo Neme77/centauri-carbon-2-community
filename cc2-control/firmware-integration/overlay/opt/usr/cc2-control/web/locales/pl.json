@@ -1061,7 +1061,7 @@
   "experiments.intro": "Opcjonalne funkcje są niezależne od aktualizacji. Początkowo są wyłączone; wybór pozostaje po aktualizacji.",
   "experiments.invalid": "Nie można bezpiecznie odczytać ustawień. Istniejący plik nie został nadpisany.",
   "experiments.lan_code": "Kod LAN dla funkcji eksperymentalnych",
-  "experiments.normal_required": "W Sterowaniu wybierz Normal i poczekaj na zakończenie bez błędów przed wyłączeniem lub zmianą źródła Canvas. Wyświetlany tryb oznacza żądanie, nie zweryfikowane rejestry.",
+  "experiments.normal_required": "W Sterowaniu wybierz Normal i poczekaj na zakończenie bez błędów przed aktualizacją aplikacji, wyłączeniem lub zmianą źródła Canvas. Wyświetlany tryb oznacza żądanie, nie zweryfikowane rejestry.",
   "experiments.pullback_separate": "Wycofanie ponad 350 mm pozostaje osobnym eksperymentem firmware. Poprawka kamery pozostaje w aktualizacjach zbiorczych.",
   "experiments.quiet_hint": "Pokazuje Quiet / Normal w Sterowaniu. Quiet wymaga G-code do 80 mm/s i 2000 mm/s²: slicer może nadpisać początkowe limity. Normal przywraca stałe limity 500 / 20000.",
   "experiments.quiet_off_confirm": "Ukryć Quiet / Normal? Najpierw Normal musi zakończyć się bez błędów. Pozostałe wybory pozostaną.",

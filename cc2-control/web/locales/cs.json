@@ -1061,7 +1061,7 @@
   "experiments.intro": "Volitelné funkce jsou nezávislé na aktualizacích. Zpočátku jsou vypnuté; volby se při aktualizaci zachovají.",
   "experiments.invalid": "Nastavení nelze bezpečně přečíst. Existující soubor nebyl přepsán.",
   "experiments.lan_code": "LAN kód pro experimentální funkce",
-  "experiments.normal_required": "V Ovládání zvolte Normal a před vypnutím nebo změnou zdroje Canvas počkejte na úspěšné dokončení. Zobrazený režim je požadavek, nikoli ověřené registry.",
+  "experiments.normal_required": "V Ovládání zvolte Normal a před aktualizací aplikace, vypnutím nebo změnou zdroje Canvas počkejte na úspěšné dokončení. Zobrazený režim je požadavek, nikoli ověřené registry.",
   "experiments.pullback_separate": "Zpětný posuv nad 350 mm zůstává samostatným firmware experimentem. Oprava kamery zůstává v kumulativních aktualizacích.",
   "experiments.quiet_hint": "Zobrazí Quiet / Normal v Ovládání. Quiet vyžaduje G-code do 80 mm/s a 2000 mm/s²: slicer může přepsat počáteční limity. Normal obnoví pevné limity 500 / 20000.",
   "experiments.quiet_off_confirm": "Skrýt Quiet / Normal? Normal musí nejprve úspěšně skončit. Ostatní volby zůstanou.",

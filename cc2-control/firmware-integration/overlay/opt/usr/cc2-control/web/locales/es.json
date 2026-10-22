@@ -1061,7 +1061,7 @@
   "experiments.intro": "Las funciones opcionales son independientes de las actualizaciones. Empiezan desactivadas; las elecciones se conservan al actualizar.",
   "experiments.invalid": "No se pudieron leer los ajustes de forma segura. El archivo existente no se ha sobrescrito.",
   "experiments.lan_code": "Código LAN para funciones experimentales",
-  "experiments.normal_required": "En Control, selecciona Normal y espera a que termine sin errores antes de desactivar o cambiar la fuente Canvas. El modo mostrado es una solicitud, no registros verificados.",
+  "experiments.normal_required": "En Control, selecciona Normal y espera a que termine sin errores antes de actualizar la aplicación, desactivar o cambiar la fuente Canvas. El modo mostrado es una solicitud, no registros verificados.",
   "experiments.pullback_separate": "La retracción superior a 350 mm sigue siendo una prueba de firmware separada. El arreglo de cámara permanece en las actualizaciones acumulativas.",
   "experiments.quiet_hint": "Muestra Quiet / Normal en Control. Quiet requiere G-code limitado a 80 mm/s y 2000 mm/s²: el laminador puede cambiar los límites iniciales. Normal restaura los límites fijos 500 / 20000.",
   "experiments.quiet_off_confirm": "¿Ocultar Quiet / Normal? Normal debe terminar sin errores primero. Se conservan las otras opciones.",

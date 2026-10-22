@@ -34,6 +34,7 @@
 #include "uds.h"
 #include "http_guard.h"
 #include "experiments_state.h"
+static int experiments_normal_confirmed(console_state *console);
 
 static uds_client telemetry;
 /* Build-plate measurement and nozzle chosen for a print (plates.h). */

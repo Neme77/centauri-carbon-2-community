@@ -53,7 +53,8 @@ static int app_update_ready(const mqtt_client *mqtt, console_state *console) {
     int busy;
     pthread_mutex_lock(&console->lock); busy = console->busy; pthread_mutex_unlock(&console->lock);
     time_t age = time(NULL) - mqtt->last_message;
-    return gcode_idle_for_mutation(mqtt) && age >= 0 && !busy && !plates_background_active() &&
+    return (!experiments.quiet_motors || experiments_normal_confirmed(console)) &&
+        gcode_idle_for_mutation(mqtt) && age >= 0 && !busy && !plates_background_active() &&
         mqtt->have_extruder_temp && mqtt->have_extruder_target && mqtt->have_bed_temp && mqtt->have_bed_target &&
         isfinite(mqtt->extruder_temp) && mqtt->extruder_temp >= 0 && mqtt->extruder_temp <= 50 &&
         isfinite(mqtt->bed_temp) && mqtt->bed_temp >= 0 && mqtt->bed_temp <= 50 &&

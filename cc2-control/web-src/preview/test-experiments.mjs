@@ -31,7 +31,7 @@ try {
       const [feature, enabled] = action.split(':')
       state[feature === 'canvas-uds' ? 'canvas_uds' : 'quiet_motors'] = enabled === 'on'
     }
-    return r.fulfill({ json: state })
+    return r.fulfill({ json: { ...state, ready: state.ready && (!state.quiet_motors || state.normal_confirmed) } })
   })
   await page.goto(`${server.resolvedUrls.local[0]}#settings/updates`)
   const canvas = page.getByRole('switch', { name: 'Canvas UDS', exact: true })
