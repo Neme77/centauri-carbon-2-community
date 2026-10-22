@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Optional experiments are separate from stable application updates: independent, persisted Canvas UDS (#200) and Quiet-control opt-ins (original motor feature by BorjaLL, #179), both initially disabled. Normal must complete before hiding Quiet controls or reconnecting Canvas while those controls are enabled. Extended pull-back remains a separate firmware experiment.
+- Public cumulative release packaging with `--release` refuses missing qualified camera runtime files, retaining the camera migration for users skipping 1.2.19.
+
 - Web UI: shared design system (page, card and dialog titles, spacing, radius), documented in `AGENTS.md`, with keyboard focus, accessible names and landmarks checked with axe (#196).
 - The demo (`npm run preview:ui`) starts in English.
 - Homepage: simplified, with the firmware and CC2 Control downloads highlighted (#201).

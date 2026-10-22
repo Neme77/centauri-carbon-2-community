@@ -73,10 +73,8 @@ try {
   await bell.click()
   await page.getByRole('dialog').getByRole('button', { name: 'Open updates', exact: true }).click()
   await page.getByText('Compatible update available: 1.2.15', { exact: true }).waitFor()
-  await page.getByLabel('Update channel', { exact: true }).selectOption('canvas-uds')
-  await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
-  await page.getByRole('button', { name: 'CC2 Control 1.3.0 available', exact: true }).waitFor()
-  await page.getByLabel('Update channel', { exact: true }).selectOption('stable')
+  assert.equal(await page.getByLabel('Update channel', { exact: true }).count(), 0)
+  assert.equal(await page.getByRole('button', { name: 'CC2 Control 1.3.0 available', exact: true }).count(), 0)
 
   const shots = process.env.CC2_NOTICE_SCREENSHOTS
   if (shots) await mkdir(shots, { recursive: true })

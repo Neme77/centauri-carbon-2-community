@@ -88,6 +88,11 @@ jobs:
         working-directory: cc2-control/web-src
         run: npm run test:control-calibrations
 
+      - name: Experimental feature switches and Quiet controls
+        run: |
+          npm run test:experiments
+          npm run test:motor-mode
+
       - name: Canvas states and explicit recovery loading
         run: npm run test:canvas-states
 

@@ -171,5 +171,55 @@ int main(void){
         expect(!control_idle_motors_due(&idle,&s,3*limit+1),"the wait restarts once the blocker clears");
         expect(control_idle_motors_due(&idle,&s,4*limit+1),"release follows a full period after the blocker");
     }
+    {
+        mqtt_client q;memset(&q,0,sizeof(q));
+        q.have_machine_status=1;q.machine_status=1;q.connected=q.registered=1;q.last_message=time(NULL);
+        expect(control_build_script("motors:quiet",&q,script,sizeof(script),reason,sizeof(reason)),"quiet motors accepted idle");
+        expect(strlen(script)<CONSOLE_COMMAND_MAX,"quiet motors fits the console transport");
+        expect(strstr(script,"STEPPER=stepper_x FIELD=en_spreadcycle VALUE=2")&&strstr(script,"STEPPER=stepper_y FIELD=en_spreadcycle VALUE=2")&&
+               strstr(script,"STEPPER=stepper_x FIELD=tpwmthrs VALUE=1048576")&&strstr(script,"STEPPER=stepper_y FIELD=tpwmthrs VALUE=1048576"),
+               "quiet motors clears en_spreadcycle and tpwmthrs on X and Y without a literal 0");
+        expect(strstr(script,"VALUE=0")==NULL,"quiet motors never sends VALUE=0 (refused by the firmware)");
+        expect(strstr(script,"DUMP_TMC STEPPER=stepper_x")&&strstr(script,"DUMP_TMC STEPPER=stepper_y"),"quiet motors reads the drivers back");
+        expect(control_build_script("motors:normal",&q,script,sizeof(script),reason,sizeof(reason))&&
+               strstr(script,"stepper_x FIELD=en_spreadcycle VALUE=1")&&strstr(script,"stepper_y FIELD=en_spreadcycle VALUE=1")&&
+               strstr(script,"stepper_y FIELD=tpwmthrs VALUE=1048575"),"normal motors restores SpreadCycle on X and Y");
+        expect(strlen(script)<CONSOLE_COMMAND_MAX,"normal motors fits the console transport");
+        {
+            const char *on_x=NULL,*on_y=NULL,*cap=NULL,*lift=NULL,*wait=NULL;
+            expect(control_build_script("motors:quiet",&q,script,sizeof(script),reason,sizeof(reason)),"quiet motors accepted again");
+            wait=strstr(script,"M400\n");cap=strstr(script,"SET_VELOCITY_LIMIT VELOCITY=80 ACCEL=2000");
+            on_x=strstr(script,"stepper_x FIELD=en_spreadcycle VALUE=2");on_y=strstr(script,"stepper_y FIELD=en_spreadcycle VALUE=2");
+            expect(wait==script&&cap&&wait<cap,"quiet motors waits for moves before capping the toolhead");
+            expect(cap&&on_x&&on_y&&cap<on_x&&cap<on_y&&cap<strstr(script,"FIELD=tpwmthrs"),
+                   "quiet motors caps speed and accel before any StealthChop write");
+            expect(strstr(script,"VELOCITY=500")==NULL&&strstr(script,"ACCEL=20000")==NULL,"quiet motors never lifts the cap");
+            char normal[700];
+            expect(control_build_script("motors:normal",&q,normal,sizeof(normal),reason,sizeof(reason)),"normal motors accepted again");
+            lift=strstr(normal,"SET_VELOCITY_LIMIT VELOCITY=500 ACCEL=20000");
+            const char *off_x=strstr(normal,"stepper_x FIELD=en_spreadcycle VALUE=1"),*off_y=strstr(normal,"stepper_y FIELD=en_spreadcycle VALUE=1");
+            const char *thr_y=strstr(normal,"stepper_y FIELD=tpwmthrs VALUE=1048575");
+            expect(lift&&off_x&&off_y&&thr_y&&off_x<lift&&off_y<lift&&thr_y<lift,
+                   "normal motors restores SpreadCycle on X and Y before lifting the cap");
+            expect(off_x<strstr(normal,"stepper_x FIELD=tpwmthrs")&&strstr(normal,"M400")==NULL,
+                   "normal motors enables SpreadCycle before restoring the hybrid threshold");
+        }
+        {
+            int seen=0;
+            expect(!control_motor_mode_restore_due(&seen,1,1,"standby"),"quiet idle without a print keeps quiet");
+            expect(!control_motor_mode_restore_due(&seen,1,2,"printing")&&seen,"a print in quiet is remembered");
+            expect(!control_motor_mode_restore_due(&seen,1,1,"paused"),"a paused print keeps quiet");
+            expect(control_motor_mode_restore_due(&seen,1,1,"complete"),"quiet returns to normal when the print ends");
+            expect(!control_motor_mode_restore_due(&seen,1,1,"complete"),"the return to normal is requested once");
+            seen=1;
+            expect(!control_motor_mode_restore_due(&seen,0,1,"complete")&&!seen,"normal mode clears the print memory");
+        }
+        expect(!control_build_script("motors:quiet:x",&q,script,sizeof(script),reason,sizeof(reason)),"motor mode action must match exactly");
+        expect(!control_build_script("motors:quiet",&q,script,200,reason,sizeof(reason)),"motor mode rejects a truncated script");
+        q.machine_status=2;
+        expect(!control_build_script("motors:quiet",&q,script,sizeof(script),reason,sizeof(reason)),"motor mode rejected while printing");
+        q.machine_status=1;q.last_message-=30;
+        expect(!control_build_script("motors:normal",&q,script,sizeof(script),reason,sizeof(reason)),"motor mode rejected with stale telemetry");
+    }
     return 0;
 }

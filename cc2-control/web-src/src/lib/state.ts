@@ -179,6 +179,11 @@ export function view(d: any) {
         ? elapsed + remaining
         : Number(d?.print?.total_duration),
     lightOn: Number(d?.hardware?.light) === 1,
+    // X/Y chopper mode requested through CC2 Control; null after a printer restart (the configured mode returns).
+    motorMode: (d?.motor_mode === 'quiet' || d?.motor_mode === 'normal' ? d.motor_mode : null) as
+      | 'quiet'
+      | 'normal'
+      | null,
     pos: (a: 'x' | 'y' | 'z') => `${Number(d?.motion?.[a] || 0).toFixed(2)} mm`,
     fan: (k: 'part' | 'aux' | 'box') => Math.max(0, Math.min(100, Math.round((Number(d?.fans?.[k] || 0) / 255) * 100))),
   }

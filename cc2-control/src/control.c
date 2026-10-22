@@ -272,6 +272,47 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         snprintf(script,cap,"SAVE_GCODE_STATE NAME=CC2_CONTROL_EXTRUDE\nM83\nG1 E%.2f F%d\nRESTORE_GCODE_STATE NAME=CC2_CONTROL_EXTRUDE",value,value<0?600:300);
         return 1;
     }
+    /* X/Y TMC2209 chopper mode, both steppers together (CoreXY). The native
+     * SET_TMC_FIELD treats VALUE=0 as "not given" (error 803), so the zero
+     * writes use values whose masked field is 0: en_spreadcycle is one bit
+     * (2 -> 0) and tpwmthrs 20 bits (0x100000 -> 0). Both reverse writes are
+     * ordinary non-zero values. DUMP_TMC puts the read-back in the console.
+     * StealthChop loses steps at high speed and acceleration (a hybrid
+     * tpwmthrs threshold does not prevent it), so Quiet always caps the
+     * toolhead first and Normal only lifts the cap after SpreadCycle is back. */
+    if(!strcmp(action,"motors:quiet")||!strcmp(action,"motors:normal")){
+        time_t now=time(NULL);int quiet=action[7]=='q';
+        if(printing(m))return reject(reason,reason_cap,"Motor mode cannot change while printing");
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+           m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Motor mode requires the printer to be idle with fresh telemetry");
+        static const char *const steppers[]={"stepper_x","stepper_y"};
+        int n=quiet?snprintf(script,cap,"M400\nSET_VELOCITY_LIMIT VELOCITY=%s ACCEL=%s",
+                             CONTROL_QUIET_VELOCITY,CONTROL_QUIET_ACCEL):0;
+        if(n<0||(size_t)n>=cap)return reject(reason,reason_cap,"Motor mode command is too long");
+        size_t used=(size_t)n;
+        for(int i=0;i<2;i++){
+            n=quiet?snprintf(script+used,cap-used,
+                    "\nSET_TMC_FIELD STEPPER=%s FIELD=tpwmthrs VALUE=%s"
+                    "\nSET_TMC_FIELD STEPPER=%s FIELD=en_spreadcycle VALUE=%s",
+                    steppers[i],CONTROL_TPWMTHRS_ZERO,steppers[i],CONTROL_SPREADCYCLE_ZERO):
+                snprintf(script+used,cap-used,
+                    "%sSET_TMC_FIELD STEPPER=%s FIELD=en_spreadcycle VALUE=1"
+                    "\nSET_TMC_FIELD STEPPER=%s FIELD=tpwmthrs VALUE=%s",
+                    i?"\n":"",steppers[i],steppers[i],CONTROL_TPWMTHRS_MAX);
+            if(n<0||(size_t)n>=cap-used)return reject(reason,reason_cap,"Motor mode command is too long");
+            used+=(size_t)n;
+        }
+        if(!quiet){
+            n=snprintf(script+used,cap-used,"\nSET_VELOCITY_LIMIT VELOCITY=%s ACCEL=%s",
+                       CONTROL_NORMAL_VELOCITY,CONTROL_NORMAL_ACCEL);
+            if(n<0||(size_t)n>=cap-used)return reject(reason,reason_cap,"Motor mode command is too long");
+            used+=(size_t)n;
+        }
+        n=snprintf(script+used,cap-used,"\nDUMP_TMC STEPPER=stepper_x\nDUMP_TMC STEPPER=stepper_y");
+        if(n<0||(size_t)n>=cap-used)return reject(reason,reason_cap,"Motor mode command is too long");
+        return 1;
+    }
     if(strcmp(action,"system:motors_off")==0){
         if(printing(m))return reject(reason,reason_cap,"Motors cannot be disabled while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Motors off requires the printer to be idle");
@@ -317,6 +358,15 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(strcmp(b,"cancel")==0){if(!printing(m))return reject(reason,reason_cap,"No print is active");snprintf(script,cap,"CANCEL_PRINT");return 1;}
     }
     return reject(reason,reason_cap,"Unknown or unsupported control action");
+}
+
+int control_motor_mode_restore_due(int *seen_print,int quiet,int machine_status,const char *print_state){
+    int job=machine_status==2||(print_state&&(!strcmp(print_state,"printing")||!strcmp(print_state,"paused")));
+    if(!quiet){*seen_print=0;return 0;}
+    if(job){*seen_print=1;return 0;}
+    if(!*seen_print||machine_status!=1)return 0;
+    *seen_print=0;
+    return 1;
 }
 
 int control_idle_motors_due(control_idle_motors *s,const control_idle_sample *in,time_t now){
