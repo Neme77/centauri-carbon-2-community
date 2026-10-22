@@ -1043,5 +1043,15 @@
   "canvas.recovery_load_select": "Sélectionnez un emplacement présent. Charger/Décharger restent bloqués jusqu’à confirmation d’un état cohérent.",
   "files.sort": "Trier par",
   "app.print_progress": "Progression de l'impression",
-  "app.sidebar": "Menu latéral"
+  "app.sidebar": "Menu latéral",
+  "spools.spoolman_sync": "Synchronisation Spoolman",
+  "spools.spoolman_hint": "Envoie la consommation mesurée à un serveur Spoolman auto-hébergé et récupère son matériau, sa couleur, son nom et son poids restant, pour toute bobine liée ci-dessous.",
+  "spools.spoolman_url": "URL du serveur",
+  "spools.spoolman_auth": "Connexion au proxy inverse (optionnel)",
+  "spools.spoolman_auth_placeholder": "utilisateur:motdepasse",
+  "spools.spoolman_saved_toast": "Paramètres Spoolman enregistrés.",
+  "spools.spoolman_id": "ID de bobine Spoolman",
+  "spools.spoolman_id_placeholder": "ex. 42",
+  "spools.spoolman_id_hint": "Lie cette bobine à une bobine Spoolman, par son id numérique. Laisser vide pour ne pas la synchroniser.",
+  "spools.invalid_spoolman_id": "L'id Spoolman ne doit contenir que des chiffres."
 }
