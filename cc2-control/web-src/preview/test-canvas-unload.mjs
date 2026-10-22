@@ -14,7 +14,9 @@ try {
   window.__cc2UnloadPosts={save:0,restart:0}
   window.fetch=(input,options={})=>{
    const raw=typeof input==='string'?input:input.url
-   const route=new URL(raw,location.href).pathname
+   let route=new URL(raw,location.href).pathname
+   const api=route.indexOf('/api/')
+   if(api>=0)route=route.slice(api)
    if(options.method==='POST') {
     if(route==='/api/canvas/unload') window.__cc2UnloadPosts.save++
     if(route==='/api/canvas/unload/restart') window.__cc2UnloadPosts.restart++

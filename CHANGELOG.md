@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Canvas: compact slot cards, shared actions and a bounded session-history panel; inspired by Surfoo's layout proposal (#203) and refined through the maintainer-approved layout (#207).
+
 - Web UI: shared design system (page, card and dialog titles, spacing, radius), documented in `AGENTS.md`, with keyboard focus, accessible names and landmarks checked with axe (#196).
 - The demo (`npm run preview:ui`) starts in English.
 - Homepage: simplified, with the firmware and CC2 Control downloads highlighted (#201).

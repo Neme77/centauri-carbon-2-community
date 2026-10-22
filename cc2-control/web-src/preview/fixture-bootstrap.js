@@ -22,7 +22,7 @@
     z_offset: { value: 0, reference: 0, adjustment: 0, pending: false, timed_out: false },
     recovery: { available: false, reboot_pending: false, error: 'none' },
     hardware: { camera: true, usb: true, light: 1, filament_detection: true, filament_detected: false },
-    spools: { enabled: false, revision: 1, questions: [] },
+    spools: { enabled: Boolean(state.spoolLibrary?.enabled), revision: state.spoolLibrary?.revision || 1, questions: [] },
     printer_report: null, printer_error: null, camera_viewer: null,
   })
   const reply = (data, status = 200) => Promise.resolve(new Response(JSON.stringify(data), {
@@ -44,7 +44,7 @@
     }
     if (path === '/api/camera/claim') return reply({viewer:String(options.body)})
     if (path === '/api/canvas') return reply({available:true,auto_refill:false,slots:state.trays.map(t=>{
-        const fresh=state.connected&&state.canvasFresh
+        const fresh=state.connected&&state.canvasFresh&&state.canvasConnected!==false
         const changing=(state.headLoaded&&state.activeTray===-1)||(!state.headLoaded&&state.activeTray!==-1)
         const kind=!fresh?'unknown':changing?'transition':t.status===0?'empty':t.status===2&&state.activeTray===t.tray_id&&state.headLoaded?'loaded':t.status===1&&state.activeTray!==t.tray_id?'present':'transition'
         const busy=state.status!==1
@@ -53,7 +53,7 @@
         const transitionReason=state.headLoaded&&state.activeTray===-1?'unassigned_head':'transition'
         const recovery_load=fresh&&!busy&&state.headLoaded&&state.activeTray===-1&&t.status===1&&state.trays.length===4&&state.trays.every(t=>t.status===0||t.status===1)
         return {slot:t.tray_id,state:kind,load,unload,recovery_load,reason_load:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='loaded'?'already_loaded':kind==='transition'?transitionReason:load?'none':'head_occupied',reason_unload:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='transition'?transitionReason:unload?'none':'not_loaded'}
-      }),telemetry:{result:{canvas_info:{canvas_list:[{canvas_id:0,connected:1,tray_list:state.trays}]}}}})
+      }),telemetry:{result:{canvas_info:{canvas_list:[{canvas_id:0,connected:state.canvasConnected===false?0:1,tray_list:state.trays}]}}}})
     if (path === '/api/canvas/unload/restart' && options.method === 'POST') {
       if (String(options.body) !== 'RESTART') return reply({ ok: false, error: 'Explicit restart confirmation required' }, 400)
       if (!state.unload.pending || state.status !== 1) return reply({ ok: false, error: 'The printer must be idle' }, 409)
@@ -71,6 +71,7 @@
       }
       return reply({ ok: true, editable: true, min: 60, max: 350, configured: u.configured, override: u.override, pending_restart: u.pending, restart: 'none' })
     }
+    if (path === '/api/spools') return reply(state.spoolLibrary || {})
     if (path === '/api/printer') return reply(printer())
     if (path === '/api/health') return reply({ service: 'cc2-control', version: '1.2.3', mqtt_connected: state.connected })
     if (path === '/api/setup') return reply({ required: false, configured: true, mqtt_connected: state.connected })

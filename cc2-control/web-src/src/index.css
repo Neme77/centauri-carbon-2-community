@@ -1,5 +1,50 @@
 @import "tailwindcss";
 
+/* Canvas: settings determine the desktop row height; observations never stretch it. */
+.cc2-canvas-overview { display:flex; align-items:center; gap:16px; }
+.cc2-canvas-miniatures { display:none; gap:4px; }
+.cc2-canvas-miniatures svg { border-bottom:3px solid var(--edge); margin-bottom:3px; }
+.cc2-canvas-slots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.cc2-canvas-slot { position:relative; display:flex; flex-direction:column; }
+.cc2-canvas-slot-pick { position:absolute; inset:0; z-index:1; border-radius:8px; }
+.cc2-canvas-slot>:not(.cc2-canvas-slot-pick) { pointer-events:none; }
+.cc2-canvas-slot .cc2-canvas-choose { position:relative; z-index:2; pointer-events:auto; }
+.cc2-canvas-slot .cc2-canvas-slot-pick:focus-visible { outline-offset:3px; }
+.cc2-canvas-slot .cc2-canvas-slot-pick:disabled { cursor:default; }
+.cc2-canvas-ring { width:76px; height:76px; border:15px solid; border-radius:50%; background:var(--bg); margin:0 auto 12px; flex-shrink:0; }
+.cc2-canvas-slot-data { display:grid; gap:4px; font-size:12px; }
+.cc2-canvas-spool-name { min-height:1.45em; overflow-wrap:anywhere; font-weight:600; margin-bottom:6px; }
+.cc2-canvas-choose { width:100%; margin:10px 0; }
+.cc2-canvas-remaining { margin-top:auto; padding-top:10px; font-size:12px; }
+.cc2-canvas-weight-track { height:5px; margin:6px 0 10px; border-radius:3px; background:var(--edge); overflow:hidden; }
+.cc2-canvas-weight-track>div { height:100%; background:var(--cyan); }
+.cc2-canvas-slot-state { font-size:12px; min-height:4.35em; overflow-wrap:anywhere; }
+.cc2-canvas-selected-label { display:none; }
+.cc2-canvas-lower { display:grid; gap:14px; align-items:stretch; }
+.cc2-canvas-settings { display:flex; flex-direction:column; min-height:300px; }
+.cc2-canvas-refill { margin-bottom:10px; }
+.cc2-canvas-unload { border-top:1px solid var(--edge); padding-top:10px; font-size:12px; }
+.cc2-canvas-unload>label { flex-wrap:wrap; font-size:14px; }
+.cc2-canvas-unload>label>small { margin-left:0; }
+.cc2-canvas-unload input { width:100px; }
+.cc2-canvas-unload>p { font-size:12px; }
+.cc2-canvas-reset { margin-top:auto; padding-top:10px; display:flex; justify-content:flex-end; }
+.cc2-canvas-history { display:flex; flex-direction:column; height:320px; min-height:0; overflow:hidden; }
+.cc2-canvas-history>.text-xs { flex-shrink:0; }
+.cc2-canvas-history-scroll { flex:1 1 0; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; margin:10px 0; padding-right:5px; border-block:1px solid var(--edge); }
+.cc2-canvas-history-empty { display:flex; height:100%; min-height:70px; align-items:center; justify-content:center; text-align:center; }
+.cc2-canvas-history>button { flex-shrink:0; }
+@container page (min-width:720px) {
+  .cc2-canvas-miniatures { display:flex; }
+  .cc2-canvas-selected-label { display:inline; }
+  .cc2-canvas-lower { grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); }
+  .cc2-canvas-history { height:0; min-height:100%; }
+}
+@container page (min-width:960px) {
+  .cc2-canvas-slots { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .cc2-canvas-slot-state { min-height:1.45em; }
+}
+
 /* Every page follows the content width; desktop thresholds retain useful column widths. */
 @custom-variant cc2-sm {
   @media (hover: hover) and (pointer: fine) {
@@ -369,3 +414,12 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 @container page (min-width: 900px) {
   .cc2-object-map-expanded .cc2-object-map-layout { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
 }
+
+.cc2-canvas-slot-data>div, .cc2-canvas-remaining>div:first-child { border:0; padding:0; gap:8px; }
+.cc2-canvas-slot-data>div>span, .cc2-canvas-remaining>div:first-child>span { color:var(--muted); }
+
+.cc2-canvas-actionbar { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; }
+.cc2-canvas-actionheading>div { margin:0; padding:0; border:0; }
+
+[data-canvas-action-reason] { min-height:4.35em; }
+@container page (min-width:720px) { [data-canvas-action-reason] { min-height:1.45em; } }
