@@ -33,8 +33,13 @@ These rules apply to contributors and coding agents working in this repository.
 - Preserve current safety guards, fail-closed behaviour and compatibility
   checks unless the change explicitly targets them.
 - Do not rewrite public history for cosmetic cleanup.
+- Reformatting release history must preserve existing author, idea and tester acknowledgements.
 - Keep commit messages concise; put detailed rationale and validation notes in
   pull requests or release notes.
+- Every user-visible change adds a line under `## [Unreleased]` in `CHANGELOG.md`
+  ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format), in `Added`,
+  `Changed`, `Fixed` or `Removed`, with the PR number and the contributor credit.
+  Internal changes (tests, CI, documentation, generated files) need no entry.
 
 ## Build and test CC2 Control
 
