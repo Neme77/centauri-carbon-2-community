@@ -307,3 +307,65 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   cursor: not-allowed;
   opacity: .6;
 }
+
+/* A single physical bed view; all drawing stays in the browser and has no animation. */
+.cc2-object-map-frame { max-width: 480px; margin-inline: auto; }
+.cc2-object-map-plate {
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  padding: 24px;
+  background: linear-gradient(145deg, var(--panel), var(--field));
+  box-shadow: inset 0 0 0 5px var(--panel), 0 4px 16px #0002;
+}
+.cc2-object-map-surface {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  background: var(--field);
+}
+.cc2-object-map-grid { stroke: var(--edge); stroke-width: .5; }
+.cc2-object-map-outline {
+  fill: var(--muted);
+  fill-opacity: .12;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.cc2-object-map-outline[data-current="true"] { fill: var(--amber); stroke: var(--amber); stroke-width: 1.6; }
+.cc2-object-map-outline[data-selected="true"] { fill: var(--cyan); stroke: var(--cyan); fill-opacity: .25; }
+.cc2-object-map-outline[data-excluded="true"] { fill: var(--red); stroke: var(--red); fill-opacity: .05; stroke-dasharray: 3 2; }
+.cc2-object-map-marker {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, 50%);
+  border: 2px solid var(--muted);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: 0 2px 5px #0003;
+}
+.cc2-object-map-marker:hover:not(:disabled) { border-color: var(--cyan); }
+.cc2-object-map-marker[data-current="true"]:not([data-excluded]) {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--amber) 35%, transparent);
+}
+.cc2-object-map-marker[data-selected="true"] { border-color: var(--cyan); background: var(--cyan); color: var(--ink); }
+.cc2-object-map-marker[data-excluded="true"] { border-color: var(--red); color: var(--red); text-decoration: line-through; opacity: .65; }
+.cc2-object-map-marker:disabled { cursor: not-allowed; }
+.cc2-object-map-marker:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+.cc2-object-map-list { max-height: 300px; }
+.cc2-object-map-expanded .cc2-object-map-frame { max-width: 680px; }
+.cc2-object-map-expanded .cc2-object-map-list { max-height: 480px; }
+@container page (min-width: 900px) {
+  .cc2-object-map-expanded .cc2-object-map-layout { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+}

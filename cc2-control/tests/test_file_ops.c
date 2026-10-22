@@ -48,14 +48,14 @@ static void test_rejected_upload_drains_body(mqtt_client *mqtt){
     close(pair[1]);
 }
 static void test_upload_size_limit(mqtt_client *mqtt){
-    const size_t limit=128UL*1024UL*1024UL;
-    expect(FILE_UPLOAD_MAX==limit,"upload limit is 128 MiB");
+    const size_t limit=512UL*1024UL*1024UL;
+    expect(FILE_UPLOAD_MAX==limit,"upload limit is 512 MiB");
     int pair[2];expect(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0,"create oversized upload socket");
     char request[512];int n=snprintf(request,sizeof(request),
         "POST /api/gcode-files/upload?storage=internal&name=large.gcode HTTP/1.1\r\nContent-Length: %zu\r\n\r\n",limit+1);
     expect(!gcode_upload_start(pair[0],request,"storage=internal&name=large.gcode",(size_t)n,(size_t)n,mqtt),"oversized raw upload rejected before worker starts");
     char response[512];ssize_t got=recv(pair[1],response,sizeof(response)-1,0);expect(got>0,"receive size rejection");response[got]=0;
-    expect(strstr(response,"413 Payload Too Large")&&strstr(response,"maximum 128 MiB"),"raw upload reports updated maximum");
+    expect(strstr(response,"413 Payload Too Large")&&strstr(response,"maximum 512 MiB"),"raw upload reports updated maximum");
     close(pair[0]);close(pair[1]);
     expect(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0,"create oversized multipart socket");
     n=snprintf(request,sizeof(request),"POST /api/files/local HTTP/1.1\r\nContent-Type: multipart/form-data; boundary=test\r\nContent-Length: %zu\r\n\r\n",limit+8193);
@@ -64,6 +64,27 @@ static void test_upload_size_limit(mqtt_client *mqtt){
     expect(strstr(response,"413 Payload Too Large")!=NULL,"multipart overhead remains bounded");
     close(pair[0]);close(pair[1]);
 }
+/* Admit a realistic large body from headers without allocating or sending it.
+ * EOF must abort the streaming worker and remove the incomplete target. */
+static void test_large_upload_admission(mqtt_client *mqtt){
+    expect(UPLOAD_CHUNK==16384,"large uploads retain 16 KiB buffer");
+    expect(UPLOAD_TOTAL_SECONDS==1800,"large uploads have bounded 30 minute deadline");
+    int pair[2];expect(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0,"create large admission socket");
+    struct timeval timeout={10,0};setsockopt(pair[1],SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
+    char request[512];int n=snprintf(request,sizeof(request),
+        "POST /api/gcode-files/upload?storage=internal&name=large.gcode HTTP/1.1\r\nContent-Length: %zu\r\n\r\n",450UL*1024UL*1024UL);
+    shutdown(pair[1],SHUT_WR);
+    expect(gcode_upload_start(pair[0],request,"storage=internal&name=large.gcode",(size_t)n,(size_t)n,mqtt),"450 MiB raw body admitted by streaming worker");
+    char response[1024];size_t used=0;ssize_t got;
+    while(used<sizeof(response)-1 && (got=recv(pair[1],response+used,sizeof(response)-1-used,0))>0)used+=(size_t)got;
+    response[used]=0;close(pair[1]);
+    expect(used>0 && !strstr(response,"413 Payload Too Large") && !strstr(response,"201 Created"),"incomplete large upload fails without a false size refusal or success");
+    char path[1024];snprintf(path,sizeof(path),"%s/large.gcode",gcode_internal_root);
+    expect(access(path,F_OK)!=0,"incomplete large upload never finalized");
+    const struct timespec pause={0,10000000};
+    for(int i=0;i<100 && atomic_load(&upload_busy);i++)nanosleep(&pause,NULL);
+    expect(!atomic_load(&upload_busy),"large upload releases worker slot");
+}
 int main(void){
     char root[]="/tmp/cc2-file-manager-test-XXXXXX";expect(mkdtemp(root)!=NULL,"create test directory");
     gcode_internal_root=root;gcode_usb_root="/tmp/cc2-usb-not-mounted";
@@ -71,6 +92,7 @@ int main(void){
     mqtt.connected=mqtt.registered=mqtt.have_machine_status=1;
     mqtt.machine_status=1;mqtt.last_message=time(NULL);
     test_upload_size_limit(&mqtt);
+    test_large_upload_admission(&mqtt);
     expect(run_upload(&mqtt,"cube.gcode","internal","; cube test\n","test-code")==201,"upload into internal memory");
     expect(run_upload(&mqtt,"barca%201.gcode","internal","; spaced name\n","test-code")==201,"upload URL-encoded filename with spaces");
     char path[1024];snprintf(path,sizeof(path),"%s/cube.gcode",root);

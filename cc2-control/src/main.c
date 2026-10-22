@@ -62,7 +62,7 @@ static int z_offset_readback(double *value){
 }
 
 #define REQUEST_MAX 12288
-#define FILE_UPLOAD_MAX (128UL * 1024UL * 1024UL)
+#define FILE_UPLOAD_MAX (512UL * 1024UL * 1024UL)
 #define UPLOAD_CHUNK 16384
 #define PATH_MAX_LOCAL 512
 #define GCODE_FILES_MAX 128
@@ -360,6 +360,9 @@ typedef struct {
     size_t scanned; /* directory entries examined */
     int available;
     int truncated;
+    int scan_truncated;
+    int has_more;
+    const gcode_file_entry *after;
 } gcode_file_list;
 
 typedef struct {
@@ -421,7 +424,8 @@ static int compare_gcode_files(const void *left, const void *right) {
     const gcode_file_entry *a = (const gcode_file_entry *)left;
     const gcode_file_entry *b = (const gcode_file_entry *)right;
     if (a->modified != b->modified) return a->modified < b->modified ? 1 : -1;
-    return strcasecmp(a->relative_path, b->relative_path);
+    int order = strcasecmp(a->relative_path, b->relative_path);
+    return order ? order : strcmp(a->relative_path, b->relative_path);
 }
 
 /* Keep the newest GCODE_FILES_MAX files in whatever order readdir returns
@@ -434,11 +438,13 @@ static void add_gcode_file(gcode_file_list *list, const char *relative,
     candidate.size = (long long)status->st_size;
     candidate.modified = (long long)status->st_mtime;
     list->total++;
+    if (list->after && compare_gcode_files(&candidate, list->after) <= 0) return;
     if (list->count < GCODE_FILES_MAX) {
         list->files[list->count++] = candidate;
         return;
     }
     list->truncated = 1;
+    list->has_more = 1;
     size_t oldest = 0;
     for (size_t index = 1; index < list->count; ++index)
         if (compare_gcode_files(&list->files[index], &list->files[oldest]) > 0) oldest = index;
@@ -448,7 +454,7 @@ static void add_gcode_file(gcode_file_list *list, const char *relative,
 static void scan_gcode_directory(const char *root, const char *relative,
                                  unsigned int depth, gcode_file_list *list) {
     if (depth > GCODE_SCAN_DEPTH_MAX || list->scanned >= GCODE_SCAN_ENTRIES_MAX) {
-        list->truncated = 1;
+        list->scan_truncated = list->truncated = 1;
         return;
     }
     char directory_path[PATH_MAX_LOCAL * 2];
@@ -456,7 +462,7 @@ static void scan_gcode_directory(const char *root, const char *relative,
         ? snprintf(directory_path, sizeof(directory_path), "%s/%s", root, relative)
         : snprintf(directory_path, sizeof(directory_path), "%s", root);
     if (directory_length < 0 || (size_t)directory_length >= sizeof(directory_path)) {
-        list->truncated = 1;
+        list->scan_truncated = list->truncated = 1;
         return;
     }
     DIR *directory = opendir(directory_path);
@@ -465,7 +471,7 @@ static void scan_gcode_directory(const char *root, const char *relative,
     while ((item = readdir(directory)) != NULL) {
         if (item->d_name[0] == '.') continue;
         if (list->scanned >= GCODE_SCAN_ENTRIES_MAX) {
-            list->truncated = 1;
+            list->scan_truncated = list->truncated = 1;
             break;
         }
         list->scanned++;
@@ -474,13 +480,13 @@ static void scan_gcode_directory(const char *root, const char *relative,
             ? snprintf(child_relative, sizeof(child_relative), "%s/%s", relative, item->d_name)
             : snprintf(child_relative, sizeof(child_relative), "%s", item->d_name);
         if (relative_length < 0 || (size_t)relative_length >= sizeof(child_relative)) {
-            list->truncated = 1;
+            list->scan_truncated = list->truncated = 1;
             continue;
         }
         char child_path[PATH_MAX_LOCAL * 2];
         int path_length = snprintf(child_path, sizeof(child_path), "%s/%s", root, child_relative);
         if (path_length < 0 || (size_t)path_length >= sizeof(child_path)) {
-            list->truncated = 1;
+            list->scan_truncated = list->truncated = 1;
             continue;
         }
         struct stat status;
@@ -488,7 +494,7 @@ static void scan_gcode_directory(const char *root, const char *relative,
         if (S_ISDIR(status.st_mode)) {
             if (depth < GCODE_SCAN_DEPTH_MAX)
                 scan_gcode_directory(root, child_relative, depth + 1, list);
-            else list->truncated = 1;
+            else list->scan_truncated = list->truncated = 1;
         } else if (S_ISREG(status.st_mode) && is_gcode_filename(item->d_name) &&
                    safe_relative_path(child_relative)) {
             add_gcode_file(list, child_relative, &status);
@@ -497,8 +503,9 @@ static void scan_gcode_directory(const char *root, const char *relative,
     closedir(directory);
 }
 
-static void collect_gcode_files(const char *root, gcode_file_list *list) {
+static void collect_gcode_files_after(const char *root, gcode_file_list *list, const gcode_file_entry *after) {
     memset(list, 0, sizeof(*list));
+    list->after = after;
     struct stat status;
     if (stat(root, &status) != 0 || !S_ISDIR(status.st_mode)) return;
     DIR *probe = opendir(root);
@@ -507,6 +514,10 @@ static void collect_gcode_files(const char *root, gcode_file_list *list) {
     list->available = 1;
     scan_gcode_directory(root, "", 0, list);
     qsort(list->files, list->count, sizeof(list->files[0]), compare_gcode_files);
+}
+
+static void collect_gcode_files(const char *root, gcode_file_list *list) {
+    collect_gcode_files_after(root, list, NULL);
 }
 
 static void append_gcode_storage(json_builder *builder, const char *name,
@@ -525,6 +536,14 @@ static void append_gcode_storage(json_builder *builder, const char *name,
                             entry->size, entry->modified);
     }
     json_builder_printf(builder, "]");
+    json_builder_printf(builder, ",\"has_more\":%s,\"scan_truncated\":%s,\"next\":",
+                        list->has_more ? "true" : "false", list->scan_truncated ? "true" : "false");
+    if (list->has_more && list->count) {
+        const gcode_file_entry *last = &list->files[list->count - 1];
+        json_builder_printf(builder, "{\"modified\":\"%lld\",\"path\":", last->modified);
+        json_builder_string(builder, last->relative_path);
+        json_builder_printf(builder, "}");
+    } else json_builder_printf(builder, "null");
     struct statvfs space;
     struct stat st, parent;
     char upper[PATH_MAX_LOCAL * 2];
@@ -619,6 +638,45 @@ static int gcode_storage_root(const char *storage, const char **root) {
 }
 
 #include "gcode_download.h"
+
+/* Cursor pages keep the fixed 128-entry window and all traversal guards.
+ * A cursor is metadata for ordering only, never an instruction to open a path.
+ * Timestamps are decimal strings in the response to avoid JS integer rounding. */
+static int gcode_page_query(const char *query, char storage[16], gcode_file_entry *after) {
+    if (!query || strncmp(query, "storage=", 8)) return 0;
+    const char *before = strstr(query + 8, "&before=");
+    if (!before || before == query + 8 || (size_t)(before - query - 8) >= 16) return 0;
+    memcpy(storage, query + 8, (size_t)(before - query - 8)); storage[before - query - 8] = 0;
+    const char *number = before + 8, *file = strstr(number, "&file=");
+    if (!file || file == number || file - number >= 32 || strchr(file + 6, '&')) return 0;
+    char text[32]; memcpy(text, number, (size_t)(file - number)); text[file - number] = 0;
+    for (size_t i = text[0] == '-' ? 1 : 0; text[i]; i++) if (!isdigit((unsigned char)text[i])) return 0;
+    char *end; errno = 0; after->modified = strtoll(text, &end, 10);
+    if (errno || end == text || *end) return 0;
+    return download_decode(after->relative_path, sizeof(after->relative_path), file + 6, strlen(file + 6)) &&
+           safe_relative_path(after->relative_path) && is_gcode_filename(after->relative_path);
+}
+static void gcode_page_response(int fd, const char *query) {
+    char storage[16]; gcode_file_entry after = {0}; const char *root;
+    if (!gcode_page_query(query, storage, &after) || !gcode_storage_root(storage, &root)) {
+        const char error[] = "{\"error\":\"Invalid file page cursor\"}\n";
+        respond(fd,400,"Bad Request","application/json",error,sizeof(error)-1); return;
+    }
+    gcode_file_list *list = calloc(1, sizeof(*list)); char *body = malloc(GCODE_JSON_CAP);
+    if (!list || !body) {
+        const char error[] = "{\"error\":\"Out of memory\"}\n";
+        respond(fd,503,"Service Unavailable","application/json",error,sizeof(error)-1);
+        free(list); free(body); return;
+    }
+    collect_gcode_files_after(root, list, &after);
+    json_builder b = {body,0,GCODE_JSON_CAP,0}; json_builder_printf(&b,"{");
+    append_gcode_storage(&b,storage,list,root); json_builder_printf(&b,"}\n");
+    if (b.failed) {
+        const char error[] = "{\"error\":\"File page is too large\"}\n";
+        respond(fd,507,"Insufficient Storage","application/json",error,sizeof(error)-1);
+    } else respond(fd,200,"OK","application/json",body,b.length);
+    free(body); free(list);
+}
 
 /* USB root must actually be a mounted removable filesystem, not a plain
  * directory on internal flash left behind when the drive is unplugged. */
@@ -756,7 +814,7 @@ typedef struct {
     const mqtt_client *mqtt;
     struct timespec started;
 } gcode_upload_job;
-#define UPLOAD_TOTAL_SECONDS 300
+#define UPLOAD_TOTAL_SECONDS 1800
 #define UPLOAD_STORAGE_MARGIN (16ULL*1024*1024)
 static int (*upload_statvfs)(const char *,struct statvfs *)=statvfs;
 static int upload_has_space(const char *root,size_t length,unsigned copies){
@@ -967,7 +1025,7 @@ static int gcode_upload_start(int fd,const char *request,const char *query,
     }
     size_t len=content_length_from_headers(request);
     if(!len||len>FILE_UPLOAD_MAX||header_length>used||used-header_length>len){
-        const char *e="{\"error\":\"Invalid upload size (maximum 128 MiB)\"}\n";
+        const char *e="{\"error\":\"Invalid upload size (maximum 512 MiB)\"}\n";
         respond(fd,413,"Payload Too Large","application/json",e,strlen(e));return 0;
     }
     if(!upload_space_guard(fd,root,len,1))return 0;
@@ -3764,6 +3822,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         preferences_put_response(fd,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files")==0) {
         gcode_files_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/page")==0) {
+        gcode_page_response(fd,query);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
         return gcode_download_start(fd,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
