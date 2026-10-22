@@ -2570,6 +2570,8 @@ static void uds_response(int fd){
     json_builder_printf(&b,",\"light\":");
     if(uds_fresh(&telemetry)&&telemetry.have_light)json_builder_printf(&b,"%s",telemetry.light?"true":"false");
     else json_builder_printf(&b,"null");
+    json_builder_printf(&b,",\"canvas_uds_enabled\":%s,\"canvas_uds_available\":%s",
+        telemetry.canvas_enabled?"true":"false",uds_canvas_available(&telemetry)?"true":"false");
     json_builder_printf(&b,"}\n");
     if(!b.failed)respond(fd,200,"OK","application/json",body,b.length);
 }
@@ -2594,12 +2596,13 @@ static void mqtt_diagnostic_response(int fd, const mqtt_client *mqtt) {
 }
 
 static void canvas_response(int fd, const mqtt_client *mqtt) {
-    size_t cap=mqtt->canvas_snapshot_len+2304;
+    size_t snapshot_length;const char *snapshot=mqtt_canvas_snapshot(mqtt,&snapshot_length);
+    size_t cap=snapshot_length+2304;
     char *body=malloc(cap);if(!body)return;
     json_builder b={body,0,cap,0};
-    json_builder_printf(&b,"{\"available\":%s,\"active_tray_id\":%d,\"machine_status\":%d,\"auto_refill\":%s,\"slots\":[",
-      mqtt->canvas_snapshot_len?"true":"false",mqtt->have_canvas_active_tray?mqtt->canvas_active_tray_id:-1,
-      mqtt->machine_status,mqtt->have_auto_refill?(mqtt->auto_refill?"true":"false"):"null");
+    json_builder_printf(&b,"{\"available\":%s,\"active_tray_id\":%d,\"machine_status\":%d,\"auto_refill\":%s,\"source\":\"%s\",\"slots\":[",
+      snapshot_length?"true":"false",mqtt->canvas_uds_ready?telemetry.canvas.active_cid:(mqtt->have_canvas_active_tray?mqtt->canvas_active_tray_id:-1),
+      mqtt->machine_status,mqtt->canvas_uds_ready?(telemetry.canvas.auto_refill?"true":"false"):(mqtt->have_auto_refill?(mqtt->auto_refill?"true":"false"):"null"),mqtt->canvas_uds_ready?"uds":"mqtt");
     for(int i=0;i<4;i++){
       canvas_slot_view v=canvas_slot_policy(mqtt,i);
       json_builder_printf(&b,"%s{\"slot\":%d,\"state\":\"%s\",\"load\":%s,\"unload\":%s,\"recovery_load\":%s,\"reason_load\":\"%s\",\"reason_unload\":\"%s\"}",
@@ -2608,7 +2611,7 @@ static void canvas_response(int fd, const mqtt_client *mqtt) {
         canvas_reason_name(v.reason_load),canvas_reason_name(v.reason_unload));
     }
     json_builder_printf(&b,"]");
-    if(mqtt->canvas_snapshot_len)json_builder_printf(&b,",\"telemetry\":%.*s",(int)mqtt->canvas_snapshot_len,mqtt->canvas_snapshot);
+    if(snapshot_length)json_builder_printf(&b,",\"telemetry\":%.*s",(int)snapshot_length,snapshot);
     json_builder_printf(&b,"}\n");
     if(!b.failed)respond(fd,200,"OK","application/json; charset=utf-8",body,b.length);
     free(body);
@@ -2693,7 +2696,7 @@ static const char *json_next_element(const char *p,const char *end){
 }
 
 static void lane_data_build(const mqtt_client *mqtt,json_builder *builder){
-    const char *snapshot=mqtt->canvas_snapshot,*end=snapshot+mqtt->canvas_snapshot_len;
+    size_t snapshot_length;const char *snapshot=mqtt_canvas_snapshot(mqtt,&snapshot_length),*end=snapshot+snapshot_length;
     const char *root=json_skip_space(snapshot,end),*root_end,*result_end,*info_end,*list_end,*trays_end;
     if(root>=end||*root!='{'||!(root_end=json_container_end(root,end)))return;
     const char *result=json_member_object(root,root_end,"result",'{',&result_end);
@@ -2740,7 +2743,8 @@ static void orca_server_info_response(int fd, const mqtt_client *mqtt) {
 
 static void orca_lane_data_response(int fd, const mqtt_client *mqtt) {
     static const char prefix[]="{\"result\":{\"namespace\":\"lane_data\",\"value\":{";
-    size_t cap=sizeof(prefix)+mqtt->canvas_snapshot_len*4+64;
+    size_t snapshot_length;(void)mqtt_canvas_snapshot(mqtt,&snapshot_length);
+    size_t cap=sizeof(prefix)+snapshot_length*4+64;
     char *data=malloc(cap);
     if(!data)return;
     json_builder builder={data,0,cap,0};
@@ -3923,11 +3927,13 @@ int main(int argc, char **argv) {
     int panda_port = 7125;
     const char *web_root = "./web";
     const char *uds_path = "/tmp/elegoo_uds";
+    int canvas_uds_enabled=0;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
         else if (strcmp(argv[i], "--http-host") == 0 && i + 1 < argc) http_host_alias = argv[++i];
         else if (strcmp(argv[i], "--panda-port") == 0 && i + 1 < argc) panda_port = atoi(argv[++i]);
         else if (strcmp(argv[i], "--web-root") == 0 && i + 1 < argc) web_root = argv[++i];
+        else if (strcmp(argv[i], "--experimental-canvas-uds") == 0) canvas_uds_enabled=1;
         else if (strcmp(argv[i], "--uds-socket") == 0 && i + 1 < argc) uds_path = argv[++i];
         else if (strcmp(argv[i], "--config") == 0 && i + 1 < argc) mqtt_config_path = argv[++i];
         else if (strcmp(argv[i], "--presets") == 0 && i + 1 < argc) material_presets_path = argv[++i];
@@ -3966,6 +3972,7 @@ int main(int argc, char **argv) {
     console_init(&console,"/tmp/elegoo_uds");
     recovery_console=&console;
     uds_init(&telemetry);
+    telemetry.canvas_enabled=canvas_uds_enabled;
     if(!bk_recover()){fprintf(stderr,"Application restore recovery failed; refusing to load mixed libraries\n");console_destroy(&console);return 1;}
     plates_load();
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
