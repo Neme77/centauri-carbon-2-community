@@ -65,6 +65,9 @@ typedef struct {
     size_t snapshot_len;
     char diagnostic[32768];
     size_t diagnostic_len;
+    int canvas_uds_ready;
+    char canvas_uds_snapshot[4096];
+    size_t canvas_uds_snapshot_len;
     char canvas_snapshot[8192];
     size_t canvas_snapshot_len;
     unsigned long canvas_revision; /* counts captured snapshots, so readers can tell a new one */
@@ -107,6 +110,12 @@ typedef struct {
     size_t large_len, large_need;
     unsigned char large_flags;
 } mqtt_client;
+
+/* Read-side experimental overlay only; transport ownership and MQTT cache stay unchanged. */
+static inline const char *mqtt_canvas_snapshot(const mqtt_client *c,size_t *length){
+    if(c->canvas_uds_ready){*length=c->canvas_uds_snapshot_len;return c->canvas_uds_snapshot;}
+    *length=c->canvas_snapshot_len;return c->canvas_snapshot;
+}
 
 void mqtt_init(mqtt_client *client);
 int mqtt_load_config(mqtt_client *client, const char *path);
