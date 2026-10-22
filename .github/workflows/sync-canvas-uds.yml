@@ -1,0 +1,23 @@
+name: Synchronize Canvas UDS source snapshot
+on:
+  push:
+    branches: [experimental/canvas-uds]
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: experimental/canvas-uds
+          fetch-depth: 0
+      - name: Regenerate and verify canonical source snapshot
+        run: |
+          python3 experimental/pr128-integration/sync_source.py
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git commit -m "Refresh Canvas UDS snapshot after fixed slot keys"
+          git push origin HEAD:experimental/canvas-uds

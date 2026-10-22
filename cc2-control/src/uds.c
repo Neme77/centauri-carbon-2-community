@@ -164,8 +164,9 @@ static void canvas_merge(uds_client *c,const char *status,const char *end,int ol
  if(lite){
   if((!older||!(v->present&CC_DID))&&json_member(lite,le,"did")){if(!canvas_int(lite,le,"did",0,31,&value))valid=0;else {if((v->present&CC_DID)&&v->did!=value){memset(v->slots,0,sizeof(v->slots));v->present&=~CC_CONNECTED;}v->did=value;v->present|=CC_DID;}}
   if((!older||!(v->present&CC_CONNECTED))&&json_member(lite,le,"connected")){if(!canvas_int(lite,le,"connected",0,1,&value))valid=0;else {v->connected=value;v->present|=CC_CONNECTED;}}
+  static const char *const channel_keys[]={"channels0","channels1","channels2","channels3"};
   for(int i=0;i<4;i++){
-   char key[16];snprintf(key,sizeof(key),"channels%d",i);const char *se,*slot=json_member_object(lite,le,key,'{',&se);
+   const char *key=channel_keys[i];const char *se,*slot=json_member_object(lite,le,key,'{',&se);
    if(json_member(lite,le,key)&&(!slot||!canvas_slot_merge(&v->slots[i],slot,se,i,older)))valid=0;
   }
  }
