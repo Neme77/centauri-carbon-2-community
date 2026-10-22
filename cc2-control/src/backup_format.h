@@ -303,7 +303,7 @@ static int bk_spool_item(const char *o,const char *end,void *opaque) {
     bk_spool_context *ctx=opaque;
     spool_store *s=ctx->store;
     if(ctx->kind==0) {
-        if(s->count>=SPOOLS_MAX || !bk_keys(o,end,",id,name,brand,material,color,diameter,density,net,remaining,tare,low,price,note,created,used,archived,"))return 0;
+        if(s->count>=SPOOLS_MAX || !bk_keys(o,end,",id,name,brand,material,color,diameter,density,net,remaining,tare,low,price,note,created,used,archived,spoolman_id,"))return 0;
         spool_entry *p=&s->spools[s->count];
         if(!spools_parse_entry(o,end,p))return 0;
         for(int i=0;i<s->count;i++)if(!strcmp(p->id,s->spools[i].id))return 0;
@@ -332,7 +332,7 @@ static int bk_job_item(const char *o,const char *end,void *unused) {
 }
 static int bk_spools(const char *o,const char *end,spool_store *s) {
     memset(s,0,sizeof(*s));
-    if(!bk_keys(o,end,",version,enabled,slots,job,spools,log,") || !bk_int(o,end,"version",1,1,NULL) ||
+    if(!bk_keys(o,end,",version,enabled,slots,job,spools,log,spoolman_url,spoolman_basic_auth,") || !bk_int(o,end,"version",1,1,NULL) ||
         !spools_bool_member(o,end,"enabled",&s->enabled))return 0;
     const char *je,*job=json_member_object(o,end,"job",'{',&je);
     if(!job || !bk_keys(job,je,",active,baseline,last_tray,file,uuid,used,duration,between,started,result,slots,") ||
