@@ -108,5 +108,5 @@ if __name__ == '__main__':
     if args.release and args.application_only_trial:
         parser.error('--release and --application-only-trial are mutually exclusive')
     if args.camera_runtime is None and (args.release or not args.application_only_trial):
-        parser.error('Public cumulative releases require --camera-runtime, including for users who skipped 1.2.19')
+        parser.error('Public cumulative releases require --camera-runtime, including for users who skipped earlier updates')
     package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime)
