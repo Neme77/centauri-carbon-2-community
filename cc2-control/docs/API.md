@@ -469,6 +469,28 @@ also reports `bed_temperature` (the first `M190`/`M140` with a target) and `nozz
 slicer's configuration block), or `null`, for the build-plate measurement and nozzle the dialog suggests.
 Requires printer validation.
 
+### Spoolman sync
+
+An optional bridge between the local spool library above and a self-hosted
+[Spoolman](https://github.com/Donkie/Spoolman) server on the LAN. Spoolman is the inventory source of truth
+for any spool you link to it: CC2 Control periodically reports the grams this printer has measured for it
+(`PUT /api/v1/spool/{id}/use`) and pulls Spoolman's own material, colour, name and remaining weight back
+into the local entry — the same way a refill or an edit made in Spoolman's own web UI would otherwise never
+reach the printer.
+
+- `POST /api/spoolman` (`url`, `basic_auth`) configures it. `url` must be `http://host[:port][/base]` —
+  there is no TLS stack linked into this binary, so `https://` is refused. An empty `url` turns sync off.
+  `basic_auth` is `user:pass` for a reverse proxy some self-hosters put in front of Spoolman; Spoolman
+  itself needs no key. `GET /api/spools` reports `spoolman_url` and `spoolman_has_auth` (never the secret
+  itself).
+- Link a spool to Spoolman's own numeric spool id with `/api/spools/save` `spoolman_id` (digits only; empty
+  unlinks it and discards anything still queued to send for it).
+- Sync runs on the same cadence as the local library's own periodic save (at most once every two minutes),
+  in a background thread — never on the request-handling thread, so a slow or unreachable Spoolman cannot
+  stall the printer connection. A failed push is retried on the next cycle rather than lost or double-sent
+  (Spoolman's `/use` is an absolute delta, not read-modify-write, so a retry after a partial failure is
+  always safe).
+
 ## Bounded asynchronous G-code analysis
 
 Metadata and inspection scans run on one worker with a 128 KiB stack and a queue

@@ -39,6 +39,8 @@
 #define SPOOL_DENSITY 1.24       /* g/cm3 for usage of trays without a spool, and new spools */
 #define SPOOL_LOAD_MM 2000.0     /* at most this much is extruded before the printer names the first tray */
 
+#define SPOOLMAN_ID_MAX 15   /* Spoolman's own integer spool id, decimal text, "" = not linked */
+
 typedef struct {
     char id[SPOOL_ID_LEN + 1];
     char name[SPOOL_TEXT_MAX + 1], brand[SPOOL_TEXT_MAX + 1], note[SPOOL_TEXT_MAX + 1];
@@ -48,6 +50,8 @@ typedef struct {
     double net, remaining, tare, low, price;      /* grams; price per spool */
     long long created, used;                      /* unix seconds */
     int archived;
+    char spoolman_id[SPOOLMAN_ID_MAX + 1];        /* "" = not linked to a Spoolman spool; see spoolman.h */
+    double spoolman_unsent;                        /* grams charged locally, not yet reported to Spoolman */
 } spool_entry;
 
 /* One Canvas tray as the printer reports it. */
@@ -89,12 +93,17 @@ typedef struct {
     char job[SPOOL_JOB_MAX + 1], result[16];
 } spool_event;
 
+#define SPOOLMAN_URL_MAX 255
+#define SPOOLMAN_AUTH_MAX 127   /* "user:pass" for a reverse proxy; Spoolman itself needs no key */
+
 typedef struct {
     int enabled, count, log_count;
     spool_entry spools[SPOOLS_MAX];
     spool_slot slots[SPOOL_SLOTS];
     spool_job job;
     spool_event log[SPOOL_LOG_MAX]; /* oldest first */
+    char spoolman_url[SPOOLMAN_URL_MAX + 1];       /* "" = Spoolman sync off; e.g. "http://192.0.2.5:7912" */
+    char spoolman_basic_auth[SPOOLMAN_AUTH_MAX + 1]; /* "" = none; "user:pass" for a reverse proxy in front of Spoolman */
 } spool_store;
 
 static spool_store spools;
@@ -305,6 +314,7 @@ static void spools_charge(int index, double mm) {
         if (sp->remaining < -1e6) sp->remaining = -1e6;
         sp->used = (long long)spools_wall(NULL);
         spools_unsaved += fabs(grams);
+        if (sp->spoolman_id[0]) sp->spoolman_unsent += grams;
     } else if (s->question) {
         s->question_mm += mm;
         spool_clean(s->question_job, sizeof(s->question_job), job->file, strlen(job->file));
@@ -599,8 +609,8 @@ static void spools_entry_json(json_builder *b, const spool_entry *s) {
         "\"tare\":%.1f,\"low\":%.1f,\"price\":%.2f,\"note\":", s->color, s->diameter, s->density, s->net,
         s->remaining, s->tare, s->low, s->price);
     json_builder_string(b, s->note);
-    json_builder_printf(b, ",\"created\":%lld,\"used\":%lld,\"archived\":%s}", s->created, s->used,
-                        s->archived ? "true" : "false");
+    json_builder_printf(b, ",\"created\":%lld,\"used\":%lld,\"archived\":%s,\"spoolman_id\":\"%s\"}", s->created,
+                        s->used, s->archived ? "true" : "false", s->spoolman_id);
 }
 
 static void spools_tray_json(json_builder *b, const spool_tray *t) {
@@ -633,7 +643,11 @@ static char *spools_encode(const spool_store *store, size_t *length) {
     json_builder b = {malloc(SPOOLS_FILE_MAX), 0, SPOOLS_FILE_MAX, 0};
     if (!b.data) return NULL;
     const spool_job *job = &store->job;
-    json_builder_printf(&b, "{\"version\":1,\"enabled\":%s,\"slots\":[", store->enabled ? "true" : "false");
+    json_builder_printf(&b, "{\"version\":1,\"enabled\":%s,\"spoolman_url\":", store->enabled ? "true" : "false");
+    json_builder_string(&b, store->spoolman_url);
+    json_builder_printf(&b, ",\"spoolman_basic_auth\":");
+    json_builder_string(&b, store->spoolman_basic_auth);
+    json_builder_printf(&b, ",\"slots\":[");
     for (int i = 0; i < SPOOL_SLOTS; ++i) {
         const spool_slot *s = &store->slots[i];
         json_builder_printf(&b, "%s{\"spool\":\"%s\",\"last\":\"%s\",\"question\":%d,\"question_since\":%lld,"
@@ -742,10 +756,17 @@ static int spools_time_member(const char *obj, const char *end, const char *key,
     return 1;
 }
 
+/* Spoolman's spool id as plain decimal digits, or "" for not-yet-reported-missing. */
+static int spoolman_id_ok(const char *text) {
+    if (!text[0]) return 1;
+    for (const char *p = text; *p; ++p) if (!isdigit((unsigned char)*p)) return 0;
+    return 1;
+}
+
 static int spools_parse_entry(const char *obj, const char *end, spool_entry *s) {
     const char *text; int length;
     memset(s, 0, sizeof(*s));
-    return spools_id_member(obj, end, "id", s->id) && s->id[0] &&
+    int ok = spools_id_member(obj, end, "id", s->id) && s->id[0] &&
         spools_text_member(obj, end, "name", s->name, sizeof(s->name), SPOOL_TEXT_MAX, 1) &&
         spools_text_member(obj, end, "brand", s->brand, sizeof(s->brand), SPOOL_TEXT_MAX, 1) &&
         spools_text_member(obj, end, "material", s->material, sizeof(s->material), SPOOL_MATERIAL_MAX, 0) &&
@@ -761,6 +782,18 @@ static int spools_parse_entry(const char *obj, const char *end, spool_entry *s) 
         plates_member_double(obj, end, "price", &s->price) && s->price >= 0 && s->price <= 1e7 &&
         spools_time_member(obj, end, "created", &s->created) && spools_time_member(obj, end, "used", &s->used) &&
         spools_bool_member(obj, end, "archived", &s->archived);
+    if (!ok) return 0;
+    /* Optional, added after v1: a save file from before this field exists without
+     * it entirely, which must still load every spool rather than fail the whole
+     * entry -- so this is checked separately from the mandatory fields above. */
+    s->spoolman_id[0] = 0;
+    if (json_member_raw_string(obj, end, "spoolman_id", &text, &length) && length >= 0 &&
+        (size_t)length <= SPOOLMAN_ID_MAX) {
+        memcpy(s->spoolman_id, text, (size_t)length);
+        s->spoolman_id[length] = 0;
+        if (!spoolman_id_ok(s->spoolman_id)) s->spoolman_id[0] = 0;
+    }
+    return 1;
 }
 
 static int spools_parse_tray(const char *obj, const char *end, spool_tray *t) {
@@ -895,6 +928,17 @@ static void spools_load(void) {
             for (int k = 0; k < i; ++k)
                 if (spools.slots[i].spool[0] && !strcmp(spools.slots[i].spool, spools.slots[k].spool)) ok = 0;
         }
+        /* Optional, added after v1: a save file from before Spoolman sync existed
+         * has no such keys at all, which is not a load failure -- just no sync. */
+        if (ok) {
+            const char *text2; int len2;
+            if (!json_member_raw_string(root, root_end, "spoolman_url", &text2, &len2) || len2 < 0 ||
+                (size_t)len2 > SPOOLMAN_URL_MAX) spools.spoolman_url[0] = 0;
+            else { memcpy(spools.spoolman_url, text2, (size_t)len2); spools.spoolman_url[len2] = 0; }
+            if (!json_member_raw_string(root, root_end, "spoolman_basic_auth", &text2, &len2) || len2 < 0 ||
+                (size_t)len2 > SPOOLMAN_AUTH_MAX) spools.spoolman_basic_auth[0] = 0;
+            else { memcpy(spools.spoolman_basic_auth, text2, (size_t)len2); spools.spoolman_basic_auth[len2] = 0; }
+        }
     }
     free(text);
     if (ok) { spools_available = 1; spools_error = ""; }
@@ -1021,6 +1065,7 @@ static void spools_bind(int index, spool_entry *sp) {
             double grams = spool_grams(sp, s->question_mm);
             sp->remaining -= grams;
             sp->used = (long long)spools_wall(NULL);
+            if (sp->spoolman_id[0]) sp->spoolman_unsent += grams;
             if (job->active && !job->spool[index][0] && fabs(job->mm[index] - s->question_mm) < 1e-6) {
                 /* The open segment is this print's usage from the tray: it becomes the spool's. */
                 spool_copy_id(job->spool[index], sp->id);
@@ -1046,8 +1091,10 @@ static void spools_get_response(int fd, const mqtt_client *mqtt) {
     if (!b.data) { spools_fail(fd, 500, "Out of memory"); return; }
     json_builder_printf(&b, "{\"available\":%s,\"error\":", spools_available ? "true" : "false");
     json_builder_string(&b, spools_error);
-    json_builder_printf(&b, ",\"enabled\":%s,\"revision\":%lu,\"canvas\":%s,\"active_tray\":%d,\"slots\":[",
+    json_builder_printf(&b, ",\"enabled\":%s,\"revision\":%lu,\"canvas\":%s,\"active_tray\":%d,\"spoolman_url\":",
         spools.enabled ? "true" : "false", spools_revision, canvas ? "true" : "false", spools_active_tray(mqtt));
+    json_builder_string(&b, spools.spoolman_url);
+    json_builder_printf(&b, ",\"spoolman_has_auth\":%s,\"slots\":[", spools.spoolman_basic_auth[0] ? "true" : "false");
     for (int i = 0; i < SPOOL_SLOTS; ++i) {
         const spool_slot *s = &spools.slots[i];
         json_builder_printf(&b, "%s{\"slot\":%d,\"spool\":\"%s\",\"last\":\"%s\",\"question\":\"%s\","
@@ -1158,6 +1205,11 @@ static void spools_save_response(int fd, const char *body, size_t length) {
     if ((value = spool_form_get(&f, "archived"))) {
         if (strcmp(value, "0") && strcmp(value, "1")) { spools_fail(fd, 400, "Invalid spool"); return; }
         s.archived = value[0] == '1';
+    }
+    if ((value = spool_form_get(&f, "spoolman_id"))) {
+        if (strlen(value) > SPOOLMAN_ID_MAX || !spoolman_id_ok(value)) { spools_fail(fd, 400, "Invalid Spoolman id"); return; }
+        snprintf(s.spoolman_id, sizeof(s.spoolman_id), "%s", value);
+        if (!value[0]) s.spoolman_unsent = 0;   /* unlinking: forget what was still queued to send */
     }
     int slot = -1;
     if ((value = spool_form_get(&f, "slot")) && ((slot = spool_slot_value(value)) < 0 || existing || s.archived)) {
