@@ -47,12 +47,36 @@ try {
       return original(url,opts)
     }
   })
-  const open=page.getByRole('button',{name:'Bed map',exact:true})
-  await open.waitFor();await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(e=>e.textContent.trim()==='Bed map').disabled)
+  const open=page.getByRole('button',{name:'Expand bed map',exact:true})
+  await open.waitFor();await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(e=>e.textContent.trim()==='Expand bed map').disabled)
+  assert.equal(await page.locator('[data-bed-map]').count(),1,'one map is already visible in Job')
+  assert.equal(await page.locator('[data-object-id]').count(),6,'only one compact object list')
+  const inlineMap=await page.locator('[data-bed-map]').boundingBox()
+  await page.locator('[data-bed-object-id="Buddha.stl_id_1_copy_0"]').click()
+  assert.match(await page.locator('[data-bed-selection]').innerText(),/X 50\.0 \/ Y 50\.0 mm/)
+  for(const [theme,width] of [['dark',1440],['light',1440],['dark',390]]) {
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme)
+    await page.setViewportSize({width,height:1000});await page.waitForTimeout(300)
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'inline map overflow')
+    const square=await page.locator('[data-bed-map]').boundingBox()
+    assert(Math.abs(square.width-square.height)<1,`bed must stay square at ${width}: ${JSON.stringify(square)}`)
+    if(process.env.CC2_AXE_PATH){
+      await page.addScriptTag({path:process.env.CC2_AXE_PATH})
+      const violations=await page.evaluate(async()=> (await axe.run(document.querySelector('.cc2-object-map'))).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})))
+      assert.deepEqual(violations,[],`inline accessibility ${theme}/${width}`)
+    }
+    if(process.env.CC2_SCREENSHOTS){
+      await mkdir(process.env.CC2_SCREENSHOTS,{recursive:true})
+      await page.screenshot({path:path.join(process.env.CC2_SCREENSHOTS,`bed-map-inline-${theme}-${width}.png`),fullPage:true})
+    }
+  }
+  await page.setViewportSize({width:1440,height:1000});await page.waitForTimeout(300)
   await open.click()
   const dialog=page.getByRole('dialog')
   await dialog.getByRole('heading',{name:'Bed map',exact:true}).waitFor()
   const markers=dialog.locator('[data-bed-object-id]')
+  assert.equal(await page.locator('[data-bed-map]').count(),1,'expansion replaces the inline map')
+  assert((await dialog.locator('[data-bed-map]').boundingBox()).width>inlineMap.width,'expanded map is larger')
   assert.equal(await markers.count(),4,'unknown/out-of-bed positions are not invented or clipped onto the bed')
   assert.equal(await dialog.locator('[data-bed-list-id]').count(),6)
   assert.equal(await dialog.locator('img').count(),0,'object names are escaped')
@@ -90,15 +114,24 @@ try {
   for (const [theme,width] of [['dark',1440],['light',1440],['dark',390],['light',768]]) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme)
     await page.setViewportSize({width,height:900})
+    await page.waitForTimeout(300)
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'page overflow')
     assert(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth),'dialog overflow')
     const rect=await dialog.boundingBox();assert(rect.x>=0&&rect.x+rect.width<=width,'dialog must stay inside viewport')
+    const square=await dialog.locator('[data-bed-map]').boundingBox()
+    assert(Math.abs(square.width-square.height)<1,'expanded bed stays square')
+    if(process.env.CC2_AXE_PATH){
+      await page.addScriptTag({path:process.env.CC2_AXE_PATH})
+      const violations=await page.evaluate(async()=> (await axe.run(document.querySelector('[role=dialog]'))).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})))
+      assert.deepEqual(violations,[],`expanded accessibility ${theme}/${width}`)
+    }
     if(process.env.CC2_SCREENSHOTS){
       await mkdir(process.env.CC2_SCREENSHOTS,{recursive:true})
       await page.screenshot({path:path.join(process.env.CC2_SCREENSHOTS,`bed-map-${theme}-${width}.png`)})
     }
   }
   await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0)
+  assert.equal(await page.locator('[data-bed-map]').count(),1,'inline map restored on close')
   assert.equal(await open.evaluate(el=>document.activeElement===el),true,'focus returns to map button')
   await open.focus();await page.keyboard.press('Enter');await dialog.waitFor()
   await dialog.getByRole('button',{name:'Close bed map',exact:true}).click()
@@ -114,6 +147,15 @@ try {
   assert.equal(await dialog.locator('[data-bed-list-id="Back corner"]').getAttribute('aria-pressed'),'true')
   await dialog.getByRole('button',{name:'Close bed map',exact:true}).click()
   // Complete coordinate loss still leaves the list available without false map markers.
+  await page.evaluate(()=>window.__CC2_PREVIEW.objectRows=[{name:'Overlap A',center:[100,100]},{name:'Overlap B',center:[100,100]}])
+  await page.waitForFunction(()=>document.querySelectorAll('[data-object-id]').length===2)
+  await open.click()
+  await dialog.locator('[data-bed-list-id="Overlap B"]').click()
+  assert.equal(await dialog.locator('[data-bed-object-id="Overlap B"]').getAttribute('aria-pressed'),'true')
+  await dialog.locator('[data-bed-list-id="Overlap A"]').focus();await page.keyboard.press('Enter')
+  assert.equal(await dialog.locator('[data-bed-object-id="Overlap A"]').getAttribute('aria-pressed'),'true','coincident markers stay selectable from the compact list')
+  await dialog.getByRole('button',{name:'Close bed map',exact:true}).click()
+  // Coordinate loss still leaves the compact list available.
   await page.evaluate(()=>window.__CC2_PREVIEW.objectRows=[{name:'No position'}])
   await page.waitForFunction(()=>document.querySelector('[data-object-id]')?.dataset.objectId==='No position')
   await open.click();assert.equal(await markers.count(),0)

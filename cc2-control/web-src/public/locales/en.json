@@ -1053,5 +1053,7 @@
   "spools.spoolman_id": "Spoolman spool ID",
   "spools.spoolman_id_placeholder": "e.g. 42",
   "spools.spoolman_id_hint": "Links this spool to one in Spoolman, by its numeric id. Leave empty to not sync it.",
-  "spools.invalid_spoolman_id": "The Spoolman id must be digits only."
+  "spools.invalid_spoolman_id": "The Spoolman id must be digits only.",
+  "files.list_changed_retry": "The file list changed while loading. Refresh and try again.",
+  "job.bed_map_expand": "Expand bed map"
 }

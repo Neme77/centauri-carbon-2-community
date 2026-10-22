@@ -1053,5 +1053,7 @@
   "spools.spoolman_id": "ID szpuli w Spoolman",
   "spools.spoolman_id_placeholder": "np. 42",
   "spools.spoolman_id_hint": "Łączy tę szpulę z tą w Spoolman, po jej numerycznym id. Pozostaw puste, aby nie synchronizować.",
-  "spools.invalid_spoolman_id": "Id Spoolman może zawierać tylko cyfry."
+  "spools.invalid_spoolman_id": "Id Spoolman może zawierać tylko cyfry.",
+  "files.list_changed_retry": "Lista plików zmieniła się podczas wczytywania. Odśwież i spróbuj ponownie.",
+  "job.bed_map_expand": "Powiększ mapę stołu"
 }

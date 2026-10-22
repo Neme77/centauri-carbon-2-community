@@ -1053,5 +1053,7 @@
   "spools.spoolman_id": "ID de bobina en Spoolman",
   "spools.spoolman_id_placeholder": "p. ej. 42",
   "spools.spoolman_id_hint": "Vincula esta bobina a una de Spoolman, por su id numérico. Déjalo vacío para no sincronizarla.",
-  "spools.invalid_spoolman_id": "El id de Spoolman debe contener solo cifras."
+  "spools.invalid_spoolman_id": "El id de Spoolman debe contener solo cifras.",
+  "files.list_changed_retry": "La lista cambió durante la carga. Actualiza e inténtalo de nuevo.",
+  "job.bed_map_expand": "Ampliar mapa de la cama"
 }

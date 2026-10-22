@@ -1053,5 +1053,7 @@
   "spools.spoolman_id": "Spoolman tekercs ID",
   "spools.spoolman_id_placeholder": "pl. 42",
   "spools.spoolman_id_hint": "Összekapcsolja ezt a tekercset egy Spoolman tekerccsel, a numerikus id alapján. Hagyd üresen, ha nem akarod szinkronizálni.",
-  "spools.invalid_spoolman_id": "A Spoolman id csak számjegyeket tartalmazhat."
+  "spools.invalid_spoolman_id": "A Spoolman id csak számjegyeket tartalmazhat.",
+  "files.list_changed_retry": "A fájllista betöltés közben megváltozott. Frissítsen és próbálja újra.",
+  "job.bed_map_expand": "Tárgyasztaltérkép nagyítása"
 }

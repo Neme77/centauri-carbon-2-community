@@ -1053,5 +1053,7 @@
   "spools.spoolman_id": "ID катушки в Spoolman",
   "spools.spoolman_id_placeholder": "напр. 42",
   "spools.spoolman_id_hint": "Связывает эту катушку с катушкой в Spoolman по её числовому id. Оставьте пустым, чтобы не синхронизировать.",
-  "spools.invalid_spoolman_id": "ID Spoolman должен содержать только цифры."
+  "spools.invalid_spoolman_id": "ID Spoolman должен содержать только цифры.",
+  "files.list_changed_retry": "Список файлов изменился при загрузке. Обновите и повторите попытку.",
+  "job.bed_map_expand": "Развернуть карту стола"
 }

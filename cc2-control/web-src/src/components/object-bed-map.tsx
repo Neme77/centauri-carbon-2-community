@@ -8,115 +8,104 @@ import { cn } from '@/lib/utils'
 
 const ticks = [0, 50, 100, 150, 200, 250]
 
-// Inspired by Nick Plateringen-Paul's bed-map prototype. Use the object model,
-// never parsed button text, CSS classes, disabled state or another polling timer.
+// Map prototype: Nick Plateringen-Paul. Single-view refinement: DamiBFryta.
+// Both sizes read the same model; selection never changes the original G-code ID.
 export const ObjectBedMap = ({
   onClose,
   onExclude,
   live,
 }: {
-  onClose: () => void
+  onClose?: () => void
   onExclude: () => void
   live: boolean
 }) => {
   const o = objects.use()
   const selected = o.entries.find(e => e.id === o.selected)
   const missing = o.entries.filter(e => !onBed(e.center)).length
-  return (
-    <Dialog onClose={onClose} width={880} class="max-w-[calc(100vw-2rem)]" label={t('job.bed_map')}>
-      <div class="mb-3 flex items-center justify-between gap-3 border-b border-edge pb-3">
-        <DialogTitle>{t('job.bed_map')}</DialogTitle>
-        <Button onClick={onClose} aria-label={t('job.bed_map_close')}>
-          <X size={18} />
-        </Button>
-      </div>
-      <p class="mb-4 text-sm text-muted">{t('job.bed_map_hint')}</p>
-      <div class="grid min-w-0 gap-5 cc2-md:grid-cols-2">
+  const content = (
+    <div class={cn('cc2-object-map', onClose && 'cc2-object-map-expanded')}>
+      {onClose && (
+        <div class="mb-3 flex items-center justify-between gap-3 border-b border-edge pb-3">
+          <DialogTitle>{t('job.bed_map')}</DialogTitle>
+          <Button onClick={onClose} aria-label={t('job.bed_map_close')}>
+            <X size={18} />
+          </Button>
+        </div>
+      )}
+      <p class="mb-3 text-xs text-muted">{t('job.bed_map_hint')}</p>
+      <div class="cc2-object-map-layout grid min-w-0 gap-3.5 cc2-md:grid-cols-2">
         <div class="min-w-0">
-          <div class="mb-2 flex justify-between text-xs text-muted">
-            <span>
-              {BED_SIZE} × {BED_SIZE} mm
-            </span>
-            <span>Y ↑ · X →</span>
-          </div>
-          <div class="p-4">
-            <div class="relative aspect-square border-2 border-edge bg-field" data-bed-map>
-              <svg viewBox={`0 0 ${BED_SIZE} ${BED_SIZE}`} class="absolute inset-0 h-full w-full" aria-hidden="true">
-                {ticks.map(n => (
-                  <path
-                    key={n}
-                    d={`M ${n} 0 V ${BED_SIZE} M 0 ${BED_SIZE - n} H ${BED_SIZE}`}
-                    fill="none"
-                    stroke="var(--edge)"
-                    stroke-width="0.5"
-                  />
-                ))}
-                {o.entries.map(
-                  e =>
-                    e.polygon &&
-                    onBed(e.center) && (
-                      <polygon
-                        key={e.id}
-                        points={e.polygon.map(([x, y]) => `${x},${BED_SIZE - y}`).join(' ')}
-                        fill={
-                          o.excluded.includes(e.id)
-                            ? 'var(--red)'
-                            : e.id === o.selected
-                              ? 'var(--cyan)'
-                              : e.id === o.current
-                                ? 'var(--amber)'
-                                : 'var(--muted)'
-                        }
-                        fill-opacity="0.14"
-                        stroke={
-                          o.excluded.includes(e.id)
-                            ? 'var(--red)'
-                            : e.id === o.selected
-                              ? 'var(--cyan)'
-                              : e.id === o.current
-                                ? 'var(--amber)'
-                                : 'var(--muted)'
-                        }
-                        stroke-width="1"
-                      />
-                    )
-                )}
-              </svg>
-              {o.entries.map((e, i) => {
-                if (!onBed(e.center)) return null
-                const excluded = o.excluded.includes(e.id)
-                const current = e.id === o.current
-                const chosen = e.id === o.selected
-                return (
-                  <button
-                    type="button"
-                    key={e.id}
-                    data-bed-object-id={e.id}
-                    data-current={current ? 'true' : undefined}
-                    aria-label={`${i + 1}. ${e.label} · X ${e.center[0].toFixed(1)} / Y ${e.center[1].toFixed(1)} mm${current ? ` · ${t('job.current_object')}` : ''}${excluded ? ` · ${t('job.excluded')}` : ''}`}
-                    aria-pressed={chosen}
-                    title={e.label}
-                    disabled={excluded || !live}
-                    class={cn(
-                      'absolute z-10 grid h-8 w-8 -translate-x-1/2 translate-y-1/2 place-items-center rounded-md border-2 text-xs font-bold shadow-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan disabled:cursor-not-allowed',
-                      excluded
-                        ? 'border-red bg-panel text-red line-through'
-                        : chosen
-                          ? 'border-cyan bg-cyan text-ink cursor-pointer'
-                          : 'border-muted bg-panel text-fg cursor-pointer hover:border-cyan',
-                      current && !excluded && 'ring-2 ring-amber ring-offset-2 ring-offset-field'
-                    )}
-                    style={{ left: `${(e.center[0] / BED_SIZE) * 100}%`, bottom: `${(e.center[1] / BED_SIZE) * 100}%` }}
-                    onClick={() => objects.set({ selected: e.id })}
-                  >
-                    {i + 1}
-                  </button>
-                )
-              })}
+          <div class="cc2-object-map-frame">
+            <div class="mb-2 flex justify-between text-xs text-muted">
+              <span>
+                {BED_SIZE} × {BED_SIZE} mm
+              </span>
+              <span>Y ↑ · X →</span>
             </div>
+            <div class="cc2-object-map-plate">
+              <div class="cc2-object-map-surface" data-bed-map>
+                <svg
+                  viewBox={`0 0 ${BED_SIZE} ${BED_SIZE}`}
+                  class="pointer-events-none absolute inset-0 h-full w-full"
+                  aria-hidden="true"
+                >
+                  {ticks.map(n => (
+                    <path
+                      key={n}
+                      d={`M ${n} 0 V ${BED_SIZE} M 0 ${BED_SIZE - n} H ${BED_SIZE}`}
+                      class="cc2-object-map-grid"
+                      fill="none"
+                    />
+                  ))}
+                  {o.entries.map(
+                    e =>
+                      e.polygon &&
+                      onBed(e.center) && (
+                        <polygon
+                          key={e.id}
+                          data-bed-outline-id={e.id}
+                          data-selected={e.id === o.selected ? 'true' : undefined}
+                          data-current={e.id === o.current ? 'true' : undefined}
+                          data-excluded={o.excluded.includes(e.id) ? 'true' : undefined}
+                          points={e.polygon.map(([x, y]) => `${x},${BED_SIZE - y}`).join(' ')}
+                          class="cc2-object-map-outline"
+                        />
+                      )
+                  )}
+                </svg>
+                {o.entries.map((e, i) => {
+                  if (!onBed(e.center)) return null
+                  const excluded = o.excluded.includes(e.id)
+                  const current = e.id === o.current
+                  const chosen = e.id === o.selected
+                  return (
+                    <button
+                      type="button"
+                      key={e.id}
+                      data-bed-object-id={e.id}
+                      data-current={current ? 'true' : undefined}
+                      data-selected={chosen ? 'true' : undefined}
+                      data-excluded={excluded ? 'true' : undefined}
+                      aria-label={`${i + 1}. ${e.label} · X ${e.center[0].toFixed(1)} / Y ${e.center[1].toFixed(1)} mm${current ? ` · ${t('job.current_object')}` : ''}${excluded ? ` · ${t('job.excluded')}` : ''}`}
+                      aria-pressed={chosen}
+                      title={e.label}
+                      disabled={excluded || !live}
+                      class="cc2-object-map-marker focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan"
+                      style={{
+                        left: `${(e.center[0] / BED_SIZE) * 100}%`,
+                        bottom: `${(e.center[1] / BED_SIZE) * 100}%`,
+                      }}
+                      onClick={() => objects.set({ selected: e.id })}
+                    >
+                      {i + 1}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <p class="mt-2 text-center text-xs text-muted">{t('job.bed_map_front')}</p>
           </div>
-          <p class="text-center text-xs text-muted">{t('job.bed_map_front')}</p>
-          <div class="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
+          <div class="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
             <span class="flex items-center gap-1.5">
               <i class="h-2 w-2 rounded-full bg-cyan" />
               {t('job.bed_map_selected')}
@@ -130,50 +119,77 @@ export const ObjectBedMap = ({
               {t('job.excluded')}
             </span>
           </div>
-          {missing > 0 && <p class="mt-3 text-sm text-muted">{tpl('job.bed_map_missing', { n: missing })}</p>}
+          {missing > 0 && <p class="mt-3 text-xs text-muted">{tpl('job.bed_map_missing', { n: missing })}</p>}
         </div>
         <div class="flex min-w-0 flex-col">
-          <div class="grid max-h-64 gap-2 overflow-y-auto p-1">
-            {o.entries.map((e, i) => {
-              const excluded = o.excluded.includes(e.id)
-              const current = e.id === o.current
-              return (
-                <Button
-                  key={e.id}
-                  data-bed-list-id={e.id}
-                  aria-pressed={e.id === o.selected}
-                  variant={e.id === o.selected ? 'active' : 'default'}
-                  disabled={excluded || !live}
-                  class={cn(
-                    'h-auto justify-start whitespace-normal text-left text-xs [overflow-wrap:anywhere]',
-                    excluded && 'text-red'
+          <p class="mb-2 text-xs text-muted">{t('job.object_position_order')}</p>
+          <div class="cc2-object-map-list grid content-start gap-2 overflow-y-auto p-1">
+            {o.entries.length === 0 ? (
+              <div class="text-muted" role="status">
+                <p>{t('job.no_live_object_data')}</p>
+                <p class="mt-2 text-xs">
+                  {t(
+                    o.error
+                      ? 'job.object_status_unavailable'
+                      : o.has
+                        ? 'job.no_labelled_objects_reported_by'
+                        : 'job.objects_will_appear_during_a'
                   )}
-                  onClick={() => objects.set({ selected: e.id })}
-                >
-                  <span class="shrink-0 font-bold">{i + 1}.</span>
-                  <span>
-                    {e.label}
-                    {excluded ? ` · ${t('job.excluded')}` : ''}
-                  </span>
-                  {current && (
-                    <span role="img" class="ml-auto shrink-0 text-amber" aria-label={t('job.current_object')}>
-                      ●
+                </p>
+              </div>
+            ) : (
+              o.entries.map((e, i) => {
+                const excluded = o.excluded.includes(e.id)
+                const current = e.id === o.current
+                return (
+                  <Button
+                    key={e.id}
+                    data-object-id={e.id}
+                    data-bed-list-id={e.id}
+                    data-current={current ? 'true' : undefined}
+                    aria-pressed={e.id === o.selected}
+                    title={e.label}
+                    variant={e.id === o.selected ? 'active' : 'default'}
+                    disabled={excluded || !live}
+                    class={cn(
+                      'h-auto justify-start whitespace-normal text-left text-xs [overflow-wrap:anywhere]',
+                      excluded && 'text-red line-through'
+                    )}
+                    onClick={() => objects.set({ selected: e.id })}
+                  >
+                    <span class="shrink-0 font-bold">{i + 1}.</span>
+                    <span>
+                      {e.label}
+                      {excluded ? ` · ${t('job.excluded')}` : ''}
                     </span>
-                  )}
-                </Button>
-              )
-            })}
+                    {current && !excluded && (
+                      <span role="img" class="ml-auto shrink-0 text-amber" aria-label={t('job.current_object')}>
+                        ●
+                      </span>
+                    )}
+                  </Button>
+                )
+              })
+            )}
           </div>
-          <p class="my-4 min-w-0 text-sm [overflow-wrap:anywhere]">
+          <div
+            class="my-3 rounded-md border border-edge bg-field p-3 text-xs [overflow-wrap:anywhere]"
+            data-bed-selection
+          >
             {selected ? (
               <>
                 <span class="text-muted">{t('job.bed_map_selected')}: </span>
                 <b>{selected.label}</b>
+                <p class="mt-1 text-muted">
+                  {onBed(selected.center)
+                    ? `X ${selected.center[0].toFixed(1)} / Y ${selected.center[1].toFixed(1)} mm`
+                    : t('job.object_position_unknown')}
+                </p>
               </>
             ) : (
               t('job.bed_map_choose')
             )}
-          </p>
+          </div>
           <Button
             wide
             variant="danger"
@@ -185,6 +201,13 @@ export const ObjectBedMap = ({
           <p class="mt-2 text-xs text-muted">{t('job.this_protected_action_cannot_be')}</p>
         </div>
       </div>
+    </div>
+  )
+  return onClose ? (
+    <Dialog onClose={onClose} width={1200} class="max-w-[calc(100vw-2rem)]" label={t('job.bed_map')}>
+      {content}
     </Dialog>
+  ) : (
+    <section aria-label={t('job.bed_map')}>{content}</section>
   )
 }

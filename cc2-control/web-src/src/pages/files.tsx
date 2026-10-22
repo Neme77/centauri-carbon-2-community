@@ -50,23 +50,44 @@ export const Files = () => {
   const [sel, setSel] = useState<Entry | null>(null)
   const [busy, setBusy] = useState(false),
     [loaded, setLoaded] = useState(false)
-  // Storages whose list the backend cut to its newest files.
+  const listing = useRef<AbortController | null>(null)
+  // Warn only when traversal guards (or an older backend) leave a partial list.
   const [cut, setCut] = useState<{ storage: string; n: number; total: number }[]>([])
 
   const refresh = async (announce = false) => {
+    listing.current?.abort()
+    const controller = new AbortController()
+    listing.current = controller
     try {
-      const data = await request('/api/gcode-files'),
+      const data = await request('/api/gcode-files', { signal: controller.signal }),
         next: Entry[] = [],
         partial: typeof cut = []
       for (const [storage, group] of [
         ['internal', data.internal],
         ['usb', data.usb],
       ] as const) {
-        const files = group?.files || []
-        for (const file of files) next.push({ storage, file })
-        if (group?.truncated)
-          partial.push({ storage, n: files.length, total: Math.max(Number(group.total) || 0, files.length) })
+        const files: any[] = [...(group?.files || [])]
+        let batch = group
+        let scanCut = Boolean(group?.scan_truncated)
+        const cursors = new Set<string>()
+        while (batch?.has_more) {
+          const cursor = batch.next
+          if (!cursor || typeof cursor.modified !== 'string' || typeof cursor.path !== 'string' || cursors.size >= 32)
+            throw Error(t('files.list_changed_retry'))
+          const encoded = new URLSearchParams({ storage, before: cursor.modified, file: cursor.path }).toString()
+          if (cursors.has(encoded)) throw Error(t('files.list_changed_retry'))
+          cursors.add(encoded)
+          batch = (await request(`/api/gcode-files/page?${encoded}`, { signal: controller.signal }))[storage]
+          if (!batch || !Array.isArray(batch.files)) throw Error(t('files.list_changed_retry'))
+          files.push(...batch.files)
+          scanCut ||= Boolean(batch.scan_truncated)
+        }
+        const unique = new Map(files.map(file => [file.path, file]))
+        for (const file of unique.values()) next.push({ storage, file })
+        if (scanCut || (group?.has_more === undefined && group?.truncated))
+          partial.push({ storage, n: unique.size, total: Math.max(Number(group.total) || 0, unique.size) })
       }
+      if (controller.signal.aborted) return
       setSpace({ internal: data.internal?.space, usb: data.usb?.space })
       setEntries(next)
       setCut(partial)
@@ -76,11 +97,13 @@ export const Files = () => {
       setLoaded(true)
       if (announce) notify(t('files.protected_file_list_refreshed'))
     } catch (e) {
+      if (controller.signal.aborted) return
       notify(tpl('files.file_list_unavailable_error', { error: errText(e) }), 'error')
     }
   }
   useEffect(() => {
     refresh()
+    return () => listing.current?.abort()
   }, [])
 
   useEffect(() => setPage(0), [q, loc, sort])
@@ -467,7 +490,7 @@ const Upload = ({
       new TextEncoder().encode(file.name).length >= 256 ||
       !/\.gcode$/i.test(file.name) ||
       file.size === 0 ||
-      file.size > 128 * 1024 * 1024
+      file.size > 512 * 1024 * 1024
     )
       return notify(t('files.choose_a_valid_gcode_file_between'), 'error')
     if (
@@ -488,7 +511,7 @@ const Upload = ({
         )
         x.setRequestHeader('Content-Type', 'application/octet-stream')
         x.setRequestHeader('X-CC2-Request', '1')
-        x.timeout = 180000
+        x.timeout = 1830000
         x.upload.onprogress = ev => {
           if (ev.lengthComputable) {
             const p = Math.min(100, Math.round((ev.loaded * 100) / ev.total))

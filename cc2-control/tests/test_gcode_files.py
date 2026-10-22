@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -68,6 +69,55 @@ def check_newest_files_listed(binary):
             times = [item["modified"] for item in listing["files"]]
             assert times == sorted(times, reverse=True) and times[0] == base + 199
             assert payload["usb"]["total"] == 0
+
+            def all_pages():
+                with urllib.request.urlopen(endpoint, timeout=2) as response:
+                    group = json.load(response)["internal"]
+                files = list(group["files"])
+                seen = set()
+                while group["has_more"]:
+                    assert group["scan_truncated"] is False
+                    cursor = group["next"]
+                    assert isinstance(cursor["modified"], str)
+                    query = urllib.parse.urlencode({"storage":"internal", "before":cursor["modified"], "file":cursor["path"]})
+                    assert query not in seen
+                    seen.add(query)
+                    assert len(seen) < 5
+                    with urllib.request.urlopen(endpoint + "/page?" + query, timeout=2) as response:
+                        group = json.load(response)["internal"]
+                    assert group["count"] <= 128
+                    files.extend(group["files"])
+                assert group["next"] is None
+                paths = [item["path"] for item in files]
+                assert len(paths) == len(set(paths)), "cursor pages repeat a file"
+                return paths
+
+            assert len(all_pages()) == 200, "old files remain accessible"
+            for path in internal.iterdir():
+                os.utime(path, (base, base))
+            (internal / "nested").mkdir()
+            extras = ["Foo.gcode", "foo.gcode", "nested/old file &x.gcode"]
+            for name in extras:
+                path = internal / name
+                path.write_text("G28\n", encoding="ascii")
+                os.utime(path, (base, base))
+            complete = all_pages()
+            assert len(complete) == 203 and set(extras).issubset(complete)
+            for query in [
+                "storage=internal&before=-&file=x.gcode",
+                "storage=internal&before=9223372036854775808&file=x.gcode",
+                "storage=internal&before=1&file=../x.gcode",
+                "storage=internal&before=1&file=%00x.gcode",
+                "storage=internal&before=1&file=%zz.gcode",
+                "storage=unknown&before=1&file=x.gcode",
+                "storage=internal&before=1&file=x.gcode&file=y.gcode",
+                "storage=internal&file=x.gcode",
+            ]:
+                try:
+                    urllib.request.urlopen(endpoint + "/page?" + query, timeout=2)
+                    raise AssertionError("invalid cursor accepted: " + query)
+                except urllib.error.HTTPError as error:
+                    assert error.code == 400, query
         finally:
             process.terminate()
             try:

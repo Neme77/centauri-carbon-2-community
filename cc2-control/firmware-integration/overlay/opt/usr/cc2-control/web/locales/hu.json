@@ -375,7 +375,7 @@
   "files.bed_temperature": "Tárgyasztal hőmérséklete",
   "files.browse_protected_g_code_storage_on": "A CC2 védett G-code tárhelyének böngészése",
   "files.choose_a_g_code_file_first": "Először válassz G-code fájlt.",
-  "files.choose_a_valid_gcode_file_between": "1 bájt és 128 MiB közötti méretű, érvényes .gcode fájlt válassz.",
+  "files.choose_a_valid_gcode_file_between": "1 bájt és 512 MiB közötti méretű, érvényes .gcode fájlt válassz.",
   "files.confirmation_is_required_for": "A védett műveletekhez megerősítés szükséges.",
   "files.copied_n_selected_files": "{n} kijelölt fájl másolva.",
   "files.copy_n_selected_files_to_where": "Átmásolod a(z) {n} kijelölt fájlt ide: {where}?",
@@ -395,7 +395,7 @@
   "files.layers": "Rétegek",
   "files.loading_files": "Fájlok betöltése…",
   "files.local_upload": "Helyi feltöltés",
-  "files.maximum_upload_size_no_automatic": "Legfeljebb 128 MiB · nincs automatikus nyomtatás · meglévő fájlokat soha nem ír felül",
+  "files.maximum_upload_size_no_automatic": "Legfeljebb 512 MiB · nincs automatikus nyomtatás · meglévő fájlokat soha nem ír felül",
   "files.modified": "Módosítva",
   "files.n_selected": "{n} kijelölve",
   "files.name_uploaded_to_where": "{name} feltöltve ide: {where}.",
@@ -416,7 +416,7 @@
   "files.select_file": "Fájl kiválasztása",
   "files.select_files_from_only_one_storage": "Egyszerre csak egy tárhelyről jelölj ki fájlokat.",
   "files.select_g_code_file": "G-code fájl kiválasztása",
-  "files.showing_newest_n_of_total": "{where}: a(z) {total} G-code fájlból a legújabb {n} látszik. A többi megjelenítéséhez töröld a régi fájlokat.",
+  "files.showing_newest_n_of_total": "{where}: {n} fájl látható a legalább {total} találatból. A keresési korlátok miatt a lista nem teljes.",
   "files.size": "Méret",
   "files.start_protected_print": "Védett nyomtatás indítása",
   "files.stopped_after_n_files_error": "Leállt {n} fájl után: {error}",
@@ -1043,5 +1043,7 @@
   "canvas.recovery_load_select": "Válasszon szálat tartalmazó rekeszt. A normál betöltés/kihúzás az egységes állapot visszaigazolásáig tiltva marad.",
   "files.sort": "Rendezés",
   "app.print_progress": "Nyomtatás előrehaladása",
-  "app.sidebar": "Oldalmenü"
+  "app.sidebar": "Oldalmenü",
+  "files.list_changed_retry": "A fájllista betöltés közben megváltozott. Frissítsen és próbálja újra.",
+  "job.bed_map_expand": "Tárgyasztaltérkép nagyítása"
 }

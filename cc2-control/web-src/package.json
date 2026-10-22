@@ -41,7 +41,8 @@
     "test:object-layout": "node preview/test-object-layout.mjs && node preview/test-object-selection.mjs",
     "test:mesh-side-labels": "node preview/test-mesh-side-labels.mjs",
     "test:plate-flow": "node preview/test-empty-plate-flow.mjs",
-    "test:bed-map": "node preview/test-bed-map.mjs"
+    "test:bed-map": "node preview/test-bed-map.mjs",
+    "test:file-library": "node preview/test-file-library.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
