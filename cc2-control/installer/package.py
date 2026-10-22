@@ -103,7 +103,10 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=ROOT / f'output/CC2-Control-{VERSION}-Multiplatform-Update.zip')
     parser.add_argument('--camera-runtime', type=Path, help='Include the three fingerprinted R2 camera runtime files')
     parser.add_argument('--release', action='store_true', help='Require the cumulative camera component for a public release')
+    parser.add_argument('--application-only-trial', action='store_true', help='Explicitly build a development-only app package without the cumulative camera component')
     args = parser.parse_args()
-    if args.release and args.camera_runtime is None:
+    if args.release and args.application_only_trial:
+        parser.error('--release and --application-only-trial are mutually exclusive')
+    if args.camera_runtime is None and (args.release or not args.application_only_trial):
         parser.error('Public cumulative releases require --camera-runtime, including for users who skipped 1.2.19')
     package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime)

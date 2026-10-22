@@ -34,7 +34,6 @@
 #include "uds.h"
 #include "http_guard.h"
 #include "experiments_state.h"
-#include "experiments_state.h"
 
 static uds_client telemetry;
 /* Build-plate measurement and nozzle chosen for a print (plates.h). */
@@ -3629,10 +3628,6 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         const char *error="{\"accepted\":false,\"error\":\"Enable the experimental Quiet controls first\"}\n";
         respond(fd,409,"Conflict","application/json",error,strlen(error));return;
     }
-    if(!strcmp(action,"motors:quiet") && !experiments.quiet_motors){
-        const char *error="{\"accepted\":false,\"error\":\"Enable the experimental Quiet controls first\"}\n";
-        respond(fd,409,"Conflict","application/json",error,strlen(error));return;
-    }
     if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
     if(!strncmp(action,"light:",6)){
         if(strcmp(action,"light:on")&&strcmp(action,"light:off")){
@@ -3724,7 +3719,6 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 
 #include "app_updates.h"
 #include "app_update_catalog.h"
-#include "experiments.h"
 #include "experiments.h"
 #include "backup.h"
 

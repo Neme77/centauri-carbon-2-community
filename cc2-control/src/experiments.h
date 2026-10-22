@@ -1,3 +1,5 @@
+#ifndef CC2_EXPERIMENTS_H
+#define CC2_EXPERIMENTS_H
 /* Included after the existing update/plate guards. HTTP-loop-owned choices;
  * changing the source never sends a motor, heater or printer restart command. */
 static int experiments_normal_confirmed(console_state *console) {
@@ -59,3 +61,5 @@ static void experiments_put_response(int fd, const char *request, const char *bo
     }
     experiments_response(fd, mqtt, console);
 }
+
+#endif
