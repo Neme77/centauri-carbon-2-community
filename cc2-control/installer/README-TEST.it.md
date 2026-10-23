@@ -1,50 +1,15 @@
-# CC2 Control 1.2.19 — aggiornamento completo
+# CC2 Control 1.2.20 — aggiornamento cumulativo sperimentale
 
-**RIAVVIO COMPLETO NECESSARIO: questo aggiornamento comprende il fix webcam.
-Al termine dell'installazione, riavviare manualmente la stampante quando è inattiva.
-Il solo aggiornamento della pagina o riavvio di CC2 Control non attiva la patch.**
+Prerelease per Community Firmware V4.4/V4.4.1, base ELEGOO 02.01.01.07. La stabile resta 1.2.19. È un unico pacchetto dell’app, non un elenco di moduli scaricabili.
 
-Include i fix camera della PR #183 e la gestione delle date G-code non attendibili
-della PR #185. Le librerie webcam sono le stesse provate per sette ore di stampa
-con IA attiva e streaming funzionante. Il nuovo installer integrato richiede una
-prova completa sulla stampante prima della pubblicazione nel canale stabile.
+Scegliere Sperimentale in Impostazioni → Aggiornamenti, leggere le note, inserire il codice LAN, scaricare/verificare e confermare separatamente l’installazione. Nelle interfacce stabili precedenti il canale è chiamato Canvas UDS sperimentale. Chi usa la prova precedente con solo canale stabile può caricare una volta il file .cc2update firmato dalla stessa pagina. Il nuovo selettore rimane poi disponibile. Cambiare canale non abilita alcuna funzione. La campanella continua a segnalare le release stabili. Per tornare a un’app stabile precedente serve il backup dell’installer: scegliere Stabile non esegue un downgrade.
 
-Aggiornare soltanto con stampante connessa, inattiva, ugello e piatto a non più di
-50 °C e target a zero. Chiudere le dirette prima dell'installazione. Il codice LAN
-autorizza l'installazione dal pannello; non viene incluso nel pacchetto.
+Canvas UDS e i controlli Quiet hanno scelte indipendenti, salvate sulla stampante e inizialmente spente su una nuova installazione. Le preferenze già presenti vengono conservate. Canvas UDS, stati degli slot e sincronizzazione Orca sono stati accettati dal maintainer il 23 ottobre 2026. Quiet/Normal su V4.4 richiede ancora prove hardware: attivare i controlli non invia comandi, ma selezionare Quiet modifica i motori. Lo slicer può sovrascrivere i limiti iniziali 80 mm/s e 2000 mm/s². Normal ripristina valori fissi 500/20000; la modalità mostrata è richiesta, non una lettura verificata dei registri TMC. Prima di disabilitare Quiet, cambiare sorgente Canvas o aggiornare l’app con i controlli Quiet abilitati, selezionare Normal e attendere il completamento senza errori.
 
-Dal pannello: Impostazioni → Aggiornamenti → carica il file .cc2update firmato.
-In alternativa estrarre lo ZIP multiplatform e avviare l'installer per il proprio
-sistema operativo. Conservare il percorso del backup indicato alla fine.
+Il pacchetto include le librerie webcam R2 qualificate e invariate, anche per chi ha saltato la 1.2.19. ALLA PRIMA ATTIVAZIONE DEL FIX WEBCAM SERVE UN RIAVVIO COMPLETO DELLA STAMPANTE INATTIVA. La ricarica della pagina o il solo riavvio di CC2 Control non bastano. Un componente webcam già presente e riconosciuto viene conservato. Nessun riavvio della stampante viene avviato automaticamente.
 
-Il componente camera controlla hash del firmware, file di avvio e dipendenze;
-interrompe l'installazione su configurazioni non riconosciute. Non sostituisce
-ai_camera e non aumenta il limite di stream. Una precedente installazione R2
-personale riconosciuta viene conservata, inclusa la sua scelta di attivazione.
-Non vengono riavviati automaticamente la camera o la stampante.
+Installare solo con stampante connessa, inattiva e fredda (ugello/piatto non oltre 50 °C e target zero). Chiudere prima le dirette. Impostazioni, materiali, piatti/ugelli e bobine vengono conservati. Salvare il percorso esatto del backup/ripristino indicato dall’installer. È incluso anche l’installer Windows/macOS/Linux; usare solo il backup della propria stampante.
 
-Dopo il riavvio, verificare versione 1.2.19, connessione, video locale e Matrix.
-Per una nuova installazione della camera:
+La retrazione oltre 350 mm resta un esperimento firmware separato. Questo aggiornamento non installa né abilita il runtime esteso. Un runtime esteso installato indipendentemente richiede il proprio ripristino qualificato, con impostazioni effettive entro 350 mm prima di ripristinare l’eseguibile originale. I download del builder e del firmware completo restano invariati.
 
-```sh
-sh /opt/usr/cc2-control/camera/manage.sh status
-```
-
-Chi ha già la precedente installazione personale usa invece:
-
-```sh
-sh /opt/usr/cc2-camera-recovery-r2/manage.sh status
-```
-
-Il ripristino dell'applicazione dal backup ripristina anche il precedente avvio
-della camera se questo aggiornamento l'ha modificato, rifiutando modifiche
-successive non riconosciute. Eseguire il ripristino a stampante inattiva e fredda;
-riavviare poi completamente per cambiare la patch già caricata in memoria.
-
-Le date palesemente errate dei file sono mostrate come non disponibili, senza
-modificare G-code o timestamp originali. L'orologio deve comunque potersi
-sincronizzare, anche sulle reti che bloccano l'accesso al cloud.
-
-Grazie a tharje per diagnosi, riproduzione e analisi del problema webcam, e ai
-beta tester della community per le prove. I singoli eventi IA e le sessioni RTC
-scadute non sono qualificati da una semplice prova con IA abilitata.
+Crediti: Surfoo per i fix grafici e gli spunti su Canvas e documentazione; BorjaLL per Quiet; Noahwhite2014 per la retrazione estesa; Nick Plateringen-Paul per la mappa originale; DamiBFryta, il nostro beta tester definitivo, per suggerimenti e prove; tharje per diagnosi e recupero webcam. Storie dei contributi e crediti precedenti sono conservati.
