@@ -1,0 +1,31 @@
+name: Synchronize experimental catalogue snapshot
+on:
+  push:
+    branches: [release/control-1.2.20-experimental-catalog]
+    paths: [.github/workflows/sync-experimental-catalog.yml]
+permissions:
+  contents: write
+jobs:
+  synchronize:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: release/control-1.2.20-experimental-catalog
+      - name: Synchronize catalogue-only builder snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current
+          git diff --cached --quiet || git commit -m "Pin unchanged stable sources with experimental catalogue entry"
+      - name: Verify snapshot and builder
+        run: |
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+          python3 cc2-control/tests/test_web_sync_static.py
+          python3 cc2-control/tests/test_locales_static.py
+      - name: Publish verified pins
+        run: git push origin HEAD:refs/heads/release/control-1.2.20-experimental-catalog
+
