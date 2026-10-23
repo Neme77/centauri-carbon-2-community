@@ -12,7 +12,7 @@ Prerelease only; stable remains 1.2.19. Includes the cumulative R2 camera compon
 
 ### Added
 
-- Explicit experimental application channel selection, independent of feature opt-ins; stable notifications remain unchanged (#206 follow-up). Original feature credits below are retained.
+- Explicit experimental application channel selection, independent of feature opt-ins; stable notifications remain unchanged (#212, based on #206). Original feature credits below are retained.
 
 - Experimental Canvas pull-back: verify the exact running extended-range firmware before allowing values above 350 mm (#209, original contribution by Noahwhite2014 in #202 and issue #172); runtime installation remains separate and is never activated by an application update.
 
