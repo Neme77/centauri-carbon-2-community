@@ -1,0 +1,22 @@
+name: Diagnose stable updater HTTPS download
+on:
+  push:
+    branches: [test/builder-4.4.2-control-1.2.21]
+    paths: [.github/workflows/diagnose-stable-download.yml]
+permissions:
+  contents: read
+jobs:
+  https:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compile the existing certificate-verifying HTTPS helper
+        working-directory: cc2-control
+        run: make build/cc2-https-download CROSS= CC=gcc EXTRA_CFLAGS=-Werror
+      - name: Verify actual public stable package through this helper
+        working-directory: cc2-control
+        run: |
+          build/cc2-https-download 'https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-V4.4.cc2update' updater/ca-bundle.pem 33555540 > /tmp/stable.cc2update
+          python3 -c "import hashlib,urllib.request; from pathlib import Path; b=Path('/tmp/stable.cc2update').read_bytes(); expected=urllib.request.urlopen('https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/SHA256SUMS.txt').read().decode(); actual=hashlib.sha256(b).hexdigest(); assert actual+'  CC2-Control-1.2.19-V4.4.cc2update' in expected; print('PASS actual stable download',len(b),actual)"
+

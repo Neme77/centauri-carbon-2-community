@@ -55,8 +55,9 @@ class FirmwareUpdater(unittest.TestCase):
             p.validate_arm_elf(path, require_version=False)
 
     def test_release_number_does_not_change_compatibility_family(self):
-        self.assertEqual(b.firmware_release_version(), '4.4.1')
+        self.assertEqual(b.firmware_release_version(), '4.4.2')
         self.assertEqual(b.firmware_version(), '4.4')
 
 if __name__ == '__main__':
     unittest.main()
+

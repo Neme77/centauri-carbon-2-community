@@ -16,6 +16,8 @@ jobs:
           fetch-depth: 0
       - name: Early firmware boot fixtures before dependency setup
         run: python3 builder/current/tests/test_camera_firmware.py
+      - name: Check release numbering before dependency setup
+        run: python3 builder/current/tests/test_firmware_updater.py
       - uses: actions/setup-node@v7
         with:
           node-version: 26
