@@ -1,0 +1,22 @@
+name: Publish verified experimental prerelease
+on:
+  push:
+    branches: [publish/control-1.2.20-experimental]
+    paths: [.github/workflows/publish-experimental.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: Neme77/centauri-carbon-2-community
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Verify and publish the immutable experimental assets
+        run: python3 experimental/release-publication/publish.py

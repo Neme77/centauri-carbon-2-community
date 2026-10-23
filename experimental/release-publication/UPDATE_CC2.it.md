@@ -1,0 +1,15 @@
+# CC2 Control 1.2.20 — aggiornamento cumulativo sperimentale
+
+Prerelease per Community Firmware V4.4/V4.4.1, base ELEGOO 02.01.01.07. La stabile resta 1.2.19. È un unico pacchetto dell’app, non un elenco di moduli scaricabili.
+
+Scegliere Sperimentale in Impostazioni → Aggiornamenti, leggere le note, inserire il codice LAN, scaricare/verificare e confermare separatamente l’installazione. Nelle interfacce stabili precedenti il canale è chiamato Canvas UDS sperimentale. Chi usa la prova precedente con solo canale stabile può caricare una volta il file .cc2update firmato dalla stessa pagina. Il nuovo selettore rimane poi disponibile. Cambiare canale non abilita alcuna funzione. La campanella continua a segnalare le release stabili. Per tornare a un’app stabile precedente serve il backup dell’installer: scegliere Stabile non esegue un downgrade.
+
+Canvas UDS e i controlli Quiet hanno scelte indipendenti, salvate sulla stampante e inizialmente spente su una nuova installazione. Le preferenze già presenti vengono conservate. Canvas UDS, stati degli slot e sincronizzazione Orca sono stati accettati dal maintainer il 23 ottobre 2026. Quiet/Normal su V4.4 richiede ancora prove hardware: attivare i controlli non invia comandi, ma selezionare Quiet modifica i motori. Lo slicer può sovrascrivere i limiti iniziali 80 mm/s e 2000 mm/s². Normal ripristina valori fissi 500/20000; la modalità mostrata è richiesta, non una lettura verificata dei registri TMC. Prima di disabilitare Quiet, cambiare sorgente Canvas o aggiornare l’app con i controlli Quiet abilitati, selezionare Normal e attendere il completamento senza errori.
+
+Il pacchetto include le librerie webcam R2 qualificate e invariate, anche per chi ha saltato la 1.2.19. ALLA PRIMA ATTIVAZIONE DEL FIX WEBCAM SERVE UN RIAVVIO COMPLETO DELLA STAMPANTE INATTIVA. La ricarica della pagina o il solo riavvio di CC2 Control non bastano. Un componente webcam già presente e riconosciuto viene conservato. Nessun riavvio della stampante viene avviato automaticamente.
+
+Installare solo con stampante connessa, inattiva e fredda (ugello/piatto non oltre 50 °C e target zero). Chiudere prima le dirette. Impostazioni, materiali, piatti/ugelli e bobine vengono conservati. Salvare il percorso esatto del backup/ripristino indicato dall’installer. È incluso anche l’installer Windows/macOS/Linux; usare solo il backup della propria stampante.
+
+La retrazione oltre 350 mm resta un esperimento firmware separato. Questo aggiornamento non installa né abilita il runtime esteso. Un runtime esteso installato indipendentemente richiede il proprio ripristino qualificato, con impostazioni effettive entro 350 mm prima di ripristinare l’eseguibile originale. I download del builder e del firmware completo restano invariati.
+
+Crediti: Surfoo per i fix grafici e gli spunti su Canvas e documentazione; BorjaLL per Quiet; Noahwhite2014 per la retrazione estesa; Nick Plateringen-Paul per la mappa originale; DamiBFryta, il nostro beta tester definitivo, per suggerimenti e prove; tharje per diagnosi e recupero webcam. Storie dei contributi e crediti precedenti sono conservati.
