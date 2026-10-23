@@ -63,7 +63,29 @@ installs it for users skipping 1.2.19. A complete idle-printer reboot is require
 when first installing the camera fix. CI application-only candidates are not
 public cumulative releases.
 
-## Validation
+## Trying the cumulative experimental application
+
+The trial combines the accepted Canvas layout (#207) and spool insertion popup
+(#210) with the original Canvas UDS (#200), Quiet (#179, BorjaLL) and extended
+pull-back readback (#209, Noahwhite2014) changes. Version stays 1.2.19 for this
+development trial. Use the computer installer for a same-version trial; this is
+not a signed stable update. An application-only trial preserves an installed
+camera component and does not install the separate extended-range runtime.
+
+Test Canvas UDS and Quiet separately, leaving the other option off first. To
+return to the ordinary configuration, select Normal in Control and wait for its
+successful completion before disabling Quiet, then disable Canvas UDS. The
+installer's backup restores the previous application; save its exact restore
+path. Returning to an older application cannot remove an independently installed
+extended-range firmware patch: first follow that experiment's own rollback
+procedure and validate all effective pull-back settings at 350 mm or below.
+
+The original authors' printer observations remain their own validation. This
+combined application still requires separate printer acceptance, including
+Quiet/Normal readback and slicer-limit verification. Automated checks alone do
+not qualify a new motor mode or a longer physical pull-back.
+
+## Automated validation
 
 The integration has a C harness for independent persistence, corruption/refusal,
 LAN confirmation, fresh/cold/idle guards, no implicit motor commands and

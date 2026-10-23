@@ -3105,6 +3105,7 @@ static void mesh_response(int fd) {
 
 #include "plates.h"
 #include "spools.h"
+#include "sha256.h"
 #include "canvas_unload.h"
 
 static void serve_index(int fd, const char *web_root) {

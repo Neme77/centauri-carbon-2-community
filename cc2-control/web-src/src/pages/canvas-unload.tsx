@@ -7,13 +7,16 @@ import { ask } from '@/lib/confirm'
 import { type Key, t, tpl } from '@/lib/i18n'
 
 const I = { size: 16, strokeWidth: 1 }
+const STOCK_MAX = 350 // what the stock firmware accepts
 
 // GET /api/canvas/unload: [canvas_dev] unload_fila_dist as configured by the printer and as overridden from here
 // (autosave.cfg). The printer reads it at start-up, so a saved value stays pending until the next restart.
+// `extended`: the printer runs the program with the firmware's 350 mm limit raised, so max is higher.
 type Unload = {
   editable: boolean
   min: number
   max: number
+  extended?: boolean
   configured: number | null
   override: number | null
   pending_restart: boolean
@@ -27,7 +30,7 @@ const RESTART_ERRORS: Record<string, Key> = {
 }
 
 // Pull-back after the cut. Changes need an idle printer and apply after a printer restart, offered right away.
-export const CanvasUnload = ({ idle }: { idle: boolean }) => {
+export const CanvasUnload = ({ idle, compact = false }: { idle: boolean; compact?: boolean }) => {
   const [state, setState] = useState<Unload | null>(null)
   const [value, setValue] = useState('')
   const [edited, setEdited] = useState(false) // a value outside the range read from the printer is not an input error
@@ -95,7 +98,7 @@ export const CanvasUnload = ({ idle }: { idle: boolean }) => {
   const locked = !idle || busy || restarting || !state.editable
   const canSave = !locked && valid && number !== override
   return (
-    <div class="mt-3 border-t border-edge pt-3" data-canvas-unload>
+    <div class={compact ? 'cc2-canvas-unload' : 'mt-3 border-t border-edge pt-3'} data-canvas-unload>
       <label for="canvas-unload" class="flex items-center gap-2">
         <MoveLeft {...I} />
         {t('canvas.unload_title')}
@@ -133,8 +136,13 @@ export const CanvasUnload = ({ idle }: { idle: boolean }) => {
         </Button>
       </div>
       <p class="mt-2 text-[13px] text-muted">
-        {edited && !valid ? tpl('canvas.unload_invalid', { min, max }) : tpl('canvas.unload_hint', { min, max })}
+        {edited && !valid
+          ? tpl('canvas.unload_invalid', { min, max })
+          : tpl(compact ? 'canvas.unload_hint_compact' : 'canvas.unload_hint', { min, max })}
       </p>
+      {state.extended && (
+        <p class="mt-2 text-[13px] text-cyan">{tpl('canvas.unload_extended', { max, stock: STOCK_MAX })}</p>
+      )}
       {configured !== null && configured > max && (
         <p class="mt-2 text-[13px] text-amber">{tpl('canvas.unload_above_range', { value: configured, max })}</p>
       )}

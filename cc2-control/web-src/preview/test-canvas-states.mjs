@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
+import path from 'node:path'
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
 import { fixture, launchOptions, root } from './fixture.mjs'
 
 // Deterministic limits and discontinuities supplement the actual UI path below.
-const logicServer = await createServer({ root, configFile: false, server: { middlewareMode: true } })
+const logicServer = await createServer({ root, configFile: false, resolve: { alias: { '@': path.join(root, 'src') } }, server: { middlewareMode: true } })
 try {
   const { observeCanvasSlots: observe, observedPrinterPhase: phase, canvasTimeline: history, clearCanvasTimeline: clear } =
     await logicServer.ssrLoadModule('/src/lib/canvas-events.ts')

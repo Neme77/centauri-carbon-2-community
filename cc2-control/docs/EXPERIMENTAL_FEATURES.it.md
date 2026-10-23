@@ -58,6 +58,29 @@ patch già installata. Alla prima attivazione serve un riavvio completo della
 stampante inattiva. Le build di sola applicazione per CI non sono release
 cumulative da pubblicare.
 
+## Prova del pacchetto sperimentale cumulativo
+
+La prova unisce il layout Canvas (#207) e il popup bobine (#210) già approvati
+con Canvas UDS (#200), Quiet (#179, BorjaLL) e il riconoscimento della retrazione
+estesa (#209, Noahwhite2014). La versione resta 1.2.19 per questa prova di sviluppo.
+Per reinstallare la stessa versione usare l'installer da computer: non è un
+aggiornamento stabile firmato. La prova di sola applicazione conserva la patch
+webcam già installata e non installa il runtime della retrazione estesa.
+
+Provare Canvas UDS e Quiet separatamente, lasciando prima spenta l'altra opzione.
+Per tornare alla configurazione ordinaria, scegliere Normal in Controllo e
+attendere il completamento senza errori prima di disabilitare Quiet; poi spegnere
+Canvas UDS. Conservare il percorso esatto del backup indicato dall'installer per
+ripristinare l'applicazione precedente. Tale ripristino non rimuove una patch
+firmware installata separatamente: per la retrazione estesa occorre seguire il
+relativo ripristino e verificare prima tutte le impostazioni effettive entro
+350 mm.
+
+Le prove fisiche riferite dagli autori restano la loro validazione. Questa
+integrazione richiede ancora una prova dedicata sulla stampante, compresa la
+lettura Quiet/Normal e la verifica dei limiti dello slicer. I test automatici
+non qualificano da soli la modalità motori o una maggiore retrazione fisica.
+
 I test C e del browser coprono salvataggio, indipendenza delle scelte,
 conferme, errori, ripristino MQTT, protezioni e geometria. Non sostituiscono
 nuove verifiche hardware. Crediti originali di #200 e #179 conservati.

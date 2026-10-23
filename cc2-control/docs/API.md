@@ -122,13 +122,20 @@ reads it at start-up from the printer configuration followed by `autosave.cfg`, 
 CC2 Control stores its value as a `[canvas_dev]` override in the SAVE_CONFIG block of `autosave.cfg` and never
 edits the vendor configuration. The firmware's SAVE_CONFIG keeps that section.
 
-- `GET /api/canvas/unload` returns `{"editable":bool,"min":60,"max":350,"configured":mm|null,"override":mm|null,
+- `GET /api/canvas/unload` returns `{"editable":bool,"min":60,"max":350|1000,"extended":bool,"configured":mm|null,"override":mm|null,
   "pending_restart":bool,"restart":"none"|"restarting"|"printer_busy"|"launch_failed"|"reboot_failed"}`.
   `configured` comes from the printer configuration and `override` from `autosave.cfg`. `editable` is false
   when `autosave.cfg` has a layout CC2 Control does not edit (no SAVE_CONFIG marker, carriage returns, or a
   duplicate section or key). A failed restart is reported once.
-- `POST /api/canvas/unload` with body `60`–`350` (whole millimetres) sets the override, and with body `default`
-  removes it. The firmware refuses to start with a value outside 60–350, so other values answer `400`. It
+- `extended` is true, and `max` is 1000, only while the running `elegoo_printer` is the V4.4 program with the
+  `unload_fila_dist` limit raised to 1000 mm (SHA-256 `15ea2077…0ea1bc`, issue #172). CC2 Control hashes the
+  running program once per printer process on a background thread; until that finishes, and for any other
+  program, `max` is 350. A result belongs to one process (id and start time) and one file (device, inode,
+  size, modification and change times); a file that changes while it is read, a process that has gone or been
+  replaced by the time the result is stored, and two printer processes at once all give 350. A save above 350
+  checks the running program again just before writing and answers `409` if it is no longer the raised one.
+- `POST /api/canvas/unload` with body `60`–`max` (whole millimetres) sets the override, and with body `default`
+  removes it. The firmware refuses to start with a value outside its range, so other values answer `400`. It
   answers `409` unless the printer is idle with fresh telemetry and nothing else in progress. The old file is
   kept as `autosave_backup.cfg`, as the firmware's own SAVE_CONFIG keeps it, and the reply is the new state.
   A change stays `pending_restart` until the system boots again.

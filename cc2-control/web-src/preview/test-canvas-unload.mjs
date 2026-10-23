@@ -14,7 +14,9 @@ try {
   window.__cc2UnloadPosts={save:0,restart:0}
   window.fetch=(input,options={})=>{
    const raw=typeof input==='string'?input:input.url
-   const route=new URL(raw,location.href).pathname
+   let route=new URL(raw,location.href).pathname
+   const api=route.indexOf('/api/')
+   if(api>=0)route=route.slice(api)
    if(options.method==='POST') {
     if(route==='/api/canvas/unload') window.__cc2UnloadPosts.save++
     if(route==='/api/canvas/unload/restart') window.__cc2UnloadPosts.restart++
@@ -52,7 +54,7 @@ try {
  await input.fill('300')
  await save.click()
  await page.getByRole('button',{name:'Annulla',exact:true}).click()
- assert.deepEqual(await unload(page),{configured:85,override:300,pending:true,restarts:0})
+ assert.deepEqual(await unload(page),{configured:85,override:300,pending:true,restarts:0,extended:false})
  await box.getByText('Salvata. Riavvia la stampante per applicarla.').waitFor()
  assert.match(await box.textContent(),/300 mm, impostato qui/)
  assert.equal((await writes()).save,1,'only one save POST before explicit restart')
@@ -80,8 +82,25 @@ try {
  await page.getByRole('button',{name:'Annulla',exact:true}).click()
  assert.equal((await unload(page)).override,95)
  assert.equal((await writes()).save,3,'button, restore default and changed Enter each save once')
+ // The program with the raised limit: up to 1000 mm, with a note about going back to stock.
+ assert.doesNotMatch(await box.textContent(),/portato a/)
+ await page.evaluate(()=>{window.__CC2_PREVIEW.unload.extended=true;location.hash='#control'})
+ await page.evaluate(()=>{location.hash='#canvas'})
+ await box.getByText(/limite di ritiro portato a 1000 mm/).waitFor()
+ assert.match(await box.textContent(),/imposta 350 mm o meno/)
+ await input.fill('1001')
+ assert.equal(await save.isDisabled(),true)
+ assert.match(await box.textContent(),/Inserisci un numero intero da 60 a 1000 mm/)
+ await input.fill('1000')
+ assert.equal(await save.isDisabled(),false)
+ await save.click()
+ await page.getByRole('button',{name:'Annulla',exact:true}).click()
+ assert.equal((await unload(page)).override,1000)
+ await box.getByRole('button',{name:'Usa il valore predefinito della stampante',exact:true}).click()
+ await page.getByRole('button',{name:'Annulla',exact:true}).click()
+ assert.equal((await unload(page)).override,null)
  // A busy printer locks the field.
  await page.evaluate(()=>{window.__CC2_PREVIEW.status=2})
  await page.waitForFunction(()=>document.getElementById('canvas-unload').disabled)
- console.log('PASS Canvas pull-back: range checks, unchanged Enter no-op, single-flight save/restart, changed Enter save, default, busy lock')
+ console.log('PASS Canvas pull-back: range checks, unchanged Enter no-op, single-flight save/restart, changed Enter save, default, 1000 mm program, busy lock')
 }finally{await browser.close();await demo.cleanup()}

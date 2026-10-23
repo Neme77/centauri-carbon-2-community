@@ -7,11 +7,13 @@
  * stores its value as a "[canvas_dev]" override in the SAVE_CONFIG block and never
  * edits the vendor configuration; removing the line returns to the configured value.
  * The firmware refuses to start with a value outside 60-350 mm, so nothing else is
- * ever written. The value applies at the next printer restart, which the page can
- * request through the same guarded reboot as the build-plate library. A saved value
- * is pending until the system has booted again (kernel boot id). */
+ * ever written, unless the printer runs the program with that limit raised to
+ * 1000 mm (see below). The value applies at the next printer restart, which the page
+ * can request through the same guarded reboot as the build-plate library. A saved
+ * value is pending until the system has booted again (kernel boot id). */
 #define CANVAS_UNLOAD_MIN 60
 #define CANVAS_UNLOAD_MAX 350
+#define CANVAS_UNLOAD_EXTENDED_MAX 1000
 #define CANVAS_UNLOAD_KEY "unload_fila_dist"
 #define CANVAS_UNLOAD_CONFIG_MAX (256 * 1024)
 
@@ -20,6 +22,162 @@ static const char *printer_config_path = "/opt/inst/printer_dsp.cfg";
 static const char *canvas_unload_pending_path = "/tmp/cc2-control-canvas-unload-pending";
 static const char *boot_id_path = "/proc/sys/kernel/random/boot_id";
 static int canvas_unload_restart_requested;
+
+/* A longer pull-back for a 4-in-1 merger far from the toolhead (issue #172) needs the
+ * community firmware's elegoo_printer (ELEGOO 02.01.01.07) with one constant changed:
+ * the 350.0 maximum of getdouble("unload_fila_dist") at file offset 0x5bba38 raised to
+ * 1000.0. Only that exact program, while it is the one running, unlocks values above
+ * 350; any other program would refuse to start with them.
+ *
+ * Hashing the 29 MB file takes a few seconds on the printer, so it runs on a thread,
+ * never in the HTTP loop, and the stock range applies until the result is known. A
+ * result belongs to one process and one file: the process id with its start time (a
+ * reused id has another start time) and the file's device, inode, size and
+ * modification and change times. The file is hashed through one descriptor and must
+ * be unchanged before and after reading, and the same process must still be running
+ * the same file when the result is stored. A save above 350 checks the running
+ * program again just before it writes. No printer process, two of them, or any read
+ * error keeps 350. */
+static const char *canvas_unload_extended_sha256 = "15ea20771b1424560bfa0c6e4170993e1ce20001b90715d2b00f57dfcb0ea1bc";
+static const char *canvas_unload_program = NULL; /* tests: this file instead of the running printer */
+static void (*canvas_unload_after_hash)(void) = NULL; /* tests: runs between hashing and storing the result */
+static pthread_mutex_t canvas_unload_check_lock = PTHREAD_MUTEX_INITIALIZER;
+static char canvas_unload_checked[448];  /* the process and file the result belongs to */
+static int canvas_unload_checking, canvas_unload_extended_ok;
+
+typedef struct {
+    char path[300];      /* where to read the program */
+    char file[160];      /* device, inode, size, mtime, ctime */
+    char identity[448];  /* the process (or test file) and file */
+} canvas_unload_program_id;
+
+static void canvas_unload_file_identity(const struct stat *st, char *out, size_t size) {
+    snprintf(out, size, "%llu:%llu:%lld:%lld.%09ld:%lld.%09ld", (unsigned long long)st->st_dev,
+             (unsigned long long)st->st_ino, (long long)st->st_size, (long long)st->st_mtim.tv_sec,
+             (long)st->st_mtim.tv_nsec, (long long)st->st_ctim.tv_sec, (long)st->st_ctim.tv_nsec);
+}
+
+/* Field 22 of a /proc/<pid>/stat line, the start time in clock ticks. The process name
+ * in parentheses may contain spaces and parentheses, so fields count from the last ")". */
+static int canvas_unload_parse_start_time(const char *line, unsigned long long *start) {
+    const char *p = strrchr(line, ')');
+    if (!p) return 0;
+    p++;  /* the space before field 3 */
+    for (int field = 4; field <= 22; ++field) {
+        p = strchr(p + 1, ' ');
+        if (!p) return 0;
+    }
+    char *end;
+    errno = 0;
+    *start = strtoull(p + 1, &end, 10);
+    return !errno && end != p + 1 && (*end == ' ' || *end == '\n' || !*end);
+}
+
+static int canvas_unload_start_time(const char *pid, unsigned long long *start) {
+    char path[300], line[1024];
+    snprintf(path, sizeof(path), "/proc/%s/stat", pid);
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    size_t n = fread(line, 1, sizeof(line) - 1, f);
+    fclose(f);
+    line[n] = 0;
+    return canvas_unload_parse_start_time(line, start);
+}
+
+/* The one running elegoo_printer, or the test file. 0 when there is none or more than one. */
+static int canvas_unload_find_program(canvas_unload_program_id *id) {
+    struct stat st;
+    if (canvas_unload_program) {
+        if (stat(canvas_unload_program, &st) != 0) return 0;
+        snprintf(id->path, sizeof(id->path), "%s", canvas_unload_program);
+        canvas_unload_file_identity(&st, id->file, sizeof(id->file));
+        snprintf(id->identity, sizeof(id->identity), "file:%s", id->file);
+        return 1;
+    }
+    DIR *proc = opendir("/proc");
+    if (!proc) return 0;
+    struct dirent *entry;
+    int found = 0;
+    while ((entry = readdir(proc))) {
+        if (!isdigit((unsigned char)entry->d_name[0])) continue;
+        char comm_path[300], comm[32] = "";
+        snprintf(comm_path, sizeof(comm_path), "/proc/%s/comm", entry->d_name);
+        FILE *f = fopen(comm_path, "r");
+        if (!f) continue;
+        if (!fgets(comm, sizeof(comm), f)) comm[0] = 0;
+        fclose(f);
+        if (strcmp(comm, "elegoo_printer\n")) continue;
+        /* The same start time on both sides of the stat: the id was not reused in between. */
+        unsigned long long start = 0, again = 0;
+        char exe[300];
+        snprintf(exe, sizeof(exe), "/proc/%s/exe", entry->d_name);
+        if (!canvas_unload_start_time(entry->d_name, &start) || stat(exe, &st) != 0 ||
+            !canvas_unload_start_time(entry->d_name, &again) || start != again) continue;
+        if (++found > 1) break;
+        snprintf(id->path, sizeof(id->path), "%s", exe);
+        canvas_unload_file_identity(&st, id->file, sizeof(id->file));
+        snprintf(id->identity, sizeof(id->identity), "%s:%llu:%s", entry->d_name, start, id->file);
+    }
+    closedir(proc);
+    return found == 1;
+}
+
+/* SHA-256 of the program, only if the file read is the one identified and did not change while it was read. */
+static int canvas_unload_hash_program(const canvas_unload_program_id *id, char digest[65]) {
+    int fd = open(id->path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return 0;
+    struct stat before, after;
+    char file_before[160], file_after[160];
+    int ok = fstat(fd, &before) == 0;
+    if (ok) canvas_unload_file_identity(&before, file_before, sizeof(file_before));
+    ok = ok && !strcmp(file_before, id->file) && sha256_fd(fd, digest) && fstat(fd, &after) == 0;
+    if (ok) canvas_unload_file_identity(&after, file_after, sizeof(file_after));
+    ok = ok && !strcmp(file_after, file_before);
+    close(fd);
+    return ok;
+}
+
+static void *canvas_unload_check_worker(void *arg) {
+    canvas_unload_program_id *job = arg, now;
+    char digest[65];
+    int ok = canvas_unload_hash_program(job, digest) && !strcmp(digest, canvas_unload_extended_sha256);
+    if (canvas_unload_after_hash) canvas_unload_after_hash();
+    /* Still the same process and file now that the result is known. */
+    int current = canvas_unload_find_program(&now) && !strcmp(now.identity, job->identity);
+    pthread_mutex_lock(&canvas_unload_check_lock);
+    if (!strcmp(canvas_unload_checked, job->identity)) {
+        canvas_unload_extended_ok = ok && current;
+        if (!current) canvas_unload_checked[0] = 0;  /* check whatever runs now on the next request */
+    }
+    canvas_unload_checking = 0;
+    pthread_mutex_unlock(&canvas_unload_check_lock);
+    free(job);
+    return NULL;
+}
+
+/* 1 when the running program is known to accept up to 1000 mm. Starts the check for
+ * a process or file not seen before and answers 0 until it has finished. */
+static int canvas_unload_extended(void) {
+    canvas_unload_program_id id;
+    if (!canvas_unload_find_program(&id)) return 0;
+    pthread_mutex_lock(&canvas_unload_check_lock);
+    int known = !strcmp(id.identity, canvas_unload_checked), result = known && canvas_unload_extended_ok;
+    if (!known && !canvas_unload_checking) {
+        canvas_unload_program_id *job = malloc(sizeof(*job));
+        pthread_t thread;
+        if (job) {
+            *job = id;
+            snprintf(canvas_unload_checked, sizeof(canvas_unload_checked), "%s", id.identity);
+            canvas_unload_extended_ok = 0; canvas_unload_checking = 1;
+            if (pthread_create(&thread, NULL, canvas_unload_check_worker, job) == 0) pthread_detach(thread);
+            else { canvas_unload_checking = 0; canvas_unload_checked[0] = 0; free(job); }
+        }
+    }
+    pthread_mutex_unlock(&canvas_unload_check_lock);
+    return result;
+}
+
+static int canvas_unload_max(void) { return canvas_unload_extended() ? CANVAS_UNLOAD_EXTENDED_MAX : CANVAS_UNLOAD_MAX; }
 
 /* The "#*#" lines of autosave.cfg that belong to [canvas_dev]. */
 typedef struct {
@@ -226,10 +384,11 @@ static void canvas_unload_state(int fd, int status) {
         if (reboot_pending) restart = "restarting";
         else if (strcmp(reboot_error, "none")) { restart = reboot_error; canvas_unload_restart_requested = 0; }
     }
+    int extended = canvas_unload_extended();
     char body[512];
     json_builder b = {body, 0, sizeof(body), 0};
-    json_builder_printf(&b, "{\"ok\":true,\"editable\":%s,\"min\":%d,\"max\":%d", editable ? "true" : "false",
-                        CANVAS_UNLOAD_MIN, CANVAS_UNLOAD_MAX);
+    json_builder_printf(&b, "{\"ok\":true,\"editable\":%s,\"min\":%d,\"max\":%d,\"extended\":%s", editable ? "true" : "false",
+                        CANVAS_UNLOAD_MIN, extended ? CANVAS_UNLOAD_EXTENDED_MAX : CANVAS_UNLOAD_MAX, extended ? "true" : "false");
     canvas_unload_number_json(&b, "configured", have_configured, configured);
     canvas_unload_number_json(&b, "override", editable && e.has_value, editable ? e.value : 0);
     json_builder_printf(&b, ",\"pending_restart\":%s,\"restart\":\"%s\"}\n",
@@ -243,14 +402,18 @@ static void canvas_unload_response(int fd) { canvas_unload_state(fd, 200); }
 static void canvas_unload_save_response(int fd, const mqtt_client *mqtt, const char *body, size_t body_len) {
     while (body_len && isspace((unsigned char)*body)) { body++; body_len--; }
     while (body_len && isspace((unsigned char)body[body_len - 1])) body_len--;
-    int value = -1;
+    int value = -1, maximum = canvas_unload_max();
     if (body_len == 7 && !memcmp(body, "default", 7)) value = 0;
-    else if (body_len >= 2 && body_len <= 3) {
+    else if (body_len >= 2 && body_len <= 4) {
         value = 0;
-        for (size_t i = 0; i < body_len; ++i) value = isdigit((unsigned char)body[i]) ? value * 10 + body[i] - '0' : -1000;
-        if (value < CANVAS_UNLOAD_MIN || value > CANVAS_UNLOAD_MAX) value = -1;
+        for (size_t i = 0; i < body_len; ++i) value = isdigit((unsigned char)body[i]) ? value * 10 + body[i] - '0' : -100000;
+        if (value < CANVAS_UNLOAD_MIN || value > maximum) value = -1;
     }
-    if (value < 0) { plates_fail(fd, 400, "Enter a whole number of millimetres from 60 to 350"); return; }
+    if (value < 0) {
+        char message[80];
+        snprintf(message, sizeof(message), "Enter a whole number of millimetres from %d to %d", CANVAS_UNLOAD_MIN, maximum);
+        plates_fail(fd, 400, message); return;
+    }
     const char *busy = plates_printer_ready(mqtt);
     if (busy) { plates_fail(fd, 409, busy); return; }
     size_t length = 0, new_length = 0, again_length = 0;
@@ -271,6 +434,10 @@ static void canvas_unload_save_response(int fd, const mqtt_client *mqtt, const c
     int unchanged = again && again_length == length && !memcmp(again, file, length);
     free(again); free(file);
     if (!unchanged) { free(updated); plates_fail(fd, 409, "The printer changed its configuration meanwhile; try again"); return; }
+    /* Above 350 only while the program checked for it is still the one running. */
+    if (value > CANVAS_UNLOAD_MAX && !canvas_unload_extended()) {
+        free(updated); plates_fail(fd, 409, "The printer program changed; it accepts at most 350 mm"); return;
+    }
     /* Record the restart requirement before changing persistent configuration.
      * If /tmp or boot-id access fails, the configuration must stay untouched. */
     int already_pending = canvas_unload_pending();

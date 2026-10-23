@@ -26,7 +26,6 @@
     "test:print-temperatures": "node preview/test-print-temperatures.mjs",
     "test:printer-reports": "node preview/test-printer-reports.mjs",
     "test:control-calibrations": "node preview/test-control-calibrations.mjs",
-    "test:motor-mode": "node preview/test-motor-mode.mjs",
     "test:fans": "node preview/test-fan-inputs.mjs",
     "test:canvas-reset": "node preview/test-canvas-reset.mjs && node preview/test-canvas-presence.mjs && node preview/test-canvas-unload.mjs",
     "test:languages": "node preview/test-polish-czech.mjs",
@@ -44,6 +43,9 @@
     "test:plate-flow": "node preview/test-empty-plate-flow.mjs",
     "test:bed-map": "node preview/test-bed-map.mjs",
     "test:file-library": "node preview/test-file-library.mjs",
+    "test:canvas-layout": "node preview/test-canvas-layout.mjs",
+    "test:spool-insertion": "node preview/test-spool-insertion.mjs",
+    "test:motor-mode": "node preview/test-motor-mode.mjs",
     "test:experiments": "node preview/test-experiments.mjs"
   },
   "devDependencies": {

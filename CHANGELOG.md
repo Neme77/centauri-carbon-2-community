@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Experimental Canvas pull-back: verify the exact running extended-range firmware before allowing values above 350 mm (#209, original contribution by Noahwhite2014 in #202 and issue #172); runtime installation remains separate and is never activated by an application update.
+
+- Spool insertion popup: add an identical spool without moving the original, and calculate remaining filament from total and empty-spool weights while keeping nominal capacity separate (#210). Suggested by [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester; the Spools section stays unchanged.
+
 - Canvas: an explicit action to recover an unassigned filament head by loading any present slot (#190).
 - Files: older G-code files stay reachable, and uploads stream up to 512 MiB (#197).
 - Object exclusion: a single refined 2D bed map replaces the previous views (#199), following DamiBFryta's feedback and Nick Plateringen-Paul's original map idea/prototype.
@@ -16,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Optional experiments are separate from stable application updates: independent, persisted Canvas UDS (#200) and Quiet-control opt-ins (original motor feature by BorjaLL, #179), both initially disabled. Normal must complete before hiding Quiet controls or reconnecting Canvas while those controls are enabled. Extended pull-back remains a separate firmware experiment.
 - Public cumulative release packaging with `--release` refuses missing qualified camera runtime files, retaining the camera migration for users skipping 1.2.19.
+- Canvas: compact slot cards, shared actions and a bounded session-history panel; inspired by Surfoo's layout proposal (#203) and refined through the maintainer-approved layout (#207).
 
 - Web UI: shared design system (page, card and dialog titles, spacing, radius), documented in `AGENTS.md`, with keyboard focus, accessible names and landmarks checked with axe (#196).
 - The demo (`npm run preview:ui`) starts in English.
