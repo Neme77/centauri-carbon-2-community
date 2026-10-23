@@ -554,6 +554,7 @@
   "canvas.unload_restart_busy": "El reinicio se canceló porque la impresora pasó a estar ocupada. Reiníciela más tarde para aplicar la distancia.",
   "canvas.unload_restart_failed": "No se pudo reiniciar la impresora. Reiníciela más tarde para aplicar la distancia.",
   "canvas.unload_above_range": "La configuración de la impresora fija {value} mm, más de los {max} mm que acepta el firmware original, así que se cambió fuera de CC2 Control. Guardar aquí lo sustituye.",
+  "canvas.unload_extended": "Esta impresora usa el programa con el límite de retroceso elevado a {max} mm. Antes de volver a un programa original, ajuste {stock} mm o menos, o la impresora no arrancará.",
   "canvas.unload_not_editable": "El autosave.cfg de esta impresora tiene una estructura que CC2 Control no edita, así que la distancia no se puede cambiar aquí.",
   "substate.receiving_file": "Recibiendo archivo",
   "substate.heating_nozzle": "Calentando boquilla",

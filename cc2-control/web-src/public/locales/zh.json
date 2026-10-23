@@ -554,6 +554,7 @@
   "canvas.unload_restart_busy": "打印机变为忙碌，重启已取消。请稍后重启以应用该距离。",
   "canvas.unload_restart_failed": "无法重启打印机。请稍后重启以应用该距离。",
   "canvas.unload_above_range": "打印机配置设为 {value} mm，超过原厂固件允许的 {max} mm，说明它是在 CC2 Control 之外修改的。在此保存会替换该值。",
+  "canvas.unload_extended": "此打印机运行的程序已将回抽上限提高到 {max} mm。改回原厂程序之前，请先设为 {stock} mm 或更小，否则打印机将无法启动。",
   "canvas.unload_not_editable": "此打印机的 autosave.cfg 格式不受 CC2 Control 支持编辑，因此无法在此更改该距离。",
   "substate.receiving_file": "正在接收文件",
   "substate.heating_nozzle": "喷嘴加热中",

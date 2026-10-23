@@ -554,6 +554,7 @@
   "canvas.unload_restart_busy": "Restart byl zrušen, protože tiskárna začala pracovat. Restartujte ji později, aby se vzdálenost projevila.",
   "canvas.unload_restart_failed": "Tiskárnu se nepodařilo restartovat. Restartujte ji později, aby se vzdálenost projevila.",
   "canvas.unload_above_range": "Konfigurace tiskárny nastavuje {value} mm, více než {max} mm, které přijímá původní firmware, takže byla změněna mimo CC2 Control. Uložením zde ji nahradíte.",
+  "canvas.unload_extended": "Tiskárna používá program s limitem vytažení zvýšeným na {max} mm. Než se vrátí k původnímu programu, nastavte nejvýše {stock} mm, jinak se tiskárna nespustí.",
   "canvas.unload_not_editable": "Soubor autosave.cfg této tiskárny má strukturu, kterou CC2 Control neupravuje, takže vzdálenost zde nelze změnit.",
   "substate.receiving_file": "Příjem souboru",
   "substate.heating_nozzle": "Zahřívání trysky",

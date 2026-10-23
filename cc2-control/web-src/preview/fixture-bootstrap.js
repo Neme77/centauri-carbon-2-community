@@ -4,7 +4,7 @@
     status: 1,
     reject: false,
     commands: [],
-    unload: { configured: 85, override: null, pending: false, restarts: 0 },
+    unload: { configured: 85, override: null, pending: false, restarts: 0, extended: false },
     headLoaded: false, activeTray: -1, canvasFresh: true,
     fans: { part: 0, aux: 0, box: 0 },
     trays: [0, 1, 2, 3].map(i => ({tray_id:i,status:i===1||i===2?1:0,filament_color:['','#66BB6A','#48A7FA','#F5F5F5'][i],filament_name:['','PETG','PETG','PLA'][i],filament_type:['','PETG','PETG','PLA'][i]})),
@@ -62,14 +62,15 @@
     }
     if (path === '/api/canvas/unload') {
       const u = state.unload
+      const max = u.extended ? 1000 : 350
       if (options.method === 'POST') {
         const text = String(options.body).trim()
-        const value = text === 'default' ? null : /^\d{2,3}$/.test(text) ? Number(text) : NaN
-        if (value !== null && !(value >= 60 && value <= 350)) return reply({ ok: false, error: 'Enter a whole number of millimetres from 60 to 350' }, 400)
+        const value = text === 'default' ? null : /^\d{2,4}$/.test(text) ? Number(text) : NaN
+        if (value !== null && !(value >= 60 && value <= max)) return reply({ ok: false, error: `Enter a whole number of millimetres from 60 to ${max}` }, 400)
         if (state.status !== 1) return reply({ ok: false, error: 'The printer must be idle' }, 409)
         if (value !== u.override) Object.assign(u, { override: value, pending: true })
       }
-      return reply({ ok: true, editable: true, min: 60, max: 350, configured: u.configured, override: u.override, pending_restart: u.pending, restart: 'none' })
+      return reply({ ok: true, editable: true, min: 60, max, extended: u.extended, configured: u.configured, override: u.override, pending_restart: u.pending, restart: 'none' })
     }
     if (path === '/api/printer') return reply(printer())
     if (path === '/api/health') return reply({ service: 'cc2-control', version: '1.2.3', mqtt_connected: state.connected })
