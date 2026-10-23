@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Firmware builder V4.4.2: integrate the qualified R2 camera thread-reaping and local/Matrix recovery runtime from first boot, with exact-fingerprint checks, managed-component migration and native fallback (PR pending). Thanks to [tharje](https://github.com/tharje) for diagnosis and [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester, for persistent testing. Includes stable CC2 Control 1.2.21; the complete OTA is built locally and awaits hardware validation.
+
 - Spool insertion popup: add an identical spool without moving the original, and calculate remaining filament from total and empty-spool weights while keeping nominal capacity separate (#210). Suggested by [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester; the Spools section stays unchanged.
 
 - Canvas: an explicit action to recover an unassigned filament head by loading any present slot (#190).

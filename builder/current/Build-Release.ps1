@@ -5,9 +5,11 @@ $ErrorActionPreference='Stop'
 if (-not $ExistingBuilder) {
     $desktop=[Environment]::GetFolderPath('Desktop')
     $firmwareVersion=(Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\cc2-control\FIRMWARE_VERSION') -Raw).Trim()
-    $previousPackage='CC2-Builder-V'+$firmwareVersion+'-Control-Panel-Canvas-Reset-Test-R2'
+    $previousPackage='CC2-Builder-V'+$firmwareVersion+'-Updated-Control-Panel'
     foreach ($relative in @("$previousPackage\builder\current",
                             "$previousPackage\$previousPackage\builder\current",
+                            'CC2-Builder-V4.4.1\builder\current',
+                            'CC2-Builder-V4.4-Updated-Control-Panel\builder\current',
                             'CC2-Builder-V4.3-Candidate\builder\current')) {
         $candidate=Join-Path $desktop $relative
         if (Test-Path -LiteralPath $candidate) {$ExistingBuilder=$candidate;break}
@@ -18,7 +20,8 @@ $old=(Resolve-Path -LiteralPath $ExistingBuilder).Path
 if (Test-Path -LiteralPath (Join-Path $old 'builder\current')) {$old=Join-Path $old 'builder\current'}
 if ($old -eq $PSScriptRoot) {throw 'Usa il builder precedente come sorgente degli input.'}
 $inputs=@('keys\cc2_aes_key_v1.bin','keys\cc2_stock_private.pem','keys\cc2_community_release_private.pem',
-    'components\ssh\sshd','tools\squashfs-tools-4.6.1\bin\mksquashfs','tools\squashfs-tools-4.6.1\bin\unsquashfs')
+    'components\ssh\sshd','tools\squashfs-tools-4.6.1\bin\mksquashfs','tools\squashfs-tools-4.6.1\bin\unsquashfs',
+    'original_firmware\cc2_eeb001_02.01.01.07_20260922210235.zip.sig')
 foreach ($relative in $inputs) {
     $source=Join-Path $old $relative
     $destination=Join-Path $PSScriptRoot $relative
