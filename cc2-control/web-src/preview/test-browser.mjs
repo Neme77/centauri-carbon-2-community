@@ -180,8 +180,8 @@ try {
   // Canvas auto refill follows the printer's readback.
   await page.locator('#cc2-navigation a[href="#canvas"]').click()
   const refill = page.locator('[data-canvas-settings] button[aria-pressed]')
-  assert.equal(await refill.count(), 1, 'Auto refill selector must not match the four slot selection buttons')
   await refill.waitFor()
+  assert.equal(await refill.count(), 1, 'Auto refill selector must not match the four slot selection buttons')
   await page.waitForFunction(() => document.querySelector('[data-canvas-settings] button[aria-pressed]')?.textContent.includes(' '))
   assert.equal(await refill.getAttribute('aria-pressed'), 'false')
   const toggled = page.waitForResponse(r => r.url().endsWith('/api/canvas/auto-refill'))
