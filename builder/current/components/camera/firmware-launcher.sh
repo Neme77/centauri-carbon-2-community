@@ -2,6 +2,7 @@
 # Run at the original vendor camera position; first-boot seed is atomic.
 set -eu
 umask 077
+export LD_LIBRARY_PATH=/opt/lib
 SOURCE=/opt/inst/cc2-camera-r2
 BASE=/opt/usr/cc2-control/camera
 CAMERA=/opt/bin/ai_camera
@@ -88,3 +89,4 @@ fi
 cleanup
 trap - 0 1 2 15
 exec "$BASE/boot-camera.sh" "$@"
+
