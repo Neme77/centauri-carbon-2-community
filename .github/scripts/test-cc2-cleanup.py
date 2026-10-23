@@ -21,6 +21,10 @@ class Fixture:
         put(self.root/'proc/mounts','device '+str(self.usr)+' ext4 rw 0 0\n')
         (self.root/'tmp').mkdir();self.stub=self.root/'stub';self.stub.mkdir()
         self.log=self.root/'service.log';self.running=self.root/'running';self.running.touch()
+        # Real CC2 Control exposes both configuration paths in /proc/argv.
+        # R1 mistakenly treated those files as protected active runtimes and
+        # never scheduled the requested reset, even after stopping the service.
+        put(self.root/'proc/123/cmdline',b'cc2-control\0--config\0'+str(self.app/'cc2-control.conf').encode()+b'\0--preferences\0'+str(self.app/'ui-preferences.json').encode()+b'\0')
         put(self.root/'etc/init.d/cc2-control',f'#!/bin/sh\necho "$1" >> "{self.log}"\ncase "$1" in stop) [ "${{TEST_STOP_FAIL:-0}}" = 0 ] || exit 1;rm -f "{self.running}";; start) touch "{self.running}";; esac\n')
         put(self.stub/'id','#!/bin/sh\necho 0\n')
         put(self.stub/'sync','#!/bin/sh\nexit 0\n')
@@ -41,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='cc2-cleanup-test-') as temp:
     f=Fixture(temp);f.run('check');assert not f.log.exists() and (f.app/'cc2-control.conf').exists()
     f.run('apply');assert f.log.read_text().splitlines()==['stop'] and not f.running.exists()
     for n in f.remove:assert not (f.usr/n).exists(),n
-    assert not (f.app/'cc2-control.conf').exists() and not (f.app/'ui-preferences.json').exists();count+=2
+    assert not (f.app/'cc2-control.conf').exists() and not (f.app/'ui-preferences.json').exists(), 'RESET_FILES_NOT_REMOVED';count+=2
     for env in [dict(TEST_STATE=IDLE.replace('age":2','age":99')),dict(TEST_STATE=IDLE.replace('"status":1','"status":2')),dict(TEST_STATE=IDLE.replace('25.0','80.0')),dict(TEST_STATE=IDLE.replace('"target":0.0','"target":60.0')),dict(TEST_STATE='{}'),dict(TEST_UPDATE='{"busy":true}'),dict(TEST_WORKER='1')]:
         f=Fixture(temp);f.run('apply',ok=False,**env);assert not f.log.exists() and (f.app/'cc2-control.conf').exists();count+=1
     f=Fixture(temp);(f.usr/'cc2-camera-before-firmware-99').symlink_to(f.usr/'cfg',target_is_directory=True)
@@ -50,7 +54,7 @@ with tempfile.TemporaryDirectory(prefix='cc2-cleanup-test-') as temp:
         f=Fixture(temp);p=f.usr/'cc2-camera-recovery-r2'
         if mode=='mapped':put(f.root/'proc/123/maps',str(p)+'/old.so\n')
         elif mode in ('exe','cwd'):
-            d=f.root/'proc/123';d.mkdir(parents=True);(d/mode).symlink_to(p if mode=='cwd' else p/'old.txt')
+            d=f.root/'proc/123';d.mkdir(parents=True,exist_ok=True);(d/mode).symlink_to(p if mode=='cwd' else p/'old.txt')
         elif mode=='cmdline':put(f.root/'proc/123/cmdline',str(p/'start.sh').encode()+b'\0')
         elif mode=='mount':put(f.root/'proc/mounts','device '+str(p/'nested')+' ext4 rw 0 0\n')
         elif mode=='rollback':put(f.app/'camera/printer.original',str(p/'boot-camera.sh'))

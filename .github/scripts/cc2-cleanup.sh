@@ -68,6 +68,12 @@ safe() {
     for ref in /etc/init.d/printer /etc/init.d/cc2-camera-launch /etc/init.d/cc2-reactor-launch "$APP/camera/printer.original" "$ROOT/cc2-reactor-runtime-v2/printer.original";do
         [ ! -f "$ref" ] || ! grep -F "$path/" "$ref" >/dev/null 2>&1 || return 1
     done
+    # These exact user-selected configuration files are intentionally reset.
+    # They appear in CC2 Control's argv while planning; apply stops CC2 Control
+    # and waits for its exit before removing anything in the plan.
+    case "$path" in
+        "$APP/cc2-control.conf"|"$APP/cc2-control.conf.new"|"$APP/ui-preferences.json"|"$APP/ui-preferences.json.tmp"|"$APP/ui-preferences.json.new") return 0;;
+    esac
     if grep -Fx "$path" "$USED" >/dev/null 2>&1 || grep -F "$path/" "$USED" >/dev/null 2>&1;then return 1;fi
     return 0
 }
