@@ -1045,5 +1045,9 @@
   "app.print_progress": "Postęp wydruku",
   "app.sidebar": "Menu boczne",
   "files.list_changed_retry": "Lista plików zmieniła się podczas wczytywania. Odśwież i spróbuj ponownie.",
-  "job.bed_map_expand": "Powiększ mapę stołu"
+  "job.bed_map_expand": "Powiększ mapę stołu",
+  "spools.insert_copy_hint": "Utwórz osobną szpulę na podstawie danych istniejącej; oryginalna pozostanie w swoim slocie.",
+  "spools.insert_copy_source": "Kopiuj dane z",
+  "spools.insert_weight_hint": "Opcjonalnie: masa całkowita minus masa pustej szpuli daje pozostały filament. Nominalna masa netto nie zmienia się. Zostaw masę całkowitą pustą, aby wpisać pozostałą masę ręcznie.",
+  "spools.insert_weight_invalid": "Podaj prawidłowe masy całkowitą i pustej szpuli; całkowita nie może być mniejsza od pustej. Pozostały filament musi ważyć od 0 do 20000 g."
 }

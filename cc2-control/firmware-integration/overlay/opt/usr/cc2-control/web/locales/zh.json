@@ -1045,5 +1045,9 @@
   "app.print_progress": "打印进度",
   "app.sidebar": "侧边菜单",
   "files.list_changed_retry": "加载时文件列表发生变化。请刷新后重试。",
-  "job.bed_map_expand": "放大热床地图"
+  "job.bed_map_expand": "放大热床地图",
+  "spools.insert_copy_hint": "复制现有料盘的数据以创建独立料盘；原料盘仍保留在原槽位。",
+  "spools.insert_copy_source": "复制数据来源",
+  "spools.insert_weight_hint": "可选：总重量减去空料盘重量即为剩余耗材。标称净重保持不变。总重量留空时可手动输入余量。",
+  "spools.insert_weight_invalid": "请输入有效的总重量和空料盘重量；总重量不得小于空料盘重量。剩余耗材须在 0 至 20000 克之间。"
 }

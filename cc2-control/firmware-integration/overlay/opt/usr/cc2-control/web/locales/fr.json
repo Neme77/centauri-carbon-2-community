@@ -1045,5 +1045,9 @@
   "app.print_progress": "Progression de l'impression",
   "app.sidebar": "Menu latéral",
   "files.list_changed_retry": "La liste a changé pendant le chargement. Actualisez et réessayez.",
-  "job.bed_map_expand": "Agrandir la carte du plateau"
+  "job.bed_map_expand": "Agrandir la carte du plateau",
+  "spools.insert_copy_hint": "Créez une bobine distincte avec les caractéristiques d’une bobine existante ; l’originale reste dans son emplacement.",
+  "spools.insert_copy_source": "Copier les caractéristiques de",
+  "spools.insert_weight_hint": "Facultatif : poids total moins bobine vide donne le filament restant. Le poids net nominal reste inchangé. Laissez le total vide pour une saisie manuelle.",
+  "spools.insert_weight_invalid": "Saisissez des poids total et à vide valides ; le total doit être au moins égal au poids à vide. Le filament restant doit être compris entre 0 et 20000 g."
 }

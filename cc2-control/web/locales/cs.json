@@ -1045,5 +1045,9 @@
   "app.print_progress": "Průběh tisku",
   "app.sidebar": "Boční menu",
   "files.list_changed_retry": "Seznam souborů se během načítání změnil. Obnovte jej a zkuste to znovu.",
-  "job.bed_map_expand": "Zvětšit mapu podložky"
+  "job.bed_map_expand": "Zvětšit mapu podložky",
+  "spools.insert_copy_hint": "Vytvoří samostatnou cívku podle údajů existující cívky; původní zůstane ve svém slotu.",
+  "spools.insert_copy_source": "Kopírovat údaje z",
+  "spools.insert_weight_hint": "Volitelné: celková hmotnost minus prázdná cívka udává zbývající filament. Jmenovitá čistá hmotnost se nemění. Pro ruční zadání nechte celkovou hmotnost prázdnou.",
+  "spools.insert_weight_invalid": "Zadejte platnou celkovou hmotnost a hmotnost prázdné cívky; celková nesmí být nižší než prázdná. Zbývající filament musí být mezi 0 a 20000 g."
 }

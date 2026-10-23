@@ -1045,5 +1045,9 @@
   "app.print_progress": "Avanzamento della stampa",
   "app.sidebar": "Menu laterale",
   "files.list_changed_retry": "L’elenco file è cambiato durante il caricamento. Aggiorna e riprova.",
-  "job.bed_map_expand": "Espandi mappa del piatto"
+  "job.bed_map_expand": "Espandi mappa del piatto",
+  "spools.insert_copy_hint": "Crea una bobina distinta copiando i dati di una esistente; quella originale resta nel suo slot.",
+  "spools.insert_copy_source": "Copia i dati da",
+  "spools.insert_weight_hint": "Facoltativo: peso totale meno bobina vuota dà il filamento rimasto. Il peso netto nominale non cambia. Lascia vuoto il totale per inserire il residuo manualmente.",
+  "spools.insert_weight_invalid": "Inserisci pesi totale e a vuoto validi; il totale non può essere inferiore al peso a vuoto. Il filamento rimasto deve essere fra 0 e 20000 g."
 }
