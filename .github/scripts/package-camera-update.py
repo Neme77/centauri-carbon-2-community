@@ -17,7 +17,7 @@ for name,expected in PINS.items():
     assert hashlib.sha256(matches[0].read_bytes()).hexdigest()==expected,name
     shutil.copyfile(matches[0],runtime/name)
 subprocess.run([sys.executable,str(root/'cc2-control/installer/package.py'),
-                '--prepared',str(root/'cc2-control/dist/cc2-control'),
+                '--release','--prepared',str(root/'cc2-control/dist/cc2-control'),
                 '--camera-runtime',str(runtime)],check=True)
 (root/'output/camera-runtime-pins.json').write_text(json.dumps(PINS,indent=2)+'\n')
 print('Pinned camera binaries packaged without rebuilding or changing them; no printer addressed.')

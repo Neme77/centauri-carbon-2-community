@@ -1,6 +1,6 @@
 # Optional experimental features
 
-Application updates use the stable signed catalogue. Under Settings → Updates,
+The signed catalogue distinguishes Stable and Experimental application builds. The bell reports stable releases only. The selector offers the newest compatible build on the selected channel, not a module list. Choosing Experimental requires confirmation; selecting Stable does not downgrade. Use the installer backup for an older application. Under Settings → Updates,
 the separate Experimental features card provides independent, explicit opt-ins.
 This is not a plugin store and no extra executable is downloaded by a switch.
 Both features default to off. An old browser choice of the `canvas-uds` update
@@ -93,3 +93,9 @@ Normal-before-disable. Browser tests exercise actual switches, cancel/confirm,
 backend errors, reload persistence, offline guards, stable-only update notices
 and responsive layouts. Existing #200 and #179 tests remain; automated checks
 are not new hardware qualification. Credits remain with the original authors.
+
+## Experimental 1.2.20 distribution
+
+The public prerelease includes the cumulative R2 camera fix. The historical canvas-uds channel now identifies the complete experimental application; it does not enable Canvas UDS or Quiet. The new channel preference is independent of feature choices and ignores the old browser preference until explicitly confirmed. Users of the preceding stable-only trial can upload the signed .cc2update once from Settings; the selector is restored in 1.2.20.
+
+The maintainer confirmed Canvas UDS, slot states and Orca synchronization on 23 October 2026. Quiet and the extended pull-back runtime retain separate qualification requirements. Stable remains 1.2.19.

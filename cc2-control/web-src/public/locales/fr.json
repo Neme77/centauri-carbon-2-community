@@ -1049,7 +1049,7 @@
   "experiments.canvas_off_confirm": "Désactiver Canvas UDS et revenir à MQTT ? Brève reconnexion. Les autres choix sont conservés.",
   "experiments.canvas_on_confirm": "Activer Canvas UDS complet ? Brève reconnexion de la télémétrie, sans commande de chauffe ni mouvement. Utilise un peu plus de mémoire.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Mises à jour de l’application : canal stable. Les fonctions expérimentales se choisissent séparément ci-dessous.",
+  "experiments.channel_stable": "La cloche signale les mises à jour stables. Les choix des fonctions expérimentales restent indépendants.",
   "experiments.disable": "Désactiver",
   "experiments.enable": "Activer",
   "experiments.fallback": "Activé · repli MQTT",
@@ -1067,5 +1067,9 @@
   "experiments.title": "Fonctions expérimentales",
   "experiments.unavailable": "Paramètres expérimentaux indisponibles. Aucune modification possible.",
   "experiments.using_mqtt": "Désactivé · source MQTT",
-  "experiments.using_uds": "Activé · source UDS"
+  "experiments.using_uds": "Activé · source UDS",
+  "updates.channel": "Canal de mise à jour",
+  "updates.stable": "Stable",
+  "updates.experimental": "Expérimental",
+  "updates.experimental_warning": "Les versions expérimentales servent aux essais. Certaines fonctions peuvent ne pas être validées ; ce choix ne les active pas. Pour revenir à une version stable antérieure, utilisez la sauvegarde de l’installateur."
 }

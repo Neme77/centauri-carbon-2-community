@@ -1049,7 +1049,7 @@
   "experiments.canvas_off_confirm": "Disable Canvas UDS and return to MQTT? The telemetry connection will reconnect briefly. Other experimental choices are kept.",
   "experiments.canvas_on_confirm": "Enable full Canvas UDS telemetry? The telemetry connection will reconnect briefly; no heating or motion command is sent. Some additional memory is used.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Application updates: stable channel. Experimental features are selected separately below.",
+  "experiments.channel_stable": "The bell reports stable updates. Experimental feature choices remain independent.",
   "experiments.disable": "Disable",
   "experiments.enable": "Enable",
   "experiments.fallback": "Enabled · using MQTT fallback",
@@ -1067,5 +1067,9 @@
   "experiments.title": "Experimental features",
   "experiments.unavailable": "Experimental settings are unavailable. No changes can be made.",
   "experiments.using_mqtt": "Disabled · using MQTT",
-  "experiments.using_uds": "Enabled · using UDS"
+  "experiments.using_uds": "Enabled · using UDS",
+  "updates.channel": "Update channel",
+  "updates.stable": "Stable",
+  "updates.experimental": "Experimental",
+  "updates.experimental_warning": "Experimental application builds are for testing. Features may be unqualified; choosing this channel does not enable them. Returning to an older stable version requires the installer backup, not this selector."
 }

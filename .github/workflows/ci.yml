@@ -92,6 +92,7 @@ jobs:
         run: |
           npm run test:experiments
           npm run test:motor-mode
+          npm run test:experimental-channel
 
       - name: Canvas states and explicit recovery loading
         run: npm run test:canvas-states && npm run test:canvas-layout && npm run test:canvas-reset

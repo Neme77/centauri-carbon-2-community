@@ -1,48 +1,15 @@
-# CC2 Control 1.2.19 — complete update
+# CC2 Control 1.2.20 — experimental cumulative update
 
-**FULL PRINTER REBOOT REQUIRED: this update includes the camera fix.
-After installation, manually reboot the complete printer while it is idle.
-Refreshing the page or restarting only CC2 Control does not activate the patch.**
+This is a public prerelease for Community Firmware V4.4/V4.4.1, ELEGOO base 02.01.01.07. Stable remains 1.2.19. It is one application package, not a collection of downloadable modules.
 
-Includes camera fixes from PR #183 and unreliable G-code date handling from
-PR #185. Camera library bytes match the seven-hour printing observation with
-AI enabled and working streaming. The new combined installer requires a complete
-printer acceptance test before stable-channel publication.
+Choose Experimental in Settings → Updates, read the notes, enter the LAN code, download/verify and separately confirm installation. Older stable interfaces call this channel experimental Canvas UDS. Users of the preceding stable-only trial can upload the signed .cc2update from the same page once. The new selector then remains available. Channel selection never enables a feature. The bell continues to report stable releases. Returning to an older stable app requires the installer backup; selecting Stable does not downgrade.
 
-Install only while connected, idle and cool (nozzle/bed at most 50 °C, targets
-zero). Close live viewers first. The LAN code authorizes installation through
-the panel and is not included in this package.
+Canvas UDS and Quiet controls are separate machine-persisted opt-ins and default to off on a new installation. Existing choices are retained. Canvas UDS, slot states and Orca synchronization were accepted by the maintainer on 23 October 2026. Quiet/Normal on V4.4 still needs hardware qualification: enabling its controls sends no command, but actually selecting Quiet changes the motor mode. Slicer commands can override its initial 80 mm/s and 2000 mm/s² limits. Normal restores fixed 500/20000 limits; displayed mode is requested state, not verified TMC registers. Explicitly select Normal and wait for successful completion before disabling Quiet, changing Canvas source or updating the app while Quiet controls are enabled.
 
-In the panel use Settings → Updates → upload the signed .cc2update file, or
-extract the multiplatform ZIP and run the installer for your operating system.
-Keep the backup path shown at completion.
+This cumulative package includes the unchanged qualified R2 camera libraries, including for users who skipped 1.2.19. A FULL IDLE-PRINTER REBOOT IS REQUIRED WHEN FIRST ACTIVATING THE CAMERA FIX. Reloading the page or restarting only CC2 Control is insufficient. A recognized existing camera component is preserved. No printer reboot is started automatically.
 
-Camera checks pin the executable, startup file, libraries and dependencies;
-unknown configurations are refused. ai_camera is not replaced and the stream
-limit is unchanged. A recognized previous personal R2 installation and its
-activation preference are preserved. No automatic camera restart or reboot occurs.
+Install only while connected, idle and cold (nozzle/bed at most 50 °C, heating targets zero). Close live views first. Settings, materials, plates/nozzles and spools are retained. Keep the exact backup/restore path reported by the installer. The Windows/macOS/Linux installer is also included; use only this printer’s own backup.
 
-After reboot, check version 1.2.19, printer connection, local and Matrix video.
-For a new camera installation run:
+Pull-back above 350 mm remains a separate firmware experiment. This update installs no extended runtime and does not enable it. An independently installed extended runtime requires its own qualified rollback, including effective settings at or below 350 mm before restoring the original printer executable. Builder and full-firmware downloads are unchanged.
 
-```sh
-sh /opt/usr/cc2-control/camera/manage.sh status
-```
-
-For the existing personal installation use:
-
-```sh
-sh /opt/usr/cc2-camera-recovery-r2/manage.sh status
-```
-
-Application backup restoration also restores the previous camera startup when
-this update changed it, refusing unrelated later startup edits. Restore only
-while idle and cool, then reboot the whole printer to change in-memory patches.
-
-Obviously unreliable file dates are displayed as unavailable without rewriting
-G-code or original timestamps. The clock still needs a reachable time source,
-including on networks that block cloud access.
-
-Thanks to tharje for camera diagnosis, reproduction and analysis, and to the
-community beta testers. Specific AI detections and expired RTC sessions are not
-qualified merely by observing a print with AI options enabled.
+Credits: Surfoo for UI fixes and Canvas/documentation ideas; BorjaLL for Quiet; Noahwhite2014 for extended pull-back; Nick Plateringen-Paul for the original object map; DamiBFryta, our ultimate beta tester, for suggestions and testing; tharje for camera diagnosis and recovery work. Original contribution histories and earlier credits are retained.

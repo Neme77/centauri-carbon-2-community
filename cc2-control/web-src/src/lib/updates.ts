@@ -2,6 +2,17 @@ import { request } from './api'
 import { t } from './i18n'
 import { store, ls } from './store'
 
+export type UpdateChannel = 'stable' | 'canvas-uds'
+const channelKey = 'cc2-app-update-view'
+// Old channel preferences never enable experiments or select a preview silently.
+export const updateView = store<{ channel: UpdateChannel }>({
+  channel: ls.get(channelKey) === 'canvas-uds' ? 'canvas-uds' : 'stable',
+})
+export function selectUpdateChannel(channel: UpdateChannel) {
+  updateView.set({ channel })
+  ls.set(channelKey, channel)
+}
+
 export type Release = {
   version: string
   firmware: string

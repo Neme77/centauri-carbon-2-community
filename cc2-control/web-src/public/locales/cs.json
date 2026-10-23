@@ -1049,7 +1049,7 @@
   "experiments.canvas_off_confirm": "Zakázat Canvas UDS a vrátit se k MQTT? Proběhne krátké opětovné připojení. Ostatní volby zůstanou.",
   "experiments.canvas_on_confirm": "Povolit úplný Canvas UDS? Telemetrie se krátce znovu připojí, bez příkazu ohřevu či pohybu. Spotřebuje trochu více paměti.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Aktualizace aplikace: stabilní kanál. Experimentální funkce se vybírají samostatně níže.",
+  "experiments.channel_stable": "Zvonek upozorňuje na stabilní aktualizace. Volby experimentálních funkcí zůstávají nezávislé.",
   "experiments.disable": "Zakázat",
   "experiments.enable": "Povolit",
   "experiments.fallback": "Povoleno · záloha MQTT",
@@ -1067,5 +1067,9 @@
   "experiments.title": "Experimentální funkce",
   "experiments.unavailable": "Experimentální nastavení nejsou dostupná. Nelze je měnit.",
   "experiments.using_mqtt": "Zakázáno · zdroj MQTT",
-  "experiments.using_uds": "Povoleno · zdroj UDS"
+  "experiments.using_uds": "Povoleno · zdroj UDS",
+  "updates.channel": "Kanál aktualizací",
+  "updates.stable": "Stabilní",
+  "updates.experimental": "Experimentální",
+  "updates.experimental_warning": "Experimentální verze slouží k testování. Některé funkce nemusí být ověřené; volba kanálu je nezapíná. Návrat ke starší stabilní verzi vyžaduje zálohu instalátoru."
 }

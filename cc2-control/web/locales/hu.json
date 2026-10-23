@@ -1049,7 +1049,7 @@
   "experiments.canvas_off_confirm": "Letiltod a Canvas UDS-t és visszatérsz MQTT-re? Rövid újracsatlakozás történik. A többi választás megmarad.",
   "experiments.canvas_on_confirm": "Engedélyezed a teljes Canvas UDS-t? A telemetria röviden újracsatlakozik, fűtési vagy mozgási parancs nélkül. Kicsit több memóriát használ.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Alkalmazásfrissítések: stabil csatorna. A kísérleti funkciók alább külön választhatók.",
+  "experiments.channel_stable": "A csengő a stabil frissítéseket jelzi. A kísérleti funkciók beállításai függetlenek maradnak.",
   "experiments.disable": "Letiltás",
   "experiments.enable": "Engedélyezés",
   "experiments.fallback": "Engedélyezve · MQTT-tartalék",
@@ -1067,5 +1067,9 @@
   "experiments.title": "Kísérleti funkciók",
   "experiments.unavailable": "A kísérleti beállítások nem érhetők el. Módosítás nem lehetséges.",
   "experiments.using_mqtt": "Letiltva · MQTT-forrás",
-  "experiments.using_uds": "Engedélyezve · UDS-forrás"
+  "experiments.using_uds": "Engedélyezve · UDS-forrás",
+  "updates.channel": "Frissítési csatorna",
+  "updates.stable": "Stabil",
+  "updates.experimental": "Kísérleti",
+  "updates.experimental_warning": "A kísérleti verziók tesztelésre valók. Egyes funkciók még nem ellenőrzöttek; a csatornaválasztás nem kapcsolja be őket. Régebbi stabil verzióhoz a telepítő biztonsági mentése szükséges."
 }

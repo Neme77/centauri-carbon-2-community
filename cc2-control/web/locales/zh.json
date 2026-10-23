@@ -1049,7 +1049,7 @@
   "experiments.canvas_off_confirm": "禁用 Canvas UDS 并回到 MQTT？遥测将短暂重连，其他实验选择会保留。",
   "experiments.canvas_on_confirm": "启用完整 Canvas UDS？遥测连接将短暂重连，不发送加热或运动命令，会使用少量额外内存。",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "应用更新使用稳定通道。实验功能在下方单独选择。",
+  "experiments.channel_stable": "铃铛仅提示稳定版更新。实验功能选项保持独立。",
   "experiments.disable": "禁用",
   "experiments.enable": "启用",
   "experiments.fallback": "已启用 · MQTT 回退",
@@ -1067,5 +1067,9 @@
   "experiments.title": "实验功能",
   "experiments.unavailable": "实验设置不可用，无法修改。",
   "experiments.using_mqtt": "已禁用 · MQTT 来源",
-  "experiments.using_uds": "已启用 · UDS 来源"
+  "experiments.using_uds": "已启用 · UDS 来源",
+  "updates.channel": "更新通道",
+  "updates.stable": "稳定版",
+  "updates.experimental": "实验版",
+  "updates.experimental_warning": "实验版应用用于测试，部分功能可能尚未验证；选择此通道不会启用这些功能。返回较旧的稳定版需要使用安装程序的备份，不能通过此选择器降级。"
 }

@@ -1,6 +1,6 @@
 # Experimental trial: Canvas UDS and Quiet
 
-Development package, displayed version 1.2.19. This is not the stable release or
+Application-only development package. This is not the stable release or
 a signed automatic update. Extract the ZIP and use Install-Windows.cmd, or
 install-cc2-control.sh on macOS/Linux, with the printer connected, idle and cold,
 and heating targets zero. Keep the exact backup path reported by the installer.
