@@ -7,6 +7,7 @@ ROOT=/opt/usr
 APP=$ROOT/cc2-control
 INIT=/etc/init.d/cc2-control
 PLAN=/tmp/cc2-cleanup-plan-$$
+USED=/tmp/cc2-cleanup-used-$$
 LOCK=/tmp/cc2-control-install.lock
 LOCKED=0
 STOPPED=0
@@ -15,7 +16,7 @@ finish() {
     code=$?
     trap - 0
     if [ "$STOPPED" = 1 ] && [ "$code" != 0 ];then echo 'CC2 Control was asked to stop; it is not restarted automatically.' >&2;fi
-    rm -f "$PLAN"
+    rm -f "$PLAN" "$USED"
     if [ "$LOCKED" = 1 ];then rmdir "$LOCK" || code=1;fi
     exit "$code"
 }
@@ -25,6 +26,7 @@ trap 'exit 130' 1 2 15
 [ -d "$ROOT" ] && [ ! -L "$ROOT" ] && [ "$(cd "$ROOT" && pwd -P)" = "$ROOT" ] || stop 'persistent root must be regular'
 [ -d "$APP" ] && [ ! -L "$APP" ] || stop 'application directory must be regular'
 [ -f "$INIT" ] && [ ! -L "$INIT" ] || stop 'application service is missing or symlinked'
+idle() {
 STATE=$(wget -qO- http://127.0.0.1:8081/api/printer) || stop 'telemetry unavailable'
 case "$STATE" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) stop 'connected idle printer required';; esac
 AGE=$(printf '%s' "$STATE" | sed -n 's/.*"last_message_age":\([0-9][0-9]*\),.*/\1/p')
@@ -33,6 +35,8 @@ case "$AGE" in ''|*[!0-9]*) stop 'missing telemetry age';; esac
 for HEATER in extruder heater_bed;do
     printf '%s' "$STATE" | sed -n "s/.*\"$HEATER\":{\"temperature\":\([-0-9.]*\),\"target\":\([-0-9.]*\)}.*/\1 \2/p" | awk 'NF==2 && $1 ~ /^[0-9]+([.][0-9]+)?$/ && $2 ~ /^[0-9]+([.][0-9]+)?$/ && $1<=50 && $2==0 {ok=1} END{exit !ok}' || stop 'cold printer with zero heater targets required'
 done
+}
+idle
 UPDATE=$(wget -qO- http://127.0.0.1:8081/api/app-update/status) || stop 'update status unavailable'
 case "$UPDATE" in *'"busy":false'*) ;; *) stop 'updater is busy or state is unknown';; esac
 [ ! -e "$LOCK" ] && [ ! -L "$LOCK" ] || stop 'installer lock exists'
@@ -45,6 +49,14 @@ eligible() {
     [ "${1%/*}" = "$ROOT" ] || return 1
     printf '%s\n' "${1##*/}" | grep -Eq '^(cc2-control-backup-[0-9]{8}-[0-9]{6}-[0-9]+|cc2-reactor-before-firmware-[0-9]+|cc2-camera-before-reinstall-[0-9]{8}|cc2-camera-before-firmware-[0-9]+|cc2-camera-reap-boot-r1|cc2-camera-recovery-r2)$'
 }
+snapshot_usage() {
+    : > "$USED"
+    for proc in /proc/[0-9]*;do
+        for ref in exe cwd;do readlink "$proc/$ref" >> "$USED" 2>/dev/null || true;done
+        if [ -r "$proc/maps" ];then grep -F "$ROOT/" "$proc/maps" >> "$USED" 2>/dev/null || true;fi
+        if [ -r "$proc/cmdline" ];then tr '\000' '\n' < "$proc/cmdline" | grep -F "$ROOT/" >> "$USED" || true;fi
+    done
+}
 safe() {
     path=$1
     eligible "$path" || stop 'path is outside the exact cleanup scope'
@@ -56,23 +68,18 @@ safe() {
     for ref in /etc/init.d/printer /etc/init.d/cc2-camera-launch /etc/init.d/cc2-reactor-launch "$APP/camera/printer.original" "$ROOT/cc2-reactor-runtime-v2/printer.original";do
         [ ! -f "$ref" ] || ! grep -F "$path/" "$ref" >/dev/null 2>&1 || return 1
     done
-    for proc in /proc/[0-9]*;do
-        for ref in exe cwd;do
-            dest=$(readlink "$proc/$ref" 2>/dev/null || true)
-            case "$dest" in "$path"|"$path/"*) return 1;; esac
-        done
-        if [ -r "$proc/maps" ] && grep -F "$path/" "$proc/maps" >/dev/null 2>&1;then return 1;fi
-        if [ -r "$proc/cmdline" ] && tr '\000' '\n' < "$proc/cmdline" | grep -F "$path/" >/dev/null 2>&1;then return 1;fi
-    done
+    if grep -Fx "$path" "$USED" >/dev/null 2>&1 || grep -F "$path/" "$USED" >/dev/null 2>&1;then return 1;fi
     return 0
 }
 : > "$PLAN"
+snapshot_usage
 for path in "$ROOT"/cc2-control-backup-* "$ROOT"/cc2-reactor-before-firmware-* "$ROOT"/cc2-camera-before-reinstall-* "$ROOT"/cc2-camera-before-firmware-* "$ROOT/cc2-camera-reap-boot-r1" "$ROOT/cc2-camera-recovery-r2" "$ROOT/cc2-control-updates" "$ROOT/cc2-control.init-pre-1.1.24" "$ROOT/cc2-control.inst-launch-pre-1.1.24" "$APP/cc2-control.conf" "$APP/cc2-control.conf.new" "$APP/ui-preferences.json" "$APP/ui-preferences.json.tmp" "$APP/ui-preferences.json.new";do
     [ -e "$path" ] || [ -L "$path" ] || continue
     eligible "$path" || continue
     if safe "$path";then printf '%s\n' "$path" >> "$PLAN";echo "REMOVE: $path";else echo "KEEP: active, mounted or required by startup/rollback: $path";fi
 done
 if [ "$MODE" = check ];then echo 'CHECK COMPLETE: no settings, files or services changed.';exit 0;fi
+idle
 mkdir "$LOCK" || stop 'cannot acquire installer lock'
 LOCKED=1
 STOPPED=1
@@ -82,6 +89,7 @@ while pidof cc2-control >/dev/null 2>&1;do
     [ "$waited" -lt 20 ] || stop 'application did not stop'
     sleep 1;waited=$((waited+1))
 done
+snapshot_usage
 while IFS= read -r path;do
     safe "$path" || stop "candidate became active: $path"
     if [ -d "$path" ];then rm -rf -- "$path";else rm -f -- "$path";fi
