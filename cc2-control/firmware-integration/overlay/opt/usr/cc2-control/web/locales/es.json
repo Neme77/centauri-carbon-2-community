@@ -1044,6 +1044,16 @@
   "files.sort": "Ordenar por",
   "app.print_progress": "Progreso de la impresión",
   "app.sidebar": "Menú lateral",
+  "spools.spoolman_sync": "Sincronización con Spoolman",
+  "spools.spoolman_hint": "Envía el consumo medido a un servidor Spoolman autoalojado y recupera su material, color, nombre y peso restante, para cualquier bobina vinculada aquí abajo.",
+  "spools.spoolman_url": "URL del servidor",
+  "spools.spoolman_auth": "Inicio de sesión del proxy inverso (opcional)",
+  "spools.spoolman_auth_placeholder": "usuario:contraseña",
+  "spools.spoolman_saved_toast": "Ajustes de Spoolman guardados.",
+  "spools.spoolman_id": "ID de bobina en Spoolman",
+  "spools.spoolman_id_placeholder": "p. ej. 42",
+  "spools.spoolman_id_hint": "Vincula esta bobina a una de Spoolman, por su id numérico. Déjalo vacío para no sincronizarla.",
+  "spools.invalid_spoolman_id": "El id de Spoolman debe contener solo cifras.",
   "files.list_changed_retry": "La lista cambió durante la carga. Actualiza e inténtalo de nuevo.",
   "job.bed_map_expand": "Ampliar mapa de la cama"
 }

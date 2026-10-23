@@ -1044,6 +1044,16 @@
   "files.sort": "Sort by",
   "app.print_progress": "Print progress",
   "app.sidebar": "Side menu",
+  "spools.spoolman_sync": "Spoolman sync",
+  "spools.spoolman_hint": "Pushes measured usage to a self-hosted Spoolman server and pulls its material, colour, name and remaining weight back, for any spool you link to it below.",
+  "spools.spoolman_url": "Server URL",
+  "spools.spoolman_auth": "Reverse-proxy login (optional)",
+  "spools.spoolman_auth_placeholder": "user:pass",
+  "spools.spoolman_saved_toast": "Spoolman settings saved.",
+  "spools.spoolman_id": "Spoolman spool ID",
+  "spools.spoolman_id_placeholder": "e.g. 42",
+  "spools.spoolman_id_hint": "Links this spool to one in Spoolman, by its numeric id. Leave empty to not sync it.",
+  "spools.invalid_spoolman_id": "The Spoolman id must be digits only.",
   "files.list_changed_retry": "The file list changed while loading. Refresh and try again.",
   "job.bed_map_expand": "Expand bed map"
 }
