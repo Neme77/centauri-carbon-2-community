@@ -189,4 +189,3 @@ enable|disable) toggle "$1" ;;
 verify) installed_check; echo 'INSTALLED FILES VERIFIED; current video still requires observation.' ;;
 *) echo 'Usage: sh manage.sh check | install | status | verify | disable | enable | rollback' >&2; exit 2 ;;
 esac
-

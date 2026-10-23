@@ -94,4 +94,3 @@ fi
 cleanup
 trap - 0 1 2 15
 exec "$BASE/boot-camera.sh" "$@"
-

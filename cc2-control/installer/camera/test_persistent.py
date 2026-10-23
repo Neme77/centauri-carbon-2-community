@@ -167,4 +167,3 @@ with tempfile.TemporaryDirectory() as directory:
             assert f.init.read_bytes()==before and not f.base.exists()
             assert (personal/'enabled').read_bytes()==enabled and not f.launches.exists()
 print(f'PASS: {CASES} persistent install/boot/disable/enable/exact-rollback/fallback/refusal cases; shell={SHELL}; no printer addressed')
-

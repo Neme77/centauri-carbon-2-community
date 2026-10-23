@@ -22,4 +22,3 @@ jobs:
       - name: Bounded CSP header and response-framing regressions
         working-directory: cc2-control
         run: python3 tests/test_https_parser.py
-

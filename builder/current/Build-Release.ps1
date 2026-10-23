@@ -46,4 +46,3 @@ if ($full.Length -lt 3 -or $full.Substring(1,2) -ne ':\') {throw 'Estrarre il pa
 $linuxRoot='/mnt/'+$full.Substring(0,1).ToLowerInvariant()+'/'+$full.Substring(3).Replace('\','/')
 & wsl.exe -d $Distro -u root --exec python3 -u "$linuxRoot/build_release.py" --mode $Mode
 if ($LASTEXITCODE -ne 0) {throw 'Build fallita. Non installare: incolla il primo errore.'}
-

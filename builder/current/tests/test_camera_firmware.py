@@ -17,6 +17,11 @@ camera=importlib.util.module_from_spec(spec);spec.loader.exec_module(camera)
 sha=lambda b:hashlib.sha256(b).hexdigest()
 
 class CameraFirmwareTests(unittest.TestCase):
+    def test_canonical_camera_shell_sources_are_lf(self):
+        for path in [BUILDER/'components/camera/firmware-launcher.sh',*(camera.REPO/'cc2-control/installer/camera'/name for name in ('common.sh','manage.sh','boot-camera.sh'))]:
+            data=path.read_bytes()
+            self.assertTrue(data.startswith(b'#!/bin/sh\n'),str(path))
+            self.assertNotIn(b'\r',data,str(path))
     @unittest.skipUnless((BUILDER/'components/camera/prepared-manifest.json').is_file(),'qualified runtime supplied in builder packaging workflow')
     def test_rootfs_install_and_reextraction_audit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -124,4 +129,3 @@ class CameraFirmwareTests(unittest.TestCase):
     def test_failed_native_preflight_starts_native(self):self.boot('runtime-fails')
 
 if __name__=='__main__':unittest.main()
-

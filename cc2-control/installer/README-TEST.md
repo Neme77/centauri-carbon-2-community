@@ -27,4 +27,3 @@ and validate that complete image on hardware before publishing it.
 Thanks to tharje for camera diagnosis, DamiBFryta, our ultimate beta tester, for
 persistent testing and feedback, Surfoo, Nick Plateringen-Paul and all original
 contributors whose credits remain in project history.
-

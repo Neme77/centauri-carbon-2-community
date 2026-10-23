@@ -44,4 +44,3 @@ int main(int argc,char **argv) {
     puts("PASS: real response parser accepts bounded 9-15 KiB CSP headers; total budget, framing and redirect guards preserved");
     return 0;
 }
-

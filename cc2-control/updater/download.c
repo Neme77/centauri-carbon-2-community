@@ -154,4 +154,3 @@ int main(int argc, char **argv) {
     fputs("HTTPS update download failed: certificate, connection, clock or response rejected\n", stderr);
     return 1;
 }
-

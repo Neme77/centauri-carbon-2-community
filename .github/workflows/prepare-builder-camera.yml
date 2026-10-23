@@ -16,6 +16,8 @@ jobs:
           fetch-depth: 0
       - name: Early firmware boot fixtures before dependency setup
         run: python3 builder/current/tests/test_camera_firmware.py
+      - name: Validate canonical camera shell sources
+        run: python3 -c "from pathlib import Path; paths=list(Path('cc2-control/installer/camera').glob('*.sh')); assert all(b'\\r' not in p.read_bytes() for p in paths)"
       - name: Check release numbering before dependency setup
         run: python3 builder/current/tests/test_firmware_updater.py
       - uses: actions/setup-node@v7
@@ -83,4 +85,3 @@ jobs:
           path: output/CC2-Control-1.2.21-Multiplatform-Update.zip*
           retention-days: 14
           if-no-files-found: error
-

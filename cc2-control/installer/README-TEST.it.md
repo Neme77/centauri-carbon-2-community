@@ -27,4 +27,3 @@ va generato sul PC e provato sulla stampante prima della pubblicazione.
 Grazie a tharje per la diagnosi webcam, a DamiBFryta, il nostro beta tester
 definitivo, per prove e suggerimenti, e a Surfoo, Nick Plateringen-Paul e tutti
 i contributor già accreditati nella cronologia del progetto.
-

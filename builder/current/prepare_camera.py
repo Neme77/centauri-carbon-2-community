@@ -22,7 +22,10 @@ def main():
             raise RuntimeError('Camera runtime is not ARM32: '+name)
     prepared.mkdir(parents=True,exist_ok=True)
     for name in ('common.sh','manage.sh','boot-camera.sh'):
-        shutil.copyfile(camera.REPO/'cc2-control/installer/camera'/name,prepared/name)
+        source=camera.REPO/'cc2-control/installer/camera'/name
+        data=source.read_bytes()
+        if not data.startswith(b'#!/bin/sh\n') or b'\r' in data:raise RuntimeError('Noncanonical shell line endings: '+name)
+        shutil.copyfile(source,prepared/name)
     for name in camera.payload.PINS:shutil.copyfile(runtime/name,prepared/name)
     shutil.copyfile(component/'firmware-launcher.sh',prepared/'firmware-launcher.sh')
     sums=''.join(camera.sha(prepared/name)+'  '+name+'\n' for name in sorted(camera.FILES) if name!='SHA256SUMS')

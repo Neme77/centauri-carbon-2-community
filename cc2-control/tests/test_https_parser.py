@@ -8,4 +8,3 @@ binary=ROOT/'build/test-https-parser'
 subprocess.run(['gcc','-std=c11','-Wall','-Wextra','-Werror','-I'+str(tls/'include'),str(ROOT/'tests/test_https_parser.c'),
     *map(str,[tls/'library/libmbedtls.a',tls/'library/libmbedx509.a',tls/'library/libmbedcrypto.a']),'-o',str(binary)],check=True)
 subprocess.run([str(binary),str(ROOT/'updater/ca-bundle.pem')],check=True)
-
