@@ -1,0 +1,71 @@
+{
+  "locales": {
+    "cs": {
+      "updates.channel": "Kanál aktualizací",
+      "updates.stable": "Stabilní",
+      "updates.experimental": "Experimentální",
+      "updates.experimental_warning": "Experimentální verze slouží k testování. Některé funkce nemusí být ověřené; volba kanálu je nezapíná. Návrat ke starší stabilní verzi vyžaduje zálohu instalátoru.",
+      "experiments.channel_stable": "Zvonek upozorňuje na stabilní aktualizace. Volby experimentálních funkcí zůstávají nezávislé."
+    },
+    "en": {
+      "updates.channel": "Update channel",
+      "updates.stable": "Stable",
+      "updates.experimental": "Experimental",
+      "updates.experimental_warning": "Experimental application builds are for testing. Features may be unqualified; choosing this channel does not enable them. Returning to an older stable version requires the installer backup, not this selector.",
+      "experiments.channel_stable": "The bell reports stable updates. Experimental feature choices remain independent."
+    },
+    "es": {
+      "updates.channel": "Canal de actualizaciones",
+      "updates.stable": "Estable",
+      "updates.experimental": "Experimental",
+      "updates.experimental_warning": "Las versiones experimentales son para pruebas. Algunas funciones pueden no estar validadas; elegir este canal no las activa. Para volver a una versión estable anterior, usa la copia de seguridad del instalador.",
+      "experiments.channel_stable": "La campana avisa de actualizaciones estables. Las opciones experimentales siguen siendo independientes."
+    },
+    "fr": {
+      "updates.channel": "Canal de mise à jour",
+      "updates.stable": "Stable",
+      "updates.experimental": "Expérimental",
+      "updates.experimental_warning": "Les versions expérimentales servent aux essais. Certaines fonctions peuvent ne pas être validées ; ce choix ne les active pas. Pour revenir à une version stable antérieure, utilisez la sauvegarde de l’installateur.",
+      "experiments.channel_stable": "La cloche signale les mises à jour stables. Les choix des fonctions expérimentales restent indépendants."
+    },
+    "hu": {
+      "updates.channel": "Frissítési csatorna",
+      "updates.stable": "Stabil",
+      "updates.experimental": "Kísérleti",
+      "updates.experimental_warning": "A kísérleti verziók tesztelésre valók. Egyes funkciók még nem ellenőrzöttek; a csatornaválasztás nem kapcsolja be őket. Régebbi stabil verzióhoz a telepítő biztonsági mentése szükséges.",
+      "experiments.channel_stable": "A csengő a stabil frissítéseket jelzi. A kísérleti funkciók beállításai függetlenek maradnak."
+    },
+    "it": {
+      "updates.channel": "Canale aggiornamenti",
+      "updates.stable": "Stabile",
+      "updates.experimental": "Sperimentale",
+      "updates.experimental_warning": "Le versioni sperimentali dell’app sono destinate alle prove. Alcune funzioni possono non essere validate; scegliere questo canale non le attiva. Per tornare a una stabile precedente serve il backup dell’installer, non questo selettore.",
+      "experiments.channel_stable": "La campanella segnala gli aggiornamenti stabili. Le scelte delle funzioni sperimentali restano indipendenti."
+    },
+    "pl": {
+      "updates.channel": "Kanał aktualizacji",
+      "updates.stable": "Stabilny",
+      "updates.experimental": "Eksperymentalny",
+      "updates.experimental_warning": "Wersje eksperymentalne służą do testów. Niektóre funkcje mogą nie być zweryfikowane; wybór kanału ich nie włącza. Powrót do starszej wersji stabilnej wymaga kopii zapasowej instalatora.",
+      "experiments.channel_stable": "Dzwonek informuje o stabilnych aktualizacjach. Wybór funkcji eksperymentalnych pozostaje niezależny."
+    },
+    "ru": {
+      "updates.channel": "Канал обновлений",
+      "updates.stable": "Стабильный",
+      "updates.experimental": "Экспериментальный",
+      "updates.experimental_warning": "Экспериментальные версии предназначены для тестирования. Некоторые функции ещё не проверены; выбор канала их не включает. Для возврата к более старой стабильной версии нужна резервная копия установщика.",
+      "experiments.channel_stable": "Колокольчик сообщает о стабильных обновлениях. Выбор экспериментальных функций остаётся независимым."
+    },
+    "zh": {
+      "updates.channel": "更新通道",
+      "updates.stable": "稳定版",
+      "updates.experimental": "实验版",
+      "updates.experimental_warning": "实验版应用用于测试，部分功能可能尚未验证；选择此通道不会启用这些功能。返回较旧的稳定版需要使用安装程序的备份，不能通过此选择器降级。",
+      "experiments.channel_stable": "铃铛仅提示稳定版更新。实验功能选项保持独立。"
+    }
+  },
+  "notes": {
+    "README-TEST.md": "# CC2 Control 1.2.20 — experimental cumulative update\n\nThis is a public prerelease for Community Firmware V4.4/V4.4.1, ELEGOO base 02.01.01.07. Stable remains 1.2.19. It is one application package, not a collection of downloadable modules.\n\nChoose Experimental in Settings → Updates, read the notes, enter the LAN code, download/verify and separately confirm installation. Older stable interfaces call this channel experimental Canvas UDS. Users of the preceding stable-only trial can upload the signed .cc2update from the same page once. The new selector then remains available. Channel selection never enables a feature. The bell continues to report stable releases. Returning to an older stable app requires the installer backup; selecting Stable does not downgrade.\n\nCanvas UDS and Quiet controls are separate machine-persisted opt-ins and default to off on a new installation. Existing choices are retained. Canvas UDS, slot states and Orca synchronization were accepted by the maintainer on 23 October 2026. Quiet/Normal on V4.4 still needs hardware qualification: enabling its controls sends no command, but actually selecting Quiet changes the motor mode. Slicer commands can override its initial 80 mm/s and 2000 mm/s² limits. Normal restores fixed 500/20000 limits; displayed mode is requested state, not verified TMC registers. Explicitly select Normal and wait for successful completion before disabling Quiet, changing Canvas source or updating the app while Quiet controls are enabled.\n\nThis cumulative package includes the unchanged qualified R2 camera libraries, including for users who skipped 1.2.19. A FULL IDLE-PRINTER REBOOT IS REQUIRED WHEN FIRST ACTIVATING THE CAMERA FIX. Reloading the page or restarting only CC2 Control is insufficient. A recognized existing camera component is preserved. No printer reboot is started automatically.\n\nInstall only while connected, idle and cold (nozzle/bed at most 50 °C, heating targets zero). Close live views first. Settings, materials, plates/nozzles and spools are retained. Keep the exact backup/restore path reported by the installer. The Windows/macOS/Linux installer is also included; use only this printer’s own backup.\n\nPull-back above 350 mm remains a separate firmware experiment. This update installs no extended runtime and does not enable it. An independently installed extended runtime requires its own qualified rollback, including effective settings at or below 350 mm before restoring the original printer executable. Builder and full-firmware downloads are unchanged.\n\nCredits: Surfoo for UI fixes and Canvas/documentation ideas; BorjaLL for Quiet; Noahwhite2014 for extended pull-back; Nick Plateringen-Paul for the original object map; DamiBFryta, our ultimate beta tester, for suggestions and testing; tharje for camera diagnosis and recovery work. Original contribution histories and earlier credits are retained.\n",
+    "README-TEST.it.md": "# CC2 Control 1.2.20 — aggiornamento cumulativo sperimentale\n\nPrerelease per Community Firmware V4.4/V4.4.1, base ELEGOO 02.01.01.07. La stabile resta 1.2.19. È un unico pacchetto dell’app, non un elenco di moduli scaricabili.\n\nScegliere Sperimentale in Impostazioni → Aggiornamenti, leggere le note, inserire il codice LAN, scaricare/verificare e confermare separatamente l’installazione. Nelle interfacce stabili precedenti il canale è chiamato Canvas UDS sperimentale. Chi usa la prova precedente con solo canale stabile può caricare una volta il file .cc2update firmato dalla stessa pagina. Il nuovo selettore rimane poi disponibile. Cambiare canale non abilita alcuna funzione. La campanella continua a segnalare le release stabili. Per tornare a un’app stabile precedente serve il backup dell’installer: scegliere Stabile non esegue un downgrade.\n\nCanvas UDS e i controlli Quiet hanno scelte indipendenti, salvate sulla stampante e inizialmente spente su una nuova installazione. Le preferenze già presenti vengono conservate. Canvas UDS, stati degli slot e sincronizzazione Orca sono stati accettati dal maintainer il 23 ottobre 2026. Quiet/Normal su V4.4 richiede ancora prove hardware: attivare i controlli non invia comandi, ma selezionare Quiet modifica i motori. Lo slicer può sovrascrivere i limiti iniziali 80 mm/s e 2000 mm/s². Normal ripristina valori fissi 500/20000; la modalità mostrata è richiesta, non una lettura verificata dei registri TMC. Prima di disabilitare Quiet, cambiare sorgente Canvas o aggiornare l’app con i controlli Quiet abilitati, selezionare Normal e attendere il completamento senza errori.\n\nIl pacchetto include le librerie webcam R2 qualificate e invariate, anche per chi ha saltato la 1.2.19. ALLA PRIMA ATTIVAZIONE DEL FIX WEBCAM SERVE UN RIAVVIO COMPLETO DELLA STAMPANTE INATTIVA. La ricarica della pagina o il solo riavvio di CC2 Control non bastano. Un componente webcam già presente e riconosciuto viene conservato. Nessun riavvio della stampante viene avviato automaticamente.\n\nInstallare solo con stampante connessa, inattiva e fredda (ugello/piatto non oltre 50 °C e target zero). Chiudere prima le dirette. Impostazioni, materiali, piatti/ugelli e bobine vengono conservati. Salvare il percorso esatto del backup/ripristino indicato dall’installer. È incluso anche l’installer Windows/macOS/Linux; usare solo il backup della propria stampante.\n\nLa retrazione oltre 350 mm resta un esperimento firmware separato. Questo aggiornamento non installa né abilita il runtime esteso. Un runtime esteso installato indipendentemente richiede il proprio ripristino qualificato, con impostazioni effettive entro 350 mm prima di ripristinare l’eseguibile originale. I download del builder e del firmware completo restano invariati.\n\nCrediti: Surfoo per i fix grafici e gli spunti su Canvas e documentazione; BorjaLL per Quiet; Noahwhite2014 per la retrazione estesa; Nick Plateringen-Paul per la mappa originale; DamiBFryta, il nostro beta tester definitivo, per suggerimenti e prove; tharje per diagnosi e recupero webcam. Storie dei contributi e crediti precedenti sono conservati.\n"
+  }
+}

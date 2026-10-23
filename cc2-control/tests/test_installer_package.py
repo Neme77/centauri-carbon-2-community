@@ -1,5 +1,6 @@
 """Exercise packaging and updater rollback without SSH or a real printer."""
 import hashlib, importlib.util, io, os, pathlib, subprocess, tarfile, tempfile, zipfile
+from unittest.mock import patch
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('updater',ROOT/'installer/package.py')
 pkg=importlib.util.module_from_spec(spec);spec.loader.exec_module(pkg)
@@ -16,6 +17,12 @@ with tempfile.TemporaryDirectory() as tmp:
     (prepared/'updater-trusted-key.json').write_bytes((ROOT/'updater/trusted-key.json').read_bytes())
     (prepared/'THIRD_PARTY_NOTICES.txt').write_bytes((ROOT/'third-party/monocypher/LICENCE.md').read_bytes())
     pkg.package(prepared,ROOT/'scripts',source,output)
+    # A cumulative camera package must not ship application-only operator notes.
+    cumulative=base/'cumulative.zip'
+    with patch.object(pkg,'camera_functions',return_value=''):
+        pkg.package(prepared,ROOT/'scripts',source,cumulative,camera_runtime=base/'runtime-fixture')
+    with zipfile.ZipFile(cumulative) as z:
+        assert not any('README-EXPERIMENTAL' in name for name in z.namelist())
     with zipfile.ZipFile(output) as z:
         files={pathlib.Path(n).name:z.read(n) for n in z.namelist()}
         for name in ('README-TEST.md','README-TEST.it.md'):

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { t, tpl } from '@/lib/i18n'
 import { health, openSettings } from '@/lib/state'
-import { compatible, newer, status, updateCatalog } from '@/lib/updates'
+import { compatible, newer, selectUpdateChannel, status, updateCatalog } from '@/lib/updates'
 import { cn } from '@/lib/utils'
 
 export const UpdateNotice = () => {
@@ -18,6 +18,7 @@ export const UpdateNotice = () => {
   const label = available ? tpl('updates.notice_available', { version: release.version }) : t('updates.notifications')
   const visit = () => {
     setOpen(false)
+    if (available) selectUpdateChannel('stable')
     openSettings('updates')
   }
   return (

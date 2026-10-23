@@ -147,7 +147,7 @@ try {
   assert.equal(await page.getByLabel('LAN Access Code', { exact: true }).inputValue(), '')
   await page.getByText('No newer compatible update published.', { exact: true }).waitFor()
   assert.equal(await page.getByText(localized.en, { exact: true }).count(), 0, 'installed release notes must disappear')
-  assert.equal(await page.getByLabel('Update channel', { exact: true }).count(), 0)
+  assert.equal(await page.getByLabel('Update channel', { exact: true }).inputValue(), 'stable')
   assert.equal(await page.getByText('Experimental fixture', { exact: true }).count(), 0)
   for (const width of [1440,768,390]) {
     await page.setViewportSize({width,height:1000})

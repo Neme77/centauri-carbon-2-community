@@ -1,6 +1,6 @@
 # Prova sperimentale: Canvas UDS e Quiet
 
-Pacchetto di sviluppo, versione visualizzata 1.2.19. Non è la release stabile e
+Pacchetto di sola applicazione per sviluppo. Non è la release stabile e
 non va caricato come aggiornamento automatico o firmato. Estrarre lo ZIP e usare
 Install-Windows.cmd, oppure install-cc2-control.sh su macOS/Linux, con stampante
 connessa, inattiva, fredda e target a zero. Conservare il percorso del backup.

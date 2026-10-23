@@ -1,29 +1,49 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { PasswordInput } from '@/components/ui/field'
+import { PasswordInput, Select } from '@/components/ui/field'
 import { Experiments } from './Experiments'
 import { ask } from '@/lib/confirm'
 import { errText, notify, request } from '@/lib/api'
 import { i18n, t } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
-import { checkUpdates, compatible, newer, refresh, releaseNotes, status, updateCatalog } from '@/lib/updates'
+import {
+  checkUpdates,
+  compatible,
+  newer,
+  refresh,
+  releaseNotes,
+  selectUpdateChannel,
+  status,
+  updateCatalog,
+  updateView,
+  type UpdateChannel,
+} from '@/lib/updates'
 
 export const Updates = () => {
   usePoll(refresh, 2000)
   const state = status.use().data
   const language = i18n.use().lang
   const { index, checking } = updateCatalog.use()
+  const { channel } = updateView.use()
   const [working, setWorking] = useState(false),
     [code, setCode] = useState(''),
     [error, setError] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const mounted = useRef(true),
     selection = useRef(0)
-  const release = compatible(index, state?.firmware || '', 'stable')[0]
+  const release = compatible(index, state?.firmware || '', channel)[0]
   const available = release && newer(release.version, state?.installed || '')
   const notes = available ? releaseNotes(release, language) : null
   const busy = working || Boolean(state?.busy)
+  const changeChannel = async (next: UpdateChannel) => {
+    if (busy || next === channel) return
+    if (next === 'canvas-uds' && !(await ask(t('updates.experimental_warning')))) return
+    if (!mounted.current) return
+    selection.current++
+    selectUpdateChannel(next)
+    setError('')
+  }
   const runCheck = async (force = true) => {
     setError('')
     try {
@@ -42,8 +62,9 @@ export const Updates = () => {
   }, [])
   const prepare = async (local: boolean) => {
     if (!state?.ready || !code.trim() || busy || (local ? !file : !available)) return
-    if (!(await ask(t('updates.prepare_confirm')))) return
     const chosen = selection.current
+    if (!(await ask(t('updates.prepare_confirm')))) return
+    if (chosen !== selection.current) return
     setWorking(true)
     setError('')
     try {
@@ -97,8 +118,26 @@ export const Updates = () => {
             <span class="text-muted">{t('updates.installed')}</span>
             <b class="mt-1 block">{state?.installed || '—'}</b>
           </div>
-          <p class="text-muted">{t('experiments.channel_stable')}</p>
+          <label>
+            <span class="text-muted">{t('updates.channel')}</span>
+            <Select
+              class="mt-1"
+              aria-label={t('updates.channel')}
+              value={channel}
+              disabled={busy}
+              onChange={e => {
+                const next = e.currentTarget.value as UpdateChannel
+                e.currentTarget.value = channel
+                void changeChannel(next)
+              }}
+            >
+              <option value="stable">{t('updates.stable')}</option>
+              <option value="canvas-uds">{t('updates.experimental')}</option>
+            </Select>
+          </label>
         </div>
+        <p class="mt-2 text-xs text-muted">{t('experiments.channel_stable')}</p>
+        {channel === 'canvas-uds' && <p class="mt-2 text-sm text-amber">{t('updates.experimental_warning')}</p>}
         <div class="my-4 flex flex-wrap items-center gap-3">
           <Button disabled={checking || busy || !state?.enabled} onClick={() => void runCheck()}>
             {t('updates.check')}

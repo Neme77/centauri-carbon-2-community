@@ -1,6 +1,6 @@
 # Funzioni sperimentali opzionali
 
-Gli aggiornamenti dell’app usano il catalogo stabile firmato. In Impostazioni →
+Il catalogo firmato distingue il canale Stabile dal canale Sperimentale dell’app. La campanella segnala solo le release stabili. Il selettore propone la versione compatibile più recente del canale scelto, non un elenco di moduli. Scegliere Sperimentale richiede una conferma; tornare allo stabile non effettua un downgrade. Per una versione precedente usare il backup dell’installer. In Impostazioni →
 Aggiornamenti una sezione separata permette di scegliere le funzioni sperimentali.
 Entrambe partono spente. Non è un negozio di plugin e gli interruttori non
 scaricano eseguibili. La vecchia scelta del canale `canvas-uds` nel browser non
@@ -84,3 +84,9 @@ non qualificano da soli la modalità motori o una maggiore retrazione fisica.
 I test C e del browser coprono salvataggio, indipendenza delle scelte,
 conferme, errori, ripristino MQTT, protezioni e geometria. Non sostituiscono
 nuove verifiche hardware. Crediti originali di #200 e #179 conservati.
+
+## Distribuzione sperimentale 1.2.20
+
+La prerelease pubblica include il fix webcam R2 cumulativo. Il canale storico canvas-uds indica ora la build sperimentale completa, non attiva automaticamente Canvas UDS o Quiet. La nuova scelta del canale è separata dalle preferenze delle funzioni e ignora la vecchia preferenza del browser finché non viene riconfermata. Chi usa la precedente prova con solo canale stabile può caricare una volta il file .cc2update firmato dal pannello; nella 1.2.20 è nuovamente presente il selettore.
+
+Canvas UDS, stati degli slot e sincronizzazione Orca sono stati confermati dal maintainer il 23 ottobre 2026. Quiet e il runtime della retrazione estesa conservano qualifiche e prove separate. La 1.2.19 resta la stabile.

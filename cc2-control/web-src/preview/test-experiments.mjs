@@ -39,7 +39,7 @@ try {
   const code = page.getByLabel('LAN code for experimental features', { exact: true })
   const confirm = () => page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
   await canvas.waitFor(); assert(await canvas.isDisabled()); assert(await quiet.isDisabled())
-  assert.equal(await page.getByLabel('Update channel', { exact: true }).count(), 0)
+  assert.equal(await page.getByLabel('Update channel', { exact: true }).inputValue(), 'stable')
   await code.fill('fixture-confirmation')
   await canvas.click(); await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
   assert.deepEqual(choices, [])

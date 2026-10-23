@@ -76,7 +76,10 @@ def package(prepared, scripts, source, output, camera_runtime=None):
                 archive.addfile(entry, io.BytesIO(data))
     public = {name: (HERE / name).read_bytes() for name in
               ('Install-CC2-Control.ps1', 'Install-Windows.cmd', 'install-cc2-control.sh', 'README.md')}
-    for name in ('README-TEST.md', 'README-TEST.it.md', 'README-EXPERIMENTAL.md', 'README-EXPERIMENTAL.it.md'):
+    note_names = ['README-TEST.md', 'README-TEST.it.md']
+    if camera_runtime is None:
+        note_names += ['README-EXPERIMENTAL.md', 'README-EXPERIMENTAL.it.md']
+    for name in note_names:
         trial_notes = HERE / name
         if trial_notes.is_file(): public[name] = trial_notes.read_bytes()
     public['cc2-control-payload.tar.gz'] = payload.getvalue()

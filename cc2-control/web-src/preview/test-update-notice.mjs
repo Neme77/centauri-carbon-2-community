@@ -73,7 +73,7 @@ try {
   await bell.click()
   await page.getByRole('dialog').getByRole('button', { name: 'Open updates', exact: true }).click()
   await page.getByText('Compatible update available: 1.2.15', { exact: true }).waitFor()
-  assert.equal(await page.getByLabel('Update channel', { exact: true }).count(), 0)
+  assert.equal(await page.getByLabel('Update channel', { exact: true }).inputValue(), 'stable')
   assert.equal(await page.getByRole('button', { name: 'CC2 Control 1.3.0 available', exact: true }).count(), 0)
 
   const shots = process.env.CC2_NOTICE_SCREENSHOTS
