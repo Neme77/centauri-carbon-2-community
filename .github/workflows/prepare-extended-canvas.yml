@@ -1,0 +1,54 @@
+name: Prepare extended Canvas integration
+on:
+  push:
+    branches: [integration/canvas-unload-extended]
+    paths: ['.github/workflows/prepare-extended-canvas.yml']
+permissions:
+  contents: write
+jobs:
+  source:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+      - name: Integrate reviewed contributor head
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin pull/202/head:refs/remotes/origin/pr202
+          test "$(git rev-parse origin/pr202)" = "a5adcad9ecad44cb9202e6f46286acbc819693db"
+          git merge --no-ff --no-edit origin/pr202 -m 'Integrate Noahwhite2014 extended pull-back with current Canvas UDS'
+      - name: Install web dependencies
+        working-directory: cc2-control/web-src
+        run: npm ci
+      - name: Rebuild web and synchronize firmware overlay
+        run: |
+          cd cc2-control/web-src
+          npm run check
+          npm run build
+          cd ../..
+          cp cc2-control/web/index.html cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web/index.html
+          cp cc2-control/web/locales/*.json cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web/locales/
+          python3 cc2-control/tests/test_web_sync_static.py
+      - name: Commit integration before source snapshot
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('CHANGELOG.md')
+          s = p.read_text()
+          s = s.replace('### Added\n', '### Added\n\n- Experimental Canvas: fingerprint-gated extended pull-back, by Noahwhite2014 (#202), aligned with opt-in Canvas UDS and synchronized builder sources.\n', 1)
+          p.write_text(s)
+          PY
+          git add cc2-control CHANGELOG.md
+          if ! git diff --cached --quiet; then git commit -m 'Synchronize extended Canvas web overlay and contributor credit'; fi
+      - name: Synchronize canonical source archive and pins
+        run: |
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          if ! git diff --cached --quiet; then git commit -m 'Sync extended Canvas integration source snapshot'; fi
+          git push origin HEAD
