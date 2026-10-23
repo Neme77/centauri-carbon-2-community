@@ -21,6 +21,7 @@ trap 'exit 1' 1 2 15
 native() {
     cleanup
     trap - 0 1 2 15
+    printf 'mode=native reason=%s pid=%s\n' "$1" "$$" > /tmp/cc2-camera-firmware-status.txt
     logger -t cc2-camera "R2 firmware preflight refused: $1; using native camera"
     shift
     CC2_CAMERA_REAP_TRIAL=0 CC2_CAMERA_REAP_ENABLE_LAN=0 CC2_CAMERA_RECOVERY_TRIAL=0 exec "$CAMERA" "$@"
@@ -50,7 +51,7 @@ if [ -e "$BASE" ] || [ -L "$BASE" ];then
         [ -f "$BASE/$file" ] && [ ! -L "$BASE/$file" ] || native existing-component-file "$@"
         if ! cmp -s "$SOURCE/$file" "$BASE/$file";then
             case "$file:$(sha "$BASE/$file")" in
-                manage.sh:578493eae89ff602a7c8ab1bf65bfb3c71298ff45d5fd7eb419d8da20f07c487|SHA256SUMS:bbf3b682accbf9242cd8129ec353c1b0694640a5ca4c149565f14f4841614e70) ;;
+                manage.sh:578493eae89ff602a7c8ab1bf65bfb3c71298ff45d5fd7eb419d8da20f07c487|SHA256SUMS:581c066726993e6d69d83303a1f14190c11ef29862052f1b84b3c6f12f800ab3) ;;
                 *) native unknown-existing-component "$@" ;;
             esac
         fi
@@ -93,4 +94,5 @@ if [ "$CURRENT" != "$(cat "$SOURCE/patched.sha256")" ];then
 fi
 cleanup
 trap - 0 1 2 15
+printf 'mode=delegated component=persistent-r2 pid=%s\n' "$$" > /tmp/cc2-camera-firmware-status.txt
 exec "$BASE/boot-camera.sh" "$@"

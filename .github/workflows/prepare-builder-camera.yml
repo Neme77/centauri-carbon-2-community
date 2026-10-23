@@ -1,5 +1,5 @@
 name: Prepare V4.4.2 firmware builder with stable Control 1.2.21
-# R2 trial: canonical camera preflight must take precedence over retained personal trials.
+# Firmware trial R2: validate published prior camera manifest before migration.
 on:
   push:
     branches: [test/builder-4.4.2-control-1.2.21]
@@ -80,8 +80,8 @@ jobs:
         run: python3 cc2-control/installer/package.py --prepared cc2-control/dist/cc2-control --camera-runtime builder/current/components/camera/runtime
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: cc2-builder-v4.4.2-control-1.2.21-test-r1
-          path: output/CC2-Builder-V4.4.2-Control-1.2.21-Test-R1.zip*
+          name: cc2-builder-v4.4.2-control-1.2.21-test-r2
+          path: output/CC2-Builder-V4.4.2-Control-1.2.21-Test-R2.zip*
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@v7.0.2

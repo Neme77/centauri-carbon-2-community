@@ -18,7 +18,7 @@ def stage():
     print('Unchanged qualified camera libraries staged')
 
 def package():
-    name='CC2-Builder-V4.4.2-Control-1.2.21-Test-R1'
+    name='CC2-Builder-V4.4.2-Control-1.2.21-Test-R2'
     assert (ROOT/'builder/current/RELEASE_VERSION').read_text().strip()=='4.4.2'
     assert (ROOT/'cc2-control/VERSION').read_text().strip()=='1.2.21'
     commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()

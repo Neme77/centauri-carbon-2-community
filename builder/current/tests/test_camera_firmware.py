@@ -17,6 +17,15 @@ camera=importlib.util.module_from_spec(spec);spec.loader.exec_module(camera)
 sha=lambda b:hashlib.sha256(b).hexdigest()
 
 class CameraFirmwareTests(unittest.TestCase):
+    def test_published_previous_manifest_identity(self):
+        # Extracted from the immutable signed public 1.2.19 package:
+        # package SHA256 0648d7337026dcd84d1a91e6389d1f680a3af64b6810a4e187bc978952eb01bb.
+        data=(BUILDER/'tests/fixtures/published-camera-SHA256SUMS').read_bytes()
+        self.assertEqual(sha(data),'581c066726993e6d69d83303a1f14190c11ef29862052f1b84b3c6f12f800ab3')
+        launcher=(BUILDER/'components/camera/firmware-launcher.sh').read_text()
+        self.assertIn('SHA256SUMS:'+sha(data),launcher)
+        self.assertIn('578493eae89ff602a7c8ab1bf65bfb3c71298ff45d5fd7eb419d8da20f07c487  manage.sh',data.decode())
+        for name,pin in camera.payload.PINS.items():self.assertIn(pin+'  '+name,data.decode())
     def test_canonical_camera_shell_sources_are_lf(self):
         for path in [BUILDER/'components/camera/firmware-launcher.sh',*(camera.REPO/'cc2-control/installer/camera'/name for name in ('common.sh','manage.sh','boot-camera.sh'))]:
             data=path.read_bytes()
@@ -85,6 +94,13 @@ class CameraFirmwareTests(unittest.TestCase):
                 for name in (*values,'SHA256SUMS'):shutil.copyfile(source/name,base/name);(base/name).chmod(0o700)
                 (base/'printer.original').write_bytes(original)
                 if scenario.startswith('legacy'):
+                    # Exercise the actual differing legacy-file acceptance path,
+                    # instead of copying the new source into the old component.
+                    old_values=dict(values);old_values['manage.sh']=b'previous qualified manage fixture\n'
+                    (base/'manage.sh').write_bytes(old_values['manage.sh'])
+                    previous_manifest=''.join(sha(data)+'  '+name+'\n' for name,data in sorted(old_values.items())).encode()
+                    (base/'SHA256SUMS').write_bytes(previous_manifest)
+                    if scenario=='legacy-bad-manifest':(base/'SHA256SUMS').write_bytes(previous_manifest+b'changed\n')
                     old=original.decode().replace('ai_camera &',values['common.sh'].decode().split("NEW_LINE='",1)[1].split("'",1)[0])
                     (base/'patched.sha256').write_text(sha(old.encode())+'\n')
                 else:(base/'patched.sha256').write_bytes((source/'patched.sha256').read_bytes())
@@ -96,6 +112,9 @@ class CameraFirmwareTests(unittest.TestCase):
             if scenario=='corrupt-source':(source/'manage.sh').write_text('bad')
             if scenario=='startup-changed':init.write_text('changed')
             script=(BUILDER/'components/camera/firmware-launcher.sh').read_text()
+            if scenario.startswith('legacy'):
+                script=script.replace('578493eae89ff602a7c8ab1bf65bfb3c71298ff45d5fd7eb419d8da20f07c487',sha(old_values['manage.sh']))
+                script=script.replace('581c066726993e6d69d83303a1f14190c11ef29862052f1b84b3c6f12f800ab3',sha(previous_manifest))
             script=script.replace(camera.CAMERA_SHA,vendor_sha).replace(camera.INIT_SHA,sha(original))
             script=re.sub(r'/(?:opt|etc|tmp)/',lambda m:str(root)+m[0],script)
             script=script.replace('/proc/mounts',str(mounts)).replace('logger -t cc2-camera','echo')
@@ -106,6 +125,8 @@ class CameraFirmwareTests(unittest.TestCase):
             self.assertEqual(result.returncode,0,result.stderr)
             patched=scenario in ('fresh','legacy-enabled')
             self.assertIn('CAMERA:1:1:original-arg' if patched else ('NATIVE_CHANGED' if scenario=='wrong-camera' else 'CAMERA:0:0:original-arg'),result.stdout)
+            status=(root/'tmp/cc2-camera-firmware-status.txt').read_text()
+            self.assertIn('mode=delegated' if scenario in ('fresh','legacy-enabled','legacy-disabled','disabled') else 'mode=native',status)
             if patched:
                 self.assertTrue((base/'enabled').is_file())
                 second=subprocess.run([*shell,str(path),'again'],env=env,text=True,capture_output=True)
@@ -119,6 +140,7 @@ class CameraFirmwareTests(unittest.TestCase):
     def test_fresh_seed_repeat_boot_and_exact_rollback(self):self.boot('fresh')
     def test_qualified_previous_installation_migrates(self):self.boot('legacy-enabled')
     def test_disabled_previous_installation_stays_disabled(self):self.boot('legacy-disabled')
+    def test_changed_previous_manifest_starts_native(self):self.boot('legacy-bad-manifest')
     def test_disabled_current_installation_stays_disabled(self):self.boot('disabled')
     def test_unknown_previous_installation_is_preserved(self):self.boot('unknown-existing')
     def test_symlinked_enabled_marker_refused(self):self.boot('symlink')
