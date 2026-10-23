@@ -181,7 +181,7 @@ toggle() {
     fi
 }
 case "${1:-check}" in
-check) if personal_existing; then :; elif [ -e "$BASE" ] || [ -L "$BASE" ]; then case "$(sha "$INIT")" in "$STOCK_INIT_SHA"|"$TRIAL_INIT_SHA") dormant_check; source_check;; *) idle; installed_check;; esac; else source_check; fi; echo 'CHECK PASS: pinned startup/camera/runtime, fresh Idle state and dependencies. No file installed and no process restarted.' ;;
+check) if [ -e "$BASE" ] || [ -L "$BASE" ]; then case "$(sha "$INIT")" in "$STOCK_INIT_SHA"|"$TRIAL_INIT_SHA") dormant_check; source_check;; *) idle; installed_check;; esac; elif personal_existing; then :; else source_check; fi; echo 'CHECK PASS: pinned startup/camera/runtime, fresh Idle state and dependencies. No file installed and no process restarted.' ;;
 install) stage ;;
 rollback) rollback ;;
 status) status ;;

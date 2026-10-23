@@ -166,4 +166,23 @@ with tempfile.TemporaryDirectory() as directory:
             if failure=='none':f.run('install')
             assert f.init.read_bytes()==before and not f.base.exists()
             assert (personal/'enabled').read_bytes()==enabled and not f.launches.exists()
+            if failure=='none':
+                # Reproduce migration from the personal trial to the canonical
+                # 1.2.19 component, leaving the old qualified trial untouched.
+                # check and install must choose the same canonical component.
+                f.init.write_bytes(f.original);f.run('install')
+                before=f.init.read_bytes()
+                personal_before={p.name:p.read_bytes() for p in personal.iterdir()}
+                f.run('check');f.run('install');f.run('verify')
+                assert f.init.read_bytes()==before
+                assert {p.name:p.read_bytes() for p in personal.iterdir()}==personal_before
+                f.run('disable');f.run('check');f.run('install')
+                assert not (f.base/'enabled').exists(), 'preserve canonical activation choice'
+                # A corrupt canonical component or changed startup must fail,
+                # rather than fall back to the obsolete personal directory.
+                f.init.write_bytes(before+b'# unrelated startup change\n')
+                f.run('check',ok=False);f.run('install',ok=False)
+                f.init.write_bytes(before)
+                (f.base/'libcc2-camera-recovery-r2.so').write_bytes(b'corrupt')
+                f.run('check',ok=False);f.run('install',ok=False)
 print(f'PASS: {CASES} persistent install/boot/disable/enable/exact-rollback/fallback/refusal cases; shell={SHELL}; no printer addressed')

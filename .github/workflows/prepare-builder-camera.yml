@@ -1,4 +1,5 @@
 name: Prepare V4.4.2 firmware builder with stable Control 1.2.21
+# R2 trial: canonical camera preflight must take precedence over retained personal trials.
 on:
   push:
     branches: [test/builder-4.4.2-control-1.2.21]

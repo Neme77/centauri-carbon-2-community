@@ -8,11 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Firmware builder V4.4.2: integrate the qualified R2 camera thread-reaping and local/Matrix recovery runtime from first boot, with exact-fingerprint checks, managed-component migration and native fallback (PR pending). Thanks to [tharje](https://github.com/tharje) for diagnosis and [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester, for persistent testing. Includes stable CC2 Control 1.2.21; the complete OTA is built locally and awaits hardware validation.
+- Firmware builder V4.4.2: integrate the qualified R2 camera thread-reaping and local/Matrix recovery runtime from first boot, with exact-fingerprint checks, managed-component migration and native fallback (#214). Thanks to [tharje](https://github.com/tharje) for diagnosis and [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester, for persistent testing. Includes stable CC2 Control 1.2.21; the complete OTA is built locally and awaits hardware validation.
 
 ### Fixed
 
-- Application updater: accept GitHub redirect security headers larger than 8 KiB within the existing 16 KiB total budget, while preserving TLS and redirect checks; recognize a qualified dormant R2 camera directory after rollback or firmware reinstall and retain it before reinstallation (PR pending). Reported and reproduced during maintainer upgrade testing.
+- Application updater: accept GitHub redirect security headers larger than 8 KiB within the existing 16 KiB total budget, while preserving TLS and redirect checks; recognize a qualified dormant R2 camera directory after rollback or firmware reinstall and retain it before reinstallation; prefer a verified canonical camera installation over retained personal-trial files (#214). Reported and reproduced during maintainer upgrade testing.
 
 - Spool insertion popup: add an identical spool without moving the original, and calculate remaining filament from total and empty-spool weights while keeping nominal capacity separate (#210). Suggested by [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester; the Spools section stays unchanged.
 
