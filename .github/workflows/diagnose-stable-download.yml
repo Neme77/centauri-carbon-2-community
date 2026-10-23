@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Trace a disposable diagnostic build without changing published code
+        run: python3 .github/scripts/trace-https-helper.py
       - name: Compile the existing certificate-verifying HTTPS helper
         working-directory: cc2-control
         run: make build/cc2-https-download CROSS= CC=gcc EXTRA_CFLAGS=-Werror
