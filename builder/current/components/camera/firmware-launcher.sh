@@ -21,7 +21,7 @@ trap 'exit 1' 1 2 15
 native() {
     cleanup
     trap - 0 1 2 15
-    printf 'mode=native reason=%s pid=%s\n' "$1" "$$" > /tmp/cc2-camera-firmware-status.txt
+    printf 'mode=native reason=%s pid=%s\n' "$1" "$$" > /tmp/cc2-camera-firmware-status.txt 2>/dev/null || true
     logger -t cc2-camera "R2 firmware preflight refused: $1; using native camera"
     shift
     CC2_CAMERA_REAP_TRIAL=0 CC2_CAMERA_REAP_ENABLE_LAN=0 CC2_CAMERA_RECOVERY_TRIAL=0 exec "$CAMERA" "$@"
@@ -94,5 +94,5 @@ if [ "$CURRENT" != "$(cat "$SOURCE/patched.sha256")" ];then
 fi
 cleanup
 trap - 0 1 2 15
-printf 'mode=delegated component=persistent-r2 pid=%s\n' "$$" > /tmp/cc2-camera-firmware-status.txt
+printf 'mode=delegated component=persistent-r2 pid=%s\n' "$$" > /tmp/cc2-camera-firmware-status.txt 2>/dev/null || true
 exec "$BASE/boot-camera.sh" "$@"

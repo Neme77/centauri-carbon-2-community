@@ -1,5 +1,5 @@
 name: Prepare V4.4.2 firmware builder with stable Control 1.2.21
-# Firmware trial R2: validate published prior camera manifest before migration.
+# Firmware trial R2: validate published camera migration and non-blocking boot diagnostics.
 on:
   push:
     branches: [test/builder-4.4.2-control-1.2.21]
