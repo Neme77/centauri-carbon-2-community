@@ -189,10 +189,12 @@ export const SpoolEditor = ({
   draft,
   set,
   create,
+  weighing,
 }: {
   draft: SpoolDraft
   set: (d: SpoolDraft) => void
   create: boolean
+  weighing?: { total: string; setTotal: (value: string) => void }
 }) => {
   const list = presets.use().list
   const materials = [...new Set([...list.map(p => String(p.name)), ...MATERIALS])]
@@ -210,6 +212,22 @@ export const SpoolEditor = ({
   })
   return (
     <div class="grid gap-3 cc2-sm:grid-cols-6">
+      {weighing && (
+        <>
+          <Field label="spools.weigh_gross" class="cc2-sm:col-span-6">
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max="25000"
+              step="any"
+              value={weighing.total}
+              onInput={e => weighing.setTotal(e.currentTarget.value)}
+            />
+          </Field>
+          <p class="text-xs text-muted cc2-sm:col-span-6">{t('spools.insert_weight_hint')}</p>
+        </>
+      )}
       <Field label="common.name" class="cc2-sm:col-span-6">
         <Input maxLength={96} placeholder={t('spools.name_placeholder')} {...input('name')} />
       </Field>
@@ -251,7 +269,15 @@ export const SpoolEditor = ({
       </Field>
       {create && (
         <Field label="spools.remaining_g" class="cc2-sm:col-span-2">
-          <Input type="number" inputMode="decimal" min="0" max="20000" step="1" {...input('remaining')} />
+          <Input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            max="20000"
+            step="1"
+            readOnly={Boolean(weighing?.total.trim())}
+            {...input('remaining')}
+          />
         </Field>
       )}
       <Field label="spools.tare" class={create ? 'cc2-sm:col-span-2' : 'cc2-sm:col-span-4'}>
@@ -508,6 +534,22 @@ const SpoolChooser = ({
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState(() => draftFrom(null, tray, prefill))
+  const [totalWeight, setTotalWeight] = useState('')
+  const [templateId, setTemplateId] = useState('')
+  const templates = lib.spools.filter(s => !s.archived)
+  const creating = choice === 'new' || choice === 'copy'
+  const measured = reason === 'question' && totalWeight.trim() !== ''
+  const left = Number(totalWeight) - Number(draft.tare)
+  const validWeight =
+    !measured || (inRange(totalWeight, 0, 25000) && inRange(draft.tare, 0, 5000) && left >= 0 && left <= 20000)
+  const newDraft = measured ? { ...draft, remaining: validWeight ? num(left) : '' } : draft
+  const copyFrom = (id: string) => {
+    const source = templates.find(s => s.id === id)
+    if (!source) return
+    setTemplateId(id)
+    setDraft({ ...draftFrom(source), remaining: num(source.net) })
+    setTotalWeight('')
+  }
   const chosen = (choice && lib.spools.find(s => s.id === choice)) || null
   // Writing the spool's filament to the tray keeps the printer and the slicer in step with the inventory.
   const preset = chosen
@@ -548,10 +590,12 @@ const SpoolChooser = ({
   }
   const confirm = () =>
     run(async () => {
-      if (choice === 'new') {
-        const problem = draftProblem(draft, true)
+      if (creating) {
+        if (!validWeight) throw new Error(t('spools.insert_weight_invalid'))
+        if (choice === 'copy' && !templates.some(s => s.id === templateId)) throw new Error(t('spools.no_match'))
+        const problem = draftProblem(newDraft, true)
         if (problem) throw new Error(t(problem))
-        await saveSpool({ ...draftFields(draft, true), slot })
+        await saveSpool({ ...draftFields(newDraft, true), slot })
         notify(
           tpl('spools.assigned_toast', { name: draft.name.trim() || draft.material.trim(), place: placeName(slot) })
         )
@@ -581,7 +625,7 @@ const SpoolChooser = ({
     })
   const radio = 'mt-0.5 shrink-0 accent-cyan'
   return (
-    <Dialog onClose={() => !busy && close()} locked={busy} width={700}>
+    <Dialog onClose={() => !busy && close()} locked={busy} width={700} label={tpl(title, { place: placeName(slot) })}>
       <div class="text-xs text-muted">{t('spools.title')}</div>
       <DialogTitle class="my-2">{tpl(title, { place: placeName(slot) })}</DialogTitle>
       {tray && (
@@ -674,9 +718,57 @@ const SpoolChooser = ({
             <span class="text-xs text-muted">{t('spools.new_spool_hint')}</span>
           </span>
         </label>
-        {choice === 'new' && (
+        {reason === 'question' && templates.length > 0 && (
+          <label
+            class={cn(
+              'flex cursor-pointer items-start gap-3 rounded-lg border p-2.5',
+              choice === 'copy' ? 'border-cyan bg-field' : 'border-edge'
+            )}
+          >
+            <input
+              type="radio"
+              name="cc2-spool-choice"
+              class={radio}
+              checked={choice === 'copy'}
+              onChange={() => {
+                copyFrom(templateId || chosen?.id || templates.find(s => suits(s, want))?.id || templates[0].id)
+                setChoice('copy')
+              }}
+            />
+            <span class="grid gap-0.5">
+              <b class="text-sm">{t('spools.add_same')}</b>
+              <span class="text-xs text-muted">{t('spools.insert_copy_hint')}</span>
+            </span>
+          </label>
+        )}
+        {choice === 'copy' && (
+          <Field label="spools.insert_copy_source">
+            <Select
+              aria-label={t('spools.insert_copy_source')}
+              value={templateId}
+              onChange={e => copyFrom(e.currentTarget.value)}
+            >
+              {templates.map(s => (
+                <option key={s.id} value={s.id}>
+                  {spoolLabel(s)} · {s.material} · {s.color}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {creating && (
           <div class="rounded-lg border border-edge p-3">
-            <SpoolEditor draft={draft} set={setDraft} create />
+            <SpoolEditor
+              draft={newDraft}
+              set={setDraft}
+              create
+              weighing={reason === 'question' ? { total: totalWeight, setTotal: setTotalWeight } : undefined}
+            />
+            {!validWeight && (
+              <p role="alert" class="mt-2 text-xs text-red">
+                {t('spools.insert_weight_invalid')}
+              </p>
+            )}
           </div>
         )}
         {(reason !== 'question' || slot === EXTERNAL) && (
@@ -732,7 +824,7 @@ const SpoolChooser = ({
         </Button>
         <Button
           variant="primary"
-          disabled={busy || (choice === '' && !state.spool && reason === 'question')}
+          disabled={busy || (creating && !validWeight) || (choice === '' && !state.spool && reason === 'question')}
           onClick={confirm}
         >
           {t('common.confirm')}

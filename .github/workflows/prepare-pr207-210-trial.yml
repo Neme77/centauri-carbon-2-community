@@ -1,0 +1,76 @@
+name: Prepare PR207 and PR210 cumulative application trial
+on:
+  push:
+    branches: [test/pr207-210-integration]
+permissions:
+  contents: write
+concurrency:
+  group: prepare-pr207-210
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: test/pr207-210-integration
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - name: Install host and ARM tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user busybox
+      - name: Build combined web sources
+        working-directory: cc2-control/web-src
+        run: npm ci && npm run check && npm run build
+      - name: Install interaction-test browser
+        working-directory: cc2-control/web-src
+        run: npx playwright install --with-deps chromium
+      - name: Combined Canvas and spool interactions
+        working-directory: cc2-control/web-src
+        run: |
+          npm run test:canvas-layout
+          npm run test:canvas-states
+          npm run test:spool-insertion
+          npm run test:spools
+          npm run test:object-layout
+          npm run test:bed-map
+          npm run test:file-library
+      - name: Verify reproducible assets and source references
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          cp -a cc2-control/web/. cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web/
+          git add cc2-control/web cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web
+          git diff --cached --quiet || git commit -m 'Build cumulative Canvas layout and spool popup trial'
+          (cd cc2-control/web-src && npm run build)
+          git diff --exit-code -- cc2-control/web
+          python3 cc2-control/tests/test_web_sync_static.py
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current
+          git diff --cached --quiet || git commit -m 'Pin cumulative PR207 and PR210 trial sources'
+          git push origin HEAD:refs/heads/test/pr207-210-integration
+      - name: Native backend and builder regressions
+        run: |
+          make -C cc2-control clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+      - name: Build and smoke-test ARM application
+        run: |
+          make -C cc2-control clean all EXTRA_CFLAGS=-Werror
+          CC2_TEST_RUNNER=qemu-arm python3 cc2-control/tests/test_smoke.py cc2-control/dist/cc2-control/cc2-control
+      - name: Package application only, retaining the existing camera
+        run: |
+          python3 cc2-control/installer/package.py --prepared cc2-control/dist/cc2-control
+          git rev-parse HEAD > output/integration-head.txt
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cc2-control-pr207-pr210-trial
+          path: |
+            output/CC2-Control-1.2.19-Multiplatform-Update.zip*
+            output/integration-head.txt
+          if-no-files-found: error
+          retention-days: 14

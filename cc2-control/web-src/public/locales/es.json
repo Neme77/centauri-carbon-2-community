@@ -1036,5 +1036,9 @@
   "job.bed_map_expand": "Ampliar mapa de la cama",
   "canvas.actions_for_slot": "Acciones para la ranura {slot}",
   "canvas.settings_title": "Ajustes de Canvas",
-  "canvas.unload_hint_compact": "Retracción tras el corte: {min}–{max} mm. Requiere reiniciar la impresora."
+  "canvas.unload_hint_compact": "Retracción tras el corte: {min}–{max} mm. Requiere reiniciar la impresora.",
+  "spools.insert_copy_hint": "Crea una bobina distinta copiando los datos de otra; la original permanece en su ranura.",
+  "spools.insert_copy_source": "Copiar datos de",
+  "spools.insert_weight_hint": "Opcional: peso total menos bobina vacía da el filamento restante. El peso neto nominal no cambia. Deja el total vacío para introducirlo manualmente.",
+  "spools.insert_weight_invalid": "Introduce pesos total y vacío válidos; el total no puede ser inferior al peso vacío. El filamento restante debe estar entre 0 y 20000 g."
 }
