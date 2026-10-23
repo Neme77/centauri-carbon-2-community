@@ -1036,5 +1036,9 @@
   "job.bed_map_expand": "Powiększ mapę stołu",
   "canvas.actions_for_slot": "Działania dla slotu {slot}",
   "canvas.settings_title": "Ustawienia Canvas",
-  "canvas.unload_hint_compact": "Wycofanie po odcięciu: {min}–{max} mm. Wymaga ponownego uruchomienia drukarki."
+  "canvas.unload_hint_compact": "Wycofanie po odcięciu: {min}–{max} mm. Wymaga ponownego uruchomienia drukarki.",
+  "spools.insert_copy_hint": "Utwórz osobną szpulę na podstawie danych istniejącej; oryginalna pozostanie w swoim slocie.",
+  "spools.insert_copy_source": "Kopiuj dane z",
+  "spools.insert_weight_hint": "Opcjonalnie: masa całkowita minus masa pustej szpuli daje pozostały filament. Nominalna masa netto nie zmienia się. Zostaw masę całkowitą pustą, aby wpisać pozostałą masę ręcznie.",
+  "spools.insert_weight_invalid": "Podaj prawidłowe masy całkowitą i pustej szpuli; całkowita nie może być mniejsza od pustej. Pozostały filament musi ważyć od 0 do 20000 g."
 }

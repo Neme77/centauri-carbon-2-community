@@ -1036,5 +1036,9 @@
   "job.bed_map_expand": "Tárgyasztaltérkép nagyítása",
   "canvas.actions_for_slot": "Műveletek a(z) {slot}. rekeszhez",
   "canvas.settings_title": "Canvas-beállítások",
-  "canvas.unload_hint_compact": "Visszahúzás vágás után: {min}–{max} mm. A nyomtató újraindítása szükséges."
+  "canvas.unload_hint_compact": "Visszahúzás vágás után: {min}–{max} mm. A nyomtató újraindítása szükséges.",
+  "spools.insert_copy_hint": "Külön tekercset hoz létre egy meglévő adataiból; az eredeti a helyén marad.",
+  "spools.insert_copy_source": "Adatok másolása innen",
+  "spools.insert_weight_hint": "Opcionális: az össztömeg és az üres tekercs tömegének különbsége a maradék filament. A névleges nettó tömeg nem változik. Kézi bevitelhez hagyja üresen az össztömeget.",
+  "spools.insert_weight_invalid": "Adjon meg érvényes össztömeget és üres tekercstömeget; az össztömeg nem lehet kisebb az üres tömegnél. A maradék filament 0 és 20000 g közötti lehet."
 }

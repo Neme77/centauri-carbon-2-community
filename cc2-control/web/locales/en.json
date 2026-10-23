@@ -1036,5 +1036,9 @@
   "job.bed_map_expand": "Expand bed map",
   "canvas.actions_for_slot": "Actions for Slot {slot}",
   "canvas.settings_title": "Canvas settings",
-  "canvas.unload_hint_compact": "Pull-back after cutting: {min}–{max} mm. Requires a printer restart."
+  "canvas.unload_hint_compact": "Pull-back after cutting: {min}–{max} mm. Requires a printer restart.",
+  "spools.insert_copy_hint": "Create a separate spool from an existing one’s details; the original stays in its slot.",
+  "spools.insert_copy_source": "Copy details from",
+  "spools.insert_weight_hint": "Optional: total minus empty spool weight gives remaining filament. Nominal net weight stays unchanged. Leave total blank for manual entry.",
+  "spools.insert_weight_invalid": "Enter a valid total and empty spool weight; total must not be less than the empty spool weight. Remaining filament must be between 0 and 20000 g."
 }
