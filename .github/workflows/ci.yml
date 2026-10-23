@@ -91,6 +91,9 @@ jobs:
       - name: Canvas states and explicit recovery loading
         run: npm run test:canvas-states && npm run test:canvas-layout && npm run test:canvas-reset
 
+      - name: New-spool insertion copy and scale-weight regression
+        run: npm run test:spool-insertion
+
       - name: Complete file library and large upload admission
         run: npm run test:file-library
 

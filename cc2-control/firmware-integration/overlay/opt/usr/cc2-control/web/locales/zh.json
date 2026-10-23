@@ -1036,5 +1036,9 @@
   "job.bed_map_expand": "放大热床地图",
   "canvas.actions_for_slot": "槽位 {slot} 操作",
   "canvas.settings_title": "Canvas 设置",
-  "canvas.unload_hint_compact": "切断后回抽：{min}–{max} 毫米。需要重启打印机。"
+  "canvas.unload_hint_compact": "切断后回抽：{min}–{max} 毫米。需要重启打印机。",
+  "spools.insert_copy_hint": "复制现有料盘的数据以创建独立料盘；原料盘仍保留在原槽位。",
+  "spools.insert_copy_source": "复制数据来源",
+  "spools.insert_weight_hint": "可选：总重量减去空料盘重量即为剩余耗材。标称净重保持不变。总重量留空时可手动输入余量。",
+  "spools.insert_weight_invalid": "请输入有效的总重量和空料盘重量；总重量不得小于空料盘重量。剩余耗材须在 0 至 20000 克之间。"
 }
