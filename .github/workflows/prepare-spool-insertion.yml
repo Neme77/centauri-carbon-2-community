@@ -1,0 +1,40 @@
+name: Prepare spool insertion source
+on:
+  push:
+    branches: [feature/spool-insertion-copy-weight]
+    paths: ['cc2-control/**', '.github/workflows/prepare-spool-insertion.yml']
+permissions:
+  contents: write
+jobs:
+  source:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - name: Check and rebuild the production UI
+        working-directory: cc2-control/web-src
+        run: npm ci && npm run check && npm run build
+      - name: Synchronize firmware overlay and commit application sources
+        run: |
+          cp -a cc2-control/web/. cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web/
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add cc2-control
+          if ! git diff --cached --quiet; then
+            git commit -m 'Build spool insertion copy and weight UI'
+          fi
+      - name: Synchronize canonical source archive and pins
+        run: |
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'Sync spool insertion source snapshot and builder pins'
+          fi
+          git push origin HEAD
