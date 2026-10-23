@@ -554,6 +554,7 @@
   "canvas.unload_restart_busy": "The restart was cancelled because the printer became busy. Restart it later to apply the distance.",
   "canvas.unload_restart_failed": "The printer could not be restarted. Restart it later to apply the distance.",
   "canvas.unload_above_range": "The printer's configuration sets {value} mm, more than the {max} mm the stock firmware accepts, so it was changed outside CC2 Control. Saving here replaces it.",
+  "canvas.unload_extended": "This printer runs the program with the pull-back limit raised to {max} mm. Before it goes back to a stock program, set {stock} mm or less, or the printer won't start.",
   "canvas.unload_not_editable": "This printer's autosave.cfg has a layout CC2 Control does not edit, so the distance can't be changed here.",
   "substate.receiving_file": "Receiving file",
   "substate.heating_nozzle": "Heating nozzle",

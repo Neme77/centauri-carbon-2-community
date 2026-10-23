@@ -156,6 +156,7 @@
   "canvas.unload_restart_busy": "Az újraindítás megszakadt, mert a nyomtató foglalt lett. Indítsd újra később a távolság alkalmazásához.",
   "canvas.unload_restart_failed": "A nyomtatót nem sikerült újraindítani. Indítsd újra később a távolság alkalmazásához.",
   "canvas.unload_above_range": "A nyomtató konfigurációja {value} mm-t állít be, többet, mint a gyári firmware által elfogadott {max} mm, tehát a CC2 Controlon kívül módosították. Az itteni mentés lecseréli.",
+  "canvas.unload_extended": "Ez a nyomtató olyan programot futtat, amelyben a visszahúzás határa {max} mm-re van emelve. Mielőtt a nyomtató visszatér a gyári programra, állíts be legfeljebb {stock} mm-t, különben nem indul el.",
   "canvas.unload_not_editable": "Ennek a nyomtatónak az autosave.cfg fájlja olyan szerkezetű, amelyet a CC2 Control nem szerkeszt, ezért a távolság itt nem módosítható.",
   "canvas.reset_all": "Összes filamentadat törlése",
   "canvas.reset_all_confirm": "Törlöd mind a négy Canvas-hely anyagadatait? Ezzel a mentett anyag, szín és hőmérsékletek törlődnek. A filamentet a rendszer fizikailag nem adagolja ki.",
