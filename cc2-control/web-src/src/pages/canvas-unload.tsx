@@ -30,7 +30,7 @@ const RESTART_ERRORS: Record<string, Key> = {
 }
 
 // Pull-back after the cut. Changes need an idle printer and apply after a printer restart, offered right away.
-export const CanvasUnload = ({ idle }: { idle: boolean }) => {
+export const CanvasUnload = ({ idle, compact = false }: { idle: boolean; compact?: boolean }) => {
   const [state, setState] = useState<Unload | null>(null)
   const [value, setValue] = useState('')
   const [edited, setEdited] = useState(false) // a value outside the range read from the printer is not an input error
@@ -98,7 +98,7 @@ export const CanvasUnload = ({ idle }: { idle: boolean }) => {
   const locked = !idle || busy || restarting || !state.editable
   const canSave = !locked && valid && number !== override
   return (
-    <div class="mt-3 border-t border-edge pt-3" data-canvas-unload>
+    <div class={compact ? 'cc2-canvas-unload' : 'mt-3 border-t border-edge pt-3'} data-canvas-unload>
       <label for="canvas-unload" class="flex items-center gap-2">
         <MoveLeft {...I} />
         {t('canvas.unload_title')}
@@ -136,7 +136,9 @@ export const CanvasUnload = ({ idle }: { idle: boolean }) => {
         </Button>
       </div>
       <p class="mt-2 text-[13px] text-muted">
-        {edited && !valid ? tpl('canvas.unload_invalid', { min, max }) : tpl('canvas.unload_hint', { min, max })}
+        {edited && !valid
+          ? tpl('canvas.unload_invalid', { min, max })
+          : tpl(compact ? 'canvas.unload_hint_compact' : 'canvas.unload_hint', { min, max })}
       </p>
       {state.extended && (
         <p class="mt-2 text-[13px] text-cyan">{tpl('canvas.unload_extended', { max, stock: STOCK_MAX })}</p>

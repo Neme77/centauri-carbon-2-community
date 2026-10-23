@@ -271,6 +271,41 @@ Hotend calibration and PID persistence were validated on a physical CC2.
 No restart was observed after saving. Immediate application of the new PID
 coefficients has not been independently verified.
 
+## X/Y motor mode (StealthChop)
+
+Experimental: disabled by default and explicitly opted into in Settings → Updates,
+independently of the stable application update channel. Quiet commands are refused
+until opted in; Normal remains available for recovery. Not yet physically qualified
+on V4.4 / V4.4.1. Passing CI is not printer qualification.
+
+`POST /api/control` accepts `motors:quiet` and `motors:normal` while the printer is
+idle with fresh telemetry; both are refused during a print. They change the X and Y
+TMC2209 drivers together (CoreXY) with the native `SET_TMC_FIELD`, which refuses a
+literal `VALUE=0`, so the zero writes use values whose masked field is 0
+(`en_spreadcycle` 2, `tpwmthrs` 1048576).
+
+StealthChop loses steps at high speed and acceleration, and a hybrid `tpwmthrs`
+threshold does not cap the speed. Quiet therefore runs `M400` and
+`SET_VELOCITY_LIMIT VELOCITY=80 ACCEL=2000` before any StealthChop write; Normal
+restores SpreadCycle on both steppers first and then
+`SET_VELOCITY_LIMIT VELOCITY=500 ACCEL=20000`, the stock `printer.cfg` limits
+(CC2 Control does not read the printer configuration). Normal always restores these
+fixed values, not limits a user set before Quiet. Both end with `DUMP_TMC` for X and
+Y, shown in the Console.
+
+`GET /api/printer` reports the last requested mode as `motor_mode` (`"quiet"`,
+`"normal"`, or `null` before any request and after the printer service reconnects,
+when the configured mode returns). It records the last accepted request, not a
+verified TMC register state: check the `DUMP_TMC` read-back. It does not report the
+toolhead velocity or acceleration limits.
+
+Quiet belongs to one print. The 80 mm/s / 2000 mm/s² values are initial limits,
+not an enforced cap: a slicer's `M204` or `SET_VELOCITY_LIMIT` lines raise them
+again during the print, so Quiet suits only G-code sliced to stay at or below
+80 mm/s and 2000 mm/s² throughout; the Control page warns while a print runs in Quiet. When a
+print (printing or paused) has run in Quiet and the printer is idle again, CC2
+Control sends the Normal script itself.
+
 ## Build-plate library
 
 CC2 Control keeps named plate surfaces in `bed-plates.json` (`--plates FILE`, next to the UI preferences):
@@ -563,3 +598,16 @@ Test qualification is separate from printer qualification. The regression model
 keeps stored profiles and the active matrix independent and covers successful,
 ignored/refused loads, missing/wrong matrix data, busy/stale guards and pending
 post-restart activation. A controlled V4.4 printer trial is required before release.
+
+## Experimental feature preferences
+
+`GET /api/experiments` reports the stored choices, actual Canvas UDS availability,
+editability and the shared cold/idle readiness guard.
+
+`POST /api/experiments` accepts exactly `canvas-uds:on`, `canvas-uds:off`,
+`quiet-motors:on` or `quiet-motors:off`, with `X-CC2-LAN`. Both default off and
+are persisted independently. Changing Canvas reconnects the existing UDS connection,
+revokes old direct-state authority and sends no motion/heating command. Disabling
+Quiet controls, or changing Canvas while they are enabled, requires a successful
+explicit Normal command on the current UDS connection. Invalid storage is not
+overwritten. See [experimental features](EXPERIMENTAL_FEATURES.md) for limitations.

@@ -678,7 +678,8 @@ const Profiles = () => {
 
 export const Control = () => {
   usePoll(refreshPrinter, 1500)
-  const d = printer.use().data
+  const link = printer.use()
+  const d = link.data
   const v = view(d)
   const focus = calibrationFocus.use()
   useEffect(() => {
@@ -773,6 +774,38 @@ export const Control = () => {
                 {t('common.fans_off')}
               </Button>
             </div>
+            {(d?.experiments?.quiet_motors || v.motorMode === 'quiet') && (
+              <div class="mt-3 border-t border-edge pt-3">
+                <div class="mb-2">{t('control.motor_mode')}</div>
+                <div class="grid grid-cols-2 gap-2.5">
+                  {(['quiet', 'normal'] as const).map(mode => (
+                    <Button
+                      key={mode}
+                      class="min-h-12"
+                      variant={v.motorMode === mode ? 'active' : 'default'}
+                      aria-pressed={v.motorMode === mode}
+                      disabled={
+                        !v.idle || !link.ok || !d?.connected || (mode === 'quiet' && !d?.experiments?.quiet_motors)
+                      }
+                      onClick={async () => {
+                        const ok = await control(
+                          `motors:${mode}`,
+                          t(mode === 'quiet' ? 'control.motor_mode_quiet_confirm' : 'control.motor_mode_normal_confirm')
+                        )
+                        if (ok) setTimeout(refreshPrinter, 250)
+                      }}
+                    >
+                      <Icon n="motors" class="text-cyan" />
+                      {t(mode === 'quiet' ? 'control.motor_mode_quiet' : 'control.motor_mode_normal')}
+                    </Button>
+                  ))}
+                </div>
+                <p class="mt-2 text-xs text-muted">{t('control.motor_mode_hint')}</p>
+                {v.motorMode === 'quiet' && (v.printing || v.paused) && (
+                  <Warn>{t('control.motor_mode_print_warning')}</Warn>
+                )}
+              </div>
+            )}
             <Notice icon="lock">
               <span>
                 {t('control.protected_actions')}

@@ -12,7 +12,7 @@ export default defineConfig(async ({ mode, command }): Promise<UserConfig> => {
   if (mode === 'demo' && command !== 'serve')
     throw new Error('Demo is development-only; use npm run build for firmware')
   const demo = mode === 'demo'
-  const preview = demo ? (await import('./preview/plugin')).previewPlugin() : null
+  const preview = demo ? (await import('./preview/plugin.ts')).previewPlugin() : null
   return {
     plugins: [...(preview ? [preview] : []), preact(), tailwindcss(), viteSingleFile()],
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },

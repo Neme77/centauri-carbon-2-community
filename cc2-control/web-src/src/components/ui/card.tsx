@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { cn } from '@/lib/utils'
 import { Icon } from '@/components/icons'
-import { type Key, t } from '@/lib/i18n'
+import { type Key, t, tpl } from '@/lib/i18n'
 
 export const Card = ({
   class: c,
@@ -18,16 +18,18 @@ export const CardHead = ({
   title,
   end,
   sub,
+  values,
 }: {
   icon?: string
   title: Key
   end?: ComponentChildren
   sub?: Key
+  values?: Record<string, string | number>
 }) => (
   <div class="mb-3 flex min-h-7 items-center gap-2.5 border-b border-edge pb-2.5">
     {icon && <Icon n={icon} class="text-cyan" />}
     <div class="min-w-0">
-      <h2 class="text-base font-semibold">{t(title)}</h2>
+      <h2 class="text-base font-semibold">{values ? tpl(title, values) : t(title)}</h2>
       {sub && <small class="text-muted">{t(sub)}</small>}
     </div>
     {end !== undefined && <span class="ml-auto text-xs text-muted">{end}</span>}
