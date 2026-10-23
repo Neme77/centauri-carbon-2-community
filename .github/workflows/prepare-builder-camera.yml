@@ -69,10 +69,18 @@ jobs:
           CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
       - name: Package source builder with camera runtime and public provenance
         run: python3 .github/scripts/package-builder-camera.py --package
+      - name: Package the same corrected application for a signed panel trial
+        run: python3 cc2-control/installer/package.py --prepared cc2-control/dist/cc2-control --camera-runtime builder/current/components/camera/runtime
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: cc2-builder-v4.4.2-control-1.2.21-test-r1
           path: output/CC2-Builder-V4.4.2-Control-1.2.21-Test-R1.zip*
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cc2-control-1.2.21-cumulative-candidate
+          path: output/CC2-Control-1.2.21-Multiplatform-Update.zip*
           retention-days: 14
           if-no-files-found: error
 

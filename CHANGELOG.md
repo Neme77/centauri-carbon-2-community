@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Firmware builder V4.4.2: integrate the qualified R2 camera thread-reaping and local/Matrix recovery runtime from first boot, with exact-fingerprint checks, managed-component migration and native fallback (PR pending). Thanks to [tharje](https://github.com/tharje) for diagnosis and [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester, for persistent testing. Includes stable CC2 Control 1.2.21; the complete OTA is built locally and awaits hardware validation.
 
+### Fixed
+
+- Application updater: accept GitHub redirect security headers larger than 8 KiB within the existing 16 KiB total budget, while preserving TLS and redirect checks; recognize a qualified dormant R2 camera directory after rollback or firmware reinstall and retain it before reinstallation (PR pending). Reported and reproduced during maintainer upgrade testing.
+
 - Spool insertion popup: add an identical spool without moving the original, and calculate remaining filament from total and empty-spool weights while keeping nominal capacity separate (#210). Suggested by [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester; the Spools section stays unchanged.
 
 - Canvas: an explicit action to recover an unassigned filament head by loading any present slot (#190).
@@ -361,3 +365,4 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [Community Firmware V4.3 / CC2 Control 1.2.0]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3
 [V4.2 / CC2 Control 1.1.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
+

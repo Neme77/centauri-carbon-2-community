@@ -41,16 +41,48 @@ root_stage() {
     ROOT_STAGE=/etc/init.d/.cc2-camera-stage-$$
     mkdir "$ROOT_STAGE" || stop 'cannot stage an atomic startup replacement'
 }
+dormant_check() {
+    # A qualified native/one-shot startup means these retained files are not
+    # installed into startup. Authenticate them before retaining/moving them.
+    choose_startup
+    [ -d "$BASE" ] && [ ! -L "$BASE" ] || stop 'retained camera directory must be regular'
+    for F in common.sh manage.sh boot-camera.sh SHA256SUMS printer.original patched.sha256 libcc2-camera-reap-r2.so libcc2-camera-recovery-r2.so cc2-camera-reap-check;do
+        [ -f "$BASE/$F" ] && [ ! -L "$BASE/$F" ] || stop 'retained camera file missing or symlinked'
+    done
+    (cd "$BASE" && sha256sum -c SHA256SUMS) || stop 'retained camera checksums differ'
+    runtime_files "$BASE" || stop 'retained camera runtime differs'
+    for ITEM in 'common.sh:f6dc57c5e54a1763f0c60c79c75362da604fe5350857958618b6be3cb071ef8e' 'manage.sh:578493eae89ff602a7c8ab1bf65bfb3c71298ff45d5fd7eb419d8da20f07c487' 'boot-camera.sh:e570b84e4b5615bfea53be5c52a1befef7b78f0b91ba16e62b500652a8cdfaa5';do
+        FILE=${ITEM%%:*};PIN=${ITEM#*:}
+        ACTUAL=$(sha "$BASE/$FILE")
+        [ "$ACTUAL" = "$PIN" ] || [ "$ACTUAL" = "$(sha "$SOURCE/$FILE")" ] || stop 'unknown retained camera source'
+    done
+    backup_fingerprint "$BASE/printer.original" || stop 'retained startup backup is unqualified'
+    PREVIOUS_LINE='ai_camera &'
+    [ "$(sha "$BASE/printer.original")" != "$TRIAL_INIT_SHA" ] || PREVIOUS_LINE=$TRIAL_LINE
+    PREVIOUS=$(awk -v old="$PREVIOUS_LINE" -v new="$NEW_LINE" '{line=$0;sub(/^[ \t]*/,"",line);if(line==old){match($0,/^[ \t]*/);print substr($0,1,RLENGTH) new;n++;next}print} END{if(n!=1)exit 1}' "$BASE/printer.original" | sha256sum | awk '{print $1}')
+    FIRMWARE=$(awk '{line=$0;sub(/^[ \t]*/,"",line);if(line=="ai_camera &"){match($0,/^[ \t]*/);print substr($0,1,RLENGTH) "/etc/init.d/cc2-camera-launch & # CC2_CAMERA_FIRMWARE_R2";n++;next}print} END{if(n!=1)exit 1}' "$BASE/printer.original" | sha256sum | awk '{print $1}')
+    SAVED=$(cat "$BASE/patched.sha256")
+    [ "$SAVED" = "$PREVIOUS" ] || { [ "$(sha "$BASE/printer.original")" = "$STOCK_INIT_SHA" ] && [ "$SAVED" = "$FIRMWARE" ]; } || stop 'retained startup fingerprint differs'
+}
 stage() {
     lock
+    DORMANT=0
     if [ -e "$BASE" ] || [ -L "$BASE" ]; then
-        idle
-        installed_check
-        echo 'ALREADY INSTALLED: existing camera activation preserved. Reboot required if not yet active.'
-        return
+        case "$(sha "$INIT")" in
+            "$STOCK_INIT_SHA"|"$TRIAL_INIT_SHA") dormant_check; DORMANT=1 ;;
+            *) idle; installed_check; echo 'ALREADY INSTALLED: existing camera activation preserved. Reboot required if not yet active.'; return ;;
+        esac
     fi
     if personal_existing; then return; fi
     source_check
+    if [ "$DORMANT" -eq 1 ];then
+        RETAINED=/opt/usr/cc2-camera-before-reinstall-$$
+        [ ! -e "$RETAINED" ] && [ ! -L "$RETAINED" ] || stop 'retained backup already exists'
+        [ "$(sha "$INIT")" = "$INIT_SHA" ] || stop 'startup changed before retained-directory move'
+        mv "$BASE" "$RETAINED" || stop 'cannot preserve previous camera directory'
+        [ "$SOURCE" != "$BASE" ] || SOURCE=$RETAINED
+        echo "Previous dormant camera files retained: $RETAINED"
+    fi
     [ ! -e "$BASE" ] && [ ! -L "$BASE" ] || stop 'persistent directory already exists; use status/disable/rollback, do not overwrite'
     root_stage
     cp -p "$INIT" "$ROOT_STAGE/printer"
@@ -149,7 +181,7 @@ toggle() {
     fi
 }
 case "${1:-check}" in
-check) if personal_existing; then :; elif [ -e "$BASE" ] || [ -L "$BASE" ]; then idle; installed_check; else source_check; fi; echo 'CHECK PASS: pinned startup/camera/runtime, fresh Idle state and dependencies. No file installed and no process restarted.' ;;
+check) if personal_existing; then :; elif [ -e "$BASE" ] || [ -L "$BASE" ]; then case "$(sha "$INIT")" in "$STOCK_INIT_SHA"|"$TRIAL_INIT_SHA") dormant_check; source_check;; *) idle; installed_check;; esac; else source_check; fi; echo 'CHECK PASS: pinned startup/camera/runtime, fresh Idle state and dependencies. No file installed and no process restarted.' ;;
 install) stage ;;
 rollback) rollback ;;
 status) status ;;
@@ -157,3 +189,4 @@ enable|disable) toggle "$1" ;;
 verify) installed_check; echo 'INSTALLED FILES VERIFIED; current video still requires observation.' ;;
 *) echo 'Usage: sh manage.sh check | install | status | verify | disable | enable | rollback' >&2; exit 2 ;;
 esac
+

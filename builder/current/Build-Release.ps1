@@ -8,11 +8,21 @@ if (-not $ExistingBuilder) {
     $previousPackage='CC2-Builder-V'+$firmwareVersion+'-Updated-Control-Panel'
     foreach ($relative in @("$previousPackage\builder\current",
                             "$previousPackage\$previousPackage\builder\current",
-                            'CC2-Builder-V4.4.1\builder\current',
-                            'CC2-Builder-V4.4-Updated-Control-Panel\builder\current',
                             'CC2-Builder-V4.3-Candidate\builder\current')) {
         $candidate=Join-Path $desktop $relative
         if (Test-Path -LiteralPath $candidate) {$ExistingBuilder=$candidate;break}
+    }
+    if (-not $ExistingBuilder) {
+        foreach ($package in (Get-ChildItem -LiteralPath $desktop -Directory -Filter 'CC2-Builder-V*' | Sort-Object LastWriteTime -Descending)) {
+            foreach ($relative in @('builder\current', ($package.Name+'\builder\current'))) {
+                $candidate=Join-Path $package.FullName $relative
+                if ((Test-Path -LiteralPath (Join-Path $candidate 'core\firmware_builder.py') -PathType Leaf) -and $candidate -ne $PSScriptRoot) {
+                    $ExistingBuilder=$candidate
+                    break
+                }
+            }
+            if ($ExistingBuilder) {break}
+        }
     }
     if (-not $ExistingBuilder) {$ExistingBuilder=Read-Host 'Cartella builder precedente (builder\current) con chiavi e strumenti'}
 }
@@ -36,3 +46,4 @@ if ($full.Length -lt 3 -or $full.Substring(1,2) -ne ':\') {throw 'Estrarre il pa
 $linuxRoot='/mnt/'+$full.Substring(0,1).ToLowerInvariant()+'/'+$full.Substring(3).Replace('\','/')
 & wsl.exe -d $Distro -u root --exec python3 -u "$linuxRoot/build_release.py" --mode $Mode
 if ($LASTEXITCODE -ne 0) {throw 'Build fallita. Non installare: incolla il primo errore.'}
+

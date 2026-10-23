@@ -11,8 +11,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Trace a disposable diagnostic build without changing published code
-        run: python3 .github/scripts/trace-https-helper.py
       - name: Compile the existing certificate-verifying HTTPS helper
         working-directory: cc2-control
         run: make build/cc2-https-download CROSS= CC=gcc EXTRA_CFLAGS=-Werror
@@ -21,4 +19,7 @@ jobs:
         run: |
           build/cc2-https-download 'https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-V4.4.cc2update' updater/ca-bundle.pem 33555540 > /tmp/stable.cc2update
           python3 -c "import hashlib,urllib.request; from pathlib import Path; b=Path('/tmp/stable.cc2update').read_bytes(); expected=urllib.request.urlopen('https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/SHA256SUMS.txt').read().decode(); actual=hashlib.sha256(b).hexdigest(); assert actual+'  CC2-Control-1.2.19-V4.4.cc2update' in expected; print('PASS actual stable download',len(b),actual)"
+      - name: Bounded CSP header and response-framing regressions
+        working-directory: cc2-control
+        run: python3 tests/test_https_parser.py
 

@@ -48,7 +48,12 @@ if [ -e "$BASE" ] || [ -L "$BASE" ];then
     [ -d "$BASE" ] && [ ! -L "$BASE" ] || native existing-component-type "$@"
     for file in common.sh manage.sh boot-camera.sh SHA256SUMS libcc2-camera-reap-r2.so libcc2-camera-recovery-r2.so cc2-camera-reap-check;do
         [ -f "$BASE/$file" ] && [ ! -L "$BASE/$file" ] || native existing-component-file "$@"
-        cmp -s "$SOURCE/$file" "$BASE/$file" || native unknown-existing-component "$@"
+        if ! cmp -s "$SOURCE/$file" "$BASE/$file";then
+            case "$file:$(sha "$BASE/$file")" in
+                manage.sh:578493eae89ff602a7c8ab1bf65bfb3c71298ff45d5fd7eb419d8da20f07c487|SHA256SUMS:bbf3b682accbf9242cd8129ec353c1b0694640a5ca4c149565f14f4841614e70) ;;
+                *) native unknown-existing-component "$@" ;;
+            esac
+        fi
     done
     [ ! -L "$BASE/enabled" ] && [ ! -L "$BASE/patched.sha256" ] && [ ! -L "$BASE/printer.original" ] || native existing-marker-symlink "$@"
     if [ ! -e "$BASE/enabled" ];then DISABLED=1
