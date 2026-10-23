@@ -257,15 +257,21 @@ button { font: inherit; color: inherit; }
 :root[data-theme="light"] .camera-grid { opacity: .12; }
 :root[data-theme="light"] .camera-frame::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
 :root[data-theme="light"] .camera-frame::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
-.tuning-row { grid-template-columns: 92px minmax(72px, 1fr) 60px 48px; min-height: 30px; gap: 7px; margin: 7px 0; font-size: 11px; }
-.tuning-row label { min-width: 0; line-height: 1.25; }
-.tuning-slider { width: 100%; height: 20px; margin: 0; accent-color: var(--cyan); cursor: pointer; }
-.tuning-input-wrap { display: flex; align-items: center; justify-content: center; gap: 2px; height: 30px; border: 1px solid var(--edge); border-radius: 5px; background: var(--field); color: var(--text); }
-.tuning-input { width: 36px; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; text-align: right; font: inherit; font-variant-numeric: tabular-nums; }
-.tuning-input-wrap span { color: var(--muted); }
-.tuning-apply { min-height: 30px; padding: 0 7px; font-size: 10px; }
-.tuning-hint { margin-top: 6px; line-height: 1.35; }
-.tuning-slider:focus-visible, .tuning-input-wrap:focus-within, .tuning-apply:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.tuning-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tuning-field { min-width: 0; }
+.tuning-field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; margin-bottom: 2px; font-size: 11px; }
+.tuning-field-head label { min-width: 0; font-weight: 600; }
+.tuning-field-head > span { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+.tuning-field-head strong { color: var(--cyan); font-size: 11px; }
+.tuning-slider { display: block; width: 100%; height: 18px; margin: 0; accent-color: var(--cyan); cursor: pointer; }
+.tuning-actions { display: flex; align-items: center; gap: 4px; }
+.tuning-input-wrap { display: flex; flex: 0 0 50px; align-items: center; justify-content: center; gap: 2px; height: 30px; border: 1px solid var(--edge); border-radius: 5px; background: var(--field); color: var(--text); }
+.tuning-input { width: 29px; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; text-align: right; font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; }
+.tuning-input-wrap span { color: var(--muted); font-size: 10px; }
+.tuning-apply, .tuning-reset { min-width: 0; min-height: 30px; flex: 1 1 auto; padding: 0 5px; font-size: 10px; }
+.tuning-range { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; line-height: 1.2; }
+.tuning-hint { margin: 7px 0 0; line-height: 1.35; }
+.tuning-slider:focus-visible, .tuning-input-wrap:focus-within, .tuning-apply:focus-visible, .tuning-reset:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .visual-button > .icon { width: 15px; height: 15px; }
 .header-action .icon { width: 16px; height: 16px; }
 .update-indicator .icon { width: 18px; height: 18px; }
@@ -274,8 +280,11 @@ button { font: inherit; color: inherit; }
 #device[data-viewport="mobile"] .brand-mobile-title { display: block; }
 #device[data-viewport="mobile"] .brand-lockup { min-width: 0; }
 #device[data-viewport="mobile"] .brand-lockup::after { display: none; content: none; }
-#device[data-viewport="mobile"] .tuning-row { grid-template-columns: 76px minmax(46px, 1fr) 56px 44px; gap: 5px; }
-#device[data-viewport="mobile"] .tuning-apply { padding-inline: 5px; font-size: 10px; }
+#device[data-viewport="mobile"] .tuning-fields { gap: 8px; }
+#device[data-viewport="mobile"] .tuning-field-head { font-size: 10px; }
+#device[data-viewport="mobile"] .tuning-input-wrap { flex-basis: 46px; height: 40px; }
+#device[data-viewport="mobile"] .tuning-input { width: 26px; }
+#device[data-viewport="mobile"] .tuning-apply, #device[data-viewport="mobile"] .tuning-reset { min-height: 40px; padding-inline: 4px; font-size: 9px; }
 #device[data-viewport="mobile"] .camera-frame { min-height: 160px; }
 
 </style>
@@ -390,19 +399,29 @@ button { font: inherit; color: inherit; }
             </section>
             <section class="card">
               <div class="card-head"><span class="card-icon" data-icon="sliders" aria-hidden="true"></span><h2 class="card-title">Print tuning</h2><span class="card-end">Current print</span></div>
-              <div class="tuning-row" data-tuning="speed">
-                <label for="speed-slider">Print speed</label>
-                <input id="speed-slider" class="tuning-slider" type="range" min="50" max="150" step="1" value="100" aria-label="Print speed slider">
-                <div class="tuning-input-wrap"><input id="speed-value" class="tuning-input" type="number" min="50" max="150" step="1" value="100" aria-label="Print speed percentage"><span aria-hidden="true">%</span></div>
-                <button class="visual-button tuning-apply" type="button" data-apply="speed">Apply</button>
+              <div class="tuning-fields">
+                <section class="tuning-field" data-tuning="speed">
+                  <div class="tuning-field-head"><label for="speed-slider">Print speed</label><span>Actual <strong>100%</strong></span></div>
+                  <input id="speed-slider" class="tuning-slider" type="range" min="25" max="200" step="1" value="100" aria-label="Print speed slider">
+                  <div class="tuning-actions">
+                    <div class="tuning-input-wrap"><input id="speed-value" class="tuning-input" type="number" min="25" max="200" step="1" value="100" aria-label="Print speed percentage"><span aria-hidden="true">%</span></div>
+                    <button class="visual-button tuning-apply" type="button">Apply</button>
+                    <button class="visual-button tuning-reset" type="button">Reset</button>
+                  </div>
+                  <small class="tuning-range">25–200%</small>
+                </section>
+                <section class="tuning-field" data-tuning="flow">
+                  <div class="tuning-field-head"><label for="flow-slider">Extrusion flow</label><span>Actual <strong>100%</strong></span></div>
+                  <input id="flow-slider" class="tuning-slider" type="range" min="50" max="150" step="1" value="100" aria-label="Extrusion flow slider">
+                  <div class="tuning-actions">
+                    <div class="tuning-input-wrap"><input id="flow-value" class="tuning-input" type="number" min="50" max="150" step="1" value="100" aria-label="Extrusion flow percentage"><span aria-hidden="true">%</span></div>
+                    <button class="visual-button tuning-apply" type="button">Apply</button>
+                    <button class="visual-button tuning-reset" type="button">Reset</button>
+                  </div>
+                  <small class="tuning-range">50–150%</small>
+                </section>
               </div>
-              <div class="tuning-row" data-tuning="flow">
-                <label for="flow-slider">Extrusion flow</label>
-                <input id="flow-slider" class="tuning-slider" type="range" min="50" max="150" step="1" value="100" aria-label="Extrusion flow slider">
-                <div class="tuning-input-wrap"><input id="flow-value" class="tuning-input" type="number" min="50" max="150" step="1" value="100" aria-label="Extrusion flow percentage"><span aria-hidden="true">%</span></div>
-                <button class="visual-button tuning-apply" type="button" data-apply="flow">Apply</button>
-              </div>
-              <p class="tuning-hint" id="tuning-preview-status">Active print only · illustrative controls; no printer command is sent.</p>
+              <p class="tuning-hint" id="tuning-preview-status">Live speed 45 mm/s · active print only · preview sends no printer commands.</p>
             </section>
           </div>
         </div>
@@ -534,19 +553,28 @@ for (const node of document.querySelectorAll("[data-icon]")) {
     : iconPaths[name];
   if (paths) node.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>';
 }
-for (const row of document.querySelectorAll("[data-tuning]")) {
-  const slider = row.querySelector(".tuning-slider");
-  const field = row.querySelector(".tuning-input");
-  const apply = row.querySelector(".tuning-apply");
-  if (!slider || !field || !apply) continue;
+for (const fieldset of document.querySelectorAll("[data-tuning]")) {
+  const slider = fieldset.querySelector(".tuning-slider");
+  const field = fieldset.querySelector(".tuning-input");
+  const apply = fieldset.querySelector(".tuning-apply");
+  const reset = fieldset.querySelector(".tuning-reset");
+  if (!slider || !field || !apply || !reset) continue;
   slider.addEventListener("input", () => { field.value = slider.value; });
   apply.addEventListener("click", () => {
     const parsed = Number(field.value);
-    const value = Math.max(50, Math.min(150, Number.isFinite(parsed) ? Math.round(parsed) : 100));
+    const min = Number(slider.min);
+    const max = Number(slider.max);
+    const value = Math.max(min, Math.min(max, Number.isFinite(parsed) ? Math.round(parsed) : 100));
     field.value = String(value);
     slider.value = String(value);
     const status = document.getElementById("tuning-preview-status");
     if (status) status.textContent = "Preview only — no printer command was sent.";
+  });
+  reset.addEventListener("click", () => {
+    field.value = "100";
+    slider.value = "100";
+    const status = document.getElementById("tuning-preview-status");
+    if (status) status.textContent = "Preview only — reset sends no printer command.";
   });
 }
 
