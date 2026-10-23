@@ -132,7 +132,11 @@ const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; ac
       <CardHead
         icon="spool"
         title="spools.spoolman_sync"
-        end={<Tag tone={lib.spoolman_url ? 'ok' : 'default'}>{t(lib.spoolman_url ? 'spools.tracking_on' : 'spools.tracking_off')}</Tag>}
+        end={
+          <Tag tone={lib.spoolman_url ? 'ok' : 'default'}>
+            {t(lib.spoolman_url ? 'spools.tracking_on' : 'spools.tracking_off')}
+          </Tag>
+        }
       />
       <p class="text-[13px] text-muted">{t('spools.spoolman_hint')}</p>
       <div class="mt-3 grid gap-3 cc2-sm:grid-cols-6">
