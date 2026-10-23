@@ -1045,5 +1045,9 @@
   "app.print_progress": "Nyomtatás előrehaladása",
   "app.sidebar": "Oldalmenü",
   "files.list_changed_retry": "A fájllista betöltés közben megváltozott. Frissítsen és próbálja újra.",
-  "job.bed_map_expand": "Tárgyasztaltérkép nagyítása"
+  "job.bed_map_expand": "Tárgyasztaltérkép nagyítása",
+  "spools.insert_copy_hint": "Külön tekercset hoz létre egy meglévő adataiból; az eredeti a helyén marad.",
+  "spools.insert_copy_source": "Adatok másolása innen",
+  "spools.insert_weight_hint": "Opcionális: az össztömeg és az üres tekercs tömegének különbsége a maradék filament. A névleges nettó tömeg nem változik. Kézi bevitelhez hagyja üresen az össztömeget.",
+  "spools.insert_weight_invalid": "Adjon meg érvényes össztömeget és üres tekercstömeget; az össztömeg nem lehet kisebb az üres tömegnél. A maradék filament 0 és 20000 g közötti lehet."
 }

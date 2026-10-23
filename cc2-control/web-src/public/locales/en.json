@@ -1045,5 +1045,9 @@
   "app.print_progress": "Print progress",
   "app.sidebar": "Side menu",
   "files.list_changed_retry": "The file list changed while loading. Refresh and try again.",
-  "job.bed_map_expand": "Expand bed map"
+  "job.bed_map_expand": "Expand bed map",
+  "spools.insert_copy_hint": "Create a separate spool from an existing one’s details; the original stays in its slot.",
+  "spools.insert_copy_source": "Copy details from",
+  "spools.insert_weight_hint": "Optional: total minus empty spool weight gives remaining filament. Nominal net weight stays unchanged. Leave total blank for manual entry.",
+  "spools.insert_weight_invalid": "Enter a valid total and empty spool weight; total must not be less than the empty spool weight. Remaining filament must be between 0 and 20000 g."
 }

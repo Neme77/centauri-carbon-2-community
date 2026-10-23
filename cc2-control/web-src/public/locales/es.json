@@ -1045,5 +1045,9 @@
   "app.print_progress": "Progreso de la impresión",
   "app.sidebar": "Menú lateral",
   "files.list_changed_retry": "La lista cambió durante la carga. Actualiza e inténtalo de nuevo.",
-  "job.bed_map_expand": "Ampliar mapa de la cama"
+  "job.bed_map_expand": "Ampliar mapa de la cama",
+  "spools.insert_copy_hint": "Crea una bobina distinta copiando los datos de otra; la original permanece en su ranura.",
+  "spools.insert_copy_source": "Copiar datos de",
+  "spools.insert_weight_hint": "Opcional: peso total menos bobina vacía da el filamento restante. El peso neto nominal no cambia. Deja el total vacío para introducirlo manualmente.",
+  "spools.insert_weight_invalid": "Introduce pesos total y vacío válidos; el total no puede ser inferior al peso vacío. El filamento restante debe estar entre 0 y 20000 g."
 }
