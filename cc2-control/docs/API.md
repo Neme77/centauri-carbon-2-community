@@ -611,3 +611,13 @@ revokes old direct-state authority and sends no motion/heating command. Disablin
 Quiet controls, or changing Canvas while they are enabled, requires a successful
 explicit Normal command on the current UDS connection. Invalid storage is not
 overwritten. See [experimental features](EXPERIMENTAL_FEATURES.md) for limitations.
+
+## Completed print readback
+
+`GET /api/printer` adds `print.native` when the existing UDS cache has a fresh
+print state (filename may be empty and duration null when cleared by firmware): `{state, filename, duration}`; otherwise null.
+It adds no printer query. Raw `machine.progress` remains the native last-job
+value; the current-job UI resets its progress when idle. The nonblocking CC2
+notice accepts explicit completion only, deduplicates acknowledgements per
+browser origin and opens normal file preparation for Print again. Dismissing
+this notice does not acknowledge or operate the physical display.

@@ -1066,5 +1066,10 @@
   "experiments.title": "Kísérleti funkciók",
   "experiments.unavailable": "A kísérleti beállítások nem érhetők el. Módosítás nem lehetséges.",
   "experiments.using_mqtt": "Letiltva · MQTT-forrás",
-  "experiments.using_uds": "Engedélyezve · UDS-forrás"
+  "experiments.using_uds": "Engedélyezve · UDS-forrás",
+  "completed.title": "Nyomtatás befejezve",
+  "completed.hint": "A nyomtató elérhető. Az Újranyomtatás megnyitja a szokásos előkészítést.",
+  "completed.again": "Újranyomtatás",
+  "completed.acknowledge": "Megerősítés",
+  "completed.latest": "Utolsó befejezett nyomtatás"
 }

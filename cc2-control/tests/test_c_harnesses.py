@@ -35,6 +35,7 @@ HARNESSES = {
     "test_print_options.c": [],
     "test_light_api.c": BACKEND,
     "test_history_api.c": BACKEND,
+    "test_print_completion.c": BACKEND,
     "test_uds.c": [ROOT / "src/uds.c"],
     "test_canvas_uds.c": BACKEND,
     "test_experiments.c": BACKEND,

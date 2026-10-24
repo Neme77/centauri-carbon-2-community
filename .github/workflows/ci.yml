@@ -25,6 +25,11 @@ jobs:
       - name: Install ARM cross-compiler and emulator
         run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user
 
+      - name: Completed-print metadata regression
+        run: |
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_print_completion.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-print-completion -lm
+          /tmp/test-print-completion
+
       - name: Host build and tests (warnings are errors)
         run: make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
 
@@ -81,6 +86,9 @@ jobs:
 
       - name: Install browser for PID interaction regression
         run: npx playwright install --with-deps chromium
+
+      - name: Print completion notice and idle progress
+        run: npm run test:print-completion
 
       - name: PID browser interaction regression
         run: npm run test:pid

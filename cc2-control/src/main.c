@@ -2467,7 +2467,16 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
-    char body[6144],filename[520],state[140],uuid[260],axes[40];
+    char body[8192],filename[520],state[140],uuid[260],axes[40];
+    char native_job[1400]="null",native_filename[1100],native_state[40],native_seconds[40];
+    const char *native=uds_print_state(&telemetry);double native_duration;
+    if(native){
+        json_escape(native_filename,sizeof(native_filename),telemetry.have_filename?telemetry.filename:"");
+        int have_native_duration=uds_value(&telemetry,U_DURATION,&native_duration);
+        json_number(native_seconds,sizeof(native_seconds),have_native_duration,have_native_duration?native_duration:0);
+        json_escape(native_state,sizeof(native_state),native);
+        snprintf(native_job,sizeof(native_job),"{\"state\":\"%s\",\"filename\":\"%s\",\"duration\":%s}",native_state,native_filename,native_seconds);
+    }
     if(uds_value(&telemetry,U_ET,&live))json_number(et,sizeof(et),1,live);
     else json_number(et,sizeof(et),mqtt->have_extruder_temp,mqtt->extruder_temp);
     if(uds_value(&telemetry,U_EG,&live))json_number(eg,sizeof(eg),1,live);
@@ -2540,7 +2549,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"chamber\":{\"temperature\":%s},"
         "\"fans\":{\"controller\":%s,\"heater\":%s,\"part\":%s,\"aux\":%.1f,\"box\":%.1f},"
         "\"machine\":{\"status\":%d,\"status_name\":\"%s\",\"sub_status\":%d,\"reason\":%d,\"progress\":%d},"
-        "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld},"
+        "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld,\"native\":%s},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
         "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
@@ -2549,7 +2558,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
-        mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
+        mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
         printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false");

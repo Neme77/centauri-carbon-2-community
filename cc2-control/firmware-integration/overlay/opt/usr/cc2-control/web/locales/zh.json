@@ -1066,5 +1066,10 @@
   "experiments.title": "实验功能",
   "experiments.unavailable": "实验设置不可用，无法修改。",
   "experiments.using_mqtt": "已禁用 · MQTT 来源",
-  "experiments.using_uds": "已启用 · UDS 来源"
+  "experiments.using_uds": "已启用 · UDS 来源",
+  "completed.title": "打印完成",
+  "completed.hint": "打印机可用。再次打印将打开正常的打印准备界面。",
+  "completed.again": "再次打印",
+  "completed.acknowledge": "确认",
+  "completed.latest": "上次已完成的打印"
 }

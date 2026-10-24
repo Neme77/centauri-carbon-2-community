@@ -1066,5 +1066,10 @@
   "experiments.title": "Funkcje eksperymentalne",
   "experiments.unavailable": "Ustawienia eksperymentalne są niedostępne. Zmiany są niemożliwe.",
   "experiments.using_mqtt": "Wyłączone · źródło MQTT",
-  "experiments.using_uds": "Włączone · źródło UDS"
+  "experiments.using_uds": "Włączone · źródło UDS",
+  "completed.title": "Druk zakończony",
+  "completed.hint": "Drukarka jest dostępna. Drukuj ponownie otwiera zwykłe ustawienia druku.",
+  "completed.again": "Drukuj ponownie",
+  "completed.acknowledge": "Potwierdź",
+  "completed.latest": "Ostatni zakończony druk"
 }

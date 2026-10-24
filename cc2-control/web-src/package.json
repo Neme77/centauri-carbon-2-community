@@ -46,7 +46,8 @@
     "test:canvas-layout": "node preview/test-canvas-layout.mjs",
     "test:spool-insertion": "node preview/test-spool-insertion.mjs",
     "test:motor-mode": "node preview/test-motor-mode.mjs",
-    "test:experiments": "node preview/test-experiments.mjs"
+    "test:experiments": "node preview/test-experiments.mjs",
+    "test:print-completion": "node preview/test-print-completion.mjs && node preview/test-print-completion-browser.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

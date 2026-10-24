@@ -1066,5 +1066,10 @@
   "experiments.title": "Экспериментальные функции",
   "experiments.unavailable": "Экспериментальные настройки недоступны. Изменения невозможны.",
   "experiments.using_mqtt": "Выключено · источник MQTT",
-  "experiments.using_uds": "Включено · источник UDS"
+  "experiments.using_uds": "Включено · источник UDS",
+  "completed.title": "Печать завершена",
+  "completed.hint": "Принтер доступен. Повторная печать открывает обычную подготовку.",
+  "completed.again": "Напечатать снова",
+  "completed.acknowledge": "Подтвердить",
+  "completed.latest": "Последняя завершённая печать"
 }
