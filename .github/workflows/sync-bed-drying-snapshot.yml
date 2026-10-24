@@ -2,7 +2,6 @@ name: Align bed drying source snapshot
 on:
   push:
     branches: [feature/experimental-bed-drying]
-    paths: [.github/workflows/sync-bed-drying-snapshot.yml]
 permissions:
   contents: write
 jobs:
