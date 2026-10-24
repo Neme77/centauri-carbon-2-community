@@ -902,7 +902,7 @@
   "updates.no_update": "No newer compatible update published.",
   "updates.check_failed": "GitHub check failed. Check your Internet connection and try again.",
   "updates.bootstrap": "Install the updater-enabled CC2 Control package once from your computer.",
-  "updates.requirements": "Requires Community Firmware V4.4/V4.4.1, fresh connection, an idle printer, nozzle and bed ≤50 °C, and heating targets zero. Pause live view before installation.",
+  "updates.requirements": "Requires Community Firmware V4.4/V4.4.1/V4.4.2, fresh connection, an idle printer, nozzle and bed ≤50 °C, and heating targets zero. Pause live view before installation.",
   "updates.download": "Download and verify",
   "updates.prepare_confirm": "Download or upload this package for verification? The application will not be installed yet.",
   "updates.verified": "Package verified",

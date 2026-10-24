@@ -902,7 +902,7 @@
   "updates.no_update": "Aucune mise à jour compatible plus récente publiée.",
   "updates.check_failed": "Échec de la vérification GitHub. Vérifiez Internet puis réessayez.",
   "updates.bootstrap": "Installez une fois depuis votre ordinateur le paquet CC2 Control intégrant la mise à jour.",
-  "updates.requirements": "Nécessite Community Firmware V4.4/V4.4.1, connexion récente, imprimante inactive, buse et plateau ≤50 °C et consignes nulles. Mettez la vidéo en pause avant l’installation.",
+  "updates.requirements": "Nécessite Community Firmware V4.4/V4.4.1/V4.4.2, connexion récente, imprimante inactive, buse et plateau ≤50 °C et consignes nulles. Mettez la vidéo en pause avant l’installation.",
   "updates.download": "Télécharger et vérifier",
   "updates.prepare_confirm": "Télécharger ou envoyer ce paquet pour vérification ? L’application ne sera pas encore installée.",
   "updates.verified": "Paquet vérifié",

@@ -902,7 +902,7 @@
   "updates.no_update": "Nie opublikowano nowszej zgodnej aktualizacji.",
   "updates.check_failed": "Sprawdzanie GitHub nie powiodło się. Sprawdź Internet i spróbuj ponownie.",
   "updates.bootstrap": "Najpierw zainstaluj z komputera pakiet CC2 Control z modułem aktualizacji.",
-  "updates.requirements": "Wymaga Community Firmware V4.4/V4.4.1, świeżego połączenia, bezczynnej drukarki, dyszy i stołu ≤50 °C oraz zerowych temperatur zadanych. Wstrzymaj podgląd przed instalacją.",
+  "updates.requirements": "Wymaga Community Firmware V4.4/V4.4.1/V4.4.2, świeżego połączenia, bezczynnej drukarki, dyszy i stołu ≤50 °C oraz zerowych temperatur zadanych. Wstrzymaj podgląd przed instalacją.",
   "updates.download": "Pobierz i zweryfikuj",
   "updates.prepare_confirm": "Pobrać lub przesłać pakiet do weryfikacji? Aplikacja nie zostanie jeszcze zainstalowana.",
   "updates.verified": "Pakiet zweryfikowany",

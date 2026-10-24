@@ -902,7 +902,7 @@
   "updates.no_update": "Nessun aggiornamento compatibile più recente pubblicato.",
   "updates.check_failed": "Controllo GitHub fallito. Verifica Internet e riprova.",
   "updates.bootstrap": "Installa una volta dal computer il pacchetto CC2 Control che include l’updater.",
-  "updates.requirements": "Richiede Community Firmware V4.4/V4.4.1, connessione aggiornata, stampante inattiva, ugello e piatto ≤50 °C e target di riscaldamento zero. Metti in pausa il live prima dell’installazione.",
+  "updates.requirements": "Richiede Community Firmware V4.4/V4.4.1/V4.4.2, connessione aggiornata, stampante inattiva, ugello e piatto ≤50 °C e target di riscaldamento zero. Metti in pausa il live prima dell’installazione.",
   "updates.download": "Scarica e verifica",
   "updates.prepare_confirm": "Scaricare o caricare il pacchetto per verificarlo? L’applicazione non verrà ancora installata.",
   "updates.verified": "Pacchetto verificato",

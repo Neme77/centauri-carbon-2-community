@@ -902,7 +902,7 @@
   "updates.no_update": "尚未发布更新的兼容版本。",
   "updates.check_failed": "GitHub 检查失败。请检查网络连接后重试。",
   "updates.bootstrap": "请先在电脑上安装包含更新模块的 CC2 Control 软件包。",
-  "updates.requirements": "需要 Community Firmware V4.4/V4.4.1、有效连接、空闲的打印机、喷嘴和热床温度 ≤50 °C，且目标温度为零。安装前请暂停实时视频。",
+  "updates.requirements": "需要 Community Firmware V4.4/V4.4.1/V4.4.2、有效连接、空闲的打印机、喷嘴和热床温度 ≤50 °C，且目标温度为零。安装前请暂停实时视频。",
   "updates.download": "下载并验证",
   "updates.prepare_confirm": "下载或上传软件包进行验证？此时不会安装应用。",
   "updates.verified": "软件包已验证",

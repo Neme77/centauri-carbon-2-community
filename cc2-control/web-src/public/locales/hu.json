@@ -902,7 +902,7 @@
   "updates.no_update": "Jelenleg nincs újabb közzétett kompatibilis frissítés.",
   "updates.check_failed": "Nem sikerült ellenőrizni a GitHubon elérhető frissítéseket. Ellenőrizd az internetkapcsolatot, majd próbáld újra.",
   "updates.bootstrap": "Először telepítsd számítógépről a frissítéskezelőt is tartalmazó CC2 Control-csomagot.",
-  "updates.requirements": "A telepítéshez Community Firmware V4.4/V4.4.1, működő kapcsolat a nyomtatóval (friss állapotadatokkal), tétlen nyomtató, legfeljebb 50 °C-os fúvóka és tárgyasztal, valamint 0 °C-ra állított fűtési célhőmérsékletek szükségesek. Előtte szüneteltesd az élőképet.",
+  "updates.requirements": "A telepítéshez Community Firmware V4.4/V4.4.1/V4.4.2, működő kapcsolat a nyomtatóval (friss állapotadatokkal), tétlen nyomtató, legfeljebb 50 °C-os fúvóka és tárgyasztal, valamint 0 °C-ra állított fűtési célhőmérsékletek szükségesek. Előtte szüneteltesd az élőképet.",
   "updates.download": "Letöltés és ellenőrzés",
   "updates.prepare_confirm": "Letöltöd vagy feltöltöd a csomagot ellenőrzésre? Ez még nem telepíti az alkalmazást.",
   "updates.verified": "A csomag ellenőrizve",
