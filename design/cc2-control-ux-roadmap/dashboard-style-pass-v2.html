@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CC2 Control — Dashboard styling pass v2</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #031622;
+  --panel: #052131;
+  --edge: #17445b;
+  --text: #edf6fc;
+  --muted: #8daebf;
+  --field: #0a2b3f;
+  --ink: #012331;
+  --cyan: #00d3ed;
+  --green: #29e49b;
+  --amber: #ffc54a;
+  --red: #ff6170;
+  --blue: #209eff;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef0f2;
+  --panel: #ffffff;
+  --edge: #c5cbd0;
+  --text: #17191b;
+  --muted: #596168;
+  --field: #f4f5f6;
+  --ink: #ffffff;
+  --cyan: #006f80;
+  --green: #087748;
+  --amber: #815700;
+  --red: #ad2638;
+  --blue: #166fa8;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #0c1218; color: var(--text); font: 14px/1.45 "Segoe UI", Arial, sans-serif; }
+button { font: inherit; color: inherit; }
+.preview-shell { width: min(100%, 1440px); margin: 0 auto; padding: 18px; }
+.preview-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; color: var(--muted); font-size: 12px; }
+.control-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.control-label { margin-right: 4px; }
+.preview-button { min-height: 36px; padding: 6px 12px; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel); cursor: pointer; }
+.preview-button[aria-pressed="true"] { border-color: var(--cyan); background: var(--field); color: var(--cyan); }
+.preview-note { margin-left: auto; }
+#device {
+  position: relative;
+  --preview-bg: var(--bg);
+  width: 100%;
+  min-height: 720px;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--preview-bg);
+  color: var(--text);
+  box-shadow: 0 14px 36px #0005;
+}
+.topbar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 60px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--edge);
+  background: var(--panel);
+}
+.brand-lockup { position: relative; display: flex; align-items: center; flex: 1 1 auto; min-width: 220px; height: 100%; color: var(--cyan); }
+.brand-mark {
+  position: relative;
+  width: 25px;
+  height: 27px;
+  margin-right: 12px;
+  border-left: 2px solid currentColor;
+  border-top: 2px solid currentColor;
+  transform: skewY(-28deg);
+}
+.brand-mark::before { position: absolute; content: ""; left: 5px; right: -7px; bottom: -4px; border-bottom: 1px solid currentColor; }
+.brand-mark::after { position: absolute; content: ""; width: 4px; height: 4px; border-radius: 50%; background: currentColor; left: -3px; bottom: -5px; }
+.brand-title { font-size: 23px; line-height: 1; font-weight: 700; letter-spacing: -.035em; white-space: nowrap; text-shadow: 0 0 14px #00d3ed33; }
+.brand-divider { margin: 0 9px; color: var(--muted); font-weight: 400; }
+.brand-subtitle { color: var(--text); font-size: 17px; font-weight: 500; }
+.header-actions { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.status-box { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 10px; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel); white-space: nowrap; font-size: 12px; }
+.status-box strong { font-weight: 500; }
+.status-dot { display: inline-block; width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--green); }
+.connection-label { color: var(--muted); }
+.update-indicator { position: relative; width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--edge); border-radius: 6px; color: var(--cyan); font-size: 17px; }
+.update-indicator::after { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; content: ""; border-radius: 50%; background: var(--amber); }
+.header-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 10px; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel); font-size: 12px; white-space: nowrap; }
+.header-action.stop { border-color: var(--red); color: var(--red); background: var(--panel); font-weight: 600; }
+.header-action .glyph { font-size: 17px; line-height: 1; }
+.top-progress { position: absolute; right: 0; bottom: -1px; left: 0; height: 3px; background: var(--edge); }
+.top-progress > i { display: block; width: 68%; height: 100%; background: var(--cyan); }
+.menu-toggle { display: none; width: 44px; height: 44px; flex: 0 0 44px; align-items: center; justify-content: center; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel); }
+.hamburger, .hamburger::before, .hamburger::after { display: block; width: 18px; height: 2px; background: var(--text); }
+.hamburger { position: relative; }
+.hamburger::before, .hamburger::after { position: absolute; left: 0; content: ""; }
+.hamburger::before { top: -6px; }
+.hamburger::after { top: 6px; }
+.app-layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 660px; }
+.sidebar { display: flex; flex-direction: column; border-right: 1px solid var(--edge); background: var(--panel); }
+.sidebar-label { padding: 18px 16px 8px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.nav-list { display: grid; gap: 2px; padding: 0 0 10px; }
+.nav-item { display: flex; align-items: center; gap: 13px; height: 50px; padding: 0 14px; border-left: 4px solid transparent; color: var(--muted); font-size: 14px; }
+.nav-item.current { border-left-color: var(--cyan); background: var(--field); color: var(--cyan); }
+.nav-glyph { display: inline-grid; width: 20px; place-items: center; color: currentColor; font-size: 16px; }
+.sidebar-bottom { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--edge); color: var(--muted); font-size: 11px; }
+.content { min-width: 0; padding: 12px; }
+.dashboard-primary { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: stretch; gap: 14px; }
+.column { display: grid; align-content: start; gap: 14px; min-width: 0; }
+.card { min-width: 0; padding: 14px; border: 1px solid var(--edge); border-radius: 8px; background: var(--panel); }
+.card-head { display: flex; align-items: center; gap: 10px; min-height: 28px; margin-bottom: 12px; padding-bottom: 9px; border-bottom: 1px solid var(--edge); }
+.card-icon { display: inline-grid; width: 19px; place-items: center; color: var(--cyan); font-size: 16px; }
+.card-title { margin: 0; font-size: 16px; line-height: 1.35; font-weight: 600; }
+.card-end { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.camera-frame { position: relative; display: grid; min-height: 180px; aspect-ratio: 16 / 9; place-items: center; overflow: hidden; border: 1px solid var(--edge); border-radius: 6px; background: #02090e; }
+.camera-grid { position: absolute; inset: 0; opacity: .45; background-image: linear-gradient(#17445b 1px, transparent 1px), linear-gradient(90deg, #17445b 1px, transparent 1px); background-size: 36px 36px; transform: perspective(240px) rotateX(50deg) scale(1.35); transform-origin: center 80%; }
+.camera-frame::before { position: absolute; content: ""; top: 18%; left: 28%; width: 44%; height: 48%; border: 2px solid #31576a; border-radius: 4px; background: linear-gradient(135deg, #142b36, #08131a); box-shadow: 0 0 0 1px #061118; }
+.camera-frame::after { position: absolute; content: ""; top: 28%; left: 43%; width: 14%; height: 25%; border: 2px solid #537284; border-radius: 3px; background: linear-gradient(180deg, #233d48, #10222c); }
+.camera-overlay { position: absolute; inset: auto 10px 9px; display: flex; justify-content: space-between; gap: 8px; color: #d7e3ea; font-size: 11px; }
+.camera-state { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border-radius: 4px; background: #07141dcc; }
+.camera-controls { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.visual-button { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; gap: 7px; padding: 5px 10px; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 12px; }
+.visual-button.primary { border-color: var(--cyan); background: var(--cyan); color: var(--ink); font-weight: 500; }
+.quick-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.quick-action { display: grid; min-height: 72px; align-content: center; justify-items: center; gap: 5px; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel); color: var(--text); text-align: center; font-size: 12px; }
+.quick-action .glyph { color: var(--cyan); font-size: 18px; }
+.job-name { overflow-wrap: anywhere; margin: 2px 0 11px; font-size: 21px; line-height: 1.38; font-weight: 600; }
+.job-progress-row { display: flex; align-items: center; gap: 12px; }
+.progress-track { height: 12px; flex: 1; overflow: hidden; border-radius: 999px; background: var(--edge); }
+.progress-fill { width: 68%; height: 100%; border-radius: inherit; background: var(--cyan); }
+.progress-value { min-width: 44px; font-size: 17px; font-weight: 600; text-align: right; }
+.job-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0 14px; }
+.job-stat { min-width: 0; padding-right: 8px; border-right: 1px solid var(--edge); }
+.job-stat:last-child { border-right: 0; }
+.stat-value { display: block; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-label { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.job-actions { display: flex; gap: 7px; padding-top: 10px; border-top: 1px solid var(--edge); }
+.tuning-row { display: grid; grid-template-columns: 82px minmax(0, 1fr) 42px; align-items: center; gap: 9px; margin: 11px 0; font-size: 12px; }
+.tuning-track { height: 6px; overflow: hidden; border-radius: 4px; background: var(--edge); }
+.tuning-fill { height: 100%; width: 60%; border-radius: inherit; background: var(--cyan); }
+.tuning-fill.flow { width: 50%; background: var(--blue); }
+.tuning-value { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.tuning-hint { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.thermals-card { grid-column: span 2; }
+.thermal-content { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(180px, .9fr); align-items: center; gap: 14px; }
+.chart { display: block; width: 100%; height: 118px; }
+.chart-grid { stroke: var(--edge); stroke-width: 1; }
+.chart-line-nozzle { fill: none; stroke: var(--red); stroke-width: 2.4; }
+.chart-line-bed { fill: none; stroke: var(--blue); stroke-width: 2.4; }
+.chart-label { fill: var(--muted); font: 11px "Segoe UI", Arial, sans-serif; }
+.readings { display: grid; gap: 12px; }
+.reading { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 12px; }
+.reading-dot { width: 8px; height: 8px; border-radius: 50%; }
+.reading-dot.nozzle { background: var(--red); }
+.reading-dot.bed { background: var(--blue); }
+.reading-dot.chamber { background: var(--amber); }
+.reading strong { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.reading small { color: var(--muted); font-size: 11px; }
+.fan-row { display: grid; grid-template-columns: minmax(0, 1fr) 37px minmax(60px, 1fr); align-items: center; gap: 8px; margin: 15px 0; font-size: 12px; }
+.fan-row b { font-weight: 600; text-align: right; }
+.fan-track { height: 6px; border-radius: 4px; background: var(--edge); }
+.fan-fill { height: 100%; border-radius: inherit; background: var(--cyan); }
+.z-value { margin: 15px 0 7px; font-size: 28px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.z-value small { color: var(--muted); font-size: 13px; }
+.session-tag { display: inline-flex; margin-top: 8px; padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--amber) 55%, var(--edge)); border-radius: 999px; color: var(--amber); font-size: 11px; }
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.detail-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--edge); font-size: 12px; }
+.detail-row:last-child { border-bottom: 0; }
+.detail-row span:last-child { font-weight: 600; text-align: right; }
+.footer-note { margin: 12px 2px 0; color: var(--muted); font-size: 11px; }
+.mobile-menu-backdrop { display: none; }
+#device[data-viewport="mobile"] { width: min(100%, 390px); min-height: 720px; margin: 0 auto; }
+#device[data-viewport="mobile"] .topbar { height: 68px; gap: 8px; padding: 6px 8px; }
+#device[data-viewport="mobile"] .menu-toggle { display: flex; }
+#device[data-viewport="mobile"] .brand-lockup { min-width: 0; }
+#device[data-viewport="mobile"] .brand-mark, #device[data-viewport="mobile"] .brand-title, #device[data-viewport="mobile"] .brand-divider, #device[data-viewport="mobile"] .brand-subtitle { display: none; }
+#device[data-viewport="mobile"] .brand-lockup::after { content: "CC2 Control"; color: var(--cyan); font-size: 15px; font-weight: 600; white-space: nowrap; }
+#device[data-viewport="mobile"] .header-actions { gap: 4px; }
+#device[data-viewport="mobile"] .status-box { min-width: 38px; min-height: 40px; justify-content: center; padding: 0 7px; }
+#device[data-viewport="mobile"] .status-box .connection-label { display: none; }
+#device[data-viewport="mobile"] .status-box strong { display: none; }
+#device[data-viewport="mobile"] .update-indicator { width: 40px; height: 40px; }
+#device[data-viewport="mobile"] .header-action { width: 40px; min-height: 40px; padding: 0; font-size: 0; }
+#device[data-viewport="mobile"] .header-action .glyph { font-size: 18px; }
+#device[data-viewport="mobile"] .app-layout { display: block; min-height: 0; }
+#device[data-viewport="mobile"] .sidebar { position: absolute; z-index: 5; top: 68px; bottom: 0; left: 0; width: min(280px, 84vw); transform: translateX(-105%); visibility: hidden; transition: transform 150ms ease, visibility 150ms; box-shadow: 12px 0 30px #0006; }
+#device[data-viewport="mobile"] .sidebar.open { transform: translateX(0); visibility: visible; }
+#device[data-viewport="mobile"] .mobile-menu-backdrop.open { display: block; position: absolute; z-index: 4; inset: 68px 0 0; background: #0008; }
+#device[data-viewport="mobile"] .content { padding: 10px; }
+#device[data-viewport="mobile"] .dashboard-primary { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+#device[data-viewport="mobile"] .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+#device[data-viewport="mobile"] .thermals-card { grid-column: 1 / -1; }
+#device[data-viewport="mobile"] .thermal-content { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+#device[data-viewport="mobile"] .chart { height: 95px; }
+#device[data-viewport="mobile"] .detail-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+#device[data-viewport="mobile"] .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#device[data-viewport="mobile"] .camera-frame { min-height: 160px; }
+#device[data-viewport="mobile"] .job-name { font-size: 18px; }
+#device[data-viewport="mobile"] .job-stats { gap: 7px; margin-top: 14px; }
+#device[data-viewport="mobile"] .job-stat { padding-right: 4px; }
+#device[data-viewport="mobile"] .stat-label { font-size: 11px; }
+#device[data-viewport="mobile"] .card { padding: 12px; }
+#device[data-viewport="mobile"] .card-head { gap: 8px; }
+#device[data-viewport="mobile"] .visual-button, #device[data-viewport="mobile"] .quick-action { min-height: 44px; }
+#device[data-viewport="mobile"] .sidebar-label { padding-top: 14px; }
+@media (max-width: 700px) {
+  .preview-shell { padding: 10px; }
+  .preview-note { width: 100%; margin-left: 0; }
+  .preview-controls { align-items: flex-start; }
+  .control-group { width: 100%; }
+  #device[data-viewport="desktop"] .dashboard-primary { grid-template-columns: minmax(0, 1fr); }
+  #device[data-viewport="desktop"] .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #device[data-viewport="desktop"] .thermals-card { grid-column: 1 / -1; }
+  #device[data-viewport="desktop"] .thermal-content { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 390px) {
+  .preview-shell { padding: 6px; }
+  #device[data-viewport="mobile"] .topbar { gap: 5px; padding-inline: 5px; }
+  #device[data-viewport="mobile"] .header-actions { gap: 3px; }
+  #device[data-viewport="mobile"] .menu-toggle { width: 40px; flex-basis: 40px; }
+  #device[data-viewport="mobile"] .job-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #device[data-viewport="mobile"] .job-stat:nth-child(2) { border-right: 0; }
+  #device[data-viewport="mobile"] .reading { grid-template-columns: 10px minmax(0, 1fr) auto; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+}
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* Follow-up preview: retain the production door artwork and icon family. */
+.brand-lockup { gap: 0; min-width: 0; }
+.brand-art { display: block; width: 112px; height: 48px; flex: 0 0 auto; color: var(--cyan); opacity: .82; }
+.brand-wordmark { min-width: 0; flex: 1 1 auto; }
+.brand-title { display: block; margin: 0; font-size: clamp(18px, 2vw, 28px); }
+.brand-mobile-title { display: none; color: var(--cyan); font-size: 15px; font-weight: 700; white-space: nowrap; }
+.brand-title .brand-subtitle { font-size: .8em; }
+.brand-lockup::after { content: none; }
+.icon { display: block; width: 18px; height: 18px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.card-icon .icon { width: 19px; height: 19px; }
+.camera-frame {
+  background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 14%, transparent), transparent 58%), linear-gradient(145deg, color-mix(in srgb, var(--panel) 78%, #16384a), color-mix(in srgb, var(--bg) 84%, #102b3a));
+}
+.camera-grid { opacity: .2; }
+.camera-frame::before { border-color: color-mix(in srgb, var(--cyan) 38%, var(--edge)); background: linear-gradient(135deg, color-mix(in srgb, var(--panel) 50%, #234252), color-mix(in srgb, var(--bg) 55%, #10232d)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--edge) 60%, transparent); }
+.camera-frame::after { border-color: color-mix(in srgb, var(--muted) 70%, var(--edge)); background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 60%, #315061), color-mix(in srgb, var(--bg) 55%, #132a36)); }
+.camera-overlay { color: var(--text); }
+.camera-state { border: 1px solid var(--edge); color: var(--text); background: color-mix(in srgb, var(--panel) 91%, transparent); }
+.camera-paused-label { padding: 3px 7px; border: 1px solid var(--edge); border-radius: 999px; }
+.camera-paused-label .icon { width: 13px; height: 13px; }
+:root[data-theme="light"] .camera-frame { background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 58%), linear-gradient(145deg, #e9f1f4, #dce8ed); }
+:root[data-theme="light"] .camera-grid { opacity: .12; }
+:root[data-theme="light"] .camera-frame::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
+:root[data-theme="light"] .camera-frame::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
+.tuning-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tuning-field { min-width: 0; }
+.tuning-field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; margin-bottom: 2px; font-size: 11px; }
+.tuning-field-head label { min-width: 0; font-weight: 600; }
+.tuning-field-head > span { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+.tuning-field-head strong { color: var(--cyan); font-size: 11px; }
+.tuning-slider { display: block; width: 100%; height: 18px; margin: 0; accent-color: var(--cyan); cursor: pointer; }
+.tuning-actions { display: flex; align-items: center; gap: 4px; }
+.tuning-input-wrap { display: flex; flex: 0 0 50px; align-items: center; justify-content: center; gap: 2px; height: 30px; border: 1px solid var(--edge); border-radius: 5px; background: var(--field); color: var(--text); }
+.tuning-input { width: 29px; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; text-align: right; font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; }
+.tuning-input-wrap span { color: var(--muted); font-size: 10px; }
+.tuning-apply, .tuning-reset { min-width: 0; min-height: 30px; flex: 1 1 auto; padding: 0 5px; font-size: 10px; }
+.tuning-range { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; line-height: 1.2; }
+.tuning-hint { margin: 7px 0 0; line-height: 1.35; }
+.tuning-slider:focus-visible, .tuning-input-wrap:focus-within, .tuning-apply:focus-visible, .tuning-reset:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.visual-button > .icon { width: 15px; height: 15px; }
+.header-action .icon { width: 16px; height: 16px; }
+.update-indicator .icon { width: 18px; height: 18px; }
+#device[data-viewport="mobile"] .brand-art { display: none; }
+#device[data-viewport="mobile"] .brand-title { display: none; }
+#device[data-viewport="mobile"] .brand-mobile-title { display: block; }
+#device[data-viewport="mobile"] .brand-lockup { min-width: 0; }
+#device[data-viewport="mobile"] .brand-lockup::after { display: none; content: none; }
+#device[data-viewport="mobile"] .tuning-fields { gap: 8px; }
+#device[data-viewport="mobile"] .tuning-field-head { font-size: 10px; }
+#device[data-viewport="mobile"] .tuning-input-wrap { flex-basis: 46px; height: 40px; }
+#device[data-viewport="mobile"] .tuning-input { width: 26px; }
+#device[data-viewport="mobile"] .tuning-apply, #device[data-viewport="mobile"] .tuning-reset { min-height: 40px; padding-inline: 4px; font-size: 9px; }
+#device[data-viewport="mobile"] .camera-frame { min-height: 160px; }
+
+</style>
+</head>
+<body>
+<div class="preview-shell">
+  <div class="preview-controls">
+    <div class="control-group" role="group" aria-label="Preview size">
+      <span class="control-label">Preview size</span>
+      <button class="preview-button" type="button" data-size="desktop" aria-pressed="true">Desktop</button>
+      <button class="preview-button" type="button" data-size="mobile" aria-pressed="false">Mobile</button>
+    </div>
+    <div class="control-group" role="group" aria-label="Theme">
+      <span class="control-label">Theme</span>
+      <button class="preview-button" type="button" data-theme-choice="dark" aria-pressed="true">Dark</button>
+      <button class="preview-button" type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+    </div>
+    <span class="preview-note">Dashboard v2 · current CC2 identity · illustrative values only; no printer commands</span>
+  </div>
+
+  <section id="device" data-viewport="desktop" aria-label="CC2 Control Dashboard concept">
+    <header class="topbar">
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-navigation"><span class="hamburger" aria-hidden="true"></span></button>
+      <div class="brand-lockup" aria-label="Centauri Carbon 2, Control Center">
+        <svg aria-hidden="true" viewBox="0 16 702 268" class="brand-art">
+          <defs>
+            <pattern id="cc2-hachures-v2" width="107.65" height="200" patternUnits="userSpaceOnUse" patternTransform="translate(5.3 0) skewX(-45)">
+              <rect width="50" height="200" fill="currentColor" />
+            </pattern>
+            <clipPath id="cc2-zone-v2">
+              <path d="M156.6 64 H444.5 L631.43 250.93 A10 10 0 0 1 624.36 268 H56 V164.6 Z" />
+            </clipPath>
+          </defs>
+          <polygon points="46,36 10,72 10,36" fill="currentColor" transform="matrix(1.3888889,0,0,1.3888889,8.109735,-19.996551)" />
+          <rect x="0" y="16" width="702" height="268" fill="url(#cc2-hachures-v2)" clip-path="url(#cc2-zone-v2)" />
+          <path d="M16 263.68732 V148 L140 24 h321.1 l240 240" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter" />
+          <circle cx="16" cy="254" r="14" fill="currentColor" />
+        </svg>
+        <div class="brand-wordmark">
+          <h1 class="brand-title">Centauri Carbon 2<span class="brand-divider">/</span><span class="brand-subtitle">Control Center</span></h1>
+          <span class="brand-mobile-title">CC2 Control</span>
+        </div>
+      </div>
+      <div class="header-actions" aria-label="Printer status and actions">
+        <div class="status-box"><span class="status-dot" aria-hidden="true"></span><strong>Printing · 68%</strong><span class="connection-label">Printer connected</span></div>
+        <div class="update-indicator" aria-label="Update available"><span data-icon="rotate" aria-hidden="true"></span></div>
+        <span class="header-action stop"><span class="glyph" data-icon="alert" aria-hidden="true"></span>Emergency stop</span>
+        <span class="header-action"><span class="glyph" data-icon="rotate" aria-hidden="true"></span>Restart</span>
+      </div>
+      <div class="top-progress" aria-label="Illustrative print progress"><i></i></div>
+    </header>
+
+    <div class="mobile-menu-backdrop" id="menu-backdrop"></div>
+    <div class="app-layout">
+      <aside class="sidebar" id="primary-navigation" aria-label="Main navigation">
+        <div class="sidebar-label">Main menu</div>
+        <nav class="nav-list">
+          <div class="nav-item current" aria-current="page"><span class="nav-glyph" data-icon="gauge" aria-hidden="true"></span>Dashboard</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="sliders" aria-hidden="true"></span>Control</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="file" aria-hidden="true"></span>Job</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="files" aria-hidden="true"></span>Files</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="history" aria-hidden="true"></span>History</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="grid" aria-hidden="true"></span>Bed levelling</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="canvas" aria-hidden="true"></span>Canvas</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="spool" aria-hidden="true"></span>Spools</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="external" aria-hidden="true"></span>Panda Breath</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="terminal" aria-hidden="true"></span>Console</div>
+          <div class="nav-item"><span class="nav-glyph" data-icon="settings" aria-hidden="true"></span>Settings</div>
+        </nav>
+        <div class="sidebar-bottom">CC2 Control 1.2.19</div>
+      </aside>
+
+      <main class="content">
+        <div class="dashboard-primary">
+          <div class="column">
+            <section class="card">
+              <div class="card-head"><span class="card-icon" data-icon="camera" aria-hidden="true"></span><h2 class="card-title">Live camera</h2><span class="card-end camera-paused-label"><span data-icon="pause" aria-hidden="true"></span>Paused</span></div>
+              <div class="camera-frame" role="img" aria-label="Illustrative paused camera preview; no live video">
+                <div class="camera-grid"></div>
+                <div class="camera-overlay"><span class="camera-state"><span class="status-dot" style="background:var(--muted)" aria-hidden="true"></span>Camera off</span><span>Preview image · illustrative</span></div>
+              </div>
+              <div class="camera-controls">
+                <span class="visual-button primary"><span data-icon="camera" aria-hidden="true"></span>Start live view</span>
+                <span class="visual-button"><span data-icon="external" aria-hidden="true"></span>Open in new window</span>
+                <span class="visual-button"><span data-icon="image" aria-hidden="true"></span>Snapshot</span>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-head"><span class="card-icon" data-icon="bolt" aria-hidden="true"></span><h2 class="card-title">Quick actions</h2><span class="card-end">Edit</span></div>
+              <div class="quick-grid">
+                <div class="quick-action"><span class="glyph" data-icon="home" aria-hidden="true"></span><span>Home axes</span></div>
+                <div class="quick-action"><span class="glyph" data-icon="snowflake" aria-hidden="true"></span><span>Cooldown</span></div>
+                <div class="quick-action"><span class="glyph" data-icon="light" aria-hidden="true"></span><span>Light</span></div>
+                <div class="quick-action"><span class="glyph" data-icon="sliders" aria-hidden="true"></span><span>Control</span></div>
+              </div>
+            </section>
+          </div>
+
+          <div class="column">
+            <section class="card">
+              <div class="card-head"><span class="card-icon" data-icon="file" aria-hidden="true"></span><h2 class="card-title">Current job</h2><span class="card-end"><span class="status-dot" aria-hidden="true"></span>Printing</span></div>
+              <div class="job-name">enclosure-side-v3.gcode</div>
+              <div class="job-progress-row"><div class="progress-track" role="progressbar" aria-label="Print progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="68"><div class="progress-fill"></div></div><span class="progress-value">68%</span></div>
+              <div class="job-stats">
+                <div class="job-stat"><span class="stat-value">1h 24m</span><span class="stat-label">Elapsed</span></div>
+                <div class="job-stat"><span class="stat-value">39m</span><span class="stat-label">Remaining · 18:42</span></div>
+                <div class="job-stat"><span class="stat-value">842</span><span class="stat-label">Current layer</span></div>
+                <div class="job-stat"><span class="stat-value">1,248</span><span class="stat-label">Total layers</span></div>
+              </div>
+              <div class="job-actions"><span class="visual-button primary"><span data-icon="pause" aria-hidden="true"></span>Pause</span><span class="visual-button"><span data-icon="square" aria-hidden="true"></span>Cancel</span></div>
+            </section>
+            <section class="card">
+              <div class="card-head"><span class="card-icon" data-icon="sliders" aria-hidden="true"></span><h2 class="card-title">Print tuning</h2><span class="card-end">Current print</span></div>
+              <div class="tuning-fields">
+                <section class="tuning-field" data-tuning="speed">
+                  <div class="tuning-field-head"><label for="speed-slider">Print speed</label><span>Actual <strong>100%</strong></span></div>
+                  <input id="speed-slider" class="tuning-slider" type="range" min="25" max="200" step="1" value="100" aria-label="Print speed slider">
+                  <div class="tuning-actions">
+                    <div class="tuning-input-wrap"><input id="speed-value" class="tuning-input" type="number" min="25" max="200" step="1" value="100" aria-label="Print speed percentage"><span aria-hidden="true">%</span></div>
+                    <button class="visual-button tuning-apply" type="button">Apply</button>
+                    <button class="visual-button tuning-reset" type="button">Reset</button>
+                  </div>
+                  <small class="tuning-range">25–200%</small>
+                </section>
+                <section class="tuning-field" data-tuning="flow">
+                  <div class="tuning-field-head"><label for="flow-slider">Extrusion flow</label><span>Actual <strong>100%</strong></span></div>
+                  <input id="flow-slider" class="tuning-slider" type="range" min="50" max="150" step="1" value="100" aria-label="Extrusion flow slider">
+                  <div class="tuning-actions">
+                    <div class="tuning-input-wrap"><input id="flow-value" class="tuning-input" type="number" min="50" max="150" step="1" value="100" aria-label="Extrusion flow percentage"><span aria-hidden="true">%</span></div>
+                    <button class="visual-button tuning-apply" type="button">Apply</button>
+                    <button class="visual-button tuning-reset" type="button">Reset</button>
+                  </div>
+                  <small class="tuning-range">50–150%</small>
+                </section>
+              </div>
+              <p class="tuning-hint" id="tuning-preview-status">Live speed 45 mm/s · active print only · preview sends no printer commands.</p>
+            </section>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <section class="card thermals-card">
+            <div class="card-head"><span class="card-icon" data-icon="thermometer" aria-hidden="true"></span><h2 class="card-title">Thermals</h2><span class="card-end">Live history · 5 minutes</span></div>
+            <div class="thermal-content">
+              <svg class="chart" viewBox="0 0 440 118" role="img" aria-label="Illustrative nozzle and bed temperature history over five minutes">
+                <path class="chart-grid" d="M0 18.5H440M0 48.5H440M0 78.5H440M0 108.5H440" />
+                <path class="chart-line-nozzle" d="M4 75 C40 75 42 28 80 29 S115 47 151 42 S181 31 219 33 S261 47 294 39 S333 25 369 31 S409 36 436 26" />
+                <path class="chart-line-bed" d="M4 96 C42 96 50 86 82 85 S132 82 161 81 S205 84 238 80 S292 84 321 77 S367 82 398 77 S423 74 436 74" />
+                <text class="chart-label" x="2" y="116">5 min ago</text>
+                <text class="chart-label" x="399" y="116">Now</text>
+              </svg>
+              <div class="readings">
+                <div class="reading"><span class="reading-dot nozzle" aria-hidden="true"></span><span>Nozzle</span><strong>208 <small>/ 210 °C</small></strong></div>
+                <div class="reading"><span class="reading-dot bed" aria-hidden="true"></span><span>Heated bed</span><strong>59 <small>/ 60 °C</small></strong></div>
+                <div class="reading"><span class="reading-dot chamber" aria-hidden="true"></span><span>Chamber</span><strong>42 °C</strong></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-icon" data-icon="fan" aria-hidden="true"></span><h2 class="card-title">Fans</h2></div>
+            <div class="fan-row"><span>Part fan</span><b>45%</b><div class="fan-track"><div class="fan-fill" style="width:45%"></div></div></div>
+            <div class="fan-row"><span>Aux fan</span><b>30%</b><div class="fan-track"><div class="fan-fill" style="width:30%"></div></div></div>
+            <div class="fan-row"><span>Chamber</span><b>80%</b><div class="fan-track"><div class="fan-fill" style="width:80%"></div></div></div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-icon" data-icon="move" aria-hidden="true"></span><h2 class="card-title">Effective Z offset</h2></div>
+            <div class="z-value">+0.12 <small>mm</small></div>
+            <div class="stat-label">Offset applies to this session only.</div>
+            <span class="session-tag">Session only</span>
+          </section>
+        </div>
+
+        <div class="detail-grid">
+          <section class="card">
+            <div class="card-head"><span class="card-icon" data-icon="crosshair" aria-hidden="true"></span><h2 class="card-title">Position</h2></div>
+            <div class="detail-row"><span>X</span><span>128.00 mm</span></div>
+            <div class="detail-row"><span>Y</span><span>116.50 mm</span></div>
+            <div class="detail-row"><span>Z</span><span>42.60 mm</span></div>
+            <p class="footer-note">XYZ homed</p>
+          </section>
+          <section class="card">
+            <div class="card-head"><span class="card-icon" data-icon="monitor" aria-hidden="true"></span><h2 class="card-title">System</h2><span class="card-end"><span class="status-dot" aria-hidden="true"></span>Online</span></div>
+            <div class="detail-row"><span>Uptime</span><span>3d 8h</span></div>
+            <div class="detail-row"><span>CPU load</span><span>0.31 · 0.28 · 0.24</span></div>
+            <div class="detail-row"><span>Available memory</span><span>312 MiB</span></div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </section>
+</div>
+
+<script>
+const device = document.getElementById("device");
+const sizeButtons = Array.from(document.querySelectorAll("[data-size]"));
+const themeButtons = Array.from(document.querySelectorAll("[data-theme-choice]"));
+for (const button of sizeButtons) {
+  button.addEventListener("click", () => {
+    const size = button.dataset.size;
+    device.dataset.viewport = size;
+    for (const item of sizeButtons) item.setAttribute("aria-pressed", String(item === button));
+  });
+}
+for (const button of themeButtons) {
+  button.addEventListener("click", () => {
+    const theme = button.dataset.themeChoice;
+    document.documentElement.dataset.theme = theme === "dark" ? "" : theme;
+    for (const item of themeButtons) item.setAttribute("aria-pressed", String(item === button));
+  });
+}
+const menu = document.getElementById("primary-navigation");
+const menuButton = document.getElementById("menu-toggle");
+const backdrop = document.getElementById("menu-backdrop");
+const closeMenu = () => {
+  menu.classList.remove("open");
+  backdrop.classList.remove("open");
+  menuButton.setAttribute("aria-expanded", "false");
+  menuButton.setAttribute("aria-label", "Open navigation");
+};
+menuButton.addEventListener("click", () => {
+  const open = !menu.classList.contains("open");
+  menu.classList.toggle("open", open);
+  backdrop.classList.toggle("open", open);
+  menuButton.setAttribute("aria-expanded", String(open));
+  menuButton.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+});
+backdrop.addEventListener("click", closeMenu);
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeMenu();
+});
+
+const iconPaths = {
+  gauge: '<path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/><path d="M12 12v2"/>',
+  sliders: '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/>',
+  files: '<path d="M15 2H6a2 2 0 0 0-2 2v14"/><path d="M18 8h-5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-7z"/><path d="M18 8v5h5"/>',
+  history: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  grid: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+  spool: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M3 8h4M17 8h4M3 16h4M17 16h4"/>',
+  external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  terminal: '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
+  settings: '<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1 0 1.8z"/>',
+  camera: '<path d="M14 5h-4L8 3H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3l-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  bolt: '<path d="m13 2-3 8h7l-6 12 2-9H6z"/>',
+  home: '<path d="m3 10 9-7 9 7"/><path d="M5 9v12h14V9"/><path d="M9 21v-7h6v7"/>',
+  snowflake: '<path d="M12 2v20M4.9 6l14.2 12M4.9 18 19.1 6"/><path d="m8 4 4 2 4-2M8 20l4-2 4 2M3 10l1.9-4L3 2M21 22l-1.9-4L21 14M3 14l1.9 4L3 22M21 2l-1.9 4L21 10"/>',
+  light: '<path d="M9 18h6M10 22h4"/><path d="M8 14a6 6 0 1 1 8 0c-.8.7-1 1.3-1 2h-6c0-.7-.2-1.3-1-2z"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  square: '<rect x="5" y="5" width="14" height="14" rx="1"/>',
+  thermometer: '<path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0z"/><path d="M12 11v6"/>',
+  fan: '<path d="M12 12c-1.6-1.2-2.3-3.3-1.7-5.2.5-1.5 2.4-2.3 3.6-1.2 1.2 1.2.6 3.1-.4 4.5"/><path d="M12 12c1.2-1.6 3.3-2.3 5.2-1.7 1.5.5 2.3 2.4 1.2 3.6-1.2 1.2-3.1.6-4.5-.4"/><path d="M12 12c1.6 1.2 2.3 3.3 1.7 5.2-.5 1.5-2.4 2.3-3.6 1.2-1.2-1.2-.6-3.1.4-4.5"/><path d="M12 12c-1.2 1.6-3.3 2.3-5.2 1.7-1.5-.5-2.3-2.4-1.2-3.6 1.2-1.2 3.1-.6 4.5.4"/><circle cx="12" cy="12" r="1"/>',
+  move: '<path d="m5 9-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20M12 2v20"/>',
+  crosshair: '<circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+  monitor: '<rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8M12 16v5"/>',
+  rotate: '<path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.5-2.5L20 12M4 12l2.9 5.5A7 7 0 0 0 18.4 15"/>',
+  alert: '<path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>'
+};
+for (const node of document.querySelectorAll("[data-icon]")) {
+  const name = node.dataset.icon;
+  const paths = name === "canvas"
+    ? '<circle cx="6.25" cy="6.25" r="4.25"/><circle cx="6.25" cy="6.25" r="1"/><circle cx="17.75" cy="6.25" r="4.25"/><circle cx="17.75" cy="6.25" r="1"/><circle cx="6.25" cy="17.75" r="4.25"/><circle cx="6.25" cy="17.75" r="1"/><circle cx="17.75" cy="17.75" r="4.25"/><circle cx="17.75" cy="17.75" r="1"/>'
+    : iconPaths[name];
+  if (paths) node.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>';
+}
+for (const fieldset of document.querySelectorAll("[data-tuning]")) {
+  const slider = fieldset.querySelector(".tuning-slider");
+  const field = fieldset.querySelector(".tuning-input");
+  const apply = fieldset.querySelector(".tuning-apply");
+  const reset = fieldset.querySelector(".tuning-reset");
+  if (!slider || !field || !apply || !reset) continue;
+  slider.addEventListener("input", () => { field.value = slider.value; });
+  apply.addEventListener("click", () => {
+    const parsed = Number(field.value);
+    const min = Number(slider.min);
+    const max = Number(slider.max);
+    const value = Math.max(min, Math.min(max, Number.isFinite(parsed) ? Math.round(parsed) : 100));
+    field.value = String(value);
+    slider.value = String(value);
+    const status = document.getElementById("tuning-preview-status");
+    if (status) status.textContent = "Preview only — no printer command was sent.";
+  });
+  reset.addEventListener("click", () => {
+    field.value = "100";
+    slider.value = "100";
+    const status = document.getElementById("tuning-preview-status");
+    if (status) status.textContent = "Preview only — reset sends no printer command.";
+  });
+}
+
+</script>
+</body>
+</html>
