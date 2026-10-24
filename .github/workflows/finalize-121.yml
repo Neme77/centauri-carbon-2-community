@@ -1,0 +1,24 @@
+name: Finalize release test snapshot
+on:
+  push:
+    branches: [test/builder-4.4.2-control-1.2.21]
+    paths: [.github/workflows/finalize-121.yml]
+permissions:
+  contents: write
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Pin test-only correction without changing production code
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current
+          git diff --cached --quiet || git commit -m 'Pin dialog-focus regression test correction'
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+          git push origin HEAD:refs/heads/test/builder-4.4.2-control-1.2.21
