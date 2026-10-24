@@ -22,17 +22,22 @@ export const Experiments = () => {
       mounted.current = false
     }
   }, [])
-  const change = async (feature: 'canvas-uds' | 'quiet-motors') => {
+  const change = async (feature: 'canvas-uds' | 'quiet-motors' | 'bed-drying') => {
     if (!data || !ok || busy) return
-    const enabled = feature === 'canvas-uds' ? data.canvas_uds : data.quiet_motors
+    const enabled =
+      feature === 'canvas-uds' ? data.canvas_uds : feature === 'bed-drying' ? data.bed_drying : data.quiet_motors
     const message =
-      feature === 'canvas-uds'
+      feature === 'bed-drying'
         ? enabled
-          ? 'experiments.canvas_off_confirm'
-          : 'experiments.canvas_on_confirm'
-        : enabled
-          ? 'experiments.quiet_off_confirm'
-          : 'experiments.quiet_on_confirm'
+          ? 'drying.disable_confirm'
+          : 'drying.enable_confirm'
+        : feature === 'canvas-uds'
+          ? enabled
+            ? 'experiments.canvas_off_confirm'
+            : 'experiments.canvas_on_confirm'
+          : enabled
+            ? 'experiments.quiet_off_confirm'
+            : 'experiments.quiet_on_confirm'
     if (!(await ask(t(message))) || !mounted.current) return
     setBusy(true)
     setError('')
@@ -114,6 +119,24 @@ export const Experiments = () => {
           >
             {t(data?.quiet_motors ? 'experiments.disable' : 'experiments.enable')}
           </Button>
+        </div>
+        <div class="rounded-md border border-edge p-3">
+          <h3 class="text-base font-semibold">{t('drying.title')}</h3>
+          <p class="my-2 text-muted">{t('drying.hint')}</p>
+          <Button
+            role="switch"
+            aria-checked={Boolean(data?.bed_drying)}
+            aria-label={t('drying.title')}
+            disabled={disabled}
+            onClick={() => void change('bed-drying')}
+          >
+            {t(data?.bed_drying ? 'experiments.disable' : 'experiments.enable')}
+          </Button>
+          {data?.bed_drying && (
+            <Button class="ml-2" onClick={() => openPage('control')}>
+              {t('common.control')}
+            </Button>
+          )}
         </div>
       </div>
       {!ok && <p class="mt-3 text-amber">{t('experiments.unavailable')}</p>}

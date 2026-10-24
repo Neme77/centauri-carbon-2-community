@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in experimental timed bed heating for filament drying, with finite duration, explicit stop/readback and a short native heater lease; requested by **romeopuch** in #198 (#218). No automatic heating after restart. Hardware validation is still required.
+
 ## [CC2 Control 1.2.21 / Firmware V4.4.2] - 2026-10-24
 
 ### Added

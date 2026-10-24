@@ -21,10 +21,11 @@ static void experiments_response(int fd, const mqtt_client *mqtt, console_state 
     char body[640];
     int n = snprintf(body, sizeof(body),
         "{\"schema\":1,\"editable\":%s,\"ready\":%s,\"canvas_uds\":%s,\"canvas_uds_available\":%s,"
-        "\"quiet_motors\":%s,\"normal_confirmed\":%s,\"cli_canvas\":%s}\n",
+        "\"bed_drying\":%s,\"quiet_motors\":%s,\"normal_confirmed\":%s,\"cli_canvas\":%s}\n",
         experiments_storage_valid ? "true" : "false",
         !app_update_active() && app_update_ready(mqtt, console) ? "true" : "false",
         telemetry.canvas_enabled ? "true" : "false", uds_canvas_available(&telemetry) ? "true" : "false",
+        experiments.bed_drying ? "true" : "false",
         experiments.quiet_motors ? "true" : "false", experiments_normal_confirmed(console) ? "true" : "false",
         experiments_cli_canvas ? "true" : "false");
     respond(fd, 200, "OK", "application/json", body, (size_t)n);
@@ -38,6 +39,8 @@ static void experiments_put_response(int fd, const char *request, const char *bo
     else if (length == 14 && !memcmp(body, "canvas-uds:off", 14)) next.canvas_uds = 0;
     else if (length == 15 && !memcmp(body, "quiet-motors:on", 15)) next.quiet_motors = 1;
     else if (length == 16 && !memcmp(body, "quiet-motors:off", 16)) next.quiet_motors = 0;
+    else if (length == 13 && !memcmp(body,"bed-drying:on",13)) next.bed_drying=1;
+    else if (length == 14 && !memcmp(body,"bed-drying:off",14)) next.bed_drying=0;
     else { app_update_fail(fd, 400, "Invalid experimental feature selection"); return; }
     if (!experiments_storage_valid) { app_update_fail(fd, 409, "Experimental settings storage is invalid"); return; }
     if (app_update_active() || !app_update_ready(mqtt, console)) {
@@ -46,7 +49,7 @@ static void experiments_put_response(int fd, const char *request, const char *bo
     if (next.canvas_uds != experiments.canvas_uds && experiments_cli_canvas) {
         app_update_fail(fd, 409, "Canvas UDS is controlled by a command-line option"); return;
     }
-    if (next.canvas_uds != experiments.canvas_uds || next.quiet_motors != experiments.quiet_motors) {
+    if (next.canvas_uds != experiments.canvas_uds || next.quiet_motors != experiments.quiet_motors || next.bed_drying != experiments.bed_drying) {
         if (experiments.quiet_motors && (!next.quiet_motors || next.canvas_uds != experiments.canvas_uds) &&
             !experiments_normal_confirmed(console)) {
             app_update_fail(fd, 409, "Return the motors to Normal before disabling Quiet or changing the Canvas source"); return;
