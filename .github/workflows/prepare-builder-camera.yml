@@ -1,5 +1,5 @@
 name: Prepare unified Control 1.2.21 and V4.4.2 builder
-# Unified trial R3: stable application updates and independent guarded experimental choices.
+# Unified trial R3 documentation and same-version install instructions: stable application updates and independent guarded experimental choices.
 on:
   push:
     branches: [test/builder-4.4.2-control-1.2.21]

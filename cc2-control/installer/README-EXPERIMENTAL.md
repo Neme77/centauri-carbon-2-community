@@ -1,23 +1,27 @@
 # Experimental trial: Canvas UDS and Quiet
 
-Development package, displayed version 1.2.19. This is not the stable release or
-a signed automatic update. Extract the ZIP and use Install-Windows.cmd, or
-install-cc2-control.sh on macOS/Linux, with the printer connected, idle and cold,
-and heating targets zero. Keep the exact backup path reported by the installer.
+These optional features are included in the single CC2 Control 1.2.21 base.
+No update-channel switch or separate application variant is needed.
+The cumulative package also includes the qualified R2 camera component for
+users skipping 1.2.19 and does not modify the printer executable. Feature
+switches need no full reboot; first activation of the camera fix does require
+a complete printer reboot.
 
-This application-only package preserves an installed camera fix without
-reinstalling it and does not modify the printer executable. The two switches do
-not require a full printer reboot. Future public cumulative releases still
-require the qualified camera component.
+For this trial, if 1.2.21 is already installed, extract the ZIP and use
+Install-Windows.cmd or install-cc2-control.sh: the panel correctly refuses a
+same-version package. Do not advance the version for a trial. Install only
+while connected, idle and cold with heating targets zero. Keep the exact
+backup path reported by the installer.
 
-In Settings → Updates, enter the LAN code in Experimental features. Both choices
-default to off and remain independent. Try Canvas UDS first, checking slot states
+In Settings â†’ Updates, enter the LAN code in Experimental features. Both choices
+default to off on new installations and remain independent; existing saved
+choices are retained. Try Canvas UDS first, checking slot states
 and Orca synchronization; turn it off before trying Quiet separately. Stored
 opt-in is distinct from actual source availability: read the displayed status.
 
 Quiet opt-in only reveals the controls on Control. It does not change motors.
 Before any movement, verify driver readback and limits following PR #179. The
-slicer can override the initial 80 mm/s and 2000 mm/s² limits; do not use G-code
+slicer can override the initial 80 mm/s and 2000 mm/sÂ² limits; do not use G-code
 that exceeds them. Normal restores fixed 500/20000 limits, not previous custom
 values. Displayed mode is requested state, not verified hardware registers. This
 combined application still needs printer acceptance; authors' hardware tests

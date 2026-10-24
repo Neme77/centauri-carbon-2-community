@@ -1,38 +1,41 @@
 # Prova sperimentale: Canvas UDS e Quiet
 
-Pacchetto di sviluppo, versione visualizzata 1.2.19. Non è la release stabile e
-non va caricato come aggiornamento automatico o firmato. Estrarre lo ZIP e usare
-Install-Windows.cmd, oppure install-cc2-control.sh su macOS/Linux, con stampante
-connessa, inattiva, fredda e target a zero. Conservare il percorso del backup.
+Queste funzioni opzionali fanno parte della base unica CC2 Control 1.2.21.
+Non serve cambiare canale o installare una diversa variante per abilitarle.
+Il pacchetto cumulativo include anche il componente webcam R2 qualificato,
+necessario a chi ha saltato l'aggiornamento 1.2.19, e non modifica l'eseguibile
+della stampante. I selettori non richiedono un riavvio completo; la prima
+attivazione del fix webcam richiede invece il riavvio completo della stampante.
 
-Questo pacchetto contiene la sola applicazione: conserva il fix webcam già
-installato, non lo reinstalla e non modifica l'eseguibile del firmware. Non serve
-un riavvio completo per i due interruttori. I futuri aggiornamenti pubblici
-cumulativi continueranno a includere il componente webcam.
+Per questa prova, se la versione installata e gia 1.2.21, estrarre lo ZIP e
+usare Install-Windows.cmd o install-cc2-control.sh: il pannello rifiuta
+correttamente pacchetti della stessa versione. Non aumentare la versione per
+una prova. Installare solo con stampante connessa, inattiva, fredda e target a
+zero; conservare il percorso esatto del backup indicato dall'installer.
 
-In Impostazioni → Aggiornamenti, inserire il codice LAN nella sezione delle
-funzioni sperimentali. Le due opzioni partono spente e rimangono indipendenti.
+In Impostazioni â†’ Aggiornamenti, inserire il codice LAN nella sezione delle
+funzioni sperimentali. Le due opzioni partono spente nelle nuove installazioni e rimangono indipendenti; le preferenze gia salvate vengono conservate.
 Provare prima Canvas UDS, controllando stati degli slot e sincronizzazione Orca;
-poi disattivarlo per provare Quiet separatamente. Una scelta salvata non è una
+poi disattivarlo per provare Quiet separatamente. Una scelta salvata non Ã¨ una
 conferma della sorgente realmente disponibile: leggere lo stato mostrato.
 
 Quiet abilita solo i controlli in Controllo. Non cambia i motori da solo. Prima di
 qualsiasi movimento verificare le letture dei driver e i limiti come descritto
-nella PR #179. Lo slicer può sovrascrivere i limiti iniziali 80 mm/s e 2000 mm/s²;
+nella PR #179. Lo slicer puÃ² sovrascrivere i limiti iniziali 80 mm/s e 2000 mm/sÂ²;
 non usare G-code che li superi. Normal ripristina valori fissi 500/20000, non
-eventuali limiti personalizzati. La modalità visualizzata è richiesta, non una
-verifica dei registri hardware. Questa integrazione non è ancora validata sulla
+eventuali limiti personalizzati. La modalitÃ  visualizzata Ã¨ richiesta, non una
+verifica dei registri hardware. Questa integrazione non Ã¨ ancora validata sulla
 stampante: i test degli autori e quelli automatici sono registrati separatamente.
 
 Per disattivare Quiet, cambiare sorgente Canvas o aggiornare/ripristinare l'app
-quando Quiet è abilitato, selezionare Normal in Controllo e attendere il
+quando Quiet Ã¨ abilitato, selezionare Normal in Controllo e attendere il
 completamento senza errori. Poi spegnere le opzioni. Se serve, usare il comando
 di ripristino dal percorso del backup stampato dall'installer, a stampante
 inattiva e fredda. Le preferenze sperimentali restano esterne all'applicazione;
 una vecchia app non offre automaticamente queste funzioni.
 
-La retrazione oltre 350 mm è un esperimento separato: il riconoscimento del
-firmware è incluso ma il runtime esteso non viene installato. Non modificare il
+La retrazione oltre 350 mm Ã¨ un esperimento separato: il riconoscimento del
+firmware Ã¨ incluso ma il runtime esteso non viene installato. Non modificare il
 firmware originale o aumentare distanze per provare questi due interruttori.
 Un eventuale runtime esteso richiede prima del ripristino configurazioni
 effettive entro 350 mm e la propria procedura di rimozione.

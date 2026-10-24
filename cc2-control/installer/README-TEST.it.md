@@ -1,4 +1,4 @@
-# CC2 Control 1.2.21 — prova cumulativa correttiva
+# CC2 Control 1.2.21 â€” prova cumulativa correttiva
 
 Per Community Firmware V4.4/V4.4.1 e candidato V4.4.2, base ELEGOO 02.01.01.07.
 
@@ -10,20 +10,23 @@ file firmato dal PC; la correzione si applica ai download successivi.
 Riconosce e conserva una precedente cartella webcam R2 rimasta inattiva dopo
 un ripristino o una reinstallazione del firmware, verificando file e impronte
 prima di reinstallarla. Componenti sconosciuti o avvii modificati restano
-rifiutati. Il fix webcam R2 incluso mantiene le librerie già qualificate.
+rifiutati. Il fix webcam R2 incluso mantiene le librerie giÃ  qualificate.
 
 Installare con stampante connessa, inattiva e fredda, target di riscaldamento zero.
 Alla prima attivazione del fix webcam serve un riavvio completo della stampante;
 il solo riavvio di CC2 Control non basta. Nessun riavvio viene eseguito in
 automatico. Conservare il percorso di backup indicato dall'installer.
 
-Include le novità stabili già provate di Canvas, bobine, mappa oggetti, gestione
-file e interfaccia. Canvas UDS, Quiet e retrazione estesa restano esperimenti
-separati. Impostazioni, bobine e librerie piatti vengono conservate.
+Include le novitÃ  stabili giÃ  provate di Canvas, bobine, mappa oggetti, gestione
+file e interfaccia. Canvas UDS e i controlli Quiet sono opzioni indipendenti della stessa base,
+spente nelle nuove installazioni. La retrazione estesa resta separata e il suo
+runtime non viene installato. Leggere README-EXPERIMENTAL.it.md per la prova. Impostazioni, bobine e librerie piatti vengono conservate.
 
-Il builder del firmware completo è un pacchetto separato: il firmware V4.4.2
+Il builder del firmware completo Ã¨ un pacchetto separato: il firmware V4.4.2
 va generato sul PC e provato sulla stampante prima della pubblicazione.
 
 Grazie a tharje per la diagnosi webcam, a DamiBFryta, il nostro beta tester
 definitivo, per prove e suggerimenti, e a Surfoo, Nick Plateringen-Paul e tutti
-i contributor già accreditati nella cronologia del progetto.
+i contributor giÃ  accreditati nella cronologia del progetto.
+
+Se la stampante mostra gia 1.2.21, usare l'installer da computer per questa prova: il pannello accetta soltanto versioni successive.

@@ -1,4 +1,4 @@
-# CC2 Control 1.2.21 — cumulative corrective trial
+# CC2 Control 1.2.21 â€” cumulative corrective trial
 
 For Community Firmware V4.4/V4.4.1 and the V4.4.2 candidate, ELEGOO 02.01.01.07.
 
@@ -18,7 +18,9 @@ CC2 Control is insufficient. No printer reboot is automatic. Keep the exact
 installer backup path for restoration.
 
 Includes accepted stable Canvas, spool, object-map, file and UI improvements.
-Canvas UDS, Quiet and extended pull-back remain separate experiments. Settings,
+Canvas UDS and Quiet controls are independent options in this same base, off on
+new installations. Extended pull-back stays separate; its runtime is not
+installed. See README-EXPERIMENTAL.md for the trial. Settings,
 spools and plate libraries are retained.
 
 The full firmware builder is separate: generate V4.4.2 on the maintainer's PC
@@ -27,3 +29,5 @@ and validate that complete image on hardware before publishing it.
 Thanks to tharje for camera diagnosis, DamiBFryta, our ultimate beta tester, for
 persistent testing and feedback, Surfoo, Nick Plateringen-Paul and all original
 contributors whose credits remain in project history.
+
+If the printer already shows 1.2.21, use the computer installer for this trial: the panel accepts only newer versions.
