@@ -126,6 +126,11 @@ static void drying_tick(const mqtt_client *mqtt) {
         int foreign=mqtt->have_machine_status&&mqtt->machine_status!=1;
         drying_stop(foreign?"busy":"telemetry",foreign);
     }
+    if(drying.stage>=DRY_CHECK&&drying.stage<=DRY_HEAT&&fresh&&target!=0&&
+       !(drying.stage==DRY_HEAT&&drying.exchange.sent>0&&fabs(target-drying.temp)<=0.5))
+        drying_stop("changed",1);
+    if(drying.stage==DRY_STOPPING&&mqtt->have_machine_status&&mqtt->machine_status!=1)
+        drying.restore_only=1;
     if(drying.stage==DRY_HEATING||drying.stage==DRY_HOLDING) {
         if(!drying.target_seen&&fabs(target-drying.temp)<=0.5)drying.target_seen=1;
         if(!drying.target_seen&&now-drying.since<10000)return;
