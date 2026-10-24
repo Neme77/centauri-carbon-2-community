@@ -36,7 +36,7 @@ try {
   })
   await page.goto(`${server.resolvedUrls.local[0]}#control`)
   assert.equal(await page.locator('[data-bed-drying]').count(), 0)
-  await page.goto(`${server.resolvedUrls.local[0]}#settings/updates`)
+  await page.goto(`${server.resolvedUrls.local[0]}#settings/integrations`)
   const toggle = page.getByRole('switch', { name: 'Bed heating for filament drying', exact: true })
   await toggle.waitFor(); assert(await toggle.isDisabled())
   await page.getByLabel('LAN code for experimental features', { exact: true }).fill('fixture-confirmation')

@@ -426,3 +426,84 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 
 /* The status pill sits on the page background, so retain its panel contrast. */
 .cc2-canvas-overview .cc2-canvas-connection { background:var(--panel); }
+
+/* Paused-camera artwork from pezso92's Dashboard preview (#187), kept static. */
+.cc2-camera-paused {
+  isolation: isolate;
+  background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 14%, transparent), transparent 58%),
+    linear-gradient(145deg, color-mix(in srgb, var(--panel) 78%, #16384a), color-mix(in srgb, var(--bg) 84%, #102b3a));
+}
+.cc2-camera-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .2;
+  background-image: linear-gradient(#17445b 1px, transparent 1px), linear-gradient(90deg, #17445b 1px, transparent 1px);
+  background-size: 36px 36px;
+  transform: perspective(240px) rotateX(50deg) scale(1.35);
+  transform-origin: center 80%;
+}
+.cc2-camera-paused::before {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  top: 18%; left: 28%; width: 44%; height: 48%;
+  border: 2px solid color-mix(in srgb, var(--cyan) 38%, var(--edge));
+  border-radius: 4px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--panel) 50%, #234252), color-mix(in srgb, var(--bg) 55%, #10232d));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--edge) 60%, transparent);
+}
+.cc2-camera-paused::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  top: 28%; left: 43%; width: 14%; height: 25%;
+  border: 2px solid color-mix(in srgb, var(--muted) 70%, var(--edge));
+  border-radius: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 60%, #315061), color-mix(in srgb, var(--bg) 55%, #132a36));
+}
+.cc2-camera-idle-controls { top: 66%; }
+:root[data-theme="light"] .cc2-camera-paused {
+  background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 58%), linear-gradient(145deg, #e9f1f4, #dce8ed);
+}
+:root[data-theme="light"] .cc2-camera-grid { opacity: .12; }
+:root[data-theme="light"] .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
+:root[data-theme="light"] .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
+
+/* Fit the slider into the existing heading space instead of adding another card row. */
+.cc2-tuning-field > .cc2-tuning-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 2px 8px;
+  margin: 0 0 4px;
+}
+.cc2-tuning-heading label { margin: 0; }
+.cc2-tuning-field .cc2-tuning-slider {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+.cc2-tuning-slider:disabled { cursor: default; }
+
+/* Preview refinement: the camera option belongs in its header, not in the video column. */
+.cc2-camera-card > div:first-child > span:last-child { min-width: 0; }
+.cc2-quick-actions > div:first-child { min-height: 24px; margin-bottom: 6px; padding-bottom: 6px; }
+.cc2-quick-actions > div:first-child button { min-height: 26px; padding-block: 2px; }
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-quick-actions .cc2-quick-grid > button { min-height: 36px; padding: 4px 6px; line-height: 1.25; gap: 6px; }
+}
+@media (hover: none), (pointer: coarse) {
+  .cc2-camera-preference { position: relative; }
+  .cc2-camera-preference::before { content: ""; position: absolute; inset: -12px 0; }
+  .cc2-quick-actions .cc2-quick-grid > button { min-height: 44px; padding-block: 6px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-main .cc2-camera-card .cc2-camera-stop { min-height: 24px; padding-block: 0; }
+}

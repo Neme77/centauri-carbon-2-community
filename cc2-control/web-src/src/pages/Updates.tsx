@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/field'
-import { Experiments } from './Experiments'
 import { ask } from '@/lib/confirm'
 import { errText, notify, request } from '@/lib/api'
 import { i18n, t } from '@/lib/i18n'
@@ -89,109 +88,106 @@ export const Updates = () => {
     }
   }
   return (
-    <>
-      <Card>
-        <CardHead icon="settings" title="updates.title" sub="updates.application_only" />
-        <div class="grid gap-4 cc2-sm:grid-cols-2">
-          <div>
-            <span class="text-muted">{t('updates.installed')}</span>
-            <b class="mt-1 block">{state?.installed || '—'}</b>
-          </div>
-          <p class="text-muted">{t('experiments.channel_stable')}</p>
+    <Card>
+      <CardHead icon="settings" title="updates.title" sub="updates.application_only" />
+      <div class="grid gap-4 cc2-sm:grid-cols-2">
+        <div>
+          <span class="text-muted">{t('updates.installed')}</span>
+          <b class="mt-1 block">{state?.installed || '—'}</b>
         </div>
-        <div class="my-4 flex flex-wrap items-center gap-3">
-          <Button disabled={checking || busy || !state?.enabled} onClick={() => void runCheck()}>
-            {t('updates.check')}
-          </Button>
-          <span>
-            {checking
-              ? t('updates.checking')
-              : available
-                ? `${t('updates.available')}: ${release.version}`
-                : t('updates.no_update')}
-          </span>
+        <p class="text-muted">{t('experiments.channel_stable')}</p>
+      </div>
+      <div class="my-4 flex flex-wrap items-center gap-3">
+        <Button disabled={checking || busy || !state?.enabled} onClick={() => void runCheck()}>
+          {t('updates.check')}
+        </Button>
+        <span>
+          {checking
+            ? t('updates.checking')
+            : available
+              ? `${t('updates.available')}: ${release.version}`
+              : t('updates.no_update')}
+        </span>
+      </div>
+      {notes?.text && (
+        <div class="my-3 text-muted">
+          {notes.language !== language && <p class="mb-1 text-sm">{t('updates.notes_in_english')}</p>}
+          <p class="whitespace-pre-wrap break-words" lang={notes.language}>
+            {notes.text}
+          </p>
         </div>
-        {notes?.text && (
-          <div class="my-3 text-muted">
-            {notes.language !== language && <p class="mb-1 text-sm">{t('updates.notes_in_english')}</p>}
-            <p class="whitespace-pre-wrap break-words" lang={notes.language}>
-              {notes.text}
-            </p>
-          </div>
+      )}
+      {!state?.enabled && <p class="my-3 text-amber">{t('updates.bootstrap')}</p>}
+      <p class="my-3 text-sm text-muted">{t('updates.requirements')}</p>
+      <label class="block max-w-md" htmlFor="update-lan-code">
+        {t('settings.lan_access_code')}
+        <PasswordInput
+          id="update-lan-code"
+          class="mt-1"
+          value={code}
+          disabled={busy}
+          onInput={e => setCode(e.currentTarget.value)}
+          autoComplete="off"
+        />
+      </label>
+      <div class="my-4 flex flex-wrap gap-3">
+        <Button disabled={!available || !state?.ready || !code.trim() || busy} onClick={() => void prepare(false)}>
+          {t('updates.download')}
+        </Button>
+        <Button
+          disabled={state?.phase !== 'ready' || !state.ready || !code.trim() || busy}
+          onClick={() => void install()}
+        >
+          {t('updates.install')}
+        </Button>
+      </div>
+      <details class="border-t border-edge pt-3">
+        <summary class="cursor-pointer">{t('updates.local_file')}</summary>
+        <input
+          class="cc2-update-file my-3 block w-full max-w-md"
+          aria-label={t('updates.local_file')}
+          type="file"
+          accept=".cc2update"
+          disabled={busy}
+          onChange={e => {
+            const selected = e.currentTarget.files?.[0] || null
+            selection.current++
+            setFile(selected && selected.size >= 1108 && selected.size <= 33555540 ? selected : null)
+          }}
+        />
+        <Button disabled={!file || !state?.ready || !code.trim() || busy} onClick={() => void prepare(true)}>
+          {t('updates.verify_file')}
+        </Button>
+      </details>
+      <p class="mt-4">
+        {t('updates.status')}{' '}
+        {t(
+          state?.phase === 'complete'
+            ? 'updates.complete'
+            : state?.phase === 'failed' || state?.phase === 'interrupted'
+              ? 'updates.failed'
+              : state?.phase === 'ready'
+                ? 'updates.verified'
+                : busy
+                  ? 'updates.working'
+                  : 'updates.idle'
         )}
-        {!state?.enabled && <p class="my-3 text-amber">{t('updates.bootstrap')}</p>}
-        <p class="my-3 text-sm text-muted">{t('updates.requirements')}</p>
-        <label class="block max-w-md" htmlFor="update-lan-code">
-          {t('settings.lan_access_code')}
-          <PasswordInput
-            id="update-lan-code"
-            class="mt-1"
-            value={code}
-            disabled={busy}
-            onInput={e => setCode(e.currentTarget.value)}
-            autoComplete="off"
-          />
-        </label>
-        <div class="my-4 flex flex-wrap gap-3">
-          <Button disabled={!available || !state?.ready || !code.trim() || busy} onClick={() => void prepare(false)}>
-            {t('updates.download')}
-          </Button>
-          <Button
-            disabled={state?.phase !== 'ready' || !state.ready || !code.trim() || busy}
-            onClick={() => void install()}
-          >
-            {t('updates.install')}
-          </Button>
-        </div>
-        <details class="border-t border-edge pt-3">
-          <summary class="cursor-pointer">{t('updates.local_file')}</summary>
-          <input
-            class="cc2-update-file my-3 block w-full max-w-md"
-            aria-label={t('updates.local_file')}
-            type="file"
-            accept=".cc2update"
-            disabled={busy}
-            onChange={e => {
-              const selected = e.currentTarget.files?.[0] || null
-              selection.current++
-              setFile(selected && selected.size >= 1108 && selected.size <= 33555540 ? selected : null)
-            }}
-          />
-          <Button disabled={!file || !state?.ready || !code.trim() || busy} onClick={() => void prepare(true)}>
-            {t('updates.verify_file')}
-          </Button>
-        </details>
-        <p class="mt-4">
-          {t('updates.status')}{' '}
-          {t(
-            state?.phase === 'complete'
-              ? 'updates.complete'
-              : state?.phase === 'failed' || state?.phase === 'interrupted'
-                ? 'updates.failed'
-                : state?.phase === 'ready'
-                  ? 'updates.verified'
-                  : busy
-                    ? 'updates.working'
-                    : 'updates.idle'
-          )}
+      </p>
+      {state?.version && (
+        <p>
+          {t('updates.selected')} {state.version}
         </p>
-        {state?.version && (
-          <p>
-            {t('updates.selected')} {state.version}
-          </p>
-        )}
-        {state?.phase === 'complete' && (
-          <Button class="mt-3" onClick={() => location.reload()}>
-            {t('updates.reload')}
-          </Button>
-        )}
-        {error && (
-          <p class="mt-3 break-words text-red" role="alert">
-            {error}
-          </p>
-        )}
-      </Card>
-      <Experiments />
-    </>
+      )}
+      {state?.phase === 'complete' && (
+        <Button class="mt-3" onClick={() => location.reload()}>
+          {t('updates.reload')}
+        </Button>
+      )}
+      {error && (
+        <p class="mt-3 break-words text-red" role="alert">
+          {error}
+        </p>
+      )}
+    </Card>
   )
 }

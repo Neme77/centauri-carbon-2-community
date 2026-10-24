@@ -30,6 +30,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Dashboard: integrate pezso92’s paused-camera artwork and speed/flow sliders with the existing numeric Apply/Reset controls; move “Keep active” into the camera header, compact Quick actions and align the desktop columns (PR_PENDING, visual direction and artwork by [pezso92](https://github.com/pezso92) in #187).
+- Settings: group the independently enabled experiments below official Integrations instead of Updates; include timed bed heating from #218, keeping its existing guards and opt-in behavior (PR_PENDING).
+
 - Experimental feature settings: remove unrelated extended pull-back/camera and memory-saving wording, and show a contextual Control shortcut when Normal must be confirmed after a Canvas source change (#214, maintainer feedback).
 
 - One application update stream replaces the experimental channel selector, including for browsers with the old channel preference saved (#214). Optional experiments are independent from application updates: independent, persisted Canvas UDS (#200) and Quiet-control opt-ins (original motor feature by BorjaLL, #179), both initially disabled. Normal must complete before hiding Quiet controls or reconnecting Canvas while those controls are enabled. Extended pull-back remains a separate firmware experiment.
