@@ -1,0 +1,22 @@
+name: Publish validated Control 1.2.21 and V4.4.2
+on:
+  push:
+    branches: [publish/control-1.2.21-and-v4.4.2]
+    paths: [.github/workflows/publish-12121.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: Neme77/centauri-carbon-2-community
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Stage checksum-pinned releases for local firmware upload
+        run: python3 experimental/release-publication/publish.py draft
