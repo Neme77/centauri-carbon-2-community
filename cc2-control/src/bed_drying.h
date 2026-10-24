@@ -67,7 +67,7 @@ static void drying_load(void) {
     struct stat st;char text[80]={0},canonical[80];int timeout=0,temp=0;
     int ok=!fstat(fd,&st)&&S_ISREG(st.st_mode)&&st.st_uid==geteuid()&&!(st.st_mode&0077)&&st.st_size>0&&st.st_size<79;
     ssize_t n=ok?read(fd,text,sizeof(text)-1):-1;close(fd);
-    ok=ok&&n==st.st_size&&sscanf(text,"CC2DRY1 %d %d",&timeout,&temp)==2&&timeout>=60&&timeout<=259200&&temp>=30&&temp<=90;
+    ok=ok&&n==st.st_size&&sscanf(text,"CC2DRY1 %6d %2d",&timeout,&temp)==2&&timeout>=60&&timeout<=259200&&temp>=30&&temp<=90;
     if(ok){snprintf(canonical,sizeof(canonical),"CC2DRY1 %d %d\n",timeout,temp);ok=!strcmp(text,canonical);}
     drying.stage=DRY_RECOVERY;drying.reason=ok?"restart":"storage";
     if(ok){drying.original_timeout=timeout;drying.temp=temp;}
@@ -209,7 +209,7 @@ static void drying_response(int fd,const mqtt_client *mqtt,console_state *consol
 static void drying_start_response(int fd,const char *request,const char *body,size_t length,mqtt_client *mqtt,console_state *console) {
     if(!app_update_authorized(request,mqtt)){app_update_fail(fd,401,"LAN code confirmation required or temporarily locked");return;}
     int temp=0,minutes=0;char canonical[32],input[32]={0};
-    if(length>=sizeof(input)){app_update_fail(fd,400,"Invalid bed heating settings");return;}
+    if(length<4||length>6){app_update_fail(fd,400,"Invalid bed heating settings");return;}
     memcpy(input,body,length);
     if(sscanf(input,"%d:%d",&temp,&minutes)!=2||temp<30||temp>90||minutes<1||minutes>720){app_update_fail(fd,400,"Use 30-90 C and 1-720 minutes");return;}
     snprintf(canonical,sizeof(canonical),"%d:%d",temp,minutes);

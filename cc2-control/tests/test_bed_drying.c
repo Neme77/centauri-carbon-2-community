@@ -59,7 +59,7 @@ int main(void){
     telemetry.values[U_ET]=70;start("70:1",409);telemetry.values[U_ET]=25;
     snapshot(70,0);start("70:1",409);snapshot(25,0);
 
-    start("70:0",400);start("70:721",400);start("91:1",400);start("70:1x",400);start("070:1",400);
+    start("999999999999999999999999:1",400);start("70:0",400);start("70:721",400);start("91:1",400);start("70:1x",400);start("070:1",400);
     assert(!heats&&!leases);heat();
     tick();assert(drying.stage==DRY_HEATING&&drying.hold_until==0);
     clock_ms+=31000;snapshot(30,70);tick();assert(leases==2&&heats==1);
