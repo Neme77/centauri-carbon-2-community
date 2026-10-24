@@ -85,10 +85,11 @@ static int drying_sample(const mqtt_client *mqtt, double *bed, double *target) {
         isfinite(*bed)&&*bed>=0&&*bed<=110&&isfinite(*target);
 }
 static int drying_ready(const mqtt_client *mqtt,console_state *console) {
-    double bed,target;
+    double bed,target,nozzle;
     return experiments.bed_drying&&experiments_storage_valid&&!drying_active()&&!app_update_active()&&
-        app_update_ready(mqtt,console)&&!plates_cal.stage&&!plates.pending[0]&&!plates_late_active()&&
-        !z_offset_pending&&drying_sample(mqtt,&bed,&target)&&target==0;
+        app_update_ready(mqtt,console)&&!plates_printer_ready(mqtt)&&!plates_cal.stage&&!plates.pending[0]&&!plates_late_active()&&
+        !z_offset_pending&&drying_sample(mqtt,&bed,&target)&&bed<=50&&target==0&&
+        uds_value(&telemetry,U_ET,&nozzle)&&isfinite(nozzle)&&nozzle>=0&&nozzle<=50;
 }
 static void drying_command(const char *script) {
     plates_exchange_close(&drying.exchange);

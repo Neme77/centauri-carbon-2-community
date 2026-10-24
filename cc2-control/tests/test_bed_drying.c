@@ -50,10 +50,15 @@ int main(void){
     machine.have_extruder_temp=machine.have_bed_temp=machine.have_extruder_target=machine.have_bed_target=1;
     machine.extruder_temp=machine.bed_temp=25;strcpy(machine.password,"fixture-confirmation");
     uds_init(&telemetry);int pair[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));telemetry.fd=pair[0];telemetry.ready=1;
-    telemetry.have_print_state=1;telemetry.present=(1u<<U_BT)|(1u<<U_BG)|(1u<<U_EG)|(1u<<U_LIVE_SPEED);telemetry.connections=1;
+    telemetry.have_print_state=1;telemetry.present=(1u<<U_ET)|(1u<<U_BT)|(1u<<U_BG)|(1u<<U_EG)|(1u<<U_LIVE_SPEED);telemetry.connections=1;
+    telemetry.values[U_ET]=25;
     plates_uds=fake_rpc;experiments_storage_valid=1;
     reset();start("70:1",409);assert(!heats&&!leases);
     experiments.bed_drying=1;
+    atomic_store(&upload_busy,1);start("70:1",409);atomic_store(&upload_busy,0);
+    telemetry.values[U_ET]=70;start("70:1",409);telemetry.values[U_ET]=25;
+    snapshot(70,0);start("70:1",409);snapshot(25,0);
+
     start("70:0",400);start("70:721",400);start("91:1",400);start("70:1x",400);start("070:1",400);
     assert(!heats&&!leases);heat();
     tick();assert(drying.stage==DRY_HEATING&&drying.hold_until==0);
