@@ -1066,5 +1066,10 @@
   "experiments.title": "Funciones experimentales",
   "experiments.unavailable": "Ajustes experimentales no disponibles. No se pueden modificar.",
   "experiments.using_mqtt": "Desactivado · fuente MQTT",
-  "experiments.using_uds": "Activado · fuente UDS"
+  "experiments.using_uds": "Activado · fuente UDS",
+  "spools.history_filter": "Mostrar movimientos",
+  "spools.history_all": "Todos los movimientos",
+  "spools.history_consumption": "Solo consumo",
+  "spools.history_count": "Se muestran {shown} de {total} movimientos guardados",
+  "spools.no_consumption": "No hay consumo en el historial guardado."
 }

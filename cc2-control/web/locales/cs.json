@@ -1066,5 +1066,10 @@
   "experiments.title": "Experimentální funkce",
   "experiments.unavailable": "Experimentální nastavení nejsou dostupná. Nelze je měnit.",
   "experiments.using_mqtt": "Zakázáno · zdroj MQTT",
-  "experiments.using_uds": "Povoleno · zdroj UDS"
+  "experiments.using_uds": "Povoleno · zdroj UDS",
+  "spools.history_filter": "Zobrazit pohyby",
+  "spools.history_all": "Všechny pohyby",
+  "spools.history_consumption": "Pouze spotřeba",
+  "spools.history_count": "Zobrazeno {shown} z {total} uložených pohybů",
+  "spools.no_consumption": "V uložené historii není žádná spotřeba."
 }

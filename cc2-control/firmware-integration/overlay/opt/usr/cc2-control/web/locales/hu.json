@@ -1066,5 +1066,10 @@
   "experiments.title": "Kísérleti funkciók",
   "experiments.unavailable": "A kísérleti beállítások nem érhetők el. Módosítás nem lehetséges.",
   "experiments.using_mqtt": "Letiltva · MQTT-forrás",
-  "experiments.using_uds": "Engedélyezve · UDS-forrás"
+  "experiments.using_uds": "Engedélyezve · UDS-forrás",
+  "spools.history_filter": "Mozgások megjelenítése",
+  "spools.history_all": "Minden mozgás",
+  "spools.history_consumption": "Csak fogyasztás",
+  "spools.history_count": "{shown} megjelenített mozgás a(z) {total} mentett mozgásból",
+  "spools.no_consumption": "Nincs fogyasztás a mentett előzményekben."
 }

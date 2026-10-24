@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Spools: keep recent movements in a bounded scrolling panel, with All movements / Consumption only filters and visible result counts; saved accounting and per-spool history are unchanged (PR_PENDING). Requested by [DamiBFryta](https://www.reddit.com/user/DamiBFryta/).
+
 ## [CC2 Control 1.2.21 / Firmware V4.4.2] - 2026-10-24
 
 ### Added

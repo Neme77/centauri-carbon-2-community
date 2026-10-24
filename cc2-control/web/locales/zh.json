@@ -1066,5 +1066,10 @@
   "experiments.title": "实验功能",
   "experiments.unavailable": "实验设置不可用，无法修改。",
   "experiments.using_mqtt": "已禁用 · MQTT 来源",
-  "experiments.using_uds": "已启用 · UDS 来源"
+  "experiments.using_uds": "已启用 · UDS 来源",
+  "spools.history_filter": "显示记录",
+  "spools.history_all": "所有记录",
+  "spools.history_consumption": "仅耗材消耗",
+  "spools.history_count": "显示 {total} 条已保存记录中的 {shown} 条",
+  "spools.no_consumption": "已保存的历史中没有耗材消耗记录。"
 }

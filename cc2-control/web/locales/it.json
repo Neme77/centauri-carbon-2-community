@@ -1066,5 +1066,10 @@
   "experiments.title": "Funzioni sperimentali",
   "experiments.unavailable": "Impostazioni sperimentali non disponibili. Non è possibile modificarle.",
   "experiments.using_mqtt": "Disabilitato · sorgente MQTT",
-  "experiments.using_uds": "Abilitato · sorgente UDS"
+  "experiments.using_uds": "Abilitato · sorgente UDS",
+  "spools.history_filter": "Mostra movimenti",
+  "spools.history_all": "Tutti i movimenti",
+  "spools.history_consumption": "Solo consumi",
+  "spools.history_count": "Visualizzati {shown} di {total} movimenti salvati",
+  "spools.no_consumption": "Nessun consumo nella cronologia salvata."
 }

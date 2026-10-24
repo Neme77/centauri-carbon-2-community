@@ -1066,5 +1066,10 @@
   "experiments.title": "Funkcje eksperymentalne",
   "experiments.unavailable": "Ustawienia eksperymentalne są niedostępne. Zmiany są niemożliwe.",
   "experiments.using_mqtt": "Wyłączone · źródło MQTT",
-  "experiments.using_uds": "Włączone · źródło UDS"
+  "experiments.using_uds": "Włączone · źródło UDS",
+  "spools.history_filter": "Pokaż operacje",
+  "spools.history_all": "Wszystkie operacje",
+  "spools.history_consumption": "Tylko zużycie",
+  "spools.history_count": "Wyświetlono {shown} z {total} zapisanych operacji",
+  "spools.no_consumption": "Brak zużycia w zapisanej historii."
 }

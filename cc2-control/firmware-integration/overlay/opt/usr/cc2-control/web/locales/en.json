@@ -1066,5 +1066,10 @@
   "experiments.title": "Experimental features",
   "experiments.unavailable": "Experimental settings are unavailable. No changes can be made.",
   "experiments.using_mqtt": "Disabled · using MQTT",
-  "experiments.using_uds": "Enabled · using UDS"
+  "experiments.using_uds": "Enabled · using UDS",
+  "spools.history_filter": "Show movements",
+  "spools.history_all": "All movements",
+  "spools.history_consumption": "Consumption only",
+  "spools.history_count": "Showing {shown} of {total} saved movements",
+  "spools.no_consumption": "No consumption in the saved history."
 }

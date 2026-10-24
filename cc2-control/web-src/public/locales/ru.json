@@ -1066,5 +1066,10 @@
   "experiments.title": "Экспериментальные функции",
   "experiments.unavailable": "Экспериментальные настройки недоступны. Изменения невозможны.",
   "experiments.using_mqtt": "Выключено · источник MQTT",
-  "experiments.using_uds": "Включено · источник UDS"
+  "experiments.using_uds": "Включено · источник UDS",
+  "spools.history_filter": "Показать операции",
+  "spools.history_all": "Все операции",
+  "spools.history_consumption": "Только расход",
+  "spools.history_count": "Показано {shown} из {total} сохранённых операций",
+  "spools.no_consumption": "В сохранённой истории нет расхода."
 }
