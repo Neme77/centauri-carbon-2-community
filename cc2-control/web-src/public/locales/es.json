@@ -1066,5 +1066,10 @@
   "experiments.title": "Funciones experimentales",
   "experiments.unavailable": "Ajustes experimentales no disponibles. No se pueden modificar.",
   "experiments.using_mqtt": "Desactivado · fuente MQTT",
-  "experiments.using_uds": "Activado · fuente UDS"
+  "experiments.using_uds": "Activado · fuente UDS",
+  "completed.title": "Impresión completada",
+  "completed.hint": "La impresora está disponible. Volver a imprimir abre la preparación habitual.",
+  "completed.again": "Volver a imprimir",
+  "completed.acknowledge": "Confirmar",
+  "completed.latest": "Última impresión completada"
 }

@@ -334,22 +334,6 @@ export const TitleSync = () => {
   return null
 }
 
-// The printer reports no end-of-print event, so a print that was active and no longer is has ended (finished or cancelled).
-export const PrintWatcher = () => {
-  const d = printer.use().data
-  const running = useRef<string | null>(null)
-  useEffect(() => {
-    if (!d) return
-    const v = view(d)
-    if (v.active) running.current = v.rawFilename
-    else if (running.current !== null) {
-      notify(tpl('app.print_ended', { name: running.current }))
-      running.current = null
-    }
-  }, [d])
-  return null
-}
-
 // The printer answers CC2 Control's MQTT requests after the HTTP request has returned; each new refusal
 // is shown once. An old refusal seen when the page opens is not news.
 export const RefusalWatcher = () => {

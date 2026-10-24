@@ -1066,5 +1066,10 @@
   "experiments.title": "Funzioni sperimentali",
   "experiments.unavailable": "Impostazioni sperimentali non disponibili. Non è possibile modificarle.",
   "experiments.using_mqtt": "Disabilitato · sorgente MQTT",
-  "experiments.using_uds": "Abilitato · sorgente UDS"
+  "experiments.using_uds": "Abilitato · sorgente UDS",
+  "completed.title": "Stampa completata",
+  "completed.hint": "La stampante è disponibile. Stampa di nuovo apre la normale preparazione.",
+  "completed.again": "Stampa di nuovo",
+  "completed.acknowledge": "Conferma",
+  "completed.latest": "Ultima stampa completata"
 }

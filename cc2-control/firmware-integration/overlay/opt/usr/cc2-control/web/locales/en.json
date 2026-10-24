@@ -1066,5 +1066,10 @@
   "experiments.title": "Experimental features",
   "experiments.unavailable": "Experimental settings are unavailable. No changes can be made.",
   "experiments.using_mqtt": "Disabled · using MQTT",
-  "experiments.using_uds": "Enabled · using UDS"
+  "experiments.using_uds": "Enabled · using UDS",
+  "completed.title": "Print completed",
+  "completed.hint": "The printer is available. Print again opens the normal print setup.",
+  "completed.again": "Print again",
+  "completed.acknowledge": "Confirm",
+  "completed.latest": "Last completed print"
 }

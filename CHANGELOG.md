@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Nonblocking completed-print notice with acknowledgement and Print again through the normal preparation dialog, inspired by the printer display and requested by **Neme77** (PR pending). Uses existing polling; cancellation/disconnection is not success.
+
+### Fixed
+
+- Reset the current-job progress display when the printer is idle, without homing or overwriting the native last-job counters (PR pending).
+
 ## [CC2 Control 1.2.21 / Firmware V4.4.2] - 2026-10-24
 
 ### Added

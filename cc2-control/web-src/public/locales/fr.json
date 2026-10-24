@@ -1066,5 +1066,10 @@
   "experiments.title": "Fonctions expérimentales",
   "experiments.unavailable": "Paramètres expérimentaux indisponibles. Aucune modification possible.",
   "experiments.using_mqtt": "Désactivé · source MQTT",
-  "experiments.using_uds": "Activé · source UDS"
+  "experiments.using_uds": "Activé · source UDS",
+  "completed.title": "Impression terminée",
+  "completed.hint": "L’imprimante est disponible. Réimprimer ouvre la préparation habituelle.",
+  "completed.again": "Réimprimer",
+  "completed.acknowledge": "Confirmer",
+  "completed.latest": "Dernière impression terminée"
 }
