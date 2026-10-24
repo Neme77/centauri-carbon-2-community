@@ -1,50 +1,32 @@
-# CC2 Control 1.2.19 — aggiornamento completo
+# CC2 Control 1.2.21 — prova cumulativa correttiva
 
-**RIAVVIO COMPLETO NECESSARIO: questo aggiornamento comprende il fix webcam.
-Al termine dell'installazione, riavviare manualmente la stampante quando è inattiva.
-Il solo aggiornamento della pagina o riavvio di CC2 Control non attiva la patch.**
+Per Community Firmware V4.4/V4.4.1 e candidato V4.4.2, base ELEGOO 02.01.01.07.
 
-Include i fix camera della PR #183 e la gestione delle date G-code non attendibili
-della PR #185. Le librerie webcam sono le stesse provate per sette ore di stampa
-con IA attiva e streaming funzionante. Il nuovo installer integrato richiede una
-prova completa sulla stampante prima della pubblicazione nel canale stabile.
+Corregge il download degli aggiornamenti quando le intestazioni di sicurezza
+di GitHub superano 8 KiB, mantenendo il limite totale di 16 KiB e tutte le
+verifiche TLS. Le versioni precedenti richiedono questo primo caricamento del
+file firmato dal PC; la correzione si applica ai download successivi.
 
-Aggiornare soltanto con stampante connessa, inattiva, ugello e piatto a non più di
-50 °C e target a zero. Chiudere le dirette prima dell'installazione. Il codice LAN
-autorizza l'installazione dal pannello; non viene incluso nel pacchetto.
+Riconosce e conserva una precedente cartella webcam R2 rimasta inattiva dopo
+un ripristino o una reinstallazione del firmware, verificando file e impronte
+prima di reinstallarla. Componenti sconosciuti o avvii modificati restano
+rifiutati. Il fix webcam R2 incluso mantiene le librerie già qualificate.
 
-Dal pannello: Impostazioni → Aggiornamenti → carica il file .cc2update firmato.
-In alternativa estrarre lo ZIP multiplatform e avviare l'installer per il proprio
-sistema operativo. Conservare il percorso del backup indicato alla fine.
+Installare con stampante connessa, inattiva e fredda, target di riscaldamento zero.
+Alla prima attivazione del fix webcam serve un riavvio completo della stampante;
+il solo riavvio di CC2 Control non basta. Nessun riavvio viene eseguito in
+automatico. Conservare il percorso di backup indicato dall'installer.
 
-Il componente camera controlla hash del firmware, file di avvio e dipendenze;
-interrompe l'installazione su configurazioni non riconosciute. Non sostituisce
-ai_camera e non aumenta il limite di stream. Una precedente installazione R2
-personale riconosciuta viene conservata, inclusa la sua scelta di attivazione.
-Non vengono riavviati automaticamente la camera o la stampante.
+Include le novità stabili già provate di Canvas, bobine, mappa oggetti, gestione
+file e interfaccia. Canvas UDS e i controlli Quiet sono opzioni indipendenti della stessa base,
+spente nelle nuove installazioni. La retrazione estesa resta separata e il suo
+runtime non viene installato. Leggere README-EXPERIMENTAL.it.md per la prova. Impostazioni, bobine e librerie piatti vengono conservate.
 
-Dopo il riavvio, verificare versione 1.2.19, connessione, video locale e Matrix.
-Per una nuova installazione della camera:
+Il builder del firmware completo è un pacchetto separato: il firmware V4.4.2
+va generato sul PC e provato sulla stampante prima della pubblicazione.
 
-```sh
-sh /opt/usr/cc2-control/camera/manage.sh status
-```
+Grazie a tharje per la diagnosi webcam, a DamiBFryta, il nostro beta tester
+definitivo, per prove e suggerimenti, e a Surfoo, Nick Plateringen-Paul e tutti
+i contributor già accreditati nella cronologia del progetto.
 
-Chi ha già la precedente installazione personale usa invece:
-
-```sh
-sh /opt/usr/cc2-camera-recovery-r2/manage.sh status
-```
-
-Il ripristino dell'applicazione dal backup ripristina anche il precedente avvio
-della camera se questo aggiornamento l'ha modificato, rifiutando modifiche
-successive non riconosciute. Eseguire il ripristino a stampante inattiva e fredda;
-riavviare poi completamente per cambiare la patch già caricata in memoria.
-
-Le date palesemente errate dei file sono mostrate come non disponibili, senza
-modificare G-code o timestamp originali. L'orologio deve comunque potersi
-sincronizzare, anche sulle reti che bloccano l'accesso al cloud.
-
-Grazie a tharje per diagnosi, riproduzione e analisi del problema webcam, e ai
-beta tester della community per le prove. I singoli eventi IA e le sessioni RTC
-scadute non sono qualificati da una semplice prova con IA abilitata.
+Se la stampante mostra gia 1.2.21, usare l'installer da computer per questa prova: il pannello accetta soltanto versioni successive.

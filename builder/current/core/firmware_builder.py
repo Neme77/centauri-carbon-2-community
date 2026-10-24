@@ -79,8 +79,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_COMMIT='e4d0057eac42e1241ca62589a398b4a32affccc7'
-CC2_CONTROL_SOURCE_SHA256='b2582ee994922824d585b258e4a4fa04e6f781103fb1bcdb887c182773ebac0a'
+CC2_CONTROL_SOURCE_COMMIT='5a375c09d617e599ae95eba17cbe3b0a442ddc31'
+CC2_CONTROL_SOURCE_SHA256='fdad6d0c779b66747a59fa68713b3d47a570cf3d7482f713841e6cfdedeae2d5'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 CC2_UPDATE_FILES=('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
 # Translation files are optional and open-ended (one per language), unlike the
@@ -412,7 +412,8 @@ def install_release_printer(printer,reference):
  reqhash(printer,manifest['input_sha256'],'HTTP intermediate')
  Path(printer).write_bytes(validate_release_printer(Path(reference).read_bytes()))
 
-REACTOR_HELPER_SHA256='170851f47569d9f02072403ffda497e3135c1e01574e0a95a543a0f451f31b84'
+REACTOR_HELPER_SHA256='833380a3c6ef7002cac388bfa2612961b5fccb7b0e6e222ab5d9f4c7c4328501'
+CAMERA_HELPER_SHA256='8bd14ec9461cedebb78d52f5390bd59cbf8b95b8196c7ec16b07e0b28165bc8c'
 
 def firmware_release_version():
  version=(BASE/'RELEASE_VERSION').read_text(encoding='utf-8').strip()
@@ -494,6 +495,12 @@ def main():
  reactor=importlib.util.module_from_spec(spec); spec.loader.exec_module(reactor)
  reactor_component=here/'components/reactor'
  reactor.load(reactor_component)
+ camera_helper=here/'core/camera_component.py'
+ reqhash(camera_helper,CAMERA_HELPER_SHA256,'Camera integration helper')
+ spec=importlib.util.spec_from_file_location('camera_firmware_component',camera_helper)
+ camera_runtime=importlib.util.module_from_spec(spec);spec.loader.exec_module(camera_runtime)
+ camera_component=here/'components/camera'
+ camera_runtime.load(camera_component)
  mk=find_squash_tool(a.mksquashfs,'mksquashfs'); un=find_squash_tool(a.unsquashfs,'unsquashfs')
  for cmd in ('openssl','cpio'):
   if not shutil.which(cmd): raise RuntimeError(f'Missing required command: {cmd}')
@@ -537,13 +544,15 @@ def main():
   patch_dual(daemon,dual)
   install_cc2_control(root,cc2_component,cc2_manifest)
   reactor.install(root,reactor_component)
+  camera_runtime.install(root,camera_component)
   # Verify intended rootfs surface before compression.
   reqhash(gui,EXPECTED['patched_gui'],'installed patched GUI'); reqhash(root/'usr/sbin/sshd',EXPECTED['sshd'],'installed sshd')
   reqhash(camera,CAMERA_RELEASE_SHA256,'installed coexistence camera')
   reqhash(printer,PRINTER_RELEASE_SHA256,'installed patched elegoo_printer')
   reqhash(daemon,EXPECTED['daemon_dual'],'installed Dual Trust daemon')
   audit_cc2_control(root,cc2_component,cc2_manifest)
-  reactor.audit(root,reactor_component)
+  reactor.audit(root,reactor_component,printer_init_transform=camera_runtime.patched_init)
+  camera_runtime.audit(root,camera_component)
   banner('REBUILD SQUASHFS'); new=work/'rootfs.new'; log=run([mk,root,new,'-comp','xz','-b','262144','-noappend','-no-tailends','-exports','-all-root'],capture=True)
   if 'Failed to read file' in log: raise RuntimeError('mksquashfs reported Failed to read file')
   shutil.copyfile(new,cpio/'rootfs'); root_hash=sha256(cpio/'rootfs'); print('rootfs SHA256:',root_hash)
@@ -555,7 +564,8 @@ def main():
   reqhash(vr/'opt/bin/elegoo_printer',PRINTER_RELEASE_SHA256,'rebuilt patched elegoo_printer')
   reqhash(vr/'opt/inst/daemon-000/daemon-000',EXPECTED['daemon_dual'],'rebuilt Dual Trust daemon')
   audit_cc2_control(vr,cc2_component,cc2_manifest)
-  reactor.audit(vr,reactor_component)
+  reactor.audit(vr,reactor_component,printer_init_transform=camera_runtime.patched_init)
+  camera_runtime.audit(vr,camera_component)
   reqhash(vr/'etc/init.d/sshd',EXPECTED['sshd_init'],'rebuilt sshd init')
   reqhash(vr/'etc/ssh/sshd_config',EXPECTED['sshd_config'],'rebuilt sshd config')
   for n in ('S50sshd','K50sshd'):

@@ -87,6 +87,22 @@ with tempfile.TemporaryDirectory() as directory:
     f.run('enable');assert f.boot()==expected
     f.run('rollback');assert f.init.read_bytes()==f.original and not (f.base/'enabled').exists()
     f.run('rollback');assert f.init.read_bytes()==f.original
+    # A retained canonical component after rollback or firmware reinstallation
+    # must be recognized as dormant, without weakening unknown-startup refusal.
+    before=f.init.read_bytes();f.run('check');assert f.init.read_bytes()==before
+    f.run('install');assert f.boot()==expected
+    retained=list(f.base.parents[1].glob('cc2-camera-before-reinstall-*'))
+    assert len(retained)==1 and (retained[0]/'printer.original').read_bytes()==f.original
+    f=Fixture(parent,noop);f.run('install');f.run('rollback')
+    (f.base/'common.sh').write_text('untrusted retained script\n')
+    names=(*NAMES,'libcc2-camera-reap-r2.so','libcc2-camera-recovery-r2.so','cc2-camera-reap-check')
+    (f.base/'SHA256SUMS').write_text(''.join(sha(f.base/n)+'  '+n+'\n' for n in names))
+    f.run('check',ok=False);f.run('install',ok=False);assert f.init.read_bytes()==f.original
+    assert (f.base/'common.sh').read_text()=='untrusted retained script\n'
+    f=Fixture(parent,noop);f.run('install');f.run('rollback')
+    f.run('install',ok=False,TEST_STATE=IDLE.replace('age":2','age":99'))
+    assert f.base.exists() and f.init.read_bytes()==f.original
+    assert not list(f.base.parents[1].glob('cc2-camera-before-reinstall-*'))
     # Disabled payload, corruption, changed firmware/startup and loader failures
     # must launch only the native camera, rather than break printer startup.
     for mode in ['disabled','bad-enabled','library','camera','startup','loader','missing-dependency','helper','manifest','missing-common','symlink-enabled']:
@@ -150,4 +166,23 @@ with tempfile.TemporaryDirectory() as directory:
             if failure=='none':f.run('install')
             assert f.init.read_bytes()==before and not f.base.exists()
             assert (personal/'enabled').read_bytes()==enabled and not f.launches.exists()
+            if failure=='none':
+                # Reproduce migration from the personal trial to the canonical
+                # 1.2.19 component, leaving the old qualified trial untouched.
+                # check and install must choose the same canonical component.
+                f.init.write_bytes(f.original);f.run('install')
+                before=f.init.read_bytes()
+                personal_before={p.name:p.read_bytes() for p in personal.iterdir()}
+                f.run('check');f.run('install');f.run('verify')
+                assert f.init.read_bytes()==before
+                assert {p.name:p.read_bytes() for p in personal.iterdir()}==personal_before
+                f.run('disable');f.run('check');f.run('install')
+                assert not (f.base/'enabled').exists(), 'preserve canonical activation choice'
+                # A corrupt canonical component or changed startup must fail,
+                # rather than fall back to the obsolete personal directory.
+                f.init.write_bytes(before+b'# unrelated startup change\n')
+                f.run('check',ok=False);f.run('install',ok=False)
+                f.init.write_bytes(before)
+                (f.base/'libcc2-camera-recovery-r2.so').write_bytes(b'corrupt')
+                f.run('check',ok=False);f.run('install',ok=False)
 print(f'PASS: {CASES} persistent install/boot/disable/enable/exact-rollback/fallback/refusal cases; shell={SHELL}; no printer addressed')

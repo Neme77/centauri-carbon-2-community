@@ -147,18 +147,13 @@ try {
   assert.equal(await page.getByLabel('LAN Access Code', { exact: true }).inputValue(), '')
   await page.getByText('No newer compatible update published.', { exact: true }).waitFor()
   assert.equal(await page.getByText(localized.en, { exact: true }).count(), 0, 'installed release notes must disappear')
-  await page.getByLabel('Update channel', { exact: true }).selectOption('canvas-uds')
-  await page.getByRole('dialog').getByRole('button',{name:'Cancel',exact:true}).click()
-  assert.equal(await page.getByLabel('Update channel', { exact: true }).inputValue(), 'stable')
-  await page.getByLabel('Update channel', { exact: true }).selectOption('canvas-uds')
-  await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click()
-  await page.getByText('Experimental fixture', { exact: true }).waitFor()
+  assert.equal(await page.getByLabel('Update channel', { exact: true }).count(), 0)
+  assert.equal(await page.getByText('Experimental fixture', { exact: true }).count(), 0)
   for (const width of [1440,768,390]) {
     await page.setViewportSize({width,height:1000})
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'settings overflow '+width)
   }
   await page.setViewportSize({ width: 1440, height: 1000 })
-  await page.getByLabel('Update channel', { exact: true }).selectOption('stable')
   index.releases[0].version = '1.2.10'
   index.releases[0].url = index.releases[0].url.replace('control-1.2.9', 'control-1.2.10')
   await page.getByRole('button', { name: 'Check for updates', exact: true }).click()

@@ -122,13 +122,20 @@ reads it at start-up from the printer configuration followed by `autosave.cfg`, 
 CC2 Control stores its value as a `[canvas_dev]` override in the SAVE_CONFIG block of `autosave.cfg` and never
 edits the vendor configuration. The firmware's SAVE_CONFIG keeps that section.
 
-- `GET /api/canvas/unload` returns `{"editable":bool,"min":60,"max":350,"configured":mm|null,"override":mm|null,
+- `GET /api/canvas/unload` returns `{"editable":bool,"min":60,"max":350|1000,"extended":bool,"configured":mm|null,"override":mm|null,
   "pending_restart":bool,"restart":"none"|"restarting"|"printer_busy"|"launch_failed"|"reboot_failed"}`.
   `configured` comes from the printer configuration and `override` from `autosave.cfg`. `editable` is false
   when `autosave.cfg` has a layout CC2 Control does not edit (no SAVE_CONFIG marker, carriage returns, or a
   duplicate section or key). A failed restart is reported once.
-- `POST /api/canvas/unload` with body `60`–`350` (whole millimetres) sets the override, and with body `default`
-  removes it. The firmware refuses to start with a value outside 60–350, so other values answer `400`. It
+- `extended` is true, and `max` is 1000, only while the running `elegoo_printer` is the V4.4 program with the
+  `unload_fila_dist` limit raised to 1000 mm (SHA-256 `15ea2077…0ea1bc`, issue #172). CC2 Control hashes the
+  running program once per printer process on a background thread; until that finishes, and for any other
+  program, `max` is 350. A result belongs to one process (id and start time) and one file (device, inode,
+  size, modification and change times); a file that changes while it is read, a process that has gone or been
+  replaced by the time the result is stored, and two printer processes at once all give 350. A save above 350
+  checks the running program again just before writing and answers `409` if it is no longer the raised one.
+- `POST /api/canvas/unload` with body `60`–`max` (whole millimetres) sets the override, and with body `default`
+  removes it. The firmware refuses to start with a value outside its range, so other values answer `400`. It
   answers `409` unless the printer is idle with fresh telemetry and nothing else in progress. The old file is
   kept as `autosave_backup.cfg`, as the firmware's own SAVE_CONFIG keeps it, and the reply is the new state.
   A change stays `pending_restart` until the system boots again.
@@ -263,6 +270,41 @@ requires confirmation for calibration and saving.
 Hotend calibration and PID persistence were validated on a physical CC2.
 No restart was observed after saving. Immediate application of the new PID
 coefficients has not been independently verified.
+
+## X/Y motor mode (StealthChop)
+
+Experimental: disabled by default and explicitly opted into in Settings → Updates,
+independently of the stable application update channel. Quiet commands are refused
+until opted in; Normal remains available for recovery. Not yet physically qualified
+on V4.4 / V4.4.1. Passing CI is not printer qualification.
+
+`POST /api/control` accepts `motors:quiet` and `motors:normal` while the printer is
+idle with fresh telemetry; both are refused during a print. They change the X and Y
+TMC2209 drivers together (CoreXY) with the native `SET_TMC_FIELD`, which refuses a
+literal `VALUE=0`, so the zero writes use values whose masked field is 0
+(`en_spreadcycle` 2, `tpwmthrs` 1048576).
+
+StealthChop loses steps at high speed and acceleration, and a hybrid `tpwmthrs`
+threshold does not cap the speed. Quiet therefore runs `M400` and
+`SET_VELOCITY_LIMIT VELOCITY=80 ACCEL=2000` before any StealthChop write; Normal
+restores SpreadCycle on both steppers first and then
+`SET_VELOCITY_LIMIT VELOCITY=500 ACCEL=20000`, the stock `printer.cfg` limits
+(CC2 Control does not read the printer configuration). Normal always restores these
+fixed values, not limits a user set before Quiet. Both end with `DUMP_TMC` for X and
+Y, shown in the Console.
+
+`GET /api/printer` reports the last requested mode as `motor_mode` (`"quiet"`,
+`"normal"`, or `null` before any request and after the printer service reconnects,
+when the configured mode returns). It records the last accepted request, not a
+verified TMC register state: check the `DUMP_TMC` read-back. It does not report the
+toolhead velocity or acceleration limits.
+
+Quiet belongs to one print. The 80 mm/s / 2000 mm/s² values are initial limits,
+not an enforced cap: a slicer's `M204` or `SET_VELOCITY_LIMIT` lines raise them
+again during the print, so Quiet suits only G-code sliced to stay at or below
+80 mm/s and 2000 mm/s² throughout; the Control page warns while a print runs in Quiet. When a
+print (printing or paused) has run in Quiet and the printer is idle again, CC2
+Control sends the Normal script itself.
 
 ## Build-plate library
 
@@ -556,3 +598,16 @@ Test qualification is separate from printer qualification. The regression model
 keeps stored profiles and the active matrix independent and covers successful,
 ignored/refused loads, missing/wrong matrix data, busy/stale guards and pending
 post-restart activation. A controlled V4.4 printer trial is required before release.
+
+## Experimental feature preferences
+
+`GET /api/experiments` reports the stored choices, actual Canvas UDS availability,
+editability and the shared cold/idle readiness guard.
+
+`POST /api/experiments` accepts exactly `canvas-uds:on`, `canvas-uds:off`,
+`quiet-motors:on` or `quiet-motors:off`, with `X-CC2-LAN`. Both default off and
+are persisted independently. Changing Canvas reconnects the existing UDS connection,
+revokes old direct-state authority and sends no motion/heating command. Disabling
+Quiet controls, or changing Canvas while they are enabled, requires a successful
+explicit Normal command on the current UDS connection. Invalid storage is not
+overwritten. See [experimental features](EXPERIMENTAL_FEATURES.md) for limitations.

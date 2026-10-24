@@ -1,48 +1,33 @@
-# CC2 Control 1.2.19 — complete update
+# CC2 Control 1.2.21 — cumulative corrective trial
 
-**FULL PRINTER REBOOT REQUIRED: this update includes the camera fix.
-After installation, manually reboot the complete printer while it is idle.
-Refreshing the page or restarting only CC2 Control does not activate the patch.**
+For Community Firmware V4.4/V4.4.1 and the V4.4.2 candidate, ELEGOO 02.01.01.07.
 
-Includes camera fixes from PR #183 and unreliable G-code date handling from
-PR #185. Camera library bytes match the seven-hour printing observation with
-AI enabled and working streaming. The new combined installer requires a complete
-printer acceptance test before stable-channel publication.
+Fixes updater downloads when GitHub security headers exceed 8 KiB, preserving
+the existing 16 KiB total-header budget and all certificate/redirect checks.
+Older versions need this first signed panel upload from the computer; subsequent
+downloads use the corrected helper.
 
-Install only while connected, idle and cool (nozzle/bed at most 50 °C, targets
-zero). Close live viewers first. The LAN code authorizes installation through
-the panel and is not included in this package.
+Recognizes and retains a qualified dormant R2 camera directory left after
+rollback or firmware reinstallation, authenticating its files and startup
+fingerprints before reinstalling. Unknown components and unrelated startup
+changes remain refused. The included camera R2 libraries are unchanged.
 
-In the panel use Settings → Updates → upload the signed .cc2update file, or
-extract the multiplatform ZIP and run the installer for your operating system.
-Keep the backup path shown at completion.
+Install only while connected, idle and cold, with heater targets zero. A complete
+idle-printer reboot is required on first camera-fix activation; restarting only
+CC2 Control is insufficient. No printer reboot is automatic. Keep the exact
+installer backup path for restoration.
 
-Camera checks pin the executable, startup file, libraries and dependencies;
-unknown configurations are refused. ai_camera is not replaced and the stream
-limit is unchanged. A recognized previous personal R2 installation and its
-activation preference are preserved. No automatic camera restart or reboot occurs.
+Includes accepted stable Canvas, spool, object-map, file and UI improvements.
+Canvas UDS and Quiet controls are independent options in this same base, off on
+new installations. Extended pull-back stays separate; its runtime is not
+installed. See README-EXPERIMENTAL.md for the trial. Settings,
+spools and plate libraries are retained.
 
-After reboot, check version 1.2.19, printer connection, local and Matrix video.
-For a new camera installation run:
+The full firmware builder is separate: generate V4.4.2 on the maintainer's PC
+and validate that complete image on hardware before publishing it.
 
-```sh
-sh /opt/usr/cc2-control/camera/manage.sh status
-```
+Thanks to tharje for camera diagnosis, DamiBFryta, our ultimate beta tester, for
+persistent testing and feedback, Surfoo, Nick Plateringen-Paul and all original
+contributors whose credits remain in project history.
 
-For the existing personal installation use:
-
-```sh
-sh /opt/usr/cc2-camera-recovery-r2/manage.sh status
-```
-
-Application backup restoration also restores the previous camera startup when
-this update changed it, refusing unrelated later startup edits. Restore only
-while idle and cool, then reboot the whole printer to change in-memory patches.
-
-Obviously unreliable file dates are displayed as unavailable without rewriting
-G-code or original timestamps. The clock still needs a reachable time source,
-including on networks that block cloud access.
-
-Thanks to tharje for camera diagnosis, reproduction and analysis, and to the
-community beta testers. Specific AI detections and expired RTC sessions are not
-qualified merely by observing a print with AI options enabled.
+If the printer already shows 1.2.21, use the computer installer for this trial: the panel accepts only newer versions.

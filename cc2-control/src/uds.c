@@ -13,6 +13,8 @@
 
 static const char subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"toolhead\":[\"homed_axes\"],\"filament_switch_sensor filament_sensor\":[\"filament_detected\"],\"output_pin led_pin\":[\"value\"],\"print_stats\":[\"filename\",\"state\",\"info\",\"print_duration\",\"total_duration\",\"filament_used\"],\"canvas_dev\":[\"active_cid\"],\"bed_mesh\":[\"profile_name\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003"
  "{\"id\":13,\"method\":\"gcode/subscribe_report\",\"params\":{\"response_template\":{\"method\":\"cc2_report\"}}}\003";
+static const char canvas_subscription[] = "{\"id\":11,\"method\":\"objects/subscribe\",\"params\":{\"objects\":{\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],\"gcode_move\":[\"speed_factor\",\"extrude_factor\",\"homing_origin\"],\"motion_report\":[\"live_velocity\"],\"toolhead\":[\"homed_axes\"],\"filament_switch_sensor filament_sensor\":[\"filament_detected\"],\"output_pin led_pin\":[\"value\"],\"print_stats\":[\"filename\",\"state\",\"info\",\"print_duration\",\"total_duration\",\"filament_used\"],\"canvas_dev\":[\"type\",\"active_did\",\"active_cid\",\"auto_plug_in_enable\",\"canvas_lite\"],\"bed_mesh\":[\"profile_name\"],\"virtual_sdcard\":[\"progress\"],\"exclude_object\":[\"excluded_objects\",\"current_object\"],\"fan\":[\"speed\",\"rpm\"],\"fan_generic fan1\":[\"speed\",\"rpm\"],\"controller_fan board_cooling_fan\":[\"speed\",\"rpm\"],\"heater_fan heatbreak_cooling_fan\":[\"speed\",\"rpm\"]},\"response_template\":{\"method\":\"cc2_status\"}}}\003"
+ "{\"id\":13,\"method\":\"gcode/subscribe_report\",\"params\":{\"response_template\":{\"method\":\"cc2_report\"}}}\003";
 static const char heartbeat[]="{\"id\":12,\"method\":\"info\",\"params\":{}}\003";
 static double elapsed(struct timespec a,struct timespec b){return (double)(a.tv_sec-b.tv_sec)+(a.tv_nsec-b.tv_nsec)/1e9;}
 static struct timespec now_mono(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t;}
@@ -67,6 +69,109 @@ static const char *json_member_object(const char *obj,const char *end,const char
     if(!value||*value!=open)return NULL;
     *value_end=json_container_end(value,end);
     return *value_end?value:NULL;
+}
+
+/* Canvas has a small typed cache. A malformed/incomplete view falls back to MQTT;
+ * a missing member in a delta retains its previous value, including empty slots. */
+enum { CS_CID=1,CS_STATUS=2,CS_BRAND=4,CS_CODE=8,CS_NAME=16,CS_TYPE=32,
+       CS_COLOR=64,CS_MIN=128,CS_MAX=256,CS_ALL=511 };
+enum { CC_TYPE=1,CC_ACTIVE_DID=2,CC_ACTIVE_CID=4,CC_REFILL=8,CC_DID=16,
+       CC_CONNECTED=32,CC_ALL=63 };
+static int canvas_literal(const char *o,const char *e,const char *key,char *out,size_t cap){
+ const char *p=json_member(o,e,key);if(!p||*p!='"')return 0;
+ const char *q=json_string_end(p,e);if(!q||(size_t)(q-p)>=cap)return 0;
+ for(const char *r=p+1;r<q-1;r++){
+  if((unsigned char)*r<32)return 0;
+  if(*r=='\\'){
+   r++;if(r>=q-1)return 0;
+   if(*r=='u'){for(int i=0;i<4;i++){r++;if(r>=q-1||!isxdigit((unsigned char)*r))return 0;}}
+   else if(!strchr("\"\\/bfnrt",*r))return 0;
+  }
+ }
+ memcpy(out,p,(size_t)(q-p));out[q-p]=0;return 1;
+}
+static int numeric(const char *o,const char *e,const char *key,double *out);
+static int canvas_int(const char *o,const char *e,const char *key,int low,int high,int *out){
+ double v;if(!numeric(o,e,key,&v)||v<low||v>high||floor(v)!=v)return 0;
+ *out=(int)v;return 1;
+}
+static int canvas_temp(const char *o,const char *e,const char *key,double *out){
+ const char *p=json_member(o,e,key);if(!p)return 0;
+ double value;
+ if(*p=='"'){
+  char text[68];if(!canvas_literal(o,e,key,text,sizeof(text)))return 0;
+  size_t length=strlen(text);text[length-1]=0;
+  const char *start=text+1;if(!*start){*out=0;return 1;}
+  char *q;errno=0;value=strtod(start,&q);
+  if(q==start||errno||!isfinite(value))return 0;
+  while(isspace((unsigned char)*q))q++;
+  if(*q&&strcmp(q,"\xe2\x84\x83")&&strcmp(q,"\\u2103")&&strcmp(q,"C")&&strcmp(q,"\xc2\xb0" "C"))return 0;
+ }else if(!numeric(o,e,key,&value))return 0;
+ if(value<0||value>1000)return 0;
+ *out=value;return 1;
+}
+static int canvas_color(const char *o,const char *e,char *out,size_t cap){
+ char text[32];if(!canvas_literal(o,e,"color",text,sizeof(text)))return 0;
+ if(!strcmp(text,"\"\"")){snprintf(out,cap,"\"\"");return 1;}
+ size_t length=strlen(text);const char *hex=NULL;
+ if(length==10&&text[1]=='0'&&(text[2]=='x'||text[2]=='X'))hex=text+3;
+ if(length==9&&text[1]=='#')hex=text+2;
+ if(!hex)return 0;
+ for(int i=0;i<6;i++)if(!isxdigit((unsigned char)hex[i]))return 0;
+ if(cap<10)return 0;
+ out[0]='"';out[1]='#';for(int i=0;i<6;i++)out[i+2]=(char)toupper((unsigned char)hex[i]);
+ out[8]='"';out[9]=0;return 1;
+}
+static int canvas_slot_merge(uds_canvas_slot *s,const char *o,const char *e,int slot,int older){
+ int value;
+ if((!older||!(s->present&CS_CID))&&json_member(o,e,"cid")){if(!canvas_int(o,e,"cid",slot,slot,&value))return 0;s->cid=value;s->present|=CS_CID;}
+ if((!older||!(s->present&CS_STATUS))&&json_member(o,e,"status")){if(!canvas_int(o,e,"status",0,255,&value))return 0;s->status=value;s->present|=CS_STATUS;}
+ const char *fe,*f=json_member_object(o,e,"filament",'{',&fe);
+ if(json_member(o,e,"filament")&&!f)return 0;
+ if(!f)return 1;
+#define CSTRING(key,member,flag) do {if((!older||!(s->present&flag))&&json_member(f,fe,key)){if(!canvas_literal(f,fe,key,s->member,sizeof(s->member)))return 0;s->present|=flag;}} while(0)
+ CSTRING("manufacturer",brand,CS_BRAND);CSTRING("code",code,CS_CODE);
+ CSTRING("detailed_type",name,CS_NAME);CSTRING("type",type,CS_TYPE);
+#undef CSTRING
+ if((!older||!(s->present&CS_COLOR))&&json_member(f,fe,"color")){if(!canvas_color(f,fe,s->color,sizeof(s->color)))return 0;s->present|=CS_COLOR;}
+ if((!older||!(s->present&CS_MIN))&&json_member(f,fe,"nozzle_min_temp")){if(!canvas_temp(f,fe,"nozzle_min_temp",&s->min_temp))return 0;s->present|=CS_MIN;}
+ if((!older||!(s->present&CS_MAX))&&json_member(f,fe,"nozzle_max_temp")){if(!canvas_temp(f,fe,"nozzle_max_temp",&s->max_temp))return 0;s->present|=CS_MAX;}
+ if((s->present&(CS_MIN|CS_MAX))==(CS_MIN|CS_MAX)&&s->min_temp>s->max_temp)return 0;
+ return 1;
+}
+static void canvas_merge(uds_client *c,const char *status,const char *end,int older){
+ if(!c->canvas_enabled)return;
+ if(older&&c->ready)return;
+ if(older&&c->canvas.revision&&!c->canvas.valid)return;
+ const char *ce,*o=json_member_object(status,end,"canvas_dev",'{',&ce);
+ if(!json_member(status,end,"canvas_dev"))return;
+ if(!o){if(!older)memset(&c->canvas,0,sizeof(c->canvas));return;}
+ /* Older initial replies fill missing members without replacing newer delta data. */
+ uds_canvas *v=&c->canvas;int valid=1,value;
+ if((!older||!(v->present&CC_TYPE))&&json_member(o,ce,"type")){
+  char type[24];if(!canvas_literal(o,ce,"type",type,sizeof(type))||strcmp(type,"\"lite\""))valid=0;
+  else v->present|=CC_TYPE;
+ }
+#define CINT(key,member,flag,low,high) do {if((!older||!(v->present&flag))&&json_member(o,ce,key)){if(!canvas_int(o,ce,key,low,high,&value))valid=0;else {v->member=value;v->present|=flag;}}} while(0)
+ CINT("active_did",active_did,CC_ACTIVE_DID,-1,31);
+ CINT("active_cid",active_cid,CC_ACTIVE_CID,-1,3);
+ CINT("auto_plug_in_enable",auto_refill,CC_REFILL,0,1);
+#undef CINT
+ const char *le,*lite=json_member_object(o,ce,"canvas_lite",'{',&le);
+ if(older&&lite&&(v->present&CC_DID)&&json_member(lite,le,"did")&&
+    (!canvas_int(lite,le,"did",0,31,&value)||value!=v->did))return;
+ if(json_member(o,ce,"canvas_lite")&&!lite)valid=0;
+ if(lite){
+  if((!older||!(v->present&CC_DID))&&json_member(lite,le,"did")){if(!canvas_int(lite,le,"did",0,31,&value))valid=0;else {if((v->present&CC_DID)&&v->did!=value){memset(v->slots,0,sizeof(v->slots));v->present&=~CC_CONNECTED;}v->did=value;v->present|=CC_DID;}}
+  if((!older||!(v->present&CC_CONNECTED))&&json_member(lite,le,"connected")){if(!canvas_int(lite,le,"connected",0,1,&value))valid=0;else {v->connected=value;v->present|=CC_CONNECTED;}}
+  static const char *const channel_keys[]={"channels0","channels1","channels2","channels3"};
+  for(int i=0;i<4;i++){
+   const char *key=channel_keys[i];const char *se,*slot=json_member_object(lite,le,key,'{',&se);
+   if(json_member(lite,le,key)&&(!slot||!canvas_slot_merge(&v->slots[i],slot,se,i,older)))valid=0;
+  }
+ }
+ if(!valid){v->present=0;for(int i=0;i<4;i++)v->slots[i].present=0;v->valid=0;return;}
+ v->valid=1;v->revision++;
 }
 
 static int numeric(const char *o,const char *e,const char *key,double *out){
@@ -311,6 +416,7 @@ int uds_message(uds_client *c,const char *json,size_t length){
   exclude_value(x,xe,"excluded_objects",'[',c->excluded_objects,sizeof(c->excluded_objects),&c->have_excluded_objects,older);
   exclude_value(x,xe,"current_object",'"',c->current_object,sizeof(c->current_object),&c->have_current_object,older);
  }
+ canvas_merge(c,status,se,older);
  if(!older)c->eventtime=event;
  c->messages++;c->last_rx=now_mono();if(initial)c->ready=1;
  return 1;
@@ -318,6 +424,7 @@ int uds_message(uds_client *c,const char *json,size_t length){
 void uds_init(uds_client *c){memset(c,0,sizeof(*c));c->fd=-1;}
 void uds_close(uds_client *c){
  if(c->fd>=0)close(c->fd);
+ memset(&c->canvas,0,sizeof(c->canvas));
  c->fd=-1;c->ready=0;c->present=0;c->used=c->sent=0;c->have_filename=c->have_print_state=c->have_mesh_profile=0;
  c->have_excluded_objects=c->have_current_object=0;
  c->have_homed_axes=c->have_light=c->have_head_filament=0;
@@ -345,8 +452,10 @@ void uds_tick(uds_client *c,const char *path){
   if(fcntl(fd,F_SETFL,O_NONBLOCK)<0||connect(fd,(struct sockaddr *)&a,sizeof(a))<0){close(fd);return;}
   c->fd=fd;c->last_rx=now;c->last_ping=now;c->messages=0;c->eventtime=0;c->connections++;
  }
- if(c->sent<sizeof(subscription)-1){
-  ssize_t n=send(c->fd,subscription+c->sent,sizeof(subscription)-1-c->sent,MSG_NOSIGNAL);
+ const char *selected=c->canvas_enabled?canvas_subscription:subscription;
+ size_t selected_length=c->canvas_enabled?sizeof(canvas_subscription)-1:sizeof(subscription)-1;
+ if(c->sent<selected_length){
+  ssize_t n=send(c->fd,selected+c->sent,selected_length-c->sent,MSG_NOSIGNAL);
   if(n>0)c->sent+=(size_t)n;
   else if(n==0||(errno!=EAGAIN&&errno!=EWOULDBLOCK&&errno!=EINTR))uds_disconnect(c,"subscribe_send",n<0?errno:0);
   return;
@@ -388,6 +497,9 @@ int uds_job_matches(const uds_client *c,const char *filename){
  return c->have_filename&&*file&&filename&&!strcmp(file,filename);
 }
 void uds_motion_light(const uds_client *c,mqtt_client *v){
+ int canvas_length=uds_canvas_status(c,v->canvas_uds_snapshot,sizeof(v->canvas_uds_snapshot));
+ v->canvas_uds_ready=canvas_length>0;
+ v->canvas_uds_snapshot_len=canvas_length>0?(size_t)canvas_length:0;
  /* Stale or absent direct homing state must never authorize motion. */
  v->homed_axes[0]=0;
  if(uds_fresh(c)&&c->have_homed_axes)strcpy(v->homed_axes,c->homed_axes);
@@ -428,4 +540,27 @@ int uds_exclude_status(const uds_client *c,char *out,size_t cap){
  int n=snprintf(out,cap,"{\"result\":{\"status\":{\"exclude_object\":{\"excluded_objects\":%s,\"current_object\":%s}}}}",
   c->excluded_objects,c->current_object);
  return n>0&&(size_t)n<cap?n:-1;
+}
+
+int uds_canvas_available(const uds_client *c){
+ const uds_canvas *v=&c->canvas;
+ if(!c->canvas_enabled||!uds_fresh(c)||!v->valid||v->present!=CC_ALL)return 0;
+ if(v->active_did!=-1&&v->active_did!=v->did)return 0;
+ for(int i=0;i<4;i++)if(v->slots[i].present!=CS_ALL)return 0;
+ return 1;
+}
+int uds_canvas_status(const uds_client *c,char *out,size_t cap){
+ if(!uds_canvas_available(c))return 0;
+ const uds_canvas *v=&c->canvas;size_t used=0;
+#define CWRITE(...) do {int n=snprintf(out+used,cap-used,__VA_ARGS__);if(n<0||(size_t)n>=cap-used)return -1;used+=(size_t)n;} while(0)
+ CWRITE("{\"result\":{\"canvas_info\":{\"active_canvas_id\":%d,\"active_tray_id\":%d,\"auto_refill\":%s,\"canvas_list\":[{\"canvas_id\":%d,\"connected\":%d,\"tray_list\":[",
+  v->active_did,v->active_cid,v->auto_refill?"true":"false",v->did,v->connected);
+ for(int i=0;i<4;i++){
+  const uds_canvas_slot *s=&v->slots[i];
+  CWRITE("%s{\"tray_id\":%d,\"status\":%d,\"brand\":%s,\"filament_code\":%s,\"filament_name\":%s,\"filament_type\":%s,\"filament_color\":%s,\"min_nozzle_temp\":%.6g,\"max_nozzle_temp\":%.6g}",
+   i?",":"",s->cid,s->status,s->brand,s->code,s->name,s->type,s->color,s->min_temp,s->max_temp);
+ }
+ CWRITE("]}]}}}");
+#undef CWRITE
+ return (int)used;
 }
