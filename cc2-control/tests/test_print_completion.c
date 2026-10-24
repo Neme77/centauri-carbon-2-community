@@ -13,8 +13,10 @@ int main(void){
     uds_init(&telemetry);telemetry.fd=99;telemetry.ready=1;telemetry.have_print_state=telemetry.have_filename=1;
     strcpy(telemetry.print_state,"complete");strcpy(telemetry.filename,"part.gcode");telemetry.present=1u<<U_DURATION;telemetry.values[U_DURATION]=123.5;
     clock_gettime(CLOCK_MONOTONIC,&telemetry.last_rx);readback(reply,sizeof(reply));
-    assert(strstr(reply,"\"native\":{\"state\":\"complete\",\"filename\":\"part.gcode\",\"duration\":123.500}"));
+    assert(strstr(reply,"\"native\":{\"state\":\"complete\",\"filename\":\"part.gcode\",\"duration\":123.5}"));
     assert(strstr(reply,"\"progress\":100"));/* Native last-job count is not falsified. */
+    telemetry.have_filename=0;telemetry.present=0;readback(reply,sizeof(reply));
+    assert(strstr(reply,"\"native\":{\"state\":\"complete\",\"filename\":\"\",\"duration\":null}"));
     telemetry.last_rx.tv_sec-=10;readback(reply,sizeof(reply));assert(strstr(reply,"\"native\":null"));
     clock_gettime(CLOCK_MONOTONIC,&telemetry.last_rx);strcpy(telemetry.print_state,"cancelled");readback(reply,sizeof(reply));
     assert(strstr(reply,"\"native\":{\"state\":\"cancelled\""));

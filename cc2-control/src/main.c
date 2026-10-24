@@ -2468,12 +2468,14 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
     char body[8192],filename[520],state[140],uuid[260],axes[40];
-    char native_job[1400]="null",native_filename[1100],native_state[40];
+    char native_job[1400]="null",native_filename[1100],native_state[40],native_seconds[40];
     const char *native=uds_print_state(&telemetry);double native_duration;
-    if(native&&telemetry.have_filename&&uds_value(&telemetry,U_DURATION,&native_duration)){
-        json_escape(native_filename,sizeof(native_filename),telemetry.filename);
+    if(native){
+        json_escape(native_filename,sizeof(native_filename),telemetry.have_filename?telemetry.filename:"");
+        int have_native_duration=uds_value(&telemetry,U_DURATION,&native_duration);
+        json_number(native_seconds,sizeof(native_seconds),have_native_duration,have_native_duration?native_duration:0);
         json_escape(native_state,sizeof(native_state),native);
-        snprintf(native_job,sizeof(native_job),"{\"state\":\"%s\",\"filename\":\"%s\",\"duration\":%.3f}",native_state,native_filename,native_duration);
+        snprintf(native_job,sizeof(native_job),"{\"state\":\"%s\",\"filename\":\"%s\",\"duration\":%s}",native_state,native_filename,native_seconds);
     }
     if(uds_value(&telemetry,U_ET,&live))json_number(et,sizeof(et),1,live);
     else json_number(et,sizeof(et),mqtt->have_extruder_temp,mqtt->extruder_temp);

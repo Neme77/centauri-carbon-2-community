@@ -58,7 +58,7 @@ export const PrintCompleted = () => {
       <CardHead icon="file" title={notice.live ? 'completed.title' : 'completed.latest'} />
       <p class="break-words font-semibold">{notice.path}</p>
       <p class="mt-2 text-muted">
-        {duration(notice.seconds)} · {t('completed.hint')}
+        {notice.seconds > 0 ? duration(notice.seconds) : '—'} · {t('completed.hint')}
       </p>
       <div class="mt-3 flex flex-wrap gap-2">
         <Button onClick={dismiss}>{t('completed.acknowledge')}</Button>

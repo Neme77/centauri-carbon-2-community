@@ -614,8 +614,8 @@ overwritten. See [experimental features](EXPERIMENTAL_FEATURES.md) for limitatio
 
 ## Completed print readback
 
-`GET /api/printer` adds `print.native` when the existing UDS cache has fresh
-print state, filename and duration: `{state, filename, duration}`; otherwise null.
+`GET /api/printer` adds `print.native` when the existing UDS cache has a fresh
+print state (filename may be empty and duration null when cleared by firmware): `{state, filename, duration}`; otherwise null.
 It adds no printer query. Raw `machine.progress` remains the native last-job
 value; the current-job UI resets its progress when idle. The nonblocking CC2
 notice accepts explicit completion only, deduplicates acknowledgements per

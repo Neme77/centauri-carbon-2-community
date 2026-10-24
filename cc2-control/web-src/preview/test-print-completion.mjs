@@ -22,3 +22,7 @@ assert(replayable('parts/A B.gcode'))
 console.log('PASS explicit completion, cancellation/stale/mismatched refusal, deduplication, repeat prints, late opening and replay paths')
 
 tracker=new CompletionTracker(new Set());for(let i=0;i<2;i++){tracker.observe(sample('printing',2,'part.gcode',''),true);assert(tracker.observe(sample('complete',1,'part.gcode',''),true)?.live,'Same file without UUID must still report each observed print')}
+
+tracker=new CompletionTracker(new Set());tracker.observe(sample('printing',2),true)
+const cleared=sample('complete',1,'');cleared.print.native.duration=null;cleared.print.duration=0
+assert.equal(tracker.observe(cleared,true)?.path,'part.gcode','Use the observed file when firmware clears end metadata')

@@ -29,9 +29,9 @@ export class CompletionTracker {
       return null
     }
     if (Number(d?.machine?.status) !== 1 || state !== 'complete') return null
-    const path = String(native?.filename || job?.filename || '')
+    const path = String(native?.filename || job?.filename || this.running?.path || '')
     const seconds = Number(native?.duration ?? job?.duration)
-    if (!path || !Number.isFinite(seconds) || seconds <= 0) return null
+    if (!path || !Number.isFinite(seconds) || seconds < 0 || (!this.running && seconds === 0)) return null
     if (this.running && this.running.path !== path) return null
     const uuid = this.running?.uuid || String(job?.uuid || '')
     const alias = `file:${path}:${seconds}`
