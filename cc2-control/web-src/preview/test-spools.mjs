@@ -151,7 +151,9 @@ try {
   await dialog.getByText('The printer reports', { exact: true }).waitFor()
   // The tray reports purple PLA and no spool has it: nothing unrelated is suggested, a new spool is preselected.
   await dialog.getByText('No spool in the inventory has this filament.', { exact: false }).waitFor()
-  assert.equal(await dialog.locator('input[name="cc2-spool-choice"]').count(), 1)
+  assert.equal(await dialog.locator('input[name="cc2-spool-choice"]').count(), 2)
+  assert.equal(await dialog.getByRole('radio', { name: /Add another like this/ }).count(), 1)
+  assert.equal(await dialog.getByRole('radio', { name: /Add another like this/ }).isChecked(), false)
   assert.ok(await dialog.getByRole('radio', { name: /New spool/ }).isChecked())
   // Every spool is one step away, grouped as in the inventory; the three sealed black spools are one choice.
   await dialog.getByRole('button', { name: /^Show all \d+ spools$/ }).click()
@@ -171,7 +173,8 @@ try {
   // The spool that was there fits what the tray reports (ELEGOO PLA Matte in its blue) and is preselected;
   // Polymaker's blue PLA is another maker's, so it is not suggested.
   assert.ok(await dialog.getByRole('radio', { name: /Blue PLA/ }).isChecked())
-  assert.equal(await dialog.locator('input[name="cc2-spool-choice"]').count(), 2)
+  assert.equal(await dialog.locator('input[name="cc2-spool-choice"]').count(), 3)
+  assert.equal(await dialog.getByRole('radio', { name: /Add another like this/ }).isChecked(), false)
   assert.equal(await dialog.getByRole('radio', { name: /Polymaker/ }).count(), 0)
   await dialog.getByRole('button', { name: 'Not now', exact: true }).click()
   await dialog.waitFor({ state: 'detached' })
@@ -199,6 +202,7 @@ try {
   dialog = page.getByRole('dialog')
   assert.ok(await dialog.getByRole('radio', { name: /Green PLA/ }).isChecked())
   assert.equal(await dialog.locator('input[name="cc2-spool-choice"]').count(), 3)
+  assert.equal(await dialog.getByRole('radio', { name: /Add another like this/ }).count(), 0, 'manual inventory chooser stays unchanged')
   assert.equal(await dialog.getByText('No spool in the inventory has this filament.', { exact: false }).count(), 0)
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await dialog.waitFor({ state: 'detached' })

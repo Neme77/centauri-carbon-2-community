@@ -47,3 +47,7 @@ experimental/combined-test/reactor/vendor-link/
 experimental/combined-test/reactor/libcc2-reactor-v2.so
 experimental/combined-test/reactor/cc2-reactor-bridge-test
 experimental/combined-test/reactor/symbols-debug.txt
+experimental/firmware-port/reactor/vendor-link/
+builder/current/components/camera/runtime/
+builder/current/components/camera/prepared/
+builder/current/components/camera/prepared-manifest.json

@@ -90,7 +90,7 @@ def install(root,component):
     printer_init.write_text(init_patched)
     return manifest
 
-def audit(root,component):
+def audit(root,component,printer_init_transform=None):
     root=Path(root);component,manifest=load(component)
     for name,expected in manifest['files'].items():
         if digest(root/'opt/inst/cc2-reactor'/name)!=expected:
@@ -107,5 +107,7 @@ def audit(root,component):
         raise RuntimeError('Rebuilt reactor boot hook mode mismatch')
 
     init_original=(root/'opt/inst/cc2-reactor/printer-init.original.sh').read_text()
-    if (root/'etc/init.d/printer').read_text()!=patched_printer_init(init_original):
+    expected_init=patched_printer_init(init_original)
+    if printer_init_transform is not None:expected_init=printer_init_transform(expected_init)
+    if (root/'etc/init.d/printer').read_text()!=expected_init:
         raise RuntimeError('Rebuilt vendor GUI startup coordination mismatch')

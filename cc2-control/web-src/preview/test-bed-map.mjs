@@ -142,6 +142,9 @@ try {
   })
   await page.waitForFunction(()=>document.querySelectorAll('[data-object-id]').length===42)
   await open.click()
+  // Wait for the dialog's mount effect before moving keyboard focus to a marker.
+  // Otherwise its initial focus can steal Enter and activate the close button.
+  await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Close bed map')
   assert.equal(await markers.count(),42)
   await dialog.locator('[data-bed-object-id="Back corner"]').focus();await page.keyboard.press('Enter')
   assert.equal(await dialog.locator('[data-bed-list-id="Back corner"]').getAttribute('aria-pressed'),'true')

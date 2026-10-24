@@ -8,6 +8,21 @@
 enum uds_field { U_ET,U_EG,U_BT,U_BG,U_CF,U_HF,U_PF,U_AF,
  U_CRPM,U_HRPM,U_PRPM,U_ARPM,U_SPEED_FACTOR,U_FLOW_FACTOR,
  U_LIVE_SPEED,U_PROGRESS,U_LAYER,U_DURATION,U_TOTAL_DURATION,U_Z_OFFSET,U_FILAMENT_USED,U_CANVAS_CHANNEL,U_FIELDS };
+#define UDS_CANVAS_JSON_MAX 4096
+typedef struct {
+ uint32_t present;
+ int cid, status;
+ double min_temp, max_temp;
+ /* Validated JSON string literals, including quotes; no unbounded raw snapshot. */
+ char brand[132], code[132], name[68], type[68], color[16];
+} uds_canvas_slot;
+typedef struct {
+ uint32_t present;
+ int did, active_did, active_cid, connected, auto_refill;
+ int valid;
+ unsigned long revision;
+ uds_canvas_slot slots[4];
+} uds_canvas;
 #define UDS_CONSOLE_LINES 32
 #define UDS_CONSOLE_LINE 1024
 /* Fixed memory, event-loop owned. A visible viewer renews a short capture lease. */
@@ -20,6 +35,8 @@ typedef struct {
 
 typedef struct {
  uds_console console;
+ int canvas_enabled; /* Explicit experimental opt-in; preserved across reconnects. */
+ uds_canvas canvas;
  int fd, ready;
  size_t used, sent;
  char input[16384];
@@ -64,4 +81,6 @@ int uds_job_matches(const uds_client *c,const char *filename);
 void uds_motion_light(const uds_client *c,mqtt_client *view);
 void uds_overlay(const uds_client *c,mqtt_client *view);
 int uds_exclude_status(const uds_client *c,char *out,size_t cap);
+int uds_canvas_available(const uds_client *c);
+int uds_canvas_status(const uds_client *c,char *out,size_t cap);
 #endif

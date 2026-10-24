@@ -15,6 +15,7 @@
 
 /* One short-lived, certificate-verified HTTPS client. Never load this TLS
  * library into the resident printer application, and never permit HTTP. */
+#define MAX_RESPONSE_HEADERS 16384
 static int url(const char *value, char host[100], char path[4096]) {
     if (strncmp(value, "https://", 8) || strlen(value) >= 4196) return 0;
     const char *slash = strchr(value + 8, '/');
@@ -39,7 +40,7 @@ static int line(mbedtls_ssl_context *ssl, char *out, size_t capacity, size_t *he
     for (;;) {
         unsigned char c;
         int n = mbedtls_ssl_read(ssl, &c, 1);
-        if (n <= 0 || ++*headers > 16384 || used + 1 >= capacity || !c) return 0;
+        if (n <= 0 || ++*headers > MAX_RESPONSE_HEADERS || used + 1 >= capacity || !c) return 0;
         out[used++] = (char)c;
         if (c == '\n') {
             if (used < 2 || out[used - 2] != '\r') return 0;
@@ -61,7 +62,9 @@ static int copy(mbedtls_ssl_context *ssl, uint64_t count, uint64_t *total, uint6
 }
 
 static int get(const char *target, const char *ca, uint64_t maximum, char redirect[4196]) {
-    char host[100], path[4096], request[4350], text[8192];
+    /* GitHub's redirect CSP can exceed 8 KiB. Any line that fits inside
+     * the existing total-header budget must fit this bounded scratch buffer. */
+    char host[100], path[4096], request[4350], text[MAX_RESPONSE_HEADERS];
     if (!url(target, host, path)) return 0;
     mbedtls_net_context net; mbedtls_ssl_context ssl; mbedtls_ssl_config config;
     mbedtls_x509_crt roots; mbedtls_entropy_context entropy; mbedtls_ctr_drbg_context random;

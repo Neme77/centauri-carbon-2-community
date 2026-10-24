@@ -111,17 +111,6 @@ async function checkIndex() {
 }
 
 export const updateCatalog = store({ index: null as Catalog | null, checking: false })
-export const updateChannel = store({ value: ls.get('cc2-update-channel') === 'canvas-uds' ? 'canvas-uds' : 'stable' })
-export const setUpdateChannel = (value: string) => {
-  const next = value === 'canvas-uds' ? value : 'stable'
-  ls.set('cc2-update-channel', next)
-  updateChannel.set({ value: next })
-}
-addEventListener('storage', event => {
-  if (event.key === 'cc2-update-channel')
-    updateChannel.set({ value: event.newValue === 'canvas-uds' ? 'canvas-uds' : 'stable' })
-})
-
 export const UPDATE_CHECK_INTERVAL = 6 * 3600000
 export const UPDATE_RETRY_INTERVAL = 15 * 60000
 let checkPending: Promise<Catalog | null> | null = null

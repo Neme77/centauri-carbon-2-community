@@ -83,7 +83,7 @@ export function previewPlugin(): Plugin {
   let deleted = new Set<string>()
   let autoRefill = false
   // Canvas pull-back: the printer's configured value and the autosave.cfg override, pending until a restart.
-  let unload = { configured: 85, override: null as number | null, pending: false }
+  let unload = { configured: 85, override: null as number | null, pending: false, extended: false }
   let videos: Record<string, number> = {}
   // Build-plate library: which simulated plate mesh each printer side slot holds, as /api/plates reports it.
   const plateMesh = (tilt: number) => ({
@@ -347,7 +347,8 @@ export function previewPlugin(): Plugin {
     ok: true,
     editable: true,
     min: 60,
-    max: 350,
+    max: unload.extended ? 1000 : 350,
+    extended: unload.extended,
     configured: unload.configured,
     override: unload.override,
     pending_restart: unload.pending,
@@ -357,7 +358,7 @@ export function previewPlugin(): Plugin {
     speed = 100
     flow = 100
     autoRefill = false
-    unload = { configured: 85, override: null, pending: false }
+    unload = { configured: 85, override: null, pending: false, extended: false }
     videos = {}
     deleted = new Set()
     cameraViewer = null
@@ -740,9 +741,10 @@ export function previewPlugin(): Plugin {
             }
             if (path === '/api/canvas/unload' && req.method === 'POST') {
               const text = body.trim()
-              const value = text === 'default' ? null : /^\d{2,3}$/.test(text) ? Number(text) : Number.NaN
-              if (value !== null && !(value >= 60 && value <= 350))
-                return reply({ ok: false, error: 'Enter a whole number of millimetres from 60 to 350' }, 400)
+              const max = unload.extended ? 1000 : 350
+              const value = text === 'default' ? null : /^\d{2,4}$/.test(text) ? Number(text) : Number.NaN
+              if (value !== null && !(value >= 60 && value <= max))
+                return reply({ ok: false, error: `Enter a whole number of millimetres from 60 to ${max}` }, 400)
               if (scene !== 'idle') return reply({ ok: false, error: 'The printer must be idle' }, 409)
               if (value !== unload.override) unload = { ...unload, override: value, pending: true }
               return reply(unloadState())

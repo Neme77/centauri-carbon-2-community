@@ -14,10 +14,10 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   const errors = []
   page.on('pageerror', e => errors.push(e.message))
-  let installed = '1.2.14', checks = 0, verified = 0, packages = 0, stops = 0
+  let installed = '1.2.21', checks = 0, verified = 0, packages = 0, stops = 0
   let offline = false, reject = false
   const index = { schema: 1, expires: Math.floor(Date.now() / 1000) + 86400, releases: [
-    { version: '1.2.15', firmware: '4.4', channel: 'stable', url: 'https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.15-V4.4/Control.cc2update', size: 1500000, notes: 'Stable fixture' },
+    { version: '1.2.22', firmware: '4.4', channel: 'stable', url: 'https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/Control.cc2update', size: 1500000, notes: 'Stable fixture' },
     { version: '9.0.0', firmware: '4.3', channel: 'stable', url: 'https://github.com/Neme77/centauri-carbon-2-community/releases/download/test/Control.cc2update', size: 1500000, notes: 'Wrong firmware' },
     { version: '1.3.0', firmware: '4.4', channel: 'canvas-uds', url: 'https://github.com/Neme77/centauri-carbon-2-community/releases/download/test/Control.cc2update', size: 1500000, notes: 'Experimental fixture' },
   ] }
@@ -49,13 +49,13 @@ try {
   await page.goto(server.resolvedUrls.local[0] + '#dashboard')
   const bell = page.locator('[data-update-notice]')
   const dot = page.locator('[data-update-dot]')
-  await page.getByRole('button', { name: 'CC2 Control 1.2.15 available', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'CC2 Control 1.2.22 available', exact: true }).waitFor()
   assert.equal(await dot.count(), 1)
   assert.equal(checks, 1)
   assert.equal(verified, 1)
   assert.equal(packages, 0)
   await bell.click()
-  await page.getByRole('dialog').getByText('CC2 Control 1.2.15 available', { exact: true }).waitFor()
+  await page.getByRole('dialog').getByText('CC2 Control 1.2.22 available', { exact: true }).waitFor()
   await page.waitForFunction(() => document.querySelector('[role=dialog]')?.contains(document.activeElement))
   await page.keyboard.press('Escape')
   await page.getByRole('dialog').waitFor({ state: 'hidden' })
@@ -67,16 +67,14 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: 'Open updates', exact: true }).click()
   await page.getByRole('tab', { name: 'Updates', exact: true }).waitFor()
   assert.equal(await page.getByRole('tab', { name: 'Updates', exact: true }).getAttribute('aria-selected'), 'true')
-  await page.getByText('Compatible update available: 1.2.15', { exact: true }).waitFor()
+  await page.getByText('Compatible update available: 1.2.22', { exact: true }).waitFor()
   assert.equal(checks, 1, 'header and Settings must share the verified cache')
   await page.getByRole('tab', { name: 'Appearance', exact: true }).click()
   await bell.click()
   await page.getByRole('dialog').getByRole('button', { name: 'Open updates', exact: true }).click()
-  await page.getByText('Compatible update available: 1.2.15', { exact: true }).waitFor()
-  await page.getByLabel('Update channel', { exact: true }).selectOption('canvas-uds')
-  await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
-  await page.getByRole('button', { name: 'CC2 Control 1.3.0 available', exact: true }).waitFor()
-  await page.getByLabel('Update channel', { exact: true }).selectOption('stable')
+  await page.getByText('Compatible update available: 1.2.22', { exact: true }).waitFor()
+  assert.equal(await page.getByLabel('Update channel', { exact: true }).count(), 0)
+  assert.equal(await page.getByRole('button', { name: 'CC2 Control 1.3.0 available', exact: true }).count(), 0)
 
   const shots = process.env.CC2_NOTICE_SCREENSHOTS
   if (shots) await mkdir(shots, { recursive: true })
@@ -110,18 +108,18 @@ try {
   await page.keyboard.up('Enter')
   assert.equal(stops, 1, 'one-second hold must still trigger exactly once')
 
-  installed = '1.2.15'
+  installed = '1.2.22'
   await page.waitForFunction(() => !document.querySelector('[data-update-dot]'))
   assert.equal(await bell.getAttribute('aria-label'), 'Update notifications')
-  index.releases[0].version = '1.2.13'
+  index.releases[0].version = '1.2.20'
   await page.getByRole('button', { name: 'Check for updates', exact: true }).click()
   await page.getByText('No newer compatible update published.', { exact: true }).waitFor()
   assert.equal(await dot.count(), 0, 'older release must not notify')
   assert.equal(packages, 0, 'notification interactions never download or install')
 
   // A fresh application must fail silently when GitHub or the verifier refuses the catalog.
-  installed = '1.2.14'
-  index.releases[0].version = '1.2.15'
+  installed = '1.2.21'
+  index.releases[0].version = '1.2.22'
   for (const mode of ['offline', 'signature']) {
     offline = mode === 'offline'
     reject = mode === 'signature'

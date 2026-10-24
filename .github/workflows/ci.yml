@@ -42,7 +42,7 @@ jobs:
         run: CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
 
       - name: Package firmware-qualified application updater
-        run: python3 installer/package.py --prepared dist/cc2-control
+        run: python3 installer/package.py --application-only-trial --prepared dist/cc2-control
 
       - name: Save application updater candidate
         uses: actions/upload-artifact@v7.0.2
@@ -88,8 +88,16 @@ jobs:
         working-directory: cc2-control/web-src
         run: npm run test:control-calibrations
 
+      - name: Independent experimental choices and Quiet controls
+        run: |
+          npm run test:experiments
+          npm run test:motor-mode
+
       - name: Canvas states and explicit recovery loading
-        run: npm run test:canvas-states
+        run: npm run test:canvas-states && npm run test:canvas-layout && npm run test:canvas-reset
+
+      - name: New-spool insertion copy and scale-weight regression
+        run: npm run test:spool-insertion
 
       - name: Complete file library and large upload admission
         run: npm run test:file-library

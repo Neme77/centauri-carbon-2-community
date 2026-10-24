@@ -1,20 +1,20 @@
-# Update CC2 Control 1.2.19 — esclusivamente Community Firmware V4.4 / V4.4.1
+# Update CC2 Control 1.2.21 — esclusivamente Community Firmware V4.4 / V4.4.1 / V4.4.2
 
 [English](UPDATE_CC2.md) · [Homepage](../README.md)
 
-La 1.2.19 aggiunge recupero dei thread webcam e del video locale/Matrix, mappa interattiva per l’esclusione oggetti, gestione delle date file non affidabili, miglioramenti Canvas/mobile di pezso92 e metadati Panda/DragonBreath di Noahwhite2014. Preferenze e librerie conservate.
+La 1.2.21 aggiunge recupero dei thread webcam e del video locale/Matrix, mappa interattiva per l’esclusione oggetti, gestione delle date file non affidabili, miglioramenti Canvas/mobile di pezso92 e metadati Panda/DragonBreath di Noahwhite2014. Preferenze e librerie conservate.
 
-**RIAVVIO COMPLETO DELLA STAMPANTE NECESSARIO DOPO L’INSTALLAZIONE RIUSCITA.** Aggiornare la pagina, riavviare CC2 Control o soltanto il firmware non attiva il componente webcam. Chiudere i live prima di aggiornare. L’installer salva anche l’avvio camera quando lo modifica. [Note complete, crediti e verifiche](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4).
+**Riavvio completo solo alla prima attivazione del fix webcam.** È incluso dalla 1.2.19: se già attivo, questo aggiornamento non richiede un ulteriore riavvio. Il firmware completo V4.4.2 si riavvia già durante l'installazione. Se il vecchio downloader fallisce con errore HTTPS, scarica il `.cc2update` sul computer e caricalo dal pannello oppure usa l'installer per PC. Chiudi i video prima dell'aggiornamento.
 
 **Solo Community Firmware V4.4 o V4.4.1 già installato e configurato. Non installare sulla V4.3, sul firmware originale ELEGOO o su altri modelli.** Il solo numero base 02.01.01.07 non basta: prima di fermare il servizio, l’installer verifica binario community su disco, processo della stampante e daemon degli aggiornamenti. Impronte sconosciute vengono rifiutate.
 
-È uno ZIP applicativo per aggiornare via SSH. Non installa l’immagine firmware o SSH e non sostituisce il modulo callback. Installa anche il componente di avvio webcam con verifiche di compatibilità descritto sopra. Canvas rimane su MQTT; fix LAN/WAN, luci e funzioni già validate restano inclusi.
+È uno ZIP applicativo per aggiornare via SSH. Non installa l’immagine firmware o SSH e non sostituisce il modulo callback. Installa anche il componente di avvio webcam con verifiche di compatibilità descritto sopra. Canvas usa MQTT come impostazione iniziale; UDS e Quiet sono opzioni sperimentali indipendenti; fix LAN/WAN, luci e funzioni già validate restano inclusi.
 
 ## Scegliere il metodo di aggiornamento
 
 - **La scheda Impostazioni → Aggiornamenti non è ancora presente:** seguire una volta l'installazione dello ZIP dal computer descritta sotto. Installa anche i componenti dell'updater.
-- **Il pannello aggiornamenti è già installato:** aprire Impostazioni → Aggiornamenti, Stabile, quindi Controlla aggiornamenti. Inserire il codice LAN, scegliere Scarica e verifica e, solo dopo la verifica, Installa con conferma separata. In alternativa caricare `CC2-Control-1.2.19-V4.4.cc2update` dalla release. Lo ZIP dell'installer non va caricato nel pannello.
-- Se il pannello riporta già 1.2.19, non serve reinstallare. Controlla aggiornamenti aggiorna manualmente l'indice in cache.
+- **Il pannello aggiornamenti è già installato:** aprire Impostazioni → Aggiornamenti, quindi Controlla aggiornamenti. Inserire il codice LAN, scegliere Scarica e verifica e, solo dopo la verifica, Installa con conferma separata. In alternativa caricare `CC2-Control-1.2.21-V4.4.cc2update` dalla release. Lo ZIP dell'installer non va caricato nel pannello.
+- Se il pannello riporta già 1.2.21, non serve reinstallare. Controlla aggiornamenti aggiorna manualmente l'indice in cache.
 
 Per entrambi i metodi valgono stampante inattiva/fredda e target zero. La sola verifica non installa nulla. Indice e applicazione sono firmati; basi incompatibili e versioni uguali/precedenti vengono rifiutate. Non interrompere l'alimentazione. Attendere l'esito, ricaricare e ricontrollare connessione, Canvas e impostazioni dopo un riavvio a stampante inattiva.
 
@@ -34,11 +34,11 @@ Dopo un ripristino di fabbrica il codice può cambiare: inserisci prima il nuovo
 
 ## 1. Preparazione
 
-1. Scaricare **CC2-Control-1.2.19-Multiplatform-Update.zip** e checksum dalla [release applicativa](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4).
+1. Scaricare **CC2-Control-1.2.21-Multiplatform-Update.zip** e checksum dalla [release applicativa](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.21-V4.4).
 2. Confrontare SHA-256 dello ZIP con il valore pubblicato:
 
 ~~~powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\CC2-Control-1.2.19-Multiplatform-Update.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\CC2-Control-1.2.21-Multiplatform-Update.zip'
 ~~~
 
 3. Confermare V4.4 e **Stampante connessa** in CC2 Control.
@@ -84,13 +84,13 @@ Il successo mostra **INSTALLATION PASSED**, percorso del backup e comando esatto
 ## 3. Verifica
 
 1. Aprire http://IP-STAMPANTE:8081 e ricaricare; Ctrl+F5 se rimane la vecchia UI.
-2. Verificare **1.2.19**, **Stampante connessa**, temperature e slot Canvas. Il codice LAN salvato non dovrebbe essere richiesto di nuovo.
+2. Verificare **1.2.21**, **Stampante connessa**, temperature e slot Canvas. Il codice LAN salvato non dovrebbe essere richiesto di nuovo.
 3. Se desiderato, scegliere **Magyar** da **Impostazioni → Aspetto**. Le lingue diventano otto.
 4. Controllare piatti/ugelli in **Livellamento piatto**. La calibrazione accetta temperatura **40–110 °C**, stabilizzazione **0–60 minuti** (predefinita **10**) e ugello. Lasciare il piatto libero prima di confermare.
 5. Ogni piatto conserva misure per temperatura e ugello. Il dialogo di stampa utilizza la misura a temperatura più vicina o quella scelta, applicando la correzione Z dell’ugello selezionato.
 6. Riavviare una volta mentre la stampante è inattiva, poi verificare avvio automatico, connessione e Canvas.
 
-Non servono ripristino di fabbrica o sostituzione del codice LAN. Il display mantiene la base vendor 02.01.01.07; l’applicazione è 1.2.19.
+Non servono ripristino di fabbrica o sostituzione del codice LAN. Il display mantiene la base vendor 02.01.01.07; l’applicazione è 1.2.21.
 
 ## 4. Ripristino dell’applicazione precedente
 
