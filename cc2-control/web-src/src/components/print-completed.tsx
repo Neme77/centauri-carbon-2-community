@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { CompletionTracker, replayable, type Completion } from '@/lib/print-completion'
 import { ls } from '@/lib/store'
 import { printer, view } from '@/lib/state'
-import { t } from '@/lib/i18n'
+import { t, tpl } from '@/lib/i18n'
+import { notify } from '@/lib/api'
 import { duration } from '@/lib/format'
 import { startFile } from '@/pages/print-dialog'
 const storageKey = 'cc2-completed-print-seen'
@@ -21,9 +22,19 @@ export const PrintCompleted = () => {
   const seen = useRef(readSeen()),
     tracker = useRef<CompletionTracker | null>(null)
   if (!tracker.current) tracker.current = new CompletionTracker(seen.current)
+  const ending = useRef<string | null>(null)
   const [notice, setNotice] = useState<Completion | null>(null),
     [busy, setBusy] = useState(false)
   useEffect(() => {
+    const age = Number(data?.last_message_age)
+    if (ok && data?.connected && Number.isFinite(age) && age >= 0 && age <= 15) {
+      const state = String(data?.print?.native?.state || data?.print?.state || '')
+      if (Number(data?.machine?.status) === 2 && /^(printing|paused)$/.test(state))
+        ending.current = data?.print?.native?.filename || data?.print?.filename || null
+      else if (/^(cancelled|error)$/.test(state) && ending.current)
+        notify(tpl('app.print_ended', { name: ending.current }))
+      if (/^(complete|cancelled|error)$/.test(state)) ending.current = null
+    }
     const next = tracker.current?.observe(data, ok)
     if (next) setNotice(next)
     else if (ok && data?.connected && Number(data?.machine?.status) === 2) setNotice(null)
