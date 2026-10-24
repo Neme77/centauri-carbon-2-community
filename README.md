@@ -4,17 +4,17 @@ Community firmware, local printer control and reproducible build tools for the
 **ELEGOO Centauri Carbon 2**, maintained by **Neme77**.
 
 <p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.1/CC2_V4_4_1_STOCK_20261014_205610_dd82af94.zip.sig"><img src="https://img.shields.io/badge/DOWNLOAD-Firmware%20V4.4.1-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download complete firmware V4.4.1"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig"><img src="https://img.shields.io/badge/DOWNLOAD-Firmware%20V4.4.2-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download complete firmware V4.4.2"></a>
   &nbsp;
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/DOWNLOAD-CC2%20Control%201.2.19-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download CC2 Control 1.2.19 multiplatform update"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/CC2-Control-1.2.21-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/DOWNLOAD-CC2%20Control%201.2.21-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download CC2 Control 1.2.21 multiplatform update"></a>
 </p>
 
-| **🖨️ Complete firmware · V4.4.1** | **🔄 CC2 Control · 1.2.19** |
+| **🖨️ Complete firmware · V4.4.2** | **🔄 CC2 Control · 1.2.21** |
 | --- | --- |
-| [**Download signed firmware**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.1/CC2_V4_4_1_STOCK_20261014_205610_dd82af94.zip.sig) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.1) | [**Download Windows / macOS / Linux package**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-Multiplatform-Update.zip) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4) |
-| First installation. Includes CC2 Control **1.2.10**; then update the application to **1.2.19**. | For community firmware **V4.4/V4.4.1**. Includes the camera stability and recovery fixes. |
+| [**Download signed firmware**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Download Windows / macOS / Linux package**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/CC2-Control-1.2.21-Multiplatform-Update.zip) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.21-V4.4) |
+| Complete installation with CC2 Control **1.2.21** and the webcam fix already included. No extra reboot after firmware installation. | For community firmware **V4.4/V4.4.1/V4.4.2**. Includes the camera stability and recovery fixes. |
 
-**Updating from the CC2 Control panel?** [Download the signed `.cc2update` file](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.19-V4.4/CC2-Control-1.2.19-V4.4.cc2update) and select it in **Settings → Updates**. After installing **1.2.19**, **reboot the complete printer while idle** to activate the camera fixes.
+**Updating from the CC2 Control panel?** [Download the signed `.cc2update` file](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/CC2-Control-1.2.21-V4.4.cc2update) and select it in **Settings → Updates**. For app-only updates, reboot while idle only on first activation of the camera fix; it is already active for users coming from 1.2.19. Complete V4.4.2 installation needs no additional reboot.
 
 [Italiano](README.it.md) · [Documentation](docs/README.md) · [Downloads](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Screenshots](docs/SCREENSHOTS.md)
 
@@ -39,7 +39,7 @@ and follow the matching guide and release notes. **Complete firmware**, the
 the builder ZIP is not an installable printer update. Check the supplied SHA-256
 checksums before installation.
 
-The current qualified firmware family is **V4.4/V4.4.1**, based on ELEGOO
+The current qualified firmware family is **V4.4/V4.4.1/V4.4.2**, based on ELEGOO
 **02.01.01.07**. Its application updates are not interchangeable with stock
 firmware, older community firmware or experimental builds.
 

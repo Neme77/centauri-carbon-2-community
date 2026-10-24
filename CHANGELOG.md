@@ -6,9 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [CC2 Control 1.2.21 / Firmware V4.4.2] - 2026-10-24
+
 ### Added
 
-- Firmware builder V4.4.2: integrate the qualified R2 camera thread-reaping and local/Matrix recovery runtime from first boot, with exact-fingerprint checks, migration of the actual published R2 component and native fallback with a current-boot diagnostic (#214). Thanks to [tharje](https://github.com/tharje) for diagnosis and [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester, for persistent testing. Includes CC2 Control 1.2.21; the complete OTA is built locally. The previous R2 image passed maintainer functional testing; this unified application candidate requires a new trial.
+- Firmware builder V4.4.2: integrate the qualified R2 camera thread-reaping and local/Matrix recovery runtime from first boot, with exact-fingerprint checks, migration of the actual published R2 component and native fallback with a current-boot diagnostic (#214). Thanks to [tharje](https://github.com/tharje) for diagnosis and [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester, for persistent testing. Includes CC2 Control 1.2.21; the complete OTA is built locally. The final R4 image passed maintainer first-boot, local/Matrix video and completed-print testing with AI enabled.
 
 - Experimental Canvas pull-back: verify the exact running extended-range firmware before allowing values above 350 mm (#209, original contribution by Noahwhite2014 in #202 and issue #172); runtime installation remains separate and is never activated by an application update.
 
@@ -20,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Application updater: accept GitHub redirect security headers larger than 8 KiB within the existing 16 KiB total budget, while preserving TLS and redirect checks; recognize a qualified dormant R2 camera directory after rollback or firmware reinstall and retain it before reinstallation; prefer a verified canonical camera installation over retained personal-trial files (#214). Reported and reproduced during maintainer upgrade testing.
+- Application updater: accept GitHub redirect security headers larger than 8 KiB within the existing 16 KiB total budget, while preserving TLS and redirect checks; recognize a qualified dormant R2 camera directory after rollback or firmware reinstall and retain it before reinstallation; prefer a verified canonical camera installation over retained personal-trial files (#214). Reported and reproduced during maintainer upgrade testing; independently diagnosed by efiten in #215.
 
 ### Changed
 
