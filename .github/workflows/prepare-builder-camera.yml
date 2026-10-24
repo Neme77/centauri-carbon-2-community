@@ -1,5 +1,5 @@
-name: Prepare V4.4.2 firmware builder with stable Control 1.2.21
-# Firmware trial R2: validate published camera migration and non-blocking boot diagnostics.
+name: Prepare unified Control 1.2.21 and V4.4.2 builder
+# Unified trial R3: stable application updates and independent guarded experimental choices.
 on:
   push:
     branches: [test/builder-4.4.2-control-1.2.21]
@@ -13,7 +13,7 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
@@ -74,19 +74,33 @@ jobs:
           make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
           make clean all EXTRA_CFLAGS=-Werror
           CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
+      - name: Install browser for the unified application trial
+        working-directory: cc2-control/web-src
+        run: npx playwright install --with-deps chromium
+      - name: Independent features, updater and accepted UI regressions
+        working-directory: cc2-control/web-src
+        run: |
+          npm run test:experiments
+          npm run test:motor-mode
+          npm run test:updates
+          npm run test:update-notice
+          npm run test:canvas-states
+          npm run test:canvas-layout
+          npm run test:canvas-reset
+          npm run test:spool-insertion
       - name: Package source builder with camera runtime and public provenance
         run: python3 .github/scripts/package-builder-camera.py --package
       - name: Package the same corrected application for a signed panel trial
-        run: python3 cc2-control/installer/package.py --prepared cc2-control/dist/cc2-control --camera-runtime builder/current/components/camera/runtime
+        run: python3 cc2-control/installer/package.py --release --prepared cc2-control/dist/cc2-control --camera-runtime builder/current/components/camera/runtime
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: cc2-builder-v4.4.2-control-1.2.21-test-r2
-          path: output/CC2-Builder-V4.4.2-Control-1.2.21-Test-R2.zip*
+          name: cc2-builder-v4.4.2-control-1.2.21-unified-r3
+          path: output/CC2-Builder-V4.4.2-Control-1.2.21-Test-R3.zip*
           retention-days: 14
           if-no-files-found: error
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: cc2-control-1.2.21-cumulative-candidate
+          name: cc2-control-1.2.21-unified-candidate-r3
           path: output/CC2-Control-1.2.21-Multiplatform-Update.zip*
           retention-days: 14
           if-no-files-found: error

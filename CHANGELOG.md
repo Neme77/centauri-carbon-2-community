@@ -8,11 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Firmware builder V4.4.2: integrate the qualified R2 camera thread-reaping and local/Matrix recovery runtime from first boot, with exact-fingerprint checks, migration of the actual published R2 component and native fallback with a current-boot diagnostic (#214). Thanks to [tharje](https://github.com/tharje) for diagnosis and [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester, for persistent testing. Includes stable CC2 Control 1.2.21; the complete OTA is built locally and awaits hardware validation.
+- Firmware builder V4.4.2: integrate the qualified R2 camera thread-reaping and local/Matrix recovery runtime from first boot, with exact-fingerprint checks, migration of the actual published R2 component and native fallback with a current-boot diagnostic (#214). Thanks to [tharje](https://github.com/tharje) for diagnosis and [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester, for persistent testing. Includes CC2 Control 1.2.21; the complete OTA is built locally. The previous R2 image passed maintainer functional testing; this unified application candidate requires a new trial.
 
-### Fixed
-
-- Application updater: accept GitHub redirect security headers larger than 8 KiB within the existing 16 KiB total budget, while preserving TLS and redirect checks; recognize a qualified dormant R2 camera directory after rollback or firmware reinstall and retain it before reinstallation; prefer a verified canonical camera installation over retained personal-trial files (#214). Reported and reproduced during maintainer upgrade testing.
+- Experimental Canvas pull-back: verify the exact running extended-range firmware before allowing values above 350 mm (#209, original contribution by Noahwhite2014 in #202 and issue #172); runtime installation remains separate and is never activated by an application update.
 
 - Spool insertion popup: add an identical spool without moving the original, and calculate remaining filament from total and empty-spool weights while keeping nominal capacity separate (#210). Suggested by [DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester; the Spools section stays unchanged.
 
@@ -20,8 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Files: older G-code files stay reachable, and uploads stream up to 512 MiB (#197).
 - Object exclusion: a single refined 2D bed map replaces the previous views (#199), following DamiBFryta's feedback and Nick Plateringen-Paul's original map idea/prototype.
 
+### Fixed
+
+- Application updater: accept GitHub redirect security headers larger than 8 KiB within the existing 16 KiB total budget, while preserving TLS and redirect checks; recognize a qualified dormant R2 camera directory after rollback or firmware reinstall and retain it before reinstallation; prefer a verified canonical camera installation over retained personal-trial files (#214). Reported and reproduced during maintainer upgrade testing.
+
 ### Changed
 
+- One application update stream replaces the experimental channel selector, including for browsers with the old channel preference saved (#214). Optional experiments are independent from application updates: independent, persisted Canvas UDS (#200) and Quiet-control opt-ins (original motor feature by BorjaLL, #179), both initially disabled. Normal must complete before hiding Quiet controls or reconnecting Canvas while those controls are enabled. Extended pull-back remains a separate firmware experiment.
+- Public cumulative release packaging with `--release` refuses missing qualified camera runtime files, retaining the camera migration for users skipping 1.2.19.
 - Canvas: compact slot cards, shared actions and a bounded session-history panel; inspired by Surfoo's layout proposal (#203) and refined through the maintainer-approved layout (#207).
 
 - Web UI: shared design system (page, card and dialog titles, spacing, radius), documented in `AGENTS.md`, with keyboard focus, accessible names and landmarks checked with axe (#196).

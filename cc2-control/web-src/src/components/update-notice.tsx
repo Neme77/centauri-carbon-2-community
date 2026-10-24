@@ -4,17 +4,16 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { t, tpl } from '@/lib/i18n'
 import { health, openSettings } from '@/lib/state'
-import { compatible, newer, status, updateCatalog, updateChannel } from '@/lib/updates'
+import { compatible, newer, status, updateCatalog } from '@/lib/updates'
 import { cn } from '@/lib/utils'
 
 export const UpdateNotice = () => {
   const [open, setOpen] = useState(false)
   const state = status.use().data
   const { index } = updateCatalog.use()
-  const { value: channel } = updateChannel.use()
   const current = health.use().data?.version || ''
   const installed = newer(current, state?.installed || '') ? current : state?.installed || ''
-  const release = state?.enabled ? compatible(index, state.firmware, channel)[0] : undefined
+  const release = state?.enabled ? compatible(index, state.firmware, 'stable')[0] : undefined
   const available = release && newer(release.version, installed)
   const label = available ? tpl('updates.notice_available', { version: release.version }) : t('updates.notifications')
   const visit = () => {

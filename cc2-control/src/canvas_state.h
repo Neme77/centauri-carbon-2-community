@@ -15,13 +15,14 @@ static inline const char *canvas_reason_name(int reason) {
  return reason>=0&&reason<=CR_UNASSIGNED_HEAD?names[reason]:names[1];
 }
 /* MQTT Canvas is a retained delta cache within one live session; the existing
- * disconnect path clears it. Do not add full Canvas UDS subscriptions/polling.
- * Direct UDS provides only active channel and the small head-presence boolean.
+ * disconnect path clears it. The opt-in UDS variant uses a separate normalized
+ * read cache; connection, freshness, head and native command guards stay unchanged.
  */
 static inline int canvas_source_valid(const mqtt_client *m) {
- time_t now=time(NULL);
+ time_t now=time(NULL);size_t snapshot_length;
+ (void)mqtt_canvas_snapshot(m,&snapshot_length);
  return m->connected&&m->registered&&m->last_message>0&&now>=m->last_message&&now-m->last_message<=30
-   &&m->canvas_snapshot_len>0&&m->canvas_snapshot_len<sizeof(m->canvas_snapshot)
+   &&snapshot_length>0&&snapshot_length<sizeof(m->canvas_snapshot)
    &&m->canvas_direct_known;
 }
 static inline const char *canvas_child(const char *p,const char *end,const char *key,const char **child_end) {
@@ -32,7 +33,7 @@ static inline const char *canvas_child(const char *p,const char *end,const char 
  * masquerade as top-level status fields.
  */
 static inline int canvas_reported_status(const mqtt_client *m,int slot) {
- const char *p=m->canvas_snapshot,*end=p+m->canvas_snapshot_len,*re=end,*ie=end,*le=end;
+ size_t length;const char *p=mqtt_canvas_snapshot(m,&length),*end=p+length,*re=end,*ie=end,*le=end;
  if(slot<0||slot>3||p==end||*p!='{'||ccv_json_container_end(p,end)!=end)return -1;
  const char *result=canvas_child(p,end,"result",&re);
  const char *info=canvas_child(result,re,"canvas_info",&ie);

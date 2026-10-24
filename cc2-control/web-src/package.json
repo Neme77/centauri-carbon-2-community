@@ -44,7 +44,9 @@
     "test:bed-map": "node preview/test-bed-map.mjs",
     "test:file-library": "node preview/test-file-library.mjs",
     "test:canvas-layout": "node preview/test-canvas-layout.mjs",
-    "test:spool-insertion": "node preview/test-spool-insertion.mjs"
+    "test:spool-insertion": "node preview/test-spool-insertion.mjs",
+    "test:motor-mode": "node preview/test-motor-mode.mjs",
+    "test:experiments": "node preview/test-experiments.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

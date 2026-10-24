@@ -76,7 +76,7 @@ def package(prepared, scripts, source, output, camera_runtime=None):
                 archive.addfile(entry, io.BytesIO(data))
     public = {name: (HERE / name).read_bytes() for name in
               ('Install-CC2-Control.ps1', 'Install-Windows.cmd', 'install-cc2-control.sh', 'README.md')}
-    for name in ('README-TEST.md', 'README-TEST.it.md'):
+    for name in ('README-TEST.md', 'README-TEST.it.md', 'README-EXPERIMENTAL.md', 'README-EXPERIMENTAL.it.md'):
         trial_notes = HERE / name
         if trial_notes.is_file(): public[name] = trial_notes.read_bytes()
     public['cc2-control-payload.tar.gz'] = payload.getvalue()
@@ -102,5 +102,11 @@ if __name__ == '__main__':
     parser.add_argument('--source', type=Path, default=ROOT / 'builder/current/components/cc2-control/source/source.zip')
     parser.add_argument('--output', type=Path, default=ROOT / f'output/CC2-Control-{VERSION}-Multiplatform-Update.zip')
     parser.add_argument('--camera-runtime', type=Path, help='Include the three fingerprinted R2 camera runtime files')
+    parser.add_argument('--release', action='store_true', help='Require the cumulative camera component for a public release')
+    parser.add_argument('--application-only-trial', action='store_true', help='Explicitly build a development-only app package without the cumulative camera component')
     args = parser.parse_args()
+    if args.release and args.application_only_trial:
+        parser.error('--release and --application-only-trial are mutually exclusive')
+    if args.camera_runtime is None and (args.release or not args.application_only_trial):
+        parser.error('Public cumulative releases require --camera-runtime, including for users who skipped earlier updates')
     package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime)
