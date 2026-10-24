@@ -36,6 +36,7 @@ import {
   type SpoolSlot,
   type SpoolStack,
   saveSpool,
+  saveSpoolmanConfig,
   setTracking,
   slotOf,
   spoolHierarchy,
@@ -122,6 +123,55 @@ const Tracking = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: A
     {lib.enabled && !lib.canvas && <Notice>{t('spools.no_canvas')}</Notice>}
   </Card>
 )
+
+const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: Act }) => {
+  const [url, setUrl] = useState(lib.spoolman_url)
+  const [auth, setAuth] = useState('')
+  return (
+    <Card>
+      <CardHead
+        icon="spool"
+        title="spools.spoolman_sync"
+        end={
+          <Tag tone={lib.spoolman_url ? 'ok' : 'default'}>
+            {t(lib.spoolman_url ? 'spools.tracking_on' : 'spools.tracking_off')}
+          </Tag>
+        }
+      />
+      <p class="text-[13px] text-muted">{t('spools.spoolman_hint')}</p>
+      <div class="mt-3 grid gap-3 cc2-sm:grid-cols-6">
+        <label class="grid content-start gap-1 text-xs cc2-sm:col-span-4">
+          <span class="text-muted">{t('spools.spoolman_url')}</span>
+          <Input placeholder="http://192.168.1.50:7912" value={url} onInput={e => setUrl(e.currentTarget.value)} />
+        </label>
+        <label class="grid content-start gap-1 text-xs cc2-sm:col-span-2">
+          <span class="text-muted">{t('spools.spoolman_auth')}</span>
+          <Input
+            type="password"
+            autocomplete="new-password"
+            placeholder={lib.spoolman_has_auth ? '••••••••' : t('spools.spoolman_auth_placeholder')}
+            value={auth}
+            onInput={e => setAuth(e.currentTarget.value)}
+          />
+        </label>
+      </div>
+      <div class="mt-3">
+        <Button
+          variant="primary"
+          disabled={busy}
+          onClick={() =>
+            act(async () => {
+              await saveSpoolmanConfig({ url, ...(auth ? { basic_auth: auth } : {}) })
+              notify(t('spools.spoolman_saved_toast'))
+            })
+          }
+        >
+          {t('spools.save')}
+        </Button>
+      </div>
+    </Card>
+  )
+}
 
 const SlotCard = ({ lib, s, busy, act }: { lib: SpoolLibrary; s: SpoolSlot; busy: boolean; act: Act }) => {
   const spool = findSpool(lib, s.spool)
@@ -753,6 +803,7 @@ export const Spools = () => {
       ) : (
         <div class="grid gap-3.5">
           <Tracking lib={lib} busy={busy} act={act} />
+          <SpoolmanCard lib={lib} busy={busy} act={act} />
           {lib.enabled && <InPrinter lib={lib} busy={busy} act={act} />}
           <Inventory lib={lib} busy={busy} act={act} />
           <Card>

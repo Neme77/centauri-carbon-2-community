@@ -86,7 +86,8 @@ export type SpoolDraft = Record<
   | 'diameter'
   | 'density'
   | 'price'
-  | 'note',
+  | 'note'
+  | 'spoolman_id',
   string
 > & { densityTouched: boolean }
 
@@ -111,6 +112,7 @@ export const draftFrom = (
       density: num(s.density),
       price: s.price ? num(s.price) : '',
       note: s.note,
+      spoolman_id: s.spoolman_id,
       densityTouched: true,
     }
   // A tray reports a product line ("PLA Matte") besides its type ("PLA"): the spool keeps the line as its
@@ -133,6 +135,7 @@ export const draftFrom = (
     density: num(densityFor(material)),
     price: '',
     note: '',
+    spoolman_id: '',
     densityTouched: false,
   }
 }
@@ -151,6 +154,7 @@ export const draftProblem = (d: SpoolDraft, create: boolean): Key | null => {
   if (!d.material.trim() || !textOk(d.material.trim(), 32)) return 'spools.invalid_material'
   if (![d.name, d.brand, d.note].every(v => textOk(v.trim(), 96))) return 'spools.invalid_text'
   if (!/^#[0-9a-f]{6}$/i.test(d.color)) return 'spools.invalid_colour'
+  if (d.spoolman_id.trim() && !/^\d{1,15}$/.test(d.spoolman_id.trim())) return 'spools.invalid_spoolman_id'
   const numbers =
     inRange(d.net, 1, 20000) &&
     (!create || inRange(d.remaining, 0, 20000)) &&
@@ -175,6 +179,7 @@ export const draftFields = (d: SpoolDraft, create: boolean): SpoolFields => ({
   density: Number(d.density),
   price: Number(d.price || 0),
   note: d.note.trim(),
+  spoolman_id: d.spoolman_id.trim(),
 })
 
 const Field = ({ label, children, class: c }: { label: Key; children: preact.ComponentChildren; class?: string }) => (
@@ -316,6 +321,15 @@ export const SpoolEditor = ({
       </Field>
       <Field label="spools.note" class="cc2-sm:col-span-6">
         <Input maxLength={96} {...input('note')} />
+      </Field>
+      <Field label="spools.spoolman_id" class="cc2-sm:col-span-6">
+        <Input
+          inputMode="numeric"
+          maxLength={15}
+          placeholder={t('spools.spoolman_id_placeholder')}
+          {...input('spoolman_id')}
+        />
+        <span class="text-[11px] text-muted">{t('spools.spoolman_id_hint')}</span>
       </Field>
     </div>
   )

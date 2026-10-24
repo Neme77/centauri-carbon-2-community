@@ -23,6 +23,7 @@ export type Spool = {
   created: number
   used: number
   archived: boolean
+  spoolman_id: string
 }
 export type SpoolTray = { status: number; type: string; name: string; color: string; brand: string; code: string }
 export type SpoolSlot = {
@@ -56,6 +57,8 @@ export type SpoolLibrary = {
   job: { active: boolean; file: string; started: number; slots: { mm: number; grams: number; spool: string }[] }
   spools: Spool[]
   log: SpoolEvent[]
+  spoolman_url: string
+  spoolman_has_auth: boolean
 }
 // What /api/printer carries so that every page notices an open question.
 export type SpoolSummary = { enabled: boolean; revision: number; questions: number[] } | null | undefined
@@ -344,3 +347,5 @@ export const dismissSlot = (slot: number) => post('/api/spools/dismiss', lines({
 export const adjustSpool = (id: string, weight: { remaining: number } | { gross: number }) =>
   post('/api/spools/adjust', lines({ id, ...weight }))
 export const setTracking = (on: boolean) => post('/api/spools/enable', on ? 'on' : 'off')
+export const saveSpoolmanConfig = (fields: { url?: string; basic_auth?: string }) =>
+  post('/api/spoolman', lines(fields))
