@@ -144,12 +144,12 @@ static void drying_tick(const mqtt_client *mqtt) {
     if(drying.stage==DRY_STOPPING) {
         if(!fresh){drying.reason="telemetry";return;} /* Do not cool somebody else's active print. */
         if(target==0&&drying.stopping_started&&telemetry.messages>drying.stop_messages) {
-            drying.stage=DRY_RESTORE;drying.query[0]=0;
+            drying.stage=DRY_RESTORE;drying.query[0]=0;drying.retry_at=0;
         } else if(drying.restore_only|| (target!=0&&fabs(target-drying.temp)>0.5)) {
             /* A changed nonzero setpoint belongs to another user. Leave the
              * native short timeout in place until the bed is switched off. */
             if(target!=0)return;
-            drying.stage=DRY_RESTORE;drying.query[0]=0;
+            drying.stage=DRY_RESTORE;drying.query[0]=0;drying.retry_at=0;
         } else if(!drying.query[0]&&now>=drying.retry_at) {
             drying_command("M140 S0");drying.stop_messages=telemetry.messages;
             drying.stopping_started=1;drying.retry_at=now+5000;
