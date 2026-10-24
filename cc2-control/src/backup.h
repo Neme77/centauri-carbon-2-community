@@ -119,7 +119,7 @@ static int bk_capture(char *data[4],size_t lengths[4]) {
     }
     if(plates_available)data[2]=plates_encode(&plates,&lengths[2]);
     else data[2]=bk_read(plates_path,PLATES_FILE_MAX,&lengths[2],&missing);
-    if(spools_available)data[3]=spools_encode(&spools,&lengths[3]);
+    if(spools_available)data[3]=spools_encode_ex(&spools,&lengths[3],1);
     else data[3]=bk_read(spools_path,SPOOLS_FILE_MAX,&lengths[3],&missing);
     return data[1]&&data[2]&&data[3];
 }
@@ -474,6 +474,7 @@ static void bk_response(int fd,const char *path,const char *request,const char *
             plates_z_valid=0;
         }
         if(mask&BK_SPOOLS){spools=p->spool_data;
+            spoolman_epoch++;
             spools_available=1;
             spools_error="";
             spools_dirty=spools_urgent=0;

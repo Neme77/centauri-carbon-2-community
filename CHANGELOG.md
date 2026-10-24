@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Canvas: an explicit action to recover an unassigned filament head by loading any present slot (#190).
 - Files: older G-code files stay reachable, and uploads stream up to 512 MiB (#197).
 - Object exclusion: a single refined 2D bed map replaces the previous views (#199), following DamiBFryta's feedback and Nick Plateringen-Paul's original map idea/prototype.
-- Spools: optional Spoolman sync pushes measured usage to a self-hosted Spoolman server and pulls material, colour, name and remaining weight back (#208).
+- Spools: optional Spoolman sync pushes measured usage to a self-hosted Spoolman server and pulls material, colour, name and remaining weight back; usage whose delivery is uncertain is never sent twice, and exported backups leave out the proxy login (#208).
 
 ### Changed
 

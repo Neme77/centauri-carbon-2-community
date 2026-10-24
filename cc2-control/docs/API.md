@@ -483,13 +483,30 @@ reach the printer.
   `basic_auth` is `user:pass` for a reverse proxy some self-hosters put in front of Spoolman; Spoolman
   itself needs no key. `GET /api/spools` reports `spoolman_url` and `spoolman_has_auth` (never the secret
   itself).
-- Link a spool to Spoolman's own numeric spool id with `/api/spools/save` `spoolman_id` (digits only; empty
-  unlinks it and discards anything still queued to send for it).
+- Link a spool to Spoolman's own numeric spool id with `/api/spools/save` `spoolman_id` (digits only; a
+  Spoolman spool can be linked to one local spool only, otherwise `409`; changing or emptying the id discards
+  anything still queued or in flight for the old link, and replies to requests started under the old link are
+  ignored). Changing the server URL or login does the same for every spool. Exported backups leave out the
+  proxy login and the sync accounting, and a restore leaves sync off until it is configured again.
 - Sync runs on the same cadence as the local library's own periodic save (at most once every two minutes),
   in a background thread — never on the request-handling thread, so a slow or unreachable Spoolman cannot
-  stall the printer connection. A failed push is retried on the next cycle rather than lost or double-sent
-  (Spoolman's `/use` is an absolute delta, not read-modify-write, so a retry after a partial failure is
-  always safe).
+  stall the printer connection.
+- Usage accounting. Spoolman's `/use` **adds** `use_weight` to the spool's used weight, so repeating a request
+  whose outcome is unknown could charge the same grams twice. Each linked spool therefore keeps `unsent`
+  (not handed to a request yet), `inflight` (handed to a request whose outcome is unknown) and the baseline
+  `used_weight` read just before that request, all saved with the library and restored after a restart.
+  A failure that cannot have reached Spoolman (no connection, request not fully sent, a 4xx) leaves the grams
+  in `unsent` for the next cycle. A request that may have been applied (the connection dropped after the request
+  went out, a 5xx, a truncated or unreadable reply) is **not** retried: the next read of `used_weight` settles
+  it — it grew by the grams, so it was applied; it did not, so the grams return to `unsent`; it changed in some
+  other way or the baseline is gone (a restart in the middle of a request), so the grams are dropped rather than
+  risk charging them twice, and the pull brings the spool to Spoolman's own figure.
+- A pull sets the remaining weight to Spoolman's figure minus what Spoolman has not been told about yet
+  (`unsent` + `inflight`), so usage charged while a request was in flight is kept.
+- Replies are read whole or rejected: headers and `Content-Length` or chunked framing are checked, a reply that
+  is cut short is an unknown outcome, and a reply larger than its buffer (8 KiB for one spool, 128 KiB for the
+  spool list) is refused, never truncated. Numbers and texts from Spoolman pass the same bounded parsers as
+  local data; a value that fails is ignored.
 
 ## Bounded asynchronous G-code analysis
 

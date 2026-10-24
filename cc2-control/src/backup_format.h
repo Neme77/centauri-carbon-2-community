@@ -303,9 +303,12 @@ static int bk_spool_item(const char *o,const char *end,void *opaque) {
     bk_spool_context *ctx=opaque;
     spool_store *s=ctx->store;
     if(ctx->kind==0) {
-        if(s->count>=SPOOLS_MAX || !bk_keys(o,end,",id,name,brand,material,color,diameter,density,net,remaining,tare,low,price,note,created,used,archived,spoolman_id,"))return 0;
+        if(s->count>=SPOOLS_MAX || !bk_keys(o,end,",id,name,brand,material,color,diameter,density,net,remaining,tare,low,price,note,created,used,archived,spoolman_id,spoolman_unsent,spoolman_inflight,spoolman_base,"))return 0;
         spool_entry *p=&s->spools[s->count];
         if(!spools_parse_entry(o,end,p))return 0;
+        /* The sync accounting belongs to the link to one Spoolman server; a restore starts with sync off. */
+        p->spoolman_unsent=p->spoolman_inflight=0;
+        p->spoolman_base=-1;
         for(int i=0;i<s->count;i++)if(!strcmp(p->id,s->spools[i].id))return 0;
         s->count++;
         return 1;

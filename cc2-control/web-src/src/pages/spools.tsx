@@ -147,6 +147,8 @@ const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; ac
         <label class="grid content-start gap-1 text-xs cc2-sm:col-span-2">
           <span class="text-muted">{t('spools.spoolman_auth')}</span>
           <Input
+            type="password"
+            autocomplete="new-password"
             placeholder={lib.spoolman_has_auth ? '••••••••' : t('spools.spoolman_auth_placeholder')}
             value={auth}
             onInput={e => setAuth(e.currentTarget.value)}
