@@ -82,6 +82,9 @@ jobs:
       - name: Install browser for PID interaction regression
         run: npx playwright install --with-deps chromium
 
+      - name: Experimental bed heating controls
+        run: npm run test:bed-drying
+
       - name: PID browser interaction regression
         run: npm run test:pid
       - name: Control calibration layout and actions

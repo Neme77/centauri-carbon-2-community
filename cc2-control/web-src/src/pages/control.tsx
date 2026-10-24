@@ -1,3 +1,4 @@
+import { BedDrying } from './bed-drying'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
@@ -828,6 +829,7 @@ export const Control = () => {
           <Profiles />
         </div>
       </div>
+      <BedDrying />
     </Page>
   )
 }

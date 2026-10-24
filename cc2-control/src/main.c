@@ -35,6 +35,8 @@
 #include "http_guard.h"
 #include "experiments_state.h"
 static int experiments_normal_confirmed(console_state *console);
+static int drying_active(void);
+static int drying_status_json(char *out,size_t capacity,const mqtt_client *mqtt);
 
 static uds_client telemetry;
 /* Build-plate measurement and nozzle chosen for a print (plates.h). */
@@ -2467,7 +2469,8 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
-    char body[6144],filename[520],state[140],uuid[260],axes[40];
+    char body[7168],filename[520],state[140],uuid[260],axes[40],drying_status[640];
+    drying_status_json(drying_status,sizeof(drying_status),mqtt);
     if(uds_value(&telemetry,U_ET,&live))json_number(et,sizeof(et),1,live);
     else json_number(et,sizeof(et),mqtt->have_extruder_temp,mqtt->extruder_temp);
     if(uds_value(&telemetry,U_EG,&live))json_number(eg,sizeof(eg),1,live);
@@ -2546,13 +2549,13 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s}}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
-        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false");
+        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status);
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -3721,6 +3724,7 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 
 #include "app_updates.h"
 #include "app_update_catalog.h"
+#include "bed_drying.h"
 #include "experiments.h"
 #include "backup.h"
 
@@ -3776,7 +3780,20 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         app_update_fail(fd, 409, "Application update is running; printer changes are paused");
         return 0;
     }
-    if ((strcmp(method,"GET")==0 && strcmp(path,"/api/backup/export")==0) ||
+    /* A drying session owns the bed until zero readback and timeout restoration.
+     * M112 stays available; external display/slicer actions are observed by tick. */
+    if(drying_active() && strcmp(method,"GET") && strcmp(method,"HEAD") && !emergency &&
+       strcmp(path,"/api/bed-drying/stop") &&
+       !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
+        app_update_fail(fd,409,"Stop bed heating and wait for confirmation before another operation");return 0;
+    }
+    if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
+        drying_response(fd,mqtt,console);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/start")){
+        drying_start_response(fd,request,body,body_len,mqtt,console);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/stop")){
+        drying_stop_response(fd,request,mqtt,console);
+    } else if ((strcmp(method,"GET")==0 && strcmp(path,"/api/backup/export")==0) ||
         (strcmp(method,"POST")==0 && !strncmp(path,"/api/backup/import/",19))) {
         bk_response(fd,path,request,body,body_len,mqtt,console);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/experiments")==0) {
@@ -4018,6 +4035,7 @@ int main(int argc, char **argv) {
     experiments_cli_canvas=canvas_uds_enabled;
     telemetry.canvas_enabled=canvas_uds_enabled||experiments.canvas_uds;
     if(!bk_recover()){fprintf(stderr,"Application restore recovery failed; refusing to load mixed libraries\n");console_destroy(&console);return 1;}
+    drying_load();
     plates_load();
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
@@ -4064,6 +4082,7 @@ int main(int argc, char **argv) {
         uds_motion_light(&telemetry,&mqtt);
         plates_tick(&mqtt);
         plates_calibration_tick(&mqtt,&console);
+        drying_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
         int max_fd=server;
@@ -4073,7 +4092,7 @@ int main(int argc, char **argv) {
         for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
             FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
         }
-        int short_wait=receiving||plates_background_active()||plates_late_active();
+        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0;
         struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
