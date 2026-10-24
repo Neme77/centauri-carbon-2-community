@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Spools: keep recent movements in a bounded scrolling panel, with All movements / Consumption only filters and visible result counts; saved accounting and per-spool history are unchanged (PR_PENDING). Requested by [DamiBFryta](https://www.reddit.com/user/DamiBFryta/).
+- Spools: keep recent movements in a bounded scrolling panel, with All movements / Consumption only filters and visible result counts; saved accounting and per-spool history are unchanged (#220). Requested by [DamiBFryta](https://www.reddit.com/user/DamiBFryta/).
 
 ## [CC2 Control 1.2.21 / Firmware V4.4.2] - 2026-10-24
 
@@ -377,3 +377,4 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [Community Firmware V4.3 / CC2 Control 1.2.0]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3
 [V4.2 / CC2 Control 1.1.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
+
