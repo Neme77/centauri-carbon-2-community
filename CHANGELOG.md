@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Updates: include supported Community Firmware V4.4.2 in the requirements notice across all nine languages; strengthen the update-panel regression and cover Spanish language switching (PR_PENDING, fixes #221). Reported by [pezso92](https://github.com/pezso92).
+- Updates: include supported Community Firmware V4.4.2 in the requirements notice across all nine languages; strengthen the update-panel regression and cover Spanish language switching (#222, fixes #221). Reported by [pezso92](https://github.com/pezso92).
 
 ## [CC2 Control 1.2.21 / Firmware V4.4.2] - 2026-10-24
 
@@ -377,3 +377,4 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [Community Firmware V4.3 / CC2 Control 1.2.0]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3
 [V4.2 / CC2 Control 1.1.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
+
