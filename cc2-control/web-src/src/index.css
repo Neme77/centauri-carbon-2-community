@@ -462,7 +462,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   border-radius: 3px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 60%, #315061), color-mix(in srgb, var(--bg) 55%, #132a36));
 }
-.cc2-camera-idle-controls { top: 66%; }
+.cc2-camera-idle-controls { bottom: 2px; }
 :root[data-theme="light"] .cc2-camera-paused {
   background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 58%), linear-gradient(145deg, #e9f1f4, #dce8ed);
 }
@@ -507,3 +507,4 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
   .cc2-main .cc2-camera-card .cc2-camera-stop { min-height: 24px; padding-block: 0; }
 }
+

@@ -48,6 +48,15 @@ try {
     assert.equal(layout.overflow, false); assert(layout.camera >= 180)
     if (width === 1440) assert(Math.abs(layout.quick - layout.tuning) <= 1)
   }
+  await page.route('**/__preview/camera.svg*', r => r.abort())
+  await page.getByRole('button', { name: 'Start live view', exact: true }).click()
+  await page.locator('.cc2-camera-frame p').waitFor()
+  const retryFits = await page.evaluate(() => {
+    const frame = document.querySelector('.cc2-camera-frame').getBoundingClientRect()
+    const button = document.querySelector('.cc2-camera-frame button').getBoundingClientRect()
+    return button.top >= frame.top && button.bottom <= frame.bottom
+  })
+  assert(retryFits, 'mobile error feedback must keep the full retry button inside the camera frame')
   await page.request.post(origin + '__preview/scenario', { data: { scene: 'idle' } }); await page.reload()
   await page.waitForFunction(() => document.querySelector('#tune-speed').disabled)
   assert(await slider.isDisabled()); assert.deepEqual(commands, ['tune:speed:125', 'tune:speed:100'])
@@ -59,3 +68,4 @@ try {
   await browser?.close()
   await server.close()
 }
+
