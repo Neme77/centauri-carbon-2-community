@@ -2,7 +2,7 @@
 
 Gli aggiornamenti dell’app usano il catalogo stabile firmato. In Impostazioni →
 Aggiornamenti una sezione separata permette di scegliere le funzioni sperimentali.
-Entrambe partono spente. Non è un negozio di plugin e gli interruttori non
+Entrambe partono spente nelle nuove installazioni; le scelte gia salvate vengono conservate. Non è un negozio di plugin e gli interruttori non
 scaricano eseguibili. La vecchia scelta del canale `canvas-uds` nel browser non
 attiva alcuna funzione e non nasconde più gli aggiornamenti stabili.
 
@@ -62,10 +62,11 @@ cumulative da pubblicare.
 
 La prova unisce il layout Canvas (#207) e il popup bobine (#210) già approvati
 con Canvas UDS (#200), Quiet (#179, BorjaLL) e il riconoscimento della retrazione
-estesa (#209, Noahwhite2014). La versione resta 1.2.19 per questa prova di sviluppo.
-Per reinstallare la stessa versione usare l'installer da computer: non è un
-aggiornamento stabile firmato. La prova di sola applicazione conserva la patch
-webcam già installata e non installa il runtime della retrazione estesa.
+estesa (#209, Noahwhite2014) sulla base stabile corrente. Entrambe le opzioni
+sono incluse nello stesso pacchetto cumulativo: non servono canali o varianti
+separati. Per le prove con la stessa versione usare l'installer da computer.
+Il componente webcam e incluso anche per chi salta gli aggiornamenti precedenti;
+il runtime firmware della retrazione estesa rimane separato.
 
 Provare Canvas UDS e Quiet separatamente, lasciando prima spenta l'altra opzione.
 Per tornare alla configurazione ordinaria, scegliere Normal in Controllo e

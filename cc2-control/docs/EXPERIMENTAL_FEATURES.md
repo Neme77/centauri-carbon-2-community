@@ -67,10 +67,11 @@ public cumulative releases.
 
 The trial combines the accepted Canvas layout (#207) and spool insertion popup
 (#210) with the original Canvas UDS (#200), Quiet (#179, BorjaLL) and extended
-pull-back readback (#209, Noahwhite2014) changes. Version stays 1.2.19 for this
-development trial. Use the computer installer for a same-version trial; this is
-not a signed stable update. An application-only trial preserves an installed
-camera component and does not install the separate extended-range runtime.
+pull-back readback (#209, Noahwhite2014) changes on the current stable application
+base. Both opt-ins are included in the same cumulative package; no separate
+update channel or application variant is needed. Use the computer installer
+for same-version trials. The camera component is included for users skipping
+previous updates; the extended-range firmware runtime remains separate.
 
 Test Canvas UDS and Quiet separately, leaving the other option off first. To
 return to the ordinary configuration, select Normal in Control and wait for its

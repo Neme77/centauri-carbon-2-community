@@ -1,4 +1,4 @@
-# CC2 Control 1.2.21 â€” cumulative corrective trial
+# CC2 Control 1.2.21 — cumulative corrective trial
 
 For Community Firmware V4.4/V4.4.1 and the V4.4.2 candidate, ELEGOO 02.01.01.07.
 

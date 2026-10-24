@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='cc2-signed-update-') as temp:
     (base / 'verify.c').write_bytes((ROOT / 'updater/verify.c').read_bytes())
     binary = base / 'verify'
     flags = shlex.split(os.environ.get('CC2_TEST_CFLAGS',''))
-    run('cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-DCC2_CONTROL_VERSION="1.2.8"', '-DCC2_COMMUNITY_FIRMWARE_VERSION="4.4"',
+    run('cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-DCC2_CONTROL_VERSION="1.2.21"', '-DCC2_COMMUNITY_FIRMWARE_VERSION="4.4"',
         *flags, '-I'+str(ROOT/'third-party/monocypher'), base/'verify.c', ROOT/'third-party/monocypher/monocypher.c',
         ROOT/'third-party/monocypher/monocypher-ed25519.c', '-o', binary)
     compatibility = json.loads((ROOT/'installer/compatibility.json').read_text())
@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix='cc2-signed-update-') as temp:
         (base/'message').write_bytes(message)
         run('openssl','pkeyutl','-sign','-rawin','-inkey',key,'-in',base/'message','-out',base/'signature')
         return (base/'signature').read_bytes()
-    def package(payload, version='1.2.9', firmware='4.4', printer=None):
+    def package(payload, version='1.2.22', firmware='4.4', printer=None):
         manifest=(f'version={version}\nfirmware={firmware}\nprinter={printer or compatibility["printer_sha256"]}\n'
             f'daemon={compatibility["daemon_sha256"]}\nsize={len(payload)}\nsha512={hashlib.sha512(payload).hexdigest()}\n').encode()
         header=b'CC2UPD1\n'+struct.pack('>IQ',len(manifest),len(payload))
@@ -61,12 +61,12 @@ with tempfile.TemporaryDirectory(prefix='cc2-signed-update-') as temp:
             args=[str(binary),'--extract',str(file),str(stage)]
         result=subprocess.run(args,capture_output=True)
         assert (result.returncode==0)==success,result.stderr.decode()
-        if success: assert json.loads(result.stdout)['version']=='1.2.9'
+        if success: assert json.loads(result.stdout)['version']=='1.2.22'
     valid=package(tar()); check(valid,True); check(valid,True,True)
     for offset in (0,20,90,len(valid)-1):
         bad=bytearray(valid); bad[offset]^=1; check(bad,False)
     check(valid[:-1],False); check(valid+b'x',False)
-    for version in ('1.2.8','1.2.7','1.2.9-test'):
+    for version in ('1.2.21','1.2.20','1.2.22-test'):
         check(package(tar(),version=version),False)
     check(package(tar(),firmware='4.3'),False)
     check(package(tar(),printer='0'*64),False)

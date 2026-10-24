@@ -7,6 +7,7 @@ import { errText, notify, request } from '@/lib/api'
 import { experimental, refreshExperiments, type ExperimentState } from '@/lib/experiments'
 import { t } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
+import { openPage } from '@/lib/state'
 
 export const Experiments = () => {
   usePoll(refreshExperiments, 5000)
@@ -57,6 +58,14 @@ export const Experiments = () => {
       <CardHead icon="settings" title="experiments.title" />
       <p class="text-muted">{t('experiments.intro')}</p>
       <p class="mt-2 text-muted">{t('experiments.guard')}</p>
+      {ok && data?.quiet_motors && !data.normal_confirmed && (
+        <div class="mt-3 rounded-md border border-amber/50 bg-amber/10 p-3" data-experiment-recovery role="status">
+          <p class="text-amber">{t('experiments.normal_required')}</p>
+          <Button class="mt-2" onClick={() => openPage('control')}>
+            {t('common.control')}
+          </Button>
+        </div>
+      )}
       <label class="my-3 block max-w-md" htmlFor="experiments-lan">
         {t('experiments.lan_code')}
         <PasswordInput
@@ -105,14 +114,10 @@ export const Experiments = () => {
           >
             {t(data?.quiet_motors ? 'experiments.disable' : 'experiments.enable')}
           </Button>
-          {data?.quiet_motors && !data.normal_confirmed && (
-            <p class="mt-2 text-xs text-amber">{t('experiments.normal_required')}</p>
-          )}
         </div>
       </div>
       {!ok && <p class="mt-3 text-amber">{t('experiments.unavailable')}</p>}
       {data && !data.editable && <p class="mt-3 text-amber">{t('experiments.invalid')}</p>}
-      <p class="mt-3.5 text-xs text-muted">{t('experiments.pullback_separate')}</p>
       {error && (
         <p class="mt-3 break-words text-red" role="alert">
           {error}

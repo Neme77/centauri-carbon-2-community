@@ -13,29 +13,29 @@ correttamente pacchetti della stessa versione. Non aumentare la versione per
 una prova. Installare solo con stampante connessa, inattiva, fredda e target a
 zero; conservare il percorso esatto del backup indicato dall'installer.
 
-In Impostazioni â†’ Aggiornamenti, inserire il codice LAN nella sezione delle
+In Impostazioni → Aggiornamenti, inserire il codice LAN nella sezione delle
 funzioni sperimentali. Le due opzioni partono spente nelle nuove installazioni e rimangono indipendenti; le preferenze gia salvate vengono conservate.
 Provare prima Canvas UDS, controllando stati degli slot e sincronizzazione Orca;
-poi disattivarlo per provare Quiet separatamente. Una scelta salvata non Ã¨ una
+poi disattivarlo per provare Quiet separatamente. Una scelta salvata non è una
 conferma della sorgente realmente disponibile: leggere lo stato mostrato.
 
 Quiet abilita solo i controlli in Controllo. Non cambia i motori da solo. Prima di
 qualsiasi movimento verificare le letture dei driver e i limiti come descritto
-nella PR #179. Lo slicer puÃ² sovrascrivere i limiti iniziali 80 mm/s e 2000 mm/sÂ²;
+nella PR #179. Lo slicer può sovrascrivere i limiti iniziali 80 mm/s e 2000 mm/s²;
 non usare G-code che li superi. Normal ripristina valori fissi 500/20000, non
-eventuali limiti personalizzati. La modalitÃ  visualizzata Ã¨ richiesta, non una
-verifica dei registri hardware. Questa integrazione non Ã¨ ancora validata sulla
+eventuali limiti personalizzati. La modalità visualizzata è richiesta, non una
+verifica dei registri hardware. Questa integrazione non è ancora validata sulla
 stampante: i test degli autori e quelli automatici sono registrati separatamente.
 
 Per disattivare Quiet, cambiare sorgente Canvas o aggiornare/ripristinare l'app
-quando Quiet Ã¨ abilitato, selezionare Normal in Controllo e attendere il
+quando Quiet è abilitato, selezionare Normal in Controllo e attendere il
 completamento senza errori. Poi spegnere le opzioni. Se serve, usare il comando
 di ripristino dal percorso del backup stampato dall'installer, a stampante
 inattiva e fredda. Le preferenze sperimentali restano esterne all'applicazione;
 una vecchia app non offre automaticamente queste funzioni.
 
-La retrazione oltre 350 mm Ã¨ un esperimento separato: il riconoscimento del
-firmware Ã¨ incluso ma il runtime esteso non viene installato. Non modificare il
+La retrazione oltre 350 mm è un esperimento separato: il riconoscimento del
+firmware è incluso ma il runtime esteso non viene installato. Non modificare il
 firmware originale o aumentare distanze per provare questi due interruttori.
 Un eventuale runtime esteso richiede prima del ripristino configurazioni
 effettive entro 350 mm e la propria procedura di rimozione.

@@ -30,6 +30,7 @@ try {
         return r.fulfill({ status: 409, json: { error: 'Return motors to Normal first' } })
       const [feature, enabled] = action.split(':')
       state[feature === 'canvas-uds' ? 'canvas_uds' : 'quiet_motors'] = enabled === 'on'
+      if (feature === 'canvas-uds' && state.quiet_motors) state.normal_confirmed = false
     }
     return r.fulfill({ json: { ...state, ready: state.ready && (!state.quiet_motors || state.normal_confirmed) } })
   })
@@ -53,7 +54,7 @@ try {
   await quiet.click(); await confirm(); await page.getByRole('alert').filter({ hasText: 'LAN code rejected' }).waitFor()
   assert.equal(await quiet.getAttribute('aria-checked'), 'false')
   await code.fill('fixture-confirmation'); await quiet.click(); await confirm()
-  await page.getByText('In Control, select Normal', { exact: false }).waitFor()
+  await page.getByText('Normal needs confirmation.', { exact: false }).waitFor()
   assert.equal(await quiet.getAttribute('aria-checked'), 'true'); assert(await quiet.isDisabled())
   assert.equal(state.canvas_uds, true, 'Quiet opt-in must preserve Canvas')
   state.normal_confirmed = true
@@ -65,6 +66,27 @@ try {
   await code.fill('fixture-confirmation'); await canvas.click(); await confirm()
   await page.getByText('Disabled · using MQTT', { exact: true }).waitFor()
   assert.deepEqual(native, [], 'Preferences must never issue native commands')
+  // Real printer case: changing the Canvas subscription revokes a prior Normal confirmation.
+  state.canvas_uds = true; state.quiet_motors = true; state.normal_confirmed = true
+  await code.fill('fixture-confirmation')
+  await page.waitForFunction(() => document.querySelector('[data-experiments] [role=switch]')?.getAttribute('aria-checked') === 'true')
+  await canvas.click(); await confirm()
+  const recovery = page.locator('[data-experiment-recovery]')
+  await recovery.waitFor()
+  assert.equal(state.canvas_uds, false); assert(state.quiet_motors)
+  assert(await canvas.isDisabled()); assert(await quiet.isDisabled())
+  await recovery.getByRole('button', { name: 'Control', exact: true }).click()
+  await page.waitForURL('**/#control')
+  assert.deepEqual(native, [], 'Recovery link must navigate only, never send Normal automatically')
+  await page.goto(`${server.resolvedUrls.local[0]}#settings/updates`)
+  await recovery.waitFor()
+  state.normal_confirmed = true // The separately confirmed Normal command completes on the fresh connection.
+  await recovery.waitFor({ state: 'hidden' })
+  await code.fill('fixture-confirmation')
+  await page.waitForFunction(() => !document.querySelectorAll('[data-experiments] [role=switch]')[1].disabled)
+  await quiet.click(); await confirm()
+  assert.equal(state.canvas_uds, false, 'Quiet opt-out must retain the selected Canvas source')
+  assert.deepEqual(native, [])
   state.ready = false
   await code.fill('fixture-confirmation')
   await page.waitForFunction(() => [...document.querySelectorAll('[data-experiments] [role=switch]')].every(b => b.disabled))

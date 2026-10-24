@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Experimental feature settings: remove unrelated extended pull-back/camera and memory-saving wording, and show a contextual Control shortcut when Normal must be confirmed after a Canvas source change (#214, maintainer feedback).
+
 - One application update stream replaces the experimental channel selector, including for browsers with the old channel preference saved (#214). Optional experiments are independent from application updates: independent, persisted Canvas UDS (#200) and Quiet-control opt-ins (original motor feature by BorjaLL, #179), both initially disabled. Normal must complete before hiding Quiet controls or reconnecting Canvas while those controls are enabled. Extended pull-back remains a separate firmware experiment.
 - Public cumulative release packaging with `--release` refuses missing qualified camera runtime files, retaining the camera migration for users skipping 1.2.19.
 - Canvas: compact slot cards, shared actions and a bounded session-history panel; inspired by Surfoo's layout proposal (#203) and refined through the maintainer-approved layout (#207).

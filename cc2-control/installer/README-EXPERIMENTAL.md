@@ -13,7 +13,7 @@ same-version package. Do not advance the version for a trial. Install only
 while connected, idle and cold with heating targets zero. Keep the exact
 backup path reported by the installer.
 
-In Settings â†’ Updates, enter the LAN code in Experimental features. Both choices
+In Settings → Updates, enter the LAN code in Experimental features. Both choices
 default to off on new installations and remain independent; existing saved
 choices are retained. Try Canvas UDS first, checking slot states
 and Orca synchronization; turn it off before trying Quiet separately. Stored
@@ -21,7 +21,7 @@ opt-in is distinct from actual source availability: read the displayed status.
 
 Quiet opt-in only reveals the controls on Control. It does not change motors.
 Before any movement, verify driver readback and limits following PR #179. The
-slicer can override the initial 80 mm/s and 2000 mm/sÂ² limits; do not use G-code
+slicer can override the initial 80 mm/s and 2000 mm/s² limits; do not use G-code
 that exceeds them. Normal restores fixed 500/20000 limits, not previous custom
 values. Displayed mode is requested state, not verified hardware registers. This
 combined application still needs printer acceptance; authors' hardware tests
