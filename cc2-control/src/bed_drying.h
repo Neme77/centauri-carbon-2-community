@@ -223,7 +223,7 @@ static void drying_start_response(int fd,const char *request,const char *body,si
 }
 static void drying_stop_response(int fd,const char *request,mqtt_client *mqtt,console_state *console) {
     if(!app_update_authorized(request,mqtt)){app_update_fail(fd,401,"LAN code confirmation required or temporarily locked");return;}
-    if(drying_active()&&drying.stage!=DRY_RECOVERY)drying_stop("manual",0);
+    if(drying_active()&&drying.original_timeout)drying_stop("manual",0);
     drying_response(fd,mqtt,console);
 }
 #endif

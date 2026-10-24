@@ -74,6 +74,9 @@ int main(void){
     plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;drying_load();
     assert(drying.stage==DRY_RECOVERY);tick();assert(heats==1&&leases==1&&offs==0);
     snapshot(25,0);tick();assert(!drying_active()&&heats==1&&restores==1);
+    reset();heat();
+    plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;drying_load();
+    drying_stop("manual",0);tick();assert(offs==1);finish();assert(!drying_active()&&restores==1);
     reset();heat();telemetry.connections++;tick();assert(drying.stage==DRY_STOPPING);finish();
     assert(!drying_result("{\"id\":204,\"error\":{},\"result\":{}}",33,0));
     reset();assert(!symlink("missing",journal));start("70:1",503);assert(!heats&&!leases);unlink(journal);
