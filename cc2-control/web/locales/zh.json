@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "热床 PID",
   "control.fan_percent": "设置{name}（%）",
   "control.invalid_fan_percent": "请输入 0 到 100 之间的整数。",
-  "control.fan_enter_hint": "输入 0 到 100 之间的数值，然后按 Enter 键。",
   "canvas.reset_all": "重置所有槽位的耗材数据",
   "canvas.reset_all_confirm": "重置全部四个 Canvas 槽位的材料数据？这将清除保存的材料、颜色和温度，不会实际卸载耗材。",
   "common.pagination": "分页",
@@ -1025,16 +1024,6 @@
   "files.sort": "排序方式",
   "app.print_progress": "打印进度",
   "app.sidebar": "侧边菜单",
-  "spools.spoolman_sync": "Spoolman 同步",
-  "spools.spoolman_hint": "将测得的用量推送到自托管的 Spoolman 服务器，并将材料、颜色、名称和剩余重量拉取回来，适用于下方关联的任何耗材卷。",
-  "spools.spoolman_url": "服务器地址",
-  "spools.spoolman_auth": "反向代理登录（可选）",
-  "spools.spoolman_auth_placeholder": "用户名:密码",
-  "spools.spoolman_saved_toast": "Spoolman 设置已保存。",
-  "spools.spoolman_id": "Spoolman 耗材卷 ID",
-  "spools.spoolman_id_placeholder": "例如 42",
-  "spools.spoolman_id_hint": "通过数字 ID 将此耗材卷与 Spoolman 中的一个关联。留空则不同步。",
-  "spools.invalid_spoolman_id": "Spoolman ID 只能是数字。",
   "files.list_changed_retry": "加载时文件列表发生变化。请刷新后重试。",
   "job.bed_map_expand": "放大热床地图",
   "canvas.actions_for_slot": "槽位 {slot} 操作",
@@ -1108,7 +1097,5 @@
   "settings.forget_lan": "忘记访问码",
   "settings.remember_save": "验证并记住",
   "settings.remember_saved": "已在此设备上记住 LAN 访问码",
-  "settings.remember_storage_failed": "浏览器存储不可用。访问码未保存。",
-  "settings.spoolman_enable": "启用 Spoolman",
-  "settings.spoolman_hint": "在耗材卷页面显示 Spoolman 并与服务器同步。关闭后保留设置和关联。"
+  "settings.remember_storage_failed": "浏览器存储不可用。访问码未保存。"
 }

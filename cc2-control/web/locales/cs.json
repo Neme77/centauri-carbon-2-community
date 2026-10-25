@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "PID podložky",
   "control.fan_percent": "Nastavit {name} (%)",
   "control.invalid_fan_percent": "Zadejte celé číslo od 0 do 100.",
-  "control.fan_enter_hint": "Zadejte hodnotu od 0 do 100 a stiskněte Enter.",
   "canvas.reset_all": "Resetovat všechny filamenty",
   "canvas.reset_all_confirm": "Resetovat údaje o materiálu ve všech čtyřech slotech Canvas? Vymaže se uložený materiál, barva a teploty. Filament nebude vysunut.",
   "common.pagination": "Stránkování",
@@ -1025,16 +1024,6 @@
   "files.sort": "Seřadit podle",
   "app.print_progress": "Průběh tisku",
   "app.sidebar": "Boční menu",
-  "spools.spoolman_sync": "Synchronizace se Spoolman",
-  "spools.spoolman_hint": "Odesílá naměřenou spotřebu na vlastní server Spoolman a stahuje z něj materiál, barvu, název a zbývající hmotnost pro každou cívku propojenou níže.",
-  "spools.spoolman_url": "URL serveru",
-  "spools.spoolman_auth": "Přihlášení k reverzní proxy (volitelné)",
-  "spools.spoolman_auth_placeholder": "uzivatel:heslo",
-  "spools.spoolman_saved_toast": "Nastavení Spoolman uloženo.",
-  "spools.spoolman_id": "ID cívky ve Spoolman",
-  "spools.spoolman_id_placeholder": "např. 42",
-  "spools.spoolman_id_hint": "Propojí tuto cívku s cívkou ve Spoolman podle jejího číselného id. Prázdné pole ji nebude synchronizovat.",
-  "spools.invalid_spoolman_id": "ID Spoolman musí obsahovat jen číslice.",
   "files.list_changed_retry": "Seznam souborů se během načítání změnil. Obnovte jej a zkuste to znovu.",
   "job.bed_map_expand": "Zvětšit mapu podložky",
   "canvas.actions_for_slot": "Akce pro slot {slot}",
@@ -1108,7 +1097,5 @@
   "settings.forget_lan": "Zapomenout kód",
   "settings.remember_save": "Ověřit a zapamatovat",
   "settings.remember_saved": "Kód LAN zapamatován v tomto zařízení",
-  "settings.remember_storage_failed": "Úložiště prohlížeče není dostupné. Kód nebyl uložen.",
-  "settings.spoolman_enable": "Povolit Spoolman",
-  "settings.spoolman_hint": "Zobrazí Spoolman v sekci Cívky a synchronizuje se serverem. Vypnutí zachová nastavení a propojení."
+  "settings.remember_storage_failed": "Úložiště prohlížeče není dostupné. Kód nebyl uložen."
 }

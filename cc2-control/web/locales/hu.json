@@ -339,7 +339,6 @@
   "control.quick_pid_bed": "Tárgyasztal PID",
   "control.fan_percent": "{name} beállítása (%)",
   "control.invalid_fan_percent": "Adj meg 0 és 100 közötti egész számot.",
-  "control.fan_enter_hint": "Adj meg egy 0 és 100 közötti értéket, majd nyomd meg az Entert.",
   "dashboard.available_memory": "Szabad memória",
   "dashboard.chamber": "Kamra",
   "dashboard.choose_four_protected_actions_or": "Válassz négy védett műveletet vagy navigációs parancsikont.",
@@ -1025,16 +1024,6 @@
   "files.sort": "Rendezés",
   "app.print_progress": "Nyomtatás előrehaladása",
   "app.sidebar": "Oldalmenü",
-  "spools.spoolman_sync": "Spoolman szinkronizálás",
-  "spools.spoolman_hint": "A mért felhasználást elküldi egy saját üzemeltetésű Spoolman szerverre, és onnan visszahozza az anyag, a szín, a név és a hátralévő tömeg adatait minden alább hozzákapcsolt tekercshez.",
-  "spools.spoolman_url": "Szerver URL",
-  "spools.spoolman_auth": "Reverse proxy bejelentkezés (opcionális)",
-  "spools.spoolman_auth_placeholder": "felhasznalo:jelszo",
-  "spools.spoolman_saved_toast": "Spoolman beállítások elmentve.",
-  "spools.spoolman_id": "Spoolman tekercs ID",
-  "spools.spoolman_id_placeholder": "pl. 42",
-  "spools.spoolman_id_hint": "Összekapcsolja ezt a tekercset egy Spoolman tekerccsel, a numerikus id alapján. Hagyd üresen, ha nem akarod szinkronizálni.",
-  "spools.invalid_spoolman_id": "A Spoolman id csak számjegyeket tartalmazhat.",
   "files.list_changed_retry": "A fájllista betöltés közben megváltozott. Frissítsen és próbálja újra.",
   "job.bed_map_expand": "Tárgyasztaltérkép nagyítása",
   "canvas.actions_for_slot": "Műveletek a(z) {slot}. rekeszhez",
@@ -1108,7 +1097,5 @@
   "settings.forget_lan": "Kód elfelejtése",
   "settings.remember_save": "Ellenőrzés és megjegyzés",
   "settings.remember_saved": "LAN-kód megjegyezve ezen az eszközön",
-  "settings.remember_storage_failed": "A böngésző tárhelye nem érhető el. A kód nem lett mentve.",
-  "settings.spoolman_enable": "Spoolman engedélyezése",
-  "settings.spoolman_hint": "Megjeleníti a Spoolmant az Orsók oldalon, és szinkronizál a szerverrel. A kikapcsolás megőrzi a beállításokat és a kapcsolatokat."
+  "settings.remember_storage_failed": "A böngésző tárhelye nem érhető el. A kód nem lett mentve."
 }

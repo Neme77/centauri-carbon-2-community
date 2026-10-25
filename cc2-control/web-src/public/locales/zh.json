@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "热床 PID",
   "control.fan_percent": "设置{name}（%）",
   "control.invalid_fan_percent": "请输入 0 到 100 之间的整数。",
-  "control.fan_enter_hint": "输入 0 到 100 之间的数值，然后按 Enter 键。",
   "canvas.reset_all": "重置所有槽位的耗材数据",
   "canvas.reset_all_confirm": "重置全部四个 Canvas 槽位的材料数据？这将清除保存的材料、颜色和温度，不会实际卸载耗材。",
   "common.pagination": "分页",

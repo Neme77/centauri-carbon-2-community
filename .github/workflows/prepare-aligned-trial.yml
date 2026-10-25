@@ -1,0 +1,82 @@
+name: Prepare aligned cumulative trial
+on:
+  push:
+    branches: [test/cumulative-pr208-225, ui/spoolman-integration-toggle, fix/bed-drying-help, test/cumulative-pr208-230]
+    paths: [.github/workflows/prepare-aligned-trial.yml]
+permissions:
+  contents: write
+concurrency:
+  group: aligned-trial-${{ github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v7
+        if: github.ref_name != 'fix/bed-drying-help'
+        with:
+          node-version: 26
+      - name: Rebuild the canonical UI
+        if: github.ref_name != 'fix/bed-drying-help'
+        working-directory: cc2-control/web-src
+        run: npm ci && npm run check && npm run build
+      - name: Targeted real-browser regressions
+        if: github.ref_name == 'test/cumulative-pr208-230'
+        working-directory: cc2-control/web-src
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:bed-drying
+          npm run test:spoolman-integration
+          npm run test:control-calibrations
+          npm run test:remember-lan
+      - name: Focused heater command and ownership regression
+        run: |
+          cd cc2-control
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_bed_drying.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-bed-drying -lm
+          /tmp/test-bed-drying
+      - name: Commit rebuilt UI and exact source snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cc2-control
+          git diff --cached --quiet || git commit -m "Rebuild aligned cumulative interface"
+          python3 experimental/pr128-integration/sync_source.py
+          rm .github/workflows/prepare-aligned-trial.yml
+          git add builder/current .github/workflows/prepare-aligned-trial.yml
+          git commit -m "Regenerate aligned builder snapshot and remove preparation workflow"
+      - name: Builder and source consistency checks
+        run: python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+      - name: Publish this prepared branch only
+        run: git push origin HEAD:refs/heads/${{ github.ref_name }}
+      - name: Native application regression suite
+        if: github.ref_name == 'test/cumulative-pr208-230'
+        run: make -C cc2-control clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
+      - name: Install ARM toolchain
+        if: github.ref_name == 'test/cumulative-pr208-230'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user
+      - name: ARM build and smoke test
+        if: github.ref_name == 'test/cumulative-pr208-230'
+        run: |
+          make -C cc2-control clean all EXTRA_CFLAGS=-Werror
+          CC2_TEST_RUNNER=qemu-arm python3 cc2-control/tests/test_smoke.py cc2-control/dist/cc2-control/cc2-control
+      - name: Package application-only trial without camera payload
+        if: github.ref_name == 'test/cumulative-pr208-230'
+        run: |
+          python3 cc2-control/installer/package.py --application-only-trial --prepared cc2-control/dist/cc2-control --output output/CC2-Control-1.2.21-Cumulative-Trial-R2-Multiplatform-Update.zip
+          git rev-parse HEAD > output/integration-head.txt
+          cp cc2-control/dist/cc2-control/build-info.json output/build-info.json || true
+      - uses: actions/upload-artifact@v7.0.2
+        if: github.ref_name == 'test/cumulative-pr208-230'
+        with:
+          name: cc2-control-cumulative-trial-r2
+          path: |
+            output/CC2-Control-1.2.21-Cumulative-Trial-R2-Multiplatform-Update.zip*
+            output/integration-head.txt
+          if-no-files-found: error
+          retention-days: 14

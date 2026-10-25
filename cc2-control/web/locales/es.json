@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "PID de la Cama",
   "control.fan_percent": "Ajustar {name} (%)",
   "control.invalid_fan_percent": "Introduzca un numero entero del 0 al 100.",
-  "control.fan_enter_hint": "Introduzca un valor del 0 al 100 y presione Enter.",
   "canvas.reset_all": "Restablecer todos los filamentos",
   "canvas.reset_all_confirm": "¿Restablecer los datos de material para las cuatro ranuras Canvas? Esto borra el material, el color y las temperaturas guardados. No descarga el filamento.",
   "settings.camera_persistent": "Mantener activa",
@@ -1025,16 +1024,6 @@
   "files.sort": "Ordenar por",
   "app.print_progress": "Progreso de la impresión",
   "app.sidebar": "Menú lateral",
-  "spools.spoolman_sync": "Sincronización con Spoolman",
-  "spools.spoolman_hint": "Envía el consumo medido a un servidor Spoolman autoalojado y recupera su material, color, nombre y peso restante, para cualquier bobina vinculada aquí abajo.",
-  "spools.spoolman_url": "URL del servidor",
-  "spools.spoolman_auth": "Inicio de sesión del proxy inverso (opcional)",
-  "spools.spoolman_auth_placeholder": "usuario:contraseña",
-  "spools.spoolman_saved_toast": "Ajustes de Spoolman guardados.",
-  "spools.spoolman_id": "ID de bobina en Spoolman",
-  "spools.spoolman_id_placeholder": "p. ej. 42",
-  "spools.spoolman_id_hint": "Vincula esta bobina a una de Spoolman, por su id numérico. Déjalo vacío para no sincronizarla.",
-  "spools.invalid_spoolman_id": "El id de Spoolman debe contener solo cifras.",
   "files.list_changed_retry": "La lista cambió durante la carga. Actualiza e inténtalo de nuevo.",
   "job.bed_map_expand": "Ampliar mapa de la cama",
   "canvas.actions_for_slot": "Acciones para la ranura {slot}",
@@ -1108,7 +1097,5 @@
   "settings.forget_lan": "Olvidar código",
   "settings.remember_save": "Verificar y recordar",
   "settings.remember_saved": "Código LAN recordado en este dispositivo",
-  "settings.remember_storage_failed": "El almacenamiento del navegador no está disponible. El código no se ha guardado.",
-  "settings.spoolman_enable": "Activar Spoolman",
-  "settings.spoolman_hint": "Muestra Spoolman en Bobinas y sincroniza con tu servidor. Al desactivarlo se conservan la configuración y las asociaciones."
+  "settings.remember_storage_failed": "El almacenamiento del navegador no está disponible. El código no se ha guardado."
 }
