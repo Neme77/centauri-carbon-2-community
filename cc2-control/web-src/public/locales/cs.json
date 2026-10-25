@@ -1110,5 +1110,16 @@
   "settings.remember_saved": "Kód LAN zapamatován v tomto zařízení",
   "settings.remember_storage_failed": "Úložiště prohlížeče není dostupné. Kód nebyl uložen.",
   "settings.spoolman_enable": "Povolit Spoolman",
-  "settings.spoolman_hint": "Zobrazí Spoolman v sekci Cívky a synchronizuje se serverem. Vypnutí zachová nastavení a propojení."
+  "settings.spoolman_hint": "Zobrazí Spoolman v sekci Cívky a synchronizuje se serverem. Vypnutí zachová nastavení a propojení.",
+  "filament.external": "Externí cívka",
+  "filament.edit": "Upravit materiál",
+  "filament.brand": "Značka",
+  "filament.type": "Typ",
+  "filament.category": "Podkategorie",
+  "filament.colour": "Barva",
+  "filament.save_confirm": "Uložit tento materiál do tiskárny?",
+  "filament.load_confirm": "Zavést externí filament? Tiskárna zahřeje trysku a posune filament.",
+  "filament.unload_confirm": "Vysunout externí filament? Tiskárna zahřeje trysku a posune filament.",
+  "filament.unsupported_temperature": "Tento materiál překračuje chráněný rozsah teploty trysky.",
+  "filament.save": "Uložit"
 }

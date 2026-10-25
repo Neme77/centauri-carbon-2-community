@@ -1110,5 +1110,16 @@
   "settings.remember_saved": "LAN-kód megjegyezve ezen az eszközön",
   "settings.remember_storage_failed": "A böngésző tárhelye nem érhető el. A kód nem lett mentve.",
   "settings.spoolman_enable": "Spoolman engedélyezése",
-  "settings.spoolman_hint": "Megjeleníti a Spoolmant az Orsók oldalon, és szinkronizál a szerverrel. A kikapcsolás megőrzi a beállításokat és a kapcsolatokat."
+  "settings.spoolman_hint": "Megjeleníti a Spoolmant az Orsók oldalon, és szinkronizál a szerverrel. A kikapcsolás megőrzi a beállításokat és a kapcsolatokat.",
+  "filament.external": "Külső tekercs",
+  "filament.edit": "Anyag szerkesztése",
+  "filament.brand": "Márka",
+  "filament.type": "Típus",
+  "filament.category": "Alkategória",
+  "filament.colour": "Szín",
+  "filament.save_confirm": "Menti ezt az anyagot a nyomtatón?",
+  "filament.load_confirm": "Betölti a külső filamentet? A nyomtató felmelegíti a fúvókát és mozgatja a filamentet.",
+  "filament.unload_confirm": "Kitölti a külső filamentet? A nyomtató felmelegíti a fúvókát és mozgatja a filamentet.",
+  "filament.unsupported_temperature": "Ez az anyag túllépi a fúvóka védett hőmérsékleti tartományát.",
+  "filament.save": "Mentés"
 }

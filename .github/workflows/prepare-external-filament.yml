@@ -1,0 +1,50 @@
+name: Prepare external filament controls
+on:
+  push:
+    branches: [feat/external-filament]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/external-filament
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Verify native guards and all standalone C harnesses
+        run: python3 cc2-control/tests/test_c_harnesses.py
+      - name: Verify shared material catalog
+        run: python3 cc2-control/tests/test_external_catalog_static.py
+      - name: Install browser build dependencies
+        working-directory: cc2-control/web-src
+        run: npm ci
+      - name: Check and build interface
+        working-directory: cc2-control/web-src
+        run: |
+          npm run check
+          npm run build
+      - name: Browser interaction checks
+        working-directory: cc2-control/web-src
+        run: |
+          npx playwright install --with-deps chromium
+          node preview/test-external-filament.mjs
+      - name: Save interface review images
+        uses: actions/upload-artifact@v7
+        with:
+          name: external-filament-preview
+          path: cc2-control/web-src/preview/artifacts/external-filament-*.png
+      - name: Commit generated interface, pin source snapshot and remove temporary workflow
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add cc2-control/web
+          git commit -m "Build shared native filament material interface"
+          python3 experimental/pr128-integration/sync_source.py
+          rm .github/workflows/prepare-external-filament.yml
+          git add builder/current .github/workflows/prepare-external-filament.yml
+          git commit -m "Pin filament controls source snapshot and remove preparation workflow"
+          python3 -m unittest discover -s builder/current/tests -p test_cc2_control_source_snapshot.py
+          git push origin HEAD:feat/external-filament

@@ -3079,6 +3079,24 @@ static void exclude_objects_response(int fd, const mqtt_client *mqtt) {
     if (dynamic_owned) free(dynamic);
 }
 
+#include "external_filament.h"
+static const char external_query[]="{\"id\":206,\"method\":\"objects/query\",\"params\":{\"objects\":{\"canvas_dev\":null,\"print_stats\":[\"state\"]}}}\003";
+static int external_read(char **reply,size_t *length,external_readback *state){
+    return uds_query_json(external_query,reply,length)==0&&*reply&&external_parse(*reply,*length,state);
+}
+static void external_filament_response(int fd,const mqtt_client *mqtt){
+    char *reply=NULL;size_t length=0;external_readback state={0};
+    int known=external_read(&reply,&length,&state);
+    int fresh=mqtt->connected&&mqtt->registered&&mqtt->last_message>0&&time(NULL)>=mqtt->last_message&&time(NULL)-mqtt->last_message<=15;
+    int idle=known&&fresh&&state.idle&&mqtt->have_machine_status&&mqtt->machine_status==1;
+    const char *filament=known&&state.filament?state.filament:"null";
+    size_t flen=known&&state.filament?(size_t)(state.filament_end-state.filament):4;
+    size_t cap=flen+160;char *body=malloc(cap);
+    if(body){int n=snprintf(body,cap,"{\"available\":%s,\"idle\":%s,\"filament\":%.*s}\n",known&&fresh&&state.disconnected?"true":"false",idle?"true":"false",(int)flen,filament);
+        respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)n);free(body);}
+    free(reply);
+}
+
 static void mesh_response(int fd) {
     int uds = socket(AF_UNIX, SOCK_STREAM, 0);
     if (uds < 0) {
@@ -3684,8 +3702,15 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         const char *error="{\"accepted\":false,\"error\":\"Fresh tuning readback is unavailable\"}\n";
         respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
     }
-    if(!control_build_script(action,mqtt,script,sizeof(script),reason,sizeof(reason))||
-       console_start(console,script,reason,sizeof(reason))!=0){
+    mqtt->external_verified=0;
+    if(!strncmp(action,"external:",9)){
+        char *reply=NULL;size_t length=0;external_readback state={0};
+        mqtt->external_verified=external_read(&reply,&length,&state)&&state.idle;
+        free(reply);
+    }
+    int built=control_build_script(action,mqtt,script,sizeof(script),reason,sizeof(reason));
+    mqtt->external_verified=0;
+    if(!built||console_start(console,script,reason,sizeof(reason))!=0){
         char escaped[300],response[420];json_escape(escaped,sizeof(escaped),reason);
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
@@ -3693,7 +3718,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     if(!strcmp(action,"motors:quiet")||!strcmp(action,"motors:normal")){
         motor_mode_requested=action[7]=='q'?"quiet":"normal";motor_mode_connection=telemetry.connections;
     }
-    if(!strncmp(action,"canvas:material:",16)||!strcmp(action,"canvas:reset-all")){mqtt->canvas_material_read_at=time(NULL)+1;mqtt->canvas_watch_until=time(NULL)+15;}
+    if(!strncmp(action,"canvas:material:",16)||!strncmp(action,"canvas:catalog:",15)||!strcmp(action,"canvas:reset-all")){mqtt->canvas_material_read_at=time(NULL)+1;mqtt->canvas_watch_until=time(NULL)+15;}
     if(z_action){z_offset_reference=z_reference;z_offset_session=1;z_offset_expected=z_next;z_offset_pending=1;z_offset_timed_out=0;clock_gettime(CLOCK_MONOTONIC,&z_offset_started);}
     const char *ok="{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
@@ -3991,6 +4016,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         console_command_response(fd,console,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/recovery/reboot")==0) {
         recovery_reboot_response(fd,body,body_len);
+    } else if (!strcmp(method,"GET")&&!strcmp(path,"/api/external-filament")) {
+        external_filament_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/control")==0) {
         control_response(fd,console,mqtt,body,body_len);
     } else if (strcmp(method,"GET")!=0 && strcmp(method,"POST")!=0 && strcmp(method,"PUT")!=0) {

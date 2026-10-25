@@ -1110,5 +1110,16 @@
   "settings.remember_saved": "LAN code remembered on this device",
   "settings.remember_storage_failed": "Browser storage is unavailable. The code was not saved.",
   "settings.spoolman_enable": "Enable Spoolman",
-  "settings.spoolman_hint": "Show Spoolman in Spools and synchronize with your server. Turning it off keeps settings and links."
+  "settings.spoolman_hint": "Show Spoolman in Spools and synchronize with your server. Turning it off keeps settings and links.",
+  "filament.external": "External spool",
+  "filament.edit": "Edit material",
+  "filament.brand": "Brand",
+  "filament.type": "Type",
+  "filament.category": "Subcategory",
+  "filament.colour": "Colour",
+  "filament.save_confirm": "Save this material on the printer?",
+  "filament.load_confirm": "Load external filament? The printer will heat the nozzle and move the filament.",
+  "filament.unload_confirm": "Unload external filament? The printer will heat the nozzle and move the filament.",
+  "filament.unsupported_temperature": "This material exceeds the protected nozzle temperature range.",
+  "filament.save": "Save"
 }

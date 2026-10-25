@@ -1110,5 +1110,16 @@
   "settings.remember_saved": "已在此设备上记住 LAN 访问码",
   "settings.remember_storage_failed": "浏览器存储不可用。访问码未保存。",
   "settings.spoolman_enable": "启用 Spoolman",
-  "settings.spoolman_hint": "在耗材卷页面显示 Spoolman 并与服务器同步。关闭后保留设置和关联。"
+  "settings.spoolman_hint": "在耗材卷页面显示 Spoolman 并与服务器同步。关闭后保留设置和关联。",
+  "filament.external": "外部料盘",
+  "filament.edit": "编辑材料",
+  "filament.brand": "品牌",
+  "filament.type": "类型",
+  "filament.category": "子类别",
+  "filament.colour": "颜色",
+  "filament.save_confirm": "将此材料保存到打印机？",
+  "filament.load_confirm": "加载外部耗材？打印机将加热喷嘴并移动耗材。",
+  "filament.unload_confirm": "卸载外部耗材？打印机将加热喷嘴并移动耗材。",
+  "filament.unsupported_temperature": "此材料超出喷嘴的受保护温度范围。",
+  "filament.save": "保存"
 }

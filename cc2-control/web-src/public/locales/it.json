@@ -1110,5 +1110,16 @@
   "settings.remember_saved": "Codice LAN ricordato su questo dispositivo",
   "settings.remember_storage_failed": "La memoria del browser non è disponibile. Il codice non è stato salvato.",
   "settings.spoolman_enable": "Abilita Spoolman",
-  "settings.spoolman_hint": "Mostra Spoolman nelle Bobine e sincronizza con il tuo server. Disattivandolo conservi configurazione e associazioni."
+  "settings.spoolman_hint": "Mostra Spoolman nelle Bobine e sincronizza con il tuo server. Disattivandolo conservi configurazione e associazioni.",
+  "filament.external": "Bobina esterna",
+  "filament.edit": "Modifica materiale",
+  "filament.brand": "Marchio",
+  "filament.type": "Tipo",
+  "filament.category": "Sottocategoria",
+  "filament.colour": "Colore",
+  "filament.save_confirm": "Salvare questo materiale sulla stampante?",
+  "filament.load_confirm": "Caricare il filamento esterno? La stampante riscalderà l’ugello e muoverà il filamento.",
+  "filament.unload_confirm": "Scaricare il filamento esterno? La stampante riscalderà l’ugello e muoverà il filamento.",
+  "filament.unsupported_temperature": "Questo materiale supera l’intervallo protetto di temperatura dell’ugello.",
+  "filament.save": "Salva"
 }

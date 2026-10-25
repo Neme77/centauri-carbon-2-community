@@ -1110,5 +1110,16 @@
   "settings.remember_saved": "Kod LAN zapamiętany na tym urządzeniu",
   "settings.remember_storage_failed": "Pamięć przeglądarki jest niedostępna. Kod nie został zapisany.",
   "settings.spoolman_enable": "Włącz Spoolman",
-  "settings.spoolman_hint": "Pokaż Spoolman w sekcji Szpule i synchronizuj z serwerem. Wyłączenie zachowuje ustawienia i powiązania."
+  "settings.spoolman_hint": "Pokaż Spoolman w sekcji Szpule i synchronizuj z serwerem. Wyłączenie zachowuje ustawienia i powiązania.",
+  "filament.external": "Szpula zewnętrzna",
+  "filament.edit": "Edytuj materiał",
+  "filament.brand": "Marka",
+  "filament.type": "Typ",
+  "filament.category": "Podkategoria",
+  "filament.colour": "Kolor",
+  "filament.save_confirm": "Zapisać ten materiał w drukarce?",
+  "filament.load_confirm": "Załadować filament zewnętrzny? Drukarka nagrzeje dyszę i przesunie filament.",
+  "filament.unload_confirm": "Wyładować filament zewnętrzny? Drukarka nagrzeje dyszę i przesunie filament.",
+  "filament.unsupported_temperature": "Ten materiał przekracza chroniony zakres temperatury dyszy.",
+  "filament.save": "Zapisz"
 }
