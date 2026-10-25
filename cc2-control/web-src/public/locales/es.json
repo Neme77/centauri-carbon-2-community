@@ -1088,6 +1088,7 @@
   "drying.interrupted": "Interrumpido",
   "drying.unavailable": "Lectura no disponible",
   "drying.expired": "Tiempo agotado; objetivo cero confirmado.",
+  "drying.manual_stopped": "Secado detenido. Objetivo de la cama confirmado a 0 °C.",
   "drying.interrupted_hint": "Sesión interrumpida o modificada desde otro lugar. Comprueba el objetivo de la cama; la parada solo se confirma al leer cero.",
   "drying.enable_confirm": "¿Activar los controles experimentales de calentamiento temporizado de cama?",
   "drying.disable_confirm": "¿Ocultar los controles experimentales de calentamiento de cama?",

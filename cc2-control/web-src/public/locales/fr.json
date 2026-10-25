@@ -1088,6 +1088,7 @@
   "drying.interrupted": "Interrompu",
   "drying.unavailable": "Lecture indisponible",
   "drying.expired": "Durée écoulée ; consigne zéro confirmée.",
+  "drying.manual_stopped": "Séchage interrompu. Consigne du plateau confirmée à 0 °C.",
   "drying.interrupted_hint": "Session interrompue ou modifiée ailleurs. Vérifiez la consigne du plateau ; l’arrêt n’est confirmé qu’après lecture de zéro.",
   "drying.enable_confirm": "Activer les commandes expérimentales de chauffage temporisé du plateau ?",
   "drying.disable_confirm": "Masquer les commandes expérimentales de chauffage du plateau ?",

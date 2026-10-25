@@ -1088,6 +1088,7 @@
   "drying.interrupted": "已中断",
   "drying.unavailable": "无法读取状态",
   "drying.expired": "时间已到，已确认目标温度为零。",
+  "drying.manual_stopped": "烘干已停止。已确认热床目标温度为 0 °C。",
   "drying.interrupted_hint": "运行已中断或被其他操作更改。请检查热床目标温度；只有读回零值后才能确认停止。",
   "drying.enable_confirm": "启用实验性定时热床加热控制？",
   "drying.disable_confirm": "隐藏实验性热床加热控制？",

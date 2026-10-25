@@ -1088,6 +1088,7 @@
   "drying.interrupted": "Megszakítva",
   "drying.unavailable": "Az érték nem elérhető",
   "drying.expired": "Az idő letelt; a nulla célérték megerősítve.",
+  "drying.manual_stopped": "Szárítás leállítva. Az ágy célhőmérséklete igazoltan 0 °C.",
   "drying.interrupted_hint": "A munkamenet megszakadt vagy máshol módosult. Ellenőrizze az ágy célértékét; a leállítás csak nulla visszaolvasása után megerősített.",
   "drying.enable_confirm": "Bekapcsolja a kísérleti időzített ágyfűtés vezérlését?",
   "drying.disable_confirm": "Elrejti a kísérleti ágyfűtés vezérlését?",
