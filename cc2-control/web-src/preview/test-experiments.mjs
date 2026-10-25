@@ -34,7 +34,7 @@ try {
     }
     return r.fulfill({ json: { ...state, ready: state.ready && (!state.quiet_motors || state.normal_confirmed) } })
   })
-  await page.goto(`${server.resolvedUrls.local[0]}#settings/updates`)
+  await page.goto(`${server.resolvedUrls.local[0]}#settings/integrations`)
   const canvas = page.getByRole('switch', { name: 'Canvas UDS', exact: true })
   const quiet = page.getByRole('switch', { name: 'Quiet motor controls', exact: true })
   const code = page.getByLabel('LAN code for experimental features', { exact: true })
@@ -78,7 +78,7 @@ try {
   await recovery.getByRole('button', { name: 'Control', exact: true }).click()
   await page.waitForURL('**/#control')
   assert.deepEqual(native, [], 'Recovery link must navigate only, never send Normal automatically')
-  await page.goto(`${server.resolvedUrls.local[0]}#settings/updates`)
+  await page.goto(`${server.resolvedUrls.local[0]}#settings/integrations`)
   await recovery.waitFor()
   state.normal_confirmed = true // The separately confirmed Normal command completes on the fresh connection.
   await recovery.waitFor({ state: 'hidden' })

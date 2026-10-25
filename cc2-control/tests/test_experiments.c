@@ -82,7 +82,7 @@ int main(void) {
     assert(!chmod(path, 0644)); experiments_load(); assert(!experiments_storage_valid);
     assert(!chmod(path, 0600)); experiments_load();
     overwrite("{\"schema\":1,\"canvas_uds\":true,\"quiet_motors\":false}\n");
-    assert(!experiments_save((experiment_choices){0, 1}));
+    assert(!experiments_save((experiment_choices){0, 1, 0}));
     assert(!unlink(path)); assert(!symlink("missing-target", path)); experiments_load();
     /* A dangling symlink is not an absent file. */
     assert(!experiments_storage_valid);

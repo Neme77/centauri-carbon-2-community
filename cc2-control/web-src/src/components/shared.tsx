@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { Dot } from '@/components/ui/badge'
 import { Card, CardHead } from '@/components/ui/card'
 import { Icon } from '@/components/icons'
-import { cameraPreferences, type Key, t } from '@/lib/i18n'
+import { cameraPreferences, setPersistentCamera, type Key, t } from '@/lib/i18n'
 import { errText, notify, post, tpl } from '@/lib/api'
 import { poll, usePoll } from '@/lib/poll'
 import { store } from '@/lib/store'
@@ -230,16 +230,16 @@ const CAMERA_RETRY_MS = [2500, 5000, 10000, 20000, 30000]
 const viewerId = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')
 
-const cameraDock = store({ slot: null as HTMLElement | null, tall: false })
+const cameraDock = store({ slot: null as HTMLElement | null, tall: false, preferences: false })
 let persistentHost: HTMLElement | null = null
 let cameraParking: HTMLElement | null = null
 
-const CameraDock = ({ tall = false }: { tall?: boolean }) => {
+const CameraDock = ({ tall = false, preferences = false }: { tall?: boolean; preferences?: boolean }) => {
   const slot = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const element = slot.current
     if (!element) return
-    cameraDock.set({ slot: element, tall })
+    cameraDock.set({ slot: element, tall, preferences })
     if (persistentHost) element.appendChild(persistentHost)
     return () => {
       // Park the existing DOM before this page is removed. Its image and
@@ -248,17 +248,63 @@ const CameraDock = ({ tall = false }: { tall?: boolean }) => {
       if (persistentHost && cameraParking) cameraParking.appendChild(persistentHost)
       cameraDock.set({ slot: null })
     }
-  }, [tall])
+  }, [tall, preferences])
   return <div ref={slot} class="cc2-camera-dock" />
 }
 
-export const CameraCard = ({ tall, standalone }: { tall?: boolean; standalone?: boolean }) => {
+// Keep the same stream host when toggling persistence in the camera card.
+export const CameraCard = ({
+  tall,
+  standalone,
+  preferences,
+}: {
+  tall?: boolean
+  standalone?: boolean
+  preferences?: boolean
+}) => (standalone ? <CameraStream tall={tall} standalone /> : <CameraDock tall={tall} preferences={preferences} />)
+
+const CameraPreference = () => {
   const persistent = cameraPreferences.use().persistent
-  if (persistent && !standalone) return <CameraDock tall={tall} />
-  return <CameraStream tall={tall} standalone={standalone} />
+  const [saving, setSaving] = useState(false)
+  const [desired, setDesired] = useState(persistent)
+  useEffect(() => setDesired(persistent), [persistent])
+  const change = async (enabled: boolean) => {
+    setDesired(enabled)
+    setSaving(true)
+    try {
+      await setPersistentCamera(enabled)
+    } catch (e) {
+      setDesired(persistent)
+      notify(errText(e), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <label class="cc2-camera-preference flex min-h-5 items-center gap-1.5 whitespace-nowrap text-xs text-muted">
+      <input
+        type="checkbox"
+        class="size-4 shrink-0 accent-cyan"
+        checked={desired}
+        disabled={saving}
+        onChange={e => void change(e.currentTarget.checked)}
+      />
+      {t('settings.camera_persistent')}
+    </label>
+  )
 }
 
-const CameraStream = ({ tall, standalone }: { tall?: boolean; standalone?: boolean }) => {
+const CameraStream = ({
+  tall,
+  standalone,
+  preferences,
+  dock,
+}: {
+  tall?: boolean
+  standalone?: boolean
+  preferences?: boolean
+  dock?: HTMLElement | null
+}) => {
   const persistent = cameraPreferences.use().persistent
   const keepAlive = useRef(persistent)
   keepAlive.current = persistent
@@ -300,6 +346,11 @@ const CameraStream = ({ tall, standalone }: { tall?: boolean; standalone?: boole
     setGaveUp(false)
     setNote(why)
   }
+  const previousDock = useRef(dock)
+  useEffect(() => {
+    if (!standalone && !persistent && (!dock || previousDock.current !== dock) && live.current) stop()
+    previousDock.current = dock
+  }, [dock, persistent])
   const connect = () => {
     clearRetry()
     if (!live.current || (document.hidden && !keepAlive.current)) return
@@ -378,48 +429,57 @@ const CameraStream = ({ tall, standalone }: { tall?: boolean; standalone?: boole
     }
   }, [])
   return (
-    <Card class="flex flex-col">
+    <Card class="cc2-camera-card flex flex-col">
       <CardHead
         icon="camera"
         title="common.live_camera"
         end={
-          on ? (
-            <>
-              {ready && (
-                <>
-                  <Dot /> {t('common.live')}
-                </>
-              )}
-              <Button class="ml-2 text-xs" onClick={() => stop()}>
-                {t('common.camera_stop')}
-              </Button>
-            </>
-          ) : undefined
+          <span class="flex flex-wrap items-center justify-end gap-2">
+            {preferences && !standalone ? <CameraPreference /> : null}
+            {on && (
+              <>
+                {ready && (
+                  <span class="hidden items-center gap-1 cc2-sm:inline-flex">
+                    <Dot /> {t('common.live')}
+                  </span>
+                )}
+                <Button
+                  class="cc2-camera-stop min-w-8 px-2 text-xs"
+                  aria-label={t('common.camera_stop')}
+                  title={t('common.camera_stop')}
+                  onClick={() => stop()}
+                >
+                  <Icon n="pause" class="size-4" />
+                  <span class="hidden cc2-sm:inline">{t('common.camera_stop')}</span>
+                </Button>
+              </>
+            )}
+          </span>
         }
       />
       <div
         class={cn(
           'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
-          standalone ? 'min-h-[calc(100dvh_-_7rem)]' : tall ? 'min-h-80' : 'aspect-video'
+          standalone ? 'min-h-[calc(100dvh_-_7rem)]' : tall ? 'min-h-80' : 'aspect-video',
+          !ready && 'cc2-camera-paused'
         )}
       >
+        {!ready && <div class="cc2-camera-grid" aria-hidden="true" />}
         {!ready && (
-          <div class="text-center text-muted">
-            <Icon n="camera" class="mx-auto mb-2 size-10" />
-            <strong class="block text-[15px] font-medium">
-              {t(tall ? 'common.your_live_print_camera' : 'common.your_cc2_camera_feed')}
-            </strong>
-            <p class="text-xs">
-              {on
-                ? t(
-                    gaveUp
-                      ? 'common.camera_gave_up'
-                      : failed
-                        ? 'common.camera_unavailable'
-                        : 'common.waiting_for_camera_stream'
-                  )
-                : t(note || 'common.camera_off')}
-            </p>
+          <div class="cc2-camera-idle-controls absolute inset-x-0 z-10 max-w-full px-4 py-3 text-center text-muted">
+            {(on || note) && (
+              <p class="text-xs">
+                {on
+                  ? t(
+                      gaveUp
+                        ? 'common.camera_gave_up'
+                        : failed
+                          ? 'common.camera_unavailable'
+                          : 'common.waiting_for_camera_stream'
+                    )
+                  : note && t(note)}
+              </p>
+            )}
             {!on && (
               <Button class="mt-2 text-xs" onClick={start}>
                 {t(note === 'common.camera_taken_over' ? 'common.camera_watch_here' : 'common.camera_start')}
@@ -490,15 +550,12 @@ export const CameraWindow = () => {
   )
 }
 
-export const PersistentCamera = () => {
-  const persistent = cameraPreferences.use().persistent
-  return persistent ? <PersistentCameraHost /> : null
-}
+export const PersistentCamera = () => <PersistentCameraHost />
 
 const PersistentCameraHost = () => {
   const [host] = useState(() => document.createElement('div'))
   const parking = useRef<HTMLDivElement>(null)
-  const { tall } = cameraDock.use()
+  const { slot, tall, preferences } = cameraDock.use()
   useLayoutEffect(() => {
     persistentHost = host
     cameraParking = parking.current
@@ -513,7 +570,7 @@ const PersistentCameraHost = () => {
   return (
     <>
       <div ref={parking} hidden class="cc2-camera-parking" />
-      {createPortal(<CameraStream tall={tall} />, host)}
+      {createPortal(<CameraStream tall={tall} preferences={preferences} dock={slot} />, host)}
     </>
   )
 }

@@ -22,17 +22,22 @@ export const Experiments = () => {
       mounted.current = false
     }
   }, [])
-  const change = async (feature: 'canvas-uds' | 'quiet-motors') => {
+  const change = async (feature: 'canvas-uds' | 'quiet-motors' | 'bed-drying') => {
     if (!data || !ok || busy) return
-    const enabled = feature === 'canvas-uds' ? data.canvas_uds : data.quiet_motors
+    const enabled =
+      feature === 'canvas-uds' ? data.canvas_uds : feature === 'bed-drying' ? data.bed_drying : data.quiet_motors
     const message =
-      feature === 'canvas-uds'
+      feature === 'bed-drying'
         ? enabled
-          ? 'experiments.canvas_off_confirm'
-          : 'experiments.canvas_on_confirm'
-        : enabled
-          ? 'experiments.quiet_off_confirm'
-          : 'experiments.quiet_on_confirm'
+          ? 'drying.disable_confirm'
+          : 'drying.enable_confirm'
+        : feature === 'canvas-uds'
+          ? enabled
+            ? 'experiments.canvas_off_confirm'
+            : 'experiments.canvas_on_confirm'
+          : enabled
+            ? 'experiments.quiet_off_confirm'
+            : 'experiments.quiet_on_confirm'
     if (!(await ask(t(message))) || !mounted.current) return
     setBusy(true)
     setError('')
@@ -77,19 +82,11 @@ export const Experiments = () => {
           autoComplete="off"
         />
       </label>
-      <div class="grid gap-3.5 cc2-md:grid-cols-2">
-        <div class="rounded-md border border-edge p-3">
+      <div class="grid gap-3.5 cc2-md:grid-cols-3">
+        <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
           <h3 class="text-base font-semibold">{t('experiments.canvas_title')}</h3>
-          <p class="my-2 text-muted">{t('experiments.canvas_hint')}</p>
-          <Button
-            role="switch"
-            aria-checked={Boolean(data?.canvas_uds)}
-            aria-label={t('experiments.canvas_title')}
-            disabled={disabled || data?.cli_canvas}
-            onClick={() => void change('canvas-uds')}
-          >
-            {t(data?.canvas_uds ? 'experiments.disable' : 'experiments.enable')}
-          </Button>
+          <p class="my-2 flex-1 text-sm text-muted">{t('experiments.canvas_hint')}</p>
+
           <p class="mt-2 text-xs text-muted" data-experiment-canvas-source>
             {t(
               !ok
@@ -101,10 +98,19 @@ export const Experiments = () => {
                   : 'experiments.using_mqtt'
             )}
           </p>
+          <Button
+            role="switch"
+            aria-checked={Boolean(data?.canvas_uds)}
+            aria-label={t('experiments.canvas_title')}
+            disabled={disabled || data?.cli_canvas}
+            onClick={() => void change('canvas-uds')}
+          >
+            {t(data?.canvas_uds ? 'experiments.disable' : 'experiments.enable')}
+          </Button>
         </div>
-        <div class="rounded-md border border-edge p-3">
+        <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
           <h3 class="text-base font-semibold">{t('experiments.quiet_title')}</h3>
-          <p class="my-2 text-muted">{t('experiments.quiet_hint')}</p>
+          <p class="my-2 flex-1 text-sm text-muted">{t('experiments.quiet_hint')}</p>
           <Button
             role="switch"
             aria-checked={Boolean(data?.quiet_motors)}
@@ -114,6 +120,24 @@ export const Experiments = () => {
           >
             {t(data?.quiet_motors ? 'experiments.disable' : 'experiments.enable')}
           </Button>
+        </div>
+        <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
+          <h3 class="text-base font-semibold">{t('drying.title')}</h3>
+          <p class="my-2 flex-1 text-sm text-muted">{t('drying.hint')}</p>
+          <Button
+            role="switch"
+            aria-checked={Boolean(data?.bed_drying)}
+            aria-label={t('drying.title')}
+            disabled={disabled}
+            onClick={() => void change('bed-drying')}
+          >
+            {t(data?.bed_drying ? 'experiments.disable' : 'experiments.enable')}
+          </Button>
+          {data?.bed_drying && (
+            <Button class="ml-2" onClick={() => openPage('control')}>
+              {t('common.control')}
+            </Button>
+          )}
         </div>
       </div>
       {!ok && <p class="mt-3 text-amber">{t('experiments.unavailable')}</p>}

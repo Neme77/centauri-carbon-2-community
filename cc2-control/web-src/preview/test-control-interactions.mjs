@@ -42,14 +42,12 @@ try {
         await page.waitForTimeout(400)
         return { frame: await frame.boundingBox(), card: await frame.locator('..').boundingBox() }
       }
-      await page.goto(demo.url + '#settings')
-      await page.getByRole('tab', { name: 'Appearance', exact: true }).click()
-      const flag = page.getByRole('checkbox', { name: 'Keep live camera across pages' })
+      await page.goto(demo.url + '#dashboard')
+      const flag = page.getByRole('checkbox', { name: 'Keep active', exact: true })
       await flag.uncheck()
       const before = {}
       for (const route of ['dashboard', 'job']) before[route] = await dimensions(route)
-      await page.goto(demo.url + '#settings')
-      await page.getByRole('tab', { name: 'Appearance', exact: true }).click()
+      await page.goto(demo.url + '#dashboard')
       await flag.check()
       for (const route of ['dashboard', 'job']) {
         const after = await dimensions(route)

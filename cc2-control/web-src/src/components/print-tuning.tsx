@@ -10,7 +10,19 @@ type Kind = 'speed' | 'flow'
 const percent = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const display = (v: number | null) => (v === null ? '—' : String(Math.round(v * 10) / 10))
 
-const TuningForm = ({ d, rev, ok, compact }: { d: any; rev: number; ok: boolean; compact: boolean }) => {
+const TuningForm = ({
+  d,
+  rev,
+  ok,
+  compact,
+  sliders,
+}: {
+  d: any
+  rev: number
+  ok: boolean
+  compact: boolean
+  sliders: boolean
+}) => {
   const [draft, setDraft] = useState({ speed: '', flow: '' })
   const [pending, setPending] = useState<{ kind: Kind; value: number; rev: number } | null>(null)
   const sending = useRef(false)
@@ -70,12 +82,32 @@ const TuningForm = ({ d, rev, ok, compact }: { d: any; rev: number; ok: boolean;
           const disabled = !ready || actual[kind] === null || pending !== null || posting
           return (
             <div key={kind} class="cc2-tuning-field min-w-0">
-              <div class={compact ? 'mb-2 flex flex-wrap items-center justify-between gap-1' : ''}>
-                <label for={`tune-${kind}`} class="mb-1 block font-medium">
-                  {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
-                </label>
-                <div class="mb-2 text-sm text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</div>
-              </div>
+              {sliders ? (
+                <div class="cc2-tuning-heading">
+                  <label for={`tune-${kind}`} class="font-medium">
+                    {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
+                  </label>
+                  <span class="text-xs text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</span>
+                  <input
+                    type="range"
+                    class="cc2-tuning-slider"
+                    min={min}
+                    max={max}
+                    step="1"
+                    value={Math.max(min, Math.min(max, valid ? value : (actual[kind] ?? 100)))}
+                    aria-label={t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
+                    disabled={disabled}
+                    onInput={e => setDraft(s => ({ ...s, [kind]: e.currentTarget.value }))}
+                  />
+                </div>
+              ) : (
+                <div class={compact ? 'mb-2 flex flex-wrap items-center justify-between gap-1' : ''}>
+                  <label for={`tune-${kind}`} class="mb-1 block font-medium">
+                    {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
+                  </label>
+                  <div class="mb-2 text-sm text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</div>
+                </div>
+              )}
               <form
                 class="flex flex-wrap gap-2"
                 onSubmit={e => {
@@ -108,12 +140,12 @@ const TuningForm = ({ d, rev, ok, compact }: { d: any; rev: number; ok: boolean;
         })}
       </div>
       {!compact && <div class="mt-3 text-sm">{tpl('tuning.live_velocity', { value: display(live) })}</div>}
-      <p class="mt-2 text-xs text-muted">{t(ready ? 'tuning.manual_note' : 'tuning.unavailable')}</p>
+      {!sliders && <p class="mt-2 text-xs text-muted">{t(ready ? 'tuning.manual_note' : 'tuning.unavailable')}</p>}
     </Card>
   )
 }
 
-export const PrintTuning = ({ compact = false }: { compact?: boolean }) => {
+export const PrintTuning = ({ compact = false, sliders = false }: { compact?: boolean; sliders?: boolean }) => {
   const { data, rev, ok } = printer.use()
   return (
     <TuningForm
@@ -122,6 +154,7 @@ export const PrintTuning = ({ compact = false }: { compact?: boolean }) => {
       rev={rev}
       ok={ok}
       compact={compact}
+      sliders={sliders}
     />
   )
 }
