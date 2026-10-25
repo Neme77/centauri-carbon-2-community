@@ -106,7 +106,10 @@ static int drying_result(const char *text,size_t length,int help) {
     if(!help){const char *re=*result=='{'?json_container_end(result,root_end):NULL;
         return re&&json_skip_space(result+1,re)==re-1;}
     const char *re=result<root_end&&*result=='{'?json_container_end(result,root_end):NULL;
-    return re&&json_member(result,re,"SET_HEATER_BED_IDLE_TIMEOUT")&&json_member(result,re,"M140");
+    /* gcode/help lists commands with help text, not every registered G/M-code.
+     * Require the native safety lease here. M140 still needs its own correlated
+     * script acknowledgement and fresh target readback before holding heat. */
+    return re&&json_member(result,re,"SET_HEATER_BED_IDLE_TIMEOUT");
 }
 static void drying_stop(const char *reason,int restore_only) {
     plates_exchange_close(&drying.exchange);drying.query[0]=0;
