@@ -1,0 +1,25 @@
+name: Prepare approved Control source snapshot
+on:
+  push:
+    branches: [ui/control-layout-alignment]
+    paths: ['.github/workflows/prepare-control-layout.yml']
+permissions:
+  contents: write
+jobs:
+  snapshot:
+    if: github.repository == 'Neme77/centauri-carbon-2-community' && github.ref == 'refs/heads/ui/control-layout-alignment' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+      - name: Regenerate source archive and checksums
+        run: |
+          python3 experimental/pr128-integration/sync_source.py
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git diff --cached --quiet || git commit -m 'Align approved Control builder source snapshot'
+          git push origin HEAD:refs/heads/ui/control-layout-alignment

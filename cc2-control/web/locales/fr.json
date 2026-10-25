@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "PID plateau",
   "control.fan_percent": "Régler {name} (%)",
   "control.invalid_fan_percent": "Saisissez un nombre entier de 0 à 100.",
-  "control.fan_enter_hint": "Saisissez une valeur de 0 à 100 et appuyez sur Entrée.",
   "canvas.reset_all": "Réinitialiser tous les filaments",
   "canvas.reset_all_confirm": "Réinitialiser les données des quatre emplacements Canvas ? Cette opération efface le matériau, la couleur et les températures enregistrés. Elle ne décharge pas le filament.",
   "settings.camera_persistent": "Maintenir active",

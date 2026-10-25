@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "PID piatto",
   "control.fan_percent": "Imposta {name} (%)",
   "control.invalid_fan_percent": "Inserisci un numero intero da 0 a 100.",
-  "control.fan_enter_hint": "Scrivi un valore da 0 a 100 e premi Invio.",
   "canvas.reset_all": "Reimposta tutti i filamenti",
   "canvas.reset_all_confirm": "Reimpostare i dati del materiale di tutti e quattro gli slot Canvas? Questa operazione cancella materiale, colore e temperature salvati. Non scarica il filamento.",
   "settings.camera_persistent": "Mantieni attiva",
