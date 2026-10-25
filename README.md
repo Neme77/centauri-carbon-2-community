@@ -70,13 +70,13 @@ Existing V4.4/V4.4.1 users can install the separate application update.
 
 Compact slot cards, shared actions and balanced settings/history panels make Canvas easier to read on desktop and mobile. Recovery loading can restore an unassigned filament-head state after a reboot; you choose a present slot and confirm the native loading operation. Observed history is bounded and resets on page reload. Layout inspiration: **Surfoo**; maintainer/tester refinements preserve the project's existing controls and information.
 
-![New Canvas layout](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/Canvas-1.2.21.png)
+[![New Canvas layout](docs/images/cc2-control/canvas-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/cc2-control/canvas-current.png)
 
 ### Independent experimental features
 
 **Canvas UDS** and **Quiet motor controls** are independent opt-ins in Settings → Updates. They start disabled on fresh installations and retain existing choices across updates. Canvas UDS has MQTT fallback. Quiet/Normal derives from **BorjaLL**'s contribution; slicer commands can override its initial limits. Complete Normal before disabling Quiet controls or changing Canvas source. Extended pull-back above 350 mm still needs its separate qualified firmware runtime.
 
-![Independent experimental settings](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/Experiments-1.2.21.png)
+[![Independent experimental settings](docs/images/cc2-control/experiments-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/cc2-control/experiments-current.png)
 
 *Images show the actual interface with simulated demonstration data.*
 

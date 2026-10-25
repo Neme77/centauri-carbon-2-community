@@ -1,32 +1,33 @@
-# CC2 Control 1.2.21 — prova cumulativa correttiva
+# Prova cumulativa PR 218, 219, 220, 222 e 223 — R1
 
-Per Community Firmware V4.4/V4.4.1 e candidato V4.4.2, base ELEGOO 02.01.01.07.
+Pacchetto di verifica per la stampante del manutentore, non una release pubblica.
+La versione rimane 1.2.21: installare dal computer con Install-Windows.cmd
+(o Install-CC2-Control.ps1), non dalla campanella o dal caricamento nel pannello.
 
-Corregge il download degli aggiornamenti quando le intestazioni di sicurezza
-di GitHub superano 8 KiB, mantenendo il limite totale di 16 KiB e tutte le
-verifiche TLS. Le versioni precedenti richiedono questo primo caricamento del
-file firmato dal PC; la correzione si applica ai download successivi.
+Include:
+- Dashboard approvata: sfondo camera di pezso92, Mantieni attiva nella testata,
+  slider velocità/flow insieme a valori e Applica/Ripristina; spazi riallineati.
+- Integrazioni sperimentali sotto quelle ufficiali, compresa l'asciugatura.
+- Asciugatura del filamento sul piatto: temperatura 30–90 °C e durata finita,
+  avvio/arresto espliciti, conferme e controlli di stato. Non si avvia abilitandola.
+- Avviso di stampa completata, conferma e ristampa dal normale dialogo;
+  percentuale azzerata a stampante inattiva.
+- Consumi recenti delle bobine in un riquadro scorrevole e filtrabile.
+- Requisiti aggiornamenti corretti anche per firmware V4.4.2 in tutte le lingue.
 
-Riconosce e conserva una precedente cartella webcam R2 rimasta inattiva dopo
-un ripristino o una reinstallazione del firmware, verificando file e impronte
-prima di reinstallarla. Componenti sconosciuti o avvii modificati restano
-rifiutati. Il fix webcam R2 incluso mantiene le librerie già qualificate.
+Installare soltanto con stampante connessa, inattiva e fredda, target a zero.
+Le preferenze sono conservate. Questo pacchetto di sola applicazione conserva
+la patch webcam già installata: non la reinstalla e non riavvia la stampante.
+Conservare il percorso di backup e il comando di ripristino mostrati al termine.
 
-Installare con stampante connessa, inattiva e fredda, target di riscaldamento zero.
-Alla prima attivazione del fix webcam serve un riavvio completo della stampante;
-il solo riavvio di CC2 Control non basta. Nessun riavvio viene eseguito in
-automatico. Conservare il percorso di backup indicato dall'installer.
+Prove: Dashboard e cursori durante una stampa normale; live, cambio pagina e
+Mantieni attiva; popup e percentuale alla fine; filtri bobine; Integrazioni e
+pagina Aggiornamenti. Verificare prima le funzioni ordinarie. Per la nuova
+asciugatura leggere cc2-control/docs/BED_DRYING.md nei sorgenti: eseguire una
+prima sessione breve e sorvegliata, senza bobina, verificando arresto e target
+zero. Non usare la prima prova per un ciclo incustodito.
 
-Include le novità stabili già provate di Canvas, bobine, mappa oggetti, gestione
-file e interfaccia. Canvas UDS e i controlli Quiet sono opzioni indipendenti della stessa base,
-spente nelle nuove installazioni. La retrazione estesa resta separata e il suo
-runtime non viene installato. Leggere README-EXPERIMENTAL.it.md per la prova. Impostazioni, bobine e librerie piatti vengono conservate.
-
-Il builder del firmware completo è un pacchetto separato: il firmware V4.4.2
-va generato sul PC e provato sulla stampante prima della pubblicazione.
-
-Grazie a tharje per la diagnosi webcam, a DamiBFryta, il nostro beta tester
-definitivo, per prove e suggerimenti, e a Surfoo, Nick Plateringen-Paul e tutti
-i contributor già accreditati nella cronologia del progetto.
-
-Se la stampante mostra gia 1.2.21, usare l'installer da computer per questa prova: il pannello accetta soltanto versioni successive.
+Crediti: pezso92 per la direzione grafica e lo sfondo camera; romeopuch per la
+richiesta asciugatura; DamiBFryta per prove e suggerimenti sulle bobine, oltre
+ai contributor già accreditati nelle singole PR. Nessuna release, catalogo
+stabile o firmware completo viene pubblicato da questa prova.

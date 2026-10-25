@@ -1,33 +1,23 @@
-# CC2 Control 1.2.21 — cumulative corrective trial
+# Cumulative PR 218, 219, 220, 222 and 223 trial — R1
 
-For Community Firmware V4.4/V4.4.1 and the V4.4.2 candidate, ELEGOO 02.01.01.07.
+Maintainer-only validation package, not a public release. Version stays 1.2.21.
+Install from the computer using Install-Windows.cmd / Install-CC2-Control.ps1;
+the in-app updater rejects the same version. Keep the printed backup/restore path.
+Install only while connected, cold and idle, with heater targets zero.
 
-Fixes updater downloads when GitHub security headers exceed 8 KiB, preserving
-the existing 16 KiB total-header budget and all certificate/redirect checks.
-Older versions need this first signed panel upload from the computer; subsequent
-downloads use the corrected helper.
+Includes the approved Dashboard camera artwork, header Keep active preference,
+draft speed/flow sliders plus existing numeric Apply/Reset, experimental features
+under Integrations, opt-in timed bed heating, completed-print notice/idle progress,
+compact filtered spool history and V4.4.2 updater requirements in all languages.
+Existing preferences and the already installed webcam patch are retained; this
+application-only trial does not reinstall the camera component or reboot.
 
-Recognizes and retains a qualified dormant R2 camera directory left after
-rollback or firmware reinstallation, authenticating its files and startup
-fingerprints before reinstalling. Unknown components and unrelated startup
-changes remain refused. The included camera R2 libraries are unchanged.
+Check ordinary UI, live-camera navigation, printing sliders, completion notice,
+idle progress, spool filters and settings placement first. Enabling bed drying
+must not heat anything. Before a short supervised empty-bed heating/stop test,
+read cc2-control/docs/BED_DRYING.md in the included sources; verify target-zero
+readback before leaving the printer. Do not begin with an unattended drying cycle.
 
-Install only while connected, idle and cold, with heater targets zero. A complete
-idle-printer reboot is required on first camera-fix activation; restarting only
-CC2 Control is insufficient. No printer reboot is automatic. Keep the exact
-installer backup path for restoration.
-
-Includes accepted stable Canvas, spool, object-map, file and UI improvements.
-Canvas UDS and Quiet controls are independent options in this same base, off on
-new installations. Extended pull-back stays separate; its runtime is not
-installed. See README-EXPERIMENTAL.md for the trial. Settings,
-spools and plate libraries are retained.
-
-The full firmware builder is separate: generate V4.4.2 on the maintainer's PC
-and validate that complete image on hardware before publishing it.
-
-Thanks to tharje for camera diagnosis, DamiBFryta, our ultimate beta tester, for
-persistent testing and feedback, Surfoo, Nick Plateringen-Paul and all original
-contributors whose credits remain in project history.
-
-If the printer already shows 1.2.21, use the computer installer for this trial: the panel accepts only newer versions.
+Credits: pezso92 (visual direction/artwork), romeopuch (drying request), DamiBFryta
+(spool feedback/testing), and contributors credited in the individual PRs.
+No public release, stable catalogue or complete firmware is published by this trial.

@@ -1,0 +1,72 @@
+name: Prepare cumulative PR 218-223 trial
+on:
+  push:
+    branches: [test/cumulative-pr218-223]
+    paths: ['.github/workflows/prepare-cumulative-trial.yml']
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - name: Install native and ARM test tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user busybox
+      - name: Check and build combined interface
+        working-directory: cc2-control/web-src
+        run: npm ci && npm run check && npm run build
+      - name: Commit generated UI and pin combined sources
+        run: |
+          cp -a cc2-control/web/. cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web/
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add cc2-control/web cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web
+          git diff --cached --quiet || git commit -m 'Build cumulative validation interface'
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git diff --cached --quiet || git commit -m 'Pin cumulative validation sources'
+          git push origin HEAD
+      - name: Native combined feature and installer tests
+        run: |
+          make -C cc2-control clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+      - name: Install isolated browser
+        working-directory: cc2-control/web-src
+        run: npx playwright install --with-deps chromium
+      - name: Combined browser regression
+        working-directory: cc2-control/web-src
+        run: |
+          npm run test:dashboard-style
+          npm run test:camera
+          npm run test:experiments
+          npm run test:bed-drying
+          npm run test:print-completion
+          npm run test:spool-history
+          npm run test:updates
+      - name: Build and smoke test ARM application
+        run: |
+          make -C cc2-control clean all EXTRA_CFLAGS=-Werror
+          CC2_TEST_RUNNER=qemu-arm python3 cc2-control/tests/test_smoke.py cc2-control/dist/cc2-control/cc2-control
+      - name: Package application-only validation installer
+        run: |
+          python3 cc2-control/installer/package.py --application-only-trial --prepared cc2-control/dist/cc2-control --output output/CC2-Control-1.2.21-PR218-223-Trial-R1-Multiplatform-Update.zip
+          git rev-parse HEAD > output/integration-head.txt
+          printf '%s\n' 'Included PRs: 218 219 220 222 223' 'Application-only trial; existing camera runtime retained; version remains 1.2.21.' > output/TRIAL-SCOPE.txt
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cc2-control-pr218-223-trial-r1
+          path: |
+            output/CC2-Control-1.2.21-PR218-223-Trial-R1-Multiplatform-Update.zip*
+            output/integration-head.txt
+            output/TRIAL-SCOPE.txt
+          if-no-files-found: error
+          retention-days: 14
