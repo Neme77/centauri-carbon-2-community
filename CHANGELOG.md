@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Opt-in experimental timed bed heating for filament drying, with finite duration, explicit stop/readback and a short native heater lease; requested by **romeopuch** in #198 (#218). No automatic heating after restart. Hardware validation is still required.
 
+### Changed
+
+- Dashboard: integrate pezso92’s paused-camera artwork and speed/flow sliders with the existing numeric Apply/Reset controls; move “Keep active” into the camera header, compact Quick actions and align the desktop columns (#223, visual direction and artwork by [pezso92](https://github.com/pezso92) in #187).
+- Settings: group the independently enabled experiments below official Integrations instead of Updates; include timed bed heating from #218, keeping its existing guards and opt-in behavior (#223).
+
 ## [CC2 Control 1.2.21 / Firmware V4.4.2] - 2026-10-24
 
 ### Added
@@ -30,8 +35,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Dashboard: integrate pezso92’s paused-camera artwork and speed/flow sliders with the existing numeric Apply/Reset controls; move “Keep active” into the camera header, compact Quick actions and align the desktop columns (#223, visual direction and artwork by [pezso92](https://github.com/pezso92) in #187).
-- Settings: group the independently enabled experiments below official Integrations instead of Updates; include timed bed heating from #218, keeping its existing guards and opt-in behavior (#223).
 
 - Experimental feature settings: remove unrelated extended pull-back/camera and memory-saving wording, and show a contextual Control shortcut when Normal must be confirmed after a Canvas source change (#214, maintainer feedback).
 
