@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Align experimental-integration card actions and place the drying controls side by side on desktop and phone; reported by **Neme77**.
+- Align experimental-integration card actions and place the drying controls side by side on desktop and phone; reported by **Neme77** (#232).
 
 - Bed drying: distinguish a manually stopped session with fresh zero-target confirmation from an external or unconfirmed interruption; reported and printer-tested by **Neme77** (#230).
 
