@@ -1078,6 +1078,7 @@
   "drying.interrupted": "Interrupted",
   "drying.unavailable": "Readback unavailable",
   "drying.expired": "Time elapsed; target zero confirmed.",
+  "drying.manual_stopped": "Bed drying stopped. Bed target confirmed at 0 °C.",
   "drying.interrupted_hint": "Session interrupted or changed elsewhere. Check the bed target; stopping is confirmed only after zero readback.",
   "drying.enable_confirm": "Enable the experimental timed bed-heating controls?",
   "drying.disable_confirm": "Hide the experimental bed-heating controls?",

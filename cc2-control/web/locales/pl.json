@@ -1078,6 +1078,7 @@
   "drying.interrupted": "Przerwano",
   "drying.unavailable": "Odczyt niedostępny",
   "drying.expired": "Czas upłynął; potwierdzono cel zero.",
+  "drying.manual_stopped": "Suszenie zatrzymane. Potwierdzono temperaturę zadaną stołu 0 °C.",
   "drying.interrupted_hint": "Sesja przerwana lub zmieniona z innego miejsca. Sprawdź cel stołu; zatrzymanie jest potwierdzone dopiero po odczycie zera.",
   "drying.enable_confirm": "Włączyć eksperymentalne sterowanie grzaniem stołu z timerem?",
   "drying.disable_confirm": "Ukryć eksperymentalne sterowanie grzaniem stołu?",

@@ -1078,6 +1078,7 @@
   "drying.interrupted": "Přerušeno",
   "drying.unavailable": "Odečet není dostupný",
   "drying.expired": "Čas vypršel; potvrzena nulová cílová teplota.",
+  "drying.manual_stopped": "Sušení zastaveno. Cílová teplota podložky potvrzena na 0 °C.",
   "drying.interrupted_hint": "Relace přerušena nebo změněna jinde. Zkontrolujte cíl podložky; zastavení je potvrzeno až po odečtu nuly.",
   "drying.enable_confirm": "Zapnout experimentální ovládání časovaného ohřevu podložky?",
   "drying.disable_confirm": "Skrýt experimentální ovládání ohřevu podložky?",
