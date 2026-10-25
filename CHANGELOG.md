@@ -6,10 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
-
-- Reorganize Control with live Z offset above homepage-style print tuning, compact machine actions alongside calibration cards, and cleaner fan controls (PR pending; layout by Neme77, inspired by pezso92's #187 design work).
-
 ### Added
 
 - Optional browser-local LAN code remembering in Settings → Connection for updates and experimental controls, with verification, masked fields, explicit forgetting and unchanged action confirmations; requested by **Neme77** (#225).
@@ -26,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Updates: include supported Community Firmware V4.4.2 in the requirements notice across all nine languages; strengthen the update-panel regression and cover Spanish language switching (#222, fixes #221). Reported by [pezso92](https://github.com/pezso92).
 
 ### Changed
+
+- Control: place live Z offset above homepage-style print tuning, compact machine actions beside calibration cards, and remove the redundant fan entry hint (#226; layout by **Neme77**, inspired by [pezso92](https://github.com/pezso92)'s #187 design work).
 
 - Dashboard: integrate pezso92’s paused-camera artwork and speed/flow sliders with the existing numeric Apply/Reset controls; move “Keep active” into the camera header, compact Quick actions and align the desktop columns (#223, visual direction and artwork by [pezso92](https://github.com/pezso92) in #187).
 - Settings: group the independently enabled experiments below official Integrations instead of Updates; include timed bed heating from #218, keeping its existing guards and opt-in behavior (#223).
