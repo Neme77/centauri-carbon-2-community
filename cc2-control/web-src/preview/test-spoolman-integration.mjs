@@ -36,4 +36,3 @@ try {
  assert.deepEqual(errors,[])
  console.log('PASS: default hidden, explicit activation, retained URL/auth, save refusal, disabled state survives reload and responsive settings')
 }finally{await browser?.close();await server.close()}
-
