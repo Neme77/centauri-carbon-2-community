@@ -1092,5 +1092,11 @@
   "spools.history_all": "Všechny pohyby",
   "spools.no_consumption": "V uložené historii není žádná spotřeba.",
   "spools.history_consumption": "Pouze spotřeba",
-  "spools.history_filter": "Zobrazit pohyby"
+  "spools.history_filter": "Zobrazit pohyby",
+  "settings.remember_lan": "Zapamatovat kód LAN v tomto zařízení",
+  "settings.remember_hint": "Používat pro aktualizace a experimentální funkce. Ukládejte jen na osobním zařízení: kdokoli používající tento prohlížeč může tyto akce povolit.",
+  "settings.forget_lan": "Zapomenout kód",
+  "settings.remember_save": "Ověřit a zapamatovat",
+  "settings.remember_saved": "Kód LAN zapamatován v tomto zařízení",
+  "settings.remember_storage_failed": "Úložiště prohlížeče není dostupné. Kód nebyl uložen."
 }

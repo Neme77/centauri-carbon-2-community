@@ -1,9 +1,10 @@
+import { lanRequest, useLanCode } from '@/lib/lan-code'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/field'
 import { ask } from '@/lib/confirm'
-import { errText, notify, request } from '@/lib/api'
+import { errText, notify } from '@/lib/api'
 import { experimental, refreshExperiments, type ExperimentState } from '@/lib/experiments'
 import { t } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
@@ -11,9 +12,9 @@ import { openPage } from '@/lib/state'
 
 export const Experiments = () => {
   usePoll(refreshExperiments, 5000)
+  const [code, setCode, clearCode] = useLanCode()
   const { data, ok } = experimental.use()
-  const [code, setCode] = useState(''),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState('')
   const mounted = useRef(true)
   useEffect(() => {
@@ -42,14 +43,13 @@ export const Experiments = () => {
     setBusy(true)
     setError('')
     try {
-      const updated: ExperimentState = await request('/api/experiments', {
+      const updated: ExperimentState = await lanRequest('/api/experiments', code, {
         method: 'POST',
-        headers: { 'X-CC2-LAN': code.trim() },
         body: `${feature}:${enabled ? 'off' : 'on'}`,
       })
       if (!mounted.current) return
       experimental.set({ data: updated, ok: true })
-      setCode('')
+      clearCode()
       notify(t('experiments.saved'))
     } catch (e) {
       if (mounted.current) setError(errText(e))

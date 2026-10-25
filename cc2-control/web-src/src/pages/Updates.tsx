@@ -1,20 +1,21 @@
+import { lanRequest, useLanCode } from '@/lib/lan-code'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/field'
 import { ask } from '@/lib/confirm'
-import { errText, notify, request } from '@/lib/api'
+import { errText, notify } from '@/lib/api'
 import { i18n, t } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
 import { checkUpdates, compatible, newer, refresh, releaseNotes, status, updateCatalog } from '@/lib/updates'
 
 export const Updates = () => {
   usePoll(refresh, 2000)
+  const [code, setCode, clearCode] = useLanCode()
   const state = status.use().data
   const language = i18n.use().lang
   const { index, checking } = updateCatalog.use()
   const [working, setWorking] = useState(false),
-    [code, setCode] = useState(''),
     [error, setError] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const mounted = useRef(true),
@@ -47,9 +48,9 @@ export const Updates = () => {
     setError('')
     try {
       if (chosen !== selection.current) return
-      await request(local ? '/api/app-update/upload' : '/api/app-update/download', {
+      await lanRequest(local ? '/api/app-update/upload' : '/api/app-update/download', code, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream', 'X-CC2-LAN': code.trim() },
+        headers: { 'Content-Type': 'application/octet-stream' },
         body: local ? file : release.url,
         signal: AbortSignal.timeout(300000),
       })
@@ -73,12 +74,11 @@ export const Updates = () => {
     setWorking(true)
     setError('')
     try {
-      await request('/api/app-update/install', {
+      await lanRequest('/api/app-update/install', code, {
         method: 'POST',
-        headers: { 'X-CC2-LAN': code.trim() },
         body: state.job,
       })
-      setCode('')
+      clearCode()
       notify(t('updates.restarting'))
       await refresh()
     } catch (e) {

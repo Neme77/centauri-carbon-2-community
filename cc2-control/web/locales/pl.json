@@ -1092,5 +1092,11 @@
   "spools.history_all": "Wszystkie operacje",
   "spools.no_consumption": "Brak zużycia w zapisanej historii.",
   "spools.history_consumption": "Tylko zużycie",
-  "spools.history_filter": "Pokaż operacje"
+  "spools.history_filter": "Pokaż operacje",
+  "settings.remember_lan": "Zapamiętaj kod LAN na tym urządzeniu",
+  "settings.remember_hint": "Używaj go do aktualizacji i funkcji eksperymentalnych. Zapisuj tylko na własnym urządzeniu: każdy użytkownik tej przeglądarki może autoryzować te działania.",
+  "settings.forget_lan": "Zapomnij kod",
+  "settings.remember_save": "Sprawdź i zapamiętaj",
+  "settings.remember_saved": "Kod LAN zapamiętany na tym urządzeniu",
+  "settings.remember_storage_failed": "Pamięć przeglądarki jest niedostępna. Kod nie został zapisany."
 }

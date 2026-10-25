@@ -1092,5 +1092,11 @@
   "spools.history_all": "所有记录",
   "spools.no_consumption": "已保存的历史中没有耗材消耗记录。",
   "spools.history_consumption": "仅耗材消耗",
-  "spools.history_filter": "显示记录"
+  "spools.history_filter": "显示记录",
+  "settings.remember_lan": "在此设备上记住 LAN 访问码",
+  "settings.remember_hint": "用于更新和实验性功能。请仅在个人设备上保存：使用此浏览器的任何人都可以授权这些操作。",
+  "settings.forget_lan": "忘记访问码",
+  "settings.remember_save": "验证并记住",
+  "settings.remember_saved": "已在此设备上记住 LAN 访问码",
+  "settings.remember_storage_failed": "浏览器存储不可用。访问码未保存。"
 }

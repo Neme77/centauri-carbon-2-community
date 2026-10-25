@@ -1,9 +1,10 @@
+import { lanRequest, useLanCode } from '@/lib/lan-code'
 import { useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, PasswordInput } from '@/components/ui/field'
 import { ask } from '@/lib/confirm'
-import { errText, request } from '@/lib/api'
+import { errText } from '@/lib/api'
 import { t, type Key } from '@/lib/i18n'
 import { duration } from '@/lib/format'
 import { printer, refreshPrinter } from '@/lib/state'
@@ -19,12 +20,12 @@ const stages: Record<string, Key> = {
   interrupted: 'drying.interrupted',
 }
 export const BedDrying = () => {
+  const [code, setCode] = useLanCode()
   const { data, ok } = printer.use()
   const session = data?.bed_drying
   const [temp, setTemp] = useState('70'),
     [minutes, setMinutes] = useState('360')
-  const [code, setCode] = useState(''),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState('')
   if (!session?.enabled && !session?.active) return null
   const valid =
@@ -50,9 +51,8 @@ export const BedDrying = () => {
     setBusy(true)
     setError('')
     try {
-      await request(`/api/bed-drying/${action}`, {
+      await lanRequest(`/api/bed-drying/${action}`, code, {
         method: 'POST',
-        headers: { 'X-CC2-LAN': code.trim() },
         body: action === 'start' ? `${Number(temp)}:${Number(minutes)}` : '',
       })
       await refreshPrinter()

@@ -1092,5 +1092,11 @@
   "spools.history_all": "Minden mozgás",
   "spools.no_consumption": "Nincs fogyasztás a mentett előzményekben.",
   "spools.history_consumption": "Csak fogyasztás",
-  "spools.history_filter": "Mozgások megjelenítése"
+  "spools.history_filter": "Mozgások megjelenítése",
+  "settings.remember_lan": "LAN-kód megjegyzése ezen az eszközön",
+  "settings.remember_hint": "Újrafelhasználás frissítésekhez és kísérleti funkciókhoz. Csak saját eszközön mentse: e böngésző minden használója engedélyezheti ezeket a műveleteket.",
+  "settings.forget_lan": "Kód elfelejtése",
+  "settings.remember_save": "Ellenőrzés és megjegyzés",
+  "settings.remember_saved": "LAN-kód megjegyezve ezen az eszközön",
+  "settings.remember_storage_failed": "A böngésző tárhelye nem érhető el. A kód nem lett mentve."
 }

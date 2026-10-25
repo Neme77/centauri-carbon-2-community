@@ -50,7 +50,8 @@
     "test:experiments": "node preview/test-experiments.mjs",
     "test:bed-drying": "node preview/test-bed-drying.mjs",
     "test:print-completion": "node preview/test-print-completion.mjs && node preview/test-print-completion-browser.mjs",
-    "test:spool-history": "node preview/test-spool-history.mjs"
+    "test:spool-history": "node preview/test-spool-history.mjs",
+    "test:remember-lan": "node preview/test-remember-lan.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

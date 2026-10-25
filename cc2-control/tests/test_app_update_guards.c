@@ -26,6 +26,11 @@ int main(void) {
     assert(!app_update_authorized(duplicate, &mqtt));
     assert(!app_update_authorized("POST / HTTP/1.1\r\n\r\n", &mqtt));
     assert(app_update_authorized(good, &mqtt));
+    /* Verifying browser storage uses the same rate-limited authorization;
+     * it must not accept duplicate headers or an incorrect candidate. */
+    assert(app_update_authorized("POST /api/access/verify HTTP/1.1\r\nX-CC2-LAN: fixture-confirmation\r\n\r\n", &mqtt));
+    assert(!app_update_authorized("POST /api/access/verify HTTP/1.1\r\nX-CC2-LAN: wrong\r\n\r\n", &mqtt));
+    assert(app_update_authorized(good, &mqtt));
     assert(app_update_token_valid("0123456789abcdef0123456789abcdef"));
     assert(!app_update_token_valid("../escape"));
     assert(!app_update_token_valid("0123456789abcdef0123456789abcdeG"));
