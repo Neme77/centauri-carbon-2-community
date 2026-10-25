@@ -3117,6 +3117,7 @@ static void mesh_response(int fd) {
 
 #include "plates.h"
 #include "spools.h"
+#include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
 
@@ -3969,6 +3970,12 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         spools_dismiss_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/adjust")==0) {
         spools_adjust_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman")==0) {
+        spoolman_config_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/catalog/refresh")==0) {
+        spoolman_catalog_refresh_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spoolman/catalog")==0) {
+        spoolman_catalog_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/pid")==0) {
         pid_status_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/monitor/clear")==0) {
@@ -4119,6 +4126,7 @@ int main(int argc, char **argv) {
         motor_mode_tick(&mqtt,&console);
         spools_tick(&mqtt);
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
+        if (spools_available) spoolman_tick((long long)now.tv_sec * 1000 + now.tv_nsec / 1000000);
         for(int i=0;i<HTTP_PENDING_MAX;i++){
             http_pending *p=&pending[i];if(p->fd<0)continue;
             double age=(double)(now.tv_sec-p->started.tv_sec)+(now.tv_nsec-p->started.tv_nsec)/1e9;

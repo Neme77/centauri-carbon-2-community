@@ -261,6 +261,7 @@ export function previewPlugin(): Plugin {
     created: 1790000000,
     used: 1790890000,
     archived: false,
+    spoolman_id: '',
     ...extra,
   })
   const resetSpools = () => {
