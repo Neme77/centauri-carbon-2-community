@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reorganize Control with live Z offset above homepage-style print tuning, compact machine actions alongside calibration cards, and cleaner fan controls (PR pending; layout by Neme77, inspired by pezso92's #187 design work).
+
 ### Added
 
 - Optional browser-local LAN code remembering in Settings → Connection for updates and experimental controls, with verification, masked fields, explicit forgetting and unchanged action confirmations; requested by **Neme77** (#225).
