@@ -20,7 +20,9 @@ jobs:
       - name: Regenerate and verify the exact application source snapshot
         run: |
           python3 experimental/pr128-integration/sync_source.py
-          test "$(sha256sum builder/current/components/cc2-control/source/source.zip | cut -d ' ' -f 1)" = "4a43f610d7c456b343ecc1bf66f47ba0575304396bfb9b7f50c00bc0733f1102"
+          git diff --exit-code 5c9d655304b4f1c68953c83ae754727576d2e101 -- cc2-control
+          python3 -c "from pathlib import Path; import subprocess,zipfile; paths=subprocess.check_output(['git','ls-files','cc2-control'],text=True).splitlines(); archive=zipfile.ZipFile('builder/current/components/cc2-control/source/source.zip'); assert archive.testzip() is None; assert sorted(archive.namelist())==sorted(p.removeprefix('cc2-control/') for p in paths); assert all(archive.read(p.removeprefix('cc2-control/'))==Path(p).read_bytes() for p in paths); print('PASS: every snapshot member matches the authorized canonical source commit',len(paths))"
+          sha256sum builder/current/components/cc2-control/source/source.zip
           python3 builder/current/tests/test_cc2_control_source_snapshot.py
           python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
           git diff --check
