@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "PID podložky",
   "control.fan_percent": "Nastavit {name} (%)",
   "control.invalid_fan_percent": "Zadejte celé číslo od 0 do 100.",
-  "control.fan_enter_hint": "Zadejte hodnotu od 0 do 100 a stiskněte Enter.",
   "canvas.reset_all": "Resetovat všechny filamenty",
   "canvas.reset_all_confirm": "Resetovat údaje o materiálu ve všech čtyřech slotech Canvas? Vymaže se uložený materiál, barva a teploty. Filament nebude vysunut.",
   "common.pagination": "Stránkování",

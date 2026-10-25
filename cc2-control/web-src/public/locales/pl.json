@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "PID stołu",
   "control.fan_percent": "Ustaw {name} (%)",
   "control.invalid_fan_percent": "Wpisz liczbę całkowitą od 0 do 100.",
-  "control.fan_enter_hint": "Wpisz wartość od 0 do 100 i naciśnij Enter.",
   "canvas.reset_all": "Resetuj wszystkie filamenty",
   "canvas.reset_all_confirm": "Zresetować dane materiału we wszystkich czterech slotach Canvas? Usunie to zapisany materiał, kolor i temperatury. Filament nie zostanie wyładowany.",
   "common.pagination": "Strony",

@@ -727,101 +727,100 @@ export const Control = () => {
                 />
               ))}
             </div>
-            <p class="mt-4 border-t border-edge pt-3 text-xs text-muted">{t('control.fan_enter_hint')}</p>
           </Card>
         </div>
         <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:contents">
-          <Card>
-            <CardHead icon="settings" title="control.machine" />
-            <div class="grid auto-rows-fr grid-cols-2 gap-2.5">
-              <Button
-                class="min-h-16 flex-col gap-1"
-                variant={v.lightOn ? 'active' : 'default'}
-                aria-pressed={v.lightOn}
-                title={t(
-                  v.lightOn ? 'control.internal_light_on_press_to_turn' : 'control.internal_light_off_press_to_turn'
-                )}
-                onClick={async () => {
-                  if (await control(v.lightOn ? 'light:off' : 'light:on')) setTimeout(refreshPrinter, 250)
-                }}
-              >
-                <Icon n="light" class="text-cyan" />
-                <span>
-                  {t('common.lights')} {t(v.lightOn ? 'control.on' : 'control.off')}
-                </span>
-              </Button>
-              <Button
-                class="min-h-16 flex-col gap-1"
-                disabled={!v.idle}
-                onClick={() => control('system:motors_off', t('common.disable_all_motors'))}
-              >
-                <Icon n="motors" class="text-cyan" />
-                {t('common.motors_off')}
-              </Button>
-              <Button
-                class="min-h-16 flex-col gap-1"
-                disabled={!v.idle}
-                onClick={() => control('system:heaters_off', t('common.turn_all_heaters_off'))}
-              >
-                <Icon n="temp" class="text-cyan" />
-                {t('control.heaters_off')}
-              </Button>
-              <Button
-                class="min-h-16 flex-col gap-1"
-                disabled={!v.idle}
-                onClick={() => control('system:fans_off', t('common.turn_all_fans_off'))}
-              >
-                <Icon n="fan" class="text-cyan" />
-                {t('common.fans_off')}
-              </Button>
-            </div>
-            {(d?.experiments?.quiet_motors || v.motorMode === 'quiet') && (
-              <div class="mt-3 border-t border-edge pt-3">
-                <div class="mb-2">{t('control.motor_mode')}</div>
-                <div class="grid grid-cols-2 gap-2.5">
-                  {(['quiet', 'normal'] as const).map(mode => (
-                    <Button
-                      key={mode}
-                      class="min-h-12"
-                      variant={v.motorMode === mode ? 'active' : 'default'}
-                      aria-pressed={v.motorMode === mode}
-                      disabled={
-                        !v.idle || !link.ok || !d?.connected || (mode === 'quiet' && !d?.experiments?.quiet_motors)
-                      }
-                      onClick={async () => {
-                        const ok = await control(
-                          `motors:${mode}`,
-                          t(mode === 'quiet' ? 'control.motor_mode_quiet_confirm' : 'control.motor_mode_normal_confirm')
-                        )
-                        if (ok) setTimeout(refreshPrinter, 250)
-                      }}
-                    >
-                      <Icon n="motors" class="text-cyan" />
-                      {t(mode === 'quiet' ? 'control.motor_mode_quiet' : 'control.motor_mode_normal')}
-                    </Button>
-                  ))}
-                </div>
-                <p class="mt-2 text-xs text-muted">{t('control.motor_mode_hint')}</p>
-                {v.motorMode === 'quiet' && (v.printing || v.paused) && (
-                  <Warn>{t('control.motor_mode_print_warning')}</Warn>
-                )}
-              </div>
-            )}
-            <Notice icon="lock">
-              <span>
-                {t('control.protected_actions')}
-                <br />
-                <small>{t('control.emergency_stop_is_always_available')}</small>
-              </span>
-            </Notice>
-          </Card>
           <ZOffset />
+          <PrintTuning compact sliders />
         </div>
       </div>
       <div class="cc2-control-calibrations mt-3.5 grid items-stretch gap-3.5 cc2-xl:grid-cols-3">
         <InputShaper d={d} v={v} />
         <PidCalibration d={d} />
-        <PrintTuning compact />
+        <Card class="cc2-machine">
+          <CardHead icon="settings" title="control.machine" />
+          <div class="grid auto-rows-fr grid-cols-2 gap-2.5">
+            <Button
+              class="min-h-11 gap-2"
+              variant={v.lightOn ? 'active' : 'default'}
+              aria-pressed={v.lightOn}
+              title={t(
+                v.lightOn ? 'control.internal_light_on_press_to_turn' : 'control.internal_light_off_press_to_turn'
+              )}
+              onClick={async () => {
+                if (await control(v.lightOn ? 'light:off' : 'light:on')) setTimeout(refreshPrinter, 250)
+              }}
+            >
+              <Icon n="light" class="text-cyan" />
+              <span>
+                {t('common.lights')} {t(v.lightOn ? 'control.on' : 'control.off')}
+              </span>
+            </Button>
+            <Button
+              class="min-h-11 gap-2"
+              disabled={!v.idle}
+              onClick={() => control('system:motors_off', t('common.disable_all_motors'))}
+            >
+              <Icon n="motors" class="text-cyan" />
+              {t('common.motors_off')}
+            </Button>
+            <Button
+              class="min-h-11 gap-2"
+              disabled={!v.idle}
+              onClick={() => control('system:heaters_off', t('common.turn_all_heaters_off'))}
+            >
+              <Icon n="temp" class="text-cyan" />
+              {t('control.heaters_off')}
+            </Button>
+            <Button
+              class="min-h-11 gap-2"
+              disabled={!v.idle}
+              onClick={() => control('system:fans_off', t('common.turn_all_fans_off'))}
+            >
+              <Icon n="fan" class="text-cyan" />
+              {t('common.fans_off')}
+            </Button>
+          </div>
+          {(d?.experiments?.quiet_motors || v.motorMode === 'quiet') && (
+            <div class="mt-3 border-t border-edge pt-3">
+              <div class="mb-2">{t('control.motor_mode')}</div>
+              <div class="grid grid-cols-2 gap-2.5">
+                {(['quiet', 'normal'] as const).map(mode => (
+                  <Button
+                    key={mode}
+                    class="min-h-12"
+                    variant={v.motorMode === mode ? 'active' : 'default'}
+                    aria-pressed={v.motorMode === mode}
+                    disabled={
+                      !v.idle || !link.ok || !d?.connected || (mode === 'quiet' && !d?.experiments?.quiet_motors)
+                    }
+                    onClick={async () => {
+                      const ok = await control(
+                        `motors:${mode}`,
+                        t(mode === 'quiet' ? 'control.motor_mode_quiet_confirm' : 'control.motor_mode_normal_confirm')
+                      )
+                      if (ok) setTimeout(refreshPrinter, 250)
+                    }}
+                  >
+                    <Icon n="motors" class="text-cyan" />
+                    {t(mode === 'quiet' ? 'control.motor_mode_quiet' : 'control.motor_mode_normal')}
+                  </Button>
+                ))}
+              </div>
+              <p class="mt-2 text-xs text-muted">{t('control.motor_mode_hint')}</p>
+              {v.motorMode === 'quiet' && (v.printing || v.paused) && (
+                <Warn>{t('control.motor_mode_print_warning')}</Warn>
+              )}
+            </div>
+          )}
+          <Notice icon="lock">
+            <span>
+              {t('control.protected_actions')}
+              <br />
+              <small>{t('control.emergency_stop_is_always_available')}</small>
+            </span>
+          </Notice>
+        </Card>
       </div>
       <div class="cc2-control-bottom mt-3.5 grid items-start gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
         <Extruder d={d} v={v} />

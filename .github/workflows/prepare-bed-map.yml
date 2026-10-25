@@ -60,7 +60,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp -a cc2-control/web/. cc2-control/firmware-integration/overlay/opt/usr/cc2-control/web/
           git add cc2-control
           git diff --cached --quiet || git commit -m "Rebuild 1.2.19 update component notices"
           previous_source_sha=$(sha256sum builder/current/components/cc2-control/source/source.zip | cut -d ' ' -f 1)

@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "Bed PID",
   "control.fan_percent": "Set {name} (%)",
   "control.invalid_fan_percent": "Enter a whole number from 0 to 100.",
-  "control.fan_enter_hint": "Enter a value from 0 to 100 and press Enter.",
   "canvas.reset_all": "Reset all filaments",
   "canvas.reset_all_confirm": "Reset material data for all four Canvas slots? This clears saved material, colour and temperatures. It does not unload filament.",
   "settings.camera_persistent": "Keep active",

@@ -84,13 +84,11 @@ cd cc2-control/web-src
 npm ci            # once
 npm run check     # type-check (strict), lint and formatting (Biome); `npm run format` fixes formatting
 npm run build     # rewrites ../web/index.html and ../web/locales/
-cd ../tests && python3 test_web_sync_static.py   # build and firmware overlay copy must match
+cd ../tests && python3 test_web_sync_static.py   # web/locales must match web-src/public/locales
 ```
 
 - commit the rebuilt `web/index.html` and `web/locales/` with the sources (CI rebuilds it and fails
-  on any difference) and keep the committed copy under
-  `cc2-control/firmware-integration/overlay/.../web/` identical: after `npm run build`, copy
-  `web/index.html` and `web/locales/*.json` over it (`test_web_sync_static.py`);
+  on any difference);
 - any change under `cc2-control/` (sources, tests, `preview/` scripts, `web/`) also needs the builder snapshot regenerated, as the last commit of the branch: `python3 experimental/pr128-integration/sync_source.py` rewrites `builder/current/components/cc2-control/source/source.zip` and the pins in `builder/current/prepare.py`, `core/firmware_builder.py` and `launch_helpers/run_build.py`; it pins `HEAD`, so run it on a clean, committed tree and commit the result (`builder/current/tests/test_cc2_control_source_snapshot.py`, the "Firmware builder (host tests)" job). These generated files are shared by every branch: one change per pull request, and regenerate the build and the snapshot after rebasing, or two open pull requests conflict;
 - to add a colour theme, append an entry to `THEMES` in `web-src/src/lib/i18n.ts` and a `:root[data-theme="<id>"]` block with every token to `web-src/src/index.css` (`test_themes_static.py` checks it); the backend stores any lowercase-hyphenated identifier, so it needs no change;
 - inspect the complete relevant code path before editing;

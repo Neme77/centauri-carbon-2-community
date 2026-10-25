@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "PID de la Cama",
   "control.fan_percent": "Ajustar {name} (%)",
   "control.invalid_fan_percent": "Introduzca un numero entero del 0 al 100.",
-  "control.fan_enter_hint": "Introduzca un valor del 0 al 100 y presione Enter.",
   "canvas.reset_all": "Restablecer todos los filamentos",
   "canvas.reset_all_confirm": "¿Restablecer los datos de material para las cuatro ranuras Canvas? Esto borra el material, el color y las temperaturas guardados. No descarga el filamento.",
   "settings.camera_persistent": "Mantener activa",
