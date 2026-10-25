@@ -66,6 +66,7 @@ class PolicyTests(unittest.TestCase):
 class TransactionTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name)
+        (self.root/'tmp').mkdir()
         self.stage=self.root/'opt/usr/.cc2-pullback-stage-0123456789abcdefabcd';self.stage.mkdir(parents=True)
         self.state=self.root/'opt/usr/cc2-canvas-pullback-1000'
         self.base=self.root/'opt/usr/cc2-reactor-runtime-v2';self.base.mkdir()
@@ -129,22 +130,23 @@ class TransactionTests(unittest.TestCase):
         for k,p in self.targets.items():self.assertEqual(p.read_bytes(),self.original[k])
     def test_guards_refuse_without_changes(self):
         self.payload();self.printer['last_message_age']=99;self.write_printer()
-        r=self.run_transaction();self.assertNotEqual(r.returncode,0)
+        r=self.run_transaction();self.assertNotEqual(r.returncode,0);self.assertIn('stale telemetry',r.stdout)
         for k,p in self.targets.items():self.assertEqual(p.read_bytes(),self.original[k])
     def test_process_replaced(self):
         self.payload();(self.root/'proc/42/stat').write_text('42 (printer) S '+'0 '*18+'1235 0\n')
-        self.assertNotEqual(self.run_transaction().returncode,0)
+        r=self.run_transaction();self.assertNotEqual(r.returncode,0);self.assertIn('printer process was replaced',r.stdout)
     def test_foreign_target_refused(self):
         self.payload();self.targets['boot'].write_bytes(b'foreign')
-        self.assertNotEqual(self.run_transaction().returncode,0)
+        r=self.run_transaction();self.assertNotEqual(r.returncode,0);self.assertIn('files changed while preparing',r.stdout)
         self.assertEqual(self.targets['boot'].read_bytes(),b'foreign')
     def test_plan_cannot_write_unknown_path(self):
         self.payload();p=self.stage/'plan';p.write_text(p.read_text().replace(str(self.targets['boot']),str(self.root/'outside')));self.resign()
-        self.assertNotEqual(self.run_transaction().returncode,0);self.assertFalse((self.root/'outside').exists())
+        r=self.run_transaction();self.assertNotEqual(r.returncode,0);self.assertIn('invalid transaction target',r.stdout);self.assertFalse((self.root/'outside').exists())
     def test_mid_transaction_failure_restores_original(self):
         self.payload();native=subprocess.check_output(['sh','-c','command -v mv'],text=True).strip()
         self.script('mv',f'case "$*" in *launcher.sh.cc2-pb-new*) exit 1;; esac\nexec {native} "$@"')
-        r=self.run_transaction();self.assertNotEqual(r.returncode,0)
+        r=self.run_transaction();self.assertNotEqual(r.returncode,0);self.assertIn('Original files restored',r.stdout);self.assertTrue((self.state/'backup/boot').exists())
         for k,p in self.targets.items():self.assertEqual(p.read_bytes(),self.original[k])
 
 if __name__=='__main__':unittest.main(verbosity=2)
+
