@@ -22,7 +22,9 @@ ready() {
     [ "$START" = "$(cat "$HERE/start")" ] || fail 'printer process was replaced'
     S=$(wget -qO- http://127.0.0.1:8081/api/printer) || fail 'printer state unavailable'
     H=$(wget -qO- http://127.0.0.1:8081/api/health) || fail 'health unavailable'
-    case "$S" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) fail 'printer must remain connected and Idle';; esac
+    case "$S" in *'"connected":true'*) ;; *) fail 'printer disconnected';; esac
+    printf '%s' "$S" | grep -Eq '"machine":\{"status":1[,}]' || fail 'printer must remain Idle'
+    case "$S" in *'"print":{"enabled":false'*) ;; *) fail 'active print prevents installation';; esac
     case "$H" in *'"mqtt_registered":true'*) ;; *) fail 'MQTT registration unavailable';; esac
     AGE=$(printf '%s' "$S" | sed -n 's/.*"last_message_age":\([0-9][0-9]*\),.*/\1/p')
     case "$AGE" in ''|*[!0-9]*) fail 'missing fresh telemetry';; esac
@@ -46,6 +48,12 @@ finish() {
     CODE=$?
     trap - 0 1 2 15
     set +e
+    if [ "$DONE" -eq 0 ] && [ "$CHANGED" -eq 1 ]; then
+        while IFS='|' read -r KEY DEST BEFORE AFTER PERM; do
+            TEMP="$DEST.cc2-pb-new"
+            if [ -f "$TEMP" ] && [ ! -L "$TEMP" ] && [ "$(hash "$TEMP")" = "$AFTER" ]; then rm -f "$TEMP"; fi
+        done < "$HERE/plan"
+    fi
     if [ "$DONE" -eq 0 ] && [ "$CHANGED" -eq 1 ] && [ "$MODE" = install ]; then
         # Installation never changes distance. Restore only exact known old/new files.
         OK=1

@@ -82,7 +82,7 @@ class TransactionTests(unittest.TestCase):
         self.script('sync','exit 0')
         (self.root/'proc/42').mkdir(parents=True)
         (self.root/'proc/42/stat').write_text('42 (printer) S '+'0 '*18+'1234 0\n')
-        self.printer=dict(connected=True,last_message_age=1,machine={'status':1},extruder={'temperature':25,'target':0},heater_bed={'temperature':25,'target':0})
+        self.printer=dict(connected=True,last_message_age=1,machine={'status':1},print={'enabled':False},extruder={'temperature':25,'target':0},heater_bed={'temperature':25,'target':0})
         self.write_printer()
     def tearDown(self):self.temp.cleanup()
     def script(self,name,body):
@@ -149,4 +149,3 @@ class TransactionTests(unittest.TestCase):
         for k,p in self.targets.items():self.assertEqual(p.read_bytes(),self.original[k])
 
 if __name__=='__main__':unittest.main(verbosity=2)
-
