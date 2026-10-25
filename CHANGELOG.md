@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Experimental bed drying: accept the real firmware help response, which omits M-codes, while preserving the native heater lease, command acknowledgement and target readback checks; reported and diagnosed by **tharje** (#229).
+- Experimental bed drying: accept the real firmware help response, which omits M-codes, while preserving the native heater lease, command acknowledgement and target readback checks; reported, tested and diagnosed by **Noahwhite2014** (#230).
 
 - Reset the current-job progress display when the printer is idle, without homing or overwriting the native last-job counters (#219).
 
@@ -400,6 +400,7 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [Community Firmware V4.3 / CC2 Control 1.2.0]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3
 [V4.2 / CC2 Control 1.1.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
+
 
 
 
