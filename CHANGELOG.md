@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Align experimental-integration card actions and place the drying controls side by side on desktop and phone; reported by **Neme77**.
+
 - Bed drying: distinguish a manually stopped session with fresh zero-target confirmation from an external or unconfirmed interruption; reported and printer-tested by **Neme77** (#230).
 
 - Experimental bed drying: accept the real firmware help response, which omits M-codes, while preserving the native heater lease, command acknowledgement and target readback checks; reported, tested and diagnosed by **Noahwhite2014** (#230).

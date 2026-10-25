@@ -98,46 +98,48 @@ export const Experiments = () => {
                   : 'experiments.using_mqtt'
             )}
           </p>
-          <Button
-            role="switch"
-            aria-checked={Boolean(data?.canvas_uds)}
-            aria-label={t('experiments.canvas_title')}
-            disabled={disabled || data?.cli_canvas}
-            onClick={() => void change('canvas-uds')}
-          >
-            {t(data?.canvas_uds ? 'experiments.disable' : 'experiments.enable')}
-          </Button>
+          <div class="flex flex-wrap items-stretch gap-2" data-experiment-actions>
+            <Button
+              role="switch"
+              aria-checked={Boolean(data?.canvas_uds)}
+              aria-label={t('experiments.canvas_title')}
+              disabled={disabled || data?.cli_canvas}
+              onClick={() => void change('canvas-uds')}
+            >
+              {t(data?.canvas_uds ? 'experiments.disable' : 'experiments.enable')}
+            </Button>
+          </div>
         </div>
         <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
           <h3 class="text-base font-semibold">{t('experiments.quiet_title')}</h3>
           <p class="my-2 flex-1 text-sm text-muted">{t('experiments.quiet_hint')}</p>
-          <Button
-            role="switch"
-            aria-checked={Boolean(data?.quiet_motors)}
-            aria-label={t('experiments.quiet_title')}
-            disabled={disabled || (data?.quiet_motors && !data.normal_confirmed)}
-            onClick={() => void change('quiet-motors')}
-          >
-            {t(data?.quiet_motors ? 'experiments.disable' : 'experiments.enable')}
-          </Button>
+          <div class="flex flex-wrap items-stretch gap-2" data-experiment-actions>
+            <Button
+              role="switch"
+              aria-checked={Boolean(data?.quiet_motors)}
+              aria-label={t('experiments.quiet_title')}
+              disabled={disabled || (data?.quiet_motors && !data.normal_confirmed)}
+              onClick={() => void change('quiet-motors')}
+            >
+              {t(data?.quiet_motors ? 'experiments.disable' : 'experiments.enable')}
+            </Button>
+          </div>
         </div>
         <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
           <h3 class="text-base font-semibold">{t('drying.title')}</h3>
           <p class="my-2 flex-1 text-sm text-muted">{t('drying.hint')}</p>
-          <Button
-            role="switch"
-            aria-checked={Boolean(data?.bed_drying)}
-            aria-label={t('drying.title')}
-            disabled={disabled}
-            onClick={() => void change('bed-drying')}
-          >
-            {t(data?.bed_drying ? 'experiments.disable' : 'experiments.enable')}
-          </Button>
-          {data?.bed_drying && (
-            <Button class="ml-2" onClick={() => openPage('control')}>
-              {t('common.control')}
+          <div class="flex flex-wrap items-stretch gap-2" data-experiment-actions>
+            <Button
+              role="switch"
+              aria-checked={Boolean(data?.bed_drying)}
+              aria-label={t('drying.title')}
+              disabled={disabled}
+              onClick={() => void change('bed-drying')}
+            >
+              {t(data?.bed_drying ? 'experiments.disable' : 'experiments.enable')}
             </Button>
-          )}
+            {data?.bed_drying && <Button onClick={() => openPage('control')}>{t('common.control')}</Button>}
+          </div>
         </div>
       </div>
       {!ok && <p class="mt-3 text-amber">{t('experiments.unavailable')}</p>}
