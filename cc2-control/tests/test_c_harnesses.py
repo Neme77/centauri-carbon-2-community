@@ -47,6 +47,7 @@ HARNESSES = {
     "test_plates.c": BACKEND,
     "test_canvas_unload.c": BACKEND,
     "test_spools.c": BACKEND,
+    "test_spoolman.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
 }
 

@@ -6,7 +6,7 @@ static mqtt_client machine;
 static console_state commands;
 static long long clock_ms=1000;
 static long long fake_clock(void){return clock_ms;}
-static int heats,offs,leases,restores,support=1,fail=0,apply=1;
+static int heats,offs,leases,restores,support=1,fail=0,apply=1,reject_heat=0;
 static char directory[256];
 static void snapshot(double bed,double target){
     telemetry.values[U_BT]=bed;telemetry.values[U_BG]=target;telemetry.messages++;
@@ -15,8 +15,8 @@ static void snapshot(double bed,double target){
 }
 static int fake_rpc(const char *query,char **reply,size_t *length){
     const char *text="{\"id\":204,\"result\":{}}";
-    if(strstr(query,"gcode/help"))text=support?"{\"id\":203,\"result\":{\"SET_HEATER_BED_IDLE_TIMEOUT\":\"test\",\"M140\":\"test\"}}":"{\"id\":203,\"result\":{\"M140\":\"test\"}}";
-    else if(strstr(query,"M140 S70")){heats++;if(apply)snapshot(25,70);}
+    if(strstr(query,"gcode/help"))text=support?"{\"id\":203,\"result\":{\"SET_HEATER_BED_IDLE_TIMEOUT\":\"Set the heater bed idle timeout\",\"SET_IDLE_TIMEOUT\":\"Set the idle timeout\"}}":"{\"id\":203,\"result\":{\"SET_IDLE_TIMEOUT\":\"Set the idle timeout\"}}";
+    else if(strstr(query,"M140 S70")){heats++;if(reject_heat)text="{\"id\":204,\"error\":{\"message\":\"Unknown command M140\"}}";else if(apply)snapshot(25,70);}
     else if(strstr(query,"M140 S0")){offs++;if(apply)snapshot(telemetry.values[U_BT],0);}
     else if(strstr(query,"TIMEOUT=90"))leases++;
     else if(strstr(query,"TIMEOUT=600"))restores++;
@@ -34,7 +34,7 @@ static void start(const char *body,int expected){
 static void tick(void){drying_tick(&machine);}
 static void reset(void){
     plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;drying.reason="none";
-    unlink(drying_journal);heats=offs=leases=restores=0;support=apply=1;fail=0;clock_ms=1000;
+    unlink(drying_journal);heats=offs=leases=restores=0;support=apply=1;fail=reject_heat=0;clock_ms=1000;
     machine.machine_status=1;machine.print_enabled=0;strcpy(telemetry.print_state,"standby");snapshot(25,0);
 }
 static void heat(void){start("70:1",200);tick();assert(drying.stage==DRY_ARM);tick();assert(leases==1);tick();assert(heats==1);assert(drying.stage==DRY_HEATING);}
@@ -75,6 +75,15 @@ int main(void){
     machine.machine_status=1;strcpy(telemetry.print_state,"complete");snapshot(70,70);tick();assert(offs==0);snapshot(70,0);finish();assert(!drying_active());
     reset();heat();machine.last_message-=60;tick();clock_ms+=100000;tick();assert(leases==1&&heats==1&&offs==0);snapshot(25,70);tick();assert(offs==1);finish();
     reset();support=0;start("70:1",200);tick();assert(!drying_active()&&!heats&&!leases&&drying.stage==DRY_INTERRUPTED);
+    /* Real help omits M-codes: the supported path above must heat normally.
+     * Help cannot substitute for the correlated command result/readback. */
+    reset();start("70:1",200);tick();tick();reject_heat=1;tick();
+    assert(heats==1&&leases==1&&drying.stage==DRY_STOPPING&&!strcmp(drying.reason,"command"));
+    assert(telemetry.values[U_BG]==0);reject_heat=0;finish();assert(!drying_active()&&restores==1);
+    const char *nested="{\"id\":203,\"result\":{\"other\":{\"SET_HEATER_BED_IDLE_TIMEOUT\":\"nested\"}}}";
+    assert(!drying_result(nested,strlen(nested),1));
+    const char *wrong_id="{\"id\":999,\"result\":{\"SET_HEATER_BED_IDLE_TIMEOUT\":\"help\"}}";
+    assert(!drying_result(wrong_id,strlen(wrong_id),1));
     reset();heat();/* Simulate CC2 death: persisted marker never resumes heat. */
     plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;drying_load();
     assert(drying.stage==DRY_RECOVERY);tick();assert(heats==1&&leases==1&&offs==0);

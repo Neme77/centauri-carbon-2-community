@@ -1,23 +1,7 @@
-# Cumulative PR 218, 219, 220, 222 and 223 trial — R1
+# Cumulative CC2 Control trial — PR 208 and 225, R1
 
-Maintainer-only validation package, not a public release. Version stays 1.2.21.
-Install from the computer using Install-Windows.cmd / Install-CC2-Control.ps1;
-the in-app updater rejects the same version. Keep the printed backup/restore path.
-Install only while connected, cold and idle, with heater targets zero.
+Rebuilt from current develop plus #208 and #225. Version remains 1.2.21. Includes the previously integrated Dashboard, experimental integration cards, optional timed bed drying, print completion notice and compact spool history, plus optional Spoolman by tharje and personal-browser LAN remembering requested by Neme77. Existing contributor credits are preserved.
 
-Includes the approved Dashboard camera artwork, header Keep active preference,
-draft speed/flow sliders plus existing numeric Apply/Reset, experimental features
-under Integrations, opt-in timed bed heating, completed-print notice/idle progress,
-compact filtered spool history and V4.4.2 updater requirements in all languages.
-Existing preferences and the already installed webcam patch are retained; this
-application-only trial does not reinstall the camera component or reboot.
+Application-only trial: retains the already installed camera runtime, does not reinstall it, and requires no full-printer reboot. No merge, release or catalogue changes. Extract into a new directory and use the computer installer while the printer is idle and cold; use Install-Windows.cmd on Windows. Same-version panel restrictions remain unchanged; do not upload this ZIP to the panel. Retain the backup/restore path reported by the installer.
 
-Check ordinary UI, live-camera navigation, printing sliders, completion notice,
-idle progress, spool filters and settings placement first. Enabling bed drying
-must not heat anything. Before a short supervised empty-bed heating/stop test,
-read cc2-control/docs/BED_DRYING.md in the included sources; verify target-zero
-readback before leaving the printer. Do not begin with an unattended drying cycle.
-
-Credits: pezso92 (visual direction/artwork), romeopuch (drying request), DamiBFryta
-(spool feedback/testing), and contributors credited in the individual PRs.
-No public release, stable catalogue or complete firmware is published by this trial.
+Check existing Dashboard/Canvas/mesh/Orca/spool/video behavior. Enable LAN remembering in Settings → Connection and verify masked reuse after navigation/reload, action confirmations and Forget across tabs. Only save on a personal device. Spoolman stays off without configuration; real-server validation must check imports, links, material/color/remaining weight, measured consumption and independent links for copied physical spools. Backups must exclude proxy credentials and restore leaves sync disabled. Experimental features remain optional and no automatic hardware action is expected. Report printer results before integration.

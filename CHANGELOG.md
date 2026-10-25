@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Independent Spoolman integration switch in Settings, hiding its spool controls and pausing server requests without losing local tracking, saved server settings, links or queued usage (#227; requested by **Neme77**, building on [tharje](https://github.com/tharje)'s #208 integration).
+
 - Optional browser-local LAN code remembering in Settings → Connection for updates and experimental controls, with verification, masked fields, explicit forgetting and unchanged action confirmations; requested by **Neme77** (#225).
 
 - Opt-in experimental timed bed heating for filament drying, with finite duration, explicit stop/readback and a short native heater lease; requested by **romeopuch** in #198 (#218). No automatic heating after restart. Hardware validation is still required.
@@ -15,6 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Nonblocking completed-print notice with acknowledgement and Print again through the normal preparation dialog, inspired by the printer display and requested by **Neme77** (#219). Uses existing polling; cancellation/disconnection is not success.
 
 ### Fixed
+
+- Bed drying: distinguish a manually stopped session with fresh zero-target confirmation from an external or unconfirmed interruption; reported and printer-tested by **Neme77** (#230).
+
+- Experimental bed drying: accept the real firmware help response, which omits M-codes, while preserving the native heater lease, command acknowledgement and target readback checks; reported, tested and diagnosed by **Noahwhite2014** (#230).
 
 - Reset the current-job progress display when the printer is idle, without homing or overwriting the native last-job counters (#219).
 
@@ -43,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Canvas: an explicit action to recover an unassigned filament head by loading any present slot (#190).
 - Files: older G-code files stay reachable, and uploads stream up to 512 MiB (#197).
 - Object exclusion: a single refined 2D bed map replaces the previous views (#199), following DamiBFryta's feedback and Nick Plateringen-Paul's original map idea/prototype.
+- Spools: optional Spoolman sync pushes measured usage to a self-hosted Spoolman server and pulls material, colour, name and remaining weight back; usage whose delivery is uncertain is never sent twice, and exported backups leave out the proxy login (#208).
 
 ### Fixed
 
@@ -398,6 +405,3 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [Community Firmware V4.3 / CC2 Control 1.2.0]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3
 [V4.2 / CC2 Control 1.1.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
-
-
-

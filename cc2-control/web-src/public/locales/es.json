@@ -1024,6 +1024,16 @@
   "files.sort": "Ordenar por",
   "app.print_progress": "Progreso de la impresión",
   "app.sidebar": "Menú lateral",
+  "spools.spoolman_sync": "Sincronización con Spoolman",
+  "spools.spoolman_hint": "Envía el consumo medido a un servidor Spoolman autoalojado y recupera su material, color, nombre y peso restante, para cualquier bobina vinculada aquí abajo.",
+  "spools.spoolman_url": "URL del servidor",
+  "spools.spoolman_auth": "Inicio de sesión del proxy inverso (opcional)",
+  "spools.spoolman_auth_placeholder": "usuario:contraseña",
+  "spools.spoolman_saved_toast": "Ajustes de Spoolman guardados.",
+  "spools.spoolman_id": "ID de bobina en Spoolman",
+  "spools.spoolman_id_placeholder": "p. ej. 42",
+  "spools.spoolman_id_hint": "Vincula esta bobina a una de Spoolman, por su id numérico. Déjalo vacío para no sincronizarla.",
+  "spools.invalid_spoolman_id": "El id de Spoolman debe contener solo cifras.",
   "files.list_changed_retry": "La lista cambió durante la carga. Actualiza e inténtalo de nuevo.",
   "job.bed_map_expand": "Ampliar mapa de la cama",
   "canvas.actions_for_slot": "Acciones para la ranura {slot}",
@@ -1078,6 +1088,7 @@
   "drying.interrupted": "Interrumpido",
   "drying.unavailable": "Lectura no disponible",
   "drying.expired": "Tiempo agotado; objetivo cero confirmado.",
+  "drying.manual_stopped": "Secado detenido. Objetivo de la cama confirmado a 0 °C.",
   "drying.interrupted_hint": "Sesión interrumpida o modificada desde otro lugar. Comprueba el objetivo de la cama; la parada solo se confirma al leer cero.",
   "drying.enable_confirm": "¿Activar los controles experimentales de calentamiento temporizado de cama?",
   "drying.disable_confirm": "¿Ocultar los controles experimentales de calentamiento de cama?",
@@ -1097,5 +1108,7 @@
   "settings.forget_lan": "Olvidar código",
   "settings.remember_save": "Verificar y recordar",
   "settings.remember_saved": "Código LAN recordado en este dispositivo",
-  "settings.remember_storage_failed": "El almacenamiento del navegador no está disponible. El código no se ha guardado."
+  "settings.remember_storage_failed": "El almacenamiento del navegador no está disponible. El código no se ha guardado.",
+  "settings.spoolman_enable": "Activar Spoolman",
+  "settings.spoolman_hint": "Muestra Spoolman en Bobinas y sincroniza con tu servidor. Al desactivarlo se conservan la configuración y las asociaciones."
 }

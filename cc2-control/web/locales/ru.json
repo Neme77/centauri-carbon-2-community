@@ -1024,6 +1024,16 @@
   "files.sort": "Сортировка",
   "app.print_progress": "Ход печати",
   "app.sidebar": "Боковое меню",
+  "spools.spoolman_sync": "Синхронизация со Spoolman",
+  "spools.spoolman_hint": "Отправляет измеренный расход на собственный сервер Spoolman и получает обратно материал, цвет, название и остаток для каждой привязанной ниже катушки.",
+  "spools.spoolman_url": "URL сервера",
+  "spools.spoolman_auth": "Логин для обратного proxy (необязательно)",
+  "spools.spoolman_auth_placeholder": "пользователь:пароль",
+  "spools.spoolman_saved_toast": "Настройки Spoolman сохранены.",
+  "spools.spoolman_id": "ID катушки в Spoolman",
+  "spools.spoolman_id_placeholder": "напр. 42",
+  "spools.spoolman_id_hint": "Связывает эту катушку с катушкой в Spoolman по её числовому id. Оставьте пустым, чтобы не синхронизировать.",
+  "spools.invalid_spoolman_id": "ID Spoolman должен содержать только цифры.",
   "files.list_changed_retry": "Список файлов изменился при загрузке. Обновите и повторите попытку.",
   "job.bed_map_expand": "Развернуть карту стола",
   "canvas.actions_for_slot": "Действия для слота {slot}",
@@ -1078,6 +1088,7 @@
   "drying.interrupted": "Прервано",
   "drying.unavailable": "Данные недоступны",
   "drying.expired": "Время истекло; нулевая цель подтверждена.",
+  "drying.manual_stopped": "Сушка остановлена. Подтверждена целевая температура стола 0 °C.",
   "drying.interrupted_hint": "Сеанс прерван или изменён извне. Проверьте цель стола; остановка подтверждается только после чтения нуля.",
   "drying.enable_confirm": "Включить экспериментальное управление нагревом стола по таймеру?",
   "drying.disable_confirm": "Скрыть экспериментальное управление нагревом стола?",
@@ -1097,5 +1108,7 @@
   "settings.forget_lan": "Забыть код",
   "settings.remember_save": "Проверить и запомнить",
   "settings.remember_saved": "Код LAN сохранён на этом устройстве",
-  "settings.remember_storage_failed": "Хранилище браузера недоступно. Код не сохранён."
+  "settings.remember_storage_failed": "Хранилище браузера недоступно. Код не сохранён.",
+  "settings.spoolman_enable": "Включить Spoolman",
+  "settings.spoolman_hint": "Показывает Spoolman в разделе катушек и синхронизирует с сервером. При отключении настройки и привязки сохраняются."
 }
