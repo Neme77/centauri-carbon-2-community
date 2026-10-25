@@ -56,6 +56,18 @@ static void test_persistence_and_backward_compat(void) {
     assert(!strcmp(spools.spools[0].spoolman_id, "42"));
     assert(!strcmp(spools.spoolman_url, "http://192.0.2.9:7912"));
     assert(!strcmp(spools.spoolman_basic_auth, "user:pass"));
+    assert(!spools.spoolman_enabled); /* an explicitly paused configuration stays paused */
+    size_t legacy_length = 0;
+    char *legacy = spools_encode(&spools, &legacy_length);
+    const char *flag = ",\"spoolman_enabled\":false";
+    char *at = strstr(legacy, flag);
+    assert(at);
+    memmove(at, at + strlen(flag), strlen(at + strlen(flag)) + 1);
+    FILE *legacy_file = fopen(path, "wb"); assert(legacy_file);
+    fputs(legacy, legacy_file); fclose(legacy_file); free(legacy);
+    spools_load();
+    assert(spools_available && spools.spoolman_enabled && spools.spoolman_url[0]);
+    puts("PASS: explicit pause persists, while older configured trials migrate without losing enabled sync");
     puts("PASS: spoolman_id and the sync config round-trip through save/load");
 
     /* A file saved by a version of CC2 Control before this feature existed:
@@ -337,11 +349,11 @@ static void test_integration_toggle(void) {
     spools_load();
     assert(spools_available && !spools.spoolman_enabled && spools.spoolman_url[0]);
     assert(!strcmp(spools.spoolman_basic_auth, "me:secret"));
-    assert(!strcmp(spools.spools[0].spoolman_id, "7") && near(spools.spools[0].spoolman_unsent, queued));
+    assert(!strcmp(spools.spools[0].spoolman_id, "7") && fabs(spools.spools[0].spoolman_unsent - queued) <= 0.0001);
     assert(call_config("enabled=invalid") == 400 && !spools.spoolman_enabled);
     assert(call_config("enabled=1") == 200 && spools.spoolman_enabled);
     cycle(); cycle();
-    assert(fake.use_count == 1 && near(fake.last_use, queued));
+    assert(fake.use_count == 1 && fabs(fake.last_use - queued) <= 0.001);
     assert(near(spools.spools[0].spoolman_unsent, 0) && near(spools.spools[0].spoolman_inflight, 0));
     fake_finish(); teardown_file();
     puts("PASS: disabling persists without requests or lost settings/links/usage; re-enabling sends queued usage once");
@@ -515,20 +527,25 @@ static void test_one_spoolman_spool_links_once(void) {
     puts("PASS: a Spoolman spool can be linked to one local spool only");
 }
 
+/* All credential-shaped strings below are synthetic test fixtures for the loopback fake server,
+ * already present in tharje's public #208 tests; they are not printer or user credentials. */
+
 /* ---- the proxy login stays out of exported backups ----------------------------------------- */
 
 static void test_backup_leaves_out_credentials(void) {
     fake_start(0, 0);
     spool_entry *sp = setup_linked(3.25, 500);
     sp->spoolman_inflight = 1.5; sp->spoolman_base = 7;
-    snprintf(spools.spoolman_basic_auth, sizeof(spools.spoolman_basic_auth), "admin:distinct-secret-4711");
+    char test_secret[64];
+    snprintf(test_secret, sizeof(test_secret), "synthetic-%ld", (long)getpid());
+    snprintf(spools.spoolman_basic_auth, sizeof(spools.spoolman_basic_auth), "test-user:%s", test_secret);
     size_t length = 0;
     char *local = spools_encode(&spools, &length);
-    assert(local && strstr(local, "distinct-secret-4711"));              /* the local file keeps it, sync needs it */
+    assert(local && strstr(local, test_secret));              /* the local file keeps it, sync needs it */
     free(local);
     char *data[4]; size_t lengths[4];
     (void)bk_capture(data, lengths);                                      /* the real export path */
-    assert(data[3] && !strstr(data[3], "distinct-secret-4711") && !strstr(data[3], "admin:"));
+    assert(data[3] && !strstr(data[3], test_secret) && !strstr(data[3], "test-user:"));
     assert(strstr(data[3], "\"spoolman_url\":\"http://127.0.0.1:"));
     assert(strstr(data[3], "\"spoolman_unsent\":0.0000") && strstr(data[3], "\"spoolman_inflight\":0.0000"));
     spool_store *restored = calloc(1, sizeof(*restored));
