@@ -898,7 +898,7 @@
   "updates.no_update": "Novější kompatibilní aktualizace není zveřejněna.",
   "updates.check_failed": "Kontrola GitHubu selhala. Ověřte připojení k Internetu a zkuste to znovu.",
   "updates.bootstrap": "Nejprve z počítače nainstalujte balíček CC2 Control s aktualizačním modulem.",
-  "updates.requirements": "Vyžaduje Community Firmware V4.4/V4.4.1, aktuální připojení, nečinnou tiskárnu, trysku a podložku ≤50 °C a nulové cílové teploty. Před instalací pozastavte video.",
+  "updates.requirements": "Vyžaduje Community Firmware V4.4/V4.4.1/V4.4.2, aktuální připojení, nečinnou tiskárnu, trysku a podložku ≤50 °C a nulové cílové teploty. Před instalací pozastavte video.",
   "updates.download": "Stáhnout a ověřit",
   "updates.prepare_confirm": "Stáhnout nebo nahrát balíček k ověření? Aplikace ještě nebude nainstalována.",
   "updates.verified": "Balíček ověřen",
@@ -1082,5 +1082,15 @@
   "drying.interrupted_hint": "Relace přerušena nebo změněna jinde. Zkontrolujte cíl podložky; zastavení je potvrzeno až po odečtu nuly.",
   "drying.enable_confirm": "Zapnout experimentální ovládání časovaného ohřevu podložky?",
   "drying.disable_confirm": "Skrýt experimentální ovládání ohřevu podložky?",
-  "drying.start_confirm": "Spustit časovaný ohřev? Ověřte limity cívky a dohlížejte na první test."
+  "drying.start_confirm": "Spustit časovaný ohřev? Ověřte limity cívky a dohlížejte na první test.",
+  "completed.again": "Tisknout znovu",
+  "completed.latest": "Poslední dokončený tisk",
+  "completed.title": "Tisk dokončen",
+  "completed.acknowledge": "Potvrdit",
+  "completed.hint": "Tiskárna je k dispozici. Tisknout znovu otevře běžnou přípravu tisku.",
+  "spools.history_count": "Zobrazeno {shown} z {total} uložených pohybů",
+  "spools.history_all": "Všechny pohyby",
+  "spools.no_consumption": "V uložené historii není žádná spotřeba.",
+  "spools.history_consumption": "Pouze spotřeba",
+  "spools.history_filter": "Zobrazit pohyby"
 }

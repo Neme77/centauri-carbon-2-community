@@ -167,7 +167,12 @@ export function view(d: any) {
     total,
     active,
     homed,
-    progress: Math.max(0, Math.min(100, Number(d?.machine?.progress || 0))),
+    // An idle printer may retain the last job’s 100% until the next home.
+    // Keep that native value in the payload; the current-job display has no active progress.
+    progress:
+      /idle|ready/i.test(state) && !/print|pause/i.test(jobState)
+        ? 0
+        : Math.max(0, Math.min(100, Number(d?.machine?.progress || 0))),
     idle: /idle|ready/i.test(state),
     printing: !paused && (/print/i.test(state) || /print/i.test(jobState)),
     paused,

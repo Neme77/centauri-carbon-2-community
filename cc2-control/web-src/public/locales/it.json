@@ -898,7 +898,7 @@
   "updates.no_update": "Nessun aggiornamento compatibile più recente pubblicato.",
   "updates.check_failed": "Controllo GitHub fallito. Verifica Internet e riprova.",
   "updates.bootstrap": "Installa una volta dal computer il pacchetto CC2 Control che include l’updater.",
-  "updates.requirements": "Richiede Community Firmware V4.4/V4.4.1, connessione aggiornata, stampante inattiva, ugello e piatto ≤50 °C e target di riscaldamento zero. Metti in pausa il live prima dell’installazione.",
+  "updates.requirements": "Richiede Community Firmware V4.4/V4.4.1/V4.4.2, connessione aggiornata, stampante inattiva, ugello e piatto ≤50 °C e target di riscaldamento zero. Metti in pausa il live prima dell’installazione.",
   "updates.download": "Scarica e verifica",
   "updates.prepare_confirm": "Scaricare o caricare il pacchetto per verificarlo? L’applicazione non verrà ancora installata.",
   "updates.verified": "Pacchetto verificato",
@@ -1082,5 +1082,15 @@
   "drying.interrupted_hint": "Sessione interrotta o modificata altrove. Controlla il target del piatto; l’arresto è confermato solo dopo la lettura a zero.",
   "drying.enable_confirm": "Abilitare i controlli sperimentali di riscaldamento temporizzato del piatto?",
   "drying.disable_confirm": "Nascondere i controlli sperimentali di riscaldamento del piatto?",
-  "drying.start_confirm": "Avviare il riscaldamento temporizzato? Controlla i limiti della bobina e sorveglia la prima prova."
+  "drying.start_confirm": "Avviare il riscaldamento temporizzato? Controlla i limiti della bobina e sorveglia la prima prova.",
+  "completed.again": "Stampa di nuovo",
+  "completed.latest": "Ultima stampa completata",
+  "completed.title": "Stampa completata",
+  "completed.acknowledge": "Conferma",
+  "completed.hint": "La stampante è disponibile. Stampa di nuovo apre la normale preparazione.",
+  "spools.history_count": "Visualizzati {shown} di {total} movimenti salvati",
+  "spools.history_all": "Tutti i movimenti",
+  "spools.no_consumption": "Nessun consumo nella cronologia salvata.",
+  "spools.history_consumption": "Solo consumi",
+  "spools.history_filter": "Mostra movimenti"
 }

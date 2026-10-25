@@ -1,6 +1,7 @@
+import { PrintCompleted } from '@/components/print-completed'
 import { i18n } from '@/lib/i18n'
 import { menu, nav, printer } from '@/lib/state'
-import { PrintWatcher, PrinterReport, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
+import { PrinterReport, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CameraWindow, PersistentCamera } from '@/components/shared'
 import { SpoolWatcher } from '@/components/spool-ui'
@@ -43,7 +44,7 @@ export const App = () => {
   return (
     <>
       <TitleSync />
-      <PrintWatcher />
+      <PrintCompleted />
       <RefusalWatcher />
       <Sidebar />
       <Topbar />

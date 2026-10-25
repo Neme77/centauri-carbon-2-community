@@ -898,7 +898,7 @@
   "updates.no_update": "No se ha publicado ninguna actualizacion compatible mas reciente.",
   "updates.check_failed": "Fallo en la comprobacion de GitHub. Revise su conexion a Internet e intentelo de nuevo.",
   "updates.bootstrap": "Instale el paquete de CC2 Control habilitado para actualizaciones una vez desde su ordenador.",
-  "updates.requirements": "Requiere Firmware Comunitario V4.4/V4.4.1, conexion nueva, una impresora inactiva, boquilla y cama ≤50 °C, y objetivos de calentamiento en cero. Pause la vista en vivo antes de la instalacion.",
+  "updates.requirements": "Requiere Firmware Comunitario V4.4/V4.4.1/V4.4.2, conexion nueva, una impresora inactiva, boquilla y cama ≤50 °C, y objetivos de calentamiento en cero. Pause la vista en vivo antes de la instalacion.",
   "updates.download": "Descargar y verificar",
   "updates.prepare_confirm": "¿Descargar o cargar este paquete para su verificacion? La aplicacion aun no se instalara.",
   "updates.verified": "Paquete verificado",
@@ -1082,5 +1082,15 @@
   "drying.interrupted_hint": "Sesión interrumpida o modificada desde otro lugar. Comprueba el objetivo de la cama; la parada solo se confirma al leer cero.",
   "drying.enable_confirm": "¿Activar los controles experimentales de calentamiento temporizado de cama?",
   "drying.disable_confirm": "¿Ocultar los controles experimentales de calentamiento de cama?",
-  "drying.start_confirm": "¿Iniciar el calentamiento temporizado? Comprueba los límites de la bobina y supervisa la primera prueba."
+  "drying.start_confirm": "¿Iniciar el calentamiento temporizado? Comprueba los límites de la bobina y supervisa la primera prueba.",
+  "completed.again": "Volver a imprimir",
+  "completed.latest": "Última impresión completada",
+  "completed.title": "Impresión completada",
+  "completed.acknowledge": "Confirmar",
+  "completed.hint": "La impresora está disponible. Volver a imprimir abre la preparación habitual.",
+  "spools.history_count": "Se muestran {shown} de {total} movimientos guardados",
+  "spools.history_all": "Todos los movimientos",
+  "spools.no_consumption": "No hay consumo en el historial guardado.",
+  "spools.history_consumption": "Solo consumo",
+  "spools.history_filter": "Mostrar movimientos"
 }

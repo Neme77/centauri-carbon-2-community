@@ -67,13 +67,13 @@ Chi usa già V4.4/V4.4.1 può installare il solo aggiornamento di CC2 Control.
 
 Schede slot compatte, azioni condivise e pannelli impostazioni/cronologia bilanciati rendono Canvas più leggibile su PC e telefono. Il caricamento di recupero permette di risolvere uno stato della testina non assegnato dopo un riavvio: scegli uno slot presente e conferma il caricamento nativo. La cronologia osservata è limitata alla sessione e si azzera ricaricando la pagina. Layout ispirato alla proposta di **Surfoo**, rifinito con le prove e le scelte del maintainer.
 
-![Nuovo layout Canvas](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/Canvas-1.2.21.png)
+[![Nuovo layout Canvas](docs/images/cc2-control/canvas-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/cc2-control/canvas-current.png)
 
 ### Funzioni sperimentali indipendenti
 
 **Canvas UDS** e **controlli motori Quiet** si abilitano separatamente in Impostazioni → Aggiornamenti. Partono disattivati sulle nuove installazioni; le scelte esistenti vengono conservate. UDS mantiene il ripiego MQTT. Quiet/Normal deriva dal contributo di **BorjaLL**: i comandi dello slicer possono sovrascrivere i limiti iniziali. Completa Normal prima di disattivare i controlli Quiet o cambiare sorgente Canvas. Oltre 350 mm rimane necessario il runtime firmware separato e qualificato.
 
-![Impostazioni sperimentali indipendenti](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/Experiments-1.2.21.png)
+[![Impostazioni sperimentali indipendenti](docs/images/cc2-control/experiments-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/cc2-control/experiments-current.png)
 
 *Immagini dell'interfaccia effettiva con dati dimostrativi simulati.*
 

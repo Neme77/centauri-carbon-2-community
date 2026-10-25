@@ -17,6 +17,7 @@ try {
   const localized = {
     en: 'Stable fixture — retained settings',
     it: 'Note italiane: impostazioni conservate',
+    es: 'Notas en español: configuración conservada',
     fr: 'Notes françaises : paramètres conservés',
     pl: 'Polskie informacje: ustawienia zachowane',
     cs: 'České poznámky: nastavení zachováno',
@@ -32,7 +33,7 @@ try {
   ] }
   let cache = { schema: 1, expires: 0, releases: [] }
   await page.route('**/i18n/*.json', async r => {
-    const code = new URL(r.request().url()).pathname.match(/^\/i18n\/(en|it|fr|pl|cs|hu|ru|zh)\.json$/)?.[1]
+    const code = new URL(r.request().url()).pathname.match(/^\/i18n\/(en|it|es|fr|pl|cs|hu|ru|zh)\.json$/)?.[1]
     assert(code, 'unexpected locale request')
     return r.fulfill({ body: await readFile(path.join(root, `public/locales/${code}.json`), 'utf8'), contentType: 'application/json' })
   })
@@ -62,10 +63,10 @@ try {
   await page.goto(server.resolvedUrls.local[0] + '#settings')
   await page.getByRole('tab', { name: 'Updates', exact: true }).click()
   await page.getByText('Compatible update available: 1.2.9', { exact: true }).waitFor()
-  // Show both supported Community Firmware generations, in every translated catalog.
+  // Name all three supported Community Firmware releases, in every translated catalog.
   for (const lang of ['en', 'hu', 'cs', 'es', 'fr', 'it', 'pl', 'ru', 'zh']) {
     const dict = JSON.parse(await readFile(path.join(root, `public/locales/${lang}.json`)))
-    assert.match(dict['updates.requirements'], /V4\.4\/V4\.4\.1/, lang + ' update requirements are out of date')
+    assert.match(dict['updates.requirements'], /V4\.4\/V4\.4\.1\/V4\.4\.2/, lang + ' update requirements are out of date')
   }
 // DamiBFryta: the native chooser's visible field and both cursor areas must agree.
   await page.locator('details summary').click()
@@ -185,5 +186,5 @@ try {
   assert.equal(await page.getByText(localized.en, { exact: true }).count(), 0, 'older release notes must remain hidden')
   assert.equal(await page.getByText(previous['updates.notes_in_english'], { exact: true }).count(), 0)
   assert.deepEqual(errors, [])
-  console.log('PASS: native file chooser mouse/keyboard, light/dark styling, disabled cursors, mobile layout; update auth/confirmations, installed/older note hiding, 8-language selection and labelled fallback')
+  console.log('PASS: native file chooser mouse/keyboard, light/dark styling, disabled cursors, mobile layout; update auth/confirmations, installed/older note hiding, 9-language selection and labelled fallback')
 } finally { await browser?.close(); await server.close() }
