@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Draft standalone Windows/Linux/macOS pilot for the fingerprint-pinned extended Canvas pull-back limit, with original-file backups and guarded removal; original patch by **Noahwhite2014** (#172, #202, #228). Printer validation is pending.
+
 - Optional browser-local LAN code remembering in Settings → Connection for updates and experimental controls, with verification, masked fields, explicit forgetting and unchanged action confirmations; requested by **Neme77** (#225).
 
 - Opt-in experimental timed bed heating for filament drying, with finite duration, explicit stop/readback and a short native heater lease; requested by **romeopuch** in #198 (#218). No automatic heating after restart. Hardware validation is still required.
