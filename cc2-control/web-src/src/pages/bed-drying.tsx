@@ -45,6 +45,14 @@ export const BedDrying = () => {
     data?.extruder?.target === 0 &&
     data?.heater_bed?.target === 0 &&
     !session.active
+  const manualStopped =
+    ok &&
+    data?.connected &&
+    !session.active &&
+    session.state === 'interrupted' &&
+    session.reason === 'manual' &&
+    session.fresh &&
+    session.target === 0
   const send = async (action: 'start' | 'stop') => {
     if (busy || !code.trim()) return
     if (action === 'start' && !(await ask(t('drying.start_confirm')))) return
@@ -124,7 +132,15 @@ export const BedDrying = () => {
         {session.state === 'holding' && ` · ${t('drying.remaining')}: ${duration(session.remaining)}`}
       </p>
       {session.reason !== 'none' && (
-        <p class="mt-2 text-muted">{t(session.reason === 'elapsed' ? 'drying.expired' : 'drying.interrupted_hint')}</p>
+        <p class="mt-2 text-muted">
+          {t(
+            manualStopped
+              ? 'drying.manual_stopped'
+              : session.reason === 'elapsed'
+                ? 'drying.expired'
+                : 'drying.interrupted_hint'
+          )}
+        </p>
       )}
       {error && (
         <p class="mt-2 break-words text-red" role="alert">

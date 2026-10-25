@@ -1078,6 +1078,7 @@
   "drying.interrupted": "Interrotto",
   "drying.unavailable": "Lettura non disponibile",
   "drying.expired": "Tempo trascorso; target zero confermato.",
+  "drying.manual_stopped": "Asciugatura interrotta. Target del piatto confermato a 0 °C.",
   "drying.interrupted_hint": "Sessione interrotta o modificata altrove. Controlla il target del piatto; l’arresto è confermato solo dopo la lettura a zero.",
   "drying.enable_confirm": "Abilitare i controlli sperimentali di riscaldamento temporizzato del piatto?",
   "drying.disable_confirm": "Nascondere i controlli sperimentali di riscaldamento del piatto?",
