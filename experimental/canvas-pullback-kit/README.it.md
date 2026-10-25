@@ -1,8 +1,8 @@
-# Retrazione Canvas estesa — prova R1
+# Retrazione Canvas estesa — prova R2
 
-Pacchetto sperimentale autonomo per Community Firmware **V4.4.2 / CC2 Control 1.2.21**. Riproduce la modifica di **Noahwhite2014** (#172 / #202): alza il limite accettato da 350 a 1000 mm. Non modifica automaticamente la distanza, non espelle filamento, non invia movimenti né riavvia la stampante. Non modifica la webcam o CC2 Control.
+Pacchetto sperimentale autonomo per Community Firmware **V4.4.1 oppure V4.4.2 / CC2 Control 1.2.21**. Riproduce la modifica di **Noahwhite2014** (#172 / #202): alza il limite accettato da 350 a 1000 mm. Non modifica automaticamente la distanza, non espelle filamento, non invia movimenti né riavvia la stampante. Non modifica la webcam o CC2 Control.
 
-**Prima prova controllata: questo installer non è ancora validato sulla stampante.** Il controllo delle impronte non dimostra che una distanza sia adatta al proprio percorso filamento. Il contributor ha riportato una prova a 560 mm; scaricamento e successivo caricamento a 1000 mm non sono validati.
+**Prova controllata.** R1 è stata provata su V4.4.2 con scaricamento e ricaricamento a 500 mm. L’installazione/rimozione del nuovo profilo V4.4.1 attende il test del contributor. Il controllo delle impronte non dimostra che una distanza sia adatta al proprio percorso filamento; 1000 mm non sono qualificati per ogni stampante.
 
 ## Requisiti
 
@@ -34,3 +34,7 @@ Se una transazione viene interrotta, conservare l'output e usare **Stato**; non 
 ## Contenuto e crediti
 
 Sorgenti e script, senza eseguibili vendor, credenziali o chiavi. La trasformazione viene effettuata sul PC su una copia letta dalla propria stampante; vengono verificati SHA-256 prima e dopo. Patch originale e idea: **Noahwhite2014**. Packaging e controlli di installazione/ripristino: progetto CC2 Community. Non è il progetto abbandonato di espulsione completa del filamento.
+
+## Profilo V4.4.1 in R2
+
+Le impronte coincidono con il firmware V4.4.1 pubblicato. Installazione e rimozione su questa versione attendono il test del contributor; prima occorre ripristinare i file originali da eventuali patch manuali. R1 è stata provata su V4.4.2 con scaricamento e ricaricamento a 500 mm. Il kit non modifica distanze o timeout di ricarica e non qualifica 1000 mm per ogni percorso fisico. Generazioni miste vengono rifiutate.

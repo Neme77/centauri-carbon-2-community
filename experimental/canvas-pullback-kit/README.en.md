@@ -1,8 +1,8 @@
-# Extended Canvas pull-back — R1 pilot
+# Extended Canvas pull-back — R2 pilot
 
-Standalone experimental installer for **Community Firmware V4.4.2 / CC2 Control 1.2.21**. Reproduces **Noahwhite2014**'s #172 / #202 change: raises the accepted maximum from 350 to 1000 mm. It does not set the distance, eject filament, request movement, restart services or reboot. It does not change the webcam or CC2 Control.
+Standalone experimental installer for **Community Firmware V4.4.1 or V4.4.2 / CC2 Control 1.2.21**. Reproduces **Noahwhite2014**'s #172 / #202 change: raises the accepted maximum from 350 to 1000 mm. It does not set the distance, eject filament, request movement, restart services or reboot. It does not change the webcam or CC2 Control.
 
-**Controlled first trial: this installer has not yet been validated on a printer.** Fingerprint checks do not establish a suitable physical distance. The contributor reported 560 mm; unloading/reloading at 1000 mm remains unqualified.
+**Controlled trial.** R1 installation and a 500 mm unload/reload cycle were tested on V4.4.2. The added V4.4.1 profile matches the published firmware archive exactly; its installation/removal is awaiting the contributor's test. Fingerprints do not establish a safe physical distance. The contributor reported longer travel on a custom path; this does not qualify 1000 mm for every printer. Reload-distance and timeout settings are not changed. Restore any manual runtime patch from original backups before using this kit; mixed generations are refused.
 
 ## Requirements and check
 

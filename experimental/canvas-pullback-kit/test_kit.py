@@ -15,6 +15,16 @@ import policy
 import patch_pullback
 
 class PolicyTests(unittest.TestCase):
+    def test_exact_shipped_profiles(self):
+        for name,pins in policy.PROFILES.items():
+            sums=policy.profile_sums(pins)
+            self.assertEqual(policy.digest(sums),pins['sums'])
+            self.assertEqual(policy.select_profile(sums,pins['sums'].encode()+b'\n'),(name,pins))
+        old=policy.PROFILES['V4.4.1'];new=policy.PROFILES['V4.4.2']
+        mixed=policy.profile_sums(old).replace(old['libcc2-reactor-v2.so'].encode(),new['libcc2-reactor-v2.so'].encode())
+        for sums,generation in ((mixed,old['sums']), (policy.profile_sums(old),new['sums']), (b'unknown',old['sums'])):
+            with self.assertRaises(ValueError):policy.select_profile(sums,generation.encode())
+
     def test_clamp_preserves_other_settings(self):
         source=b'[other]\r\nunload_fila_dist=999\r\n[canvas_dev]\r\nunload_fila_dist = 5.6e2 # custom\r\nmesh = unchanged\r\n#*# [canvas_dev]\r\n#*# unload_fila_dist: 1000\r\n'
         out, values=policy.clamp_config(source)
@@ -41,9 +51,12 @@ class PolicyTests(unittest.TestCase):
         repo=Path(__file__).resolve().parents[2]
         launcher=(repo/'experimental/firmware-port/launcher.sh').read_bytes()
         boot=(repo/'builder/current/components/reactor/firmware-launcher.sh').read_bytes()
-        result=policy.patched_files(dict(program=original,launcher=launcher,boot=boot,sums=policy.SUMS))
-        self.assertIn(policy.digest(result['launcher']).encode(),result['sums'])
-        self.assertIn(b'EXPECTED='+patch_pullback.ORIGINAL_SHA256.encode(),result['boot'])
+        for name,pins in policy.PROFILES.items():
+            with self.subTest(profile=name):
+                result=policy.patched_files(dict(program=original,launcher=launcher,boot=boot,sums=policy.profile_sums(pins)),pins)
+                self.assertIn(policy.digest(result['launcher']).encode(),result['sums'])
+                self.assertIn(pins['libcc2-reactor-v2.so'].encode(),result['sums'])
+                self.assertIn(b'EXPECTED='+patch_pullback.ORIGINAL_SHA256.encode(),result['boot'])
     def test_archive_rejects_paths_links_duplicates(self):
         for name,kind in (('../outside',tarfile.REGTYPE),('/absolute',tarfile.REGTYPE),('safe',tarfile.SYMTYPE)):
             member=tarfile.TarInfo(name);member.type=kind

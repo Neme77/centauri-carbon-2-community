@@ -1,0 +1,34 @@
+name: Verify pullback runtime profiles
+on:
+  push:
+    branches: [experimental/pullback-multiplatform-package]
+    paths: [.github/workflows/verify-pullback-profiles.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: experimental/pullback-multiplatform-package
+      - name: Check both profiles and guarded transactions
+        run: |
+          python3 -m unittest discover -s experimental/canvas-pullback-kit -p test_kit.py -v
+          sh -n experimental/canvas-pullback-kit/snapshot.sh
+          sh -n experimental/canvas-pullback-kit/transaction.sh
+          python3 experimental/canvas-pullback-kit/build_package.py output/CC2-Canvas-Pullback-Experimental-R2.zip
+      - name: Remove temporary verification workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/verify-pullback-profiles.yml
+          git commit -m "Remove completed pullback profile verification workflow"
+          git push origin HEAD:refs/heads/experimental/pullback-multiplatform-package
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: canvas-pullback-r2
+          path: output/CC2-Canvas-Pullback-Experimental-R2.zip*
+          if-no-files-found: error

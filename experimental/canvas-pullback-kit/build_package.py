@@ -13,7 +13,7 @@ def build(output):
     output=Path(output);output.parent.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(output,'x',compression=zipfile.ZIP_DEFLATED) as z:
         for name,data in sorted(files.items()):
-            info=zipfile.ZipInfo('CC2-Canvas-Pullback-Experimental-R1/'+name,(2026,10,25,0,0,0))
+            info=zipfile.ZipInfo('CC2-Canvas-Pullback-Experimental-R2/'+name,(2026,10,25,0,0,0))
             info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o100644<<16;z.writestr(info,data)
     with zipfile.ZipFile(output) as z:
         assert z.testzip() is None

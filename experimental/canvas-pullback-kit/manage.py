@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
-from policy import BASE, STATE, HOOK, TARGETS, CONFIGS, PINS, MODES, SUMS, digest, pinned, patched_files, clamp_config, validate_tar_member
+from policy import BASE, STATE, HOOK, TARGETS, CONFIGS, MODES, digest, patched_files, clamp_config, validate_tar_member, select_profile
 from patch_pullback import ORIGINAL_SHA256, EXTENDED_SHA256
 
 HOME = Path(__file__).resolve().parent
@@ -75,23 +75,22 @@ def qualify(snapshot):
         start=meta['stat'].decode().rsplit(')',1)[1].split()[19]
         assert start.isdigit()
     except (IndexError,AssertionError):raise ValueError('Cannot verify process start time')
+    profile,pins=select_profile(files.get('/opt/inst/cc2-reactor/SHA256SUMS',b''), files.get(BASE+'/firmware-payload.sha256',b''))
     checks={line.split(None,1)[1].strip():line.split()[0] for line in meta['checks'].decode().splitlines()}
-    expected={'/opt/bin/elegoo_printer':ORIGINAL_SHA256,'/opt/lib/libcolib.so':PINS['libco'],**{BASE+'/'+k:PINS[k] for k in ('preflight.sh','libcc2-reactor-v2.so','cc2-reactor-bridge-test')}}
+    expected={'/opt/bin/elegoo_printer':ORIGINAL_SHA256,'/opt/lib/libcolib.so':pins['libco'],**{BASE+'/'+k:pins[k] for k in ('preflight.sh','libcc2-reactor-v2.so','cc2-reactor-bridge-test')}}
     if checks != expected:raise ValueError('Native program/libco/runtime fingerprint mismatch')
-    if files.get('/opt/inst/cc2-reactor/SHA256SUMS') != SUMS or files.get(BASE+'/firmware-payload.sha256',b'').strip().decode() != PINS['sums']:
-        raise ValueError('Firmware/runtime source generation is not qualified')
     installed=STATE+'/manifest.json' in files
     original={k:files[STATE+'/backup/'+k] if installed else files[p] for k,p in TARGETS.items()}
-    extended=patched_files(original)
+    extended=patched_files(original,pins)
     if installed:
         manifest=json.loads(files[STATE+'/manifest.json'])
         if manifest != component_manifest(original,extended):raise ValueError('Component backup metadata differs')
     for key,path in TARGETS.items():
-        allowed=(digest(original[key]),digest(extended[key])) if installed else (PINS[key],)
+        allowed=(digest(original[key]),digest(extended[key])) if installed else (pins[key],)
         if digest(files[path]) not in allowed:raise ValueError('Changed or unsupported installed file: '+key)
     for path in CONFIGS.values():
         if path in files:clamp_config(files[path])
-    return {'pid':pid,'start':start,'running':running,'installed':installed,'original':original,'extended':extended,'checks':checks}
+    return {'profile':profile,'pid':pid,'start':start,'running':running,'installed':installed,'original':original,'extended':extended,'checks':checks}
 
 def ready(meta):
     p=json.loads(meta['printer.json']);h=json.loads(meta['health.json'])
@@ -161,7 +160,7 @@ def main():
     host=args.host or input('Printer IP / IP stampante: ').strip()
     remote=Remote(host,args.user,args.port)
     snapshot=remote.snapshot();info=qualify(snapshot)
-    print('Qualified native/runtime fingerprints. / Impronte verificate.')
+    print('Qualified native/runtime fingerprints. / Impronte verificate.', info['profile'])
     print('Component:', 'present / presente' if info['installed'] else 'absent / assente')
     print('Running program:', 'extended / esteso' if info['running']==EXTENDED_SHA256 else 'standard')
     if info['installed']:

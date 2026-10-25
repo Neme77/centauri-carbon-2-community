@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Draft standalone Windows/Linux/macOS pilot for the fingerprint-pinned extended Canvas pull-back limit, with original-file backups and guarded removal; original patch by **Noahwhite2014** (#172, #202, #228). Printer validation is pending.
+- Draft standalone Windows/Linux/macOS pilot for the fingerprint-pinned extended Canvas pull-back limit, with original-file backups and guarded removal; original patch by **Noahwhite2014** (#172, #202, #228). Exact V4.4.1 and V4.4.2 runtime profiles are supported; V4.4.2 pilot installation and a 500 mm unload/reload cycle passed, while V4.4.1 installation/removal validation remains pending.
 
 - Optional browser-local LAN code remembering in Settings → Connection for updates and experimental controls, with verification, masked fields, explicit forgetting and unchanged action confirmations; requested by **Neme77** (#225).
 

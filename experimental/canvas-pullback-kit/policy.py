@@ -21,18 +21,34 @@ PINS = {
 }
 SUMS = ''.join(PINS[n]+'  '+n+'\n' for n in ['cc2-reactor-bridge-test','launcher','libcc2-reactor-v2.so','preflight.sh']).replace('  launcher\n','  launcher.sh\n').encode()
 PINS['sums'] = hashlib.sha256(SUMS).hexdigest()
+
+# Exact shipped generations; never accept a mix of their runtime files.
+PROFILES = {'V4.4.2': dict(PINS), 'V4.4.1': dict(PINS, **{
+    'libcc2-reactor-v2.so': 'de6d86c4fa32aae05440a803099c553af934a22b25c6644d8ec977decc22c38a',
+    'cc2-reactor-bridge-test': 'ece04de527fa39f7be4bb7f5b1378fc173b4c0e1151b7e8316dd281250507b43',
+    'sums': 'd0f95aa4cde3844f4bfa3ca7fd27780dc355cf94f44740ab723cf26e1e59025e',
+})}
+
+def profile_sums(pins):
+    return ''.join(pins[n]+'  '+n+'\n' for n in ('cc2-reactor-bridge-test','launcher','libcc2-reactor-v2.so','preflight.sh')).replace('  launcher\n','  launcher.sh\n').encode()
+
+def select_profile(shipped, generation):
+    for name, pins in PROFILES.items():
+        if shipped == profile_sums(pins) and generation.strip() == pins['sums'].encode():
+            return name, pins
+    raise ValueError('Firmware/runtime source generation is not qualified')
 MODES = {'boot': 0o755, 'launcher': 0o700, 'sums': 0o600, 'program': 0o700}
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
-def pinned(key, data):
-    if digest(data) != PINS[key]:
+def pinned(key, data, pins=PINS):
+    if digest(data) != pins[key]:
         raise ValueError('Unsupported or changed component: '+key)
 
-def patched_files(original):
+def patched_files(original, pins=PINS):
     for key in TARGETS:
-        pinned(key, original[key])
+        pinned(key, original[key], pins)
     launcher = original['launcher'].replace(ORIGINAL_SHA256.encode(), EXTENDED_SHA256.encode())
     if original['launcher'].count(ORIGINAL_SHA256.encode()) != 1:
         raise ValueError('Unexpected runtime launcher')
@@ -41,7 +57,7 @@ def patched_files(original):
     if original['boot'].count(old) != 1:
         raise ValueError('Unexpected firmware boot hook')
     return {'boot': original['boot'].replace(old, new), 'launcher': launcher,
-            'sums': original['sums'].replace(PINS['launcher'].encode(), digest(launcher).encode()),
+            'sums': original['sums'].replace(pins['launcher'].encode(), digest(launcher).encode()),
             'program': transform(original['program'])}
 
 def clamp_config(data):
