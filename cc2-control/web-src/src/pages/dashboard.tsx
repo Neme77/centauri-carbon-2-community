@@ -114,7 +114,7 @@ export const Dashboard = () => {
       {editing && <QuickEditor onClose={() => setEditing(false)} />}
       <div class="cc2-dashboard-primary grid gap-3.5 cc2-lg:grid-cols-2">
         <div class="cc2-dashboard-camera-column grid content-start gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
-          <CameraCard />
+          <CameraCard preferences />
           <Card class="cc2-quick-actions">
             <CardHead
               icon="bolt"
@@ -126,7 +126,7 @@ export const Dashboard = () => {
                 </Button>
               }
             />
-            <div class="grid grid-cols-2 gap-2.5 cc2-sm:grid-cols-4">
+            <div class="cc2-quick-grid grid grid-cols-2 gap-2 cc2-sm:grid-cols-4">
               {quickActions.map((action, n) => (
                 <Slot key={n} action={action} idle={v.idle} lightOn={v.lightOn} />
               ))}
@@ -165,7 +165,7 @@ export const Dashboard = () => {
               <JobControls v={v} />
             </div>
           </Card>
-          <PrintTuning />
+          <PrintTuning sliders />
         </div>
       </div>
 

@@ -611,3 +611,29 @@ revokes old direct-state authority and sends no motion/heating command. Disablin
 Quiet controls, or changing Canvas while they are enabled, requires a successful
 explicit Normal command on the current UDS connection. Invalid storage is not
 overwritten. See [experimental features](EXPERIMENTAL_FEATURES.md) for limitations.
+
+## Experimental bed heating
+
+`GET /api/bed-drying` returns the same `bed_drying` state included in the existing
+`GET /api/printer` poll: enabled, active, state, reason, temperature, minutes,
+remaining (hold seconds), fresh, bed and target. `fresh=false` numeric samples
+are not authoritative. The browser adds no extra printer poll.
+
+`POST /api/experiments` accepts `bed-drying:on` / `bed-drying:off` using the
+existing cold/idle/LAN guards. Enabling the UI heats nothing.
+`POST /api/bed-drying/start` requires `X-CC2-LAN` and canonical text
+`temperature:minutes` (30–90 °C, 1–720 minutes), fresh idle/cold status, zero
+heater targets and no other operation. `POST /api/bed-drying/stop` uses the same
+LAN header; receipt is not confirmation of heater shutdown. Confirm only after
+zero target readback. The session cannot be extended or resumed via Start.
+See [BED_DRYING.md](BED_DRYING.md) for native lease and recovery limitations.
+
+## Completed print readback
+
+`GET /api/printer` adds `print.native` when the existing UDS cache has a fresh
+print state (filename may be empty and duration null when cleared by firmware): `{state, filename, duration}`; otherwise null.
+It adds no printer query. Raw `machine.progress` remains the native last-job
+value; the current-job UI resets its progress when idle. The nonblocking CC2
+notice accepts explicit completion only, deduplicates acknowledgements per
+browser origin and opens normal file preparation for Print again. Dismissing
+this notice does not acknowledge or operate the physical display.

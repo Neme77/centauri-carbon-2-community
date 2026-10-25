@@ -5,7 +5,7 @@ import { ls } from '@/lib/store'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
-import { Input } from '@/components/ui/field'
+import { Input, Select } from '@/components/ui/field'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Notice, Warn } from '@/components/shared'
 import { draftFields, draftFrom, draftProblem, placeName, SpoolEditor, SpoolMeter, Swatch } from '@/components/spool-ui'
@@ -270,6 +270,47 @@ const History = ({ lib, events, spool }: { lib: SpoolLibrary; events: SpoolEvent
   ) : (
     <Notice>{t('spools.no_history')}</Notice>
   )
+
+// Filter before limiting: older consumption remains reachable when recent entries are corrections.
+const RecentHistory = ({ lib }: { lib: SpoolLibrary }) => {
+  const [filter, setFilter] = useState('all')
+  const matches = filter === 'consumption' ? lib.log.filter(e => e.kind === 'print') : lib.log
+  const events = matches.slice(0, 30)
+  return (
+    <Card data-recent-history="">
+      <CardHead icon="info" title="spools.recent" />
+      <div class="mb-2 flex flex-wrap items-end justify-between gap-2">
+        <label class="grid gap-1 text-xs">
+          <span class="text-muted">{t('spools.history_filter')}</span>
+          <Select
+            aria-label={t('spools.history_filter')}
+            value={filter}
+            onChange={e => setFilter(e.currentTarget.value)}
+          >
+            <option value="all">{t('spools.history_all')}</option>
+            <option value="consumption">{t('spools.history_consumption')}</option>
+          </Select>
+        </label>
+        <span class="text-xs text-muted">
+          {tpl('spools.history_count', { shown: events.length, total: matches.length })}
+        </span>
+      </div>
+      {events.length ? (
+        <section
+          key={filter}
+          aria-label={t('spools.recent')}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: The bounded scroll region must be reachable with the keyboard.
+          tabIndex={0}
+          class="max-h-80 overflow-y-auto overscroll-contain pr-1"
+        >
+          <History lib={lib} events={events} spool />
+        </section>
+      ) : (
+        <Notice>{t(filter === 'consumption' ? 'spools.no_consumption' : 'spools.no_history')}</Notice>
+      )}
+    </Card>
+  )
+}
 
 const kg = (grams: number) => (grams / 1000).toFixed(1)
 // Compact buttons for the inventory rows; `!` wins over the Button's own size classes.
@@ -755,10 +796,7 @@ export const Spools = () => {
           <Tracking lib={lib} busy={busy} act={act} />
           {lib.enabled && <InPrinter lib={lib} busy={busy} act={act} />}
           <Inventory lib={lib} busy={busy} act={act} />
-          <Card>
-            <CardHead icon="info" title="spools.recent" />
-            <History lib={lib} events={lib.log.slice(0, 30)} spool />
-          </Card>
+          <RecentHistory lib={lib} />
         </div>
       )}
     </Page>

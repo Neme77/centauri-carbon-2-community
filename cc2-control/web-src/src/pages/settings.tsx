@@ -11,7 +11,6 @@ import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2, Archive, FileDow
 import { errText, notify, post, request } from '@/lib/api'
 import { collectDiagnostics } from '@/lib/diagnostics'
 import {
-  cameraPreferences,
   setPersistentCamera,
   detectLanguage,
   i18n,
@@ -39,6 +38,7 @@ import {
 import { health, nav, openSettings, type SettingsTab, refreshHealth, refreshSetup } from '@/lib/state'
 import { Updates } from './Updates'
 import { Backup } from './Backup'
+import { Experiments } from './Experiments'
 
 const TABS = [
   [Link, 'settings.connection'],
@@ -280,22 +280,6 @@ const Integrations = () => {
 }
 
 const Appearance = () => {
-  const savedPersistent = cameraPreferences.use().persistent
-  const [persistent, setPersistent] = useState(savedPersistent)
-  useEffect(() => setPersistent(savedPersistent), [savedPersistent])
-  const [savingCamera, setSavingCamera] = useState(false)
-  const changeCamera = async (enabled: boolean) => {
-    setPersistent(enabled)
-    setSavingCamera(true)
-    try {
-      await setPersistentCamera(enabled)
-    } catch (e) {
-      setPersistent(savedPersistent)
-      notify(errText(e), 'error')
-    } finally {
-      setSavingCamera(false)
-    }
-  }
   const lang = i18n.get().lang,
     mode = theme.use().mode
   const restore = async () => {
@@ -306,7 +290,7 @@ const Appearance = () => {
       notify(errText(e), 'error')
       return
     }
-    await changeCamera(false)
+    await setPersistentCamera(false)
     ;['cc2-language', 'cc2-theme'].forEach(ls.del)
     setTheme('dark', true)
     await setLanguage(detectLanguage(), true)
@@ -339,19 +323,6 @@ const Appearance = () => {
             </Select>
           </label>
         </div>
-        <label class="mt-4 flex items-start gap-3 border-t border-edge pt-3">
-          <input
-            type="checkbox"
-            class="mt-1 accent-cyan"
-            checked={persistent}
-            disabled={savingCamera}
-            onChange={e => void changeCamera(e.currentTarget.checked)}
-          />
-          <span>
-            <b>{t('settings.camera_persistent')}</b>
-            <small class="mt-1 block text-muted">{t('settings.camera_persistent_help')}</small>
-          </span>
-        </label>
       </Card>
       <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-edge pt-3">
         <div class="mr-auto">
@@ -420,7 +391,12 @@ export const Settings = () => {
         />
         <div class="max-w-4xl">
           {tab === 0 && <Connection />}
-          {tab === 1 && <Integrations />}
+          {tab === 1 && (
+            <>
+              <Integrations />
+              <Experiments />
+            </>
+          )}
           {tab === 2 && <Appearance />}
           {tab === 4 && <Updates />}
           {tab === 5 && <Backup />}

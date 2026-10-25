@@ -25,6 +25,16 @@ jobs:
       - name: Install ARM cross-compiler and emulator
         run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user
 
+      - name: Bed heating ownership and timeout regression
+        run: |
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_bed_drying.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-bed-drying -lm
+          /tmp/test-bed-drying
+
+      - name: Completed-print metadata regression
+        run: |
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_print_completion.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-print-completion -lm
+          /tmp/test-print-completion
+
       - name: Host build and tests (warnings are errors)
         run: make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
 
@@ -82,6 +92,12 @@ jobs:
       - name: Install browser for PID interaction regression
         run: npx playwright install --with-deps chromium
 
+      - name: Experimental bed heating controls
+        run: npm run test:bed-drying
+
+      - name: Print completion notice and idle progress
+        run: npm run test:print-completion
+
       - name: PID browser interaction regression
         run: npm run test:pid
       - name: Control calibration layout and actions
@@ -97,7 +113,7 @@ jobs:
         run: npm run test:canvas-states && npm run test:canvas-layout && npm run test:canvas-reset
 
       - name: New-spool insertion copy and scale-weight regression
-        run: npm run test:spool-insertion
+        run: npm run test:spool-insertion && npm run test:spool-history
 
       - name: Complete file library and large upload admission
         run: npm run test:file-library
