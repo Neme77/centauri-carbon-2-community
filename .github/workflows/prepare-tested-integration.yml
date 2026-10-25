@@ -1,0 +1,58 @@
+name: Prepare tested PR integration
+on:
+  push:
+    branches: [integration/tested-spoolman-drying]
+    paths: [.github/workflows/prepare-tested-integration.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: integration/tested-spoolman-drying
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Complete translated stop confirmation
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          texts = {"en":"Bed drying stopped. Bed target confirmed at 0 °C.","it":"Asciugatura interrotta. Target del piatto confermato a 0 °C.","fr":"Séchage interrompu. Consigne du plateau confirmée à 0 °C.","es":"Secado detenido. Objetivo de la cama confirmado a 0 °C.","cs":"Sušení zastaveno. Cílová teplota podložky potvrzena na 0 °C.","hu":"Szárítás leállítva. Az ágy célhőmérséklete igazoltan 0 °C.","pl":"Suszenie zatrzymane. Potwierdzono temperaturę zadaną stołu 0 °C.","ru":"Сушка остановлена. Подтверждена целевая температура стола 0 °C.","zh":"烘干已停止。已确认热床目标温度为 0 °C。"}
+          for language,text in texts.items():
+              p=Path('cc2-control/web-src/public/locales')/(language+'.json')
+              s=p.read_text()
+              assert '"drying.manual_stopped"' not in s
+              pos=s.index('  "drying.interrupted_hint":')
+              s=s[:pos]+'  "drying.manual_stopped": '+json.dumps(text,ensure_ascii=False)+',\n'+s[pos:]
+              p.write_text(s)
+          PY
+      - name: Rebuild and test integrated interface
+        working-directory: cc2-control/web-src
+        run: |
+          npm ci
+          npm run check
+          npm run build
+          npx playwright install --with-deps chromium
+          npm run test:bed-drying
+          npm run test:spoolman-integration
+          npm run test:experiments
+          npm run test:motor-mode
+      - name: Commit exact integrated sources
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cc2-control
+          git commit -m "Build tested Spoolman and drying integration"
+          python3 experimental/pr128-integration/sync_source.py
+          rm .github/workflows/prepare-tested-integration.yml
+          git add builder/current .github/workflows/prepare-tested-integration.yml
+          git commit -m "Pin tested integrated builder source and remove preparation"
+      - name: Verify source archive and builder
+        run: python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+      - name: Update integration branch only
+        run: git push origin HEAD:refs/heads/integration/tested-spoolman-drying

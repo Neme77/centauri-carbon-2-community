@@ -25,6 +25,7 @@ import {
 } from '@/lib/i18n'
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
+import { spools, refreshSpools, saveSpoolmanConfig } from '@/lib/spools'
 import { usePoll } from '@/lib/poll'
 import {
   pandabreath,
@@ -156,6 +157,42 @@ const Connection = () => {
   )
 }
 
+const SpoolmanIntegration = () => {
+  const { data, ok } = spools.use()
+  const [busy, setBusy] = useState(false)
+  const changing = useRef(false)
+  usePoll(refreshSpools, 20000)
+  const toggle = async () => {
+    if (changing.current || !ok || !data?.available) return
+    changing.current = true
+    setBusy(true)
+    try {
+      await saveSpoolmanConfig({ enabled: !data.spoolman_enabled })
+      await refreshSpools()
+    } catch (error) {
+      notify(errText(error), 'error')
+    } finally {
+      changing.current = false
+      setBusy(false)
+    }
+  }
+  return (
+    <div class="my-2 grid items-center gap-2.5 cc2-md:grid-cols-[230px_1fr_auto]" aria-busy={busy}>
+      <b>{t('settings.spoolman_enable')}</b>
+      <span class="text-muted">{t('settings.spoolman_hint')}</span>
+      {ok && data?.available ? (
+        <Switch
+          on={data.spoolman_enabled === true}
+          label={t('settings.spoolman_enable')}
+          onClick={busy ? undefined : toggle}
+        />
+      ) : (
+        <span class="text-xs text-muted">{t('spools.loading')}</span>
+      )}
+    </div>
+  )
+}
+
 const Integrations = () => {
   const checking = useRef(false)
   const [orcaBusy, setOrcaBusy] = useState(false)
@@ -218,6 +255,7 @@ const Integrations = () => {
   return (
     <Card>
       <CardHead icon="plug" title="settings.integrations" sub="settings.service_configuration_for_local" />
+      <SpoolmanIntegration />
       <div class={row}>
         <b>{t('settings.panda_breath_compatibility')}</b>
         <span class="text-muted">{t('settings.read_only_compatibility_endpoint')}</span>

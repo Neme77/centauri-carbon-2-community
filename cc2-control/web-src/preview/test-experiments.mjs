@@ -7,7 +7,8 @@ import { mkdir } from 'node:fs/promises'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), mode: 'demo', server: { port: 0, host: '127.0.0.1' } })
-let browser, unreachable = false
+let browser, unreachable = false, holdReloadRead = false, releaseReloadRead, markReloadRead
+const reloadReadStarted = new Promise(resolve => { markReloadRead = resolve })
 const state = { schema: 1, editable: true, ready: true, canvas_uds: false, canvas_uds_available: false, quiet_motors: false, normal_confirmed: false, cli_canvas: false }
 const choices = [], native = [], errors = []
 try {
@@ -19,7 +20,13 @@ try {
   await page.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
   await page.route('**/api/app-update/status', r => r.fulfill({ json: { enabled: false, ready: true, busy: false, installed: '1.2.19', firmware: '4.4' } }))
   await page.route('**/api/control', r => { native.push(r.request().postData()); return r.fulfill({ status: 409, json: { error: 'No native action expected' } }) })
-  await page.route('**/api/experiments', r => {
+  await page.route('**/api/experiments', async r => {
+    if (r.request().method() === 'GET' && holdReloadRead) {
+      holdReloadRead = false
+      const gate = new Promise(resolve => { releaseReloadRead = resolve })
+      markReloadRead()
+      await gate
+    }
     if (unreachable) return r.fulfill({ status: 503, json: { error: 'unavailable' } })
     if (r.request().method() === 'POST') {
       const action = r.request().postData()
@@ -49,7 +56,16 @@ try {
   await page.getByText('Enabled · using MQTT fallback', { exact: true }).waitFor()
   assert.deepEqual(choices, ['canvas-uds:on']); assert.deepEqual(native, [])
   assert.equal(await code.inputValue(), '')
-  await page.reload(); await canvas.waitFor(); assert.equal(await canvas.getAttribute('aria-checked'), 'true')
+  // Rendering the switch does not mean the asynchronous GET has completed.
+  // Hold that response: pending controls must stay inert, then show server truth.
+  holdReloadRead = true
+  await page.reload(); await reloadReadStarted; await canvas.waitFor()
+  assert.equal(await canvas.getAttribute('aria-checked'), 'false')
+  assert(await canvas.isDisabled(), 'Pending read must not enable an experiment change')
+  releaseReloadRead()
+  await page.waitForFunction(() => document.querySelector('[data-experiments] [role=switch]')?.getAttribute('aria-checked') === 'true')
+  assert.equal(await canvas.getAttribute('aria-checked'), 'true')
+  assert.deepEqual(choices, ['canvas-uds:on'], 'Reload must read, never change the selected experiment')
   await code.fill('wrong')
   await quiet.click(); await confirm(); await page.getByRole('alert').filter({ hasText: 'LAN code rejected' }).waitFor()
   assert.equal(await quiet.getAttribute('aria-checked'), 'false')

@@ -7,8 +7,8 @@ import { fixture, launchOptions } from './fixture.mjs'
 const setup = `{
  const s=window.__CC2_PREVIEW;
  s.posts=[];
- const spool={id:'source',name:'ELEGOO PLA Black',brand:'ELEGOO',material:'PLA',color:'#000000',net:1000,remaining:280,tare:220,low:100,diameter:1.75,density:1.24,price:20,note:'Product details',created:1,used:720,archived:false};
- s.spoolLibrary={available:true,error:'',enabled:true,revision:1,canvas:true,active_tray:-1,job:{active:false,file:'',started:0,slots:[]},log:[],spools:[spool,{...spool,id:'other',name:'Other spool',net:750,remaining:150,tare:200},{...spool,id:'archived',name:'Archived',archived:true}],slots:[0,1,2,3,4].map(slot=>({slot,spool:slot===0?'source':'',last:'',question:slot===1?'inserted':'',question_since:1,question_mm:0,runout:false,printer:{status:1,type:'PLA',name:'PLA',brand:'ELEGOO',color:'#000000',code:''}}))};
+ const spool={id:'source',name:'ELEGOO PLA Black',brand:'ELEGOO',material:'PLA',color:'#000000',net:1000,remaining:280,tare:220,low:100,diameter:1.75,density:1.24,price:20,note:'Product details',spoolman_id:'',created:1,used:720,archived:false};
+ s.spoolLibrary={available:true,error:'',enabled:true,revision:1,canvas:true,active_tray:-1,job:{active:false,file:'',started:0,slots:[]},log:[],spools:[{...spool,spoolman_id:'42'},{...spool,id:'other',name:'Other spool',net:750,remaining:150,tare:200},{...spool,id:'archived',name:'Archived',archived:true}],slots:[0,1,2,3,4].map(slot=>({slot,spool:slot===0?'source':'',last:'',question:slot===1?'inserted':'',question_since:1,question_mm:0,runout:false,printer:{status:1,type:'PLA',name:'PLA',brand:'ELEGOO',color:'#000000',code:''}}))};
  const original=window.fetch;
  window.fetch=async (input,options={})=>{
   const path=new URL(typeof input==='string'?input:input.url,location.href).pathname;
@@ -88,7 +88,7 @@ try {
   for(const post of state.posts){
    assert(post.path.endsWith('/api/spools/save'));assert.equal(post.marker,'1')
    const fields=Object.fromEntries(post.body.split('\n').map(s=>{const i=s.indexOf('=');return[s.slice(0,i),s.slice(i+1)]}))
-   assert.equal(fields.id,undefined);assert.equal(fields.slot,'1');assert.equal(fields.net,'1000');assert.equal(fields.remaining,'700.5');assert.equal(fields.tare,'220');assert.equal(fields.used,undefined)
+   assert.equal(fields.id,undefined);assert.equal(fields.spoolman_id,'','a copy of a linked spool is a new spool: no inherited Spoolman link');assert.equal(fields.slot,'1');assert.equal(fields.net,'1000');assert.equal(fields.remaining,'700.5');assert.equal(fields.tare,'220');assert.equal(fields.used,undefined)
   }
   assert.deepEqual(state.commands,[])
   // A second insertion still supports creating from scratch with manual remaining weight.

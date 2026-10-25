@@ -1,33 +1,23 @@
-# Prova cumulativa PR 218, 219, 220, 222 e 223 — R1
+# Prova cumulativa CC2 Control — PR 208 e 225, R1
 
-Pacchetto di verifica per la stampante del manutentore, non una release pubblica.
-La versione rimane 1.2.21: installare dal computer con Install-Windows.cmd
-(o Install-CC2-Control.ps1), non dalla campanella o dal caricamento nel pannello.
+Pacchetto ricompilato dai sorgenti di develop e delle PR #208 e #225. Mantiene la versione 1.2.21: le prove non avanzano la versione pubblica.
 
-Include:
-- Dashboard approvata: sfondo camera di pezso92, Mantieni attiva nella testata,
-  slider velocità/flow insieme a valori e Applica/Ripristina; spazi riallineati.
-- Integrazioni sperimentali sotto quelle ufficiali, compresa l'asciugatura.
-- Asciugatura del filamento sul piatto: temperatura 30–90 °C e durata finita,
-  avvio/arresto espliciti, conferme e controlli di stato. Non si avvia abilitandola.
-- Avviso di stampa completata, conferma e ristampa dal normale dialogo;
-  percentuale azzerata a stampante inattiva.
-- Consumi recenti delle bobine in un riquadro scorrevole e filtrabile.
-- Requisiti aggiornamenti corretti anche per firmware V4.4.2 in tutte le lingue.
+Comprende tutte le integrazioni già unite: nuova Dashboard e live persistente, sperimentali in Integrazioni, asciugatura piatto opzionale, avviso di fine stampa, cronologia bobine compatta e indicazione firmware V4.4.2; aggiunge Spoolman opzionale (#208, tharje) e il ricordo del codice LAN nel browser (#225, richiesta Neme77). Rimangono i crediti storici e i ringraziamenti a DamiBFryta e agli altri contributor.
 
-Installare soltanto con stampante connessa, inattiva e fredda, target a zero.
-Le preferenze sono conservate. Questo pacchetto di sola applicazione conserva
-la patch webcam già installata: non la reinstalla e non riavvia la stampante.
-Conservare il percorso di backup e il comando di ripristino mostrati al termine.
+È una prova della sola applicazione: la patch webcam presente sulla stampante resta installata; questo pacchetto non la reinstalla e non impone un riavvio completo. Nessuna pubblicazione, modifica dei cataloghi o aggiornamento automatico.
 
-Prove: Dashboard e cursori durante una stampa normale; live, cambio pagina e
-Mantieni attiva; popup e percentuale alla fine; filtri bobine; Integrazioni e
-pagina Aggiornamenti. Verificare prima le funzioni ordinarie. Per la nuova
-asciugatura leggere cc2-control/docs/BED_DRYING.md nei sorgenti: eseguire una
-prima sessione breve e sorvegliata, senza bobina, verificando arresto e target
-zero. Non usare la prima prova per un ciclo incustodito.
+## Installazione
 
-Crediti: pezso92 per la direzione grafica e lo sfondo camera; romeopuch per la
-richiesta asciugatura; DamiBFryta per prove e suggerimenti sulle bobine, oltre
-ai contributor già accreditati nelle singole PR. Nessuna release, catalogo
-stabile o firmware completo viene pubblicato da questa prova.
+Stampante inattiva e fredda. Estrai lo ZIP in una nuova cartella e usa Install-Windows.cmd (oppure Install-CC2-Control.ps1) su Windows; su Linux/macOS usa install-cc2-control.sh. Per la prova sulla stessa versione usa l'installer del computer: il pannello aggiornamenti mantiene il confronto di versione. Non caricare questo ZIP nel pannello.
+
+Conserva il percorso del backup stampato dall'installer per il ripristino. Non cancellare i dati delle bobine o le impostazioni prima della prova.
+
+## Controlli
+
+- Dashboard, live locale/Matrix, Canvas, mesh, Orca e tracciamento bobine continuano a funzionare.
+- Impostazioni → Connessione: il ricordo del codice LAN è spento inizialmente. Verifica e salva il codice, passa ad Aggiornamenti/Integrazioni e ricarica: il campo resta mascherato. Le azioni richiedono sempre conferma. Dimentica codice deve svuotare i campi, anche nelle altre schede aperte. Usalo soltanto su un dispositivo personale.
+- Spoolman: senza configurazione il tracciamento resta locale. Per la prova completa occorre un server Spoolman reale. Configura l'integrazione, verifica importazione, collegamenti, colori/materiali/pesi e aggiornamento del consumo; una copia di una bobina deve avere un nuovo collegamento indipendente. Evita correzioni concorrenti dei pesi mentre controlli i valori.
+- Verifica che un backup non contenga le credenziali del proxy; dopo ripristino Spoolman resta da riconfigurare. Non modificare il backup originale.
+- Le funzioni sperimentali rimangono opzionali; non occorre attivarle per provare Spoolman o il codice LAN.
+
+Riporta il risultato prima di procedere con i merge. Nessun test automatico sostituisce la prova sulla stampante con Spoolman reale.

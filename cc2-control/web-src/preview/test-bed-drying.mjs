@@ -31,7 +31,7 @@ try {
     assert.equal(r.request().headers()['x-cc2-lan'], 'fixture-confirmation')
     actions.push([r.request().url().split('/').pop(), r.request().postData()])
     if (actions.at(-1)[0] === 'start') Object.assign(session, { active: true, state: 'heating', target: 70 })
-    else Object.assign(session, { state: 'stopping' })
+    else Object.assign(session, { state: 'stopping', reason: 'manual' })
     return r.fulfill({ json: session })
   })
   await page.goto(`${server.resolvedUrls.local[0]}#control`)
@@ -60,8 +60,23 @@ try {
   await card.getByLabel('LAN code for experimental features', { exact: true }).fill('fixture-confirmation')
   await card.getByRole('button', { name: 'Stop bed heating', exact: true }).click()
   await card.getByText('Stopping · awaiting confirmation', { exact: true }).waitFor(); assert(session.active)
-  Object.assign(session, { active: false, state: 'interrupted', target: 0, reason: 'manual' })
+  const stoppedText = 'Bed drying stopped. Bed target confirmed at 0 °C.'
+  const warningText = 'Session interrupted or changed elsewhere. Check the bed target; stopping is confirmed only after zero readback.'
+  assert.equal(await card.getByText(stoppedText, { exact: true }).count(), 0, 'A stop request is not zero confirmation')
+  for (const pending of [
+    { active: false, state: 'interrupted', target: 70, fresh: true, reason: 'manual' },
+    { active: false, state: 'interrupted', target: 0, fresh: false, reason: 'manual' },
+    { active: false, state: 'interrupted', target: 0, fresh: true, reason: 'changed' },
+  ]) {
+    Object.assign(session, pending)
+    await page.reload(); await card.getByText(warningText, { exact: true }).waitFor()
+    assert.equal(await card.getByText(stoppedText, { exact: true }).count(), 0, 'Stale/nonzero or externally changed targets must not confirm a manual stop')
+  }
+  Object.assign(session, { active: false, state: 'interrupted', target: 0, fresh: true, reason: 'manual' })
+  await page.reload(); await card.getByText(stoppedText, { exact: true }).waitFor()
   await card.getByText('Interrupted', { exact: true }).waitFor()
+  assert.equal(await card.getByText(warningText, { exact: true }).count(), 0)
+
   await page.setViewportSize({ width: 390, height: 844 }); await card.scrollIntoViewIfNeeded()
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
   await mkdir('preview/artifacts', { recursive: true })
