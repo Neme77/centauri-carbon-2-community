@@ -86,6 +86,8 @@ static pthread_mutex_t spoolman_outbox_mutex = PTHREAD_MUTEX_INITIALIZER;
 static spoolman_result spoolman_outbox[SPOOLS_MAX + SPOOLMAN_CATALOG_MAX];
 static int spoolman_outbox_count;
 static int spoolman_worker_running;
+/* Worker requests check this atomic flag without reading the main-thread store. */
+static atomic_int spoolman_paused;
 static long long spoolman_last_tick_ms;
 
 /* What the worker needs, copied out of `spools` under the main thread before
@@ -164,6 +166,7 @@ static int spoolman_prefix_ci(const char *text, const char *prefix, size_t n) {
 static int spoolman_request(const char *host, int port, const char *basic_auth, const char *method,
                             const char *path, const char *body, char *reply, size_t reply_cap) {
     if (reply_cap) reply[0] = 0;
+    if (atomic_load(&spoolman_paused)) return SPOOLMAN_E_NOSEND;
     int fd = spoolman_connect(host, port);
     if (fd < 0) return SPOOLMAN_E_NOSEND;
     char auth_header[256] = "";
@@ -190,6 +193,7 @@ static int spoolman_request(const char *host, int port, const char *basic_auth, 
     if (n <= 0 || (size_t)n >= sizeof(request)) { close(fd); return SPOOLMAN_E_NOSEND; }
     const char *p = request; size_t left = (size_t)n;
     while (left) {
+        if (atomic_load(&spoolman_paused)) { close(fd); return SPOOLMAN_E_NOSEND; }
         ssize_t sent = send(fd, p, left, MSG_NOSIGNAL);
         /* Part of a request is never acted on: the server waits for the rest of the declared body. */
         if (sent <= 0) { close(fd); return SPOOLMAN_E_NOSEND; }
@@ -457,6 +461,7 @@ static void *spoolman_worker(void *arg) {
  * running -- starts a new one for every spool that is linked (spoolman_id
  * set) and either has unsent usage or is simply due a refresh. */
 static void spoolman_tick(long long now) {
+    atomic_store(&spoolman_paused, !spools.spoolman_enabled);
     pthread_mutex_lock(&spoolman_outbox_mutex);
     int count = spoolman_outbox_count; spoolman_outbox_count = 0;
     spoolman_result *drained = count ? malloc((size_t)count * sizeof(*drained)) : NULL;
@@ -469,6 +474,7 @@ static void spoolman_tick(long long now) {
         const spoolman_result *r = &drained[i];
         if (r->epoch != spoolman_epoch) continue;        /* the server settings changed since the request began */
         if (r->is_new) {
+            if (!spools.spoolman_enabled) continue;
             if (spool_find_by_spoolman_id(r->spoolman_id) || spools.count >= SPOOLS_MAX) continue;
             /* Built off to the side, then copied in -- spools_new_id() checks the array
              * for a free id, so the slot must not already "contain itself" while empty. */
@@ -501,7 +507,7 @@ static void spoolman_tick(long long now) {
             sp->spoolman_base = r->base; break;
         default: break;
         }
-        if (r->have_pull) {
+        if (r->have_pull && spools.spoolman_enabled) {
             const spoolman_spool *p = &r->spool;
             if (p->material[0]) snprintf(sp->material, sizeof(sp->material), "%s", p->material);
             if (p->name[0]) snprintf(sp->name, sizeof(sp->name), "%s", p->name);
@@ -515,7 +521,7 @@ static void spoolman_tick(long long now) {
     }
     free(drained);
 
-    if (running || !spools.spoolman_url[0] || now - spoolman_last_tick_ms < SPOOLMAN_TICK_MS) return;
+    if (running || !spools.spoolman_enabled || !spools.spoolman_url[0] || now - spoolman_last_tick_ms < SPOOLMAN_TICK_MS) return;
     spoolman_job_batch *batch = malloc(sizeof(*batch));
     if (!batch) return;
     memset(batch, 0, sizeof(*batch));
@@ -571,6 +577,8 @@ static void spoolman_config_response(int fd, const char *body, size_t length) {
     if (!spool_form_parse(body, length, &f)) { spools_fail(fd, 400, "Invalid request"); return; }
     if (!spools_open(fd)) return;
     const char *url = spool_form_get(&f, "url"), *auth = spool_form_get(&f, "basic_auth");
+    const char *enabled = spool_form_get(&f, "enabled");
+    if (enabled && strcmp(enabled, "0") && strcmp(enabled, "1")) { spools_fail(fd, 400, "Invalid enabled flag"); return; }
     if (url && url[0]) {
         char host[SPOOLMAN_HOST_MAX], base[SPOOLMAN_PATH_MAX];
         int port;
@@ -584,6 +592,8 @@ static void spoolman_config_response(int fd, const char *body, size_t length) {
     spool_store *before = spools_snapshot(fd);
     if (!before) return;
     int changed = (url && strcmp(url, spools.spoolman_url)) || (auth && strcmp(auth, spools.spoolman_basic_auth));
+    int toggled = enabled && spools.spoolman_enabled != (enabled[0] == '1');
+    if (enabled) spools.spoolman_enabled = enabled[0] == '1';
     if (url) snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "%s", url);
     if (auth) snprintf(spools.spoolman_basic_auth, sizeof(spools.spoolman_basic_auth), "%s", auth);
     if (changed) {
@@ -595,7 +605,11 @@ static void spoolman_config_response(int fd, const char *body, size_t length) {
             spools.spools[i].spoolman_base = -1;
         }
     }
-    if (spools_commit(fd, before)) spools_reply(fd, 200, "{\"ok\":true}\n");
+    if (spools_commit(fd, before)) {
+        atomic_store(&spoolman_paused, !spools.spoolman_enabled);
+        if (toggled && spools.spoolman_enabled) spoolman_last_tick_ms = 0;
+        spools_reply(fd, 200, "{\"ok\":true}\n");
+    }
 }
 
 /* ---- Spoolman catalog: the browser's own picker, instead of typing an id blind ------------- */
@@ -630,6 +644,7 @@ static void *spoolman_catalog_worker(void *arg) {
 /* POST /api/spoolman/catalog/refresh -- starts (or no-ops if one is already running) a fetch. */
 static void spoolman_catalog_refresh_response(int fd) {
     if (!spools_open(fd)) return;
+    if (!spools.spoolman_enabled) { spools_fail(fd, 409, "Spoolman integration is disabled"); return; }
     if (!spools.spoolman_url[0]) { spools_fail(fd, 400, "Set the Spoolman server URL first"); return; }
     pthread_mutex_lock(&spoolman_catalog_mutex);
     int already = spoolman_catalog_loading;
@@ -650,6 +665,7 @@ static void spoolman_catalog_refresh_response(int fd) {
 
 /* GET /api/spoolman/catalog -- the cached result of the last refresh. */
 static void spoolman_catalog_response(int fd) {
+    if (!spools.spoolman_enabled) { spools_fail(fd, 409, "Spoolman integration is disabled"); return; }
     pthread_mutex_lock(&spoolman_catalog_mutex);
     size_t cap = 16384;
     json_builder b = {malloc(cap), 0, cap, 0};

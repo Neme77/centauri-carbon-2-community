@@ -1108,5 +1108,7 @@
   "settings.forget_lan": "Zapomenout kód",
   "settings.remember_save": "Ověřit a zapamatovat",
   "settings.remember_saved": "Kód LAN zapamatován v tomto zařízení",
-  "settings.remember_storage_failed": "Úložiště prohlížeče není dostupné. Kód nebyl uložen."
+  "settings.remember_storage_failed": "Úložiště prohlížeče není dostupné. Kód nebyl uložen.",
+  "settings.spoolman_enable": "Povolit Spoolman",
+  "settings.spoolman_hint": "Zobrazí Spoolman v sekci Cívky a synchronizuje se serverem. Vypnutí zachová nastavení a propojení."
 }

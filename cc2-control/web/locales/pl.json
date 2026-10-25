@@ -1108,5 +1108,7 @@
   "settings.forget_lan": "Zapomnij kod",
   "settings.remember_save": "Sprawdź i zapamiętaj",
   "settings.remember_saved": "Kod LAN zapamiętany na tym urządzeniu",
-  "settings.remember_storage_failed": "Pamięć przeglądarki jest niedostępna. Kod nie został zapisany."
+  "settings.remember_storage_failed": "Pamięć przeglądarki jest niedostępna. Kod nie został zapisany.",
+  "settings.spoolman_enable": "Włącz Spoolman",
+  "settings.spoolman_hint": "Pokaż Spoolman w sekcji Szpule i synchronizuj z serwerem. Wyłączenie zachowuje ustawienia i powiązania."
 }

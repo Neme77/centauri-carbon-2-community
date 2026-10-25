@@ -103,6 +103,7 @@ typedef struct {
 
 typedef struct {
     int enabled, count, log_count;
+    int spoolman_enabled; /* Independent of local tracking; retained URL and links can be paused. */
     spool_entry spools[SPOOLS_MAX];
     spool_slot slots[SPOOL_SLOTS];
     spool_job job;
@@ -665,6 +666,7 @@ static char *spools_encode_ex(const spool_store *store, size_t *length, int back
     const spool_job *job = &store->job;
     json_builder_printf(&b, "{\"version\":1,\"enabled\":%s,\"spoolman_url\":", store->enabled ? "true" : "false");
     json_builder_string(&b, store->spoolman_url);
+    json_builder_printf(&b, ",\"spoolman_enabled\":%s", !backup && store->spoolman_enabled ? "true" : "false");
     json_builder_printf(&b, ",\"spoolman_basic_auth\":");
     json_builder_string(&b, backup ? "" : store->spoolman_basic_auth);
     json_builder_printf(&b, ",\"slots\":[");
@@ -969,6 +971,11 @@ static void spools_load(void) {
             if (!json_member_raw_string(root, root_end, "spoolman_basic_auth", &text2, &len2) || len2 < 0 ||
                 (size_t)len2 > SPOOLMAN_AUTH_MAX) spools.spoolman_basic_auth[0] = 0;
             else { memcpy(spools.spoolman_basic_auth, text2, (size_t)len2); spools.spoolman_basic_auth[len2] = 0; }
+            /* Existing configured installations stay enabled; fresh installs are off. */
+            if (!json_member(root, root_end, "spoolman_enabled"))
+                spools.spoolman_enabled = spools.spoolman_url[0] != 0;
+            else if (!spools_bool_member(root, root_end, "spoolman_enabled", &spools.spoolman_enabled))
+                ok = 0;
         }
     }
     free(text);
@@ -1125,6 +1132,7 @@ static void spools_get_response(int fd, const mqtt_client *mqtt) {
     json_builder_printf(&b, ",\"enabled\":%s,\"revision\":%lu,\"canvas\":%s,\"active_tray\":%d,\"spoolman_url\":",
         spools.enabled ? "true" : "false", spools_revision, canvas ? "true" : "false", spools_active_tray(mqtt));
     json_builder_string(&b, spools.spoolman_url);
+    json_builder_printf(&b, ",\"spoolman_enabled\":%s", spools.spoolman_enabled ? "true" : "false");
     json_builder_printf(&b, ",\"spoolman_has_auth\":%s,\"slots\":[", spools.spoolman_basic_auth[0] ? "true" : "false");
     for (int i = 0; i < SPOOL_SLOTS; ++i) {
         const spool_slot *s = &spools.slots[i];

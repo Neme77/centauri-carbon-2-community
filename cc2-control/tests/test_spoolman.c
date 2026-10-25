@@ -287,6 +287,7 @@ static spool_entry *setup_linked(double unsent, double remaining) {
     memset(&spools, 0, sizeof(spools));
     spools.job.last_tray = -1;
     spools_available = 1;
+    spools.spoolman_enabled = 1;
     spoolman_epoch++;
     spoolman_last_tick_ms = 0; virtual_now = 0;
     snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "http://127.0.0.1:%d", fake.port);
@@ -315,6 +316,54 @@ static void test_end_to_end_push_and_pull(void) {
     assert(near(sp->remaining, 587.5));
     fake_finish(); teardown_file();
     puts("PASS: a tick pushes unsent usage and pulls material/colour/name/remaining from Spoolman");
+}
+
+static void test_integration_toggle(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    snprintf(spools.spoolman_basic_auth, sizeof(spools.spoolman_basic_auth), "me:secret");
+    unsigned epoch = spoolman_epoch;
+    assert(call_config("enabled=0") == 200);
+    assert(!spools.spoolman_enabled && spoolman_epoch == epoch);
+    assert(!strcmp(sp->spoolman_id, "7") && near(sp->spoolman_unsent, 12.5));
+    spools.enabled = 1;
+    spool_copy_id(spools.slots[0].spool, sp->id);
+    spools_charge(0, 100);
+    double queued = sp->spoolman_unsent;
+    assert(queued > 12.5 && sp->remaining < 500 && spools.enabled);
+    assert(spools_save() == 0);
+    cycle();
+    assert(!worker_running() && fake.use_count == 0 && fake.get_count == 0 && fake.list_count == 0);
+    spools_load();
+    assert(spools_available && !spools.spoolman_enabled && spools.spoolman_url[0]);
+    assert(!strcmp(spools.spoolman_basic_auth, "me:secret"));
+    assert(!strcmp(spools.spools[0].spoolman_id, "7") && near(spools.spools[0].spoolman_unsent, queued));
+    assert(call_config("enabled=invalid") == 400 && !spools.spoolman_enabled);
+    assert(call_config("enabled=1") == 200 && spools.spoolman_enabled);
+    cycle(); cycle();
+    assert(fake.use_count == 1 && near(fake.last_use, queued));
+    assert(near(spools.spools[0].spoolman_unsent, 0) && near(spools.spools[0].spoolman_inflight, 0));
+    fake_finish(); teardown_file();
+    puts("PASS: disabling persists without requests or lost settings/links/usage; re-enabling sends queued usage once");
+}
+
+static void test_disable_during_baseline(void) {
+    fake_start(100, 600); fake.get_delay_ms = 200; fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    virtual_now += SPOOLMAN_TICK_MS;
+    spoolman_tick(virtual_now);
+    for (int i = 0; i < 200 && !fake.get_count; ++i) sleep_ms(5);
+    assert(fake.get_count == 1);
+    assert(call_config("enabled=0") == 200);
+    wait_worker(); spoolman_tick(virtual_now + 1);
+    assert(fake.use_count == 0 && fake.list_count == 0);
+    assert(near(sp->remaining, 500) && near(sp->spoolman_unsent, 12.5) && near(sp->spoolman_inflight, 0));
+    fake.get_delay_ms = 0;
+    assert(call_config("enabled=1") == 200);
+    cycle();
+    assert(fake.use_count == 1 && near(fake.last_use, 12.5));
+    fake_finish(); teardown_file();
+    puts("PASS: disabling during a baseline read blocks new writes and keeps accounting for safe resumption");
 }
 
 static void test_no_connection_keeps_usage_unsent(void) {
@@ -484,6 +533,7 @@ static void test_backup_leaves_out_credentials(void) {
     assert(strstr(data[3], "\"spoolman_unsent\":0.0000") && strstr(data[3], "\"spoolman_inflight\":0.0000"));
     spool_store *restored = calloc(1, sizeof(*restored));
     assert(restored && bk_spools(data[3], data[3] + lengths[3], restored));
+    assert(!restored->spoolman_enabled);
     assert(!restored->spoolman_url[0] && !restored->spoolman_basic_auth[0]);   /* a restore leaves sync off */
     assert(near(restored->spools[0].spoolman_unsent, 0) && near(restored->spools[0].spoolman_inflight, 0));
     assert(!strcmp(restored->spools[0].spoolman_id, "7"));
@@ -609,6 +659,8 @@ int main(void) {
     test_charge_accumulates_only_when_linked();
     test_config_endpoint();
     test_end_to_end_push_and_pull();
+    test_integration_toggle();
+    test_disable_during_baseline();
     test_no_connection_keeps_usage_unsent();
     test_dropped_reply_is_never_resent_blindly();
     test_unknown_outcome_stays_pending_until_settled();

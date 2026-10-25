@@ -1108,5 +1108,7 @@
   "settings.forget_lan": "Dimentica codice",
   "settings.remember_save": "Verifica e ricorda",
   "settings.remember_saved": "Codice LAN ricordato su questo dispositivo",
-  "settings.remember_storage_failed": "La memoria del browser non è disponibile. Il codice non è stato salvato."
+  "settings.remember_storage_failed": "La memoria del browser non è disponibile. Il codice non è stato salvato.",
+  "settings.spoolman_enable": "Abilita Spoolman",
+  "settings.spoolman_hint": "Mostra Spoolman nelle Bobine e sincronizza con il tuo server. Disattivandolo conservi configurazione e associazioni."
 }

@@ -1108,5 +1108,7 @@
   "settings.forget_lan": "Oublier le code",
   "settings.remember_save": "Vérifier et mémoriser",
   "settings.remember_saved": "Code LAN mémorisé sur cet appareil",
-  "settings.remember_storage_failed": "Le stockage du navigateur est indisponible. Le code n’a pas été enregistré."
+  "settings.remember_storage_failed": "Le stockage du navigateur est indisponible. Le code n’a pas été enregistré.",
+  "settings.spoolman_enable": "Activer Spoolman",
+  "settings.spoolman_hint": "Affiche Spoolman dans Bobines et synchronise avec votre serveur. La désactivation conserve la configuration et les associations."
 }

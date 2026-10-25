@@ -1108,5 +1108,7 @@
   "settings.forget_lan": "Forget code",
   "settings.remember_save": "Verify and remember",
   "settings.remember_saved": "LAN code remembered on this device",
-  "settings.remember_storage_failed": "Browser storage is unavailable. The code was not saved."
+  "settings.remember_storage_failed": "Browser storage is unavailable. The code was not saved.",
+  "settings.spoolman_enable": "Enable Spoolman",
+  "settings.spoolman_hint": "Show Spoolman in Spools and synchronize with your server. Turning it off keeps settings and links."
 }

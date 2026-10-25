@@ -1108,5 +1108,7 @@
   "settings.forget_lan": "Kód elfelejtése",
   "settings.remember_save": "Ellenőrzés és megjegyzés",
   "settings.remember_saved": "LAN-kód megjegyezve ezen az eszközön",
-  "settings.remember_storage_failed": "A böngésző tárhelye nem érhető el. A kód nem lett mentve."
+  "settings.remember_storage_failed": "A böngésző tárhelye nem érhető el. A kód nem lett mentve.",
+  "settings.spoolman_enable": "Spoolman engedélyezése",
+  "settings.spoolman_hint": "Megjeleníti a Spoolmant az Orsók oldalon, és szinkronizál a szerverrel. A kikapcsolás megőrzi a beállításokat és a kapcsolatokat."
 }

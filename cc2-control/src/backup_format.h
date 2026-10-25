@@ -335,7 +335,7 @@ static int bk_job_item(const char *o,const char *end,void *unused) {
 }
 static int bk_spools(const char *o,const char *end,spool_store *s) {
     memset(s,0,sizeof(*s));
-    if(!bk_keys(o,end,",version,enabled,slots,job,spools,log,spoolman_url,spoolman_basic_auth,") || !bk_int(o,end,"version",1,1,NULL) ||
+    if(!bk_keys(o,end,",version,enabled,slots,job,spools,log,spoolman_url,spoolman_basic_auth,spoolman_enabled,") || !bk_int(o,end,"version",1,1,NULL) ||
         !spools_bool_member(o,end,"enabled",&s->enabled))return 0;
     const char *je,*job=json_member_object(o,end,"job",'{',&je);
     if(!job || !bk_keys(job,je,",active,baseline,last_tray,file,uuid,used,duration,between,started,result,slots,") ||

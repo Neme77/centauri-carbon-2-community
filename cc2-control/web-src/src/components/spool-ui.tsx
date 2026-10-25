@@ -202,6 +202,7 @@ export const SpoolEditor = ({
   weighing?: { total: string; setTotal: (value: string) => void }
 }) => {
   const list = presets.use().list
+  const spoolmanEnabled = spools.use().data?.spoolman_enabled === true
   const materials = [...new Set([...list.map(p => String(p.name)), ...MATERIALS])]
   const change = (key: keyof SpoolDraft, value: string) => {
     const next = { ...draft, [key]: value }
@@ -322,15 +323,17 @@ export const SpoolEditor = ({
       <Field label="spools.note" class="cc2-sm:col-span-6">
         <Input maxLength={96} {...input('note')} />
       </Field>
-      <Field label="spools.spoolman_id" class="cc2-sm:col-span-6">
-        <Input
-          inputMode="numeric"
-          maxLength={15}
-          placeholder={t('spools.spoolman_id_placeholder')}
-          {...input('spoolman_id')}
-        />
-        <span class="text-[11px] text-muted">{t('spools.spoolman_id_hint')}</span>
-      </Field>
+      {spoolmanEnabled && (
+        <Field label="spools.spoolman_id" class="cc2-sm:col-span-6">
+          <Input
+            inputMode="numeric"
+            maxLength={15}
+            placeholder={t('spools.spoolman_id_placeholder')}
+            {...input('spoolman_id')}
+          />
+          <span class="text-[11px] text-muted">{t('spools.spoolman_id_hint')}</span>
+        </Field>
+      )}
     </div>
   )
 }

@@ -1108,5 +1108,7 @@
   "settings.forget_lan": "Забыть код",
   "settings.remember_save": "Проверить и запомнить",
   "settings.remember_saved": "Код LAN сохранён на этом устройстве",
-  "settings.remember_storage_failed": "Хранилище браузера недоступно. Код не сохранён."
+  "settings.remember_storage_failed": "Хранилище браузера недоступно. Код не сохранён.",
+  "settings.spoolman_enable": "Включить Spoolman",
+  "settings.spoolman_hint": "Показывает Spoolman в разделе катушек и синхронизирует с сервером. При отключении настройки и привязки сохраняются."
 }

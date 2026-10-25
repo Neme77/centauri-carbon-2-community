@@ -240,6 +240,9 @@ export function previewPlugin(): Plugin {
   const trayColors = ['#EF5350', '#42A5F5', '#8E24AA', '#66BB6A']
   type PreviewSpool = Record<string, any> & { id: string }
   let spoolsOn = false
+  let spoolmanOn = false,
+    spoolmanUrl = '',
+    spoolmanHasAuth = false
   let spoolRevision = 1
   let spoolList: PreviewSpool[] = []
   let spoolSlots: { spool: string; last: string; question: string; question_since: number }[] = []
@@ -308,6 +311,9 @@ export function previewPlugin(): Plugin {
       available: true,
       error: '',
       enabled: spoolsOn,
+      spoolman_enabled: spoolmanOn,
+      spoolman_url: spoolmanUrl,
+      spoolman_has_auth: spoolmanHasAuth,
       revision: spoolRevision,
       canvas: true,
       active_tray: active ? 0 : -1,
@@ -688,6 +694,7 @@ export function previewPlugin(): Plugin {
           '/api/plates/calibrate',
           '/api/plates/calibrate/cancel',
           '/__preview/calibration-step',
+          '/api/spoolman',
           '/api/spools/enable',
           '/api/spools/save',
           '/api/spools/delete',
@@ -711,6 +718,22 @@ export function previewPlugin(): Plugin {
         req.on('end', () => {
           if (oversized) return
           try {
+            if (path === '/api/spoolman' && req.method === 'POST') {
+              const form = Object.fromEntries(
+                body
+                  .split('\n')
+                  .filter(Boolean)
+                  .map(line => {
+                    const i = line.indexOf('=')
+                    return [line.slice(0, i), line.slice(i + 1)]
+                  })
+              )
+              if (form.enabled !== undefined) spoolmanOn = form.enabled === '1'
+              if (form.url !== undefined) spoolmanUrl = form.url
+              if (form.basic_auth !== undefined) spoolmanHasAuth = Boolean(form.basic_auth)
+              spoolRevision++
+              return reply({ ok: true, simulated: true })
+            }
             if (path === '/__preview/scenario' && req.method === 'POST') {
               const value = JSON.parse(body).scene
               if (!scenarios.includes(value)) return reply({ error: 'Unknown scenario' }, 400)

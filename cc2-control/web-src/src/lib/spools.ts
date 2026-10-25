@@ -57,6 +57,7 @@ export type SpoolLibrary = {
   job: { active: boolean; file: string; started: number; slots: { mm: number; grams: number; spool: string }[] }
   spools: Spool[]
   log: SpoolEvent[]
+  spoolman_enabled: boolean
   spoolman_url: string
   spoolman_has_auth: boolean
 }
@@ -347,5 +348,5 @@ export const dismissSlot = (slot: number) => post('/api/spools/dismiss', lines({
 export const adjustSpool = (id: string, weight: { remaining: number } | { gross: number }) =>
   post('/api/spools/adjust', lines({ id, ...weight }))
 export const setTracking = (on: boolean) => post('/api/spools/enable', on ? 'on' : 'off')
-export const saveSpoolmanConfig = (fields: { url?: string; basic_auth?: string }) =>
+export const saveSpoolmanConfig = (fields: { enabled?: boolean; url?: string; basic_auth?: string }) =>
   post('/api/spoolman', lines(fields))

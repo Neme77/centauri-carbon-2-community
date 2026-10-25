@@ -844,7 +844,7 @@ export const Spools = () => {
       ) : (
         <div class="grid gap-3.5">
           <Tracking lib={lib} busy={busy} act={act} />
-          <SpoolmanCard lib={lib} busy={busy} act={act} />
+          {lib.spoolman_enabled && <SpoolmanCard lib={lib} busy={busy} act={act} />}
           {lib.enabled && <InPrinter lib={lib} busy={busy} act={act} />}
           <Inventory lib={lib} busy={busy} act={act} />
           <RecentHistory lib={lib} />
