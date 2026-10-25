@@ -36,6 +36,8 @@ import {
   setPandaBreathHost,
 } from '@/lib/pandabreath'
 import { health, nav, openSettings, type SettingsTab, refreshHealth, refreshSetup } from '@/lib/state'
+import { RememberLan } from '@/components/remember-lan'
+import { forgetLanCode } from '@/lib/lan-code'
 import { Updates } from './Updates'
 import { Backup } from './Backup'
 import { Experiments } from './Experiments'
@@ -87,6 +89,7 @@ const Connection = () => {
         re = Boolean(s.configured)
       if (re && !(await ask(t('settings.replace_the_saved_lan_code_only')))) return
       await post(re ? '/api/setup/revalidate' : '/api/setup', v)
+      forgetLanCode()
       setCode('')
       setBusy(true)
       notify(t('settings.lan_access_code_saved_restarting'))
@@ -137,6 +140,7 @@ const Connection = () => {
               )}
         </span>
       </Field>
+      <RememberLan />
       <Field label="settings.mqtt_connection">
         <div class="flex flex-wrap items-center gap-3">
           <Tag tone={mqtt ? 'ok' : 'warning'}>

@@ -1092,5 +1092,11 @@
   "spools.history_all": "Все операции",
   "spools.no_consumption": "В сохранённой истории нет расхода.",
   "spools.history_consumption": "Только расход",
-  "spools.history_filter": "Показать операции"
+  "spools.history_filter": "Показать операции",
+  "settings.remember_lan": "Запомнить код LAN на этом устройстве",
+  "settings.remember_hint": "Использовать для обновлений и экспериментальных функций. Сохраняйте только на личном устройстве: любой пользователь этого браузера сможет разрешать эти действия.",
+  "settings.forget_lan": "Забыть код",
+  "settings.remember_save": "Проверить и запомнить",
+  "settings.remember_saved": "Код LAN сохранён на этом устройстве",
+  "settings.remember_storage_failed": "Хранилище браузера недоступно. Код не сохранён."
 }

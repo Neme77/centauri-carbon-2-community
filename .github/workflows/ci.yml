@@ -92,6 +92,9 @@ jobs:
       - name: Install browser for PID interaction regression
         run: npx playwright install --with-deps chromium
 
+      - name: Optional browser LAN code remembering
+        run: npm run test:remember-lan
+
       - name: Experimental bed heating controls
         run: npm run test:bed-drying
 

@@ -70,6 +70,24 @@ with tempfile.TemporaryDirectory(prefix="cc2-smoke-") as temporary:
         assert status == 200, f"/api/preferences returned {status}"
         status, _ = get(base + "/definitely-not-a-route")
         assert status == 404, f"unknown route returned {status}"
+        # Browser remembering checks the supplied code without returning it or
+        # mutating printer configuration, preferences or MQTT registration.
+        original = (state / "cc2-control.conf").read_bytes()
+        for candidate, expected in [("wrong", 401), ("smoke", 200)]:
+            req = urllib.request.Request(base + "/api/access/verify", data=b"", method="POST",
+                headers={"X-CC2-Request": "1", "X-CC2-LAN": candidate})
+            try:
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    code, result = response.status, response.read()
+            except urllib.error.HTTPError as error:
+                code, result = error.code, error.read()
+            assert code == expected, (code, result)
+            assert candidate.encode() not in result
+            if code == 200:
+                assert json.loads(result) == {"verified": True}
+        assert (state / "cc2-control.conf").read_bytes() == original
+        status, _ = get(base + "/api/access/verify")
+        assert status == 404, "verification must require POST and the request marker"
         assert process.poll() is None, "cc2-control stopped during the smoke test"
     finally:
         process.terminate()

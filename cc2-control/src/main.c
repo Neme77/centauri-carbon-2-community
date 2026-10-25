@@ -3805,6 +3805,13 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if ((strcmp(method,"GET")==0 && strcmp(path,"/api/backup/export")==0) ||
         (strcmp(method,"POST")==0 && !strncmp(path,"/api/backup/import/",19))) {
         bk_response(fd,path,request,body,body_len,mqtt,console);
+    } else if (!strcmp(method,"POST") && !strcmp(path,"/api/access/verify")) {
+        if (!app_update_authorized(request,mqtt))
+            app_update_fail(fd,401,"LAN code confirmation required or temporarily locked");
+        else {
+            const char *reply="{\"verified\":true}\n";
+            respond(fd,200,"OK","application/json; charset=utf-8",reply,strlen(reply));
+        }
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/experiments")==0) {
         experiments_response(fd,mqtt,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/experiments")==0) {

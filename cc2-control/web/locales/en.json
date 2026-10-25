@@ -1092,5 +1092,11 @@
   "spools.history_all": "All movements",
   "spools.no_consumption": "No consumption in the saved history.",
   "spools.history_consumption": "Consumption only",
-  "spools.history_filter": "Show movements"
+  "spools.history_filter": "Show movements",
+  "settings.remember_lan": "Remember the LAN code on this device",
+  "settings.remember_hint": "Reuse it for updates and experimental features. Save only on a personal device: anyone using this browser can authorize these actions.",
+  "settings.forget_lan": "Forget code",
+  "settings.remember_save": "Verify and remember",
+  "settings.remember_saved": "LAN code remembered on this device",
+  "settings.remember_storage_failed": "Browser storage is unavailable. The code was not saved."
 }
