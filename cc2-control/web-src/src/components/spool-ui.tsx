@@ -112,7 +112,7 @@ export const draftFrom = (
       density: num(s.density),
       price: s.price ? num(s.price) : '',
       note: s.note,
-      spoolman_id: s.spoolman_id,
+      spoolman_id: s.spoolman_id ?? '',
       densityTouched: true,
     }
   // A tray reports a product line ("PLA Matte") besides its type ("PLA"): the spool keeps the line as its
@@ -561,7 +561,8 @@ const SpoolChooser = ({
     const source = templates.find(s => s.id === id)
     if (!source) return
     setTemplateId(id)
-    setDraft({ ...draftFrom(source), remaining: num(source.net) })
+    // A copy is a new physical spool: it must not inherit the original's Spoolman link.
+    setDraft({ ...draftFrom(source), remaining: num(source.net), spoolman_id: '' })
     setTotalWeight('')
   }
   const chosen = (choice && lib.spools.find(s => s.id === choice)) || null

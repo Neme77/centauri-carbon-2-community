@@ -147,17 +147,18 @@ static void test_config_endpoint(void) {
 
 /* ---- a stateful fake Spoolman on loopback -------------------------------------------------- */
 
+/* Everything here is touched by both the test thread and the server thread, so every field is atomic. */
 typedef struct {
-    volatile int stop, bound, port;
-    double used, remaining;          /* the spool's state on the "server" */
-    int use_mode;                    /* 0 normal, 1 apply then drop the reply, 2 drop without applying, 3 apply + 500 */
-    int get_mode;                    /* 0 normal, 1 drop, 2 chunked, 3 fragmented, 4 truncated */
-    volatile int gets_down;          /* every GET is dropped while set */
-    int auto_gets_down;              /* set gets_down once a /use has been seen */
-    int get_delay_ms;
-    int use_count, get_count, list_count;
-    double last_use;
-    const char *list_body;
+    _Atomic int stop, bound, port;
+    _Atomic double used, remaining;  /* the spool's state on the "server" */
+    _Atomic int use_mode;            /* 0 normal, 1 apply then drop the reply, 2 drop without applying, 3 apply + 500 */
+    _Atomic int get_mode;            /* 0 normal, 1 drop, 2 chunked, 3 fragmented, 4 truncated */
+    _Atomic int gets_down;           /* every GET is dropped while set */
+    _Atomic int auto_gets_down;      /* set gets_down once a /use has been seen */
+    _Atomic int get_delay_ms;
+    _Atomic int use_count, get_count, list_count;
+    _Atomic double last_use;
+    _Atomic(const char *) list_body;
 } fake_spoolman;
 
 static fake_spoolman fake;
@@ -230,7 +231,7 @@ static void *fake_server(void *unused) {
             const char *w = strstr(req, "use_weight");
             double grams = w ? atof(strchr(w, ':') + 1) : 0;
             fake.last_use = grams;
-            if (fake.use_mode != 2) { fake.used += grams; fake.remaining -= grams; }
+            if (fake.use_mode != 2) { fake.used = fake.used + grams; fake.remaining = fake.remaining - grams; }
             snprintf(body, sizeof(body), "{\"id\":7,\"remaining_weight\":%.3f,\"used_weight\":%.3f}", fake.remaining, fake.used);
             if (fake.auto_gets_down) fake.gets_down = 1;
             if (fake.use_mode == 1 || fake.use_mode == 2) { close(fd); continue; }
@@ -261,9 +262,15 @@ static void fake_launch(void) {
 static void fake_finish(void) { fake.stop = 1; pthread_join(fake_thread, NULL); }
 
 static long long virtual_now;
+static int worker_running(void) {
+    pthread_mutex_lock(&spoolman_outbox_mutex);
+    int running = spoolman_worker_running;
+    pthread_mutex_unlock(&spoolman_outbox_mutex);
+    return running;
+}
 static void wait_worker(void) {
-    for (int i = 0; i < 4000 && spoolman_worker_running; ++i) sleep_ms(5);
-    assert(!spoolman_worker_running);
+    for (int i = 0; i < 4000 && worker_running(); ++i) sleep_ms(5);
+    assert(!worker_running());
 }
 /* One full sync cycle: start a worker when due, wait for it, then drain its results. */
 static void cycle(void) {
@@ -391,7 +398,7 @@ static void test_local_usage_during_a_pull_is_kept(void) {
     spool_copy_id(spools.slots[0].spool, sp->id);
     virtual_now += SPOOLMAN_TICK_MS;
     spoolman_tick(virtual_now);                    /* worker starts, slowly */
-    assert(spoolman_worker_running);
+    assert(worker_running());
     spools_charge(0, 1000);                        /* the print goes on meanwhile */
     double during = sp->spoolman_unsent;
     assert(during > 1);
@@ -488,7 +495,7 @@ static void test_backup_leaves_out_credentials(void) {
 
 /* ---- HTTP framing --------------------------------------------------------------------------- */
 
-typedef struct { const char *data; size_t length, piece; int cut_early; volatile int bound, port; } raw_server;
+typedef struct { const char *data; size_t length, piece; int cut_early; _Atomic int bound, port; } raw_server;
 
 static void *raw_server_run(void *arg) {
     raw_server *r = arg;

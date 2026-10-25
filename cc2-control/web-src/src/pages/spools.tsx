@@ -534,7 +534,7 @@ const SpoolForm = ({
     spool
       ? draftFrom(spool)
       : template
-        ? { ...draftFrom(template), remaining: draftFrom(template).net }
+        ? { ...draftFrom(template), remaining: draftFrom(template).net, spoolman_id: '' }
         : draftFrom(null)
   )
   const save = () =>
