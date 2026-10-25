@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Experimental bed drying: accept the real firmware help response, which omits M-codes, while preserving the native heater lease, command acknowledgement and target readback checks; reported and diagnosed by **tharje** (#229).
+
 - Reset the current-job progress display when the printer is idle, without homing or overwriting the native last-job counters (#219).
 
 
