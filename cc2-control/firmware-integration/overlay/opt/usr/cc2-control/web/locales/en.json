@@ -898,7 +898,7 @@
   "updates.no_update": "No newer compatible update published.",
   "updates.check_failed": "GitHub check failed. Check your Internet connection and try again.",
   "updates.bootstrap": "Install the updater-enabled CC2 Control package once from your computer.",
-  "updates.requirements": "Requires Community Firmware V4.4/V4.4.1, fresh connection, an idle printer, nozzle and bed ≤50 °C, and heating targets zero. Pause live view before installation.",
+  "updates.requirements": "Requires Community Firmware V4.4/V4.4.1/V4.4.2, fresh connection, an idle printer, nozzle and bed ≤50 °C, and heating targets zero. Pause live view before installation.",
   "updates.download": "Download and verify",
   "updates.prepare_confirm": "Download or upload this package for verification? The application will not be installed yet.",
   "updates.verified": "Package verified",
@@ -1082,5 +1082,15 @@
   "drying.interrupted_hint": "Session interrupted or changed elsewhere. Check the bed target; stopping is confirmed only after zero readback.",
   "drying.enable_confirm": "Enable the experimental timed bed-heating controls?",
   "drying.disable_confirm": "Hide the experimental bed-heating controls?",
-  "drying.start_confirm": "Start timed bed heating? Check the spool temperature limits and supervise the first test."
+  "drying.start_confirm": "Start timed bed heating? Check the spool temperature limits and supervise the first test.",
+  "completed.again": "Print again",
+  "completed.latest": "Last completed print",
+  "completed.title": "Print completed",
+  "completed.acknowledge": "Confirm",
+  "completed.hint": "The printer is available. Print again opens the normal print setup.",
+  "spools.history_count": "Showing {shown} of {total} saved movements",
+  "spools.history_all": "All movements",
+  "spools.no_consumption": "No consumption in the saved history.",
+  "spools.history_consumption": "Consumption only",
+  "spools.history_filter": "Show movements"
 }

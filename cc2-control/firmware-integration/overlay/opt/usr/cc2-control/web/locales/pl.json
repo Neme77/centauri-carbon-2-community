@@ -898,7 +898,7 @@
   "updates.no_update": "Nie opublikowano nowszej zgodnej aktualizacji.",
   "updates.check_failed": "Sprawdzanie GitHub nie powiodło się. Sprawdź Internet i spróbuj ponownie.",
   "updates.bootstrap": "Najpierw zainstaluj z komputera pakiet CC2 Control z modułem aktualizacji.",
-  "updates.requirements": "Wymaga Community Firmware V4.4/V4.4.1, świeżego połączenia, bezczynnej drukarki, dyszy i stołu ≤50 °C oraz zerowych temperatur zadanych. Wstrzymaj podgląd przed instalacją.",
+  "updates.requirements": "Wymaga Community Firmware V4.4/V4.4.1/V4.4.2, świeżego połączenia, bezczynnej drukarki, dyszy i stołu ≤50 °C oraz zerowych temperatur zadanych. Wstrzymaj podgląd przed instalacją.",
   "updates.download": "Pobierz i zweryfikuj",
   "updates.prepare_confirm": "Pobrać lub przesłać pakiet do weryfikacji? Aplikacja nie zostanie jeszcze zainstalowana.",
   "updates.verified": "Pakiet zweryfikowany",
@@ -1082,5 +1082,15 @@
   "drying.interrupted_hint": "Sesja przerwana lub zmieniona z innego miejsca. Sprawdź cel stołu; zatrzymanie jest potwierdzone dopiero po odczycie zera.",
   "drying.enable_confirm": "Włączyć eksperymentalne sterowanie grzaniem stołu z timerem?",
   "drying.disable_confirm": "Ukryć eksperymentalne sterowanie grzaniem stołu?",
-  "drying.start_confirm": "Rozpocząć grzanie z timerem? Sprawdź limity szpuli i nadzoruj pierwszy test."
+  "drying.start_confirm": "Rozpocząć grzanie z timerem? Sprawdź limity szpuli i nadzoruj pierwszy test.",
+  "completed.again": "Drukuj ponownie",
+  "completed.latest": "Ostatni zakończony druk",
+  "completed.title": "Druk zakończony",
+  "completed.acknowledge": "Potwierdź",
+  "completed.hint": "Drukarka jest dostępna. Drukuj ponownie otwiera zwykłe ustawienia druku.",
+  "spools.history_count": "Wyświetlono {shown} z {total} zapisanych operacji",
+  "spools.history_all": "Wszystkie operacje",
+  "spools.no_consumption": "Brak zużycia w zapisanej historii.",
+  "spools.history_consumption": "Tylko zużycie",
+  "spools.history_filter": "Pokaż operacje"
 }

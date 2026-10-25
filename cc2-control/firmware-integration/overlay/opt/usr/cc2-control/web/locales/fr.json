@@ -898,7 +898,7 @@
   "updates.no_update": "Aucune mise à jour compatible plus récente publiée.",
   "updates.check_failed": "Échec de la vérification GitHub. Vérifiez Internet puis réessayez.",
   "updates.bootstrap": "Installez une fois depuis votre ordinateur le paquet CC2 Control intégrant la mise à jour.",
-  "updates.requirements": "Nécessite Community Firmware V4.4/V4.4.1, connexion récente, imprimante inactive, buse et plateau ≤50 °C et consignes nulles. Mettez la vidéo en pause avant l’installation.",
+  "updates.requirements": "Nécessite Community Firmware V4.4/V4.4.1/V4.4.2, connexion récente, imprimante inactive, buse et plateau ≤50 °C et consignes nulles. Mettez la vidéo en pause avant l’installation.",
   "updates.download": "Télécharger et vérifier",
   "updates.prepare_confirm": "Télécharger ou envoyer ce paquet pour vérification ? L’application ne sera pas encore installée.",
   "updates.verified": "Paquet vérifié",
@@ -1082,5 +1082,15 @@
   "drying.interrupted_hint": "Session interrompue ou modifiée ailleurs. Vérifiez la consigne du plateau ; l’arrêt n’est confirmé qu’après lecture de zéro.",
   "drying.enable_confirm": "Activer les commandes expérimentales de chauffage temporisé du plateau ?",
   "drying.disable_confirm": "Masquer les commandes expérimentales de chauffage du plateau ?",
-  "drying.start_confirm": "Démarrer le chauffage temporisé ? Vérifiez les limites de la bobine et surveillez le premier essai."
+  "drying.start_confirm": "Démarrer le chauffage temporisé ? Vérifiez les limites de la bobine et surveillez le premier essai.",
+  "completed.again": "Réimprimer",
+  "completed.latest": "Dernière impression terminée",
+  "completed.title": "Impression terminée",
+  "completed.acknowledge": "Confirmer",
+  "completed.hint": "L’imprimante est disponible. Réimprimer ouvre la préparation habituelle.",
+  "spools.history_count": "{shown} mouvements affichés sur {total} enregistrés",
+  "spools.history_all": "Tous les mouvements",
+  "spools.no_consumption": "Aucune consommation dans l’historique enregistré.",
+  "spools.history_consumption": "Consommation uniquement",
+  "spools.history_filter": "Afficher les mouvements"
 }
