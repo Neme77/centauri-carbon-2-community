@@ -1,0 +1,41 @@
+name: Verify experiment reload readiness
+on:
+  push:
+    branches: [ui/spoolman-integration-toggle]
+    paths: [.github/workflows/verify-experiment-readiness.yml]
+permissions:
+  contents: write
+concurrency:
+  group: experiment-readiness-227
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ui/spoolman-integration-toggle
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Verify asynchronous reload and Quiet guards
+        working-directory: cc2-control/web-src
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run test:experiments
+          npm run test:motor-mode
+      - name: Regenerate source snapshot and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 experimental/pr128-integration/sync_source.py
+          rm .github/workflows/verify-experiment-readiness.yml
+          git add builder/current .github/workflows/verify-experiment-readiness.yml
+          git commit -m "Refresh builder snapshot after experiment regression fix"
+      - name: Verify builder source consistency
+        run: python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+      - name: Update only the PR branch
+        run: git push origin HEAD:refs/heads/ui/spoolman-integration-toggle
