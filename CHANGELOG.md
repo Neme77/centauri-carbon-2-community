@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Control: place live Z offset above homepage-style print tuning, compact machine actions beside calibration cards, and remove the redundant fan entry hint (#226; layout by **Neme77**, inspired by [pezso92](https://github.com/pezso92)'s #187 design work).
+
 - Dashboard: integrate pezso92’s paused-camera artwork and speed/flow sliders with the existing numeric Apply/Reset controls; move “Keep active” into the camera header, compact Quick actions and align the desktop columns (#223, visual direction and artwork by [pezso92](https://github.com/pezso92) in #187).
 - Settings: group the independently enabled experiments below official Integrations instead of Updates; include timed bed heating from #218, keeping its existing guards and opt-in behavior (#223).
 

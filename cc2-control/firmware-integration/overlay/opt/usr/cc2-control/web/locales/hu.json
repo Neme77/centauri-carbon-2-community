@@ -339,7 +339,6 @@
   "control.quick_pid_bed": "Tárgyasztal PID",
   "control.fan_percent": "{name} beállítása (%)",
   "control.invalid_fan_percent": "Adj meg 0 és 100 közötti egész számot.",
-  "control.fan_enter_hint": "Adj meg egy 0 és 100 közötti értéket, majd nyomd meg az Entert.",
   "dashboard.available_memory": "Szabad memória",
   "dashboard.chamber": "Kamra",
   "dashboard.choose_four_protected_actions_or": "Válassz négy védett műveletet vagy navigációs parancsikont.",

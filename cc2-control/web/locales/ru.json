@@ -879,7 +879,6 @@
   "control.quick_pid_bed": "PID стола",
   "control.fan_percent": "Установить {name} (%)",
   "control.invalid_fan_percent": "Введите целое число от 0 до 100.",
-  "control.fan_enter_hint": "Введите значение от 0 до 100 и нажмите Enter.",
   "canvas.reset_all": "Сбросить данные о филаменте во всех слотах",
   "canvas.reset_all_confirm": "Сбросить данные о материале для всех четырёх слотов Canvas? Будут удалены сохранённые материал, цвет и температуры. Филамент физически не выгружается.",
   "common.pagination": "Страницы",
