@@ -1,10 +1,9 @@
 # Experimental bed heating for filament drying
 
-Issue: #198. Requested by **romeopuch**. This is an opt-in pilot for the next
-application release; it is not enabled or published in the stable catalogue.
+Issue: #198. Requested by **romeopuch**. This is an opt-in experiment included in CC2 Control 1.2.22. It starts disabled on a fresh installation.
 
-Enable **Bed heating for filament drying** in Settings → Updates → Experimental
-features. The Control page then offers a bed setpoint (30–90 °C), finite hold
+Enable **Bed heating for filament drying** in Settings → Integrations → Experimental
+integrations. The Control page then offers a bed setpoint (30–90 °C), finite hold
 (1–720 minutes), Start and Stop, protected by LAN confirmation. The timer begins
 when fresh bed readback reaches the setpoint within 1 °C. It continues if the
 page closes. It never resumes heating after a CC2/printer restart. There are no
@@ -44,7 +43,9 @@ Current settings migrate schema 1 → 2 while preserving UDS/Quiet choices and
 leaving bed heating off. Downgrading to an older app that cannot read schema 2
 opts experiments out; back up settings before testing a downgrade.
 
-## Required supervised hardware pilot (not yet performed)
+## Validation and additional supervised checks
+
+Neme77 tested heating at 50 °C / 2 minutes, manual Stop and normal expiry with a confirmed zero bed target on the printer. These checks do not establish spool drying performance or the native cutoff timing under every fault condition. The remaining checks below describe additional qualification scenarios, not a claim that all have been physically tested.
 
 1. Idle/cold printer, no ongoing calibration or transfers: use 40 °C / 1 minute.
 2. Confirm Stop during heating and hold, zero readback, and configured timeout
@@ -58,4 +59,4 @@ opts experiments out; back up settings before testing a downgrade.
 7. Only after these pass, try a longer supervised hold with a suitable spool.
 
 Host/browser tests simulate these transitions; they do not qualify native heater
-cutoff timing or drying performance. No printer has been heated by development.
+cutoff timing or drying performance. Development commands do not heat a printer; the supervised hardware checks above were performed separately by the maintainer.

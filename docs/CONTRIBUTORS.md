@@ -128,3 +128,13 @@ Thanks to **Barry** for Panda Breath field feedback and **[DamiBFryta](https://w
 - **[Noahwhite2014](https://github.com/Noahwhite2014)**: Panda/DragonBreath filament metadata bridge and empty WebSocket ping fix (#181, integrated in #182). Original commits and feature credit retained.
 
 Thanks to **Barry** for accessory feedback, **[DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our ultimate beta tester**, and all community testers for sustained testing and detailed reports. Earlier contributors, including Spanish/Hungarian translation authors, remain credited above.
+
+## CC2 Control 1.2.22
+
+- **tharje**: Spoolman integration (#208), server sync and usage delivery guards.
+- **pezso92**: Dashboard artwork/design inspiration (#187/#223), Control inspiration (#226), version report (#221/#222), drying documentation (#235).
+- **Noahwhite2014**: extended pull-back patch and V4.4.1 kit testing (#172/#202/#228), drying diagnosis (#230), completion/two-colour history validation.
+- **romeopuch**: timed heating request (#198/#218).
+- **DamiBFryta, our ultimate beta tester**: spool history and continuing feedback (#220).
+
+Neme77 developed and printer-tested the integrated layouts, external-spool/material controls (#233), LAN remembering (#225), completion notice (#219), Spoolman switch (#227) and experiment refinements (#232). All earlier contributors retain their credits above and in the changelog.

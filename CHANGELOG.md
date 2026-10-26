@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [CC2 Control 1.2.22] - 2026-10-26
+
 ### Added
+
+- Spools: optional Spoolman sync pushes measured usage to a self-hosted Spoolman server and pulls material, colour, name and remaining weight back; usage whose delivery is uncertain is never sent twice, and exported backups leave out the proxy login (#208, by **tharje**).
 
 - Optional standalone Windows/Linux/macOS installer for the fingerprint-pinned extended Canvas pull-back range, with original-file backups and guarded removal; original patch and V4.4.1 R3 install/removal validation by **Noahwhite2014** (#172, #202, #228). Exact V4.4.1/V4.4.2 runtime profiles; CC2 Control 1.2.21 or 1.2.22. The separate component is never installed by the application updater.
 
@@ -16,11 +20,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Optional browser-local LAN code remembering in Settings → Connection for updates and experimental controls, with verification, masked fields, explicit forgetting and unchanged action confirmations; requested by **Neme77** (#225).
 
-- Opt-in experimental timed bed heating for filament drying, with finite duration, explicit stop/readback and a short native heater lease; requested by **romeopuch** in #198 (#218). No automatic heating after restart. Hardware validation is still required.
+- Opt-in experimental timed bed heating for filament drying, with finite duration, explicit stop/readback and a short native heater lease; requested by **romeopuch** in #198 (#218). No automatic heating after restart. Maintainer tests at 50 °C / 2 minutes confirmed heating, manual stop and normal expiry with zero-target readback; the feature remains experimental.
 
 - Nonblocking completed-print notice with acknowledgement and Print again through the normal preparation dialog, inspired by the printer display and requested by **Neme77** (#219). Uses existing polling; cancellation/disconnection is not success.
 
 ### Fixed
+
+- Bed-drying documentation now describes the native help response and separate command/readback verification correctly; clarification by **pezso92** (#235), following **Noahwhite2014**’s diagnosis in #230.
 
 - Extended pull-back installer: identify the configuration file/value preventing installation and retain removal backups under a clean token-based name; reported and R3 printer-tested by **Noahwhite2014** (#228).
 
@@ -57,7 +63,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Canvas: an explicit action to recover an unassigned filament head by loading any present slot (#190).
 - Files: older G-code files stay reachable, and uploads stream up to 512 MiB (#197).
 - Object exclusion: a single refined 2D bed map replaces the previous views (#199), following DamiBFryta's feedback and Nick Plateringen-Paul's original map idea/prototype.
-- Spools: optional Spoolman sync pushes measured usage to a self-hosted Spoolman server and pulls material, colour, name and remaining weight back; usage whose delivery is uncertain is never sent twice, and exported backups leave out the proxy login (#208).
 
 ### Fixed
 
@@ -399,7 +404,7 @@ Standalone update. The internal service version remains 1.1.31, and it does not 
 
 Earlier release details remain available through GitHub Releases, tags and Git history.
 
-[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.19-V4.4...HEAD
+[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.22-V4.4...HEAD
 [CC2 Control 1.2.19]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4
 [CC2 Control 1.2.18]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.18-V4.4
 [CC2 Control 1.2.17]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.17-V4.4
@@ -413,3 +418,5 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [Community Firmware V4.3 / CC2 Control 1.2.0]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3
 [V4.2 / CC2 Control 1.1.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
+
+[CC2 Control 1.2.22]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4
