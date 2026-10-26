@@ -6,15 +6,15 @@ della **ELEGOO Centauri Carbon 2**, mantenuti da **Neme77**.
 <p align="center">
   <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig"><img src="https://img.shields.io/badge/SCARICA-Firmware%20V4.4.2-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il firmware completo V4.4.2"></a>
   &nbsp;
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/CC2-Control-1.2.21-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/SCARICA-CC2%20Control%201.2.21-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il pacchetto multipiattaforma CC2 Control 1.2.21"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Control-1.2.22-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/SCARICA-CC2%20Control%201.2.22-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il pacchetto multipiattaforma CC2 Control 1.2.22"></a>
 </p>
 
-| **🖨️ Firmware completo · V4.4.2** | **🔄 CC2 Control · 1.2.21** |
+| **🖨️ Firmware completo · V4.4.2** | **🔄 CC2 Control · 1.2.22** |
 | --- | --- |
-| [**Scarica il firmware firmato**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Scarica il pacchetto Windows / macOS / Linux**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/CC2-Control-1.2.21-Multiplatform-Update.zip) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.21-V4.4) |
+| [**Scarica il firmware firmato**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Scarica il pacchetto Windows / macOS / Linux**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Control-1.2.22-Multiplatform-Update.zip) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4) |
 | Installazione completa con CC2 Control **1.2.21** e patch webcam già inclusa. Nessun riavvio aggiuntivo dopo il firmware. | Per firmware community **V4.4/V4.4.1/V4.4.2**. Include i fix di stabilità e recupero della webcam. |
 
-**Aggiorni dal pannello di CC2 Control?** [Scarica il file firmato `.cc2update`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.21-V4.4/CC2-Control-1.2.21-V4.4.cc2update) e selezionalo in **Impostazioni → Aggiornamenti**. Aggiornamento della sola app: riavvio completo solo alla prima attivazione del fix webcam, già presente dalla 1.2.19. Il firmware completo V4.4.2 non richiede un riavvio aggiuntivo.
+**Aggiorni dal pannello di CC2 Control?** [Scarica il file firmato `.cc2update`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Control-1.2.22-V4.4.cc2update) e selezionalo in **Impostazioni → Aggiornamenti**. Aggiornamento della sola app: riavvio completo solo alla prima attivazione del fix webcam, già presente dalla 1.2.19. Il firmware completo V4.4.2 non richiede un riavvio aggiuntivo.
 
 [English](README.md) · [Documentazione](docs/README.md) · [Download](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Immagini](docs/SCREENSHOTS.md)
 
@@ -58,41 +58,36 @@ Consulta la [guida dell’applicazione](docs/CC2_CONTROL.md) e la
 [galleria](docs/SCREENSHOTS.md). Le funzioni sperimentali richiedono una scelta
 esplicita e una validazione separata.
 
-## Novità di V4.4.2 / CC2 Control 1.2.21
+## Novità di CC2 Control 1.2.22
 
-Il firmware completo include l'applicazione aggiornata e il fix webcam dall'avvio.
-Chi usa già V4.4/V4.4.1 può installare il solo aggiornamento di CC2 Control.
+- **Bobina esterna, anche per chi acquista la CC2 senza Combo:** comandi nativi **Carica / Scarica** quando Canvas è assente e modifica **Marchio → Tipo → Sottocategoria → Colore**. Canvas condivide catalogo originale e palette di 24 colori (#233). L’update non abilita la bobina esterna con Canvas collegato.
+- **Dashboard:** sfondo camera di **pezso92**, slider velocità/flow con campi numerici Applica/Ripristina, riquadri allineati e **Mantieni attiva** nell’intestazione camera (#223).
+- **Controllo:** azioni macchina compatte, Z offset sopra la regolazione stampa e calibrazioni allineate (#226).
+- **Spoolman:** sincronizzazione facoltativa di **tharje** (#208), selettore indipendente in Integrazioni che conserva configurazione e tracciamento locale (#227).
+- **Codice LAN:** salvataggio facoltativo verificato nel browser, campi mascherati precompilati e Dimentica (#225).
+- **Fine stampa:** avviso non bloccante con file/durata, Conferma e Stampa di nuovo; percentuale azzerata quando inattiva senza home (#219).
+- **Cronologia bobine:** pannello scorrevole con filtri Tutti / Solo consumi, suggerito da **DamiBFryta** (#220).
+- **Integrazioni sperimentali:** UDS, Quiet e riscaldamento piatto in Impostazioni → Integrazioni, indipendenti e con azioni allineate (#223/#232).
+- **Esperimento asciugatura:** riscaldamento temporizzato, arresto e conferma target zero (#198/#218/#230); richiesta di **romeopuch**, diagnosi di **Noahwhite2014**, documentazione di **pezso92** (#235).
+- **Aggiornamenti e pacchetti:** requisiti corretti nelle nove lingue (#222), rimosso overlay web inutilizzato (#229). Fix webcam cumulativo, preferenze, mesh e backup conservati.
 
-### Nuovo Canvas
 
-Schede slot compatte, azioni condivise e pannelli impostazioni/cronologia bilanciati rendono Canvas più leggibile su PC e telefono. Il caricamento di recupero permette di risolvere uno stato della testina non assegnato dopo un riavvio: scegli uno slot presente e conferma il caricamento nativo. La cronologia osservata è limitata alla sessione e si azzera ricaricando la pagina. Layout ispirato alla proposta di **Surfoo**, rifinito con le prove e le scelte del maintainer.
 
-[![Nuovo layout Canvas](docs/images/cc2-control/canvas-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/cc2-control/canvas-current.png)
+[![Dashboard](docs/images/cc2-control/dashboard-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/dashboard-current.png)
 
-### Funzioni sperimentali indipendenti
+[![Control](docs/images/cc2-control/control-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/control-current.png)
 
-**Canvas UDS** e **controlli motori Quiet** si abilitano separatamente in Impostazioni → Aggiornamenti. Partono disattivati sulle nuove installazioni; le scelte esistenti vengono conservate. UDS mantiene il ripiego MQTT. Quiet/Normal deriva dal contributo di **BorjaLL**: i comandi dello slicer possono sovrascrivere i limiti iniziali. Completa Normal prima di disattivare i controlli Quiet o cambiare sorgente Canvas. Oltre 350 mm rimane necessario il runtime firmware separato e qualificato.
+### Retrazione Canvas estesa facoltativa
 
-[![Impostazioni sperimentali indipendenti](docs/images/cc2-control/experiments-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/cc2-control/experiments-current.png)
+[**Kit sperimentale separato Windows / Linux / macOS**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Canvas-Pullback-Experimental-R4.zip), di **Noahwhite2014** (#228). Qualificato solo per **V4.4.1/V4.4.2**, con Control **1.2.21/1.2.22**. Estende il limite configurabile fino a 1000 mm senza scegliere la distanza né inviare movimenti; il valore adatto dipende dal percorso. **Rimuovere e riavviare prima degli update app/firmware.** Non installato dall’updater automatico. [Istruzioni](experimental/canvas-pullback-kit/README.it.md).
 
-*Immagini dell'interfaccia effettiva con dati dimostrativi simulati.*
+[![Nuovo layout Canvas](docs/images/cc2-control/canvas-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/canvas-current.png)
 
-### Tutte le migliorie della release
+[![Impostazioni sperimentali indipendenti](docs/images/cc2-control/experiments-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/experiments-current.png)
 
-- **Aggiornamenti affidabili:** corretti i download GitHub con intestazioni di sicurezza superiori a 8 KiB, mantenendo il limite totale di 16 KiB e i controlli TLS/redirect; risolto l'errore HTTPS/orologio fuorviante (#214, segnalazione di **efiten**, #215).
-- **Webcam:** recupero dei thread client e delle notifiche per video locale/Matrix dall'avvio di V4.4.2 e negli aggiornamenti cumulativi, anche saltando versioni. Migrazione corretta delle installazioni verificate già presenti o inattive; modifiche di avvio sconosciute restano rifiutate. Diagnosi di **tharje**.
-- **Aggiornamento unificato:** un solo flusso stabile; chi proviene dalla precedente sperimentale riceve lo stesso pacchetto 1.2.21. Le opzioni restano indipendenti dagli update.
-- **Canvas:** nuovo layout e azioni condivise (#207), caricamento di recupero con conferma (#190), telemetria UDS facoltativa (#200).
-- **Quiet/Normal:** attivazione separata, conferma LAN, controlli stampante inattiva/fredda e indicazioni per riconfermare Normal dopo una riconnessione (contributo originale di **BorjaLL**, #179).
-- **File:** accesso anche oltre i primi 128 file e caricamenti in streaming fino a **512 MiB** (#197).
-- **Esclusione oggetti:** una sola mappa 2D rifinita, selezione collegata e ID G-code originali conservati (#199). Idea/prototipo di **Nick Plateringen-Paul**, rifinitura suggerita da **DamiBFryta**.
-- **Popup nuova bobina:** copia indipendente senza spostare la bobina originale e calcolo del filamento residuo da peso totale meno tara, mantenendo separata la capacità nominale (#210), su suggerimento di **DamiBFryta**.
-- **Interfaccia:** spaziature e titoli uniformi, focus da tastiera e accessibilità (#196); download evidenziati nella homepage (#201).
-- **Funzioni conservate:** backup/ripristino, mesh per piatti/ugelli, Orca, lingue, video persistente, diagnostica e campanella aggiornamenti.
-- **Riavvio:** necessario per la sola app soltanto alla prima attivazione del fix webcam, già incluso dalla 1.2.19. Il firmware V4.4.2 si riavvia durante l'installazione e non richiede un riavvio aggiuntivo.
+Canvas ispirato a **Surfoo**; Quiet originale di **BorjaLL**. Le sperimentali mantengono le scelte. Anteprime con dati simulati. Firmware V4.4.2 e builder includono ancora Control 1.2.21: le nuove funzioni si ottengono con questo update dell’app.
 
-[Note complete, checksum e crediti](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.21-V4.4).
-Spoolman, il restyling della dashboard, asciugatura bobine e popup di fine stampa restano fuori da questa release.
+[Release notes / Note complete, validation, checksums and credits](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4).
 
 ## Aiuto e sviluppo
 
