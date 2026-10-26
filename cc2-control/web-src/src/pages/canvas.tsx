@@ -1,3 +1,4 @@
+import { FilamentMaterial } from '@/components/filament-material'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import {
@@ -15,8 +16,6 @@ import { cn } from '@/lib/utils'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pip, Tag } from '@/components/ui/badge'
-import { Select } from '@/components/ui/field'
-import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Row } from '@/components/shared'
 import { CanvasUnload } from './canvas-unload'
 import { control, errText, notify, post } from '@/lib/api'
@@ -24,123 +23,21 @@ import { type Key, t, tpl } from '@/lib/i18n'
 import { poll, usePoll } from '@/lib/poll'
 import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
 import { canvasTimeline, clearCanvasTimeline, type ObservedPrinterPhase } from '@/lib/canvas-events'
-import { presets, printer } from '@/lib/state'
+import { printer } from '@/lib/state'
 import { findSpool, g, openChooser, refreshSpools, spoolLabel, spools } from '@/lib/spools'
 
 const I = { size: 16, strokeWidth: 1 }
-const PALETTE = [
-  '#F5F5F5',
-  '#B0BEC5',
-  '#616E77',
-  '#16191D',
-  '#EF5350',
-  '#FF8A3D',
-  '#FDD835',
-  '#66BB6A',
-  '#00CFE8',
-  '#2196F3',
-  '#3F51B5',
-  '#AB47BC',
-  '#EC407A',
-  '#795548',
-  '#C7A44A',
-]
-
-const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }) => {
-  const list = presets.use().list
-  const tray = canvas.get().model?.trays[slot]
-  const [preset, setPreset] = useState(0),
-    [colour, setColour] = useState(canvasHex(tray?.filament_color, slot))
-  const submit = async (e: Event) => {
-    e.preventDefault()
-    const p = list[preset]
-    if (!p) return
-    const hex = colour.slice(1).toUpperCase(),
-      min = Number(p.min || Math.max(120, p.nozzle - 20)),
-      max = Number(p.max || Math.min(320, p.nozzle + 20))
-    if (
-      !(await ask(
-        tpl('canvas.save_name_colour_min_max_c', {
-          name: p.name,
-          colour: hex,
-          min,
-          max,
-          slot: slot + 1,
-        })
-      ))
-    )
-      return
-    canvas.set(s => ({
-      optimistic: { ...s.optimistic, [slot]: { colour: `#${hex}`, material: p.name, until: Date.now() + 4000 } },
-    }))
-    onClose()
-    if (await control(`canvas:material:${slot}:${p.name}:${hex}:${min}:${max}`)) {
-      setTimeout(refreshCanvas, 700)
-      setTimeout(refreshCanvas, 2000)
-      // With spool tracking on, the second question: which spool now carries this filament?
-      if (spools.get().data?.enabled) openChooser(slot, 'material', { material: p.name, color: `#${hex}` })
-    } else refreshCanvas()
-  }
-  return (
-    <Dialog onClose={onClose}>
-      <form onSubmit={submit}>
-        <DialogTitle class="mb-4">{t('canvas.choose_material_and_colour')}</DialogTitle>
-        <label htmlFor="material-profile" class="mb-1.5 mt-3 block text-muted">
-          {t('canvas.material_profile')}
-        </label>
-        <Select
-          id="material-profile"
-          value={String(preset)}
-          onChange={e => setPreset(+e.currentTarget.value)}
-          autofocus
-        >
-          {list.map((p, i) => (
-            <option key={i} value={i}>
-              {p.name} ({p.min || p.nozzle - 20}–{p.max || p.nozzle + 20} °C)
-            </option>
-          ))}
-        </Select>
-        <label htmlFor="material-colour" class="mb-1.5 mt-3 block text-muted">
-          {t('canvas.filament_colour')}
-        </label>
-        <div class="grid grid-cols-[78px_1fr] items-center gap-3">
-          <input
-            id="material-colour"
-            type="color"
-            class="h-12 w-19.5 rounded-md border border-edge bg-field p-0.5"
-            value={colour.toLowerCase()}
-            onInput={e => setColour(e.currentTarget.value.toUpperCase())}
-          />
-          <output class="font-mono text-base font-semibold">{colour}</output>
-        </div>
-        <fieldset class="m-0 min-w-0 border-0 p-0">
-          <legend class="mb-1.5 mt-3 p-0 text-muted">{t('canvas.quick_colours')}</legend>
-          <div class="grid grid-cols-5 gap-2 cc2-sm:grid-cols-8">
-            {PALETTE.map(c => (
-              <button
-                key={c}
-                type="button"
-                title={c}
-                class={cn(
-                  'h-8.5 rounded-md border-2 border-white/30',
-                  c === colour && 'outline outline-2 outline-offset-2 outline-cyan'
-                )}
-                style={{ background: c }}
-                onClick={() => setColour(c)}
-              />
-            ))}
-          </div>
-        </fieldset>
-        <div class="mt-5 flex justify-end gap-2.5">
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button type="submit" variant="primary">
-            {t('canvas.apply_to_canvas_slot')}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
-  )
-}
+const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }) => (
+  <FilamentMaterial
+    slot={slot}
+    filament={canvas.get().model?.trays[slot]}
+    onClose={onClose}
+    onSaved={(material, color) => {
+      refreshCanvas()
+      if (spools.get().data?.enabled) openChooser(slot, 'material', { material, color })
+    }}
+  />
+)
 
 export const Canvas = () => {
   const recoverySending = useRef(false)

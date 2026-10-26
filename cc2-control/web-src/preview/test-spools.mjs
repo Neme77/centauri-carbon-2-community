@@ -87,7 +87,7 @@ try {
   await toast('Spool saved.')
   assert.deepEqual(posts.at(-1), [
     '/api/spools/save',
-    'name=Silk Gold\nbrand=\nmaterial=PLA Silk\ncolor=#C7A44A\nnet=750\nremaining=750\ntare=0\nlow=100\ndiameter=1.75\ndensity=1.24\nprice=0\nnote=',
+    'name=Silk Gold\nbrand=\nmaterial=PLA Silk\ncolor=#C7A44A\nnet=750\nremaining=750\ntare=0\nlow=100\ndiameter=1.75\ndensity=1.24\nprice=0\nnote=\nspoolman_id=',
   ])
   // Without a brand it joins "Other"; its colour is the name without the material's words.
   await page
@@ -120,7 +120,7 @@ try {
   await stack('Black').getByText('×3', { exact: true }).waitFor()
   assert.deepEqual(posts.at(-1), [
     '/api/spools/save',
-    'name=Black PETG\nbrand=ELEGOO\nmaterial=PETG\ncolor=#16191D\nnet=1000\nremaining=1000\ntare=150\nlow=100\ndiameter=1.75\ndensity=1.27\nprice=0\nnote=',
+    'name=Black PETG\nbrand=ELEGOO\nmaterial=PETG\ncolor=#16191D\nnet=1000\nremaining=1000\ntare=150\nlow=100\ndiameter=1.75\ndensity=1.27\nprice=0\nnote=\nspoolman_id=',
   ])
 
   // A search opens the colours it finds; a folded manufacturer stays folded after a reload.

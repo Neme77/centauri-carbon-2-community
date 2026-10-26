@@ -11,6 +11,7 @@ BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", 
 HARNESSES = {
     "test_panda_metadata.c": [],
     "test_backup.c": BACKEND,
+    "test_external_filament.c": [ROOT / "src/control.c"],
     "test_canvas_state.c": [ROOT / "src/control.c"],
     "test_canvas_recovery_load.c": [ROOT / "src/control.c"],
     "test_app_update_guards.c": BACKEND,
@@ -47,6 +48,7 @@ HARNESSES = {
     "test_plates.c": BACKEND,
     "test_canvas_unload.c": BACKEND,
     "test_spools.c": BACKEND,
+    "test_spoolman.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
 }
 

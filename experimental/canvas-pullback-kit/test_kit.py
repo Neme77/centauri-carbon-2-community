@@ -82,6 +82,9 @@ class PolicyTests(unittest.TestCase):
         health=dict(version='1.2.21',mqtt_registered=True)
         def check(p=printer,h=health):manage.ready({'printer.json':json.dumps(p).encode(),'health.json':json.dumps(h).encode()})
         check()
+        check(h=health|{'version':'1.2.22'})
+        for version in ('1.2.19','1.2.20','1.2.23','1.2.22-dev','',None):
+            with self.subTest(version=version),self.assertRaises(ValueError):check(h=health|{'version':version})
         for changes in ({'last_message_age':16},{'connected':False},{'machine':{'status':2}},{'print':{'enabled':True}},{'heater_bed':{'temperature':51,'target':0}},{'extruder':{'temperature':25,'target':1}}):
             with self.assertRaises(ValueError):check(printer|changes)
         with self.assertRaises(ValueError):check(h=health|{'version':'1.2.19'})

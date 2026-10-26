@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Draft standalone Windows/Linux/macOS pilot for the fingerprint-pinned extended Canvas pull-back limit, with original-file backups and guarded removal; original patch by **Noahwhite2014** (#172, #202, #228). Exact V4.4.1 and V4.4.2 runtime profiles are supported; V4.4.2 pilot installation and a 500 mm unload/reload cycle passed, and the complete V4.4.1 installation/status/removal cycle passed on **Noahwhite2014**’s printer.
+- Optional standalone Windows/Linux/macOS installer for the fingerprint-pinned extended Canvas pull-back range, with original-file backups and guarded removal; original patch and V4.4.1 R3 install/removal validation by **Noahwhite2014** (#172, #202, #228). Exact V4.4.1/V4.4.2 runtime profiles; CC2 Control 1.2.21 or 1.2.22. The separate component is never installed by the application updater.
+
+- Native external-spool Load/Unload controls and shared Canvas/external Brand, Type, Subcategory and Colour editing, with the stock material catalog and 24-colour palette; requested and investigated with **Neme77** (#233).
+
+- Independent Spoolman integration switch in Settings, hiding its spool controls and pausing server requests without losing local tracking, saved server settings, links or queued usage (#227; requested by **Neme77**, building on [tharje](https://github.com/tharje)'s #208 integration).
 
 - Optional browser-local LAN code remembering in Settings → Connection for updates and experimental controls, with verification, masked fields, explicit forgetting and unchanged action confirmations; requested by **Neme77** (#225).
 
@@ -18,7 +22,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Extended pull-back pilot R3: identify the configuration file and value that prevent installation, and retain removal backups under a clean token-based name; reported and R2 hardware-tested by **Noahwhite2014** (#228).
+- Extended pull-back installer: identify the configuration file/value preventing installation and retain removal backups under a clean token-based name; reported and R3 printer-tested by **Noahwhite2014** (#228).
+
+- Align experimental-integration card actions and place the drying controls side by side on desktop and phone; reported by **Neme77** (#232).
+
+- Bed drying: distinguish a manually stopped session with fresh zero-target confirmation from an external or unconfirmed interruption; reported and printer-tested by **Neme77** (#230).
+
+- Experimental bed drying: accept the real firmware help response, which omits M-codes, while preserving the native heater lease, command acknowledgement and target readback checks; reported, tested and diagnosed by **Noahwhite2014** (#230).
 
 - Reset the current-job progress display when the printer is idle, without homing or overwriting the native last-job counters (#219).
 
@@ -47,6 +57,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Canvas: an explicit action to recover an unassigned filament head by loading any present slot (#190).
 - Files: older G-code files stay reachable, and uploads stream up to 512 MiB (#197).
 - Object exclusion: a single refined 2D bed map replaces the previous views (#199), following DamiBFryta's feedback and Nick Plateringen-Paul's original map idea/prototype.
+- Spools: optional Spoolman sync pushes measured usage to a self-hosted Spoolman server and pulls material, colour, name and remaining weight back; usage whose delivery is uncertain is never sent twice, and exported backups leave out the proxy login (#208).
 
 ### Fixed
 
@@ -402,6 +413,3 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [Community Firmware V4.3 / CC2 Control 1.2.0]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3
 [V4.2 / CC2 Control 1.1.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
-
-
-

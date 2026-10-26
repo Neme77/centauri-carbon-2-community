@@ -100,8 +100,8 @@ def ready(meta):
         raise ValueError('Printer must be connected, Idle and freshly reported')
     if p.get('print',{}).get('enabled') is not False or p.get('print',{}).get('state') in ('printing','paused'):
         raise ValueError('An active or paused print prevents installation/removal')
-    if h.get('mqtt_registered') is not True or h.get('version')!='1.2.21':
-        raise ValueError('This pilot requires registered CC2 Control 1.2.21')
+    if h.get('mqtt_registered') is not True or h.get('version') not in ('1.2.21','1.2.22'):
+        raise ValueError('This component requires registered CC2 Control 1.2.21 or 1.2.22')
     for key in ('extruder','heater_bed'):
         item=p.get(key,{})
         if not number(item.get('temperature')) or not 0<=item['temperature']<=50 or not number(item.get('target')) or item['target']!=0:

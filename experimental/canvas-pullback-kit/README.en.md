@@ -1,14 +1,16 @@
-# Extended Canvas pull-back — R3 pilot
+# Extended Canvas pull-back — R4 experimental component
 
-Standalone experimental installer for **Community Firmware V4.4.1 or V4.4.2 / CC2 Control 1.2.21**. Reproduces **Noahwhite2014**'s #172 / #202 change: raises the accepted maximum from 350 to 1000 mm. It does not set the distance, eject filament, request movement, restart services or reboot. It does not change the webcam or CC2 Control.
+Standalone experimental installer for **Community Firmware V4.4.1 or V4.4.2 / CC2 Control 1.2.21 or 1.2.22**. Reproduces **Noahwhite2014**'s #172 / #202 change: raises the accepted maximum from 350 to 1000 mm. It does not set the distance, eject filament, request movement, restart services or reboot. It does not change the webcam or CC2 Control.
 
 **Controlled trial.** R1 installation and a 500 mm unload/reload cycle were tested on V4.4.2. R2 completed its installation/status/removal cycle on Noahwhite2014’s V4.4.1 printer, including a persistent 560 mm override, restoration to 350 mm on removal and working camera/CC2 Control. No movement was requested in that cycle. Fingerprints do not establish a safe physical distance. The contributor reported longer travel on a custom path; this does not qualify 1000 mm for every printer. Reload-distance and timeout settings are not changed. Restore any manual runtime patch from original backups before using this kit; mixed generations are refused.
 
-## R3 corrections and focused retest
+## R3 validation and R4 compatibility
 
-Installation refusal now names the exact configuration path and unload_fila_dist value above 350 mm, including values in autosave_backup.cfg and SAVE_CONFIG sections. Removal retains backups under /opt/usr/cc2-canvas-pullback-1000.removed-<token> without the staging-directory prefix. The menu and archive identify R3 consistently. The qualified program patch, fingerprints, configuration guards, reload distance and reload timeout are unchanged.
+Installation refusal now names the exact configuration path and unload_fila_dist value above 350 mm, including values in autosave_backup.cfg and SAVE_CONFIG sections. Removal retains backups under /opt/usr/cc2-canvas-pullback-1000.removed-<token> without the staging-directory prefix. The menu and archive now identify R4 consistently. The qualified program patch, fingerprints, configuration guards, reload distance and reload timeout are unchanged.
 
-For the focused retest, restore the original runtime first if manually patched. While Idle and cold, check all three supported configuration files for values above 350 mm. An intentionally higher value should produce a refusal naming its file/value and leave the printer unchanged. Return it to 350 mm or less, then run Check → Install → idle reboot → Status. Save the previously tested 560 mm override without issuing movement, then Remove → verify clamp and clean backup name → idle reboot → Status. No new physical distance test is required for these two corrections; share the outputs.
+R3 passed Noahwhite2014’s focused V4.4.1 printer retest: exact refusal path/value with no changed hashes, full installation/reboot/status, saved 560 mm override without movement, removal/clamp to 350 mm and exact original restoration, clean backup name and working camera. R4 adds an explicit CC2 Control 1.2.22 version allowance alongside 1.2.21 and updates these instructions. The executable transformation and runtime fingerprints are unchanged. R4’s version check is covered by automated tests; the reported physical installation/removal test used R3. V4.4 has no qualified runtime profile in this component.
+
+The external-spool Load/Unload card added to CC2 Control is independent. This component changes the Canvas cut-and-pull-back setting, not the external-spool motion distance.
 
 ## Requirements and check
 
@@ -16,9 +18,9 @@ Python 3.10+ and OpenSSH client on Windows, Linux or macOS. SSH credentials are 
 
 The printer must be connected, Idle, without a paused print, both heaters at most 50 °C with targets zero; at least 128 MiB persistent free space is required after staging. Only the exact pinned program, launchers and runtime are accepted. Included/ambiguous configuration is refused.
 
-Extract the complete ZIP. Windows: open `Start-Windows.cmd`. Linux/macOS: run `sh Start-Linux-macOS.sh`. Select **1 — Check**, enter the printer IP and share the result with the maintainer before installation.
+Extract the complete ZIP. Windows: open `Start-Windows.cmd`. Linux/macOS: run `sh Start-Linux-macOS.sh`. Select **1 — Check**, enter the printer IP and require CHECK PASS before installation. If refused, retain the output and investigate before proceeding.
 
-After arranging the pilot, select **3 — Install**, type `INSTALL PULLBACK`, and keep the terminal open. Only after `INSTALLATION PASSED`, reboot the idle printer normally. Select **2 — Status** and verify the extended program, Canvas, local/Matrix video and normal loading. Installation leaves the configured distance unchanged; arrange the physical test separately.
+After a successful check, select **3 — Install**, type `INSTALL PULLBACK`, and keep the terminal open. Only after `INSTALLATION PASSED`, reboot the idle printer normally. Select **2 — Status** and verify the extended program, Canvas, local/Matrix video and normal loading. Installation leaves the configured distance unchanged; arrange the physical test separately.
 
 CLI: `python manage.py check --host IP` (`python3` on Linux/macOS). Actions: `check`, `status`, `install`, `remove`.
 

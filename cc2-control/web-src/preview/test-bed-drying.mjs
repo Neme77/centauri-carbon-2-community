@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
 const server = await createServer({ root: new URL('..', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'), mode: 'demo', server: { host: '127.0.0.1', port: 0 } })
-let browser
+let browser, language = 'en'
 const choices = { schema: 1, editable: true, ready: true, canvas_uds: false, canvas_uds_available: false, quiet_motors: false, normal_confirmed: false, cli_canvas: false, bed_drying: false }
 const session = { enabled: false, active: false, state: 'off', reason: 'none', fresh: true, bed: 25, target: 0, temperature: 70, minutes: 1, remaining: 0 }
 const actions = [], errors = []
@@ -12,7 +12,7 @@ try {
   browser = await chromium.launch({ headless: true, ...(process.env.CC2_BROWSER_PATH ? { executablePath: process.env.CC2_BROWSER_PATH } : {}) })
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   page.on('pageerror', e => errors.push(e.message))
-  await page.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
+  await page.route('**/api/preferences', r => r.fulfill({ json: { language, theme: 'dark' } }))
   await page.route('**/api/experiments', r => {
     if (r.request().method() === 'POST') {
       assert.equal(r.request().headers()['x-cc2-lan'], 'fixture-confirmation')
@@ -31,7 +31,7 @@ try {
     assert.equal(r.request().headers()['x-cc2-lan'], 'fixture-confirmation')
     actions.push([r.request().url().split('/').pop(), r.request().postData()])
     if (actions.at(-1)[0] === 'start') Object.assign(session, { active: true, state: 'heating', target: 70 })
-    else Object.assign(session, { state: 'stopping' })
+    else Object.assign(session, { state: 'stopping', reason: 'manual' })
     return r.fulfill({ json: session })
   })
   await page.goto(`${server.resolvedUrls.local[0]}#control`)
@@ -60,13 +60,59 @@ try {
   await card.getByLabel('LAN code for experimental features', { exact: true }).fill('fixture-confirmation')
   await card.getByRole('button', { name: 'Stop bed heating', exact: true }).click()
   await card.getByText('Stopping · awaiting confirmation', { exact: true }).waitFor(); assert(session.active)
-  Object.assign(session, { active: false, state: 'interrupted', target: 0, reason: 'manual' })
+  const stoppedText = 'Bed drying stopped. Bed target confirmed at 0 °C.'
+  const warningText = 'Session interrupted or changed elsewhere. Check the bed target; stopping is confirmed only after zero readback.'
+  assert.equal(await card.getByText(stoppedText, { exact: true }).count(), 0, 'A stop request is not zero confirmation')
+  for (const pending of [
+    { active: false, state: 'interrupted', target: 70, fresh: true, reason: 'manual' },
+    { active: false, state: 'interrupted', target: 0, fresh: false, reason: 'manual' },
+    { active: false, state: 'interrupted', target: 0, fresh: true, reason: 'changed' },
+  ]) {
+    Object.assign(session, pending)
+    await page.reload(); await card.getByText(warningText, { exact: true }).waitFor()
+    assert.equal(await card.getByText(stoppedText, { exact: true }).count(), 0, 'Stale/nonzero or externally changed targets must not confirm a manual stop')
+  }
+  Object.assign(session, { active: false, state: 'interrupted', target: 0, fresh: true, reason: 'manual' })
+  await page.reload(); await card.getByText(stoppedText, { exact: true }).waitFor()
   await card.getByText('Interrupted', { exact: true }).waitFor()
+  assert.equal(await card.getByText(warningText, { exact: true }).count(), 0)
+
   await page.setViewportSize({ width: 390, height: 844 }); await card.scrollIntoViewIfNeeded()
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
   await mkdir('preview/artifacts', { recursive: true })
   await card.screenshot({ path: 'preview/artifacts/bed-drying-mobile.png' })
   await page.setViewportSize({ width: 1440, height: 1000 }); await card.screenshot({ path: 'preview/artifacts/bed-drying-desktop.png' })
+  // The enabled drying card has two controls; all desktop footers must still align.
+  for (const locale of ['en', 'it']) for (const enabled of [false, true]) {
+    language = locale; choices.bed_drying = enabled; session.enabled = enabled
+    await page.goto(`${server.resolvedUrls.local[0]}#settings/integrations`); await page.reload()
+    await page.waitForFunction(lang => document.documentElement.lang === lang, locale)
+    await page.waitForFunction(expected => document.querySelectorAll('[data-experiments] [role=switch]')[2]?.getAttribute('aria-checked') === String(expected), enabled)
+    for (const width of [1440, 768, 390]) {
+      await page.setViewportSize({ width, height: 1100 })
+      // Container queries settle on the next rendering frame after a viewport resize.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      const geometry = await page.locator('[data-experiment-actions]').evaluateAll(rows => rows.map(row => ({
+        row: row.getBoundingClientRect().toJSON(),
+        buttons: [...row.querySelectorAll('button')].map(b => b.getBoundingClientRect().toJSON()),
+      })))
+      assert.equal(geometry.length, 3)
+      if (width === 1440) {
+        const tops = geometry.map(g => g.buttons[0].top)
+        assert(Math.max(...tops) - Math.min(...tops) <= 1, `${locale}: desktop controls must align with drying ${enabled}`)
+      }
+      if (enabled) {
+        const [toggle, control] = geometry[2].buttons
+        assert.equal(geometry[2].buttons.length, 2)
+        assert(Math.abs(toggle.top - control.top) <= 1, `${locale}: drying controls must share a row at ${width}: ${JSON.stringify(geometry[2])}`)
+        assert(control.left >= toggle.right + 6, `${locale}: drying controls must have a gap`)
+      }
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${locale}: overflow at ${width}`)
+      if (locale === 'it' && enabled && width !== 768) {
+        await page.locator('[data-experiments]').screenshot({ path: `preview/artifacts/experiment-actions-${width}.png` })
+      }
+    }
+  }
   assert.deepEqual(errors, []); assert.equal(actions.length, 2)
   console.log('PASS opt-in, no heat on enable, validation, actual start/cancel/stop controls, reload continuity, pending zero confirmation and mobile layout')
 } finally { await browser?.close(); await server.close() }
