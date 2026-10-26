@@ -14,6 +14,8 @@ della **ELEGOO Centauri Carbon 2**, mantenuti da **Neme77**.
 | [**Scarica il firmware firmato**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Scarica il pacchetto Windows / macOS / Linux**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Control-1.2.22-Multiplatform-Update.zip) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4) |
 | Installazione completa con CC2 Control **1.2.21** e patch webcam già inclusa. Nessun riavvio aggiuntivo dopo il firmware. | Per firmware community **V4.4/V4.4.1/V4.4.2**. Include i fix di stabilità e recupero della webcam. |
 
+> **Sperimentale facoltativa · Retrazione Canvas R4:** [**Scarica il kit Windows / Linux / macOS**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Canvas-Pullback-Experimental-R4.zip). Estende il limite configurabile fino a 1000 mm sui runtime qualificati **V4.4.1/V4.4.2**, con Control **1.2.21/1.2.22**. Di **Noahwhite2014**. [Istruzioni](experimental/canvas-pullback-kit/README.it.md). Rimuovere il componente e riavviare prima degli update app/firmware.
+
 **Aggiorni dal pannello di CC2 Control?** [Scarica il file firmato `.cc2update`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Control-1.2.22-V4.4.cc2update) e selezionalo in **Impostazioni → Aggiornamenti**. Aggiornamento della sola app: riavvio completo solo alla prima attivazione del fix webcam, già presente dalla 1.2.19. Il firmware completo V4.4.2 non richiede un riavvio aggiuntivo.
 
 [English](README.md) · [Documentazione](docs/README.md) · [Download](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Immagini](docs/SCREENSHOTS.md)
@@ -59,6 +61,8 @@ Consulta la [guida dell’applicazione](docs/CC2_CONTROL.md) e la
 esplicita e una validazione separata.
 
 ## Novità di CC2 Control 1.2.22
+
+> **Piccolo errore di testo nella 1.2.22:** la pagina Aggiornamenti riporta ancora «Le funzioni sperimentali si scelgono separatamente qui sotto». Si trovano invece in **Impostazioni → Integrazioni**. Ci scusiamo per l’indicazione imprecisa: le funzioni operano regolarmente. Correggeremo il testo nel prossimo aggiornamento.
 
 - **Bobina esterna, anche per chi acquista la CC2 senza Combo:** comandi nativi **Carica / Scarica** quando Canvas è assente e modifica **Marchio → Tipo → Sottocategoria → Colore**. Canvas condivide catalogo originale e palette di 24 colori (#233). L’update non abilita la bobina esterna con Canvas collegato.
 - **Dashboard:** sfondo camera di **pezso92**, slider velocità/flow con campi numerici Applica/Ripristina, riquadri allineati e **Mantieni attiva** nell’intestazione camera (#223).
