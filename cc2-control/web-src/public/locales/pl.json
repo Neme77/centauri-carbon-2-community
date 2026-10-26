@@ -1050,7 +1050,7 @@
   "experiments.canvas_off_confirm": "Wyłączyć Canvas UDS i wrócić do MQTT? Nastąpi krótkie ponowne połączenie. Pozostałe wybory pozostaną.",
   "experiments.canvas_on_confirm": "Włączyć pełny Canvas UDS? Telemetria na krótko połączy się ponownie, bez poleceń grzania ani ruchu. Używa nieco więcej pamięci.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Aktualizacje aplikacji: kanał stabilny. Funkcje eksperymentalne wybiera się osobno poniżej.",
+  "experiments.channel_stable": "Aktualizacje aplikacji: kanał stabilny. Funkcjami eksperymentalnymi zarządza się osobno w Ustawienia → Integracje.",
   "experiments.disable": "Wyłącz",
   "experiments.enable": "Włącz",
   "experiments.fallback": "Włączone · zapasowe MQTT",

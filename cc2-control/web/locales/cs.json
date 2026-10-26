@@ -1050,7 +1050,7 @@
   "experiments.canvas_off_confirm": "Zakázat Canvas UDS a vrátit se k MQTT? Proběhne krátké opětovné připojení. Ostatní volby zůstanou.",
   "experiments.canvas_on_confirm": "Povolit úplný Canvas UDS? Telemetrie se krátce znovu připojí, bez příkazu ohřevu či pohybu. Spotřebuje trochu více paměti.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Aktualizace aplikace: stabilní kanál. Experimentální funkce se vybírají samostatně níže.",
+  "experiments.channel_stable": "Aktualizace aplikace: stabilní kanál. Experimentální funkce se spravují samostatně v Nastavení → Integrace.",
   "experiments.disable": "Zakázat",
   "experiments.enable": "Povolit",
   "experiments.fallback": "Povoleno · záloha MQTT",

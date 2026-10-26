@@ -1050,7 +1050,7 @@
   "experiments.canvas_off_confirm": "Disabilitare Canvas UDS e tornare a MQTT? La telemetria si riconnetterà brevemente. Le altre scelte sperimentali vengono conservate.",
   "experiments.canvas_on_confirm": "Abilitare la telemetria Canvas UDS completa? La telemetria si riconnetterà brevemente; non vengono inviati comandi di riscaldamento o movimento. Usa un po’ di memoria aggiuntiva.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Aggiornamenti dell’app: canale stabile. Le funzioni sperimentali si scelgono separatamente qui sotto.",
+  "experiments.channel_stable": "Aggiornamenti dell’app: canale stabile. Le funzioni sperimentali si gestiscono separatamente in Impostazioni → Integrazioni.",
   "experiments.disable": "Disabilita",
   "experiments.enable": "Abilita",
   "experiments.fallback": "Abilitato · ripiego su MQTT",
