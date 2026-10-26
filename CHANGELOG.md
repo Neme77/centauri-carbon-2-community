@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Point the stable update notice to Settings → Integrations in all nine languages; experimental controls are no longer described as being below the update panel (#240, reported by **Neme77**).
+
 ### Changed
 
 - Polish Hungarian installer prerequisites and Canvas labels for more natural wording (#238, by **pezso92**).

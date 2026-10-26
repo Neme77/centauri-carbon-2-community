@@ -1050,7 +1050,7 @@
   "experiments.canvas_off_confirm": "Désactiver Canvas UDS et revenir à MQTT ? Brève reconnexion. Les autres choix sont conservés.",
   "experiments.canvas_on_confirm": "Activer Canvas UDS complet ? Brève reconnexion de la télémétrie, sans commande de chauffe ni mouvement. Utilise un peu plus de mémoire.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Mises à jour de l’application : canal stable. Les fonctions expérimentales se choisissent séparément ci-dessous.",
+  "experiments.channel_stable": "Mises à jour de l’application : canal stable. Les fonctions expérimentales se gèrent séparément dans Paramètres → Intégrations.",
   "experiments.disable": "Désactiver",
   "experiments.enable": "Activer",
   "experiments.fallback": "Activé · repli MQTT",
