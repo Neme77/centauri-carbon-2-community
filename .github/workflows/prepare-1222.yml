@@ -68,3 +68,5 @@ jobs:
             output/camera-runtime-pins.json
           retention-days: 30
           if-no-files-found: error
+
+# Release documentation aligned; rebuild revision 2.
