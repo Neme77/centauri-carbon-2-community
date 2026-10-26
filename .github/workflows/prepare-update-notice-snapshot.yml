@@ -1,0 +1,29 @@
+name: Prepare update-notice source snapshot
+on:
+  push:
+    branches: [fix/updates-experiments-location]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.repository == 'Neme77/centauri-carbon-2-community'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/updates-experiments-location
+      - name: Validate locales and refresh the canonical builder snapshot
+        run: |
+          test "$(git status --porcelain)" = ""
+          python3 cc2-control/tests/test_web_sync_static.py
+          python3 cc2-control/tests/test_locales_static.py
+          python3 experimental/pr128-integration/sync_source.py
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+      - name: Commit generated files and remove this preparation workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git rm .github/workflows/prepare-update-notice-snapshot.yml
+          git commit -m "Refresh source snapshot for corrected update notices"
+          git push origin HEAD:refs/heads/fix/updates-experiments-location
