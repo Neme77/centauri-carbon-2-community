@@ -92,6 +92,9 @@ jobs:
       - name: Install browser for PID interaction regression
         run: npx playwright install --with-deps chromium
 
+      - name: Native external spool and shared Canvas material controls
+        run: node preview/test-external-filament.mjs
+
       - name: Optional Spoolman integration switch
         run: npm run test:spoolman-integration
 

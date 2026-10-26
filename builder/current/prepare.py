@@ -13,8 +13,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_COMMIT='48d7d0b51fe22c5effa98622a9b855d04480961e'
-SOURCE_SHA256='360702a3b51a2f212661e609c44f68ce49f109b39cce916648627f8e4dde1a94'
+SOURCE_COMMIT='61f2ec2aecedca9b8567d609a70c83aa50d4f59d'
+SOURCE_SHA256='e85276960ea98e4e886d6ad3ae7b64b36c774159390df057693026810ce89ab1'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'

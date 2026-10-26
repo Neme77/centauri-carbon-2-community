@@ -1,5 +1,6 @@
 #include "control.h"
 #include "canvas_state.h"
+#include "external_filament_catalog.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -62,6 +63,41 @@ static double homing_extruder_restore_target(const mqtt_client *m){
 int control_build_script(const char *action,const mqtt_client *m,char *script,size_t cap,char *reason,size_t reason_cap){
     char kind[32],a[32],b[32],colour[16]; double value,value2;
     int slot,min_temp,max_temp;
+    if(!strncmp(action,"external:",9)||!strncmp(action,"canvas:catalog:",15)){
+        time_t now=time(NULL);
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+           m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Filament controls require fresh idle telemetry");
+        int external=!strncmp(action,"external:",9);
+        if(external&&!m->external_verified)
+            return reject(reason,reason_cap,"External filament requires native confirmation that Canvas is disconnected and the printer is idle");
+        if(!strcmp(action,"external:load")||!strcmp(action,"external:unload")){
+            snprintf(script,cap,"M600 S%d",!strcmp(action,"external:load")?1:2);return 1;
+        }
+        int brand,type,item,end=0;char hex[7];int parsed;
+        if(external)parsed=sscanf(action,"external:material:%d:%d:%d:%6[0-9a-fA-F]%n",&brand,&type,&item,hex,&end);
+        else parsed=sscanf(action,"canvas:catalog:%d:%d:%d:%d:%6[0-9a-fA-F]%n",&slot,&brand,&type,&item,hex,&end);
+        if(parsed!=(external?4:5)||!end||action[end]||strlen(hex)!=6)
+            return reject(reason,reason_cap,"Invalid filament material selection");
+        if(!external&&(!canvas_source_valid(m)||canvas_reported_status(m,slot)<0))
+            return reject(reason,reason_cap,"Canvas material editing requires a known connected slot");
+        const external_material *selected=NULL;
+        for(size_t i=0;i<sizeof(external_materials)/sizeof(external_materials[0]);i++){
+            const external_material *candidate=&external_materials[i];
+            if(candidate->brand==brand&&candidate->type==type&&candidate->item==item){selected=candidate;break;}
+        }
+        if(!selected||selected->min<120||selected->max>320||selected->min>=selected->max)
+            return reject(reason,reason_cap,"Selected material exceeds the protected nozzle temperature range");
+        char channel[32],code[20];
+        if(external)snprintf(channel,sizeof(channel),"EXTERN_FILA=1");
+        else snprintf(channel,sizeof(channel),"CHANNEL=%d",slot);
+        if(brand==0)snprintf(code,sizeof(code),"0x%04X",selected->code);
+        else snprintf(code,sizeof(code),"Generic");
+        int n=snprintf(script,cap,"CANVAS_SET_FILAMENT_INFO %s COLOR=0x%s detailed_type=\"%s\" MANUFACTURER=\"%s\" nozzle_max_temp=%d nozzle_min_temp=%d TYPE=\"%s\" CODE=%s",
+            channel,hex,selected->name,selected->maker,selected->max,selected->min,selected->material,code);
+        if(n<0||(size_t)n>=cap)return reject(reason,reason_cap,"Filament command exceeds buffer capacity");
+        return 1;
+    }
     if(strncmp(action,"object:exclude:",15)==0){
         const char *name=action+15;
         if(!m->have_machine_status||m->machine_status!=2)

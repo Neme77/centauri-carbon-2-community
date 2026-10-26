@@ -1,3 +1,4 @@
+import { ExternalFilament } from './external-filament'
 import { BedDrying } from './bed-drying'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
@@ -828,6 +829,7 @@ export const Control = () => {
           <Profiles />
         </div>
       </div>
+      <ExternalFilament />
       <BedDrying />
     </Page>
   )

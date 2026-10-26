@@ -83,6 +83,7 @@ typedef struct {
     int canvas_active_tray_id;
     int have_canvas_active_tray;
     int canvas_direct_known,canvas_direct_active,canvas_head_loaded,canvas_direct_idle;
+    int external_verified; /* One native readback, scoped to the current protected request. */
     /* Publishing a request is not acceptance: the printer answers on
      * <client>/api_response with result.error_code. Last non-zero code: */
     int reply_error_method, reply_error_code;
