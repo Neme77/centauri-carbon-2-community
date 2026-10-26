@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Console: allow native Canvas mode and material data setters before full XYZ homing, retaining motion, load/unload, freshness and Idle guards (#241, reported by **Neme77**).
+
 - Point the stable update notice to Settings → Integrations in all nine languages; experimental controls are no longer described as being below the update panel (#240, reported by **Neme77**).
 
 ### Changed
