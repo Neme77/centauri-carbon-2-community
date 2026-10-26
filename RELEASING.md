@@ -4,7 +4,7 @@ Checklist for publishing a release. A release is a Git tag plus the files attach
 
 ## Where the version lives
 
-`cc2-control/VERSION` is the only place the CC2 Control version is written, and `cc2-control/FIRMWARE_VERSION` the only place the community firmware release number (`4.2`) is written. The Makefile passes both to the compiler, `installer/package.py` and `builder/current/prepare.py` read it, and `tests/test_version_static.py` fails if a copy appears in code. The release tag (`V4.2-R5`), the README download links and the changelog name a release and are edited by hand.
+`cc2-control/VERSION` is the only place the CC2 Control version is written, and `cc2-control/FIRMWARE_VERSION` the application updater compatibility-family identifier (currently `4.4`), not the full firmware patch-release label. The Makefile passes both to the compiler, `installer/package.py` and `builder/current/prepare.py` read it, and `tests/test_version_static.py` fails if a copy appears in code. The release tag (`V4.2-R5`), the README download links and the changelog name a release and are edited by hand.
 
 ## Before tagging
 
@@ -21,7 +21,7 @@ Checklist for publishing a release. A release is a Git tag plus the files attach
 
 ## Tagging and publishing
 
-1. The tag points at the commit that contains the exact source of the release.
+1. Merge the checked release branch into `develop`, then merge `develop` into `main`. Create the release tag on the resulting `main` commit, never on a `develop`-only commit. Verify that the checked application tree and source snapshot are unchanged before tagging.
 2. Attach the firmware, the builder, the updater and the source archive, each with a `.sha256.txt` file.
 3. Write the release notes: what changed, the checksums, the printer base version and what was tested on hardware.
 4. Update the README download links and checksums.
@@ -29,3 +29,5 @@ Checklist for publishing a release. A release is a Git tag plus the files attach
 ## After publishing
 
 Never replace or delete an attached file. If something is wrong, publish a new tag (for example `V4.2-R6`) and say in its notes what it replaces.
+
+For application-only releases, retain the published complete-firmware and builder downloads. Publish the signed app, computer installer, corresponding sources, instructions and checksums. Optional experimental components are separate assets with their own compatibility and removal requirements. Keep the homepage concise; full history belongs in CHANGELOG.md and release notes. Preserve contributor and tester credits.

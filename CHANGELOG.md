@@ -404,7 +404,7 @@ Standalone update. The internal service version remains 1.1.31, and it does not 
 
 Earlier release details remain available through GitHub Releases, tags and Git history.
 
-[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.19-V4.4...HEAD
+[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.22-V4.4...HEAD
 [CC2 Control 1.2.19]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4
 [CC2 Control 1.2.18]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.18-V4.4
 [CC2 Control 1.2.17]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.17-V4.4
@@ -418,3 +418,5 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [Community Firmware V4.3 / CC2 Control 1.2.0]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.3
 [V4.2 / CC2 Control 1.1.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
+
+[CC2 Control 1.2.22]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4
