@@ -70,3 +70,4 @@ jobs:
           if-no-files-found: error
 
 # Release documentation aligned; rebuild revision 2.
+# Include current experimental-integration instructions in release ZIP.

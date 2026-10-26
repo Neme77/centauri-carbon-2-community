@@ -1,19 +1,19 @@
 # Prova sperimentale: Canvas UDS e Quiet
 
-Queste funzioni opzionali fanno parte della base unica CC2 Control 1.2.21.
+Queste funzioni opzionali fanno parte della base unica CC2 Control 1.2.22.
 Non serve cambiare canale o installare una diversa variante per abilitarle.
 Il pacchetto cumulativo include anche il componente webcam R2 qualificato,
 necessario a chi ha saltato l'aggiornamento 1.2.19, e non modifica l'eseguibile
 della stampante. I selettori non richiedono un riavvio completo; la prima
 attivazione del fix webcam richiede invece il riavvio completo della stampante.
 
-Per questa prova, se la versione installata e gia 1.2.21, estrarre lo ZIP e
+Per questa prova, se la versione installata e gia 1.2.22, estrarre lo ZIP e
 usare Install-Windows.cmd o install-cc2-control.sh: il pannello rifiuta
 correttamente pacchetti della stessa versione. Non aumentare la versione per
 una prova. Installare solo con stampante connessa, inattiva, fredda e target a
 zero; conservare il percorso esatto del backup indicato dall'installer.
 
-In Impostazioni → Aggiornamenti, inserire il codice LAN nella sezione delle
+In Impostazioni → Integrazioni, inserire il codice LAN nella sezione delle
 funzioni sperimentali. Le due opzioni partono spente nelle nuove installazioni e rimangono indipendenti; le preferenze gia salvate vengono conservate.
 Provare prima Canvas UDS, controllando stati degli slot e sincronizzazione Orca;
 poi disattivarlo per provare Quiet separatamente. Una scelta salvata non è una
