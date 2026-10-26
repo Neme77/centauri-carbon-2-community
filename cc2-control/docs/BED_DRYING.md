@@ -14,7 +14,7 @@ material presets or claims that bed temperature equals filament/air temperature.
 
 The supplied G-code uses six hour-long G4 waits. This implementation sends no
 G4/M190, nozzle, movement, fan or stepper command and changes no vendor file.
-It checks `gcode/help` for `SET_HEATER_BED_IDLE_TIMEOUT` and `M140` before heating.
+`gcode/help` is checked only for `SET_HEATER_BED_IDLE_TIMEOUT`, the native safety lease. The vendor response can omit registered M-codes such as `M140`; the app verifies that command separately through its correlated script reply and fresh bed-target readback. The regression fixture follows the printer's help-response shape with no M-code entries.
 It reads the configured bed idle timeout from printer.cfg/autosave.cfg, records a
 private recovery marker, arms a **90-second native bed timeout**, waits for the
 correlated reply, and only then requests the bed target once. While it owns the
