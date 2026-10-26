@@ -1,0 +1,27 @@
+name: Persistent camera R2 startup checks
+on:
+  push:
+    branches: [test/camera-persistent-r2, develop]
+    paths:
+      - experimental/camera-persistent-r2/**
+      - .github/workflows/camera-persistent-r2.yml
+  pull_request:
+    paths:
+      - experimental/camera-persistent-r2/**
+      - .github/workflows/camera-persistent-r2.yml
+permissions:
+  contents: read
+jobs:
+  startup-transactions:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install BusyBox for startup-shell fixtures
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq busybox
+      - name: Test persistent activation and native fallback without a printer
+        run: |
+          python3 experimental/camera-persistent-r2/test_persistent.py
+          CC2_TEST_SHELL='busybox sh' python3 experimental/camera-persistent-r2/test_persistent.py

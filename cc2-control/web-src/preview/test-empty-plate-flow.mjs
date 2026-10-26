@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { createServer } from 'vite'
+import { chromium } from 'playwright'
+const root=fileURLToPath(new URL('..',import.meta.url))
+process.env.CC2_BACKEND='http://127.0.0.1:1'
+const server=await createServer({root,configFile:path.join(root,'vite.config.ts'),mode:'demo',server:{port:0,host:'127.0.0.1'}})
+let browser
+try {
+ await server.listen();const origin=server.resolvedUrls.local[0].replace(/\/$/,'')
+ browser=await chromium.launch({headless:true,...(process.env.CC2_BROWSER_PATH?{executablePath:process.env.CC2_BROWSER_PATH}:{})})
+ const page=await browser.newPage({viewport:{width:1440,height:1000},timezoneId:'Europe/Rome'})
+ const errors=[],posts=[];page.on('pageerror',e=>errors.push(e.message))
+ page.on('request',r=>{if(r.method()==='POST'&&new URL(r.url()).pathname.startsWith('/api/plates/'))posts.push([new URL(r.url()).pathname,r.postData()])})
+ await page.route('**/api/preferences',r=>r.fulfill({json:{language:'en',theme:'dark'}}))
+ await page.route('**/api/plates',async r=>{const response=await r.fetch();const data=await response.json();data.plates=data.plates.filter(p=>p.side==='A'||p.name==='PLA 30 B');if(data.calibration.result!=='saved')data.slots.B='empty';await r.fulfill({response,json:data})})
+ await page.goto(origin+'/#bed/plates')
+ await Promise.all([page.waitForEvent('load'),page.selectOption('#preview-scene','idle')])
+ const form=page.locator('section').filter({has:page.getByRole('heading',{name:'New plate profile',exact:true})})
+ await form.locator('select').first().selectOption('B')
+ await form.locator('input:not([type=checkbox])').first().fill('PLA 30 B')
+ assert(await form.getByRole('checkbox').isDisabled())
+ await form.getByRole('button',{name:'Save Plate',exact:true}).click()
+ await page.getByText('Plate profile created. Calibrate it before mounting.',{exact:true}).waitFor()
+ const card=page.locator('[data-plate]').filter({has:page.getByText('PLA 30 B',{exact:true})})
+ await card.waitFor();const id=await card.getAttribute('data-plate')
+ assert(await card.getByRole('button',{name:'Mount',exact:true}).isDisabled())
+ assert.deepEqual(posts.at(-1),['/api/plates/create','B\nPLA 30 B\n0.000'])
+ await card.getByRole('button',{name:'Calibrate this plate',exact:true}).click()
+ const field=text=>page.locator('label',{hasText:text}).locator('select,input')
+ const side=field('Calibration plate side'),temp=field('Bed temperature, °C'),soak=field('Soak, min'),target=field('Save the result to plate')
+ await side.waitFor();assert.equal(await side.inputValue(),'default1');assert.equal(await target.inputValue(),id)
+ await temp.fill('30');await soak.selectOption('2')
+ await page.getByRole('tab',{name:'Build Plates',exact:true}).click()
+ await page.getByRole('tab',{name:'Mesh & Saved Profiles',exact:true}).click()
+ assert.equal(await target.inputValue(),id);assert.equal(await temp.inputValue(),'30');assert.equal(await soak.inputValue(),'2')
+ await page.getByRole('button',{name:/Run Bed Mesh Calibration/}).click()
+ await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click()
+ await page.locator('[data-calibration]').waitFor()
+ await page.getByRole('tab',{name:'Build Plates',exact:true}).click()
+ await page.getByRole('tab',{name:'Mesh & Saved Profiles',exact:true}).click()
+ assert.equal(await target.inputValue(),id);assert.equal(await temp.inputValue(),'30');assert.equal(await soak.inputValue(),'2')
+ assert(await target.isDisabled())
+ assert.equal(posts.filter(([url])=>url==='/api/plates/calibrate').length,1)
+ for(let i=0;i<5;i++)await page.evaluate(()=>fetch('/__preview/calibration-step',{method:'POST'}))
+ await page.getByRole('tab',{name:'Build Plates',exact:true}).click()
+ await card.locator('[data-measure]').waitFor()
+ assert.match(await card.locator('[data-measure]').first().innerText(),/\d{1,2}:\d{2}:\d{2}/)
+ assert.deepEqual(errors,[])
+ console.log('PASS: empty Side B profile, guarded mounting, 30 C calibration target, tabs before/during calibration, one start and exact time')
+}finally{await browser?.close();await server.close()}

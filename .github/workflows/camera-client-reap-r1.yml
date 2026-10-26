@@ -1,0 +1,38 @@
+name: Experimental camera client reclamation
+on:
+  push:
+    branches: [test/camera-persistent-r2, develop]
+    paths:
+      - experimental/camera-client-reap-r1/**
+      - .github/workflows/camera-client-reap-r1.yml
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - experimental/camera-client-reap-r1/**
+      - .github/workflows/camera-client-reap-r1.yml
+permissions:
+  contents: read
+jobs:
+  offline-qualification:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install host and emulated ARM test tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc g++ gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf qemu-user python3-venv
+          python3 -m venv "$RUNNER_TEMP/camera-tools"
+          "$RUNNER_TEMP/camera-tools/bin/pip" install ziglang==0.15.2 pyelftools==0.33
+          echo "CC2_ZIG=$RUNNER_TEMP/camera-tools/lib/python3.14/site-packages/ziglang/zig" >> "$GITHUB_ENV"
+      - name: Native threads, allocation failures, libstdc++ ABI, ASAN/UBSAN and ARM QEMU
+        run: |
+          CC2_ZIG=$("$RUNNER_TEMP/camera-tools/bin/python" -c 'import ziglang; from pathlib import Path; print(Path(ziglang.__file__).parent/"zig")')
+          export CC2_ZIG
+          "$RUNNER_TEMP/camera-tools/bin/python" experimental/camera-client-reap-r1/build-ci.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cc2-camera-client-reap-r2
+          path: experimental/camera-client-reap-r1/output/package/
+          if-no-files-found: error
+          retention-days: 14

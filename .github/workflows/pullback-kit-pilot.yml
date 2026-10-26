@@ -1,0 +1,18 @@
+name: Standalone pull-back kit pilot
+on:
+  push:
+    branches: [experimental/pullback-multiplatform-package]
+    paths: ['experimental/canvas-pullback-kit/**', '.github/workflows/pullback-kit-pilot.yml']
+  pull_request:
+    paths: ['experimental/canvas-pullback-kit/**', '.github/workflows/pullback-kit-pilot.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: sh -n experimental/canvas-pullback-kit/transaction.sh && sh -n experimental/canvas-pullback-kit/snapshot.sh && sh -n experimental/canvas-pullback-kit/Start-Linux-macOS.sh
+      - name: Policy and isolated transaction tests
+        run: python3 -m unittest discover -s experimental/canvas-pullback-kit -p test_kit.py -v

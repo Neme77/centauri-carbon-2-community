@@ -1,0 +1,59 @@
+{
+  "vendor_sha256": "8039081f9c4b01e720d838d4ab6e4515a8979b9a71a33bd4164321c282e06074",
+  "libco_sha256": "14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403",
+  "mapping": {
+    "0x2bc578": "0x35ee3c",
+    "0x2bc7e8": "0xbf70c",
+    "0x470e08": "0x271c90",
+    "0x2cf490": "0xcfd10",
+    "0x2d0914": "0xd1194",
+    "0x46c518": "0x26d3a0",
+    "0x46d520": "0x26e3a8",
+    "0x46be24": "0x26ccac",
+    "0x46aa30": "0x26b8b8",
+    "0x472a34": "0x2738bc",
+    "0x4697b8": "0x26a640",
+    "0x46b23c": "0x26c0c4",
+    "0x4714c8": "0x272350",
+    "0x3095cc": "0x109e4c",
+    "0x47124c": "0x2720d4",
+    "0x46cf54": "0x26dddc",
+    "0x469cd4": "0x26ab5c",
+    "0x2da7dc": "0xdb05c",
+    "0x2cfbe0": "0xd0460",
+    "0x469664": "0x26a4ec",
+    "0x2c3668": "0xc3ee8",
+    "0x3d566c": "0x1d62b4"
+  },
+  "replaced_functions_comparison": {
+    "_ZN15ReactorCallback6invokeEd": {
+      "old_va": "0x469cd4",
+      "new_va": "0x26ab5c",
+      "old_size": 308,
+      "new_size": 308,
+      "instructions_equal_except_call_targets": true
+    },
+    "_ZN13SelectReactor12check_timersEdb": {
+      "old_va": "0x46be24",
+      "new_va": "0x26ccac",
+      "old_size": 820,
+      "new_size": 820,
+      "instructions_equal_except_call_targets": true
+    },
+    "_ZN11PollReactor13dispatch_loopEv": {
+      "old_va": "0x46d520",
+      "new_va": "0x26e3a8",
+      "old_size": 1400,
+      "new_size": 1400,
+      "instructions_equal_except_call_targets": false
+    },
+    "_ZN17ReactorCompletion4waitEdRKN8nlohmann16json_abi_v3_12_010basic_jsonISt3mapSt6vectorNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbxydSaNS1_14adl_serializerES4_IhSaIhEEvEE": {
+      "old_va": "0x4697b8",
+      "new_va": "0x26a640",
+      "old_size": 600,
+      "new_size": 600,
+      "instructions_equal_except_call_targets": false
+    }
+  },
+  "status": "experimental_unqualified_until_ARM_tests"
+}

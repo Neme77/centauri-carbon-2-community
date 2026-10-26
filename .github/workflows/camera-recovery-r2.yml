@@ -1,0 +1,39 @@
+name: Experimental camera recovery R2
+on:
+  push:
+    branches: [test/camera-persistent-r2, develop]
+    paths:
+      - experimental/camera-recovery-r2/**
+      - .github/workflows/camera-recovery-r2.yml
+  pull_request:
+    paths:
+      - experimental/camera-recovery-r2/**
+      - .github/workflows/camera-recovery-r2.yml
+permissions:
+  contents: read
+jobs:
+  offline-qualification:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install offline build and ARM emulation tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc g++ gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf qemu-user python3-venv
+          python3 -m venv "$RUNNER_TEMP/camera-tools"
+          "$RUNNER_TEMP/camera-tools/bin/pip" install ziglang==0.15.2
+      - name: Socket ordering, concurrent delivery, sanitizer and ARM ABI checks
+        run: |
+          CC2_ZIG=$("$RUNNER_TEMP/camera-tools/bin/python" -c 'import ziglang; from pathlib import Path; print(Path(ziglang.__file__).parent/"zig")')
+          export CC2_ZIG
+          "$RUNNER_TEMP/camera-tools/bin/python" experimental/camera-recovery-r2/build-ci.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cc2-camera-recovery-r2
+          path: |
+            experimental/camera-recovery-r2/output/libcc2-camera-recovery-r2.so
+            experimental/camera-recovery-r2/output/validation.json
+            experimental/camera-recovery-r2/output/required-symbol-versions.txt
+          if-no-files-found: error
+          retention-days: 14

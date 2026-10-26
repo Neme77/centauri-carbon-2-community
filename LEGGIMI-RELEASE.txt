@@ -1,0 +1,12 @@
+COMMUNITY FIRMWARE V4.4 — CC2 CONTROL 1.2.3
+
+Per installare il firmware completo scaricare il file .zip.sig firmato della release V4.4 e verificarne SHA-256. Copiarlo integro nella radice USB e utilizzare l’aggiornamento offline dal display. Non estrarlo né rinominarlo update.bin.
+
+Guida completa: docs/FIRST_RUN.it.md (English: docs/FIRST_RUN.md).
+Release: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4
+
+Lo ZIP del builder contiene sorgenti per compilare sul PC, non il firmware da installare. Nel kit pubblico leggere PUBLIC-BUILDER.txt: input vendor, strumenti e chiavi restano esterni. Non sono inclusi updater standalone CC2 Control per V4.4; non installare la nuova applicazione separatamente sulla V4.3.
+
+La base ufficiale del builder è esclusivamente 02.01.01.07. I vecchi input firmware non sono intercambiabili. Il ripristino di fabbrica non è necessario.
+
+ELEGOO ha bloccato il downgrade. Il link al firmware originale nelle guide riguarda la stessa versione 02.01.01.07 e non permette di tornare a versioni precedenti. Il checksum del file è verificato e il maintainer ha confermato sulla stampante il ritorno dalla V4.4 al firmware originale della stessa versione.

@@ -1,0 +1,40 @@
+name: Integrate printer-validated CC2 Control 1.2.14
+on:
+  push:
+    branches: [release/cc2-control-1.2.14]
+    paths: [.github/workflows/integrate-1214.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  integrate:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: cc2-control-1.2.14-combined-trial
+          run-id: 38948274396
+          github-token: ${{ github.token }}
+          path: /tmp/validated-1214
+      - name: Import the exact printer-tested application sources
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 .github/scripts/integrate-1214.py
+          git add cc2-control README.md CHANGELOG.md docs
+          git commit -m "Release printer-validated CC2 Control 1.2.14"
+      - name: Synchronize public builder source pins
+        run: |
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current
+          git commit -m "Synchronize public builder snapshot with CC2 Control 1.2.14"
+      - name: Verify generated assets and builder
+        run: |
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+          python3 cc2-control/tests/test_web_sync_static.py
+          python3 cc2-control/tests/test_locales_static.py
+      - name: Publish integration commits
+        run: git push origin HEAD:refs/heads/release/cc2-control-1.2.14

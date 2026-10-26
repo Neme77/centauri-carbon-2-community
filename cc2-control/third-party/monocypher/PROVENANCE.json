@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/LoupVaillant/Monocypher",
+  "tag": "4.0.2",
+  "commit": "0d85f98c9d9b0227e42cf795cb527dff372b40a4",
+  "license": "BSD-2-Clause OR CC0-1.0",
+  "notes": "Source copied from the pinned upstream commit; vendored hashes record local line endings.",
+  "sha256": {
+    "LICENCE.md": "7a832295f091db95a0610681487a83347de4ec836f3e091439e297eb392b7656",
+    "monocypher-ed25519.c": "7e4e19d4f85a2759dfcf3a937eb969dd92d126326cf55fc1a3dd342ad37ab100",
+    "monocypher-ed25519.h": "ce7eaf5efae08c9da8cea5bb6a992878f9d3cc5a3498f2bb247e656a9ec935e6",
+    "monocypher.c": "784fd249db0a24f3d40002fa901917833fd2b866f62aeec5dff98ee2adba7052",
+    "monocypher.h": "1c4018fe4f85f7ab90092a78cfb7cf7e2afa6eeb0cf076a38a8a75cd8513d1b7"
+  }
+}

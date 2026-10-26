@@ -12,22 +12,19 @@ Contributions, test reports and focused bug fixes are welcome.
 
 ## Repository conventions
 
-- Current files use stable paths; version numbers belong in source constants,
-  release tags and the changelog, not in working filenames.
-- Generated firmware, binaries, credentials and private signing keys are never
-  committed.
-- Do not rewrite published history to tidy commit counts. Use a focused branch
-  and squash it when merging if appropriate.
+- Current files use stable paths. The CC2 Control version is written only in `cc2-control/VERSION`; release tags and the changelog name releases (see [`RELEASING.md`](RELEASING.md)), not working filenames.
+- Generated firmware, binaries, credentials and private signing keys are never committed.
+- Do not rewrite published history to tidy commit counts. Use a focused branch and squash it when merging if appropriate.
 - Keep vendor material separate and record its origin and checksum.
-- User-facing documentation is written in English; the UI may contain supported
-  translations.
+- User-facing documentation is written in English; the UI may contain supported translations.
 
 ## Tests
 
 ```sh
 cd cc2-control
-make clean all CROSS= CC=gcc
-python3 -m unittest discover -s tests -p 'test_*.py'
+make clean test CROSS= CC=gcc
 ```
 
-See [`docs/TESTING.md`](docs/TESTING.md) for firmware and real-printer checks.
+These tests also run automatically on every pull request; a PR should be green
+before it is merged. See [`docs/TESTING.md`](docs/TESTING.md) for firmware and
+real-printer checks.

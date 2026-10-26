@@ -1,0 +1,664 @@
+{
+  "brands": [
+    {
+      "name": "ELEGOO",
+      "types": [
+        {
+          "name": "PLA",
+          "items": [
+            {
+              "name": "PLA",
+              "min": 190,
+              "max": 230,
+              "code": 0
+            },
+            {
+              "name": "PLA+",
+              "min": 190,
+              "max": 230,
+              "code": 1
+            },
+            {
+              "name": "PLA PRO",
+              "min": 190,
+              "max": 230,
+              "code": 2
+            },
+            {
+              "name": "PLA Silk",
+              "min": 190,
+              "max": 230,
+              "code": 3
+            },
+            {
+              "name": "PLA-CF",
+              "min": 210,
+              "max": 240,
+              "code": 4
+            },
+            {
+              "name": "PLA Matte",
+              "min": 190,
+              "max": 230,
+              "code": 6
+            },
+            {
+              "name": "PLA Wood",
+              "min": 190,
+              "max": 230,
+              "code": 8
+            },
+            {
+              "name": "PLA Basic",
+              "min": 190,
+              "max": 230,
+              "code": 9
+            },
+            {
+              "name": "RAPID PLA+",
+              "min": 190,
+              "max": 230,
+              "code": 10
+            },
+            {
+              "name": "PLA Marble",
+              "min": 190,
+              "max": 230,
+              "code": 11
+            },
+            {
+              "name": "PLA Galaxy",
+              "min": 190,
+              "max": 230,
+              "code": 12
+            },
+            {
+              "name": "PLA Red Copper",
+              "min": 190,
+              "max": 230,
+              "code": 13
+            }
+          ]
+        },
+        {
+          "name": "PETG",
+          "items": [
+            {
+              "name": "PETG",
+              "min": 230,
+              "max": 260,
+              "code": 256
+            },
+            {
+              "name": "PETG-CF",
+              "min": 240,
+              "max": 270,
+              "code": 257
+            },
+            {
+              "name": "PETG-GF",
+              "min": 240,
+              "max": 270,
+              "code": 258
+            },
+            {
+              "name": "PETG PRO",
+              "min": 230,
+              "max": 260,
+              "code": 259
+            },
+            {
+              "name": "PETG Translucent",
+              "min": 230,
+              "max": 260,
+              "code": 260
+            },
+            {
+              "name": "RAPID PETG",
+              "min": 230,
+              "max": 260,
+              "code": 261
+            }
+          ]
+        },
+        {
+          "name": "ABS",
+          "items": [
+            {
+              "name": "ABS",
+              "min": 240,
+              "max": 280,
+              "code": 512
+            },
+            {
+              "name": "ABS-CF",
+              "min": 240,
+              "max": 280,
+              "code": 514
+            }
+          ]
+        },
+        {
+          "name": "TPU",
+          "items": [
+            {
+              "name": "TPU 95A",
+              "min": 220,
+              "max": 240,
+              "code": 769
+            },
+            {
+              "name": "RAPID TPU 95A",
+              "min": 220,
+              "max": 240,
+              "code": 770
+            }
+          ]
+        },
+        {
+          "name": "PA",
+          "items": [
+            {
+              "name": "PA-CF",
+              "min": 260,
+              "max": 300,
+              "code": 1025
+            },
+            {
+              "name": "PAHT-CF",
+              "min": 280,
+              "max": 320,
+              "code": 1026
+            }
+          ]
+        },
+        {
+          "name": "PC",
+          "items": [
+            {
+              "name": "PC",
+              "min": 260,
+              "max": 290,
+              "code": 1536
+            },
+            {
+              "name": "PC-FR",
+              "min": 260,
+              "max": 290,
+              "code": 1538
+            }
+          ]
+        },
+        {
+          "name": "ASA",
+          "items": [
+            {
+              "name": "ASA",
+              "min": 240,
+              "max": 280,
+              "code": 2048
+            },
+            {
+              "name": "ASA-CF",
+              "min": 240,
+              "max": 280,
+              "code": 2049
+            }
+          ]
+        },
+        {
+          "name": "PET",
+          "items": [
+            {
+              "name": "PET",
+              "min": 230,
+              "max": 250,
+              "code": 3840
+            },
+            {
+              "name": "PET-CF",
+              "min": 230,
+              "max": 250,
+              "code": 3841
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Generic",
+      "types": [
+        {
+          "name": "PLA",
+          "items": [
+            {
+              "name": "PLA",
+              "min": 190,
+              "max": 230,
+              "code": 0
+            },
+            {
+              "name": "PLA+",
+              "min": 190,
+              "max": 230,
+              "code": 1
+            },
+            {
+              "name": "PLA PRO",
+              "min": 190,
+              "max": 230,
+              "code": 2
+            },
+            {
+              "name": "PLA Silk",
+              "min": 190,
+              "max": 230,
+              "code": 3
+            },
+            {
+              "name": "PLA-CF",
+              "min": 210,
+              "max": 240,
+              "code": 4
+            },
+            {
+              "name": "PLA Carbon",
+              "min": 190,
+              "max": 230,
+              "code": 5
+            },
+            {
+              "name": "PLA Matte",
+              "min": 190,
+              "max": 230,
+              "code": 6
+            },
+            {
+              "name": "PLA Fluo",
+              "min": 190,
+              "max": 230,
+              "code": 7
+            },
+            {
+              "name": "PLA Wood",
+              "min": 190,
+              "max": 230,
+              "code": 8
+            },
+            {
+              "name": "PLA Basic",
+              "min": 190,
+              "max": 230,
+              "code": 9
+            },
+            {
+              "name": "RAPID PLA+",
+              "min": 190,
+              "max": 230,
+              "code": 10
+            },
+            {
+              "name": "PLA Marble",
+              "min": 190,
+              "max": 230,
+              "code": 11
+            },
+            {
+              "name": "PLA Galaxy",
+              "min": 190,
+              "max": 230,
+              "code": 12
+            },
+            {
+              "name": "PLA Red Copper",
+              "min": 190,
+              "max": 230,
+              "code": 13
+            },
+            {
+              "name": "PLA Sparkle",
+              "min": 190,
+              "max": 230,
+              "code": 14
+            }
+          ]
+        },
+        {
+          "name": "PETG",
+          "items": [
+            {
+              "name": "PETG",
+              "min": 230,
+              "max": 260,
+              "code": 256
+            },
+            {
+              "name": "PETG-CF",
+              "min": 240,
+              "max": 270,
+              "code": 257
+            },
+            {
+              "name": "PETG-GF",
+              "min": 240,
+              "max": 270,
+              "code": 258
+            },
+            {
+              "name": "PETG PRO",
+              "min": 230,
+              "max": 260,
+              "code": 259
+            },
+            {
+              "name": "PETG Translucent",
+              "min": 230,
+              "max": 260,
+              "code": 260
+            },
+            {
+              "name": "RAPID PETG",
+              "min": 230,
+              "max": 260,
+              "code": 261
+            }
+          ]
+        },
+        {
+          "name": "ABS",
+          "items": [
+            {
+              "name": "ABS",
+              "min": 240,
+              "max": 280,
+              "code": 512
+            },
+            {
+              "name": "ABS-GF",
+              "min": 240,
+              "max": 280,
+              "code": 513
+            },
+            {
+              "name": "ABS-CF",
+              "min": 240,
+              "max": 280,
+              "code": 514
+            }
+          ]
+        },
+        {
+          "name": "TPU",
+          "items": [
+            {
+              "name": "TPU",
+              "min": 220,
+              "max": 240,
+              "code": 768
+            },
+            {
+              "name": "TPU 95A",
+              "min": 220,
+              "max": 240,
+              "code": 769
+            },
+            {
+              "name": "RAPID TPU 95A",
+              "min": 220,
+              "max": 240,
+              "code": 770
+            }
+          ]
+        },
+        {
+          "name": "PA",
+          "items": [
+            {
+              "name": "PA",
+              "min": 260,
+              "max": 290,
+              "code": 1024
+            },
+            {
+              "name": "PA-CF",
+              "min": 260,
+              "max": 300,
+              "code": 1025
+            },
+            {
+              "name": "PAHT-CF",
+              "min": 280,
+              "max": 320,
+              "code": 1026
+            },
+            {
+              "name": "PA6",
+              "min": 260,
+              "max": 290,
+              "code": 1027
+            },
+            {
+              "name": "PA6-CF",
+              "min": 270,
+              "max": 310,
+              "code": 1028
+            },
+            {
+              "name": "PA12",
+              "min": 240,
+              "max": 270,
+              "code": 1029
+            },
+            {
+              "name": "PA12-CF",
+              "min": 260,
+              "max": 290,
+              "code": 1030
+            }
+          ]
+        },
+        {
+          "name": "CPE",
+          "items": [
+            {
+              "name": "CPE",
+              "min": 220,
+              "max": 250,
+              "code": 1280
+            }
+          ]
+        },
+        {
+          "name": "PC",
+          "items": [
+            {
+              "name": "PC",
+              "min": 260,
+              "max": 290,
+              "code": 1536
+            },
+            {
+              "name": "PCTG",
+              "min": 260,
+              "max": 290,
+              "code": 1537
+            },
+            {
+              "name": "PC-FR",
+              "min": 260,
+              "max": 290,
+              "code": 1538
+            }
+          ]
+        },
+        {
+          "name": "PVA",
+          "items": [
+            {
+              "name": "PVA",
+              "min": 180,
+              "max": 210,
+              "code": 1792
+            }
+          ]
+        },
+        {
+          "name": "ASA",
+          "items": [
+            {
+              "name": "ASA",
+              "min": 240,
+              "max": 280,
+              "code": 2048
+            },
+            {
+              "name": "ASA-CF",
+              "min": 240,
+              "max": 280,
+              "code": 2049
+            }
+          ]
+        },
+        {
+          "name": "BVOH",
+          "items": [
+            {
+              "name": "BVOH",
+              "min": 190,
+              "max": 210,
+              "code": 2304
+            }
+          ]
+        },
+        {
+          "name": "EVA",
+          "items": [
+            {
+              "name": "EVA",
+              "min": 180,
+              "max": 220,
+              "code": 2560
+            }
+          ]
+        },
+        {
+          "name": "HIPS",
+          "items": [
+            {
+              "name": "HIPS",
+              "min": 220,
+              "max": 250,
+              "code": 2816
+            }
+          ]
+        },
+        {
+          "name": "PP",
+          "items": [
+            {
+              "name": "PP",
+              "min": 210,
+              "max": 250,
+              "code": 3072
+            },
+            {
+              "name": "PP-CF",
+              "min": 220,
+              "max": 260,
+              "code": 3073
+            },
+            {
+              "name": "PP-GF",
+              "min": 230,
+              "max": 250,
+              "code": 3074
+            }
+          ]
+        },
+        {
+          "name": "PPA",
+          "items": [
+            {
+              "name": "PPA",
+              "min": 290,
+              "max": 310,
+              "code": 3328
+            },
+            {
+              "name": "PPA-CF",
+              "min": 300,
+              "max": 320,
+              "code": 3329
+            },
+            {
+              "name": "PPA-GF",
+              "min": 290,
+              "max": 310,
+              "code": 3330
+            }
+          ]
+        },
+        {
+          "name": "PPS",
+          "items": [
+            {
+              "name": "PPS",
+              "min": 330,
+              "max": 340,
+              "code": 3584
+            },
+            {
+              "name": "PPS-CF",
+              "min": 340,
+              "max": 360,
+              "code": 3585
+            }
+          ]
+        },
+        {
+          "name": "PET",
+          "items": [
+            {
+              "name": "PET",
+              "min": 230,
+              "max": 250,
+              "code": 3840
+            },
+            {
+              "name": "PET-CF",
+              "min": 230,
+              "max": 250,
+              "code": 3841
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "colors": [
+    "#FFFFFF",
+    "#FFF242",
+    "#DBF47A",
+    "#09CC3A",
+    "#077747",
+    "#0B6283",
+    "#0BE2A0",
+    "#74D9F3",
+    "#48A7FA",
+    "#2850DF",
+    "#433089",
+    "#A03BF7",
+    "#F32FF8",
+    "#D4B1DD",
+    "#F95D77",
+    "#F72221",
+    "#7C4C00",
+    "#F88D36",
+    "#FCEBD7",
+    "#D2C5A3",
+    "#AF7832",
+    "#898989",
+    "#BCBCBC",
+    "#000000"
+  ]
+}

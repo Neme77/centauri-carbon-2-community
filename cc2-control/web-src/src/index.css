@@ -1,0 +1,510 @@
+@import "tailwindcss";
+
+/* Canvas: settings determine the desktop row height; observations never stretch it. */
+.cc2-canvas-overview { display:flex; align-items:center; gap:16px; }
+.cc2-canvas-miniatures { display:none; gap:4px; }
+.cc2-canvas-miniatures svg { border-bottom:3px solid var(--edge); margin-bottom:3px; }
+.cc2-canvas-slots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.cc2-canvas-slot { position:relative; display:flex; flex-direction:column; }
+.cc2-canvas-slot-pick { position:absolute; inset:0; z-index:1; border-radius:8px; }
+.cc2-canvas-slot>:not(.cc2-canvas-slot-pick) { pointer-events:none; }
+.cc2-canvas-slot .cc2-canvas-choose { position:relative; z-index:2; pointer-events:auto; }
+.cc2-canvas-slot .cc2-canvas-slot-pick:focus-visible { outline-offset:3px; }
+.cc2-canvas-slot .cc2-canvas-slot-pick:disabled { cursor:default; }
+.cc2-canvas-ring { width:76px; height:76px; border:15px solid; border-radius:50%; background:var(--bg); margin:0 auto 12px; flex-shrink:0; }
+.cc2-canvas-slot-data { display:grid; gap:4px; font-size:12px; }
+.cc2-canvas-spool-name { min-height:1.45em; overflow-wrap:anywhere; font-weight:600; margin-bottom:6px; }
+.cc2-canvas-choose { width:100%; margin:10px 0; }
+.cc2-canvas-remaining { margin-top:auto; padding-top:10px; font-size:12px; }
+.cc2-canvas-weight-track { height:5px; margin:6px 0 10px; border-radius:3px; background:var(--edge); overflow:hidden; }
+.cc2-canvas-weight-track>div { height:100%; background:var(--cyan); }
+.cc2-canvas-slot-state { font-size:12px; min-height:4.35em; overflow-wrap:anywhere; }
+.cc2-canvas-selected-label { display:none; }
+.cc2-canvas-lower { display:grid; gap:14px; align-items:stretch; }
+.cc2-canvas-settings { display:flex; flex-direction:column; min-height:300px; }
+.cc2-canvas-refill { margin-bottom:10px; }
+.cc2-canvas-unload { border-top:1px solid var(--edge); padding-top:10px; font-size:12px; }
+.cc2-canvas-unload>label { flex-wrap:wrap; font-size:14px; }
+.cc2-canvas-unload>label>small { margin-left:0; }
+.cc2-canvas-unload input { width:100px; }
+.cc2-canvas-unload>p { font-size:12px; }
+.cc2-canvas-reset { margin-top:auto; padding-top:10px; display:flex; justify-content:flex-end; }
+.cc2-canvas-history { display:flex; flex-direction:column; height:320px; min-height:0; overflow:hidden; }
+.cc2-canvas-history>.text-xs { flex-shrink:0; }
+.cc2-canvas-history-scroll { flex:1 1 0; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; margin:10px 0; padding-right:5px; border-block:1px solid var(--edge); }
+.cc2-canvas-history-empty { display:flex; height:100%; min-height:70px; align-items:center; justify-content:center; text-align:center; }
+.cc2-canvas-history>button { flex-shrink:0; }
+@container page (min-width:720px) {
+  .cc2-canvas-miniatures { display:flex; }
+  .cc2-canvas-selected-label { display:inline; }
+  .cc2-canvas-lower { grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); }
+  .cc2-canvas-history { height:0; min-height:100%; }
+}
+@container page (min-width:960px) {
+  .cc2-canvas-slots { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .cc2-canvas-slot-state { min-height:1.45em; }
+}
+
+/* Every page follows the content width; desktop thresholds retain useful column widths. */
+@custom-variant cc2-sm {
+  @media (hover: hover) and (pointer: fine) {
+    @container page (min-width: 540px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 640px) { @slot; }
+  }
+}
+@custom-variant cc2-md {
+  @media (hover: hover) and (pointer: fine) {
+    @container page (min-width: 720px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 768px) { @slot; }
+  }
+}
+@custom-variant cc2-lg {
+  @media (hover: hover) and (pointer: fine) {
+    @container page (min-width: 960px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 1024px) { @slot; }
+  }
+}
+@custom-variant cc2-xl {
+  @media (hover: hover) and (pointer: fine) {
+    @container page (min-width: 1020px) { @slot; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    @container page (min-width: 1280px) { @slot; }
+  }
+}
+
+
+@theme inline {
+  --color-bg: var(--bg); --color-panel: var(--panel); --color-edge: var(--edge);
+  --color-fg: var(--text); --color-muted: var(--muted); --color-field: var(--field); --color-ink: var(--ink);
+  --color-cyan: var(--cyan); --color-green: var(--green); --color-amber: var(--amber);
+  --color-red: var(--red); --color-blue: var(--blue);
+  --color-well: var(--well); --color-well-fg: var(--well-fg);
+}
+:root {
+  color-scheme: dark;
+  --bg: #031622; --panel: #052131; --edge: #17445b; --text: #edf6fc; --muted: #8daebf; --field: #0a2b3f; --ink: #012331;
+  --cyan: #00d3ed; --green: #29e49b; --amber: #ffc54a; --red: #ff6170; --blue: #209eff;
+  --well: #031521; --well-fg: #edf6fc; /* inset dark surfaces: 3D mesh, terminal */
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef0f2; --panel: #fff; --edge: #c5cbd0; --text: #17191b; --muted: #596168; --field: #f4f5f6; --ink: #fff;
+  --cyan: #006f80; --green: #087748; --amber: #815700; --red: #ad2638; --blue: #166fa8;
+  --well: #031521; --well-fg: #edf6fc;
+}
+/* Extra palettes. Each one defines every token above; --cyan is the accent colour, --ink the text drawn on it. */
+:root[data-theme="dracula"] {
+  color-scheme: dark;
+  --bg: #21222c; --panel: #282a36; --edge: #44475a; --text: #f8f8f2; --muted: #a4a9c8; --field: #343746; --ink: #282a36;
+  --cyan: #bd93f9; --green: #50fa7b; --amber: #ffb86c; --red: #ff5555; --blue: #8be9fd;
+  --well: #191a21; --well-fg: #f8f8f2;
+}
+:root[data-theme="nord"] {
+  color-scheme: dark;
+  --bg: #2e3440; --panel: #3b4252; --edge: #4c566a; --text: #eceff4; --muted: #b4bfd3; --field: #434c5e; --ink: #2e3440;
+  --cyan: #88c0d0; --green: #a3be8c; --amber: #ebcb8b; --red: #d57780; --blue: #81a1c1;
+  --well: #242933; --well-fg: #eceff4;
+}
+:root[data-theme="monokai"] {
+  color-scheme: dark;
+  --bg: #1e1f1c; --panel: #272822; --edge: #49483e; --text: #f8f8f2; --muted: #a6a28c; --field: #3e3d32; --ink: #272822;
+  --cyan: #a6e22e; --green: #a6e22e; --amber: #fd971f; --red: #f92672; --blue: #66d9ef;
+  --well: #191a15; --well-fg: #f8f8f2;
+}
+:root[data-theme="solarized-light"] {
+  color-scheme: light;
+  --bg: #eee8d5; --panel: #fdf6e3; --edge: #d6cfb9; --text: #073642; --muted: #586e75; --field: #f5eedb; --ink: #fdf6e3;
+  --cyan: #1c78bc; --green: #5f7000; --amber: #946c00; --red: #dc322f; --blue: #1c78bc;
+  --well: #002b36; --well-fg: #eee8d5;
+}
+/* Inter (SIL OFL, see fonts/OFL.txt): variable 400â€“700, Latin + Latin-1 only, inlined by the build so it needs no request. */
+@font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+main:focus { outline: none; } /* focus lands here after navigation, it is not a control */
+input[type=range], input[type=checkbox], input[type=radio], progress { accent-color: var(--cyan); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* Tailwind's reset gives buttons the default arrow: restore the pointer on everything clickable (utilities still win). */
+@layer base {
+  small { font-size: 12px; } /* Tailwind's reset makes it 80% of its parent, which falls under 10 px inside text-xs */
+  button:not(:disabled),
+  select:not(:disabled),
+  input:is([type="checkbox"], [type="radio"], [type="color"], [type="file"]):not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Compact layout (drawer menu, full content width): portrait phones and tablets up to 900 px, and short landscape screens.
+   Keep this query identical to COMPACT in components/layout.tsx. */
+.cc2-menu-backdrop { display: none; }
+@media (max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
+  .cc2-main { margin-left: 0; padding: 10px; }
+  .cc2-main input, .cc2-main select, .cc2-main textarea { font-size: 16px; }
+  .cc2-file-row { min-height: 56px; }
+  .cc2-file-identity { gap: 6px; }
+  .cc2-file-name {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; font-weight: 500;
+  }
+  .cc2-file-expanded { display: block; overflow-wrap: anywhere; font-size: 12px; }
+  .cc2-file-detail-title { font-size: 13px; }
+  .cc2-mobile-menu { display: flex; }
+  .cc2-topbar { gap: 8px; padding-inline: 8px; }
+  .cc2-full-brand { display: none; }
+  .cc2-portrait-brand { display: block; }
+  .cc2-sidebar {
+    width: min(280px, 85vw); transform: translateX(-100%); visibility: hidden;
+    overflow-y: auto; transition: transform 150ms ease;
+  }
+  .cc2-sidebar-open { transform: translateX(0); visibility: visible; }
+  .cc2-sidebar nav a { justify-content: flex-start; padding-inline: 16px; }
+  .cc2-sidebar nav a span { display: inline; }
+  .cc2-menu-backdrop {
+    display: block; position: fixed; inset: 68px 0 0; z-index: 19;
+    background: #0008;
+  }
+  .cc2-topbar > div:last-child { min-width: 0; gap: 4px; }
+  .cc2-topbar > div:last-child > div:first-child { padding-inline: 8px; }
+}
+
+/* A short landscape screen cannot spare a 68 px header or 52 px menu rows. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .cc2-topbar { height: 52px; }
+  .cc2-main { margin-top: 52px; }
+  .cc2-sidebar { top: 52px; }
+  .cc2-sidebar nav a { height: 44px; }
+  .cc2-sidebar > div { display: none; } /* collapse button and version: meaningless for a drawer */
+  .cc2-menu-backdrop { inset: 52px 0 0; }
+}
+
+/* Touch: 44 px is the minimum comfortable target. Switches keep their look and get a larger hit area instead. */
+@media (pointer: coarse) {
+  button:not([role="switch"]), select, input:not([type="range"], [type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="hidden"]) {
+    min-height: 44px;
+  }
+  button[role="switch"] { position: relative; }
+  button[role="switch"]::before { content: ""; position: absolute; inset: -11px -4px; }
+}
+
+/* Compact desktop density. Touch targets and compact drawers keep their existing sizing. */
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-topbar { height: 60px; gap: 12px; }
+  .cc2-sidebar { top: 60px; }
+  .cc2-main { margin-top: 60px; padding: 12px; font-size: 13px; }
+  .cc2-header-title { height: 48px; }
+  .cc2-header-title h1 { font-size: 29px; bottom: 5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cc2-header-title .cc2-full-brand > svg { top: 43.2px; }
+  .cc2-topbar > div:last-child > :is(div, button):not([role="presentation"]) { height: 36px; font-size: 12px; }
+  .cc2-main section { padding: 12px; }
+  .cc2-main section h2 { font-size: 14px; }
+  .cc2-main button:not([role="switch"]), .cc2-main input:not([type="range"], [type="checkbox"], [type="radio"]), .cc2-main select { min-height: 32px; font-size: 13px; }
+  .cc2-dashboard-primary { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: stretch; }
+  .cc2-camera-frame { height: clamp(180px, 20vw, 240px); aspect-ratio: auto; }
+  .cc2-camera-frame img { object-fit: contain; }
+  .cc2-job-filename { font-size: 17px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .cc2-job-stats { margin-top: 12px; row-gap: 8px; }
+  .cc2-tuning > div:first-child { margin-bottom: 8px; padding-bottom: 8px; }
+  .cc2-tuning-fields { gap: 12px; }
+  .cc2-tuning-field { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: baseline; }
+  .cc2-tuning-field label, .cc2-tuning-field > div { margin-bottom: 4px; font-size: 12px; }
+  .cc2-tuning-field form, .cc2-tuning-field small { grid-column: 1 / -1; }
+  .cc2-tuning-field form { flex-wrap: wrap; gap: 6px; }
+  .cc2-tuning-field input { width: 64px; min-width: 0; }
+  .cc2-tuning-field button { padding-inline: 8px; font-size: 12px; }
+  .cc2-tuning > p { margin-top: 6px; }
+  .cc2-tuning > .mt-3 { margin-top: 8px; font-size: 12px; }
+  .cc2-control-columns { align-items: start; }
+  .cc2-control-columns > div { gap: 12px; }
+}
+/* A narrow desktop content area stacks cards rather than forcing two squeezed columns. */
+@media (hover: hover) and (pointer: fine) {
+  @container page (max-width: 959px) {
+    .cc2-dashboard-primary { grid-template-columns: minmax(0, 1fr); }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 720px) and (max-width: 1019px) {
+    .cc2-control-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cc2-control-columns > div:last-child { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container page (min-width: 1020px) {
+    .cc2-control-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cc2-control-columns > div:last-child { grid-column: auto; grid-template-columns: minmax(0, 1fr); }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 960px) {
+    .cc2-dashboard-bottom { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  }
+}
+
+/* Keep all routes inside the same bounded content container. */
+.cc2-page-content { min-width: 0; }
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-page-content { max-width: 1440px; margin-inline: auto; }
+  .cc2-job-primary { align-items: stretch; }
+  .cc2-job-primary .cc2-camera-frame { min-height: 0; height: 240px; }
+  .cc2-job-primary > section:last-child { gap: 0; }
+  .cc2-job-primary .cc2-job-stats { margin-bottom: 12px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-dashboard-primary > div:last-child { grid-template-rows: auto auto; align-content: start; }
+  .cc2-dashboard-primary > div:last-child > section { height: auto; }
+  .cc2-dashboard-camera-column { grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; }
+  .cc2-dashboard-primary .cc2-camera-frame { height: auto; min-height: 180px; flex: 1 0 auto; }
+  .cc2-quick-actions button { flex-direction: row; min-height: 36px; height: auto; padding: 8px; font-size: 12px; }
+  .cc2-control-columns > div { align-content: start; }
+  .cc2-control-columns > div > section { height: auto; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-movement .cc2-motion-pad { grid-template-columns: minmax(0, 1.4fr) minmax(110px, .8fr); gap: 12px; margin-block: 12px; padding-top: 12px; }
+  .cc2-motion-pad > div:last-child { padding-left: 12px; }
+  .cc2-material-presets > div:first-child { flex-wrap: wrap; gap: 4px; }
+  .cc2-material-presets > p { font-size: 12px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-mesh-stat strong { font-size: 18px; margin-top: 4px; }
+  .cc2-mesh-stat p { font-size: 11px; }
+  .cc2-mesh-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .cc2-mesh-actions button { padding: 8px 12px; gap: 8px; }
+  .cc2-mesh-actions button > svg { width: 20px; height: 20px; }
+  .cc2-mesh-actions strong { font-size: 12px; }
+  .cc2-mesh-actions small { font-size: 11px; margin-top: 2px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-control-bottom { margin-top: 12px; gap: 12px; }
+  @container page (min-width: 720px) {
+    .cc2-control-bottom { align-items: stretch; }
+    .cc2-control-bottom > div > section { height: 100%; }
+  }
+  @container page (min-width: 1020px) {
+    .cc2-control-bottom { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cc2-control-bottom > div { grid-column: span 2; }
+  }
+}
+
+/* Control preview: numeric fan targets and matched desktop card edges. */
+.cc2-camera-dock, .cc2-persistent-camera { display: contents; }
+.cc2-fan-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto; align-items: center; gap: 12px; }
+.cc2-fan-row > input[type="range"] { min-width: 0; width: 100%; }
+.cc2-fan-value input { padding-inline: 4px; }
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 1020px) {
+    .cc2-control-columns { align-items: stretch; }
+  }
+}
+@media (max-width: 420px) {
+  .cc2-fan-row { gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
+  .cc2-fan-row > span:first-child { grid-column: 1 / -1; }
+}
+
+/* The bell shares the emergency-action area; touch targets remain 44 px. */
+.cc2-emergency-stop { min-width: 44px; font-size: 12px; }
+@media (max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
+  .cc2-header-action-label { display: none; }
+  .cc2-header-actions { min-width: 0; flex-shrink: 1; }
+  .cc2-header-status { min-width: 0; }
+  .cc2-header-status > div { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .cc2-portrait-brand { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+}
+
+/* The whole native file input opens the chooser: make that full hit area visible. */
+.cc2-update-file {
+  min-height: 44px;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  padding: 6px;
+  background: var(--field);
+  color: var(--text);
+  cursor: pointer;
+}
+.cc2-update-file::file-selector-button {
+  margin-inline-end: 10px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 6px 10px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: inherit;
+}
+.cc2-update-file:not(:disabled):hover::file-selector-button {
+  border-color: var(--cyan);
+}
+.cc2-update-file:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+/* A single physical bed view; all drawing stays in the browser and has no animation. */
+.cc2-object-map-frame { max-width: 480px; margin-inline: auto; }
+.cc2-object-map-plate {
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  padding: 24px;
+  background: linear-gradient(145deg, var(--panel), var(--field));
+  box-shadow: inset 0 0 0 5px var(--panel), 0 4px 16px #0002;
+}
+.cc2-object-map-surface {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  background: var(--field);
+}
+.cc2-object-map-grid { stroke: var(--edge); stroke-width: .5; }
+.cc2-object-map-outline {
+  fill: var(--muted);
+  fill-opacity: .12;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.cc2-object-map-outline[data-current="true"] { fill: var(--amber); stroke: var(--amber); stroke-width: 1.6; }
+.cc2-object-map-outline[data-selected="true"] { fill: var(--cyan); stroke: var(--cyan); fill-opacity: .25; }
+.cc2-object-map-outline[data-excluded="true"] { fill: var(--red); stroke: var(--red); fill-opacity: .05; stroke-dasharray: 3 2; }
+.cc2-object-map-marker {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, 50%);
+  border: 2px solid var(--muted);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: 0 2px 5px #0003;
+}
+.cc2-object-map-marker:hover:not(:disabled) { border-color: var(--cyan); }
+.cc2-object-map-marker[data-current="true"]:not([data-excluded]) {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--amber) 35%, transparent);
+}
+.cc2-object-map-marker[data-selected="true"] { border-color: var(--cyan); background: var(--cyan); color: var(--ink); }
+.cc2-object-map-marker[data-excluded="true"] { border-color: var(--red); color: var(--red); text-decoration: line-through; opacity: .65; }
+.cc2-object-map-marker:disabled { cursor: not-allowed; }
+.cc2-object-map-marker:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+.cc2-object-map-list { max-height: 300px; }
+.cc2-object-map-expanded .cc2-object-map-frame { max-width: 680px; }
+.cc2-object-map-expanded .cc2-object-map-list { max-height: 480px; }
+@container page (min-width: 900px) {
+  .cc2-object-map-expanded .cc2-object-map-layout { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+}
+
+.cc2-canvas-slot-data>div, .cc2-canvas-remaining>div:first-child { border:0; padding:0; gap:8px; }
+.cc2-canvas-slot-data>div>span, .cc2-canvas-remaining>div:first-child>span { color:var(--muted); }
+
+.cc2-canvas-actionbar { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; }
+.cc2-canvas-actionheading>div { margin:0; padding:0; border:0; }
+
+[data-canvas-action-reason] { min-height:4.35em; }
+@container page (min-width:720px) { [data-canvas-action-reason] { min-height:1.45em; } }
+
+/* The status pill sits on the page background, so retain its panel contrast. */
+.cc2-canvas-overview .cc2-canvas-connection { background:var(--panel); }
+
+/* Paused-camera artwork from pezso92's Dashboard preview (#187), kept static. */
+.cc2-camera-paused {
+  isolation: isolate;
+  background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 14%, transparent), transparent 58%),
+    linear-gradient(145deg, color-mix(in srgb, var(--panel) 78%, #16384a), color-mix(in srgb, var(--bg) 84%, #102b3a));
+}
+.cc2-camera-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .2;
+  background-image: linear-gradient(#17445b 1px, transparent 1px), linear-gradient(90deg, #17445b 1px, transparent 1px);
+  background-size: 36px 36px;
+  transform: perspective(240px) rotateX(50deg) scale(1.35);
+  transform-origin: center 80%;
+}
+.cc2-camera-paused::before {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  top: 18%; left: 28%; width: 44%; height: 48%;
+  border: 2px solid color-mix(in srgb, var(--cyan) 38%, var(--edge));
+  border-radius: 4px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--panel) 50%, #234252), color-mix(in srgb, var(--bg) 55%, #10232d));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--edge) 60%, transparent);
+}
+.cc2-camera-paused::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  top: 28%; left: 43%; width: 14%; height: 25%;
+  border: 2px solid color-mix(in srgb, var(--muted) 70%, var(--edge));
+  border-radius: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 60%, #315061), color-mix(in srgb, var(--bg) 55%, #132a36));
+}
+.cc2-camera-idle-controls { bottom: 2px; }
+:root[data-theme="light"] .cc2-camera-paused {
+  background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 58%), linear-gradient(145deg, #e9f1f4, #dce8ed);
+}
+:root[data-theme="light"] .cc2-camera-grid { opacity: .12; }
+:root[data-theme="light"] .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
+:root[data-theme="light"] .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
+
+/* Fit the slider into the existing heading space instead of adding another card row. */
+.cc2-tuning-field > .cc2-tuning-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 2px 8px;
+  margin: 0 0 4px;
+}
+.cc2-tuning-heading label { margin: 0; }
+.cc2-tuning-field .cc2-tuning-slider {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+.cc2-tuning-slider:disabled { cursor: default; }
+
+/* Preview refinement: the camera option belongs in its header, not in the video column. */
+.cc2-camera-card > div:first-child > span:last-child { min-width: 0; }
+.cc2-quick-actions > div:first-child { min-height: 24px; margin-bottom: 6px; padding-bottom: 6px; }
+.cc2-quick-actions > div:first-child button { min-height: 26px; padding-block: 2px; }
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-quick-actions .cc2-quick-grid > button { min-height: 36px; padding: 4px 6px; line-height: 1.25; gap: 6px; }
+}
+@media (hover: none), (pointer: coarse) {
+  .cc2-camera-preference { position: relative; }
+  .cc2-camera-preference::before { content: ""; position: absolute; inset: -12px 0; }
+  .cc2-quick-actions .cc2-quick-grid > button { min-height: 44px; padding-block: 6px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-main .cc2-camera-card .cc2-camera-stop { min-height: 24px; padding-block: 0; }
+}
+

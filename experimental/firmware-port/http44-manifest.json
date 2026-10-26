@@ -1,0 +1,215 @@
+{
+  "status": "draft: offline tests only; LAN/WAN MQTT coexistence not ported",
+  "baseline_sha256": "8039081f9c4b01e720d838d4ab6e4515a8979b9a71a33bd4164321c282e06074",
+  "output_sha256": "256bb3b93cb9495cf010efc13379f70873ccf94541ac8e2c2235b4d8767f6760",
+  "device_status_offset": "0xbbc",
+  "patches": [
+    {
+      "va": "0x812128",
+      "offset": 8397096,
+      "before": "47f5e2eb0040a0e1f8004be27c3207e3b93040e3e020a0e3081607e3b91040e3eedfe2ebb43707e3b93040e318300be518301be5ec300be518001be5b5c6e2eb0030a0e1e8300be504208de2ec304be2030093e8030082e80230a0e300308de5f8304be20e0093e80400a0e1f6d6e4eb",
+      "after": "1a0000eaa8011be5403090e5010053e3d600008a080090e5000050e3d300000a143090e5000053e3d000000af83500ebce0000ea00f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e3",
+      "reason": "Replace one mode-change informational log with an out-of-line HTTP-start block using the existing NetworkManager stack frame.",
+      "branches": [
+        {
+          "source": "0x812128",
+          "target": "0x812198",
+          "instruction": "b"
+        },
+        {
+          "source": "0x812138",
+          "target": "0x812498",
+          "instruction": "bhi"
+        },
+        {
+          "source": "0x812144",
+          "target": "0x812498",
+          "instruction": "beq"
+        },
+        {
+          "source": "0x812150",
+          "target": "0x812498",
+          "instruction": "beq"
+        },
+        {
+          "source": "0x812154",
+          "target": "0x81f93c",
+          "instruction": "bl"
+        },
+        {
+          "source": "0x812158",
+          "target": "0x812498",
+          "instruction": "b"
+        }
+      ]
+    },
+    {
+      "va": "0x812494",
+      "offset": 8397972,
+      "before": "00f020e3",
+      "after": "24ffffea",
+      "reason": "Ensure HTTP is started after strategy selection and token setup, including direct WAN boot.",
+      "branches": [
+        {
+          "source": "0x812494",
+          "target": "0x81212c",
+          "instruction": "b"
+        }
+      ]
+    },
+    {
+      "va": "0x81f1b4",
+      "offset": 8450484,
+      "before": "ff0100eb",
+      "after": "00f020e3",
+      "reason": "Do not stop the HTTP file server in LanStrategy::stop; MQTT and camera stop paths remain original.",
+      "branches": []
+    },
+    {
+      "va": "0x84ec20",
+      "offset": 8645664,
+      "before": "14301be50b0053e3",
+      "after": "020053e30b005313",
+      "reason": "Admit PRINTING=2 in addition to original states 1 and 11. All other states still fail the gate.",
+      "branches": []
+    },
+    {
+      "va": "0x84f940",
+      "offset": 8649024,
+      "before": "41ffe1eb0040a0e1bb0f4be22c3506e3bb3040e36f2fa0e3241c08e3bb1040e3e8e9e1ebe03209e3bb3040e3e0320be5e00209e3bb0040e3b0d0e1eb0030a0e1dc320be5493e4be20c3043e2083043e20c308de504208de22e3e4be2030093e8030082e80230a0e300308de5bb3f4be20e0093e80400a0e1a9b7e5eb4e3e4be20c3043e20300a0e188bfe1eb0030a0e10300a0e127bde1eb0030a0e1000053e30130a0130030a0037330efe6000053e33a00000a14ffe1eb0040a0e1b60f4be22c3506e3bb3040e3072da0e3241c08e3bb1040e3bbe9e1eb0c3309e3bb3040e3cc320be50c0309e3bb0040e383d0e1eb0030a0e1c8320be54e3e4be20c3043e20c308de504208de2b33f4be2030093e8030082e80430a0e300308de5b63f4be20e0093e80400a0e17db7e5ebb8351be5683083e27c1907e3a81040e30300a0e1cd2ce2eb0040a0e1323302e3b0320be52b2e4be2b13f4be20210a0e10300a0e11defffebb13f4be20310a0e10400a0e13a2de2ebb13f4be20300a0e1b405e2eb493e4be20c3043e2083043e20310a0e1b0051be53b0900ebc840a0e3250400ea06ac00eb0020a0e14b3e4be20c3043e20310a0e10200a0e178fe00eb",
+      "after": "491e4be2141041e2b0051be59d0900eb994100e3870400ea00f020e300f020e300f020e300f020e300f020e300f020e3bccb90e501005ce30b005c1352fc000a1eff2fe100f020e300f020e300f020e3bccb90e501005ce30b005c1339fb000a1eff2fe100f020e300f020e300f020e3bccb90e50b005ce311fd000a1eff2fe100f020e300f020e300f020e300f020e34aac00ebbc3b90e5010053e30b0053130100000a994100e33c0600ea3c311be5300500ea00f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e300f020e3",
+      "reason": "Existing file on first chunk returns HTTP 409 without deletion, in every state. Reclaimed overwrite code hosts guarded state setters and a cancellation guard.",
+      "branches": [
+        {
+          "source": "0x84f94c",
+          "target": "0x851fc8",
+          "instruction": "bl"
+        },
+        {
+          "source": "0x84f954",
+          "target": "0x850b78",
+          "instruction": "b"
+        },
+        {
+          "source": "0x84f97c",
+          "target": "0x88eacc",
+          "instruction": "beq"
+        },
+        {
+          "source": "0x84f99c",
+          "target": "0x88e688",
+          "instruction": "beq"
+        },
+        {
+          "source": "0x84f9b8",
+          "target": "0x88ee04",
+          "instruction": "beq"
+        },
+        {
+          "source": "0x84f9d0",
+          "target": "0x87ab00",
+          "instruction": "bl"
+        },
+        {
+          "source": "0x84f9e0",
+          "target": "0x84f9ec",
+          "instruction": "beq"
+        },
+        {
+          "source": "0x84f9e8",
+          "target": "0x8512e0",
+          "instruction": "b"
+        },
+        {
+          "source": "0x84f9f0",
+          "target": "0x850eb8",
+          "instruction": "b"
+        }
+      ]
+    },
+    {
+      "va": "0x850000",
+      "offset": 8650752,
+      "before": "b1fa00eb",
+      "after": "5afeffeb",
+      "reason": "Only enter upload status when current machine status is 1 or 11.",
+      "branches": [
+        {
+          "source": "0x850000",
+          "target": "0x84f970",
+          "instruction": "bl"
+        }
+      ]
+    },
+    {
+      "va": "0x850238",
+      "offset": 8651320,
+      "before": "12f900eb",
+      "after": "d4fdffeb",
+      "reason": "Write-error path: do not force idle from printing or other active states.",
+      "branches": [
+        {
+          "source": "0x850238",
+          "target": "0x84f990",
+          "instruction": "bl"
+        }
+      ]
+    },
+    {
+      "va": "0x8509a8",
+      "offset": 8653224,
+      "before": "36f700eb",
+      "after": "f8fbffeb",
+      "reason": "MD5-error path: do not force idle from printing or other active states.",
+      "branches": [
+        {
+          "source": "0x8509a8",
+          "target": "0x84f990",
+          "instruction": "bl"
+        }
+      ]
+    },
+    {
+      "va": "0x8509c4",
+      "offset": 8653252,
+      "before": "0ef900eb",
+      "after": "f9fbffeb",
+      "reason": "Completion substatus 3001 is emitted only while current machine status is 11.",
+      "branches": [
+        {
+          "source": "0x8509c4",
+          "target": "0x84f9b0",
+          "instruction": "bl"
+        }
+      ]
+    },
+    {
+      "va": "0x852500",
+      "offset": 8660224,
+      "before": "3ff200eb",
+      "after": "2af5ffeb",
+      "reason": "Timeout substatus 3001 is emitted only while current machine status is 11.",
+      "branches": [
+        {
+          "source": "0x852500",
+          "target": "0x84f9b0",
+          "instruction": "bl"
+        }
+      ]
+    },
+    {
+      "va": "0x850eb4",
+      "offset": 8654516,
+      "before": "3c311be5",
+      "after": "c5faffea",
+      "reason": "After token validation, reject transfer cancellation outside idle/transfer states; prevents the stock arbitrary-path deletion during printing.",
+      "branches": [
+        {
+          "source": "0x850eb4",
+          "target": "0x84f9d0",
+          "instruction": "b"
+        }
+      ]
+    }
+  ]
+}

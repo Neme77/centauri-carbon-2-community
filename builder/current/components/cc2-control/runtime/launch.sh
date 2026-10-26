@@ -14,6 +14,8 @@ while ! pidof elegoo_printer >/dev/null 2>&1; do
 done
 
 logger -t cc2-control "elegoo_printer detected; waiting for hardware initialization"
-sleep 20
-logger -t cc2-control "Starting CC2 Control 1.1.30"
+
+# Allow the vendor hardware initialization to settle before connecting.
+sleep 30
+logger -t cc2-control "Starting CC2 Control"
 exec /opt/inst/cc2-control/start.sh

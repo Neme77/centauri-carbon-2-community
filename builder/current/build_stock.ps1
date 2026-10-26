@@ -1,4 +1,4 @@
-# CC2 builder v4.2 launcher: stock signing.
+# CC2 builder launcher: stock signing.
 [CmdletBinding()]
 param(
     [string]$Distro = 'Ubuntu',

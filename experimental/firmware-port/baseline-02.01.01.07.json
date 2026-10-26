@@ -1,0 +1,81 @@
+{
+  "ota_version": "02.01.01.07",
+  "community_target": "4.4",
+  "status": "analysis_only_not_buildable",
+  "outer": {
+    "size": 109475220,
+    "sha256": "278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406",
+    "md5": "1cbee81a985601d1944cea50773793ba"
+  },
+  "files": {
+    "etc/init.d/printer": {
+      "size": 4318,
+      "sha256": "6e7c875d40386854028779fdd1573c45a5ce4a69aba828227fff1bb568f7020f",
+      "md5": "e6c3381d6e16132c73caac2fe9807a1c"
+    },
+    "opt/bin/ai_camera": {
+      "size": 4369420,
+      "sha256": "ad888fec26ce214427eda038ae70b76cf68155f365c669ed647c1c09bad7a1f7",
+      "md5": "25609e7bd4538a9bf8d355970847961f"
+    },
+    "opt/bin/ec-eeb001-gui": {
+      "size": 2655456,
+      "sha256": "24d0e561287a4b5a87c8ec698c98f60acf2c70511114b36224b4eb9249283abd",
+      "md5": "fa48cc33f669343291af8a228f41ad64"
+    },
+    "opt/bin/elegoo_printer": {
+      "size": 29274740,
+      "sha256": "8039081f9c4b01e720d838d4ab6e4515a8979b9a71a33bd4164321c282e06074",
+      "md5": "901c2ac64516ace933fd9f1bd68c6c88"
+    },
+    "opt/bin/run_printer.sh": {
+      "size": 2172,
+      "sha256": "c26d495c6ea4870cb36a42c0e291db59caf2a9cfaa8782a3befeb766106581e0",
+      "md5": "8bb243c20d96ec8a98cbbd879d8d1fa5"
+    },
+    "opt/inst/daemon-000/daemon-000": {
+      "size": 1325540,
+      "sha256": "6fed6657e814f010fef87b40c5932d8fa7c5e9c044d7376f25fc2318daeb10f9",
+      "md5": "7c7e6c934c0e0c689745e00ff365e54b"
+    },
+    "opt/inst/firmware_version/versions.json": {
+      "size": 758,
+      "sha256": "9f46cfb7b334e750296f99a7695fd9bec23775cefb65f9d66ac175abae7e62c8",
+      "md5": "9417f41bbc137c46734a98cf9383fed4"
+    },
+    "opt/inst/printer_dsp.cfg": {
+      "size": 36181,
+      "sha256": "0cb2216fea47b045f5bab2c88f1812560af2ae347e6c0b213788a9b54bc8fdfb",
+      "md5": "5561509986561663ee25ffd9562c8cab"
+    },
+    "opt/lib/libcolib.so": {
+      "size": 275688,
+      "sha256": "14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403",
+      "md5": "f973120f172fc30dd3abdbc67706e097"
+    },
+    "resource": {
+      "size": 681984,
+      "sha256": "aacfe9a9d847f4be3e4b5a16f7c16cba93a60e25ba371efb77568568b0b37aad"
+    },
+    "uboot": {
+      "size": 1310720,
+      "sha256": "769d55b96ed4dff486ff5b79f35d61a36d68c444f49f19e44059e2472d468f72"
+    },
+    "boot0": {
+      "size": 49152,
+      "sha256": "b18b3f31b3d378b56b4d01b1863a6b9f0f61211ba1f4ad8e7b672ff54887ec41"
+    },
+    "kernel": {
+      "size": 3977216,
+      "sha256": "e1ca036e667f1976fb1a1944b6922df8a1c26d5870912dd8273e0fcc3bb4efec"
+    },
+    "rootfs": {
+      "size": 103415808,
+      "sha256": "20375a79e1ee2748f43fd39a62e5a48b23b945ed048dbe52a54d0a1f37b1acae"
+    },
+    "sw-description": {
+      "size": 3579,
+      "sha256": "6598586ada5e7e9256316c63b801579e65e797d2a77e13ab360f09b3581ae2fb"
+    }
+  }
+}

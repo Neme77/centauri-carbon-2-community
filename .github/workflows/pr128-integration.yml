@@ -1,0 +1,41 @@
+name: PR128 integration qualification
+on:
+  push:
+    branches: [test/pr128-integration]
+    paths: [.github/workflows/pr128-integration.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Preserve Surfoo commits and integrate current develop
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin pull/128/head
+          test "$(git rev-parse FETCH_HEAD)" = "f1b8bf6253aaf609077c4be76d4042830aa0eeda"
+          git merge --no-ff --no-edit FETCH_HEAD
+          python3 experimental/pr128-integration/sync_source.py --spanish
+      - name: Rebuild and check UI
+        working-directory: cc2-control/web-src
+        run: npm ci && npm run check && npm run build
+      - name: Synchronize public source snapshot and builder references
+        run: python3 experimental/pr128-integration/sync_source.py
+      - name: Validate builder and localization
+        run: |
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+          python3 cc2-control/tests/test_web_sync_static.py
+          python3 cc2-control/tests/test_locales_static.py
+          python3 cc2-control/tests/test_locale_coverage_static.py
+      - name: Save verified generated files on integration branch
+        run: |
+          git add cc2-control/web-src/public/locales/es.json cc2-control/web builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git commit -m "chore: rebuild generated assets for Surfoo PR128"
+          git push origin HEAD:refs/heads/test/pr128-integration

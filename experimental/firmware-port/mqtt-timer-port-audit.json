@@ -1,0 +1,16 @@
+{
+  "reference_firmware": "CC2_V4_3_STOCK_20261009_165429_eb03e545.zip.sig",
+  "reference_firmware_sha256": "0ea244d0543443d0a87b40cdfd66d8cd5710917026ce03dfeb6d4ba7f968be7b",
+  "reference_printer_sha256": "c21126e78a63ac9140e7347c56f363d5e513495c58c06fc17e8ef97846f3c0a3",
+  "new_connector_mode_field": "0x104",
+  "legacy_connector_mode_field": "0x74",
+  "timer_constructor_callsites": [
+    "0x837168",
+    "0x8371a0"
+  ],
+  "native_duplicate_timer_lookup": "0x93d4e0",
+  "native_existing_timer_cancellation_call": "0x93d5c4",
+  "dual_formatter_gate": "0x88db48",
+  "scope": "Restore omitted behaviours; preserve vendor per-instance connector state and WAN timer names",
+  "hardware_status": "pending; cloud regression reproduces without reactor and with CC2 Control stopped according to supplied tests"
+}

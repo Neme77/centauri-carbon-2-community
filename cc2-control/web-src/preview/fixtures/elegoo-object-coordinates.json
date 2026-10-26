@@ -1,0 +1,24 @@
+{
+  "result": {
+    "status": {
+      "exclude_object": {
+        "objects": [
+          {
+            "name": "GPUSUPPORT_BASE.STL_ID_0_COPY_0",
+            "center": "[185.813,114.082]"
+          },
+          {
+            "name": "GPUSUPPORT_SCREW.STL_ID_1_COPY_0",
+            "center": "[47.409,115.154]"
+          },
+          {
+            "name": "GPUSUPPORT_STOP.STL_ID_2_COPY_0",
+            "center": "[116.549,113.552]"
+          }
+        ],
+        "excluded_objects": null,
+        "current_object": ""
+      }
+    }
+  }
+}

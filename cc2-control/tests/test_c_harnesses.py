@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Compile and run the standalone C test harnesses that no other driver runs."""
+import os
+import pathlib
+import subprocess
+import tempfile
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+FLAGS = ["-O2", "-std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-D_POSIX_C_SOURCE=200809L", "-pthread", *os.environ.get("CC2_TEST_CFLAGS", "").split()]
+BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", ROOT / "src/panda.c", ROOT / "src/uds.c"]
+HARNESSES = {
+    "test_panda_metadata.c": [],
+    "test_backup.c": BACKEND,
+    "test_external_filament.c": [ROOT / "src/control.c"],
+    "test_canvas_state.c": [ROOT / "src/control.c"],
+    "test_canvas_recovery_load.c": [ROOT / "src/control.c"],
+    "test_app_update_guards.c": BACKEND,
+    "test_gcode_metadata.c": [],
+    "test_object_query.c": BACKEND,
+    "test_exclude_objects.c": BACKEND,
+    # test_file_ops.c and test_orca_upload.c include src/main.c themselves.
+    "test_file_ops.c": BACKEND,
+    "test_file_analysis.c": BACKEND,
+    "test_recovery_download.c": BACKEND,
+    "test_emergency_latch.c": [],
+    "test_runtime_limits.c": BACKEND,
+    "test_mqtt_limits.c": [],
+    "test_calibrated_start.c": BACKEND,
+    "test_external_feed_start.c": BACKEND,
+    "test_filament_metadata.c": BACKEND,
+    "test_orca_upload.c": BACKEND,
+    "test_mqtt_workload.c": [],
+    "test_mqtt_registration.c": [],
+    "test_canvas_discovery.c": [],
+    "test_printer_replies.c": [],
+    "test_print_options.c": [],
+    "test_light_api.c": BACKEND,
+    "test_history_api.c": BACKEND,
+    "test_print_completion.c": BACKEND,
+    "test_uds.c": [ROOT / "src/uds.c"],
+    "test_canvas_uds.c": BACKEND,
+    "test_experiments.c": BACKEND,
+    "test_bed_drying.c": BACKEND,
+    "test_uds_diagnostic.c": BACKEND,
+    "test_tuning_api.c": BACKEND,
+    "test_pid_api.c": BACKEND,
+    "test_z_offset_api.c": BACKEND,
+    "test_plates.c": BACKEND,
+    "test_canvas_unload.c": BACKEND,
+    "test_spools.c": BACKEND,
+    "test_spoolman.c": BACKEND,
+    "test_control_actions.c": [ROOT / "src/control.c"],
+}
+
+with tempfile.TemporaryDirectory(prefix="cc2-c-harness-") as temporary:
+    for name, sources in HARNESSES.items():
+        binary = pathlib.Path(temporary) / name[:-2]
+        subprocess.run(["cc", *FLAGS, str(ROOT / "tests" / name), *map(str, sources), "-o", str(binary), "-lm"], check=True)
+        subprocess.run([str(binary)], cwd=temporary, check=True)
+        print(f"PASS: {name}")

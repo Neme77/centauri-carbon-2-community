@@ -1,0 +1,163 @@
+#include "../src/uds.h"
+#include <assert.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
+static void message(uds_client *c,const char *s){assert(uds_message(c,s,strlen(s)));}
+int main(void){
+ uds_client c;uds_init(&c);int pair[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":2,\"status\":{\"gcode_move\":{\"speed_factor\":0.5}}}}");
+ assert(!uds_fresh(&c));
+ /* An earlier initial snapshot must not overwrite the preceding notification. */
+ message(&c,"{\"id\":11,\"result\":{\"eventtime\":1,\"status\":{\"extruder\":{\"temperature\":210,\"target\":210},\"gcode_move\":{\"speed_factor\":1,\"extrude_factor\":1},\"fan\":{\"speed\":0.6,\"rpm\":8700},\"print_stats\":{\"filename\":\"local/cube.gcode\",\"info\":{\"current_layer\":4,\"total_layer\":null},\"print_duration\":60},\"virtual_sdcard\":{\"progress\":0.25}}}}");
+ double v;assert(uds_value(&c,U_SPEED_FACTOR,&v)&&v==0.5);
+ assert(uds_value(&c,U_FLOW_FACTOR,&v)&&v==1);
+ mqtt_client view;memset(&view,0,sizeof(view));strcpy(view.filename,"cube.gcode");view.machine_status=2;view.chamber_temp=26;view.box_fan=25.5;
+ uds_overlay(&c,&view);assert(view.extruder_temp==210&&view.part_fan==153);
+ assert(view.current_layer==4&&view.progress==25&&view.print_duration==60);
+ assert(view.machine_status==2&&view.chamber_temp==26&&view.box_fan==25.5);
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":3,\"status\":{\"extruder\":{\"temperature\":211},\"gcode_move\":{\"extrude_factor\":0.95},\"print_stats\":{\"info\":{\"total_layer\":null}}}}}");
+ assert(uds_value(&c,U_ET,&v)&&v==211);assert(uds_value(&c,U_EG,&v)&&v==210);
+ assert(uds_value(&c,U_LAYER,&v)&&v==4);assert(uds_value(&c,U_FLOW_FACTOR,&v)&&v==0.95);
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":4,\"status\":{\"fan\":{\"speed\":9},\"virtual_sdcard\":{\"progress\":null}}}}");
+ assert(uds_value(&c,U_PF,&v)&&v==0.6);assert(uds_value(&c,U_PROGRESS,&v)&&v==0.25);
+ strcpy(view.filename,"different.gcode");view.current_layer=90;uds_overlay(&c,&view);assert(view.current_layer==90);
+ { uds_client h;uds_init(&h);h.fd=c.fd;h.ready=1;
+ /* Direct readback wins over a stale MQTT snapshot, including empty axes. */
+ message(&h,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":5,\"status\":{\"toolhead\":{\"homed_axes\":\"xyz\"},\"output_pin led_pin\":{\"value\":0}}}}");
+ strcpy(view.homed_axes,"x");view.led_status=1;uds_motion_light(&h,&view);
+ assert(!strcmp(view.homed_axes,"xyz")&&view.led_status==0);
+ message(&h,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":6,\"status\":{\"toolhead\":{\"homed_axes\":\"\"},\"output_pin led_pin\":{\"value\":1}}}}");
+ uds_motion_light(&h,&view);assert(!view.homed_axes[0]&&view.led_status==1);
+ message(&h,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":7,\"status\":{\"toolhead\":{\"homed_axes\":\"xx\"}}}}");
+ strcpy(view.homed_axes,"xyz");uds_motion_light(&h,&view);assert(!view.homed_axes[0]);
+ h.last_rx.tv_sec-=10;strcpy(view.homed_axes,"xyz");uds_motion_light(&h,&view);assert(!view.homed_axes[0]);
+ }
+ c.last_rx.tv_sec-=10;strcpy(view.homed_axes,"xyz");uds_motion_light(&c,&view);assert(!view.homed_axes[0]);assert(!uds_value(&c,U_ET,&v));view.extruder_temp=200;uds_overlay(&c,&view);assert(view.extruder_temp==200);
+ message(&c,"{\"id\":12,\"result\":{\"state\":\"ready\"}}");assert(uds_fresh(&c));
+ assert(!uds_message(&c,"{broken",7));
+ struct timespec saved_rx=c.last_rx;unsigned long saved_messages=c.messages;
+ message(&c,"{\"id\":0,\"report\":{\"message\":\"vendor report\"}}");
+ message(&c,"{\"method\":\"other_notification\",\"params\":{}}");
+ assert(c.ignored_messages==2&&c.messages==saved_messages&&c.fd>=0);
+ assert(c.last_rx.tv_sec==saved_rx.tv_sec&&c.last_rx.tv_nsec==saved_rx.tv_nsec);
+ assert(uds_value(&c,U_SPEED_FACTOR,&v)&&v==0.5);
+ /* Native reports must neither refresh sensors nor claim a current fault. */
+ message(&c,"{\"id\":0,\"report\":{\"error_code\":1264,\"error_level\":2,\"message\":\"Clog\\n\\u00e8 <script>\"}}");
+ assert(c.report_sequence==1&&c.report_code==1264&&c.report_level==2);
+ message(&c,"{\"report\":{\"error_code\":1264,\"error_level\":2,\"message\":\"Clog\\n\\u00e8 <script>\"}}");
+ assert(c.report_sequence==1);
+ assert(!strcmp(c.report_message,"\"Clog\\n\\u00e8 <script>\""));
+ assert(c.messages==saved_messages&&c.last_rx.tv_sec==saved_rx.tv_sec&&c.last_rx.tv_nsec==saved_rx.tv_nsec);
+ message(&c,"{\"report\":{\"error_code\":0,\"error_level\":0,\"message\":\"ok\"}}");
+ assert(c.report_sequence==1&&c.report_code==1264);
+ message(&c,"{\"report\":{\"error_code\":1.5,\"error_level\":2}}");
+ message(&c,"{\"report\":{\"error_code\":803,\"error_level\":9}}");
+ assert(c.report_sequence==1);
+ message(&c,"{\"report\":{\"error_code\":9999,\"error_level\":1,\"message\":\"bad\\q\"}}");
+ assert(c.report_sequence==2&&c.report_code==9999&&!strcmp(c.report_message,"null"));
+ char huge_report[1300];memset(huge_report,'x',sizeof(huge_report));
+ const char *prefix="{\"report\":{\"error_code\":803,\"error_level\":2,\"message\":\"";
+ memcpy(huge_report,prefix,strlen(prefix));strcpy(huge_report+1200,"\"}}");message(&c,huge_report);
+ assert(c.report_sequence==3&&!strcmp(c.report_message,"null"));
+ message(&c,"{\"report\":{\"error_code\":0,\"error_level\":3,\"message\":\"Resume\"}}");
+ assert(c.report_sequence==4&&c.report_level==3);
+ message(&c,"{\"id\":13,\"error\":{\"message\":\"unsupported endpoint\"}}");
+ assert(c.fd>=0&&c.report_sequence==4);
+ assert(!uds_message(&c,"{\"id\":11,\"error\":{}}",strlen("{\"id\":11,\"error\":{}}")));
+ assert(!strcmp(c.parse_error,"subscription_error"));
+ assert(!uds_message(&c,"{\"id\":12,\"error\":{}}",strlen("{\"id\":12,\"error\":{}}")));
+ assert(!strcmp(c.parse_error,"heartbeat_error"));
+ assert(!fcntl(c.fd,F_SETFL,O_NONBLOCK));
+ const char *frame="{\"method\":\"cc2_status\",\"params\":{\"eventtime\":5,\"status\":{\"gcode_move\":{\"speed_factor\":1.3}}}}\003";
+ assert(write(pair[1],frame,10)==10);uds_process(&c);assert(c.used==10);
+ assert(write(pair[1],frame+10,strlen(frame)-10)==(ssize_t)strlen(frame)-10);uds_process(&c);
+ assert(uds_value(&c,U_SPEED_FACTOR,&v)&&v==1.3&&c.used==0);
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":6,\"status\":{\"print_stats\":{\"filename\":\"local/next.gcode\"}}}}");
+ assert(!uds_value(&c,U_LAYER,&v)&&!uds_value(&c,U_PROGRESS,&v));
+ /* The Canvas channel and how the print stands arrive in the same stream as filament_used. */
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":7,\"status\":{\"canvas_dev\":{\"active_cid\":2},\"print_stats\":{\"state\":\"printing\"}}}}");
+ assert(uds_value(&c,U_CANVAS_CHANNEL,&v)&&v==2&&!strcmp(uds_print_state(&c),"printing"));
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":8,\"status\":{\"canvas_dev\":{\"active_cid\":-1},\"print_stats\":{\"state\":\"complete\"}}}}");
+ assert(uds_value(&c,U_CANVAS_CHANNEL,&v)&&v==-1&&!strcmp(uds_print_state(&c),"complete"));
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":9,\"status\":{\"canvas_dev\":{\"active_cid\":99},\"print_stats\":{\"state\":\"Bad <b>\"}}}}");
+ assert(uds_value(&c,U_CANVAS_CHANNEL,&v)&&v==-1&&!strcmp(uds_print_state(&c),"complete"));
+ /* The mesh the printer applies: a profile name, empty once cleared; other text is ignored. */
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":10,\"status\":{\"bed_mesh\":{\"profile_name\":\"cc2_0123456789abcdef\"}}}}");
+ assert(!strcmp(uds_mesh_profile(&c),"cc2_0123456789abcdef"));
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":11,\"status\":{\"bed_mesh\":{\"profile_name\":\"a b\"}}}}");
+ assert(!strcmp(uds_mesh_profile(&c),"cc2_0123456789abcdef"));
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":12,\"status\":{\"bed_mesh\":{\"profile_name\":\"\"}}}}");
+ assert(!strcmp(uds_mesh_profile(&c),""));
+ close(pair[1]);uds_process(&c);assert(c.fd==-1&&!c.ready&&!c.present&&!uds_print_state(&c)&&!uds_mesh_profile(&c));
+ assert(c.disconnects==1&&!strcmp(c.last_disconnect,"peer_closed"));
+ assert(c.report_sequence==4&&!strcmp(c.report_message,"\"Resume\""));
+ uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
+ assert(!fcntl(c.fd,F_SETFL,O_NONBLOCK));
+ const char *bad="{broken\003";
+ assert(write(pair[1],bad,strlen(bad))==(ssize_t)strlen(bad));uds_process(&c);
+ assert(c.fd==-1&&c.disconnects==1&&!strcmp(c.last_disconnect,"invalid_json"));close(pair[1]);
+ uds_init(&c);uds_tick(&c,"/nonexistent/cc2-test-socket");assert(c.fd==-1);
+ /* elegoo_printer keeps every request in memory: only a silent stream is probed. */
+ uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
+ assert(!fcntl(c.fd,F_SETFL,O_NONBLOCK)&&!fcntl(pair[1],F_SETFL,O_NONBLOCK));
+ clock_gettime(CLOCK_MONOTONIC,&c.last_rx);c.last_ping=c.last_rx;
+ char out[4096];ssize_t got;
+ uds_tick(&c,"/unused");got=read(pair[1],out,sizeof(out)-1);assert(got>0);out[got]=0;
+ assert(strstr(out,"objects/subscribe")&&strstr(out,"gcode/subscribe_report")&&!strstr(out,"\"method\":\"info\""));
+ c.last_ping.tv_sec-=10;uds_tick(&c,"/unused");assert(read(pair[1],out,sizeof(out)-1)<0);
+ c.last_rx.tv_sec-=3;uds_tick(&c,"/unused");got=read(pair[1],out,sizeof(out)-1);assert(got>0);out[got]=0;
+ assert(strstr(out,"\"method\":\"info\""));
+ uds_tick(&c,"/unused");assert(read(pair[1],out,sizeof(out)-1)<0);
+ message(&c,"{\"id\":12,\"result\":{\"state\":\"ready\"}}");c.last_ping.tv_sec-=10;
+ uds_tick(&c,"/unused");assert(read(pair[1],out,sizeof(out)-1)<0);
+ c.last_rx.tv_sec-=6;uds_tick(&c,"/unused");
+ assert(c.fd==-1&&!strcmp(c.last_disconnect,"receive_timeout"));close(pair[1]);
+ /* exclude_object values are kept as raw JSON, so /api/exclude-objects needs no query. */
+ uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
+ char live[1024];assert(uds_exclude_status(&c,live,sizeof(live))<0);
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":5,\"status\":{\"exclude_object\":{\"current_object\":\"B\"}}}}");
+ message(&c,"{\"id\":11,\"result\":{\"eventtime\":4,\"status\":{\"exclude_object\":{\"excluded_objects\":[\"A \\\"x\\\"\"],\"current_object\":\"A\"}}}}");
+ assert(!strcmp(c.current_object,"\"B\"")&&!strcmp(c.excluded_objects,"[\"A \\\"x\\\"\"]"));
+ assert(uds_exclude_status(&c,live,sizeof(live))>0);
+ assert(!strcmp(live,"{\"result\":{\"status\":{\"exclude_object\":{\"excluded_objects\":[\"A \\\"x\\\"\"],\"current_object\":\"B\"}}}}"));
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":6,\"status\":{\"exclude_object\":{\"current_object\":null}}}}");
+ assert(!strcmp(c.current_object,"null")&&uds_exclude_status(&c,live,10)<0);
+ char big[9100];int length=snprintf(big,sizeof(big),"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":7,\"status\":{\"exclude_object\":{\"excluded_objects\":[\"");
+ memset(big+length,'a',8300);length+=8300;
+ length+=snprintf(big+length,sizeof(big)-(size_t)length,"\"]}}}}");
+ assert(uds_message(&c,big,(size_t)length)&&!c.have_excluded_objects&&uds_exclude_status(&c,live,sizeof(live))<0);
+ uds_close(&c);assert(!c.have_current_object);close(pair[1]);
+ /* Head state is independent of slot presence; stale/malformed values cannot authorize Canvas. */
+ assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));uds_init(&c);c.fd=pair[0];
+ message(&c,"{\"id\":11,\"result\":{\"eventtime\":1,\"status\":{\"filament_switch_sensor filament_sensor\":{\"filament_detected\":false},\"canvas_dev\":{\"active_cid\":-1},\"print_stats\":{\"state\":\"standby\"}}}}");
+ uds_motion_light(&c,&view);assert(view.canvas_direct_known&&!view.canvas_head_loaded&&view.canvas_direct_active==-1&&view.canvas_direct_idle);
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":2,\"status\":{\"filament_switch_sensor filament_sensor\":{\"filament_detected\":true},\"canvas_dev\":{\"active_cid\":1}}}}");
+ uds_motion_light(&c,&view);assert(view.canvas_direct_known&&view.canvas_head_loaded&&view.canvas_direct_active==1);
+ message(&c,"{\"method\":\"cc2_status\",\"params\":{\"eventtime\":3,\"status\":{\"filament_switch_sensor filament_sensor\":{\"filament_detected\":null}}}}");
+ uds_motion_light(&c,&view);assert(!view.canvas_direct_known);
+ uds_close(&c);uds_motion_light(&c,&view);assert(!view.canvas_direct_known);close(pair[1]);
+ /* A passive report never grants telemetry freshness or changes command state. */
+ uds_init(&c);
+ const char *report="{\"method\":\"cc2_report\",\"params\":{\"response\":\"probe: 1.234\"}}";
+ message(&c,report);assert(c.console.count==0);
+ uds_console_lease(&c);message(&c,report);
+ assert(c.console.count==1&&c.console.sequence==1&&!strcmp(c.console.lines[0],report));
+ assert(!uds_fresh(&c)&&c.messages==0);
+ for(int i=0;i<100;i++)message(&c,report);
+ assert(c.console.count==20&&c.console.dropped==81);
+ c.console.rate_start.tv_sec-=2;
+ for(int i=0;i<20;i++)message(&c,report);
+ assert(c.console.count==32&&c.console.dropped==89);
+ c.console.until.tv_sec-=20;message(&c,report);assert(c.console.sequence==40);
+ uds_console_lease(&c);c.console.rate_start.tv_sec-=2;
+ char large[2048];memset(large,'x',sizeof(large));
+ memcpy(large,report,strlen(report)-3);
+ /* A valid oversized response is refused without evicting any retained line. */
+ snprintf(large,sizeof(large),"{\"method\":\"cc2_report\",\"params\":{\"response\":\"%01500d\"}}",1);
+ message(&c,large);assert(c.console.count==32&&c.console.dropped==90);
+ puts("PASS UDS initial/delta merge, ordering, scaling, job matching, stale fallback, fragmented frames, silence-only probes and exclude_object state");
+ return 0;
+}

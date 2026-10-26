@@ -3,162 +3,116 @@
 Community firmware, local printer control and reproducible build tools for the
 **ELEGOO Centauri Carbon 2**, maintained by **Neme77**.
 
-> Independent community project. Not affiliated with, endorsed by or supported
-> by ELEGOO.
-
-## Current release
-
-| Component | Version |
-|---|---:|
-| Community firmware | [V4.2](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2) |
-| CC2 Control | [1.1.31](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.1.31) |
-
-Release binaries, standalone updaters, source archives and checksums are kept
-with the corresponding GitHub Release. The canonical development source is
-kept directly on `main`.
-
-## Downloads
-
 <p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig"><img alt="Download Community Firmware V4.2" src="https://img.shields.io/badge/Download-Firmware%20V4.2-00b8d9?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip"><img alt="Download CC2 Control 1.1.31 updater" src="https://img.shields.io/badge/Update-CC2%20Control%201.1.31-22c55e?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip"><img alt="Download CC2 Control 1.1.31 source" src="https://img.shields.io/badge/Source-CC2%20Control%201.1.31-6f42c1?style=for-the-badge"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig"><img src="https://img.shields.io/badge/DOWNLOAD-Firmware%20V4.4.2-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download complete firmware V4.4.2"></a>
+  &nbsp;
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Control-1.2.22-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/DOWNLOAD-CC2%20Control%201.2.22-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download CC2 Control 1.2.22 multiplatform update"></a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip"><img alt="Download firmware builder R4" src="https://img.shields.io/badge/Builder-Firmware%20R4-f59e0b?style=for-the-badge"></a>
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt"><img alt="Download SHA256 checksums" src="https://img.shields.io/badge/Verify-SHA256SUMS-64748b?style=for-the-badge"></a>
-</p>
+| **🖨️ Complete firmware · V4.4.2** | **🔄 CC2 Control · 1.2.22** |
+| --- | --- |
+| [**Download signed firmware**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Download Windows / macOS / Linux package**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Control-1.2.22-Multiplatform-Update.zip) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4) |
+| Complete installation with CC2 Control **1.2.21** and the webcam fix already included. No extra reboot after firmware installation. | For community firmware **V4.4/V4.4.1/V4.4.2**. Includes the camera stability and recovery fixes. |
+
+**Updating from the CC2 Control panel?** [Download the signed `.cc2update` file](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Control-1.2.22-V4.4.cc2update) and select it in **Settings → Updates**. For app-only updates, reboot while idle only on first activation of the camera fix; it is already active for users coming from 1.2.19. Complete V4.4.2 installation needs no additional reboot.
+
+[Italiano](README.it.md) · [Documentation](docs/README.md) · [Downloads](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Screenshots](docs/SCREENSHOTS.md)
+
+> Independent community project, not affiliated with or supported by ELEGOO.
+> This project targets the **Centauri Carbon 2**, not the first Centauri Carbon.
 
 <p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.2"><strong>Release notes, checksums and all V4.2 downloads</strong></a>
+  <img src="docs/images/cc2-control/dashboard-light.png" alt="CC2 Control dashboard with live camera, printer controls and temperature monitoring" width="1200">
 </p>
 
-| Choose this file | When to use it |
-|---|---|
-| [`CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_V4_2_STOCK_20260927_160433_d464d184.zip.sig) | New installation or complete Community Firmware V4.2 update |
-| [`CC2-Control-1.1.31-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip) | Existing Community Firmware installation: update only CC2 Control, without reflashing the full firmware |
-| [`CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Source-and-Multiplatform-Builder-R1.zip) | Complete CC2 Control source and reproducible updater builder |
-| [`CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/CC2_BUILDER_V4_2_CC2_CONTROL_1.1.30_R4_RELEASE.zip) | Firmware builder R4 |
-| [`SHA256SUMS_V4_2.txt`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.2/SHA256SUMS_V4_2.txt) | Verify downloaded release files |
+## Get started
 
-## Already running an older Community Firmware?
+| What you need | English | Italiano |
+| --- | --- | --- |
+| Install the complete community firmware | [First installation](docs/FIRST_RUN.md) | [Prima installazione](docs/FIRST_RUN.it.md) |
+| Update an existing CC2 Control installation | [Application updates](docs/UPDATE_CC2.md) | [Aggiornamenti dell’app](docs/UPDATE_CC2.it.md) |
+| Connect OrcaSlicer and synchronize Canvas slots | [OrcaSlicer setup](docs/ORCASLICER.md) | [Configurazione OrcaSlicer](docs/ORCASLICER.it.md) |
 
-If your printer already runs an earlier Community Firmware release, you do not
-need to reflash the complete firmware just to update CC2 Control.
+Download files from [GitHub Releases](https://github.com/Neme77/centauri-carbon-2-community/releases)
+and follow the matching guide and release notes. **Complete firmware**, the
+**CC2 Control application** and the **source builder** are different downloads:
+the builder ZIP is not an installable printer update. Check the supplied SHA-256
+checksums before installation.
 
-Use the standalone updater:
+The current qualified firmware family is **V4.4/V4.4.1/V4.4.2**, based on ELEGOO
+**02.01.01.07**. Its application updates are not interchangeable with stock
+firmware, older community firmware or experimental builds.
 
-[`CC2-Control-1.1.31-Multiplatform-Update.zip`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.1.31/CC2-Control-1.1.31-Multiplatform-Update.zip)
+Open **`http://PRINTER-IP:8081`** on your local network. OrcaSlicer also needs
+**`:8081`** after the printer IP. App installation requires the printer’s **LAN
+access code**, which is different from the SSH password; checking for updates
+does not. Installation always requires confirmation. Camera-component updates
+require a **full printer reboot** as described in their release notes.
 
-The standalone updater replaces only CC2 Control and preserves the persistent
-LAN access code, material presets and interface preferences. CC2 Control 1.1.31
-also adds LAN-code revalidation and OrcaSlicer Moonraker-agent Canvas filament
-synchronization. After the update, CC2 Control realigns its local services
-automatically, so an additional printer reboot or full power cycle should not
-be necessary.
+## What CC2 Control offers
 
-For detailed instructions, see [Installation](docs/INSTALL.md).
+- Local dashboard, live video, temperatures, fans, print speed and flow controls.
+- Internal/USB files, model previews and interactive object exclusion.
+- Canvas slot states, material settings, auto refill and OrcaSlicer filament sync.
+- Bed leveling, saved plate/nozzle meshes and optional spool inventory/tracking.
+- Backup and selective restore, diagnostics, protected Console and signed app updates.
+- Multiple interface languages, themes and desktop/mobile layouts.
 
-## Changed the printer LAN access code?
+See the [application guide](docs/CC2_CONTROL.md) and [screenshot gallery](docs/SCREENSHOTS.md).
+Experimental features remain opt-in and require their own validation.
 
-If you change the LAN access code from the printer, update the same code in
-CC2 Control at `http://PRINTER-IP:8081` under **Settings → Connection**.
+## New in CC2 Control 1.2.22
 
-Enter the new code, select **Verify**, then **Save changes**.
+- **External spool, including printers bought without the Canvas Combo:** native **Load / Unload** when Canvas is confirmed absent, plus **Brand → Type → Subcategory → Colour** editing. Canvas shares the stock material catalog and 24-colour palette (#233). External feeding with Canvas connected is not enabled by this update.
+- **Dashboard:** pezso92’s paused-camera artwork, speed/flow sliders alongside numeric Apply/Reset controls, aligned panels and **Keep active** in the camera header (#223).
+- **Control:** compact machine actions, live Z offset above print tuning and aligned calibration panels (#226).
+- **Spoolman:** optional server sync by **tharje** (#208), independently enabled in Integrations; configuration and local tracking are kept when disabled (#227).
+- **LAN code:** optional verified browser-local remembering, masked prefilled fields and explicit Forget (#225).
+- **Print completion:** nonblocking filename/duration notice, Confirm and Print again; idle progress clears without homing (#219).
+- **Spool history:** bounded scrolling with All / Consumption-only filters, suggested by **DamiBFryta** (#220).
+- **Experimental integrations:** Canvas UDS, Quiet and timed bed heating grouped in Settings → Integrations, independently enabled with aligned actions (#223/#232).
+- **Filament drying experiment:** finite timed bed heating, explicit stop and zero-target confirmation (#198/#218/#230); requested by **romeopuch**, native help-check issue diagnosed by **Noahwhite2014**, documentation clarified by **pezso92** (#235).
+- **Updates and packaging:** supported-version notices corrected in all nine languages (#222); unused firmware web overlay removed (#229). Cumulative webcam fix, preferences, mesh libraries and backups retained.
 
-If CC2 Control does not immediately reconnect after the LAN code change, restart
-only the CC2 Control service over SSH:
 
-```sh
-/etc/init.d/cc2-control restart
-```
 
-This restarts CC2 Control without rebooting or power-cycling the printer.
+[![Dashboard](docs/images/cc2-control/dashboard-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/dashboard-current.png)
 
-If the old code prevents access to the configuration page entirely, reset only
-the CC2 Control connection configuration:
+[![Control](docs/images/cc2-control/control-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/control-current.png)
 
-```sh
-/etc/init.d/cc2-control stop
-rm -f /opt/usr/cc2-control/cc2-control.conf
-/etc/init.d/cc2-control start
-```
+### Optional extended Canvas pull-back
 
-Then reload `http://PRINTER-IP:8081` and complete the initial setup with the
-new LAN access code. Material presets and interface preferences are preserved.
+[**Separate experimental Windows / Linux / macOS kit**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Canvas-Pullback-Experimental-R4.zip), by **Noahwhite2014** (#228). Qualified **V4.4.1/V4.4.2 only**, with Control **1.2.21/1.2.22**. Raises the accepted range up to 1000 mm without choosing a distance or sending movement; suitability depends on the filament path. **Remove it and reboot before app/firmware updates.** Never installed by the automatic updater. [Instructions](experimental/canvas-pullback-kit/README.en.md).
 
-## Features
+[![New Canvas layout](docs/images/cc2-control/canvas-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/canvas-current.png)
 
-- local web dashboard on port `8081`;
-- live status, camera, temperatures, fans and motion controls;
-- G-code/3MF file management, thumbnails and OrcaSlicer integration;
-- Canvas material slots, colours, presets and spool selection;
-- Side A / Side B mesh handling, adaptive probing and screw levelling;
-- object exclusion, protected console and global emergency stop;
-- English and Italian interface with persistent dark and light themes;
-- Panda/Moonraker compatibility endpoint on port `7125`.
+[![Independent experimental settings](docs/images/cc2-control/experiments-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/experiments-current.png)
 
-## Source layout
+Canvas layout inspired by **Surfoo**; original Quiet feature by **BorjaLL**. Experiments retain saved choices. Previews use simulated data. Full V4.4.2 firmware and builder still include Control 1.2.21; install this app update for the new features.
 
-| Path | Contents |
-|---|---|
-| [`cc2-control/`](cc2-control/) | C backend, web UI, scripts, tests and protocol notes |
-| [`builder/current/`](builder/current/) | Current firmware build logic and host-side tests |
-| [`docs/`](docs/) | Installation, architecture, build and testing documentation |
-| [`CHANGELOG.md`](CHANGELOG.md) | User-visible project history |
-| [`AGENTS.md`](AGENTS.md) | Repository working rules for contributors and coding agents |
+[Release notes / Note complete, validation, checksums and credits](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4).
 
-Historical versions are preserved through Git tags, GitHub Releases and Git
-history instead of parallel version-specific documents on `main`.
+## Help and development
 
-## Documentation
+[Documentation index](docs/README.md) · [Report a problem](https://github.com/Neme77/centauri-carbon-2-community/issues) · [Contributing](CONTRIBUTING.md) · [Build guide](docs/BUILD.md) · [Source and provenance](docs/SOURCE.md)
 
-- [Installation](docs/INSTALL.md)
-- [Build and reproduction](docs/BUILD.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [CC2 Control](docs/CC2_CONTROL.md)
-- [Source and third-party inputs](docs/SOURCE.md)
-- [Testing](docs/TESTING.md)
-- [Contributing](CONTRIBUTING.md)
+Version history belongs in the [CHANGELOG](CHANGELOG.md) and
+[release notes](https://github.com/Neme77/centauri-carbon-2-community/releases).
+Installation details and compatibility requirements are maintained in the guides
+linked above.
 
-## Interface preview
+## Community
 
-### Dashboard
+Thanks to **Surfoo, beanbo, efiten, Skcycos, pezso92, asiersan, Noahwhite2014,
+tharje, Nick Plateringen-Paul**, and every contributor, translator and tester.
+Special thanks to **[DamiBFryta](https://www.reddit.com/user/DamiBFryta/), our
+ultimate beta tester**. [Full credits and original contributions](docs/CONTRIBUTORS.md).
 
-<p align="center">
-  <img src="docs/images/v4.2/dashboard-light-theme.jpg" alt="CC2 Control dashboard" width="1000">
-</p>
+AI-assisted work is reviewed and validated. Architecture decisions, printer-side
+testing and release approval remain with the maintainer and community testers.
 
-### Bed Levelling
+## License
 
-<table>
-  <tr>
-    <td align="center"><strong>Dark theme</strong></td>
-    <td align="center"><strong>Light theme</strong></td>
-  </tr>
-  <tr>
-    <td><img src="docs/images/v4.2/bed-levelling-dark-theme.jpg" alt="Bed Levelling dark theme"></td>
-    <td><img src="docs/images/v4.2/bed-levelling-light-theme.jpg" alt="Bed Levelling light theme"></td>
-  </tr>
-</table>
-
-## AI-assisted development
-
-This project uses AI-assisted development tools as part of the workflow,
-including support for code review, refactoring, debugging, documentation and
-selected code generation tasks.
-
-A substantial part of the codebase is written and maintained directly by the
-project maintainer. Architecture decisions, reverse engineering, hardware
-testing, printer-side validation and release approval are performed by the
-maintainer and community testers.
-
-AI-assisted changes are reviewed and validated before being included in a
-release.
-
-## License and notices
-
-Project code is provided under GPL-3.0-only where the contributors have the
-right to license it. Vendor firmware and third-party components keep their own
-terms. See [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).
+Project code is GPL-3.0-only where contributors have the right to license it.
+Vendor firmware and third-party components retain their own terms.
+See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).

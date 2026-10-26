@@ -131,6 +131,8 @@ static void *console_worker(void *opaque) {
         close(fd); finish(state, 0, "Cannot send command\n"); return NULL;
     }
 
+    if (strcmp(command, "M112") == 0) atomic_store(&state->emergency_sent, 1);
+
     append_output(state, "> ", 2);
     append_output(state, command, strlen(command));
     append_output(state, "\n", 1);
@@ -179,6 +181,7 @@ static void *console_worker(void *opaque) {
 
 void console_init(console_state *state, const char *socket_path) {
     memset(state, 0, sizeof(*state));
+    atomic_init(&state->emergency_sent, 0);
     pthread_mutex_init(&state->lock, NULL);
     snprintf(state->socket_path, sizeof(state->socket_path), "%s", socket_path);
 }

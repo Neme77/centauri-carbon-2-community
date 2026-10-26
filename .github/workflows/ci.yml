@@ -1,0 +1,246 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cc2-control:
+    name: CC2 Control (host tests + ARM build)
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: cc2-control
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install ARM cross-compiler and emulator
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user
+
+      - name: Bed heating ownership and timeout regression
+        run: |
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_bed_drying.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-bed-drying -lm
+          /tmp/test-bed-drying
+
+      - name: Completed-print metadata regression
+        run: |
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_print_completion.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-print-completion -lm
+          /tmp/test-print-completion
+
+      - name: Host build and tests (warnings are errors)
+        run: make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
+
+      - name: Verified GitHub HTTPS download with the standalone helper
+        run: CC2_TEST_LIVE_HTTPS=1 python3 tests/test_https_live.py
+
+      - name: ARM build (warnings are errors)
+        # A separate short-lived TLS helper replaces the printer's broken curl.
+        run: |
+          make clean all EXTRA_CFLAGS=-Werror
+          file dist/cc2-control/cc2-control
+          file dist/cc2-control/cc2-control | grep -q 'ARM, EABI5.*statically linked'
+
+      - name: ARM binary smoke test under qemu
+        run: CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
+
+      - name: Package firmware-qualified application updater
+        run: python3 installer/package.py --application-only-trial --prepared dist/cc2-control
+
+      - name: Save application updater candidate
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cc2-control-v44-updater
+          path: output/CC2-Control-*-Multiplatform-Update.zip*
+          if-no-files-found: error
+
+
+  web:
+    name: Web UI (type-check, build, up to date)
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: cc2-control/web-src
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+
+      - name: Install dependencies from the lockfile
+        run: npm ci
+
+      - name: Type-check, lint and formatting (Biome)
+        run: npm run check
+
+      - name: Rebuild web/ (index.html and locales) and fail if the committed build is stale
+        run: |
+          npm run build
+          git add --intent-to-add ../web
+          git diff --exit-code -- ../web
+
+      - name: Install browser for PID interaction regression
+        run: npx playwright install --with-deps chromium
+
+      - name: Native external spool and shared Canvas material controls
+        run: node preview/test-external-filament.mjs
+
+      - name: Optional Spoolman integration switch
+        run: npm run test:spoolman-integration
+
+      - name: Optional browser LAN code remembering
+        run: npm run test:remember-lan
+
+      - name: Experimental bed heating controls
+        run: npm run test:bed-drying
+
+      - name: Print completion notice and idle progress
+        run: npm run test:print-completion
+
+      - name: PID browser interaction regression
+        run: npm run test:pid
+      - name: Control calibration layout and actions
+        working-directory: cc2-control/web-src
+        run: npm run test:control-calibrations
+
+      - name: Independent experimental choices and Quiet controls
+        run: |
+          npm run test:experiments
+          npm run test:motor-mode
+
+      - name: Canvas states and explicit recovery loading
+        run: npm run test:canvas-states && npm run test:canvas-layout && npm run test:canvas-reset
+
+      - name: New-spool insertion copy and scale-weight regression
+        run: npm run test:spool-insertion && npm run test:spool-history
+
+      - name: Complete file library and large upload admission
+        run: npm run test:file-library
+
+      - name: Single object map, original IDs and responsive expansion
+        run: npm run test:object-layout && npm run test:bed-map
+
+      - name: Sidebar geometry and accessible navigation regression
+        run: node preview/test-ui-polish.mjs
+
+      - name: Hungarian language selection, persistence and mobile layouts
+        run: npm run test:hungarian
+
+      - name: Spanish language selection, persistence and mobile layouts
+        run: npm run test:spanish
+
+      - name: Signed update panel confirmations and mobile layouts
+        run: npm run test:updates
+
+      - name: Update notification, compatibility, cache and mobile header
+        run: npm run test:update-notice
+
+      - name: Library mesh selection and guarded activation
+        run: npm run test:mesh-selector
+        env:
+          CC2_MESH_SCREENSHOTS: /tmp/cc2-mesh-preview
+
+      - name: Save mesh selector screenshots
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: mesh-library-selector-preview
+          path: /tmp/cc2-mesh-preview/
+          if-no-files-found: ignore
+
+      - name: Printing temperature interaction regression
+        run: npm run test:print-temperatures
+
+      - name: Native printer report interaction regression
+        run: npm run test:printer-reports
+
+      - name: Install browser for file-dialog regression
+        run: npx playwright install --with-deps chromium
+
+      - name: Slow file-analysis browser regression
+        run: npm run test:filaments
+
+  sanitizers:
+    name: CC2 Control (${{ matrix.sanitize }} sanitizer)
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitize: ["address,undefined", "thread"]
+    defaults:
+      run:
+        working-directory: cc2-control
+    env:
+      # Reports from every process, including the server started by the
+      # runtime tests, whose exit status the tests do not check.
+      ASAN_OPTIONS: log_path=/tmp/sanitizer/report
+      UBSAN_OPTIONS: log_path=/tmp/sanitizer/report:print_stacktrace=1
+      TSAN_OPTIONS: log_path=/tmp/sanitizer/report
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Lower mmap randomisation for the sanitizer runtimes
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Tests with sanitizers
+        run: |
+          mkdir -p /tmp/sanitizer
+          make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror SANITIZE=${{ matrix.sanitize }}
+
+      - name: Fail on any sanitizer report
+        if: always()
+        run: |
+          if ls /tmp/sanitizer/report* >/dev/null 2>&1; then
+            cat /tmp/sanitizer/report*
+            exit 1
+          fi
+
+  builder:
+    name: Firmware builder (host tests)
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Builder tests
+        run: python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+
+      - name: Launcher tests
+        run: python3 builder/current/launch_helpers/tests/test_launcher.py
+
+  reactor-fixtures:
+    name: Experimental reactor (host fixtures)
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Bridge with UBSan (mocked vendor ABI)
+        run: |
+          g++ -std=c++11 -O0 -g -Wall -Wextra -fsanitize=undefined -fno-sanitize-recover=all experimental/combined-test/reactor/bridge_test.cpp -o /tmp/cc2-reactor-bridge
+          /tmp/cc2-reactor-bridge
+      - name: Installer and archive simulations
+        run: |
+          python3 experimental/combined-test/test_installer.py
+          python3 experimental/combined-test/test_package.py
+      - name: Shell syntax
+        run: |
+          for script in experimental/combined-test/*.sh; do sh -n "$script"; done
+
+  payload-44:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install GNU ARM binutils
+        run: sudo apt-get update && sudo apt-get install -y binutils-arm-linux-gnueabihf
+      - name: Reproduce qualified 4.4 Dual Trust payload
+        run: python3 experimental/firmware-port/assemble_dual44_gnu.py --prefix arm-linux-gnueabihf
+      - name: Check 4.4 source pins and base requirements
+        run: python3 builder/current/tests/test_44_port_static.py

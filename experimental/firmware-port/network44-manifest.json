@@ -1,0 +1,274 @@
+{
+  "status": "candidate: native WAN camera command restored; paired camera coexistence patch; hardware pending",
+  "input_sha256": "256bb3b93cb9495cf010efc13379f70873ccf94541ac8e2c2235b4d8767f6760",
+  "output_sha256": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+  "payload_va": "0xcd77e8",
+  "payload_size": 500,
+  "patches": [
+    {
+      "va": "0xcd77e8",
+      "offset": 13400040,
+      "before": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "after": "a8011be5403090e5010053e327ebec1a080090e5000050e324ebec0a5d30d0e5000053e321ebec1a0c3090e5000053e31eebec0abb1dedeb1cebecea0f502de90ffad5eb400090e5010050e30f50bde8531eed0a54304be2f91dedea70402de90240a0e10350a0e1086091e5000056e30800000a040056e10600000a5d30d6e5000053e30300000a0030a0e35d30c6e50600a0e1ad20edeb0400a0e135ff2fe17080bde870402de908401be50150a0e10060a0e133ff2fe1080094e5000050e30600000a060050e10400000a5d30d0e5000053e30100000a0510a0e1601eedeb7080bde8080090e5000050e31eff2f015d30d0e5000053e31eff2f01581eedea100090e5000050e31eff2f012f18edeadbf9d5ebe7eaeceb000050e31ad9ee1ab7d9eeea70402de90040a0e1dda1cfeb000050e31300000a0060a0e1758ceeeb0050a0e1901dd5e5000051e30c00001a911dd5e5000051e30900000a981d95e5000051e30600000ad90e85e2040080e2a49fcfeb0010a0e10400a0e1c9a1cfeb000000ea0600a0e17080bde84343325f4c414e5f4d5154545f434845434b5f5449434b004343325f4c414e5f4d5154545f52455452595f434f4e4e454354494f4e00000068301be5043193e5010053e374190703cd104003409ecfea68301be5043193e5010053e38c190703cd1040033a9ecfea",
+      "reason": "Reconstructed LAN/WAN coexistence helper; no vendor function replaced"
+    },
+    {
+      "offset": 164,
+      "before": "e877cc00",
+      "after": "dc79cc00",
+      "reason": "Include appended helper in executable segment"
+    },
+    {
+      "offset": 168,
+      "before": "e877cc00",
+      "after": "dc79cc00",
+      "reason": "Include appended helper in executable segment"
+    },
+    {
+      "va": "0x81f028",
+      "offset": 8450088,
+      "before": "54304be2",
+      "after": "fde112ea",
+      "reason": "_ZN13communication11LanStrategy5startEv"
+    },
+    {
+      "va": "0x812124",
+      "offset": 8397092,
+      "before": "33ff2fe1",
+      "after": "c61513eb",
+      "reason": "_ZN13communication14NetworkManager8set_modeE11NetworkMode"
+    },
+    {
+      "va": "0x812158",
+      "offset": 8397144,
+      "before": "ce0000ea",
+      "after": "a21513ea",
+      "reason": "_ZN13communication14NetworkManager8set_modeE11NetworkMode"
+    },
+    {
+      "va": "0x811c70",
+      "offset": 8395888,
+      "before": "33ff2fe1",
+      "after": "051713eb",
+      "reason": "_ZN13communication14NetworkManager14report_messageERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE"
+    },
+    {
+      "va": "0x811c10",
+      "offset": 8395792,
+      "before": "33ff2fe1",
+      "after": "0b1713eb",
+      "reason": "_ZN13communication14NetworkManager4stopEv"
+    },
+    {
+      "va": "0x88dd54",
+      "offset": 8904020,
+      "before": "b10ffeeb",
+      "after": "dc2611eb",
+      "reason": "_ZNK10api_module12DeviceStatus19post_change_messageERKN8nlohmann16json_abi_v3_12_010basic_jsonISt3mapSt6vectorNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbxydSaNS2_14adl_serializerES5_IhSaIhEEvEE"
+    },
+    {
+      "va": "0x88dd70",
+      "offset": 8904048,
+      "before": "9d0000ea",
+      "after": "e02611ea",
+      "reason": "_ZNK10api_module12DeviceStatus19post_change_messageERKN8nlohmann16json_abi_v3_12_010basic_jsonISt3mapSt6vectorNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbxydSaNS2_14adl_serializerES5_IhSaIhEEvEE"
+    },
+    {
+      "va": "0x88dfc4",
+      "offset": 8904644,
+      "before": "150ffeeb",
+      "after": "472611eb",
+      "reason": "_ZNK10api_module12DeviceStatus19post_change_messageERKN8nlohmann16json_abi_v3_12_010basic_jsonISt3mapSt6vectorNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbxydSaNS2_14adl_serializerES5_IhSaIhEEvEE"
+    },
+    {
+      "va": "0x811c0c",
+      "offset": 8395788,
+      "before": "0200a0e1",
+      "after": "08101be5",
+      "reason": "Restore explicit NetworkManager owner argument before coexistence teardown, matching tested 4.3 callsite"
+    },
+    {
+      "va": "0x812120",
+      "offset": 8397088,
+      "before": "0200a0e1",
+      "after": "a8111be5",
+      "reason": "Restore explicit NetworkManager owner argument before coexistence teardown, matching tested 4.3 callsite"
+    },
+    {
+      "va": "0x851754",
+      "offset": 8656724,
+      "before": "4dbae1eb",
+      "after": "6c1812eb",
+      "reason": "Restore HTTP LAN token fallback in WAN; original token matches and empty request rejection unchanged"
+    },
+    {
+      "va": "0x851924",
+      "offset": 8657188,
+      "before": "d9b9e1eb",
+      "after": "f81712eb",
+      "reason": "Restore HTTP LAN token fallback in WAN; original token matches and empty request rejection unchanged"
+    },
+    {
+      "va": "0x837168",
+      "offset": 8548712,
+      "before": "5620e2eb",
+      "after": "0f8212eb",
+      "reason": "LAN-only distinct MQTT periodic task name; WAN native name preserved"
+    },
+    {
+      "va": "0x8371a0",
+      "offset": 8548768,
+      "before": "4820e2eb",
+      "after": "078212eb",
+      "reason": "LAN-only distinct MQTT retry task name; WAN native name preserved"
+    },
+    {
+      "va": "0x88db48",
+      "offset": 8903496,
+      "before": "000053e30130a0030030a013",
+      "after": "010053e30130a0930030a083",
+      "reason": "Restore old v2 LAN formatter in modes LAN and WAN, then native cloud formatter"
+    }
+  ],
+  "relocated_targets": [
+    {
+      "va": "0xcd77f4",
+      "target": "0x812498",
+      "instruction": "bne"
+    },
+    {
+      "va": "0xcd7800",
+      "target": "0x812498",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd780c",
+      "target": "0x812498",
+      "instruction": "bne"
+    },
+    {
+      "va": "0xcd7818",
+      "target": "0x812498",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd781c",
+      "target": "0x81ef10",
+      "instruction": "bl"
+    },
+    {
+      "va": "0xcd7820",
+      "target": "0x812498",
+      "instruction": "b"
+    },
+    {
+      "va": "0xcd7828",
+      "target": "0x25606c",
+      "instruction": "bl"
+    },
+    {
+      "va": "0xcd7838",
+      "target": "0x81f18c",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd7840",
+      "target": "0x81f02c",
+      "instruction": "b"
+    },
+    {
+      "va": "0xcd7858",
+      "target": "0xcd7880",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd7860",
+      "target": "0xcd7880",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd786c",
+      "target": "0xcd7880",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd787c",
+      "target": "0x81fb38",
+      "instruction": "bl"
+    },
+    {
+      "va": "0xcd78a8",
+      "target": "0xcd78c8",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd78b0",
+      "target": "0xcd78c8",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd78bc",
+      "target": "0xcd78c8",
+      "instruction": "beq"
+    },
+    {
+      "va": "0xcd78c4",
+      "target": "0x81f24c",
+      "instruction": "bl"
+    },
+    {
+      "va": "0xcd78e4",
+      "target": "0x81f24c",
+      "instruction": "b"
+    },
+    {
+      "va": "0xcd78f4",
+      "target": "0x81d9b8",
+      "instruction": "b"
+    },
+    {
+      "va": "0xcd78f8",
+      "target": "0x25606c",
+      "instruction": "bl"
+    },
+    {
+      "va": "0xcd78fc",
+      "target": "0x8124a0",
+      "instruction": "bl"
+    },
+    {
+      "va": "0xcd7904",
+      "target": "0x88dd74",
+      "instruction": "bne"
+    },
+    {
+      "va": "0xcd7908",
+      "target": "0x88dfec",
+      "instruction": "b"
+    }
+  ],
+  "http_token_fallback": {
+    "va": "0xcd790c",
+    "size": 104,
+    "callsites": [
+      "0x851754",
+      "0x851924"
+    ],
+    "source": "http-token-fallback44.S",
+    "legacy_reference": "CC2_HTTP_LAN_WAN_v1_TEST/fallback.S",
+    "device_status_flags": [
+      "0xd90",
+      "0xd91"
+    ],
+    "saved_string": "0xd94",
+    "saved_length": "0xd98"
+  },
+  "mqtt_timer_helpers": [
+    "0xcd79ac",
+    "0xcd79c4"
+  ],
+  "mqtt_timer_names": [
+    "0xcd7974",
+    "0xcd798c"
+  ]
+}

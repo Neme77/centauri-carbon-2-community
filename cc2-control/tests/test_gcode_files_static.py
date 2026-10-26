@@ -3,11 +3,12 @@
 
 from pathlib import Path
 
+from _websrc import read_src
 
 root = Path(__file__).resolve().parents[1]
 main = (root / "src/main.c").read_text(encoding="utf-8")
 mqtt = (root / "src/mqtt.c").read_text(encoding="utf-8")
-web = (root / "web/index.html").read_text(encoding="utf-8")
+web = read_src()
 
 required_main = (
     'GCODE_INTERNAL_ROOT "/opt/usr/gcode/local"',
@@ -27,11 +28,14 @@ required_main = (
     'strcmp(leveling, "calibrate")',
     'BED_MESH_CALIBRATE_SET EXECUTE_CALIBRATE_FROM_SLICER=1',
     'BED_MESH_CALIBRATE PROFILE=%s BED_TEMP=60',
-    'SDCARD_PRINT_FILE FILENAME=%s/\\"%s\\" SLICE_CFG_MODEL=%d',
+    'SDCARD_PRINT_FILE FILENAME=%s/\\"%s\\" SLICE_CFG_MODEL=1',
+    'CANVAS_SET_COLOR_TABLE T= CHANNEL=',
+    '{"CANVAS_SET_COLOR_TABLE T=", " ID=", " CHANNEL="}',
+    "!slot_count && canvas_color_table_clear() != 0",
     'print_media = "local"',
     'GCODE_USB_IMPORT_PREFIX "CC2_USB_"',
-    'bounded_number_after_marker(line, "nozzle_temperature", 500.0)',
-    'bounded_number_after_marker(line, "bed_temperature", 200.0)',
+    'gcode_metadata_number(line, "nozzle_temperature", 500.0)',
+    'gcode_metadata_number(line, "bed_temperature", 200.0)',
 )
 required_mqtt = (
     '"method\\\":1020',
@@ -45,26 +49,25 @@ required_mqtt = (
     'tools[index], trays[index]',
 )
 required_web = (
-    'data-page="files"',
-    'async function refreshFiles()',
-    'async function startFile(storage, path)',
-    "overlay.id='cc2PrintOverlay'",
-    'name="useCanvas"',
-    'Choose print spool',
-    '/api/gcode-files/inspect',
-    'select.dataset.tool',
-    'Importing USB G-code to internal storage',
-    'name="plateSide"',
-    "form.elements.plateSide.value",
-    "profiles.default1",
+    "['files', FilesIcon, 'common.files']",
+    "const refresh = async",
+    "export async function startFile(storage: string, path: string)",
+    "'print.choose_print_spool'",
+    "useCanvas",
+    "/api/gcode-files/inspect",
+    "`${tool}:${map[tool]}`",
+    "print.importing_usb_g_code_to_internal",
+    "plateSide",
+    "readSide('default1')",
+    "available === null",
+    "available === false",
+    "unknown && !calibrating",
+    "const recheckMesh = async",
     "meshAvailable",
-    'id="meshProfile"',
-    'name="calibrateBed"',
-    "form.elements.calibrateBed.checked?'calibrate':'saved'",
-    'inspection.adaptive_mesh',
-    'validTemperature(metadata.nozzle_temperature,500)',
-    'const fileMetadataCache = new Map()',
-    'fileMetadataCache.set(metadataKey,metadata)',
+    "calibrating ? 'calibrate' : 'saved'",
+    "temp(meta.nozzle_temperature, 500)",
+    "const metaCache = new Map",
+    "metaCache.set(k, m)",
 )
 
 for marker in required_main:

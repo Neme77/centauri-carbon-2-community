@@ -1,0 +1,6 @@
+{
+  "firmware_version_file_sha256": "bc33529cc1b1e6924eb04c472ecaab73efc2d71a0bbf442c550ecdb4b1b5db94",
+  "vendor_base": "02.01.01.07",
+  "printer_sha256": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+  "daemon_sha256": "83433b14e49d1e8aa9523282ead03618378573f4b66de1ad8f7f3c444b11aada"
+}

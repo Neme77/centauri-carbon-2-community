@@ -1,7 +1,9 @@
 #include "../src/control.h"
+#include "../src/console.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static void expect(int condition,const char *label){
     if(!condition){fprintf(stderr,"FAIL: %s\n",label);exit(1);}
@@ -9,15 +11,215 @@ static void expect(int condition,const char *label){
 }
 
 int main(void){
-    mqtt_client mqtt; char script[512],reason[256];
+    mqtt_client mqtt; char script[700],reason[256];
     memset(&mqtt,0,sizeof(mqtt));
     mqtt.have_machine_status=1; mqtt.machine_status=1;
+    mqtt.connected=mqtt.registered=1; mqtt.last_message=time(NULL);
+    expect(control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset accepted idle");
+    expect(strlen(script)<CONSOLE_COMMAND_MAX,"Canvas reset fits console transport without truncation");
+    for(int i=0;i<4;i++){
+        char expected[160];snprintf(expected,sizeof(expected),"CANVAS_SET_FILAMENT_INFO CHANNEL=%d COLOR= detailed_type=\"\" MANUFACTURER= nozzle_max_temp= nozzle_min_temp= TYPE=\"\" CODE=",i);
+        expect(strstr(script,expected)!=NULL,"Canvas reset clears each native slot");
+    }
+    expect(strchr(script,'\n')&&strstr(script,"CANVAS_UNLOAD")==NULL,"Canvas reset does not unload filament");
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,100,reason,sizeof(reason)),"Canvas reset rejects truncated batch");
+    expect(!control_build_script("canvas:reset-all:extra",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset action must match exactly");
+    mqtt.machine_status=2;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected during printing");
+    strcpy(mqtt.print_state,"paused");
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected during pause");
+    mqtt.machine_status=1; mqtt.have_machine_status=0;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected without machine status");
+    mqtt.have_machine_status=1; mqtt.last_message-=30;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected stale");
+    mqtt.last_message=time(NULL);mqtt.print_state[0]='\0';
+    mqtt.connected=0;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected disconnected");
+    mqtt.connected=1;mqtt.registered=0;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected unregistered");
+    mqtt.registered=1;mqtt.last_message=0;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected missing timestamp");
+    mqtt.last_message=time(NULL)+30;
+    expect(!control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset rejected future timestamp");
+    mqtt.last_message=time(NULL);
+    expect(control_build_script("canvas:reset-all",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Canvas reset accepted after fresh telemetry recovers");
+    expect(control_build_script("canvas:material:1:PLA:2850DF:190:230",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
+        !strcmp(script,"CANVAS_SET_FILAMENT_INFO CHANNEL=1 COLOR=0x2850DF detailed_type=\"PLA\" MANUFACTURER=\"Generic\" nozzle_max_temp=230 nozzle_min_temp=190 TYPE=\"PLA\" CODE=Generic"),"Canvas material without a maker is generic");
+    expect(control_build_script("canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
+        !strcmp(script,"CANVAS_SET_FILAMENT_INFO CHANNEL=1 COLOR=0x2850DF detailed_type=\"PLA Matte\" MANUFACTURER=\"Elegoo\" nozzle_max_temp=230 nozzle_min_temp=190 TYPE=\"PLA\" CODE=Generic"),"Canvas material names a spool's line and maker");
+    expect(control_build_script("canvas:material:1:PLA MATTE:2850DF:190:230",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
+        strstr(script,"detailed_type=\"PLA MATTE\"")&&strstr(script,"TYPE=\"PLA MATTE\""),"Canvas profile accepts internal spaces and quotes the name");
+    const char *bad_materials[]={"canvas:material:1: PLA:2850DF:190:230","canvas:material:1:PLA :2850DF:190:230",
+        "canvas:material:1:PLA;M112:2850DF:190:230","canvas:material:1:PLA\nM112:2850DF:190:230",
+        "canvas:material:1:PLA\"MATTE:2850DF:190:230","canvas:material:1:12345678901234567:2850DF:190:230",
+        "canvas:material:1:PLA:2850DF:190:230junk","canvas:material:1:PLA:2850DF:190:230:PLA Matte",
+        "canvas:material:1:PLA:2850DF:190:230:PLA \"x\":Elegoo","canvas:material:1:PLA:2850DF:190:230:PLA Matte:El;ego",
+        "canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo:more","canvas:material:1:PLA:2850DF:190:230: PLA:Elegoo",
+        "canvas:material:1:PLA:2850DF:190:230:PLA Matte:Elegoo\nM112"};
+    for(size_t i=0;i<sizeof(bad_materials)/sizeof(bad_materials[0]);i++)expect(!control_build_script(bad_materials[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),bad_materials[i]);
+    expect(control_build_script("heaters:set:205:60",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
+        !strcmp(script,"SET_HEATER_TEMPERATURE HEATER=extruder TARGET=205.0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60.0"),"temperature targets accepted idle without waiting");
+    mqtt.machine_status=2;
+    expect(control_build_script("heaters:set:215:65",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets accepted during print");
+    strcpy(mqtt.print_state,"paused");
+    expect(control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets accepted for paused print");
+    expect(!control_build_script("preheat:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"preheat remains blocked during print");
+    const char *bad_targets[]={"heaters:set:nan:60","heaters:set:210:inf","heaters:set:-1:60","heaters:set:301:60","heaters:set:200:121","heaters:set:200:60junk","heaters:set:200:60\nM112","heaters:set:200"};
+    for(size_t i=0;i<sizeof(bad_targets)/sizeof(bad_targets[0]);i++)expect(!control_build_script(bad_targets[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),bad_targets[i]);
+    mqtt.last_message-=30;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected stale");mqtt.last_message=time(NULL);
+    mqtt.connected=0;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected disconnected");mqtt.connected=1;
+    mqtt.registered=0;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected unregistered");mqtt.registered=1;
+    mqtt.have_machine_status=0;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected unknown state");mqtt.have_machine_status=1;
+    mqtt.machine_status=3;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected during other operation");
+    mqtt.machine_status=1; mqtt.print_state[0]=0;
+    expect(control_build_script("home:ALL",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"G28\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=0.0")==0,"home switches nozzle off when previous target is unavailable");
+    mqtt.have_extruder_target=1; mqtt.extruder_target=205.0;
+    expect(control_build_script("home:X",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"G28 X\nSET_HEATER_TEMPERATURE HEATER=extruder TARGET=205.0")==0,"home restores previous nozzle target");
+    expect(control_build_script("screws:measure",&mqtt,script,sizeof(script),reason,sizeof(reason)),"screw measurement accepted while idle");
+    expect(strstr(script,"M140 S60\nG180 S3\nM190 S60")!=NULL,"screw measurement heats bed and runs stock nozzle cleaning before probing");
+    expect(strstr(script,"M190 S60")<strstr(script,"PROBE SAMPLES=3"),"screw measurement waits for 60 C bed before probing");
+    expect(strstr(script,"M104 S0\nM140 S0")!=NULL,"screw measurement switches heaters off after probing");
+    expect(strstr(script,"G1 X30 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X230 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X230 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X30 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM104 S0\nM140 S0")!=NULL,"screw measurement uses corrected points and lifts Z before final heater shutdown");
+    expect(strstr(script,"G28")==NULL,"screw measurement avoids final homing that clears measured values");
+    expect(strstr(script,"TARGET=205.0")==NULL,"screw measurement does not restore stale pre-clean nozzle target");
     expect(control_build_script("system:heaters_off",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"TURN_OFF_HEATERS")==0,"heaters-off command");
+    const char *off_aliases[]={"heaters:off","system:heaters_off"};
+    for(size_t i=0;i<2;i++) {
+        expect(control_build_script(off_aliases[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),"heater shutdown accepted with fresh idle state");
+        mqtt.last_message=time(NULL)-30;
+        expect(!control_build_script(off_aliases[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),"heater shutdown rejected with stale idle state");
+        mqtt.last_message=time(NULL);mqtt.connected=0;
+        expect(!control_build_script(off_aliases[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),"heater shutdown rejected when disconnected");
+        mqtt.connected=1;mqtt.registered=0;
+        expect(!control_build_script(off_aliases[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),"heater shutdown rejected when unregistered");
+        mqtt.registered=1;mqtt.have_machine_status=0;
+        expect(!control_build_script(off_aliases[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),"heater shutdown rejected with unknown state");
+        mqtt.have_machine_status=1;mqtt.machine_status=3;
+        expect(!control_build_script(off_aliases[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),"heater shutdown rejected while paused");
+        expect(control_build_script("system:emergency_stop",&mqtt,script,sizeof(script),reason,sizeof(reason)),"emergency stop remains available while paused");
+        mqtt.machine_status=1;
+    }
     expect(control_build_script("system:fans_off",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strstr(script,"M106 P2 S0"),"fans-off command");
     expect(control_build_script("system:emergency_stop",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"M112")==0,"emergency-stop command");
     mqtt.machine_status=2;
+    expect(control_build_script("object:exclude:pièce (2)",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"EXCLUDE_OBJECT NAME=\"pièce (2)\"")==0,"accented object name and parentheses are quoted safely");
+    expect(control_build_script("object:exclude:测试 (1)",&mqtt,script,sizeof(script),reason,sizeof(reason)),"Chinese object name accepted");
+    expect(!control_build_script("object:exclude:x\"\nM112",&mqtt,script,sizeof(script),reason,sizeof(reason)),"object command injection rejected");
+    expect(!control_build_script("object:exclude:bad\xc0\xaf",&mqtt,script,sizeof(script),reason,sizeof(reason)),"overlong UTF-8 object name rejected");
+
     expect(!control_build_script("system:fans_off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"fans-off blocked while printing");
-    expect(control_build_script("system:heaters_off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"heaters-off remains available while printing");
+    expect(!control_build_script("system:heaters_off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"heaters-off blocked while printing");
+    expect(!control_build_script("heaters:off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"heaters-off alias blocked while printing");
     expect(control_build_script("system:emergency_stop",&mqtt,script,sizeof(script),reason,sizeof(reason)),"emergency stop remains available while printing");
+    mqtt.connected=mqtt.registered=1;mqtt.last_message=time(NULL);
+    strcpy(mqtt.filename,"cube.gcode");strcpy(mqtt.print_state,"printing");
+    expect(control_build_script("tune:speed:80",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"M220 S80")==0,"speed override while printing");
+    expect(control_build_script("tune:flow:95",&mqtt,script,sizeof(script),reason,sizeof(reason))&&strcmp(script,"M221 S95")==0,"flow override while printing");
+    const char *valid[]={"tune:speed:25","tune:speed:200","tune:speed:100","tune:flow:50","tune:flow:150","tune:flow:100"};
+    for(size_t i=0;i<sizeof(valid)/sizeof(valid[0]);i++)expect(control_build_script(valid[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),valid[i]);
+    const char *invalid[]={"tune:speed:24","tune:speed:201","tune:flow:49","tune:flow:151","tune:speed:nan","tune:flow:inf","tune:speed:80.5","tune:speed:80junk","tune:flow:95:M112","tune:flow:95\nM112","tune:speed:","tune:other:100","tune:speed:-80","tune:speed:999999999999999999999999999999999999999999999999999"};
+    for(size_t i=0;i<sizeof(invalid)/sizeof(invalid[0]);i++)expect(!control_build_script(invalid[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),invalid[i]);
+    strcpy(mqtt.print_state,"paused");expect(control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning allowed in pause");
+    mqtt.machine_status=1;expect(!control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked idle");mqtt.machine_status=2;
+    mqtt.last_message=time(NULL)-30;expect(!control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked stale");mqtt.last_message=time(NULL);
+    mqtt.connected=0;expect(!control_build_script("tune:flow:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked disconnected");mqtt.connected=1;
+    mqtt.registered=0;expect(!control_build_script("tune:flow:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked unregistered");mqtt.registered=1;
+    mqtt.filename[0]=0;expect(!control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked without active file");
+
+    /* After homing or calibration the steppers stay energised and keep the
+     * board fan running; they are released after ten stationary idle minutes. */
+    const time_t limit=CONTROL_IDLE_MOTORS_SECONDS;
+    control_idle_motors idle={0};
+    control_idle_sample held={.valid=1,.machine_status=1,.print_state="",.board_fan=1.0,.x=52.5,.y=264.0,.z=50.0};
+    control_idle_sample s=held;
+    expect(!control_idle_motors_due(&idle,&s,1000),"idle release starts its wait");
+    expect(!control_idle_motors_due(&idle,&s,1000+limit-1),"idle release waits the full period");
+    expect(control_idle_motors_due(&idle,&s,1000+limit),"idle release is due after the full period");
+    expect(!control_idle_motors_due(&idle,&s,1000+limit+1)&&!control_idle_motors_due(&idle,&s,1000+3*limit),"idle release is sent once per stationary period");
+    s.x+=0.1;
+    expect(!control_idle_motors_due(&idle,&s,1000+3*limit+1),"movement after an unconfirmed release restarts the wait");
+    expect(control_idle_motors_due(&idle,&s,1000+4*limit+1),"idle release retries after another full period");
+
+    idle=(control_idle_motors){0};s=held;
+    expect(!control_idle_motors_due(&idle,&s,0),"idle release armed before movement");
+    s.z-=0.2;
+    expect(!control_idle_motors_due(&idle,&s,limit-1)&&!control_idle_motors_due(&idle,&s,2*limit-2),"movement restarts the idle wait");
+    expect(control_idle_motors_due(&idle,&s,2*limit-1),"idle release counts from the last movement");
+
+    idle=(control_idle_motors){0};s=held;
+    expect(!control_idle_motors_due(&idle,&s,0),"idle release armed before steppers are released");
+    s.board_fan=0.0;
+    expect(!control_idle_motors_due(&idle,&s,limit),"no release once the board fan has stopped");
+    s.board_fan=1.0;
+    expect(!control_idle_motors_due(&idle,&s,limit+1)&&control_idle_motors_due(&idle,&s,2*limit+1),"re-enabled steppers start a new wait");
+
+    const char *blockers[]={"stale telemetry","printing","paused print","calibrating","console command",
+        "nozzle target","bed target","moving"};
+    for(int i=0;i<(int)(sizeof(blockers)/sizeof(blockers[0]));i++){
+        idle=(control_idle_motors){0};s=held;
+        expect(!control_idle_motors_due(&idle,&s,0),"idle release armed before a blocker");
+        if(i==0)s.valid=0;
+        else if(i==1)s.machine_status=2;
+        else if(i==2){s.machine_status=1;s.print_state="paused";}
+        else if(i==3)s.machine_status=5;
+        else if(i==4)s.console_busy=1;
+        else if(i==5)s.nozzle_target=140.0;
+        else if(i==6)s.bed_target=60.0;
+        else s.velocity=5.0;
+        expect(!control_idle_motors_due(&idle,&s,limit)&&!control_idle_motors_due(&idle,&s,3*limit),blockers[i]);
+        s=held;
+        expect(!control_idle_motors_due(&idle,&s,3*limit+1),"the wait restarts once the blocker clears");
+        expect(control_idle_motors_due(&idle,&s,4*limit+1),"release follows a full period after the blocker");
+    }
+    {
+        mqtt_client q;memset(&q,0,sizeof(q));
+        q.have_machine_status=1;q.machine_status=1;q.connected=q.registered=1;q.last_message=time(NULL);
+        expect(control_build_script("motors:quiet",&q,script,sizeof(script),reason,sizeof(reason)),"quiet motors accepted idle");
+        expect(strlen(script)<CONSOLE_COMMAND_MAX,"quiet motors fits the console transport");
+        expect(strstr(script,"STEPPER=stepper_x FIELD=en_spreadcycle VALUE=2")&&strstr(script,"STEPPER=stepper_y FIELD=en_spreadcycle VALUE=2")&&
+               strstr(script,"STEPPER=stepper_x FIELD=tpwmthrs VALUE=1048576")&&strstr(script,"STEPPER=stepper_y FIELD=tpwmthrs VALUE=1048576"),
+               "quiet motors clears en_spreadcycle and tpwmthrs on X and Y without a literal 0");
+        expect(strstr(script,"VALUE=0")==NULL,"quiet motors never sends VALUE=0 (refused by the firmware)");
+        expect(strstr(script,"DUMP_TMC STEPPER=stepper_x")&&strstr(script,"DUMP_TMC STEPPER=stepper_y"),"quiet motors reads the drivers back");
+        expect(control_build_script("motors:normal",&q,script,sizeof(script),reason,sizeof(reason))&&
+               strstr(script,"stepper_x FIELD=en_spreadcycle VALUE=1")&&strstr(script,"stepper_y FIELD=en_spreadcycle VALUE=1")&&
+               strstr(script,"stepper_y FIELD=tpwmthrs VALUE=1048575"),"normal motors restores SpreadCycle on X and Y");
+        expect(strlen(script)<CONSOLE_COMMAND_MAX,"normal motors fits the console transport");
+        {
+            const char *on_x=NULL,*on_y=NULL,*cap=NULL,*lift=NULL,*wait=NULL;
+            expect(control_build_script("motors:quiet",&q,script,sizeof(script),reason,sizeof(reason)),"quiet motors accepted again");
+            wait=strstr(script,"M400\n");cap=strstr(script,"SET_VELOCITY_LIMIT VELOCITY=80 ACCEL=2000");
+            on_x=strstr(script,"stepper_x FIELD=en_spreadcycle VALUE=2");on_y=strstr(script,"stepper_y FIELD=en_spreadcycle VALUE=2");
+            expect(wait==script&&cap&&wait<cap,"quiet motors waits for moves before capping the toolhead");
+            expect(cap&&on_x&&on_y&&cap<on_x&&cap<on_y&&cap<strstr(script,"FIELD=tpwmthrs"),
+                   "quiet motors caps speed and accel before any StealthChop write");
+            expect(strstr(script,"VELOCITY=500")==NULL&&strstr(script,"ACCEL=20000")==NULL,"quiet motors never lifts the cap");
+            char normal[700];
+            expect(control_build_script("motors:normal",&q,normal,sizeof(normal),reason,sizeof(reason)),"normal motors accepted again");
+            lift=strstr(normal,"SET_VELOCITY_LIMIT VELOCITY=500 ACCEL=20000");
+            const char *off_x=strstr(normal,"stepper_x FIELD=en_spreadcycle VALUE=1"),*off_y=strstr(normal,"stepper_y FIELD=en_spreadcycle VALUE=1");
+            const char *thr_y=strstr(normal,"stepper_y FIELD=tpwmthrs VALUE=1048575");
+            expect(lift&&off_x&&off_y&&thr_y&&off_x<lift&&off_y<lift&&thr_y<lift,
+                   "normal motors restores SpreadCycle on X and Y before lifting the cap");
+            expect(off_x<strstr(normal,"stepper_x FIELD=tpwmthrs")&&strstr(normal,"M400")==NULL,
+                   "normal motors enables SpreadCycle before restoring the hybrid threshold");
+        }
+        {
+            int seen=0;
+            expect(!control_motor_mode_restore_due(&seen,1,1,"standby"),"quiet idle without a print keeps quiet");
+            expect(!control_motor_mode_restore_due(&seen,1,2,"printing")&&seen,"a print in quiet is remembered");
+            expect(!control_motor_mode_restore_due(&seen,1,1,"paused"),"a paused print keeps quiet");
+            expect(control_motor_mode_restore_due(&seen,1,1,"complete"),"quiet returns to normal when the print ends");
+            expect(!control_motor_mode_restore_due(&seen,1,1,"complete"),"the return to normal is requested once");
+            seen=1;
+            expect(!control_motor_mode_restore_due(&seen,0,1,"complete")&&!seen,"normal mode clears the print memory");
+        }
+        expect(!control_build_script("motors:quiet:x",&q,script,sizeof(script),reason,sizeof(reason)),"motor mode action must match exactly");
+        expect(!control_build_script("motors:quiet",&q,script,200,reason,sizeof(reason)),"motor mode rejects a truncated script");
+        q.machine_status=2;
+        expect(!control_build_script("motors:quiet",&q,script,sizeof(script),reason,sizeof(reason)),"motor mode rejected while printing");
+        q.machine_status=1;q.last_message-=30;
+        expect(!control_build_script("motors:normal",&q,script,sizeof(script),reason,sizeof(reason)),"motor mode rejected with stale telemetry");
+    }
     return 0;
 }

@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Run the v4.2 builder with fixed local inputs and separate logs/outputs."""
+"""Run the builder with fixed local inputs and separate logs/outputs."""
 import argparse
 import datetime
 import hashlib
+import re
 from pathlib import Path
 import subprocess
 import sys
 import uuid
+import zipfile
 
-BUILDER_SHA256 = '540ff5fef4cecad8bac18fde53a227f5538d18cb37ed22dbad7a7a6730e64541'
+SOURCE = Path(__file__).resolve().parents[1] / 'components/cc2-control/source/source.zip'
+with zipfile.ZipFile(SOURCE) as snapshot:
+    FIRMWARE_VERSION = snapshot.read('FIRMWARE_VERSION').decode().strip()
+
+BUILDER_SHA256='4a57722577226fc1ff6d6aed42f67dc07c9dc16c1ce8fa18f861f01e5b9468ee'
 
 def sha256(path):
     h = hashlib.sha256()
@@ -30,11 +36,14 @@ def build_arguments(root, mode, preflight=False, check_key=False, keep_work=Fals
     output = None
     action = 'check_key' if check_key else ('preflight' if preflight else 'build')
     stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:8]
-    stem = 'CC2_V4_2_' + mode.upper() + '_' + stamp
+    release_version = (Path(__file__).resolve().parents[1] / 'RELEASE_VERSION').read_text().strip()
+    if not re.fullmatch(re.escape(FIRMWARE_VERSION)+r'\.\d+', release_version):
+        raise RuntimeError('Versione release firmware non valida')
+    stem = 'CC2_V' + release_version.replace('.', '_') + '_' + mode.upper() + '_' + stamp
     if check_key:
         command.append('--check-signing-key-only')
     else:
-        firmware = root / 'original_firmware/cc2_eeb001_02.01.00.00_20260707170825.zip.sig'
+        firmware = root / 'original_firmware/cc2_eeb001_02.01.01.07_20260922210235.zip.sig'
         aes = root / 'keys/cc2_aes_key_v1.bin'
         mk = root / 'tools/squashfs-tools-4.6.1/bin/mksquashfs'
         un = root / 'tools/squashfs-tools-4.6.1/bin/unsquashfs'
@@ -51,7 +60,7 @@ def build_arguments(root, mode, preflight=False, check_key=False, keep_work=Fals
     if missing:
         raise FileNotFoundError('File mancanti:\n' + '\n'.join(missing))
     if sha256(builder) != BUILDER_SHA256:
-        raise RuntimeError('Builder diverso dalla v4.2 prevista. Non avvio la costruzione.')
+        raise RuntimeError('Builder diverso da quello previsto. Non avvio la costruzione.')
     return command, output, root / 'logs' / (stem + '_' + action + '.log')
 
 def run(root, mode, preflight=False, check_key=False, keep_work=False):
@@ -63,7 +72,7 @@ def run(root, mode, preflight=False, check_key=False, keep_work=False):
     print('Log:', log, flush=True)
     # stderr is merged in Python, avoiding PowerShell 5 native-stderr handling issues.
     with log.open('x', encoding='utf-8') as dst:
-        dst.write('CC2 v4.2 launcher; signing mode=' + mode + '\n')
+        dst.write('CC2 launcher; signing mode=' + mode + '\n')
         dst.flush()
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, encoding='utf-8', errors='replace', bufsize=1)

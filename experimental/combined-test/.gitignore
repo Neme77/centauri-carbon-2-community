@@ -1,0 +1,5 @@
+reactor/vendor-link/
+reactor/*.so
+reactor/cc2-reactor-bridge-test
+reactor/symbols-debug.txt
+__pycache__/

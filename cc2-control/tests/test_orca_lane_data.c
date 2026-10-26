@@ -5,10 +5,14 @@
 #include <sys/socket.h>
 static char response[16384];
 static int get(mqtt_client *mqtt,const char *path){
-  int pair[2];assert(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0);
+  int pair[2], listener=socket(AF_INET,SOCK_STREAM,0);assert(listener>=0);
+  struct sockaddr_in address={0};address.sin_family=AF_INET;address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+  assert(bind(listener,(struct sockaddr *)&address,sizeof(address))==0);
+  socklen_t size=sizeof(address);assert(getsockname(listener,(struct sockaddr *)&address,&size)==0);
+  assert(listen(listener,1)==0);pair[1]=socket(AF_INET,SOCK_STREAM,0);assert(pair[1]>=0);
+  assert(connect(pair[1],(struct sockaddr *)&address,size)==0);pair[0]=accept(listener,NULL,NULL);assert(pair[0]>=0);close(listener);
   char request[512];int n=snprintf(request,sizeof(request),"GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n",path);
-  assert(send_all(pair[1],request,(size_t)n)==0);
-  handle_client(pair[0],"./web",mqtt,NULL);close(pair[0]);
+  handle_client(pair[0],request,(size_t)n,"./web",mqtt,NULL);close(pair[0]);
   size_t used=0;ssize_t got;
   while((got=recv(pair[1],response+used,sizeof(response)-1-used,0))>0)used+=(size_t)got;
   response[used]=0;close(pair[1]);

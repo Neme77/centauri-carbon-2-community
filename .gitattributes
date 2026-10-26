@@ -1,0 +1,28 @@
+# Byte-exact inputs pinned by SHA-256 in builder/current/core/firmware_builder.py.
+# Never convert their line endings: one dropped CR makes the fail-closed build refuse to run.
+builder/current/components/ssh/sshd.init -text
+builder/current/components/ssh/sshd_config -text
+builder/current/patches/z-offset/patch_zoffset.py -text
+builder/current/patches/http-upload/http_upload_v1.json -text
+builder/current/dualtrust/apply_dualtrust.py -text
+builder/current/dualtrust/cc2_community_release_public.pem -text
+builder/current/keys/cc2_stock_public.pem -text
+builder/current/tools/cc2_sig_tool_v1.1.py -text
+builder/current/core/firmware_builder.py -text
+
+# Standalone updater shell launchers.
+cc2-control/installer/*.sh text eol=lf
+*.sh text eol=lf
+*.init text eol=lf
+**/cc2-configure text eol=lf
+builder/current/prepare.py text eol=lf
+cc2-control/src/mqtt.c text eol=lf
+cc2-control/src/mqtt.h text eol=lf
+
+# OTA 02.01.01.07 qualification inputs: preserve exact SHA-256 bytes.
+experimental/firmware-port/patch_*.py -text
+experimental/firmware-port/*-manifest.json -text
+experimental/firmware-port/dual44-manifest.json -text
+experimental/firmware-port/http44-manifest.json -text
+experimental/firmware-port/network44-manifest.json -text
+experimental/firmware-port/cc2_community_release_public.pem -text

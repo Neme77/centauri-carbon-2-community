@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, validate and stage CC2 Control 1.1.30 for firmware V4.2."""
+"""Build, validate and stage CC2 Control for the current community firmware."""
 import hashlib
 import json
 from pathlib import Path
@@ -13,10 +13,14 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_SHA256 = '553b13cd0e5571fc604f3dd85d1859a593081e01e1f515ca1d4acaf28ea8f48b'
+SOURCE_COMMIT='b762ea40765a81fad9851140ee9e2e652dc10a76'
+SOURCE_SHA256='f33fa560d13b9d30633f6b76a1d32476d75f9438cc512c8a151a38c28083cecb'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
+# The version is written once, in cc2-control/VERSION, and travels inside the pinned snapshot.
+with zipfile.ZipFile(SOURCE) as _snapshot:
+    VERSION = _snapshot.read('VERSION').decode().strip()
 
 def sha256(path):
     h = hashlib.sha256()
@@ -25,14 +29,29 @@ def sha256(path):
             h.update(block)
     return h.hexdigest()
 
-def validate_arm_elf(path):
+UPDATE_FILES = ('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
+
+def validate_arm_elf(path, require_version=True):
     data = path.read_bytes()[:64]
     if len(data) < 20 or data[:4] != b'\x7fELF' or data[4] != 1 or data[5] != 1:
         raise RuntimeError('CC2 Control output is not a 32-bit little-endian ELF')
     if struct.unpack_from('<H', data, 18)[0] != 40:
         raise RuntimeError('CC2 Control output is not an ARM executable')
-    if b'1.1.30' not in path.read_bytes():
-        raise RuntimeError('CC2 Control binary does not identify version 1.1.30')
+    if require_version and VERSION.encode() not in path.read_bytes():
+        raise RuntimeError(f'CC2 Control binary does not identify version {VERSION}')
+
+def copy_shell_lf(source, destination):
+    data = source.read_bytes()
+    if data.startswith(b'\xef\xbb\xbf'):
+        data = data[3:]
+    data = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+    if not data.startswith(b'#!'):
+        raise RuntimeError(f'Shell script has no shebang: {source}')
+    destination.write_bytes(data)
+    destination.chmod(0o755)
+
+def prepared_mode(relative):
+    return 0o755 if relative in ('cc2-control', 'cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'start.sh', 'launch.sh', 'cc2-control.init', 'cc2-configure') else 0o644
 
 def main():
     firmware_init = (RUNTIME / 'cc2-control.init').read_text(encoding='utf-8')
@@ -42,7 +61,7 @@ def main():
         raise RuntimeError('CC2 Control source archive hash mismatch')
     if OUTPUT.exists():
         shutil.rmtree(OUTPUT)
-    with tempfile.TemporaryDirectory(prefix='cc2-control-v128-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='cc2-control-prepare-') as temporary:
         tree = Path(temporary) / 'source'
         tree.mkdir()
         with zipfile.ZipFile(SOURCE) as archive:
@@ -51,36 +70,40 @@ def main():
         # Replace it with the validated persistent-storage launcher before tests
         # and packaging. The runtime copy is the canonical firmware launcher.
         firmware_start = tree / 'firmware-integration/overlay/opt/inst/cc2-control/start.sh'
-        shutil.copy2(RUNTIME / 'start.sh', firmware_start)
-        subprocess.run([sys.executable, 'tests/test_console_completion.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_thermal_chart_layout.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_gcode_files_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_discovery_api_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_light_state_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_launchers_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_translation_static.py'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_live_job_static.py'], cwd=tree, check=True)
-        subprocess.run(['make', 'clean', 'all', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
-        control_test = Path(temporary) / 'test-control-actions'
-        subprocess.run(['gcc', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-I', 'src',
-                        'tests/test_control_actions.c', 'src/control.c', '-lm', '-o', str(control_test)],
-                       cwd=tree, check=True)
-        subprocess.run([str(control_test)], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_gcode_files.py', 'build/cc2-control'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_preferences_api.py', 'build/cc2-control'], cwd=tree, check=True)
-        subprocess.run([sys.executable, 'tests/test_panda_bridge.py', 'build/cc2-control'], cwd=tree, check=True)
-        subprocess.run(['make', 'clean', 'all'], cwd=tree, check=True)
+        copy_shell_lf(RUNTIME / 'start.sh', firmware_start)
+        subprocess.run(['make', 'clean', 'test', 'CROSS=', 'CC=gcc'], cwd=tree, check=True)
+        compiler='/opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf-gcc'
+        subprocess.run(['make', 'clean', 'all', 'CROSS='+compiler.removesuffix('gcc'), 'CC='+compiler, 'AR='+compiler.removesuffix('gcc')+'ar', 'EXTRA_CFLAGS=-mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard'], cwd=tree, check=True)
         binary = tree / 'dist/cc2-control/cc2-control'
         web = tree / 'dist/cc2-control/web/index.html'
         validate_arm_elf(binary)
         (OUTPUT / 'web').mkdir(parents=True)
         (OUTPUT / 'defaults').mkdir(parents=True)
         shutil.copy2(binary, OUTPUT / 'cc2-control')
+        for name in UPDATE_FILES:
+            helper = tree / 'dist/cc2-control' / name
+            if name in ('cc2-update-worker', 'cc2-https-download'):
+                validate_arm_elf(helper, require_version=False)
+            if name.endswith('.sh'):
+                copy_shell_lf(helper, OUTPUT / name)
+            else:
+                shutil.copy2(helper, OUTPUT / name)
+            (OUTPUT / name).chmod(prepared_mode(name))
         shutil.copy2(web, OUTPUT / 'web/index.html')
+        # Older snapshots embed their translations in index.html; newer ones
+        # fetch /i18n/<code>.json and must ship web/locales alongside it.
+        locales = tree / 'dist/cc2-control/web/locales'
+        if '/i18n/' in web.read_text(encoding='utf-8') and not (locales / 'en.json').is_file():
+            raise RuntimeError('CC2 Control UI loads /i18n/ but dist has no web/locales/en.json')
+        if locales.is_dir():
+            (OUTPUT / 'web/locales').mkdir()
+            for locale in sorted(locales.glob('*.json')):
+                shutil.copy2(locale, OUTPUT / 'web/locales' / locale.name)
+                (OUTPUT / 'web/locales' / locale.name).chmod(0o644)
         shutil.copy2(tree / 'firmware-integration/overlay/opt/inst/cc2-control/defaults/material-presets.json',
                      OUTPUT / 'defaults/material-presets.json')
     for name in ('start.sh', 'launch.sh', 'cc2-control.init', 'cc2-configure'):
-        shutil.copy2(RUNTIME / name, OUTPUT / name)
+        copy_shell_lf(RUNTIME / name, OUTPUT / name)
     for name in ('cc2-control', 'start.sh', 'launch.sh', 'cc2-configure'):
         (OUTPUT / name).chmod(0o755)
     (OUTPUT / 'cc2-control.init').chmod(0o755)
@@ -90,17 +113,19 @@ def main():
     for path in sorted(p for p in OUTPUT.rglob('*') if p.is_file()):
         files[path.relative_to(OUTPUT).as_posix()] = {
             'sha256': sha256(path),
-            'mode': oct(path.stat().st_mode & 0o777),
+            'mode': oct(prepared_mode(path.relative_to(OUTPUT).as_posix())),
         }
     manifest = {
         'component': 'CC2 Control',
-        'version': '1.1.30',
+        'version': VERSION,
         'source_sha256': SOURCE_SHA256,
+        'source_commit': SOURCE_COMMIT,
         'files': files,
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-    print('CC2 Control 1.1.30 prepared:', OUTPUT)
+    print(f'CC2 Control {VERSION} prepared:', OUTPUT)
     print('Manifest:', MANIFEST)
 
 if __name__ == '__main__':
     main()
+

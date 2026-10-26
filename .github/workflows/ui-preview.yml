@@ -1,0 +1,93 @@
+name: Isolated UI preview
+
+on:
+  pull_request:
+    paths:
+      - 'cc2-control/web-src/**'
+      - 'cc2-control/src/**'
+      - '.github/workflows/ui-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: cc2-control/web-src
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Backup restore controls and selected-language first render
+        run: npm run test:backup-language
+        env:
+          CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
+      - name: Navigate the isolated preview and capture each page
+        run: npm run test:preview
+        env:
+          CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
+      - name: Verify recovery confirmation and native G-code download
+        run: npm run test:recovery
+      - name: Verify adaptive and saved mesh rendering
+        run: npm run test:mesh
+      - name: Verify paginated lists and storage display
+        run: npm run test:list-pages
+      - name: Verify unavailable G-code dates and sorting without file writes
+        run: npm run test:file-dates
+      - name: Verify approved Dashboard controls and responsive layout
+        run: npm run test:dashboard-style
+      - name: Verify camera streaming lifecycle
+        run: npm run test:camera
+      - name: Verify Polish and Czech language selection and layouts
+        run: npm run test:languages
+      - name: Verify Canvas reset confirmation and empty-slot rendering
+        run: npm run test:canvas-reset
+      - name: Verify Canvas state eligibility and reboot recovery guidance
+        run: npm run test:canvas-states
+      - name: Verify optional Panda Breath page and address validation
+        run: node preview/test-pandabreath.mjs
+      - name: Verify numeric fan input and Control panel layout
+        run: npm run test:fans
+      - name: Verify material names and themed preheat selector
+        run: npm run test:materials
+      - name: Verify Quick Actions light telemetry and heater shutdown guards
+        run: npm run test:quick
+      - name: Verify timelapse selection and history deletion controls
+        run: npm run test:print-history
+      - name: Verify G-code filament labels and Canvas mapping
+        run: npm run test:filaments
+      - name: Verify build-plate library controls
+        run: npm run test:plates
+      - name: Verify spool tracking, the slot question and the print check
+        run: npm run test:spools
+        env:
+          CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
+      - name: Verify mesh calibration homes an unhomed printer first
+        run: npm run test:calibration
+      - name: Verify calibration destination and hold selection survive navigation
+        run: npm run test:plate-flow
+      - name: Verify the Job page asks for objects only during a print
+        run: npm run test:job-objects
+      - name: Bed map selection, live highlight and protected exclusion
+        run: npm run test:bed-map
+        env:
+          CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
+      - name: Browser upload and same-name reload
+        run: npm run test:upload
+      - name: Save screenshots for visual review
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cc2-ui-preview-screenshots
+          path: ${{ runner.temp }}/cc2-preview-screenshots
+          retention-days: 7
+      - name: Printer report browser regression
+        run: npm run test:printer-reports

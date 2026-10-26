@@ -1,0 +1,14 @@
+{
+  "input_sha256": "ad888fec26ce214427eda038ae70b76cf68155f365c669ed647c1c09bad7a1f7",
+  "output_sha256": "ec5633b17de329d5b18c3f8d8de6ebf389391a04193536d976ba167022d07b99",
+  "patches": [
+    {
+      "va": "0x1297cc",
+      "offset": 1152972,
+      "before": "cbe600eb",
+      "after": "f3e600eb",
+      "reason": "Keep local MJPEG available when native WAN camera pause command enables RTC; preserve LAN resume command disabling WAN RTC"
+    }
+  ],
+  "status": "candidate; remote Matrix/Slicer and local camera need hardware validation"
+}

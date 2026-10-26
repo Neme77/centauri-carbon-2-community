@@ -1,0 +1,94 @@
+name: Prepare CC2 Control 1.2.19 with camera fixes
+on:
+  push:
+    branches: [test/control-1.2.19-camera-and-dates]
+    paths:
+      - cc2-control/installer/**
+      - cc2-control/tests/test_camera*
+      - cc2-control/web-src/preview/test-updates.mjs
+      - .github/workflows/prepare-camera-update.yml
+  pull_request:
+    paths:
+      - cc2-control/installer/**
+      - cc2-control/tests/test_camera*
+      - cc2-control/web-src/preview/test-updates.mjs
+      - .github/workflows/prepare-camera-update.yml
+concurrency:
+  group: prepare-camera-update-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: false
+permissions:
+  contents: write
+  actions: read
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'test/control-1.2.19-camera-and-dates'))
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: test/control-1.2.19-camera-and-dates
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - name: Install host, ARM and shell-test tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user busybox
+      - uses: actions/download-artifact@v8
+        with:
+          name: cc2-camera-client-reap-r2
+          run-id: 39297401612
+          github-token: ${{ github.token }}
+          path: /tmp/qualified-reap
+      - uses: actions/download-artifact@v8
+        with:
+          name: cc2-camera-recovery-r2
+          run-id: 39491902374
+          github-token: ${{ github.token }}
+          path: /tmp/qualified-recovery
+      - run: npm ci && npm run check && npm run build
+        working-directory: cc2-control/web-src
+      - run: npx playwright install --with-deps chromium
+        working-directory: cc2-control/web-src
+      - run: npm run test:file-dates && npm run test:updates
+        working-directory: cc2-control/web-src
+      - name: Camera startup and exact rollback with BusyBox ash
+        run: CC2_TEST_SHELL='busybox sh' python3 cc2-control/tests/test_camera_component.py
+      - name: Commit rebuilt UI and synchronized source snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cc2-control
+          git diff --cached --quiet || git commit -m "Rebuild 1.2.19 update component notices"
+          previous_source_sha=$(sha256sum builder/current/components/cc2-control/source/source.zip | cut -d ' ' -f 1)
+          python3 experimental/pr128-integration/sync_source.py
+          current_source_sha=$(sha256sum builder/current/components/cc2-control/source/source.zip | cut -d ' ' -f 1)
+          if [ "$previous_source_sha" = "$current_source_sha" ]; then
+            git restore builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          fi
+          git add builder/current
+          git diff --cached --quiet || git commit -m "Pin 1.2.19 application sources for combined updater"
+          git push origin HEAD:refs/heads/test/control-1.2.19-camera-and-dates
+      - name: Host installer, runtime and firmware-builder regression tests
+        run: |
+          make -C cc2-control clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+      - name: Build and smoke-test ARM application
+        run: |
+          make -C cc2-control clean all EXTRA_CFLAGS=-Werror
+          CC2_TEST_RUNNER=qemu-arm python3 cc2-control/tests/test_smoke.py cc2-control/dist/cc2-control/cc2-control
+      - name: Package the unchanged qualified camera libraries
+        run: |
+          python3 .github/scripts/package-camera-update.py
+          git rev-parse HEAD > output/integration-head.txt
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cc2-control-1.2.19-camera-and-dates
+          path: |
+            output/CC2-Control-1.2.19-Multiplatform-Update.zip*
+            output/integration-head.txt
+            output/camera-runtime-pins.json
+          if-no-files-found: error
+          retention-days: 14

@@ -36,7 +36,7 @@ done
 
 logger -t cc2-control "elegoo_printer detected; waiting for hardware initialization"
 sleep 20
-logger -t cc2-control "Starting CC2 Control 1.1.31 for firmware v4.2"
+logger -t cc2-control "Starting CC2 Control for the community firmware"
 
 exec "$BASE/cc2-control" \
     --port 8081 \
@@ -44,4 +44,6 @@ exec "$BASE/cc2-control" \
     --web-root "$BASE/web" \
     --config "$PERSIST/cc2-control.conf" \
     --presets "$PERSIST/material-presets.json" \
-    --preferences "$PERSIST/ui-preferences.json"
+    --preferences "$PERSIST/ui-preferences.json" \
+    --plates "$PERSIST/bed-plates.json" \
+    --spools "$PERSIST/spools.json"

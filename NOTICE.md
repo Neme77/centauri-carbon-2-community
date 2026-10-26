@@ -8,7 +8,11 @@ The distributed firmware is derived from the ELEGOO Centauri Carbon 2 stock pack
 
 OpenCentauri/cc-fw-tools is acknowledged as the publication-structure reference, not as the asserted source of our patches. Its repository carries GPL-3.0 and its release notes identify the underlying ELEGOO firmware. No OpenCentauri code was copied as part of this documentation update.
 
+CC2 Control interprets vendor MQTT values (machine sub-states, request `error_code` values and the auto-refill method number) according to ELEGOO's elegoo-link SDK, licensed under the Apache License 2.0: <https://github.com/elegooofficial/elegoo-link>, file `src/lan/adapters/elegoo_fdm_cc2/elegoo_fdm_cc2_message_adapter.cpp` at commit `46c7b814e055cf9675d58482d79f43d0bd2280da`. Only the meaning of these codes was transcribed into `cc2-control/web-src/src/lib/machine.ts` and `cc2-control/src/mqtt.c`; no SDK source code was copied. The print-history methods 1036 and 1051 and their reply fields are not implemented by that adapter; they were taken from MQTT traffic observed between ElegooSlicer and a CC2 printer.
+
 References inspected for this update:
 - https://github.com/OpenCentauri/cc-fw-tools
 - https://github.com/OpenCentauri/cc-fw-tools/blob/main/LICENSE
 - https://github.com/OpenCentauri/cc-fw-tools/releases
+
+The timelapse print flag (`config.delay_video`) and delete-task method number 1038 follow the same SDK adapter. The 1019 print-configuration request and 1038 `params.list` payload were checked against the CC2 vendor executable already used by this builder; the history-delete handler inspected removes records rather than video or G-code files. Native hardware behavior still requires printer validation.

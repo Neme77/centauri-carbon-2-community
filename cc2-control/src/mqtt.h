@@ -4,16 +4,25 @@
 #include <stddef.h>
 #include <time.h>
 
+/* Replies addressed to this client that exceed input[] (the print history can)
+ * are assembled on the heap up to this size; larger ones are drained as before. */
+#define MQTT_REPLY_MAX (256U * 1024U)
+
 typedef struct {
     int fd;
     unsigned char input[16384];
     size_t input_len;
+    size_t discard_remaining;
+    unsigned long oversized_packets, oversized_snapshots;
     time_t last_connect_attempt;
     time_t last_message;
     time_t last_ping;
     time_t last_app_ping; /* CC2 application-level heartbeat, separate from MQTT PINGREQ */
+    time_t app_ping_pending_since;
+    unsigned long registration_recoveries;
     unsigned long messages;
     unsigned long info_responses;
+    unsigned long received_publishes, skipped_requests, skipped_request_bytes;
     int connected;
     int registered;
     int register_sent;
@@ -49,19 +58,65 @@ typedef struct {
     char serial[64];
     char config_path[256];
     int serial_persisted;
+    time_t last_serial_discovery;
+    unsigned int serial_discovery_attempts;
     char client_id[64];
     char snapshot[12288];
     size_t snapshot_len;
     char diagnostic[32768];
     size_t diagnostic_len;
+    int canvas_uds_ready;
+    char canvas_uds_snapshot[4096];
+    size_t canvas_uds_snapshot_len;
     char canvas_snapshot[8192];
     size_t canvas_snapshot_len;
+    unsigned long canvas_revision; /* counts captured snapshots, so readers can tell a new one */
     time_t last_canvas_request;
+    time_t canvas_watch_until;
+    time_t canvas_material_read_at;
     unsigned int canvas_request_attempts;
     int canvas_discovery_complete;
+    /* Automatic discovery budget survives transport reconnects; Sync rearms it. */
+    unsigned int automatic_registration_attempts, automatic_snapshot_attempts, automatic_canvas_attempts;
+    unsigned long mqtt_connections;
+    time_t discovery_ready_at;
     int canvas_active_tray_id;
     int have_canvas_active_tray;
+    int canvas_direct_known,canvas_direct_active,canvas_head_loaded,canvas_direct_idle;
+    int external_verified; /* One native readback, scoped to the current protected request. */
+    /* Publishing a request is not acceptance: the printer answers on
+     * <client>/api_response with result.error_code. Last non-zero code: */
+    int reply_error_method, reply_error_code;
+    unsigned long reply_errors;
+    time_t reply_error_time;
+    /* canvas_info.auto_refill: full 2005 replies carry it, status deltas may not. */
+    int auto_refill, have_auto_refill;
+    int canvas_refresh_due, auto_refill_probed;
+    /* Latest successful 1036 (print task history) reply to our own request. */
+    char *history;
+    size_t history_len;
+    int history_error;
+    time_t history_received, history_requested;
+    int history_refresh_due;
+    /* 1051 is acknowledged at once; rendering then runs in machine state 12. */
+    time_t timelapse_requested;
+    int timelapse_rendering;
+    unsigned long oversized_replies;
+    unsigned char *large;
+    time_t history_delete_requested;
+    unsigned long print_config_id, print_config_reply_id;
+    int print_config_error;
+    unsigned long light_request_id, light_reply_id;
+    int light_error;
+    size_t large_len, large_need;
+    unsigned char large_flags;
 } mqtt_client;
+
+/* Read-side experimental overlay only; transport ownership and MQTT cache stay unchanged. */
+static inline const char *mqtt_canvas_snapshot(const mqtt_client *c,size_t *length){
+    if(c->canvas_uds_ready){*length=c->canvas_uds_snapshot_len;return c->canvas_uds_snapshot;}
+    *length=c->canvas_snapshot_len;return c->canvas_snapshot;
+}
 
 void mqtt_init(mqtt_client *client);
 int mqtt_load_config(mqtt_client *client, const char *path);
@@ -70,8 +125,16 @@ void mqtt_close(mqtt_client *client);
 int mqtt_process(mqtt_client *client);
 void mqtt_tick(mqtt_client *client);
 int mqtt_request_canvas(mqtt_client *client);
+int mqtt_sync_canvas(mqtt_client *client);
+size_t mqtt_discovery_diagnostic(const mqtt_client *client, char *out, size_t capacity);
+int mqtt_set_auto_refill(mqtt_client *client, int enabled);
+int mqtt_set_light(mqtt_client *client, int enabled);
+int mqtt_request_history(mqtt_client *client);
+int mqtt_delete_history(mqtt_client *client, const char *params);
+int mqtt_prepare_timelapse(mqtt_client *client, int enabled);
+int mqtt_generate_timelapse(mqtt_client *client, const char *url);
 int mqtt_start_print(mqtt_client *client, const char *storage_media, const char *filename,
                      const int *tools, const int *trays, size_t slot_count,
-                     char print_layout, int bedlevel_force);
+                     char print_layout, int bedlevel_force, int timelapse);
 
 #endif

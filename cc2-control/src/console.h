@@ -3,6 +3,7 @@
 
 #include <pthread.h>
 #include <stddef.h>
+#include <stdatomic.h>
 #include "mqtt.h"
 
 #define CONSOLE_OUTPUT_MAX 262144
@@ -10,6 +11,7 @@
 
 typedef struct {
     pthread_mutex_t lock;
+    atomic_int emergency_sent; /* Armed only after an exact M112 has reached the UDS socket. */
     int busy;
     int completed;
     int success;

@@ -1,0 +1,90 @@
+[
+  {
+    "old_va": "0x5b9124",
+    "symbol": "_ZN13communication14NetworkManager8set_modeE11NetworkMode",
+    "reason": "Replace one mode-change informational log with an out-of-line HTTP-start block using the existing NetworkManager stack frame.",
+    "old_function_size": 1684,
+    "new_function_size": 1684,
+    "new_va_candidate": "0x812128"
+  },
+  {
+    "old_va": "0x5b9490",
+    "symbol": "_ZN13communication14NetworkManager8set_modeE11NetworkMode",
+    "reason": "Ensure HTTP is started after strategy selection and token setup, including direct WAN boot.",
+    "old_function_size": 1684,
+    "new_function_size": 1684,
+    "new_va_candidate": "0x812494"
+  },
+  {
+    "old_va": "0x5c5470",
+    "symbol": "_ZN13communication11LanStrategy4stopEv",
+    "reason": "Do not stop the HTTP file server in LanStrategy::stop; MQTT and camera stop paths remain original.",
+    "old_function_size": 184,
+    "new_function_size": 184,
+    "new_va_candidate": "0x81f1b4"
+  },
+  {
+    "old_va": "0x5f2ff0",
+    "symbol": "_ZN13communication10HTTPServer18handle_file_uploadEP11HttpRequestP12HttpResponseNS_12FilePathTypeE",
+    "reason": "Admit PRINTING=2 in addition to original states 1 and 11. All other states still fail the gate.",
+    "old_function_size": 8676,
+    "new_function_size": 8684,
+    "new_va_candidate": "0x84ec18"
+  },
+  {
+    "old_va": "0x5f3d10",
+    "symbol": "_ZN13communication10HTTPServer18handle_file_uploadEP11HttpRequestP12HttpResponseNS_12FilePathTypeE",
+    "reason": "Existing file on first chunk returns HTTP 409 without deletion, in every state. Reclaimed overwrite code hosts guarded state setters and a cancellation guard.",
+    "old_function_size": 8676,
+    "new_function_size": 8684,
+    "new_va_candidate": "0x84f938"
+  },
+  {
+    "old_va": "0x5f43d0",
+    "symbol": "_ZN13communication10HTTPServer18handle_file_uploadEP11HttpRequestP12HttpResponseNS_12FilePathTypeE",
+    "reason": "Only enter upload status when current machine status is 1 or 11.",
+    "old_function_size": 8676,
+    "new_function_size": 8684,
+    "new_va_candidate": "0x84fff8"
+  },
+  {
+    "old_va": "0x5f4608",
+    "symbol": "_ZN13communication10HTTPServer18handle_file_uploadEP11HttpRequestP12HttpResponseNS_12FilePathTypeE",
+    "reason": "Write-error path: do not force idle from printing or other active states.",
+    "old_function_size": 8676,
+    "new_function_size": 8684,
+    "new_va_candidate": "0x850230"
+  },
+  {
+    "old_va": "0x5f4d78",
+    "symbol": "_ZN13communication10HTTPServer18handle_file_uploadEP11HttpRequestP12HttpResponseNS_12FilePathTypeE",
+    "reason": "MD5-error path: do not force idle from printing or other active states.",
+    "old_function_size": 8676,
+    "new_function_size": 8684,
+    "new_va_candidate": "0x8509a0"
+  },
+  {
+    "old_va": "0x5f4d94",
+    "symbol": "_ZN13communication10HTTPServer18handle_file_uploadEP11HttpRequestP12HttpResponseNS_12FilePathTypeE",
+    "reason": "Completion substatus 3001 is emitted only while current machine status is 11.",
+    "old_function_size": 8676,
+    "new_function_size": 8684,
+    "new_va_candidate": "0x8509bc"
+  },
+  {
+    "old_va": "0x5f68c0",
+    "symbol": "_ZN13communication10HTTPServer21handle_upload_timeoutEv",
+    "reason": "Timeout substatus 3001 is emitted only while current machine status is 11.",
+    "old_function_size": 1008,
+    "new_function_size": 1008,
+    "new_va_candidate": "0x852500"
+  },
+  {
+    "old_va": "0x5f527c",
+    "symbol": "_ZN13communication10HTTPServer18handle_file_cancelEP11HttpRequestP12HttpResponseNS_12FilePathTypeE",
+    "reason": "After token validation, reject transfer cancellation outside idle/transfer states; prevents the stock arbitrary-path deletion during printing.",
+    "old_function_size": 1400,
+    "new_function_size": 1408,
+    "new_va_candidate": "0x850eac"
+  }
+]

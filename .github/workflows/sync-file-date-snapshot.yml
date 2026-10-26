@@ -1,0 +1,36 @@
+name: Synchronize file-date builder snapshot
+on:
+  push:
+    branches: [fix/gcode-unreliable-dates]
+    paths: [.github/workflows/sync-file-date-snapshot.yml]
+  pull_request:
+    paths: [.github/workflows/sync-file-date-snapshot.yml]
+permissions:
+  contents: write
+concurrency:
+  group: file-date-source-snapshot
+  cancel-in-progress: false
+jobs:
+  synchronize:
+    if: github.actor != 'github-actions[bot]' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/gcode-unreliable-dates'))
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: fix/gcode-unreliable-dates
+      - name: Synchronize canonical source archive and pins
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current
+          git diff --cached --quiet || git commit -m "Synchronize builder snapshot with file-date fix"
+      - name: Verify builder and generated assets
+        run: |
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+          python3 cc2-control/tests/test_web_sync_static.py
+          python3 cc2-control/tests/test_locales_static.py
+      - name: Publish verified snapshot
+        run: git push origin HEAD:refs/heads/fix/gcode-unreliable-dates
