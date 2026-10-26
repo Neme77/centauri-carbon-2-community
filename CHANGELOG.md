@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Optional standalone Windows/Linux/macOS installer for the fingerprint-pinned extended Canvas pull-back range, with original-file backups and guarded removal; original patch and V4.4.1 R3 install/removal validation by **Noahwhite2014** (#172, #202, #228). Exact V4.4.1/V4.4.2 runtime profiles; CC2 Control 1.2.21 or 1.2.22. The separate component is never installed by the application updater.
+
 - Native external-spool Load/Unload controls and shared Canvas/external Brand, Type, Subcategory and Colour editing, with the stock material catalog and 24-colour palette; requested and investigated with **Neme77** (#233).
 
 - Independent Spoolman integration switch in Settings, hiding its spool controls and pausing server requests without losing local tracking, saved server settings, links or queued usage (#227; requested by **Neme77**, building on [tharje](https://github.com/tharje)'s #208 integration).
@@ -19,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Nonblocking completed-print notice with acknowledgement and Print again through the normal preparation dialog, inspired by the printer display and requested by **Neme77** (#219). Uses existing polling; cancellation/disconnection is not success.
 
 ### Fixed
+
+- Extended pull-back installer: identify the configuration file/value preventing installation and retain removal backups under a clean token-based name; reported and R3 printer-tested by **Noahwhite2014** (#228).
 
 - Align experimental-integration card actions and place the drying controls side by side on desktop and phone; reported by **Neme77** (#232).
 
