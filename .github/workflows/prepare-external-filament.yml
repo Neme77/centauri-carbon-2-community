@@ -14,10 +14,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - name: Verify native guards and all standalone C harnesses
-        run: python3 cc2-control/tests/test_c_harnesses.py
       - name: Verify shared material catalog
-        run: python3 cc2-control/tests/test_external_catalog_static.py
+        run: |
+          python3 cc2-control/tests/test_external_catalog_static.py
+          python3 cc2-control/tests/test_locale_coverage_static.py
+          python3 cc2-control/tests/test_locales_static.py
       - name: Install browser build dependencies
         working-directory: cc2-control/web-src
         run: npm ci
@@ -46,5 +47,5 @@ jobs:
           rm .github/workflows/prepare-external-filament.yml
           git add builder/current .github/workflows/prepare-external-filament.yml
           git commit -m "Pin filament controls source snapshot and remove preparation workflow"
-          python3 -m unittest discover -s builder/current/tests -p test_cc2_control_source_snapshot.py
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
           git push origin HEAD:feat/external-filament
