@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Polish Hungarian installer prerequisites and Canvas labels for more natural wording (#238, by **pezso92**).
+
 ## [CC2 Control 1.2.22] - 2026-10-26
 
 ### Added
