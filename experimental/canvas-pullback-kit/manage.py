@@ -118,8 +118,12 @@ def prepare(snapshot, info, action):
     if action=='remove' and not info['installed']:raise ValueError('No qualified component backup was found')
     if action=='install':
         for path in CONFIGS.values():
-            if path in files and any(v>350 for v in clamp_config(files[path])[1]):
-                raise ValueError('Installation requires every configured pull-back value at most 350 mm')
+            if path in files:
+                for value in clamp_config(files[path])[1]:
+                    if value>350:
+                        shown=str(value)
+                        if len(shown)>80:shown=shown[:80]+'...'
+                        raise ValueError(f'Installation requires every configured pull-back value at most 350 mm: {path}: unload_fila_dist={shown}')
         order=list(TARGETS)
         changed={k:(TARGETS[k],info['extended'][k],MODES[k]) for k in order}
     else:

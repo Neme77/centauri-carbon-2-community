@@ -145,7 +145,7 @@ done < "$HERE/plan"
 printf '%s-complete\n' "$MODE" > "$STATE/phase"
 sync
 if [ "$MODE" = remove ]; then
-    ARCHIVE="$STATE.removed-$(basename "$HERE")"
+    ARCHIVE="$STATE.removed-$TOKEN"
     [ ! -e "$ARCHIVE" ] || fail 'backup archive already exists'
     mv "$STATE" "$ARCHIVE"
     echo "REMOVAL PASSED. Backups retained: $ARCHIVE"

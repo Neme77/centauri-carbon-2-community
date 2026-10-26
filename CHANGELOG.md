@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Draft standalone Windows/Linux/macOS pilot for the fingerprint-pinned extended Canvas pull-back limit, with original-file backups and guarded removal; original patch by **Noahwhite2014** (#172, #202, #228). Exact V4.4.1 and V4.4.2 runtime profiles are supported; V4.4.2 pilot installation and a 500 mm unload/reload cycle passed, while V4.4.1 installation/removal validation remains pending.
+- Draft standalone Windows/Linux/macOS pilot for the fingerprint-pinned extended Canvas pull-back limit, with original-file backups and guarded removal; original patch by **Noahwhite2014** (#172, #202, #228). Exact V4.4.1 and V4.4.2 runtime profiles are supported; V4.4.2 pilot installation and a 500 mm unload/reload cycle passed, and the complete V4.4.1 installation/status/removal cycle passed on **Noahwhite2014**’s printer.
 
 - Optional browser-local LAN code remembering in Settings → Connection for updates and experimental controls, with verification, masked fields, explicit forgetting and unchanged action confirmations; requested by **Neme77** (#225).
 
@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Nonblocking completed-print notice with acknowledgement and Print again through the normal preparation dialog, inspired by the printer display and requested by **Neme77** (#219). Uses existing polling; cancellation/disconnection is not success.
 
 ### Fixed
+
+- Extended pull-back pilot R3: identify the configuration file and value that prevent installation, and retain removal backups under a clean token-based name; reported and R2 hardware-tested by **Noahwhite2014** (#228).
 
 - Reset the current-job progress display when the printer is idle, without homing or overwriting the native last-job counters (#219).
 

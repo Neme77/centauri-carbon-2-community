@@ -63,6 +63,20 @@ class PolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):policy.validate_tar_member(member)
         payload={'plan':b'a'}
         with self.assertRaises(ValueError):manage.unpack(manage.archive_payload(payload))
+    def test_install_refusal_names_config_and_value(self):
+        printer=dict(connected=True,last_message_age=1,machine={'status':1},print={'enabled':False},extruder={'temperature':25,'target':0},heater_bed={'temperature':25,'target':0})
+        meta={'printer.json':json.dumps(printer).encode(),'health.json':json.dumps(dict(version='1.2.21',mqtt_registered=True)).encode()}
+        for path in policy.CONFIGS.values():
+            for source in (b'[canvas_dev]\nunload_fila_dist = 560\n',b'#*# [canvas_dev]\n#*# unload_fila_dist = 1000\n'):
+                with self.subTest(path=path,source=source):
+                    files={path:source}
+                    with self.assertRaises(ValueError) as refusal:
+                        manage.prepare((files,{},meta),{'installed':False},'install')
+                    message=str(refusal.exception)
+                    self.assertIn(path,message)
+                    self.assertIn('unload_fila_dist='+('560' if b'560' in source else '1000'),message)
+                    self.assertIn('at most 350 mm',message)
+                    self.assertEqual(files,{path:source},'diagnosis must not modify any config')
     def test_ready_guards(self):
         printer=dict(connected=True,last_message_age=1,machine={'status':1},print={'enabled':False},extruder={'temperature':25,'target':0},heater_bed={'temperature':25,'target':0})
         health=dict(version='1.2.21',mqtt_registered=True)
@@ -138,6 +152,13 @@ class TransactionTests(unittest.TestCase):
         self.payload('remove',config=True);r=self.run_transaction('remove');self.assertEqual(r.returncode,0,r.stdout)
         for k,p in self.targets.items():self.assertEqual(p.read_bytes(),self.original[k])
         self.assertIn(b'=350', (self.root/'opt/usr/cfg/autosave.cfg').read_bytes())
+        archived=Path(str(self.state)+'.removed-0123456789abcdefabcd')
+        self.assertTrue(archived.is_dir(),r.stdout)
+        self.assertFalse(self.state.exists())
+        self.assertIn('Backups retained: '+str(archived),r.stdout)
+        self.assertNotIn('.removed-.cc2-pullback-stage-',r.stdout)
+        for key in self.targets:self.assertEqual((archived/'backup'/key).read_bytes(),self.original[key])
+
     def test_partial_install_can_be_removed(self):
         self.payload('remove',partial=True);r=self.run_transaction('remove');self.assertEqual(r.returncode,0,r.stdout)
         for k,p in self.targets.items():self.assertEqual(p.read_bytes(),self.original[k])

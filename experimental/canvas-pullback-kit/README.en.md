@@ -1,8 +1,14 @@
-# Extended Canvas pull-back — R2 pilot
+# Extended Canvas pull-back — R3 pilot
 
 Standalone experimental installer for **Community Firmware V4.4.1 or V4.4.2 / CC2 Control 1.2.21**. Reproduces **Noahwhite2014**'s #172 / #202 change: raises the accepted maximum from 350 to 1000 mm. It does not set the distance, eject filament, request movement, restart services or reboot. It does not change the webcam or CC2 Control.
 
-**Controlled trial.** R1 installation and a 500 mm unload/reload cycle were tested on V4.4.2. The added V4.4.1 profile matches the published firmware archive exactly; its installation/removal is awaiting the contributor's test. Fingerprints do not establish a safe physical distance. The contributor reported longer travel on a custom path; this does not qualify 1000 mm for every printer. Reload-distance and timeout settings are not changed. Restore any manual runtime patch from original backups before using this kit; mixed generations are refused.
+**Controlled trial.** R1 installation and a 500 mm unload/reload cycle were tested on V4.4.2. R2 completed its installation/status/removal cycle on Noahwhite2014’s V4.4.1 printer, including a persistent 560 mm override, restoration to 350 mm on removal and working camera/CC2 Control. No movement was requested in that cycle. Fingerprints do not establish a safe physical distance. The contributor reported longer travel on a custom path; this does not qualify 1000 mm for every printer. Reload-distance and timeout settings are not changed. Restore any manual runtime patch from original backups before using this kit; mixed generations are refused.
+
+## R3 corrections and focused retest
+
+Installation refusal now names the exact configuration path and unload_fila_dist value above 350 mm, including values in autosave_backup.cfg and SAVE_CONFIG sections. Removal retains backups under /opt/usr/cc2-canvas-pullback-1000.removed-<token> without the staging-directory prefix. The menu and archive identify R3 consistently. The qualified program patch, fingerprints, configuration guards, reload distance and reload timeout are unchanged.
+
+For the focused retest, restore the original runtime first if manually patched. While Idle and cold, check all three supported configuration files for values above 350 mm. An intentionally higher value should produce a refusal naming its file/value and leave the printer unchanged. Return it to 350 mm or less, then run Check → Install → idle reboot → Status. Save the previously tested 560 mm override without issuing movement, then Remove → verify clamp and clean backup name → idle reboot → Status. No new physical distance test is required for these two corrections; share the outputs.
 
 ## Requirements and check
 
