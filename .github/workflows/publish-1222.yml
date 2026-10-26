@@ -18,4 +18,4 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: python3 experimental/release-publication/publish.py
+      - run: python3 experimental/release-publication/finalize.py
