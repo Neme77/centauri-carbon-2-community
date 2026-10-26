@@ -217,7 +217,10 @@ static int is_prehome_nonmotion(const char *word) {
         "ACCELEROMETER_QUERY","LOAD_CELL_READ","LOAD_CELL_DIAGNOSTIC",
         "BED_MESH_OUTPUT","G90","G91","M82","M83",
         "SET_HEATER_TEMPERATURE","TURN_OFF_HEATERS","M104","M109","M140","M190",
-        "M106","M107","SET_FAN_SPEED","SET_CAVITY_FAN"
+        "M106","M107","SET_FAN_SPEED","SET_CAVITY_FAN",
+        /* Native Canvas mode/material setters update data only; load/unload
+         * and other Canvas commands retain the homing requirement. */
+        "USED_CANVAS_DEV","CANVAS_SET_FILAMENT_INFO"
     };
     for (size_t i = 0; i < sizeof(commands)/sizeof(commands[0]); ++i)
         if (strcmp(word, commands[i]) == 0) return 1;
