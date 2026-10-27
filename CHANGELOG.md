@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Hungarian companion to the external-feed experiment guide, by **pezso92** (#249).
+
+### Fixed
+
+- Restore Hungarian accents in the signed 1.2.23 update summaries on both catalogue routes; wording and report by **pezso92** (#248, #250). Application version and downloads are unchanged.
+
+
 ## [CC2 Control 1.2.23] - 2026-10-27
 
 ### Added
