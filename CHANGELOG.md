@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Clarify firmware-managed Input Shaper saving and the explicit Save PID step in all nine languages, following Neme77's calibration and reboot verification (#252).
+
 - Restore Hungarian accents in the signed 1.2.23 update summaries on both catalogue routes; wording and report by **pezso92** (#248, #250). Application version and downloads are unchanged.
 
 
