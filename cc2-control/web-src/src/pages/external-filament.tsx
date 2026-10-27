@@ -45,7 +45,7 @@ export const ExternalFilament = () => {
       <CardHead icon="canvas" title="filament.external" />
       {state.experiment && (
         <div class="mb-3" data-filament-source>
-          <fieldset class="flex flex-wrap items-center gap-2" aria-label={t('feed.source')}>
+          <fieldset class="flex min-w-0 flex-wrap items-center gap-2" aria-label={t('feed.source')}>
             <span class="text-muted">{t('feed.source')}</span>
             <Button
               aria-pressed={state.source === 'canvas'}

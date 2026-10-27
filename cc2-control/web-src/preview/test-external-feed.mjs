@@ -57,7 +57,8 @@ try {
  await mkdir('preview/artifacts',{recursive:true})
  for(const width of [1440,390]){
   await page.setViewportSize({width,height:1000})
-  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))
+  const layout=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,over:[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(0,8).map(e=>({tag:e.tagName,class:e.className,width:e.getBoundingClientRect().width,text:e.textContent.slice(0,70)}))}))
+  assert(layout.scroll<=width+1,JSON.stringify(layout))
   await card.screenshot({path:`preview/artifacts/external-feed-${width}.png`})
  }
  fail=true

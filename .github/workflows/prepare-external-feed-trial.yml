@@ -59,6 +59,7 @@ jobs:
           CC2_TEST_RUNNER=qemu-arm python3 cc2-control/tests/test_smoke.py cc2-control/dist/cc2-control/cc2-control
       - name: Package application-only cumulative trial
         run: |
+          cp cc2-control/docs/EXTERNAL_FEED_EXPERIMENT.md cc2-control/installer/README-TEST.md
           python3 cc2-control/installer/package.py --application-only-trial --prepared cc2-control/dist/cc2-control --output output/CC2-Control-1.2.22-External-Feed-PR241-243-Trial-R1.zip
           sha256sum output/CC2-Control-1.2.22-External-Feed-PR241-243-Trial-R1.zip
       - uses: actions/upload-artifact@v7.0.2
