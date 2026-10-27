@@ -3,6 +3,8 @@
 Community firmware, local printer control and reproducible build tools for the
 **ELEGOO Centauri Carbon 2**, maintained by **Neme77**.
 
+> **NEW: PRINT TPU WITHOUT UNPLUGGING CANVAS — CC2 Control 1.2.23.** Optional in **Settings → Integrations → Experimental integrations**. Full PLA/TPU 95A cycle validated by **DamiBFryta**. [Download and details](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.23-V4.4).
+
 <p align="center">
   <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig"><img src="https://img.shields.io/badge/DOWNLOAD-Firmware%20V4.4.2-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download complete firmware V4.4.2"></a>
   &nbsp;
