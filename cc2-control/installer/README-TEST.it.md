@@ -1,10 +1,7 @@
-# CC2 Control 1.2.23 — validazione della release
+# Prova cumulativa: PR252 + PR253
 
-Update pubblico cumulativo per Community V4.4/V4.4.1/V4.4.2, base ELEGOO 02.01.01.07. Include il componente webcam R2 per chi ha saltato gli update precedenti. Riavviare la stampante inattiva solo alla prima attivazione; se il fix webcam è già attivo non serve un ulteriore riavvio completo.
+CC2 Control resta alla versione 1.2.23. Include la correzione delle frecce Z di Surfoo e i testi sul salvataggio delle calibrazioni. I pulsanti mantengono soltanto le frecce, senza nuove scritte visibili.
 
-Le integrazioni sono state provate sulle stampanti del maintainer e dei contributor: Dashboard/Controllo, codice LAN, Spoolman, fine stampa, consumi multicolore, bobina esterna e selezione materiali. Asciugatura a 50 C per 2 minuti: avvio, arresto e scadenza confermati con target a zero; rimane sperimentale facoltativa. I controlli automatici e gli hash accompagnano la release. Le prove hardware dei pacchetti di test restano distinte dalla ricompilazione finale della versione.
+Estrarre lo ZIP completo e avviare Install-Windows.cmd oppure l'installer Linux/macOS. E una prova via SSH, non un file da caricare nel pannello. Stampante connessa, inattiva e fredda, target zero e video in pausa. Aggiorna soltanto CC2 Control conservando la patch camera gia installata; non serve un riavvio completo della stampante. Conservare il percorso di ripristino stampato dall'installer. Dopo l'installazione usare Ctrl+F5: il numero di versione resta 1.2.23.
 
-Seguire README.md e le guide update. Il kit retrazione Canvas estesa è separato e non installato automaticamente: rimuoverlo e riavviare prima degli update. Conservare il percorso di backup/ripristino stampato dall'installer.
-
-
-TPU 95A: DamiBFryta validated the full PLA to TPU cycle and printing without unplugging Canvas. The external-feed feature remains opt-in under Experimental integrations. Console nonmotion and completed-job path fixes are included (#241/#242/#243).
+Con piatto libero, assi in home e spazio di corsa, iniziare dal passo 0.1 mm: la freccia Z superiore deve far salire il piatto (Z negativo), quella inferiore deve farlo scendere (Z positivo). Le protezioni su home, stato inattivo e limiti restano invariate. Controllare anche i testi del salvataggio automatico Input Shaper e del pulsante Salva PID. Non occorre ripetere le calibrazioni soltanto per leggere i nuovi messaggi. La compilazione automatica non ha mosso alcuna stampante. Verifica fisica prima di merge e pubblicazione.

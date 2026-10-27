@@ -112,9 +112,11 @@ jobs:
 
       - name: PID browser interaction regression
         run: npm run test:pid
-      - name: Control calibration layout and actions
+      - name: Z direction and Control calibration layout/actions
         working-directory: cc2-control/web-src
-        run: npm run test:control-calibrations
+        run: |
+          npm run test:z-direction
+          npm run test:control-calibrations
 
       - name: Independent experimental choices and Quiet controls
         run: |
