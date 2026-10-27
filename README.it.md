@@ -6,12 +6,12 @@ della **ELEGOO Centauri Carbon 2**, mantenuti da **Neme77**.
 <p align="center">
   <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig"><img src="https://img.shields.io/badge/SCARICA-Firmware%20V4.4.2-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il firmware completo V4.4.2"></a>
   &nbsp;
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.23-V4.4/CC2-Control-1.2.23-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/SCARICA-CC2%20Control%201.2.22-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il pacchetto multipiattaforma CC2 Control 1.2.22"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.23-V4.4/CC2-Control-1.2.23-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/SCARICA-CC2%20Control%201.2.23-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il pacchetto multipiattaforma CC2 Control 1.2.23"></a>
 </p>
 
-| **🖨️ Firmware completo · V4.4.2** | **🔄 CC2 Control · 1.2.22** |
+| **🖨️ Firmware completo · V4.4.2** | **🔄 CC2 Control · 1.2.23** |
 | --- | --- |
-| [**Scarica il firmware firmato**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Scarica il pacchetto Windows / macOS / Linux**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.23-V4.4/CC2-Control-1.2.23-Multiplatform-Update.zip) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4) |
+| [**Scarica il firmware firmato**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Scarica il pacchetto Windows / macOS / Linux**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.23-V4.4/CC2-Control-1.2.23-Multiplatform-Update.zip) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.23-V4.4) |
 | Installazione completa con CC2 Control **1.2.21** e patch webcam già inclusa. Nessun riavvio aggiuntivo dopo il firmware. | Per firmware community **V4.4/V4.4.1/V4.4.2**. Include i fix di stabilità e recupero della webcam. |
 
 > **Sperimentale facoltativa · Retrazione Canvas R4:** [**Scarica il kit Windows / Linux / macOS**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Canvas-Pullback-Experimental-R4.zip). Estende il limite configurabile fino a 1000 mm sui runtime qualificati **V4.4.1/V4.4.2**, con Control **1.2.21/1.2.22**. Di **Noahwhite2014**. [Istruzioni](experimental/canvas-pullback-kit/README.it.md). Rimuovere il componente e riavviare prima degli update app/firmware.
