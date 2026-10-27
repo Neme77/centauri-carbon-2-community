@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { FilamentMaterial } from '@/components/filament-material'
 import { control, post, errText, notify } from '@/lib/api'
 import { ask } from '@/lib/confirm'
-import { refreshCanvas } from '@/lib/canvas'
+import { canvasColour, refreshCanvas } from '@/lib/canvas'
 import { externalFeed, refreshExternalFeed } from '@/lib/external-feed'
 import { printer } from '@/lib/state'
 import { usePoll } from '@/lib/poll'
@@ -48,6 +48,7 @@ export const ExternalFilament = () => {
           <fieldset class="flex min-w-0 flex-wrap items-center gap-2" aria-label={t('feed.source')}>
             <span class="text-muted">{t('feed.source')}</span>
             <Button
+              variant={state.source === 'canvas' ? 'primary' : 'default'}
               aria-pressed={state.source === 'canvas'}
               disabled={!state.can_select || busy}
               onClick={() => choose('canvas')}
@@ -55,6 +56,7 @@ export const ExternalFilament = () => {
               {t('common.canvas')}
             </Button>
             <Button
+              variant={state.source === 'external' ? 'primary' : 'default'}
               aria-pressed={state.source === 'external'}
               disabled={!state.can_select || busy}
               onClick={() => choose('external')}
@@ -67,7 +69,14 @@ export const ExternalFilament = () => {
       )}
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <strong>{state.filament?.detailed_type || state.filament?.type || '—'}</strong>
+          <strong class="inline-flex items-center gap-2">
+            <span
+              class="inline-block h-3 w-3 rounded-full border border-edge"
+              aria-hidden="true"
+              style={{ backgroundColor: canvasColour(state.filament?.color, 0) }}
+            />
+            {state.filament?.detailed_type || state.filament?.type || '—'}
+          </strong>
           <p class="text-xs text-muted">{state.filament?.manufacturer || '—'}</p>
         </div>
         <div class="flex flex-wrap gap-2">
