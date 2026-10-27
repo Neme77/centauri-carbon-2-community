@@ -1050,7 +1050,7 @@
   "experiments.canvas_off_confirm": "Выключить Canvas UDS и вернуться к MQTT? Будет краткое переподключение. Остальные настройки сохранятся.",
   "experiments.canvas_on_confirm": "Включить полный Canvas UDS? Телеметрия кратко переподключится без команд нагрева и движения. Использует немного больше памяти.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Обновления приложения: стабильный канал. Экспериментальные функции выбираются отдельно ниже.",
+  "experiments.channel_stable": "Обновления приложения: стабильный канал. Экспериментальные функции настраиваются отдельно в разделе Настройки → Интеграции.",
   "experiments.disable": "Выключить",
   "experiments.enable": "Включить",
   "experiments.fallback": "Включено · резерв MQTT",
@@ -1117,5 +1117,12 @@
   "filament.load_confirm": "Загрузить внешний филамент? Принтер нагреет сопло и переместит филамент.",
   "filament.unload_confirm": "Выгрузить внешний филамент? Принтер нагреет сопло и переместит филамент.",
   "filament.unsupported_temperature": "Этот материал превышает защищённый диапазон температуры сопла.",
-  "filament.save": "Сохранить"
+  "filament.save": "Сохранить",
+  "feed.title": "External spool with Canvas connected",
+  "feed.hint": "Adds a source selector and native external load/unload controls. Use a direct filament path; TPU requires a suitable material profile.",
+  "feed.source": "Feed source",
+  "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
+  "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
+  "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
 }

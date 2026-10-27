@@ -52,7 +52,8 @@
     "test:print-completion": "node preview/test-print-completion.mjs && node preview/test-print-completion-browser.mjs",
     "test:spool-history": "node preview/test-spool-history.mjs",
     "test:remember-lan": "node preview/test-remember-lan.mjs",
-    "test:spoolman-integration": "node preview/test-spoolman-integration.mjs"
+    "test:spoolman-integration": "node preview/test-spoolman-integration.mjs",
+    "test:external-feed": "node preview/test-external-feed.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

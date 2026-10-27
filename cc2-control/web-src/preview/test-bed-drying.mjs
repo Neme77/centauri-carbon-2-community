@@ -82,7 +82,7 @@ try {
   await mkdir('preview/artifacts', { recursive: true })
   await card.screenshot({ path: 'preview/artifacts/bed-drying-mobile.png' })
   await page.setViewportSize({ width: 1440, height: 1000 }); await card.screenshot({ path: 'preview/artifacts/bed-drying-desktop.png' })
-  // The enabled drying card has two controls; all desktop footers must still align.
+  // The enabled drying card has two controls; footers align within each row of the two-column grid.
   for (const locale of ['en', 'it']) for (const enabled of [false, true]) {
     language = locale; choices.bed_drying = enabled; session.enabled = enabled
     await page.goto(`${server.resolvedUrls.local[0]}#settings/integrations`); await page.reload()
@@ -96,10 +96,12 @@ try {
         row: row.getBoundingClientRect().toJSON(),
         buttons: [...row.querySelectorAll('button')].map(b => b.getBoundingClientRect().toJSON()),
       })))
-      assert.equal(geometry.length, 3)
+      assert.equal(geometry.length, 4)
       if (width === 1440) {
-        const tops = geometry.map(g => g.buttons[0].top)
-        assert(Math.max(...tops) - Math.min(...tops) <= 1, `${locale}: desktop controls must align with drying ${enabled}`)
+        for (let i = 0; i < geometry.length; i += 2) {
+          const tops = geometry.slice(i, i + 2).map(g => g.buttons[0].top)
+          assert(Math.max(...tops) - Math.min(...tops) <= 1, `${locale}: desktop controls must align in row ${i / 2} with drying ${enabled}`)
+        }
       }
       if (enabled) {
         const [toggle, control] = geometry[2].buttons

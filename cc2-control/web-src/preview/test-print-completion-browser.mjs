@@ -16,7 +16,8 @@ try{
  await page.route('**/api/printer',async r=>{
   const response=await r.fetch(),d=await response.json(),printing=['printing','paused'].includes(state)
   d.connected=connected;d.last_message_age=connected?0:60;d.machine={status:printing?2:1,status_name:printing?'Printing':'Idle',sub_status:0,progress:printing?43:100}
-  d.print={enabled:printing,filename:printing?'part.gcode':'',state:printing?state:'',uuid:printing?uuid:'',duration:printing?80:0,current_layer:printing?4:0,total_layers:10,remaining:printing?20:0,native:{state,filename:cleared&&!printing?'':'part.gcode',duration:cleared&&!printing?null:123.5}}
+  d.print={enabled:printing,filename:printing?'part.gcode':'',state:printing?state:'',uuid:printing?uuid:'',duration:printing?80:0,current_layer:printing?4:0,total_layers:10,remaining:printing?20:0,native:printing?null:{state,filename:cleared?'':'local/part.gcode',duration:cleared?null:123.5}}
+  d.motion={...d.motion,homed_axes:'',x:52.5,y:264,z:80}
   return r.fulfill({json:d})
  })
  await page.route('**/api/gcode-files/inspect',r=>{assert.equal(r.request().postData(),'internal\npart.gcode');return r.fulfill({json:{tools:[0],filaments:[],bed_temperature:60,nozzle_diameter:0.4}})})

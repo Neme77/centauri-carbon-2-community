@@ -1,8 +1,8 @@
-# CC2 Control 1.2.22 update — Community Firmware V4.4 / V4.4.1 / V4.4.2 only
+# CC2 Control 1.2.23 update — Community Firmware V4.4 / V4.4.1 / V4.4.2 only
 
 [Italiano](UPDATE_CC2.it.md) · [Homepage](../README.md)
 
-1.2.22 includes the redesigned Dashboard and Control layouts, shared Canvas/external material editing and native external-spool controls, optional Spoolman sync, browser-local LAN-code remembering, print-completion notice, bounded spool history and opt-in timed bed heating. Preferences and libraries are retained.
+1.2.23 includes the redesigned Dashboard and Control layouts, shared Canvas/external material editing and native external-spool controls, optional Spoolman sync, browser-local LAN-code remembering, print-completion notice, bounded spool history and opt-in timed bed heating. Preferences and libraries are retained.
 
 **Reboot only on first activation of the camera fix.** It is already included since 1.2.19; if active, no additional reboot is needed for this app update. Complete firmware V4.4.2 already reboots and activates the fix. If the old downloader reports HTTPS failure, download the signed `.cc2update` on your computer and upload it through the panel, or use the computer installer. Close viewers before updating.
 
@@ -13,8 +13,8 @@ This ZIP updates the application over SSH. It does not flash the firmware image,
 ## Choose your update method
 
 - **No Settings → Updates tab yet:** follow the computer-assisted ZIP installation below once. It installs the updater helpers with CC2 Control.
-- **Updater panel already installed:** open Settings → Updates, then Check for updates. Enter the printer LAN code, choose Download and verify, and only after verification choose Install and confirm separately. Alternatively upload `CC2-Control-1.2.22-V4.4.cc2update` from the release. The panel does not accept the installer ZIP.
-- If the panel already reports 1.2.22, you are current; no reinstallation is required. A manual Check refreshes the cached index.
+- **Updater panel already installed:** open Settings → Updates, then Check for updates. Enter the printer LAN code, choose Download and verify, and only after verification choose Install and confirm separately. Alternatively upload `CC2-Control-1.2.23-V4.4.cc2update` from the release. The panel does not accept the installer ZIP.
+- If the panel already reports 1.2.23, you are current; no reinstallation is required. A manual Check refreshes the cached index.
 
 The same idle/cold/zero-target requirements apply to either method. Verification alone does not install anything. The online index and application are signed; incompatible bases and same/older application versions are refused. Do not turn power off during installation. Wait for completion, reload and recheck connection/Canvas/settings after an idle reboot.
 
@@ -34,11 +34,11 @@ A factory reset may change the code: enter the new code in the **Connection** ta
 
 ## 1. Prepare
 
-1. Download **CC2-Control-1.2.22-Multiplatform-Update.zip** and its checksum from the [application release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4).
+1. Download **CC2-Control-1.2.23-Multiplatform-Update.zip** and its checksum from the [application release](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.23-V4.4).
 2. Verify the ZIP SHA-256 against the release checksum:
 
 ~~~powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\CC2-Control-1.2.22-Multiplatform-Update.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\CC2-Control-1.2.23-Multiplatform-Update.zip'
 ~~~
 
 3. Confirm a supported V4.4/V4.4.1/V4.4.2 firmware is installed and CC2 Control reports **Printer connected**.
@@ -84,13 +84,13 @@ Success prints **INSTALLATION PASSED**, the backup directory and exact restore c
 ## 3. Verify
 
 1. Open http://PRINTER-IP:8081 and reload; use Ctrl+F5 if the old interface persists.
-2. Check **1.2.22**, **Printer connected**, temperatures and Canvas slots. The saved LAN code should not be requested again.
+2. Check **1.2.23**, **Printer connected**, temperatures and Canvas slots. The saved LAN code should not be requested again.
 3. Select **Magyar** under **Settings → Appearance**. Eight languages are available.
 4. Inspect plates/nozzles in **Bed Levelling**. Calibration accepts bed temperature **40–110 °C**, soak **0–60 minutes** (default **10**) and nozzle. Keep the bed clear before confirming.
 5. Each plate keeps measurements by temperature and nozzle. The print dialog uses the nearest bed-temperature measurement or your chosen measurement, with the selected nozzle Z correction.
 6. Restart once while Idle, then verify automatic startup, connection and Canvas again.
 
-A factory reset and LAN-code replacement are not required. The printer display retains vendor base 02.01.01.07; the application version is 1.2.22.
+A factory reset and LAN-code replacement are not required. The printer display retains vendor base 02.01.01.07; the application version is 1.2.23.
 
 ## 4. Restore the previous application
 
@@ -113,3 +113,15 @@ Plate library: older apps enforcing a 40 °C minimum cannot read new 30–39 °C
 ## Separate extended Canvas pull-back component
 
 The optional experimental R4 download raises the accepted Canvas pull-back maximum to 1000 mm on exact qualified V4.4.1/V4.4.2 runtimes with CC2 Control 1.2.21 or 1.2.22. It is not included or activated by this application update, and it does not extend external-spool movement. Follow its own README and Check step. Remove the component and reboot before ordinary app/firmware updates; removal returns supported values above 350 mm to 350 mm. Physical distances and reload settings depend on the filament path.
+
+
+## New in CC2 Control 1.2.23
+
+### **PRINT TPU WITHOUT DISCONNECTING CANVAS**
+
+Enable **External spool with Canvas connected** under **Settings → Integrations → Experimental integrations**, then select External spool in Canvas or Control. It remains **EXPERIMENTAL, optional and off by default**. A direct external filament path is required: TPU does not run through Canvas. Native source selection keeps Canvas connected and communicating.
+
+**DamiBFryta, our definitive beta tester, validated the full PLA → TPU cycle, including eSUN TPU 95A printing, without unplugging Canvas: no issues and no errors.** Neme77 validated external PLA loading/purge, a completed print and return to normal Canvas loading. Other flexible materials, hardness and paths need their own validation. Native loading/purge speeds are unchanged.
+
+[External-feed instructions](https://github.com/Neme77/centauri-carbon-2-community/blob/main/cc2-control/docs/EXTERNAL_FEED_EXPERIMENT.md).
+

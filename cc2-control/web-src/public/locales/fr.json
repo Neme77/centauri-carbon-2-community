@@ -1050,7 +1050,7 @@
   "experiments.canvas_off_confirm": "Désactiver Canvas UDS et revenir à MQTT ? Brève reconnexion. Les autres choix sont conservés.",
   "experiments.canvas_on_confirm": "Activer Canvas UDS complet ? Brève reconnexion de la télémétrie, sans commande de chauffe ni mouvement. Utilise un peu plus de mémoire.",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "Mises à jour de l’application : canal stable. Les fonctions expérimentales se choisissent séparément ci-dessous.",
+  "experiments.channel_stable": "Mises à jour de l’application : canal stable. Les fonctions expérimentales se gèrent séparément dans Paramètres → Intégrations.",
   "experiments.disable": "Désactiver",
   "experiments.enable": "Activer",
   "experiments.fallback": "Activé · repli MQTT",
@@ -1117,5 +1117,12 @@
   "filament.load_confirm": "Charger le filament externe ? L’imprimante chauffera la buse et déplacera le filament.",
   "filament.unload_confirm": "Décharger le filament externe ? L’imprimante chauffera la buse et déplacera le filament.",
   "filament.unsupported_temperature": "Ce matériau dépasse la plage de température protégée de la buse.",
-  "filament.save": "Enregistrer"
+  "filament.save": "Enregistrer",
+  "feed.title": "External spool with Canvas connected",
+  "feed.hint": "Adds a source selector and native external load/unload controls. Use a direct filament path; TPU requires a suitable material profile.",
+  "feed.source": "Feed source",
+  "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
+  "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
+  "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
 }

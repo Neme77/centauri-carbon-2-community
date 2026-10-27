@@ -1,3 +1,5 @@
+import { ExternalFilament } from './external-filament'
+import { externalFeed } from '@/lib/external-feed'
 import { FilamentMaterial } from '@/components/filament-material'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
@@ -40,6 +42,8 @@ const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }
 )
 
 export const Canvas = () => {
+  const feed = externalFeed.use()
+  const externalSelected = feed.experiment && feed.source === 'external'
   const recoverySending = useRef(false)
   const [recoveryBusy, setRecoveryBusy] = useState(false)
   const [recoverySent, setRecoverySent] = useState(false)
@@ -51,7 +55,9 @@ export const Canvas = () => {
   const [refillBusy, setRefillBusy] = useState(false)
   const [resetBusy, setResetBusy] = useState(false)
   const printerState = printer.use()
-  const idle = Boolean(printerState.ok && printerState.data?.connected && printerState.data.machine?.status === 1)
+  const idle = Boolean(
+    printerState.ok && printerState.data?.connected && printerState.data.machine?.status === 1 && !externalSelected
+  )
   const resetAll = async () => {
     if (resetBusy || !idle || !model?.connected) return
     if (!(await ask(t('canvas.reset_all_confirm'), true))) return
@@ -73,7 +79,7 @@ export const Canvas = () => {
   // Refresh while the page is open, except behind the material dialog.
   useEffect(() => (dialog ? undefined : poll(refreshCanvas, 2000)), [dialog])
   usePoll(refreshSpools, 10000)
-  const ok = Boolean(model?.connected)
+  const ok = Boolean(model?.connected && !externalSelected)
   const selected = controls.find(c => c.slot === slot)
   const recoverLoad = async () => {
     if (recoverySending.current || recoverySent || !ok || !idle || selected?.recovery_load !== true) return
@@ -226,9 +232,9 @@ export const Canvas = () => {
             ))}
           </div>
           <div class="grid justify-items-end gap-2">
-            <Tag class="cc2-canvas-connection" tone={ok ? 'ok' : 'warning'}>
+            <Tag class="cc2-canvas-connection" tone={model?.connected ? 'ok' : 'warning'}>
               <Pip />
-              {t(ok ? 'common.connected' : 'canvas.not_detected')}
+              {t(model?.connected ? 'common.connected' : 'canvas.not_detected')}
             </Tag>
             <Button onClick={sync}>
               <RefreshCw {...I} />
@@ -238,6 +244,8 @@ export const Canvas = () => {
         </div>
       }
     >
+      <ExternalFilament />
+      {externalSelected && <p class="my-2 text-muted">{t('feed.canvas_paused')}</p>}
       <div class="mb-3.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" data-canvas-status>
         <span>
           {t('canvas.telemetry')}: {t(model ? 'canvas.available' : 'canvas.unavailable')}

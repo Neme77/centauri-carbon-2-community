@@ -72,7 +72,13 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(external&&!m->external_verified)
             return reject(reason,reason_cap,"External filament requires native confirmation that Canvas is disconnected and the printer is idle");
         if(!strcmp(action,"external:load")||!strcmp(action,"external:unload")){
-            snprintf(script,cap,"M600 S%d",!strcmp(action,"external:load")?1:2);return 1;
+            int load=!strcmp(action,"external:load");
+            if(m->external_verified==2){
+                if(!isfinite(m->external_temperature)||m->external_temperature<120||m->external_temperature>320)
+                    return reject(reason,reason_cap,"External material requires a valid native maximum nozzle temperature");
+                snprintf(script,cap,"USED_CANVAS_DEV USED_CANVAS=0\nM600 S%d TEMP=%.0f",load?1:2,m->external_temperature);
+            }else snprintf(script,cap,"M600 S%d",load?1:2);
+            return 1;
         }
         int brand,type,item,end=0;char hex[7];int parsed;
         if(external)parsed=sscanf(action,"external:material:%d:%d:%d:%6[0-9a-fA-F]%n",&brand,&type,&item,hex,&end);

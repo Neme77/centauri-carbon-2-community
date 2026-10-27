@@ -23,22 +23,30 @@ export const Experiments = () => {
       mounted.current = false
     }
   }, [])
-  const change = async (feature: 'canvas-uds' | 'quiet-motors' | 'bed-drying') => {
+  const change = async (feature: 'canvas-uds' | 'quiet-motors' | 'bed-drying' | 'external-feed') => {
     if (!data || !ok || busy) return
     const enabled =
-      feature === 'canvas-uds' ? data.canvas_uds : feature === 'bed-drying' ? data.bed_drying : data.quiet_motors
-    const message =
-      feature === 'bed-drying'
-        ? enabled
-          ? 'drying.disable_confirm'
-          : 'drying.enable_confirm'
+      feature === 'external-feed'
+        ? data.external_feed
         : feature === 'canvas-uds'
+          ? data.canvas_uds
+          : feature === 'bed-drying'
+            ? data.bed_drying
+            : data.quiet_motors
+    const message =
+      feature === 'external-feed'
+        ? 'feed.enable_confirm'
+        : feature === 'bed-drying'
           ? enabled
-            ? 'experiments.canvas_off_confirm'
-            : 'experiments.canvas_on_confirm'
-          : enabled
-            ? 'experiments.quiet_off_confirm'
-            : 'experiments.quiet_on_confirm'
+            ? 'drying.disable_confirm'
+            : 'drying.enable_confirm'
+          : feature === 'canvas-uds'
+            ? enabled
+              ? 'experiments.canvas_off_confirm'
+              : 'experiments.canvas_on_confirm'
+            : enabled
+              ? 'experiments.quiet_off_confirm'
+              : 'experiments.quiet_on_confirm'
     if (!(await ask(t(message))) || !mounted.current) return
     setBusy(true)
     setError('')
@@ -82,7 +90,7 @@ export const Experiments = () => {
           autoComplete="off"
         />
       </label>
-      <div class="grid gap-3.5 cc2-md:grid-cols-3">
+      <div class="grid gap-3.5 cc2-md:grid-cols-2">
         <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
           <h3 class="text-base font-semibold">{t('experiments.canvas_title')}</h3>
           <p class="my-2 flex-1 text-sm text-muted">{t('experiments.canvas_hint')}</p>
@@ -139,6 +147,22 @@ export const Experiments = () => {
               {t(data?.bed_drying ? 'experiments.disable' : 'experiments.enable')}
             </Button>
             {data?.bed_drying && <Button onClick={() => openPage('control')}>{t('common.control')}</Button>}
+          </div>
+        </div>
+        <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
+          <h3 class="text-base font-semibold">{t('feed.title')}</h3>
+          <p class="my-2 flex-1 text-sm text-muted">{t('feed.hint')}</p>
+          <div class="flex flex-wrap items-stretch gap-2" data-experiment-actions>
+            <Button
+              role="switch"
+              aria-checked={Boolean(data?.external_feed)}
+              aria-label={t('feed.title')}
+              disabled={disabled}
+              onClick={() => void change('external-feed')}
+            >
+              {t(data?.external_feed ? 'experiments.disable' : 'experiments.enable')}
+            </Button>
+            {data?.external_feed && <Button onClick={() => openPage('canvas')}>{t('common.canvas')}</Button>}
           </div>
         </div>
       </div>

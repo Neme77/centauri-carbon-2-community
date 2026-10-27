@@ -1050,7 +1050,7 @@
   "experiments.canvas_off_confirm": "禁用 Canvas UDS 并回到 MQTT？遥测将短暂重连，其他实验选择会保留。",
   "experiments.canvas_on_confirm": "启用完整 Canvas UDS？遥测连接将短暂重连，不发送加热或运动命令，会使用少量额外内存。",
   "experiments.canvas_title": "Canvas UDS",
-  "experiments.channel_stable": "应用更新使用稳定通道。实验功能在下方单独选择。",
+  "experiments.channel_stable": "应用更新使用稳定通道。实验功能可在“设置 → 集成”中单独管理。",
   "experiments.disable": "禁用",
   "experiments.enable": "启用",
   "experiments.fallback": "已启用 · MQTT 回退",
@@ -1117,5 +1117,12 @@
   "filament.load_confirm": "加载外部耗材？打印机将加热喷嘴并移动耗材。",
   "filament.unload_confirm": "卸载外部耗材？打印机将加热喷嘴并移动耗材。",
   "filament.unsupported_temperature": "此材料超出喷嘴的受保护温度范围。",
-  "filament.save": "保存"
+  "filament.save": "保存",
+  "feed.title": "External spool with Canvas connected",
+  "feed.hint": "Adds a source selector and native external load/unload controls. Use a direct filament path; TPU requires a suitable material profile.",
+  "feed.source": "Feed source",
+  "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
+  "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
+  "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
 }
