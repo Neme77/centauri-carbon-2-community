@@ -1,0 +1,38 @@
+name: Prepare print completion source snapshot
+on:
+  push:
+    branches: [fix/print-completion-local-path]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/fix/print-completion-local-path'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - name: Validate and rebuild UI
+        working-directory: cc2-control/web-src
+        run: |
+          npm ci
+          npm run check
+          npm run build
+          npx playwright install --with-deps chromium
+          npm run test:print-completion
+      - name: Commit rebuilt UI and remove temporary workflow
+        run: |
+          git config user.name 'Neme77'
+          git config user.email '59748679+Neme77@users.noreply.github.com'
+          git rm .github/workflows/prepare-print-completion.yml
+          git add cc2-control/web
+          git commit -m 'Rebuild completion notice UI and remove preparation workflow'
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git commit -m 'Refresh builder snapshot for native completion path matching'
+          git push origin HEAD:fix/print-completion-local-path

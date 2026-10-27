@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Match native `local/` internal-storage paths with MQTT filenames so a completed-print notice is not delayed by a false file mismatch; replay uses the relative file path and homing remains unrelated (#242, reported by **Neme77**).
+
 - Point the stable update notice to Settings → Integrations in all nine languages; experimental controls are no longer described as being below the update panel (#240, reported by **Neme77**).
 
 ### Changed
