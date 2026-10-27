@@ -6,9 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [CC2 Control 1.2.23] - 2026-10-27
+
 ### Added
 
-- Experimental native Canvas / external-feed selector with persistent external material controls, guarded empty-head switching and mode reassertion before external loading; direct PLA path validation by **Neme77**, TPU 95A validation pending (#243).
+- Experimental native Canvas / external-feed selector with persistent external material controls, guarded empty-head switching and mode reassertion before external loading; direct PLA path validation by **Neme77**, full PLA to TPU cycle including eSUN TPU 95A printing validated by **DamiBFryta** without unplugging Canvas (#243).
 
 ### Fixed
 
@@ -419,7 +421,8 @@ Standalone update. The internal service version remains 1.1.31, and it does not 
 
 Earlier release details remain available through GitHub Releases, tags and Git history.
 
-[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.22-V4.4...HEAD
+[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.23-V4.4...HEAD
+[CC2 Control 1.2.23]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.23-V4.4
 [CC2 Control 1.2.19]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4
 [CC2 Control 1.2.18]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.18-V4.4
 [CC2 Control 1.2.17]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.17-V4.4
