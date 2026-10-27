@@ -33,7 +33,7 @@ try {
  await card.waitFor()
  assert(await card.getByRole('button',{name:'Load',exact:true}).isDisabled())
  await card.getByRole('button',{name:'External spool',exact:true}).click()
- await page.getByRole('button',{name:'Confirm',exact:true}).click()
+ await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click()
  await page.waitForFunction(()=>document.querySelector('[data-filament-source] button[aria-pressed=true]')?.textContent.includes('External'))
  assert.deepEqual(choices,['external'])
  assert.deepEqual(actions,[],'Source choice must not load or heat')
@@ -43,7 +43,7 @@ try {
  assert.equal(await form.getByLabel('Type',{exact:true}).inputValue(),'3')
  await form.getByLabel('Type',{exact:true}).selectOption('0')
  await form.getByRole('button',{name:'Save',exact:true}).click()
- await page.getByRole('button',{name:'Confirm',exact:true}).click()
+ await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click()
  await form.waitFor({state:'detached'})
  assert(actions[0].startsWith('external:material:'),'Material uses the external profile with Canvas still connected')
  await page.reload();await card.waitFor()
@@ -57,15 +57,16 @@ try {
  await mkdir('preview/artifacts',{recursive:true})
  for(const width of [1440,390]){
   await page.setViewportSize({width,height:1000})
+  await page.waitForTimeout(500)
   const layout=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,over:[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(0,8).map(e=>({tag:e.tagName,class:e.className,width:e.getBoundingClientRect().width,text:e.textContent.slice(0,70)}))}))
   assert(layout.scroll<=width+1,JSON.stringify(layout))
   await card.screenshot({path:`preview/artifacts/external-feed-${width}.png`})
  }
  fail=true
- await card.getByRole('button',{name:'Canvas',exact:true}).click();await page.getByRole('button',{name:'Confirm',exact:true}).click()
+ await card.getByRole('button',{name:'Canvas',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click()
  assert.equal(await card.getByRole('button',{name:'External spool',exact:true}).getAttribute('aria-pressed'),'true','Failed command keeps the previous choice')
  fail=false
- await card.getByRole('button',{name:'Canvas',exact:true}).click();await page.getByRole('button',{name:'Confirm',exact:true}).click()
+ await card.getByRole('button',{name:'Canvas',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click()
  await page.waitForFunction(()=>document.querySelector('[data-filament-source] button[aria-pressed=true]')?.textContent.includes('Canvas'))
  assert(await card.getByRole('button',{name:'Load',exact:true}).isDisabled())
  assert.deepEqual(errors,[])
