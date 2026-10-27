@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Restore Hungarian accents in the signed 1.2.23 update summaries on both catalogue routes; wording and report by **pezso92** (#248, #250). Application version and downloads are unchanged.
+- Z move buttons were inverted: the up arrow now raises the bed and the down arrow lowers it (#253).
 
 
 ## [CC2 Control 1.2.23] - 2026-10-27
