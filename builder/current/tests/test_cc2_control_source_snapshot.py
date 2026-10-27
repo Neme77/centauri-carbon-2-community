@@ -20,6 +20,10 @@ with zipfile.ZipFile(prepare.SOURCE) as archive:
         source = archive.read(f'web-src/public/locales/{locale.name}')
         assert source == locale.read_bytes(), locale.name
         assert source == archive.read(f'web/locales/{locale.name}'), locale.name
+    # Guides are shipped in source.zip too, including translated companions.
+    for document in sorted((BASE.parents[1] / 'cc2-control/docs').rglob('*.md')):
+        member = document.relative_to(BASE.parents[1] / 'cc2-control').as_posix()
+        assert archive.read(member) == document.read_bytes(), member
     assert 'make' in (BASE / 'prepare.py').read_text()
     assert "'test', 'CROSS=', 'CC=gcc'" in (BASE / 'prepare.py').read_text()
 print('PASS: pinned snapshot matches canonical backend, rebuilt UI, all shipped locales including Hungarian and new regressions.')
