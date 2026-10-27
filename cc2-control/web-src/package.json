@@ -53,7 +53,8 @@
     "test:spool-history": "node preview/test-spool-history.mjs",
     "test:remember-lan": "node preview/test-remember-lan.mjs",
     "test:spoolman-integration": "node preview/test-spoolman-integration.mjs",
-    "test:external-feed": "node preview/test-external-feed.mjs"
+    "test:external-feed": "node preview/test-external-feed.mjs",
+    "test:z-direction": "node preview/test-z-direction.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

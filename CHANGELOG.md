@@ -12,7 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Clarify firmware-managed Input Shaper saving and the explicit Save PID step in all nine languages, following Neme77's calibration and reboot verification (#252).
+
 - Restore Hungarian accents in the signed 1.2.23 update summaries on both catalogue routes; wording and report by **pezso92** (#248, #250). Application version and downloads are unchanged.
+- Z move buttons were inverted: the up arrow now raises the bed and the down arrow lowers it (#253, by **Surfoo**); retain arrow-only controls and protect both click directions with a browser regression.
 
 
 ## [CC2 Control 1.2.23] - 2026-10-27

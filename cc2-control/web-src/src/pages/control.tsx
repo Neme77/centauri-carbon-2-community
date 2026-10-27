@@ -101,17 +101,17 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
           <div class="grid gap-1.5">
             <Button
               class={pad}
-              aria-label={t('control.move_z_positive')}
+              aria-label={t('control.move_z_negative')}
               disabled={!can('z')}
-              onClick={() => move('Z', 1)}
+              onClick={() => move('Z', -1)}
             >
               <ArrowBigUp {...B} />
             </Button>
             <Button
               class={pad}
-              aria-label={t('control.move_z_negative')}
+              aria-label={t('control.move_z_positive')}
               disabled={!can('z')}
-              onClick={() => move('Z', -1)}
+              onClick={() => move('Z', 1)}
             >
               <ArrowBigDown {...B} />
             </Button>
