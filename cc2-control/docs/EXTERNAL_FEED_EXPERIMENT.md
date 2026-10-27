@@ -1,5 +1,7 @@
 # External feed with Canvas connected (experimental)
 
+Hungarian translation: [EXTERNAL_FEED_EXPERIMENT.hu.md](./EXTERNAL_FEED_EXPERIMENT.hu.md).
+
 This opt-in uses native USED_CANVAS_DEV and M600 commands. It does not disconnect Canvas electrically, suspend a service, patch the vendor binary, change firmware configuration, or replace the existing camera fix.
 
 Enable **External spool with Canvas connected** under Settings → Integrations → Experimental integrations with an idle, cold printer and LAN-code confirmation. In Canvas or Control, the External spool card provides a Canvas / External spool source selector. A source change requires confirmed fresh native Idle state, no active Canvas channel, and no filament at the printhead sensor. Selection alone does not move or heat anything; the native command must acknowledge before the preference is saved.
