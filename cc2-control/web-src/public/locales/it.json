@@ -1117,5 +1117,12 @@
   "filament.load_confirm": "Caricare il filamento esterno? La stampante riscalderà l’ugello e muoverà il filamento.",
   "filament.unload_confirm": "Scaricare il filamento esterno? La stampante riscalderà l’ugello e muoverà il filamento.",
   "filament.unsupported_temperature": "Questo materiale supera l’intervallo protetto di temperatura dell’ugello.",
-  "filament.save": "Salva"
+  "filament.save": "Salva",
+  "feed.title": "Bobina esterna con Canvas collegato",
+  "feed.hint": "Aggiunge la scelta della sorgente e i comandi nativi di carico/scarico esterno. Usa un percorso diretto; per il TPU scegli un profilo materiale adatto.",
+  "feed.source": "Sorgente filamento",
+  "feed.selection_hint": "La scelta resta visibile dopo la stampa e viene riapplicata prima del carico. Cambia sorgente solo a testina scarica.",
+  "feed.select_confirm": "Cambiare sorgente filamento? Rimuovi prima il filamento dalla testina. Questa scelta non avvia il carico.",
+  "feed.enable_confirm": "Modificare i controlli sperimentali della bobina esterna? Prima di disabilitarli torna a Canvas con la testina scarica.",
+  "feed.canvas_paused": "Bobina esterna selezionata. Il Canvas resta collegato; seleziona Canvas per usarne i comandi."
 }

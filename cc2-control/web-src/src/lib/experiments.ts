@@ -7,6 +7,7 @@ export type ExperimentState = {
   ready: boolean
   canvas_uds: boolean
   canvas_uds_available: boolean
+  external_feed?: boolean
   bed_drying?: boolean
   quiet_motors: boolean
   normal_confirmed: boolean

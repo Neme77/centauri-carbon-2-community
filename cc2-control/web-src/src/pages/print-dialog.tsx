@@ -21,6 +21,7 @@ type Pending = {
   meshError: string | null
   trays: any[]
   connected: boolean
+  preferExternal: boolean
   spools: SpoolLibrary | null
   // The build-plate library, and the file's first-layer bed temperature and nozzle diameter when it states them.
   plates: PlateLibrary | null
@@ -75,12 +76,13 @@ export async function startFile(storage: string, path: string) {
   fileAnalysisPending = true
   notify(t('print.analysing_file'))
   try {
-    const [inspection, canvasData, meshReadiness, library, plateLibrary] = await Promise.all([
+    const [inspection, canvasData, meshReadiness, library, plateLibrary, feed] = await Promise.all([
       post('/api/gcode-files/inspect', `${storage}\n${path}`),
       request('/api/canvas').catch(() => ({ available: false })),
       readMeshReadiness(),
       printer.get().data?.spools?.enabled ? request('/api/spools').catch(() => null) : null,
       request('/api/plates').catch(() => null),
+      request('/api/external-filament').catch(() => null),
     ])
     const tools: number[] = Array.isArray(inspection.tools) && inspection.tools.length ? inspection.tools : [0]
     const model = canvasModel(canvasData)
@@ -94,6 +96,7 @@ export async function startFile(storage: string, path: string) {
         meshError: meshReadiness.error,
         trays: model?.trays || [],
         connected: Boolean(model?.connected),
+        preferExternal: feed?.experiment === true && feed?.source === 'external',
         spools: library?.available && library.enabled ? library : null,
         plates: plateLibrary?.available ? plateLibrary : null,
         bedTemp: typeof inspection.bed_temperature === 'number' ? inspection.bed_temperature : null,
@@ -151,7 +154,7 @@ export const PrintDialog = () => {
 
 const Form = ({ job }: { job: Pending }) => {
   const multi = job.tools.length > 1
-  const [useCanvas, setUse] = useState(job.connected)
+  const [useCanvas, setUse] = useState(job.connected && (!job.preferExternal || multi))
   const [map, setMap] = useState<Record<number, string>>({})
   const [side, setSide] = useState<'A' | 'B'>('A')
   const [calibrate, setCalibrate] = useState(false)

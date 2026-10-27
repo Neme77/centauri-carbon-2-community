@@ -21,10 +21,11 @@ static void experiments_response(int fd, const mqtt_client *mqtt, console_state 
     char body[640];
     int n = snprintf(body, sizeof(body),
         "{\"schema\":1,\"editable\":%s,\"ready\":%s,\"canvas_uds\":%s,\"canvas_uds_available\":%s,"
-        "\"bed_drying\":%s,\"quiet_motors\":%s,\"normal_confirmed\":%s,\"cli_canvas\":%s}\n",
+        "\"external_feed\":%s,\"bed_drying\":%s,\"quiet_motors\":%s,\"normal_confirmed\":%s,\"cli_canvas\":%s}\n",
         experiments_storage_valid ? "true" : "false",
         !app_update_active() && app_update_ready(mqtt, console) ? "true" : "false",
         telemetry.canvas_enabled ? "true" : "false", uds_canvas_available(&telemetry) ? "true" : "false",
+        external_feed_enabled ? "true" : "false",
         experiments.bed_drying ? "true" : "false",
         experiments.quiet_motors ? "true" : "false", experiments_normal_confirmed(console) ? "true" : "false",
         experiments_cli_canvas ? "true" : "false");
@@ -34,6 +35,15 @@ static void experiments_response(int fd, const mqtt_client *mqtt, console_state 
 static void experiments_put_response(int fd, const char *request, const char *body, size_t length,
                                      mqtt_client *mqtt, console_state *console) {
     if (!app_update_authorized(request, mqtt)) { app_update_fail(fd, 401, "LAN code confirmation required or temporarily locked"); return; }
+    if((length==16&&!memcmp(body,"external-feed:on",16))||(length==17&&!memcmp(body,"external-feed:off",17))){
+        int enabled=length==16;
+        if(app_update_active()||!app_update_ready(mqtt,console)){
+            app_update_fail(fd,409,"Printer must be connected, idle and cold with heating targets zero");return;
+        }
+        if(!enabled&&external_source_selected){app_update_fail(fd,409,"Select Canvas with the printhead empty before disabling external feed");return;}
+        if(!external_feed_store(enabled,enabled?external_source_selected:0)){app_update_fail(fd,503,"Cannot save external-feed settings");return;}
+        experiments_response(fd,mqtt,console);return;
+    }
     experiment_choices next = experiments;
     if (length == 13 && !memcmp(body, "canvas-uds:on", 13)) next.canvas_uds = 1;
     else if (length == 14 && !memcmp(body, "canvas-uds:off", 14)) next.canvas_uds = 0;
