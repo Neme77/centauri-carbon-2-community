@@ -1,5 +1,8 @@
 export type Completion = { key: string; alias: string; path: string; seconds: number; live: boolean }
 type Tracked = { path: string; uuid: string; run: number }
+// UDS prefixes internal files with local/, while MQTT and file actions use
+// paths relative to internal storage. Preserve all remaining path components.
+const jobPath = (value: unknown) => String(value || '').replace(/^local\//, '')
 // Explicit completion evidence only; idle/100%, cancellation and lost connectivity
 // cannot manufacture a successful print. Reuse the existing printer poll.
 export class CompletionTracker {
@@ -18,7 +21,7 @@ export class CompletionTracker {
     const busy = Number(d?.machine?.status) === 2
     const state = String(native?.state || job?.state || '')
     if (busy && /^(printing|paused)$/.test(state)) {
-      const path = String(native?.filename || job?.filename || '')
+      const path = jobPath(native?.filename || job?.filename)
       const uuid = String(job?.uuid || '')
       if (path && (!this.running || this.running.path !== path || this.running.uuid !== uuid))
         this.running = { path, uuid, run: ++this.run }
@@ -29,7 +32,7 @@ export class CompletionTracker {
       return null
     }
     if (Number(d?.machine?.status) !== 1 || state !== 'complete') return null
-    const path = String(native?.filename || job?.filename || this.running?.path || '')
+    const path = jobPath(native?.filename || job?.filename || this.running?.path)
     const seconds = Number(native?.duration ?? job?.duration)
     if (!path || !Number.isFinite(seconds) || seconds < 0 || (!this.running && seconds === 0)) return null
     if (this.running && this.running.path !== path) return null

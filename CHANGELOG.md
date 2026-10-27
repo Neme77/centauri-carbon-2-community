@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Experimental native Canvas / external-feed selector with persistent external material controls, guarded empty-head switching and mode reassertion before external loading; direct PLA path validation by **Neme77**, TPU 95A validation pending (#243).
+
 ### Fixed
+
+- Allow native Canvas data setters before full XYZ homing without relaxing motion guards (#241, reported by **Neme77**).
+- Match native `local/` completion paths to MQTT names before showing and replaying a completed job (#242, reported by **Neme77**).
 
 - Point the stable update notice to Settings → Integrations in all nine languages; experimental controls are no longer described as being below the update panel (#240, reported by **Neme77**).
 

@@ -34,6 +34,9 @@
 #include "uds.h"
 #include "http_guard.h"
 #include "experiments_state.h"
+#include "external_feed_state.h"
+static int app_update_active(void);
+static int plates_background_active(void);
 static int experiments_normal_confirmed(console_state *console);
 static int drying_active(void);
 static int drying_status_json(char *out,size_t capacity,const mqtt_client *mqtt);
@@ -3080,21 +3083,63 @@ static void exclude_objects_response(int fd, const mqtt_client *mqtt) {
 }
 
 #include "external_filament.h"
-static const char external_query[]="{\"id\":206,\"method\":\"objects/query\",\"params\":{\"objects\":{\"canvas_dev\":null,\"print_stats\":[\"state\"]}}}\003";
+static const char external_query[]="{\"id\":206,\"method\":\"objects/query\",\"params\":{\"objects\":{\"canvas_dev\":null,\"print_stats\":[\"state\"],\"filament_switch_sensor filament_sensor\":[\"filament_detected\"]}}}\003";
+static int (*external_uds)(const char *,char **,size_t *)=uds_query_json;
 static int external_read(char **reply,size_t *length,external_readback *state){
-    return uds_query_json(external_query,reply,length)==0&&*reply&&external_parse(*reply,*length,state);
+    return external_uds(external_query,reply,length)==0&&*reply&&external_parse(*reply,*length,state);
+}
+/* Selection is a UI/session preference. Native print completion may restore
+ * Canvas; each connected external motor operation reasserts its own source.
+ * Never infer external mode from connected=1/0 or active_cid=-1 alone. */
+static int external_fresh_idle(const mqtt_client *mqtt,const external_readback *state){
+    return gcode_idle_for_mutation(mqtt)&&time(NULL)>=mqtt->last_message&&state->native_idle;
 }
 static void external_filament_response(int fd,const mqtt_client *mqtt){
     char *reply=NULL;size_t length=0;external_readback state={0};
     int known=external_read(&reply,&length,&state);
     int fresh=mqtt->connected&&mqtt->registered&&mqtt->last_message>0&&time(NULL)>=mqtt->last_message&&time(NULL)-mqtt->last_message<=15;
-    int idle=known&&fresh&&state.idle&&mqtt->have_machine_status&&mqtt->machine_status==1;
+    int opted=external_feed_enabled&&!state.disconnected;
+    int selected=!opted||external_source_selected;
+    int idle=known&&fresh&&external_fresh_idle(mqtt,&state)&&state.active_channel==-1&&selected;
+    if(opted)idle=idle&&state.have_sensor;
     const char *filament=known&&state.filament?state.filament:"null";
     size_t flen=known&&state.filament?(size_t)(state.filament_end-state.filament):4;
-    size_t cap=flen+160;char *body=malloc(cap);
-    if(body){int n=snprintf(body,cap,"{\"available\":%s,\"idle\":%s,\"filament\":%.*s}\n",known&&fresh&&state.disconnected?"true":"false",idle?"true":"false",(int)flen,filament);
+    size_t cap=flen+512;char *body=malloc(cap);
+    if(body){int n=snprintf(body,cap,
+        "{\"available\":%s,\"idle\":%s,\"experiment\":%s,\"source\":\"%s\",\"can_select\":%s,\"can_unload\":%s,\"temperature\":%.1f,\"filament\":%.*s}\n",
+        known&&fresh&&(state.disconnected||external_feed_enabled)?"true":"false",idle?"true":"false",
+        external_feed_enabled?"true":"false",state.disconnected||external_source_selected?"external":"canvas",
+        known&&fresh&&external_feed_enabled&&!state.disconnected&&external_fresh_idle(mqtt,&state)&&state.active_channel==-1&&state.have_sensor&&!state.filament_detected?"true":"false",
+        idle&&(!opted||state.filament_detected)?"true":"false",known?state.temperature:0,(int)flen,filament);
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)n);free(body);}
     free(reply);
+}
+static void filament_source_response(int fd,console_state *console,mqtt_client *mqtt,const char *body,size_t length){
+    int wanted=length==8&&!memcmp(body,"external",8);
+    if(!wanted&&(length!=6||memcmp(body,"canvas",6))){const char *error="{\"error\":\"Invalid filament source\"}";respond(fd,400,"Bad Request","application/json",error,strlen(error));return;}
+    char *reply=NULL;size_t size=0;external_readback state={0};
+    pthread_mutex_lock(&console->lock);int busy=console->busy;pthread_mutex_unlock(&console->lock);
+    int valid=external_feed_enabled&&!busy&&!app_update_active()&&!plates_background_active()&&external_read(&reply,&size,&state)&&
+        external_fresh_idle(mqtt,&state)&&!state.disconnected&&state.active_channel==-1&&state.have_sensor&&!state.filament_detected;
+    free(reply);
+    if(!valid){const char *error="{\"error\":\"Source change requires the enabled experiment, fresh Idle state, connected Canvas and an empty printhead\"}";
+        respond(fd,409,"Conflict","application/json",error,strlen(error));return;}
+    const char *query=wanted?
+        "{\"id\":207,\"method\":\"gcode/script\",\"params\":{\"script\":\"USED_CANVAS_DEV USED_CANVAS=0\"}}\003":
+        "{\"id\":207,\"method\":\"gcode/script\",\"params\":{\"script\":\"USED_CANVAS_DEV USED_CANVAS=1\"}}\003";
+    reply=NULL;size=0;
+    int sent=external_uds(query,&reply,&size)==0&&reply;
+    const char *end=sent?reply+size:NULL,*root=sent?ccv_json_skip_space(reply,end):NULL;
+    const char *re=root&&root<end&&*root=='{'?ccv_json_container_end(root,end):NULL;
+    int acknowledged=re&&ccv_json_skip_space(re,end)==end&&ccv_json_member(root,re,"result")&&!ccv_json_member(root,re,"error");
+    free(reply);
+    if(!acknowledged){const char *error="{\"error\":\"Native source command was not acknowledged; selection was not updated\"}";
+        respond(fd,503,"Service Unavailable","application/json",error,strlen(error));return;}
+    if(!external_feed_store(1,wanted)){
+        const char *error="{\"error\":\"Source command acknowledged but preference could not be saved; select the source again\"}";
+        respond(fd,503,"Service Unavailable","application/json",error,strlen(error));return;
+    }
+    external_filament_response(fd,mqtt);
 }
 
 static void mesh_response(int fd) {
@@ -3702,14 +3747,31 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         const char *error="{\"accepted\":false,\"error\":\"Fresh tuning readback is unavailable\"}\n";
         respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
     }
+    if(external_feed_enabled&&external_source_selected&&!strncmp(action,"canvas:",7)){
+        const char *error="{\"error\":\"Select Canvas with the external filament removed before using its controls\"}";
+        respond(fd,409,"Conflict","application/json",error,strlen(error));return;
+    }
     mqtt->external_verified=0;
+    mqtt->external_temperature=0;
     if(!strncmp(action,"external:",9)){
         char *reply=NULL;size_t length=0;external_readback state={0};
-        mqtt->external_verified=external_read(&reply,&length,&state)&&state.idle;
+        if(external_read(&reply,&length,&state)){
+            mqtt->external_verified=state.idle;
+            if(!state.disconnected&&external_feed_enabled&&external_source_selected&&
+                external_fresh_idle(mqtt,&state)&&state.active_channel==-1&&state.have_sensor&&
+                (strcmp(action,"external:unload")||state.filament_detected))mqtt->external_verified=2;
+            mqtt->external_temperature=state.temperature;
+        }
         free(reply);
     }
     int built=control_build_script(action,mqtt,script,sizeof(script),reason,sizeof(reason));
     mqtt->external_verified=0;
+    if(built&&external_feed_enabled&&!external_source_selected&&
+       (!strncmp(action,"canvas:load:",12)||!strncmp(action,"canvas:recover-load:",20)||!strncmp(action,"canvas:unload:",14))){
+        char next[sizeof(script)];int n=snprintf(next,sizeof(next),"USED_CANVAS_DEV USED_CANVAS=1\n%s",script);
+        if(n<0||(size_t)n>=sizeof(next)){built=0;snprintf(reason,sizeof(reason),"Source script exceeds capacity");}
+        else memcpy(script,next,(size_t)n+1);
+    }
     if(!built||console_start(console,script,reason,sizeof(reason))!=0){
         char escaped[300],response[420];json_escape(escaped,sizeof(escaped),reason);
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
@@ -4016,6 +4078,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         console_command_response(fd,console,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/recovery/reboot")==0) {
         recovery_reboot_response(fd,body,body_len);
+    } else if (!strcmp(method,"POST")&&!strcmp(path,"/api/filament-source")) {
+        filament_source_response(fd,console,mqtt,body,body_len);
     } else if (!strcmp(method,"GET")&&!strcmp(path,"/api/external-filament")) {
         external_filament_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/control")==0) {
@@ -4082,6 +4146,7 @@ int main(int argc, char **argv) {
     recovery_console=&console;
     uds_init(&telemetry);
     experiments_load();
+    external_feed_load();
     experiments_cli_canvas=canvas_uds_enabled;
     telemetry.canvas_enabled=canvas_uds_enabled||experiments.canvas_uds;
     if(!bk_recover()){fprintf(stderr,"Application restore recovery failed; refusing to load mixed libraries\n");console_destroy(&console);return 1;}

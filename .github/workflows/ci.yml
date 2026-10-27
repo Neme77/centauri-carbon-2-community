@@ -95,6 +95,9 @@ jobs:
       - name: Native external spool and shared Canvas material controls
         run: node preview/test-external-filament.mjs
 
+      - name: Connected Canvas external-feed selection and guards
+        run: npm run test:external-feed
+
       - name: Optional Spoolman integration switch
         run: npm run test:spoolman-integration
 
