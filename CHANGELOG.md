@@ -8,11 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Delete unused G-code files while printing or busy, with active/paused/recoverable job and pending Orca-start protection, requested by **Neme77** (#259).
+
 - Optional Obsidian theme with graphite panels, a purple action accent and cyan telemetry, designed with **Neme77** (#255).
 
 - Hungarian companion to the external-feed experiment guide, by **pezso92** (#249).
 
 ### Fixed
+
+- Centre collapsed navigation and progressively clip labels, by **Surfoo** (#257); preserve labels in mobile drawers and keep the expand icon visible.
+- Thicken the Canvas colour rings while preserving their outer dimensions, by **Surfoo** (#258).
 
 - A bed mesh calibration whose heat-up and soak together took more than about 15 minutes stopped with "The bed did not hold the temperature" before probing: the firmware switches an idle printer's bed off 15 minutes after the last command. CC2 Control now sends the bed target again every ten minutes while it heats and soaks, by **beanbo** (#256).
 

@@ -716,13 +716,75 @@ static int gcode_ready_for_upload(const mqtt_client *mqtt){
         mqtt->last_message>0 && time(NULL)-mqtt->last_message<=15;
 }
 
+/* A sliced job can be named by its basename, a native local/ path, or an
+ * imported USB alias. Protect matching basenames on both media (including FAT
+ * case aliases) rather than guessing which representation the native UI uses. */
+static atomic_int upload_busy=0;
+static pthread_mutex_t orca_pending_mutex=PTHREAD_MUTEX_INITIALIZER;
+static char orca_pending_filename[PATH_MAX_LOCAL];
+static int gcode_same_job_name(const char *file, const char *job) {
+    if (!file || !*file || !job || !*job) return 0;
+    const char *a = strrchr(file, '/'), *b = strrchr(job, '/');
+    return !strcasecmp(a ? a + 1 : file, b ? b + 1 : job);
+}
+/* Compare file identity as well as text: removable filesystems can resolve
+ * different Unicode case spellings to the same file. Restrict all lookups to
+ * the already-qualified G-code roots and retain their no-symlink checks. */
+static int gcode_same_job_file(const char *file, const char *job) {
+    if (!file || !job || !*job) return 0;
+    const char *roots[] = {gcode_internal_root, gcode_usb_root};
+    const char *relative = job;
+    for (unsigned i = 0; i < 2; i++) {
+        size_t n = strlen(roots[i]);
+        if (!strncmp(job, roots[i], n) && job[n] == '/') { relative = job + n + 1; break; }
+    }
+    if (!strncmp(relative,"local/",6)) relative += 6;
+    else if (!strncmp(relative,"u-disk/",7)) relative += 7;
+    else if (!strncmp(relative,"usb/",4)) relative += 4;
+    char candidate[PATH_MAX_LOCAL*2], active[PATH_MAX_LOCAL*2];
+    struct stat a,b;
+    for (unsigned i = 0; i < 2; i++) {
+        if (!gcode_resolved_path(roots[i],file,candidate,sizeof(candidate)) || stat(candidate,&a)) continue;
+        for (unsigned j = 0; j < 2; j++)
+            if (gcode_resolved_path(roots[j],relative,active,sizeof(active)) && !stat(active,&b) &&
+                a.st_dev == b.st_dev && a.st_ino == b.st_ino) return 1;
+    }
+    return 0;
+}
+static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file) {
+    time_t now = time(NULL);
+    if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status ||
+        mqtt->last_message <= 0 || now < mqtt->last_message || now - mqtt->last_message > 15)
+        return "Printer must be connected with fresh status";
+    if (mqtt->machine_status == 0 || mqtt->machine_status == 9 || mqtt->machine_status == 11 ||
+        mqtt->machine_status == 15 || mqtt->machine_status == 16)
+        return "File deletion unavailable during startup, transfer, upgrade or recovery";
+    if (atomic_load(&upload_busy)) return "Finish the current upload before deleting files";
+    pthread_mutex_lock(&orca_pending_mutex);
+    int pending = gcode_same_job_name(file, orca_pending_filename) || gcode_same_job_file(file, orca_pending_filename);
+    pthread_mutex_unlock(&orca_pending_mutex);
+    if (pending) return "File is waiting to start printing";
+    const char *native = uds_print_state(&telemetry);
+    int reported_job = mqtt->machine_status == 2 || !strcmp(mqtt->print_state, "printing") ||
+                       !strcmp(mqtt->print_state, "paused") || !strcmp(mqtt->print_state, "error");
+    int native_job = native && (!strcmp(native, "printing") || !strcmp(native, "paused") || !strcmp(native, "error"));
+    if (reported_job || native_job) {
+        if (!native_job || !telemetry.have_filename || !telemetry.filename[0])
+            return "Cannot identify the active print safely";
+        if (gcode_same_job_name(file, mqtt->filename) || gcode_same_job_name(file, telemetry.filename) ||
+            gcode_same_job_file(file, mqtt->filename) || gcode_same_job_file(file, telemetry.filename))
+            return "Cannot delete the active, paused or recoverable print";
+        return NULL;
+    }
+    if (mqtt->machine_status == 1 && !native) return NULL; /* retain idle operation without native telemetry */
+    if (!native || (strcmp(native, "standby") && strcmp(native, "complete") && strcmp(native, "cancelled")))
+        return "Cannot identify the printer state safely";
+    return NULL;
+}
+
 static void gcode_delete_response(int fd,const char *request,const mqtt_client *mqtt,
                                   const char *body,size_t length){
     (void)request;
-    if(!gcode_idle_for_mutation(mqtt)){
-        const char *e="{\"error\":\"Printer must be idle and connected\"}\n";
-        respond(fd,409,"Conflict","application/json",e,strlen(e));return;
-    }
     char storage[16],file[PATH_MAX_LOCAL];const char *root,*media;
     if(!gcode_request_file(body,length,storage,file,NULL,NULL,&root,&media)||
        !gcode_storage_writable(storage,root)){
@@ -734,6 +796,12 @@ static void gcode_delete_response(int fd,const char *request,const mqtt_client *
     if(!gcode_resolved_path(root,file,path,sizeof(path))){
         const char *e="{\"error\":\"G-code file not found or unsafe\"}\n";
         respond(fd,404,"Not Found","application/json",e,strlen(e));return;
+    }
+    const char *blocked = gcode_delete_guard(mqtt, file);
+    if (blocked) {
+        char error[256];
+        int n = snprintf(error, sizeof(error), "{\"error\":\"%s\"}\n", blocked);
+        respond(fd,409,"Conflict","application/json",error,(size_t)n);return;
     }
     /* Recheck direct filename and block hard-linked content. */
     struct stat st;
@@ -875,13 +943,10 @@ static void upload_discard(gcode_upload_job *job,size_t received,unsigned char *
 /* One upload at a time. The connection thread takes the slot and the upload
  * worker releases it, so this is an atomic flag: a mutex must be unlocked by
  * the thread that locked it. */
-static atomic_int upload_busy=0;
 static int upload_slot_acquire(void){int expected=0;return atomic_compare_exchange_strong(&upload_busy,&expected,1);}
 static void upload_slot_release(void){atomic_store(&upload_busy,0);}
 /* One print request may await the operator's Canvas mapping. Never print from
  * the upload worker: the existing protected print route remains authoritative. */
-static pthread_mutex_t orca_pending_mutex=PTHREAD_MUTEX_INITIALIZER;
-static char orca_pending_filename[PATH_MAX_LOCAL];
 static unsigned long orca_pending_generation=0;
 static time_t orca_pending_created=0;
 
