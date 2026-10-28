@@ -20,7 +20,7 @@ for file in /sys/bus/usb/devices/*/idVendor; do
     if [ "$(cat "$file")" = 0bda ] && [ "$(cat "$device/idProduct")" = 8153 ] && [ "$(cat "$device/bcdDevice")" = 31fd ]; then found=1; fi
 done
 [ "$found" = 1 ] || fail 'Expected UE300 USB ID/revision not found'
-printer=$(wget -T 5 -qO- http://127.0.0.1:8081/api/printer) || fail 'CC2 Control status unavailable'
+printer=$(wget -qO- http://127.0.0.1:8081/api/printer) || fail 'CC2 Control status unavailable'
 printf '%s' "$printer" | grep -q '"connected":true' || fail 'Printer disconnected'
 printf '%s' "$printer" | grep -q '"machine":{"status":1,' || fail 'Printer is not Idle'
 age=$(printf '%s' "$printer" | sed -n 's/.*"last_message_age":\([0-9][0-9]*\).*/\1/p')
