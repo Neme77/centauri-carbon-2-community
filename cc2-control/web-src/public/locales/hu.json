@@ -1124,5 +1124,15 @@
   "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
   "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
   "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
-  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls.",
+  "files.delete_reason_fresh_status": "A nyomtatónak csatlakoztatva kell lennie, friss állapotadatokkal",
+  "files.delete_reason_busy": "Indítás, átvitel, frissítés vagy helyreállítás közben nem lehet fájlt törölni",
+  "files.delete_reason_upload_busy": "A fájlok törlése előtt fejezd be a folyamatban lévő feltöltést",
+  "files.delete_reason_pending_print": "A fájl nyomtatásra vár",
+  "files.delete_reason_active_print_unknown": "Az aktív nyomtatás nem azonosítható biztonságosan",
+  "files.delete_reason_active_print": "Az aktív, szüneteltetett vagy helyreállítható nyomtatás nem törölhető",
+  "files.delete_reason_state_unknown": "A nyomtató állapota nem azonosítható biztonságosan",
+  "files.delete_reason_storage_unavailable": "A tárhely nem érhető el vagy nem írható",
+  "files.delete_reason_unsafe_file": "A G-code-fájl nem található, vagy az elérési útja nem biztonságos",
+  "files.delete_reason_failed": "Ez a fájl nem törölhető"
 }

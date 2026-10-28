@@ -129,6 +129,9 @@ jobs:
       - name: New-spool insertion copy and scale-weight regression
         run: npm run test:spool-insertion && npm run test:spool-history
 
+      - name: Localized single and bulk file-deletion refusals
+        run: node preview/test-file-delete-errors.mjs
+
       - name: Complete file library and large upload admission
         run: npm run test:file-library
 

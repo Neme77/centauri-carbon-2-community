@@ -1124,5 +1124,15 @@
   "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
   "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
   "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
-  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls.",
+  "files.delete_reason_fresh_status": "Drukarka musi być połączona i mieć aktualne dane stanu",
+  "files.delete_reason_busy": "Usuwanie jest niedostępne podczas uruchamiania, przesyłania, aktualizacji lub odzyskiwania",
+  "files.delete_reason_upload_busy": "Zakończ bieżące przesyłanie przed usuwaniem plików",
+  "files.delete_reason_pending_print": "Plik oczekuje na rozpoczęcie drukowania",
+  "files.delete_reason_active_print_unknown": "Nie można bezpiecznie zidentyfikować aktywnego wydruku",
+  "files.delete_reason_active_print": "Nie można usunąć aktywnego, wstrzymanego ani możliwego do odzyskania wydruku",
+  "files.delete_reason_state_unknown": "Nie można bezpiecznie określić stanu drukarki",
+  "files.delete_reason_storage_unavailable": "Pamięć jest niedostępna lub nie można w niej zapisywać",
+  "files.delete_reason_unsafe_file": "Nie znaleziono pliku G-code lub ścieżka jest niebezpieczna",
+  "files.delete_reason_failed": "Nie można usunąć tego pliku"
 }

@@ -1124,5 +1124,15 @@
   "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
   "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
   "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
-  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls.",
+  "files.delete_reason_fresh_status": "Принтер должен быть подключён и передавать актуальные данные",
+  "files.delete_reason_busy": "Удаление недоступно во время запуска, передачи, обновления или восстановления",
+  "files.delete_reason_upload_busy": "Завершите текущую загрузку перед удалением файлов",
+  "files.delete_reason_pending_print": "Файл ожидает начала печати",
+  "files.delete_reason_active_print_unknown": "Не удалось достоверно определить активную печать",
+  "files.delete_reason_active_print": "Нельзя удалить активную, приостановленную или восстанавливаемую печать",
+  "files.delete_reason_state_unknown": "Не удалось достоверно определить состояние принтера",
+  "files.delete_reason_storage_unavailable": "Хранилище недоступно или защищено от записи",
+  "files.delete_reason_unsafe_file": "Файл G-code не найден или путь небезопасен",
+  "files.delete_reason_failed": "Не удалось удалить этот файл"
 }

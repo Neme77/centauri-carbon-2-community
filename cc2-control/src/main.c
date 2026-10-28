@@ -751,34 +751,56 @@ static int gcode_same_job_file(const char *file, const char *job) {
     }
     return 0;
 }
+/* Stable codes are for UI localization; retain English error text for API clients. */
+static void gcode_delete_error(int fd, int status, const char *reason, const char *code) {
+    static const struct { const char *code, *message; } errors[] = {
+        {"file_delete_fresh_status", "Printer must be connected with fresh status"},
+        {"file_delete_busy", "File deletion unavailable during startup, transfer, upgrade or recovery"},
+        {"file_delete_upload_busy", "Finish the current upload before deleting files"},
+        {"file_delete_pending_print", "File is waiting to start printing"},
+        {"file_delete_active_print_unknown", "Cannot identify the active print safely"},
+        {"file_delete_active_print", "Cannot delete the active, paused or recoverable print"},
+        {"file_delete_state_unknown", "Cannot identify the printer state safely"},
+        {"file_delete_storage_unavailable", "Storage unavailable or not writable"},
+        {"file_delete_unsafe_file", "G-code file not found or unsafe"},
+        {"file_delete_failed", "Cannot delete this file"},
+    };
+    const char *message = "Cannot delete this file";
+    for (size_t i = 0; i < sizeof(errors) / sizeof(errors[0]); i++)
+        if (!strcmp(code, errors[i].code)) { message = errors[i].message; break; }
+    char json[384];
+    int n = snprintf(json, sizeof(json), "{\"error\":\"%s\",\"code\":\"%s\"}\n", message, code);
+    respond(fd,status,reason,"application/json",json,(size_t)n);
+}
+
 static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file) {
     time_t now = time(NULL);
     if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status ||
         mqtt->last_message <= 0 || now < mqtt->last_message || now - mqtt->last_message > 15)
-        return "Printer must be connected with fresh status";
+        return "file_delete_fresh_status";
     if (mqtt->machine_status == 0 || mqtt->machine_status == 9 || mqtt->machine_status == 11 ||
         mqtt->machine_status == 15 || mqtt->machine_status == 16)
-        return "File deletion unavailable during startup, transfer, upgrade or recovery";
-    if (atomic_load(&upload_busy)) return "Finish the current upload before deleting files";
+        return "file_delete_busy";
+    if (atomic_load(&upload_busy)) return "file_delete_upload_busy";
     pthread_mutex_lock(&orca_pending_mutex);
     int pending = gcode_same_job_name(file, orca_pending_filename) || gcode_same_job_file(file, orca_pending_filename);
     pthread_mutex_unlock(&orca_pending_mutex);
-    if (pending) return "File is waiting to start printing";
+    if (pending) return "file_delete_pending_print";
     const char *native = uds_print_state(&telemetry);
     int reported_job = mqtt->machine_status == 2 || !strcmp(mqtt->print_state, "printing") ||
                        !strcmp(mqtt->print_state, "paused") || !strcmp(mqtt->print_state, "error");
     int native_job = native && (!strcmp(native, "printing") || !strcmp(native, "paused") || !strcmp(native, "error"));
     if (reported_job || native_job) {
         if (!native_job || !telemetry.have_filename || !telemetry.filename[0])
-            return "Cannot identify the active print safely";
+            return "file_delete_active_print_unknown";
         if (gcode_same_job_name(file, mqtt->filename) || gcode_same_job_name(file, telemetry.filename) ||
             gcode_same_job_file(file, mqtt->filename) || gcode_same_job_file(file, telemetry.filename))
-            return "Cannot delete the active, paused or recoverable print";
+            return "file_delete_active_print";
         return NULL;
     }
     if (mqtt->machine_status == 1 && !native) return NULL; /* retain idle operation without native telemetry */
     if (!native || (strcmp(native, "standby") && strcmp(native, "complete") && strcmp(native, "cancelled")))
-        return "Cannot identify the printer state safely";
+        return "file_delete_state_unknown";
     return NULL;
 }
 
@@ -788,27 +810,22 @@ static void gcode_delete_response(int fd,const char *request,const mqtt_client *
     char storage[16],file[PATH_MAX_LOCAL];const char *root,*media;
     if(!gcode_request_file(body,length,storage,file,NULL,NULL,&root,&media)||
        !gcode_storage_writable(storage,root)){
-        const char *e="{\"error\":\"Storage unavailable or not writable\"}\n";
-        respond(fd,400,"Bad Request","application/json",e,strlen(e));return;
+        gcode_delete_error(fd,400,"Bad Request","file_delete_storage_unavailable");return;
     }
     (void)media;
     char path[PATH_MAX_LOCAL*2];
     if(!gcode_resolved_path(root,file,path,sizeof(path))){
-        const char *e="{\"error\":\"G-code file not found or unsafe\"}\n";
-        respond(fd,404,"Not Found","application/json",e,strlen(e));return;
+        gcode_delete_error(fd,404,"Not Found","file_delete_unsafe_file");return;
     }
     const char *blocked = gcode_delete_guard(mqtt, file);
     if (blocked) {
-        char error[256];
-        int n = snprintf(error, sizeof(error), "{\"error\":\"%s\"}\n", blocked);
-        respond(fd,409,"Conflict","application/json",error,(size_t)n);return;
+        gcode_delete_error(fd,409,"Conflict",blocked);return;
     }
     /* Recheck direct filename and block hard-linked content. */
     struct stat st;
     if(lstat(path,&st)!=0||!S_ISREG(st.st_mode)||st.st_nlink!=1||
        unlink(path)!=0){
-        const char *e="{\"error\":\"Cannot delete this file\"}\n";
-        respond(fd,409,"Conflict","application/json",e,strlen(e));return;
+        gcode_delete_error(fd,409,"Conflict","file_delete_failed");return;
     }
     const char *ok="{\"deleted\":true}\n";
     respond(fd,200,"OK","application/json",ok,strlen(ok));
