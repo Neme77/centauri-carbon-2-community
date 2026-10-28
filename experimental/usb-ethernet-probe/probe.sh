@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+DIR=$(CDPATH='' cd "$(dirname "$0")" && pwd)
 fail() { echo "STOP: $*" >&2; exit 1; }
 case "${1:-check}" in check|probe) ;; *) fail 'Use check or probe';; esac
 [ "$(uname -m)" = armv7l ] || fail 'Not the qualified ARMv7 printer'
@@ -24,7 +24,7 @@ printer=$(wget -T 5 -qO- http://127.0.0.1:8081/api/printer) || fail 'CC2 Control
 printf '%s' "$printer" | grep -q '"connected":true' || fail 'Printer disconnected'
 printf '%s' "$printer" | grep -q '"machine":{"status":1,' || fail 'Printer is not Idle'
 age=$(printf '%s' "$printer" | sed -n 's/.*"last_message_age":\([0-9][0-9]*\).*/\1/p')
-[ -n "$age" ] && [ "$age" -le 15 ] || fail 'Stale printer status'
+if [ -z "$age" ] || [ "$age" -gt 15 ]; then fail 'Stale printer status'; fi
 printf '%s' "$printer" | grep -Eq '"extruder":\{[^}]*"target":0(\.0+)?[,}]' || fail 'Nozzle heating target is not zero'
 printf '%s' "$printer" | grep -Eq '"heater_bed":\{[^}]*"target":0(\.0+)?[,}]' || fail 'Bed heating target is not zero'
 echo 'CHECK PASS: payload, kernel/config, original Wi-Fi, UE300 and fresh Idle state. No module loaded.'
