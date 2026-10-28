@@ -1,0 +1,44 @@
+name: UE300 preliminary ABI probe build
+on:
+  push:
+    branches: [test/usb-ethernet-ue300-probe-r1]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install host build tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential bc flex bison libssl-dev libelf-dev kmod libncurses5
+      - name: Reproduce unmodified source analysis modules
+        shell: bash
+        run: |
+          set -o pipefail
+          bash experimental/usb-ethernet-offline/build-offline.sh "$RUNNER_TEMP/ue300" 2>&1 | tee offline-build.log
+      - name: Build preliminary probe for the observed running kernel release
+        shell: bash
+        run: |
+          export PATH="$RUNNER_TEMP/ue300/toolchain/bin:$PATH"
+          export STAGING_DIR="$RUNNER_TEMP/ue300/toolchain"
+          make -C "$RUNNER_TEMP/ue300/kernel" ARCH=arm CROSS_COMPILE=arm-openwrt-linux-gnueabi- HOSTCFLAGS='-O2 -fcommon' EXTRAVERSION= modules_prepare
+          test "$(make -s -C "$RUNNER_TEMP/ue300/kernel" ARCH=arm CROSS_COMPILE=arm-openwrt-linux-gnueabi- EXTRAVERSION= kernelrelease)" = 5.4.61
+          make -C "$RUNNER_TEMP/ue300/kernel" ARCH=arm CROSS_COMPILE=arm-openwrt-linux-gnueabi- HOSTCFLAGS='-O2 -fcommon' EXTRAVERSION= M="$GITHUB_WORKSPACE/experimental/usb-ethernet-probe" modules
+          mkdir -p probe-report
+          cp experimental/usb-ethernet-probe/cc2_ue300_abi_probe.ko probe-report/
+          cp experimental/usb-ethernet-probe/{probe.c,dependencies.S,Makefile,kernel-dependencies.txt} probe-report/
+          modinfo probe-report/*.ko > probe-report/modinfo.txt
+          arm-openwrt-linux-gnueabi-nm -u probe-report/*.ko > probe-report/undefined.txt
+          arm-openwrt-linux-gnueabi-readelf -h probe-report/*.ko > probe-report/elf.txt
+          arm-openwrt-linux-gnueabi-objdump -dr probe-report/*.ko > probe-report/disassembly.txt
+          sha256sum probe-report/*.ko > probe-report/SHA256SUMS
+          printf '%s\n' 'PRELIMINARY PROBE ONLY; not the Ethernet driver.' 'Source revision differs; EXTRAVERSION= targets printer release 5.4.61.' 'Runtime checks and symbol resolution do not prove full driver ABI compatibility.' > probe-report/QUALIFICATION.txt
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: ue300-preliminary-abi-probe-r1
+          path: |
+            probe-report/
+            offline-build.log
+          if-no-files-found: error
