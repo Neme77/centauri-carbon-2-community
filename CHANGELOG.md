@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Shrink the black centre of the Canvas slot colour rings by thickening the ring (#258, by **Surfoo**).
+
 - Keep desktop page and camera widths unchanged when collapsing the sidebar, centring content in the extra space instead of stretching it, requested by **Neme77** (#255).
 
 - Clarify firmware-managed Input Shaper saving and the explicit Save PID step in all nine languages, following Neme77's calibration and reboot verification (#252).
