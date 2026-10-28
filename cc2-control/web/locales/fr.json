@@ -1124,5 +1124,15 @@
   "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
   "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
   "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
-  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls.",
+  "files.delete_reason_fresh_status": "L’imprimante doit être connectée avec des données récentes",
+  "files.delete_reason_busy": "Suppression indisponible pendant le démarrage, le transfert, la mise à jour ou la récupération",
+  "files.delete_reason_upload_busy": "Terminez le téléversement en cours avant de supprimer des fichiers",
+  "files.delete_reason_pending_print": "Le fichier attend le démarrage de l’impression",
+  "files.delete_reason_active_print_unknown": "Impossible d’identifier avec certitude l’impression active",
+  "files.delete_reason_active_print": "Impossible de supprimer l’impression active, en pause ou récupérable",
+  "files.delete_reason_state_unknown": "Impossible d’identifier avec certitude l’état de l’imprimante",
+  "files.delete_reason_storage_unavailable": "Stockage indisponible ou non accessible en écriture",
+  "files.delete_reason_unsafe_file": "Fichier G-code introuvable ou chemin non sécurisé",
+  "files.delete_reason_failed": "Impossible de supprimer ce fichier"
 }

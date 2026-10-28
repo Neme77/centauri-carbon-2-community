@@ -1124,5 +1124,15 @@
   "feed.selection_hint": "La scelta resta visibile dopo la stampa e viene riapplicata prima del carico. Cambia sorgente solo a testina scarica.",
   "feed.select_confirm": "Cambiare sorgente filamento? Rimuovi prima il filamento dalla testina. Questa scelta non avvia il carico.",
   "feed.enable_confirm": "Modificare i controlli sperimentali della bobina esterna? Prima di disabilitarli torna a Canvas con la testina scarica.",
-  "feed.canvas_paused": "Bobina esterna selezionata. Il Canvas resta collegato; seleziona Canvas per usarne i comandi."
+  "feed.canvas_paused": "Bobina esterna selezionata. Il Canvas resta collegato; seleziona Canvas per usarne i comandi.",
+  "files.delete_reason_fresh_status": "La stampante deve essere connessa con dati aggiornati",
+  "files.delete_reason_busy": "Eliminazione non disponibile durante avvio, trasferimento, aggiornamento o recupero",
+  "files.delete_reason_upload_busy": "Completa il caricamento in corso prima di eliminare i file",
+  "files.delete_reason_pending_print": "Il file è in attesa di avviare la stampa",
+  "files.delete_reason_active_print_unknown": "Impossibile identificare con certezza la stampa attiva",
+  "files.delete_reason_active_print": "Non puoi eliminare la stampa attiva, in pausa o recuperabile",
+  "files.delete_reason_state_unknown": "Impossibile identificare con certezza lo stato della stampante",
+  "files.delete_reason_storage_unavailable": "Memoria non disponibile o non scrivibile",
+  "files.delete_reason_unsafe_file": "File G-code non trovato o percorso non sicuro",
+  "files.delete_reason_failed": "Impossibile eliminare questo file"
 }

@@ -1124,5 +1124,15 @@
   "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
   "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
   "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
-  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls.",
+  "files.delete_reason_fresh_status": "Tiskárna musí být připojena a mít aktuální údaje o stavu",
+  "files.delete_reason_busy": "Mazání není dostupné během spouštění, přenosu, aktualizace nebo obnovy",
+  "files.delete_reason_upload_busy": "Před mazáním souborů dokončete probíhající nahrávání",
+  "files.delete_reason_pending_print": "Soubor čeká na zahájení tisku",
+  "files.delete_reason_active_print_unknown": "Aktivní tisk nelze bezpečně určit",
+  "files.delete_reason_active_print": "Nelze smazat aktivní, pozastavený ani obnovitelný tisk",
+  "files.delete_reason_state_unknown": "Stav tiskárny nelze bezpečně určit",
+  "files.delete_reason_storage_unavailable": "Úložiště není dostupné nebo do něj nelze zapisovat",
+  "files.delete_reason_unsafe_file": "Soubor G-code nebyl nalezen nebo cesta není bezpečná",
+  "files.delete_reason_failed": "Tento soubor nelze smazat"
 }

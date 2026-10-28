@@ -12,7 +12,9 @@ static int run_delete(mqtt_client *mqtt,const char *body,const char *auth){
     char response[600];ssize_t size=recv(pair[1],response,sizeof(response)-1,0);
     expect(size>0,"receive delete response");response[size]=0;
     close(pair[0]);close(pair[1]);
-    return atoi(strchr(response,' ')+1);
+    int status=atoi(strchr(response,' ')+1);
+    if(status>=400){expect(strstr(response,"\"code\":\"file_delete_")!=NULL,"deletion refusal has stable code");expect(strstr(response,"\"error\":\"")!=NULL,"English API error remains available");}
+    return status;
 }
 static int run_upload(mqtt_client *mqtt,const char *name,const char *storage,const char *content,const char *auth){
     int pair[2];expect(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0,"create upload socket");
@@ -94,6 +96,7 @@ static void test_busy_deletion(mqtt_client *mqtt, const char *root) {
     strcpy(telemetry.print_state,"printing"); strcpy(telemetry.filename,"local/cube.gcode");
     mqtt->machine_status=2; strcpy(mqtt->print_state,"printing"); strcpy(mqtt->filename,"cube.gcode");
     expect(run_delete(mqtt,"internal\ncube.gcode","")==409,"active print cannot be deleted");
+    expect(!strcmp(gcode_delete_guard(mqtt,"cube.gcode"),"file_delete_active_print"),"active print code");
     expect(run_delete(mqtt,"internal\nunused.gcode","")==200,"unused file can be deleted while printing");
     expect(gcode_delete_guard(mqtt,"sub/CUBE.GCODE")!=NULL,"basename and FAT case aliases protected");
     strcpy(telemetry.filename,"local/CC2_USB_imported.gcode");

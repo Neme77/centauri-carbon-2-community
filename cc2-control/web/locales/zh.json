@@ -1124,5 +1124,15 @@
   "feed.selection_hint": "The selection stays visible after a print and is reapplied before loading. Change source only with an empty printhead.",
   "feed.select_confirm": "Change the feed source? Remove filament from the printhead first. This selection does not load filament.",
   "feed.enable_confirm": "Change the experimental external-feed controls? Return to Canvas with the printhead empty before disabling them.",
-  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls."
+  "feed.canvas_paused": "External spool selected. Canvas remains connected; select Canvas to use its controls.",
+  "files.delete_reason_fresh_status": "打印机必须已连接且状态数据为最新",
+  "files.delete_reason_busy": "启动、传输、更新或恢复期间无法删除文件",
+  "files.delete_reason_upload_busy": "删除文件前请完成当前上传",
+  "files.delete_reason_pending_print": "文件正在等待开始打印",
+  "files.delete_reason_active_print_unknown": "无法安全确定当前打印任务",
+  "files.delete_reason_active_print": "无法删除正在打印、已暂停或可恢复的任务",
+  "files.delete_reason_state_unknown": "无法安全确定打印机状态",
+  "files.delete_reason_storage_unavailable": "存储不可用或不可写",
+  "files.delete_reason_unsafe_file": "未找到 G-code 文件或路径不安全",
+  "files.delete_reason_failed": "无法删除此文件"
 }

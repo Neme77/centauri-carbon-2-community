@@ -195,6 +195,8 @@ lists at most 128 files: when it holds more, the newest 128 are listed, `truncat
 and `total` counts every G-code file found. The scan examines at most 4096 directory entries
 per storage; beyond that `truncated` is `true` and `total` covers only the entries examined.
 
+Deletion refusals include a stable `code` alongside the existing English `error` for API compatibility. The UI translates the code for single and bulk deletion and uses a localized generic refusal for unknown codes or malformed responses. Codes: `file_delete_fresh_status`, `file_delete_busy`, `file_delete_upload_busy`, `file_delete_pending_print`, `file_delete_active_print_unknown`, `file_delete_active_print`, `file_delete_state_unknown`, `file_delete_storage_unavailable`, `file_delete_unsafe_file`, `file_delete_failed`. HTTP statuses and safety decisions are unchanged.
+
 `POST /api/gcode-files/delete` accepts deletions while the printer is busy if fresh
 MQTT and native print state identify the job safely. The active, paused or errored
 job and pending Orca starts are protected; in-flight uploads also block deletion.

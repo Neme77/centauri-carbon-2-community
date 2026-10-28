@@ -33,11 +33,29 @@ const body = (s: string, p: string) => ({
   body: `${s}\n${p}`,
   cache: 'no-store' as const,
 })
-const failure = (r: Response) =>
+const deletionReasons = {
+  file_delete_fresh_status: 'files.delete_reason_fresh_status',
+  file_delete_busy: 'files.delete_reason_busy',
+  file_delete_upload_busy: 'files.delete_reason_upload_busy',
+  file_delete_pending_print: 'files.delete_reason_pending_print',
+  file_delete_active_print_unknown: 'files.delete_reason_active_print_unknown',
+  file_delete_active_print: 'files.delete_reason_active_print',
+  file_delete_state_unknown: 'files.delete_reason_state_unknown',
+  file_delete_storage_unavailable: 'files.delete_reason_storage_unavailable',
+  file_delete_unsafe_file: 'files.delete_reason_unsafe_file',
+  file_delete_failed: 'files.delete_reason_failed',
+} as const
+const failure = (r: Response, deletion = false) =>
   r
     .json()
-    .then(j => String(j.error || `HTTP ${r.status}`))
-    .catch(() => `HTTP ${r.status}`)
+    .then(j => {
+      if (!deletion) return String(j.error || `HTTP ${r.status}`)
+      const key = Object.keys(deletionReasons).includes(j?.code)
+        ? deletionReasons[j.code as keyof typeof deletionReasons]
+        : null
+      return t(key || 'files.delete_reason_failed')
+    })
+    .catch(() => (deletion ? t('files.delete_reason_failed') : `HTTP ${r.status}`))
 
 export const Files = () => {
   const [space, setSpace] = useState<{ internal: any; usb: any }>({ internal: null, usb: null })
@@ -150,12 +168,17 @@ export const Files = () => {
       return
     try {
       const r = await fetch('/api/gcode-files/delete', body(storage, path))
-      if (!r.ok) throw Error(await failure(r))
+      if (!r.ok) throw Error(await failure(r, true))
       if (sel && key(sel) === key(e)) setSel(null)
       notify(tpl('files.deleted_path_from_where', { path, where: where(storage) }))
       await refresh()
     } catch (err) {
-      notify(tpl('files.delete_failed_error', { error: errText(err) }), 'error')
+      notify(
+        tpl('files.delete_failed_error', {
+          error: err instanceof TypeError ? t('files.delete_reason_failed') : errText(err),
+        }),
+        'error'
+      )
     }
   }
   const bulk = async (kind: 'delete' | 'copy') => {
@@ -177,11 +200,17 @@ export const Files = () => {
           kind === 'delete'
             ? await fetch('/api/gcode-files/delete', body(i.storage, i.path))
             : await fetch('/api/gcode-files/copy', body(i.storage, `${dest}\n${i.path}`))
-        if (!r.ok) throw Error(await failure(r))
+        if (!r.ok) throw Error(await failure(r, kind === 'delete'))
         if (kind === 'delete') toggle(key(i), false)
         done++
       } catch (err) {
-        notify(tpl('files.stopped_after_n_files_error', { n: done, error: errText(err) }), 'error')
+        notify(
+          tpl('files.stopped_after_n_files_error', {
+            n: done,
+            error: kind === 'delete' && err instanceof TypeError ? t('files.delete_reason_failed') : errText(err),
+          }),
+          'error'
+        )
         break
       }
     }
