@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Trial only: keep long calibration soaks heated, by **beanbo** (#256); physical validation pending.
+- Keep long bed-mesh calibration soaks heated by renewing the owned bed target every ten minutes, by **beanbo** (#256); extended soak validated on the printer by **Neme77**.
 
 - Centre collapsed navigation and progressively clip labels, by **Surfoo** (#257); preserve labels in mobile drawers and keep the expand icon visible.
 - Thicken the Canvas colour rings while preserving their outer dimensions, by **Surfoo** (#258).

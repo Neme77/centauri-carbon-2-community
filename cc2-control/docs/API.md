@@ -388,7 +388,7 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   a profile, homes the printer when needed (`G28`), heats the bed (`M140`), waits until telemetry reads the
   temperature, holds it for the soak time (the firmware's own calibration probes as soon as the sensor
   reads the target, while the plate still expands), then sends `BED_MESH_CALIBRATE PROFILE=<slot>
-  BED_TEMP=<t>` through the console. With a plate, the result becomes its measurement as with
+  BED_TEMP=<t>` through the console. While heating and soaking, CC2 Control renews the target every ten minutes only while fresh status confirms that the run still owns the bed; manual target changes still stop the run. With a plate, the result becomes its measurement as with
   `/api/plates/measure`. `GET /api/plates` reports it as `calibration` (`stage` `homing`, `heating`,
   `soaking`, `probing`, `saving` or `off`, the soak seconds `remaining`, the bed temperature `bed`, and
   `result` `done`, `saved`, `failed` or `cancelled` with `error` `homing`, `heating`, `busy`, `telemetry`,
@@ -683,5 +683,3 @@ value; the current-job UI resets its progress when idle. The nonblocking CC2
 notice accepts explicit completion only, deduplicates acknowledgements per
 browser origin and opens normal file preparation for Print again. Dismissing
 this notice does not acknowledge or operate the physical display.
-
-During calibration heating and soaking, the trial repeats the owned bed target every ten minutes (#256, beanbo). This is pending real-printer validation.
