@@ -8,12 +8,21 @@
 #include <linux/usb.h>
 
 extern const unsigned long cc2_ue300_dependencies[];
+static int cc2_probe_usb(struct usb_device *usb, void *data)
+{
+    unsigned int *seen = data;
+    if (le16_to_cpu(usb->descriptor.idVendor) != 0x0bda ||
+        le16_to_cpu(usb->descriptor.idProduct) != 0x8153) return 0;
+    if (le16_to_cpu(usb->descriptor.bcdDevice) != 0x31fd || usb->speed != USB_SPEED_HIGH)
+        return -EINVAL;
+    (*seen)++;
+    return 0;
+}
 static int __init cc2_probe_init(void)
 {
     struct net_device *netdev;
     struct sk_buff *skb;
-    struct usb_device *usb;
-    unsigned int i;
+    unsigned int i, seen = 0;
     int result = -EINVAL;
     BUILD_BUG_ON(sizeof(struct net_device) != 1600);
     BUILD_BUG_ON(sizeof(struct sk_buff) != 192);
@@ -43,17 +52,13 @@ static int __init cc2_probe_init(void)
         pr_err("CC2_UE300_ABI_R1 FAIL sk_buff layout\n");
         goto free_skb;
     }
-    usb = usb_find_device(NULL, 0x0bda, 0x8153);
-    if (!usb) { result = -ENODEV; goto free_skb; }
-    if (le16_to_cpu(usb->descriptor.idVendor) != 0x0bda ||
-        le16_to_cpu(usb->descriptor.idProduct) != 0x8153 ||
-        le16_to_cpu(usb->descriptor.bcdDevice) != 0x31fd || usb->speed != USB_SPEED_HIGH) {
+    if (usb_for_each_dev(&seen, cc2_probe_usb) || seen != 1) {
         pr_err("CC2_UE300_ABI_R1 FAIL usb_device layout/revision\n");
     } else {
         result = 0;
         pr_info("CC2_UE300_ABI_R1 PASS core dependencies, net_device, sk_buff, USB descriptor; no Ethernet registered\n");
     }
-    usb_put_dev(usb);
+
 free_skb:
     kfree_skb(skb);
 free_net:
