@@ -719,6 +719,8 @@ static int gcode_ready_for_upload(const mqtt_client *mqtt){
 /* A sliced job can be named by its basename, a native local/ path, or an
  * imported USB alias. Protect matching basenames on both media (including FAT
  * case aliases) rather than guessing which representation the native UI uses. */
+static atomic_int upload_busy=0;
+static pthread_mutex_t orca_pending_mutex=PTHREAD_MUTEX_INITIALIZER;
 static char orca_pending_filename[PATH_MAX_LOCAL];
 static int gcode_same_job_name(const char *file, const char *job) {
     if (!file || !*file || !job || !*job) return 0;
@@ -733,7 +735,11 @@ static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file)
     if (mqtt->machine_status == 0 || mqtt->machine_status == 9 || mqtt->machine_status == 11 ||
         mqtt->machine_status == 15 || mqtt->machine_status == 16)
         return "File deletion unavailable during startup, transfer, upgrade or recovery";
-    if (gcode_same_job_name(file, orca_pending_filename)) return "File is waiting to start printing";
+    if (atomic_load(&upload_busy)) return "Finish the current upload before deleting files";
+    pthread_mutex_lock(&orca_pending_mutex);
+    int pending = gcode_same_job_name(file, orca_pending_filename);
+    pthread_mutex_unlock(&orca_pending_mutex);
+    if (pending) return "File is waiting to start printing";
     const char *native = uds_print_state(&telemetry);
     int reported_job = mqtt->machine_status == 2 || !strcmp(mqtt->print_state, "printing") ||
                        !strcmp(mqtt->print_state, "paused") || !strcmp(mqtt->print_state, "error");
@@ -912,12 +918,10 @@ static void upload_discard(gcode_upload_job *job,size_t received,unsigned char *
 /* One upload at a time. The connection thread takes the slot and the upload
  * worker releases it, so this is an atomic flag: a mutex must be unlocked by
  * the thread that locked it. */
-static atomic_int upload_busy=0;
 static int upload_slot_acquire(void){int expected=0;return atomic_compare_exchange_strong(&upload_busy,&expected,1);}
 static void upload_slot_release(void){atomic_store(&upload_busy,0);}
 /* One print request may await the operator's Canvas mapping. Never print from
  * the upload worker: the existing protected print route remains authoritative. */
-static pthread_mutex_t orca_pending_mutex=PTHREAD_MUTEX_INITIALIZER;
 static unsigned long orca_pending_generation=0;
 static time_t orca_pending_created=0;
 

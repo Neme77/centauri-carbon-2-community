@@ -123,6 +123,9 @@ static void test_busy_deletion(mqtt_client *mqtt, const char *root) {
     mqtt->machine_status=1; strcpy(orca_pending_filename,"cube.gcode");
     expect(gcode_delete_guard(mqtt,"cube.gcode")!=NULL,"pending Orca start protected");
     orca_pending_filename[0]=0;
+    atomic_store(&upload_busy,1);
+    expect(gcode_delete_guard(mqtt,"other.gcode")!=NULL,"in-flight upload blocks deletion before pending job publication");
+    atomic_store(&upload_busy,0);
     snprintf(path,sizeof(path),"%s/cube.gcode",root); snprintf(alias,sizeof(alias),"%s/alias.gcode",root);
     expect(link(path,alias)==0,"prepare hard-link alias");
     expect(run_delete(mqtt,"internal\nalias.gcode","")==409,"hard-link restrictions remain"); unlink(alias);
