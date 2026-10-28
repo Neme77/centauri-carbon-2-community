@@ -102,12 +102,14 @@ static int (*plates_uds)(const char *query, char **reply, size_t *length) = uds_
 /* A bed mesh calibration run by CC2 Control, see plates_calibration_tick. */
 enum { CAL_IDLE, CAL_HOMING, CAL_HEATING, CAL_SOAKING, CAL_PROBING, CAL_SAVING };
 #define PLATE_SOAK_MAX 60 /* minutes */
+#define PLATE_BED_RENEW_MS (10 * 60000) /* see plates_cal_keep_bed */
 static struct {
     int stage, temp, soak; /* soak in seconds */
     char side;
     char plate[PLATE_ID_LEN + 1], nozzle[PLATE_ID_LEN + 1], measure[PLATE_ID_LEN + 1];
     long long since, soak_until, done_at; /* stage start, end of the soak, when the console command finished */
     long long held; /* since when the end of the soak waits for fresh evidence */
+    long long renew_at; /* when the job next repeats its bed target */
     unsigned long generation; /* the console command the stage waits for */
     const char *result; /* "", "done" (no plate), "saved", "failed" or "cancelled" */
     const char *error;  /* what failed: "homing", "heating", "busy", "telemetry", "probing" or "saving" */
@@ -1873,12 +1875,19 @@ static int plates_cal_command(console_state *console, int stage, const char *com
     plates_cal.generation = console->generation;
     pthread_mutex_unlock(&console->lock);
     plates_cal.stage = stage; plates_cal.since = monotonic_ms(); plates_cal.done_at = 0;
+    if (stage == CAL_HEATING) plates_cal.renew_at = plates_cal.since + PLATE_BED_RENEW_MS; /* the job's M140 */
     return 0;
 }
 
-/* Tests count the heater switch-offs instead. */
+/* Tests count the heater switch-offs and the repeated targets instead. */
 static int plates_send_bed_off(void) { return send_local_gcode_script("M140 S0"); }
 static int (*plates_bed_off)(void) = plates_send_bed_off;
+static int plates_send_bed_target(int temp) {
+    char command[32];
+    snprintf(command, sizeof(command), "M140 S%d", temp);
+    return send_local_gcode_script(command);
+}
+static int (*plates_bed_target)(int temp) = plates_send_bed_target;
 
 /* The bed heater is the job's to switch off only while fresh MQTT reports Idle and fresh
  * telemetry shows the target the job set. A print started meanwhile by another client, a
@@ -1888,6 +1897,16 @@ static int plates_cal_owns_bed(const mqtt_client *mqtt) {
     return mqtt->connected && mqtt->registered && mqtt->have_machine_status && mqtt->machine_status == 1 &&
            mqtt->last_message > 0 && now >= mqtt->last_message && now - mqtt->last_message <= 15 &&
            uds_value(&telemetry, U_BG, &target) && fabs(target - plates_cal.temp) <= 0.5;
+}
+
+/* The firmware switches an idle printer's bed off 15 minutes after its last command: its
+ * idle_timeout turns the nozzle off after 300 s and the bed 600 s later ("heated bed protection"
+ * in elegoo.log), and an M140 starts that count again. While the job heats and soaks it repeats
+ * its target every ten minutes, so the bed stays on and the nozzle still times out; a send that
+ * fails is retried after 30 s. Only a bed the job owns gets its target again. */
+static void plates_cal_keep_bed(const mqtt_client *mqtt, long long now) {
+    if (now < plates_cal.renew_at || !plates_cal_owns_bed(mqtt)) return;
+    plates_cal.renew_at = now + (plates_bed_target(plates_cal.temp) == 0 ? PLATE_BED_RENEW_MS : 30000);
 }
 
 /* With `bed_off`, a job that ends early switches the bed heater off when it still owns it. */
@@ -1997,6 +2016,7 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
             plates_cal.soak_until = now + (long long)plates_cal.soak * 1000;
             return;
         }
+        plates_cal_keep_bed(mqtt, now);
         if (now - plates_cal.since > 30 * 60000) plates_cal_end(mqtt, "failed", "heating", "The bed did not reach the temperature", 1);
         return;
     case CAL_SOAKING:
@@ -2004,6 +2024,7 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
         if (have_bed && fabs(target - plates_cal.temp) > 0.5) {
             plates_cal_end(mqtt, "failed", "heating", "The bed heater was changed", 0); return;
         }
+        if (!busy) plates_cal_keep_bed(mqtt, now);
         if (now < plates_cal.soak_until || busy) return; /* a command typed meanwhile finishes first */
         {
             /* Waits up to a minute for fresh evidence, then stops; the bed is switched off only when
