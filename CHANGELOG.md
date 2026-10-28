@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- A bed mesh calibration whose heat-up and soak together took more than about 15 minutes stopped with "The bed did not hold the temperature" before probing: the firmware switches an idle printer's bed off 15 minutes after the last command. CC2 Control now sends the bed target again every ten minutes while it heats and soaks, by **beanbo**.
+
 - Keep desktop page and camera widths unchanged when collapsing the sidebar, centring content in the extra space instead of stretching it, requested by **Neme77** (#255).
 
 - Clarify firmware-managed Input Shaper saving and the explicit Save PID step in all nine languages, following Neme77's calibration and reboot verification (#252).

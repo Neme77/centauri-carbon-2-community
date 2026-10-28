@@ -381,7 +381,9 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   a profile, homes the printer when needed (`G28`), heats the bed (`M140`), waits until telemetry reads the
   temperature, holds it for the soak time (the firmware's own calibration probes as soon as the sensor
   reads the target, while the plate still expands), then sends `BED_MESH_CALIBRATE PROFILE=<slot>
-  BED_TEMP=<t>` through the console. With a plate, the result becomes its measurement as with
+  BED_TEMP=<t>` through the console. The firmware switches an idle printer's bed off 15 minutes after the
+  last command, so while it heats and soaks the run sends `M140` again every ten minutes, and only while
+  the bed still holds the target the run set. With a plate, the result becomes its measurement as with
   `/api/plates/measure`. `GET /api/plates` reports it as `calibration` (`stage` `homing`, `heating`,
   `soaking`, `probing`, `saving` or `off`, the soak seconds `remaining`, the bed temperature `bed`, and
   `result` `done`, `saved`, `failed` or `cancelled` with `error` `homing`, `heating`, `busy`, `telemetry`,
