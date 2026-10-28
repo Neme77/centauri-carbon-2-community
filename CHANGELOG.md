@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Delete unused G-code files while printing or busy, with active/paused/recoverable job and pending Orca-start protection, requested by **Neme77**.
+- Delete unused G-code files while printing or busy, with active/paused/recoverable job and pending Orca-start protection, requested by **Neme77** (#259).
 
 - Optional Obsidian theme with graphite panels, a purple action accent and cyan telemetry, designed with **Neme77** (#255).
 
