@@ -11,7 +11,7 @@
 .cc2-canvas-slot .cc2-canvas-choose { position:relative; z-index:2; pointer-events:auto; }
 .cc2-canvas-slot .cc2-canvas-slot-pick:focus-visible { outline-offset:3px; }
 .cc2-canvas-slot .cc2-canvas-slot-pick:disabled { cursor:default; }
-.cc2-canvas-ring { width:76px; max-width:100%; height:auto; aspect-ratio:1; border:15px solid; border-radius:50%; background:var(--bg); margin:0 auto 12px; flex-shrink:0; }
+.cc2-canvas-ring { width:76px; max-width:100%; height:auto; aspect-ratio:1; border:21px solid; border-radius:50%; background:var(--bg); margin:0 auto 12px; flex-shrink:0; }
 .cc2-canvas-slot-data { display:grid; gap:4px; font-size:12px; }
 .cc2-canvas-spool-name { min-height:1.45em; overflow-wrap:anywhere; font-weight:600; margin-bottom:6px; }
 .cc2-canvas-choose { width:100%; margin:10px 0; }
