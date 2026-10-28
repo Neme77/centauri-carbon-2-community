@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Center the icons of the collapsed sidebar (62 px instead of 74 px) and clip its labels progressively while it collapses instead of hiding them at once (#257, by **Surfoo**).
+
 - Keep desktop page and camera widths unchanged when collapsing the sidebar, centring content in the extra space instead of stretching it, requested by **Neme77** (#255).
 
 - Clarify firmware-managed Input Shaper saving and the explicit Save PID step in all nine languages, following Neme77's calibration and reboot verification (#252).
