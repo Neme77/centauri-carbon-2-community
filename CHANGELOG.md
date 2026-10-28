@@ -8,9 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Optional Obsidian theme with graphite panels, a purple action accent and cyan telemetry, designed with **Neme77**.
+
 - Hungarian companion to the external-feed experiment guide, by **pezso92** (#249).
 
 ### Fixed
+
+- Keep desktop page and camera widths unchanged when collapsing the sidebar, centring content in the extra space instead of stretching it, requested by **Neme77**.
 
 - Clarify firmware-managed Input Shaper saving and the explicit Save PID step in all nine languages, following Neme77's calibration and reboot verification (#252).
 

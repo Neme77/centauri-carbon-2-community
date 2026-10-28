@@ -1,0 +1,57 @@
+name: Prepare Obsidian source snapshot
+on:
+  push:
+    branches: [feat/obsidian-centred-pages]
+concurrency:
+  group: prepare-obsidian
+  cancel-in-progress: false
+permissions:
+  contents: write
+  pull-requests: read
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - run: npm ci && npm run check && npm run build
+        working-directory: cc2-control/web-src
+      - name: Update changelog and remove temporary preparation workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('CHANGELOG.md')
+          s=p.read_text()
+          import json,subprocess,time
+          for attempt in range(12):
+              prs=json.loads(subprocess.check_output(['gh','pr','list','--head','feat/obsidian-centred-pages','--json','number']))
+              if prs: break
+              time.sleep(5)
+          assert prs, 'Expected review PR before source snapshot'
+          number=prs[0]['number']
+          s=s.replace('designed with **Neme77**.',f'designed with **Neme77** (#{number}).')
+          s=s.replace('requested by **Neme77**.',f'requested by **Neme77** (#{number}).')
+          p.write_text(s)
+          Path('.github/workflows/prepare-obsidian.yml').unlink()
+          PY
+          git add CHANGELOG.md cc2-control/web .github/workflows/prepare-obsidian.yml
+          git commit -m "Build Obsidian UI and complete release notes"
+      - name: Regenerate final builder snapshot
+        run: |
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git commit -m "Refresh builder source snapshot for Obsidian and centred pages"
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
+          git push origin HEAD:feat/obsidian-centred-pages
