@@ -128,6 +128,9 @@ static void test_busy_deletion(mqtt_client *mqtt, const char *root) {
     atomic_store(&upload_busy,0);
     snprintf(path,sizeof(path),"%s/cube.gcode",root); snprintf(alias,sizeof(alias),"%s/alias.gcode",root);
     expect(link(path,alias)==0,"prepare hard-link alias");
+    mqtt->machine_status=2; strcpy(mqtt->print_state,"printing"); strcpy(telemetry.print_state,"printing");
+    expect(gcode_delete_guard(mqtt,"alias.gcode")!=NULL,"file identity protects an active job under a different spelling");
+    mqtt->machine_status=1; mqtt->print_state[0]=0; strcpy(telemetry.print_state,"standby");
     expect(run_delete(mqtt,"internal\nalias.gcode","")==409,"hard-link restrictions remain"); unlink(alias);
     expect(symlink(path,alias)==0,"prepare symlink alias");
     expect(run_delete(mqtt,"internal\nalias.gcode","")==404,"symlink restrictions remain"); unlink(alias);
