@@ -260,18 +260,6 @@
 +    console.log(`PASS: ${language} single/bulk deletion codes, unknown/missing codes, malformed reply, unchanged files`)
 +  }
 +} finally { await browser?.close(); await server.close() }
---- a/.github/workflows/ci.yml
-+++ b/.github/workflows/ci.yml
-@@ -128,6 +128,9 @@
- 
-       - name: New-spool insertion copy and scale-weight regression
-         run: npm run test:spool-insertion && npm run test:spool-history
-+
-+      - name: Localized single and bulk file-deletion refusals
-+        run: node preview/test-file-delete-errors.mjs
- 
-       - name: Complete file library and large upload admission
-         run: npm run test:file-library
 --- a/cc2-control/docs/API.md
 +++ b/cc2-control/docs/API.md
 @@ -194,6 +194,8 @@
