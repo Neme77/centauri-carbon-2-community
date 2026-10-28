@@ -271,11 +271,11 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   }
 }
 
-/* Collapsing 208 px navigation to 74 px frees 134 px: split that space
+/* Collapsing 208 px navigation to 62 px frees 146 px: split that space
    equally around the page instead of resizing its cards and camera. */
 @media (min-width: 901px) and (min-height: 501px), (min-width: 768px) and (min-height: 501px) and (orientation: landscape) {
   .cc2-main { --cc2-page-padding: 1rem; }
-  .cc2-main-collapsed { padding-inline: calc(var(--cc2-page-padding) + 4.1875rem); }
+  .cc2-main-collapsed { padding-inline: calc(var(--cc2-page-padding) + 4.5625rem); }
 }
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
   .cc2-main { --cc2-page-padding: 12px; }

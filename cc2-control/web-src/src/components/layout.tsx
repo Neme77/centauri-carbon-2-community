@@ -196,7 +196,7 @@ export const Sidebar = () => {
         class={cn(
           'cc2-sidebar',
           open && 'cc2-sidebar-open',
-          'fixed bottom-0 left-0 top-17 z-20 flex w-18.5 flex-col border-r border-edge bg-panel transition-[width]',
+          'fixed bottom-0 left-0 top-17 z-20 flex w-15.5 flex-col border-r border-edge bg-panel transition-[width]',
           !collapsed && 'md:w-52'
         )}
       >
@@ -228,7 +228,12 @@ export const Sidebar = () => {
                       aria-hidden="true"
                     />
                   )}
-                  <span class={cn('hidden whitespace-nowrap', !collapsed && 'md:inline')}>{t(label)}</span>
+                  {/* Always rendered: the sidebar width transition clips it progressively; invisible only starts once collapsed. */}
+                  <span
+                    class={cn('hidden whitespace-nowrap transition-[visibility] md:inline', collapsed && 'invisible')}
+                  >
+                    {t(label)}
+                  </span>
                 </a>
               )
             })}
@@ -239,15 +244,17 @@ export const Sidebar = () => {
             onClick={toggleMenu}
             aria-expanded={!collapsed}
             title={t(collapsed ? 'app.expand_menu' : 'app.collapse_menu')}
-            class={cn('flex h-11 w-full items-center gap-3.5 pl-[19px] text-muted hover:bg-field hover:text-fg')}
+            class="flex h-11 w-full items-center gap-3.5 overflow-hidden pl-[19px] text-muted hover:bg-field hover:text-fg"
           >
             {collapsed ? <PanelLeftOpen size={22} strokeWidth={1} /> : <PanelLeftClose size={22} strokeWidth={1} />}
-            {!collapsed && <span class="whitespace-nowrap">{t('app.collapse_menu')}</span>}
+            <span class={cn('whitespace-nowrap transition-[visibility]', collapsed && 'invisible')}>
+              {t('app.collapse_menu')}
+            </span>
           </button>
           {/* Always rendered so the button above keeps the same y when the menu collapses. */}
           <div
             class={cn(
-              'h-7 overflow-hidden whitespace-nowrap px-5 pb-3 text-center text-xs text-muted',
+              'h-7 overflow-hidden whitespace-nowrap px-5 pb-3 text-center text-xs text-muted transition-[visibility]',
               collapsed && 'invisible'
             )}
           >
