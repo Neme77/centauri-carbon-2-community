@@ -1,0 +1,59 @@
+name: Prepare localized file-deletion fix
+on:
+  push:
+    branches: [fix/localize-file-delete-261]
+permissions:
+  contents: write
+  pull-requests: read
+concurrency:
+  group: prepare-file-delete-261
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - name: Apply reviewed source patch
+        run: git apply --check issue261.patch && git apply issue261.patch
+      - name: Verify unchanged deletion protection and error codes
+        working-directory: cc2-control
+        run: |
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_file_ops.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-file-ops -lm
+          /tmp/test-file-ops
+      - name: Check and build interface
+        working-directory: cc2-control/web-src
+        run: npm ci && npm run check && npm run build
+      - name: Record PR credit, remove preparation files and refresh source snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,subprocess,time
+          for attempt in range(24):
+              prs=json.loads(subprocess.check_output(['gh','pr','list','--head','fix/localize-file-delete-261','--json','number']))
+              if prs: break
+              time.sleep(5)
+          assert prs
+          p=Path('CHANGELOG.md');s=p.read_text().replace('PR_NUMBER','#%d'%prs[0]['number']);p.write_text(s)
+          Path('issue261.patch').unlink()
+          Path('.github/workflows/prepare-delete-localization.yml').unlink()
+          PY
+          git add CHANGELOG.md cc2-control .github/workflows/ci.yml .github/workflows/prepare-delete-localization.yml issue261.patch
+          git commit -m "Localize guarded file-deletion refusals (#261)"
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git commit -m "Refresh builder source snapshot for localized deletion errors"
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
+          git push origin HEAD:fix/localize-file-delete-261
