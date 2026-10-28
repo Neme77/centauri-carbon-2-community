@@ -756,6 +756,9 @@ static void set_slot_a(const plate_mesh *m) {
 /* Heater switch-offs the job sends. */
 static int beds_off;
 static int fake_bed_off(void) { beds_off++; return 0; }
+/* Bed targets the job repeats while it heats and soaks. */
+static int bed_targets, bed_target_temp, bed_target_ok = 1;
+static int fake_bed_target(int temp) { bed_targets++; bed_target_temp = temp; return bed_target_ok ? 0 : -1; }
 static void cancel_calibration(const mqtt_client *mqtt) {
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     plates_calibrate_cancel_response(pair[0], mqtt); close(pair[0]); close(pair[1]);
@@ -772,7 +775,7 @@ static void test_calibration_job(void) {
     write_autosave(&at60, &b); memory_a = at60; memory_b = b;
     unlink(plates_path); new_process(); fresh(&mqtt);
     pthread_mutex_init(&console.lock, NULL);
-    plates_console = fake_console; plates_bed_off = fake_bed_off;
+    plates_console = fake_console; plates_bed_off = fake_bed_off; plates_bed_target = fake_bed_target;
     assert(call(SAVE, &mqtt, "A\nCarbon\n0.05\n60") == 201);
     char plate[17], first[17], body[128];
     snprintf(plate, sizeof(plate), "%s", plates.plates[0].id); snprintf(first, sizeof(first), "%s", plates.plates[0].measure);
@@ -872,6 +875,34 @@ static void test_calibration_job(void) {
     assert(calibrate(&mqtt, "A\n80\n5") == 202); plates_calibration_tick(&mqtt, &console);
     assert(!strcmp(plates_cal.result, "failed") && !strcmp(plates_cal.error, "homing"));
     console_ok = 1; telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+
+    /* The firmware switches an idle printer's bed off 15 minutes after its last command, so a long
+     * heat-up or soak gets the target again every ten minutes, and only while the job owns the bed. */
+    fresh(&mqtt); snprintf(mqtt.homed_axes, sizeof(mqtt.homed_axes), "%s", "xyz"); bed(40, 70);
+    console_log[0] = 0; bed_targets = 0;
+    assert(calibrate(&mqtt, "A\n70\n30") == 202 && plates_cal.stage == CAL_HEATING && !strcmp(console_log, "M140 S70"));
+    assert(plates_cal.renew_at == plates_cal.since + PLATE_BED_RENEW_MS);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_HEATING && !bed_targets);
+    plates_cal.renew_at = monotonic_ms() - 1; plates_calibration_tick(&mqtt, &console);
+    assert(plates_cal.stage == CAL_HEATING && bed_targets == 1 && bed_target_temp == 70);
+    assert(plates_cal.renew_at > monotonic_ms() + PLATE_BED_RENEW_MS - 5000);
+    plates_calibration_tick(&mqtt, &console); assert(bed_targets == 1); /* once per period */
+    bed(69.5, 70); plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SOAKING);
+    plates_cal.renew_at = monotonic_ms() - 1; plates_calibration_tick(&mqtt, &console);
+    assert(plates_cal.stage == CAL_SOAKING && bed_targets == 2);
+    /* A send that fails is retried 30 s later, not on every tick. */
+    bed_target_ok = 0; plates_cal.renew_at = monotonic_ms() - 1; plates_calibration_tick(&mqtt, &console);
+    assert(bed_targets == 3 && plates_cal.renew_at > monotonic_ms() && plates_cal.renew_at <= monotonic_ms() + 30000);
+    plates_calibration_tick(&mqtt, &console); assert(bed_targets == 3);
+    bed_target_ok = 1;
+    /* Stale MQTT, a command typed in the console or a target set elsewhere gets no repeat. */
+    plates_cal.renew_at = monotonic_ms() - 1; mqtt.last_message -= 20; plates_calibration_tick(&mqtt, &console);
+    assert(plates_cal.stage == CAL_SOAKING && bed_targets == 3);
+    fresh(&mqtt); console.busy = 1; plates_calibration_tick(&mqtt, &console); assert(bed_targets == 3);
+    console.busy = 0; plates_calibration_tick(&mqtt, &console); assert(bed_targets == 4);
+    plates_cal.renew_at = monotonic_ms() - 1; bed(69.5, 60); plates_calibration_tick(&mqtt, &console);
+    assert(!plates_cal.stage && !strcmp(plates_cal.error, "heating") && bed_targets == 4 && !strstr(console_log, "BED_MESH"));
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
 
     /* What a measurement records can be corrected, e.g. the nozzle of one made before nozzles were listed. */
     snprintf(body, sizeof(body), "%s\n70\n%s", first, nozzle);
