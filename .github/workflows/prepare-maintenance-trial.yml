@@ -1,0 +1,109 @@
+name: Prepare UI polish and cumulative calibration trial
+on:
+  push:
+    branches: [fix/sidebar-canvas-file-delete]
+permissions:
+  contents: write
+  pull-requests: read
+concurrency:
+  group: prepare-ui-polish-trial
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: cc2-control/web-src/package-lock.json
+      - name: Compile and exercise guarded deletion
+        working-directory: cc2-control
+        run: |
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_file_ops.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-file-ops -lm
+          /tmp/test-file-ops
+      - run: npm ci && npm run check && npm run build
+        working-directory: cc2-control/web-src
+      - name: Finish changelog and remove temporary preparation workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,subprocess,time
+          for attempt in range(12):
+              prs=json.loads(subprocess.check_output(['gh','pr','list','--head','fix/sidebar-canvas-file-delete','--json','number']))
+              if prs: break
+              time.sleep(5)
+          assert prs
+          p=Path('CHANGELOG.md');s=p.read_text().replace('requested by **Neme77**.','requested by **Neme77** (#%d).'%prs[0]['number']);p.write_text(s)
+          Path('.github/workflows/prepare-maintenance-trial.yml').unlink()
+          PY
+          git add CHANGELOG.md cc2-control/web .github/workflows/prepare-maintenance-trial.yml
+          git commit -m "Rebuild UI polish and finish guarded-deletion changelog"
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git commit -m "Refresh builder source snapshot for sidebar, Canvas and file deletion"
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
+          git push origin HEAD:fix/sidebar-canvas-file-delete
+  trial:
+    needs: prepare
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: fix/sidebar-canvas-file-delete
+      - name: Integrate beanbo calibration change only into the trial branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin pull/256/head
+          test "$(git rev-parse FETCH_HEAD)" = 1858504e71620fc9b9f684eef6006a35c50430e4
+          git switch -c test/cumulative-pr256-259
+          git merge -s ours --no-commit FETCH_HEAD
+          git show 1858504e71620fc9b9f684eef6006a35c50430e4:cc2-control/src/plates.h > cc2-control/src/plates.h
+          git show 1858504e71620fc9b9f684eef6006a35c50430e4:cc2-control/tests/test_plates.c > cc2-control/tests/test_plates.c
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('CHANGELOG.md');s=p.read_text().replace('### Fixed\n','### Fixed\n\n- Trial only: keep long calibration soaks heated, by **beanbo** (#256); physical validation pending.\n',1);p.write_text(s)
+          p=Path('cc2-control/docs/API.md');s=p.read_text()+'\nDuring calibration heating and soaking, the trial repeats the owned bed target every ten minutes (#256, beanbo). This is pending real-printer validation.\n';p.write_text(s)
+          PY
+          git add cc2-control/src/plates.h cc2-control/tests/test_plates.c cc2-control/docs/API.md CHANGELOG.md
+          git commit -m "Add beanbo long calibration soak fix to cumulative trial (#256)"
+          python3 experimental/pr128-integration/sync_source.py
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git commit -m "Refresh cumulative calibration trial source snapshot"
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
+          git push origin HEAD:test/cumulative-pr256-259
+          git rev-parse HEAD > trial-head.txt
+      - name: Install ARM toolchain and emulator
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user
+      - name: Verify file deletion and long calibration ownership
+        working-directory: cc2-control
+        run: |
+          for NAME in file_ops plates; do
+            gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_${NAME}.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o /tmp/test-${NAME} -lm
+            /tmp/test-${NAME}
+          done
+      - name: Build ARM application and package cumulative app-only trial
+        working-directory: cc2-control
+        run: |
+          make all EXTRA_CFLAGS=-Werror
+          CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
+          python3 installer/package.py --application-only-trial --prepared dist/cc2-control
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cc2-control-pr256-259-trial
+          path: |
+            cc2-control/output/CC2-Control-*-Multiplatform-Update.zip*
+            trial-head.txt
+          if-no-files-found: error

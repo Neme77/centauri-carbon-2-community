@@ -85,6 +85,53 @@ static void test_large_upload_admission(mqtt_client *mqtt){
     for(int i=0;i<100 && atomic_load(&upload_busy);i++)nanosleep(&pause,NULL);
     expect(!atomic_load(&upload_busy),"large upload releases worker slot");
 }
+static void test_busy_deletion(mqtt_client *mqtt, const char *root) {
+    char path[1024], alias[1024];
+    expect(run_upload(mqtt,"unused.gcode","internal","G1 X1\n","")==201,"prepare unused file");
+    uds_init(&telemetry); telemetry.fd=1; telemetry.ready=1;
+    clock_gettime(CLOCK_MONOTONIC,&telemetry.last_rx);
+    telemetry.have_print_state=telemetry.have_filename=1;
+    strcpy(telemetry.print_state,"printing"); strcpy(telemetry.filename,"local/cube.gcode");
+    mqtt->machine_status=2; strcpy(mqtt->print_state,"printing"); strcpy(mqtt->filename,"cube.gcode");
+    expect(run_delete(mqtt,"internal\ncube.gcode","")==409,"active print cannot be deleted");
+    expect(run_delete(mqtt,"internal\nunused.gcode","")==200,"unused file can be deleted while printing");
+    expect(gcode_delete_guard(mqtt,"sub/CUBE.GCODE")!=NULL,"basename and FAT case aliases protected");
+    strcpy(telemetry.filename,"local/CC2_USB_imported.gcode");
+    expect(gcode_delete_guard(mqtt,"cube.gcode")!=NULL,"MQTT source protected beside native USB import");
+    expect(gcode_delete_guard(mqtt,"CC2_USB_imported.gcode")!=NULL,"native USB import protected");
+    strcpy(telemetry.filename,"local/cube.gcode");
+    strcpy(telemetry.print_state,"paused"); strcpy(mqtt->print_state,"paused");
+    expect(gcode_delete_guard(mqtt,"cube.gcode")!=NULL,"paused job protected");
+    expect(gcode_delete_guard(mqtt,"other.gcode")==NULL,"unused file allowed while paused");
+    mqtt->machine_status=1; strcpy(telemetry.print_state,"error"); strcpy(mqtt->print_state,"error");
+    expect(gcode_delete_guard(mqtt,"cube.gcode")!=NULL,"errored recoverable job protected");
+    mqtt->machine_status=2; strcpy(telemetry.print_state,"printing"); strcpy(mqtt->print_state,"printing");
+    telemetry.last_rx.tv_sec-=10;
+    expect(gcode_delete_guard(mqtt,"other.gcode")!=NULL,"stale native status blocks busy deletion");
+    clock_gettime(CLOCK_MONOTONIC,&telemetry.last_rx); telemetry.filename[0]=0;
+    expect(gcode_delete_guard(mqtt,"other.gcode")!=NULL,"missing native filename blocks busy deletion");
+    strcpy(telemetry.filename,"local/cube.gcode"); mqtt->last_message=time(NULL)-60;
+    expect(gcode_delete_guard(mqtt,"other.gcode")!=NULL,"stale MQTT blocks deletion");
+    mqtt->last_message=time(NULL)+60;
+    expect(gcode_delete_guard(mqtt,"other.gcode")!=NULL,"future MQTT timestamp blocks deletion");
+    mqtt->last_message=time(NULL); strcpy(telemetry.print_state,"standby");
+    expect(gcode_delete_guard(mqtt,"other.gcode")!=NULL,"conflicting job states block deletion");
+    mqtt->print_state[0]=0; mqtt->machine_status=10;
+    expect(gcode_delete_guard(mqtt,"other.gcode")==NULL,"unused files allowed during homing with fresh native standby");
+    mqtt->machine_status=15;
+    expect(gcode_delete_guard(mqtt,"other.gcode")!=NULL,"power-loss recovery is guarded");
+    mqtt->machine_status=1; strcpy(orca_pending_filename,"cube.gcode");
+    expect(gcode_delete_guard(mqtt,"cube.gcode")!=NULL,"pending Orca start protected");
+    orca_pending_filename[0]=0;
+    snprintf(path,sizeof(path),"%s/cube.gcode",root); snprintf(alias,sizeof(alias),"%s/alias.gcode",root);
+    expect(link(path,alias)==0,"prepare hard-link alias");
+    expect(run_delete(mqtt,"internal\nalias.gcode","")==409,"hard-link restrictions remain"); unlink(alias);
+    expect(symlink(path,alias)==0,"prepare symlink alias");
+    expect(run_delete(mqtt,"internal\nalias.gcode","")==404,"symlink restrictions remain"); unlink(alias);
+    expect(access(path,F_OK)==0,"active file remains intact");
+    telemetry.fd=-1; telemetry.ready=0; mqtt->filename[0]=mqtt->print_state[0]=0;
+}
+
 int main(void){
     char root[]="/tmp/cc2-file-manager-test-XXXXXX";expect(mkdtemp(root)!=NULL,"create test directory");
     gcode_internal_root=root;gcode_usb_root="/tmp/cc2-usb-not-mounted";
@@ -114,6 +161,7 @@ int main(void){
     mqtt.connected=1;mqtt.machine_status=10;
     expect(run_upload(&mqtt,"active.gcode","internal","test","test-code")==409,"reject other active states");
     mqtt.machine_status=1;
+    test_busy_deletion(&mqtt,root);
     expect(run_delete(&mqtt,"internal\nno-code.gcode","")==200,"delete without access code");
     expect(run_delete(&mqtt,"internal\nbarca 1.gcode","")==200,"delete filename with spaces");
     expect(run_delete(&mqtt,"internal\n../cube.gcode","test-code")==404,"reject path traversal delete");

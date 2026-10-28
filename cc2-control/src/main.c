@@ -716,13 +716,44 @@ static int gcode_ready_for_upload(const mqtt_client *mqtt){
         mqtt->last_message>0 && time(NULL)-mqtt->last_message<=15;
 }
 
+/* A sliced job can be named by its basename, a native local/ path, or an
+ * imported USB alias. Protect matching basenames on both media (including FAT
+ * case aliases) rather than guessing which representation the native UI uses. */
+static char orca_pending_filename[PATH_MAX_LOCAL];
+static int gcode_same_job_name(const char *file, const char *job) {
+    if (!file || !*file || !job || !*job) return 0;
+    const char *a = strrchr(file, '/'), *b = strrchr(job, '/');
+    return !strcasecmp(a ? a + 1 : file, b ? b + 1 : job);
+}
+static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file) {
+    time_t now = time(NULL);
+    if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status ||
+        mqtt->last_message <= 0 || now < mqtt->last_message || now - mqtt->last_message > 15)
+        return "Printer must be connected with fresh status";
+    if (mqtt->machine_status == 0 || mqtt->machine_status == 9 || mqtt->machine_status == 11 ||
+        mqtt->machine_status == 15 || mqtt->machine_status == 16)
+        return "File deletion unavailable during startup, transfer, upgrade or recovery";
+    if (gcode_same_job_name(file, orca_pending_filename)) return "File is waiting to start printing";
+    const char *native = uds_print_state(&telemetry);
+    int reported_job = mqtt->machine_status == 2 || !strcmp(mqtt->print_state, "printing") ||
+                       !strcmp(mqtt->print_state, "paused") || !strcmp(mqtt->print_state, "error");
+    int native_job = native && (!strcmp(native, "printing") || !strcmp(native, "paused") || !strcmp(native, "error"));
+    if (reported_job || native_job) {
+        if (!native_job || !telemetry.have_filename || !telemetry.filename[0])
+            return "Cannot identify the active print safely";
+        if (gcode_same_job_name(file, mqtt->filename) || gcode_same_job_name(file, telemetry.filename))
+            return "Cannot delete the active, paused or recoverable print";
+        return NULL;
+    }
+    if (mqtt->machine_status == 1 && !native) return NULL; /* retain idle operation without native telemetry */
+    if (!native || (strcmp(native, "standby") && strcmp(native, "complete") && strcmp(native, "cancelled")))
+        return "Cannot identify the printer state safely";
+    return NULL;
+}
+
 static void gcode_delete_response(int fd,const char *request,const mqtt_client *mqtt,
                                   const char *body,size_t length){
     (void)request;
-    if(!gcode_idle_for_mutation(mqtt)){
-        const char *e="{\"error\":\"Printer must be idle and connected\"}\n";
-        respond(fd,409,"Conflict","application/json",e,strlen(e));return;
-    }
     char storage[16],file[PATH_MAX_LOCAL];const char *root,*media;
     if(!gcode_request_file(body,length,storage,file,NULL,NULL,&root,&media)||
        !gcode_storage_writable(storage,root)){
@@ -734,6 +765,12 @@ static void gcode_delete_response(int fd,const char *request,const mqtt_client *
     if(!gcode_resolved_path(root,file,path,sizeof(path))){
         const char *e="{\"error\":\"G-code file not found or unsafe\"}\n";
         respond(fd,404,"Not Found","application/json",e,strlen(e));return;
+    }
+    const char *blocked = gcode_delete_guard(mqtt, file);
+    if (blocked) {
+        char error[256];
+        int n = snprintf(error, sizeof(error), "{\"error\":\"%s\"}\n", blocked);
+        respond(fd,409,"Conflict","application/json",error,(size_t)n);return;
     }
     /* Recheck direct filename and block hard-linked content. */
     struct stat st;
@@ -881,7 +918,6 @@ static void upload_slot_release(void){atomic_store(&upload_busy,0);}
 /* One print request may await the operator's Canvas mapping. Never print from
  * the upload worker: the existing protected print route remains authoritative. */
 static pthread_mutex_t orca_pending_mutex=PTHREAD_MUTEX_INITIALIZER;
-static char orca_pending_filename[PATH_MAX_LOCAL];
 static unsigned long orca_pending_generation=0;
 static time_t orca_pending_created=0;
 

@@ -11,7 +11,7 @@
 .cc2-canvas-slot .cc2-canvas-choose { position:relative; z-index:2; pointer-events:auto; }
 .cc2-canvas-slot .cc2-canvas-slot-pick:focus-visible { outline-offset:3px; }
 .cc2-canvas-slot .cc2-canvas-slot-pick:disabled { cursor:default; }
-.cc2-canvas-ring { width:76px; max-width:100%; height:auto; aspect-ratio:1; border:15px solid; border-radius:50%; background:var(--bg); margin:0 auto 12px; flex-shrink:0; }
+.cc2-canvas-ring { width:76px; max-width:100%; height:auto; aspect-ratio:1; border:21px solid; border-radius:50%; background:var(--bg); margin:0 auto 12px; flex-shrink:0; }
 .cc2-canvas-slot-data { display:grid; gap:4px; font-size:12px; }
 .cc2-canvas-spool-name { min-height:1.45em; overflow-wrap:anywhere; font-weight:600; margin-bottom:6px; }
 .cc2-canvas-choose { width:100%; margin:10px 0; }
@@ -189,7 +189,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   }
   .cc2-sidebar-open { transform: translateX(0); visibility: visible; }
   .cc2-sidebar nav a { justify-content: flex-start; padding-inline: 16px; }
-  .cc2-sidebar nav a span { display: inline; }
+  .cc2-sidebar nav a span { display: inline; visibility: visible; }
   .cc2-menu-backdrop {
     display: block; position: fixed; inset: 68px 0 0; z-index: 19;
     background: #0008;
@@ -275,7 +275,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
    equally around the page instead of resizing its cards and camera. */
 @media (min-width: 901px) and (min-height: 501px), (min-width: 768px) and (min-height: 501px) and (orientation: landscape) {
   .cc2-main { --cc2-page-padding: 1rem; }
-  .cc2-main-collapsed { padding-inline: calc(var(--cc2-page-padding) + 4.1875rem); }
+  .cc2-main-collapsed { padding-inline: calc(var(--cc2-page-padding) + 4.5625rem); }
 }
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
   .cc2-main { --cc2-page-padding: 12px; }

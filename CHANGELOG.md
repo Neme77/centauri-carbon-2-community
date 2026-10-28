@@ -8,11 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Delete unused G-code files while printing or busy, with active/paused/recoverable job and pending Orca-start protection, requested by **Neme77**.
+
 - Optional Obsidian theme with graphite panels, a purple action accent and cyan telemetry, designed with **Neme77** (#255).
 
 - Hungarian companion to the external-feed experiment guide, by **pezso92** (#249).
 
 ### Fixed
+
+- Centre collapsed navigation and progressively clip labels, by **Surfoo** (#257); preserve labels in mobile drawers and keep the expand icon visible.
+- Thicken the Canvas colour rings while preserving their outer dimensions, by **Surfoo** (#258).
 
 - Keep desktop page and camera widths unchanged when collapsing the sidebar, centring content in the extra space instead of stretching it, requested by **Neme77** (#255).
 
