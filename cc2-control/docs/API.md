@@ -195,6 +195,13 @@ lists at most 128 files: when it holds more, the newest 128 are listed, `truncat
 and `total` counts every G-code file found. The scan examines at most 4096 directory entries
 per storage; beyond that `truncated` is `true` and `total` covers only the entries examined.
 
+`POST /api/gcode-files/delete` accepts deletions while the printer is busy if fresh
+MQTT and native print state identify the job safely. The active, paused or errored
+job and pending Orca starts are protected; in-flight uploads also block deletion.
+Basename and case aliases are protected on
+both media. Unknown/stale active-job evidence refuses deletion. Existing storage,
+path traversal, symlink and hard-link restrictions remain; copying is still Idle-only.
+
 `POST /api/gcode-files/upload` never overwrites a file. When it rejects an upload after the
 headers, for example with 409 because the name exists, it first reads the rest of the
 request body, so a browser receives the error instead of a reset connection.

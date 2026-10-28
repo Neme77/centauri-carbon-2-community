@@ -46,6 +46,8 @@ jobs:
         run: npm run test:dashboard-style
       - name: Obsidian persistence and sidebar page sizing
         run: npm run test:obsidian-layout
+      - name: Verify collapsed icons, mobile labels and Canvas rings
+        run: npm run test:sidebar-canvas-polish
       - name: Verify camera streaming lifecycle
         run: npm run test:camera
       - name: Verify Polish and Czech language selection and layouts
