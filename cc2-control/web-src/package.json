@@ -13,6 +13,7 @@
     "test:recovery": "node preview/test-recovery-download.mjs",
     "test:upload": "node preview/test-upload-network.mjs",
     "test:mesh": "node preview/test-adaptive-mesh.mjs",
+    "test:obsidian-layout": "node preview/test-obsidian-layout.mjs",
     "test:dashboard-style": "node preview/test-dashboard-style.mjs",
     "test:camera": "node preview/test-camera-stream.mjs",
     "test:quick": "node preview/test-quick-actions.mjs",
