@@ -1,27 +1,15 @@
-name: Build temporary UE300 driver trial
+name: Validate temporary UE300 driver controls
 on:
   push:
     branches: [test/usb-ethernet-ue300-driver-r1]
 permissions:
   contents: read
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - name: Install host build tools
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential bc flex bison libssl-dev libelf-dev kmod libncurses5
-      - name: Compile fingerprint-targeted trial modules
-        shell: bash
-        run: |
-          set -o pipefail
-          bash experimental/usb-ethernet-driver/build-driver-trial.sh "$RUNNER_TEMP/ue300-driver" 2>&1 | tee ue300-driver-build.log
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: ue300-driver-trial-r1
-          path: |
-            ${{ runner.temp }}/ue300-driver/trial-report/
-            ue300-driver-build.log
-          if-no-files-found: error
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+      - run: sh -n experimental/usb-ethernet-driver/manage.sh && shellcheck -s sh experimental/usb-ethernet-driver/manage.sh
+      - run: python3 experimental/usb-ethernet-driver/test_manage.py
