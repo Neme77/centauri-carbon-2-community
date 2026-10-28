@@ -1,0 +1,45 @@
+name: Package cumulative PR256-259 trial
+on:
+  push:
+    branches: [test/cumulative-pr256-259]
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify source snapshot and record trial head
+        run: |
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
+          git rev-parse HEAD > trial-head.txt
+      - name: Install ARM tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user
+      - name: Build and package checked application-only trial
+        working-directory: cc2-control
+        run: |
+          make all EXTRA_CFLAGS=-Werror
+          CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
+          python3 installer/package.py --application-only-trial --prepared dist/cc2-control
+      - name: Require full ZIP before upload
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          files=list(Path('output').glob('CC2-Control-*-Multiplatform-Update.zip'))
+          assert len(files)==1 and files[0].stat().st_size>1000000, 'Expected complete updater ZIP'
+          PY
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cc2-control-pr256-259-trial-complete
+          path: |
+            output/CC2-Control-*-Multiplatform-Update.zip*
+            trial-head.txt
+          if-no-files-found: error
+      - name: Remove temporary packaging workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/package-cumulative-trial.yml
+          git commit -m "Remove completed cumulative trial packaging workflow"
+          git push origin HEAD:test/cumulative-pr256-259
