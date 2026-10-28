@@ -683,3 +683,5 @@ value; the current-job UI resets its progress when idle. The nonblocking CC2
 notice accepts explicit completion only, deduplicates acknowledgements per
 browser origin and opens normal file preparation for Print again. Dismissing
 this notice does not acknowledge or operate the physical display.
+
+During calibration heating and soaking, the trial repeats the owned bed target every ten minutes (#256, beanbo). This is pending real-printer validation.
