@@ -267,4 +267,3 @@ case "${1:-check}" in
         ;;
     *) fail 'Use check, start, ethernet, status or restore';;
 esac
-
