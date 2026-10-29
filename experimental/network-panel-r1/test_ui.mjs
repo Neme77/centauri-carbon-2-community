@@ -12,6 +12,8 @@ await mkdir(output, { recursive: true })
 const dictionary = async language => JSON.parse(await readFile(path.join(app, `web-src/public/locales/${language}.json`), 'utf8'))
 let prefs = { language: 'en', theme: 'obsidian' }
 let replyCode = 200, calls = 0
+let cacheTimeline = null
+const cacheSamples = []
 const mutations = [], errors = [], outside = []
 const iface = { present: true, enabled: true, carrier: true, address: '192.0.2.103', address_mode: 'unknown', link_mbps: null }
 let snapshot = {
@@ -36,7 +38,22 @@ try {
     if (!['GET', 'HEAD'].includes(route.request().method())) mutations.push(url.pathname)
     if (url.pathname === '/api/network') {
       calls++
-      return route.fulfill({ status: replyCode, json: replyCode === 200 ? { available: true, fresh: true, age_ms: 0, snapshot } : { error: 'fixture unavailable' }, headers })
+      let envelope = { available: true, fresh: true, refreshing: false, age_ms: 0, snapshot }
+      if (cacheTimeline) {
+        const now = await page.evaluate(() => performance.now())
+        if (cacheTimeline.readyAt !== null && now >= cacheTimeline.readyAt) {
+          cacheTimeline.sampleAt = cacheTimeline.readyAt
+          cacheTimeline.readyAt = null
+        }
+        if (cacheTimeline.readyAt === null && now - cacheTimeline.attemptedAt >= 3000) {
+          cacheTimeline.attemptedAt = now
+          cacheTimeline.readyAt = now + 600
+        }
+        const age = now - cacheTimeline.sampleAt
+        envelope = { available: true, fresh: age < 8000, refreshing: cacheTimeline.readyAt !== null, age_ms: age, snapshot }
+        cacheSamples.push({ at: now, age, refreshing: envelope.refreshing })
+      }
+      return route.fulfill({ status: replyCode, json: replyCode === 200 ? envelope : { error: 'fixture unavailable' }, headers })
     }
     const routes = {
       '/api/preferences': prefs,
@@ -70,7 +87,9 @@ try {
   assert(Math.abs((await toggle.boundingBox()).y - y1) < 1, 'toggle moved when cards appeared')
   await page.getByText(en['network.missing_interface'], { exact: true }).waitFor()
   assert.equal(await page.getByRole('radio', { name: en['network.wifi'], exact: true }).getAttribute('aria-checked'), 'true')
-  assert.equal(await page.locator('.cc2-network button:not([disabled]):not([role="switch"])').count(), 1)
+  assert.equal(await page.getByRole('button', { name: en['network.prepare_trial'], exact: true }).isDisabled(), true)
+  assert.equal(await page.locator('.cc2-network [role="radio"]:not([disabled])').count(), 0)
+  assert.equal(await page.getByRole('radio', { name: en['network.automatic'], exact: true }).count(), 0)
   await page.reload()
   await page.locator('.cc2-network').waitFor()
   assert.equal(await toggle.getAttribute('aria-checked'), 'true', 'visibility preference not retained')
@@ -132,10 +151,26 @@ try {
   await page.waitForTimeout(220)
   await page.screenshot({ path: path.join(output, 'mobile.png'), fullPage: true })
   const it = await dictionary('it')
+  // Reproduce the real provider: a response starts an async refresh but still
+  // contains its previous cached sample. Static zero-age mocks missed R1.
+  await page.clock.install()
+  const start = await page.evaluate(() => performance.now())
+  cacheTimeline = { sampleAt: start, attemptedAt: start, readyAt: null }
+  await page.getByRole('button', { name: it['network.refresh'], exact: true }).click()
+  for (let step = 0; step < 48; step++) {
+    await page.clock.runFor(500)
+    // Flush browser/network IPC in real time; page.waitForTimeout uses the
+    // virtual clock and could otherwise outrun the mocked async response.
+    await new Promise(resolve => setTimeout(resolve, 50))
+    assert.equal(await page.getByText('192.0.2.103', { exact: true }).count(), 1, `cache-refresh flicker at ${step * 500}ms`)
+    assert.equal(await page.locator('.cc2-network [role="status"]').count(), 0, `healthy async refresh shown as unavailable at ${step * 500}ms`)
+  }
+  assert(cacheSamples.some(s => s.refreshing), 'fixture never exercised the stale-while-refreshing response')
+  assert(cacheSamples.some(s => s.at - s.age > start), 'fixture never returned a newly collected sample')
+  cacheTimeline = null
   await page.getByRole('tab', { name: it['settings.connection'], exact: true }).click()
   await page.locator('.cc2-network').waitFor({ state: 'detached' })
   const before = calls
-  await page.clock.install()
   await page.clock.runFor(11000)
   assert.equal(calls, before, 'network polling kept running outside the tab')
   assert.deepEqual(mutations, [], 'network page sent a mutation request')
@@ -143,7 +178,7 @@ try {
   assert.deepEqual(outside, [])
   const result = { production_ui: true, nine_languages: true, widths: [320, 390, 768, 1440],
     actual_control_paths: true, failures_and_stale_data: true, literal_ssid: true,
-    outside_tab_polling_stopped: true, network_mutations: mutations, browser_errors: errors }
+    outside_tab_polling_stopped: true, real_async_cache_timeline: true, network_mutations: mutations, browser_errors: errors }
   await writeFile(path.join(output, 'validation.json'), JSON.stringify(result, null, 2))
   console.log(JSON.stringify(result, null, 2))
 } finally {

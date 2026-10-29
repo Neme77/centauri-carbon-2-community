@@ -59,6 +59,8 @@ try:
             assert time.monotonic()-before<.25, 'network read blocked its HTTP response'
             before=time.monotonic()
             assert call('/api/health')[0]==200
+            assert call('/api/network/trial')[1]['available'] is False
+            assert call('/api/network/select','POST',{'X-CC2-Request':'1'})[0]==401
             assert time.monotonic()-before<.25, 'slow WPA read blocked unrelated HTTP'
             for _ in range(50):
                 status,data=call('/api/network')

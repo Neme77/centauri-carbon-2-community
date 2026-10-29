@@ -1,10 +1,13 @@
+import { lanRequest, useLanCode } from '@/lib/lan-code'
+import { ask } from '@/lib/confirm'
 import { useState } from 'preact/hooks'
-import { ArrowLeftRight, EthernetPort, RefreshCw, Wifi } from 'lucide-preact'
+import { EthernetPort, RefreshCw, Wifi } from 'lucide-preact'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pip, Tag } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/field'
-import { request } from '@/lib/api'
+import { request, errText } from '@/lib/api'
+import { PasswordInput } from '@/components/ui/field'
 import { type Key, t } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
 import { ls, store } from '@/lib/store'
@@ -32,16 +35,17 @@ type Snapshot = {
   }
   route: { selected: string }
 }
-type Envelope = { available: boolean; fresh: boolean; age_ms: number | null; snapshot: Snapshot | null }
-const status = store({ data: null as Envelope | null, ok: false, received: 0 })
+type Trial = { available: boolean; ready: boolean; busy: boolean; last_exit: number }
+type Envelope = { available: boolean; fresh: boolean; refreshing: boolean; age_ms: number | null; snapshot: Snapshot | null }
+const status = store({ data: null as Envelope | null, ok: false, received: 0, trial: null as Trial | null })
 let pending: Promise<void> | null = null
 const refresh = () => {
   if (pending) return pending
   pending = (async () => {
     try {
-      const data = (await request('/api/network')) as Envelope
+      const [data, trial] = await Promise.all([request('/api/network') as Promise<Envelope>, request('/api/network/trial') as Promise<Trial>])
       if (data.snapshot && data.snapshot.schema !== 1) throw new Error('Unsupported network status schema')
-      status.set({ data, ok: true, received: performance.now() })
+      status.set({ data, trial, ok: true, received: performance.now() })
     } catch {
       status.set({ ok: false })
     } finally {
@@ -59,9 +63,12 @@ const Value = ({ label, value }: { label: Key; value: string | number | null | u
 )
 
 export const Network = () => {
-  const { data, ok, received } = status.use()
-  usePoll(refresh, data?.available && ok ? 5000 : 1000)
+  const { data, ok, received, trial } = status.use()
   const fresh = Boolean(ok && data?.fresh && (data.age_ms ?? 8000) + performance.now() - received < 8000)
+  // The provider returns the old sample while its reader refreshes. A fixed
+  // two-second cadence leaves room for that extra response inside the eight-
+  // second freshness window and avoids repeatedly rescheduling the poll task.
+  usePoll(refresh, 2000)
   const d = fresh && data?.available ? data.snapshot : null
   const [ethernet, setEthernet] = useState(ls.get('cc2-network-show-ethernet') === '1')
   const [busy, setBusy] = useState(false)
@@ -73,6 +80,25 @@ export const Network = () => {
       setBusy(false)
     }
   }
+  const [code, setCode, clearCode] = useLanCode()
+  const [actionBusy, setActionBusy] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const select = async (mode: 'start' | 'wifi' | 'ethernet') => {
+    const message = mode === 'start' ? 'network.confirm_prepare' : mode === 'wifi' ? 'network.confirm_wifi' : 'network.confirm_ethernet'
+    if (!(await ask(t(message)))) return
+    setActionBusy(true)
+    setActionError('')
+    try {
+      await lanRequest('/api/network/select', code, { method: 'POST', body: mode })
+      clearCode()
+      await refresh()
+    } catch (error) {
+      setActionError(errText(error))
+    } finally {
+      setActionBusy(false)
+    }
+  }
+  const cannotSelect = !fresh || !trial?.available || !trial.ready || trial.busy || actionBusy || !code.trim()
   const route = d?.route.selected
   const connected = Boolean(d?.wifi.enabled && d.wifi.address && d.wifi.carrier && d.wireless.state === 'COMPLETED')
   const modeLabel =
@@ -80,7 +106,7 @@ export const Network = () => {
   return (
     <div class="cc2-network grid gap-3.5">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="text-xs text-amber">{t('network.readonly')}</p>
+        <p class="text-xs text-amber">{t(trial?.available ? 'network.manual_trial' : 'network.readonly')}</p>
         <Button disabled={busy} onClick={update}>
           <RefreshCw {...glyph} />
           {t('network.refresh')}
@@ -162,7 +188,7 @@ export const Network = () => {
               end={
                 <Tag tone={d?.ethernet.carrier ? 'ok' : 'default'}>
                   <Pip hollow={!d?.ethernet.carrier} />
-                  {t(d?.ethernet.carrier ? 'network.link' : 'network.inactive')}
+                  {t(!d ? 'network.unavailable' : d.ethernet.carrier ? 'network.link' : 'network.inactive')}
                 </Tag>
               }
             />
@@ -185,17 +211,27 @@ export const Network = () => {
       {ethernet && (
         <Card>
           <CardHead icon="link" title="network.modes" />
-          <div class="grid grid-cols-1 gap-2 cc2-sm:grid-cols-3" role="radiogroup" aria-label={t('network.modes')}>
+          <label class="mb-3 block max-w-md" htmlFor="network-lan-code">
+            {t('experiments.lan_code')}
+            <PasswordInput id="network-lan-code" class="mt-1" value={code} disabled={actionBusy || trial?.busy}
+              onInput={event => setCode(event.currentTarget.value)} autoComplete="off" />
+          </label>
+          <div class="mb-2 flex flex-wrap items-center gap-2">
+            <Button disabled={cannotSelect} onClick={() => select('start')}>{t('network.prepare_trial')}</Button>
+            {trial?.busy && <span role="status">{t('network.action_pending')}</span>}
+          </div>
+          {(actionError || (trial && trial.last_exit > 0)) && <p role="alert" class="mb-2 text-red">{actionError || t('network.action_failed')}</p>}
+          <div class="grid grid-cols-1 gap-2 cc2-sm:grid-cols-2" role="radiogroup" aria-label={t('network.modes')}>
             {(
               [
                 ['wifi', 'network.wifi', Wifi],
                 ['ethernet', 'network.ethernet', EthernetPort],
-                ['automatic', 'network.automatic', ArrowLeftRight],
               ] as const
             ).map(([mode, label, Icon]) => (
               <Button
                 key={mode}
-                disabled
+                disabled={cannotSelect}
+                onClick={() => select(mode)}
                 role="radio"
                 aria-checked={mode === route}
                 variant={mode === route ? 'active' : 'default'}

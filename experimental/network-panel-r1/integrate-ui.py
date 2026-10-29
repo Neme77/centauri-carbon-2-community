@@ -56,3 +56,10 @@ for lang,dictionary in strings.items():
         current[key]=value
     path.write_bytes((json.dumps(current,ensure_ascii=False,indent=2)+'\n').encode('utf-8'))
 print('Network tab integrated into disposable UI with nine dictionaries:',app)
+
+lan=web/'src/lib/lan-code.ts'
+text=lan.read_text(encoding='utf-8')
+old='access\\/verify|experiments|'
+assert text.count(old)==1
+text=text.replace(old,'network\\/select|'+old)
+lan.write_bytes(text.encode('utf-8'))

@@ -15,6 +15,8 @@ def run(args, **kwargs):
     return subprocess.run([str(x) for x in args], check=True, timeout=240, **kwargs)
 
 run([sys.executable, 'test_status.py'])
+run([sys.executable, 'test_manual_trial.py'])
+run([sys.executable, 'test_network_package_checks.py'])
 
 # Integrate into a disposable source copy so the real HTTP handler is tested
 # without changing the canonical tree or pretending this is a release package.
@@ -44,6 +46,7 @@ else:
 run([sys.executable,'prepare-axe.py'])
 os.environ['CC2_AXE_PATH']=str(out/'axe/axe.min.js')
 run(['node','test_ui.mjs',app,out/'network-ui'])
+run(['node','test_manual_ui.mjs',app,out/'network-ui'])
 run(['node','test_accessibility.mjs',app,out/'network-ui'])
 run(['gcc','-std=c11','-O1','-UNDEBUG','-Wall','-Wextra','-Wpedantic','-Werror',
      '-fsanitize=address,undefined','-fno-omit-frame-pointer','-fno-pie','-no-pie',
@@ -62,12 +65,9 @@ run(['qemu-arm',out/'test-transaction-arm'])
 arm_app=out/'cc2-control-network-ui'
 version=(app/'VERSION').read_text().strip()
 firmware=(app/'FIRMWARE_VERSION').read_text().strip()
-run([zig,'cc','-target','arm-linux-musleabihf','-mcpu=cortex_a7','-Os','-std=c11',
-     '-D_POSIX_C_SOURCE=200809L','-DCC2_NETWORK_STATUS_LIBRARY',
-     f'-DCC2_CONTROL_VERSION=\"{version}\"',f'-DCC2_COMMUNITY_FIRMWARE_VERSION=\"{firmware}\"',
-     '-pthread','-static','-s','-ffunction-sections','-fdata-sections',
-     *[app/'src'/n for n in ('main.c','mqtt.c','console.c','control.c','panda.c','uds.c','network_status.c')],
-     '-Wl,--gc-sections','-lm','-o',arm_app])
+run(['make','-C',app,'clean'])
+run(['make','-C',app,'build/cc2-control'])
+shutil.copyfile(app/'build/cc2-control',arm_app)
 assert b'/tmp/cc2-network-http-test.sock' not in arm_app.read_bytes()
 env=dict(os.environ,CC2_TEST_RUNNER='qemu-arm')
 run([sys.executable,app/'tests/test_smoke.py',arm_app],env=env)
@@ -82,6 +82,8 @@ with zipfile.ZipFile(out/'integrated-sources.zip','w',compression=zipfile.ZIP_DE
     for p in sorted(root.iterdir()):
         if p.is_file() and (p.suffix in ('.c','.h','.py','.tsx','.json','.mjs','.md') or p.name in ('THIRD-PARTY-NOTICES.txt','LICENSE.GPL-3.0')):
             archive.write(p,'network-development/'+p.name)
+    for p in sorted((root/'manual-trial').rglob('*')):
+        if p.is_file():archive.write(p,'network-development/manual-trial/'+p.relative_to(root/'manual-trial').as_posix())
     archive.write(root.parents[1]/'LICENSE','LICENSE.GPL-3.0')
 blob=binary.read_bytes()
 assert blob[:7]==b'\x7fELF\x01\x01\x01' and struct.unpack_from('<H',blob,18)[0]==40
@@ -107,9 +109,11 @@ for line in calls.splitlines():
         assert not any(word in line for word in ('AF_INET,','AF_INET6,','RTM_NEW','RTM_DEL')),line
 assert sum('execve(' in line for line in calls.splitlines())==1, 'no child commands'
 result={'scope':'Read-only network status, not the connection editor',
+        'app_compiler':run(['arm-linux-gnueabihf-gcc','--version'],capture_output=True,text=True).stdout.splitlines()[0],
+        'app_build':'canonical Makefile / ARM GNU static glibc',
         'binary_sha256':hashlib.sha256(blob).hexdigest(),'binary_bytes':len(blob),
         'host_core_and_socket_asan_ubsan':True,'arm_static_execution_qemu':True,
-        'read_only_syscalls_host':True,'actual_http_status_adapter':True,'production_ui_nine_languages':True,'transaction_policy_only':True,'real_printer_qualified':False,
+        'read_only_syscalls_host':True,'actual_http_status_adapter':True,'manual_trial_bridge_host_test':True,'manual_trial_physical_test':False,'production_ui_nine_languages':True,'transaction_policy_only':True,'real_printer_qualified':False,
         'network_changes':False,'automatic_selection':False,
         'app_binary_sha256':hashlib.sha256(arm_app.read_bytes()).hexdigest(),
         'integrated_sources_sha256':hashlib.sha256((out/'integrated-sources.zip').read_bytes()).hexdigest(),

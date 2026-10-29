@@ -28,7 +28,14 @@
     "network.interface_present": "USB Ethernet interface",
     "network.details_missing": "Wi-Fi details are temporarily unavailable.",
     "network.selected": "In use",
-    "network.frequency": "Frequency"
+    "network.frequency": "Frequency",
+    "network.manual_trial": "Manual switching trial. Ethernet restores Wi-Fi after 3 minutes; no automatic network selection.",
+    "network.prepare_trial": "Prepare trial",
+    "network.confirm_prepare": "Restart the camera and printer services to prepare the manual trial? The printer must be idle and cold.",
+    "network.confirm_ethernet": "Use Ethernet for 3 minutes and turn off Wi-Fi? Stay at the wired address. Wi-Fi will be restored automatically.",
+    "network.confirm_wifi": "Restore the original Wi-Fi connection now?",
+    "network.action_pending": "Changing connection…",
+    "network.action_failed": "The action failed. Inspect /tmp/cc2-network-panel-action.log."
   },
   "it": {
     "network.title": "Wi-Fi e LAN",
@@ -59,7 +66,14 @@
     "network.interface_present": "Interfaccia Ethernet USB",
     "network.details_missing": "Dettagli Wi-Fi momentaneamente non disponibili.",
     "network.selected": "In uso",
-    "network.frequency": "Frequenza"
+    "network.frequency": "Frequenza",
+    "network.manual_trial": "Prova di commutazione manuale. Dopo 3 minuti in Ethernet viene ripristinato il Wi-Fi; nessuna scelta automatica della rete.",
+    "network.prepare_trial": "Prepara prova",
+    "network.confirm_prepare": "Riavviare i servizi camera e stampante per preparare la prova manuale? La stampante deve essere inattiva e fredda.",
+    "network.confirm_ethernet": "Usare Ethernet per 3 minuti e spegnere il Wi-Fi? Rimani sull’indirizzo cablato. Il Wi-Fi verrà ripristinato automaticamente.",
+    "network.confirm_wifi": "Ripristinare ora la connessione Wi-Fi originale?",
+    "network.action_pending": "Cambio connessione…",
+    "network.action_failed": "Operazione non riuscita. Controlla /tmp/cc2-network-panel-action.log."
   },
   "fr": {
     "network.title": "Wi-Fi et LAN",
@@ -90,7 +104,14 @@
     "network.interface_present": "Interface Ethernet USB",
     "network.details_missing": "Les détails Wi-Fi sont temporairement indisponibles.",
     "network.selected": "En cours d’utilisation",
-    "network.frequency": "Fréquence"
+    "network.frequency": "Fréquence",
+    "network.manual_trial": "Essai de commutation manuelle. Ethernet rétablit le Wi-Fi après 3 minutes ; aucune sélection automatique du réseau.",
+    "network.prepare_trial": "Préparer l’essai",
+    "network.confirm_prepare": "Redémarrer les services caméra et imprimante pour préparer l’essai ? L’imprimante doit être inactive et froide.",
+    "network.confirm_ethernet": "Utiliser Ethernet pendant 3 minutes et désactiver le Wi-Fi ? Restez sur l’adresse filaire. Le Wi-Fi sera rétabli automatiquement.",
+    "network.confirm_wifi": "Rétablir maintenant la connexion Wi-Fi d’origine ?",
+    "network.action_pending": "Changement de connexion…",
+    "network.action_failed": "Échec. Consultez /tmp/cc2-network-panel-action.log."
   },
   "es": {
     "network.title": "Wi-Fi y LAN",
@@ -121,7 +142,14 @@
     "network.interface_present": "Interfaz Ethernet USB",
     "network.details_missing": "Los detalles de Wi-Fi no están disponibles temporalmente.",
     "network.selected": "En uso",
-    "network.frequency": "Frecuencia"
+    "network.frequency": "Frecuencia",
+    "network.manual_trial": "Prueba de cambio manual. Ethernet restaura Wi-Fi tras 3 minutos; sin selección automática de red.",
+    "network.prepare_trial": "Preparar prueba",
+    "network.confirm_prepare": "¿Reiniciar los servicios de cámara e impresora para preparar la prueba? La impresora debe estar inactiva y fría.",
+    "network.confirm_ethernet": "¿Usar Ethernet 3 minutos y apagar Wi-Fi? Permanece en la dirección por cable. Wi-Fi se restaurará automáticamente.",
+    "network.confirm_wifi": "¿Restaurar ahora la conexión Wi-Fi original?",
+    "network.action_pending": "Cambiando conexión…",
+    "network.action_failed": "Error. Consulta /tmp/cc2-network-panel-action.log."
   },
   "pl": {
     "network.title": "Wi-Fi i LAN",
@@ -152,7 +180,14 @@
     "network.interface_present": "Interfejs USB Ethernet",
     "network.details_missing": "Szczegóły Wi-Fi są chwilowo niedostępne.",
     "network.selected": "W użyciu",
-    "network.frequency": "Częstotliwość"
+    "network.frequency": "Częstotliwość",
+    "network.manual_trial": "Test ręcznego przełączania. Ethernet przywraca Wi-Fi po 3 minutach; bez automatycznego wyboru sieci.",
+    "network.prepare_trial": "Przygotuj test",
+    "network.confirm_prepare": "Uruchomić ponownie usługi kamery i drukarki? Drukarka musi być bezczynna i zimna.",
+    "network.confirm_ethernet": "Użyć Ethernet przez 3 minuty i wyłączyć Wi-Fi? Pozostań przy adresie przewodowym. Wi-Fi zostanie przywrócone automatycznie.",
+    "network.confirm_wifi": "Przywrócić teraz pierwotne połączenie Wi-Fi?",
+    "network.action_pending": "Zmiana połączenia…",
+    "network.action_failed": "Operacja nie powiodła się. Sprawdź /tmp/cc2-network-panel-action.log."
   },
   "cs": {
     "network.title": "Wi-Fi a LAN",
@@ -183,7 +218,14 @@
     "network.interface_present": "Rozhraní USB Ethernet",
     "network.details_missing": "Podrobnosti Wi-Fi dočasně nejsou dostupné.",
     "network.selected": "Používá se",
-    "network.frequency": "Frekvence"
+    "network.frequency": "Frekvence",
+    "network.manual_trial": "Test ručního přepínání. Ethernet obnoví Wi-Fi po 3 minutách; bez automatického výběru sítě.",
+    "network.prepare_trial": "Připravit test",
+    "network.confirm_prepare": "Restartovat služby kamery a tiskárny pro test? Tiskárna musí být nečinná a studená.",
+    "network.confirm_ethernet": "Použít Ethernet na 3 minuty a vypnout Wi-Fi? Zůstaňte na kabelové adrese. Wi-Fi se obnoví automaticky.",
+    "network.confirm_wifi": "Obnovit nyní původní připojení Wi-Fi?",
+    "network.action_pending": "Změna připojení…",
+    "network.action_failed": "Akce selhala. Zkontrolujte /tmp/cc2-network-panel-action.log."
   },
   "hu": {
     "network.title": "Wi-Fi és LAN",
@@ -214,7 +256,14 @@
     "network.interface_present": "USB Ethernet-interfész",
     "network.details_missing": "A Wi-Fi részletei átmenetileg nem érhetők el.",
     "network.selected": "Használatban",
-    "network.frequency": "Frekvencia"
+    "network.frequency": "Frekvencia",
+    "network.manual_trial": "Kézi váltási próba. Ethernet használata után 3 perccel visszaáll a Wi-Fi; nincs automatikus hálózatválasztás.",
+    "network.prepare_trial": "Próba előkészítése",
+    "network.confirm_prepare": "Újraindítja a kamera és a nyomtató szolgáltatásait? A nyomtatónak tétlennek és hidegnek kell lennie.",
+    "network.confirm_ethernet": "Ethernet használata 3 percig, a Wi-Fi kikapcsolásával? Maradjon a vezetékes címen. A Wi-Fi automatikusan visszaáll.",
+    "network.confirm_wifi": "Visszaállítja most az eredeti Wi-Fi-kapcsolatot?",
+    "network.action_pending": "Kapcsolatváltás…",
+    "network.action_failed": "A művelet sikertelen. Ellenőrizze: /tmp/cc2-network-panel-action.log."
   },
   "ru": {
     "network.title": "Wi-Fi и LAN",
@@ -245,7 +294,14 @@
     "network.interface_present": "Интерфейс USB Ethernet",
     "network.details_missing": "Сведения Wi-Fi временно недоступны.",
     "network.selected": "Используется",
-    "network.frequency": "Частота"
+    "network.frequency": "Частота",
+    "network.manual_trial": "Проверка ручного переключения. Через 3 минуты Ethernet восстанавливает Wi-Fi; автоматического выбора сети нет.",
+    "network.prepare_trial": "Подготовить тест",
+    "network.confirm_prepare": "Перезапустить службы камеры и принтера для теста? Принтер должен быть холодным и простаивать.",
+    "network.confirm_ethernet": "Использовать Ethernet 3 минуты и отключить Wi-Fi? Оставайтесь на проводном адресе. Wi-Fi восстановится автоматически.",
+    "network.confirm_wifi": "Восстановить исходное подключение Wi-Fi сейчас?",
+    "network.action_pending": "Смена подключения…",
+    "network.action_failed": "Операция не выполнена. Проверьте /tmp/cc2-network-panel-action.log."
   },
   "zh": {
     "network.title": "Wi-Fi 和局域网",
@@ -276,6 +332,13 @@
     "network.interface_present": "USB 以太网接口",
     "network.details_missing": "Wi-Fi 详情暂时不可用。",
     "network.selected": "正在使用",
-    "network.frequency": "频率"
+    "network.frequency": "频率",
+    "network.manual_trial": "手动切换测试。使用以太网 3 分钟后恢复 Wi-Fi；不自动选择网络。",
+    "network.prepare_trial": "准备测试",
+    "network.confirm_prepare": "是否重启摄像头和打印机服务以准备测试？打印机必须处于空闲且冷却状态。",
+    "network.confirm_ethernet": "是否使用以太网 3 分钟并关闭 Wi-Fi？请保持使用有线地址。Wi-Fi 将自动恢复。",
+    "network.confirm_wifi": "是否立即恢复原来的 Wi-Fi 连接？",
+    "network.action_pending": "正在切换连接…",
+    "network.action_failed": "操作失败。请检查 /tmp/cc2-network-panel-action.log。"
   }
 }

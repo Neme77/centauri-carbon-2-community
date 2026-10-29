@@ -1,0 +1,9 @@
+{
+  "based_on": "CC2-Network-Compatibility-Trial-R1b",
+  "manage_unchanged": true,
+  "preflight_change": "accept protected backend getsockname endpoint as alternative to SSH local endpoint",
+  "library_sha256": "bde512195dd6bf3846f3103b5e1acbd89a62e5ee819e405389c97f5fc188ff3a",
+  "temporary_only": true,
+  "ethernet_deadline_seconds": 180,
+  "automatic_quality_selection": false
+}
