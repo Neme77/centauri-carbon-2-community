@@ -92,23 +92,56 @@ static long long ns_millis(void) {
     struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
     return (long long)now.tv_sec*1000+now.tv_nsec/1000000;
 }
-static int ns_wpa(const char *command,char *out,size_t capacity) {
+typedef struct {
+    const char *error,*first_error;
+    int number,bytes,attempts;
+    long long elapsed;
+} ns_wpa_result;
+static int ns_wpa_once(const char *command,char *out,size_t capacity,ns_wpa_result *result) {
     /* Abstract client address avoids creating files in shared /tmp. Each call
      * uses a separate socket; replies are connected to the reviewed peer. */
-    int fd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC|SOCK_NONBLOCK,0);if(fd<0)return 0;
+    int fd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC|SOCK_NONBLOCK,0);
+    if(fd<0){result->error="socket";result->number=errno;return 0;}
     struct sockaddr_un local={.sun_family=AF_UNIX},peer={.sun_family=AF_UNIX};
     int n=snprintf(local.sun_path+1,sizeof(local.sun_path)-1,"cc2-net-status-%ld-%lld",(long)getpid(),ns_millis());
-    if(strlen(NS_WPA_SOCKET)>=sizeof(peer.sun_path)){close(fd);return 0;}
+    if(strlen(NS_WPA_SOCKET)>=sizeof(peer.sun_path)){result->error="path_length";close(fd);return 0;}
     strcpy(peer.sun_path,NS_WPA_SOCKET);
-    if(n<0 || (size_t)n>=sizeof(local.sun_path)-1 ||
-       bind(fd,(struct sockaddr*)&local,(socklen_t)(offsetof(struct sockaddr_un,sun_path)+1+n))<0 ||
-       connect(fd,(struct sockaddr*)&peer,sizeof(peer))<0 ||
-       send(fd,command,strlen(command),MSG_NOSIGNAL)!=(ssize_t)strlen(command)) {close(fd);return 0;}
+    if(n<0 || (size_t)n>=sizeof(local.sun_path)-1){result->error="path_length";close(fd);return 0;}
+    if(bind(fd,(struct sockaddr*)&local,(socklen_t)(offsetof(struct sockaddr_un,sun_path)+1+n))<0){result->error="bind";result->number=errno;close(fd);return 0;}
+    if(connect(fd,(struct sockaddr*)&peer,sizeof(peer))<0){result->error="connect";result->number=errno;close(fd);return 0;}
+    if(send(fd,command,strlen(command),MSG_NOSIGNAL)!=(ssize_t)strlen(command)){result->error="send";result->number=errno;close(fd);return 0;}
     struct pollfd wait={.fd=fd,.events=POLLIN};
     int ready=poll(&wait,1,150);
-    ssize_t got=ready>0?recv(fd,out,capacity-1,MSG_TRUNC|MSG_DONTWAIT):-1;close(fd);
-    if(got<=0 || (size_t)got>=capacity-1){out[0]=0;return 0;}
+    if(ready<=0){result->error=ready==0?"timeout":"poll";result->number=ready<0?errno:0;close(fd);return 0;}
+    ssize_t got=recv(fd,out,capacity-1,MSG_TRUNC|MSG_DONTWAIT);
+    int saved=errno;close(fd);
+    if(got<0){result->error="receive";result->number=saved;out[0]=0;return 0;}
+    result->bytes=(int)got;
+    if(got==0 || (size_t)got>=capacity-1){result->error=got==0?"empty_reply":"oversized_reply";out[0]=0;return 0;}
+    result->error="none";
     out[got]=0;return (int)got;
+}
+static int ns_wpa(const char *command,char *out,size_t capacity,ns_wpa_result *result) {
+    long long started=ns_millis();int length=0;
+    memset(result,0,sizeof(*result));result->first_error="none";
+    for(int attempt=1;attempt<=2;attempt++) {
+        result->attempts=attempt;result->number=0;result->bytes=0;out[0]=0;
+        length=ns_wpa_once(command,out,capacity,result);
+        if(attempt==1)result->first_error=result->error;
+        if(length>0 || attempt==2)break;
+        int transient=!strcmp(result->error,"timeout") || result->number==EINTR || result->number==EAGAIN;
+        if(!transient)break;
+        /* A repeated STATUS/SIGNAL_POLL is read-only. Keep the first error in
+         * the result instead of hiding an intermittent failure behind success. */
+        poll(NULL,0,20);
+    }
+    result->elapsed=ns_millis()-started;return length;
+}
+static void ns_wpa_result_json(FILE *out,const ns_wpa_result *result) {
+    fprintf(out,"{\"error\":");ns_json_string(out,result->error);
+    fprintf(out,",\"first_error\":");ns_json_string(out,result->first_error);
+    fprintf(out,",\"errno\":%d,\"bytes\":%d,\"attempts\":%d,\"elapsed_ms\":%lld}",
+            result->number,result->bytes,result->attempts,result->elapsed);
 }
 static void ns_interface_json(FILE *out,const ns_interface *i) {
     fprintf(out,"{\"name\":");ns_json_string(out,i->name);
@@ -176,8 +209,10 @@ int main(int argc,char **argv) {
     ns_collect_interface(&wifi,"wlan0",all);ns_collect_interface(&ethernet,"cc2lan0",all);
     if(all)freeifaddrs(all);
     char wpa[4096]={0},ssid[256]={0},state[64]={0},security[128]={0},frequency[32]={0};
-    int length=ns_wpa("STATUS",wpa,sizeof(wpa));
+    ns_wpa_result status_result,signal_result={.error="not_requested",.first_error="not_requested"};
+    int length=ns_wpa("STATUS",wpa,sizeof(wpa),&status_result);
     int wpa_ok=length>0 && ns_field(wpa,(size_t)length,"wpa_state",state,sizeof(state));
+    if(length>0&&!wpa_ok){status_result.error="malformed_reply";if(status_result.attempts==1)status_result.first_error="malformed_reply";}
     if(wpa_ok) {
         ns_field(wpa,(size_t)length,"ssid",ssid,sizeof(ssid));
         ns_field(wpa,(size_t)length,"key_mgmt",security,sizeof(security));
@@ -185,7 +220,7 @@ int main(int argc,char **argv) {
     }
     int rssi=0,have_rssi=0,freq=0,have_freq=ns_number(frequency,2000,8000,&freq);
     if(wpa_ok && !strcmp(state,"COMPLETED")) {
-        char signal[512],value[32];int received=ns_wpa("SIGNAL_POLL",signal,sizeof(signal));
+        char signal[512],value[32];int received=ns_wpa("SIGNAL_POLL",signal,sizeof(signal),&signal_result);
         if(received>0 && ns_field(signal,(size_t)received,"RSSI",value,sizeof(value)))have_rssi=ns_number(value,-127,-1,&rssi);
     }
     char source[INET_ADDRSTRLEN]={0};const char *lookup=ns_route_source(source,sizeof(source));
@@ -197,6 +232,8 @@ int main(int argc,char **argv) {
     printf(",\"ssid\":");ns_json_string(stdout,ssid);printf(",\"security\":");ns_json_string(stdout,security);
     printf(",\"frequency_mhz\":");if(have_freq)printf("%d",freq);else printf("null");
     printf(",\"signal_dbm\":");if(have_rssi)printf("%d",rssi);else printf("null");
+    printf(",\"status_read\":");ns_wpa_result_json(stdout,&status_result);
+    printf(",\"signal_read\":");ns_wpa_result_json(stdout,&signal_result);
     printf("},\"route\":{\"selected\":");ns_json_string(stdout,selected);
     printf(",\"source\":");if(*source)ns_json_string(stdout,source);else printf("null");
     printf(",\"method\":");ns_json_string(stdout,lookup);printf(",\"destination\":\"1.1.1.1\",\"internet\":\"untested\"},\"native_mode\":");ns_json_string(stdout,ns_mode());

@@ -41,6 +41,7 @@ def main():
             (b'wpa_state=COMPLETED\nssid=ok\n', b'FAIL\n', True, None),
             (b'wpa_state=COMPLETED\nssid='+b'x'*5000+b'\n', None, False, None),
             (None, None, False, None),
+            ([None, b'wpa_state=COMPLETED\nssid=Recovered reading\nfreq=5220\n'], b'RSSI=-45\n', True, -45),
         ]
         for status, signal, available, rssi in cases:
             requests=[]; failures=[]; stop=threading.Event()
@@ -59,6 +60,8 @@ def main():
                     if command not in (b'STATUS', b'SIGNAL_POLL'):
                         failures.append(command); return
                     reply=status if command==b'STATUS' else signal
+                    if isinstance(reply,list):
+                        reply=reply[min(requests.count(b'STATUS')-1,len(reply)-1)]
                     if reply is not None:
                         try:
                             server.sendto(reply, address)
@@ -73,6 +76,13 @@ def main():
                 data=json.loads(result.stdout)
                 assert data['wireless']['control_available'] is available, data
                 assert data['wireless']['signal_dbm'] == rssi, data
+                read=data['wireless']['status_read']
+                if isinstance(status,list):
+                    assert read['attempts']==2 and read['first_error']=='timeout' and read['error']=='none',read
+                elif status is None:
+                    assert read['attempts']==2 and read['first_error']=='timeout' and read['error']=='timeout',read
+                else:
+                    assert read['attempts']==1,read
                 if b'ssid=My ' in (status or b''):
                     assert data['wireless']['ssid']=='My "Wi-Fi"\\test'
                 assert data['read_only'] and not data['capabilities']['network_changes']
@@ -82,8 +92,10 @@ def main():
             finally:
                 stop.set();thread.join(2);server.close();endpoint.unlink()
         missing=run([binary], capture_output=True, text=True)
-        assert json.loads(missing.stdout)['wireless']['control_available'] is False
-    print('PASS: 10 real WPA datagram fixtures, missing peer, CLI refusal, ASAN/UBSAN, no mutation commands')
+        missing_data=json.loads(missing.stdout)['wireless']
+        assert missing_data['control_available'] is False
+        assert missing_data['status_read']['error']=='connect' and missing_data['status_read']['errno']==2
+    print('PASS: 11 real WPA datagram fixtures, bounded retry with retained first failure, missing peer, CLI refusal, ASAN/UBSAN, no mutation commands')
 
 
 if __name__=='__main__':

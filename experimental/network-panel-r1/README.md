@@ -13,6 +13,12 @@ A UDP `connect` without sending a packet obtains the kernel-selected source
 for `1.1.1.1`, including policy routing. This does not verify Internet access.
 DHCP/static origin remains unknown: an observed address is not proof of DHCP.
 Missing, malformed or duplicate fields are reported as unavailable/unknown.
+Status and signal reads record error stage, errno, reply length, attempts and
+elapsed time. Only a transient timeout/interruption/resource-busy result gets
+one bounded retry; the first failure remains visible even if the retry succeeds.
+This is resilience and diagnostics, not a claim to have diagnosed an earlier
+intermittent failure on the physical printer. A traced subsequent hardware read
+received valid STATUS and SIGNAL_POLL responses through the abstract socket.
 The network library mode and its presence in the two services are observations,
 not a claim that the cloud, video, routing or compatibility hooks work.
 
