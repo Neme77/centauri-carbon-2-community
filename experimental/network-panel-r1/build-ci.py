@@ -15,6 +15,20 @@ def run(args, **kwargs):
     return subprocess.run([str(x) for x in args], check=True, timeout=240, **kwargs)
 
 run([sys.executable, 'test_status.py'])
+
+# Integrate into a disposable source copy so the real HTTP handler is tested
+# without changing the canonical tree or pretending this is a release package.
+import shutil
+app=out/'backend-app'
+if app.exists():
+    assert app.resolve().parent==out.resolve()
+    shutil.rmtree(app)
+shutil.copytree(root.parents[1]/'cc2-control', app, ignore=shutil.ignore_patterns('node_modules','build','dist'))
+run([sys.executable,'integrate-status.py',app])
+run(['make','-C',app,'build/cc2-control','CROSS=','CC=gcc',
+     'EXTRA_CFLAGS=-DCC2_NETWORK_STATUS_TEST=\\\"/tmp/cc2-network-http-test.sock\\\"'])
+run([sys.executable,'test_http_status.py',app/'build/cc2-control'])
+
 binary=out/'cc2-network-status'
 zig=os.environ['CC2_ZIG']
 flags=['-std=c11','-Os','-Wall','-Wextra','-Wpedantic','-Werror','-static','-s']
@@ -45,7 +59,7 @@ assert sum('execve(' in line for line in calls.splitlines())==1, 'no child comma
 result={'scope':'Read-only network status, not the connection editor',
         'binary_sha256':hashlib.sha256(blob).hexdigest(),'binary_bytes':len(blob),
         'host_core_and_socket_asan_ubsan':True,'arm_static_execution_qemu':True,
-        'read_only_syscalls_host':True,'real_printer_qualified':False,
+        'read_only_syscalls_host':True,'actual_http_status_adapter':True,'real_printer_qualified':False,
         'network_changes':False,'automatic_selection':False}
 (out/'validation.json').write_text(json.dumps(result,indent=2)+'\n')
 print(json.dumps(result,indent=2))

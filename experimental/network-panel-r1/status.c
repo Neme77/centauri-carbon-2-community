@@ -202,8 +202,7 @@ static void ns_process(FILE *out,const char *name) {
     if(count==1)fprintf(out,"%ld",pid);else fprintf(out,"null");
     fprintf(out,",\"compatibility_mapped\":%s}",count==1&&loaded?"true":"false");
 }
-int main(int argc,char **argv) {
-    if(argc!=1){fprintf(stderr,"Usage: %s (read-only; no arguments)\n",argv[0]);return 2;}
+int cc2_network_snapshot(FILE *output) {
     struct ifaddrs *all=NULL;int addresses=getifaddrs(&all)==0;
     ns_interface wifi,ethernet;
     ns_collect_interface(&wifi,"wlan0",all);ns_collect_interface(&ethernet,"cc2lan0",all);
@@ -226,18 +225,25 @@ int main(int argc,char **argv) {
     char source[INET_ADDRSTRLEN]={0};const char *lookup=ns_route_source(source,sizeof(source));
     const char *selected=*source&&*wifi.ip&&!strcmp(source,wifi.ip)?"wifi":
                          *source&&*ethernet.ip&&!strcmp(source,ethernet.ip)?"ethernet":"unknown";
-    printf("{\"schema\":1,\"read_only\":true,\"addresses_readable\":%s,\"sample_uptime_ms\":%lld,\"wifi\":",addresses?"true":"false",ns_millis());
-    ns_interface_json(stdout,&wifi);printf(",\"ethernet\":");ns_interface_json(stdout,&ethernet);
-    printf(",\"wireless\":{\"control_available\":%s,\"state\":",wpa_ok?"true":"false");ns_json_string(stdout,state);
-    printf(",\"ssid\":");ns_json_string(stdout,ssid);printf(",\"security\":");ns_json_string(stdout,security);
-    printf(",\"frequency_mhz\":");if(have_freq)printf("%d",freq);else printf("null");
-    printf(",\"signal_dbm\":");if(have_rssi)printf("%d",rssi);else printf("null");
-    printf(",\"status_read\":");ns_wpa_result_json(stdout,&status_result);
-    printf(",\"signal_read\":");ns_wpa_result_json(stdout,&signal_result);
-    printf("},\"route\":{\"selected\":");ns_json_string(stdout,selected);
-    printf(",\"source\":");if(*source)ns_json_string(stdout,source);else printf("null");
-    printf(",\"method\":");ns_json_string(stdout,lookup);printf(",\"destination\":\"1.1.1.1\",\"internet\":\"untested\"},\"native_mode\":");ns_json_string(stdout,ns_mode());
-    printf(",\"services\":{\"camera\":");ns_process(stdout,"ai_camera");printf(",\"printer\":");ns_process(stdout,"elegoo_printer");
-    printf("},\"capabilities\":{\"network_changes\":false,\"automatic_selection\":false}}\n");
-    return ferror(stdout)?1:0;
+    fprintf(output,"{\"schema\":1,\"read_only\":true,\"addresses_readable\":%s,\"sample_uptime_ms\":%lld,\"wifi\":",addresses?"true":"false",ns_millis());
+    ns_interface_json(output,&wifi);fprintf(output,",\"ethernet\":");ns_interface_json(output,&ethernet);
+    fprintf(output,",\"wireless\":{\"control_available\":%s,\"state\":",wpa_ok?"true":"false");ns_json_string(output,state);
+    fprintf(output,",\"ssid\":");ns_json_string(output,ssid);fprintf(output,",\"security\":");ns_json_string(output,security);
+    fprintf(output,",\"frequency_mhz\":");if(have_freq)fprintf(output,"%d",freq);else fprintf(output,"null");
+    fprintf(output,",\"signal_dbm\":");if(have_rssi)fprintf(output,"%d",rssi);else fprintf(output,"null");
+    fprintf(output,",\"status_read\":");ns_wpa_result_json(output,&status_result);
+    fprintf(output,",\"signal_read\":");ns_wpa_result_json(output,&signal_result);
+    fprintf(output,"},\"route\":{\"selected\":");ns_json_string(output,selected);
+    fprintf(output,",\"source\":");if(*source)ns_json_string(output,source);else fprintf(output,"null");
+    fprintf(output,",\"method\":");ns_json_string(output,lookup);fprintf(output,",\"destination\":\"1.1.1.1\",\"internet\":\"untested\"},\"native_mode\":");ns_json_string(output,ns_mode());
+    fprintf(output,",\"services\":{\"camera\":");ns_process(output,"ai_camera");fprintf(output,",\"printer\":");ns_process(output,"elegoo_printer");
+    fprintf(output,"},\"capabilities\":{\"network_changes\":false,\"automatic_selection\":false}}\n");
+    return ferror(output)?1:0;
 }
+
+#ifndef CC2_NETWORK_STATUS_LIBRARY
+int main(int argc,char **argv) {
+    if(argc!=1){fprintf(stderr,"Usage: %s (read-only; no arguments)\n",argv[0]);return 2;}
+    return cc2_network_snapshot(stdout);
+}
+#endif
