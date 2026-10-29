@@ -1,0 +1,20 @@
+name: Network R3 disk installer validation
+on:
+  push:
+    branches: [test/network-panel-r1]
+    paths: ['experimental/network-package-r3/**', '.github/workflows/network-package-r3-temporary.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Verify installer grammar, bounded reads and actual disk runner
+        run: |
+          sh -n experimental/network-package-r3/installer.syntax.sh
+          sh -n experimental/network-package-r3/run-install.sh
+          sh -n experimental/network-package-r3/install-cc2-control.sh
+          python3 experimental/network-package-r3/test_installer_http.py
+          python3 experimental/network-package-r3/test_runner.py
