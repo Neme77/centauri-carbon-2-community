@@ -38,8 +38,9 @@ trace=out/'read-only-syscalls.txt'
 run(['strace','-f','-o',trace,'-e','trace=network,openat,execve,rename,unlink,ioctl',host],stdout=subprocess.DEVNULL)
 calls=trace.read_text()
 for line in calls.splitlines():
-    assert not any(word in line for word in ('O_WRONLY','O_RDWR','O_CREAT','O_TRUNC','SIOCS','RTM_NEW','RTM_DEL')),line
-    assert not ('sendto(' in line and ('AF_INET,' in line or 'AF_INET6,' in line)),line
+    assert not any(word in line for word in ('O_WRONLY','O_RDWR','O_CREAT','O_TRUNC','SIOCS')),line
+    if 'sendto(' in line or 'sendmsg(' in line:
+        assert not any(word in line for word in ('AF_INET,','AF_INET6,','RTM_NEW','RTM_DEL')),line
 assert sum('execve(' in line for line in calls.splitlines())==1, 'no child commands'
 result={'scope':'Read-only network status, not the connection editor',
         'binary_sha256':hashlib.sha256(blob).hexdigest(),'binary_bytes':len(blob),
