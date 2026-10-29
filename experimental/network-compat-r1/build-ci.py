@@ -14,9 +14,12 @@ run(['gcc',*flags,'-c','abi_call.c','-o',out/'abi-call-host.o'])
 run(['gcc',*flags,'-c','net_core.c','-o',out/'core-host.o'])
 run(['g++','-O2','-UNDEBUG','-std=c++17','-Wall','-Wextra','-Werror','test_abi.cpp',out/'abi-call-host.o',out/'core-host.o','-o',out/'test-abi-host'])
 run([out/'test-abi-host'])
+for name in ('manage.sh','preflight.sh'):
+    run(['sh','-n',name])
+run([sys.executable,'test_trial.py'])
 arm=[os.environ['CC2_ZIG'],'cc','-target','arm-linux-gnueabihf.2.23','-mcpu=cortex_a7','-marm',*flags]
 library=out/'libcc2-network-compat-r1.so'
-run([*arm,'-fPIC','-shared','network_compat.c','net_core.c','sha256_file.c','-o',library])
+run([*arm,'-fPIC','-shared','-s','network_compat.c','net_core.c','sha256_file.c','-o',library])
 run([*arm,'net_core.c','test_core.c','-o',out/'test-core-arm'])
 run(['qemu-arm','-L','/usr/arm-linux-gnueabihf',out/'test-core-arm'])
 run(['arm-linux-gnueabihf-gcc',*flags,'-marm','-c','abi_call.c','-o',out/'abi-call-arm.o'])
@@ -37,6 +40,7 @@ result={'library_sha256':hashlib.sha256(library.read_bytes()).hexdigest(),
         'glibc_max_required':'.'.join(map(str,max(required))),
         'host_core_asan_ubsan':True,'real_string_abi_host_arm':True,
         'live_arm_entry_trampoline_camera_printer':True,'inert_preload_and_foreign_executable_refusal':True,
+        'shell_syntax_and_five_restore_scenarios':True,
         'hardware_qualified':False,'automatic_quality_selection':False,'persistent_installation':False}
 (out/'validation.json').write_text(json.dumps(result,indent=2)+'\n')
 print(json.dumps(result,indent=2))
