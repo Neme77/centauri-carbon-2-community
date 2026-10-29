@@ -62,7 +62,16 @@ check(){
     [ "$(id -u)" = 0 ] || fail 'Root required'
     [ -d "$BASE" ] && [ ! -L "$BASE" ] || fail 'Trial directory unavailable'
     (cd "$BASE" && sha256sum -c SHA256SUMS) || fail 'Payload checksum failed'
+    sh "$BASE/thermal_selftest.sh" || fail 'Native thermal parser self-test failed'
     sh "$BASE/preflight.sh" || fail 'Printer/network preflight failed'
+    if [ -f /tmp/cc2-lan-cloud-r1.state/watch.pid ];then
+        previous_watch=$(cat /tmp/cc2-lan-cloud-r1.state/watch.pid)
+        case "$previous_watch" in ''|*[!0-9]*) fail 'Previous cloud trial PID is invalid';; esac
+        if kill -0 "$previous_watch" 2>/dev/null &&
+           tr '\0' ' ' < "/proc/$previous_watch/cmdline" | grep -F '/tmp/cc2-lan-cloud-r1.sh' >/dev/null;then
+            fail 'Previous cloud trial watchdog still active; wait for it to finish'
+        fi
+    fi
     [ "$(sha "$REAP")" = 8ef3a5c215462e3c9f32c3d4b85ea23e27c41e330d53b22d7cdeca9d100d016a ] || fail 'Camera reap library differs'
     [ "$(sha "$RECOVERY")" = 08f2455a99fa5294153ae64ce34117c02f4f8d2dff8527dfd8386aae361a289a ] || fail 'Camera recovery library differs'
     [ "$(sha "$REACTOR")" = 4639364c68489ec40c4e0c4f425550f3aa19e44c2ee61ed641affdc560e7e92c ] || fail 'Reactor profile differs from this V4.4.2 trial'

@@ -14,8 +14,9 @@ run(['gcc',*flags,'-c','abi_call.c','-o',out/'abi-call-host.o'])
 run(['gcc',*flags,'-c','net_core.c','-o',out/'core-host.o'])
 run(['g++','-O2','-UNDEBUG','-std=c++17','-Wall','-Wextra','-Werror','test_abi.cpp',out/'abi-call-host.o',out/'core-host.o','-o',out/'test-abi-host'])
 run([out/'test-abi-host'])
-for name in ('manage.sh','preflight.sh'):
+for name in ('manage.sh','preflight.sh','thermal_selftest.sh'):
     run(['sh','-n',name])
+run(['sh','thermal_selftest.sh'])
 run([sys.executable,'test_trial.py'])
 arm=[os.environ['CC2_ZIG'],'cc','-target','arm-linux-gnueabihf.2.23','-mcpu=cortex_a7','-marm',*flags]
 library=out/'libcc2-network-compat-r1.so'
