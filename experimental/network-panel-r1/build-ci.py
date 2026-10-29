@@ -17,6 +17,7 @@ def run(args, **kwargs):
 run([sys.executable, 'test_status.py'])
 run([sys.executable, 'test_manual_trial.py'])
 run([sys.executable, 'test_network_package_checks.py'])
+run([sys.executable, 'test_installer_http.py'])
 
 # Integrate into a disposable source copy so the real HTTP handler is tested
 # without changing the canonical tree or pretending this is a release package.
@@ -69,6 +70,9 @@ run(['make','-C',app,'clean'])
 run(['make','-C',app,'build/cc2-control'])
 shutil.copyfile(app/'build/cc2-control',arm_app)
 assert b'/tmp/cc2-network-http-test.sock' not in arm_app.read_bytes()
+# Preserve actual startup errors in CI instead of swallowing stderr.
+smoke=app/'tests/test_smoke.py'
+smoke.write_text(smoke.read_text().replace('stderr=subprocess.DEVNULL','stderr=None'))
 env=dict(os.environ,CC2_TEST_RUNNER='qemu-arm')
 run([sys.executable,app/'tests/test_smoke.py',arm_app],env=env)
 # Ship exact integrated sources alongside the candidate; they can be rebuilt
@@ -80,7 +84,7 @@ with zipfile.ZipFile(out/'integrated-sources.zip','w',compression=zipfile.ZIP_DE
         if p.is_file() and not any(part in ('node_modules','build','dist','.git') for part in rel.parts):
             archive.write(p,'cc2-control/'+rel.as_posix())
     for p in sorted(root.iterdir()):
-        if p.is_file() and (p.suffix in ('.c','.h','.py','.tsx','.json','.mjs','.md') or p.name in ('THIRD-PARTY-NOTICES.txt','LICENSE.GPL-3.0')):
+        if p.is_file() and (p.suffix in ('.c','.h','.py','.tsx','.json','.mjs','.md','.sh') or p.name in ('THIRD-PARTY-NOTICES.txt','LICENSE.GPL-3.0')):
             archive.write(p,'network-development/'+p.name)
     for p in sorted((root/'manual-trial').rglob('*')):
         if p.is_file():archive.write(p,'network-development/manual-trial/'+p.relative_to(root/'manual-trial').as_posix())
@@ -117,6 +121,6 @@ result={'scope':'Read-only network status, not the connection editor',
         'network_changes':False,'automatic_selection':False,
         'app_binary_sha256':hashlib.sha256(arm_app.read_bytes()).hexdigest(),
         'integrated_sources_sha256':hashlib.sha256((out/'integrated-sources.zip').read_bytes()).hexdigest(),
-        'source_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir() if p.is_file() and p.suffix in ('.c','.h','.py','.tsx','.json','.mjs','.md')}}
+        'source_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir() if p.is_file() and p.suffix in ('.c','.h','.py','.tsx','.json','.mjs','.md','.sh')}}
 (out/'validation.json').write_text(json.dumps(result,indent=2)+'\n')
 print(json.dumps(result,indent=2))
