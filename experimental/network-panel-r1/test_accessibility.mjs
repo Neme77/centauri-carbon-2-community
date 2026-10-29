@@ -30,7 +30,7 @@ try {
   for (const theme of ['dark', 'light']) for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 })
     await page.goto(origin + '/#settings/appearance')
-    await page.getByLabel('Theme', { exact: true }).selectOption(theme)
+    await page.locator('select').filter({ has: page.locator('option[value="obsidian"]') }).selectOption(theme)
     for (const route of pages) {
       await page.goto(origin + '/#' + route)
       await page.waitForTimeout(300)

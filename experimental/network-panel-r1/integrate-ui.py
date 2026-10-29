@@ -35,6 +35,16 @@ text=icons.read_text(encoding="utf-8")
 text=text.replace('  Zap,','  Zap,\n  Wifi,\n  EthernetPort,')
 text=text.replace('  home: House,','  wifi: Wifi,\n  ethernet: EthernetPort,\n  home: House,')
 icons.write_bytes(text.encode("utf-8"))
+# The existing mesh uses an always-dark inset even in the light theme. Its
+# caption must use the inset foreground, not the light-page muted token.
+bed=web/'src/pages/bed.tsx'
+text=bed.read_text(encoding='utf-8')
+old='<div class="p-2 text-center text-xs text-muted">'
+assert text.count(old)==1
+text=text.replace(old,'<div class="p-2 text-center text-xs text-well-fg/70">')
+text=text.replace('<p class="text-muted">{t(\'bed.waiting_for_live_mesh_data_2\')}</p>',
+                  '<p class="text-well-fg/70">{t(\'bed.waiting_for_live_mesh_data_2\')}</p>')
+bed.write_bytes(text.encode('utf-8'))
 strings=json.loads((source/'ui-strings.json').read_text(encoding="utf-8"))
 assert set(strings)=={'en','it','fr','zh','ru','pl','cs','hu','es'}
 for lang,dictionary in strings.items():
