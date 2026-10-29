@@ -68,7 +68,8 @@ version=(app/'VERSION').read_text().strip()
 firmware=(app/'FIRMWARE_VERSION').read_text().strip()
 run(['make','-C',app,'clean'])
 run(['make','-C',app,'build/cc2-control'])
-shutil.copyfile(app/'build/cc2-control',arm_app)
+shutil.copy2(app/'build/cc2-control',arm_app)
+assert arm_app.stat().st_mode & 0o111, 'candidate copy must preserve executable mode'
 assert b'/tmp/cc2-network-http-test.sock' not in arm_app.read_bytes()
 # Preserve actual startup errors in CI instead of swallowing stderr.
 smoke=app/'tests/test_smoke.py'
