@@ -13,6 +13,10 @@ REACTOR=/opt/usr/cc2-reactor-runtime-v2/libcc2-reactor-v2.so
 REAP=/opt/usr/cc2-control/camera/libcc2-camera-reap-r2.so
 RECOVERY=/opt/usr/cc2-control/camera/libcc2-camera-recovery-r2.so
 LIB=$BASE/libcc2-network-compat-r1.so
+CAMERA_PATH=/usr/sbin:/usr/bin:/sbin:/bin:/opt/bin
+PRINTER_PATH=$CAMERA_PATH
+CAMERA_LIBRARY_PATH=/opt/lib
+PRINTER_LIBRARY_PATH=/opt/lib
 fail(){ echo "STOP: $*" >&2; exit 1; }
 sha(){ sha256sum "$1" | awk '{print $1}'; }
 clock_now(){ awk '{print int($1)}' /proc/uptime; }
@@ -35,6 +39,11 @@ current_state(){
     [ -d "$STATE" ] && [ ! -L "$STATE" ]
 }
 library_loaded(){ grep -F "$LIB" "/proc/$1/maps" >/dev/null 2>&1; }
+env_field(){
+    tr '\0' '\n' < "/proc/$1/environ" | awk -v key="$2" '
+    index($0,key "=")==1 {count++;value=substr($0,length(key)+2)}
+    END {if(count>1)exit 1;print value}'
+}
 runtime_ready(){
     for role in camera printer; do
         if [ "$role" = camera ];then name=ai_camera;else name=elegoo_printer;fi
@@ -57,6 +66,19 @@ qualified_processes(){
     grep -F "$REAP" "/proc/$camera_pid/maps" >/dev/null || fail 'Camera reap R2 not loaded'
     grep -F "$RECOVERY" "/proc/$camera_pid/maps" >/dev/null || fail 'Camera recovery R2 not loaded'
     grep -F "$REACTOR" "/proc/$printer_pid/maps" >/dev/null || fail 'Reactor not loaded'
+    camera_preload=$(env_field "$camera_pid" LD_PRELOAD) || fail 'Cannot read camera loader environment'
+    printer_preload=$(env_field "$printer_pid" LD_PRELOAD) || fail 'Cannot read printer loader environment'
+    case "$camera_preload" in "$REAP:$RECOVERY"|"$LIB:$REAP:$RECOVERY") ;; *) fail 'Unreviewed camera preload; refusing to discard libraries';; esac
+    case "$printer_preload" in "$REACTOR"|"$LIB:$REACTOR") ;; *) fail 'Unreviewed printer preload; refusing to discard libraries';; esac
+    CAMERA_PATH=$(env_field "$camera_pid" PATH) || fail 'Cannot read camera PATH'
+    PRINTER_PATH=$(env_field "$printer_pid" PATH) || fail 'Cannot read printer PATH'
+    CAMERA_LIBRARY_PATH=$(env_field "$camera_pid" LD_LIBRARY_PATH) || fail 'Cannot read camera library path'
+    PRINTER_LIBRARY_PATH=$(env_field "$printer_pid" LD_LIBRARY_PATH) || fail 'Cannot read printer library path'
+    [ -n "$CAMERA_PATH" ] && [ -n "$PRINTER_PATH" ] || fail 'Original service PATH unavailable'
+    [ "$(env_field "$printer_pid" CC2_REACTOR_RUNTIME_V2)" = 1 ] || fail 'Original reactor not enabled'
+    for name in CC2_CAMERA_REAP_TRIAL CC2_CAMERA_REAP_ENABLE_LAN CC2_CAMERA_RECOVERY_TRIAL;do
+        [ "$(env_field "$camera_pid" "$name")" = 1 ] || fail 'Original camera flags differ'
+    done
 }
 check(){
     [ "$(id -u)" = 0 ] || fail 'Root required'
@@ -86,14 +108,14 @@ launch_camera(){
     preload="$REAP:$RECOVERY"
     [ "$compatibility" = 0 ] || preload="$LIB:$preload"
     (trap '' HUP;ulimit -c 0;cd / || exit 1
-     CC2_NETWORK_COMPAT_TRIAL="$compatibility" CC2_CAMERA_REAP_TRIAL=1 CC2_CAMERA_REAP_ENABLE_LAN=1 CC2_CAMERA_RECOVERY_TRIAL=1 LD_LIBRARY_PATH=/opt/lib LD_PRELOAD="$preload" exec "$CAMERA") </dev/null >> "$LOG/camera.log" 2>&1 &
+     PATH="$CAMERA_PATH" CC2_NETWORK_COMPAT_TRIAL="$compatibility" CC2_CAMERA_REAP_TRIAL=1 CC2_CAMERA_REAP_ENABLE_LAN=1 CC2_CAMERA_RECOVERY_TRIAL=1 LD_LIBRARY_PATH="$CAMERA_LIBRARY_PATH" LD_PRELOAD="$preload" exec "$CAMERA") </dev/null >> "$LOG/camera.log" 2>&1 &
 }
 launch_printer(){
     compatibility=$1
     preload="$REACTOR"
     [ "$compatibility" = 0 ] || preload="$LIB:$preload"
     (trap '' HUP;ulimit -c 0;cd / || exit 1
-     CC2_NETWORK_COMPAT_TRIAL="$compatibility" CC2_REACTOR_RUNTIME_V2=1 LD_LIBRARY_PATH=/opt/lib LD_PRELOAD="$preload" exec "$PRINTER" /opt/inst/printer_dsp.cfg -s /opt/usr/cfg/autosave.cfg -a /tmp/elegoo_uds) </dev/null >> "$LOG/printer.log" 2>&1 &
+     PATH="$PRINTER_PATH" CC2_NETWORK_COMPAT_TRIAL="$compatibility" CC2_REACTOR_RUNTIME_V2=1 LD_LIBRARY_PATH="$PRINTER_LIBRARY_PATH" LD_PRELOAD="$preload" exec "$PRINTER" /opt/inst/printer_dsp.cfg -s /opt/usr/cfg/autosave.cfg -a /tmp/elegoo_uds) </dev/null >> "$LOG/printer.log" 2>&1 &
 }
 wifi_ready(){
     wpa_cli -p /opt/usr/wifi/sockets -i wlan0 status | grep -q '^wpa_state=COMPLETED$' &&
@@ -104,6 +126,16 @@ restore(){
     [ -d "$STATE" ] || return 1
     [ ! -f "$STATE/restored" ] || return 0
     mkdir "$STATE/restoring" 2>/dev/null || return 1
+    for field in camera-path printer-path camera-library-path printer-library-path;do
+        if [ -f "$STATE/$field" ];then
+            case "$field" in
+                camera-path) CAMERA_PATH=$(cat "$STATE/$field");;
+                printer-path) PRINTER_PATH=$(cat "$STATE/$field");;
+                camera-library-path) CAMERA_LIBRARY_PATH=$(cat "$STATE/$field");;
+                printer-library-path) PRINTER_LIBRARY_PATH=$(cat "$STATE/$field");;
+            esac
+        fi
+    done
     ok=1
     if ! wifi_ready;then
         ip link set dev wlan0 up || ok=0
@@ -139,6 +171,10 @@ arm(){
     fi
     STATE="$BASE/state.$(date +%s).$$"
     mkdir "$STATE" || fail 'Cannot create private trial state'
+    printf '%s\n' "$CAMERA_PATH" > "$STATE/camera-path"
+    printf '%s\n' "$PRINTER_PATH" > "$STATE/printer-path"
+    printf '%s\n' "$CAMERA_LIBRARY_PATH" > "$STATE/camera-library-path"
+    printf '%s\n' "$PRINTER_LIBRARY_PATH" > "$STATE/printer-library-path"
     [ ! -L "$LOG" ] || fail 'Unexpected log directory symlink'
     mkdir -p "$LOG" && chmod 700 "$LOG" || fail 'Cannot create disk log directory'
     printf '%s\n' "$STATE" > "$BASE/active.next" && mv -f "$BASE/active.next" "$BASE/active" || fail 'Cannot publish trial state'
@@ -231,3 +267,4 @@ case "${1:-check}" in
         ;;
     *) fail 'Use check, start, ethernet, status or restore';;
 esac
+
