@@ -86,6 +86,7 @@ check(){
     (cd "$BASE" && sha256sum -c SHA256SUMS) || fail 'Payload checksum failed'
     sh "$BASE/thermal_selftest.sh" || fail 'Native thermal parser self-test failed'
     sh "$BASE/preflight.sh" || fail 'Printer/network preflight failed'
+    [ "$(sha /bin/wifi_daemon)" = 8e19a620921c6f4f21bde910cc3d960af5400d223493041eb96f1e921dcbe3c1 ] || fail 'Native Wi-Fi manager changed'
     if [ -f /tmp/cc2-lan-cloud-r1.state/watch.pid ];then
         previous_watch=$(cat /tmp/cc2-lan-cloud-r1.state/watch.pid)
         case "$previous_watch" in ''|*[!0-9]*) fail 'Previous cloud trial PID is invalid';; esac
@@ -194,6 +195,24 @@ stop_one(){
         sleep 1;count=$((count+1))
     done
 }
+watch_link_check(){
+    [ -f "$STATE/ethernet-active" ] || return 0
+    flags=$(cat /sys/class/net/wlan0/flags 2>/dev/null) || flags=
+    case "$flags" in
+        0x*) digits=${flags#0x};;
+        *) digits=;;
+    esac
+    case "$digits" in
+        ''|*[!0-9a-fA-F]*) echo 'INCONCLUSIVE: cannot verify Wi-Fi remained down.' > "$STATE/error";return 1;;
+    esac
+    if [ $((flags&1)) -ne 0 ];then
+        echo 'INCONCLUSIVE: native manager raised Wi-Fi during Ethernet trial; restoring.' > "$STATE/error";return 1
+    fi
+    [ "$(cat /sys/class/net/cc2lan0/carrier 2>/dev/null)" = 1 ] || {
+        echo 'Ethernet carrier lost during trial; restoring Wi-Fi.' > "$STATE/error";return 1;
+    }
+    return 0
+}
 status(){
     printf 'Mode file: ';if [ -f "$MODE" ];then cat "$MODE";else echo 'native';fi
     for role in camera printer;do
@@ -222,6 +241,7 @@ case "${1:-check}" in
         [ -d "$STATE" ] && [ ! -L "$STATE" ] || fail 'Missing watchdog state'
         echo ready > "$STATE/ready"
         while [ ! -f "$STATE/restored" ];do
+            watch_link_check || break
             deadline=$(cat "$STATE/deadline") || break
             case "$deadline" in ''|*[!0-9]*) break;; esac
             [ "$(clock_now)" -lt "$deadline" ] || break
@@ -259,6 +279,7 @@ case "${1:-check}" in
         ip -4 rule add priority 22040 from all table 200 || { restore;fail 'Wired rule failed'; }
         set_mode ethernet || { restore;fail 'Cannot select Ethernet for native services'; }
         ip link set dev wlan0 down || { restore;fail 'Cannot lower Wi-Fi'; }
+        : > "$STATE/ethernet-active"
         sleep 2
         flags=$(cat /sys/class/net/wlan0/flags) || { restore;fail 'Cannot read Wi-Fi flags'; }
         if [ $((flags&1)) -ne 0 ];then restore;fail 'Native manager raised Wi-Fi; test inconclusive';fi

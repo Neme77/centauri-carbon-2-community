@@ -41,7 +41,7 @@ result={'library_sha256':hashlib.sha256(library.read_bytes()).hexdigest(),
         'glibc_max_required':'.'.join(map(str,max(required))),
         'host_core_asan_ubsan':True,'real_string_abi_host_arm':True,
         'live_arm_entry_trampoline_camera_printer':True,'inert_preload_and_foreign_executable_refusal':True,
-        'shell_syntax_and_five_restore_scenarios':True,
+        'shell_syntax_and_eight_restore_watch_scenarios':True,
         'hardware_qualified':False,'automatic_quality_selection':False,'persistent_installation':False}
 (out/'validation.json').write_text(json.dumps(result,indent=2)+'\n')
 print(json.dumps(result,indent=2))

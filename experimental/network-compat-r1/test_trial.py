@@ -7,7 +7,7 @@ import unittest
 
 SOURCE=Path(__file__).with_name('manage.sh').read_text()
 class RestoreTests(unittest.TestCase):
-    def scenario(self,ready=True,reconnect=True,services=True,locked=False):
+    def scenario(self,ready=True,reconnect=True,services=True,locked=False,watch_flags=None):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);base=root/'base';state=base/'state.1.1';state.mkdir(parents=True)
             bins=root/'bin';bins.mkdir();mode=root/'mode';mode.write_text('ethernet\n')
@@ -16,6 +16,7 @@ class RestoreTests(unittest.TestCase):
             if services:
                 (root/'printer').touch();(root/'camera').touch()
             if locked:(state/'restoring').mkdir()
+            if watch_flags is not None:(state/'ethernet-active').touch()
             commands={
                 'ip':'''#!/bin/sh
 echo "ip $*" >> "$TEST_ROOT/calls"
@@ -42,6 +43,13 @@ case "$1" in
 esac
 ''',
                 'sleep':'#!/bin/sh\nexit 0\n',
+                'cat':'''#!/bin/sh
+case "$1" in
+ /sys/class/net/wlan0/flags) printf '%s\\n' "$TEST_WIFI_FLAGS";;
+ /sys/class/net/cc2lan0/carrier) echo 1;;
+ *) /bin/cat "$@";;
+esac
+''',
             }
             for name,content in commands.items():
                 p=bins/name;p.write_text(content);p.chmod(0o755)
@@ -54,9 +62,8 @@ PATH='{bins}':$PATH
 STATE='{state}'
 launch_printer(){{ echo launch_printer >> "$TEST_ROOT/calls";touch "$TEST_ROOT/printer"; }}
 launch_camera(){{ echo launch_camera >> "$TEST_ROOT/calls";touch "$TEST_ROOT/camera"; }}
-restore
-''')
-            env=dict(os.environ,TEST_ROOT=str(root),TEST_RECONNECT='1' if reconnect else '0')
+'''+('watch_link_check\n' if watch_flags is not None else 'restore\n'))
+            env=dict(os.environ,TEST_ROOT=str(root),TEST_RECONNECT='1' if reconnect else '0',TEST_WIFI_FLAGS=watch_flags or '0x1002')
             result=subprocess.run(['sh',str(script)],env=env,capture_output=True,text=True,timeout=10)
             calls=(root/'calls').read_text() if (root/'calls').exists() else ''
             return {'result':result,'calls':calls,'mode':mode.exists(),'rule':(root/'rule').exists(),'restored':(state/'restored').exists(),'error':(state/'error').exists()}
@@ -78,4 +85,13 @@ restore
     def test_concurrent_restore_does_not_mutate_network(self):
         x=self.scenario(locked=True);self.assertEqual(x['result'].returncode,1)
         self.assertEqual(x['calls'],'');self.assertTrue(x['mode']);self.assertTrue(x['rule'])
+    def test_watchdog_accepts_wifi_remaining_down(self):
+        x=self.scenario(watch_flags='0x1002');self.assertEqual(x['result'].returncode,0)
+        self.assertFalse(x['error']);self.assertEqual(x['calls'],'')
+    def test_watchdog_detects_native_wifi_reactivation(self):
+        x=self.scenario(watch_flags='0x1003');self.assertEqual(x['result'].returncode,1)
+        self.assertTrue(x['error']);self.assertTrue(x['mode']);self.assertTrue(x['rule'])
+    def test_watchdog_rejects_unknown_wifi_flags(self):
+        x=self.scenario(watch_flags='unknown');self.assertEqual(x['result'].returncode,1)
+        self.assertTrue(x['error'])
 if __name__=='__main__':unittest.main()
