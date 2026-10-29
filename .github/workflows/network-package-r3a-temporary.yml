@@ -1,0 +1,15 @@
+name: Network R3a launcher validation
+on:
+  push:
+    branches: [test/network-panel-r1]
+    paths: ['experimental/network-package-r3a/**', '.github/workflows/network-package-r3a-temporary.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Reproduce old shell failure and validate file transport scripts
+        run: python3 experimental/network-package-r3a/test_scripts.py
