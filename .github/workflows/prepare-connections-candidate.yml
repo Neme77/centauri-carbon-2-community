@@ -28,9 +28,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          gh api repos/Neme77/centauri-carbon-2-community/releases/assets/693701634 -H 'Accept: application/octet-stream' > /tmp/connections-source.patch.gz
+          gh api repos/Neme77/centauri-carbon-2-community/releases/assets/693727409 -H 'Accept: application/octet-stream' > /tmp/connections-source.patch.gz
           gh api repos/Neme77/centauri-carbon-2-community/releases/assets/693492332 -H 'Accept: application/octet-stream' > /tmp/connections-runtime.tar.gz
-          echo "1da4b752a0988834dc1dfae2c04eb5539900520a0d6ef252bc4b57da83f6daa2  /tmp/connections-source.patch.gz" | sha256sum -c -
+          echo "be7715d6dda6b357fb323df282a00ffb30606e5aef865c84fe9281a4c2947251  /tmp/connections-source.patch.gz" | sha256sum -c -
           echo "95db87b35dcf6799d5d57ec8ad046455c97e5cb297cc07ea4a2eeda90fb367de  /tmp/connections-runtime.tar.gz" | sha256sum -c -
           gzip -d -c /tmp/connections-source.patch.gz > /tmp/connections-source.patch
           git apply --check --whitespace=error /tmp/connections-source.patch
@@ -48,14 +48,14 @@ jobs:
       - name: Rebuild the production UI
         working-directory: cc2-control/web-src
         run: npm ci && npm run check && npm run build
-      - name: Full host application regression suite
-        run: make -C cc2-control clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
       - name: Qualify actual Connections controls
         run: |
           cd cc2-control/web-src
           npx playwright install --with-deps chromium
           cd ../..
           node experimental/network-connections/test_ui.mjs cc2-control /tmp/connections-ui
+      - name: Full host application regression suite
+        run: make -C cc2-control clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
       - name: Record the candidate source and refreshed snapshot locally on the isolated runner
         shell: bash
         run: |
