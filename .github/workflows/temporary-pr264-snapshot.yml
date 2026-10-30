@@ -1,0 +1,33 @@
+name: One-time reviewed emergency-stop snapshot
+on:
+  push:
+    branches: [fix/emergency-stop-reviewed]
+    paths: [.github/workflows/temporary-pr264-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/emergency-stop-reviewed
+          fetch-depth: 0
+      - name: Regenerate pinned component with the repository generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "3368f623aa383998fa59098bfec6ba0e47ecf06def403fa0f20d75941e99b7a6  cc2-control/src/console.c" | sha256sum -c -
+          python3 experimental/pr128-integration/sync_source.py
+          echo "22ad4c29ed7707016f0dd8fb3410f02a42ab4687a74c4a69dfcbd8f7a655e4ca  builder/current/components/cc2-control/source/source.zip" | sha256sum -c -
+          python3 builder/current/tests/test_cc2_control_source_snapshot.py
+          git rm .github/workflows/temporary-pr264-snapshot.yml
+          git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Refresh builder source snapshot after emergency-stop review"
+          git push origin HEAD:refs/heads/fix/emergency-stop-reviewed
