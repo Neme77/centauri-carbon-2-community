@@ -40,7 +40,7 @@ jobs:
       - name: Install isolated test dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user busybox libdigest-sha-perl
       - name: Qualify persistent manager and startup on fixture processes
-        run: sudo -n python3 experimental/network-connections/build_public.py
+        run: sudo -n mkdir -p /output && sudo -n python3 experimental/network-connections/build_public.py
       - name: Compile the current app and test slow native Wi-Fi isolation
         run: |
           make -C cc2-control build/cc2-control CROSS= CC=gcc EXTRA_CFLAGS='-Werror -DCC2_NETWORK_STATUS_TEST=\"/tmp/cc2-network-http-test.sock\"'
