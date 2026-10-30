@@ -9,9 +9,12 @@ qualified=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else workspace/'work/ne
 commit=sys.argv[2] if len(sys.argv)>2 else 'a55bc024869df0837c74ea88dfe86e9d84c4adbb'
 ci_run=int(sys.argv[3]) if len(sys.argv)>3 else 41015530793
 assert re.fullmatch('[0-9a-f]{40}',commit)
-result=workspace/'outputs/CC2-Control-Connections-Diagnostics-R5'
+revision=sys.argv[4] if len(sys.argv)>4 else 'R5'
+assert re.fullmatch(r'R[0-9]+[a-z]?',revision)
+stage='/opt/usr/cc2-control-connections-'+revision.lower()
+result=workspace/('outputs/CC2-Control-Connections-Diagnostics-'+revision)
 result.mkdir(exist_ok=True)
-package=result/'CC2-Control-Connections-Diagnostics-R5'
+package=result/('CC2-Control-Connections-Diagnostics-'+revision)
 assert not package.exists(),'Never overwrite a delivered revision'
 package.mkdir()
 sha=lambda b:hashlib.sha256(b).hexdigest()
@@ -34,6 +37,8 @@ def write_tar(path,data):
             entry=tarfile.TarInfo(name);entry.size=len(blob);entry.mode=mode;entry.mtime=0;entry.uid=entry.gid=0
             t.addfile(entry,io.BytesIO(blob))
 def text(name,content):
+    content=re.sub(r'/opt/usr/cc2-control-connections-r5(?=$|[^a-z0-9])',lambda _:stage,content)
+    content=re.sub(r'\bR5\b',lambda _:revision,content)
     (package/name).write_text(content,encoding='utf-8',newline='\n')
 app=read_tar(old/'cc2-control-payload.tar.gz')
 original=app['cc2-control'][0]
@@ -47,7 +52,7 @@ assert count==1
 app['cc2-control']=(candidate,0o755);app['install-on-printer.sh']=(installer,0o755)
 for p in (qualified/'cc2-control/web').rglob('*'):
     if p.is_file(): app['web/'+p.relative_to(qualified/'cc2-control/web').as_posix()]=(p.read_bytes(),0o644)
-info=json.loads(app['build-info.json'][0]);info.update({'trial':'connections-diagnostics-r5','source_commit':commit,'automatic_network_selection':False,'unconditional_network_timer':False})
+info=json.loads(app['build-info.json'][0]);info.update({'trial':'connections-diagnostics-'+revision.lower(),'source_commit':commit,'automatic_network_selection':False,'unconditional_network_timer':False})
 app['build-info.json']=(json.dumps(info,indent=2).encode()+b'\n',0o644)
 app['SHA256SUMS']=(manifest(app),0o644)
 app_archive=package/'cc2-control-payload.tar.gz';write_tar(app_archive,app)
@@ -176,8 +181,9 @@ publishing. Installation never reboots, heats or moves the printer.
 Full corresponding sources and GPL notices are included. See the Italian guide
 for log paths, supported-profile limits and recovery details.
 ''')
-text('validation.json',json.dumps({'source_commit':commit,'ci_run':ci_run,'build':report,'app_payload_sha256':app_sha,'connections_payload_sha256':net_sha,'physical_validation':False},indent=2)+'\n')
+text('validation.json',json.dumps({'revision':revision,'source_commit':commit,'ci_run':ci_run,'build':report,'app_payload_sha256':app_sha,'connections_payload_sha256':net_sha,'physical_validation':False},indent=2)+'\n')
 files={p.relative_to(package).as_posix():(p.read_bytes(),0o644) for p in package.rglob('*') if p.is_file()}
 text('SHA256SUMS',manifest(files).decode())
 print(package)
 print('Payload app:',app_sha,'network:',net_sha)
+
