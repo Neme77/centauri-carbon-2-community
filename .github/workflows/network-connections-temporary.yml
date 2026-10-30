@@ -8,7 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Compile and qualify manager primitives
@@ -22,3 +22,20 @@ jobs:
           /tmp/cc2-connections-host/control
           python3 test_wifi.py /tmp/cc2-connections-host/control
           for f in *.sh; do dash -n "$f"; done
+      - name: Install GNU ARM build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user
+      - name: Build integrated app and validate HTTP and ARM execution
+        run: python3 experimental/network-connections/build-ci.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: connections-diagnostics-r5
+          path: |
+            experimental/network-connections/output/control
+            experimental/network-connections/output/cc2-control-network
+            experimental/network-connections/output/integrated-sources.zip
+            experimental/network-connections/output/validation.json
+            experimental/network-connections/output/cc2-control/web/
+          if-no-files-found: error
+          retention-days: 14

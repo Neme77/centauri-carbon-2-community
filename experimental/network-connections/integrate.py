@@ -21,14 +21,16 @@ shutil.copyfile(previous/'status_core.h',app/'src/status_core.h')
 main=app/'src/main.c'
 text=main.read_text()
 assert '#include "connections_http.h"' not in text
+text='#define _GNU_SOURCE\n'+text
 text=text.replace('#include "backup.h"','#include "backup.h"\n#include "network_status_http.h"\n#include "connections_http.h"')
 original='!emergency && app_update_active())'
 assert text.count(original)==1
 text=text.replace(original,'!emergency && (app_update_active() || (connections_busy() && strcmp(path,"/api/network/action"))))')
 start='if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying"))'
 assert text.count(start)==1
-text=text.replace(start,'''if(!strcmp(method,"GET")&&!strcmp(path,"/api/network")) {
-        network_status_response(fd);
+text=text.replace(start,'''if(!strcmp(path,"/api/network")) {
+        if(!strcmp(method,"GET"))network_status_response(fd);
+        else app_update_fail(fd,405,"Network status is read-only");
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/network/manager")) {
         connections_status(fd,mqtt,console);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/network/action")) {

@@ -278,7 +278,7 @@ static inline int ng_exec(const char *program, char *const argv[], char *out,
       _exit(126);
     fcntl(1, F_SETFL, fcntl(1, F_GETFL) & ~O_NONBLOCK);
     long max = sysconf(_SC_OPEN_MAX);
-    if (max < 0)
+    if (max < 0 || max > 65536)
       max = 65536;
     for (int fd = 3; fd < max; fd++)
       close(fd);
