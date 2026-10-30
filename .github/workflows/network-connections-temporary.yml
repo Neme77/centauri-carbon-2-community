@@ -1,0 +1,25 @@
+name: Connections seed crash investigation
+on:
+  push:
+    branches: [test/network-panel-r1]
+    paths: ['experimental/network-connections/**', '.github/workflows/network-connections-temporary.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user
+      - name: Reproduce original resolver operation with production compiler flags
+        run: |
+          cd experimental/network-connections
+          gcc -std=c11 -Os -Wall -Wextra -Wpedantic -static test_resolver_legacy.c -o /tmp/legacy-host
+          arm-linux-gnueabihf-gcc -std=c11 -Os -Wall -Wextra -Wpedantic -static test_resolver_legacy.c -o /tmp/legacy-arm
+          python3 - <<'PY'
+          import subprocess
+          for args in (['/tmp/legacy-host'],['qemu-arm','/tmp/legacy-arm']):
+            r=subprocess.run(args,capture_output=True,text=True)
+            print(args,'EXIT',r.returncode,'OUT',r.stdout,'ERR',r.stderr,flush=True)
+          PY
