@@ -61,11 +61,15 @@ esac
  env=dict(os.environ,CC2_NETWORK_PANEL_LOCAL_IP='192.168.1.107',FIXTURES=str(fixtures))
  def run(text,case):
   transformed=text.replace('PATH=/usr/sbin:/usr/bin:/sbin:/bin','PATH='+str(bin)+':/usr/sbin:/usr/bin:/sbin:/bin').replace('/sys/class/net/',str(sysfs)+'/class/net/')
+  # BusyBox standalone ash may prefer its own applets over PATH fixtures.
+  # Shell functions bind the mock commands explicitly without altering the guard.
+  functions=''.join(name+'() { \"'+str(bin/name)+'\" \"$@\"; }\n' for name in ('id','ip','wpa_cli','wget'))
+  transformed=transformed.replace('export PATH\n','export PATH\n'+functions)
   script=base/'preflight.sh';script.write_text(transformed)
   return subprocess.run(os.environ.get('TEST_SHELL','sh').split()+[str(script)],env=dict(env,CASE=case),capture_output=True,text=True,timeout=12)
  (fixtures/'printer.json').write_text(json.dumps(default,separators=(',',':')))
  (fixtures/'uds.json').write_text(json.dumps(uds_default,separators=(',',':')))
- regression=run(original,'complete');assert regression.returncode!=0 and 'Print session still enabled' in regression.stderr
+ regression=run(original,'complete');assert regression.returncode!=0 and 'Print session still enabled' in regression.stderr,(regression.stdout,regression.stderr)
  for name,printer,uds,accept in cases:
   (fixtures/'printer.json').write_text(json.dumps(dict(default,**printer),separators=(',',':')))
   (fixtures/'uds.json').write_text(json.dumps(dict(uds_default,**uds),separators=(',',':')))
@@ -73,3 +77,4 @@ esac
   assert (result.returncode==0)==accept,(name,result.stdout,result.stderr)
   assert not list(base.glob('status-read.*')),name
 print('PASS: original completed-print defect reproduced; '+str(len(cases))+' full preflight cases; fresh UDS/cold/idle guards and bounded-read cleanup')
+

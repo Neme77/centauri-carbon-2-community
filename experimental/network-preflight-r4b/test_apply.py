@@ -30,6 +30,7 @@ for case in ('success','changed-manifest','active-watchdog','rollback'):
    exact='(cd "$BASE" && sha256sum -c SHA256SUMS)'
    assert script.count(exact)==2
    left,right=script.rsplit(exact,1);script=left+'false'+right
+  script=script.replace('set -eu\n','set -eu\nid() { \"'+str(mock/'id')+'\" \"$@\"; }\n',1)
   p=tmp/'apply.sh';p.write_text(script)
   result=subprocess.run(os.environ.get('TEST_SHELL','sh').split()+[str(p)],env=dict(os.environ,PATH=str(mock)+':'+os.environ['PATH']),capture_output=True,text=True,timeout=10)
   assert (result.returncode==0)==(case=='success'),(case,result.stdout,result.stderr)
@@ -42,3 +43,4 @@ for case in ('success','changed-manifest','active-watchdog','rollback'):
   elif case=='rollback':assert (base/'SHA256SUMS').read_text()==initial
   else:assert not work.exists()
 print('PASS: exact hotfix apply, backup, changed-manifest refusal, watchdog refusal and rollback; other payload files unchanged')
+
