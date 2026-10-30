@@ -18,9 +18,11 @@ static inline int ng_public_active(void) {
 static inline void ng_public_lease(FILE *out, int iface) {
   ng_lease l;
   int have = ng_lease_load(iface, &l) && l.present;
+  ng_config config;
+  int known = have && ng_effective_config(&config) && config.managed;
   fprintf(out, "{\"known\":%s,\"method\":\"%s\",\"prefix\":%d,\"gateway\":",
-          have ? "true" : "false",
-          have ? (l.method == NG_STATIC ? "static" : "dhcp") : "unknown",
+          known ? "true" : "false",
+          known ? (l.method == NG_STATIC ? "static" : "dhcp") : "unknown",
           have ? l.prefix : 0);
   ng_json_quote(out, have ? l.gateway : "");
   fputs(",\"dns1\":", out);

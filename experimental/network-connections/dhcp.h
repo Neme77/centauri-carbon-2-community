@@ -116,6 +116,14 @@ static inline int ng_dhcp_start(int iface, int restart) {
     return 1;
   if (!ng_dhcp_stop(iface))
     return 0;
+  /* A newly spawned client may not have delivered deconfig yet. Invalidate the
+   * previous observation before publishing its PID, so readiness cannot confirm
+   * the old address while a new DHCP configuration is still being acquired. */
+  ng_lease pending;
+  memset(&pending, 0, sizeof(pending));
+  pending.schema = NG_SCHEMA;
+  if (!ng_boot_id(pending.boot) || !ng_lease_save(iface, &pending))
+    return 0;
   char token[33], generation[512], pidfile[512];
   if (!ng_nonce(token))
     return 0;

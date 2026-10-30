@@ -18,7 +18,7 @@ jobs:
           /tmp/cc2-network-core-test
           gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror manager.c -lm -o /tmp/cc2-network-manager
           mkdir -p /tmp/cc2-connections-host
-          gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -DNG_COMPONENT='"/tmp/cc2-connections-host"' -DNG_STATE='"/tmp/cc2-connections-host/state"' -DNG_RUN='"/tmp/cc2-connections-host/run"' -DNG_WPA='"/tmp/cc2-connections-wpa-test.sock"' -fsanitize=address,undefined -fno-pie -no-pie test_manager.c -lm -o /tmp/cc2-connections-host/control
+          gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -DNG_COMPONENT='"/tmp/cc2-connections-host"' -DNG_STATE='"/tmp/cc2-connections-host/state"' -DNG_RUN='"/tmp/cc2-connections-host/run"' -DNG_TEST_TOOLS='"/tmp/cc2-connections-host/tools"' -DNG_WPA='"/tmp/cc2-connections-wpa-test.sock"' -fsanitize=address,undefined -fno-pie -no-pie test_manager.c -lm -o /tmp/cc2-connections-host/control
           /tmp/cc2-connections-host/control
           python3 test_wifi.py /tmp/cc2-connections-host/control
           for f in *.sh; do dash -n "$f"; done
@@ -28,6 +28,7 @@ jobs:
           sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user busybox
       - name: Build integrated app and validate HTTP and ARM execution
         run: |
+          python3 experimental/network-connections/test_runner.py
           python3 experimental/network-connections/test_hooks.py
           python3 experimental/network-connections/build-ci.py
       - uses: actions/upload-artifact@v6

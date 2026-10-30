@@ -16,6 +16,19 @@ static void fixture_journal(ng_journal *j) {
   assert(ng_nonce(j->token));
 }
 int main(int argc, char **argv) {
+  if (!strcmp(argv[0], "udhcpc")) {
+    const char *pidfile = NULL;
+    for (int i = 1; i + 1 < argc; i++)
+      if (!strcmp(argv[i], "-p"))
+        pidfile = argv[i + 1];
+    assert(pidfile);
+    FILE *out = fopen(pidfile, "w");
+    assert(out);
+    fprintf(out, "%ld\n", (long)getpid());
+    assert(!fclose(out));
+    while (1)
+      pause();
+  }
   (void)ng_request_run;
   (void)ng_stdin_request;
   if (argc == 3 && !strcmp(argv[1], "--watch"))
@@ -93,6 +106,30 @@ int main(int argc, char **argv) {
   assert(strstr(output, "\"temporary\":false") &&
          strstr(output, "\"pending\":null"));
   assert(!strstr(output, "password"));
+  /* Exercise the production DHCP client lifecycle with an inert executable.
+   * The old lease must be invalid before the new client's first callback. */
+  assert(ng_directory(NG_COMPONENT "/tools"));
+  assert(!symlink(NG_COMPONENT "/control", NG_COMPONENT "/tools/udhcpc"));
+  ng_lease observed;
+  memset(&observed, 0, sizeof(observed));
+  observed.schema = NG_SCHEMA;
+  observed.present = 1;
+  observed.prefix = 24;
+  strcpy(observed.ip, "192.0.2.7");
+  assert(ng_boot_id(observed.boot));
+  assert(ng_lease_save(NG_WIFI, &observed));
+  out = fmemopen(output, sizeof(output), "w");
+  assert(out);
+  ng_public_json(out, 1, 1, 0, 0);
+  assert(!fclose(out));
+  assert(strstr(output, "\"known\":false,\"method\":\"unknown\""));
+  assert(ng_dhcp_start(NG_WIFI, 1));
+  pid_t dhcp = ng_dhcp_pid(NG_WIFI);
+  assert(dhcp > 1 && getpgid(dhcp) == dhcp);
+  ng_lease awaiting;
+  assert(ng_lease_load(NG_WIFI, &awaiting) && !awaiting.present);
+  assert(ng_dhcp_stop(NG_WIFI));
+  assert(waitpid(dhcp, NULL, 0) == dhcp);
   int lock = ng_lock("operation.lock", 0);
   assert(lock >= 0);
   assert(ng_public_active());
