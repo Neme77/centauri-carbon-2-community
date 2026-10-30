@@ -1,17 +1,17 @@
 # The source is the fingerprint-qualified original set_lan.sh retained locally.
 # Replace only LAN subnet selection/firewall handling; preserve all original
 # enable/disable commands and their persistent ban_wlan semantics.
-/^get_lan_net[(][)][{]$/ {
+/^get_lan_net[(][)][{][ \t]*$/ {
     replacement=1; depth=1; count++
     print "get_lan_net(){ /opt/usr/cc2-network-manager/control --subnets; }"
     next
 }
 replacement {
     # The original top-level function ends with a brace at column zero.
-    if($0=="}") replacement=0
+    if($0 ~ /^}[ \t]*$/) replacement=0
     next
 }
-/^set_firewall_wlan_net[(][)][{]$/ {
+/^set_firewall_wlan_net[(][)][{][ \t]*$/ {
     firewall=1; count++
     print "set_firewall_wlan_net(){"
     print "    case \"$1\" in"
@@ -28,8 +28,8 @@ replacement {
     print "}"
     next
 }
-firewall { if($0=="}") firewall=0; next }
-/^case "\$1" in$/ {
+firewall { if($0 ~ /^}[ \t]*$/) firewall=0; next }
+/^case "\$1" in[ \t]*$/ {
     print
     print "    cc2_refresh_policy)"
     print "        firewall_flag=$(fw_printenv -n ban_wlan)"
@@ -40,4 +40,9 @@ firewall { if($0=="}") firewall=0; next }
     next
 }
 { print }
-END { if(count!=3 || replacement || firewall) exit 1 }
+END {
+    if(count!=3 || replacement || firewall) {
+        printf "WAN transformation refused: matched=%d expected=3 subnet_open=%d firewall_open=%d\n",count,replacement,firewall > "/dev/stderr"
+        exit 1
+    }
+}

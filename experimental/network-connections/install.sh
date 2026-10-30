@@ -11,21 +11,47 @@ STATE=/opt/usr/cc2-network-state
 STAGE=/opt/usr/.cc2-network-manager-$$
 BACKUP=/opt/usr/cc2-network-backup-$(date +%Y%m%d-%H%M%S)-$$
 COMMITTED=0
+BACKUP_READY=0
+INSTALL_PHASE=initial
+phase(){ INSTALL_PHASE=$1;printf 'CONNECTIONS_INSTALL_PHASE=%s\n' "$INSTALL_PHASE"; }
+finish(){
+    code=$?
+    trap - 0 1 2 15
+    printf 'CONNECTIONS_INSTALL_EXIT=%s LAST_PHASE=%s\n' "$code" "$INSTALL_PHASE"
+    if [ "$code" -ne 0 ] && [ "$COMMITTED" = 0 ] && [ "$BACKUP_READY" = 1 ];then
+        if sh "$BACKUP/restore.sh" --installer;then
+            echo 'CONNECTIONS_RESTORE_EXIT=0'
+        else
+            restore_code=$?
+            printf 'CONNECTIONS_RESTORE_EXIT=%s\n' "$restore_code"
+            echo 'RESTORE INCOMPLETE: inspect retained backup'
+        fi
+    fi
+    exit "$code"
+}
+trap finish 0
+trap 'exit 1' 1 2 15
 fail(){ echo "STOP: $*";exit 1; }
 sha(){ sha256sum "$1" | awk '{print $1}'; }
 [ "$(id -u)" = 0 ] || fail root_required
 [ -d /opt/usr ] && [ ! -L /opt/usr ] || fail persistent_storage
 [ "$SOURCE" != "$ROOT" ] && [ ! -e "$STAGE" ] && [ ! -L "$STAGE" ] || fail staging_path
+phase payload-checksums
 (cd "$SOURCE" && sha256sum -c SHA256SUMS) || fail payload_checksums
+phase printer-preflight
 "$SOURCE/control" --guard 8081 || fail printer_not_ready
+phase previous-session-preflight
 "$SOURCE/control" --legacy-idle || fail finish_previous_network_trial
+phase native-profile
 for item in '/etc/init.d/printer e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd255d1bc4' '/bin/wifi_daemon 8e19a620921c6f4f21bde910cc3d960af5400d223493041eb96f1e921dcbe3c1' '/opt/usr/cc2-control/camera/boot-camera.sh e570b84e4b5615bfea53be5c52a1befef7b78f0b91ba16e62b500652a8cdfaa5' '/opt/usr/cc2-reactor-runtime-v2/launcher.sh a260865964759898cf47ed8e30e20eb8981506c1a22ada32611b9911b36b47fc';do
     file=${item%% *};expected=${item#* }
     [ -f "$file" ] && [ ! -L "$file" ] && [ "$(sha "$file")" = "$expected" ] || fail native_profile
 done
+phase stage-copy
 mkdir "$STAGE" "$BACKUP"
 cp -a "$SOURCE/." "$STAGE/"
 chmod 700 "$STAGE" "$BACKUP"
+phase retain-native-hooks
 if [ -e "$ROOT" ] || [ -L "$ROOT" ];then
     [ -d "$ROOT" ] && [ ! -L "$ROOT" ] || fail existing_component
     "$ROOT/control" --busy && fail pending_network_change
@@ -45,17 +71,23 @@ else
     cp /etc/init.d/cc2-camera-launch "$STAGE/native-camera-launch"
     cp /etc/init.d/cc2-reactor-launch "$STAGE/native-reactor-launch"
 fi
-awk -v mode=camera-entry -f "$STAGE/prepare-hooks.awk" /opt/usr/cc2-control/camera/boot-camera.sh > "$STAGE/camera-entry.sh"
+phase prepare-camera-entry
+awk -v mode=camera-entry -f "$STAGE/prepare-hooks.awk" /opt/usr/cc2-control/camera/boot-camera.sh > "$STAGE/camera-entry.sh" || fail camera_entry_transform
+phase prepare-reactor-entry
 awk -v mode=reactor-entry -f "$STAGE/prepare-hooks.awk" /opt/usr/cc2-reactor-runtime-v2/launcher.sh > "$STAGE/reactor-entry.sh"
+phase prepare-startup-delegates
 awk -v mode=camera-launch -f "$STAGE/prepare-hooks.awk" "$STAGE/native-camera-launch" > "$STAGE/camera-launch.sh"
 awk -v mode=reactor-launch -f "$STAGE/prepare-hooks.awk" "$STAGE/native-reactor-launch" > "$STAGE/reactor-launch.sh"
-awk -f "$STAGE/native-wan-policy.awk" "$STAGE/native-set_lan.sh" > "$STAGE/native-wan.sh"
+phase prepare-wan-policy
+awk -f "$STAGE/native-wan-policy.awk" "$STAGE/native-set_lan.sh" > "$STAGE/native-wan.sh" || fail wan_policy_transform
+phase validate-shell
 for f in "$STAGE/"*.sh;do sh -n "$f" || fail generated_shell_syntax;done
 for path in /etc/init.d/cc2-network-manager /etc/rc.d/S23cc2-network-manager /etc/hotplug.d/net/90-cc2-network-manager;do
     if [ -e "$path" ] || [ -L "$path" ];then
         [ -d "$ROOT" ] || fail existing_foreign_hook
     fi
 done
+phase backup-hooks
 mkdir "$BACKUP/files"
 for path in /opt/usr/wifi/udhcpc_wlan0 /usr/share/udhcpc/set_lan.sh /etc/init.d/cc2-camera-launch /etc/init.d/cc2-reactor-launch /etc/init.d/cc2-network-manager /etc/rc.d/S23cc2-network-manager /etc/hotplug.d/net/90-cc2-network-manager;do
     if [ -e "$path" ] || [ -L "$path" ];then
@@ -64,14 +96,12 @@ for path in /opt/usr/wifi/udhcpc_wlan0 /usr/share/udhcpc/set_lan.sh /etc/init.d/
     else printf '%s\n' "$path" >> "$BACKUP/absent";fi
 done
 cp "$STAGE/rollback.sh" "$BACKUP/restore.sh"
-rollback(){
-    [ "$COMMITTED" = 1 ] || sh "$BACKUP/restore.sh" --installer || echo 'RESTORE INCOMPLETE: inspect retained backup'
-}
-trap rollback 0
-trap 'exit 1' 1 2 15
+BACKUP_READY=1
+phase install-component
 if [ -d "$ROOT" ];then mv "$ROOT" "$BACKUP/component";fi
 mv "$STAGE" "$ROOT"
 chmod 700 "$ROOT/control" "$ROOT/"*.sh
+phase install-delegates
 cp "$ROOT/wifi-client.sh" /opt/usr/wifi/udhcpc_wlan0
 cp "$ROOT/native-lease.sh" /usr/share/udhcpc/set_lan.sh
 cp "$ROOT/camera-launch.sh" /etc/init.d/cc2-camera-launch
@@ -80,12 +110,15 @@ cp "$ROOT/init.sh" /etc/init.d/cc2-network-manager
 cp "$ROOT/hotplug.sh" /etc/hotplug.d/net/90-cc2-network-manager
 chmod 755 /opt/usr/wifi/udhcpc_wlan0 /usr/share/udhcpc/set_lan.sh /etc/init.d/cc2-camera-launch /etc/init.d/cc2-reactor-launch /etc/init.d/cc2-network-manager /etc/hotplug.d/net/90-cc2-network-manager
 if [ ! -L /etc/rc.d/S23cc2-network-manager ];then ln -s ../init.d/cc2-network-manager /etc/rc.d/S23cc2-network-manager;fi
+phase verify-installation
 sha256sum /opt/usr/wifi/udhcpc_wlan0 /usr/share/udhcpc/set_lan.sh /etc/init.d/cc2-camera-launch /etc/init.d/cc2-reactor-launch /etc/init.d/cc2-network-manager /etc/hotplug.d/net/90-cc2-network-manager > "$ROOT/startup.sha256"
 (cd "$ROOT";find . -type f ! -name SHA256SUMS | LC_ALL=C sort | while IFS= read -r f;do sha256sum "$f";done) > "$ROOT/SHA256SUMS"
 sh "$ROOT/profile.sh" ethernet || fail installed_profile
 # Defaults leave native Wi-Fi ownership untouched. No helper/module is started.
+phase seed-configuration
 "$ROOT/control" --seed || fail configuration_seed
 COMMITTED=1
+phase complete
 sync
 echo "CONNECTIONS INSTALLED. Backup: $BACKUP"
 echo 'No service restarted and no Ethernet module loaded. Use Commuta in the panel.'

@@ -40,12 +40,18 @@ case "$1" in
  disable_wlan) fw_setenv ban_wlan true;;
 esac
 '''
+    # The qualified real set_lan.sh (53cf6a...) contains exactly this trailing
+    # space after its firewall declaration. R5's exact end anchor rejected it.
+    assert not __import__('re').search(rb'(?m)^set_firewall_wlan_net[(][)][{]$',b'set_firewall_wlan_net(){ \n')
     for awk in (['awk'],['busybox','awk']):
-        result=subprocess.run([*awk,'-f',root/'native-wan-policy.awk'],input=sample,check=True,capture_output=True).stdout
-        assert b'for net in $current_lan;' in result
-        assert result.count(b'fw_setenv')==2
-        assert b'cc2_refresh_policy)' in result
-        f=tmp/'wan.sh';f.write_bytes(result)
-        subprocess.run(['dash','-n',f],check=True);subprocess.run(['busybox','sh','-n',f],check=True)
-        assert subprocess.run([*awk,'-f',root/'native-wan-policy.awk'],input=b'#!/bin/sh\n',capture_output=True).returncode!=0
+        for ending in (b'',b' ',b'\t',b' \t '):
+            fixture=sample.replace(b'(){\n',b'(){'+ending+b'\n').replace(b'}\n',b'}'+ending+b'\n').replace(b'case "$1" in\n',b'case "$1" in'+ending+b'\n')
+            result=subprocess.run([*awk,'-f',root/'native-wan-policy.awk'],input=fixture,check=True,capture_output=True).stdout
+            assert b'for net in $current_lan;' in result
+            assert result.count(b'fw_setenv')==2
+            assert result.count(b'cc2_refresh_policy)')==1
+            f=tmp/'wan.sh';f.write_bytes(result)
+            subprocess.run(['dash','-n',f],check=True);subprocess.run(['busybox','sh','-n',f],check=True)
+        rejected=subprocess.run([*awk,'-f',root/'native-wan-policy.awk'],input=b'#!/bin/sh\n',capture_output=True)
+        assert rejected.returncode!=0 and b'matched=0 expected=3' in rejected.stderr
 print('PASS: exact firmware delegates, retained native guards/fallbacks, BusyBox syntax and unchanged persistent WAN restriction commands')
