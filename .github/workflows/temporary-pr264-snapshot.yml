@@ -22,7 +22,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           echo "3368f623aa383998fa59098bfec6ba0e47ecf06def403fa0f20d75941e99b7a6  cc2-control/src/console.c" | sha256sum -c -
           python3 experimental/pr128-integration/sync_source.py
-          echo "22ad4c29ed7707016f0dd8fb3410f02a42ab4687a74c4a69dfcbd8f7a655e4ca  builder/current/components/cc2-control/source/source.zip" | sha256sum -c -
+          python3 -c 'import zipfile,hashlib; z=zipfile.ZipFile("builder/current/components/cc2-control/source/source.zip"); names=z.namelist(); assert z.testzip() is None and len(names)==372 and len(set(names))==372; manifest="".join(n+" "+hashlib.sha256(z.read(n)).hexdigest()+"\n" for n in sorted(names)); assert hashlib.sha256(manifest.encode()).hexdigest()=="26bd89a0504fcf083ac19ee251238506ecbadcfa4e63999b7007b3b5d597465c"; print("PASS: all 372 snapshot members match the qualified local contents")'
           python3 builder/current/tests/test_cc2_control_source_snapshot.py
           git rm .github/workflows/temporary-pr264-snapshot.yml
           git add builder/current/components/cc2-control/source/source.zip builder/current/prepare.py builder/current/core/firmware_builder.py builder/current/launch_helpers/run_build.py
