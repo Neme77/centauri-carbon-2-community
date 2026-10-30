@@ -1,6 +1,7 @@
 #ifndef CC2_CONNECTIONS_WIFI_H
 #define CC2_CONNECTIONS_WIFI_H
 #include "state.h"
+static inline int ng_wifi_unescape(const char *s, char out[33]);
 static inline int ng_wifi_integer(const char *reply, int *number) {
   char *end;
   errno = 0;
@@ -48,6 +49,16 @@ static inline int ng_wifi_snapshot(ng_journal *j) {
     ng_profile *p = &j->profiles[j->profile_count++];
     p->id = id;
     p->enabled = strstr(flags, "[DISABLED]") == NULL;
+    char encoded[129];
+    const char *ssid_end = strchr(tab + 1, '\t');
+    if (!ssid_end || (size_t)(ssid_end - tab - 1) >= sizeof(encoded))
+      return 0;
+    memcpy(encoded, tab + 1, (size_t)(ssid_end - tab - 1));
+    encoded[ssid_end - tab - 1] = 0;
+    if (*encoded && !ng_wifi_unescape(encoded, p->ssid))
+      return 0;
+    if (!*encoded)
+      p->ssid[0] = 0;
     char command[80], priority[96];
     snprintf(command, sizeof(command), "GET_NETWORK %d priority", id);
     if (!ng_wpa(command, priority, sizeof(priority), 1000) ||
@@ -66,10 +77,63 @@ static inline int ng_wifi_priority(int id, int priority) {
            priority);
   return ng_wpa_ok(command);
 }
-static inline int ng_wifi_restore(const ng_journal *j, int save) {
-  if (j->created_network >= 0 &&
-      !ng_wifi_id_command("REMOVE_NETWORK", j->created_network))
+static inline int ng_wifi_restore(ng_journal *j, int save) {
+  /* Native IDs may be renumbered after SAVE_CONFIG/reboot. Match the saved
+   * SSID and priority before touching a profile; ambiguity never removes one.
+   */
+  ng_journal current;
+  memset(&current, 0, sizeof(current));
+  current.previous = j->previous;
+  current.previous.link[NG_WIFI].enabled = 0;
+  if (!ng_wifi_snapshot(&current))
     return 0;
+  int created = -1;
+  if (j->created_network >= 0) {
+    for (int i = 0; i < current.profile_count; i++) {
+      const ng_profile *p = &current.profiles[i];
+      if (!strcmp(p->ssid, j->target_ssid) &&
+          p->priority == j->created_priority) {
+        if (created >= 0)
+          return 0;
+        created = p->id;
+      }
+    }
+    /* Before priority was set, the newly added profile can still have zero
+     * priority. Only use its original ID in the same boot and verify its SSID.
+     */
+    char boot[40];
+    if (created < 0 && ng_boot_id(boot) && !strcmp(boot, j->boot)) {
+      for (int i = 0; i < current.profile_count; i++)
+        if (current.profiles[i].id == j->created_network &&
+            (!strcmp(current.profiles[i].ssid, j->target_ssid) ||
+             !*current.profiles[i].ssid))
+          created = j->created_network;
+    }
+    if (created >= 0 && !ng_wifi_id_command("REMOVE_NETWORK", created))
+      return 0;
+  }
+  int old_previous = j->previous_network;
+  for (int i = 0; i < j->profile_count; i++) {
+    ng_profile *p = &j->profiles[i];
+    int found = -1;
+    for (int k = 0; k < current.profile_count; k++) {
+      const ng_profile *q = &current.profiles[k];
+      if (q->id == created || strcmp(q->ssid, p->ssid))
+        continue;
+      /* A saved target profile temporarily receives a higher priority. */
+      if (q->priority != p->priority &&
+          !(p->id == j->target_network && q->priority == j->created_priority))
+        continue;
+      if (found >= 0)
+        return 0;
+      found = q->id;
+    }
+    if (found < 0)
+      return 0;
+    if (p->id == old_previous)
+      j->previous_network = found;
+    p->id = found;
+  }
   int ok = j->previous_network >= 0
                ? ng_wifi_id_command("SELECT_NETWORK", j->previous_network)
                : ng_wpa_ok("DISCONNECT");
@@ -93,7 +157,9 @@ static inline int ng_wifi_choose(ng_journal *j, const ng_request *r) {
     return 0;
   int id = r->network_id;
   j->target_network = id;
+  j->created_priority = max + 1;
   if (r->op == NG_WIFI_CONNECT) {
+    strcpy(j->target_ssid, r->ssid);
     char answer[80];
     if (!ng_wpa("ADD_NETWORK", answer, sizeof(answer), 1000) ||
         !ng_wifi_integer(answer, &id) || id > 4095)
@@ -145,8 +211,10 @@ static inline int ng_wifi_choose(ng_journal *j, const ng_request *r) {
   } else {
     int found = 0;
     for (int i = 0; i < j->profile_count; i++)
-      if (j->profiles[i].id == id)
+      if (j->profiles[i].id == id) {
         found = 1;
+        strcpy(j->target_ssid, j->profiles[i].ssid);
+      }
     if (!found)
       return 0;
   }
@@ -202,7 +270,27 @@ static inline int ng_wifi_unescape(const char *s, char out[33]) {
     out[n++] = (char)c;
   }
   out[n] = 0;
-  return n > 0;
+  return n > 0 && ng_utf8_valid(out);
+}
+static inline int ng_wifi_ssid(char out[33]) {
+  char reply[4096], escaped[129];
+  return ng_wpa("STATUS", reply, sizeof(reply), 500) &&
+         ng_wpa_field(reply, "ssid", escaped, sizeof(escaped)) &&
+         ng_wifi_unescape(escaped, out);
+}
+static inline int ng_operating_config(ng_config *config) {
+  if (!ng_effective_config(config))
+    return 0;
+  if (config->link[NG_WIFI].method == NG_STATIC &&
+      config->link[NG_WIFI].ssid[0]) {
+    char ssid[33];
+    if (ng_wifi_ssid(ssid) && strcmp(ssid, config->link[NG_WIFI].ssid)) {
+      int enabled = config->link[NG_WIFI].enabled;
+      memset(&config->link[NG_WIFI], 0, sizeof(config->link[NG_WIFI]));
+      config->link[NG_WIFI].enabled = enabled;
+    }
+  }
+  return 1;
 }
 static inline int ng_wifi_list(FILE *out, int scan) {
   char reply[16384];

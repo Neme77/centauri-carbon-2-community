@@ -39,7 +39,21 @@ static inline int ng_command(const char *name, char *out, size_t cap,
   va_end(list);
   args[n] = NULL;
   const char *tool = ng_tool(name);
-  return tool && ng_exec(tool, args, out, cap, seconds);
+  char diagnostic[2048];
+  char *destination = out ? out : diagnostic;
+  size_t limit = out ? cap : sizeof(diagnostic);
+  int ok = tool && ng_exec(tool, args, destination, limit, seconds);
+  if (!ok) {
+    if (!tool)
+      snprintf(destination, limit, "Required tool unavailable: %s", name);
+    size_t used = strnlen(destination, limit);
+    if (used && used < limit)
+      ng_atomic(NG_RUN, "last-command.txt", destination, used);
+    char event[80];
+    snprintf(event, sizeof(event), "command_failed:%s", name);
+    ng_event(event);
+  }
+  return ok;
 }
 static inline int ng_prefix_mask(const char *mask) {
   struct in_addr ip;
@@ -132,6 +146,7 @@ static inline int ng_static_lease(const ng_iface *i, ng_lease *l) {
   memset(l, 0, sizeof(*l));
   l->schema = NG_SCHEMA;
   l->present = 1;
+  l->method = NG_STATIC;
   l->prefix = i->prefix;
   strcpy(l->ip, i->ip);
   strcpy(l->gateway, i->gateway);
@@ -297,6 +312,9 @@ static inline int ng_configure_routes(const ng_config *config) {
     if (!config->link[i].enabled || !ng_lease_load(i, &leases[i]) ||
         !leases[i].present)
       continue;
+    char live[16];
+    if (!ng_live_ip(i, live) || strcmp(live, leases[i].ip))
+      continue;
     have[i] = 1;
     char subnet[32];
     ng_subnet(subnet, leases[i].ip, leases[i].prefix);
@@ -367,9 +385,16 @@ static inline int ng_configure_routes(const ng_config *config) {
       break;
     p = end + 1;
   }
-  if (!ng_rule_add(NG_SELECTED_PRIORITY, "all", selected) ||
-      !ng_rule_delete("22059", "all", selected))
+  if (!ng_rule_add(NG_SELECTED_PRIORITY, "all", selected))
     return 0;
+  /* A process interruption can leave a staging rule for the other table.
+   * Remove both owned staging rules only after the final route is installed. */
+  const char *staged[] = {NG_WIFI_TABLE, NG_ETH_TABLE};
+  for (int i = 0; i < 2; i++) {
+    int present = ng_rule_present("22059", "all", staged[i]);
+    if (present < 0 || (present && !ng_rule_delete("22059", "all", staged[i])))
+      return 0;
+  }
   for (int i = 0; i < 2; i++)
     if (!have[i] &&
         !ng_command("ip", NULL, 0, 2, "-4", "route", "flush", "table",
@@ -438,6 +463,24 @@ static inline int ng_set_mode(const ng_config *config) {
 static inline int ng_apply_address(int iface, const ng_lease *lease) {
   if (!lease->present || !ng_lease_valid(lease))
     return 0;
+  struct ifaddrs *all = NULL;
+  int count = 0, same = 0;
+  if (getifaddrs(&all))
+    return 0;
+  for (struct ifaddrs *p = all; p; p = p->ifa_next)
+    if (!strcmp(p->ifa_name, ng_name(iface)) && p->ifa_addr &&
+        p->ifa_addr->sa_family == AF_INET) {
+      char ip[16];
+      inet_ntop(AF_INET, &((struct sockaddr_in *)p->ifa_addr)->sin_addr, ip,
+                sizeof(ip));
+      count++;
+      same =
+          !strcmp(ip, lease->ip) && p->ifa_netmask &&
+          ((struct sockaddr_in *)p->ifa_netmask)->sin_addr.s_addr == UINT32_MAX;
+    }
+  freeifaddrs(all);
+  if (count == 1 && same)
+    return 1;
   char address[24];
   snprintf(address, sizeof(address), "%s/32", lease->ip);
   if (!ng_command("ip", NULL, 0, 2, "-4", "addr", "flush", "dev",

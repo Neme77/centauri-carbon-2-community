@@ -84,7 +84,7 @@ static inline int ng_read_file(const char *path, void *out, size_t cap,
     return 0;
   struct stat st;
   if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size < 0 ||
-      (uint64_t)st.st_size >= cap) {
+      (secret && (uint64_t)st.st_size >= cap)) {
     close(fd);
     return 0;
   }
@@ -257,6 +257,11 @@ static inline int ng_lock(const char *name, int seconds) {
  */
 static inline int ng_exec(const char *program, char *const argv[], char *out,
                           size_t capacity, int seconds) {
+  if (out) {
+    if (!capacity)
+      return 0;
+    out[0] = 0;
+  }
   int pipes[2];
   if (pipe2(pipes, O_CLOEXEC | O_NONBLOCK))
     return 0;
@@ -269,7 +274,7 @@ static inline int ng_exec(const char *program, char *const argv[], char *out,
   if (!child) {
     int null = open("/dev/null", O_RDWR);
     if (null < 0 || dup2(null, 0) < 0 || dup2(pipes[1], 1) < 0 ||
-        dup2(null, 2) < 0)
+        dup2(pipes[1], 2) < 0)
       _exit(126);
     fcntl(1, F_SETFL, fcntl(1, F_GETFL) & ~O_NONBLOCK);
     long max = sysconf(_SC_OPEN_MAX);
@@ -341,6 +346,10 @@ static inline int ng_wpa(const char *command, char *out, size_t cap,
   if (!cap || strlen(command) > 1024)
     return 0;
   out[0] = 0;
+  struct stat socket_info;
+  if (lstat(NG_WPA, &socket_info) || !S_ISSOCK(socket_info.st_mode) ||
+      socket_info.st_uid != ng_owner())
+    return 0;
   int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
   if (fd < 0)
     return 0;

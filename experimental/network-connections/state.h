@@ -11,21 +11,25 @@ enum {
 };
 typedef struct {
   int id, enabled, priority;
+  char ssid[33];
 } ng_profile;
 typedef struct {
   uint32_t schema;
   int phase, op, worker, watcher, port, proof_interface;
   long long deadline;
+  unsigned long long worker_start;
   char boot[40], token[33], previous_ip[16], expected_ip[16], error[64];
   ng_config previous, desired;
   int previous_network, created_network, target_network, profile_count;
+  int created_priority;
+  char target_ssid[33];
   ng_profile profiles[32];
   char resolver[2048];
   int resolver_size;
 } ng_journal;
 typedef struct {
   uint32_t schema;
-  int present, prefix;
+  int present, prefix, method;
   char ip[16], gateway[16], dns1[16], dns2[16], boot[40];
 } ng_lease;
 static inline int ng_boot_id(char out[40]) {
@@ -58,8 +62,9 @@ static inline int ng_journal_valid(const ng_journal *j) {
   if (j->schema != NG_SCHEMA || j->phase < NG_IDLE || j->phase > NG_FAILED ||
       j->port < 1 || j->port > 65535 || j->proof_interface < 0 ||
       j->proof_interface > 1 || !ng_config_valid(&j->previous) ||
-      !ng_config_valid(&j->desired) || !ng_token_valid(j->token) ||
-      j->profile_count < 0 || j->profile_count > 32)
+      !ng_config_valid(&j->desired) || !memchr(j->token, 0, sizeof(j->token)) ||
+      !ng_token_valid(j->token) || j->profile_count < 0 ||
+      j->profile_count > 32)
     return 0;
   if (!memchr(j->boot, 0, sizeof(j->boot)) ||
       !memchr(j->error, 0, sizeof(j->error)) ||
@@ -68,9 +73,12 @@ static inline int ng_journal_valid(const ng_journal *j) {
     return 0;
   if (j->resolver_size < 0 || j->resolver_size >= (int)sizeof(j->resolver))
     return 0;
+  if (!memchr(j->target_ssid, 0, sizeof(j->target_ssid)))
+    return 0;
   for (int i = 0; i < j->profile_count; i++)
     if (j->profiles[i].id < 0 || j->profiles[i].id > 4095 ||
-        (j->profiles[i].enabled != 0 && j->profiles[i].enabled != 1))
+        (j->profiles[i].enabled != 0 && j->profiles[i].enabled != 1) ||
+        !memchr(j->profiles[i].ssid, 0, sizeof(j->profiles[i].ssid)))
       return 0;
   return 1;
 }
@@ -89,11 +97,20 @@ static inline int ng_effective_config(ng_config *c) {
     *c = j.desired;
     return 1;
   }
+  if (ng_journal_load(&j) && j.phase == NG_RESTORING) {
+    *c = j.previous;
+    return 1;
+  }
+  if (ng_blob_read(NG_RUN, "boot-config.bin", c, sizeof(*c)) &&
+      ng_config_valid(c))
+    return 1;
   int configured;
   return ng_config_load(c, &configured);
 }
 static inline int ng_lease_valid(const ng_lease *l) {
-  if (l->schema != NG_SCHEMA || (l->present != 0 && l->present != 1) ||
+  if (l->schema != NG_SCHEMA ||
+      (l->method != NG_DHCP && l->method != NG_STATIC) ||
+      (l->present != 0 && l->present != 1) ||
       !memchr(l->boot, 0, sizeof(l->boot)))
     return 0;
   ng_iface i = {.enabled = 1, .method = NG_STATIC, .prefix = l->prefix};

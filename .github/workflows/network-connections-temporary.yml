@@ -11,8 +11,14 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - name: Strict request/configuration and atomic state tests
+      - name: Compile and qualify manager primitives
         run: |
           cd experimental/network-connections
           gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -fsanitize=address,undefined -fno-pie -no-pie test_core.c -lm -o /tmp/cc2-network-core-test
           /tmp/cc2-network-core-test
+          gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror manager.c -lm -o /tmp/cc2-network-manager
+          mkdir -p /tmp/cc2-connections-host
+          gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -DNG_COMPONENT='"/tmp/cc2-connections-host"' -DNG_STATE='"/tmp/cc2-connections-host/state"' -DNG_RUN='"/tmp/cc2-connections-host/run"' -DNG_WPA='"/tmp/cc2-connections-wpa-test.sock"' -fsanitize=address,undefined -fno-pie -no-pie test_manager.c -lm -o /tmp/cc2-connections-host/control
+          /tmp/cc2-connections-host/control
+          python3 test_wifi.py /tmp/cc2-connections-host/control
+          for f in *.sh; do dash -n "$f"; done

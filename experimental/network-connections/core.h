@@ -19,11 +19,11 @@ enum {
 };
 typedef struct {
   int enabled, method, prefix;
-  char ip[16], gateway[16], dns1[16], dns2[16];
+  char ip[16], gateway[16], dns1[16], dns2[16], ssid[33];
 } ng_iface;
 typedef struct {
   uint32_t schema;
-  int ethernet_support, selected;
+  int ethernet_support, selected, managed;
   ng_iface link[2];
 } ng_config;
 typedef struct {
@@ -66,9 +66,12 @@ static inline int ng_address(const char *ip, int prefix, const char *gateway) {
     return 0;
   return 1;
 }
+static inline int ng_utf8_valid(const char *text);
 static inline int ng_iface_valid(const ng_iface *i) {
   if ((i->enabled != 0 && i->enabled != 1) ||
       (i->method != NG_DHCP && i->method != NG_STATIC))
+    return 0;
+  if (!memchr(i->ssid, 0, sizeof(i->ssid)) || !ng_utf8_valid(i->ssid))
     return 0;
   if (!memchr(i->ip, 0, sizeof(i->ip)) ||
       !memchr(i->gateway, 0, sizeof(i->gateway)) ||
@@ -86,7 +89,7 @@ static inline int ng_iface_valid(const ng_iface *i) {
   return 1;
 }
 static inline int ng_config_valid(const ng_config *c) {
-  if (c->schema != NG_SCHEMA ||
+  if (c->schema != NG_SCHEMA || (c->managed != 0 && c->managed != 1) ||
       (c->ethernet_support != 0 && c->ethernet_support != 1) ||
       c->selected < 0 || c->selected > 1)
     return 0;
@@ -122,6 +125,38 @@ static inline int ng_clean_text(const char *s, size_t min, size_t max) {
   for (size_t i = 0; i < n; i++)
     if ((unsigned char)s[i] < 32 || (unsigned char)s[i] == 127)
       return 0;
+  return 1;
+}
+static inline int ng_utf8_valid(const char *text) {
+  const unsigned char *p = (const unsigned char *)text;
+  while (*p) {
+    unsigned c = *p++, value, minimum;
+    int extra;
+    if (c < 128)
+      continue;
+    if (c >= 0xc2 && c <= 0xdf) {
+      value = c & 31;
+      extra = 1;
+      minimum = 0x80;
+    } else if (c >= 0xe0 && c <= 0xef) {
+      value = c & 15;
+      extra = 2;
+      minimum = 0x800;
+    } else if (c >= 0xf0 && c <= 0xf4) {
+      value = c & 7;
+      extra = 3;
+      minimum = 0x10000;
+    } else
+      return 0;
+    for (int i = 0; i < extra; i++) {
+      if (!*p || (*p & 0xc0) != 0x80)
+        return 0;
+      value = (value << 6) | (*p++ & 63);
+    }
+    if (value < minimum || value > 0x10ffff ||
+        (value >= 0xd800 && value <= 0xdfff))
+      return 0;
+  }
   return 1;
 }
 static inline int ng_integer(const ng_json *j, const char *key, int min,
@@ -247,6 +282,7 @@ static inline int ng_request_parse(ng_json *j, ng_request *r) {
 static inline int ng_propose(const ng_config *old, const ng_request *r,
                              ng_config *next) {
   *next = *old;
+  next->managed = 1;
   switch (r->op) {
   case NG_SELECT:
     next->selected = r->iface;
@@ -255,8 +291,10 @@ static inline int ng_propose(const ng_config *old, const ng_request *r,
   case NG_SUPPORT:
     next->ethernet_support = r->enabled;
     next->link[1].enabled = r->enabled;
-    if (!r->enabled && next->selected == 1)
+    if (!r->enabled && next->selected == 1) {
       next->selected = 0;
+      next->link[NG_WIFI].enabled = 1;
+    }
     break;
   case NG_INTERFACE:
     next->link[r->iface].enabled = r->enabled;
@@ -266,6 +304,7 @@ static inline int ng_propose(const ng_config *old, const ng_request *r,
   case NG_IP: {
     ng_iface *i = &next->link[r->iface];
     i->method = r->method;
+    i->ssid[0] = 0;
     i->prefix = r->prefix;
     strcpy(i->ip, r->ip);
     strcpy(i->gateway, r->gateway);
@@ -275,7 +314,8 @@ static inline int ng_propose(const ng_config *old, const ng_request *r,
   }
   case NG_WIFI_CONNECT:
   case NG_WIFI_SAVED:
-    next->link[0].enabled = 1;
+    memset(&next->link[NG_WIFI], 0, sizeof(next->link[NG_WIFI]));
+    next->link[NG_WIFI].enabled = 1;
     break;
   default:
     return 0;
@@ -332,6 +372,8 @@ static inline void ng_iface_json(FILE *out, const ng_iface *i) {
   ng_json_quote(out, i->dns1);
   fputs(",\"dns2\":", out);
   ng_json_quote(out, i->dns2);
+  fputs(",\"ssid\":", out);
+  ng_json_quote(out, i->ssid);
   fputc('}', out);
 }
 static inline void ng_config_json(FILE *out, const ng_config *c) {
