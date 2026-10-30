@@ -48,6 +48,13 @@ jobs:
           file dist/cc2-control/cc2-control
           file dist/cc2-control/cc2-control | grep -q 'ARM, EABI5.*statically linked'
 
+      - name: ARM direct emergency-stop regressions under qemu
+        run: |
+          for test in test_emergency_stop_direct test_emergency_stop_edges test_emergency_stop_deadline; do
+            arm-linux-gnueabihf-gcc -O2 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread -static tests/$test.c src/console.c -o /tmp/$test
+            timeout 20s qemu-arm /tmp/$test
+          done
+
       - name: ARM binary smoke test under qemu
         run: CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
 
