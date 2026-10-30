@@ -5,6 +5,9 @@ on:
     paths: [.github/workflows/prepare-connections-candidate.yml]
 permissions:
   contents: read
+concurrency:
+  group: connections-candidate-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   prepare:
     runs-on: ubuntu-24.04
@@ -40,6 +43,8 @@ jobs:
         run: |
           make -C cc2-control build/cc2-control CROSS= CC=gcc EXTRA_CFLAGS='-Werror -DCC2_NETWORK_STATUS_TEST=\"/tmp/cc2-network-http-test.sock\"'
           python3 experimental/network-connections/test_http.py cc2-control/build/cc2-control
+      - name: Full host application regression suite
+        run: make -C cc2-control clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
       - name: Rebuild the production UI
         working-directory: cc2-control/web-src
         run: npm ci && npm run check && npm run build
