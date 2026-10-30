@@ -1,0 +1,18 @@
+name: Connections manager qualification
+on:
+  push:
+    branches: [test/network-panel-r1]
+    paths: ['experimental/network-connections/**', '.github/workflows/network-connections-temporary.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Strict request/configuration and atomic state tests
+        run: |
+          cd experimental/network-connections
+          gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -fsanitize=address,undefined -fno-pie -no-pie test_core.c -lm -o /tmp/cc2-network-core-test
+          /tmp/cc2-network-core-test
