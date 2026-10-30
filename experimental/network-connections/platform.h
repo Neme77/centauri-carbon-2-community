@@ -196,7 +196,7 @@ static inline int ng_seed_wifi(void) {
   char resolver[2048];
   size_t size;
   char resolved[512];
-  if (realpath("/etc/resolv.conf", resolved) &&
+  if (ng_resolve_path("/etc/resolv.conf", resolved, sizeof(resolved)) &&
       ng_read_file(resolved, resolver, sizeof(resolver), &size, 0)) {
     char *p = resolver;
     int dns = 0;
@@ -403,7 +403,7 @@ static inline int ng_configure_routes(const ng_config *config) {
   return 1;
 }
 static inline int ng_resolver_path(char out[512]) {
-  if (!realpath("/etc/resolv.conf", out))
+  if (!ng_resolve_path("/etc/resolv.conf", out, 512))
     return 0;
   if (strcmp(out, "/etc/resolv.conf") && strcmp(out, "/tmp/resolv.conf") &&
       strcmp(out, "/tmp/resolv.conf.auto"))

@@ -7,6 +7,7 @@ out=root/'output';out.mkdir(exist_ok=True)
 def run(args,**kw):
     return subprocess.run([str(x) for x in args],check=True,timeout=300,**kw)
 flags=['-std=c11','-Os','-Wall','-Wextra','-Wpedantic','-Werror','-static','-s']
+run([sys.executable,'test_seed.py'])
 helper=out/'control'
 run(['arm-linux-gnueabihf-gcc',*flags,'manager.c','-lm','-o',helper])
 digest=hashlib.sha256(helper.read_bytes()).hexdigest()
@@ -38,6 +39,7 @@ with zipfile.ZipFile(out/'integrated-sources.zip','w',zipfile.ZIP_DEFLATED) as z
         if f.is_file() and f.name!='IMPLEMENTATION.md':z.write(f,'network-connections/'+f.name)
     z.write(root.parents[1]/'LICENSE','LICENSE.GPL-3.0')
 report={'manager_compiler':run(['arm-linux-gnueabihf-gcc','--version'],capture_output=True,text=True).stdout.splitlines()[0],
+        'resolver_seed_host_and_arm_fortified':True,
         'manager_static_arm_readonly_qemu':True,'actual_http_guards':True,'app_arm_smoke':True,
         'manual_selection':True,'unconditional_rollback_timer':False,'physical_validation':False,
         'sha256':{f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in (helper,out/'cc2-control-network',out/'integrated-sources.zip')}}

@@ -1,4 +1,4 @@
-name: Connections seed crash investigation
+name: Connections seed correction qualification
 on:
   push:
     branches: [test/network-panel-r1]
@@ -8,18 +8,36 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user
-      - name: Reproduce original resolver operation with production compiler flags
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user busybox
+      - name: Sanitizers, native WPA, confirmation and DHCP lifecycle
         run: |
           cd experimental/network-connections
-          gcc -std=c11 -Os -Wall -Wextra -Wpedantic -static test_resolver_legacy.c -o /tmp/legacy-host
-          arm-linux-gnueabihf-gcc -std=c11 -Os -Wall -Wextra -Wpedantic -static test_resolver_legacy.c -o /tmp/legacy-arm
-          python3 - <<'PY'
-          import subprocess
-          for args in (['/tmp/legacy-host'],['qemu-arm','/tmp/legacy-arm']):
-            r=subprocess.run(args,capture_output=True,text=True)
-            print(args,'EXIT',r.returncode,'OUT',r.stdout,'ERR',r.stderr,flush=True)
-          PY
+          gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -fsanitize=address,undefined -fno-pie -no-pie test_core.c -lm -o /tmp/cc2-network-core-test
+          /tmp/cc2-network-core-test
+          mkdir -p /tmp/cc2-connections-host
+          gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -DNG_COMPONENT='"/tmp/cc2-connections-host"' -DNG_STATE='"/tmp/cc2-connections-host/state"' -DNG_RUN='"/tmp/cc2-connections-host/run"' -DNG_TEST_TOOLS='"/tmp/cc2-connections-host/tools"' -DNG_WPA='"/tmp/cc2-connections-wpa-test.sock"' -fsanitize=address,undefined -fno-pie -no-pie test_manager.c -lm -o /tmp/cc2-connections-host/control
+          /tmp/cc2-connections-host/control
+          python3 test_wifi.py /tmp/cc2-connections-host/control
+      - name: Preserved startup, installer phases and transports
+        run: |
+          python3 experimental/network-connections/test_hooks.py
+          python3 experimental/network-connections/test_install_diagnostics.py
+          python3 experimental/network-connections/test_runner.py
+          python3 experimental/network-connections/test_unix.py
+          for f in experimental/network-connections/*.sh;do dash -n "$f";done
+      - name: Full fortified seed regression, HTTP integration and GNU ARM build
+        run: python3 experimental/network-connections/build-ci.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: connections-diagnostics-r5b
+          path: |
+            experimental/network-connections/output/control
+            experimental/network-connections/output/cc2-control-network
+            experimental/network-connections/output/integrated-sources.zip
+            experimental/network-connections/output/validation.json
+            experimental/network-connections/output/cc2-control/web/
+          if-no-files-found: error
+          retention-days: 14

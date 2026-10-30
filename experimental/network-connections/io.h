@@ -44,6 +44,23 @@ static inline uid_t ng_owner(void) {
   return 0;
 #endif
 }
+/* realpath's non-NULL result buffer must hold PATH_MAX bytes, even when the
+ * resulting name is short. Let libc allocate it, then copy with our bound. */
+static inline int ng_resolve_path(const char *path, char *out,
+                                  size_t capacity) {
+  if (!path || !out || !capacity)
+    return 0;
+  out[0] = 0;
+  char *resolved = realpath(path, NULL);
+  if (!resolved)
+    return 0;
+  size_t length = strlen(resolved);
+  int ok = length < capacity;
+  if (ok)
+    memcpy(out, resolved, length + 1);
+  free(resolved);
+  return ok;
+}
 static inline int ng_hash_file(const char *path, char out[65]) {
   int fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
   if (fd < 0)
