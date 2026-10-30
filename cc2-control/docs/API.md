@@ -143,6 +143,38 @@ edits the vendor configuration. The firmware's SAVE_CONFIG keeps that section.
   guarded like a build-plate mount: the reboot is cancelled if the printer is no longer idle when it would
   start.
 
+## Nozzle thermal expansion
+
+The firmware's `[z_compensation]` table (`nozzle_calibrate_start`, `nozzle_calibrate_diff`, `nozzle_calibrate_datas`,
+relative to `fix_ref_temperature`) is read from the printer configuration; a measured table is stored as a
+`[z_compensation]` section in the SAVE_CONFIG block of `autosave.cfg`, which the firmware reads after it.
+
+- `GET /api/nozzle-expansion` returns `{"available":bool,"editable":bool,"state":"idle"|"running"|"cooling"|"saving"|"recovery",
+  "result":""|"saved"|"rejected"|"failed"|"interrupted","detail":text,"start":C,"end":C,"step":C,"delay":s,"samples":n,
+  "elapsed":s,"nozzle":C|null,"target":C|null,"reference":C,"factory":table|null,"override":table|null,"measured":table|null,
+  "slope_um":µm/C,"residual_um":µm,"pending_restart":bool,"restart":"none"|"restarting"|...}`, where a table is
+  `{"start":C,"diff":C,"values":[mm,...]}`. `available` is false without a `[z_compensation]` section; `editable` is
+  false when `autosave.cfg` has a layout CC2 Control does not edit.
+- `POST /api/nozzle-expansion/start` requires `X-CC2-LAN` and canonical text `start:end:step` (start 100 up to
+  `fix_ref_temperature` − 5, or 200 without one, end up to 340, step 5 or 10, at least four and at most 48 points).
+  It answers `409` unless the printer is idle with fresh telemetry, the printer's print state is standby, complete or
+  cancelled, both heater targets are 0, the bed is at 40 °C or less, nothing else is running, and no saved change
+  (pull-back, plate mount, nozzle table) is waiting for a restart: the run's SAVE_CONFIG writes the configuration the
+  firmware loaded at start-up, plus its own changes, over `autosave.cfg` and would discard it.
+- The run sends `NOZZLE_TEMP_CALIBRATE ... DELAY=60 SAMPLES=5` as one request with a budget of 15 min plus 8 min per
+  point, then `M104 S0`, which may wait behind a calibration still running and counts only after its reply and a zero
+  target readback, then `SAVE_CONFIG`, and checks the saved table: a slope of 0.2–2 µm/°C, every reading within
+  15 µm of the fitted line and no step down of more than 6 µm. A table that fails is replaced by the section the run
+  started with (the firmware's `autosave_backup.cfg` is left as SAVE_CONFIG wrote it). A printer-service restart
+  during the run ends it. A session file (range and start time) makes a restarted CC2 Control switch the nozzle off
+  the same way, unless a print owns the heater by then. Every end other than a kept table marks a required restart
+  (`pending_restart`): the firmware still holds the measured table in memory and a later SAVE_CONFIG would write it
+  back. Every other mutating request answers `409` while a run is active, except the emergency stop and console
+  `M112`.
+- `POST /api/nozzle-expansion/factory` with body `FACTORY` removes the saved section (idle only).
+- `POST /api/nozzle-expansion/restart` with body `RESTART` reboots the printer to apply a saved table, guarded like a
+  build-plate mount.
+
 ## Print history and time-lapse videos
 
 - `POST /api/history/refresh` sends method 1036 (one request in flight at a time).

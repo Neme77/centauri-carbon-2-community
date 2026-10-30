@@ -626,6 +626,37 @@ export function previewPlugin(): Plugin {
               })
             case '/api/canvas/unload':
               return reply(unloadState())
+            case '/api/nozzle-expansion': {
+              const factory = [
+                -0.039173, -0.033207, -0.027035, -0.017856, -0.009456, -0.002735, 0.006161, 0.01315, 0.021694, 0.028802,
+                0.034645, 0.040412, 0.048493, 0.05439, 0.063596, 0.07289,
+              ]
+              const saved = Array.from({ length: 20 }, (_, i) => +(0.00081 * (130 + 10 * i - 140) - 0.0094).toFixed(6))
+              return reply({
+                ok: true,
+                available: true,
+                editable: true,
+                state: 'idle',
+                result: 'saved',
+                detail: '',
+                start: 130,
+                end: 320,
+                step: 10,
+                delay: 60,
+                samples: 5,
+                elapsed: 0,
+                nozzle: 26,
+                target: 0,
+                reference: 140,
+                factory: { start: 100, diff: 10, values: factory },
+                override: { start: 130, diff: 10, values: saved },
+                measured: { start: 130, diff: 10, values: saved },
+                slope_um: 0.81,
+                residual_um: 1.9,
+                pending_restart: true,
+                restart: 'none',
+              })
+            }
             case '/api/canvas':
               return reply({
                 auto_refill: autoRefill,

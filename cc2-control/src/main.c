@@ -40,6 +40,7 @@ static int app_update_active(void);
 static int plates_background_active(void);
 static int experiments_normal_confirmed(console_state *console);
 static int drying_active(void);
+static int nx_active(void);
 static int drying_status_json(char *out,size_t capacity,const mqtt_client *mqtt);
 
 static uds_client telemetry;
@@ -3264,6 +3265,7 @@ static void mesh_response(int fd) {
 /* Cross-feature SAVE_CONFIG guards are implemented after both file editors. */
 static int canvas_unload_pending(void);
 static int canvas_unload_pending_intact(void);
+static int nx_pending(void);
 static const char *pending_autosave_guard(void);
 
 #include "plates.h"
@@ -3277,6 +3279,8 @@ static const char *pending_autosave_guard(void) {
         return "A Canvas pull-back change needs a restart; resolve it before calibrating or saving printer settings";
     if (plates.pending[0])
         return "A plate mesh change needs a restart; resolve it before calibrating or saving printer settings";
+    if (nx_pending())
+        return "A nozzle expansion change needs a restart; resolve it before calibrating or saving printer settings";
     return NULL;
 }
 
@@ -3941,6 +3945,7 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 #include "app_updates.h"
 #include "app_update_catalog.h"
 #include "bed_drying.h"
+#include "nozzle_expansion.h"
 #include "experiments.h"
 #include "backup.h"
 #include "network_status_http.h"
@@ -4005,6 +4010,11 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
        !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
         app_update_fail(fd,409,"Stop bed heating and wait for confirmation before another operation");return 0;
     }
+    /* The calibration heats the nozzle and moves the printhead until it has switched the nozzle off. */
+    if(nx_active() && strcmp(method,"GET") && strcmp(method,"HEAD") && !emergency &&
+       !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
+        app_update_fail(fd,409,"A nozzle expansion calibration is running; use the emergency stop to interrupt it");return 0;
+    }
     if(!strcmp(path,"/api/network")) {
         if(!strcmp(method,"GET"))network_status_response(fd);
         else app_update_fail(fd,405,"Network status is read-only");
@@ -4018,6 +4028,14 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         app_update_fail(fd,410,"Reload CC2 Control to use the Connections manager");
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
         drying_response(fd,mqtt,console);
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/nozzle-expansion")){
+        nx_response(fd);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/nozzle-expansion/start")){
+        nx_start_response(fd,request,body,body_len,mqtt);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/nozzle-expansion/factory")){
+        nx_factory_response(fd,mqtt,body,body_len);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/nozzle-expansion/restart")){
+        nx_restart_response(fd,mqtt,body,body_len);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/start")){
         drying_start_response(fd,request,body,body_len,mqtt,console);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/stop")){
@@ -4283,6 +4301,7 @@ int main(int argc, char **argv) {
     telemetry.canvas_enabled=canvas_uds_enabled||experiments.canvas_uds;
     if(!bk_recover()){fprintf(stderr,"Application restore recovery failed; refusing to load mixed libraries\n");console_destroy(&console);return 1;}
     drying_load();
+    nx_load();
     plates_load();
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
@@ -4330,6 +4349,7 @@ int main(int argc, char **argv) {
         plates_tick(&mqtt);
         plates_calibration_tick(&mqtt,&console);
         drying_tick(&mqtt);
+        nx_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
         int max_fd=server;
@@ -4339,7 +4359,8 @@ int main(int argc, char **argv) {
         for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
             FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
         }
-        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0;
+        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0||
+            (nx.exchange.fd>=0&&nx.stage!=NX_RUNNING); /* the calibration's own reply takes up to hours */
         struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}

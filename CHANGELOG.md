@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Nozzle thermal-expansion calibration on the Bed Levelling page: runs the firmware's NOZZLE_TEMP_CALIBRATE over a chosen range (default 130–330 °C, 10 °C steps, keeping the 140 °C reference and printing temperatures inside the table), always switches the nozzle off afterwards, keeps the table only when it is plausible and applies it after a printer restart, with a way back to the factory table. The factory table ends at 250 °C, where the firmware switches to a constant ~0.10 mm correction, so materials printed above it needed their own Z offset; by **Noahwhite2014** (#273).
+
 ## [CC2 Control 1.2.24] - 2026-10-31
 
 ### Added

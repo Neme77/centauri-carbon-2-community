@@ -89,6 +89,17 @@ The Bed Mesh view displays the printer's full 11×11 mesh with minimum, maximum,
 
 Screw-measurement results are captured separately and cannot replace valid mesh geometry.
 
+## Nozzle thermal expansion
+
+The printer homes and probes the bed with the nozzle at 140 °C, then heats it for printing. The nozzle grows as it heats, and the firmware's `[z_compensation]` raises Z by that growth on every move, from a table probed every 10 °C. The factory table ends at 250 °C. At and beyond either end of the table the firmware applies a constant (its slope × 140 °C, about 0.10 mm) instead of the measured growth, so materials printed above 250 °C get the wrong correction and need a different Z offset than the rest.
+
+**Bed Levelling → Nozzle expansion** measures the table for the nozzle fitted now with the firmware's own `NOZZLE_TEMP_CALIBRATE`: the bed stays cold, the nozzle steps from the start to the end temperature, holds a minute at each step and probes the bed centre five times. The default 130–330 °C in 10 °C steps takes about an hour and keeps both the 140 °C reference and printing temperatures up to 320 °C inside the table; starts above 135 °C are refused for that reason. Unload the filament, clean the nozzle and use a clear plate first. The run is started with the LAN code, blocks other printer operations, and the header's Emergency stop interrupts it.
+
+When the run ends the nozzle is switched off, and CC2 Control waits for the printer to confirm it; the page stays locked until then. The table is saved with SAVE_CONFIG and kept only when it is plausible (0.2–2 µm per °C, readings close to a straight line, no step downwards); otherwise the previous table is put back. A saved table applies after a printer restart, which the page offers. **Use factory table** removes it again, also from the next restart.
+
+SAVE_CONFIG writes the settings the printer loaded when it started, plus its own changes, over `autosave.cfg`. So a run is refused while another saved change (a Canvas pull-back, a plate mount, a table) is still waiting for a restart, and after a run that was not kept the page asks for a restart: until then the printer still holds that measurement, and saving anything on its screen would write it back.
+The chart compares the factory and saved tables relative to 140 °C.
+
 ## Object exclusion
 
 For labelled multi-object G-code, CC2 Control displays detected print objects and can send Klipper `EXCLUDE_OBJECT` for a selected component.

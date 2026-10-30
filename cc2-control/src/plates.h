@@ -1011,6 +1011,7 @@ static const char *plates_printer_ready(const mqtt_client *mqtt) {
     if (plates_console_busy()) return "Another printer command is still running";
     if (atomic_load(&upload_busy) || atomic_load(&active_downloads)) return "A file transfer is in progress";
     if (plates_cal.stage && plates_cal.stage != CAL_SAVING) return "A bed mesh calibration is running";
+    if (nx_active()) return "A nozzle expansion calibration is running";
     return NULL;
 }
 
