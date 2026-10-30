@@ -3725,6 +3725,11 @@ static void console_command_response(int fd, console_state *console, const mqtt_
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error)); return;
     }
     memcpy(command,body,body_len); command[body_len]='\0';
+    /* M112 bypasses the console and the firmware's command queue; see console_emergency_stop(). */
+    if (!strcasecmp(command,"M112") && console_emergency_stop(console,reason,sizeof(reason)) == 0) {
+        const char *ok="{\"accepted\":true}\n";
+        respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok)); return;
+    }
     if(plates_background_active() && strcmp(command,"M112")){plates_fail(fd,409,"Plate verification is still running");return;}
     if (!console_command_allowed(console,command,mqtt,reason,sizeof(reason)) ||
         console_start(console,command,reason,sizeof(reason)) != 0) {
@@ -3784,6 +3789,15 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error));return;
     }
     memcpy(action,body,body_len);action[body_len]='\0';
+    if(!strcmp(action,"system:emergency_stop")){
+        /* Straight to the firmware's emergency_stop endpoint; the queued M112 below is only the fallback. */
+        char stop_reason[160];
+        if(console_emergency_stop(console,stop_reason,sizeof(stop_reason))==0){
+            const char *ok="{\"accepted\":true}\n";
+            respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));return;
+        }
+        fprintf(stderr,"Emergency stop endpoint failed (%s); sending M112\n",stop_reason);
+    }
     if(!strcmp(action,"motors:quiet") && !experiments.quiet_motors){
         const char *error="{\"accepted\":false,\"error\":\"Enable the experimental Quiet controls first\"}\n";
         respond(fd,409,"Conflict","application/json",error,strlen(error));return;

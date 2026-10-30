@@ -359,6 +359,47 @@ int console_command_allowed(console_state *state, const char *command, const mqt
     return 1;
 }
 
+/* Emergency stop through the firmware's emergency_stop endpoint. It shuts the MCUs down at once, whereas an
+ * M112 sent as gcode/script waits behind the command that is running (homing, a bed mesh, M109/M190, a
+ * calibration) and so only fires when that command ends. It takes no console slot either, so it works while
+ * another console command is busy. Returns 0 once the request has reached the socket and the firmware has
+ * not answered with an error. */
+int console_emergency_stop(console_state *state, char *reason, size_t reason_cap) {
+    static const char request[] = "{\"id\":112,\"method\":\"emergency_stop\",\"params\":{}}\003";
+    char socket_path[108];
+    struct sockaddr_un address;
+    pthread_mutex_lock(&state->lock);
+    snprintf(socket_path, sizeof(socket_path), "%s", state->socket_path);
+    pthread_mutex_unlock(&state->lock);
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) { snprintf(reason, reason_cap, "Cannot create UDS socket"); return -1; }
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", socket_path);
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        close(fd); snprintf(reason, reason_cap, "Cannot connect to elegoo_printer"); return -1;
+    }
+    if (send_all_fd(fd, request, sizeof(request) - 1) != 0) {
+        close(fd); snprintf(reason, reason_cap, "Cannot send the emergency stop"); return -1;
+    }
+    atomic_store(&state->emergency_sent, 1);
+    /* The reply is short; a firmware that is already shutting down may close the socket instead. */
+    char reply[512]; size_t used = 0; int refused = 0;
+    for (int waited = 0; waited < 4 && used < sizeof(reply) - 1; waited++) {
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int ready = poll(&pfd, 1, 500);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready <= 0) break;
+        ssize_t got = read(fd, reply + used, sizeof(reply) - 1 - used);
+        if (got <= 0) break;
+        used += (size_t)got; reply[used] = 0;
+        if (memchr(reply, 0x03, used)) { refused = strstr(reply, "\"error\"") != NULL; break; }
+    }
+    close(fd);
+    if (refused) { snprintf(reason, reason_cap, "The printer refused the emergency stop"); return -1; }
+    return 0;
+}
+
 int console_start(console_state *state, const char *command, char *reason, size_t reason_cap) {
     pthread_t thread;
     pthread_mutex_lock(&state->lock);
