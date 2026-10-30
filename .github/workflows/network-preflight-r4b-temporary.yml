@@ -1,0 +1,22 @@
+name: Network completed-print preflight correction
+on:
+  push:
+    branches: [test/network-panel-r1]
+    paths: ['experimental/network-preflight-r4b/**', '.github/workflows/network-preflight-r4b-temporary.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Check full preflight and correction rollback
+        run: |
+          cd experimental/network-preflight-r4b
+          sh -n apply.sh
+          python3 test_preflight.py
+          python3 test_apply.py
+          if ! command -v busybox; then sudo apt-get update -qq && sudo apt-get install -y -qq busybox; fi
+          TEST_SHELL='busybox ash' python3 test_preflight.py
+          TEST_SHELL='busybox ash' python3 test_apply.py
