@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+BASE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+printf 'Printer IP / IP stampante: ';read -r host
+case "$host" in ''|*[!A-Za-z0-9.-]*) echo 'Invalid address';exit 1;;esac
+cd "$BASE"
+if command -v sha256sum >/dev/null;then sha256sum -c SHA256SUMS
+elif command -v shasum >/dev/null;then shasum -a 256 -c SHA256SUMS
+else echo 'STOP: SHA-256 tool unavailable';exit 1;fi
+target=root@$host
+scp -O prepare-disk.sh "$target:/opt/usr/cc2-control-connections-r5-prepare.sh"
+ssh "$target" 'sh /opt/usr/cc2-control-connections-r5-prepare.sh'
+scp -O cc2-control-payload.tar.gz cc2-connections.tar.gz run-install.sh verify-and-run.sh "$target:/opt/usr/cc2-control-connections-r5/"
+ssh "$target" 'sh /opt/usr/cc2-control-connections-r5/verify-and-run.sh'
+echo "CC2 Control: http://$host:8081"

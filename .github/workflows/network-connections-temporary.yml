@@ -1,4 +1,4 @@
-name: Connections manager qualification
+name: Connections packaging qualification
 on:
   push:
     branches: [test/network-panel-r1]
@@ -8,37 +8,13 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - name: Compile and qualify manager primitives
-        run: |
-          cd experimental/network-connections
-          gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -fsanitize=address,undefined -fno-pie -no-pie test_core.c -lm -o /tmp/cc2-network-core-test
-          /tmp/cc2-network-core-test
-          gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror manager.c -lm -o /tmp/cc2-network-manager
-          mkdir -p /tmp/cc2-connections-host
-          gcc -std=c11 -O1 -Wall -Wextra -Wpedantic -Werror -DNG_TEST -DNG_COMPONENT='"/tmp/cc2-connections-host"' -DNG_STATE='"/tmp/cc2-connections-host/state"' -DNG_RUN='"/tmp/cc2-connections-host/run"' -DNG_TEST_TOOLS='"/tmp/cc2-connections-host/tools"' -DNG_WPA='"/tmp/cc2-connections-wpa-test.sock"' -fsanitize=address,undefined -fno-pie -no-pie test_manager.c -lm -o /tmp/cc2-connections-host/control
-          /tmp/cc2-connections-host/control
-          python3 test_wifi.py /tmp/cc2-connections-host/control
-          for f in *.sh; do dash -n "$f"; done
-      - name: Install GNU ARM build tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc-arm-linux-gnueabihf qemu-user busybox
-      - name: Build integrated app and validate HTTP and ARM execution
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq busybox
+      - name: Verify installer failures, cleanup and both Unix checksum paths
         run: |
           python3 experimental/network-connections/test_runner.py
-          python3 experimental/network-connections/test_hooks.py
-          python3 experimental/network-connections/build-ci.py
-      - uses: actions/upload-artifact@v6
-        with:
-          name: connections-diagnostics-r5
-          path: |
-            experimental/network-connections/output/control
-            experimental/network-connections/output/cc2-control-network
-            experimental/network-connections/output/integrated-sources.zip
-            experimental/network-connections/output/validation.json
-            experimental/network-connections/output/cc2-control/web/
-          if-no-files-found: error
-          retention-days: 14
+          python3 experimental/network-connections/test_unix.py
+          python3 -m py_compile experimental/network-connections/package.py
+          for f in experimental/network-connections/*.sh;do dash -n "$f";done

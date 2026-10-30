@@ -1,11 +1,14 @@
 """Assemble a private diagnostic installer from the qualified GNU ARM output."""
-import gzip,hashlib,io,json,re,tarfile,zipfile
+import gzip,hashlib,io,json,re,tarfile,zipfile,sys
 from pathlib import Path
 
 root=Path(__file__).resolve().parent
 workspace=root.parents[3]
 old=workspace/'outputs/CC2-Control-Connections-Manual-Trial-R4/CC2-Control-Connections-Manual-Trial-R4'
-qualified=workspace/'work/network-connections-qualified/final'
+qualified=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else workspace/'work/network-connections-qualified/final'
+commit=sys.argv[2] if len(sys.argv)>2 else 'a55bc024869df0837c74ea88dfe86e9d84c4adbb'
+ci_run=int(sys.argv[3]) if len(sys.argv)>3 else 41015530793
+assert re.fullmatch('[0-9a-f]{40}',commit)
 result=workspace/'outputs/CC2-Control-Connections-Diagnostics-R5'
 result.mkdir(exist_ok=True)
 package=result/'CC2-Control-Connections-Diagnostics-R5'
@@ -44,7 +47,7 @@ assert count==1
 app['cc2-control']=(candidate,0o755);app['install-on-printer.sh']=(installer,0o755)
 for p in (qualified/'cc2-control/web').rglob('*'):
     if p.is_file(): app['web/'+p.relative_to(qualified/'cc2-control/web').as_posix()]=(p.read_bytes(),0o644)
-info=json.loads(app['build-info.json'][0]);info.update({'trial':'connections-diagnostics-r5','source_commit':'a55bc024869df0837c74ea88dfe86e9d84c4adbb','automatic_network_selection':False,'unconditional_network_timer':False})
+info=json.loads(app['build-info.json'][0]);info.update({'trial':'connections-diagnostics-r5','source_commit':commit,'automatic_network_selection':False,'unconditional_network_timer':False})
 app['build-info.json']=(json.dumps(info,indent=2).encode()+b'\n',0o644)
 app['SHA256SUMS']=(manifest(app),0o644)
 app_archive=package/'cc2-control-payload.tar.gz';write_tar(app_archive,app)
@@ -110,21 +113,8 @@ ps=ps.replace('7a32e049451a8798fa56d9261d0015026d32bde536aafb53904f0f6fc01c2de8'
 ps=ps.replace("Write-Host 'Uploading disk preparation script.'",f"$network = Join-Path $PSScriptRoot 'cc2-connections.tar.gz'\nif ((Get-FileHash -LiteralPath $network -Algorithm SHA256).Hash.ToLowerInvariant() -ne '{net_sha}') {{ throw 'Connections archive checksum mismatch' }}\nWrite-Host 'Uploading disk preparation script.'")
 ps=ps.replace('scp.exe -O $archive $runner $verify','scp.exe -O $archive $network $runner $verify')
 text('Install-CC2-Control.ps1',ps)
-(package/'Install-Windows.cmd').write_bytes((old/'Install-Windows.cmd').read_bytes())
-text('install-cc2-control.sh',f'''#!/bin/sh
-set -eu
-BASE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-printf 'Printer IP / IP stampante: ';read -r host
-case "$host" in ''|*[!A-Za-z0-9.-]*) echo 'Invalid address';exit 1;;esac
-cd "$BASE"
-sha256sum -c SHA256SUMS || exit 1
-target=root@$host
-scp -O prepare-disk.sh "$target:/opt/usr/cc2-control-connections-r5-prepare.sh"
-ssh "$target" 'sh /opt/usr/cc2-control-connections-r5-prepare.sh'
-scp -O cc2-control-payload.tar.gz cc2-connections.tar.gz run-install.sh verify-and-run.sh "$target:/opt/usr/cc2-control-connections-r5/"
-ssh "$target" 'sh /opt/usr/cc2-control-connections-r5/verify-and-run.sh'
-echo "CC2 Control: http://$host:8081"
-''')
+(package/'Install-Windows.cmd').write_bytes((old/'Install-Windows.cmd').read_bytes().replace(b' -ResetHostKey %*',b' %*'))
+text('install-cc2-control.sh',(root/'unix-install.sh.in').read_text(encoding='utf-8'))
 (package/'cc2-control-sources.zip').write_bytes((qualified/'integrated-sources.zip').read_bytes())
 text('LEGGIMI.it.md','''# Connessioni — pacchetto completo con diagnosi R5
 
@@ -186,7 +176,7 @@ publishing. Installation never reboots, heats or moves the printer.
 Full corresponding sources and GPL notices are included. See the Italian guide
 for log paths, supported-profile limits and recovery details.
 ''')
-text('validation.json',json.dumps({'source_commit':'a55bc024869df0837c74ea88dfe86e9d84c4adbb','ci_run':41015530793,'build':report,'app_payload_sha256':app_sha,'connections_payload_sha256':net_sha,'physical_validation':False},indent=2)+'\n')
+text('validation.json',json.dumps({'source_commit':commit,'ci_run':ci_run,'build':report,'app_payload_sha256':app_sha,'connections_payload_sha256':net_sha,'physical_validation':False},indent=2)+'\n')
 files={p.relative_to(package).as_posix():(p.read_bytes(),0o644) for p in package.rglob('*') if p.is_file()}
 text('SHA256SUMS',manifest(files).decode())
 print(package)
