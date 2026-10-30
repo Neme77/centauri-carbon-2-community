@@ -24,6 +24,8 @@ HARNESSES = {
     "test_recovery_download.c": BACKEND,
     "test_emergency_latch.c": [],
     "test_emergency_stop_direct.c": [ROOT / "src/console.c"],
+    "test_emergency_stop_edges.c": [ROOT / "src/console.c"],
+    "test_emergency_stop_deadline.c": [ROOT / "src/console.c"],
     "test_runtime_limits.c": BACKEND,
     "test_mqtt_limits.c": [],
     "test_calibrated_start.c": BACKEND,

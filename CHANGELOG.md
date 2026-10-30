@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Emergency stop now goes straight to the firmware's emergency_stop endpoint, so it acts at once during homing, bed meshing, heat-and-wait or any other long command and while another console command is busy, instead of waiting behind it or being refused; by **Noahwhite2014** (#264).
+- Emergency stop now goes straight to the firmware's emergency_stop endpoint, so it acts at once during homing, bed meshing, heat-and-wait or any other long command and while another console command is busy, instead of waiting behind it or being refused; by **Noahwhite2014** (#264). Maintainer review adds a two-second socket deadline and rejects incomplete or oversized replies so a saturated socket cannot freeze the panel or silently suppress the M112 fallback.
 
 - Translate file-deletion refusal reasons in all nine languages, including bulk deletion and unknown-error fallback; reported by **pezso92** (#261, #262).
 
