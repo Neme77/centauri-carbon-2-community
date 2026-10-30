@@ -71,6 +71,7 @@ if [ "$1" = start ];then
     "$ROOT/control" --guard "${3:-8081}" || fail printer_not_ready
     qualify
     if ready;then echo 'activation:already_ready';exit 0;fi
+    CC2_NETWORK_COMPAT_TRIAL=0 CC2_CAMERA_REAP_TRIAL=0 CC2_CAMERA_RECOVERY_TRIAL=0 CC2_REACTOR_RUNTIME_V2=0 LD_LIBRARY_PATH=/opt/lib LD_PRELOAD="$LIB:$REAP:$RECOVERY:$REACTOR" /opt/usr/cc2-control/camera/cc2-camera-reap-check > /tmp/cc2-network-manager/loader-check.txt 2>&1 || fail inert_loader_check
     "$ROOT/control" --watch-ready "$TOKEN" || fail watchdog_not_ready
     [ ! -e "$SNAP" ] && [ ! -L "$SNAP" ] || fail snapshot_exists
     mkdir "$SNAP"

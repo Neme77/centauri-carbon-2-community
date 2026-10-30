@@ -18,6 +18,7 @@ case "${1:-wifi}" in
  *) fail unknown_profile;;
 esac
 [ "$(sha /opt/bin/ai_camera)" = ec5633b17de329d5b18c3f8d8de6ebf389391a04193536d976ba167022d07b99 ] || fail camera_profile
+[ "$(sha /opt/lib/libcolib.so)" = 14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403 ] || fail native_library_profile
 [ "$(sha /opt/usr/cc2-reactor-runtime-v2/elegoo_printer)" = 19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745 ] || fail reactor_program_profile
 [ "$(sha /opt/usr/cc2-reactor-runtime-v2/launcher.sh)" = a260865964759898cf47ed8e30e20eb8981506c1a22ada32611b9911b36b47fc ] || fail reactor_launcher_profile
 [ "$(sha /etc/init.d/printer)" = e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd255d1bc4 ] || fail native_startup_profile
