@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [CC2 Control 1.2.24] - 2026-10-31
+
 ### Added
 
 - Optional manual Wi-Fi/USB Ethernet Connections page with saved Wi-Fi profiles, DHCP/static IP, interface switches, persistent selection and Diagnostics; qualified TP-Link UE300 RTL8153 profile (USB 0bda:8153, revision 31fd), implemented and physically tested by **Neme77** (#266). Wi-Fi remains available without an adapter. The original display-IP experiment is excluded.
@@ -18,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Detect overwritten pending Canvas pull-back and plate-mesh edits after native `SAVE_CONFIG`, refuse incompatible calibration/saving and guard the delayed restart; preserve newer native settings and require an explicit re-save. Reported by **Noahwhite2014** (#267), corrected by **Neme77**.
+- Detect overwritten pending Canvas pull-back and plate-mesh edits after native `SAVE_CONFIG`, refuse incompatible calibration/saving and guard the delayed restart; preserve newer native settings and require an explicit re-save. Reported by **Noahwhite2014** (#267), corrected by **Neme77** (#266).
 
 - Stage the cumulative Connections installer on persistent storage, bound local status reads and retain logs/backups while cleaning payloads only after complete success; preserve native DHCP, camera/reactor startup and same-boot qualification caching verified by **Neme77** (#266).
 
