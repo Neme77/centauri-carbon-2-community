@@ -1,4 +1,4 @@
-name: Diagnose isolated language preview
+name: Verify corrected preview fixtures and source snapshot
 on:
   push:
     branches: [feature/manual-wifi-lan]
@@ -6,25 +6,34 @@ on:
 permissions:
   contents: read
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: 151d8227c1e6db4895ee2841ace37923baff1e88
+          ref: b007cf5cfab5860aa242e8d9f3dc4d545cd73ef4
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 26
       - run: npm ci && npx playwright install --with-deps chromium
         working-directory: cc2-control/web-src
-      - name: Capture real failing navigation state
+      - name: Run actual corrected browser fixtures
+        run: npm run test:backup-language && npm run test:languages && npm run test:recovery && npm run test:upload
+        working-directory: cc2-control/web-src
+      - name: Verify and preserve canonical snapshot
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('cc2-control/web-src/preview/test-polish-czech.mjs')
-          s=p.read_text()
-          s=s.replace("    await language.waitFor({ state: 'visible' })", """    try { await language.waitFor({ state: 'visible', timeout: 10000 }) }
-              catch (error) { console.log('LANGUAGE_CASE',code,'URL',page.url(),'ERRORS',errors,'BODY',await page.locator('body').innerText()); throw error }""")
-          p.write_text(s)
-          PY
-          node cc2-control/web-src/preview/test-polish-czech.mjs
+          set -eu
+          python3 experimental/pr128-integration/sync_source.py
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+          mkdir /tmp/snapshot
+          cp builder/current/components/cc2-control/source/source.zip /tmp/snapshot/
+          cp builder/current/prepare.py /tmp/snapshot/
+          cp builder/current/core/firmware_builder.py /tmp/snapshot/
+          cp builder/current/launch_helpers/run_build.py /tmp/snapshot/
+          (cd /tmp/snapshot && sha256sum source.zip prepare.py firmware_builder.py run_build.py > SHA256SUMS)
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: verified-release-source-snapshot-final
+          path: /tmp/snapshot/
+          if-no-files-found: error
