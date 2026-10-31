@@ -11,8 +11,8 @@ import { chromium } from 'playwright'
 const root = fileURLToPath(new URL('..', import.meta.url)), backend = path.resolve(root, '..')
 const temporary = await mkdtemp(path.join(tmpdir(), 'cc2-backup-browser-'))
 const binary = path.join(temporary, 'cc2-control')
-await promisify(execFile)('gcc', ['-Os', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-pthread',
-  ...['main', 'mqtt', 'console', 'control', 'panda', 'uds'].map(n => path.join(backend, 'src', `${n}.c`)), '-lm', '-o', binary])
+await promisify(execFile)('gcc', ['-Os', '-std=c11', '-D_POSIX_C_SOURCE=200809L', '-DCC2_NETWORK_STATUS_LIBRARY', '-pthread',
+  ...['main', 'mqtt', 'console', 'control', 'panda', 'uds', 'network_status'].map(n => path.join(backend, 'src', `${n}.c`)), '-lm', '-o', binary])
 const listener = createServer()
 await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve))
 const port = listener.address().port

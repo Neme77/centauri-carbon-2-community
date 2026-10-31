@@ -13,6 +13,8 @@
     "test:recovery": "node preview/test-recovery-download.mjs",
     "test:upload": "node preview/test-upload-network.mjs",
     "test:mesh": "node preview/test-adaptive-mesh.mjs",
+    "test:sidebar-canvas-polish": "node preview/test-sidebar-canvas-polish.mjs",
+    "test:obsidian-layout": "node preview/test-obsidian-layout.mjs",
     "test:dashboard-style": "node preview/test-dashboard-style.mjs",
     "test:camera": "node preview/test-camera-stream.mjs",
     "test:quick": "node preview/test-quick-actions.mjs",
@@ -53,7 +55,8 @@
     "test:spool-history": "node preview/test-spool-history.mjs",
     "test:remember-lan": "node preview/test-remember-lan.mjs",
     "test:spoolman-integration": "node preview/test-spoolman-integration.mjs",
-    "test:external-feed": "node preview/test-external-feed.mjs"
+    "test:external-feed": "node preview/test-external-feed.mjs",
+    "test:z-direction": "node preview/test-z-direction.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

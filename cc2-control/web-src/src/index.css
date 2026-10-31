@@ -11,7 +11,7 @@
 .cc2-canvas-slot .cc2-canvas-choose { position:relative; z-index:2; pointer-events:auto; }
 .cc2-canvas-slot .cc2-canvas-slot-pick:focus-visible { outline-offset:3px; }
 .cc2-canvas-slot .cc2-canvas-slot-pick:disabled { cursor:default; }
-.cc2-canvas-ring { width:76px; max-width:100%; height:auto; aspect-ratio:1; border:15px solid; border-radius:50%; background:var(--bg); margin:0 auto 12px; flex-shrink:0; }
+.cc2-canvas-ring { width:76px; max-width:100%; height:auto; aspect-ratio:1; border:21px solid; border-radius:50%; background:var(--bg); margin:0 auto 12px; flex-shrink:0; }
 .cc2-canvas-slot-data { display:grid; gap:4px; font-size:12px; }
 .cc2-canvas-spool-name { min-height:1.45em; overflow-wrap:anywhere; font-weight:600; margin-bottom:6px; }
 .cc2-canvas-choose { width:100%; margin:10px 0; }
@@ -124,6 +124,26 @@
   --cyan: #1c78bc; --green: #5f7000; --amber: #946c00; --red: #dc322f; --blue: #1c78bc;
   --well: #002b36; --well-fg: #eee8d5;
 }
+/* Obsidian keeps semantic status colours separate from the purple action accent. */
+:root[data-theme="obsidian"] {
+  color-scheme: dark;
+  --bg: #0b0c12; --panel: #15161f; --edge: #333345; --text: #eeedf7; --muted: #a6a5bb; --field: #1d1e2a; --ink: #100a20;
+  --cyan: #b28aff; --green: #46dfa4; --amber: #ffc66d; --red: #ff657f; --blue: #48d9ef;
+  --well: #090a10; --well-fg: #eeedf7;
+}
+:root[data-theme="obsidian"] body {
+  background: radial-gradient(ellipse at 76% 0%, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 48%), var(--bg);
+}
+:root[data-theme="obsidian"] section.bg-panel {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 96%, var(--text)), var(--panel) 70%);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--well) 10%, transparent);
+}
+:root[data-theme="obsidian"] nav a.text-cyan,
+:root[data-theme="obsidian"] button[aria-pressed="true"] {
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--cyan) 5%, transparent);
+}
+:root[data-theme="obsidian"] .cc2-dashboard .text-2xl:not(h2),
+:root[data-theme="obsidian"] .cc2-job-stats strong { color: var(--blue); }
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400â€“700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
@@ -169,7 +189,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   }
   .cc2-sidebar-open { transform: translateX(0); visibility: visible; }
   .cc2-sidebar nav a { justify-content: flex-start; padding-inline: 16px; }
-  .cc2-sidebar nav a span { display: inline; }
+  .cc2-sidebar nav a span { display: inline; visibility: visible; }
   .cc2-menu-backdrop {
     display: block; position: fixed; inset: 68px 0 0; z-index: 19;
     background: #0008;
@@ -249,6 +269,16 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   @container page (min-width: 960px) {
     .cc2-dashboard-bottom { grid-template-columns: minmax(0, 1fr); align-items: start; }
   }
+}
+
+/* Collapsing 208 px navigation to 74 px frees 134 px: split that space
+   equally around the page instead of resizing its cards and camera. */
+@media (min-width: 901px) and (min-height: 501px), (min-width: 768px) and (min-height: 501px) and (orientation: landscape) {
+  .cc2-main { --cc2-page-padding: 1rem; }
+  .cc2-main-collapsed { padding-inline: calc(var(--cc2-page-padding) + 4.5625rem); }
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  .cc2-main { --cc2-page-padding: 12px; }
 }
 
 /* Keep all routes inside the same bounded content container. */

@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -358,6 +359,108 @@ int console_command_allowed(console_state *state, const char *command, const mqt
     }
     return 1;
 }
+
+/* One deadline covers connection, transmission and the complete reply. These
+ * sockets must never stall the HTTP thread when the firmware accept queue is full. */
+static long long emergency_now_ms(void) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) return -1;
+    return (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+static int emergency_wait(int fd, short events, long long deadline) {
+    for (;;) {
+        long long now = emergency_now_ms();
+        if (now < 0 || now >= deadline) return -1;
+        struct pollfd pfd = {fd, events, 0};
+        int ready = poll(&pfd, 1, (int)(deadline - now));
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready <= 0 || (pfd.revents & POLLNVAL)) return -1;
+        /* HUP/ERR also wake the nonblocking read/send to report EOF or failure. */
+        return 0;
+    }
+}
+
+/* Preserve Noahwhite2014's direct firmware endpoint and its independent console
+ * connection. Return failure on a refused, incomplete or oversized response so
+ * the existing caller can attempt its M112 fallback. A clean close with no reply
+ * still counts as sent: firmware shutdown can close the socket immediately. */
+int console_emergency_stop(console_state *state, char *reason, size_t reason_cap) {
+    static const char request[] = "{\"id\":112,\"method\":\"emergency_stop\",\"params\":{}}\003";
+    const char *failure = "Cannot connect to elegoo_printer";
+    long long started = emergency_now_ms();
+    if (started < 0) { snprintf(reason, reason_cap, "Cannot read emergency stop clock"); return -1; }
+    long long deadline = started + 2000;
+    char socket_path[108];
+    pthread_mutex_lock(&state->lock);
+    snprintf(socket_path, sizeof(socket_path), "%s", state->socket_path);
+    pthread_mutex_unlock(&state->lock);
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) { snprintf(reason, reason_cap, "Cannot create UDS socket"); return -1; }
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0 ||
+        fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) goto failed;
+    struct sockaddr_un address;
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", socket_path);
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        /* AF_UNIX reports a saturated accept queue as EAGAIN. No pending
+         * connection exists in that case; fail promptly rather than polling it. */
+        if (errno != EINPROGRESS) goto failed;
+        if (emergency_wait(fd, POLLOUT, deadline) != 0) goto failed;
+        int error = 0;
+        socklen_t length = sizeof(error);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) < 0 || error) goto failed;
+    }
+    failure = "Cannot send the emergency stop";
+    size_t sent = 0;
+    while (sent < sizeof(request) - 1) {
+        long long now = emergency_now_ms();
+        if (now < 0 || now >= deadline) goto failed;
+        ssize_t n = send(fd, request + sent, sizeof(request) - 1 - sent, MSG_NOSIGNAL);
+        if (n > 0) { sent += (size_t)n; continue; }
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) &&
+            emergency_wait(fd, POLLOUT, deadline) == 0) continue;
+        goto failed;
+    }
+    atomic_store(&state->emergency_sent, 1);
+    char reply[8192];
+    size_t used = 0;
+    failure = "Incomplete emergency stop response";
+    for (;;) {
+        if (emergency_wait(fd, POLLIN, deadline) != 0) goto failed;
+        ssize_t got = read(fd, reply + used, sizeof(reply) - 1 - used);
+        if (got == 0 && used == 0) { close(fd); return 0; }
+        if (got < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+        if (got <= 0) goto failed;
+        used += (size_t)got;
+        reply[used] = '\0';
+        char *end = memchr(reply, 3, used);
+        if (end) {
+            *end = '\0';
+            /* Conservative: any error marker in the complete firmware frame
+             * requests fallback, preserving the upstream refusal behaviour. */
+            if (strstr(reply, "\"error\"")) {
+                failure = "The printer refused the emergency stop";
+                goto failed;
+            }
+            if (end == reply || memchr(reply, 0, (size_t)(end - reply))) goto failed;
+            close(fd);
+            return 0;
+        }
+        if (used == sizeof(reply) - 1) {
+            failure = "Emergency stop response too large";
+            goto failed;
+        }
+    }
+failed:
+    close(fd);
+    snprintf(reason, reason_cap, "%s", failure);
+    return -1;
+}
+
 
 int console_start(console_state *state, const char *command, char *reason, size_t reason_cap) {
     pthread_t thread;

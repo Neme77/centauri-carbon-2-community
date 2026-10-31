@@ -50,7 +50,7 @@ export const App = () => {
       <Topbar />
       <main
         tabIndex={-1}
-        class={`cc2-main ml-18.5 mt-17 max-w-[2000px] p-3 transition-[margin,opacity] md:p-4 ${collapsed ? '' : 'md:ml-52'} ${stale ? 'opacity-50' : ''}`}
+        class={`cc2-main ml-15.5 mt-17 p-3 transition-[margin,padding,opacity] md:p-4 ${collapsed ? 'cc2-main-collapsed' : 'md:ml-52'} ${stale ? 'opacity-50' : ''}`}
       >
         <div class="cc2-page-content @container/page">
           <PrinterReport />

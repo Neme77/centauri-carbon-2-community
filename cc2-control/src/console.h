@@ -29,6 +29,7 @@ int console_clear(console_state *state);
 int console_command_allowed(console_state *state, const char *command, const mqtt_client *mqtt,
                             char *reason, size_t reason_cap);
 int console_start(console_state *state, const char *command, char *reason, size_t reason_cap);
+int console_emergency_stop(console_state *state, char *reason, size_t reason_cap);
 void console_json(console_state *state, char *out, size_t capacity);
 
 #endif

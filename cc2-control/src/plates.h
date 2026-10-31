@@ -90,6 +90,7 @@ static int plates_reboot_requested;
 static const mqtt_client *plates_mqtt; /* main()'s client, read by the reboot guard */
 static char plates_previous_current[PLATE_ID_LEN + 1];
 static unsigned long plates_seen_connections = ULONG_MAX;
+static int plates_pending_intact(void);
 static int plates_pending_stage; /* stored slot, load, active matrix, offset */
 static int plates_z_valid;
 static double plates_z_applied;
@@ -102,12 +103,14 @@ static int (*plates_uds)(const char *query, char **reply, size_t *length) = uds_
 /* A bed mesh calibration run by CC2 Control, see plates_calibration_tick. */
 enum { CAL_IDLE, CAL_HOMING, CAL_HEATING, CAL_SOAKING, CAL_PROBING, CAL_SAVING };
 #define PLATE_SOAK_MAX 60 /* minutes */
+#define PLATE_BED_RENEW_MS (10 * 60000) /* see plates_cal_keep_bed */
 static struct {
     int stage, temp, soak; /* soak in seconds */
     char side;
     char plate[PLATE_ID_LEN + 1], nozzle[PLATE_ID_LEN + 1], measure[PLATE_ID_LEN + 1];
     long long since, soak_until, done_at; /* stage start, end of the soak, when the console command finished */
     long long held; /* since when the end of the soak waits for fresh evidence */
+    long long renew_at; /* when the job next repeats its bed target */
     unsigned long generation; /* the console command the stage waits for */
     const char *result; /* "", "done" (no plate), "saved", "failed" or "cancelled" */
     const char *error;  /* what failed: "homing", "heating", "busy", "telemetry", "probing" or "saving" */
@@ -1070,12 +1073,14 @@ static void plates_get_response(int fd) {
     json_builder b = {malloc(PLATES_FILE_MAX + 8192), 0, PLATES_FILE_MAX + 8192, 0};
     if (!b.data) { free(file); plates_fail(fd, 500, "Out of memory"); return; }
     const plate_entry *current = plates.current[0] ? plate_find(plates.current) : NULL;
+    int pending_conflict = plates.pending[0] && !plates_pending_intact();
     const char *active = uds_mesh_profile(&telemetry);
     json_builder_printf(&b, "{\"available\":%s,\"error\":", plates_available ? "true" : "false");
     json_builder_string(&b, plates_error);
     json_builder_printf(&b, ",\"current\":\"%s\",\"pending\":\"%s\",\"result\":\"%s\",\"z_applied\":%s,",
         plates.current, plates.pending, plates_result,
         current && plates_z_valid && plate_close(plates_z_applied, plate_z_now(current)) ? "true" : "false");
+    json_builder_printf(&b, "\"pending_conflict\":%s,", pending_conflict ? "true" : "false");
     if (current) json_builder_printf(&b, "\"z_effective\":%.3f,", plate_z_now(current));
     else json_builder_printf(&b, "\"z_effective\":null,");
     json_builder_printf(&b, "\"nozzle\":\"%s\",\"mesh_profile\":", plates.nozzle);
@@ -1160,6 +1165,7 @@ static int plates_capture(int fd, char side, plate_mesh *mesh) {
 
 static const char *plates_closed(int *status) {
     *status = 409;
+    if (canvas_unload_pending()) return "A Canvas pull-back change needs a restart before changing plate settings";
     if (plates_background_active()) return "Plate verification is still running";
     if (!plates_available) { *status = 503; return plates_error; }
     if (plates.pending[0]) return "A plate change is waiting for the printer restart";
@@ -1487,11 +1493,21 @@ static void plates_nozzle_select_response(int fd, const mqtt_client *mqtt, const
     plates_reply(fd, 200, plates_reapply_z(mqtt) ? "{\"selected\":true,\"applied\":true}\n" : "{\"selected\":true,\"applied\":false}\n");
 }
 
+/* Compare only the mesh slot this operation owns; unrelated native saves are kept. */
+static int plates_pending_intact(void) {
+    if (!plates.pending[0]) return 1;
+    const plate_entry *p = plate_find(plates.pending);
+    const plate_measure *base = p ? plate_base(p) : NULL;
+    plate_mesh file;
+    return base && autosave_slot(p->side, &file) == 1 && plate_mesh_equal(&file, &base->mesh, 1);
+}
+
 /* A print started on the screen or a slicer while the reboot waited must not be cut off. */
 static int plates_reboot_guard(void) {
     time_t now=time(NULL);const mqtt_client *m=plates_mqtt;
     return m && m->connected && m->registered && m->have_machine_status && m->machine_status==1 &&
         m->last_message>0 && now>=m->last_message && now-m->last_message<=15 && uds_fresh(&telemetry) &&
+        plates_pending_intact() && canvas_unload_pending_intact() &&
         !plates_console_busy() && !atomic_load(&upload_busy) && !atomic_load(&active_downloads) && !z_offset_pending;
 }
 
@@ -1873,12 +1889,19 @@ static int plates_cal_command(console_state *console, int stage, const char *com
     plates_cal.generation = console->generation;
     pthread_mutex_unlock(&console->lock);
     plates_cal.stage = stage; plates_cal.since = monotonic_ms(); plates_cal.done_at = 0;
+    if (stage == CAL_HEATING) plates_cal.renew_at = plates_cal.since + PLATE_BED_RENEW_MS; /* the job's M140 */
     return 0;
 }
 
-/* Tests count the heater switch-offs instead. */
+/* Tests count the heater switch-offs and the repeated targets instead. */
 static int plates_send_bed_off(void) { return send_local_gcode_script("M140 S0"); }
 static int (*plates_bed_off)(void) = plates_send_bed_off;
+static int plates_send_bed_target(int temp) {
+    char command[32];
+    snprintf(command, sizeof(command), "M140 S%d", temp);
+    return send_local_gcode_script(command);
+}
+static int (*plates_bed_target)(int temp) = plates_send_bed_target;
 
 /* The bed heater is the job's to switch off only while fresh MQTT reports Idle and fresh
  * telemetry shows the target the job set. A print started meanwhile by another client, a
@@ -1888,6 +1911,16 @@ static int plates_cal_owns_bed(const mqtt_client *mqtt) {
     return mqtt->connected && mqtt->registered && mqtt->have_machine_status && mqtt->machine_status == 1 &&
            mqtt->last_message > 0 && now >= mqtt->last_message && now - mqtt->last_message <= 15 &&
            uds_value(&telemetry, U_BG, &target) && fabs(target - plates_cal.temp) <= 0.5;
+}
+
+/* The firmware switches an idle printer's bed off 15 minutes after its last command: its
+ * idle_timeout turns the nozzle off after 300 s and the bed 600 s later ("heated bed protection"
+ * in elegoo.log), and an M140 starts that count again. While the job heats and soaks it repeats
+ * its target every ten minutes, so the bed stays on and the nozzle still times out; a send that
+ * fails is retried after 30 s. Only a bed the job owns gets its target again. */
+static void plates_cal_keep_bed(const mqtt_client *mqtt, long long now) {
+    if (now < plates_cal.renew_at || !plates_cal_owns_bed(mqtt)) return;
+    plates_cal.renew_at = now + (plates_bed_target(plates_cal.temp) == 0 ? PLATE_BED_RENEW_MS : 30000);
 }
 
 /* With `bed_off`, a job that ends early switches the bed heater off when it still owns it. */
@@ -1920,6 +1953,8 @@ static int plates_homed(const mqtt_client *mqtt) {
 static void plates_calibrate_response(int fd, const mqtt_client *mqtt, console_state *console, const char *body,
                                       size_t length) {
     char fields[5][PLATE_NAME_MAX + 1] = {{0}}; int temp, soak; const char *reason;
+    const char *pending = pending_autosave_guard();
+    if (pending) { plates_fail(fd, 409, pending); return; }
     int count = plates_fields(body, length, fields, 5);
     size_t n = strlen(fields[2]);
     if (count < 3 || strlen(fields[0]) != 1 || (fields[0][0] != 'A' && fields[0][0] != 'B') ||
@@ -1997,6 +2032,7 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
             plates_cal.soak_until = now + (long long)plates_cal.soak * 1000;
             return;
         }
+        plates_cal_keep_bed(mqtt, now);
         if (now - plates_cal.since > 30 * 60000) plates_cal_end(mqtt, "failed", "heating", "The bed did not reach the temperature", 1);
         return;
     case CAL_SOAKING:
@@ -2004,6 +2040,7 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
         if (have_bed && fabs(target - plates_cal.temp) > 0.5) {
             plates_cal_end(mqtt, "failed", "heating", "The bed heater was changed", 0); return;
         }
+        if (!busy) plates_cal_keep_bed(mqtt, now);
         if (now < plates_cal.soak_until || busy) return; /* a command typed meanwhile finishes first */
         {
             /* Waits up to a minute for fresh evidence, then stops; the bed is switched off only when

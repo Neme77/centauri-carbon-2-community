@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "asset_id": 693492332,
+  "release_id": 429512215,
+  "filename": "CC2-Connections-Runtime-R5h.tar.gz",
+  "sha256": "95db87b35dcf6799d5d57ec8ad046455c97e5cb297cc07ea4a2eeda90fb367de",
+  "helper_sha256": "192ee3df47f6543e59e036a11bd242a0d0e070e7e0dc67b1d5609116903cf23d",
+  "qualified_profile": {
+    "community": "V4.4.2",
+    "kernel": "5.4.61 #40 ARMv7",
+    "usb_vendor": "0bda",
+    "usb_product": "8153",
+    "usb_revision": "31fd",
+    "tested_model": "TP-Link UE300"
+  },
+  "physical_reference": "R5h: maintainer confirmed switching, local/remote video, reboot persistence and normal Canvas startup; new cumulative build requires separate validation."
+}

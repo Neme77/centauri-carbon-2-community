@@ -195,6 +195,15 @@ lists at most 128 files: when it holds more, the newest 128 are listed, `truncat
 and `total` counts every G-code file found. The scan examines at most 4096 directory entries
 per storage; beyond that `truncated` is `true` and `total` covers only the entries examined.
 
+Deletion refusals include a stable `code` alongside the existing English `error` for API compatibility. The UI translates the code for single and bulk deletion and uses a localized generic refusal for unknown codes or malformed responses. Codes: `file_delete_fresh_status`, `file_delete_busy`, `file_delete_upload_busy`, `file_delete_pending_print`, `file_delete_active_print_unknown`, `file_delete_active_print`, `file_delete_state_unknown`, `file_delete_storage_unavailable`, `file_delete_unsafe_file`, `file_delete_failed`. HTTP statuses and safety decisions are unchanged.
+
+`POST /api/gcode-files/delete` accepts deletions while the printer is busy if fresh
+MQTT and native print state identify the job safely. The active, paused or errored
+job and pending Orca starts are protected; in-flight uploads also block deletion.
+Basename and case aliases are protected on
+both media. Unknown/stale active-job evidence refuses deletion. Existing storage,
+path traversal, symlink and hard-link restrictions remain; copying is still Idle-only.
+
 `POST /api/gcode-files/upload` never overwrites a file. When it rejects an upload after the
 headers, for example with 409 because the name exists, it first reads the rest of the
 request body, so a browser receives the error instead of a reset connection.
@@ -381,7 +390,9 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   a profile, homes the printer when needed (`G28`), heats the bed (`M140`), waits until telemetry reads the
   temperature, holds it for the soak time (the firmware's own calibration probes as soon as the sensor
   reads the target, while the plate still expands), then sends `BED_MESH_CALIBRATE PROFILE=<slot>
-  BED_TEMP=<t>` through the console. With a plate, the result becomes its measurement as with
+  BED_TEMP=<t>` through the console. The firmware switches an idle printer's bed off 15 minutes after the
+  last command, so while it heats and soaks the run sends `M140` again every ten minutes, and only while
+  the bed still holds the target the run set. With a plate, the result becomes its measurement as with
   `/api/plates/measure`. `GET /api/plates` reports it as `calibration` (`stage` `homing`, `heating`,
   `soaking`, `probing`, `saving` or `off`, the soak seconds `remaining`, the bed temperature `bed`, and
   `result` `done`, `saved`, `failed` or `cancelled` with `error` `homing`, `heating`, `busy`, `telemetry`,

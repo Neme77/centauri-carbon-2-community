@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from camera_component import functions as camera_functions, RESTORE as CAMERA_RESTORE
+from network_component import functions as network_functions, RUNTIME_SHA as NETWORK_RUNTIME_SHA
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -22,7 +23,7 @@ COMPATIBILITY = json.loads((HERE / 'compatibility.json').read_text())
 if hashlib.sha256((HERE.parent / 'FIRMWARE_VERSION').read_bytes()).hexdigest() != COMPATIBILITY['firmware_version_file_sha256']:
     raise ValueError('Updater firmware compatibility record does not match FIRMWARE_VERSION')
 
-def package(prepared, scripts, source, output, camera_runtime=None):
+def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None):
     binary = (prepared / 'cc2-control').read_bytes()
     if len(binary) < 20 or binary[:6] != b'\x7fELF\x01\x01' or struct.unpack_from('<H', binary, 18)[0] != 40:
         raise ValueError('Payload requires a 32-bit little-endian ARM ELF')
@@ -54,12 +55,15 @@ def package(prepared, scripts, source, output, camera_runtime=None):
         text = text.replace('@CAMERA_RESTORE_FUNCTION@', CAMERA_RESTORE)
         text = text.replace('@CAMERA_COMPONENT_FUNCTIONS@', camera_functions(HERE / 'camera', camera_runtime) if camera_runtime else '')
         text = text.replace('@CAMERA_COMPONENT_PREFLIGHT@', 'camera_unpack\nsh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '')
+        text = text.replace('@CONNECTIONS_COMPONENT_FUNCTIONS@', network_functions(connections_runtime) if connections_runtime else '')
+        text = text.replace('@CONNECTIONS_COMPONENT_INSTALL@', 'install_phase network-component\n                network_install_component || exit 1' if connections_runtime else '')
         files[name] = text.encode()
     files['build-info.json'] = (json.dumps({
         'version': VERSION, 'binary_sha256': binary_hash,
         'source_archive_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
         'change': 'CC2 Control application updater',
         'camera_component': 'reap-r2+recovery-r2' if camera_runtime else None,
+        'connections_runtime_sha256': NETWORK_RUNTIME_SHA if connections_runtime else None,
         'requires_full_printer_reboot': bool(camera_runtime),
         'required_community_firmware': FIRMWARE_VERSION,
         'compatibility': COMPATIBILITY,
@@ -76,7 +80,7 @@ def package(prepared, scripts, source, output, camera_runtime=None):
                 archive.addfile(entry, io.BytesIO(data))
     public = {name: (HERE / name).read_bytes() for name in
               ('Install-CC2-Control.ps1', 'Install-Windows.cmd', 'install-cc2-control.sh', 'README.md')}
-    for name in ('README-TEST.md', 'README-TEST.it.md', 'README-EXPERIMENTAL.md', 'README-EXPERIMENTAL.it.md'):
+    for name in ('README-TEST.md', 'README-EXPERIMENTAL.md'):
         trial_notes = HERE / name
         if trial_notes.is_file(): public[name] = trial_notes.read_bytes()
     public['cc2-control-payload.tar.gz'] = payload.getvalue()
@@ -103,10 +107,13 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=ROOT / f'output/CC2-Control-{VERSION}-Multiplatform-Update.zip')
     parser.add_argument('--camera-runtime', type=Path, help='Include the three fingerprinted R2 camera runtime files')
     parser.add_argument('--release', action='store_true', help='Require the cumulative camera component for a public release')
+    parser.add_argument('--connections-runtime', type=Path, help='Include the exact qualified optional Connections runtime')
     parser.add_argument('--application-only-trial', action='store_true', help='Explicitly build a development-only app package without the cumulative camera component')
     args = parser.parse_args()
     if args.release and args.application_only_trial:
         parser.error('--release and --application-only-trial are mutually exclusive')
     if args.camera_runtime is None and (args.release or not args.application_only_trial):
         parser.error('Public cumulative releases require --camera-runtime, including for users who skipped earlier updates')
-    package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime)
+    if args.release and args.connections_runtime is None:
+        parser.error('Public cumulative releases require --connections-runtime; unsupported native profiles retain native Wi-Fi')
+    package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime, args.connections_runtime)

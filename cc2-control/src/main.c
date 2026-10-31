@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -716,31 +717,116 @@ static int gcode_ready_for_upload(const mqtt_client *mqtt){
         mqtt->last_message>0 && time(NULL)-mqtt->last_message<=15;
 }
 
+/* A sliced job can be named by its basename, a native local/ path, or an
+ * imported USB alias. Protect matching basenames on both media (including FAT
+ * case aliases) rather than guessing which representation the native UI uses. */
+static atomic_int upload_busy=0;
+static pthread_mutex_t orca_pending_mutex=PTHREAD_MUTEX_INITIALIZER;
+static char orca_pending_filename[PATH_MAX_LOCAL];
+static int gcode_same_job_name(const char *file, const char *job) {
+    if (!file || !*file || !job || !*job) return 0;
+    const char *a = strrchr(file, '/'), *b = strrchr(job, '/');
+    return !strcasecmp(a ? a + 1 : file, b ? b + 1 : job);
+}
+/* Compare file identity as well as text: removable filesystems can resolve
+ * different Unicode case spellings to the same file. Restrict all lookups to
+ * the already-qualified G-code roots and retain their no-symlink checks. */
+static int gcode_same_job_file(const char *file, const char *job) {
+    if (!file || !job || !*job) return 0;
+    const char *roots[] = {gcode_internal_root, gcode_usb_root};
+    const char *relative = job;
+    for (unsigned i = 0; i < 2; i++) {
+        size_t n = strlen(roots[i]);
+        if (!strncmp(job, roots[i], n) && job[n] == '/') { relative = job + n + 1; break; }
+    }
+    if (!strncmp(relative,"local/",6)) relative += 6;
+    else if (!strncmp(relative,"u-disk/",7)) relative += 7;
+    else if (!strncmp(relative,"usb/",4)) relative += 4;
+    char candidate[PATH_MAX_LOCAL*2], active[PATH_MAX_LOCAL*2];
+    struct stat a,b;
+    for (unsigned i = 0; i < 2; i++) {
+        if (!gcode_resolved_path(roots[i],file,candidate,sizeof(candidate)) || stat(candidate,&a)) continue;
+        for (unsigned j = 0; j < 2; j++)
+            if (gcode_resolved_path(roots[j],relative,active,sizeof(active)) && !stat(active,&b) &&
+                a.st_dev == b.st_dev && a.st_ino == b.st_ino) return 1;
+    }
+    return 0;
+}
+/* Stable codes are for UI localization; retain English error text for API clients. */
+static void gcode_delete_error(int fd, int status, const char *reason, const char *code) {
+    static const struct { const char *code, *message; } errors[] = {
+        {"file_delete_fresh_status", "Printer must be connected with fresh status"},
+        {"file_delete_busy", "File deletion unavailable during startup, transfer, upgrade or recovery"},
+        {"file_delete_upload_busy", "Finish the current upload before deleting files"},
+        {"file_delete_pending_print", "File is waiting to start printing"},
+        {"file_delete_active_print_unknown", "Cannot identify the active print safely"},
+        {"file_delete_active_print", "Cannot delete the active, paused or recoverable print"},
+        {"file_delete_state_unknown", "Cannot identify the printer state safely"},
+        {"file_delete_storage_unavailable", "Storage unavailable or not writable"},
+        {"file_delete_unsafe_file", "G-code file not found or unsafe"},
+        {"file_delete_failed", "Cannot delete this file"},
+    };
+    const char *message = "Cannot delete this file";
+    for (size_t i = 0; i < sizeof(errors) / sizeof(errors[0]); i++)
+        if (!strcmp(code, errors[i].code)) { message = errors[i].message; break; }
+    char json[384];
+    int n = snprintf(json, sizeof(json), "{\"error\":\"%s\",\"code\":\"%s\"}\n", message, code);
+    respond(fd,status,reason,"application/json",json,(size_t)n);
+}
+
+static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file) {
+    time_t now = time(NULL);
+    if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status ||
+        mqtt->last_message <= 0 || now < mqtt->last_message || now - mqtt->last_message > 15)
+        return "file_delete_fresh_status";
+    if (mqtt->machine_status == 0 || mqtt->machine_status == 9 || mqtt->machine_status == 11 ||
+        mqtt->machine_status == 15 || mqtt->machine_status == 16)
+        return "file_delete_busy";
+    if (atomic_load(&upload_busy)) return "file_delete_upload_busy";
+    pthread_mutex_lock(&orca_pending_mutex);
+    int pending = gcode_same_job_name(file, orca_pending_filename) || gcode_same_job_file(file, orca_pending_filename);
+    pthread_mutex_unlock(&orca_pending_mutex);
+    if (pending) return "file_delete_pending_print";
+    const char *native = uds_print_state(&telemetry);
+    int reported_job = mqtt->machine_status == 2 || !strcmp(mqtt->print_state, "printing") ||
+                       !strcmp(mqtt->print_state, "paused") || !strcmp(mqtt->print_state, "error");
+    int native_job = native && (!strcmp(native, "printing") || !strcmp(native, "paused") || !strcmp(native, "error"));
+    if (reported_job || native_job) {
+        if (!native_job || !telemetry.have_filename || !telemetry.filename[0])
+            return "file_delete_active_print_unknown";
+        if (gcode_same_job_name(file, mqtt->filename) || gcode_same_job_name(file, telemetry.filename) ||
+            gcode_same_job_file(file, mqtt->filename) || gcode_same_job_file(file, telemetry.filename))
+            return "file_delete_active_print";
+        return NULL;
+    }
+    if (mqtt->machine_status == 1 && !native) return NULL; /* retain idle operation without native telemetry */
+    if (!native || (strcmp(native, "standby") && strcmp(native, "complete") && strcmp(native, "cancelled")))
+        return "file_delete_state_unknown";
+    return NULL;
+}
+
 static void gcode_delete_response(int fd,const char *request,const mqtt_client *mqtt,
                                   const char *body,size_t length){
     (void)request;
-    if(!gcode_idle_for_mutation(mqtt)){
-        const char *e="{\"error\":\"Printer must be idle and connected\"}\n";
-        respond(fd,409,"Conflict","application/json",e,strlen(e));return;
-    }
     char storage[16],file[PATH_MAX_LOCAL];const char *root,*media;
     if(!gcode_request_file(body,length,storage,file,NULL,NULL,&root,&media)||
        !gcode_storage_writable(storage,root)){
-        const char *e="{\"error\":\"Storage unavailable or not writable\"}\n";
-        respond(fd,400,"Bad Request","application/json",e,strlen(e));return;
+        gcode_delete_error(fd,400,"Bad Request","file_delete_storage_unavailable");return;
     }
     (void)media;
     char path[PATH_MAX_LOCAL*2];
     if(!gcode_resolved_path(root,file,path,sizeof(path))){
-        const char *e="{\"error\":\"G-code file not found or unsafe\"}\n";
-        respond(fd,404,"Not Found","application/json",e,strlen(e));return;
+        gcode_delete_error(fd,404,"Not Found","file_delete_unsafe_file");return;
+    }
+    const char *blocked = gcode_delete_guard(mqtt, file);
+    if (blocked) {
+        gcode_delete_error(fd,409,"Conflict",blocked);return;
     }
     /* Recheck direct filename and block hard-linked content. */
     struct stat st;
     if(lstat(path,&st)!=0||!S_ISREG(st.st_mode)||st.st_nlink!=1||
        unlink(path)!=0){
-        const char *e="{\"error\":\"Cannot delete this file\"}\n";
-        respond(fd,409,"Conflict","application/json",e,strlen(e));return;
+        gcode_delete_error(fd,409,"Conflict","file_delete_failed");return;
     }
     const char *ok="{\"deleted\":true}\n";
     respond(fd,200,"OK","application/json",ok,strlen(ok));
@@ -875,13 +961,10 @@ static void upload_discard(gcode_upload_job *job,size_t received,unsigned char *
 /* One upload at a time. The connection thread takes the slot and the upload
  * worker releases it, so this is an atomic flag: a mutex must be unlocked by
  * the thread that locked it. */
-static atomic_int upload_busy=0;
 static int upload_slot_acquire(void){int expected=0;return atomic_compare_exchange_strong(&upload_busy,&expected,1);}
 static void upload_slot_release(void){atomic_store(&upload_busy,0);}
 /* One print request may await the operator's Canvas mapping. Never print from
  * the upload worker: the existing protected print route remains authoritative. */
-static pthread_mutex_t orca_pending_mutex=PTHREAD_MUTEX_INITIALIZER;
-static char orca_pending_filename[PATH_MAX_LOCAL];
 static unsigned long orca_pending_generation=0;
 static time_t orca_pending_created=0;
 
@@ -3178,11 +3261,24 @@ static void mesh_response(int fd) {
     respond(fd,200,"OK","application/json; charset=utf-8",result,used); free(result);
 }
 
+/* Cross-feature SAVE_CONFIG guards are implemented after both file editors. */
+static int canvas_unload_pending(void);
+static int canvas_unload_pending_intact(void);
+static const char *pending_autosave_guard(void);
+
 #include "plates.h"
 #include "spools.h"
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
+
+static const char *pending_autosave_guard(void) {
+    if (canvas_unload_pending())
+        return "A Canvas pull-back change needs a restart; resolve it before calibrating or saving printer settings";
+    if (plates.pending[0])
+        return "A plate mesh change needs a restart; resolve it before calibrating or saving printer settings";
+    return NULL;
+}
 
 static void serve_index(int fd, const char *web_root) {
     char path[PATH_MAX_LOCAL];
@@ -3643,6 +3739,16 @@ static void console_command_response(int fd, console_state *console, const mqtt_
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error)); return;
     }
     memcpy(command,body,body_len); command[body_len]='\0';
+    /* M112 bypasses the console and the firmware's command queue; see console_emergency_stop(). */
+    if (!strcasecmp(command,"M112") && console_emergency_stop(console,reason,sizeof(reason)) == 0) {
+        const char *ok="{\"accepted\":true}\n";
+        respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok)); return;
+    }
+    /* User macros may call SAVE_CONFIG indirectly; emergency stop stays independent. */
+    const char *pending = pending_autosave_guard();
+    if (pending && strcasecmp(command, "M112")) {
+        plates_fail(fd, 409, pending); return;
+    }
     if(plates_background_active() && strcmp(command,"M112")){plates_fail(fd,409,"Plate verification is still running");return;}
     if (!console_command_allowed(console,command,mqtt,reason,sizeof(reason)) ||
         console_start(console,command,reason,sizeof(reason)) != 0) {
@@ -3702,6 +3808,15 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error));return;
     }
     memcpy(action,body,body_len);action[body_len]='\0';
+    if(!strcmp(action,"system:emergency_stop")){
+        /* Straight to the firmware's emergency_stop endpoint; the queued M112 below is only the fallback. */
+        char stop_reason[160];
+        if(console_emergency_stop(console,stop_reason,sizeof(stop_reason))==0){
+            const char *ok="{\"accepted\":true}\n";
+            respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));return;
+        }
+        fprintf(stderr,"Emergency stop endpoint failed (%s); sending M112\n",stop_reason);
+    }
     if(!strcmp(action,"motors:quiet") && !experiments.quiet_motors){
         const char *error="{\"accepted\":false,\"error\":\"Enable the experimental Quiet controls first\"}\n";
         respond(fd,409,"Conflict","application/json",error,strlen(error));return;
@@ -3721,6 +3836,10 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         }
         const char *ok="{\"accepted\":true}\n";
         respond(fd,202,"Accepted","application/json",ok,strlen(ok));return;
+    }
+    if (!strncmp(action, "pid:", 4)) {
+        const char *pending = pending_autosave_guard();
+        if (pending) { plates_fail(fd, 409, pending); return; }
     }
     if(!strcmp(action,"pid:save")) {
         pthread_mutex_lock(&console->lock);int ready=pid_ready_locked(console);pthread_mutex_unlock(&console->lock);
@@ -3824,6 +3943,8 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 #include "bed_drying.h"
 #include "experiments.h"
 #include "backup.h"
+#include "network_status_http.h"
+#include "connections_http.h"
 
 #define HTTP_PENDING_MAX 8
 typedef struct {
@@ -3873,7 +3994,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     size_t body_len=header_end&&used>=(size_t)(body-request)?used-(size_t)(body-request):0;
     int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
         body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
-    if (strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency && app_update_active()) {
+    if (strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency && (app_update_active() || (connections_busy() && strcmp(path,"/api/network/action")))) {
         app_update_fail(fd, 409, "Application update is running; printer changes are paused");
         return 0;
     }
@@ -3884,7 +4005,18 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
        !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
         app_update_fail(fd,409,"Stop bed heating and wait for confirmation before another operation");return 0;
     }
-    if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
+    if(!strcmp(path,"/api/network")) {
+        if(!strcmp(method,"GET"))network_status_response(fd);
+        else app_update_fail(fd,405,"Network status is read-only");
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/network/manager")) {
+        connections_status(fd,mqtt,console);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/network/action")) {
+        connections_action(fd,body,body_len,0,mqtt,console);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/network/scan")) {
+        connections_action(fd,body,body_len,1,mqtt,console);
+    } else if(!strcmp(path,"/api/network/select") || !strcmp(path,"/api/network/trial")) {
+        app_update_fail(fd,410,"Reload CC2 Control to use the Connections manager");
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
         drying_response(fd,mqtt,console);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/start")){
         drying_start_response(fd,request,body,body_len,mqtt,console);

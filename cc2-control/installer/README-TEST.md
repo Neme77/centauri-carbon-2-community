@@ -1,10 +1,7 @@
-# CC2 Control 1.2.23 — release validation
+# Cumulative application trial: PR252 + PR253
 
-This is the public cumulative application update for qualified Community V4.4/V4.4.1/V4.4.2, based on ELEGOO 02.01.01.07. It includes the fingerprinted R2 camera component for users who skipped earlier updates. Reboot the complete printer while idle only on first activation; an already active camera fix needs no additional full reboot.
+CC2 Control remains version 1.2.23. Includes Surfoo's corrected Z arrows and the calibration-saving text corrections. Arrow controls remain icon-only; existing positive/negative accessible names are retained. No new heating, motion limits or calibration commands.
 
-Integrated features were tested on maintainer/contributor printers before this version/package rebuild. This includes Dashboard/Control, LAN remembering, Spoolman sync, completion notice, multi-colour spool history, external-spool Load/Unload and shared material selection. Drying at 50 C for 2 minutes passed start, manual stop and expiry with zero-target confirmation; it remains opt-in experimental. Automated checks and exact source/package hashes accompany the release. Trial-build hardware evidence is distinct from the final version-only rebuild.
+Extract the full ZIP and run Install-Windows.cmd, or the Linux/macOS installer. This is an SSH trial, not a signed panel upload. Use a connected, Idle, cold printer with heater targets zero and pause video. It updates only CC2 Control and preserves the already installed camera component; no complete printer reboot is required. Keep the printed backup/restore path. Reload with Ctrl+F5 after installation because the app version stays 1.2.23.
 
-Follow README.md and the English/Italian update guides. The separate extended Canvas pull-back kit is not included or automatically installed; remove it and reboot before ordinary updates. Keep the backup/restore path printed by your installer.
-
-
-TPU 95A: DamiBFryta validated the full PLA to TPU cycle and printing without unplugging Canvas. The external-feed feature remains opt-in under Experimental integrations. Console nonmotion and completed-job path fixes are included (#241/#242/#243).
+Test with the bed clear, axes homed and room for travel: select 0.1 mm first. The upper Z arrow should raise the bed (negative Z), the lower arrow should lower it (positive Z). Homing/Idle and backend movement limits are unchanged. Check the Input Shaper automatic-saving explanation and the explicit Save PID instruction; no need to rerun calibrations just to read the updated text. No physical-printer movement was performed by build automation. Report actual results before merge or release.

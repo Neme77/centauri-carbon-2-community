@@ -8,11 +8,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Optional manual Wi-Fi/USB Ethernet Connections page with saved Wi-Fi profiles, DHCP/static IP, interface switches, persistent selection and Diagnostics; qualified TP-Link UE300 RTL8153 profile (USB 0bda:8153, revision 31fd), implemented and physically tested by **Neme77** (#266). Wi-Fi remains available without an adapter. The original display-IP experiment is excluded.
+
+- Delete unused G-code files while printing or busy, with active/paused/recoverable job and pending Orca-start protection, requested by **Neme77** (#259).
+
+- Optional Obsidian theme with graphite panels, a purple action accent and cyan telemetry, designed with **Neme77** (#255).
+
 - Hungarian companion to the external-feed experiment guide, by **pezso92** (#249).
 
 ### Fixed
 
+- Detect overwritten pending Canvas pull-back and plate-mesh edits after native `SAVE_CONFIG`, refuse incompatible calibration/saving and guard the delayed restart; preserve newer native settings and require an explicit re-save. Reported by **Noahwhite2014** (#267), corrected by **Neme77**.
+
+- Stage the cumulative Connections installer on persistent storage, bound local status reads and retain logs/backups while cleaning payloads only after complete success; preserve native DHCP, camera/reactor startup and same-boot qualification caching verified by **Neme77** (#266).
+
+- Emergency stop now goes straight to the firmware's emergency_stop endpoint, so it acts at once during homing, bed meshing, heat-and-wait or any other long command and while another console command is busy, instead of waiting behind it or being refused; by **Noahwhite2014** (#264). Maintainer review adds a two-second socket deadline and rejects incomplete or oversized replies so a saturated socket cannot freeze the panel or silently suppress the M112 fallback.
+
+- Translate file-deletion refusal reasons in all nine languages, including bulk deletion and unknown-error fallback; reported by **pezso92** (#261, #262).
+
+- Centre collapsed navigation and progressively clip labels, by **Surfoo** (#257); preserve labels in mobile drawers and keep the expand icon visible.
+- Thicken the Canvas colour rings while preserving their outer dimensions, by **Surfoo** (#258).
+
+- A bed mesh calibration whose heat-up and soak together took more than about 15 minutes stopped with "The bed did not hold the temperature" before probing: the firmware switches an idle printer's bed off 15 minutes after the last command. CC2 Control now sends the bed target again every ten minutes while it heats and soaks, by **beanbo** (#256).
+
+- Keep desktop page and camera widths unchanged when collapsing the sidebar, centring content in the extra space instead of stretching it, requested by **Neme77** (#255).
+
+- Clarify firmware-managed Input Shaper saving and the explicit Save PID step in all nine languages, following Neme77's calibration and reboot verification (#252).
+
 - Restore Hungarian accents in the signed 1.2.23 update summaries on both catalogue routes; wording and report by **pezso92** (#248, #250). Application version and downloads are unchanged.
+- Z move buttons were inverted: the up arrow now raises the bed and the down arrow lowers it (#253, by **Surfoo**); retain arrow-only controls and protect both click directions with a browser regression.
 
 
 ## [CC2 Control 1.2.23] - 2026-10-27
