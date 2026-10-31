@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -3260,11 +3261,24 @@ static void mesh_response(int fd) {
     respond(fd,200,"OK","application/json; charset=utf-8",result,used); free(result);
 }
 
+/* Cross-feature SAVE_CONFIG guards are implemented after both file editors. */
+static int canvas_unload_pending(void);
+static int canvas_unload_pending_intact(void);
+static const char *pending_autosave_guard(void);
+
 #include "plates.h"
 #include "spools.h"
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
+
+static const char *pending_autosave_guard(void) {
+    if (canvas_unload_pending())
+        return "A Canvas pull-back change needs a restart; resolve it before calibrating or saving printer settings";
+    if (plates.pending[0])
+        return "A plate mesh change needs a restart; resolve it before calibrating or saving printer settings";
+    return NULL;
+}
 
 static void serve_index(int fd, const char *web_root) {
     char path[PATH_MAX_LOCAL];
@@ -3730,6 +3744,11 @@ static void console_command_response(int fd, console_state *console, const mqtt_
         const char *ok="{\"accepted\":true}\n";
         respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok)); return;
     }
+    /* User macros may call SAVE_CONFIG indirectly; emergency stop stays independent. */
+    const char *pending = pending_autosave_guard();
+    if (pending && strcasecmp(command, "M112")) {
+        plates_fail(fd, 409, pending); return;
+    }
     if(plates_background_active() && strcmp(command,"M112")){plates_fail(fd,409,"Plate verification is still running");return;}
     if (!console_command_allowed(console,command,mqtt,reason,sizeof(reason)) ||
         console_start(console,command,reason,sizeof(reason)) != 0) {
@@ -3817,6 +3836,10 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         }
         const char *ok="{\"accepted\":true}\n";
         respond(fd,202,"Accepted","application/json",ok,strlen(ok));return;
+    }
+    if (!strncmp(action, "pid:", 4)) {
+        const char *pending = pending_autosave_guard();
+        if (pending) { plates_fail(fd, 409, pending); return; }
     }
     if(!strcmp(action,"pid:save")) {
         pthread_mutex_lock(&console->lock);int ready=pid_ready_locked(console);pthread_mutex_unlock(&console->lock);
@@ -3920,6 +3943,8 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 #include "bed_drying.h"
 #include "experiments.h"
 #include "backup.h"
+#include "network_status_http.h"
+#include "connections_http.h"
 
 #define HTTP_PENDING_MAX 8
 typedef struct {
@@ -3969,7 +3994,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     size_t body_len=header_end&&used>=(size_t)(body-request)?used-(size_t)(body-request):0;
     int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
         body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
-    if (strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency && app_update_active()) {
+    if (strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency && (app_update_active() || (connections_busy() && strcmp(path,"/api/network/action")))) {
         app_update_fail(fd, 409, "Application update is running; printer changes are paused");
         return 0;
     }
@@ -3980,7 +4005,18 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
        !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
         app_update_fail(fd,409,"Stop bed heating and wait for confirmation before another operation");return 0;
     }
-    if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
+    if(!strcmp(path,"/api/network")) {
+        if(!strcmp(method,"GET"))network_status_response(fd);
+        else app_update_fail(fd,405,"Network status is read-only");
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/network/manager")) {
+        connections_status(fd,mqtt,console);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/network/action")) {
+        connections_action(fd,body,body_len,0,mqtt,console);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/network/scan")) {
+        connections_action(fd,body,body_len,1,mqtt,console);
+    } else if(!strcmp(path,"/api/network/select") || !strcmp(path,"/api/network/trial")) {
+        app_update_fail(fd,410,"Reload CC2 Control to use the Connections manager");
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
         drying_response(fd,mqtt,console);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/start")){
         drying_start_response(fd,request,body,body_len,mqtt,console);

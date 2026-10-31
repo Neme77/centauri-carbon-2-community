@@ -1,0 +1,64 @@
+#!/bin/sh
+set -eu
+umask 077
+BASE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+[ "$BASE" = /opt/usr/cc2-control-connections-r5 ] && [ ! -L "$BASE" ] || { echo 'STOP: unexpected stage';exit 1; }
+check_archives(){
+    [ "$(sha256sum "$BASE/cc2-control-payload.tar.gz" | awk '{print $1}')" = @APP_SHA@ ] &&
+    [ "$(sha256sum "$BASE/cc2-connections.tar.gz" | awk '{print $1}')" = @NETWORK_SHA@ ]
+}
+check_archives || { echo 'STOP: archive mismatch';exit 1; }
+command -v tee >/dev/null || exit 1
+for name in payload connections;do
+    [ ! -e "$BASE/$name" ] && [ ! -L "$BASE/$name" ] || { echo 'STOP: previous attempt retained; inspect its log';exit 1; }
+    mkdir "$BASE/$name"
+done
+tar -xzf "$BASE/cc2-control-payload.tar.gz" -C "$BASE/payload"
+tar -xzf "$BASE/cc2-connections.tar.gz" -C "$BASE/connections"
+(
+    set +e
+    sh "$BASE/payload/install-on-printer.sh"
+    result=$?
+    printf '%s\n' "$result" > "$BASE/app-exit.code"
+    exit "$result"
+) 2>&1 | tee "$BASE/app-install.log"
+[ -f "$BASE/app-exit.code" ] || exit 1
+result=$(cat "$BASE/app-exit.code")
+case "$result" in ''|*[!0-9]*) exit 1;;esac
+[ "$result" -eq 0 ] || { echo 'APP INSTALLATION FAILED. Payload and log retained.';exit "$result"; }
+if [ @NETWORK_EMBEDDED@ = 1 ]; then
+    if grep -Fxq 'CONNECTIONS_COMPONENT_INSTALLED=1' "$BASE/app-install.log";then
+        echo 'Qualified Connections component installed by the cumulative app installer.' > "$BASE/network-install.log"
+        printf '0\n' > "$BASE/network-exit.code"
+    else
+        echo 'The complete Connections installer requires its qualified native profile.' > "$BASE/network-install.log"
+        printf '1\n' > "$BASE/network-exit.code"
+    fi
+else
+(
+    set +e
+    sh "$BASE/connections/install.sh"
+    result=$?
+    printf '%s\n' "$result" > "$BASE/network-exit.code"
+    exit "$result"
+) 2>&1 | tee "$BASE/network-install.log"
+fi
+[ -f "$BASE/network-exit.code" ] || exit 1
+result=$(cat "$BASE/network-exit.code")
+case "$result" in ''|*[!0-9]*) exit 1;;esac
+if [ "$result" -ne 0 ];then
+    backup=$(awk 'BEGIN{prefix="INSTALLATION PASSED. Backup: "} index($0,prefix)==1 {n++;print substr($0,length(prefix)+1)} END {if(n!=1)exit 1}' "$BASE/app-install.log") || exit "$result"
+    case "$backup" in /opt/usr/cc2-control-backup-[0-9]*-[0-9]*)
+        if [ -d "$backup" ] && [ ! -L "$backup" ] && [ -f "$backup/restore.sh" ] && [ ! -L "$backup/restore.sh" ];then
+            (set +e;sh "$backup/restore.sh";code=$?;printf '%s\n' "$code" > "$BASE/app-restore-exit.code";exit "$code") 2>&1 | tee "$BASE/app-restore.log"
+            [ -f "$BASE/app-restore-exit.code" ] && printf 'APP_RESTORE_EXIT=%s\n' "$(cat "$BASE/app-restore-exit.code")"
+        fi
+    ;;esac
+    echo 'CONNECTIONS INSTALLATION FAILED. Inspect component restoration and app-restore.log; files retained.'
+    exit "$result"
+fi
+check_archives || { echo 'INSTALLATION PASSED; cleanup skipped because archive identity changed';exit 0; }
+for name in payload connections;do [ -d "$BASE/$name" ] && [ ! -L "$BASE/$name" ] || exit 1;done
+rm -rf "$BASE/payload" "$BASE/connections"
+rm -f "$BASE/cc2-control-payload.tar.gz" "$BASE/cc2-connections.tar.gz"
+echo 'INSTALLATION COMPLETE. Staged packages removed; logs and rollback backups retained.'

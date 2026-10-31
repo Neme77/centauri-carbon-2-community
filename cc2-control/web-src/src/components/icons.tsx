@@ -29,10 +29,14 @@ import {
   SquareTerminal,
   Thermometer,
   Zap,
+  Wifi,
+  EthernetPort,
 } from 'lucide-preact'
 import { CanvasIcon } from '@/components/canvas-icon'
 
 const icons = {
+  wifi: Wifi,
+  ethernet: EthernetPort,
   home: House,
   history: History,
   control: SlidersHorizontal,

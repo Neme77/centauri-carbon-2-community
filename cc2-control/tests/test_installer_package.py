@@ -18,7 +18,8 @@ with tempfile.TemporaryDirectory() as tmp:
     pkg.package(prepared,ROOT/'scripts',source,output)
     with zipfile.ZipFile(output) as z:
         files={pathlib.Path(n).name:z.read(n) for n in z.namelist()}
-        for name in ('README-TEST.md','README-TEST.it.md'):
+        assert not any(name.endswith('.it.md') for name in files), 'Package documentation must use English'
+        for name in ('README-TEST.md',):
             notes=ROOT/'installer'/name
             if notes.is_file(): assert files[name]==notes.read_bytes()
         for line in files['SHA256SUMS'].decode().splitlines():
