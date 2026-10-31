@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 const dir=await mkdtemp(tmpdir()+'/cc2-upload-browser-')
 const backend=fileURLToPath(new URL('../../',import.meta.url))
 const binary=path.join(dir,'upload-server')
-await promisify(execFile)('gcc',['-Os','-std=c11','-D_POSIX_C_SOURCE=200809L','-pthread',path.join(backend,'tests/upload_http_fixture.c'),...['mqtt','console','control','panda','uds'].map(n=>path.join(backend,'src',n+'.c')),'-lm','-o',binary])
+await promisify(execFile)('gcc',['-Os','-std=c11','-D_POSIX_C_SOURCE=200809L', '-DCC2_NETWORK_STATUS_LIBRARY','-pthread',path.join(backend,'tests/upload_http_fixture.c'),...['mqtt','console','control','panda','uds','network_status'].map(n=>path.join(backend,'src',n+'.c')),'-lm','-o',binary])
 const probe=createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r))
 const proc=spawn(binary,[String(port),dir,path.join(backend,'web')])
 const browser=await chromium.launch({headless:true,...(process.env.CC2_BROWSER_PATH?{executablePath:process.env.CC2_BROWSER_PATH,args:['--no-sandbox','--disable-gpu','--disable-software-rasterizer','--single-process','--no-zygote']}:{})})
