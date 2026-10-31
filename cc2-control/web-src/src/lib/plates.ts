@@ -62,6 +62,7 @@ export type PlateLibrary = {
   error: string
   current: string
   pending: string
+  pending_conflict?: boolean
   result: '' | 'rebooting' | 'mounted' | 'verify_failed' | 'reboot_failed'
   z_applied: boolean
   z_effective: number | null

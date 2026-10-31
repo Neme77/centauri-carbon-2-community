@@ -3,14 +3,17 @@
  *
  * The firmware reads it once at start-up from the printer configuration followed by
  * autosave.cfg, where a later value replaces an earlier one, and its SAVE_CONFIG
- * rewrites only autosave.cfg and keeps every section in it. CC2 Control therefore
+ * rebuilds its SAVE_CONFIG block from memory, so a later native save can discard
+ * an override written after boot (issue #267). CC2 Control therefore
  * stores its value as a "[canvas_dev]" override in the SAVE_CONFIG block and never
  * edits the vendor configuration; removing the line returns to the configured value.
  * The firmware refuses to start with a value outside 60-350 mm, so nothing else is
  * ever written, unless the printer runs the program with that limit raised to
  * 1000 mm (see below). The value applies at the next printer restart, which the page
  * can request through the same guarded reboot as the build-plate library. A saved
- * value is pending until the system has booted again (kernel boot id). */
+ * value is pending until the system has booted again (kernel boot id). Its expected
+ * value is recorded separately so an external SAVE_CONFIG cannot masquerade as a
+ * successfully staged edit. Native changes are never automatically overwritten. */
 #define CANVAS_UNLOAD_MIN 60
 #define CANVAS_UNLOAD_MAX 350
 #define CANVAS_UNLOAD_EXTENDED_MAX 1000
@@ -351,17 +354,40 @@ static int canvas_unload_boot_id(char *out, size_t cap) {
     return ok;
 }
 
-/* Saved since this boot: the pending file holds the boot id it was written in. A file
- * from an earlier boot is stale, so it goes. */
-static int canvas_unload_pending(void) {
-    char now[64], saved[64]; size_t length = 0;
-    char *text = plates_read_file(canvas_unload_pending_path, sizeof(saved) - 1, &length);
-    if (!text) return 0;
-    snprintf(saved, sizeof(saved), "%.*s", (int)length, text);
-    free(text);
-    if (canvas_unload_boot_id(now, sizeof(now)) && !strcmp(now, saved)) return 1;
-    unlink(canvas_unload_pending_path);
-    return 0;
+/* A boot id plus the requested override (0 removes it). Old boot-id-only records
+ * remain pending but cannot claim that the desired value is still staged. */
+static int canvas_unload_pending_record(int *expected) {
+    char now[64]; size_t length = 0;
+    if (expected) *expected = -1;
+    char *text = plates_read_file(canvas_unload_pending_path, 128, &length);
+    if (!text) return errno != ENOENT;
+    if (!canvas_unload_boot_id(now, sizeof(now))) { free(text); return 1; }
+    char *line = strchr(text, '\n');
+    size_t id_length = line ? (size_t)(line - text) : length;
+    if (id_length != strlen(now) || memcmp(text, now, id_length)) {
+        free(text); unlink(canvas_unload_pending_path); return 0;
+    }
+    if (line && expected) {
+        const char *value = line + 1; char *end; errno = 0;
+        long parsed = strtol(value, &end, 10);
+        if (!errno && end != value && !*end &&
+            (parsed == 0 || (parsed >= CANVAS_UNLOAD_MIN && parsed <= CANVAS_UNLOAD_EXTENDED_MAX)))
+            *expected = (int)parsed;
+    }
+    free(text); return 1;
+}
+
+static int canvas_unload_pending(void) { return canvas_unload_pending_record(NULL); }
+
+static int canvas_unload_pending_intact(void) {
+    int expected = -1;
+    if (!canvas_unload_pending_record(&expected)) return 1;
+    if (expected < 0) return 0;
+    size_t length = 0; canvas_unload_entry entry = {0};
+    char *text = plates_read_file(printer_autosave_path, AUTOSAVE_FILE_MAX, &length);
+    int ok = text && canvas_unload_autosave(text, length, &entry) == 1 &&
+        (expected ? entry.has_value && entry.value == expected : !entry.has_value);
+    free(text); return ok;
 }
 
 static void canvas_unload_number_json(json_builder *b, const char *name, int known, double value) {
@@ -379,6 +405,9 @@ static void canvas_unload_state(int fd, int status) {
     text = plates_read_file(printer_autosave_path, AUTOSAVE_FILE_MAX, &length);
     int editable = text && canvas_unload_autosave(text, length, &e) == 1;
     free(text);
+    int expected = -1, pending = canvas_unload_pending_record(&expected);
+    int conflict = pending && (!editable || expected < 0 ||
+        (expected ? !e.has_value || e.value != expected : e.has_value));
     const char *restart = "none";
     if (canvas_unload_restart_requested) {
         if (reboot_pending) restart = "restarting";
@@ -391,8 +420,10 @@ static void canvas_unload_state(int fd, int status) {
                         CANVAS_UNLOAD_MIN, extended ? CANVAS_UNLOAD_EXTENDED_MAX : CANVAS_UNLOAD_MAX, extended ? "true" : "false");
     canvas_unload_number_json(&b, "configured", have_configured, configured);
     canvas_unload_number_json(&b, "override", editable && e.has_value, editable ? e.value : 0);
-    json_builder_printf(&b, ",\"pending_restart\":%s,\"restart\":\"%s\"}\n",
-                        canvas_unload_pending() ? "true" : "false", restart);
+    json_builder_printf(&b, ",\"pending_restart\":%s,\"pending_conflict\":%s,\"restart\":\"%s\"",
+                        pending && !conflict ? "true" : "false", conflict ? "true" : "false", restart);
+    canvas_unload_number_json(&b, "pending_value", pending && expected >= 0, expected);
+    json_builder_printf(&b, "}\n");
     plates_reply(fd, b.failed ? 500 : status, b.failed ? "{\"ok\":false,\"error\":\"Reply too large\"}\n" : body);
 }
 
@@ -414,6 +445,8 @@ static void canvas_unload_save_response(int fd, const mqtt_client *mqtt, const c
         snprintf(message, sizeof(message), "Enter a whole number of millimetres from %d to %d", CANVAS_UNLOAD_MIN, maximum);
         plates_fail(fd, 400, message); return;
     }
+    if (plates.pending[0]) { plates_fail(fd, 409, "A plate mesh change needs a restart before changing Canvas pull-back"); return; }
+    if (plates_cal.stage) { plates_fail(fd, 409, "A bed mesh calibration is running"); return; }
     const char *busy = plates_printer_ready(mqtt);
     if (busy) { plates_fail(fd, 409, busy); return; }
     size_t length = 0, new_length = 0, again_length = 0;
@@ -425,7 +458,7 @@ static void canvas_unload_save_response(int fd, const mqtt_client *mqtt, const c
         plates_fail(fd, 409, "The printer's autosave.cfg has a layout CC2 Control does not edit");
         return;
     }
-    if (new_length == length && !memcmp(updated, file, length)) { /* already so */
+    if (new_length == length && !memcmp(updated, file, length) && canvas_unload_pending_intact()) { /* already so */
         free(file); free(updated); canvas_unload_state(fd, 200); return;
     }
     char backup[PATH_MAX_LOCAL], boot[64];
@@ -441,15 +474,26 @@ static void canvas_unload_save_response(int fd, const mqtt_client *mqtt, const c
     /* Record the restart requirement before changing persistent configuration.
      * If /tmp or boot-id access fails, the configuration must stay untouched. */
     int already_pending = canvas_unload_pending();
-    if (!canvas_unload_boot_id(boot, sizeof(boot)) ||
-        plates_replace_file(canvas_unload_pending_path, NULL, boot, strlen(boot), 0644) != 0) {
-        free(updated); plates_fail(fd, 500, "Cannot record the required printer restart; configuration unchanged"); return;
+    size_t previous_length = 0;
+    char *previous = already_pending ? plates_read_file(canvas_unload_pending_path, 128, &previous_length) : NULL;
+    char record[96];
+    if ((already_pending && !previous) || !canvas_unload_boot_id(boot, sizeof(boot))) {
+        free(previous); free(updated);
+        plates_fail(fd, 500, "Cannot record the required printer restart; configuration unchanged"); return;
+    }
+    int record_length = snprintf(record, sizeof(record), "%s\n%d", boot, value);
+    if (record_length < 0 || (size_t)record_length >= sizeof(record) ||
+        plates_replace_file(canvas_unload_pending_path, NULL, record, (size_t)record_length, 0644) != 0) {
+        free(previous); free(updated);
+        plates_fail(fd, 500, "Cannot record the required printer restart; configuration unchanged"); return;
     }
     if (!autosave_backup_path(backup, sizeof(backup)) ||
         plates_replace_file(printer_autosave_path, backup, updated, new_length, autosave_mode()) != 0) {
-        if (!already_pending) unlink(canvas_unload_pending_path);
-        free(updated); plates_fail(fd, 500, "Cannot write the printer configuration"); return;
+        if (previous) (void)plates_replace_file(canvas_unload_pending_path, NULL, previous, previous_length, 0644);
+        else if (!already_pending) unlink(canvas_unload_pending_path);
+        free(previous); free(updated); plates_fail(fd, 500, "Cannot write the printer configuration"); return;
     }
+    free(previous);
     free(updated);
     canvas_unload_state(fd, 200);
 }
@@ -459,6 +503,9 @@ static void canvas_unload_restart_response(int fd, mqtt_client *mqtt, const char
     while (body_len && isspace((unsigned char)body[body_len - 1])) body_len--;
     if (body_len != 7 || memcmp(body, "RESTART", 7)) { plates_fail(fd, 400, "Explicit restart confirmation required"); return; }
     if (!canvas_unload_pending()) { plates_fail(fd, 409, "No saved pull-back distance is waiting for a restart"); return; }
+    if (!canvas_unload_pending_intact()) {
+        plates_fail(fd, 409, "The saved pull-back changed after staging; save it again before restarting"); return;
+    }
     const char *busy = plates_printer_ready(mqtt);
     if (busy) { plates_fail(fd, 409, busy); return; }
     canvas_unload_restart_requested = 1; plates_mqtt = mqtt;

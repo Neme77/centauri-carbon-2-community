@@ -7,7 +7,7 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FLAGS = ["-O2", "-std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-D_POSIX_C_SOURCE=200809L", "-pthread", *os.environ.get("CC2_TEST_CFLAGS", "").split()]
-BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", ROOT / "src/panda.c", ROOT / "src/uds.c"]
+BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", ROOT / "src/panda.c", ROOT / "src/uds.c", ROOT / "src/network_status.c"]
 HARNESSES = {
     "test_panda_metadata.c": [],
     "test_backup.c": BACKEND,
@@ -51,6 +51,7 @@ HARNESSES = {
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,
     "test_canvas_unload.c": BACKEND,
+    "test_pending_autosave.c": BACKEND,
     "test_spools.c": BACKEND,
     "test_spoolman.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],

@@ -14,6 +14,48 @@ wait_stopped() {
     return 0
 }
 EXPECTED=@BINARY_SHA256@
+INSTALL_PHASE=initial
+install_phase() { INSTALL_PHASE=$1; printf 'INSTALL_PHASE=%s\n' "$INSTALL_PHASE"; }
+# Bounded local health read for BusyBox without timeout or working wget -T.
+# Called only while the private installer lock directory exists.
+installer_http_get() (
+    umask 077
+    http_file="$LOCK/http-read.$$"
+    http_reader=
+    http_error="$LOCK/http-error.$$"
+    [ ! -e "$http_error" ] && [ ! -L "$http_error" ] || exit 1
+    [ ! -e "$http_file" ] && [ ! -L "$http_file" ] || exit 1
+    http_cleanup() {
+        trap - 0 1 2 15
+        if [ -n "$http_reader" ]; then kill -KILL "$http_reader" 2>/dev/null || true; fi
+        rm -f "$http_file" "$http_error"
+    }
+    trap http_cleanup 0
+    trap 'exit 130' 1 2 15
+    wget -qO- "$1" > "$http_file" 2>"$http_error" &
+    http_reader=$!
+    http_seconds=0
+    while kill -0 "$http_reader" 2>/dev/null; do
+        if [ "$http_seconds" -ge 5 ]; then
+            echo 'Local status request exceeded five seconds.' >&2
+            cat "$http_error" >&2
+            exit 124
+        fi
+        sleep 1
+        http_seconds=$((http_seconds + 1))
+    done
+    if wait "$http_reader"; then
+        http_reader=
+        cat "$http_file"
+    else
+        http_result=$?
+        http_reader=
+        printf 'WGET_EXIT=%s URL=%s\n' "$http_result" "$1" >&2
+        cat "$http_error" >&2
+        exit "$http_result"
+    fi
+)
+
 mkdir "$LOCK" || { echo 'Another installation is active.' >&2; exit 1; }
 CHANGED=0
 STOPPED=0
@@ -21,8 +63,11 @@ PASSED=0
 BACKUP=''
 CAMERA_SOURCE=''
 @CAMERA_COMPONENT_FUNCTIONS@
+@CONNECTIONS_COMPONENT_FUNCTIONS@
+
 finish() {
     code=$?
+    printf 'INSTALLER_EXIT=%s LAST_PHASE=%s\n' "$code" "$INSTALL_PHASE" >&2
     trap - 0 1 2 15
     set +e
     if [ "$PASSED" -eq 0 ] && [ -n "$CAMERA_SOURCE" ] && [ -n "$BACKUP" ] && [ -f "$BACKUP/printer-camera.before" ]; then
@@ -51,9 +96,12 @@ finish() {
 }
 trap finish 0
 trap 'exit 130' 1 2 15
+install_phase payload-checks
 (cd "$STAGE" && sha256sum -c SHA256SUMS)
+[ "$(sha256sum "$STAGE/cc2-control" | awk '{print $1}')" = "$EXPECTED" ] || { echo "Candidate differs from installer pin; no installation changed." >&2; exit 1; }
 # Fingerprint the installed and running vendor components before any backup or service stop.
 # The application-reported firmware number alone cannot identify the installed base.
+install_phase firmware-checks
 required_firmware='@FIRMWARE_VERSION@'
 expected_printer='@PRINTER_SHA256@'
 expected_daemon='@DAEMON_SHA256@'
@@ -69,8 +117,9 @@ require_hash "/proc/$printer_pid/exe" "$expected_printer"
 
 test -d "$TARGET"
 test -x "$INIT"
-STATUS=$(wget -qO- http://127.0.0.1:8081/api/printer)
-HEALTH=$(wget -qO- http://127.0.0.1:8081/api/health)
+install_phase printer-status-before-backup
+STATUS=$(installer_http_get http://127.0.0.1:8081/api/printer)
+HEALTH=$(installer_http_get http://127.0.0.1:8081/api/health)
 case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Printer must be connected and Idle.' >&2; exit 1;; esac
 case "$HEALTH" in *'"mqtt_registered":true'*) ;; *) echo 'MQTT registration unavailable.' >&2; exit 1;; esac
 AGE=$(printf '%s' "$STATUS" | sed -n 's/.*"last_message_age":\([0-9][0-9]*\),.*/\1/p')
@@ -84,19 +133,24 @@ require_cold() {
     done
 }
 require_cold
+install_phase camera-preflight
 @CAMERA_COMPONENT_PREFLIGHT@
 BACKUP="/opt/usr/cc2-control-backup-$(date +%Y%m%d-%H%M%S)-$$"
 mkdir "$BACKUP"
+install_phase backup-copy
 cp -a "$TARGET" "$BACKUP/installation"
 cp -p "$INIT" "$BACKUP/init.before"
 cp "$STAGE/restore-on-printer.sh" "$BACKUP/restore.sh"
 if [ -n "$CAMERA_SOURCE" ]; then cp -p /etc/init.d/printer "$BACKUP/printer-camera.before"; fi
-STATUS=$(wget -qO- http://127.0.0.1:8081/api/printer)
+install_phase printer-status-after-backup
+STATUS=$(installer_http_get http://127.0.0.1:8081/api/printer)
 case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Printer state changed; update cancelled.' >&2; exit 1;; esac
 require_cold
+install_phase stop-service
 STOPPED=1
 "$INIT" stop
 if ! wait_stopped; then echo 'Service did not stop; update cancelled.' >&2; exit 1; fi
+install_phase install-files
 CHANGED=1
 cp "$STAGE/cc2-control" "$TARGET/cc2-control.new"
 chmod 755 "$TARGET/cc2-control.new"
@@ -133,12 +187,15 @@ for locale in "$STAGE/web/locales/"*.json; do
     after=$(sha256sum "$TARGET/web/locales/$name" | awk '{print $1}')
     [ "$before" = "$after" ] || { echo "Installed locale checksum mismatch: $name" >&2; exit 1; }
 done
+install_phase start-service
 "$INIT" start
 tries=0
 # The launcher waits up to 120 seconds for the vendor process, then 30
 # seconds for hardware initialization. Leave time for MQTT registration too.
-while [ "$tries" -lt 120 ]; do
-    RESULT=$(wget -qO- http://127.0.0.1:8081/api/health 2>/dev/null || true)
+install_phase startup-verification
+VERIFY_DEADLINE=$(awk '{print int($1)+240}' /proc/uptime)
+while [ "$tries" -lt 120 ] && [ "$(awk '{print int($1)}' /proc/uptime)" -lt "$VERIFY_DEADLINE" ]; do
+    RESULT=$(installer_http_get http://127.0.0.1:8081/api/health 2>/dev/null || true)
     case "$RESULT" in *'"service":"cc2-control"'*'"version":"@VERSION@"'*)
         RUN_PID=$(pidof cc2-control 2>/dev/null || true)
         case "$RUN_PID" in ''|*' '*) ;; *)
@@ -149,6 +206,7 @@ while [ "$tries" -lt 120 ]; do
                     sh "$CAMERA_SOURCE/manage.sh" install || exit 1
                     echo 'REBOOT REQUIRED: reboot the complete idle printer to activate the camera fixes.'
                 fi
+                @CONNECTIONS_COMPONENT_INSTALL@
                 PASSED=1
                 echo "$RESULT"
                 echo "INSTALLATION PASSED. Backup: $BACKUP"

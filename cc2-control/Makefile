@@ -29,8 +29,8 @@ all: dist
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(TARGET): src/external_feed_state.h src/external_filament.h src/bed_drying.h src/backup.h src/backup_format.h src/experiments.h src/experiments_state.h src/app_update_catalog.h src/app_updates.h src/main.c src/gcode_metadata.h src/gcode_download.h src/history.h src/plates.h src/spools.h src/canvas_unload.h src/sha256.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h VERSION FIRMWARE_VERSION | $(BUILD)
-	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c -o $@ $(LDFLAGS) -lm
+$(TARGET): src/external_feed_state.h src/external_filament.h src/bed_drying.h src/backup.h src/backup_format.h src/experiments.h src/experiments_state.h src/app_update_catalog.h src/app_updates.h src/main.c src/gcode_metadata.h src/gcode_download.h src/history.h src/plates.h src/spools.h src/canvas_unload.h src/sha256.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h src/network_status.c src/network_status_http.h src/connections_http.h src/status_core.h $(wildcard src/connections/*.h) VERSION FIRMWARE_VERSION | $(BUILD)
+	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -DCC2_NETWORK_STATUS_LIBRARY -o $@ $(LDFLAGS) -lm
 
 $(UPDATE_WORKER): updater/verify.c updater/trusted-key.h updater/trusted-base.h third-party/monocypher/monocypher.c third-party/monocypher/monocypher.h third-party/monocypher/monocypher-ed25519.c third-party/monocypher/monocypher-ed25519.h VERSION FIRMWARE_VERSION | $(BUILD)
 	$(CC) $(CFLAGS) -Ithird-party/monocypher -Iupdater -ffunction-sections -fdata-sections updater/verify.c third-party/monocypher/monocypher.c third-party/monocypher/monocypher-ed25519.c -o $@ $(LDFLAGS)
