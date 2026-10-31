@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory() as tmp:
             if notes.is_file(): assert files[name]==notes.read_bytes()
         for line in files['SHA256SUMS'].decode().splitlines():
             digest,name=line.split('  ',1);assert hashlib.sha256(files[name]).hexdigest()==digest
-    for scenario in ('success','delayed','stop-delayed','busy','rollback','old-firmware','stock-firmware','runtime-mismatch','hot','heating'):
+    for scenario in ('success','slow-http','http-timeout','delayed','stop-delayed','busy','rollback','old-firmware','stock-firmware','runtime-mismatch','hot','heating'):
         fixture=base/scenario;fixture.mkdir();stage=fixture/'stage';stage.mkdir()
         with tarfile.open(fileobj=io.BytesIO(files['cc2-control-payload.tar.gz']),mode='r:gz') as t:
             for m in t.getmembers():
@@ -49,6 +49,14 @@ with tempfile.TemporaryDirectory() as tmp:
         heater_target=60 if scenario=='heating' else 0
         status='{"connected":true,"machine":{"status":'+str(state)+',"x":0},"last_message_age":0,"extruder":{"temperature":'+str(temperature)+',"target":'+str(heater_target)+'},"heater_bed":{"temperature":24,"target":0},"x":0}'
         (commands/'wget').write_text('#!/bin/sh\ncase "$*" in *api/printer*) echo \''+status+'\';; *) echo \'{"service":"cc2-control","version":"'+pkg.VERSION+'","mqtt_registered":true,"snapshot_received":true}\';; esac\n')
+        if scenario == 'slow-http':
+            # Reproduce the race: a real child must get time to respond even
+            # when the fixture accelerates the installer's retry backoff.
+            wget = commands / 'wget'
+            wget.write_text(wget.read_text().replace('#!/bin/sh\n', '#!/bin/sh\n/bin/sleep 0.2\n', 1))
+        if scenario == 'http-timeout':
+            # exec keeps the stalled reader in the PID the real watchdog owns.
+            (commands/'wget').write_text('#!/bin/sh\nexec /bin/sleep 30\n')
         if scenario == 'delayed':
             # Simulate health becoming available after the 60-second launcher
             # delay. The old 30-attempt limit must fail this scenario.
@@ -63,27 +71,38 @@ with tempfile.TemporaryDirectory() as tmp:
                 '    [ "$n" -gt 35 ] || exit 1;; esac\nfi\ncase "$*" in')
             wget.write_text(text)
         (commands/'pidof').write_text('#!/bin/sh\nif [ "$1" = elegoo_printer ]; then echo 2024; exit 0; fi\nif [ -f "'+str(marker)+'" ]; then echo 999; else exit 1; fi\n')
-        (commands/'sleep').write_text('#!/bin/sh\nexit 0\n')
+        # Only skip the outer two-second retry backoff. The HTTP watchdog's
+        # one-second waits must remain real: no-op waits used to exhaust its
+        # five-second budget before wget was scheduled, killing valid replies
+        # and making the delayed-attempt count nondeterministic.
+        sleep_script = '#!/bin/sh\n[ "$1" != 2 ] || exit 0\nexec /bin/sleep "$@"\n'
+        (commands/'sleep').write_text(sleep_script)
         if scenario == 'stop-delayed':
             marker.touch()
             stopping=fixture/'stopping'
             init.write_text('#!/bin/sh\ncase "$1" in start) touch "'+str(marker)+'";; stop) touch "'+str(stopping)+'";; esac\n')
             (stage/'cc2-control.init').write_bytes(init.read_bytes())
-            (commands/'sleep').write_text('#!/bin/sh\nif [ -f "'+str(stopping)+'" ]; then rm -f "'+str(marker)+'" "'+str(stopping)+'"; fi\n')
+            (commands/'sleep').write_text(sleep_script.replace('exec /bin/sleep', 'if [ -f "'+str(stopping)+'" ]; then rm -f "'+str(marker)+'" "'+str(stopping)+'"; fi\nexec /bin/sleep'))
         for p in commands.iterdir():p.chmod(0o755)
         (stage/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(stage).as_posix()+'\n' for p in sorted(stage.rglob('*')) if p.is_file() and p.name!='SHA256SUMS'))
         script=(stage/'install-on-printer.sh').read_text().replace('/opt/usr/cc2-control',str(target)).replace('/etc/init.d/cc2-control',str(init)).replace('/tmp/cc2-control-install.lock',str(fixture/'lock')).replace('/proc/$RUN_PID/exe',str(target/'cc2-control'))
         script=script.replace('/opt/bin/elegoo_printer',str(printer)).replace('/opt/inst/daemon-000/daemon-000',str(daemon)).replace('/proc/$printer_pid/exe',str(runtime)).replace(pkg.COMPATIBILITY['printer_sha256'],expected_printer).replace(pkg.COMPATIBILITY['daemon_sha256'],expected_daemon)
         script=script.replace('STAGE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)','STAGE="'+str(stage)+'"')
-        if scenario=='rollback':script=script.replace(hashlib.sha256(binary).hexdigest(),'0'*64)
+        if scenario=='rollback':
+            script=script.replace(hashlib.sha256(binary).hexdigest(),'0'*64)
+            # Exercise the same failure/rollback path without 120 real HTTP
+            # polling sleeps. The delayed scenario keeps the production limit.
+            assert '"$tries" -lt 120' in script
+            script=script.replace('"$tries" -lt 120', '"$tries" -lt 3')
         path=fixture/'run.sh';path.write_text(script)
-        result=subprocess.run(['sh',str(path)],env=dict(os.environ,PATH=str(commands)+':'+os.environ['PATH']),capture_output=True,text=True,timeout=10)
-        assert (result.returncode==0)==(scenario in ('success','delayed','stop-delayed')),result.stdout+result.stderr
-        assert (target/'cc2-control').read_bytes()==(bytes(binary) if scenario in ('success','delayed','stop-delayed') else b'OLD')
+        result=subprocess.run(['sh',str(path)],env=dict(os.environ,PATH=str(commands)+':'+os.environ['PATH']),capture_output=True,text=True,timeout=120)
+        assert (result.returncode==0)==(scenario in ('success','slow-http','delayed','stop-delayed')),scenario+'\n'+result.stdout+result.stderr
+        assert (target/'cc2-control').read_bytes()==(bytes(binary) if scenario in ('success','slow-http','delayed','stop-delayed') else b'OLD')
         if scenario == 'delayed': assert int(counter.read_text()) == 36
+        if scenario == 'http-timeout': assert 'Local status request exceeded five seconds.' in result.stderr
         for name in keep:assert (target/name).read_text()=='KEEP '+name
         assert not (fixture/'lock').exists()
-        if scenario in ('old-firmware','stock-firmware','runtime-mismatch','hot','heating','busy'):
+        if scenario in ('http-timeout','old-firmware','stock-firmware','runtime-mismatch','hot','heating','busy'):
             assert not list(target.parent.glob('cc2-control-backup-*')), scenario
             assert not marker.exists(), scenario
         if scenario == 'success':
@@ -111,3 +130,4 @@ with tempfile.TemporaryDirectory() as tmp:
     except ValueError:pass
     else:raise AssertionError('Non-ARM binary accepted')
 print('PASS: package checksums/modes, ARM guard, Idle rejection, config preservation, install/rollback simulation and configuration-only firmware backup restore')
+
