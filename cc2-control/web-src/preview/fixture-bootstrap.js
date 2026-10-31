@@ -73,6 +73,15 @@
       return reply({ ok: true, editable: true, min: 60, max, extended: u.extended, configured: u.configured, override: u.override, pending_restart: u.pending, restart: 'none' })
     }
     if (path === '/api/spools') return reply(state.spoolLibrary || {})
+    // The legacy file preview has no native network manager. Return its real
+    // unavailable shape rather than the generic empty-object fallback.
+    if (path === '/api/network') return reply({ available: false, fresh: false, refreshing: false, age_ms: null, snapshot: null })
+    if (path === '/api/network/manager') {
+      const ip = { enabled: false, method: 'dhcp', ip: '', prefix: 0, gateway: '', dns1: '', dns2: '', ssid: '' }
+      const config = { schema: 1, ethernet_support: false, selected: 'wifi', wifi: { ...ip, enabled: true }, ethernet: { ...ip } }
+      const actual = { known: false, method: 'unknown', prefix: 0, gateway: '', dns1: '', dns2: '' }
+      return reply({ schema: 1, installed: false, state_valid: false, configured: false, ready: false, busy: false, last_exit: -1, phase: 'idle', config, saved: config, actual: { wifi: actual, ethernet: actual }, last_error: '', pending: null, networks: null, diagnostic: '', automatic_selection: false, temporary: false })
+    }
     if (path === '/api/printer') return reply(printer())
     if (path === '/api/health') return reply({ service: 'cc2-control', version: '1.2.3', mqtt_connected: state.connected })
     if (path === '/api/setup') return reply({ required: false, configured: true, mqtt_connected: state.connected })

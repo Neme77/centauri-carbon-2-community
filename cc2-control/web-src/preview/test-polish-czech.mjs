@@ -13,9 +13,7 @@ try {
   await page.goto(demo.url + '#settings')
   const language = page.locator('main select:has(option[value="pl"])')
   for (const [code, name] of [['pl', 'Polski'], ['cs', 'Čeština']]) {
-    // Re-enter Appearance explicitly after the previous language's mobile navigation.
-    await page.goto(demo.url + '#settings/appearance')
-    await language.waitFor({ state: 'visible' })
+    await page.getByRole('tab').nth(2).click()
     assert.equal(await language.locator(`option[value="${code}"]`).textContent(), name)
     const labels = JSON.parse(await readFile(path.join(root, `public/locales/${code}.json`), 'utf8'))
     await language.selectOption(code)
@@ -56,4 +54,3 @@ try {
   await browser.close()
   await demo.cleanup()
 }
-
