@@ -42,9 +42,10 @@ import { forgetLanCode } from '@/lib/lan-code'
 import { Updates } from './Updates'
 import { Backup } from './Backup'
 import { Experiments } from './Experiments'
+import { Network } from './Network'
 
 const TABS = [
-  [Link, 'settings.connection'],
+  [Link, 'network.connections'],
   [Plug, 'settings.integrations'],
   [Palette, 'settings.appearance'],
   [Info, 'settings.about'],
@@ -110,7 +111,7 @@ const Connection = () => {
   }
   return (
     <Card>
-      <CardHead icon="link" title="settings.connection" sub="settings.network_and_device_access_settings" />
+      <CardHead icon="link" title="network.cc2_access" sub="settings.network_and_device_access_settings" />
       <Field label="settings.printer_ip" help="settings.current_ip_address_read_only" htmlFor="printer-ip">
         <Input id="printer-ip" value={location.hostname} readOnly />
       </Field>
@@ -432,7 +433,12 @@ export const Settings = () => {
           onChange={id => openSettings(TAB_ROUTES[TABS.findIndex(([, label]) => label === id)])}
         />
         <div class="max-w-4xl">
-          {tab === 0 && <Connection />}
+          {tab === 0 && (
+            <div class="grid gap-3.5">
+              <Network />
+              <Connection />
+            </div>
+          )}
           {tab === 1 && (
             <>
               <Integrations />

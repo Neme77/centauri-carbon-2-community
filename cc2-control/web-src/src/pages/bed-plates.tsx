@@ -696,7 +696,9 @@ export const Plates = () => {
         ) : (
           <>
             {!lib.available && <Warn>{tpl('plates.unavailable', { error: lib.error })}</Warn>}
-            {rebooting || waiting ? (
+            {lib.pending_conflict ? (
+              <Warn>{t('plates.pending_save_conflict')}</Warn>
+            ) : rebooting || waiting ? (
               <Notice icon="bolt">{tpl('plates.restarting', { name: waiting?.name || current?.name || '' })}</Notice>
             ) : lib.result === 'verify_failed' ? (
               <Warn>{t('plates.verify_failed')}</Warn>

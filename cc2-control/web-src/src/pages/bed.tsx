@@ -235,7 +235,7 @@ const MeshCard = () => {
         {view === 'values' ? (
           <div class="h-[430px] overflow-auto p-3 font-mono text-xs text-well-fg">
             {points.length < 4 ? (
-              <p class="text-muted">{t('bed.waiting_for_live_mesh_data_2')}</p>
+              <p class="text-well-fg/70">{t('bed.waiting_for_live_mesh_data_2')}</p>
             ) : (
               <table class="w-full border-collapse">
                 <caption class="mb-2 text-left">{t('bed.live_z_heights_in_mm_y')}</caption>
@@ -289,7 +289,7 @@ const MeshCard = () => {
             }}
           />
         )}
-        <div class="p-2 text-center text-xs text-muted">
+        <div class="p-2 text-center text-xs text-well-fg/70">
           {t('bed.drag_to_rotate_scroll_to_zoom')}{' '}
           <button
             type="button"

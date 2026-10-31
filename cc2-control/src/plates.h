@@ -90,6 +90,7 @@ static int plates_reboot_requested;
 static const mqtt_client *plates_mqtt; /* main()'s client, read by the reboot guard */
 static char plates_previous_current[PLATE_ID_LEN + 1];
 static unsigned long plates_seen_connections = ULONG_MAX;
+static int plates_pending_intact(void);
 static int plates_pending_stage; /* stored slot, load, active matrix, offset */
 static int plates_z_valid;
 static double plates_z_applied;
@@ -1072,12 +1073,14 @@ static void plates_get_response(int fd) {
     json_builder b = {malloc(PLATES_FILE_MAX + 8192), 0, PLATES_FILE_MAX + 8192, 0};
     if (!b.data) { free(file); plates_fail(fd, 500, "Out of memory"); return; }
     const plate_entry *current = plates.current[0] ? plate_find(plates.current) : NULL;
+    int pending_conflict = plates.pending[0] && !plates_pending_intact();
     const char *active = uds_mesh_profile(&telemetry);
     json_builder_printf(&b, "{\"available\":%s,\"error\":", plates_available ? "true" : "false");
     json_builder_string(&b, plates_error);
     json_builder_printf(&b, ",\"current\":\"%s\",\"pending\":\"%s\",\"result\":\"%s\",\"z_applied\":%s,",
         plates.current, plates.pending, plates_result,
         current && plates_z_valid && plate_close(plates_z_applied, plate_z_now(current)) ? "true" : "false");
+    json_builder_printf(&b, "\"pending_conflict\":%s,", pending_conflict ? "true" : "false");
     if (current) json_builder_printf(&b, "\"z_effective\":%.3f,", plate_z_now(current));
     else json_builder_printf(&b, "\"z_effective\":null,");
     json_builder_printf(&b, "\"nozzle\":\"%s\",\"mesh_profile\":", plates.nozzle);
@@ -1162,6 +1165,7 @@ static int plates_capture(int fd, char side, plate_mesh *mesh) {
 
 static const char *plates_closed(int *status) {
     *status = 409;
+    if (canvas_unload_pending()) return "A Canvas pull-back change needs a restart before changing plate settings";
     if (plates_background_active()) return "Plate verification is still running";
     if (!plates_available) { *status = 503; return plates_error; }
     if (plates.pending[0]) return "A plate change is waiting for the printer restart";
@@ -1489,11 +1493,21 @@ static void plates_nozzle_select_response(int fd, const mqtt_client *mqtt, const
     plates_reply(fd, 200, plates_reapply_z(mqtt) ? "{\"selected\":true,\"applied\":true}\n" : "{\"selected\":true,\"applied\":false}\n");
 }
 
+/* Compare only the mesh slot this operation owns; unrelated native saves are kept. */
+static int plates_pending_intact(void) {
+    if (!plates.pending[0]) return 1;
+    const plate_entry *p = plate_find(plates.pending);
+    const plate_measure *base = p ? plate_base(p) : NULL;
+    plate_mesh file;
+    return base && autosave_slot(p->side, &file) == 1 && plate_mesh_equal(&file, &base->mesh, 1);
+}
+
 /* A print started on the screen or a slicer while the reboot waited must not be cut off. */
 static int plates_reboot_guard(void) {
     time_t now=time(NULL);const mqtt_client *m=plates_mqtt;
     return m && m->connected && m->registered && m->have_machine_status && m->machine_status==1 &&
         m->last_message>0 && now>=m->last_message && now-m->last_message<=15 && uds_fresh(&telemetry) &&
+        plates_pending_intact() && canvas_unload_pending_intact() &&
         !plates_console_busy() && !atomic_load(&upload_busy) && !atomic_load(&active_downloads) && !z_offset_pending;
 }
 
@@ -1939,6 +1953,8 @@ static int plates_homed(const mqtt_client *mqtt) {
 static void plates_calibrate_response(int fd, const mqtt_client *mqtt, console_state *console, const char *body,
                                       size_t length) {
     char fields[5][PLATE_NAME_MAX + 1] = {{0}}; int temp, soak; const char *reason;
+    const char *pending = pending_autosave_guard();
+    if (pending) { plates_fail(fd, 409, pending); return; }
     int count = plates_fields(body, length, fields, 5);
     size_t n = strlen(fields[2]);
     if (count < 3 || strlen(fields[0]) != 1 || (fields[0][0] != 'A' && fields[0][0] != 'B') ||

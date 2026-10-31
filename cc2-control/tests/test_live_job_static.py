@@ -27,7 +27,7 @@ markers = {
 for label, marker in markers.items():
     assert marker in ui, f"missing {label}: {marker}"
 
-for tab in ("[Link, 'settings.connection']", "[Plug, 'settings.integrations']", "[Palette, 'settings.appearance']", "[Info, 'settings.about']"):
+for tab in ("[Link, 'network.connections']", "[Plug, 'settings.integrations']", "[Palette, 'settings.appearance']", "[Info, 'settings.about']"):
     assert tab in ui, f"missing settings tab: {tab}"
 assert "data-screws" not in ui, "duplicate screw navigation remains"
 assert 'strcmp(action,"system:heaters_off")' in control

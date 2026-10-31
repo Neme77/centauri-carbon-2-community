@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Optional manual Wi-Fi/USB Ethernet Connections page with saved Wi-Fi profiles, DHCP/static IP, interface switches, persistent selection and Diagnostics; qualified TP-Link UE300 RTL8153 profile (USB 0bda:8153, revision 31fd), implemented and physically tested by **Neme77** (#266). Wi-Fi remains available without an adapter. The original display-IP experiment is excluded.
+
 - Delete unused G-code files while printing or busy, with active/paused/recoverable job and pending Orca-start protection, requested by **Neme77** (#259).
 
 - Optional Obsidian theme with graphite panels, a purple action accent and cyan telemetry, designed with **Neme77** (#255).
@@ -15,6 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Hungarian companion to the external-feed experiment guide, by **pezso92** (#249).
 
 ### Fixed
+
+- Detect overwritten pending Canvas pull-back and plate-mesh edits after native `SAVE_CONFIG`, refuse incompatible calibration/saving and guard the delayed restart; preserve newer native settings and require an explicit re-save. Reported by **Noahwhite2014** (#267), corrected by **Neme77**.
+
+- Stage the cumulative Connections installer on persistent storage, bound local status reads and retain logs/backups while cleaning payloads only after complete success; preserve native DHCP, camera/reactor startup and same-boot qualification caching verified by **Neme77** (#266).
 
 - Emergency stop now goes straight to the firmware's emergency_stop endpoint, so it acts at once during homing, bed meshing, heat-and-wait or any other long command and while another console command is busy, instead of waiting behind it or being refused; by **Noahwhite2014** (#264). Maintainer review adds a two-second socket deadline and rejects incomplete or oversized replies so a saturated socket cannot freeze the panel or silently suppress the M112 fallback.
 
