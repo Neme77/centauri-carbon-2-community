@@ -1,0 +1,27 @@
+name: Refresh Connections source snapshot
+on:
+  push:
+    branches: [feature/manual-wifi-lan]
+    paths: [.github/workflows/refresh-connections-snapshot.yml]
+permissions:
+  contents: write
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/manual-wifi-lan
+          fetch-depth: 0
+      - name: Regenerate and test the canonical source snapshot
+        run: |
+          set -eu
+          git config user.name Neme77
+          git config user.email 59748679+Neme77@users.noreply.github.com
+          python3 experimental/pr128-integration/sync_source.py
+          python3 -m unittest discover -s builder/current/tests -p 'test_*.py'
+          git add builder/current
+          git diff --cached --check
+          git commit -m "Refresh snapshot after preview fixture linking correction"
+          git push origin HEAD:refs/heads/feature/manual-wifi-lan
