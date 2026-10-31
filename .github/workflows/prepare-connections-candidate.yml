@@ -28,9 +28,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          gh api repos/Neme77/centauri-carbon-2-community/releases/assets/695144123 -H 'Accept: application/octet-stream' > /tmp/connections-source.patch.gz
+          gh api repos/Neme77/centauri-carbon-2-community/releases/assets/695163566 -H 'Accept: application/octet-stream' > /tmp/connections-source.patch.gz
           gh api repos/Neme77/centauri-carbon-2-community/releases/assets/693492332 -H 'Accept: application/octet-stream' > /tmp/connections-runtime.tar.gz
-          echo "4513a558715c1fde8505fc29e2c8fcca995db82d56b88216a5a524913800c8c8  /tmp/connections-source.patch.gz" | sha256sum -c -
+          echo "623c9ba91ddb6c0cd4336157c1104c2576bba6ed483db016c5ab23340680b964  /tmp/connections-source.patch.gz" | sha256sum -c -
           echo "95db87b35dcf6799d5d57ec8ad046455c97e5cb297cc07ea4a2eeda90fb367de  /tmp/connections-runtime.tar.gz" | sha256sum -c -
           gzip -d -c /tmp/connections-source.patch.gz > /tmp/connections-source.patch
           git apply --check --whitespace=error /tmp/connections-source.patch
