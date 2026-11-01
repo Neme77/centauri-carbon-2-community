@@ -109,12 +109,14 @@ static void drying_load(void) {
     drying.fan_pending=-1;drying.plateau=NAN;
     if(ok){drying.original_timeout=timeout;drying.temp=temp;drying.preheat=preheat;drying.previous_grille=grille;drying.previous_fan=fan;}
 }
+/* The vendor keeps print.enable set after a print completes or is cancelled, so idle comes from the
+ * fresh native print state, machine status, heater targets and motion instead. */
 static int drying_sample(const mqtt_client *mqtt, double *bed, double *target) {
     double nozzle,velocity;
     const char *state=uds_print_state(&telemetry);
     time_t age=time(NULL)-mqtt->last_message;
     return mqtt->connected&&mqtt->registered&&mqtt->have_machine_status&&mqtt->machine_status==1&&
-        !mqtt->print_enabled&&age>=0&&age<=15&&state&&
+        age>=0&&age<=15&&state&&
         (!strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled"))&&
         uds_value(&telemetry,U_BT,bed)&&uds_value(&telemetry,U_BG,target)&&
         uds_value(&telemetry,U_EG,&nozzle)&&nozzle==0&&

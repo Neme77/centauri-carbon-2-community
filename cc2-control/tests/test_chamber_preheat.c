@@ -85,6 +85,23 @@ int main(void){
     { char text[80];int fd=open(journal,O_RDONLY);assert(fd>=0);ssize_t n=read(fd,text,sizeof(text)-1);close(fd);assert(n>0);text[n]=0;
       assert(!strcmp(text,"CC2DRY2 600 100 0 0\n")); }
     assert(strstr(status(),"\"mode\":\"preheat\"")&&strstr(status(),"\"chamber_target\":45")&&strstr(status(),"\"ready\":false"));
+    drying_stop("manual",0);finish();assert(!drying_active());
+    /* Straight after a completed or cancelled print the vendor still reports print.enable: the fresh
+     * native state decides, so a warm-bed preheat starts ... */
+    reset();machine.print_enabled=1;strcpy(telemetry.print_state,"complete");machine.bed_temp=70;snapshot(70,0);heat();
+    drying_stop("manual",0);snapshot(70,0);finish();assert(!drying_active()&&restores==1);
+    reset();machine.print_enabled=1;strcpy(telemetry.print_state,"cancelled");heat();drying_stop("manual",0);finish();assert(!drying_active());
+    /* ... but printing, paused, a busy machine status, and stale or disconnected telemetry are refused. */
+    reset();machine.print_enabled=1;machine.bed_temp=70;snapshot(70,0);
+    strcpy(telemetry.print_state,"printing");start("100:45:30",409);
+    strcpy(telemetry.print_state,"paused");start("100:45:30",409);
+    strcpy(telemetry.print_state,"complete");machine.machine_status=2;start("100:45:30",409);machine.machine_status=1;
+    telemetry.last_rx.tv_sec-=10;start("100:45:30",409);snapshot(70,0);
+    machine.last_message-=60;start("100:45:30",409);snapshot(70,0);
+    machine.connected=0;start("100:45:30",409);machine.connected=1;
+    telemetry.values[U_LIVE_SPEED]=50;start("100:45:30",409);telemetry.values[U_LIVE_SPEED]=0;
+    assert(!drying_active()&&!heats);machine.bed_temp=25;
+    reset();machine.bed_temp=70;snapshot(70,0);heat();snapshot(70,100);machine.bed_temp=25;
 
     /* The fan stays at 20 % while the chamber is 5 C or more short, then tapers; leases continue. */
     chamber(38);later(16000);assert(fans==0);
@@ -113,7 +130,7 @@ int main(void){
     machine.machine_status=2;strcpy(telemetry.print_state,"printing");snapshot(25,100);tick();
     assert(!strcmp(drying.reason,"print")&&strstr(status(),"\"state\":\"handed_off\"")&&offs==0);
     later(600000);assert(offs==0&&restores==0&&!strcmp(drying.reason,"print"));
-    machine.machine_status=1;strcpy(telemetry.print_state,"complete");snapshot(60,0);finish();
+    machine.machine_status=1;machine.print_enabled=1;strcpy(telemetry.print_state,"complete");snapshot(60,0);finish();
     assert(!drying_active()&&drying.stage==DRY_DONE&&restores==1&&offs==0&&strstr(status(),"\"state\":\"completed\""));
 
     /* A chamber that levels off short of the target is predicted while it still rises ... */
@@ -153,6 +170,6 @@ int main(void){
     { char low[300];snprintf(low,sizeof(low),"%s/low",temporary);f=fopen(low,"w");assert(f);fputs("[heater_bed]\nmax_temp=90\n",f);fclose(f);
       drying_config=low;reset();start("100:45:30",400);assert(strstr(response,"60-90 C"));drying_config=config;unlink(low); }
     unlink(config);unlink(autosave);assert(!rmdir(temporary));close(pair[0]);close(pair[1]);pthread_mutex_destroy(&commands.lock);
-    puts("PASS chamber preheat: opt-in/bounds, grille/fan/chamber readings, fan taper, two-minute ready, levelled-off hold, hold, restore of grille/fan/timeout, print hand-off, plateau, heat limit, lost chamber, restart without resume, unsupported firmware");
+    puts("PASS chamber preheat: opt-in/bounds, start after a completed/cancelled print (print.enable retained), printing/paused/stale refused, grille/fan/chamber readings, fan taper, two-minute ready, levelled-off hold, hold, restore of grille/fan/timeout, print hand-off, plateau, heat limit, lost chamber, restart without resume, unsupported firmware");
     return 0;
 }
