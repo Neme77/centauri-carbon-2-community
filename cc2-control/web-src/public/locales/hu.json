@@ -331,7 +331,7 @@
   "control.shaper_running": "A rezgéskalibrálás folyamatban van.",
   "control.shaper_completed": "A parancs befejeződött. A firmware a kalibráció végén automatikusan menti az eredményeket.",
   "control.shaper_check_output": "Nézd meg a nyomtató kimenetét a konzolban.",
-  "control.quick_pid_hotend": "Hotend PID",
+  "control.quick_pid_hotend": "Fúvóka PID",
   "control.quick_pid_bed": "Tárgyasztal PID",
   "control.fan_percent": "{name} beállítása (%)",
   "control.invalid_fan_percent": "Adj meg 0 és 100 közötti egész számot.",
