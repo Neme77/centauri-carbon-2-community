@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>CC2 Control — State-aware dashboard preview (#263)</title>
+<style>
+:root{color-scheme:dark;--bg:#031723;--panel:#062333;--panel-2:#092b3c;--panel-3:#0b3143;--edge:#16475d;--edge-strong:#24718b;--fg:#edf7fb;--muted:#8eb5c7;--cyan:#00c5dc;--cyan-soft:#0d3a4a;--green:#22d69b;--amber:#f6b84c;--red:#ff6977;--blue:#4bb4ff;--shadow:0 14px 40px #00101a55}
+html[data-theme=light]{color-scheme:light;--bg:#eaf2f6;--panel:#fff;--panel-2:#f2f8fa;--panel-3:#eaf4f7;--edge:#c8dce5;--edge-strong:#78b8cb;--fg:#102c3a;--muted:#55798a;--cyan:#007f98;--cyan-soft:#dff5f8;--green:#087d5b;--amber:#9a5a00;--red:#bc3042;--blue:#176ea5;--shadow:0 12px 34px #15374817}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}button,select{font:inherit;color:inherit}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}.topbar{height:58px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:0 22px;background:var(--panel);border-bottom:1px solid var(--cyan);box-shadow:0 2px 14px #00101830}.mark{width:38px;height:30px;background:repeating-linear-gradient(135deg,var(--cyan) 0 5px,transparent 5px 10px);clip-path:polygon(0 0,72% 0,100% 50%,72% 100%,0 100%)}.brand{font-size:17px;font-weight:760;letter-spacing:-.03em;color:var(--cyan)}.brand span{color:var(--muted);font-weight:500}.top-spacer{flex:1}.top-pill,.pill{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid var(--edge);border-radius:999px;color:var(--muted);font-size:12px;white-space:nowrap}.dot{width:8px;height:8px;display:inline-block;border-radius:50%;background:var(--green)}.emergency{border:1px solid #ab3544;border-radius:7px;background:transparent;color:var(--red);font-weight:700;padding:8px 12px}.demo-wrap{max-width:1600px;margin:22px auto 0;padding:0 20px}.demo-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 14px;margin-bottom:18px;border:1px dashed var(--edge-strong);border-radius:10px;background:var(--panel-2)}.demo-label{font-weight:700;color:var(--cyan)}.demo-caption{color:var(--muted);font-size:12px;flex:1 1 260px}.demo-control{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.demo-control select{background:var(--panel);border:1px solid var(--edge);border-radius:7px;padding:7px 27px 7px 9px}.demo-shell{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:var(--bg);box-shadow:var(--shadow);transition:max-width .2s ease}.demo-shell.mobile-demo{max-width:440px;margin:0 auto}.app{display:grid;grid-template-columns:196px minmax(0,1fr);min-height:890px}.sidebar{background:var(--panel);border-right:1px solid var(--edge);display:flex;flex-direction:column;padding:16px 10px}.side-brand{font-size:11px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);padding:8px 12px 16px}.nav{display:grid;gap:4px}.nav-item{padding:10px 12px;border-radius:7px;color:var(--muted);display:flex;gap:11px;align-items:center;font-size:13px}.nav-item.active{background:var(--cyan-soft);color:var(--cyan);font-weight:700}.nav-icon{width:18px;text-align:center;font-size:16px}.side-bottom{margin-top:auto;color:var(--muted);font-size:11px;padding:14px 12px;border-top:1px solid var(--edge)}.content{min-width:0;padding:24px clamp(16px,2.2vw,34px) 30px}.page-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:19px}.page-heading h1{margin:0;font-size:26px;letter-spacing:-.025em}.page-heading p{margin:3px 0 0;color:var(--muted)}.heading-tags{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.pill.state-live{color:var(--green);border-color:#16785f}.pill.state-paused{color:var(--amber);border-color:#855a1c}.pill.state-error{color:var(--red);border-color:#8f3540}.pill.state-stale{color:var(--amber);border-color:#855a1c}.layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(255px,.86fr);gap:14px;align-items:stretch}.card{min-width:0;background:var(--panel);border:1px solid var(--edge);border-radius:9px;padding:17px}.job-card{border-top:3px solid var(--green);padding-top:15px}.job-card[data-state="paused"]{border-top-color:var(--amber)}.job-card[data-state="issue"]{border-top-color:var(--red)}.job-card[data-state="stale"]{border-top-color:var(--amber)}.card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;margin-bottom:13px;border-bottom:1px solid var(--edge)}.card-head h2{font-size:15px;margin:0;display:flex;gap:9px;align-items:center}.card-icon{color:var(--cyan);font-size:17px}.eyebrow{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:750}.job-title{font-size:21px;line-height:1.25;font-weight:740;overflow-wrap:anywhere;margin:5px 0 9px}.job-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;color:var(--muted);font-size:12px}.job-meta .sep{opacity:.5}.state-copy{margin:14px 0 13px;padding:11px 12px;border-left:3px solid var(--green);background:var(--panel-2);border-radius:0 7px 7px 0;color:var(--muted)}.state-copy strong{color:var(--fg)}.job-card[data-state="paused"] .state-copy{border-left-color:var(--amber)}.job-card[data-state="issue"] .state-copy{border-left-color:var(--red)}.job-card[data-state="stale"] .state-copy{border-left-color:var(--amber)}.alert{display:none;padding:12px 13px;border:1px solid #a44450;border-radius:8px;background:color-mix(in srgb,var(--red) 10%,var(--panel));margin:12px 0;color:var(--fg)}.alert strong{display:block;margin-bottom:3px}.alert small{color:var(--muted)}.alert.visible{display:block}.progress-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:14px 0 7px}.progress-top strong{font-size:21px}.progress-top span{font-size:12px;color:var(--muted)}.progress-track{height:9px;background:var(--panel-3);border-radius:99px;overflow:hidden;border:1px solid var(--edge)}.progress-fill{height:100%;width:62%;background:linear-gradient(90deg,var(--cyan),#43dfc9);border-radius:99px;transition:width .25s}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:17px 0 15px}.metric{padding:0 11px;border-left:1px solid var(--edge)}.metric:first-child{padding-left:0;border:0}.metric b{display:block;font-size:16px}.metric span{display:block;font-size:11px;color:var(--muted);margin-top:3px}.temperature-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}.temperature{padding:9px 10px;border:1px solid var(--edge);border-radius:7px;background:var(--panel-2);min-width:0}.temperature label{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted)}.temp-dot{width:8px;height:8px;border-radius:50%;background:var(--red)}.temp-dot.bed{background:var(--blue)}.temp-dot.chamber{background:var(--amber)}.temperature b{display:block;margin-top:5px;font-size:13px}.temperature em{font-size:10px;color:var(--muted);font-style:normal;font-weight:450}.temperature.stale-reading{opacity:.55}.actions-card{display:flex;flex-direction:column}.action-summary{color:var(--muted);font-size:12px;margin:0 0 12px}.action-list{display:grid;gap:9px}.action-preview{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid var(--edge);border-radius:7px;background:var(--panel-2)}.action-preview strong{font-size:13px}.action-state{font-size:10px;color:var(--muted);text-align:right}.action-state.available{color:var(--green)}.action-state.caution{color:var(--amber)}.action-state.unavailable{color:var(--muted)}.action-icon{color:var(--cyan);margin-right:7px}.action-foot{margin-top:auto;padding-top:13px;color:var(--muted);font-size:11px;line-height:1.5}.freshness-note{display:flex;gap:8px;align-items:flex-start;margin-top:12px;color:var(--muted);font-size:11px}.freshness-icon{color:var(--cyan);font-size:14px}.lower-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;margin-top:14px}.chart{height:106px;position:relative;overflow:hidden;border-radius:6px;background:repeating-linear-gradient(to bottom,transparent 0 25px,var(--edge) 26px,transparent 27px)}.chart svg{width:100%;height:100%;overflow:visible}.chart-labels{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;margin-top:4px}.legend{display:flex;gap:13px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:11px}.legend span{display:flex;align-items:center;gap:6px}.legend i{width:8px;height:8px;border-radius:50%;background:var(--red)}.legend .blue{background:var(--blue)}.legend .amber{background:var(--amber)}.events{display:grid;gap:12px}.event{display:grid;grid-template-columns:43px 12px minmax(0,1fr);gap:9px;align-items:start;font-size:12px}.event time{color:var(--muted);font-variant-numeric:tabular-nums}.event-mark{width:9px;height:9px;margin-top:4px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 3px var(--cyan-soft)}.event-mark.warn{background:var(--amber);box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 15%,transparent)}.event-mark.err{background:var(--red);box-shadow:0 0 0 3px color-mix(in srgb,var(--red) 15%,transparent)}.event p{margin:0}.event small{display:block;color:var(--muted);margin-top:2px}.demo-notes{max-width:1600px;margin:18px auto 36px;padding:0 20px;color:var(--muted);font-size:12px}.demo-notes details{border:1px solid var(--edge);background:var(--panel);border-radius:8px;padding:12px 15px}.demo-notes summary{cursor:pointer;color:var(--fg);font-weight:700}.demo-notes ul{margin:10px 0 2px;padding-left:20px}.demo-notes li{margin:6px 0}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:980px){.app{grid-template-columns:68px minmax(0,1fr)}.sidebar{padding:15px 7px}.side-brand{font-size:0;padding:8px 8px 16px}.side-brand:after{content:"CC2";font-size:11px}.nav-item{justify-content:center;padding:11px 3px}.nav-item .nav-text{display:none}.side-bottom{font-size:0;text-align:center;padding:12px 3px}.side-bottom:after{content:"●";font-size:12px;color:var(--green)}.layout{grid-template-columns:minmax(0,1.25fr) minmax(235px,.75fr)}}
+@media(max-width:700px){.topbar{height:52px;padding:0 12px}.brand{font-size:14px}.top-pill.printer-pill,.emergency{display:none}.demo-wrap{margin-top:12px;padding:0 10px}.demo-toolbar{gap:9px;padding:10px}.demo-caption{flex-basis:100%;order:3}.app{grid-template-columns:52px minmax(0,1fr);min-height:0}.sidebar{padding:10px 4px}.content{padding:19px 12px 20px}.page-heading{display:block}.page-heading h1{font-size:23px}.heading-tags{justify-content:flex-start;margin-top:12px}.layout,.lower-grid{grid-template-columns:minmax(0,1fr)}.actions-card{min-height:0}.action-foot{margin-top:15px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:14px}.metric:nth-child(3){border-left:0;padding-left:0}.temperature-row{grid-template-columns:1fr}.temperature{display:flex;align-items:center;justify-content:space-between;gap:10px}.temperature b{margin:0}.card{padding:14px}.job-title{font-size:19px}.demo-notes{padding:0 10px}}
+@media(max-width:430px){.demo-shell.mobile-demo{max-width:100%}.demo-control select{max-width:145px}.topbar{gap:9px}.mark{width:29px;height:24px}.brand span{display:none}.content{padding-left:9px;padding-right:9px}.metrics .metric{padding-right:4px}.metric b{font-size:15px}.metric span{font-size:10px}.app{grid-template-columns:46px minmax(0,1fr)}.nav-icon{font-size:14px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="mark" aria-hidden="true"></div>
+  <div class="brand">Centauri Carbon 2 <span>/ Control Center</span></div>
+  <div class="top-spacer"></div>
+  <span class="top-pill">▣ &nbsp;Idle</span>
+  <span class="top-pill printer-pill"><i class="dot"></i> Printer connected</span>
+  <button class="emergency" type="button" aria-disabled="true" title="Visual example only">△ &nbsp;EMERGENCY STOP</button>
+</header>
+
+<div class="demo-wrap">
+  <section class="demo-toolbar" aria-label="Preview controls">
+    <span class="demo-label">Design preview · #263</span>
+    <span class="demo-caption">Static sample data and action layouts. This preview has no printer connection and sends no commands.</span>
+    <label class="demo-control" for="state-select">State
+      <select id="state-select">
+        <option value="printing">Printing</option>
+        <option value="paused">Paused</option>
+        <option value="issue">Reported issue</option>
+        <option value="stale">Stale data</option>
+      </select>
+    </label>
+    <label class="demo-control" for="theme-select">Theme
+      <select id="theme-select">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </label>
+    <label class="demo-control" for="viewport-select">View
+      <select id="viewport-select">
+        <option value="desktop">Desktop</option>
+        <option value="mobile">Mobile preview</option>
+      </select>
+    </label>
+  </section>
+
+  <div class="demo-shell" id="demo-shell">
+    <div class="app">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="side-brand">Centauri Carbon 2</div>
+        <nav class="nav">
+          <div class="nav-item active"><span class="nav-icon">◉</span><span class="nav-text">Overview</span></div>
+          <div class="nav-item"><span class="nav-icon">☷</span><span class="nav-text">Control</span></div>
+          <div class="nav-item"><span class="nav-icon">▤</span><span class="nav-text">Print job</span></div>
+          <div class="nav-item"><span class="nav-icon">▧</span><span class="nav-text">Files</span></div>
+          <div class="nav-item"><span class="nav-icon">◷</span><span class="nav-text">History</span></div>
+          <div class="nav-item"><span class="nav-icon">▦</span><span class="nav-text">Bed leveling</span></div>
+          <div class="nav-item"><span class="nav-icon">◎</span><span class="nav-text">Canvas</span></div>
+          <div class="nav-item"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></div>
+        </nav>
+        <div class="side-bottom">Community Firmware · preview</div>
+      </aside>
+
+      <main class="content">
+        <div class="page-heading">
+          <div>
+            <h1>Overview</h1>
+            <p>A calm view of the printer and the current job</p>
+          </div>
+          <div class="heading-tags" aria-live="polite">
+            <span id="state-pill" class="pill state-live"><i class="dot"></i><span id="state-pill-text">Printing</span></span>
+            <span class="pill" id="fresh-pill">● &nbsp;Live data · 2s ago</span>
+          </div>
+        </div>
+
+        <div class="layout">
+          <section class="card job-card" id="job-card" data-state="printing" aria-labelledby="job-heading">
+            <div class="card-head">
+              <h2 id="job-heading"><span class="card-icon">▣</span> Current print job</h2>
+              <span class="eyebrow" id="job-state-label">Printer reports · Printing</span>
+            </div>
+            <div class="eyebrow">Active file</div>
+            <div class="job-title" id="filename">Functional_bracket_v8.gcode</div>
+            <div class="job-meta"><span id="printer-state-meta">Started 14:02</span><span class="sep">·</span><span>Local file</span><span class="sep">·</span><span>PLA</span></div>
+
+            <div class="alert" id="alert-box" role="status">
+              <strong id="alert-title">Printer reports filament runout</strong>
+              <small id="alert-copy">Observed at 14:36 · print state is Paused. Check the printer message before choosing an action.</small>
+            </div>
+
+            <div class="state-copy" id="state-copy"><strong>Printing normally.</strong> The details below reflect the latest printer update.</div>
+
+            <div class="progress-top"><strong id="progress-label">62%</strong><span id="progress-sub">Estimated completion · 14:58</span></div>
+            <div class="progress-track" role="progressbar" aria-label="Print progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+            <div class="metrics">
+              <div class="metric"><b id="elapsed">1h 14m</b><span>Elapsed</span></div>
+              <div class="metric"><b id="remaining">44m</b><span id="remaining-label">Remaining · estimate</span></div>
+              <div class="metric"><b id="layer-now">118</b><span>Current layer</span></div>
+              <div class="metric"><b id="layer-total">190</b><span>Total layers</span></div>
+            </div>
+
+            <div class="eyebrow">Measured temperatures <span style="text-transform:none;letter-spacing:0">· target values shown where reported</span></div>
+            <div class="temperature-row" id="temperature-row">
+              <div class="temperature"><label><i class="temp-dot"></i>Nozzle</label><b><span id="nozzle-value">224.8</span> °C <em id="nozzle-target">/ 225</em></b></div>
+              <div class="temperature"><label><i class="temp-dot bed"></i>Heated bed</label><b><span id="bed-value">59.8</span> °C <em id="bed-target">/ 60</em></b></div>
+              <div class="temperature"><label><i class="temp-dot chamber"></i>Chamber</label><b><span id="chamber-value">31.2</span> °C <em id="chamber-target">measured</em></b></div>
+            </div>
+            <div class="freshness-note"><span class="freshness-icon">ⓘ</span><span>Values and status are shown with their freshness. A missing reason stays “not reported”; the dashboard does not infer a physical cause.</span></div>
+          </section>
+
+          <section class="card actions-card" aria-labelledby="actions-heading">
+            <div class="card-head">
+              <h2 id="actions-heading"><span class="card-icon">⚡</span> Suggested actions</h2>
+              <span class="eyebrow">Preview</span>
+            </div>
+            <p class="action-summary" id="action-summary">Common job controls stay in one place. Existing safety checks still decide when each action is available.</p>
+            <div class="action-list" id="action-list">
+              <div class="action-preview"><strong><span class="action-icon">Ⅱ</span>Pause print</strong><span class="action-state available">Available</span></div>
+              <div class="action-preview"><strong><span class="action-icon">□</span>Cancel print</strong><span class="action-state caution">Confirmation required</span></div>
+              <div class="action-preview"><strong><span class="action-icon">⌕</span>Open job details</strong><span class="action-state">View details</span></div>
+            </div>
+            <div class="action-foot" id="action-foot">Action labels are visual examples only. No action here is interactive or connected to the printer.</div>
+          </section>
+        </div>
+
+        <div class="lower-grid">
+          <section class="card" aria-labelledby="thermal-heading">
+            <div class="card-head"><h2 id="thermal-heading"><span class="card-icon">♨</span> Temperatures</h2><span class="eyebrow">Recent history · 5 min</span></div>
+            <div class="chart" aria-label="Illustrative nozzle and bed temperature chart">
+              <svg viewBox="0 0 640 120" role="img" aria-label="Sample temperature traces">
+                <polyline points="0,83 40,82 80,78 120,74 160,72 200,73 240,70 280,72 320,68 360,69 400,65 440,67 480,64 520,65 560,61 600,63 640,60" fill="none" stroke="var(--red)" stroke-width="3"/>
+                <polyline points="0,99 40,97 80,94 120,88 160,83 200,79 240,78 280,77 320,76 360,75 400,76 440,74 480,75 520,74 560,73 600,73 640,72" fill="none" stroke="var(--blue)" stroke-width="3"/>
+                <polyline points="0,112 80,110 160,107 240,105 320,102 400,99 480,96 560,94 640,92" fill="none" stroke="var(--amber)" stroke-width="2"/>
+              </svg>
+            </div>
+            <div class="chart-labels"><span>14:31</span><span>14:36 · latest sample</span></div>
+            <div class="legend"><span><i></i>Nozzle</span><span><i class="blue"></i>Heated bed</span><span><i class="amber"></i>Chamber</span></div>
+          </section>
+
+          <section class="card" aria-labelledby="events-heading">
+            <div class="card-head"><h2 id="events-heading"><span class="card-icon">◷</span> Recent status changes</h2><span class="eyebrow">Observed by app</span></div>
+            <div class="events" id="events">
+              <div class="event"><time>14:02</time><i class="event-mark"></i><p>Printer reported print started<small>File: Functional_bracket_v8.gcode</small></p></div>
+              <div class="event"><time>14:21</time><i class="event-mark"></i><p>Progress update received<small>Layer 64 of 190</small></p></div>
+              <div class="event"><time>14:36</time><i class="event-mark"></i><p>Latest printer status received<small>No error reported</small></p></div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<div class="demo-notes">
+  <details>
+    <summary>Design notes and scope</summary>
+    <ul>
+      <li>This is a standalone visual proposal for issue #263, not a production UI change. Every reading, timestamp and job is sample data.</li>
+      <li>State, theme and viewport selectors change only this local mock. Action rows are non-interactive examples; nothing connects to or controls a printer.</li>
+      <li>The concept gives the active job the strongest hierarchy, keeps actions visible with their availability, and shows status changes only when the app observes a printer report.</li>
+      <li>Unknown reasons stay unknown; stale values are visibly marked. Existing polling, commands, action guards and the default layout are outside this preview.</li>
+      <li>Responsive layout, visible text labels, keyboard focus and reduced-motion preferences are included for design review.</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const states={
+  printing:{label:"Printing",pill:"Printing",pillClass:"state-live",fresh:"●  Live data · 2s ago",jobState:"Printer reports · Printing",copy:"<strong>Printing normally.</strong> The details below reflect the latest printer update.",progress:"62%",pct:"62",sub:"Estimated completion · 14:58",elapsed:"1h 14m",remaining:"44m",remainingLabel:"Remaining · estimate",layer:"118",total:"190",meta:"Started 14:02",alert:false,summary:"Common job controls stay in one place. Existing safety checks still decide when each action is available.",actions:[["Ⅱ","Pause print","Available","available"],["□","Cancel print","Confirmation required","caution"],["⌕","Open job details","View details",""]],events:[["14:02","Printer reported print started","File: Functional_bracket_v8.gcode",""],["14:21","Progress update received","Layer 64 of 190",""],["14:36","Latest printer status received","No error reported",""]],temps:["224.8","59.8","31.2"],targets:["/ 225","/ 60","measured"],copyReason:"No reason reported"},
+  paused:{label:"Paused",pill:"Paused",pillClass:"state-paused",fresh:"●  Live data · 2s ago",jobState:"Printer reports · Paused",copy:"<strong>The printer reports a paused job.</strong> No reason is inferred from the pause state.",progress:"62%",pct:"62",sub:"Progress held at last update",elapsed:"1h 14m",remaining:"—",remainingLabel:"Estimate unavailable while paused",layer:"118",total:"190",meta:"Pause observed 14:36",alert:false,summary:"Make the reported state clear. Review the printer before choosing a job action.",actions:[["▶","Resume print","Review state first","caution"],["□","Cancel print","Confirmation required","caution"],["⌕","Open job details","View details",""]],events:[["14:02","Printer reported print started","File: Functional_bracket_v8.gcode",""],["14:21","Progress update received","Layer 64 of 190",""],["14:36","Printer reported Paused","Reason not reported","warn"]],temps:["224.8","59.8","31.2"],targets:["/ 225","/ 60","measured"],copyReason:"Reason not reported"},
+  issue:{label:"Reported issue",pill:"Paused · issue reported",pillClass:"state-error",fresh:"●  Live data · 2s ago",jobState:"Printer reports · Paused",copy:"<strong>Check the reported message before continuing.</strong> The printer has reported a recoverable issue.",progress:"62%",pct:"62",sub:"Progress held at last update",elapsed:"1h 14m",remaining:"—",remainingLabel:"Estimate unavailable while paused",layer:"118",total:"190",meta:"Issue observed 14:36",alert:true,summary:"Keep the printer's own message visible and make the next safe steps easy to scan.",actions:[["⌕","Review printer message","Reported by printer","caution"],["↻","Resume after inspection","Review required","caution"],["□","Cancel print","Confirmation required","caution"]],events:[["14:02","Printer reported print started","File: Functional_bracket_v8.gcode",""],["14:21","Progress update received","Layer 64 of 190",""],["14:36","Filament runout reported","Printer message · print is paused","err"]],temps:["224.8","59.8","31.2"],targets:["/ 225","/ 60","measured"],copyReason:"Filament runout reported"},
+  stale:{label:"Stale data",pill:"Data delayed",pillClass:"state-stale",fresh:"!  Last update · 2m 14s ago",jobState:"Last reported · Printing",copy:"<strong>Live data is delayed.</strong> The last known state may have changed since this update.",progress:"62%",pct:"62",sub:"Last known progress · may be outdated",elapsed:"1h 14m",remaining:"—",remainingLabel:"Estimate hidden until data refreshes",layer:"118",total:"190",meta:"Last successful update 14:34",alert:true,summary:"Wait for a fresh printer state before relying on readings or starting another action.",actions:[["↻","Refresh printer status","Waiting for connection","unavailable"],["Ⅱ","Pause print","Unavailable · stale state","unavailable"],["□","Cancel print","Unavailable · stale state","unavailable"]],events:[["14:02","Printer reported print started","File: Functional_bracket_v8.gcode",""],["14:21","Progress update received","Layer 64 of 190",""],["14:34","Last successful status","No newer report received","warn"]],temps:["224.8","59.8","31.2"],targets:["/ 225","/ 60","measured"],copyReason:"Connection data is stale"}
+};
+function setState(key){
+ const s=states[key];const card=$("job-card");card.dataset.state=key;
+ $("state-pill-text").textContent=s.pill;$("state-pill").className="pill "+s.pillClass;
+ $("fresh-pill").textContent=s.fresh;$("job-state-label").textContent=s.jobState;
+ $("state-copy").innerHTML=s.copy;$("progress-label").textContent=s.progress;
+ $("progress-sub").textContent=s.sub;$("progress-fill").style.width=s.pct+"%";
+ $("progress-bar").setAttribute("aria-valuenow",s.pct);
+ $("elapsed").textContent=s.elapsed;$("remaining").textContent=s.remaining;
+ $("remaining-label").textContent=s.remainingLabel;$("layer-now").textContent=s.layer;$("layer-total").textContent=s.total;
+ $("printer-state-meta").textContent=s.meta;$("action-summary").textContent=s.summary;
+ $("nozzle-value").textContent=s.temps[0];$("bed-value").textContent=s.temps[1];$("chamber-value").textContent=s.temps[2];
+ $("nozzle-target").textContent=s.targets[0];$("bed-target").textContent=s.targets[1];$("chamber-target").textContent=s.targets[2];
+ $("alert-box").classList.toggle("visible",s.alert);
+ if(key==="issue"){$("alert-title").textContent="Printer reports filament runout";$("alert-copy").textContent="Observed at 14:36 · print state is Paused. Check the printer message before choosing an action."}
+ else if(key==="stale"){$("alert-title").textContent="Live printer data is delayed";$("alert-copy").textContent="Last successful update was 2m 14s ago. Values shown here may be out of date."}
+ $("action-list").innerHTML=s.actions.map(a=>'<div class="action-preview"><strong><span class="action-icon">'+a[0]+'</span>'+a[1]+'</strong><span class="action-state '+a[3]+'">'+a[2]+'</span></div>').join("");
+ $("events").innerHTML=s.events.map(e=>'<div class="event"><time>'+e[0]+'</time><i class="event-mark '+e[3]+'"></i><p>'+e[1]+'<small>'+e[2]+'</small></p></div>').join("");
+ $("temperature-row").classList.toggle("stale-reading",key==="stale");
+}
+$("state-select").addEventListener("change",e=>setState(e.target.value));
+$("theme-select").addEventListener("change",e=>document.documentElement.dataset.theme=e.target.value);
+$("viewport-select").addEventListener("change",e=>$("demo-shell").classList.toggle("mobile-demo",e.target.value==="mobile"));
+setState("printing");
+</script>
+</body>
+</html>
