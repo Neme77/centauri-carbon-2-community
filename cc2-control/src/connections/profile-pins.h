@@ -2,9 +2,8 @@
 #define CC2_NETWORK_PROFILE_PINS_H
 #define NG_CC2_UE300_ABI_PROBE_KO_SHA \
   "24c757788815abe5bbabb59d64b4768efedf7a65b1a8d93f3a6ce4d1e979a3f8"
-/* Replaced by the reproducible probe build before packaging/publication. */
 #define NG_CC2_UE300_ABI_PROBE_3000_KO_SHA \
-  "0000000000000000000000000000000000000000000000000000000000000000"
+  "4027162b4a5a45fc136b932f4a33ee2a2f252270a0f7c29c6c03afc2d84e180a"
 #define NG_CC2_UE300_MII_KO_SHA                                                \
   "9051751ccefa1c1795b644764fd4c2de31b54d871e863927ef17b6d65978a7be"
 #define NG_CC2_UE300_R8152_KO_SHA                                              \

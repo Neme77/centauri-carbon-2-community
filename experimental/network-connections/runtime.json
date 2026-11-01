@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "asset_id": 693492332,
-  "release_id": 429512215,
-  "filename": "CC2-Connections-Runtime-R5h.tar.gz",
-  "sha256": "95db87b35dcf6799d5d57ec8ad046455c97e5cb297cc07ea4a2eeda90fb367de",
-  "helper_sha256": "192ee3df47f6543e59e036a11bd242a0d0e070e7e0dc67b1d5609116903cf23d",
+  "asset_id": 698833594,
+  "release_id": 430700493,
+  "filename": "CC2-Connections-Runtime-RTL8153-3000.tar.gz",
+  "sha256": "5ca5fe6ebe60809b73da7491dbd3a8b5cfa236835d7181ac852d89737a9fa76c",
+  "helper_sha256": "b124dfb811fc46d3039affe31753cc88e1996ff66a6bd6af15245c81565e59bb",
   "qualified_profile": {
     "community": "V4.4.2",
     "kernel": "5.4.61 #40 ARMv7",
@@ -13,5 +13,14 @@
     "usb_revision": "31fd",
     "tested_model": "TP-Link UE300"
   },
-  "physical_reference": "R5h: maintainer confirmed switching, local/remote video, reboot persistence and normal Canvas startup; new cumulative build requires separate validation."
+  "physical_reference": "31fd was tested in R5h; this rebuilt runtime and revision 3000 require separate hardware validation.",
+  "experimental_profiles": [
+    {
+      "usb_vendor": "0bda",
+      "usb_product": "8153",
+      "usb_revision": "3000",
+      "explicit_consent_required": true,
+      "physical_qualification": false
+    }
+  ]
 }
