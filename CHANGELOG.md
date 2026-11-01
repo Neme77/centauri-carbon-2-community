@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Experimental chamber preheat as a mode of bed heating: the bed heats the empty chamber with the exhaust grille closed and the aux fan tapering off near the target, reports when the chamber is ready, estimates where it will level off, hands the bed to a print that starts and restores the grille, fan and bed idle timeout afterwards; requested by **Sceletor** (#270), by **Noahwhite2014** (#TBD).
+- Experimental chamber preheat as a mode of bed heating: the bed heats the empty chamber with the exhaust grille closed and the aux fan tapering off near the target, reports when the chamber is ready, estimates where it will level off, hands the bed to a print that starts and restores the grille, fan and bed idle timeout afterwards; requested by **Sceletor** (#270), by **Noahwhite2014** (#277).
 
 ## [CC2 Control 1.2.24] - 2026-10-31
 
