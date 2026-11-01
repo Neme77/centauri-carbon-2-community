@@ -1190,5 +1190,13 @@
   "network.dns2": "DNS secondaire",
   "canvas.unload_pending_safety": "Redémarrez avant de sauvegarder des calibrages sur l’écran : SAVE_CONFIG peut annuler cette modification en attente.",
   "canvas.unload_conflict": "Une sauvegarde de l’imprimante a modifié le retrait en attente. Enregistrez à nouveau la valeur souhaitée avant de redémarrer.",
-  "plates.pending_save_conflict": "Une sauvegarde de l’imprimante a modifié le maillage en attente. Activation non vérifiée ; les réglages les plus récents ont été conservés."
+  "plates.pending_save_conflict": "Une sauvegarde de l’imprimante a modifié le maillage en attente. Activation non vérifiée ; les réglages les plus récents ont été conservés.",
+  "network.usb_revision": "Révision de l’adaptateur USB",
+  "network.usb_experimental_warning": "La révision RTL8153 3000 est expérimentale et sa qualification matérielle est incomplète. Les contrôles du noyau et la récupération de connexion restent obligatoires.",
+  "network.usb_approve": "Autoriser la révision expérimentale 3000",
+  "network.usb_revoke": "Révoquer l’autorisation expérimentale",
+  "network.usb_approve_confirm": "Autoriser cet adaptateur RTL8153 révision 3000 à titre expérimental ? Seul le consentement est enregistré : aucun pilote chargé ni connexion modifiée.",
+  "network.usb_revoke_confirm": "Révoquer l’autorisation pour la révision 3000 ? Désactivez d’abord Ethernet.",
+  "network.usb_approved_note": "Autorisation enregistrée pour la révision 3000. Ce n’est pas une qualification matérielle. Désactivez Ethernet avant de la révoquer.",
+  "network.usb_unsupported": "Cette révision RTL8153 n’est pas prise en charge par cette version."
 }

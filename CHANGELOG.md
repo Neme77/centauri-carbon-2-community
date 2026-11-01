@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Explicit experimental opt-in for Realtek RTL8153 USB `0bda:8153` revision `3000`, with a revision-specific preliminary ABI probe and unchanged connection confirmation/recovery. The tested `31fd` path remains available; other revisions are not automatically enabled. Reported by **kalross** (#274), implemented by **Neme77**.
+
 ## [CC2 Control 1.2.24] - 2026-10-31
 
 ### Added

@@ -1190,5 +1190,13 @@
   "network.dns2": "Pomocniczy DNS",
   "canvas.unload_pending_safety": "Uruchom ponownie przed zapisaniem kalibracji na ekranie: SAVE_CONFIG może odrzucić oczekującą zmianę.",
   "canvas.unload_conflict": "Zapis drukarki zmienił oczekujące cofanie. Zapisz ponownie żądaną wartość przed ponownym uruchomieniem.",
-  "plates.pending_save_conflict": "Zapis drukarki zmienił oczekującą siatkę. Aktywacja niepotwierdzona; zachowano nowsze ustawienia drukarki."
+  "plates.pending_save_conflict": "Zapis drukarki zmienił oczekującą siatkę. Aktywacja niepotwierdzona; zachowano nowsze ustawienia drukarki.",
+  "network.usb_revision": "Rewizja adaptera USB",
+  "network.usb_experimental_warning": "Rewizja RTL8153 3000 jest eksperymentalna i nie ukończyła kwalifikacji sprzętowej. Kontrole jądra i przywracanie połączenia pozostają wymagane.",
+  "network.usb_approve": "Zezwól na eksperymentalną rewizję 3000",
+  "network.usb_revoke": "Cofnij zgodę eksperymentalną",
+  "network.usb_approve_confirm": "Zezwolić na eksperymentalne użycie podłączonego RTL8153 w rewizji 3000? Zapisana zostanie tylko zgoda: bez ładowania sterownika i zmiany połączenia.",
+  "network.usb_revoke_confirm": "Cofnąć zgodę dla rewizji 3000? Najpierw wyłącz Ethernet.",
+  "network.usb_approved_note": "Zapisano zgodę dla rewizji 3000. Nie oznacza to kwalifikacji sprzętowej. Wyłącz Ethernet przed cofnięciem zgody.",
+  "network.usb_unsupported": "Ta rewizja RTL8153 nie jest obsługiwana w tej kompilacji."
 }

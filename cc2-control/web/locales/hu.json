@@ -1190,5 +1190,13 @@
   "network.dns2": "Másodlagos DNS",
   "canvas.unload_pending_safety": "A kijelzőn végzett kalibrációmentés előtt indítsa újra: a SAVE_CONFIG elvetheti a függő módosítást.",
   "canvas.unload_conflict": "A nyomtató mentése módosította a függő visszahúzást. Újraindítás előtt mentse újra a kívánt értéket.",
-  "plates.pending_save_conflict": "A nyomtató mentése módosította a függő hálót. Az aktiválás nem igazolt; az újabb beállítások megmaradtak."
+  "plates.pending_save_conflict": "A nyomtató mentése módosította a függő hálót. Az aktiválás nem igazolt; az újabb beállítások megmaradtak.",
+  "network.usb_revision": "USB-adapter revíziója",
+  "network.usb_experimental_warning": "Az RTL8153 3000 revízió kísérleti, hardverminősítése nem teljes. A kernelellenőrzés és a kapcsolat helyreállítása továbbra is szükséges.",
+  "network.usb_approve": "A kísérleti 3000 revízió engedélyezése",
+  "network.usb_revoke": "Kísérleti engedély visszavonása",
+  "network.usb_approve_confirm": "Engedélyezi a csatlakoztatott RTL8153 3000 revízió kísérleti használatát? Csak az engedély mentése történik: nincs illesztőprogram-betöltés vagy kapcsolatváltás.",
+  "network.usb_revoke_confirm": "Visszavonja a 3000 revízió engedélyét? Előbb kapcsolja ki az Ethernetet.",
+  "network.usb_approved_note": "A 3000 revízió engedélye mentve. Ez nem hardverminősítés. Visszavonás előtt kapcsolja ki az Ethernetet.",
+  "network.usb_unsupported": "Ez az RTL8153 revízió nem támogatott ebben a buildben."
 }

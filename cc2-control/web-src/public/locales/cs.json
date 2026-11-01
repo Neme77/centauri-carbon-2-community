@@ -1190,5 +1190,13 @@
   "network.dns2": "Sekundární DNS",
   "canvas.unload_pending_safety": "Před uložením kalibrace na displeji restartujte: SAVE_CONFIG může zahodit čekající změnu.",
   "canvas.unload_conflict": "Uložení tiskárny změnilo čekající zatažení. Před restartem znovu uložte požadovanou hodnotu.",
-  "plates.pending_save_conflict": "Uložení tiskárny změnilo čekající síť. Aktivace není ověřena; novější nastavení tiskárny byla zachována."
+  "plates.pending_save_conflict": "Uložení tiskárny změnilo čekající síť. Aktivace není ověřena; novější nastavení tiskárny byla zachována.",
+  "network.usb_revision": "Revize adaptéru USB",
+  "network.usb_experimental_warning": "Revize RTL8153 3000 je experimentální a nemá dokončenou hardwarovou kvalifikaci. Kontroly jádra a obnovení připojení zůstávají povinné.",
+  "network.usb_approve": "Povolit experimentální revizi 3000",
+  "network.usb_revoke": "Odvolat experimentální souhlas",
+  "network.usb_approve_confirm": "Povolit experimentální použití připojeného RTL8153 revize 3000? Uloží se pouze souhlas: ovladač se nenačte a připojení se nezmění.",
+  "network.usb_revoke_confirm": "Odvolat souhlas pro revizi 3000? Nejprve vypněte Ethernet.",
+  "network.usb_approved_note": "Souhlas pro revizi 3000 byl uložen. Nejde o hardwarovou kvalifikaci. Před odvoláním vypněte Ethernet.",
+  "network.usb_unsupported": "Tato revize RTL8153 není v tomto sestavení podporována."
 }
