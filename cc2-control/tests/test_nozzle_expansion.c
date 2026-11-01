@@ -78,6 +78,28 @@ static void reset(void) {
     snapshot(25, 0, 25, 0); write_file(autosave, before_autosave); unlink(pending); unlink(journal); unlink(unload_pending);
     memory_table = 0; telemetry.connections = 1;
 }
+static void tick(void) { clock_ms += 1500; nx_tick(&machine); }
+/* An exchange the real nonblocking transport has opened for the queued request but not finished sending: `sent`
+ * bytes already reached the firmware's end (`peer`); the rest waits on a pending connect or a full socket. */
+static int peer = -1;
+static void open_exchange(int connecting, size_t sent, int full) {
+    int sv[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    assert(!fcntl(sv[0], F_SETFL, O_NONBLOCK) && !fcntl(sv[1], F_SETFL, O_NONBLOCK));
+    plates_exchange *x = &nx.exchange; plates_exchange_close(x);
+    x->fd = sv[0]; x->connecting = connecting; x->id = 204; x->deadline = monotonic_ms() + 60000;
+    x->buffer = malloc(PLATES_REPLY_MAX + 1); assert(x->buffer);
+    snprintf(x->request, sizeof(x->request), "%s", nx.query);
+    if (sent) { assert(send(sv[0], nx.query, sent, 0) == (ssize_t)sent); x->sent = sent; }
+    if (full) { char fill[4096]; memset(fill, 'x', sizeof(fill)); while (send(sv[0], fill, sizeof(fill), MSG_DONTWAIT) > 0) {} }
+    peer = sv[1];
+}
+/* Everything that reached the firmware once the connection is closed, filler left out; fails if it is still open. */
+static size_t drain(char *out, size_t capacity) {
+    size_t used = 0; char chunk[4096]; ssize_t n;
+    while ((n = read(peer, chunk, sizeof(chunk))) > 0)
+        for (ssize_t i = 0; i < n; i++) if (chunk[i] != 'x') { assert(used < capacity); out[used++] = chunk[i]; }
+    assert(n == 0); close(peer); peer = -1; return used;
+}
 static void run(int ticks) { for (int i = 0; i < ticks && nx_active(); i++) { clock_ms += 1500; nx_tick(&machine); } }
 
 int main(void) {
@@ -174,6 +196,44 @@ int main(void) {
     /* The printer service restarts mid-run (emergency stop): the run is over; the nozzle is confirmed off, nothing saved. */
     reset(); start("130:320:10", 202); telemetry.connections++; run(10);
     assert(!nx_active() && !saves && !strcmp(nx.result, "failed") && strstr(nx.detail, "restarted"));
+
+    /* A print can start while a request is queued but not yet with the firmware. Ownership is checked again at the
+     * dispatch boundary of the real nonblocking transport: an unsent request is cancelled, a part-sent one is cut
+     * off before its 0x03 terminator (the firmware drops it with the connection), and SAVE_CONFIG never follows. */
+    { char got[256]; size_t n;
+      /* The calibration itself, its connect still pending: nothing ran, so nothing to restart for. */
+      reset(); start("130:320:10", 202); plates_uds = uds_query_json; open_exchange(1, 0, 0);
+      strcpy(telemetry.print_state, "printing"); snapshot(25, 0, 25, 0); tick();
+      assert(!nx_active() && !calibrations && !strcmp(nx.result, "failed") && strstr(nx.detail, "before the calibration was sent"));
+      assert(!nx_pending() && access(journal, F_OK) && nx.exchange.fd < 0 && drain(got, sizeof(got)) == 0);
+      /* M104 S0 with zero bytes sent (EAGAIN on the real transport), then a print starts. */
+      reset(); plates_uds = fake_rpc; start("130:320:10", 202); tick(); assert(calibrations == 1 && nx.stage == NX_COOLING && !nx.query[0]);
+      plates_uds = uds_query_json; nx_command("M104 S0"); open_exchange(0, 0, 1);
+      tick(); assert(nx.stage == NX_COOLING && nx.exchange.fd >= 0 && nx.exchange.sent == 0); /* EAGAIN: waits */
+      strcpy(telemetry.print_state, "printing"); snapshot(200, 220, 60, 60); tick();
+      assert(!nx_active() && !offs && !saves && !strcmp(nx.result, "failed") && strstr(nx.detail, "before the nozzle was switched off"));
+      assert(nx_pending() && drain(got, sizeof(got)) == 0);
+      /* Part of M104 S0 already sent: the rest and the terminator are never sent. */
+      reset(); plates_uds = fake_rpc; start("130:320:10", 202); tick();
+      plates_uds = uds_query_json; nx_command("M104 S0"); open_exchange(0, 10, 0);
+      strcpy(telemetry.print_state, "printing"); snapshot(200, 220, 60, 60); tick();
+      assert(!nx_active() && !offs && nx_pending() && (n = drain(got, sizeof(got))) == 10 && !memcmp(got, "{\"id\":204,", 10) && !memchr(got, 3, n));
+      /* A print starting between the nozzle-off acknowledgement and the save stage: SAVE_CONFIG is never queued. */
+      reset(); plates_uds = fake_rpc; start("130:320:10", 202); tick(); tick(); assert(offs == 1 && nx.stage == NX_COOLING && nx.off_acked);
+      strcpy(telemetry.print_state, "printing"); snapshot(200, 0, 25, 0); tick();
+      assert(!nx_active() && !saves && !strcmp(nx.result, "failed") && strstr(nx.detail, "before the table was saved") && nx_pending());
+      { char *text = read_all(autosave); assert(!strcmp(text, before_autosave)); free(text); }
+      /* SAVE_CONFIG queued but unsent when the print starts: cancelled. */
+      reset(); start("130:320:10", 202); tick(); tick(); tick(); assert(nx.stage == NX_SAVING && nx.query[0] && !saves);
+      plates_uds = uds_query_json; open_exchange(0, 0, 1);
+      strcpy(telemetry.print_state, "printing"); snapshot(200, 0, 25, 0); tick();
+      assert(!nx_active() && !saves && strstr(nx.detail, "before the table was saved") && nx_pending() && drain(got, sizeof(got)) == 0);
+      /* ... and with no fresh print state it is not sent either: decided again once the state is back. */
+      reset(); plates_uds = fake_rpc; start("130:320:10", 202); tick(); tick(); tick(); assert(nx.stage == NX_SAVING);
+      plates_uds = uds_query_json; open_exchange(1, 0, 0); telemetry.last_rx.tv_sec = 0; tick();
+      assert(nx.stage == NX_COOLING && !nx.query[0] && nx.exchange.fd < 0 && drain(got, sizeof(got)) == 0);
+      plates_uds = fake_rpc; snapshot(25, 0, 25, 0); run(5); assert(saves == 1 && !strcmp(nx.result, "saved")); }
+    strcpy(telemetry.print_state, "standby");
 
     /* Other operations wait while it runs. */
     reset(); plates_uds = NULL; start("130:320:10", 202);

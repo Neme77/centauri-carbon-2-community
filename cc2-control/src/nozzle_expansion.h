@@ -342,6 +342,28 @@ static void nx_cool(long long now, int ok) {
     nx.stage = NX_COOLING; nx.ok = ok; nx.off_acked = 0; nx.cooling_since = now; nx.retry_at = 0;
 }
 
+/* A print can take the heater between queueing a request and the firmware receiving it (a connect still
+ * pending, a send that returned EAGAIN), so ownership is checked again at the dispatch boundary on every tick
+ * until the whole request is sent. Not yet whole: the connection is closed without the rest. The firmware runs
+ * only complete, 0x03-terminated requests and drops a fragment with its connection, so nothing of it runs.
+ * Whole: the firmware has it, and its reply is handled as usual. Returns 0 when nothing may be sent now. */
+static int nx_dispatch_owned(const mqtt_client *mqtt) {
+    if (nx.exchange.fd >= 0 && !nx.exchange.connecting && nx.exchange.sent >= strlen(nx.exchange.request)) return 1;
+    if (nx_no_print(mqtt)) return 1;
+    int printing = uds_print_state(&telemetry) != NULL;
+    plates_exchange_close(&nx.exchange); nx.query[0] = 0;
+    if (nx.stage == NX_RUNNING) {
+        nx_end("failed", printing ? "A print started before the calibration was sent; nothing was changed"
+                                  : "Lost the printer's status before the calibration was sent; nothing was changed");
+    } else if (printing) {
+        nx_end_discard("failed", nx.stage == NX_SAVING ? "A print started before the table was saved; nothing was saved"
+                                                       : "A print started before the nozzle was switched off");
+    } else if (nx.stage == NX_SAVING) {
+        nx.stage = NX_COOLING;   /* no fresh status: decide again, saving included, once it is back */
+    }
+    return 0;
+}
+
 static void nx_tick(const mqtt_client *mqtt) {
     if (!nx_active()) return;
     long long now = nx_clock();
@@ -368,7 +390,12 @@ static void nx_tick(const mqtt_client *mqtt) {
         if (have_target && uds_fresh(&telemetry) && target == 0 && now - nx.cooling_since > 1000 &&
             (nx.off_acked || firmware_restarted)) {
             if (!nx.ok) { nx_end_discard(nx.result[0] ? nx.result : "failed", nx.detail); return; }
-            nx.stage = NX_SAVING; nx_command("SAVE_CONFIG"); return;
+            /* Off, but a print may have started since: SAVE_CONFIG is never sent under a print. Without a fresh
+             * print state, wait (within the limit below). */
+            if (uds_print_state(&telemetry)) {
+                if (!nx_no_print(mqtt)) { nx_end_discard("failed", "A print started before the table was saved; nothing was saved"); return; }
+                nx.stage = NX_SAVING; nx_command("SAVE_CONFIG"); return;
+            }
         }
         long long limit = (nx.deadline > nx.cooling_since ? nx.deadline : nx.cooling_since) + NX_OFF_GRACE_MS;
         if (now > limit) {
@@ -383,7 +410,7 @@ static void nx_tick(const mqtt_client *mqtt) {
         if (!nx_no_print(mqtt)) { nx_end_discard("failed", "A print started before the nozzle was switched off"); return; }
         nx_command("M104 S0");
     }
-    if (!nx.query[0]) return;
+    if (!nx.query[0] || !nx_dispatch_owned(mqtt)) return;
     char *reply = NULL; size_t length = 0;
     int fresh_exchange = nx.exchange.fd < 0;
     int result = plates_exchange_step(&nx.exchange, nx.query, &reply, &length);
