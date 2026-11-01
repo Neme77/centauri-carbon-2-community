@@ -80,7 +80,7 @@ def reqhash(p,h,label):
  print(f"[OK] {label}: {a[:16]}...")
 
 CC2_CONTROL_SOURCE_COMMIT='a6dcf98b3d90cc56518bf302b8045162076daec5'
-CC2_CONTROL_SOURCE_SHA256='212bebaeddce1bd2fa66994e3237a697c074a1134cef1e402b44781a2affe0bc'
+CC2_CONTROL_SOURCE_SHA256='9c713e96c02eb3b47d7d9ff94fbdc0be36c67106f0c02eeafcf50a5d022b9648'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 CC2_UPDATE_FILES=('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
 # Translation files are optional and open-ended (one per language), unlike the

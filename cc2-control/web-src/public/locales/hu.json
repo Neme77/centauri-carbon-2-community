@@ -1114,7 +1114,7 @@
   "filament.colour": "Szín",
   "filament.save_confirm": "Menti ezt az anyagot a nyomtatón?",
   "filament.load_confirm": "Betölti a külső filamentet? A nyomtató felmelegíti a fúvókát és mozgatja a filamentet.",
-  "filament.unload_confirm": "Kitölti a külső filamentet? A nyomtató felmelegíti a fúvókát és mozgatja a filamentet.",
+  "filament.unload_confirm": "Eltávolítod a külső filamentet? A nyomtató felmelegíti a fúvókát és mozgatja a filamentet.",
   "filament.unsupported_temperature": "Ez az anyag túllépi a fúvóka védett hőmérsékleti tartományát.",
   "filament.save": "Mentés",
   "feed.title": "Külső tekercs használata csatlakoztatott Canvas mellett",
