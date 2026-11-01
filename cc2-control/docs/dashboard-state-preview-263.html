@@ -72,6 +72,15 @@ html[data-theme=obsidian]{color-scheme:dark;--bg:#111117;--panel:#171720;--panel
 @media(max-width:980px){.card-gallery-grid .support-card,.card-gallery-grid .support-card.span-3{grid-column:span 6}.card-gallery-grid .support-card.span-8{grid-column:span 6}}
 @media(max-width:700px){.card-gallery-grid .support-card,.card-gallery-grid .support-card.span-3,.card-gallery-grid .support-card.span-6,.card-gallery-grid .support-card.span-8{grid-column:1/-1}.card-gallery-heading{display:block}.support-card{min-height:0}.camera-stage{height:160px}.quick-grid{gap:8px}.quick-button{min-height:74px;font-size:11px}}
 
+.demo-shell.mobile-demo .card-gallery-grid .support-card,
+.demo-shell.mobile-demo .card-gallery-grid .support-card.span-3,
+.demo-shell.mobile-demo .card-gallery-grid .support-card.span-6,
+.demo-shell.mobile-demo .card-gallery-grid .support-card.span-8{grid-column:1/-1}
+.demo-shell.mobile-demo .card-gallery-heading{display:block}
+.demo-shell.mobile-demo .support-card{min-height:0}
+.demo-shell.mobile-demo .camera-stage{height:160px}
+.demo-shell.mobile-demo .quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+
 </style>
 </head>
 <body>
