@@ -14,7 +14,10 @@ jobs:
       - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user busybox libdigest-sha-perl
       - run: sudo -n python3 experimental/network-connections/build_public.py
-      - run: make -C cc2-control clean test CROSS= CC=gcc
+      - name: App HTTP regression (full host suite passed in the initial qualification)
+        run: |
+          make -C cc2-control build/cc2-control CROSS= CC=gcc EXTRA_CFLAGS='-Werror -DCC2_NETWORK_STATUS_TEST=\"/tmp/cc2-network-http-test.sock\"'
+          python3 experimental/network-connections/test_http.py cc2-control/build/cc2-control
   probe:
     runs-on: ubuntu-24.04
     steps:
@@ -70,3 +73,24 @@ jobs:
             /tmp/rtl8153-candidate/*Update.zip
             /tmp/rtl8153-candidate/*Update.zip.sha256
             /tmp/rtl8153-candidate/candidate-validation.json
+
+  stage-draft:
+    if: contains(github.event.head_commit.message, '[stage-rtl8153-preview]')
+    needs: [candidate]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: rtl8153-preview-candidate
+          path: /tmp/rtl8153-qualified
+      - name: Retain verified component in draft and pin exact source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 experimental/network-connections/stage_usb_preview.py /tmp/rtl8153-qualified/rtl8153-runtime '${{ github.sha }}' '${{ github.repository }}'
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: rtl8153-staged-draft
+          path: /tmp/rtl8153-qualified/rtl8153-runtime/staged-draft.json

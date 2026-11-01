@@ -7,6 +7,7 @@ import gzip
 import hashlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -47,7 +48,10 @@ pins.write_text(text.replace('/* Replaced by the reproducible probe build before
 helper = output / 'control'
 subprocess.run(['arm-linux-gnueabihf-gcc', '-std=c11', '-Os', '-Wall', '-Wextra', '-Wpedantic', '-Werror',
                 '-static', '-s', source / 'manager.c', '-lm', '-o', helper], check=True)
-status = json.loads(subprocess.check_output(['qemu-arm', str(helper), '--status'], text=True))
+status_command = ['qemu-arm', str(helper), '--status']
+if os.geteuid() != 0:
+    status_command = ['sudo', '-n', *status_command]
+status = json.loads(subprocess.check_output(status_command, text=True))
 assert status['automatic_selection'] is False and status['usb']['approved'] is False
 helper_sha = sha(helper.read_bytes())
 files['control'] = (helper.read_bytes(), 0o700)
