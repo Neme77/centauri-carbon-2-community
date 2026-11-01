@@ -129,6 +129,7 @@ try {
  await page.getByRole('textbox',{name:en['network.diagnostics'],exact:true}).waitFor()
  assert(!await page.getByRole('textbox',{name:en['network.diagnostics']}).inputValue().then(x=>x.includes('fixture-only-pass')))
  const shots=[]
+ usb={valid:true,qualified:false,approved:false,allowed:false,can_try:true,revision:'3000',approval_revision:'',count:1}
  for(language of ['en','it','fr','es','pl','cs','hu','ru','zh'])for(const width of [320,390,768,1440]) {
   await page.setViewportSize({width,height:1000});await page.reload()
   const tr=await dict(language)

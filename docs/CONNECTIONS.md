@@ -41,3 +41,8 @@ adapter is unplugged. Connection confirmation and timeout recovery are unchanged
 Experimental approval is not hardware qualification: reset, suspend, reboot,
 long printing and local/remote camera operation on `3000` still require a device
 owner's validation. No stable catalog entry is published by the preview build.
+
+`community_firmware` in the existing system-info API identifies the compatible
+firmware family (`4.4`), not the installed point release. Device qualification
+also verifies the kernel configuration and native component fingerprints; the
+family string alone is not evidence that V4.4.2 is installed.
