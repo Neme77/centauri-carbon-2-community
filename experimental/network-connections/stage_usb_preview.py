@@ -32,9 +32,14 @@ assert hashlib.sha256(runtime.read_bytes()).hexdigest() == lock['sha256']
 with tarfile.open(runtime) as archive:
     helper = archive.extractfile('control').read()
     probe = archive.extractfile('cc2_ue300_abi_probe_3000.ko').read()
+    validated_source = json.loads(archive.extractfile('validation.json').read())['source_commit']
 assert hashlib.sha256(helper).hexdigest() == lock['helper_sha256']
 probe_sha = hashlib.sha256(probe).hexdigest()
-tag = 'rtl8153-3000-preview-' + expected[:12]
+assert re.fullmatch('[0-9a-f]{40}', validated_source)
+# Reuse is allowed only for a publication-runner fix, never production changes.
+changed = set(read(['git', 'diff', '--name-only', validated_source, 'HEAD']).splitlines())
+assert changed <= {'.github/workflows/rtl8153-preview.yml', 'experimental/network-connections/stage_usb_preview.py'}
+tag = 'rtl8153-3000-preview-' + validated_source[:12]
 releases = [release for page in json.loads(read(['gh', 'api', 'repos/' + repository + '/releases', '--paginate', '--slurp'])) for release in page]
 matches = [release for release in releases if release['tag_name'] == tag]
 if not matches:
@@ -47,14 +52,14 @@ are separate from device validation; revision 3000 remains experimental.
 The immutable R5h driver, MII module and 31fd probe are unchanged. Corresponding
 GPL sources, the new probe source and exact checksums are included in the archive.
 ''')
-    run(['gh', 'release', 'create', tag, '--repo', repository, '--draft', '--target', expected,
+    run(['gh', 'release', 'create', tag, '--repo', repository, '--draft', '--target', validated_source,
          '--title', 'RTL8153 revision 3000 opt-in candidate', '--notes-file', notes,
          runtime, runtime.with_suffix(runtime.suffix + '.sha256')])
     releases = [release for page in json.loads(read(['gh', 'api', 'repos/' + repository + '/releases', '--paginate', '--slurp'])) for release in page]
     matches = [release for release in releases if release['tag_name'] == tag]
 assert len(matches) == 1
 release = matches[0]
-assert release['draft'] and release['target_commitish'] == expected
+assert release['draft'] and release['target_commitish'] == validated_source
 assets = [asset for asset in release['assets'] if asset['name'] == runtime.name]
 assert len(assets) == 1 and assets[0]['digest'] == 'sha256:' + lock['sha256']
 lock.update(asset_id=assets[0]['id'], release_id=release['id'])
@@ -84,7 +89,7 @@ run(['git', 'add', '--', 'builder/current/components/cc2-control/source/source.z
      'builder/current/prepare.py', 'builder/current/core/firmware_builder.py',
      'builder/current/launch_helpers/run_build.py'])
 run(['git', 'commit', '-m', 'Refresh builder source snapshot for RTL8153 preview'])
-run(['python3', '-m', 'unittest', 'discover', '-s', 'builder/current/tests', '-p', 'test_cc2_control_source_snapshot.py'])
+run(['python3', 'builder/current/tests/test_cc2_control_source_snapshot.py'])
 assert not read(['git', 'status', '--porcelain'])
 run(['git', 'push', 'origin', 'HEAD:refs/heads/' + branch])
 result = {'release_id': release['id'], 'asset_id': assets[0]['id'], 'draft': True,
