@@ -233,3 +233,6 @@ Failed ownership requests leave streaming stopped. Direct Elegoo clients remain 
 If the MJPEG stream freezes, follow the [read-only camera diagnostic guide](CAMERA_DIAGNOSTICS.md)
 before restarting processes or changing printer/network settings. The documented
 vendor `ai_camera` investigation is distinct from the CC2 Control viewer's ownership behavior.
+
+
+Nozzle expansion is disabled by default. Enable its dedicated switch in Settings → Integrations → Experimental integrations before starting a run or restoring the factory table. Existing experiment choices migrate without opting into this feature; enabling its controls starts no heating or motion. Recovery and a pending table restart remain accessible when opted out.

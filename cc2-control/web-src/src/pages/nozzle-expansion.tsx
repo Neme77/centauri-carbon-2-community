@@ -9,11 +9,13 @@ import { duration } from '@/lib/format'
 import { t, tpl } from '@/lib/i18n'
 import { lanRequest, useLanCode } from '@/lib/lan-code'
 import { usePoll } from '@/lib/poll'
+import { openSettings } from '@/lib/state'
 
 // GET /api/nozzle-expansion: the firmware's [z_compensation] table (vendor configuration and the
 // one saved in autosave.cfg), the calibration CC2 Control runs with NOZZLE_TEMP_CALIBRATE and its result.
 type Table = { start: number; diff: number; values: number[] }
 type Expansion = {
+  enabled: boolean
   available: boolean
   editable: boolean
   state: 'idle' | 'running' | 'cooling' | 'saving' | 'recovery'
@@ -142,6 +144,14 @@ export const NozzleExpansion = () => {
   const running = !!state && state.state !== 'idle'
   usePoll(load, running ? 2000 : 15000)
   if (!state) return null
+  if (!state.enabled && !running && !state.pending_restart)
+    return (
+      <Card>
+        <CardHead icon="temp" title="nozzle.title" />
+        <p class="mb-3 text-muted">{t('nozzle.experiment_hint')}</p>
+        <Button onClick={() => openSettings('integrations')}>{t('experiments.title')}</Button>
+      </Card>
+    )
 
   const s = Number(start),
     e = Number(end),
@@ -301,7 +311,7 @@ export const NozzleExpansion = () => {
           </div>
           <div class="mt-3 flex flex-wrap items-center gap-2">
             <Button
-              disabled={busy || running || !valid || !checks.every(Boolean) || !code.trim()}
+              disabled={!state.enabled || busy || running || !valid || !checks.every(Boolean) || !code.trim()}
               onClick={() => void begin()}
             >
               {t('nozzle.start')}
@@ -353,7 +363,7 @@ export const NozzleExpansion = () => {
             </div>
           )}
           {state.override && !running && (
-            <Button class="mt-2" disabled={busy || !state.editable} onClick={() => void factory()}>
+            <Button class="mt-2" disabled={!state.enabled || busy || !state.editable} onClick={() => void factory()}>
               {t('nozzle.factory')}
             </Button>
           )}

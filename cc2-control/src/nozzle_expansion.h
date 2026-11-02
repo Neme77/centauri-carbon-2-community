@@ -465,8 +465,8 @@ static void nx_state(int fd, int status) {
     long long elapsed = nx_active() && nx.stage != NX_RECOVERY ? (nx_clock() - nx.since) / 1000 : 0;
     char body[4096];
     json_builder b = {body, 0, sizeof(body), 0};
-    json_builder_printf(&b, "{\"ok\":true,\"available\":%s,\"editable\":%s,\"state\":\"%s\",\"result\":\"%s\",\"detail\":",
-                        section ? "true" : "false", editable ? "true" : "false", stages[nx.stage], nx.result);
+    json_builder_printf(&b, "{\"ok\":true,\"enabled\":%s,\"available\":%s,\"editable\":%s,\"state\":\"%s\",\"result\":\"%s\",\"detail\":",
+                        experiments_storage_valid&&experiments.nozzle_expansion ? "true" : "false", section ? "true" : "false", editable ? "true" : "false", stages[nx.stage], nx.result);
     json_builder_string(&b, nx.detail);
     json_builder_printf(&b, ",\"start\":%d,\"end\":%d,\"step\":%d,\"delay\":%d,\"samples\":%d,\"elapsed\":%lld",
                         nx.start, nx.end, nx.step, NX_DELAY_S, NX_SAMPLES, elapsed);
@@ -486,6 +486,7 @@ static void nx_response(int fd) { nx_state(fd, 200); }
 /* Body start:end:step, e.g. 130:320:10. */
 static void nx_start_response(int fd, const char *request, const char *body, size_t length, mqtt_client *mqtt) {
     if (!app_update_authorized(request, mqtt)) { app_update_fail(fd, 401, "LAN code confirmation required or temporarily locked"); return; }
+    if (!experiments_storage_valid || !experiments.nozzle_expansion) { plates_fail(fd,409,"Enable nozzle expansion in Experimental integrations first");return; }
     int start = 0, end = 0, step = 0; char input[32] = {0}, canonical[32];
     if (length < 8 || length > 11) { plates_fail(fd, 400, "Invalid calibration range"); return; }
     memcpy(input, body, length);
@@ -545,6 +546,7 @@ static void nx_start_response(int fd, const char *request, const char *body, siz
 
 /* Body FACTORY: remove the saved table, so the vendor configuration's applies after a restart. */
 static void nx_factory_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
+    if (!experiments_storage_valid || !experiments.nozzle_expansion) { plates_fail(fd,409,"Enable nozzle expansion in Experimental integrations first");return; }
     if (length != 7 || memcmp(body, "FACTORY", 7)) { plates_fail(fd, 400, "Explicit confirmation required"); return; }
     if (nx_active()) { plates_fail(fd, 409, "A nozzle expansion calibration is running"); return; }
     const char *busy = plates_printer_ready(mqtt);

@@ -9,6 +9,7 @@ export type ExperimentState = {
   canvas_uds_available: boolean
   external_feed?: boolean
   bed_drying?: boolean
+  nozzle_expansion?: boolean
   quiet_motors: boolean
   normal_confirmed: boolean
   cli_canvas: boolean

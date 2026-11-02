@@ -2556,7 +2556,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
-    char body[9216],filename[520],state[140],uuid[260],axes[40],drying_status[640];
+    char body[9216],filename[520],state[140],uuid[260],axes[40],drying_status[1024];
     drying_status_json(drying_status,sizeof(drying_status),mqtt);
     char native_job[1400]="null",native_filename[1100],native_state[40],native_seconds[40];
     const char *native=uds_print_state(&telemetry);double native_duration;
@@ -4038,6 +4038,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         nx_restart_response(fd,mqtt,body,body_len);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/start")){
         drying_start_response(fd,request,body,body_len,mqtt,console);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/preheat")){
+        drying_preheat_response(fd,request,body,body_len,mqtt,console);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/stop")){
         drying_stop_response(fd,request,mqtt,console);
     } else if ((strcmp(method,"GET")==0 && strcmp(path,"/api/backup/export")==0) ||

@@ -2,15 +2,15 @@
  * or vendor configuration is stored here. Invalid storage always opts out. */
 #ifndef CC2_EXPERIMENTS_STATE_H
 #define CC2_EXPERIMENTS_STATE_H
-typedef struct { int canvas_uds, quiet_motors, bed_drying; } experiment_choices;
+typedef struct { int canvas_uds, quiet_motors, bed_drying, nozzle_expansion; } experiment_choices;
 static experiment_choices experiments;
 static int experiments_storage_valid = 1;
 static int experiments_cli_canvas;
 static const char *experiments_path = "/opt/usr/cc2-control-experiments.json";
 
 static int experiments_encode(char *out, size_t capacity, experiment_choices value) {
-    int n = snprintf(out, capacity, "{\"schema\":2,\"canvas_uds\":%s,\"quiet_motors\":%s,\"bed_drying\":%s}\n",
-                     value.canvas_uds ? "true" : "false", value.quiet_motors ? "true" : "false", value.bed_drying ? "true" : "false");
+    int n = snprintf(out, capacity, "{\"schema\":3,\"canvas_uds\":%s,\"quiet_motors\":%s,\"bed_drying\":%s,\"nozzle_expansion\":%s}\n",
+                     value.canvas_uds ? "true" : "false", value.quiet_motors ? "true" : "false", value.bed_drying ? "true" : "false", value.nozzle_expansion ? "true" : "false");
     return n > 0 && (size_t)n < capacity;
 }
 
@@ -26,16 +26,21 @@ static int experiments_read(experiment_choices *out) {
     close(fd);
     if (!ok || n != st.st_size) return 0;
     body[n] = 0;
-    for (int canvas = 0; canvas <= 1; canvas++) for (int quiet = 0; quiet <= 1; quiet++) for (int bed = 0; bed <= 1; bed++) {
-        experiment_choices value = {canvas, quiet, bed};
+    for (int canvas = 0; canvas <= 1; canvas++) for (int quiet = 0; quiet <= 1; quiet++) for (int bed = 0; bed <= 1; bed++) for (int nozzle = 0; nozzle <= 1; nozzle++) {
+        experiment_choices value = {canvas, quiet, bed, nozzle};
         if (experiments_encode(expected, sizeof(expected), value) && !strcmp(body, expected)) {
             *out = value; return 1;
         }
     }
+    /* Schema-2 choices retain their existing features; nozzle expansion opts out. */
+    for(int c=0;c<=1;c++)for(int q=0;q<=1;q++)for(int b=0;b<=1;b++){
+        snprintf(expected,sizeof(expected),"{\"schema\":2,\"canvas_uds\":%s,\"quiet_motors\":%s,\"bed_drying\":%s}\n",c?"true":"false",q?"true":"false",b?"true":"false");
+        if(!strcmp(body,expected)){*out=(experiment_choices){c,q,b,0};return 1;}
+    }
     /* Existing schema-1 choices migrate without enabling bed heating. */
     for(int c=0;c<=1;c++)for(int q=0;q<=1;q++){
         snprintf(expected,sizeof(expected),"{\"schema\":1,\"canvas_uds\":%s,\"quiet_motors\":%s}\n",c?"true":"false",q?"true":"false");
-        if(!strcmp(body,expected)){*out=(experiment_choices){c,q,0};return 1;}
+        if(!strcmp(body,expected)){*out=(experiment_choices){c,q,0,0};return 1;}
     }
     return 0;
 }
@@ -48,7 +53,7 @@ static void experiments_load(void) {
 static int experiments_save(experiment_choices next) {
     experiment_choices actual;
     if (!experiments_storage_valid || !experiments_read(&actual) ||
-        actual.canvas_uds != experiments.canvas_uds || actual.quiet_motors != experiments.quiet_motors || actual.bed_drying != experiments.bed_drying) return 0;
+        actual.canvas_uds != experiments.canvas_uds || actual.quiet_motors != experiments.quiet_motors || actual.bed_drying != experiments.bed_drying || actual.nozzle_expansion != experiments.nozzle_expansion) return 0;
     char temporary[600], body[128];
     if (!experiments_encode(body, sizeof(body), next) ||
         snprintf(temporary, sizeof(temporary), "%s.new", experiments_path) >= (int)sizeof(temporary)) return 0;
@@ -59,7 +64,7 @@ static int experiments_save(experiment_choices next) {
     if (fsync(fd)) ok = 0;
     if (close(fd)) ok = 0;
     if (ok && (!experiments_read(&actual) || actual.canvas_uds != experiments.canvas_uds ||
-               actual.quiet_motors != experiments.quiet_motors || actual.bed_drying != experiments.bed_drying)) ok = 0;
+               actual.quiet_motors != experiments.quiet_motors || actual.bed_drying != experiments.bed_drying || actual.nozzle_expansion != experiments.nozzle_expansion)) ok = 0;
     if (ok && rename(temporary, experiments_path)) ok = 0;
     if (!ok) { unlink(temporary); return 0; }
     experiments = next;

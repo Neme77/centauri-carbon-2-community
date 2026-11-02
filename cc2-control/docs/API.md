@@ -710,6 +710,17 @@ LAN header; receipt is not confirmation of heater shutdown. Confirm only after
 zero target readback. The session cannot be extended or resumed via Start.
 See [BED_DRYING.md](BED_DRYING.md) for native lease and recovery limitations.
 
+`POST /api/bed-drying/preheat` starts the same session as a chamber preheat. It requires
+`X-CC2-LAN` and canonical text `bed:chamber:minutes`: bed 60 °C up to the lower of 100 °C and the
+printer's `[heater_bed] max_temp`, chamber 30–55 °C, and 1–240 minutes held once the chamber is
+ready. It answers `409` unless the same idle checks pass (a warm bed with a zero target is allowed),
+the exhaust grille state (`print_stats.cavity_temperature_mode`), aux fan and chamber temperature
+are readable, and the chamber is below the target. The state then also reports `mode`
+(`"bed"` or `"preheat"`), `chamber_target`, `chamber` (°C or null), `ready`, `levelled` (ready because the chamber stopped rising more
+than 1 °C short of the target), `plateau` (the
+estimated level the chamber is heading for, °C or null), `fan` (aux fan PWM 0–255 sent by the
+session) and `bed_limit`. `state` is `"handed_off"` while a print that took over the bed runs.
+
 ## Completed print readback
 
 `GET /api/printer` adds `print.native` when the existing UDS cache has a fresh
@@ -719,3 +730,6 @@ value; the current-job UI resets its progress when idle. The nonblocking CC2
 notice accepts explicit completion only, deduplicates acknowledgements per
 browser origin and opens normal file preparation for Print again. Dismissing
 this notice does not acknowledge or operate the physical display.
+
+
+Nozzle expansion: `POST /api/experiments` accepts `nozzle-expansion:on` / `nozzle-expansion:off` with the existing LAN authorization and idle/cold checks. The choice defaults to off and migrates schema-1/2 settings without enabling it. `GET /api/nozzle-expansion` adds `enabled`; start/factory require the enabled, valid experiment. Recovery and an already-required restart do not require opting in.

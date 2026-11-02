@@ -634,6 +634,7 @@ export function previewPlugin(): Plugin {
               const saved = Array.from({ length: 20 }, (_, i) => +(0.00081 * (130 + 10 * i - 140) - 0.0094).toFixed(6))
               return reply({
                 ok: true,
+                enabled: true,
                 available: true,
                 editable: true,
                 state: 'idle',

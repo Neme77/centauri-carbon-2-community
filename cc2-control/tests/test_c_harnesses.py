@@ -46,6 +46,7 @@ HARNESSES = {
     "test_experiments.c": BACKEND,
     "test_bed_drying.c": BACKEND,
     "test_nozzle_expansion.c": BACKEND,
+    "test_chamber_preheat.c": BACKEND,
     "test_uds_diagnostic.c": BACKEND,
     "test_tuning_api.c": BACKEND,
     "test_pid_api.c": BACKEND,

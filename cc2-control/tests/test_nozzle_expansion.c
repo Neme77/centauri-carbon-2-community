@@ -152,6 +152,9 @@ int main(void) {
     telemetry.present = (1u << U_ET) | (1u << U_BT) | (1u << U_BG) | (1u << U_EG) | (1u << U_LIVE_SPEED);
     plates_uds = fake_rpc;
 
+    /* Off by default, enforced at mutation endpoints as well as in the UI. */
+    reset();experiments.nozzle_expansion=0;start("130:320:10",409);call(1,auth,"FACTORY",409);
+    assert(!calibrations&&!saves&&!nx_active());experiments.nozzle_expansion=1;
     /* Requests that must not start anything. */
     reset();
     call(0, no_auth, "130:320:10", 401);
@@ -247,7 +250,9 @@ int main(void) {
     assert(nx.stage == NX_RECOVERY && nx.start == 130 && nx.end == 320 && nx.step == 10 && nx.deadline > clock_ms);
     /* No printer yet: it waits. Then it queues M104 S0 (behind the run, if still going) and needs its reply. */
     telemetry.last_rx.tv_sec = 0; run(3); assert(nx.stage == NX_RECOVERY && !offs);
+    experiments.nozzle_expansion=0; /* Recovery must not require the user to re-enable the experiment. */
     snapshot(310, 320, 25, 0); run(10);
+    experiments.nozzle_expansion=1;
     assert(offs == 1 && !saves && !nx_active() && !strcmp(nx.result, "interrupted") && access(journal, F_OK) && nx_pending());
     /* A print running by then owns the heater: left alone. */
     { char j[96]; snprintf(j, sizeof(j), "CC2NX2 130 320 10 %lld\n", (long long)time(NULL));

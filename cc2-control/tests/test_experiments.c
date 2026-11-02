@@ -72,6 +72,11 @@ int main(void) {
     close(pair[0]); ssize_t n = read(pair[1], response, sizeof(response)-1); assert(n > 0); response[n] = 0; close(pair[1]);
     assert(strstr(response, "409") && !command_state.command[0]);
     experiments_cli_canvas = 1; put("canvas-uds:on", 409); experiments_cli_canvas = 0;
+    put("nozzle-expansion:on",200);assert(experiments.nozzle_expansion);experiments_load();assert(experiments.nozzle_expansion);
+    nx.stage=NX_RUNNING;put("nozzle-expansion:off",409);nx.stage=NX_IDLE;
+    put("nozzle-expansion:off",200);assert(!experiments.nozzle_expansion&&!command_state.command[0]);
+    overwrite("{\"schema\":2,\"canvas_uds\":false,\"quiet_motors\":false,\"bed_drying\":true}\n");
+    experiments_load();assert(experiments_storage_valid&&experiments.bed_drying&&!experiments.nozzle_expansion);
     /* Storage corruption, foreign changes, broad permissions and links cannot
      * opt in or be silently replaced. Existing unrelated contents survive. */
     overwrite("{\"schema\":1,\"canvas_uds\":true,\"quiet_motors\":false,\"unknown\":true}\n");
@@ -82,7 +87,7 @@ int main(void) {
     assert(!chmod(path, 0644)); experiments_load(); assert(!experiments_storage_valid);
     assert(!chmod(path, 0600)); experiments_load();
     overwrite("{\"schema\":1,\"canvas_uds\":true,\"quiet_motors\":false}\n");
-    assert(!experiments_save((experiment_choices){0, 1, 0}));
+    assert(!experiments_save((experiment_choices){0, 1, 0, 0}));
     assert(!unlink(path)); assert(!symlink("missing-target", path)); experiments_load();
     /* A dangling symlink is not an absent file. */
     assert(!experiments_storage_valid);
