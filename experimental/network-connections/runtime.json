@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "asset_id": 0,
-  "release_id": 0,
-  "filename": "connections-runtime.tar.gz",
+  "asset_id": 702442784,
+  "release_id": 431709540,
+  "filename": "CC2-Connections-Runtime-Recovery-649d0af3dba7.tar.gz",
   "sha256": "649d0af3dba7e21bc399fc741115fbe298cc1e4b77c07cf51bd35bfd73762e9a",
   "helper_sha256": "2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62",
   "qualified_profile": {
