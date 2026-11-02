@@ -95,6 +95,9 @@ class ConnectionsBootstrapTests(unittest.TestCase):
                 content+=f'exec {shutil.which(tool)} "$@"\n'
                 bins.joinpath(tool).write_text(content);bins.joinpath(tool).chmod(0o755)
             script=script.replace('PATH=/usr/sbin:/usr/bin:/sbin:/bin','PATH='+str(bins)+':/usr/sbin:/usr/bin:/sbin:/bin')
+            # Some BusyBox builds prefer internal applets over PATH entries.
+            # Redirect the fixture boundaries explicitly on every shell/build.
+            script=re.sub(r'(?<![A-Za-z0-9_/.-])(id|cp|mv|pidof)(?= )',lambda match:'"'+str(bins/match[0])+'"',script)
             source.joinpath('SHA256SUMS').write_text(''.join(f'{sha(p.read_bytes())}  {p.name}\n' for p in sorted(source.iterdir())))
             if case=='damaged-source':source.joinpath('payload').write_bytes(b'changed')
             file=base/'boot.sh';file.write_text(script)

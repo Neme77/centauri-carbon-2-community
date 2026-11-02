@@ -31,6 +31,7 @@ def prepare_fixture(shell, launcher, case):
             code = re.search(r"<<'CC2_PREPARE'\n(.*?)\nCC2_PREPARE", text, re.S)[1]
         code = code.replace('/opt/usr', str(disk)).replace('/proc/mounts', str(proc / 'mounts')).replace('/proc/meminfo', str(proc / 'meminfo'))
         code = code.replace('__STAGE__', str(stage))
+        code = code.replace('$(id -u)', '$("' + str(bins / 'id') + '" -u)').replace('$(df -k ', '$("' + str(bins / 'df') + '" -k ')
         file = base / 'prepare.sh'; file.write_text(code)
         result = subprocess.run([*shell, str(file), str(stage)], capture_output=True, text=True, timeout=10,
                                 env=dict(os.environ, PATH=str(bins) + os.pathsep + os.environ['PATH']))
@@ -68,6 +69,11 @@ def fixture(shell, case):
         (bins / 'id').chmod(0o755)
         if case == 'extract-failure':
             (bins / 'tar').write_text('#!/bin/sh\nexit 9\n'); (bins / 'tar').chmod(0o755)
+        # BusyBox may select internal applets ahead of PATH. These are the
+        # fixture's process/filesystem boundaries, not production changes.
+        code = code.replace('$(id -u)', '$("' + str(bins / 'id') + '" -u)')
+        if case == 'extract-failure': code = code.replace('tar -xzf ', '"' + str(bins / 'tar') + '" -xzf ')
+        runner.write_text(code)
         if case == 'changed-archive': archive_path.write_bytes(payload + b'changed')
         if case == 'payload-symlink':
             outside = base / 'outside'; outside.mkdir(); (outside / 'keep').write_text('keep')
