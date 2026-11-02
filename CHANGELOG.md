@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Refuse to save a build-plate measurement unless the current native mesh calibration positively completes; failed Z homing, firmware errors and acknowledgement-only replies preserve previous measurements (#279, reported by @Noahwhite2014).
+
 ### Added
 
 - Experimental nozzle thermal-expansion calibration on the Bed Levelling page (disabled by default, enabled from Experimental integrations): runs the firmware's NOZZLE_TEMP_CALIBRATE over a chosen range (default 130–330 °C, 10 °C steps, keeping the 140 °C reference and printing temperatures inside the table), always switches the nozzle off afterwards, keeps the table only when it is plausible and applies it after a printer restart, with a way back to the factory table. The factory table ends at 250 °C, where the firmware switches to a constant ~0.10 mm correction, so materials printed above it needed their own Z offset; by **Noahwhite2014** (#273).
