@@ -53,7 +53,7 @@ export function useLanCode() {
 // or catalog requests. Keep backend authorization and each action's confirmation.
 export async function lanRequest(path: string, code: string, options: RequestInit = {}) {
   if (
-    !/^\/api\/(access\/verify|experiments|app-update\/(upload|download|install)|bed-drying\/(start|preheat|stop))$/.test(
+    !/^\/api\/(access\/verify|experiments|app-update\/(upload|download|install)|bed-drying\/(start|preheat|stop)|nozzle-expansion\/start)$/.test(
       path
     )
   )

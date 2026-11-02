@@ -136,6 +136,7 @@ jobs:
       - name: Independent experimental choices and Quiet controls
         run: |
           npm run test:experiments
+          npm run test:nozzle-experiment
           npm run test:motor-mode
 
       - name: Canvas states and explicit recovery loading
