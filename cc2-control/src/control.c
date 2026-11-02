@@ -63,6 +63,17 @@ static double homing_extruder_restore_target(const mqtt_client *m){
 int control_build_script(const char *action,const mqtt_client *m,char *script,size_t cap,char *reason,size_t reason_cap){
     char kind[32],a[32],b[32],colour[16]; double value,value2;
     int slot,min_temp,max_temp;
+    if(!strncmp(action,"grille:",7)){
+        time_t now=time(NULL);
+        if(strcmp(action,"grille:open")&&strcmp(action,"grille:close"))
+            return reject(reason,reason_cap,"Invalid exhaust grille action");
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+           m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Exhaust grille controls require fresh idle telemetry");
+        int n=snprintf(script,cap,"%s",!strcmp(action,"grille:open")?"EXHAUST_GRILLE_OPEN":"EXHAUST_GRILLE_CLOSE");
+        if(n<0||(size_t)n>=cap)return reject(reason,reason_cap,"Exhaust grille command exceeds buffer capacity");
+        return 1;
+    }
     if(!strncmp(action,"external:",9)||!strncmp(action,"canvas:catalog:",15)){
         time_t now=time(NULL);
         if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||

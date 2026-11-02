@@ -29,6 +29,8 @@
     "test:print-temperatures": "node preview/test-print-temperatures.mjs",
     "test:printer-reports": "node preview/test-printer-reports.mjs",
     "test:control-calibrations": "node preview/test-control-calibrations.mjs",
+    "test:calibration-tools": "node preview/test-calibration-tools.mjs",
+    "test:grille": "node preview/test-exhaust-grille.mjs",
     "test:fans": "node preview/test-fan-inputs.mjs",
     "test:canvas-reset": "node preview/test-canvas-reset.mjs && node preview/test-canvas-presence.mjs && node preview/test-canvas-unload.mjs",
     "test:languages": "node preview/test-polish-czech.mjs",
@@ -58,7 +60,9 @@
     "test:remember-lan": "node preview/test-remember-lan.mjs",
     "test:spoolman-integration": "node preview/test-spoolman-integration.mjs",
     "test:external-feed": "node preview/test-external-feed.mjs",
-    "test:z-direction": "node preview/test-z-direction.mjs"
+    "test:z-direction": "node preview/test-z-direction.mjs",
+    "test:load-cell-guide": "node preview/test-load-cell-guide.mjs",
+    "test:rotation-restore": "node preview/test-rotation-restore.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
