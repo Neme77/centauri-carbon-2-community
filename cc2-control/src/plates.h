@@ -1508,7 +1508,7 @@ static int plates_reboot_guard(void) {
     time_t now=time(NULL);const mqtt_client *m=plates_mqtt;
     return m && m->connected && m->registered && m->have_machine_status && m->machine_status==1 &&
         m->last_message>0 && now>=m->last_message && now-m->last_message<=15 && uds_fresh(&telemetry) &&
-        plates_pending_intact() && canvas_unload_pending_intact() &&
+        plates_pending_intact() && canvas_unload_pending_intact() && rotation_pending_intact() &&
         !plates_console_busy() && !atomic_load(&upload_busy) && !atomic_load(&active_downloads) && !z_offset_pending;
 }
 

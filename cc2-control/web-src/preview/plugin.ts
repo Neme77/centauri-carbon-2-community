@@ -626,6 +626,24 @@ export function previewPlugin(): Plugin {
               })
             case '/api/canvas/unload':
               return reply(unloadState())
+            case '/api/calibration-tools/status':
+              return reply({
+                busy: false,
+                generation: 0,
+                error: 'none',
+                mode: 0,
+                active: null,
+                original: null,
+                configured: 28.8,
+                saved: null,
+                editable: true,
+                pending_restart: false,
+                pending_conflict: false,
+                reports: [],
+                cell: { stage: 0, owned: false, max_grams: 0, counts_per_gram: 0, tare_counts: null, grams: 0 },
+              })
+            case '/api/calibration-tools/action':
+              return reply({ error: 'Calibration tools are read-only in this preview' }, 409)
             case '/api/nozzle-expansion': {
               const factory = [
                 -0.039173, -0.033207, -0.027035, -0.017856, -0.009456, -0.002735, 0.006161, 0.01315, 0.021694, 0.028802,

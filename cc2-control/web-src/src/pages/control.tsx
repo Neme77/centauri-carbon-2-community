@@ -1,5 +1,7 @@
 import { ExternalFilament } from './external-filament'
 import { BedDrying } from './bed-drying'
+import { ExhaustGrille } from './exhaust-grille'
+import { CalibrationTools } from './calibration-tools'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
@@ -719,13 +721,15 @@ export const Control = () => {
             <CardHead icon="fan" title="common.fans" />
             <div class="cc2-fan-controls flex flex-1 flex-col justify-center gap-5">
               {(['part', 'aux', 'box'] as const).map(k => (
-                <FanSlider
-                  key={k}
-                  label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
-                  pct={v.fan(k)}
-                  disabled={!d?.connected}
-                  onCommit={n => control(`fan:${k}:${n}`)}
-                />
+                <div key={k}>
+                  <FanSlider
+                    label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
+                    pct={v.fan(k)}
+                    disabled={!d?.connected}
+                    onCommit={n => control(`fan:${k}:${n}`)}
+                  />
+                  {k === 'box' && <ExhaustGrille />}
+                </div>
               ))}
             </div>
           </Card>
@@ -830,6 +834,7 @@ export const Control = () => {
         </div>
       </div>
       <ExternalFilament />
+      <CalibrationTools />
       <BedDrying />
     </Page>
   )

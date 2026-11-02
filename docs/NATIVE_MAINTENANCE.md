@@ -69,6 +69,6 @@ check, not a traceable accuracy certification or a recommended calibration value
 for another printer.
 
 Actual browser controls have passed interaction, feedback, confirmation,
-responsive layout and post-reboot restore checks. The merged cumulative source
-still requires its separate host/ARM/sanitizer qualification and physical
-cumulative acceptance. Synthetic tests never heat, move or contact a printer.
+responsive layout and post-reboot restore checks. The merged cumulative source passed the host/ARM/sanitizer qualification,
+including nozzle-expansion, chamber-preheat and mesh-completion regressions.
+Physical cumulative acceptance remains pending. Synthetic tests never heat, move or contact a printer.
