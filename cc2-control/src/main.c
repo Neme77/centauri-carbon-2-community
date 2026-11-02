@@ -3279,6 +3279,7 @@ static const char *pending_autosave_guard(void);
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
+#include "runout.h"
 #include "calibration_tools.h"
 #include "cavity_floor_http.h"
 
@@ -4165,6 +4166,12 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         canvas_refresh_response(fd, mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/canvas/auto-refill")==0) {
         canvas_auto_refill_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/runout")==0) {
+        runout_response(fd,mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/runout/continue")==0) {
+        runout_continue_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/runout/match-material")==0) {
+        runout_setting_response(fd,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/canvas/unload")==0) {
         canvas_unload_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/canvas/unload")==0) {
@@ -4404,6 +4411,7 @@ int main(int argc, char **argv) {
         drying_tick(&mqtt);
         nx_tick(&mqtt);
         tools_tick(&mqtt);
+        runout_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
         int max_fd=server;
@@ -4413,7 +4421,7 @@ int main(int argc, char **argv) {
         for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
             FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
         }
-        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0||tools.busy||
+        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0||tools.busy||runout.x.fd>=0||
             (nx.exchange.fd>=0&&nx.stage!=NX_RUNNING); /* the calibration's own reply takes up to hours */
         struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
