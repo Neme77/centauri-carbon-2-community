@@ -1067,8 +1067,8 @@
   "experiments.unavailable": "Experimentální nastavení nejsou dostupná. Nelze je měnit.",
   "experiments.using_mqtt": "Zakázáno · zdroj MQTT",
   "experiments.using_uds": "Povoleno · zdroj UDS",
-  "drying.title": "Ohřev podložky pro sušení filamentu",
-  "drying.hint": "Experimentální časovaný ohřev. Teplota podložky není teplotou filamentu ani vzduchu; dodržujte limity výrobce cívky.",
+  "drying.title": "Ohřev podložky a předehřev komory",
+  "drying.hint": "Experimentální ohřev podložky pro sušení filamentu nebo předehřev komory. Teplota podložky není teplotou filamentu ani komory; dodržujte limity výrobce materiálu.",
   "drying.guard": "30–90 °C, 1–720 minut. Časovač začne po dosažení teploty a běží i po zavření stránky. Bez ohřevu trysky a pohybu. Bez automatického obnovení.",
   "drying.minutes": "Doba, minuty",
   "drying.start": "Spustit ohřev podložky",
@@ -1324,5 +1324,9 @@
   "cellguide.discard_confirm": "Odstraňte zátěž. Restartovat bez uložení a zahodit kalibraci? Jiné čekající změny zablokují tuto akci.",
   "cellguide.restart_confirm": "Odstraňte zátěž. Restartovat nečinnou tiskárnu a načíst uloženou kalibraci? Oba ohřevy musí být vypnuté.",
   "cellguide.measure_confirm": "Změřit se známou hmotností {value} g? Potvrďte, že odpovídá předmětu na podložce.",
-  "cellguide.used_mass": "Hmotnost použitá pro toto měření: {value} g"
+  "cellguide.used_mass": "Hmotnost použitá pro toto měření: {value} g",
+  "tuning.pressure_advance": "Pressure Advance (s)",
+  "tuning.actual_pa": "Aktuální: {value} s",
+  "tuning.disable_pa": "Vypnout (0)",
+  "tuning.pa_note": "Pouze aktuální hodnota (0–1 s). Počáteční G-code ji může přepsat."
 }

@@ -53,10 +53,28 @@ static inline int ng_usb_bound(const ng_usb_profile *usb) {
       !ng_resolve_path(NG_NET_SYSFS "/cc2lan0/device/driver", driver,
                        sizeof(driver)))
     return 0;
+  /* realpath resolves bus aliases to the physical sysfs hierarchy:
+   * .../1-1/1-1:1.0, not the sibling bus aliases .../1-1 and .../1-1:1.0.
+   * Match the interface's exact physical parent and its port-qualified name. */
   size_t n = strlen(selected);
+  const char *parent = strrchr(device, '/');
+  const char *port = strrchr(selected, '/');
   const char *name = strrchr(driver, '/');
-  return !strncmp(selected, device, n) && device[n] == ':' && name &&
-         !strcmp(name + 1, "cc2_ue300_r8152");
+  if (!parent || !port || (size_t)(parent - device) != n ||
+      memcmp(selected, device, n) || !name ||
+      strcmp(name + 1, "cc2_ue300_r8152"))
+    return 0;
+  port++;
+  const char *interface = parent + 1;
+  size_t length = strlen(port);
+  if (strncmp(interface, port, length) || interface[length] != ':')
+    return 0;
+  const char *configuration = interface + length + 1;
+  size_t digits = strspn(configuration, "0123456789");
+  if (!digits || configuration[digits] != '.')
+    return 0;
+  const char *number = configuration + digits + 1;
+  return *number && strspn(number, "0123456789") == strlen(number);
 }
 static inline int ng_load_drivers(void) {
   ng_usb_profile usb = ng_usb_observe();

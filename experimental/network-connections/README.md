@@ -30,3 +30,22 @@ See README.en.md for installation and compatibility details.
 
 The maintainer physically confirmed the earlier R5h runtime; the newly rebuilt
 cumulative app and its package have separate automated/device validation status.
+
+## Updating after a base-firmware reflash
+
+The installer also recognizes the exact supported state where a base-firmware
+reflash restored native overlay hooks while retaining the previous component
+and persistent DHCP entry in `/opt/usr`. It checks all native hook fingerprints,
+retained originals and component checksums, requires absent manager startup
+hooks and refuses active/mapped old components or pending network transactions.
+Mixed, foreign or symlinked inputs are refused rather than silently repaired.
+
+On that exact profile the normal update reinstalls its delegates while retaining
+saved connection settings. The rollback backup preserves the old component and
+the exact post-reflash startup files, including files that were absent. A failed
+upgrade restores that state; it does not delete the old settings or restart
+services. A full idle-printer reboot is required after successful recovery.
+
+The update must first install the new app, then run the component's strict
+fresh cold Idle guard against that new app. This does not weaken readiness
+checks to accept an older API schema or authorize running a stale helper.

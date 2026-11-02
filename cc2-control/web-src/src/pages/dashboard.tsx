@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { Settings } from 'lucide-preact'
 import { PrintTuning } from '@/components/print-tuning'
 import { Card, CardHead } from '@/components/ui/card'
@@ -9,20 +9,68 @@ import { Dot, Tag } from '@/components/ui/badge'
 import { Icon } from '@/components/icons'
 import { CameraCard, FanBar, Progress, Row } from '@/components/shared'
 import { ThermalChart } from '@/components/thermal'
-import { control, errText, notify } from '@/lib/api'
-import { calibrationFocus, QUICK_ASK, QUICK_CHOICES, quick, quickAlwaysAvailable, saveQuickActions } from '@/lib/quick'
+import { control, errText, notify, post } from '@/lib/api'
+import {
+  calibrationFocus,
+  controlFocus,
+  QUICK_ASK,
+  QUICK_CHOICES,
+  quick,
+  quickAlwaysAvailable,
+  saveQuickActions,
+} from '@/lib/quick'
 import { t, tpl } from '@/lib/i18n'
+import { grilleAllowed, grilleBusy } from '@/lib/grille'
 import { stateText } from '@/lib/machine'
 import { num, duration } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
-import { health, openPage, type Page, printer, refreshHealth, refreshPrinter, view, zoffset } from '@/lib/state'
+import {
+  health,
+  openPage,
+  openSettings,
+  type Page,
+  printer,
+  refreshHealth,
+  refreshPrinter,
+  view,
+  zoffset,
+} from '@/lib/state'
 import { JobControls } from '@/pages/job'
 
 const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightOn: boolean }) => {
   const [label, icon] = QUICK_CHOICES[action]
-  const blocked = !idle && !quickAlwaysAvailable(action)
+  const link = printer.use()
+  const isGrille = action === 'grille:open' || action === 'grille:close'
+  const grilleWaiting = grilleBusy.use().busy
+  const [pending, setPending] = useState(false)
+  const sending = useRef(false)
+  const blocked = isGrille ? !grilleAllowed(link) : !idle && !quickAlwaysAvailable(action)
   const isLight = action === 'light:toggle'
   const run = async () => {
+    if (blocked || sending.current || (isGrille && grilleBusy.get().busy)) return
+    if (action === 'settings:connection') return openSettings('connection')
+    if (action.startsWith('control:')) {
+      if (action === 'control:heating' && !link.data?.bed_drying?.enabled && !link.data?.bed_drying?.active)
+        return openSettings('integrations')
+      controlFocus.set(s => ({ target: action.slice(8), revision: s.revision + 1 }))
+      return openPage('control')
+    }
+    if (isGrille) {
+      grilleBusy.set({ busy: true })
+      sending.current = true
+      setPending(true)
+      try {
+        await post('/api/control', action)
+        notify(t(action === 'grille:open' ? 'grille.open_accepted' : 'grille.close_accepted'))
+      } catch (e) {
+        notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+      } finally {
+        grilleBusy.set({ busy: false })
+        sending.current = false
+        setPending(false)
+      }
+      return
+    }
     if (action.startsWith('calibration:')) {
       calibrationFocus.set(s => ({ target: action.slice(12), revision: s.revision + 1 }))
       return openPage('control')
@@ -37,12 +85,13 @@ const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightO
   return (
     <Button
       class="min-h-18 flex-col"
-      disabled={blocked}
+      disabled={blocked || pending || (isGrille && grilleWaiting)}
+      aria-busy={pending || undefined}
       variant={isLight && lightOn ? 'active' : 'default'}
       aria-pressed={isLight ? lightOn : undefined}
       title={
         blocked
-          ? t('common.available_when_idle')
+          ? t(isGrille ? 'grille.idle_required' : 'common.available_when_idle')
           : isLight
             ? t(lightOn ? 'control.internal_light_on_press_to_turn' : 'control.internal_light_off_press_to_turn')
             : undefined

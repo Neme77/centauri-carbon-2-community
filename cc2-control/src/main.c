@@ -2597,13 +2597,16 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         remaining=active_gcode_estimated_seconds>duration ? active_gcode_estimated_seconds-duration : 0;
         remaining_source="gcode";
     }
-    char speed_percent[40],flow_percent[40],live_velocity[40];double tune;
+    char speed_percent[40],flow_percent[40],live_velocity[40],pressure_advance[40];double tune;
     int have_speed=uds_value(&telemetry,U_SPEED_FACTOR,&tune);
     json_number(speed_percent,sizeof(speed_percent),have_speed,have_speed?tune*100:0);
     int have_flow=uds_value(&telemetry,U_FLOW_FACTOR,&tune);
     json_number(flow_percent,sizeof(flow_percent),have_flow,have_flow?tune*100:0);
     int have_velocity=uds_value(&telemetry,U_LIVE_SPEED,&tune);
     json_number(live_velocity,sizeof(live_velocity),have_velocity,have_velocity?tune:0);
+    int have_pressure=uds_value(&telemetry,U_PRESSURE_ADVANCE,&tune);
+    if(have_pressure)snprintf(pressure_advance,sizeof(pressure_advance),"%.6f",tune);
+    else snprintf(pressure_advance,sizeof(pressure_advance),"null");
     char zoffset[32],zreference[32],zadjustment[32];double offset;
     int have_offset=z_offset_readback(&offset);
     json_z_offset(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
@@ -2641,7 +2644,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"machine\":{\"status\":%d,\"status_name\":\"%s\",\"sub_status\":%d,\"reason\":%d,\"progress\":%d},"
         "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld,\"native\":%s},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
-        "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
+        "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s,\"pressure_advance\":%s},"
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
@@ -2649,7 +2652,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
-        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
+        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,pressure_advance,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
         printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status);
     if(length>0&&(size_t)length<sizeof(body))
@@ -2660,7 +2663,7 @@ static void uds_response(int fd){
     static const char *names[U_FIELDS]={"nozzle_temperature","nozzle_target","bed_temperature","bed_target",
         "controller_fan","heater_fan","part_fan","fan1","controller_rpm","heater_rpm","part_rpm","fan1_rpm",
         "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed","z_offset",
-        "filament_used","canvas_channel"};
+        "filament_used","canvas_channel","cavity_temperature_mode","pressure_advance"};
     char body[2048];json_builder b={body,0,sizeof(body),0};
     json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"connections\":%lu,\"disconnects\":%lu,\"last_disconnect\":\"%s\",\"last_errno\":%d,\"ignored_messages\":%lu,\"values\":{",
         telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages,
@@ -3573,7 +3576,9 @@ static int quick_action_valid(const char *action) {
         "home:ALL", "home:X", "home:Y", "home:Z",
         "system:heaters_off", "system:fans_off", "system:motors_off",
         "light:toggle", "page:control", "page:files", "page:bed", "page:canvas",
-        "calibration:shaper", "calibration:hotend", "calibration:bed"
+        "calibration:shaper", "calibration:hotend", "calibration:bed",
+        "grille:open", "grille:close", "settings:connection",
+        "control:fans", "control:tuning", "control:heating"
     };
     for (size_t index = 0; index < sizeof(allowed) / sizeof(allowed[0]); ++index)
         if (strcmp(action, allowed[index]) == 0) return 1;
@@ -3883,9 +3888,19 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     double tune_value;
     if(strncmp(action,"tune:",5)==0&&
-       !uds_value(&telemetry,strncmp(action,"tune:speed:",11)==0?U_SPEED_FACTOR:U_FLOW_FACTOR,&tune_value)){
+       !uds_value(&telemetry,strncmp(action,"tune:pressure-advance:",22)==0?U_PRESSURE_ADVANCE:
+          strncmp(action,"tune:speed:",11)==0?U_SPEED_FACTOR:U_FLOW_FACTOR,&tune_value)){
         const char *error="{\"accepted\":false,\"error\":\"Fresh tuning readback is unavailable\"}\n";
         respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+    }
+    if(!strncmp(action,"tune:pressure-advance:",22)){
+        const char *native_state=uds_print_state(&telemetry);
+        int idle=native_state&&(!strcmp(native_state,"standby")||!strcmp(native_state,"complete"));
+        int printing_state=native_state&&(!strcmp(native_state,"printing")||!strcmp(native_state,"paused"));
+        if(!((mqtt->machine_status==1&&idle)||(mqtt->machine_status==2&&printing_state))){
+            const char *error="{\"accepted\":false,\"error\":\"Pressure Advance requires matching fresh native Idle or print state\"}\n";
+            respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+        }
     }
     if(external_feed_enabled&&external_source_selected&&!strncmp(action,"canvas:",7)){
         const char *error="{\"error\":\"Select Canvas with the external filament removed before using its controls\"}";

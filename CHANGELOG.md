@@ -8,9 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Recover Connections updates after an exact supported base-firmware reflash while retaining saved settings and exact rollback; preserve the previous component when its backup move fails. Correct RTL8153 USB interface-parent checks behind hubs without changing driver/probe/library binaries; reported and physically investigated by **Neme77** (#286).
+
 - Refuse to save a build-plate measurement unless the current native mesh calibration positively completes; failed Z homing, firmware errors and acknowledgement-only replies preserve previous measurements (#279, reported by @Noahwhite2014).
 
 ### Added
+
+- Live runtime Pressure Advance controls alongside speed/flow, plus configurable Open/Close flaps and navigation shortcuts for Connections, Fans, Pressure Advance and bed/chamber heating. Keep the four slots and existing choices; no load-cell shortcuts. Clarify bed/chamber heating copy in all nine languages; implemented and tested by **Neme77** (#286).
 
 - Optional native display refresh with Obsidian/cyan styling, preserved native functions and illustrations, and read-only inline LAN IPv4/link information; owner-supplied firmware inputs remain private (**Neme77**, #282).
 - Native exhaust-grille Open/Close controls beside EXHAUST and an advanced calibration card for rotation distance and load-cell read/diagnostic/tare/guided calibration, with guarded native sessions, verified saves and protected restart; implemented and physically tested by **Neme77** (#283).

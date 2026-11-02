@@ -6,7 +6,7 @@ import { control, notify } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { printer, view } from '@/lib/state'
 
-type Kind = 'speed' | 'flow'
+type Kind = 'speed' | 'flow' | 'pressure-advance'
 const percent = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const display = (v: number | null) => (v === null ? '—' : String(Math.round(v * 10) / 10))
 
@@ -16,18 +16,24 @@ const TuningForm = ({
   ok,
   compact,
   sliders,
+  pressureAdvance,
 }: {
   d: any
   rev: number
   ok: boolean
   compact: boolean
   sliders: boolean
+  pressureAdvance: boolean
 }) => {
-  const [draft, setDraft] = useState({ speed: '', flow: '' })
+  const [draft, setDraft] = useState({ speed: '', flow: '', 'pressure-advance': '' })
   const [pending, setPending] = useState<{ kind: Kind; value: number; rev: number } | null>(null)
   const sending = useRef(false)
   const [posting, setPosting] = useState(false)
-  const actual = { speed: percent(d?.tuning?.speed_percent), flow: percent(d?.tuning?.flow_percent) }
+  const actual = {
+    speed: percent(d?.tuning?.speed_percent),
+    flow: percent(d?.tuning?.flow_percent),
+    'pressure-advance': percent(d?.tuning?.pressure_advance),
+  }
   const live = percent(d?.tuning?.live_velocity)
   const v = view(d)
   const active =
@@ -38,6 +44,14 @@ const TuningForm = ({
     (v.printing || v.paused)
   const fresh = Number(d?.last_message_age) >= 0 && Number(d?.last_message_age) <= 15
   const ready = ok && active && fresh
+  const nativeState = d?.print?.native?.state
+  const pressureReady =
+    ok &&
+    fresh &&
+    d?.connected &&
+    ((d?.machine?.status === 1 && ['standby', 'complete'].includes(nativeState)) ||
+      (active && ['printing', 'paused'].includes(nativeState)))
+  const kinds: Kind[] = pressureAdvance ? ['speed', 'flow', 'pressure-advance'] : ['speed', 'flow']
 
   useEffect(() => {
     if (!pending) return
@@ -51,15 +65,20 @@ const TuningForm = ({
 
   useEffect(() => {
     const observed = pending ? actual[pending.kind] : null
-    if (pending && rev > pending.rev && observed !== null && Math.abs(observed - pending.value) < 0.05) {
+    if (
+      pending &&
+      rev > pending.rev &&
+      observed !== null &&
+      Math.abs(observed - pending.value) < (pending.kind === 'pressure-advance' ? 0.0000005 : 0.05)
+    ) {
       sending.current = false
       setDraft(s => ({ ...s, [pending.kind]: '' }))
       setPending(null)
     }
-  }, [rev, pending, actual.speed, actual.flow])
+  }, [rev, pending, actual.speed, actual.flow, actual['pressure-advance']])
 
   const apply = async (kind: Kind, value: number) => {
-    if (!ready || actual[kind] === null || sending.current) return
+    if (!(kind === 'pressure-advance' ? pressureReady : ready) || actual[kind] === null || sending.current) return
     sending.current = true
     setPosting(true)
     if (await control(`tune:${kind}:${value}`)) {
@@ -74,28 +93,40 @@ const TuningForm = ({
     <Card class="cc2-tuning">
       <CardHead icon="settings" title="tuning.title" end={pending || posting ? t('tuning.waiting') : undefined} />
       <div class={compact ? 'cc2-tuning-fields grid gap-3' : 'cc2-tuning-fields grid gap-4 cc2-sm:grid-cols-2'}>
-        {(['speed', 'flow'] as const).map(kind => {
-          const min = kind === 'speed' ? 25 : 50
-          const max = kind === 'speed' ? 200 : 150
+        {kinds.map(kind => {
+          const pa = kind === 'pressure-advance'
+          const label = pa ? 'tuning.pressure_advance' : kind === 'speed' ? 'tuning.speed' : 'tuning.flow'
+          const observed = pa
+            ? actual[kind] === null
+              ? '—'
+              : String(Math.round(actual[kind] * 1e6) / 1e6)
+            : display(actual[kind])
+          const min = pa ? 0 : kind === 'speed' ? 25 : 50
+          const max = pa ? 1 : kind === 'speed' ? 200 : 150
           const value = Number(draft[kind])
-          const valid = /^\d+$/.test(draft[kind]) && Number.isInteger(value) && value >= min && value <= max
-          const disabled = !ready || actual[kind] === null || pending !== null || posting
+          const valid =
+            (pa ? /^\d+(?:\.\d{1,6})?$/.test(draft[kind]) : /^\d+$/.test(draft[kind]) && Number.isInteger(value)) &&
+            value >= min &&
+            value <= max
+          const disabled = !(pa ? pressureReady : ready) || actual[kind] === null || pending !== null || posting
           return (
             <div key={kind} class="cc2-tuning-field min-w-0">
               {sliders ? (
                 <div class="cc2-tuning-heading">
                   <label for={`tune-${kind}`} class="font-medium">
-                    {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
+                    {t(label)}
                   </label>
-                  <span class="text-xs text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</span>
+                  <span class="text-xs text-cyan">
+                    {tpl(pa ? 'tuning.actual_pa' : 'tuning.actual', { value: observed })}
+                  </span>
                   <input
                     type="range"
                     class="cc2-tuning-slider"
                     min={min}
                     max={max}
-                    step="1"
-                    value={Math.max(min, Math.min(max, valid ? value : (actual[kind] ?? 100)))}
-                    aria-label={t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
+                    step={pa ? 0.001 : 1}
+                    value={Math.max(min, Math.min(max, valid ? value : (actual[kind] ?? (pa ? 0 : 100))))}
+                    aria-label={t(label)}
                     disabled={disabled}
                     onInput={e => setDraft(s => ({ ...s, [kind]: e.currentTarget.value }))}
                   />
@@ -103,9 +134,11 @@ const TuningForm = ({
               ) : (
                 <div class={compact ? 'mb-2 flex flex-wrap items-center justify-between gap-1' : ''}>
                   <label for={`tune-${kind}`} class="mb-1 block font-medium">
-                    {t(kind === 'speed' ? 'tuning.speed' : 'tuning.flow')}
+                    {t(label)}
                   </label>
-                  <div class="mb-2 text-sm text-cyan">{tpl('tuning.actual', { value: display(actual[kind]) })}</div>
+                  <div class="mb-2 text-sm text-cyan">
+                    {tpl(pa ? 'tuning.actual_pa' : 'tuning.actual', { value: observed })}
+                  </div>
                 </div>
               )}
               <form
@@ -120,32 +153,41 @@ const TuningForm = ({
                   type="number"
                   min={min}
                   max={max}
-                  step="1"
-                  class="w-24"
+                  step={pa ? 0.000001 : 1}
+                  class={pa ? 'cc2-pressure-value w-28' : 'w-24'}
                   value={draft[kind]}
-                  placeholder={display(actual[kind])}
+                  placeholder={observed}
                   disabled={disabled}
                   onInput={e => setDraft(s => ({ ...s, [kind]: e.currentTarget.value }))}
                 />
                 <Button type="submit" disabled={disabled || !valid}>
                   {t('tuning.apply')}
                 </Button>
-                <Button type="button" disabled={disabled} onClick={() => void apply(kind, 100)}>
-                  {t('tuning.reset')}
+                <Button type="button" disabled={disabled} onClick={() => void apply(kind, pa ? 0 : 100)}>
+                  {t(pa ? 'tuning.disable_pa' : 'tuning.reset')}
                 </Button>
               </form>
-              {!compact && <small class="mt-1 block text-muted">{tpl('tuning.range', { min, max })}</small>}
+              {!compact && !pa && <small class="mt-1 block text-muted">{tpl('tuning.range', { min, max })}</small>}
             </div>
           )
         })}
       </div>
+      {pressureAdvance && <p class="mt-2 text-xs text-muted">{t('tuning.pa_note')}</p>}
       {!compact && <div class="mt-3 text-sm">{tpl('tuning.live_velocity', { value: display(live) })}</div>}
       {!sliders && <p class="mt-2 text-xs text-muted">{t(ready ? 'tuning.manual_note' : 'tuning.unavailable')}</p>}
     </Card>
   )
 }
 
-export const PrintTuning = ({ compact = false, sliders = false }: { compact?: boolean; sliders?: boolean }) => {
+export const PrintTuning = ({
+  compact = false,
+  sliders = false,
+  pressureAdvance = false,
+}: {
+  compact?: boolean
+  sliders?: boolean
+  pressureAdvance?: boolean
+}) => {
   const { data, rev, ok } = printer.use()
   return (
     <TuningForm
@@ -155,6 +197,7 @@ export const PrintTuning = ({ compact = false, sliders = false }: { compact?: bo
       ok={ok}
       compact={compact}
       sliders={sliders}
+      pressureAdvance={pressureAdvance}
     />
   )
 }

@@ -17,7 +17,7 @@ import { t, tpl } from '@/lib/i18n'
 import { store } from '@/lib/store'
 import { stateText } from '@/lib/machine'
 import { num } from '@/lib/format'
-import { calibrationFocus } from '@/lib/quick'
+import { calibrationFocus, controlFocus } from '@/lib/quick'
 import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
 
@@ -685,6 +685,19 @@ export const Control = () => {
   const link = printer.use()
   const d = link.data
   const v = view(d)
+  const shortcut = controlFocus.use()
+  useEffect(() => {
+    const selector = (
+      { fans: '.cc2-fans', tuning: '.cc2-tuning', heating: '[data-bed-drying]' } as Record<string, string>
+    )[shortcut.target]
+    if (!selector) return
+    const card = document.querySelector<HTMLElement>(selector)
+    card?.scrollIntoView({ block: 'center' })
+    const target = shortcut.target === 'tuning' ? card?.querySelector<HTMLElement>('#tune-pressure-advance') : card
+    if (target === card) target?.setAttribute('tabindex', '-1')
+    target?.focus({ preventScroll: true })
+    controlFocus.set(s => ({ target: '', revision: s.revision }))
+  }, [shortcut.target, shortcut.revision])
   const focus = calibrationFocus.use()
   useEffect(() => {
     if (!focus.target) return
@@ -736,7 +749,7 @@ export const Control = () => {
         </div>
         <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:contents">
           <ZOffset />
-          <PrintTuning compact sliders />
+          <PrintTuning compact sliders pressureAdvance />
         </div>
       </div>
       <div class="cc2-control-calibrations mt-3.5 grid items-stretch gap-3.5 cc2-xl:grid-cols-3">

@@ -53,6 +53,8 @@ HARNESSES = {
     "test_chamber_preheat.c": BACKEND,
     "test_uds_diagnostic.c": BACKEND,
     "test_tuning_api.c": BACKEND,
+    "test_pressure_advance_api.c": BACKEND,
+    "test_quick_preferences.c": BACKEND,
     "test_pid_api.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,

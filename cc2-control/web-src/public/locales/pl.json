@@ -1067,8 +1067,8 @@
   "experiments.unavailable": "Ustawienia eksperymentalne są niedostępne. Zmiany są niemożliwe.",
   "experiments.using_mqtt": "Wyłączone · źródło MQTT",
   "experiments.using_uds": "Włączone · źródło UDS",
-  "drying.title": "Podgrzewanie stołu do suszenia filamentu",
-  "drying.hint": "Eksperymentalne podgrzewanie z timerem. Temperatura stołu nie jest temperaturą filamentu ani powietrza; przestrzegaj limitów producenta szpuli.",
+  "drying.title": "Grzanie stołu i wstępne nagrzewanie komory",
+  "drying.hint": "Eksperymentalne grzanie stołu do suszenia filamentu lub wstępnego nagrzewania komory. Temperatura stołu nie jest temperaturą filamentu ani komory; przestrzegaj limitów producenta materiału.",
   "drying.guard": "30–90 °C, 1–720 minut. Timer startuje po osiągnięciu temperatury i działa po zamknięciu strony. Bez grzania dyszy i ruchu. Bez automatycznego wznowienia.",
   "drying.minutes": "Czas, minuty",
   "drying.start": "Rozpocznij grzanie stołu",
@@ -1324,5 +1324,9 @@
   "cellguide.discard_confirm": "Usuń obciążenie. Uruchomić ponownie bez zapisu, aby odrzucić kalibrację? Inne oczekujące zmiany zablokują tę czynność.",
   "cellguide.restart_confirm": "Usuń obciążenie. Uruchomić ponownie bezczynną drukarkę, aby wczytać zapisaną kalibrację? Obie grzałki muszą być wyłączone.",
   "cellguide.measure_confirm": "Zmierzyć ze znaną masą {value} g? Potwierdź, że odpowiada przedmiotowi na stole.",
-  "cellguide.used_mass": "Masa użyta w tym pomiarze: {value} g"
+  "cellguide.used_mass": "Masa użyta w tym pomiarze: {value} g",
+  "tuning.pressure_advance": "Pressure Advance (s)",
+  "tuning.actual_pa": "Aktualnie: {value} s",
+  "tuning.disable_pa": "Wyłącz (0)",
+  "tuning.pa_note": "Tylko bieżąca wartość (0–1 s). Początkowy G-code może ją nadpisać."
 }

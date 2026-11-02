@@ -3,27 +3,19 @@ import { Button } from '@/components/ui/button'
 import { errText, post } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { printer } from '@/lib/state'
+import { grilleAllowed, grilleBusy } from '@/lib/grille'
 
 export const ExhaustGrille = () => {
   const link = printer.use()
-  const d = link.data
-  const native = d?.print?.native?.state
-  const allowed =
-    link.ok &&
-    d?.connected &&
-    d.last_message_age >= 0 &&
-    d.last_message_age <= 15 &&
-    d.machine?.status === 1 &&
-    (native === 'standby' || native === 'complete') &&
-    d.extruder?.target === 0 &&
-    d.heater_bed?.target === 0 &&
-    !d.bed_drying?.active
+  const allowed = grilleAllowed(link)
+  const waiting = grilleBusy.use().busy
   const sending = useRef(false)
   const [pending, setPending] = useState(false)
   const [accepted, setAccepted] = useState<'open' | 'close' | null>(null)
   const [error, setError] = useState('')
   const send = async (direction: 'open' | 'close') => {
-    if (!allowed || sending.current) return
+    if (!allowed || sending.current || grilleBusy.get().busy) return
+    grilleBusy.set({ busy: true })
     sending.current = true
     setPending(true)
     setAccepted(null)
@@ -34,6 +26,7 @@ export const ExhaustGrille = () => {
     } catch (e) {
       setError(errText(e))
     } finally {
+      grilleBusy.set({ busy: false })
       sending.current = false
       setPending(false)
     }
@@ -41,10 +34,10 @@ export const ExhaustGrille = () => {
   return (
     <div class="cc2-exhaust-grille mt-3 border-t border-edge pt-3">
       <div class="grid grid-cols-2 gap-2">
-        <Button disabled={!allowed || pending} onClick={() => send('open')}>
+        <Button disabled={!allowed || pending || waiting} onClick={() => send('open')}>
           {t('grille.open')}
         </Button>
-        <Button disabled={!allowed || pending} onClick={() => send('close')}>
+        <Button disabled={!allowed || pending || waiting} onClick={() => send('close')}>
           {t('grille.close')}
         </Button>
       </div>
