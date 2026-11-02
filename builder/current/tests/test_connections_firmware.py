@@ -80,6 +80,11 @@ class ConnectionsBootstrapTests(unittest.TestCase):
                 process.joinpath('maps').write_text(str(root/'library.so') if case=='mapped' else '')
             # Fail real file operations at the precise commit boundary.
             bins=base/'bin';bins.mkdir()
+            # The production script requires root. Fixture ownership must be
+            # explicit: CI runs as an ordinary user, offline Docker as root.
+            # Stub only id -u; keep the production permission guard intact.
+            bins.joinpath('id').write_text('#!/bin/sh\n[ "$*" = "-u" ] || exit 97\nprintf "%s\\n" "'+('1000' if case=='not-root' else '0')+'"\n')
+            bins.joinpath('id').chmod(0o755)
             bins.joinpath('pidof').write_text('#!/bin/sh\nexit '+('0' if case=='native-running' else '1')+'\n')
             bins.joinpath('pidof').chmod(0o755)
             for tool in ('cp','mv'):
@@ -96,7 +101,7 @@ class ConnectionsBootstrapTests(unittest.TestCase):
             result=subprocess.run([*shell,str(file)],env=env,text=True,capture_output=True,timeout=15)
             success=case in ('fresh','retained','idempotent')
             self.assertEqual(result.returncode==0,success,(shell,case,result.stdout,result.stderr))
-            reasons={'foreign-dhcp':'foreign_persistent_dhcp','retained-damage':'retained_component_checksum',
+            reasons={'not-root':'root_required','foreign-dhcp':'foreign_persistent_dhcp','retained-damage':'retained_component_checksum',
                      'damaged-source':'firmware_checksums','mapped':'component_mapped','running':'component_running',
                      'copy-failure':'stage_copy','component-move-failure':'component_commit',
                      'dhcp-move-failure':'dhcp_commit','seed-failure':'configuration_seed',
@@ -126,7 +131,7 @@ class ConnectionsBootstrapTests(unittest.TestCase):
         shells=[['dash'],['busybox','sh']]
         for shell in shells:
             self.assertIsNotNone(shutil.which(shell[0]),'offline image must provide both shells')
-            for case in ('fresh','retained','idempotent','foreign-dhcp','retained-damage','damaged-source','mapped','running','native-running','copy-failure','component-move-failure','dhcp-move-failure','seed-failure'):
+            for case in ('not-root','fresh','retained','idempotent','foreign-dhcp','retained-damage','damaged-source','mapped','running','native-running','copy-failure','component-move-failure','dhcp-move-failure','seed-failure'):
                 with self.subTest(shell=shell,case=case):self.fixture(shell,case)
 
 if __name__=='__main__':unittest.main()
