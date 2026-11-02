@@ -8,11 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Keep the Obsidian background continuous on the short Appearance and About pages, without repeating horizontal bands or changing their layout; reported and verified in the browser by **Neme77** (#287).
+
 - Recover Connections updates after an exact supported base-firmware reflash while retaining saved settings and exact rollback; preserve the previous component when its backup move fails. Correct RTL8153 USB interface-parent checks behind hubs without changing driver/probe/library binaries; reported and physically investigated by **Neme77** (#286).
 
 - Refuse to save a build-plate measurement unless the current native mesh calibration positively completes; failed Z homing, firmware errors and acknowledgement-only replies preserve previous measurements (#279, reported by @Noahwhite2014).
 
 ### Added
+
+- Prepare complete Community Firmware 4.4.3 with Control 1.2.25, the native display and firmware-shipped qualified RTL8153 modules; retain the stock kernel, native startup/resource synchronization and saved connection/calibration settings. The new OTA remains a hardware-test candidate until separately accepted by **Neme77** (#287).
 
 - Live runtime Pressure Advance controls alongside speed/flow, plus configurable Open/Close flaps and navigation shortcuts for Connections, Fans, Pressure Advance and bed/chamber heating. Keep the four slots and existing choices; no load-cell shortcuts. Clarify bed/chamber heating copy in all nine languages; implemented and tested by **Neme77** (#286).
 

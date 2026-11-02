@@ -10,12 +10,16 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode',choices=('stock','community'),default='stock')
     args=parser.parse_args()
+    run(['python3',HERE/'prepare_connections.py','--verify-only'])
     run(['python3','-m','unittest','discover','-s','builder/current/tests','-p','test_*.py'],cwd=REPO)
     run(['python3',HERE/'launch_helpers/tests/test_launcher.py'])
     run(['python3',HERE/'prepare.py'])
     run(['python3',HERE/'prepare_vendor.py'])
     run(['python3',HERE/'prepare_reactor.py'])
     run(['python3',HERE/'prepare_camera.py'])
+    # Repeat after preparation so the runtime integration tests cannot remain
+    # skipped merely because their qualified local components were absent.
+    run(['python3','-m','unittest','discover','-s','builder/current/tests','-p','test_*.py'],cwd=REPO)
     run(['python3',HERE/'launch_helpers/run_build.py','--root',HERE,'--mode',args.mode,'--check-key'])
     run(['python3',HERE/'launch_helpers/run_build.py','--root',HERE,'--mode',args.mode,'--preflight'])
     run(['python3',HERE/'launch_helpers/run_build.py','--root',HERE,'--mode',args.mode])
