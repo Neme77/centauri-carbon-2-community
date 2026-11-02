@@ -320,6 +320,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"files\":\"/api/gcode-files\","
             "\"console\":\"/api/console\","
             "\"preferences\":\"/api/preferences\","
+            "\"runout\":\"/api/runout\","
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
             "\"spools\":\"/api/spools\","

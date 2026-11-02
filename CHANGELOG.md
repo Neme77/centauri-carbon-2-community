@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Continue a print from another Canvas slot after a runout, with or without the printer's auto refill: while the print waits on a Canvas runout, a card on every page offers the loaded slots (same material first) and, once confirmed, points the tools that used the empty slot at the chosen one, reheats and resumes; the printer loads it, purges and carries on, keeping the rest of the print's slot map. Optional **Match material only** under Auto refill continues automatically from a loaded slot of the same material when no slot has the same colour (it trusts the slot labels). Requested by **mcknight89**, tested on a CC2 and implemented by **Noahwhite2014** (#284).
 - Source-only, explicit opt-in EXHAUST minimum for the current print, preserving native higher cooling and releasing on Automatic, pause/end/cancel or restart; requested and physically tested by **Neme77** for #285. The optional native trial must be disabled before ordinary updates; automatic delivery remains outside this change.
 
 ### Fixed
