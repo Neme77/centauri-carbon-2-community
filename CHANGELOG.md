@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Stop presenting a completed older application update as the current selection after a full firmware upgrade; retain failed/current jobs, logs and rollback backups. Reported by **Neme77** (#287).
+
 - Keep the Obsidian background continuous on the short Appearance and About pages, without repeating horizontal bands or changing their layout; reported and verified in the browser by **Neme77** (#287).
 
 - Recover Connections updates after an exact supported base-firmware reflash while retaining saved settings and exact rollback; preserve the previous component when its backup move fails. Correct RTL8153 USB interface-parent checks behind hubs without changing driver/probe/library binaries; reported and physically investigated by **Neme77** (#286).
