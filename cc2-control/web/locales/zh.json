@@ -1340,5 +1340,19 @@
   "fanfloor.requested": "请求的最低转速：{percent}%",
   "fanfloor.not_ready": "原生组件尚未就绪。请在打印机空闲时重启或检查诊断。",
   "fanfloor.printing_required": "仅在打印运行且数据实时有效时可用。暂停或结束打印将清除此请求。",
-  "caltools.calculator": "挤出校准计算器"
+  "caltools.calculator": "挤出校准计算器",
+  "runout.heading": "Canvas 断料",
+  "runout.title": "Canvas 槽位 {slot} 耗材用尽",
+  "runout.detail": "槽位 {slot}（{material}，{tools}）已空，打印已暂停。选择另一个已装载的槽位继续：打印机会装载、冲刷并恢复打印。",
+  "runout.continue_from": "从槽位 {slot} 继续",
+  "runout.same_material": "相同材料",
+  "runout.other_material": "不同材料",
+  "runout.none_loaded": "没有其他已装载的槽位。请在 Canvas 中装入耗材，然后在此选择。",
+  "runout.confirm": "从槽位 {slot} 继续打印？打印机会装载、冲刷并恢复打印。",
+  "runout.confirm_mismatch": "槽位 {slot} 标记为 {material}，而不是 {expected}。仍要用它继续打印吗？",
+  "runout.loading": "正在装载槽位 {slot} 并恢复打印…",
+  "runout.failed": "无法继续：{error}",
+  "runout.no_match_auto": "仅匹配材料：没有其他已装载槽位的材料相同。",
+  "canvas.match_material": "仅匹配材料",
+  "canvas.match_material_hint": "开启自动续料时：若没有槽位的耗材和颜色都相同，则使用材料类型相同的已装载槽位继续。依据槽位标签判断，因此标记为 ASA 的槽位必须装有 ASA。"
 }

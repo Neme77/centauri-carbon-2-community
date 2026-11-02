@@ -1340,5 +1340,19 @@
   "fanfloor.requested": "Kért minimum: {percent}%",
   "fanfloor.not_ready": "A natív összetevő nem áll készen. Indítsa újra a tétlen nyomtatót, vagy ellenőrizze a diagnosztikát.",
   "fanfloor.printing_required": "Friss adatokkal futó nyomtatás alatt érhető el. A szünet vagy a befejezés törli a kérést.",
-  "caltools.calculator": "Extrudálás kalibrációs kalkulátor"
+  "caltools.calculator": "Extrudálás kalibrációs kalkulátor",
+  "runout.heading": "Kifogyott a Canvas filament",
+  "runout.title": "Kifogyott a filament a Canvas {slot}. helyéből",
+  "runout.detail": "A(z) {slot}. hely ({material}, {tools}) üres, a nyomtatás szünetel. Folytassa egy másik betöltött hellyel: a nyomtató betölti, átöblíti és folytatja.",
+  "runout.continue_from": "Folytatás a(z) {slot}. helyről",
+  "runout.same_material": "Azonos anyag",
+  "runout.other_material": "Más anyag",
+  "runout.none_loaded": "Nincs másik betöltött hely. Tegyen be egy tekercset a Canvasba, majd válassza ki itt.",
+  "runout.confirm": "Folytatja a nyomtatást a(z) {slot}. helyről? A nyomtató betölti, átöblíti és folytatja.",
+  "runout.confirm_mismatch": "A(z) {slot}. hely címkéje {material}, nem {expected}. Mégis ezzel folytatja a nyomtatást?",
+  "runout.loading": "A(z) {slot}. hely betöltése és folytatás…",
+  "runout.failed": "Nem sikerült folytatni: {error}",
+  "runout.no_match_auto": "Csak azonos anyag: egyik másik betöltött hely sem tartalmaz azonos anyagot.",
+  "canvas.match_material": "Csak azonos anyag",
+  "canvas.match_material_hint": "Bekapcsolt automatikus utántöltéssel: ha egyik hely sem tartalmaz azonos filamentet és színt, egy azonos anyagtípusú betöltött hellyel folytatja. A helyek címkéire hagyatkozik, ezért egy ASA címkéjű helyen ASA-nak kell lennie."
 }

@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Pip, Tag } from '@/components/ui/badge'
 import { Row } from '@/components/shared'
 import { CanvasUnload } from './canvas-unload'
-import { control, errText, notify, post } from '@/lib/api'
+import { control, errText, notify, post, request } from '@/lib/api'
 import { type Key, t, tpl } from '@/lib/i18n'
 import { poll, usePoll } from '@/lib/poll'
 import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
@@ -136,6 +136,26 @@ export const Canvas = () => {
       await post('/api/canvas/auto-refill', autoRefill ? 'off' : 'on')
       notify(t('common.command_accepted'))
       setTimeout(refreshCanvas, 1500)
+    } catch (e) {
+      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+    } finally {
+      setRefillBusy(false)
+    }
+  }
+  // "Match material only" (issue #284): CC2 Control's own setting, applied when the firmware's colour-matching refill gives up.
+  const [matchMaterial, setMatchMaterial] = useState<boolean | null>(null)
+  useEffect(() => {
+    request('/api/runout')
+      .then(r => setMatchMaterial(Boolean(r?.match_material)))
+      .catch(() => setMatchMaterial(null))
+  }, [])
+  const toggleMatch = async () => {
+    if (matchMaterial === null) return
+    setRefillBusy(true)
+    try {
+      await post('/api/runout/match-material', matchMaterial ? 'off' : 'on')
+      setMatchMaterial(!matchMaterial)
+      notify(t('common.command_accepted'))
     } catch (e) {
       notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
     } finally {
@@ -401,6 +421,23 @@ export const Canvas = () => {
               </small>
             </Button>
             <p class="mt-1 text-xs text-muted">{t('canvas.auto_refill_hint')}</p>
+            <Button
+              wide
+              class="mt-2 justify-between"
+              disabled={!ok || matchMaterial === null || autoRefill !== true || refillBusy}
+              aria-pressed={matchMaterial === true}
+              onClick={toggleMatch}
+              data-match-material
+            >
+              <span class="flex items-center gap-2">
+                <Repeat {...I} />
+                {t('canvas.match_material')}
+              </span>
+              <small class={matchMaterial && autoRefill ? 'text-cyan' : 'text-muted'}>
+                {t(matchMaterial ? 'canvas.auto_refill_on' : 'canvas.auto_refill_off')}
+              </small>
+            </Button>
+            <p class="mt-1 text-xs text-muted">{t('canvas.match_material_hint')}</p>
           </div>
           <CanvasUnload idle={idle} compact />
           <div class="cc2-canvas-reset">

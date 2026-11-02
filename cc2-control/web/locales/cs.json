@@ -1340,5 +1340,19 @@
   "fanfloor.requested": "Požadované minimum: {percent}%",
   "fanfloor.not_ready": "Nativní součást není připravena. Restartujte nečinnou tiskárnu nebo zkontrolujte diagnostiku.",
   "fanfloor.printing_required": "Dostupné během tisku s čerstvými daty. Pozastavení nebo konec požadavek zruší.",
-  "caltools.calculator": "Kalkulačka kalibrace extruze"
+  "caltools.calculator": "Kalkulačka kalibrace extruze",
+  "runout.heading": "Došel filament v Canvasu",
+  "runout.title": "Ve slotu Canvasu {slot} došel filament",
+  "runout.detail": "Slot {slot} ({material}, {tools}) je prázdný a tisk je pozastaven. Pokračujte jiným zavedeným slotem: tiskárna ho zavede, propláchne a pokračuje.",
+  "runout.continue_from": "Pokračovat ze slotu {slot}",
+  "runout.same_material": "Stejný materiál",
+  "runout.other_material": "Jiný materiál",
+  "runout.none_loaded": "Žádný jiný slot není zavedený. Vložte cívku do Canvasu a pak ji zde vyberte.",
+  "runout.confirm": "Pokračovat v tisku ze slotu {slot}? Tiskárna ho zavede, propláchne a pokračuje.",
+  "runout.confirm_mismatch": "Slot {slot} je označen jako {material}, ne {expected}. Přesto s ním pokračovat v tisku?",
+  "runout.loading": "Zavádím slot {slot} a pokračuji…",
+  "runout.failed": "Nelze pokračovat: {error}",
+  "runout.no_match_auto": "Jen stejný materiál: žádný jiný zavedený slot nemá stejný materiál.",
+  "canvas.match_material": "Jen stejný materiál",
+  "canvas.match_material_hint": "Se zapnutým automatickým doplňováním: když žádný slot nemá stejný filament i barvu, pokračuje zavedeným slotem stejného typu materiálu. Spoléhá na označení slotů, slot označený ASA tedy musí obsahovat ASA."
 }

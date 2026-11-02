@@ -1340,5 +1340,19 @@
   "fanfloor.requested": "Żądane minimum: {percent}%",
   "fanfloor.not_ready": "Komponent natywny nie jest gotowy. Uruchom ponownie bezczynną drukarkę lub sprawdź diagnostykę.",
   "fanfloor.printing_required": "Dostępne podczas wydruku z aktualnymi danymi. Pauza lub koniec anuluje żądanie.",
-  "caltools.calculator": "Kalkulator kalibracji ekstruzji"
+  "caltools.calculator": "Kalkulator kalibracji ekstruzji",
+  "runout.heading": "Koniec filamentu w Canvas",
+  "runout.title": "Skończył się filament w gnieździe {slot} Canvas",
+  "runout.detail": "Gniazdo {slot} ({material}, {tools}) jest puste, a wydruk wstrzymany. Kontynuuj z innego załadowanego gniazda: drukarka je załaduje, przepłucze i wznowi.",
+  "runout.continue_from": "Kontynuuj z gniazda {slot}",
+  "runout.same_material": "Ten sam materiał",
+  "runout.other_material": "Inny materiał",
+  "runout.none_loaded": "Żadne inne gniazdo nie jest załadowane. Włóż szpulę do Canvas, a następnie wybierz ją tutaj.",
+  "runout.confirm": "Kontynuować wydruk z gniazda {slot}? Drukarka je załaduje, przepłucze i wznowi.",
+  "runout.confirm_mismatch": "Gniazdo {slot} jest oznaczone jako {material}, nie {expected}. Mimo to kontynuować z nim wydruk?",
+  "runout.loading": "Ładowanie gniazda {slot} i wznawianie…",
+  "runout.failed": "Nie można kontynuować: {error}",
+  "runout.no_match_auto": "Tylko ten sam materiał: żadne inne załadowane gniazdo nie zawiera tego samego materiału.",
+  "canvas.match_material": "Tylko ten sam materiał",
+  "canvas.match_material_hint": "Przy włączonym automatycznym uzupełnianiu: jeśli żadne gniazdo nie ma tego samego filamentu i koloru, kontynuuje z załadowanego gniazda tego samego typu materiału. Ufa etykietom gniazd, więc gniazdo oznaczone ASA musi zawierać ASA."
 }
