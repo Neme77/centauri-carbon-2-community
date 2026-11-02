@@ -1,0 +1,2126 @@
+{
+  "schema": 1,
+  "boot_readiness_code_unchanged": true,
+  "existing_community_patch_preserved": true,
+  "original_sha256": "5f3122852044f6750dbd36aeb2ebcbd0ea8c5e99f48a52c186def1f66c3ec58a",
+  "output_sha256": "47575c54c6d9643ff0b473cc256da64e9328fc5feb1402961d08cc457fe5b7f5",
+  "added_range": [
+    2230208,
+    2242936
+  ],
+  "added_bytes": 15179,
+  "inserted_bytes": 65536,
+  "state_address": 20146752,
+  "labels": {
+    "constructor_return": 2230208,
+    "language_125_0": 2230812,
+    "language_125_1": 2230824,
+    "language_125_2": 2230836,
+    "language_125_3": 2230848,
+    "language_125_4": 2230860,
+    "language_125_5": 2230872,
+    "language_125_6": 2230884,
+    "language_125_7": 2230896,
+    "language_125_8": 2230908,
+    "language_125_9": 2230920,
+    "language_125_10": 2230932,
+    "language_125_done": 2230944,
+    "language_224_0": 2231208,
+    "language_224_1": 2231220,
+    "language_224_2": 2231232,
+    "language_224_3": 2231244,
+    "language_224_4": 2231256,
+    "language_224_5": 2231268,
+    "language_224_6": 2231280,
+    "language_224_7": 2231292,
+    "language_224_8": 2231304,
+    "language_224_9": 2231316,
+    "language_224_10": 2231328,
+    "language_224_done": 2231340,
+    "language_975_0": 2234212,
+    "language_975_1": 2234224,
+    "language_975_2": 2234236,
+    "language_975_3": 2234248,
+    "language_975_4": 2234260,
+    "language_975_5": 2234272,
+    "language_975_6": 2234284,
+    "language_975_7": 2234296,
+    "language_975_8": 2234308,
+    "language_975_9": 2234320,
+    "language_975_10": 2234332,
+    "language_975_done": 2234344,
+    "language_1178_0": 2235024,
+    "language_1178_1": 2235036,
+    "language_1178_2": 2235048,
+    "language_1178_3": 2235060,
+    "language_1178_4": 2235072,
+    "language_1178_5": 2235084,
+    "language_1178_6": 2235096,
+    "language_1178_7": 2235108,
+    "language_1178_8": 2235120,
+    "language_1178_9": 2235132,
+    "language_1178_10": 2235144,
+    "language_1178_done": 2235156,
+    "language_1381_0": 2235836,
+    "language_1381_1": 2235848,
+    "language_1381_2": 2235860,
+    "language_1381_3": 2235872,
+    "language_1381_4": 2235884,
+    "language_1381_5": 2235896,
+    "language_1381_6": 2235908,
+    "language_1381_7": 2235920,
+    "language_1381_8": 2235932,
+    "language_1381_9": 2235944,
+    "language_1381_10": 2235956,
+    "language_1381_done": 2235968,
+    "timer_return": 2237772,
+    "navigation": 2237820,
+    "nav_classic": 2238344,
+    "nav_end": 2238792,
+    "status": 2238796,
+    "language_2166_0": 2238976,
+    "language_2166_1": 2238988,
+    "language_2166_2": 2239000,
+    "language_2166_3": 2239012,
+    "language_2166_4": 2239024,
+    "language_2166_5": 2239036,
+    "language_2166_6": 2239048,
+    "language_2166_7": 2239060,
+    "language_2166_8": 2239072,
+    "language_2166_9": 2239084,
+    "language_2166_10": 2239096,
+    "language_2166_done": 2239108,
+    "language_2230_0": 2239232,
+    "language_2230_1": 2239244,
+    "language_2230_2": 2239256,
+    "language_2230_3": 2239268,
+    "language_2230_4": 2239280,
+    "language_2230_5": 2239292,
+    "language_2230_6": 2239304,
+    "language_2230_7": 2239316,
+    "language_2230_8": 2239328,
+    "language_2230_9": 2239340,
+    "language_2230_10": 2239352,
+    "language_2230_done": 2239364,
+    "language_2294_0": 2239488,
+    "language_2294_1": 2239500,
+    "language_2294_2": 2239512,
+    "language_2294_3": 2239524,
+    "language_2294_4": 2239536,
+    "language_2294_5": 2239548,
+    "language_2294_6": 2239560,
+    "language_2294_7": 2239572,
+    "language_2294_8": 2239584,
+    "language_2294_9": 2239596,
+    "language_2294_10": 2239608,
+    "language_2294_done": 2239620,
+    "language_2362_0": 2239760,
+    "language_2362_1": 2239772,
+    "language_2362_2": 2239784,
+    "language_2362_3": 2239796,
+    "language_2362_4": 2239808,
+    "language_2362_5": 2239820,
+    "language_2362_6": 2239832,
+    "language_2362_7": 2239844,
+    "language_2362_8": 2239856,
+    "language_2362_9": 2239868,
+    "language_2362_10": 2239880,
+    "language_2362_done": 2239892,
+    "canvas_off": 2239904,
+    "language_2424_0": 2240008,
+    "language_2424_1": 2240020,
+    "language_2424_2": 2240032,
+    "language_2424_3": 2240044,
+    "language_2424_4": 2240056,
+    "language_2424_5": 2240068,
+    "language_2424_6": 2240080,
+    "language_2424_7": 2240092,
+    "language_2424_8": 2240104,
+    "language_2424_9": 2240116,
+    "language_2424_10": 2240128,
+    "language_2424_done": 2240140,
+    "canvas_text_done": 2240148,
+    "language_2494_0": 2240288,
+    "language_2494_1": 2240300,
+    "language_2494_2": 2240312,
+    "language_2494_3": 2240324,
+    "language_2494_4": 2240336,
+    "language_2494_5": 2240348,
+    "language_2494_6": 2240360,
+    "language_2494_7": 2240372,
+    "language_2494_8": 2240384,
+    "language_2494_9": 2240396,
+    "language_2494_10": 2240408,
+    "language_2494_done": 2240420,
+    "idle_4": 2240432,
+    "language_2556_0": 2240536,
+    "language_2556_1": 2240548,
+    "language_2556_2": 2240560,
+    "language_2556_3": 2240572,
+    "language_2556_4": 2240584,
+    "language_2556_5": 2240596,
+    "language_2556_6": 2240608,
+    "language_2556_7": 2240620,
+    "language_2556_8": 2240632,
+    "language_2556_9": 2240644,
+    "language_2556_10": 2240656,
+    "language_2556_done": 2240668,
+    "busy_4": 2240680,
+    "language_2618_0": 2240784,
+    "language_2618_1": 2240796,
+    "language_2618_2": 2240808,
+    "language_2618_3": 2240820,
+    "language_2618_4": 2240832,
+    "language_2618_5": 2240844,
+    "language_2618_6": 2240856,
+    "language_2618_7": 2240868,
+    "language_2618_8": 2240880,
+    "language_2618_9": 2240892,
+    "language_2618_10": 2240904,
+    "language_2618_done": 2240916,
+    "state_done_4": 2240924,
+    "language_2686_0": 2241056,
+    "language_2686_1": 2241068,
+    "language_2686_2": 2241080,
+    "language_2686_3": 2241092,
+    "language_2686_4": 2241104,
+    "language_2686_5": 2241116,
+    "language_2686_6": 2241128,
+    "language_2686_7": 2241140,
+    "language_2686_8": 2241152,
+    "language_2686_9": 2241164,
+    "language_2686_10": 2241176,
+    "language_2686_done": 2241188,
+    "idle_8": 2241200,
+    "language_2748_0": 2241304,
+    "language_2748_1": 2241316,
+    "language_2748_2": 2241328,
+    "language_2748_3": 2241340,
+    "language_2748_4": 2241352,
+    "language_2748_5": 2241364,
+    "language_2748_6": 2241376,
+    "language_2748_7": 2241388,
+    "language_2748_8": 2241400,
+    "language_2748_9": 2241412,
+    "language_2748_10": 2241424,
+    "language_2748_done": 2241436,
+    "busy_8": 2241448,
+    "language_2810_0": 2241552,
+    "language_2810_1": 2241564,
+    "language_2810_2": 2241576,
+    "language_2810_3": 2241588,
+    "language_2810_4": 2241600,
+    "language_2810_5": 2241612,
+    "language_2810_6": 2241624,
+    "language_2810_7": 2241636,
+    "language_2810_8": 2241648,
+    "language_2810_9": 2241660,
+    "language_2810_10": 2241672,
+    "language_2810_done": 2241684,
+    "state_done_8": 2241692,
+    "status_end": 2241828,
+    "ip": 2241832,
+    "ip_mode_lan": 2242008,
+    "ip_mode_done": 2242016,
+    "ip_wifi_name": 2242100,
+    "ip_socket": 2242124,
+    "ip_wifi_format": 2242272,
+    "ip_format": 2242280,
+    "ip_unavailable": 2242288,
+    "language_3020_0": 2242392,
+    "language_3020_1": 2242404,
+    "language_3020_2": 2242416,
+    "language_3020_3": 2242428,
+    "language_3020_4": 2242440,
+    "language_3020_5": 2242452,
+    "language_3020_6": 2242464,
+    "language_3020_7": 2242476,
+    "language_3020_8": 2242488,
+    "language_3020_9": 2242500,
+    "language_3020_10": 2242512,
+    "language_3020_done": 2242524,
+    "ip_end": 2242532,
+    "printer_source": 2242540,
+    "trampoline_ui_view_home_home_show": 2242752,
+    "trampoline_home_menu_view_hide.part.11": 2242796,
+    "trampoline_home_menu_view_hide": 2242840,
+    "trampoline_home_menu_view_destory": 2242928
+  },
+  "original_entries": {
+    "ui_view_home_home_show": [
+      377308,
+      3912056848
+    ],
+    "home_menu_view_hide.part.11": [
+      378280,
+      3809031568
+    ],
+    "home_menu_view_hide": [
+      385780,
+      3813670912
+    ],
+    "home_menu_view_destory": [
+      385812,
+      3912056848
+    ]
+  },
+  "hooks": {
+    "ui_view_home_home_show": 2242716,
+    "home_menu_view_hide.part.11": 2242760,
+    "home_menu_view_hide": 2242804,
+    "home_menu_view_destory": 2242848
+  },
+  "animation_duration_ms": 15000,
+  "geometry": [
+    [
+      78,
+      79,
+      238,
+      170
+    ],
+    [
+      274,
+      87,
+      32,
+      32
+    ],
+    [
+      270,
+      5,
+      250,
+      28
+    ],
+    [
+      332,
+      79,
+      180,
+      52
+    ],
+    [
+      332,
+      139,
+      180,
+      52
+    ],
+    [
+      274,
+      209,
+      32,
+      32
+    ],
+    [
+      8,
+      278,
+      240,
+      20
+    ],
+    [
+      332,
+      199,
+      180,
+      52
+    ]
+  ],
+  "calls": [
+    {
+      "site": "0x220818",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x220830",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x220848",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x220858",
+      "function": "lv_obj_clear_flag"
+    },
+    {
+      "site": "0x220874",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x220884",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x22089c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2208a8",
+      "function": "get_font"
+    },
+    {
+      "site": "0x2208c4",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x2208dc",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x2208f4",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x2208fc",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x220918",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x220928",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x220940",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x22094c",
+      "function": "get_font"
+    },
+    {
+      "site": "0x220968",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x220980",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x220998",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x2209a0",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x2209b4",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x220aa4",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x220ab4",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x220acc",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x220ad8",
+      "function": "get_font"
+    },
+    {
+      "site": "0x220af4",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x220b0c",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x220b24",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x220b2c",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x220b40",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x220c30",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x220c40",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x220c58",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x220c64",
+      "function": "get_font"
+    },
+    {
+      "site": "0x220c80",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x220c98",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x220cb0",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x220cc0",
+      "function": "lv_obj_set_width"
+    },
+    {
+      "site": "0x220ce4",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x220cfc",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x220d14",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x220d2c",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x220d44",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x220d5c",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x220d74",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x220d8c",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x220da4",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x220dbc",
+      "function": "lv_obj_set_style_text_align"
+    },
+    {
+      "site": "0x220dd4",
+      "function": "lv_obj_set_style_pad_top"
+    },
+    {
+      "site": "0x220df0",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x220e08",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x220e20",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x220e38",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x220e50",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x220e68",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x220e80",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x220e98",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x220ebc",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x220ed4",
+      "function": "lv_obj_set_parent"
+    },
+    {
+      "site": "0x220ee4",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x220efc",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x220f14",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x220f2c",
+      "function": "lv_img_set_pivot"
+    },
+    {
+      "site": "0x220f3c",
+      "function": "lv_img_set_zoom"
+    },
+    {
+      "site": "0x220f4c",
+      "function": "lv_img_set_antialias"
+    },
+    {
+      "site": "0x220f64",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x220f6c",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x220f88",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x220f98",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x220fb0",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x220fbc",
+      "function": "get_font"
+    },
+    {
+      "site": "0x220fd8",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x220ff0",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x221008",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x221024",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x22103c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221054",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x22106c",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x221084",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x22109c",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x2210b4",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x2210cc",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x2210e8",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221100",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221118",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x221130",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x221148",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x221160",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x221178",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x221190",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x2211ac",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2211c4",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2211dc",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2211f4",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x22120c",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x221230",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x221240",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221258",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x22127c",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x22128c",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2212a4",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x2212c8",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2212d8",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2212f0",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x221314",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x221324",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x22133c",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x221360",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x221370",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221388",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x2213ac",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2213bc",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2213d4",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x2213f8",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x221408",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221420",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x221444",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x221468",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x22148c",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x2214b0",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x2214d4",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x2214f8",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x22151c",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x221540",
+      "function": "lv_obj_set_style_img_opa"
+    },
+    {
+      "site": "0x22155c",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221574",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x22158c",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2215a4",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x2215bc",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x2215d4",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x2215ec",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x221604",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x22161c",
+      "function": "lv_obj_set_parent"
+    },
+    {
+      "site": "0x22162c",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221644",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221650",
+      "function": "get_font"
+    },
+    {
+      "site": "0x22166c",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x221684",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x22169c",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x2216b8",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2216d0",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2216e0",
+      "function": "lv_img_set_antialias"
+    },
+    {
+      "site": "0x2216e8",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x2216fc",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x2217ec",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x2217fc",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221814",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221820",
+      "function": "get_font"
+    },
+    {
+      "site": "0x22183c",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x221854",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x22186c",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x221888",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2218a0",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2218b8",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2218d0",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x2218e8",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x221900",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x221918",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x221930",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x221948",
+      "function": "lv_obj_set_parent"
+    },
+    {
+      "site": "0x221958",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221970",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x22197c",
+      "function": "get_font"
+    },
+    {
+      "site": "0x221998",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x2219b0",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x2219c8",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x2219e4",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2219fc",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221a0c",
+      "function": "lv_img_set_antialias"
+    },
+    {
+      "site": "0x221a14",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x221a28",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x221b18",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x221b28",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221b40",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221b4c",
+      "function": "get_font"
+    },
+    {
+      "site": "0x221b68",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x221b80",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x221b98",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x221bb4",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221bcc",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221be4",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x221bfc",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x221c14",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x221c2c",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x221c44",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x221c5c",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x221c74",
+      "function": "lv_obj_set_parent"
+    },
+    {
+      "site": "0x221c84",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221c9c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221ca8",
+      "function": "get_font"
+    },
+    {
+      "site": "0x221cc4",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x221cdc",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x221cf4",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x221d10",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221d28",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221d38",
+      "function": "lv_img_set_antialias"
+    },
+    {
+      "site": "0x221d40",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x221d54",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x221e44",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x221e54",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221e6c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221e78",
+      "function": "get_font"
+    },
+    {
+      "site": "0x221e94",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x221eac",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x221ec4",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x221ee0",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221ef8",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221f04",
+      "function": "get_font"
+    },
+    {
+      "site": "0x221f20",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x221f38",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x221f48",
+      "function": "lv_obj_set_width"
+    },
+    {
+      "site": "0x221f60",
+      "function": "lv_obj_set_style_text_align"
+    },
+    {
+      "site": "0x221f78",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x221f94",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x221fac",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x221fc4",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x221fdc",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x221ff4",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x222010",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222028",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222040",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2220a0",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2220b8",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2220d0",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x222130",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222148",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222160",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2221c0",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2221d8",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2221f0",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x22223c",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x22225c",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x22226c",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222284",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222290",
+      "function": "get_font"
+    },
+    {
+      "site": "0x2222ac",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x2222c4",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x2222dc",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x2222e4",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x222300",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x222310",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222328",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222334",
+      "function": "get_font"
+    },
+    {
+      "site": "0x222350",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x222368",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x222380",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x222390",
+      "function": "lv_obj_set_width"
+    },
+    {
+      "site": "0x2223a8",
+      "function": "lv_obj_set_style_text_align"
+    },
+    {
+      "site": "0x222530",
+      "function": "home_menu_view_update_led_state"
+    },
+    {
+      "site": "0x2225b8",
+      "function": "lv_obj_has_flag"
+    },
+    {
+      "site": "0x2225d4",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2225ec",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222604",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x222620",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222638",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222650",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x22266c",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222684",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x22269c",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2226b8",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2226d0",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2226e8",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x222704",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x22271c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222734",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x222750",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222768",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222780",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x222798",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2227b0",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2227c8",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2227e4",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2227fc",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222814",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x222830",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222848",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222860",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x22287c",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x222894",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2228ac",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2228c8",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x2228e0",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2228f8",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x222914",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x22292c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x222944",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x222980",
+      "function": "lv_obj_has_flag"
+    },
+    {
+      "site": "0x222998",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x222a88",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x222a98",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x222b88",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x222b98",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x222c88",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x222c8c",
+      "function": "is_filament_canvas_connected"
+    },
+    {
+      "site": "0x222ca8",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x222d98",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x222da0",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x222e90",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x222e94",
+      "function": "data_get_machine_status"
+    },
+    {
+      "site": "0x222eb8",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x222fa8",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x222fb0",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x2230a0",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x2230a8",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x223198",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x2231b8",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x2232a8",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x2232b0",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x2233a0",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x2233a8",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x223498",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x2234a8",
+      "function": "data_get_noz_target_temp"
+    },
+    {
+      "site": "0x2234c4",
+      "function": "lv_label_set_text_fmt"
+    },
+    {
+      "site": "0x2234d4",
+      "function": "data_get_bed_target_temp"
+    },
+    {
+      "site": "0x2234f0",
+      "function": "lv_label_set_text_fmt"
+    },
+    {
+      "site": "0x223510",
+      "function": "lv_label_set_text_fmt"
+    },
+    {
+      "site": "0x22354c",
+      "function": "open"
+    },
+    {
+      "site": "0x223584",
+      "function": "read"
+    },
+    {
+      "site": "0x223590",
+      "function": "close"
+    },
+    {
+      "site": "0x223664",
+      "function": "socket"
+    },
+    {
+      "site": "0x223680",
+      "function": "ioctl"
+    },
+    {
+      "site": "0x223690",
+      "function": "close"
+    },
+    {
+      "site": "0x2236e8",
+      "function": "lv_label_set_text_fmt"
+    },
+    {
+      "site": "0x2236f0",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x2237e0",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x223804",
+      "function": "lv_img_set_src"
+    },
+    {
+      "site": "0x223814",
+      "function": "lv_obj_set_align"
+    },
+    {
+      "site": "0x22382c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x223844",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x22385c",
+      "function": "lv_img_set_pivot"
+    },
+    {
+      "site": "0x22386c",
+      "function": "lv_img_set_zoom"
+    },
+    {
+      "site": "0x22387c",
+      "function": "lv_img_set_antialias"
+    },
+    {
+      "site": "0x223894",
+      "function": "lv_obj_set_style_img_opa"
+    }
+  ],
+  "functions": {
+    "lv_obj_set_align": 1009344,
+    "lv_obj_set_pos": 1008512,
+    "lv_obj_set_size": 1008720,
+    "lv_obj_clear_flag": 1004048,
+    "lv_label_set_text": 1191668,
+    "get_font": 152204,
+    "lv_obj_set_style_text_font": 1032628,
+    "lv_obj_set_style_text_opa": 1032604,
+    "lv_obj_set_style_text_color": 1032556,
+    "lv_label_create": 1187620,
+    "get_now_language": 152236,
+    "lv_obj_set_width": 1008544,
+    "lv_obj_set_style_bg_color": 1032076,
+    "lv_obj_set_style_bg_opa": 1032124,
+    "lv_obj_set_style_border_color": 1032412,
+    "lv_obj_set_style_border_width": 1032484,
+    "lv_obj_set_style_radius": 1031812,
+    "lv_obj_set_style_text_align": 1032724,
+    "lv_obj_set_style_pad_top": 1031668,
+    "lv_obj_set_style_img_opa": 1032748,
+    "lv_obj_set_parent": 1035212,
+    "lv_img_set_pivot": 1186468,
+    "lv_img_set_zoom": 1186816,
+    "lv_img_set_antialias": 1187192,
+    "home_menu_view_update_led_state": 377556,
+    "lv_obj_has_flag": 1004276,
+    "is_filament_canvas_connected": 702144,
+    "data_get_machine_status": 718904,
+    "data_get_noz_target_temp": 709628,
+    "lv_label_set_text_fmt": 1192144,
+    "data_get_bed_target_temp": 709868,
+    "open": 76952,
+    "read": 76688,
+    "close": 76640,
+    "socket": 77132,
+    "ioctl": 76796,
+    "lv_img_set_src": 1182664
+  },
+  "original_constructor_return_sites": [
+    "0x5dce4",
+    "0x5ddb4"
+  ],
+  "palette": {
+    "input_sha256": "5f3122852044f6750dbd36aeb2ebcbd0ea8c5e99f48a52c186def1f66c3ec58a",
+    "output_sha256": "93a3644d2107f953ac0acf7a0387a684c790af51c4deb09e055dbd8ce4463323",
+    "colors_changed": 29,
+    "instruction_slots": 58,
+    "changes": [
+      {
+        "va": "0x23eb4",
+        "offset": 81588,
+        "before": "1918d7e7",
+        "after": "451503e3",
+        "color_call": "0x23ec4"
+      },
+      {
+        "va": "0x23ebc",
+        "offset": 81596,
+        "before": "ff1481e3",
+        "after": "2a1f4fe3",
+        "color_call": "0x23ec4"
+      },
+      {
+        "va": "0x23efc",
+        "offset": 81660,
+        "before": "1918d7e7",
+        "after": "451503e3",
+        "color_call": "0x23f0c"
+      },
+      {
+        "va": "0x23f04",
+        "offset": 81668,
+        "before": "ff1481e3",
+        "after": "2a1f4fe3",
+        "color_call": "0x23f0c"
+      },
+      {
+        "va": "0x23f80",
+        "offset": 81792,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x23f88"
+      },
+      {
+        "va": "0x23f84",
+        "offset": 81796,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x23f88"
+      },
+      {
+        "va": "0x23fbc",
+        "offset": 81852,
+        "before": "1818d7e7",
+        "after": "291e01e3",
+        "color_call": "0x23fc4"
+      },
+      {
+        "va": "0x23fc0",
+        "offset": 81856,
+        "before": "ff1481e3",
+        "after": "171f4fe3",
+        "color_call": "0x23fc4"
+      },
+      {
+        "va": "0x23ffc",
+        "offset": 81916,
+        "before": "1318d7e7",
+        "after": "451503e3",
+        "color_call": "0x24008"
+      },
+      {
+        "va": "0x24004",
+        "offset": 81924,
+        "before": "ff1481e3",
+        "after": "2a1f4fe3",
+        "color_call": "0x24008"
+      },
+      {
+        "va": "0x2402c",
+        "offset": 81964,
+        "before": "1318d7e7",
+        "after": "3a1503e3",
+        "color_call": "0x24038"
+      },
+      {
+        "va": "0x24034",
+        "offset": 81972,
+        "before": "ff1481e3",
+        "after": "211f4fe3",
+        "color_call": "0x24038"
+      },
+      {
+        "va": "0x2406c",
+        "offset": 82028,
+        "before": "1318d7e7",
+        "after": "451503e3",
+        "color_call": "0x24078"
+      },
+      {
+        "va": "0x24074",
+        "offset": 82036,
+        "before": "ff1481e3",
+        "after": "2a1f4fe3",
+        "color_call": "0x24078"
+      },
+      {
+        "va": "0x240cc",
+        "offset": 82124,
+        "before": "1918d7e7",
+        "after": "451503e3",
+        "color_call": "0x240dc"
+      },
+      {
+        "va": "0x240d4",
+        "offset": 82132,
+        "before": "ff1481e3",
+        "after": "2a1f4fe3",
+        "color_call": "0x240dc"
+      },
+      {
+        "va": "0x24130",
+        "offset": 82224,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24138"
+      },
+      {
+        "va": "0x24134",
+        "offset": 82228,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24138"
+      },
+      {
+        "va": "0x2418c",
+        "offset": 82316,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24194"
+      },
+      {
+        "va": "0x24190",
+        "offset": 82320,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24194"
+      },
+      {
+        "va": "0x241e8",
+        "offset": 82408,
+        "before": "1318d7e7",
+        "after": "1a1201e3",
+        "color_call": "0x241f8"
+      },
+      {
+        "va": "0x241f0",
+        "offset": 82416,
+        "before": "ff1481e3",
+        "after": "0e1f4fe3",
+        "color_call": "0x241f8"
+      },
+      {
+        "va": "0x2423c",
+        "offset": 82492,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24244"
+      },
+      {
+        "va": "0x24240",
+        "offset": 82496,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24244"
+      },
+      {
+        "va": "0x24288",
+        "offset": 82568,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24290"
+      },
+      {
+        "va": "0x2428c",
+        "offset": 82572,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24290"
+      },
+      {
+        "va": "0x24400",
+        "offset": 82944,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24408"
+      },
+      {
+        "va": "0x24404",
+        "offset": 82948,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24408"
+      },
+      {
+        "va": "0x2442c",
+        "offset": 82988,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24434"
+      },
+      {
+        "va": "0x24430",
+        "offset": 82992,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24434"
+      },
+      {
+        "va": "0x245bc",
+        "offset": 83388,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x245c4"
+      },
+      {
+        "va": "0x245c0",
+        "offset": 83392,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x245c4"
+      },
+      {
+        "va": "0x24608",
+        "offset": 83464,
+        "before": "1818d7e7",
+        "after": "291e01e3",
+        "color_call": "0x24610"
+      },
+      {
+        "va": "0x2460c",
+        "offset": 83468,
+        "before": "ff1481e3",
+        "after": "171f4fe3",
+        "color_call": "0x24610"
+      },
+      {
+        "va": "0x2494c",
+        "offset": 84300,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24954"
+      },
+      {
+        "va": "0x24950",
+        "offset": 84304,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24954"
+      },
+      {
+        "va": "0x2498c",
+        "offset": 84364,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24994"
+      },
+      {
+        "va": "0x24990",
+        "offset": 84368,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24994"
+      },
+      {
+        "va": "0x24aa8",
+        "offset": 84648,
+        "before": "1818d7e7",
+        "after": "291e01e3",
+        "color_call": "0x24ab0"
+      },
+      {
+        "va": "0x24aac",
+        "offset": 84652,
+        "before": "ff1481e3",
+        "after": "171f4fe3",
+        "color_call": "0x24ab0"
+      },
+      {
+        "va": "0x24ae4",
+        "offset": 84708,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24aec"
+      },
+      {
+        "va": "0x24ae8",
+        "offset": 84712,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24aec"
+      },
+      {
+        "va": "0x24b3c",
+        "offset": 84796,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24b44"
+      },
+      {
+        "va": "0x24b40",
+        "offset": 84800,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24b44"
+      },
+      {
+        "va": "0x24b94",
+        "offset": 84884,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24b9c"
+      },
+      {
+        "va": "0x24b98",
+        "offset": 84888,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24b9c"
+      },
+      {
+        "va": "0x24bfc",
+        "offset": 84988,
+        "before": "1818d7e7",
+        "after": "291e01e3",
+        "color_call": "0x24c04"
+      },
+      {
+        "va": "0x24c00",
+        "offset": 84992,
+        "before": "ff1481e3",
+        "after": "171f4fe3",
+        "color_call": "0x24c04"
+      },
+      {
+        "va": "0x24cd4",
+        "offset": 85204,
+        "before": "1918d7e7",
+        "after": "be1a0ae3",
+        "color_call": "0x24cdc"
+      },
+      {
+        "va": "0x24cd8",
+        "offset": 85208,
+        "before": "ff1481e3",
+        "after": "9c1f4fe3",
+        "color_call": "0x24cdc"
+      },
+      {
+        "va": "0x24d60",
+        "offset": 85344,
+        "before": "1918d7e7",
+        "after": "be1a0ae3",
+        "color_call": "0x24d68"
+      },
+      {
+        "va": "0x24d64",
+        "offset": 85348,
+        "before": "ff1481e3",
+        "after": "9c1f4fe3",
+        "color_call": "0x24d68"
+      },
+      {
+        "va": "0x24da0",
+        "offset": 85408,
+        "before": "1818d7e7",
+        "after": "291e01e3",
+        "color_call": "0x24da8"
+      },
+      {
+        "va": "0x24da4",
+        "offset": 85412,
+        "before": "ff1481e3",
+        "after": "171f4fe3",
+        "color_call": "0x24da8"
+      },
+      {
+        "va": "0x24dfc",
+        "offset": 85500,
+        "before": "1918d7e7",
+        "after": "be1a0ae3",
+        "color_call": "0x24e04"
+      },
+      {
+        "va": "0x24e00",
+        "offset": 85504,
+        "before": "ff1481e3",
+        "after": "9c1f4fe3",
+        "color_call": "0x24e04"
+      },
+      {
+        "va": "0x24e58",
+        "offset": 85592,
+        "before": "1518d7e7",
+        "after": "d81a0ee3",
+        "color_call": "0x24e60"
+      },
+      {
+        "va": "0x24e5c",
+        "offset": 85596,
+        "before": "ff1481e3",
+        "after": "7e1f4fe3",
+        "color_call": "0x24e60"
+      }
+    ],
+    "all_other_theme_callbacks_exact": true,
+    "other_theme_exact": true,
+    "original_elf_geometry": true,
+    "hardware_qualified": false
+  },
+  "hardware_qualified": false,
+  "installed": false,
+  "limitations": [
+    "Native LVGL rendering and R3a qualification pending",
+    "Read-only kernel interface query supplies the active LAN/Wi-Fi IPv4 label",
+    "Heating highlights and all touch states require device acceptance"
+  ]
+}

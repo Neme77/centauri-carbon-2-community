@@ -1,0 +1,440 @@
+{
+  "schema": 1,
+  "baseline_sha256": "47575c54c6d9643ff0b473cc256da64e9328fc5feb1402961d08cc457fe5b7f5",
+  "gui_sha256": "db09fa37d378df259427aaac392a341282e08ceb26cd87603542c0dcbcbb91d1",
+  "added_range": [
+    2245392,
+    2247632
+  ],
+  "added_bytes": 2680,
+  "labels": {
+    "constructor_tail": 2245392,
+    "show_tail": 2246408,
+    "refresh": 2246432,
+    "speed_scan": 2246680,
+    "speed_valid": 2246728,
+    "get_ip": 2246776,
+    "disconnected": 2246964,
+    "translation_393_0": 2247068,
+    "translation_393_1": 2247080,
+    "translation_393_2": 2247092,
+    "translation_393_3": 2247104,
+    "translation_393_4": 2247116,
+    "translation_393_5": 2247128,
+    "translation_393_6": 2247140,
+    "translation_393_7": 2247152,
+    "translation_393_8": 2247164,
+    "translation_393_9": 2247176,
+    "translation_393_10": 2247188,
+    "translation_393_end": 2247200,
+    "unavailable": 2247212,
+    "translation_455_0": 2247316,
+    "translation_455_1": 2247328,
+    "translation_455_2": 2247340,
+    "translation_455_3": 2247352,
+    "translation_455_4": 2247364,
+    "translation_455_5": 2247376,
+    "translation_455_6": 2247388,
+    "translation_455_7": 2247400,
+    "translation_455_8": 2247412,
+    "translation_455_9": 2247424,
+    "translation_455_10": 2247436,
+    "translation_455_end": 2247448,
+    "refresh_done": 2247460,
+    "read_file": 2247468,
+    "read_trim": 2247556,
+    "trim_byte": 2247588,
+    "read_done": 2247608,
+    "read_absent": 2247616
+  },
+  "calls": [
+    {
+      "site": "0x224338",
+      "function": "memset"
+    },
+    {
+      "site": "0x224354",
+      "function": "lv_obj_create"
+    },
+    {
+      "site": "0x224384",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x22439c",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2243b4",
+      "function": "lv_obj_set_style_bg_color"
+    },
+    {
+      "site": "0x2243cc",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x2243e4",
+      "function": "lv_obj_set_style_border_color"
+    },
+    {
+      "site": "0x2243fc",
+      "function": "lv_obj_set_style_border_width"
+    },
+    {
+      "site": "0x224414",
+      "function": "lv_obj_set_style_radius"
+    },
+    {
+      "site": "0x22442c",
+      "function": "lv_obj_set_style_pad_left"
+    },
+    {
+      "site": "0x224444",
+      "function": "lv_obj_set_style_pad_right"
+    },
+    {
+      "site": "0x22445c",
+      "function": "lv_obj_set_style_pad_top"
+    },
+    {
+      "site": "0x224474",
+      "function": "lv_obj_set_style_pad_bottom"
+    },
+    {
+      "site": "0x224484",
+      "function": "lv_obj_clear_flag"
+    },
+    {
+      "site": "0x22448c",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x2244b0",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x2244c8",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2244d8",
+      "function": "lv_label_set_long_mode"
+    },
+    {
+      "site": "0x2244f0",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x224508",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x224520",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x22452c",
+      "function": "get_font"
+    },
+    {
+      "site": "0x224540",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x224550",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x224558",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x22457c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x224594",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x2245a4",
+      "function": "lv_label_set_long_mode"
+    },
+    {
+      "site": "0x2245bc",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x2245d4",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x2245ec",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x2245f8",
+      "function": "get_font"
+    },
+    {
+      "site": "0x22460c",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x22461c",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x224628",
+      "function": "lv_label_create"
+    },
+    {
+      "site": "0x22464c",
+      "function": "lv_obj_set_pos"
+    },
+    {
+      "site": "0x224664",
+      "function": "lv_obj_set_size"
+    },
+    {
+      "site": "0x224674",
+      "function": "lv_label_set_long_mode"
+    },
+    {
+      "site": "0x22468c",
+      "function": "lv_obj_set_style_bg_opa"
+    },
+    {
+      "site": "0x2246a4",
+      "function": "lv_obj_set_style_text_opa"
+    },
+    {
+      "site": "0x2246bc",
+      "function": "lv_obj_set_style_text_color"
+    },
+    {
+      "site": "0x2246c8",
+      "function": "get_font"
+    },
+    {
+      "site": "0x2246dc",
+      "function": "lv_obj_set_style_text_font"
+    },
+    {
+      "site": "0x2246ec",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x22470c",
+      "function": "lv_obj_clear_flag"
+    },
+    {
+      "site": "0x224760",
+      "function": "lv_obj_is_valid"
+    },
+    {
+      "site": "0x224778",
+      "function": "lv_obj_is_valid"
+    },
+    {
+      "site": "0x224790",
+      "function": "lv_obj_is_valid"
+    },
+    {
+      "site": "0x2247b0",
+      "function": "memset"
+    },
+    {
+      "site": "0x2247c4",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x2247ec",
+      "function": "strcmp"
+    },
+    {
+      "site": "0x224868",
+      "function": "snprintf"
+    },
+    {
+      "site": "0x224874",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x22488c",
+      "function": "memcpy"
+    },
+    {
+      "site": "0x2248a8",
+      "function": "socket"
+    },
+    {
+      "site": "0x2248c4",
+      "function": "ioctl"
+    },
+    {
+      "site": "0x2248d0",
+      "function": "close"
+    },
+    {
+      "site": "0x224920",
+      "function": "snprintf"
+    },
+    {
+      "site": "0x22492c",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x224934",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x224a24",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x224a2c",
+      "function": "get_now_language"
+    },
+    {
+      "site": "0x224b1c",
+      "function": "lv_label_set_text"
+    },
+    {
+      "site": "0x224b3c",
+      "function": "open"
+    },
+    {
+      "site": "0x224b58",
+      "function": "read"
+    },
+    {
+      "site": "0x224b64",
+      "function": "close"
+    }
+  ],
+  "state_address": 20146784,
+  "state_bytes": 16,
+  "color_changes": [
+    {
+      "address": 148352,
+      "offset": 82816,
+      "before": "1418d7e7",
+      "after": "d81a0ee3",
+      "caller": "0x24390"
+    },
+    {
+      "address": 148360,
+      "offset": 82824,
+      "before": "ff1481e3",
+      "after": "7e1f4fe3",
+      "caller": "0x24390"
+    },
+    {
+      "address": 148688,
+      "offset": 83152,
+      "before": "1918d7e7",
+      "after": "d81a0ee3",
+      "caller": "0x244d8"
+    },
+    {
+      "address": 148692,
+      "offset": 83156,
+      "before": "ff1481e3",
+      "after": "7e1f4fe3",
+      "caller": "0x244d8"
+    },
+    {
+      "address": 149140,
+      "offset": 83604,
+      "before": "1918d7e7",
+      "after": "d81a0ee3",
+      "caller": "0x2469c"
+    },
+    {
+      "address": 149144,
+      "offset": 83608,
+      "before": "ff1481e3",
+      "after": "7e1f4fe3",
+      "caller": "0x2469c"
+    },
+    {
+      "address": 149304,
+      "offset": 83768,
+      "before": "1918d7e7",
+      "after": "d81a0ee3",
+      "caller": "0x24740"
+    },
+    {
+      "address": 149308,
+      "offset": 83772,
+      "before": "ff1481e3",
+      "after": "7e1f4fe3",
+      "caller": "0x24740"
+    },
+    {
+      "address": 149468,
+      "offset": 83932,
+      "before": "1918d7e7",
+      "after": "d81a0ee3",
+      "caller": "0x247e8"
+    },
+    {
+      "address": 149476,
+      "offset": 83940,
+      "before": "ff1481e3",
+      "after": "7e1f4fe3",
+      "caller": "0x247e8"
+    },
+    {
+      "address": 150092,
+      "offset": 84556,
+      "before": "1418d7e7",
+      "after": "d81a0ee3",
+      "caller": "0x24a54"
+    },
+    {
+      "address": 150096,
+      "offset": 84560,
+      "before": "ff1481e3",
+      "after": "7e1f4fe3",
+      "caller": "0x24a54"
+    },
+    {
+      "address": 150136,
+      "offset": 84600,
+      "before": "1418d7e7",
+      "after": "d81a0ee3",
+      "caller": "0x24a84"
+    },
+    {
+      "address": 150144,
+      "offset": 84608,
+      "before": "ff1481e3",
+      "after": "7e1f4fe3",
+      "caller": "0x24a84"
+    }
+  ],
+  "original_sites": [
+    {
+      "address": 547488,
+      "offset": 481952,
+      "before": "f08fbde8",
+      "after": "1a7a06ea"
+    },
+    {
+      "address": 537988,
+      "offset": 472452,
+      "before": "21c701ea",
+      "after": "5f8406ea"
+    }
+  ],
+  "rx_size_header_offset": 164,
+  "rx_size": 2182536,
+  "added_timers": 0,
+  "added_threads": 0,
+  "network_mutations": 0,
+  "modal": false,
+  "refresh": "native constructor and page show only",
+  "hardware_qualified": false
+}

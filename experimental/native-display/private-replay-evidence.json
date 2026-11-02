@@ -1,0 +1,696 @@
+{
+  "schema": 1,
+  "gui_sha256": "db09fa37d378df259427aaac392a341282e08ceb26cd87603542c0dcbcbb91d1",
+  "cases": [
+    {
+      "case": "native-constructor-preserved",
+      "wifi": false,
+      "canvas": false
+    },
+    {
+      "case": "native-constructor-preserved",
+      "wifi": false,
+      "canvas": true
+    },
+    {
+      "case": "native-constructor-preserved",
+      "wifi": true,
+      "canvas": false
+    },
+    {
+      "case": "native-constructor-preserved",
+      "wifi": true,
+      "canvas": true
+    },
+    {
+      "case": "absent",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "absent",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "disabled",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "unplugged-retained-lease",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "gigabit",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "100mbps",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "no-lease",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "zero-address",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "bad-speed",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "socket-failed",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 0,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 1,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 2,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 3,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 4,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 5,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 6,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 7,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 8,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 9,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    },
+    {
+      "case": "read-failed",
+      "language": 10,
+      "reentry_lease_refreshed": true,
+      "deleted_widget_guard": true
+    }
+  ],
+  "native_constructor_events_preserved": true,
+  "native_show_calls_preserved": true,
+  "no_modal_or_added_callbacks": true,
+  "fd_zero_closed": true,
+  "no_new_timers": true,
+  "no_network_mutation": true,
+  "original_byte_allowlist_checked": true,
+  "languages": 11,
+  "hardware_qualified": false,
+  "printer_accessed": false
+}
