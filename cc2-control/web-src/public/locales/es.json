@@ -1216,5 +1216,13 @@
   "network.dns2": "DNS secundario",
   "canvas.unload_pending_safety": "Reinicia antes de guardar calibraciones en la pantalla: SAVE_CONFIG puede descartar este cambio pendiente.",
   "canvas.unload_conflict": "Un guardado de la impresora modificó la retracción pendiente. Guarda de nuevo el valor deseado antes de reiniciar.",
-  "plates.pending_save_conflict": "Un guardado de la impresora modificó la malla pendiente. Activación sin verificar; se conservaron los ajustes más recientes."
+  "plates.pending_save_conflict": "Un guardado de la impresora modificó la malla pendiente. Activación sin verificar; se conservaron los ajustes más recientes.",
+  "network.usb_revision": "Revisión del adaptador USB",
+  "network.usb_experimental_warning": "La revisión RTL8153 3000 es experimental y no ha completado la validación del hardware. Se mantienen las comprobaciones del kernel y la recuperación de conexión.",
+  "network.usb_approve": "Permitir la revisión experimental 3000",
+  "network.usb_revoke": "Revocar el permiso experimental",
+  "network.usb_approve_confirm": "¿Permitir el uso experimental de este RTL8153 revisión 3000? Solo se guarda el consentimiento: no se carga ningún controlador ni se cambia la conexión.",
+  "network.usb_revoke_confirm": "¿Revocar el permiso para la revisión 3000? Primero desactiva Ethernet.",
+  "network.usb_approved_note": "Permiso guardado para la revisión 3000. No equivale a una validación del hardware. Desactiva Ethernet antes de revocarlo.",
+  "network.usb_unsupported": "Esta revisión RTL8153 no es compatible con esta compilación."
 }

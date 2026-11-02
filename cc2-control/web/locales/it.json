@@ -1216,5 +1216,13 @@
   "network.dns2": "DNS secondario",
   "canvas.unload_pending_safety": "Riavvia prima di salvare calibrazioni dal display: SAVE_CONFIG può annullare questa modifica in attesa.",
   "canvas.unload_conflict": "Un salvataggio della stampante ha modificato il ritiro in attesa. Salva di nuovo il valore desiderato prima di riavviare.",
-  "plates.pending_save_conflict": "Un salvataggio della stampante ha modificato la mesh in attesa. Attivazione non verificata; le impostazioni più recenti sono state conservate."
+  "plates.pending_save_conflict": "Un salvataggio della stampante ha modificato la mesh in attesa. Attivazione non verificata; le impostazioni più recenti sono state conservate.",
+  "network.usb_revision": "Revisione adattatore USB",
+  "network.usb_experimental_warning": "La revisione RTL8153 3000 è sperimentale e non ha completato la qualifica hardware. Restano obbligatori i controlli del kernel e il ripristino della connessione.",
+  "network.usb_approve": "Consenti la revisione sperimentale 3000",
+  "network.usb_revoke": "Revoca il consenso sperimentale",
+  "network.usb_approve_confirm": "Consentire l’uso sperimentale di questo RTL8153 revisione 3000? Viene salvato solo il consenso: nessun driver viene caricato e la connessione non cambia.",
+  "network.usb_revoke_confirm": "Revocare il consenso per la revisione 3000? Prima disabilita Ethernet.",
+  "network.usb_approved_note": "Consenso salvato per la revisione 3000. Non equivale a una qualifica hardware. Disabilita Ethernet prima di revocarlo.",
+  "network.usb_unsupported": "Questa revisione RTL8153 non è supportata da questa build."
 }

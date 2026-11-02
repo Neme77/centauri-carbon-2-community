@@ -1216,5 +1216,13 @@
   "network.dns2": "备用 DNS",
   "canvas.unload_pending_safety": "在打印机屏幕上保存校准前请先重启；SAVE_CONFIG 可能丢弃这项待生效的更改。",
   "canvas.unload_conflict": "打印机保存操作更改了待生效的回抽设置。重启前请重新保存所需值。",
-  "plates.pending_save_conflict": "打印机保存操作更改了待生效的网床。激活尚未验证；已保留打印机较新的设置。"
+  "plates.pending_save_conflict": "打印机保存操作更改了待生效的网床。激活尚未验证；已保留打印机较新的设置。",
+  "network.usb_revision": "USB 适配器修订版",
+  "network.usb_experimental_warning": "RTL8153 修订版 3000 为实验性支持，尚未完成硬件验证。内核检查和连接恢复仍然必须执行。",
+  "network.usb_approve": "允许实验性修订版 3000",
+  "network.usb_revoke": "撤销实验性授权",
+  "network.usb_approve_confirm": "允许实验性使用当前连接的 RTL8153 修订版 3000？此操作仅保存授权，不加载驱动程序，也不更改连接。",
+  "network.usb_revoke_confirm": "撤销修订版 3000 的授权？请先禁用以太网。",
+  "network.usb_approved_note": "已保存修订版 3000 的授权。这不代表硬件已通过验证。撤销前请禁用以太网。",
+  "network.usb_unsupported": "此构建不支持该 RTL8153 修订版。"
 }

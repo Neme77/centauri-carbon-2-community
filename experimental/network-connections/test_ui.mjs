@@ -10,6 +10,7 @@ const dict=async lang=>JSON.parse(await readFile(path.join(app,'web-src/public/l
 const en=await dict('en'),sent=[],errors=[]
 let language='en',theme='obsidian',pending=null
 let holdConfirm=false,releaseConfirm,failConfirm=false
+let usb={valid:true,qualified:true,approved:false,allowed:true,can_try:false,revision:'31fd',approval_revision:'',count:1}
 const ip={enabled:true,method:'dhcp',ip:'',prefix:0,gateway:'',dns1:'',dns2:''}
 const config={ethernet_support:true,selected:'wifi',wifi:{...ip},ethernet:{...ip}}
 const actual={known:true,method:'dhcp',prefix:24,gateway:'192.0.2.1',dns1:'192.0.2.1',dns2:''}
@@ -26,13 +27,14 @@ try {
   if(url.pathname.startsWith('/i18n/'))return route.fulfill({json:await dict(path.basename(url.pathname,'.json'))})
   if(url.pathname==='/api/preferences')return route.fulfill({json:{language,theme}})
   if(url.pathname==='/api/setup')return route.fulfill({json:{configured:true,mqtt_connected:true,snapshot_received:true}})
-  if(url.pathname==='/api/network/manager')return route.fulfill({json:{installed:true,state_valid:true,ready:true,busy:Boolean(pending),last_exit:0,phase:pending?'pending':'idle',config,saved:config,actual:{wifi:actual,ethernet:actual},pending,networks:{uptime_ms:500,saved:[{ssid:'Saved fixture',network_id:2,current:false}],visible:[{ssid:'Visible fixture',security:'wpa2',signal:-50,compatible:true}]},diagnostic:'',last_error:''}})
+  if(url.pathname==='/api/network/manager')return route.fulfill({json:{installed:true,state_valid:true,ready:true,busy:Boolean(pending),last_exit:0,phase:pending?'pending':'idle',usb,config,saved:config,actual:{wifi:actual,ethernet:actual},pending,networks:{uptime_ms:500,saved:[{ssid:'Saved fixture',network_id:2,current:false}],visible:[{ssid:'Visible fixture',security:'wpa2',signal:-50,compatible:true}]},diagnostic:'',last_error:''}})
   if(url.pathname==='/api/network')return route.fulfill({json:{available:true,fresh:true,age_ms:0,snapshot}})
   if(url.pathname==='/api/network/action' || url.pathname==='/api/network/scan'){
    assert.equal(r.headers()['x-cc2-lan'],undefined)
    assert.equal(r.headers()['x-cc2-request'],'1')
    const body=url.pathname.endsWith('/scan')?'scan':JSON.parse(r.postData())
    sent.push(body)
+   if(body.op==='usb-approval')usb={...usb,approved:body.enabled,allowed:body.enabled,approval_revision:body.enabled?'3000':''}
    if(body.op==='confirm' && failConfirm)return route.fulfill({status:500,json:{error:'fixture_confirmation_failed'}})
    if(body.op==='confirm' && holdConfirm)await new Promise(resolve=>{releaseConfirm=resolve})
    if(body.op==='confirm' || body.op==='cancel')pending=null
@@ -45,6 +47,31 @@ try {
  await page.goto('http://192.0.2.107/#settings/connection')
  assert.equal(await page.getByRole('button',{name:/^Prepare trial$/i,exact:true}).count(),0)
  assert(!(await page.locator('body').innerText()).includes('3 minutes'))
+ assert.equal(await page.getByRole('button',{name:en['network.usb_approve'],exact:true}).count(),0)
+ usb={valid:true,qualified:false,approved:false,allowed:false,can_try:true,revision:'3000',approval_revision:'',count:1}
+ await page.getByRole('button',{name:en['network.refresh'],exact:true}).click()
+ const approve=page.getByRole('button',{name:en['network.usb_approve'],exact:true})
+ await approve.click()
+ await page.getByRole('button',{name:en['common.cancel'],exact:true}).click()
+ assert.equal(sent.length,0)
+ await approve.click();await confirm()
+ await page.waitForFunction(()=>!document.querySelector('[role=dialog]'))
+ assert.deepEqual(sent.at(-1),{op:'usb-approval',enabled:true,revision:'3000'})
+ const revoke=page.getByRole('button',{name:en['network.usb_revoke'],exact:true})
+ await revoke.waitFor()
+ assert.equal(await revoke.isDisabled(),true,'must disable Ethernet before revoking')
+ config.ethernet.enabled=false
+ usb={...usb,valid:false,approved:false,allowed:false,can_try:false,revision:'',count:0}
+ await page.getByRole('button',{name:en['network.refresh'],exact:true}).click()
+ await revoke.click();await confirm()
+ await page.waitForFunction(()=>!document.querySelector('[role=dialog]'))
+ assert.deepEqual(sent.at(-1),{op:'usb-approval',enabled:false,revision:'3000'})
+ assert.equal(config.selected,'wifi')
+ config.ethernet.enabled=true
+ usb={valid:true,qualified:true,approved:false,allowed:true,can_try:false,revision:'31fd',approval_revision:'',count:1}
+ await page.getByRole('button',{name:en['network.refresh'],exact:true}).click()
+ sent.length=0
+
  await page.getByRole('button',{name:en['network.switch'],exact:true}).nth(1).click()
  await page.getByRole('button',{name:en['common.cancel'],exact:true}).click()
  assert.equal(sent.length,0)
@@ -102,6 +129,7 @@ try {
  await page.getByRole('textbox',{name:en['network.diagnostics'],exact:true}).waitFor()
  assert(!await page.getByRole('textbox',{name:en['network.diagnostics']}).inputValue().then(x=>x.includes('fixture-only-pass')))
  const shots=[]
+ usb={valid:true,qualified:false,approved:false,allowed:false,can_try:true,revision:'3000',approval_revision:'',count:1}
  for(language of ['en','it','fr','es','pl','cs','hu','ru','zh'])for(const width of [320,390,768,1440]) {
   await page.setViewportSize({width,height:1000});await page.reload()
   const tr=await dict(language)
@@ -114,6 +142,6 @@ try {
   }
  }
  assert.deepEqual(errors,[])
- await writeFile(path.join(out,'ui-validation.json'),JSON.stringify({actual_buttons_and_dialogs:true,no_lan_code_for_network_only:true,guard_header:true,cancel_no_mutation:true,static_ip:true,wifi_scan_and_connect:true,native_saved_profile:true,pending_confirmation:true,no_trial_or_unconditional_timer:true,nine_languages_four_widths:true,shots,errors},null,2)+'\n')
+ await writeFile(path.join(out,'ui-validation.json'),JSON.stringify({actual_buttons_and_dialogs:true,usb_revision_consent:true,no_lan_code_for_network_only:true,guard_header:true,cancel_no_mutation:true,static_ip:true,wifi_scan_and_connect:true,native_saved_profile:true,pending_confirmation:true,no_trial_or_unconditional_timer:true,nine_languages_four_widths:true,shots,errors},null,2)+'\n')
  console.log('PASS: actual Connections controls, confirmation, Wi-Fi/IP forms, credential handling and nine languages at four widths')
 } finally {await browser.close()}

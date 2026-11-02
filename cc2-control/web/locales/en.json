@@ -1216,5 +1216,13 @@
   "network.dns2": "Secondary DNS",
   "canvas.unload_pending_safety": "Restart before saving calibrations on the printer screen; SAVE_CONFIG can discard this pending change.",
   "canvas.unload_conflict": "A printer save changed the pending pull-back. Save the desired value again before restarting.",
-  "plates.pending_save_conflict": "A printer save changed the pending plate mesh. Activation is unverified; the newer printer settings were preserved."
+  "plates.pending_save_conflict": "A printer save changed the pending plate mesh. Activation is unverified; the newer printer settings were preserved.",
+  "network.usb_revision": "USB adapter revision",
+  "network.usb_experimental_warning": "RTL8153 revision 3000 is experimental. It has not completed hardware qualification. Kernel checks and connection recovery remain required.",
+  "network.usb_approve": "Allow experimental revision 3000",
+  "network.usb_revoke": "Revoke experimental approval",
+  "network.usb_approve_confirm": "Allow this connected RTL8153 revision 3000 for experimental use? This records consent only: it does not load a driver or change the connection.",
+  "network.usb_revoke_confirm": "Revoke permission for revision 3000? Disable Ethernet first.",
+  "network.usb_approved_note": "Permission saved for revision 3000. This is not hardware qualification. Disable Ethernet before revoking it.",
+  "network.usb_unsupported": "This RTL8153 revision is not supported by this build."
 }
