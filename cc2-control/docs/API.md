@@ -678,6 +678,17 @@ LAN header; receipt is not confirmation of heater shutdown. Confirm only after
 zero target readback. The session cannot be extended or resumed via Start.
 See [BED_DRYING.md](BED_DRYING.md) for native lease and recovery limitations.
 
+`POST /api/bed-drying/preheat` starts the same session as a chamber preheat. It requires
+`X-CC2-LAN` and canonical text `bed:chamber:minutes`: bed 60 °C up to the lower of 100 °C and the
+printer's `[heater_bed] max_temp`, chamber 30–55 °C, and 1–240 minutes held once the chamber is
+ready. It answers `409` unless the same idle checks pass (a warm bed with a zero target is allowed),
+the exhaust grille state (`print_stats.cavity_temperature_mode`), aux fan and chamber temperature
+are readable, and the chamber is below the target. The state then also reports `mode`
+(`"bed"` or `"preheat"`), `chamber_target`, `chamber` (°C or null), `ready`, `levelled` (ready because the chamber stopped rising more
+than 1 °C short of the target), `plateau` (the
+estimated level the chamber is heading for, °C or null), `fan` (aux fan PWM 0–255 sent by the
+session) and `bed_limit`. `state` is `"handed_off"` while a print that took over the bed runs.
+
 ## Completed print readback
 
 `GET /api/printer` adds `print.native` when the existing UDS cache has a fresh

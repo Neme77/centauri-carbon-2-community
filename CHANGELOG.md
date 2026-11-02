@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Explicit experimental opt-in for Realtek RTL8153 USB `0bda:8153` revision `3000`, with a revision-specific preliminary ABI probe and unchanged connection confirmation/recovery. The tested `31fd` path remains available; other revisions are not automatically enabled. Reported by **kalross** (#274), implemented by **Neme77** (#278).
 
+- Experimental chamber preheat as a mode of bed heating: the bed heats the empty chamber with the exhaust grille closed and the aux fan tapering off near the target, reports when the chamber is ready, estimates where it will level off, hands the bed to a print that starts and restores the grille, fan and bed idle timeout afterwards; requested by **Sceletor** (#270), by **Noahwhite2014** (#277).
+
 ## [CC2 Control 1.2.24] - 2026-10-31
 
 ### Added
