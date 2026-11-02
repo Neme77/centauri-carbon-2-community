@@ -431,6 +431,7 @@ static void canvas_unload_response(int fd) { canvas_unload_state(fd, 200); }
 
 /* Body: a whole number of millimetres, or "default" to remove the override. */
 static void canvas_unload_save_response(int fd, const mqtt_client *mqtt, const char *body, size_t body_len) {
+    if(rotation_pending()){plates_fail(fd,409,"A rotation distance change needs a restart before changing Canvas pull-back");return;}
     while (body_len && isspace((unsigned char)*body)) { body++; body_len--; }
     while (body_len && isspace((unsigned char)body[body_len - 1])) body_len--;
     int value = -1, maximum = canvas_unload_max();

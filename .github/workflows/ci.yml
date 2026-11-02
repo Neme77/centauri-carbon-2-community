@@ -60,6 +60,13 @@ jobs:
             timeout 20s qemu-arm /tmp/$test
           done
 
+      - name: ARM native maintenance regressions under qemu
+        run: |
+          for test in test_rotation_core test_load_cell_guide_core test_grille_api test_calibration_tools; do
+            arm-linux-gnueabihf-gcc -O2 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread -static tests/$test.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -lm -o /tmp/$test
+            timeout 90s qemu-arm /tmp/$test
+          done
+
       - name: ARM binary smoke test under qemu
         run: CC2_TEST_RUNNER=qemu-arm python3 tests/test_smoke.py dist/cc2-control/cc2-control
 
@@ -137,6 +144,10 @@ jobs:
         run: |
           npm run test:experiments
           npm run test:nozzle-experiment
+          npm run test:grille
+          npm run test:calibration-tools
+          npm run test:load-cell-guide
+          npm run test:rotation-restore
           npm run test:motor-mode
 
       - name: Canvas states and explicit recovery loading
