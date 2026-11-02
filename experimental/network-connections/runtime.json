@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "asset_id": 698833594,
-  "release_id": 430700493,
-  "filename": "CC2-Connections-Runtime-RTL8153-3000.tar.gz",
-  "sha256": "5ca5fe6ebe60809b73da7491dbd3a8b5cfa236835d7181ac852d89737a9fa76c",
-  "helper_sha256": "b124dfb811fc46d3039affe31753cc88e1996ff66a6bd6af15245c81565e59bb",
+  "asset_id": 702442784,
+  "release_id": 431709540,
+  "filename": "CC2-Connections-Runtime-Recovery-649d0af3dba7.tar.gz",
+  "sha256": "649d0af3dba7e21bc399fc741115fbe298cc1e4b77c07cf51bd35bfd73762e9a",
+  "helper_sha256": "2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62",
   "qualified_profile": {
     "community": "V4.4.2",
     "kernel": "5.4.61 #40 ARMv7",
@@ -13,7 +13,7 @@
     "usb_revision": "31fd",
     "tested_model": "TP-Link UE300"
   },
-  "physical_reference": "31fd was tested in R5h; this rebuilt runtime and revision 3000 require separate hardware validation.",
+  "physical_reference": "Owner accepted the corrected 31fd manager and Pressure Advance on 2026-11-02. Recovery installer and Quick Actions are newly qualified candidates; revision 3000 remains physically unqualified.",
   "experimental_profiles": [
     {
       "usb_vendor": "0bda",

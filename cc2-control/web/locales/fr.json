@@ -1067,8 +1067,8 @@
   "experiments.unavailable": "Paramètres expérimentaux indisponibles. Aucune modification possible.",
   "experiments.using_mqtt": "Désactivé · source MQTT",
   "experiments.using_uds": "Activé · source UDS",
-  "drying.title": "Chauffage du plateau pour sécher le filament",
-  "drying.hint": "Chauffage temporisé expérimental. La température du plateau n’est pas celle du filament ou de l’air ; respectez les limites du fabricant de la bobine.",
+  "drying.title": "Chauffage du plateau et préchauffage de la chambre",
+  "drying.hint": "Chauffage expérimental du plateau pour sécher le filament ou préchauffer la chambre. La température du plateau diffère de celle du filament ou de la chambre ; respectez les limites du fabricant du matériau.",
   "drying.guard": "30–90 °C, 1–720 minutes. Le minuteur démarre à température et continue une fois la page fermée. Aucun chauffage de buse ni mouvement. Aucun redémarrage automatique.",
   "drying.minutes": "Durée, minutes",
   "drying.start": "Démarrer le chauffage du plateau",
@@ -1324,5 +1324,9 @@
   "cellguide.discard_confirm": "Retirez la charge. Redémarrer sans enregistrer pour abandonner cet étalonnage ? D’autres changements en attente bloquent cette action.",
   "cellguide.restart_confirm": "Retirez la charge. Redémarrer l’imprimante au repos pour charger l’étalonnage enregistré ? Les deux chauffages doivent être éteints.",
   "cellguide.measure_confirm": "Mesurer avec une masse connue de {value} g ? Vérifiez qu’elle correspond à l’objet sur le plateau.",
-  "cellguide.used_mass": "Masse utilisée pour cette mesure : {value} g"
+  "cellguide.used_mass": "Masse utilisée pour cette mesure : {value} g",
+  "tuning.pressure_advance": "Pressure Advance (s)",
+  "tuning.actual_pa": "Actuel : {value} s",
+  "tuning.disable_pa": "Désactiver (0)",
+  "tuning.pa_note": "Valeur temporaire (0–1 s). Le G-code de démarrage peut la remplacer."
 }

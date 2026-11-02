@@ -13,7 +13,7 @@ def run(args, **kw):
 
 assert os.geteuid() == 0, 'Run the fixture suite as root; all devices/services are stand-ins'
 for name in ('test_usb_policy.py', 'test_usb_loader.py', 'test_profile_cache.py', 'test_seed.py', 'test_routes.py', 'test_wifi_enable.py',
-             'test_hooks.py', 'test_install_diagnostics.py', 'test_wifi_entry.py',
+             'test_hooks.py', 'test_install_diagnostics.py', 'test_wifi_entry.py', 'test_reflash.py',
              'test_runner.py', 'test_unix.py'):
     run(['python3', root / name])
 run(['python3', root / 'test_reactor_startup.py', root / 'fixtures/legacy-prepare-hooks.awk'])

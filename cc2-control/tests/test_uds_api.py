@@ -59,6 +59,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         # Spool tracking charges filament_used to the Canvas channel reported in the same stream.
         objects = subscription["params"]["objects"]
         assert objects["canvas_dev"] == ["active_cid"] and {"state", "filament_used"} <= set(objects["print_stats"])
+        assert "pressure_advance" in objects["extruder"], "PA uses the existing native subscription"
         send({"id": 11, "result": {"eventtime": 1, "status": {
             "extruder": {"temperature": 210, "target": 215},
             "fan": {"speed": 0.6, "rpm": 8700},
@@ -81,12 +82,14 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         printer = get("/api/printer")
         assert printer["extruder"] == {"temperature": 210, "target": 215}
         assert printer["fans"]["part"] == 153
-        assert printer["tuning"] == {"speed_percent": 80, "flow_percent": 95, "live_velocity": None}
+        assert printer["tuning"] == {"speed_percent": 80, "flow_percent": 95, "live_velocity": None, "pressure_advance": None}
         send({"method": "cc2_status", "params": {"eventtime": 2, "status": {
-            "extruder": {"temperature": 211}, "gcode_move": {"speed_factor": 1.3}
+            "extruder": {"temperature": 211, "pressure_advance": 0.04237}, "gcode_move": {"speed_factor": 1.3}
         }}})
         value = wait_for("/api/uds", lambda x: x["values"]["speed_factor"] == 1.3)
         assert value["values"]["nozzle_target"] == 215
+        assert value["values"]["pressure_advance"] == 0.04237
+        assert get("/api/printer")["tuning"]["pressure_advance"] == 0.04237
         assert value["values"]["canvas_channel"] is None and value["print_state"] is None
         send({"method": "cc2_status", "params": {"eventtime": 2.5, "status": {
             "canvas_dev": {"active_cid": 3}, "print_stats": {"state": "printing"}
@@ -130,6 +133,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         value = get("/api/uds")
         assert value["homed_axes"] is None and value["light"] is None
         assert get("/api/printer")["extruder"]["temperature"] is None
+        assert get("/api/printer")["tuning"]["pressure_advance"] is None
         # Accept the automatic reconnection and confirm the old cache is reset.
         peer, _ = listener.accept()
         peer.settimeout(3)
@@ -140,6 +144,8 @@ with tempfile.TemporaryDirectory(prefix="cc2-uds-api-") as temporary:
         value = wait_for("/api/uds", lambda x: x["fresh"])
         assert value["values"]["nozzle_temperature"] == 30
         assert value["values"]["speed_factor"] is None
+        assert value["values"]["pressure_advance"] is None
+        assert get("/api/printer")["tuning"]["pressure_advance"] is None
         assert value["homed_axes"] is None and value["light"] is None
         # Passive monitoring uses the SAME connection, even while print state is active.
         send({"method": "cc2_status", "params": {"eventtime": 0.2, "status": {

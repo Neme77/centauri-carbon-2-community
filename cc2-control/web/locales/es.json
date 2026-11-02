@@ -1067,8 +1067,8 @@
   "experiments.unavailable": "Ajustes experimentales no disponibles. No se pueden modificar.",
   "experiments.using_mqtt": "Desactivado · fuente MQTT",
   "experiments.using_uds": "Activado · fuente UDS",
-  "drying.title": "Calentamiento de cama para secar filamento",
-  "drying.hint": "Calentamiento temporizado experimental. La temperatura de la cama no es la del filamento ni del aire; respeta los límites del fabricante de la bobina.",
+  "drying.title": "Calentamiento de cama y precalentamiento de cámara",
+  "drying.hint": "Calentamiento experimental de la cama para secar filamento o precalentar la cámara. La temperatura de la cama no es la del filamento ni la cámara; respeta los límites del fabricante del material.",
   "drying.guard": "30–90 °C, 1–720 minutos. El temporizador empieza al alcanzar la temperatura y continúa con la página cerrada. Sin calentar la boquilla ni mover ejes. Sin reinicio automático.",
   "drying.minutes": "Duración, minutos",
   "drying.start": "Iniciar calentamiento de cama",
@@ -1324,5 +1324,9 @@
   "cellguide.discard_confirm": "Retira la carga. ¿Reiniciar sin guardar para descartar la calibración? Otros cambios pendientes bloquearán esta acción.",
   "cellguide.restart_confirm": "Retira la carga. ¿Reiniciar la impresora inactiva para cargar la calibración guardada? Ambos calentadores deben estar apagados.",
   "cellguide.measure_confirm": "¿Medir con una masa conocida de {value} g? Confirma que corresponde al objeto sobre la cama.",
-  "cellguide.used_mass": "Masa utilizada para esta medida: {value} g"
+  "cellguide.used_mass": "Masa utilizada para esta medida: {value} g",
+  "tuning.pressure_advance": "Pressure Advance (s)",
+  "tuning.actual_pa": "Actual: {value} s",
+  "tuning.disable_pa": "Desactivar (0)",
+  "tuning.pa_note": "Solo en ejecución (0–1 s). El G-code de inicio puede sobrescribir este valor."
 }

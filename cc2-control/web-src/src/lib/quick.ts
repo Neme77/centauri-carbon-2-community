@@ -19,6 +19,12 @@ export const QUICK_CHOICES: Record<string, [label: Key, icon: string]> = {
   'calibration:hotend': ['control.quick_pid_hotend', 'temp'],
   'calibration:bed': ['control.quick_pid_bed', 'temp'],
   'page:canvas': ['common.canvas', 'canvas'],
+  'grille:open': ['grille.open', 'fan'],
+  'grille:close': ['grille.close', 'fan'],
+  'settings:connection': ['network.connections', 'plug'],
+  'control:fans': ['common.fans', 'fan'],
+  'control:tuning': ['tuning.pressure_advance', 'settings'],
+  'control:heating': ['drying.title', 'temp'],
 }
 export const QUICK_DEFAULTS = ['home:ALL', 'system:heaters_off', 'system:fans_off', 'system:motors_off']
 export const QUICK_ASK: Record<string, Key> = {
@@ -32,7 +38,11 @@ export const QUICK_ASK: Record<string, Key> = {
 }
 // Navigation and lights stay usable while the printer is busy; the rest need an idle printer.
 export const quickAlwaysAvailable = (action: string) =>
-  action.startsWith('page:') || action.startsWith('calibration:') || action === 'light:toggle'
+  action.startsWith('page:') ||
+  action.startsWith('calibration:') ||
+  action.startsWith('control:') ||
+  action === 'settings:connection' ||
+  action === 'light:toggle'
 
 export const quick = store({ actions: QUICK_DEFAULTS })
 
@@ -52,3 +62,6 @@ export async function saveQuickActions(actions: string[]) {
 
 // Calibration shortcuts open guarded controls; they never start motion or heating.
 export const calibrationFocus = store({ target: '', revision: 0 })
+
+// Navigation-only shortcuts do not send hardware commands.
+export const controlFocus = store({ target: '', revision: 0 })

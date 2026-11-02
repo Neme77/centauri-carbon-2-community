@@ -1067,8 +1067,8 @@
   "experiments.unavailable": "A kísérleti beállítások nem érhetők el. Módosítás nem lehetséges.",
   "experiments.using_mqtt": "Letiltva · MQTT-forrás",
   "experiments.using_uds": "Engedélyezve · UDS-forrás",
-  "drying.title": "Ágyfűtés filamentszárításhoz",
-  "drying.hint": "Kísérleti időzített ágyfűtés. Az ágy hőmérséklete nem a filament vagy a levegő hőmérséklete; tartsa be az orsó gyártójának határértékeit.",
+  "drying.title": "Tárgyasztalfűtés és kamra-előmelegítés",
+  "drying.hint": "Kísérleti tárgyasztalfűtés filamentszárításhoz vagy a kamra előmelegítéséhez. Az asztal hőmérséklete nem a filament vagy a kamra hőmérséklete; tartsa be az anyag gyártójának határértékeit.",
   "drying.guard": "30–90 °C, 1–720 perc. Az időzítő a hőmérséklet elérésekor indul, és bezárt oldalnál is működik. Nincs fúvókafűtés vagy mozgás. Nincs automatikus folytatás.",
   "drying.minutes": "Időtartam, perc",
   "drying.start": "Ágyfűtés indítása",
@@ -1324,5 +1324,9 @@
   "cellguide.discard_confirm": "Távolítsd el a terhelést. Újraindítod mentés nélkül a kalibrálás elvetéséhez? Más függő módosítás megakadályozza ezt.",
   "cellguide.restart_confirm": "Távolítsd el a terhelést. Újraindítod a tétlen nyomtatót a mentett kalibrálás betöltéséhez? Mindkét fűtés legyen kikapcsolva.",
   "cellguide.measure_confirm": "Mérés {value} g ismert tömeggel? Ellenőrizd, hogy ez megfelel az asztalon lévő tárgynak.",
-  "cellguide.used_mass": "A méréshez használt tömeg: {value} g"
+  "cellguide.used_mass": "A méréshez használt tömeg: {value} g",
+  "tuning.pressure_advance": "Pressure Advance (s)",
+  "tuning.actual_pa": "Aktuális: {value} s",
+  "tuning.disable_pa": "Kikapcsolás (0)",
+  "tuning.pa_note": "Csak futás közben (0–1 s). A kezdő G-code felülírhatja ezt az értéket."
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
+const labels = JSON.parse(await readFile(new URL('../public/locales/en.json', import.meta.url), 'utf8'))
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
 const server = await createServer({ root: new URL('..', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'), mode: 'demo', server: { host: '127.0.0.1', port: 0 } })
@@ -37,7 +38,7 @@ try {
   await page.goto(`${server.resolvedUrls.local[0]}#control`)
   assert.equal(await page.locator('[data-bed-drying]').count(), 0)
   await page.goto(`${server.resolvedUrls.local[0]}#settings/integrations`)
-  const toggle = page.getByRole('switch', { name: 'Bed heating for filament drying', exact: true })
+  const toggle = page.getByRole('switch', { name: labels['drying.title'], exact: true })
   await toggle.waitFor(); assert(await toggle.isDisabled())
   await page.getByLabel('LAN code for experimental features', { exact: true }).fill('fixture-confirmation')
   await toggle.click(); await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()

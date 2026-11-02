@@ -1067,8 +1067,8 @@
   "experiments.unavailable": "实验设置不可用，无法修改。",
   "experiments.using_mqtt": "已禁用 · MQTT 来源",
   "experiments.using_uds": "已启用 · UDS 来源",
-  "drying.title": "用于干燥耗材的热床加热",
-  "drying.hint": "实验性定时热床加热。热床温度不等于耗材或空气温度；请遵守料盘制造商的温度限制。",
+  "drying.title": "热床加热与腔体预热",
+  "drying.hint": "实验性热床加热，可用于耗材干燥或腔体预热。热床温度不等于耗材或腔体温度；请遵守材料制造商的限制。",
   "drying.guard": "30–90 °C，1–720 分钟。达到温度后开始计时，关闭页面后仍继续运行。不加热喷嘴，不移动轴，不自动恢复。",
   "drying.minutes": "时长（分钟）",
   "drying.start": "开始热床加热",
@@ -1324,5 +1324,9 @@
   "cellguide.discard_confirm": "移除负载。不保存直接重启以放弃此校准？其他待处理更改会阻止此操作。",
   "cellguide.restart_confirm": "移除负载。重启空闲的打印机以加载已保存的校准？两个加热器必须关闭。",
   "cellguide.measure_confirm": "使用 {value} 克已知质量进行测量？请确认与打印床上的物体一致。",
-  "cellguide.used_mass": "本次测量使用的质量：{value} 克"
+  "cellguide.used_mass": "本次测量使用的质量：{value} 克",
+  "tuning.pressure_advance": "Pressure Advance (s)",
+  "tuning.actual_pa": "当前：{value} 秒",
+  "tuning.disable_pa": "禁用（0）",
+  "tuning.pa_note": "仅在运行时生效（0–1 秒）。起始 G-code 可能覆盖此值。"
 }

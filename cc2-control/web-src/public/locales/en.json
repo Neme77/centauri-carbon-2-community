@@ -1067,8 +1067,8 @@
   "experiments.unavailable": "Experimental settings are unavailable. No changes can be made.",
   "experiments.using_mqtt": "Disabled · using MQTT",
   "experiments.using_uds": "Enabled · using UDS",
-  "drying.title": "Bed heating for filament drying",
-  "drying.hint": "Experimental timed bed heating. Bed temperature is not filament or air temperature; follow the spool manufacturer’s limits.",
+  "drying.title": "Bed heating and chamber preheat",
+  "drying.hint": "Experimental bed heating for filament drying or chamber preheating. Bed temperature is not filament or chamber temperature; follow the material manufacturer’s limits.",
   "drying.guard": "30–90 °C, 1–720 minutes. The timer starts at temperature and runs with the page closed. No nozzle heating or movement. No automatic restart.",
   "drying.minutes": "Duration, minutes",
   "drying.start": "Start bed heating",
@@ -1324,5 +1324,9 @@
   "cellguide.discard_confirm": "Remove the load. Restart without saving to discard this calibration? Any unrelated pending changes will refuse this action.",
   "cellguide.restart_confirm": "Remove the calibration load. Restart the complete idle printer to load the saved calibration? Both heaters must be off.",
   "cellguide.measure_confirm": "Measure using a known mass of {value} g? Confirm that this matches the object on the bed.",
-  "cellguide.used_mass": "Mass used for this measurement: {value} g"
+  "cellguide.used_mass": "Mass used for this measurement: {value} g",
+  "tuning.pressure_advance": "Pressure Advance (s)",
+  "tuning.actual_pa": "Actual: {value} s",
+  "tuning.disable_pa": "Disable (0)",
+  "tuning.pa_note": "Runtime only (0–1 s). Start G-code can override this value."
 }

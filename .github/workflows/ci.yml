@@ -62,7 +62,7 @@ jobs:
 
       - name: ARM native maintenance regressions under qemu
         run: |
-          for test in test_rotation_core test_load_cell_guide_core test_grille_api test_calibration_tools; do
+          for test in test_rotation_core test_load_cell_guide_core test_grille_api test_calibration_tools test_pressure_advance_api test_quick_preferences; do
             arm-linux-gnueabihf-gcc -O2 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread -static tests/$test.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -lm -o /tmp/$test
             timeout 90s qemu-arm /tmp/$test
           done
@@ -195,6 +195,9 @@ jobs:
 
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures
+
+      - name: Pressure Advance control and readback
+        run: npm run test:pressure-advance && npm run test:quick-maintenance
 
       - name: Native printer report interaction regression
         run: npm run test:printer-reports
