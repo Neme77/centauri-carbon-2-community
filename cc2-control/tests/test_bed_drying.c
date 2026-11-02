@@ -73,6 +73,12 @@ int main(void){
     snapshot(25,0);finish();assert(!drying_active());
     reset();heat();machine.machine_status=2;strcpy(telemetry.print_state,"printing");tick();assert(offs==0&&leases==1);
     machine.machine_status=1;strcpy(telemetry.print_state,"complete");snapshot(70,70);tick();assert(offs==0);snapshot(70,0);finish();assert(!drying_active());
+    /* A cold bed after a completed or cancelled print dries even though print.enable is still set; printing and paused do not. */
+    reset();machine.print_enabled=1;strcpy(telemetry.print_state,"complete");heat();drying_stop("manual",0);finish();assert(!drying_active());
+    reset();machine.print_enabled=1;strcpy(telemetry.print_state,"cancelled");heat();drying_stop("manual",0);finish();assert(!drying_active());
+    reset();machine.print_enabled=1;strcpy(telemetry.print_state,"printing");start("70:1",409);
+    strcpy(telemetry.print_state,"paused");start("70:1",409);telemetry.last_rx.tv_sec-=10;strcpy(telemetry.print_state,"complete");start("70:1",409);
+    assert(!heats);
     reset();heat();machine.last_message-=60;tick();clock_ms+=100000;tick();assert(leases==1&&heats==1&&offs==0);snapshot(25,70);tick();assert(offs==1);finish();
     reset();support=0;start("70:1",200);tick();assert(!drying_active()&&!heats&&!leases&&drying.stage==DRY_INTERRUPTED);
     /* Real help omits M-codes: the supported path above must heat normally.
