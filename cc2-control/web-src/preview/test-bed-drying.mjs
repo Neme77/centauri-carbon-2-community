@@ -96,7 +96,7 @@ try {
         row: row.getBoundingClientRect().toJSON(),
         buttons: [...row.querySelectorAll('button')].map(b => b.getBoundingClientRect().toJSON()),
       })))
-      assert.equal(geometry.length, 4)
+      assert.equal(geometry.length, 5) // Includes the dedicated nozzle-expansion opt-in.
       if (width === 1440) {
         for (let i = 0; i < geometry.length; i += 2) {
           const tops = geometry.slice(i, i + 2).map(g => g.buttons[0].top)
