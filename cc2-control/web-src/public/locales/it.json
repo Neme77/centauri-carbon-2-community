@@ -1261,5 +1261,13 @@
   "nozzle.stale": "CC2 Control non risponde; è mostrato l'ultimo stato noto.",
   "nozzle.experiment_hint": "Abilita qui la calibrazione sperimentale dell’espansione dell’ugello nella pagina Livellamento. L’attivazione non riscalda né muove la stampante.",
   "nozzle.enable_confirm": "Abilitare i controlli sperimentali dell’espansione dell’ugello? La calibrazione richiede ancora codice LAN, lista di controllo e conferma separata. Ora non vengono avviati riscaldamenti o movimenti.",
-  "nozzle.disable_confirm": "Disabilitare i controlli sperimentali dell’espansione dell’ugello? Le tabelle salvate restano e l’eventuale riavvio necessario resta disponibile."
+  "nozzle.disable_confirm": "Disabilitare i controlli sperimentali dell’espansione dell’ugello? Le tabelle salvate restano e l’eventuale riavvio necessario resta disponibile.",
+  "network.usb_revision": "Revisione adattatore USB",
+  "network.usb_experimental_warning": "La revisione RTL8153 3000 è sperimentale e non ha completato la qualifica hardware. Restano obbligatori i controlli del kernel e il ripristino della connessione.",
+  "network.usb_approve": "Consenti la revisione sperimentale 3000",
+  "network.usb_revoke": "Revoca il consenso sperimentale",
+  "network.usb_approve_confirm": "Consentire l’uso sperimentale di questo RTL8153 revisione 3000? Viene salvato solo il consenso: nessun driver viene caricato e la connessione non cambia.",
+  "network.usb_revoke_confirm": "Revocare il consenso per la revisione 3000? Prima disabilita Ethernet.",
+  "network.usb_approved_note": "Consenso salvato per la revisione 3000. Non equivale a una qualifica hardware. Disabilita Ethernet prima di revocarlo.",
+  "network.usb_unsupported": "Questa revisione RTL8153 non è supportata da questa build."
 }

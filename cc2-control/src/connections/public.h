@@ -1,6 +1,7 @@
 #ifndef CC2_CONNECTIONS_PUBLIC_H
 #define CC2_CONNECTIONS_PUBLIC_H
 #include "state.h"
+#include "usb_policy.h"
 static inline int ng_public_active(void) {
   int fd = open(NG_RUN "/operation.lock", O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
   if (fd >= 0) {
@@ -115,6 +116,8 @@ static inline void ng_public_json(FILE *out, int installed, int ready, int busy,
     ng_json_quote(out, diagnostic);
   else
     ng_json_quote(out, "");
+  fputs(",\"usb\":", out);
+  ng_usb_public_json(out);
   fputs(",\"automatic_selection\":false,\"temporary\":false}\n", out);
 }
 #endif

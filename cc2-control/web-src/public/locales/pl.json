@@ -1261,5 +1261,13 @@
   "nozzle.stale": "CC2 Control nie odpowiada; pokazano ostatni znany stan.",
   "nozzle.experiment_hint": "Włącz tutaj eksperymentalną kalibrację rozszerzalności dyszy na stronie poziomowania. Włączenie nie uruchamia grzania ani ruchu.",
   "nozzle.enable_confirm": "Włączyć eksperymentalne sterowanie rozszerzalnością dyszy? Kalibracja nadal wymaga kodu LAN, listy kontrolnej i osobnego potwierdzenia. Bez grzania i ruchu teraz.",
-  "nozzle.disable_confirm": "Wyłączyć eksperymentalne sterowanie? Zapisane tabele pozostaną, a wymagany restart nadal będzie dostępny."
+  "nozzle.disable_confirm": "Wyłączyć eksperymentalne sterowanie? Zapisane tabele pozostaną, a wymagany restart nadal będzie dostępny.",
+  "network.usb_revision": "Rewizja adaptera USB",
+  "network.usb_experimental_warning": "Rewizja RTL8153 3000 jest eksperymentalna i nie ukończyła kwalifikacji sprzętowej. Kontrole jądra i przywracanie połączenia pozostają wymagane.",
+  "network.usb_approve": "Zezwól na eksperymentalną rewizję 3000",
+  "network.usb_revoke": "Cofnij zgodę eksperymentalną",
+  "network.usb_approve_confirm": "Zezwolić na eksperymentalne użycie podłączonego RTL8153 w rewizji 3000? Zapisana zostanie tylko zgoda: bez ładowania sterownika i zmiany połączenia.",
+  "network.usb_revoke_confirm": "Cofnąć zgodę dla rewizji 3000? Najpierw wyłącz Ethernet.",
+  "network.usb_approved_note": "Zapisano zgodę dla rewizji 3000. Nie oznacza to kwalifikacji sprzętowej. Wyłącz Ethernet przed cofnięciem zgody.",
+  "network.usb_unsupported": "Ta rewizja RTL8153 nie jest obsługiwana w tej kompilacji."
 }

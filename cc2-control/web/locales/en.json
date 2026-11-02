@@ -1261,5 +1261,13 @@
   "nozzle.stale": "CC2 Control is not answering; showing the last known state.",
   "nozzle.experiment_hint": "Opt in here to enable nozzle thermal-expansion calibration on the Bed Levelling page. Enabling the control does not heat or move the printer.",
   "nozzle.enable_confirm": "Enable the experimental nozzle-expansion controls? Calibration still requires the LAN code and a separate checklist and confirmation. No heating or motion starts now.",
-  "nozzle.disable_confirm": "Disable the experimental nozzle-expansion controls? Saved tables are kept and any required restart remains available."
+  "nozzle.disable_confirm": "Disable the experimental nozzle-expansion controls? Saved tables are kept and any required restart remains available.",
+  "network.usb_revision": "USB adapter revision",
+  "network.usb_experimental_warning": "RTL8153 revision 3000 is experimental. It has not completed hardware qualification. Kernel checks and connection recovery remain required.",
+  "network.usb_approve": "Allow experimental revision 3000",
+  "network.usb_revoke": "Revoke experimental approval",
+  "network.usb_approve_confirm": "Allow this connected RTL8153 revision 3000 for experimental use? This records consent only: it does not load a driver or change the connection.",
+  "network.usb_revoke_confirm": "Revoke permission for revision 3000? Disable Ethernet first.",
+  "network.usb_approved_note": "Permission saved for revision 3000. This is not hardware qualification. Disable Ethernet before revoking it.",
+  "network.usb_unsupported": "This RTL8153 revision is not supported by this build."
 }

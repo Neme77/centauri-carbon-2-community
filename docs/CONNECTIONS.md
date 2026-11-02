@@ -20,3 +20,29 @@ publication. Earlier R5h validation covered switching both directions, local and
 remote video, Orca transfer, reboot persistence and normal Canvas startup. This
 is separate from final-package qualification. Exact runtime hashes, sources,
 licences and rollback instructions are supplied with the installer.
+
+## Additional RTL8153 revision (issue #274)
+
+Brands are not the selection criterion. The manager checks USB vendor `0bda`,
+product `8153`, device revision and USB high-speed operation. The physically
+accepted `31fd` path remains available without additional consent.
+
+Revision `3000`, reported by **kalross**, can be tried only after an explicit
+experimental approval in Connections. Approval alone neither loads modules nor
+changes the selected connection. Ethernet activation still requires the native
+kernel/profile checks, a matching revision-specific ABI probe, exact module
+checksums and a single matching USB device bound to `cc2lan0`. A manually loaded
+driver does not bypass the probe. Other revisions and multiple RTL8153 adapters
+remain refused. RTL8139, RTL8152 and RTL8156 are not enabled by this change.
+
+Consent is stored separately from the network configuration and confirmation
+journal. Disabling Ethernet permits consent to be revoked, including after the
+adapter is unplugged. Connection confirmation and timeout recovery are unchanged.
+Experimental approval is not hardware qualification: reset, suspend, reboot,
+long printing and local/remote camera operation on `3000` still require a device
+owner's validation. No stable catalog entry is published by the preview build.
+
+`community_firmware` in the existing system-info API identifies the compatible
+firmware family (`4.4`), not the installed point release. Device qualification
+also verifies the kernel configuration and native component fingerprints; the
+family string alone is not evidence that V4.4.2 is installed.

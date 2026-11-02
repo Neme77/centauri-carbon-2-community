@@ -1261,5 +1261,13 @@
   "nozzle.stale": "CC2 Control ne répond pas ; dernier état connu affiché.",
   "nozzle.experiment_hint": "Activez ici l’étalonnage expérimental de la dilatation de la buse dans Nivellement. L’activation ne chauffe ni ne déplace l’imprimante.",
   "nozzle.enable_confirm": "Activer les commandes expérimentales de dilatation ? L’étalonnage exige encore le code LAN, une liste de contrôle et une confirmation séparée. Aucun chauffage ni mouvement maintenant.",
-  "nozzle.disable_confirm": "Désactiver ces commandes expérimentales ? Les tables enregistrées sont conservées et le redémarrage requis reste disponible."
+  "nozzle.disable_confirm": "Désactiver ces commandes expérimentales ? Les tables enregistrées sont conservées et le redémarrage requis reste disponible.",
+  "network.usb_revision": "Révision de l’adaptateur USB",
+  "network.usb_experimental_warning": "La révision RTL8153 3000 est expérimentale et sa qualification matérielle est incomplète. Les contrôles du noyau et la récupération de connexion restent obligatoires.",
+  "network.usb_approve": "Autoriser la révision expérimentale 3000",
+  "network.usb_revoke": "Révoquer l’autorisation expérimentale",
+  "network.usb_approve_confirm": "Autoriser cet adaptateur RTL8153 révision 3000 à titre expérimental ? Seul le consentement est enregistré : aucun pilote chargé ni connexion modifiée.",
+  "network.usb_revoke_confirm": "Révoquer l’autorisation pour la révision 3000 ? Désactivez d’abord Ethernet.",
+  "network.usb_approved_note": "Autorisation enregistrée pour la révision 3000. Ce n’est pas une qualification matérielle. Désactivez Ethernet avant de la révoquer.",
+  "network.usb_unsupported": "Cette révision RTL8153 n’est pas prise en charge par cette version."
 }

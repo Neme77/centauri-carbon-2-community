@@ -30,6 +30,16 @@ type Net = {
   compatible?: boolean
 }
 type Manager = {
+  usb?: {
+    valid: boolean
+    qualified: boolean
+    approved: boolean
+    allowed: boolean
+    can_try: boolean
+    revision: string
+    approval_revision: string
+    count: number
+  }
   installed: boolean
   state_valid: boolean
   ready: boolean
@@ -177,6 +187,7 @@ export const Network = () => {
   const p = m?.pending
   const here = Boolean(p?.ip && location.hostname === p.ip)
   const support = Boolean(m?.config.ethernet_support)
+  const usbConsent = m?.usb?.approval_revision === '3000'
   return (
     <div class="grid gap-3.5">
       <Card>
@@ -194,6 +205,38 @@ export const Network = () => {
           }
         />
         <p class="text-xs text-muted">{t('network.support_description')}</p>
+        {m?.usb?.valid && (
+          <p class="mt-2 text-xs text-muted">
+            {t('network.usb_revision')}: <span class="font-mono">0bda:8153 · {m.usb.revision}</span>
+          </p>
+        )}
+        {(m?.usb?.can_try || usbConsent) && (
+          <div class="mt-2 grid gap-2 rounded-md border border-edge bg-field p-3">
+            <p role="status" class="text-amber">
+              {t('network.usb_experimental_warning')}
+            </p>
+            <Button
+              disabled={locked || Boolean(usbConsent && m?.config.ethernet.enabled)}
+              onClick={async () => {
+                if (
+                  !m.usb ||
+                  !(await ask(t(usbConsent ? 'network.usb_revoke_confirm' : 'network.usb_approve_confirm')))
+                )
+                  return
+                void run({ op: 'usb-approval', enabled: !usbConsent, revision: '3000' }, false)
+              }}
+            >
+              {t(usbConsent ? 'network.usb_revoke' : 'network.usb_approve')}
+            </Button>
+            {usbConsent && <p class="text-xs text-muted">{t('network.usb_approved_note')}</p>}
+          </div>
+        )}
+        {m?.usb?.valid && !m.usb.qualified && !m.usb.can_try && (
+          <p role="status" class="mt-2 text-amber">
+            {t('network.usb_unsupported')}
+          </p>
+        )}
+
         {!m?.installed && (
           <p role="status" class="mt-2 text-amber">
             {t('network.manager_missing')}
@@ -370,6 +413,7 @@ export const Network = () => {
                 config: m?.config,
                 snapshot: data?.snapshot,
                 diagnostic: m?.diagnostic,
+                usb: m?.usb,
                 last_error: m?.last_error,
               },
               null,

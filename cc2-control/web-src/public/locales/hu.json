@@ -1261,5 +1261,13 @@
   "nozzle.stale": "A CC2 Control nem válaszol; az utolsó ismert állapot látható.",
   "nozzle.experiment_hint": "Itt engedélyezhető a fúvóka hőtágulásának kísérleti kalibrálása a szintezés oldalon. Az engedélyezés nem indít fűtést vagy mozgást.",
   "nozzle.enable_confirm": "Engedélyezed a kísérleti hőtágulás-vezérlőket? A kalibrálás továbbra is LAN-kódot, ellenőrzőlistát és külön megerősítést igényel. Most nem indul fűtés vagy mozgás.",
-  "nozzle.disable_confirm": "Letiltod a kísérleti vezérlőket? A mentett táblák megmaradnak, és a szükséges újraindítás továbbra is elérhető."
+  "nozzle.disable_confirm": "Letiltod a kísérleti vezérlőket? A mentett táblák megmaradnak, és a szükséges újraindítás továbbra is elérhető.",
+  "network.usb_revision": "USB-adapter revíziója",
+  "network.usb_experimental_warning": "Az RTL8153 3000 revízió kísérleti, hardverminősítése nem teljes. A kernelellenőrzés és a kapcsolat helyreállítása továbbra is szükséges.",
+  "network.usb_approve": "A kísérleti 3000 revízió engedélyezése",
+  "network.usb_revoke": "Kísérleti engedély visszavonása",
+  "network.usb_approve_confirm": "Engedélyezi a csatlakoztatott RTL8153 3000 revízió kísérleti használatát? Csak az engedély mentése történik: nincs illesztőprogram-betöltés vagy kapcsolatváltás.",
+  "network.usb_revoke_confirm": "Visszavonja a 3000 revízió engedélyét? Előbb kapcsolja ki az Ethernetet.",
+  "network.usb_approved_note": "A 3000 revízió engedélye mentve. Ez nem hardverminősítés. Visszavonás előtt kapcsolja ki az Ethernetet.",
+  "network.usb_unsupported": "Ez az RTL8153 revízió nem támogatott ebben a buildben."
 }

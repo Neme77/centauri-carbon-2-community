@@ -1261,5 +1261,13 @@
   "nozzle.stale": "CC2 Control no responde; se muestra el último estado conocido.",
   "nozzle.experiment_hint": "Activa aquí la calibración experimental de expansión de la boquilla en Nivelación. Activar el control no calienta ni mueve la impresora.",
   "nozzle.enable_confirm": "¿Activar los controles experimentales de expansión? La calibración aún requiere código LAN, lista de comprobación y confirmación independiente. No se inicia calor ni movimiento ahora.",
-  "nozzle.disable_confirm": "¿Desactivar estos controles experimentales? Se conservan las tablas guardadas y sigue disponible el reinicio necesario."
+  "nozzle.disable_confirm": "¿Desactivar estos controles experimentales? Se conservan las tablas guardadas y sigue disponible el reinicio necesario.",
+  "network.usb_revision": "Revisión del adaptador USB",
+  "network.usb_experimental_warning": "La revisión RTL8153 3000 es experimental y no ha completado la validación del hardware. Se mantienen las comprobaciones del kernel y la recuperación de conexión.",
+  "network.usb_approve": "Permitir la revisión experimental 3000",
+  "network.usb_revoke": "Revocar el permiso experimental",
+  "network.usb_approve_confirm": "¿Permitir el uso experimental de este RTL8153 revisión 3000? Solo se guarda el consentimiento: no se carga ningún controlador ni se cambia la conexión.",
+  "network.usb_revoke_confirm": "¿Revocar el permiso para la revisión 3000? Primero desactiva Ethernet.",
+  "network.usb_approved_note": "Permiso guardado para la revisión 3000. No equivale a una validación del hardware. Desactiva Ethernet antes de revocarlo.",
+  "network.usb_unsupported": "Esta revisión RTL8153 no es compatible con esta compilación."
 }
