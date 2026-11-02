@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Optional native display refresh with Obsidian/cyan styling, preserved native functions and illustrations, and read-only inline LAN IPv4/link information; owner-supplied firmware inputs remain private (**Neme77**, #282).
+
 - Experimental nozzle thermal-expansion calibration on the Bed Levelling page (disabled by default, enabled from Experimental integrations): runs the firmware's NOZZLE_TEMP_CALIBRATE over a chosen range (default 130–330 °C, 10 °C steps, keeping the 140 °C reference and printing temperatures inside the table), always switches the nozzle off afterwards, keeps the table only when it is plausible and applies it after a printer restart, with a way back to the factory table. The factory table ends at 250 °C, where the firmware switches to a constant ~0.10 mm correction, so materials printed above it needed their own Z offset; by **Noahwhite2014** (#273).
 - Explicit experimental opt-in for Realtek RTL8153 USB `0bda:8153` revision `3000`, with a revision-specific preliminary ABI probe and unchanged connection confirmation/recovery. The tested `31fd` path remains available; other revisions are not automatically enabled. Reported by **kalross** (#274), implemented by **Neme77** (#278).
 

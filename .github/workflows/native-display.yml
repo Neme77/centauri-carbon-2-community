@@ -1,0 +1,27 @@
+name: Native display sources
+on:
+  push:
+    paths: ['experimental/native-display/**', '.github/workflows/native-display.yml']
+  pull_request:
+    paths: ['experimental/native-display/**', '.github/workflows/native-display.yml']
+permissions:
+  contents: read
+jobs:
+  vendor-free-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: experimental/native-display
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install inert test dependencies
+        run: sudo apt-get update && sudo apt-get install -y busybox gcc-arm-linux-gnueabihf qemu-user
+      - name: Authored assets and bounded patch plan
+        run: python3 test_sources.py
+      - name: Disk-only installer and exact rollback
+        run: python3 test_native_installer.py
+      - name: Synthetic ARM loader only
+        run: python3 test_elf_layout.py
