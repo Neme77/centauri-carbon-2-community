@@ -1,0 +1,35 @@
+#!/bin/sh
+# Computer-assisted installation: payloads and logs stay on persistent UDISK.
+set -eu
+umask 077
+[ -f "$0" ] && [ ! -L "$0" ] && [ ! -L "$(dirname -- "$0")" ] || exit 1
+BASE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+case "$BASE" in /opt/usr/cc2-control-install-*) ;; *) echo 'STOP: unexpected stage';exit 1;;esac
+TOKEN=${BASE##*/cc2-control-install-}
+case "$TOKEN" in ''|*[!0-9a-f]*) exit 1;;esac
+[ "${#TOKEN}" -eq 32 ] && [ ! -L "$BASE" ] || exit 1
+[ "$(id -u)" = 0 ] || exit 1
+awk '$2=="/opt/usr" && $3!="tmpfs" {ok=1} END {exit !ok}' /proc/mounts || { echo 'STOP: persistent storage not mounted';exit 1; }
+[ -f "$BASE/cc2-control-payload.tar.gz" ] && [ ! -L "$BASE/cc2-control-payload.tar.gz" ] || exit 1
+check_archive(){ [ "$(sha256sum "$BASE/cc2-control-payload.tar.gz" | awk '{print $1}')" = @PAYLOAD_SHA@ ]; }
+check_archive || { echo 'STOP: payload checksum mismatch';exit 1; }
+[ ! -e "$BASE/payload" ] && [ ! -L "$BASE/payload" ] && [ ! -e "$BASE/installer.exit" ] && [ ! -L "$BASE/installer.exit" ] && [ ! -e "$BASE/install.log" ] && [ ! -L "$BASE/install.log" ] || { echo 'STOP: previous attempt retained';exit 1; }
+available=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+case "$available" in ''|*[!0-9]*) echo 'STOP: memory readback unavailable';exit 1;;esac
+[ "$available" -ge 24576 ] || { echo 'STOP: less than 24 MiB available RAM; close viewers and retry from a fresh idle boot';exit 1; }
+mkdir "$BASE/payload"
+tar -xzf "$BASE/cc2-control-payload.tar.gz" -C "$BASE/payload"
+(cd "$BASE/payload" && sha256sum -c SHA256SUMS) || exit 1
+(
+    set +e
+    sh "$BASE/payload/install-on-printer.sh"
+    code=$?
+    printf '%s\n' "$code" > "$BASE/installer.exit"
+    exit "$code"
+) 2>&1 | tee "$BASE/install.log"
+[ -f "$BASE/installer.exit" ] && [ "$(cat "$BASE/installer.exit")" = 0 ] || { echo 'INSTALLATION FAILED: disk payload, log and backups retained';exit 1; }
+check_archive || { echo 'INSTALLATION PASSED: changed archive retained; cleanup skipped';exit 0; }
+[ -d "$BASE/payload" ] && [ ! -L "$BASE/payload" ] || exit 1
+rm -rf "$BASE/payload"
+rm -f "$BASE/cc2-control-payload.tar.gz"
+echo 'INSTALLATION PASSED: disk payload cleaned; install.log and rollback backups retained.'

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Keep computer-assisted update payloads on persistent UDISK, verify an exclusive stage and archive, retain logs/backups and clean payloads only after success. Refuse insufficient RAM before transfer and before parsing embedded components; fixes the Windows-installation OOM observed and recovered by **Neme77** (#287).
+
 - Stop presenting a completed older application update as the current selection after a full firmware upgrade; retain failed/current jobs, logs and rollback backups. Reported by **Neme77** (#287).
 
 - Keep the Obsidian background continuous on the short Appearance and About pages, without repeating horizontal bands or changing their layout; reported and verified in the browser by **Neme77** (#287).

@@ -13,6 +13,10 @@ wait_stopped() {
     done
     return 0
 }
+# Refuse before parsing the large embedded native components on low-memory hosts.
+installer_available=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+case "$installer_available" in ''|*[!0-9]*) echo 'STOP: available memory unknown' >&2;exit 1;;esac
+[ "$installer_available" -ge 24576 ] || { echo 'STOP: less than 24 MiB available RAM; close viewers and retry from a fresh idle boot' >&2;exit 1; }
 EXPECTED=@BINARY_SHA256@
 INSTALL_PHASE=initial
 install_phase() { INSTALL_PHASE=$1; printf 'INSTALL_PHASE=%s\n' "$INSTALL_PHASE"; }

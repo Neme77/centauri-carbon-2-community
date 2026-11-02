@@ -84,6 +84,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         trial_notes = HERE / name
         if trial_notes.is_file(): public[name] = trial_notes.read_bytes()
     public['cc2-control-payload.tar.gz'] = payload.getvalue()
+    public['pc-stage.sh'] = (HERE / 'pc-stage.sh.in').read_text(encoding='utf-8').replace('@PAYLOAD_SHA@', hashlib.sha256(payload.getvalue()).hexdigest()).encode('utf-8')
     public['cc2-control-sources.zip'] = source.read_bytes()
     public['SHA256SUMS'] = ''.join(hashlib.sha256(data).hexdigest() + '  ' + name + '\n'
         for name, data in sorted(public.items())).encode()
