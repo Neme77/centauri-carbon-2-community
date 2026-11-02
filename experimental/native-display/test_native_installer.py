@@ -74,6 +74,9 @@ def fixture(root, scenario):
     commands=root/'bin'
     def command(name,text):
         p=commands/name;p.write_text('#!/bin/sh\n'+text+'\n');p.chmod(0o755)
+    # The printer's privilege context is simulated like uname/pidof; never
+    # inherit the CI account (non-root) or require sudo for temporary fixtures.
+    command('id', 'case "$1" in -u) echo ' + ('1000' if scenario=='non-root' else '0') + ';; *) exit 2;; esac')
     command('uname','case "$1" in -m) echo armv7l;; -r) echo 5.4.61;; *) exit 1;; esac')
     command('pidof','echo 123')
     command('sync','exit 0')
@@ -102,7 +105,7 @@ def run():
         assert shutil.which(shell[0])
         syntax=subprocess.run([*shell,'-n',str(HERE/'manage.sh')],capture_output=True,text=True)
         assert syntax.returncode==0,syntax.stderr
-        for scenario in ('check','success','retained-complete','copy-failure','hot','heating','printing',
+        for scenario in ('non-root','check','success','retained-complete','copy-failure','hot','heating','printing',
                          'active-session','network-pending','update-busy','foreign-gui','foreign-image',
                          'preload','symlink-image','bad-geometry','damaged-payload','stalled-http'):
             with tempfile.TemporaryDirectory(prefix='cc2 native display ') as tmp:
@@ -128,6 +131,7 @@ def run():
                     assert list((base/'state').glob('backup-*')), 'Original backup must remain'
                 else:
                     assert all(p.read_bytes()==before[name] for name,p in originals.items()),scenario
+                if scenario=='non-root':assert 'STOP: root_required' in result.stderr
                 if scenario=='copy-failure':assert 'ROLLBACK PASSED' in result.stderr
                 assert not (base/'state/lock').exists()
                 print('PASS',shell,scenario,flush=True)
