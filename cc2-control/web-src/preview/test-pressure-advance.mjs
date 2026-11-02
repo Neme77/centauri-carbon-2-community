@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
+import { settledViewport } from './viewport.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const labels = JSON.parse(await readFile(path.join(root, 'public/locales/en.json'), 'utf8'))
@@ -73,8 +74,8 @@ try {
   connected = true
   await page.waitForFunction(() => !document.querySelector('#tune-pressure-advance')?.disabled)
   for (const width of [1440, 768, 390]) {
-    await page.setViewportSize({ width, height: 1100 })
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow at ${width}`)
+    const geometry = await settledViewport(page, width)
+    assert(geometry.width <= geometry.viewport, `Overflow at ${width}: ${JSON.stringify(geometry)}`)
     const bounds = await row.boundingBox(); assert(bounds && bounds.width > 100)
     if (process.env.CC2_PA_SCREENSHOTS) {
       await mkdir(process.env.CC2_PA_SCREENSHOTS, { recursive: true })

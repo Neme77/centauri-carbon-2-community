@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { fixture, launchOptions } from './fixture.mjs'
+import { settledViewport } from './viewport.mjs'
 
 const demo = await fixture(`
 localStorage.setItem('cc2-language','en');
@@ -108,9 +109,9 @@ try {
   assert.equal(commandCount, 3)
   await page.locator('#cc2-navigation a[href="#dashboard"]').click()
   for (const width of [1440, 768, 390]) {
-    await page.setViewportSize({ width, height: 1000 })
+    const geometry = await settledViewport(page, width, 1000)
     assert.equal(await quick.locator('.cc2-quick-grid > button').count(), 4)
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `overflow at ${width}`)
+    assert(geometry.width <= geometry.viewport, `overflow at ${width}: ${JSON.stringify(geometry)}`)
   }
   assert.deepEqual(errors, [])
   console.log('PASS: persisted quick choices, shared flap guards/lock and feedback, navigation-only controls, experimental heating fallback and responsive four-slot layout; no cell shortcut')
