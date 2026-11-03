@@ -231,6 +231,13 @@ static void api_guards_and_preview(const char *backup,size_t length) {
     puts("PASS backup API: LAN, hot/printing/stale/busy guards, ordered chunks, server preview, edit conflict, selective restore and expiry");
 }
 int main(void) {
+    {
+        bk_material_context context={{{0}},0};
+        const char *high="{\"name\":\"PPS-CF10\",\"nozzle\":350,\"bed\":100,\"min\":330,\"max\":350}";
+        assert(bk_material_item(high,high+strlen(high),&context));
+        const char *too_high="{\"name\":\"BAD\",\"nozzle\":351,\"bed\":100,\"min\":330,\"max\":350}";
+        assert(!bk_material_item(too_high,too_high+strlen(too_high),&context));
+    }
     char directory[]="./backup-XXXXXX";
     assert(mkdtemp(directory)&&!chdir(directory));
     assert(bk_crc("123456789",9)==0xcbf43926U);

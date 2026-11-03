@@ -1,4 +1,5 @@
 #include "control.h"
+#include "thermal_limits.h"
 #include "canvas_state.h"
 #include "external_filament_catalog.h"
 
@@ -55,7 +56,7 @@ static int printing(const mqtt_client *m){return m->have_machine_status&&m->mach
  * target afterwards. Always append an explicit restore so manual homing
  * cannot leave the hotend heating indefinitely. */
 static double homing_extruder_restore_target(const mqtt_client *m){
-    if(m->have_extruder_target&&m->extruder_target>=0.0&&m->extruder_target<=300.0)
+    if(m->have_extruder_target&&m->extruder_target>=0.0&&m->extruder_target<=CC2_NOZZLE_TARGET_MAX)
         return m->extruder_target;
     return 0.0;
 }
@@ -85,7 +86,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(!strcmp(action,"external:load")||!strcmp(action,"external:unload")){
             int load=!strcmp(action,"external:load");
             if(m->external_verified==2){
-                if(!isfinite(m->external_temperature)||m->external_temperature<120||m->external_temperature>320)
+                if(!isfinite(m->external_temperature)||m->external_temperature<120||m->external_temperature>CC2_NOZZLE_TARGET_MAX)
                     return reject(reason,reason_cap,"External material requires a valid native maximum nozzle temperature");
                 snprintf(script,cap,"USED_CANVAS_DEV USED_CANVAS=0\nM600 S%d TEMP=%.0f",load?1:2,m->external_temperature);
             }else snprintf(script,cap,"M600 S%d",load?1:2);
@@ -103,7 +104,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             const external_material *candidate=&external_materials[i];
             if(candidate->brand==brand&&candidate->type==type&&candidate->item==item){selected=candidate;break;}
         }
-        if(!selected||selected->min<120||selected->max>320||selected->min>=selected->max)
+        if(!selected||selected->min<120||selected->max>CC2_NOZZLE_TARGET_MAX||selected->min>=selected->max)
             return reject(reason,reason_cap,"Selected material exceeds the protected nozzle temperature range");
         char channel[32],code[20];
         if(external)snprintf(channel,sizeof(channel),"EXTERN_FILA=1");
@@ -213,13 +214,13 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
            now<m->last_message||now-m->last_message>15)
             return reject(reason,reason_cap,"Temperature targets require fresh idle or printing telemetry");
         if(sscanf(action,"heaters:set:%lf:%lf%n",&value,&value2,&end)!=2||action[end]||
-           !isfinite(value)||!isfinite(value2)||value<0||value>300||value2<0||value2>120)
+           !isfinite(value)||!isfinite(value2)||value<0||value>CC2_NOZZLE_TARGET_MAX||value2<0||value2>120)
             return reject(reason,reason_cap,"Invalid temperature targets");
         snprintf(script,cap,"SET_HEATER_TEMPERATURE HEATER=extruder TARGET=%.1f\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=%.1f",value,value2);
         return 1;
     }
     if(sscanf(action,"%31[^:]:%31[^:]:%lf",kind,a,&value)==3&&strcmp(kind,"heater")==0){
-        if(strcmp(a,"extruder")==0){if(value<0||value>300)return reject(reason,reason_cap,"Nozzle target must be 0..300 C");}
+        if(strcmp(a,"extruder")==0){if(!isfinite(value)||value<0||value>CC2_NOZZLE_TARGET_MAX)return reject(reason,reason_cap,"Nozzle target must be 0..350 C");}
         else if(strcmp(a,"heater_bed")==0){if(value<0||value>120)return reject(reason,reason_cap,"Bed target must be 0..120 C");}
         else return reject(reason,reason_cap,"Unknown heater");
         snprintf(script,cap,"SET_HEATER_TEMPERATURE HEATER=%s TARGET=%.1f",a,value);return 1;
@@ -296,7 +297,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(slot<0||slot>3)return reject(reason,reason_cap,"Canvas slot must be 1..4");
         if(!valid_material_name(a))return reject(reason,reason_cap,"Material name may contain only letters, numbers, internal spaces, +, - and _");
         if(strlen(colour)!=6||strspn(colour,"0123456789abcdefABCDEF")!=6)return reject(reason,reason_cap,"Canvas colour must be six hexadecimal digits");
-        if(min_temp<120||max_temp>320||min_temp>=max_temp)return reject(reason,reason_cap,"Invalid Canvas nozzle temperature range");
+        if(min_temp<120||max_temp>CC2_NOZZLE_TARGET_MAX||min_temp>=max_temp)return reject(reason,reason_cap,"Invalid Canvas nozzle temperature range");
         if(fields==7&&(!valid_filament_label(line)||!valid_filament_label(maker)))
             return reject(reason,reason_cap,"Filament line and maker may contain only letters, numbers, spaces, +, -, _ and .");
         snprintf(script,cap,"CANVAS_SET_FILAMENT_INFO CHANNEL=%d COLOR=0x%s detailed_type=\"%s\" MANUFACTURER=\"%s\" nozzle_max_temp=%d nozzle_min_temp=%d TYPE=\"%s\" CODE=Generic",
@@ -314,7 +315,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     if(sscanf(action,"preheat:%lf:%lf",&value,&value2)==2){
         if(printing(m))return reject(reason,reason_cap,"Preheat is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Preheat requires the printer to be idle");
-        if(value<0||value>300||value2<0||value2>120)return reject(reason,reason_cap,"Preheat targets exceed the protected range");
+        if(!isfinite(value)||!isfinite(value2)||value<0||value>CC2_NOZZLE_TARGET_MAX||value2<0||value2>120)return reject(reason,reason_cap,"Preheat targets exceed the protected range");
         snprintf(script,cap,"M104 S%.0f\nM140 S%.0f",value,value2);return 1;
     }
     if(sscanf(action,"extrude:%lf",&value)==1){

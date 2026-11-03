@@ -17,6 +17,7 @@ import { t, tpl } from '@/lib/i18n'
 import { store } from '@/lib/store'
 import { stateText } from '@/lib/machine'
 import { num } from '@/lib/format'
+import { NOZZLE_TARGET_MAX } from '@/lib/thermal-limits'
 import { calibrationFocus, controlFocus } from '@/lib/quick'
 import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
@@ -195,7 +196,7 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
       !bed.trim() ||
       !Number.isFinite(n) ||
       n < 0 ||
-      n > 300 ||
+      n > NOZZLE_TARGET_MAX ||
       !Number.isFinite(b) ||
       b < 0 ||
       b > 120
@@ -208,7 +209,7 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
       <CardHead icon="temp" title="common.temperatures" />
       {(
         [
-          ['red', 'common.nozzle', d?.extruder, nozzle, setNozzle, 300],
+          ['red', 'common.nozzle', d?.extruder, nozzle, setNozzle, NOZZLE_TARGET_MAX],
           ['blue', 'common.heated_bed', d?.heater_bed, bed, setBed, 120],
         ] as const
       ).map(([dot, label, heater, val, set, max]) => (
@@ -591,7 +592,7 @@ const Profiles = () => {
       !Number.isFinite(b) ||
       !/^[A-Z0-9+_-](?:[A-Z0-9 +_-]{0,14}[A-Z0-9+_-])?$/.test(n) ||
       nz < 0 ||
-      nz > 300 ||
+      nz > NOZZLE_TARGET_MAX ||
       b < 0 ||
       b > 120
     )
@@ -603,7 +604,7 @@ const Profiles = () => {
       nozzle: Math.round(nz),
       bed: Math.round(b),
       min: prev?.min || Math.max(120, Math.round(nz - 20)),
-      max: prev?.max || Math.min(320, Math.round(nz + 20)),
+      max: prev?.max ? Math.max(prev.max, Math.round(nz)) : Math.min(NOZZLE_TARGET_MAX, Math.round(nz + 20)),
     }
     const next = at >= 0 ? list.map((p, i) => (i === at ? item : p)) : [...list, item]
     try {
@@ -652,7 +653,7 @@ const Profiles = () => {
             class="mt-1.5"
             type="number"
             min="0"
-            max="300"
+            max={NOZZLE_TARGET_MAX}
             value={nozzle}
             onInput={e => setNozzle(e.currentTarget.value)}
           />

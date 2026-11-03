@@ -31,12 +31,19 @@ try {
   const firstReply = page.waitForResponse(r => r.url().endsWith('/api/control'))
   await apply.click(); await firstReply
   assert.deepEqual(actions, ['heaters:set:210:65'])
-  await nozzle.fill('301'); await apply.click(); assert.equal(actions.length, 1)
+  assert.equal(await nozzle.getAttribute('max'), '350')
+  for (const temperature of ['301', '320', '350']) {
+    await nozzle.fill(temperature)
+    const reply = page.waitForResponse(r => r.url().endsWith('/api/control'))
+    await apply.click(); await reply
+    assert.equal(actions.at(-1), `heaters:set:${temperature}:65`)
+  }
+  await nozzle.fill('351'); await apply.click(); assert.equal(actions.length, 4)
   await nozzle.fill('215'); state = 'paused'
   await page.waitForTimeout(1500)
   const pausedReply = page.waitForResponse(r => r.url().endsWith('/api/control'))
   await apply.click(); await pausedReply
-  assert.deepEqual(actions, ['heaters:set:210:65', 'heaters:set:215:65'])
+  assert.deepEqual(actions, ['heaters:set:210:65', 'heaters:set:301:65', 'heaters:set:320:65', 'heaters:set:350:65', 'heaters:set:215:65'])
   state = 'loading'
   await page.waitForFunction(label => document.querySelector(`input[aria-label="${label}"]`)?.disabled, targetLabel('common.nozzle'))
   assert.ok(await apply.isDisabled()); assert.deepEqual(errors, [])

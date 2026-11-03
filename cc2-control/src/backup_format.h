@@ -1,4 +1,5 @@
 /* Application backup format v1. Validation without file writes, global-store changes or printer RPCs. */
+#include "thermal_limits.h"
 #define BK_MAX (512U * 1024U)
 #define BK_PREFS 1U
 #define BK_MATERIALS 2U
@@ -392,7 +393,7 @@ static int bk_material_item(const char *o,const char *end,void *opaque) {
     size_t n=strlen(name);
     if(!n||name[0]==' '||name[n-1]==' '||strspn(name,"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 +_-")!=n)return 0;
     for(int i=0;i<ctx->count;i++)if(!strcmp(name,ctx->names[i]))return 0;
-    if(!bk_int(o,end,"nozzle",0,300,&nz)||!bk_int(o,end,"bed",0,120,&bed)||
+    if(!bk_int(o,end,"nozzle",0,CC2_NOZZLE_TARGET_MAX,&nz)||!bk_int(o,end,"bed",0,120,&bed)||
        !bk_int(o,end,"min",0,350,&min)||!bk_int(o,end,"max",0,350,&max)||min>max)return 0;
     ctx->count++;
     return 1;

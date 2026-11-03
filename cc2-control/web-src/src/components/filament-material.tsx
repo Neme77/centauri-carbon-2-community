@@ -6,6 +6,7 @@ import { t } from '@/lib/i18n'
 import { control } from '@/lib/api'
 import { ask } from '@/lib/confirm'
 import catalog from '@/lib/external-filament-catalog.json'
+import { NOZZLE_TARGET_MAX } from '@/lib/thermal-limits'
 
 export const FilamentMaterial = ({
   filament,
@@ -46,7 +47,7 @@ export const FilamentMaterial = ({
   const types = catalog.brands[brand].types,
     items = types[type].items,
     selected = items[item]
-  const supported = selected.min >= 120 && selected.max <= 320
+  const supported = selected.min >= 120 && selected.max <= NOZZLE_TARGET_MAX
   const submit = async (e: Event) => {
     e.preventDefault()
     if (busy || !supported || !(await ask(t('filament.save_confirm')))) return

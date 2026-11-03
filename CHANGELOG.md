@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Align manual nozzle targets, preheat profiles, material ranges and backup restoration with the Centauri Carbon 2 native touchscreen limit of 350 C; preserve valid high-temperature targets after manual homing. Native thermal protections and separately qualified PID limits are unchanged. Reported by **Sangra6969** and reproduced by **Neme77** (#290).
+
 ## [Community Firmware V4.4.3 / CC2 Control 1.2.25] - 2026-11-03
 
 ### Fixed
