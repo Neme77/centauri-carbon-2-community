@@ -42,7 +42,7 @@ The native maintenance tools and display were developed and physically tested by
 
 ## Native display preview
 
-![CC2 Community native touchscreen, actual printer capture](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.3/CC2-Native-Display-4.4.3.png)
+![CC2 Community native touchscreen, actual printer capture](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/native-display.png)
 
 Actual 532 × 300 printer capture. Native functions and ELEGOO printer/Canvas artwork are retained; the example uses Italian. The display refresh is included in full firmware V4.4.3. Both release pages list features, contributor credits, adapter qualification and installation details.
 
