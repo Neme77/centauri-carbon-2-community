@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [Community Firmware V4.4.3 / CC2 Control 1.2.25] - 2026-11-03
+
 ### Fixed
 
 - Keep computer-assisted update payloads on persistent UDISK, verify an exclusive stage and archive, retain logs/backups and clean payloads only after success. Refuse insufficient RAM before transfer and before parsing embedded components; fixes the Windows-installation OOM observed and recovered by **Neme77** (#287).
@@ -20,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Prepare complete Community Firmware 4.4.3 with Control 1.2.25, the native display and firmware-shipped qualified RTL8153 modules; retain the stock kernel, native startup/resource synchronization and saved connection/calibration settings. The new OTA remains a hardware-test candidate until separately accepted by **Neme77** (#287).
+- Release complete Community Firmware 4.4.3 with Control 1.2.25, the native display and firmware-shipped qualified RTL8153 modules; retain the stock kernel, native startup/resource synchronization and saved connection/calibration settings. The integrated firmware and corrected persistent-staging PC installer were accepted by **Neme77** before publication (#287).
 
 - Live runtime Pressure Advance controls alongside speed/flow, plus configurable Open/Close flaps and navigation shortcuts for Connections, Fans, Pressure Advance and bed/chamber heating. Keep the four slots and existing choices; no load-cell shortcuts. Clarify bed/chamber heating copy in all nine languages; implemented and tested by **Neme77** (#286).
 

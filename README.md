@@ -3,22 +3,28 @@
 Community firmware, local printer control and reproducible build tools for the
 **ELEGOO Centauri Carbon 2**, maintained by **Neme77**.
 
-> **NEW: USB ETHERNET, CONNECTIONS AND OBSIDIAN — CC2 Control 1.2.24.** Unified manual Wi-Fi/LAN settings, optional qualified RTL8153 USB Ethernet, centered layouts and cumulative fixes including pending SAVE_CONFIG protection. [Download and complete notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.24-V4.4).
+> **NEW: NATIVE DISPLAY V4.4.3 + CC2 CONTROL 1.2.25.** Native Obsidian/cyan touchscreen, optional qualified RTL8153 Ethernet, Pressure Advance, calibration tools, experimental nozzle/chamber features and update recovery. [Download and complete notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.25-V4.4).
 
 <p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig"><img src="https://img.shields.io/badge/DOWNLOAD-Firmware%20V4.4.2-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download complete firmware V4.4.2"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.3/CC2_V4_4_3_STOCK_Control_1_2_25.zip.sig"><img src="https://img.shields.io/badge/DOWNLOAD-Firmware%20V4.4.3-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download complete firmware V4.4.3"></a>
   &nbsp;
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.24-V4.4/CC2-Control-1.2.24-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/DOWNLOAD-CC2%20Control%201.2.24-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download CC2 Control 1.2.24 multiplatform update"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.25-V4.4/CC2-Control-1.2.25-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/DOWNLOAD-CC2%20Control%201.2.25-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download CC2 Control 1.2.25 multiplatform update"></a>
 </p>
 
-| **🖨️ Complete firmware · V4.4.2** | **🔄 CC2 Control · 1.2.24** |
+| **🖨️ Complete firmware · V4.4.3** | **🔄 CC2 Control · 1.2.25** |
 | --- | --- |
-| [**Download signed firmware**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Download Windows / macOS / Linux package**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.24-V4.4/CC2-Control-1.2.24-Multiplatform-Update.zip) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.24-V4.4) |
-| Complete installation with CC2 Control **1.2.21** and the webcam fix already included. No extra reboot after firmware installation. | For community firmware **V4.4/V4.4.1/V4.4.2**. Includes the camera stability and recovery fixes. |
+| [**Download signed firmware**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.3/CC2_V4_4_3_STOCK_Control_1_2_25.zip.sig) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.3) | [**Download Windows / macOS / Linux package**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.25-V4.4/CC2-Control-1.2.25-Multiplatform-Update.zip) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.25-V4.4) |
+| Complete installation with Control **1.2.25**, the native display refresh, optional Ethernet components and existing webcam/reactor fixes. Allow the installation reboot and Canvas synchronization to finish. | For community firmware **V4.4/V4.4.1/V4.4.2/V4.4.3**. Cumulative app update; does not replace the native display. |
+
+## Native display preview
+
+![CC2 Community native touchscreen, actual printer capture](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.3/CC2-Native-Display-4.4.3.png)
+
+Actual 532 × 300 printer capture. Native functions and ELEGOO printer/Canvas artwork are retained; the example uses Italian. The display refresh is included in full firmware V4.4.3. Both release pages list features, contributor credits, adapter qualification and installation details.
 
 > **Optional experiment · Canvas pull-back R4:** [**Download the Windows / Linux / macOS kit**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Canvas-Pullback-Experimental-R4.zip). Extends the configurable limit up to 1000 mm on qualified **V4.4.1/V4.4.2** with Control **1.2.21/1.2.22**. By **Noahwhite2014**. [Instructions](experimental/canvas-pullback-kit/README.en.md). Remove the component and reboot before app/firmware updates.
 
-**Updating from the CC2 Control panel?** [Download the signed `.cc2update` file](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.24-V4.4/CC2-Control-1.2.24-V4.4.cc2update) and select it in **Settings → Updates**. For app-only updates, reboot while idle only on first activation of the camera fix; it is already active for users coming from 1.2.19. Complete V4.4.2 installation needs no additional reboot.
+**Updating from the CC2 Control panel?** [Download the signed `.cc2update` file](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.25-V4.4/CC2-Control-1.2.25-V4.4.cc2update) and select it in **Settings → Updates**. Follow every complete idle-printer reboot request, including component activation or recovery after a base-firmware reinstall. Canvas LEDs may briefly flash red during Ethernet activation while native services realign; wait for Canvas to reconnect before printing.
 
 [Documentation](docs/README.md) · [Downloads](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Screenshots](docs/SCREENSHOTS.md)
 
@@ -65,7 +71,7 @@ require a **full printer reboot** as described in their release notes.
 See the [application guide](docs/CC2_CONTROL.md) and [screenshot gallery](docs/SCREENSHOTS.md).
 Experimental features remain opt-in and require their own validation.
 
-## New in CC2 Control 1.2.24
+## New in CC2 Control 1.2.25
 
 - **Connections:** optional USB Ethernet alongside native Wi-Fi, saved Wi-Fi profiles, DHCP/static IPv4, manual connection selection, interface switches and Diagnostics. Wi-Fi remains available without an adapter; no automatic signal-quality switching.
 - **Qualified adapter:** TP-Link UE300 / Realtek RTL8153, USB 0bda:8153 revision 31fd, on Community V4.4.2. Other products or revisions are not automatically qualified by sharing a chipset. Stock firmware is unsupported; Ethernet link rate is not a USB 2.0 transfer benchmark.
@@ -74,7 +80,7 @@ Experimental features remain opt-in and require their own validation.
 
 **During installation and first activation of USB Ethernet, Canvas may temporarily flash red while native services realign. It becomes operational again after realignment.** Install Idle/cold, targets zero, with live video closed. After switching, open the selected address and choose **Keep this connection**. Disable the other interface from the address you intend to keep.
 
-[**Qualified V4.4.2 complete PC installer**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.24-V4.4/CC2-Control-1.2.24-Connections-Update.zip) · [**Signed panel update**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.24-V4.4/CC2-Control-1.2.24-V4.4.cc2update) · [**Full release notes, sources and checksums**](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.24-V4.4).
+[**Qualified V4.4.2 complete PC installer**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.25-V4.4/CC2-Control-1.2.25-Connections-Update.zip) · [**Signed panel update**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.25-V4.4/CC2-Control-1.2.25-V4.4.cc2update) · [**Full release notes, sources and checksums**](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.25-V4.4).
 
 ## New in CC2 Control 1.2.23
 
@@ -118,7 +124,7 @@ Enable **External spool with Canvas connected** under **Settings → Integration
 
 [![Independent experimental settings](docs/images/cc2-control/experiments-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/experiments-current.png)
 
-Canvas layout inspired by **Surfoo**; original Quiet feature by **BorjaLL**. Experiments retain saved choices. Previews use simulated data. Full V4.4.2 firmware and builder still include Control 1.2.21; install this app update for the new features.
+Canvas layout inspired by **Surfoo**; original Quiet feature by **BorjaLL**. Experiments retain saved choices. Previews use simulated data. Full V4.4.3 includes Control 1.2.25 and the native touchscreen refresh; the separate app update retains the existing display.
 
 [Release notes / Note complete, validation, checksums and credits](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4).
 

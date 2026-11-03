@@ -1,9 +1,11 @@
 # Current complete firmware builder
 
-This is the private hardware-test candidate for **Community Firmware 4.4.3**
+This is the current source builder for **Community Firmware 4.4.3**
 with **CC2 Control 1.2.25**, based on the exact official CC2 **02.01.01.07** OTA.
-The complete new OTA has not yet passed printer validation. Do not publish it or
-activate a stable update catalogue until that validation is recorded.
+The integrated firmware was installed and accepted by the maintainer. The final
+updater-page-only correction passed its browser regression. Release notes record
+the tested scope and exact signed artifact checksums; source archives contain no
+vendor firmware or private signing inputs.
 
 ## Integrated components
 
