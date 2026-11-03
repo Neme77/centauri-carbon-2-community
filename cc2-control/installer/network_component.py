@@ -8,8 +8,8 @@ import io
 from pathlib import Path
 import tarfile
 
-RUNTIME_SHA = '95db87b35dcf6799d5d57ec8ad046455c97e5cb297cc07ea4a2eeda90fb367de'
-HELPER_SHA = '192ee3df47f6543e59e036a11bd242a0d0e070e7e0dc67b1d5609116903cf23d'
+RUNTIME_SHA = '649d0af3dba7e21bc399fc741115fbe298cc1e4b77c07cf51bd35bfd73762e9a'
+HELPER_SHA = '2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62'
 
 def functions(runtime: Path):
     data = runtime.read_bytes()

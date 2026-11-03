@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="532" height="300" viewBox="0 0 532 300"><rect width="532" height="300" fill="#0b1018"/><g opacity="0.3926"><svg x="36" y="12" width="460" height="197.143" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 180" role="img" aria-labelledby="title desc">
+  <title id="title">CC2 Community</title>
+  <desc id="desc">Two open orbital arcs around a cyan star, with CC2 Community lettering.</desc>
+  <defs><linearGradient id="orbit" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#91f4eb"/><stop offset="1" stop-color="#28a7d8"/></linearGradient></defs>
+  <g transform="translate(210 61)" fill="none" stroke="#7eead8" stroke-linecap="round">
+    <path d="M31-24a39 39 0 1 0 0 48" stroke-width="5"/>
+    <path d="M16-12a20 20 0 1 0 0 24" stroke-width="4" opacity=".6"/>
+    <path d="m36-14 3 10 10 3-10 3-3 10-3-10-10-3 10-3Z" fill="#8bf3e4" stroke="none"/>
+    <circle cx="-25" cy="-35" r="3" fill="#8bf3e4" stroke="none"/>
+  </g>
+  <text x="210" y="133" fill="#edf2f7" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="37" font-weight="700" letter-spacing="5">CC2</text>
+  <text x="210" y="160" fill="#9aa9b9" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="14" letter-spacing="3.5">COMMUNITY</text>
+</svg>
+</g><defs><clipPath id="track"><rect x="194" y="234" width="144" height="3" rx="1.5"/></clipPath></defs><rect x="194" y="234" width="144" height="3" rx="1.5" fill="#263b46"/><g clip-path="url(#track)"><rect x="147.92" y="234" width="54" height="3" rx="1.5" fill="#7eead8"/></g><text x="266" y="259" text-anchor="middle" font-family="Segoe UI" font-size="11" font-weight="600" letter-spacing="1.2" fill="#9caabe">WELCOME TO YOUR MACHINE</text></svg>

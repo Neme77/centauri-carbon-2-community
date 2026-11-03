@@ -33,6 +33,33 @@ trap finish 0
 trap 'exit 1' 1 2 15
 fail(){ echo "STOP: $*";exit 1; }
 sha(){ sha256sum "$1" | awk '{print $1}'; }
+# A base-firmware reflash resets overlay hooks but retains /opt/usr. Accept
+# only the complete known native profile; arbitrary mixed startup is refused.
+reflash_profile(){
+    for item in '/etc/wifi/udhcpc_wlan0 b76f68e345f1221d835d1a0d6279827c5df4823c2e7fadfe0298cd49ec7bb7df' '/usr/share/udhcpc/set_lan.sh 53cf6af55ad333d5781b0d48d89fd48bde22bc516bd22e76d45f098dc224443c' '/etc/init.d/cc2-camera-launch f05accc97f0195cf4cf481b53b643902424183bb335a27f42e6069a625813c6f' '/etc/init.d/cc2-reactor-launch 8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636373fdaac43';do
+        file=${item%% *};expected=${item#* }
+        [ -f "$file" ] && [ ! -L "$file" ] && [ "$(sha "$file")" = "$expected" ] || fail reflash_native_profile
+    done
+    for path in /etc/init.d/cc2-network-manager /etc/rc.d/S23cc2-network-manager /etc/hotplug.d/net/90-cc2-network-manager;do
+        [ ! -e "$path" ] && [ ! -L "$path" ] || fail reflash_mixed_startup
+    done
+    for item in 'native-udhcpc_wlan0 b76f68e345f1221d835d1a0d6279827c5df4823c2e7fadfe0298cd49ec7bb7df' 'native-set_lan.sh 53cf6af55ad333d5781b0d48d89fd48bde22bc516bd22e76d45f098dc224443c' 'native-camera-launch f05accc97f0195cf4cf481b53b643902424183bb335a27f42e6069a625813c6f' 'native-reactor-launch 8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636373fdaac43';do
+        file="$ROOT/${item%% *}";expected=${item#* }
+        [ -f "$file" ] && [ ! -L "$file" ] && [ "$(sha "$file")" = "$expected" ] || fail reflash_retained_native_profile
+    done
+    [ -f "$ROOT/wifi-client.sh" ] && [ ! -L "$ROOT/wifi-client.sh" ] || fail reflash_retained_dhcp
+    file=/opt/usr/wifi/udhcpc_wlan0
+    [ -f "$file" ] && [ ! -L "$file" ] || fail reflash_persistent_dhcp
+    actual=$(sha "$file")
+    [ "$actual" = b76f68e345f1221d835d1a0d6279827c5df4823c2e7fadfe0298cd49ec7bb7df ] || [ "$actual" = "$(sha "$ROOT/wifi-client.sh")" ] || fail reflash_persistent_dhcp
+    for proc in /proc/[0-9]*;do
+        [ -d "$proc" ] || continue
+        executable=$(readlink "$proc/exe" 2>/dev/null) || executable=
+        case "$executable" in "$ROOT"/*) fail reflash_component_running;;esac
+        if grep -F "$ROOT/" "$proc/maps" >/dev/null 2>&1;then fail reflash_component_mapped;fi
+    done
+}
+REFLASHED=0
 [ "$(id -u)" = 0 ] || fail root_required
 [ -d /opt/usr ] && [ ! -L /opt/usr ] || fail persistent_storage
 [ "$SOURCE" != "$ROOT" ] && [ ! -e "$STAGE" ] && [ ! -L "$STAGE" ] || fail staging_path
@@ -54,9 +81,16 @@ chmod 700 "$STAGE" "$BACKUP"
 phase retain-native-hooks
 if [ -e "$ROOT" ] || [ -L "$ROOT" ];then
     [ -d "$ROOT" ] && [ ! -L "$ROOT" ] || fail existing_component
-    "$ROOT/control" --busy && fail pending_network_change
+    [ -f "$ROOT/control" ] && [ ! -L "$ROOT/control" ] && [ -f "$ROOT/startup.sha256" ] && [ ! -L "$ROOT/startup.sha256" ] || fail existing_component
     (cd "$ROOT" && sha256sum -c SHA256SUMS >/dev/null) || fail existing_component_checksums
-    sha256sum -c "$ROOT/startup.sha256" >/dev/null || fail changed_startup
+    "$ROOT/control" --busy && fail pending_network_change
+    if ! sha256sum -c "$ROOT/startup.sha256" >/dev/null 2>&1;then
+        phase reflash-profile
+        reflash_profile
+        REFLASHED=1
+        echo 'REFLASH PROFILE PASS: exact native startup restored; retained component and settings will be backed up/preserved.'
+        phase retain-native-hooks
+    fi
     cp "$ROOT/native-udhcpc_wlan0" "$STAGE/native-udhcpc_wlan0"
     cp "$ROOT/native-set_lan.sh" "$STAGE/native-set_lan.sh"
     cp "$ROOT/native-camera-launch" "$STAGE/native-camera-launch"
@@ -105,7 +139,14 @@ for path in /etc/init.d/printer /opt/usr/wifi/udhcpc_wlan0 /etc/wifi/udhcpc_wlan
     else printf '%s\n' "$path" >> "$BACKUP/absent";fi
 done
 cp "$STAGE/rollback.sh" "$BACKUP/restore.sh"
+if [ ! -e "$ROOT" ] && [ ! -L "$ROOT" ];then : > "$BACKUP/component-absent";fi
 BACKUP_READY=1
+if [ "$REFLASHED" = 1 ];then
+    phase reflash-precommit
+    "$SOURCE/control" --guard 8081 || fail printer_not_ready
+    "$ROOT/control" --busy && fail pending_network_change
+    reflash_profile
+fi
 phase install-component
 if [ -d "$ROOT" ];then mv "$ROOT" "$BACKUP/component";fi
 mv "$STAGE" "$ROOT"
@@ -133,6 +174,10 @@ sh "$ROOT/profile.sh" ethernet || fail installed_profile
 # Defaults leave native Wi-Fi ownership untouched. No helper/module is started.
 phase seed-configuration
 "$ROOT/control" --seed || fail configuration_seed
+if [ "$REFLASHED" = 1 ];then
+    echo 'REFLASH RECOVERY COMPLETE: Connections delegates reinstalled; previous component and exact startup retained in the rollback backup. Saved settings preserved.'
+    echo 'REBOOT REQUIRED: reboot the complete idle printer before using network changes.'
+fi
 COMMITTED=1
 phase complete
 sync

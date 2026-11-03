@@ -2,7 +2,7 @@
 
 Use this computer-assisted installer once when Settings → Updates is not yet available. Existing panel users can download and verify signed updates from GitHub, then confirm installation separately. See the English installation guide linked below.
 
-**Community Firmware V4.4, V4.4.1 and V4.4.2 (ELEGOO base 02.01.01.07) are supported.** The installer fingerprints the installed and running community printer executable and update daemon. V4.3, stock firmware and unknown fingerprints are refused before backup or service stop.
+**Community Firmware V4.4, V4.4.1, V4.4.2 and V4.4.3 (ELEGOO base 02.01.01.07) are supported.** The installer fingerprints the installed and running community printer executable and update daemon. V4.3, stock firmware and unknown fingerprints are refused before backup or service stop.
 
 Extract the entire ZIP on the computer. Windows: Install-Windows.cmd. Linux/macOS: sh ./install-cc2-control.sh PRINTER-IP. Requires local network access and OpenSSH. SSH username root, using your SSH password; this is separate from the LAN access code.
 
@@ -23,3 +23,13 @@ Use the backup directory and exact restore command printed by your installation 
 ## Rebuild
 
 Run the ARM build, then python3 cc2-control/installer/package.py with --prepared pointing to the application dist directory. Package includes checksums, explicit permissions, source archive, launchers and restore script. It contains no vendor firmware or private signing keys. Run installer/package regression tests and record printer validation separately.
+
+## Persistent staging and memory
+
+The computer-assisted installers prepare an exclusive /opt/usr disk stage, never
+a payload in /tmp. At least 64 MiB free persistent storage and 24 MiB available
+RAM are required before transfer; memory is checked again before native component
+parsing. Close video viewers before installing. Low/unknown memory refuses the
+operation rather than consuming the printer services' remaining headroom.
+Successful installation removes only the verified input archive and extracted
+payload. Logs and rollback backups stay; a failed attempt retains its stage.

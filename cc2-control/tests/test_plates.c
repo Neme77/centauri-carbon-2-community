@@ -733,6 +733,9 @@ static int fake_console(console_state *c, const char *command) {
     pthread_mutex_lock(&c->lock);
     c->generation++; c->busy = 0; c->completed = 1; c->success = console_ok;
     snprintf(c->command, sizeof(c->command), "%s", command);
+    c->output_len=(size_t)snprintf(c->output,sizeof(c->output),"%s",
+        !strncmp(command,"BED_MESH_CALIBRATE ",19) ?
+        "{\"report\":{\"message\":\"// Mesh Bed Leveling Complete\"}}\n{\"id\":101,\"result\":{}}\n" : "{\"id\":101,\"result\":{}}\n");
     pthread_mutex_unlock(&c->lock);
     return 0;
 }

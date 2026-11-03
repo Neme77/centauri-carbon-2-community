@@ -33,6 +33,7 @@ import {
   tempOk,
 } from '@/lib/plates'
 import { NozzleSelect, Plates } from '@/pages/bed-plates'
+import { NozzleExpansion } from '@/pages/nozzle-expansion'
 
 const I = { size: 16, strokeWidth: 1 }
 const PROFILES: [string, Key][] = [
@@ -713,6 +714,7 @@ export const Bed = () => {
           { id: 'mesh', label: t('bed.mesh_saved_profiles'), icon: <Icon n="grid" /> },
           { id: 'plates', label: t('bed.build_plates'), icon: <Icon n="layers" /> },
           { id: 'screws', label: t('bed.screw_levelling'), icon: <Icon n="target" /> },
+          { id: 'nozzle', label: t('nozzle.tab'), icon: <Icon n="temp" /> },
         ]}
         value={bed}
         onChange={id => openPage('bed', id as BedTab)}
@@ -723,6 +725,8 @@ export const Bed = () => {
         </div>
       ) : bed === 'plates' ? (
         <Plates />
+      ) : bed === 'nozzle' ? (
+        <NozzleExpansion />
       ) : (
         <MeshCard />
       )}

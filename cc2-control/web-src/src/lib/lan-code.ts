@@ -53,7 +53,9 @@ export function useLanCode() {
 // or catalog requests. Keep backend authorization and each action's confirmation.
 export async function lanRequest(path: string, code: string, options: RequestInit = {}) {
   if (
-    !/^\/api\/(access\/verify|experiments|app-update\/(upload|download|install)|bed-drying\/(start|stop))$/.test(path)
+    !/^\/api\/(access\/verify|experiments|app-update\/(upload|download|install)|bed-drying\/(start|preheat|stop)|nozzle-expansion\/start)$/.test(
+      path
+    )
   )
     throw new Error('Unsupported LAN-protected endpoint')
   const sent = code.trim(),

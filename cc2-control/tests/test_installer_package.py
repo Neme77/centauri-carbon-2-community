@@ -18,13 +18,21 @@ with tempfile.TemporaryDirectory() as tmp:
     pkg.package(prepared,ROOT/'scripts',source,output)
     with zipfile.ZipFile(output) as z:
         files={pathlib.Path(n).name:z.read(n) for n in z.namelist()}
+        runner = files['pc-stage.sh']
+        assert hashlib.sha256(files['cc2-control-payload.tar.gz']).hexdigest().encode() in runner
+        assert b'@PAYLOAD_SHA@' not in runner
+        assert b'/opt/usr/cc2-control-install-' in runner and b'/tmp/cc2-control' not in runner
+        for launcher in ('Install-CC2-Control.ps1', 'install-cc2-control.sh'):
+            assert b'/tmp/cc2-control' not in files[launcher], launcher
+            assert b'/opt/usr/cc2-control-install-' in files[launcher], launcher
+            assert b'pc-stage.sh' in files[launcher], launcher
         assert not any(name.endswith('.it.md') for name in files), 'Package documentation must use English'
         for name in ('README-TEST.md',):
             notes=ROOT/'installer'/name
             if notes.is_file(): assert files[name]==notes.read_bytes()
         for line in files['SHA256SUMS'].decode().splitlines():
             digest,name=line.split('  ',1);assert hashlib.sha256(files[name]).hexdigest()==digest
-    for scenario in ('success','slow-http','http-timeout','delayed','stop-delayed','busy','rollback','old-firmware','stock-firmware','runtime-mismatch','hot','heating'):
+    for scenario in ('success','low-memory','missing-memory','slow-http','http-timeout','delayed','stop-delayed','busy','rollback','old-firmware','stock-firmware','runtime-mismatch','hot','heating'):
         fixture=base/scenario;fixture.mkdir();stage=fixture/'stage';stage.mkdir()
         with tarfile.open(fileobj=io.BytesIO(files['cc2-control-payload.tar.gz']),mode='r:gz') as t:
             for m in t.getmembers():
@@ -87,6 +95,9 @@ with tempfile.TemporaryDirectory() as tmp:
         (stage/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(stage).as_posix()+'\n' for p in sorted(stage.rglob('*')) if p.is_file() and p.name!='SHA256SUMS'))
         script=(stage/'install-on-printer.sh').read_text().replace('/opt/usr/cc2-control',str(target)).replace('/etc/init.d/cc2-control',str(init)).replace('/tmp/cc2-control-install.lock',str(fixture/'lock')).replace('/proc/$RUN_PID/exe',str(target/'cc2-control'))
         script=script.replace('/opt/bin/elegoo_printer',str(printer)).replace('/opt/inst/daemon-000/daemon-000',str(daemon)).replace('/proc/$printer_pid/exe',str(runtime)).replace(pkg.COMPATIBILITY['printer_sha256'],expected_printer).replace(pkg.COMPATIBILITY['daemon_sha256'],expected_daemon)
+        memory = fixture / 'meminfo'
+        memory.write_text('MemAvailable: 8192 kB\n' if scenario == 'low-memory' else '' if scenario == 'missing-memory' else 'MemAvailable: 65536 kB\n')
+        script = script.replace('/proc/meminfo', str(memory))
         script=script.replace('STAGE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)','STAGE="'+str(stage)+'"')
         if scenario=='rollback':
             script=script.replace(hashlib.sha256(binary).hexdigest(),'0'*64)
@@ -102,7 +113,7 @@ with tempfile.TemporaryDirectory() as tmp:
         if scenario == 'http-timeout': assert 'Local status request exceeded five seconds.' in result.stderr
         for name in keep:assert (target/name).read_text()=='KEEP '+name
         assert not (fixture/'lock').exists()
-        if scenario in ('http-timeout','old-firmware','stock-firmware','runtime-mismatch','hot','heating','busy'):
+        if scenario in ('low-memory','missing-memory','http-timeout','old-firmware','stock-firmware','runtime-mismatch','hot','heating','busy'):
             assert not list(target.parent.glob('cc2-control-backup-*')), scenario
             assert not marker.exists(), scenario
         if scenario == 'success':

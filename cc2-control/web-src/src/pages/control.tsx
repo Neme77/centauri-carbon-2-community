@@ -1,5 +1,7 @@
 import { ExternalFilament } from './external-filament'
 import { BedDrying } from './bed-drying'
+import { ExhaustGrille } from './exhaust-grille'
+import { CalibrationTools } from './calibration-tools'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
@@ -15,7 +17,7 @@ import { t, tpl } from '@/lib/i18n'
 import { store } from '@/lib/store'
 import { stateText } from '@/lib/machine'
 import { num } from '@/lib/format'
-import { calibrationFocus } from '@/lib/quick'
+import { calibrationFocus, controlFocus } from '@/lib/quick'
 import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
 
@@ -683,6 +685,19 @@ export const Control = () => {
   const link = printer.use()
   const d = link.data
   const v = view(d)
+  const shortcut = controlFocus.use()
+  useEffect(() => {
+    const selector = (
+      { fans: '.cc2-fans', tuning: '.cc2-tuning', heating: '[data-bed-drying]' } as Record<string, string>
+    )[shortcut.target]
+    if (!selector) return
+    const card = document.querySelector<HTMLElement>(selector)
+    card?.scrollIntoView({ block: 'center' })
+    const target = shortcut.target === 'tuning' ? card?.querySelector<HTMLElement>('#tune-pressure-advance') : card
+    if (target === card) target?.setAttribute('tabindex', '-1')
+    target?.focus({ preventScroll: true })
+    controlFocus.set(s => ({ target: '', revision: s.revision }))
+  }, [shortcut.target, shortcut.revision])
   const focus = calibrationFocus.use()
   useEffect(() => {
     if (!focus.target) return
@@ -719,20 +734,22 @@ export const Control = () => {
             <CardHead icon="fan" title="common.fans" />
             <div class="cc2-fan-controls flex flex-1 flex-col justify-center gap-5">
               {(['part', 'aux', 'box'] as const).map(k => (
-                <FanSlider
-                  key={k}
-                  label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
-                  pct={v.fan(k)}
-                  disabled={!d?.connected}
-                  onCommit={n => control(`fan:${k}:${n}`)}
-                />
+                <div key={k}>
+                  <FanSlider
+                    label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
+                    pct={v.fan(k)}
+                    disabled={!d?.connected}
+                    onCommit={n => control(`fan:${k}:${n}`)}
+                  />
+                  {k === 'box' && <ExhaustGrille />}
+                </div>
               ))}
             </div>
           </Card>
         </div>
         <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:contents">
           <ZOffset />
-          <PrintTuning compact sliders />
+          <PrintTuning compact sliders pressureAdvance />
         </div>
       </div>
       <div class="cc2-control-calibrations mt-3.5 grid items-stretch gap-3.5 cc2-xl:grid-cols-3">
@@ -830,6 +847,7 @@ export const Control = () => {
         </div>
       </div>
       <ExternalFilament />
+      <CalibrationTools />
       <BedDrying />
     </Page>
   )

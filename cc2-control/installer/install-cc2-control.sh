@@ -37,6 +37,31 @@ if [ "$RESET_HOST_KEY" -eq 1 ]; then
         exit 1
     }
 fi
-scp "$ARCHIVE" "$TARGET:/tmp/cc2-control-payload.tar.gz"
-ssh "$TARGET" 'mkdir -p /tmp/cc2-control-update && tar -xzf /tmp/cc2-control-payload.tar.gz -C /tmp/cc2-control-update && chmod 755 /tmp/cc2-control-update/install-on-printer.sh /tmp/cc2-control-update/cc2-control && sh /tmp/cc2-control-update/install-on-printer.sh'
+RUNNER="$HERE/pc-stage.sh"
+[ -f "$RUNNER" ] || { echo 'Disk staging runner missing. Extract the complete package.';exit 1; }
+if command -v sha256sum >/dev/null 2>&1;then
+    runner_sha=$(sha256sum "$RUNNER" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1;then
+    runner_sha=$(shasum -a 256 "$RUNNER" | awk '{print $1}')
+else echo 'SHA-256 tool required';exit 1;fi
+TOKEN=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+case "$TOKEN" in ''|*[!0-9a-f]*) exit 1;;esac
+[ "${#TOKEN}" -eq 32 ] || exit 1
+STAGE=/opt/usr/cc2-control-install-$TOKEN
+ssh "$TARGET" "sh -s -- '$STAGE'" <<'CC2_PREPARE'
+set -eu
+umask 077
+[ "$(id -u)" = 0 ]
+[ -d /opt/usr ] && [ ! -L /opt/usr ]
+awk '$2=="/opt/usr" && $3!="tmpfs" {ok=1} END {exit !ok}' /proc/mounts
+free=$(df -k /opt/usr | awk 'END {print $4}')
+case "$free" in ''|*[!0-9]*) exit 1;;esac
+[ "$free" -ge 65536 ] || { echo 'STOP: less than 64 MiB free persistent storage';exit 1; }
+available=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+case "$available" in ''|*[!0-9]*) exit 1;;esac
+[ "$available" -ge 24576 ] || { echo 'STOP: less than 24 MiB available RAM';exit 1; }
+mkdir "$1"
+CC2_PREPARE
+scp -O "$ARCHIVE" "$RUNNER" "$TARGET:$STAGE/"
+ssh "$TARGET" "printf '%s\n' '$runner_sha  $STAGE/pc-stage.sh' | sha256sum -c - && sh '$STAGE/pc-stage.sh'"
 echo "CC2 Control installed: http://$PRINTER_IP:8081"

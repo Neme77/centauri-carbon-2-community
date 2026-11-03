@@ -16,7 +16,13 @@ for path in /etc/init.d/printer /opt/usr/wifi/udhcpc_wlan0 /etc/wifi/udhcpc_wlan
     elif [ -f "$BASE/absent" ] && grep -Fx "$path" "$BASE/absent" >/dev/null;then rm -f "$path"
     else echo 'STOP: incomplete backup';exit 1;fi
 done
-if [ -d "$ROOT" ] && [ ! -L "$ROOT" ];then mv "$ROOT" "$BASE/failed-component-$$";fi
-if [ -d "$BASE/component" ] && [ ! -L "$BASE/component" ];then mv "$BASE/component" "$ROOT";fi
+# If moving the previous component failed, it still occupies ROOT. Do not
+# displace it unless the saved component exists or this was a fresh install.
+if [ -d "$BASE/component" ] && [ ! -L "$BASE/component" ];then
+    if [ -d "$ROOT" ] && [ ! -L "$ROOT" ];then mv "$ROOT" "$BASE/failed-component-$$";fi
+    mv "$BASE/component" "$ROOT"
+elif [ -f "$BASE/component-absent" ];then
+    if [ -d "$ROOT" ] && [ ! -L "$ROOT" ];then mv "$ROOT" "$BASE/failed-component-$$";fi
+fi
 sync
 echo 'Startup restored. No service restarted. Reboot the complete idle printer to finish removing active network delegates.'

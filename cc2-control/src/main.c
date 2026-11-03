@@ -40,6 +40,7 @@ static int app_update_active(void);
 static int plates_background_active(void);
 static int experiments_normal_confirmed(console_state *console);
 static int drying_active(void);
+static int nx_active(void);
 static int drying_status_json(char *out,size_t capacity,const mqtt_client *mqtt);
 
 static uds_client telemetry;
@@ -2555,7 +2556,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
-    char body[9216],filename[520],state[140],uuid[260],axes[40],drying_status[640];
+    char body[9216],filename[520],state[140],uuid[260],axes[40],drying_status[1024];
     drying_status_json(drying_status,sizeof(drying_status),mqtt);
     char native_job[1400]="null",native_filename[1100],native_state[40],native_seconds[40];
     const char *native=uds_print_state(&telemetry);double native_duration;
@@ -2596,13 +2597,16 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         remaining=active_gcode_estimated_seconds>duration ? active_gcode_estimated_seconds-duration : 0;
         remaining_source="gcode";
     }
-    char speed_percent[40],flow_percent[40],live_velocity[40];double tune;
+    char speed_percent[40],flow_percent[40],live_velocity[40],pressure_advance[40];double tune;
     int have_speed=uds_value(&telemetry,U_SPEED_FACTOR,&tune);
     json_number(speed_percent,sizeof(speed_percent),have_speed,have_speed?tune*100:0);
     int have_flow=uds_value(&telemetry,U_FLOW_FACTOR,&tune);
     json_number(flow_percent,sizeof(flow_percent),have_flow,have_flow?tune*100:0);
     int have_velocity=uds_value(&telemetry,U_LIVE_SPEED,&tune);
     json_number(live_velocity,sizeof(live_velocity),have_velocity,have_velocity?tune:0);
+    int have_pressure=uds_value(&telemetry,U_PRESSURE_ADVANCE,&tune);
+    if(have_pressure)snprintf(pressure_advance,sizeof(pressure_advance),"%.6f",tune);
+    else snprintf(pressure_advance,sizeof(pressure_advance),"null");
     char zoffset[32],zreference[32],zadjustment[32];double offset;
     int have_offset=z_offset_readback(&offset);
     json_z_offset(zoffset,sizeof(zoffset),have_offset,have_offset?offset:0);
@@ -2640,7 +2644,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"machine\":{\"status\":%d,\"status_name\":\"%s\",\"sub_status\":%d,\"reason\":%d,\"progress\":%d},"
         "\"print\":{\"enabled\":%s,\"filename\":\"%s\",\"state\":\"%s\",\"uuid\":\"%s\",\"current_layer\":%d,\"total_layers\":%d,\"duration\":%ld,\"remaining\":%ld,\"remaining_source\":\"%s\",\"total_duration\":%ld,\"native\":%s},"
         "\"motion\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"speed\":%.1f,\"speed_mode\":%d,\"homed_axes\":\"%s\"},"
-        "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s},"
+        "\"tuning\":{\"speed_percent\":%s,\"flow_percent\":%s,\"live_velocity\":%s,\"pressure_advance\":%s},"
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
@@ -2648,7 +2652,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
-        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
+        mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,pressure_advance,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
         printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status);
     if(length>0&&(size_t)length<sizeof(body))
@@ -2659,7 +2663,7 @@ static void uds_response(int fd){
     static const char *names[U_FIELDS]={"nozzle_temperature","nozzle_target","bed_temperature","bed_target",
         "controller_fan","heater_fan","part_fan","fan1","controller_rpm","heater_rpm","part_rpm","fan1_rpm",
         "speed_factor","extrude_factor","live_velocity","progress","current_layer","print_duration","total_elapsed","z_offset",
-        "filament_used","canvas_channel"};
+        "filament_used","canvas_channel","cavity_temperature_mode","pressure_advance"};
     char body[2048];json_builder b={body,0,sizeof(body),0};
     json_builder_printf(&b,"{\"connected\":%s,\"fresh\":%s,\"messages\":%lu,\"connections\":%lu,\"disconnects\":%lu,\"last_disconnect\":\"%s\",\"last_errno\":%d,\"ignored_messages\":%lu,\"values\":{",
         telemetry.fd>=0?"true":"false",uds_fresh(&telemetry)?"true":"false",telemetry.messages,
@@ -3264,6 +3268,10 @@ static void mesh_response(int fd) {
 /* Cross-feature SAVE_CONFIG guards are implemented after both file editors. */
 static int canvas_unload_pending(void);
 static int canvas_unload_pending_intact(void);
+static int nx_pending(void);
+static int rotation_pending(void);
+static int rotation_pending_intact(void);
+static int cell_active(void);
 static const char *pending_autosave_guard(void);
 
 #include "plates.h"
@@ -3271,12 +3279,18 @@ static const char *pending_autosave_guard(void);
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
+#include "calibration_tools.h"
 
 static const char *pending_autosave_guard(void) {
+    if (cell_active()) return "Finish the load-cell calibration session before changing or saving printer settings";
+    if (rotation_pending())
+        return "A rotation distance change needs a restart; resolve it before calibrating or saving printer settings";
     if (canvas_unload_pending())
         return "A Canvas pull-back change needs a restart; resolve it before calibrating or saving printer settings";
     if (plates.pending[0])
         return "A plate mesh change needs a restart; resolve it before calibrating or saving printer settings";
+    if (nx_pending())
+        return "A nozzle expansion change needs a restart; resolve it before calibrating or saving printer settings";
     return NULL;
 }
 
@@ -3562,7 +3576,9 @@ static int quick_action_valid(const char *action) {
         "home:ALL", "home:X", "home:Y", "home:Z",
         "system:heaters_off", "system:fans_off", "system:motors_off",
         "light:toggle", "page:control", "page:files", "page:bed", "page:canvas",
-        "calibration:shaper", "calibration:hotend", "calibration:bed"
+        "calibration:shaper", "calibration:hotend", "calibration:bed",
+        "grille:open", "grille:close", "settings:connection",
+        "control:fans", "control:tuning", "control:heating"
     };
     for (size_t index = 0; index < sizeof(allowed) / sizeof(allowed[0]); ++index)
         if (strcmp(action, allowed[index]) == 0) return 1;
@@ -3822,6 +3838,16 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,409,"Conflict","application/json",error,strlen(error));return;
     }
     if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
+    if(!strncmp(action,"grille:",7)){
+        const char *native=uds_print_state(&telemetry);double nozzle,bed;
+        /* No raw servo/PWM commands: native grille policy also owns the exhaust fan.
+         * A retained MQTT print.enabled flag alone does not mean a job is running. */
+        if(drying_active()||!native||(strcmp(native,"standby")&&strcmp(native,"complete"))||
+           !uds_value(&telemetry,U_EG,&nozzle)||!uds_value(&telemetry,U_BG,&bed)||
+           !isfinite(nozzle)||!isfinite(bed)||nozzle!=0||bed!=0){
+            plates_fail(fd,409,"Exhaust grille controls require fresh native idle state, heaters off and no bed-heating session");return;
+        }
+    }
     if(!strncmp(action,"light:",6)){
         if(strcmp(action,"light:on")&&strcmp(action,"light:off")){
             const char *error="{\"accepted\":false,\"error\":\"Unknown light state\"}\n";
@@ -3862,9 +3888,19 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     double tune_value;
     if(strncmp(action,"tune:",5)==0&&
-       !uds_value(&telemetry,strncmp(action,"tune:speed:",11)==0?U_SPEED_FACTOR:U_FLOW_FACTOR,&tune_value)){
+       !uds_value(&telemetry,strncmp(action,"tune:pressure-advance:",22)==0?U_PRESSURE_ADVANCE:
+          strncmp(action,"tune:speed:",11)==0?U_SPEED_FACTOR:U_FLOW_FACTOR,&tune_value)){
         const char *error="{\"accepted\":false,\"error\":\"Fresh tuning readback is unavailable\"}\n";
         respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+    }
+    if(!strncmp(action,"tune:pressure-advance:",22)){
+        const char *native_state=uds_print_state(&telemetry);
+        int idle=native_state&&(!strcmp(native_state,"standby")||!strcmp(native_state,"complete"));
+        int printing_state=native_state&&(!strcmp(native_state,"printing")||!strcmp(native_state,"paused"));
+        if(!((mqtt->machine_status==1&&idle)||(mqtt->machine_status==2&&printing_state))){
+            const char *error="{\"accepted\":false,\"error\":\"Pressure Advance requires matching fresh native Idle or print state\"}\n";
+            respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+        }
     }
     if(external_feed_enabled&&external_source_selected&&!strncmp(action,"canvas:",7)){
         const char *error="{\"error\":\"Select Canvas with the external filament removed before using its controls\"}";
@@ -3941,6 +3977,7 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 #include "app_updates.h"
 #include "app_update_catalog.h"
 #include "bed_drying.h"
+#include "nozzle_expansion.h"
 #include "experiments.h"
 #include "backup.h"
 #include "network_status_http.h"
@@ -3994,6 +4031,16 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     size_t body_len=header_end&&used>=(size_t)(body-request)?used-(size_t)(body-request):0;
     int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
         body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
+    int console_emergency=!strcmp(method,"POST")&&!strcmp(path,"/api/console/command")&&body_len==4&&!memcmp(body,"M112",4);
+    if(tools.busy&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency){
+        plates_fail(fd,409,"A native calibration tool is still running");return 0;
+    }
+    if(cell_active()&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&strcmp(path,"/api/calibration-tools/action")){
+        plates_fail(fd,409,"Finish the load-cell calibration session first");return 0;
+    }
+    if(rotation_pending()&&!strcmp(method,"POST")&&!strncmp(path,"/api/plates/",12)){
+        plates_fail(fd,409,"A rotation distance change needs a restart before changing plate settings");return 0;
+    }
     if (strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency && (app_update_active() || (connections_busy() && strcmp(path,"/api/network/action")))) {
         app_update_fail(fd, 409, "Application update is running; printer changes are paused");
         return 0;
@@ -4005,7 +4052,16 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
        !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
         app_update_fail(fd,409,"Stop bed heating and wait for confirmation before another operation");return 0;
     }
-    if(!strcmp(path,"/api/network")) {
+    /* The calibration heats the nozzle and moves the printhead until it has switched the nozzle off. */
+    if(nx_active() && strcmp(method,"GET") && strcmp(method,"HEAD") && !emergency &&
+       !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
+        app_update_fail(fd,409,"A nozzle expansion calibration is running; use the emergency stop to interrupt it");return 0;
+    }
+    if(!strcmp(method,"GET")&&!strcmp(path,"/api/calibration-tools/status")) {
+        tools_status(fd);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/calibration-tools/action")) {
+        tools_action(fd,mqtt,body,body_len);
+    } else if(!strcmp(path,"/api/network")) {
         if(!strcmp(method,"GET"))network_status_response(fd);
         else app_update_fail(fd,405,"Network status is read-only");
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/network/manager")) {
@@ -4018,8 +4074,18 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         app_update_fail(fd,410,"Reload CC2 Control to use the Connections manager");
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
         drying_response(fd,mqtt,console);
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/nozzle-expansion")){
+        nx_response(fd);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/nozzle-expansion/start")){
+        nx_start_response(fd,request,body,body_len,mqtt);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/nozzle-expansion/factory")){
+        nx_factory_response(fd,mqtt,body,body_len);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/nozzle-expansion/restart")){
+        nx_restart_response(fd,mqtt,body,body_len);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/start")){
         drying_start_response(fd,request,body,body_len,mqtt,console);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/preheat")){
+        drying_preheat_response(fd,request,body,body_len,mqtt,console);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/bed-drying/stop")){
         drying_stop_response(fd,request,mqtt,console);
     } else if ((strcmp(method,"GET")==0 && strcmp(path,"/api/backup/export")==0) ||
@@ -4283,6 +4349,7 @@ int main(int argc, char **argv) {
     telemetry.canvas_enabled=canvas_uds_enabled||experiments.canvas_uds;
     if(!bk_recover()){fprintf(stderr,"Application restore recovery failed; refusing to load mixed libraries\n");console_destroy(&console);return 1;}
     drying_load();
+    nx_load();
     plates_load();
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
@@ -4330,6 +4397,8 @@ int main(int argc, char **argv) {
         plates_tick(&mqtt);
         plates_calibration_tick(&mqtt,&console);
         drying_tick(&mqtt);
+        nx_tick(&mqtt);
+        tools_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
         int max_fd=server;
@@ -4339,7 +4408,8 @@ int main(int argc, char **argv) {
         for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
             FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
         }
-        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0;
+        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0||tools.busy||
+            (nx.exchange.fd>=0&&nx.stage!=NX_RUNNING); /* the calibration's own reply takes up to hours */
         struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
@@ -4406,6 +4476,7 @@ int main(int argc, char **argv) {
     bk_discard();
     spools_flush();
     object_query_close();
+    nt_close(&tools.call);plates_exchange_close(&cell.query);
     uds_close(&telemetry);
     panda_stop(&panda);
     mqtt_close(&mqtt);

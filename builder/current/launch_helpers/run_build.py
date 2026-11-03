@@ -14,7 +14,7 @@ SOURCE = Path(__file__).resolve().parents[1] / 'components/cc2-control/source/so
 with zipfile.ZipFile(SOURCE) as snapshot:
     FIRMWARE_VERSION = snapshot.read('FIRMWARE_VERSION').decode().strip()
 
-BUILDER_SHA256='19576362a6121f0e16ec0422b3712566907609f05372bf5d755be91537f64dfb'
+BUILDER_SHA256='94d8c67e969b9c69cd96096cd736954c56d4ef6ac0fc1401223d5e5ada1feb11'
 
 def sha256(path):
     h = hashlib.sha256()
@@ -47,8 +47,10 @@ def build_arguments(root, mode, preflight=False, check_key=False, keep_work=Fals
         aes = root / 'keys/cc2_aes_key_v1.bin'
         mk = root / 'tools/squashfs-tools-4.6.1/bin/mksquashfs'
         un = root / 'tools/squashfs-tools-4.6.1/bin/unsquashfs'
-        required += [firmware, aes, mk, un]
+        connections = root / 'components/connections/runtime.tar.gz'
+        required += [firmware, aes, mk, un, connections]
         command += [str(firmware), '--aes-key', str(aes), '--mksquashfs', str(mk), '--unsquashfs', str(un)]
+        command += ['--connections-runtime', str(connections)]
         if preflight:
             command.append('--preflight-only')
         else:

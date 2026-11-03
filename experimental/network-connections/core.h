@@ -15,7 +15,8 @@ enum {
   NG_WIFI_SAVED,
   NG_WIFI_FORGET,
   NG_CONFIRM,
-  NG_CANCEL
+  NG_CANCEL,
+  NG_USB_APPROVAL
 };
 typedef struct {
   int enabled, method, prefix;
@@ -29,7 +30,7 @@ typedef struct {
 typedef struct {
   int op, iface, enabled, method, prefix, network_id;
   char ip[16], gateway[16], dns1[16], dns2[16], ssid[33], security[12],
-      password[65], token[33];
+      password[65], token[33], revision[5];
 } ng_request;
 static inline void ng_erase(void *memory, size_t size) {
   volatile unsigned char *p = memory;
@@ -178,8 +179,8 @@ static inline int ng_request_parse(ng_json *j, ng_request *r) {
     return 0;
   static const char *ops[] = {
       "",           "select",      "interface", "support", "ip", "wifi-connect",
-      "wifi-saved", "wifi-forget", "confirm",   "cancel"};
-  for (int i = 1; i <= NG_CANCEL; i++)
+      "wifi-saved", "wifi-forget", "confirm",   "cancel", "usb-approval"};
+  for (int i = 1; i <= NG_USB_APPROVAL; i++)
     if (!strcmp(op, ops[i]))
       r->op = i;
   if (!r->op)
@@ -191,8 +192,10 @@ static inline int ng_request_parse(ng_json *j, ng_request *r) {
       allowed |= !strcmp(k, "interface");
     if (r->op == NG_INTERFACE || r->op == NG_IP)
       allowed |= !strcmp(k, "interface");
-    if (r->op == NG_INTERFACE || r->op == NG_SUPPORT)
+    if (r->op == NG_INTERFACE || r->op == NG_SUPPORT || r->op == NG_USB_APPROVAL)
       allowed |= !strcmp(k, "enabled");
+    if (r->op == NG_USB_APPROVAL)
+      allowed |= !strcmp(k, "revision");
     if (r->op == NG_IP)
       allowed |= !strcmp(k, "method") || !strcmp(k, "ip") ||
                  !strcmp(k, "prefix") || !strcmp(k, "gateway") ||
@@ -215,9 +218,21 @@ static inline int ng_request_parse(ng_json *j, ng_request *r) {
     if (r->iface < 0)
       return 0;
   }
-  if ((r->op == NG_INTERFACE || r->op == NG_SUPPORT) &&
+  if ((r->op == NG_INTERFACE || r->op == NG_SUPPORT || r->op == NG_USB_APPROVAL) &&
       !ng_bool(j, 0, "enabled", &r->enabled))
     return 0;
+  if (r->op == NG_USB_APPROVAL) {
+    const char *revision = ng_string(j, 0, "revision");
+    if (!revision || strlen(revision) != 4 ||
+        !ng_copy(r->revision, sizeof(r->revision), revision))
+      return 0;
+    for (int i = 0; i < 4; i++)
+      if (!((revision[i] >= '0' && revision[i] <= '9') ||
+            (revision[i] >= 'a' && revision[i] <= 'f')))
+        return 0;
+    if (strcmp(revision, "3000"))
+      return 0;
+  }
   if (r->op == NG_IP) {
     const char *method = ng_string(j, 0, "method");
     if (!method)

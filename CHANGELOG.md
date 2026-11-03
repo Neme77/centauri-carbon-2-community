@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [Community Firmware V4.4.3 / CC2 Control 1.2.25] - 2026-11-03
+
+### Fixed
+
+- Keep computer-assisted update payloads on persistent UDISK, verify an exclusive stage and archive, retain logs/backups and clean payloads only after success. Refuse insufficient RAM before transfer and before parsing embedded components; fixes the Windows-installation OOM observed and recovered by **Neme77** (#287).
+
+- Stop presenting a completed older application update as the current selection after a full firmware upgrade; retain failed/current jobs, logs and rollback backups. Reported by **Neme77** (#287).
+
+- Keep the Obsidian background continuous on the short Appearance and About pages, without repeating horizontal bands or changing their layout; reported and verified in the browser by **Neme77** (#287).
+
+- Recover Connections updates after an exact supported base-firmware reflash while retaining saved settings and exact rollback; preserve the previous component when its backup move fails. Correct RTL8153 USB interface-parent checks behind hubs without changing driver/probe/library binaries; reported and physically investigated by **Neme77** (#286).
+
+- Refuse to save a build-plate measurement unless the current native mesh calibration positively completes; failed Z homing, firmware errors and acknowledgement-only replies preserve previous measurements (#279, reported by @Noahwhite2014).
+
+### Added
+
+- Release complete Community Firmware 4.4.3 with Control 1.2.25, the native display and firmware-shipped qualified RTL8153 modules; retain the stock kernel, native startup/resource synchronization and saved connection/calibration settings. The integrated firmware and corrected persistent-staging PC installer were accepted by **Neme77** before publication (#287).
+
+- Live runtime Pressure Advance controls alongside speed/flow, plus configurable Open/Close flaps and navigation shortcuts for Connections, Fans, Pressure Advance and bed/chamber heating. Keep the four slots and existing choices; no load-cell shortcuts. Clarify bed/chamber heating copy in all nine languages; implemented and tested by **Neme77** (#286).
+
+- Optional native display refresh with Obsidian/cyan styling, preserved native functions and illustrations, and read-only inline LAN IPv4/link information; owner-supplied firmware inputs remain private (**Neme77**, #282).
+- Native exhaust-grille Open/Close controls beside EXHAUST and an advanced calibration card for rotation distance and load-cell read/diagnostic/tare/guided calibration, with guarded native sessions, verified saves and protected restart; implemented and physically tested by **Neme77** (#283).
+
+- Experimental nozzle thermal-expansion calibration on the Bed Levelling page (disabled by default, enabled from Experimental integrations): runs the firmware's NOZZLE_TEMP_CALIBRATE over a chosen range (default 130–330 °C, 10 °C steps, keeping the 140 °C reference and printing temperatures inside the table), always switches the nozzle off afterwards, keeps the table only when it is plausible and applies it after a printer restart, with a way back to the factory table. The factory table ends at 250 °C, where the firmware switches to a constant ~0.10 mm correction, so materials printed above it needed their own Z offset; by **Noahwhite2014** (#273).
+- Explicit experimental opt-in for Realtek RTL8153 USB `0bda:8153` revision `3000`, with a revision-specific preliminary ABI probe and unchanged connection confirmation/recovery. The tested `31fd` path remains available; other revisions are not automatically enabled. Reported by **kalross** (#274), implemented by **Neme77** (#278).
+
+- Experimental chamber preheat as a mode of bed heating: the bed heats the empty chamber with the exhaust grille closed and the aux fan tapering off near the target, reports when the chamber is ready, estimates where it will level off, hands the bed to a print that starts and restores the grille, fan and bed idle timeout afterwards; requested by **Sceletor** (#270), by **Noahwhite2014** (#277).
+
 ## [CC2 Control 1.2.24] - 2026-10-31
 
 ### Added

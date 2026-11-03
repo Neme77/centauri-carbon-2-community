@@ -15,6 +15,7 @@ class InstallerSshTests(unittest.TestCase):
             script = root / INSTALLER.name
             shutil.copyfile(INSTALLER, script)
             (root / "cc2-control-payload.tar.gz").touch()
+            (root / "pc-stage.sh").write_text("#!/bin/sh\nexit 0\n")
             tools = root / "tools"
             tools.mkdir()
             trace = root / "trace"
@@ -50,7 +51,9 @@ class InstallerSshTests(unittest.TestCase):
     def test_normal_install_does_not_reset_key(self):
         result, calls = self.run_installer(["192.0.2.10"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual([line.split()[0] for line in calls], ["scp", "ssh"])
+        self.assertEqual([line.split()[0] for line in calls], ["ssh", "scp", "ssh"])
+        self.assertTrue(all('/tmp/cc2-control' not in line for line in calls))
+        self.assertIn('/opt/usr/cc2-control-install-', calls[1])
 
     def test_confirmed_reset_runs_before_upload(self):
         result, calls = self.run_installer(
@@ -58,7 +61,7 @@ class InstallerSshTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls[0], "ssh-keygen <-R> <192.0.2.10>")
-        self.assertEqual([line.split()[0] for line in calls], ["ssh-keygen", "scp", "ssh"])
+        self.assertEqual([line.split()[0] for line in calls], ["ssh-keygen", "ssh", "scp", "ssh"])
 
     def test_cancel_does_not_reset_or_upload(self):
         result, calls = self.run_installer(

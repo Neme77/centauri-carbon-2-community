@@ -133,6 +133,8 @@
 }
 :root[data-theme="obsidian"] body {
   background: radial-gradient(ellipse at 76% 0%, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 48%), var(--bg);
+  background-repeat: no-repeat;
+  background-size: 100% max(100vh, 100%);
 }
 :root[data-theme="obsidian"] section.bg-panel {
   background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 96%, var(--text)), var(--panel) 70%);
@@ -538,3 +540,6 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-main .cc2-camera-card .cc2-camera-stop { min-height: 24px; padding-block: 0; }
 }
 
+
+/* Keep all six Pressure Advance decimals readable in the compact Control card. */
+.cc2-tuning-field input.cc2-pressure-value { width: 96px; }

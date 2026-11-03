@@ -3,6 +3,13 @@
 #include "dhcp.h"
 #include "profile-pins.h"
 #include "profile_cache.h"
+#include "usb_policy.h"
+#ifndef NG_NET_SYSFS
+#define NG_NET_SYSFS "/sys/class/net"
+#endif
+#ifndef NG_MODULE_SYSFS
+#define NG_MODULE_SYSFS "/sys/module"
+#endif
 static inline int ng_profile_execute(const char *kind) {
   char *args[] = {"sh", NG_COMPONENT "/profile.sh", (char *)kind, NULL};
   char diagnostic[1024] = {0};
@@ -33,49 +40,81 @@ static inline int ng_carrier(int iface) {
   return ng_read_file(path, text, sizeof(text), &size, 0) &&
          !strcmp(text, "1\n");
 }
-static inline int ng_qualified_usb(void) {
-  DIR *d = opendir("/sys/bus/usb/devices");
-  if (!d)
+static inline int ng_usb_failure(const char *reason) {
+  ng_atomic(NG_RUN, "last-command.txt", reason, strlen(reason));
+  ng_event("usb_qualification_failed");
+  return 0;
+}
+static inline int ng_usb_bound(const ng_usb_profile *usb) {
+  char path[512], selected[1024], device[1024], driver[1024];
+  snprintf(path, sizeof(path), "%s/%s", NG_USB_SYSFS, usb->port);
+  if (!ng_resolve_path(path, selected, sizeof(selected)) ||
+      !ng_resolve_path(NG_NET_SYSFS "/cc2lan0/device", device, sizeof(device)) ||
+      !ng_resolve_path(NG_NET_SYSFS "/cc2lan0/device/driver", driver,
+                       sizeof(driver)))
     return 0;
-  struct dirent *entry;
-  int matches = 0;
-  while ((entry = readdir(d))) {
-    if (entry->d_name[0] == '.')
-      continue;
-    char path[512], v[16], p[16], b[16];
-    size_t size;
-    snprintf(path, sizeof(path), "/sys/bus/usb/devices/%s/idVendor",
-             entry->d_name);
-    if (!ng_read_file(path, v, sizeof(v), &size, 0) || strcmp(v, "0bda\n"))
-      continue;
-    snprintf(path, sizeof(path), "/sys/bus/usb/devices/%s/idProduct",
-             entry->d_name);
-    if (!ng_read_file(path, p, sizeof(p), &size, 0) || strcmp(p, "8153\n"))
-      continue;
-    snprintf(path, sizeof(path), "/sys/bus/usb/devices/%s/bcdDevice",
-             entry->d_name);
-    if (ng_read_file(path, b, sizeof(b), &size, 0) && !strcmp(b, "31fd\n"))
-      matches++;
-  }
-  closedir(d);
-  return matches == 1;
+  /* realpath resolves bus aliases to the physical sysfs hierarchy:
+   * .../1-1/1-1:1.0, not the sibling bus aliases .../1-1 and .../1-1:1.0.
+   * Match the interface's exact physical parent and its port-qualified name. */
+  size_t n = strlen(selected);
+  const char *parent = strrchr(device, '/');
+  const char *port = strrchr(selected, '/');
+  const char *name = strrchr(driver, '/');
+  if (!parent || !port || (size_t)(parent - device) != n ||
+      memcmp(selected, device, n) || !name ||
+      strcmp(name + 1, "cc2_ue300_r8152"))
+    return 0;
+  port++;
+  const char *interface = parent + 1;
+  size_t length = strlen(port);
+  if (strncmp(interface, port, length) || interface[length] != ':')
+    return 0;
+  const char *configuration = interface + length + 1;
+  size_t digits = strspn(configuration, "0123456789");
+  if (!digits || configuration[digits] != '.')
+    return 0;
+  const char *number = configuration + digits + 1;
+  return *number && strspn(number, "0123456789") == strlen(number);
 }
 static inline int ng_load_drivers(void) {
-  if (!ng_qualified_usb() || !ng_check_profile("ethernet"))
+  ng_usb_profile usb = ng_usb_observe();
+  if (!usb.readable || !usb.valid)
+    return ng_usb_failure("USB Ethernet needs one readable 0bda:8153 adapter at USB high speed (480 Mb/s).");
+  if (!ng_usb_allowed(&usb))
+    return ng_usb_failure(!strcmp(usb.revision, "3000")
+        ? "RTL8153 revision 3000 is experimental: explicitly approve it in Connections first."
+        : "This RTL8153 revision is not supported by this build; the qualified revision is 31fd.");
+  if (!ng_check_profile("ethernet"))
     return 0;
   char digest[65];
+  const char *probe = usb.qualified ? "cc2_ue300_abi_probe.ko"
+                                   : "cc2_ue300_abi_probe_3000.ko";
+  const char *probe_name = usb.qualified ? "cc2_ue300_abi_probe"
+                                        : "cc2_ue300_abi_probe_3000";
+  const char *probe_sha = usb.qualified ? NG_CC2_UE300_ABI_PROBE_KO_SHA
+                                       : NG_CC2_UE300_ABI_PROBE_3000_KO_SHA;
+  char probe_path[512], module_path[256];
+  snprintf(probe_path, sizeof(probe_path), "%s/%s", NG_COMPONENT, probe);
+  snprintf(module_path, sizeof(module_path), "%s/%s", NG_MODULE_SYSFS, probe_name);
   if (!ng_hash_file(NG_COMPONENT "/cc2_ue300_mii.ko", digest) ||
       strcmp(digest, NG_CC2_UE300_MII_KO_SHA) ||
       !ng_hash_file(NG_COMPONENT "/cc2_ue300_r8152.ko", digest) ||
-      strcmp(digest, NG_CC2_UE300_R8152_KO_SHA))
+      strcmp(digest, NG_CC2_UE300_R8152_KO_SHA) ||
+      !ng_hash_file(probe_path, digest) || strcmp(digest, probe_sha))
+    return ng_usb_failure("USB Ethernet module checksum mismatch; reinstall the matching component.");
+  if (!access(module_path, F_OK))
+    return ng_usb_failure("An ABI probe is already loaded; finish that operation first.");
+  /* A manually preloaded driver does not bypass the ABI/identity probe. */
+  if (!ng_command("insmod", NULL, 0, 5, probe_path, NULL))
     return 0;
-  if (access("/sys/module/cc2_ue300_r8152", F_OK)) {
-    if (!ng_command("insmod", NULL, 0, 5,
-                    NG_COMPONENT "/cc2_ue300_abi_probe.ko", NULL))
-      return 0;
-    if (!ng_command("rmmod", NULL, 0, 5, "cc2_ue300_abi_probe", NULL))
-      return 0;
-    if (access("/sys/module/cc2_ue300_mii", F_OK) &&
+  if (!ng_command("rmmod", NULL, 0, 5, probe_name, NULL))
+    return 0;
+  ng_usb_profile after = ng_usb_observe();
+  if (!ng_usb_allowed(&after) || strcmp(usb.port, after.port) ||
+      strcmp(usb.revision, after.revision))
+    return ng_usb_failure("The USB adapter changed during qualification; reconnect and try again.");
+  if (access(NG_MODULE_SYSFS "/cc2_ue300_r8152", F_OK)) {
+    if (access(NG_MODULE_SYSFS "/cc2_ue300_mii", F_OK) &&
         !ng_command("insmod", NULL, 0, 5, NG_COMPONENT "/cc2_ue300_mii.ko",
                     NULL))
       return 0;
@@ -86,7 +125,8 @@ static inline int ng_load_drivers(void) {
   long long deadline = ng_now() + 5000;
   while (!if_nametoindex("cc2lan0") && ng_now() < deadline)
     poll(NULL, 0, 100);
-  return if_nametoindex("cc2lan0") != 0;
+  return (if_nametoindex("cc2lan0") && ng_usb_bound(&usb)) ||
+         ng_usb_failure("The qualified USB device did not bind to cc2lan0 with the expected driver.");
 }
 static inline int ng_runtime_ready(void) {
   char *args[] = {"sh", NG_COMPONENT "/activate.sh", "ready", NULL};

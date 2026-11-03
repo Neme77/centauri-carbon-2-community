@@ -29,6 +29,8 @@ jobs:
         run: |
           gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_bed_drying.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -o /tmp/test-bed-drying -lm
           /tmp/test-bed-drying
+          gcc -O1 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread tests/test_chamber_preheat.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -o /tmp/test-chamber-preheat -lm
+          /tmp/test-chamber-preheat
 
       - name: Completed-print metadata regression
         run: |
@@ -56,6 +58,13 @@ jobs:
           for test in test_emergency_stop_direct test_emergency_stop_edges test_emergency_stop_deadline; do
             arm-linux-gnueabihf-gcc -O2 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread -static tests/$test.c src/console.c -o /tmp/$test
             timeout 20s qemu-arm /tmp/$test
+          done
+
+      - name: ARM native maintenance regressions under qemu
+        run: |
+          for test in test_rotation_core test_load_cell_guide_core test_grille_api test_calibration_tools test_pressure_advance_api test_quick_preferences; do
+            arm-linux-gnueabihf-gcc -O2 -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -pthread -static tests/$test.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -lm -o /tmp/$test
+            timeout 90s qemu-arm /tmp/$test
           done
 
       - name: ARM binary smoke test under qemu
@@ -117,6 +126,9 @@ jobs:
       - name: Experimental bed heating controls
         run: npm run test:bed-drying
 
+      - name: Experimental chamber preheat controls
+        run: npm run test:chamber-preheat
+
       - name: Print completion notice and idle progress
         run: npm run test:print-completion
 
@@ -131,6 +143,11 @@ jobs:
       - name: Independent experimental choices and Quiet controls
         run: |
           npm run test:experiments
+          npm run test:nozzle-experiment
+          npm run test:grille
+          npm run test:calibration-tools
+          npm run test:load-cell-guide
+          npm run test:rotation-restore
           npm run test:motor-mode
 
       - name: Canvas states and explicit recovery loading
@@ -178,6 +195,9 @@ jobs:
 
       - name: Printing temperature interaction regression
         run: npm run test:print-temperatures
+
+      - name: Pressure Advance control and readback
+        run: npm run test:pressure-advance && npm run test:quick-maintenance
 
       - name: Native printer report interaction regression
         run: npm run test:printer-reports

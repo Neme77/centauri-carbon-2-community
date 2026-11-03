@@ -354,6 +354,34 @@ static int ng_request_run(ng_request *r, const char *local, const char *peer,
     result = ng_error("printer_not_ready");
     goto done;
   }
+  if (r->op == NG_USB_APPROVAL) {
+    ng_config current;
+    if (!ng_effective_config(&current)) {
+      result = ng_error("invalid_configuration");
+      goto done;
+    }
+    /* Consent changes no network state. Revocation must not remove permission
+     * from an enabled Ethernet interface; leave that connection normally first. */
+    if (!r->enabled && current.link[NG_ETHERNET].enabled) {
+      result = ng_error("disable_ethernet_before_revoking_usb_approval");
+      goto done;
+    }
+    if (!ng_usb_approve(r->revision, r->enabled)) {
+      result = ng_error("usb_approval_not_valid");
+      goto done;
+    }
+    if (exists && j.phase == NG_IDLE) {
+      j.error[0] = 0;
+      if (!ng_journal_save(&j)) {
+        result = ng_error("journal_write_failed");
+        goto done;
+      }
+    }
+    ng_event(r->enabled ? "experimental_usb_revision_approved"
+                        : "experimental_usb_revision_revoked");
+    result = 0;
+    goto done;
+  }
   ng_config previous, desired;
   int configured;
   if (!ng_effective_config(&previous) ||

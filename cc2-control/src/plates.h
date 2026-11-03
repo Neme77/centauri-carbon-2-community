@@ -1011,6 +1011,7 @@ static const char *plates_printer_ready(const mqtt_client *mqtt) {
     if (plates_console_busy()) return "Another printer command is still running";
     if (atomic_load(&upload_busy) || atomic_load(&active_downloads)) return "A file transfer is in progress";
     if (plates_cal.stage && plates_cal.stage != CAL_SAVING) return "A bed mesh calibration is running";
+    if (nx_active()) return "A nozzle expansion calibration is running";
     return NULL;
 }
 
@@ -1507,7 +1508,7 @@ static int plates_reboot_guard(void) {
     time_t now=time(NULL);const mqtt_client *m=plates_mqtt;
     return m && m->connected && m->registered && m->have_machine_status && m->machine_status==1 &&
         m->last_message>0 && now>=m->last_message && now-m->last_message<=15 && uds_fresh(&telemetry) &&
-        plates_pending_intact() && canvas_unload_pending_intact() &&
+        plates_pending_intact() && canvas_unload_pending_intact() && rotation_pending_intact() &&
         !plates_console_busy() && !atomic_load(&upload_busy) && !atomic_load(&active_downloads) && !z_offset_pending;
 }
 
@@ -1883,6 +1884,44 @@ static int plates_console_send(console_state *console, const char *command) {
 }
 static int (*plates_console)(console_state *console, const char *command) = plates_console_send;
 
+/* A gcode/script ACK can accompany a failed pre-mesh Z home. Only the
+ * positive report emitted by the native mesh finalizer proves completion. The
+ * console clears its transcript for every generation; never consult cached
+ * object status, stored profiles or a previous command's output. Called locked.
+ * An error anywhere in this bounded transcript wins over a completion report. */
+static int plates_probe_completed(const console_state *console) {
+    if (!console->output_len || console->output_len >= sizeof(console->output)-1) return 0;
+    char expected[96];
+    snprintf(expected,sizeof(expected),"BED_MESH_CALIBRATE PROFILE=%s BED_TEMP=%d",
+             plate_slot(plates_cal.side),plates_cal.temp);
+    if (strcmp(console->command,expected)) return 0;
+    int complete=0;
+    const char *p=console->output,*end=p+console->output_len;
+    while(p<end){
+        const char *line=memchr(p,'\n',(size_t)(end-p));
+        if(!line)return 0; /* incomplete frame: evidence is uncertain */
+        const char *root=json_skip_space(p,line);p=line+1;
+        if(root==line)continue;
+        if(line-root>=2 && root[0]=='>' && root[1]==' ')continue;
+        const char *re=*root=='{'?json_container_end(root,line):NULL;
+        if(!re || json_skip_space(re,line)!=line || json_member(root,re,"error"))return 0;
+        const char *report_end,*report=json_member_object(root,re,"report",'{',&report_end);
+        if(!report)continue; /* RPC ACKs and object snapshots are not completion. */
+        double code=0,level=0;
+        if(json_member(report,report_end,"error_code") && !plates_member_double(report,report_end,"error_code",&code))return 0;
+        if(json_member(report,report_end,"error_level") && !plates_member_double(report,report_end,"error_level",&level))return 0;
+        if(code==704 || (code!=0 && level<=2))return 0;
+        const char *text;int length;
+        if(!json_member_raw_string(report,report_end,"message",&text,&length))continue;
+        if(length>=3 && !memcmp(text,"// ",3)){text+=3;length-=3;}
+        if((length>=3 && !memcmp(text,"!! ",3)) ||
+           (length==22 && !memcmp(text,"Bed Mesh State: failed",22)))return 0;
+        static const char done[]="Mesh Bed Leveling Complete";
+        if((size_t)length==sizeof(done)-1 && !memcmp(text,done,sizeof(done)-1))complete=1;
+    }
+    return complete;
+}
+
 static int plates_cal_command(console_state *console, int stage, const char *command) {
     if (plates_console(console, command) != 0) return -1;
     pthread_mutex_lock(&console->lock);
@@ -2003,6 +2042,7 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
     pthread_mutex_lock(&console->lock);
     int ours = console->generation == plates_cal.generation, busy = console->busy;
     int finished = ours && !busy && console->completed, success = console->success;
+    int probe_complete = plates_cal.stage == CAL_PROBING && finished && success && plates_probe_completed(console);
     pthread_mutex_unlock(&console->lock);
     if (finished && !plates_cal.done_at) plates_cal.done_at = now;
     int idle = mqtt->have_machine_status && mqtt->machine_status == 1;
@@ -2064,12 +2104,16 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
         }
         return;
     case CAL_PROBING:
+        if (!ours) { plates_cal_end(mqtt,"failed","probing","Calibration command ownership was lost",0); return; }
         if (!finished) return; /* the console gives up on a command after 15 minutes */
-        if (!success) { plates_cal_end(mqtt, "failed", "probing", "", 0); return; }
+        if (!success || !probe_complete) { plates_cal_end(mqtt, "failed", "probing", "The firmware did not confirm a completed bed mesh", 0); return; }
         if (!plates_cal.plate[0]) { plates_cal_end(mqtt, "done", "", "", 0); return; }
         plates_cal.stage = CAL_SAVING; plates_cal.since = now;
         return;
     case CAL_SAVING: {
+        if (!ours || !finished || !success) {
+            plates_cal_end(mqtt,"failed","probing","Calibration command ownership was lost before saving",0);return;
+        }
         int status = 0, profile = 0, applied = 0; plate_measure *m = NULL;
         const char *error = plates_take_measure(mqtt, plates_cal.plate, plates_cal.temp, plates_cal.nozzle, 0,
                                                 &status, &m, &profile, &applied);

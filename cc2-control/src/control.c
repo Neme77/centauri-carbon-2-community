@@ -63,6 +63,17 @@ static double homing_extruder_restore_target(const mqtt_client *m){
 int control_build_script(const char *action,const mqtt_client *m,char *script,size_t cap,char *reason,size_t reason_cap){
     char kind[32],a[32],b[32],colour[16]; double value,value2;
     int slot,min_temp,max_temp;
+    if(!strncmp(action,"grille:",7)){
+        time_t now=time(NULL);
+        if(strcmp(action,"grille:open")&&strcmp(action,"grille:close"))
+            return reject(reason,reason_cap,"Invalid exhaust grille action");
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+           m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Exhaust grille controls require fresh idle telemetry");
+        int n=snprintf(script,cap,"%s",!strcmp(action,"grille:open")?"EXHAUST_GRILLE_OPEN":"EXHAUST_GRILLE_CLOSE");
+        if(n<0||(size_t)n>=cap)return reject(reason,reason_cap,"Exhaust grille command exceeds buffer capacity");
+        return 1;
+    }
     if(!strncmp(action,"external:",9)||!strncmp(action,"canvas:catalog:",15)){
         time_t now=time(NULL);
         if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
@@ -374,6 +385,26 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     if(sscanf(action,"light:%31s",a)==1){
         if(strcmp(a,"on")&&strcmp(a,"off"))return reject(reason,reason_cap,"Unknown light state");
         return reject(reason,reason_cap,"Light control requires the native printer API");
+    }
+    if(!strncmp(action,"tune:pressure-advance:",22)){
+        const char *number=action+22;char *end=NULL;
+        if(!*number||strspn(number,"0123456789.")!=strlen(number))
+            return reject(reason,reason_cap,"Pressure Advance must be a decimal number");
+        const char *decimal=strchr(number,'.');
+        if(decimal&&strlen(decimal+1)>6)
+            return reject(reason,reason_cap,"Pressure Advance supports at most six decimal places");
+        value=strtod(number,&end);
+        if(!end||*end||!isfinite(value)||value<0||value>1)
+            return reject(reason,reason_cap,"Pressure Advance must be 0..1 seconds");
+        time_t now=time(NULL);
+        if(!m->connected||!m->registered||!m->have_machine_status||m->last_message<=0||now<m->last_message||now-m->last_message>15)
+            return reject(reason,reason_cap,"Printer telemetry must be connected and fresh");
+        if(m->machine_status!=1&&(!printing(m)||!m->filename[0]||
+            (strcmp(m->print_state,"printing")&&strcmp(m->print_state,"paused"))))
+            return reject(reason,reason_cap,"Pressure Advance requires Idle or an active/paused print");
+        int n=snprintf(script,cap,"SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=%.6f",value);
+        if(n<0||(size_t)n>=cap)return reject(reason,reason_cap,"Tuning command exceeds buffer size");
+        return 1;
     }
     if(strncmp(action,"tune:",5)==0){
         const char *number=NULL;int is_speed=0;

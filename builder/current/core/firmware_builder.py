@@ -79,8 +79,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_COMMIT='ec8c80d595ac08d42a8650657a950521faac6c38'
-CC2_CONTROL_SOURCE_SHA256='bfddb8b1609be1cb45603f57646742cfbbd653b38f66be2ea0eebaeac1ca707e'
+CC2_CONTROL_SOURCE_COMMIT='33b1adf47e1960f7da9a586156c2b0bb7936bc35'
+CC2_CONTROL_SOURCE_SHA256='2afa2174603c6461b126f77893edf0c9348f3748099799b52a59df39eff26926'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 CC2_UPDATE_FILES=('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
 # Translation files are optional and open-ended (one per language), unlike the
@@ -412,8 +412,11 @@ def install_release_printer(printer,reference):
  reqhash(printer,manifest['input_sha256'],'HTTP intermediate')
  Path(printer).write_bytes(validate_release_printer(Path(reference).read_bytes()))
 
-REACTOR_HELPER_SHA256='833380a3c6ef7002cac388bfa2612961b5fccb7b0e6e222ab5d9f4c7c4328501'
-CAMERA_HELPER_SHA256='8bd14ec9461cedebb78d52f5390bd59cbf8b95b8196c7ec16b07e0b28165bc8c'
+REACTOR_HELPER_SHA256='d9af4d96820846d0fab1f6dfe5ef91c10221cbf6196653eba84446c69af9912a'
+CAMERA_HELPER_SHA256='74b8865cdb1fe12df4bcc54670a5b85bab7333ddbcf3959b47cc460cf0809d61'
+INTEGRATION_HELPERS={'connections_component.py': '05ec5c63170cc861b76aa4980f01e7105a13f5703358eed081545a2d8f51e66e', 'native_display_component.py': '573d8b967f250326295726f9f1e3f22386fc8402f61bc97ae19d1137f068fb06', 'resource_update.py': '840c449879aaf008e41bdf5544df822c021f855f9fddc116b1792021ffaef749'}
+INTEGRATION_INPUTS={'experimental/native-display/package.py': 'fccf9f487e541c2ce14ce82bf64eef20d226e661c8b0e951b5f7b6200616224b', 'experimental/native-display/patch.py': '1438fdd85310f5965f9562abdfdcac1a13e87c7b413755fa350b9795ba292b2c', 'experimental/native-display/patch-plan.json': '561acf7938fb7993ab91e6d6449faf33fde098882c269929a11b089b28fc7d09', 'experimental/native-display/baseline-pins.txt': 'c2f1356d42e695bcfc953e69e37560d7a6c6a976c70815cebe3422951dd246c6', 'experimental/native-display/png_palette.py': 'cdbf580042498acdf5a29e63978ad798639fad424c291a4fff03a36799e21882', 'experimental/native-display/recolor-plan.json': '0a8fe579afee1321a5d75bba743bb9ebf765beb2bdf0b26cbbdf14218f188616', 'experimental/native-display/elf_layout.py': 'c61b033a988e16c190303415544162721caa5a62c35a435487d8091d93098d28', 'experimental/native-display/assets/manifest.json': 'cb71218bdf34a87b3e55911b3eb8846e9d3a612b7d98eb77c6eea98d5a3fe435', 'experimental/native-display/manage.sh': '081f50e94bfe8ff5aff8894364f7bfb81d03ba6041fd4d85441db60d113ee0d0', 'experimental/native-display/thermal.awk': '1cb4534a5c6b447cfd8dd963c125614115effeb4d469b61e0eb0f50469f2d749', 'experimental/native-display/LICENSE-LUCIDE.txt': 'b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57', 'builder/current/components/connections/firmware-seed.sh': '75d3b459a83edb49c3330beeaa8531ec7ec75b1a42bdcacb39d361cf6409c052', 'builder/current/components/connections/firmware.init': '0023ae212221603e3012b5afa67ef3a07598c36d756dfb32a7a95ef73579d168'}
+
 
 def firmware_release_version():
  version=(BASE/'RELEASE_VERSION').read_text(encoding='utf-8').strip()
@@ -459,6 +462,7 @@ def main():
  ap.add_argument('--mksquashfs'); ap.add_argument('--unsquashfs')
  ap.add_argument('--cc2-control-dir',default=str(here/'components/cc2-control/prepared'),help='Prepared CC2 Control component directory')
  ap.add_argument('--cc2-control-manifest',default=str(here/'components/cc2-control/prepared-manifest.json'),help='Prepared CC2 Control manifest')
+ ap.add_argument('--connections-runtime',default=str(here/'components/connections/runtime.tar.gz'),help='Exact locally qualified Connections runtime archive')
  ap.add_argument('--sshd',default=str(here/'components'/'ssh'/'sshd'))
  ap.add_argument('--sshd-init',default=str(here/'components'/'ssh'/'sshd.init'))
  ap.add_argument('--sshd-config',default=str(here/'components'/'ssh'/'sshd_config'))
@@ -501,6 +505,20 @@ def main():
  camera_runtime=importlib.util.module_from_spec(spec);spec.loader.exec_module(camera_runtime)
  camera_component=here/'components/camera'
  camera_runtime.load(camera_component)
+ integrated={}
+ for relative,pin in INTEGRATION_INPUTS.items():
+  reqhash(here.parents[1]/relative,pin,'Reviewed firmware integration source '+relative)
+ for name,pin in INTEGRATION_HELPERS.items():
+  helper=here/'core'/name
+  reqhash(helper,pin,'Firmware integration helper '+name)
+  spec=importlib.util.spec_from_file_location('firmware_'+name[:-3],helper)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  integrated[name]=module
+ connections=integrated['connections_component.py']
+ display=integrated['native_display_component.py']
+ resources=integrated['resource_update.py']
+ connections_archive=req(a.connections_runtime,'qualified Connections runtime')
+ connections_input=connections.read_runtime(connections_archive)
  mk=find_squash_tool(a.mksquashfs,'mksquashfs'); un=find_squash_tool(a.unsquashfs,'unsquashfs')
  for cmd in ('openssl','cpio'):
   if not shutil.which(cmd): raise RuntimeError(f'Missing required command: {cmd}')
@@ -516,6 +534,7 @@ def main():
   with stock.open('rb') as f: run(['cpio','-idmu'],cwd=cpio,stdin=f)
   for n in CPIO_FILES: req(cpio/n,n)
   for n in ['sw-description','resource','uboot','boot0','kernel']: reqhash(cpio/n,EXPECTED[n],f'stock {n}')
+  (cpio/'sw-description').write_bytes(resources.patch((cpio/'sw-description').read_bytes()))
   reqhash(cpio/'rootfs',EXPECTED['stock_rootfs'],'stock rootfs')
   banner('EXTRACT + PATCH ROOTFS'); run([un,'-d',root,cpio/'rootfs'],capture=True)
   gui=root/'opt/bin/ec-eeb001-gui'
@@ -545,27 +564,35 @@ def main():
   install_cc2_control(root,cc2_component,cc2_manifest)
   reactor.install(root,reactor_component)
   camera_runtime.install(root,camera_component)
+  display.install(root)
+  connections_payload,connections_hooks=connections.install(root,connections_archive)
+  camera_hook=lambda text:connections.hook_transform(text,'camera-launch',connections_input)
+  reactor_hook=lambda text:connections.hook_transform(text,'reactor-launch',connections_input)
   # Verify intended rootfs surface before compression.
-  reqhash(gui,EXPECTED['patched_gui'],'installed patched GUI'); reqhash(root/'usr/sbin/sshd',EXPECTED['sshd'],'installed sshd')
+  reqhash(gui,display.GUI_SHA256,'installed native Community display'); reqhash(root/'usr/sbin/sshd',EXPECTED['sshd'],'installed sshd')
   reqhash(camera,CAMERA_RELEASE_SHA256,'installed coexistence camera')
   reqhash(printer,PRINTER_RELEASE_SHA256,'installed patched elegoo_printer')
   reqhash(daemon,EXPECTED['daemon_dual'],'installed Dual Trust daemon')
   audit_cc2_control(root,cc2_component,cc2_manifest)
-  reactor.audit(root,reactor_component,printer_init_transform=camera_runtime.patched_init)
-  camera_runtime.audit(root,camera_component)
+  reactor.audit(root,reactor_component,printer_init_transform=camera_runtime.patched_init,hook_transform=reactor_hook)
+  camera_runtime.audit(root,camera_component,hook_transform=camera_hook)
+  display.audit(root)
+  connections.audit(root,connections_payload,connections_hooks)
   banner('REBUILD SQUASHFS'); new=work/'rootfs.new'; log=run([mk,root,new,'-comp','xz','-b','262144','-noappend','-no-tailends','-exports','-all-root'],capture=True)
   if 'Failed to read file' in log: raise RuntimeError('mksquashfs reported Failed to read file')
   shutil.copyfile(new,cpio/'rootfs'); root_hash=sha256(cpio/'rootfs'); print('rootfs SHA256:',root_hash)
   g_root=golden_report('rebuilt rootfs image (byte-level; metadata may differ)',cpio/'rootfs','rootfs') if (a.golden_check or a.require_golden) else None
   # Re-extract and audit the critical files after SquashFS creation.
   vr=work/'verify_rootfs'; run([un,'-d',vr,cpio/'rootfs'],capture=True)
-  reqhash(vr/'opt/bin/ec-eeb001-gui',EXPECTED['patched_gui'],'rebuilt patched GUI'); reqhash(vr/'usr/sbin/sshd',EXPECTED['sshd'],'rebuilt sshd')
+  reqhash(vr/'opt/bin/ec-eeb001-gui',display.GUI_SHA256,'rebuilt native Community display'); reqhash(vr/'usr/sbin/sshd',EXPECTED['sshd'],'rebuilt sshd')
   reqhash(vr/'opt/bin/ai_camera',CAMERA_RELEASE_SHA256,'rebuilt coexistence camera')
   reqhash(vr/'opt/bin/elegoo_printer',PRINTER_RELEASE_SHA256,'rebuilt patched elegoo_printer')
   reqhash(vr/'opt/inst/daemon-000/daemon-000',EXPECTED['daemon_dual'],'rebuilt Dual Trust daemon')
   audit_cc2_control(vr,cc2_component,cc2_manifest)
-  reactor.audit(vr,reactor_component,printer_init_transform=camera_runtime.patched_init)
-  camera_runtime.audit(vr,camera_component)
+  reactor.audit(vr,reactor_component,printer_init_transform=camera_runtime.patched_init,hook_transform=reactor_hook)
+  camera_runtime.audit(vr,camera_component,hook_transform=camera_hook)
+  display.audit(vr)
+  connections.audit(vr,connections_payload,connections_hooks)
   reqhash(vr/'etc/init.d/sshd',EXPECTED['sshd_init'],'rebuilt sshd init')
   reqhash(vr/'etc/ssh/sshd_config',EXPECTED['sshd_config'],'rebuilt sshd config')
   for n in ('S50sshd','K50sshd'):
