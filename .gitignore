@@ -51,3 +51,6 @@ experimental/firmware-port/reactor/vendor-link/
 builder/current/components/camera/runtime/
 builder/current/components/camera/prepared/
 builder/current/components/camera/prepared-manifest.json
+builder/current/components/connections/runtime.tar.gz
+builder/current/components/connections/prepared/
+builder/current/components/connections/prepared-manifest.json

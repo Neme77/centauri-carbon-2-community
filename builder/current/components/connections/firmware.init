@@ -1,0 +1,9 @@
+#!/bin/sh /etc/rc.common
+START=23
+STOP=98
+start(){
+    sh /opt/inst/cc2-connections/firmware-seed.sh || return 1
+    /opt/usr/cc2-network-manager/control --ensure
+}
+boot(){ start; }
+stop(){ :; }

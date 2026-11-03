@@ -12,6 +12,7 @@ builder/current/core/firmware_builder.py -text
 
 # Standalone updater shell launchers.
 cc2-control/installer/*.sh text eol=lf
+cc2-control/installer/pc-stage.sh.in text eol=lf
 *.sh text eol=lf
 *.init text eol=lf
 **/cc2-configure text eol=lf

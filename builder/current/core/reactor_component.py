@@ -90,12 +90,14 @@ def install(root,component):
     printer_init.write_text(init_patched)
     return manifest
 
-def audit(root,component,printer_init_transform=None):
+def audit(root,component,printer_init_transform=None,hook_transform=None):
     root=Path(root);component,manifest=load(component)
     for name,expected in manifest['files'].items():
         if digest(root/'opt/inst/cc2-reactor'/name)!=expected:
             raise RuntimeError('Rebuilt reactor checksum mismatch: '+name)
-    if digest(root/'etc/init.d/cc2-reactor-launch')!=digest(component/'firmware-launcher.sh'):
+    expected_hook=(component/'firmware-launcher.sh').read_bytes()
+    if hook_transform is not None:expected_hook=hook_transform(expected_hook.decode()).encode()
+    if (root/'etc/init.d/cc2-reactor-launch').read_bytes()!=expected_hook:
         raise RuntimeError('Rebuilt reactor boot hook mismatch')
     original=(root/'opt/inst/cc2-reactor/run_printer.original.sh').read_text()
     if (root/'opt/bin/run_printer.sh').read_text()!=patched_vendor_launcher(original):

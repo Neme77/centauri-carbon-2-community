@@ -13,6 +13,8 @@ export const Updates = () => {
   usePoll(refresh, 2000)
   const [code, setCode, clearCode] = useLanCode()
   const state = status.use().data
+  const superseded = state?.phase === 'complete' && !state.busy && newer(state.installed, state.version)
+  const phase = superseded ? 'none' : state?.phase
   const language = i18n.use().lang
   const { index, checking } = updateCatalog.use()
   const [working, setWorking] = useState(false),
@@ -162,23 +164,23 @@ export const Updates = () => {
       <p class="mt-4">
         {t('updates.status')}{' '}
         {t(
-          state?.phase === 'complete'
+          phase === 'complete'
             ? 'updates.complete'
-            : state?.phase === 'failed' || state?.phase === 'interrupted'
+            : phase === 'failed' || phase === 'interrupted'
               ? 'updates.failed'
-              : state?.phase === 'ready'
+              : phase === 'ready'
                 ? 'updates.verified'
                 : busy
                   ? 'updates.working'
                   : 'updates.idle'
         )}
       </p>
-      {state?.version && (
+      {state?.version && !superseded && (
         <p>
           {t('updates.selected')} {state.version}
         </p>
       )}
-      {state?.phase === 'complete' && (
+      {phase === 'complete' && (
         <Button class="mt-3" onClick={() => location.reload()}>
           {t('updates.reload')}
         </Button>

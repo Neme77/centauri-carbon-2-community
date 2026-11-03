@@ -4,6 +4,7 @@ import { chromium } from 'playwright'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { mkdir, readFile } from 'node:fs/promises'
+import { settledViewport } from './viewport.mjs'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), mode: 'demo', server: { port: 0, host: '127.0.0.1' } })
 let browser
@@ -63,10 +64,10 @@ try {
   await page.goto(server.resolvedUrls.local[0] + '#settings')
   await page.getByRole('tab', { name: 'Updates', exact: true }).click()
   await page.getByText('Compatible update available: 1.2.9', { exact: true }).waitFor()
-  // Name all three supported Community Firmware releases, in every translated catalog.
+  // Name all four supported Community Firmware releases, in every translated catalog.
   for (const lang of ['en', 'hu', 'cs', 'es', 'fr', 'it', 'pl', 'ru', 'zh']) {
     const dict = JSON.parse(await readFile(path.join(root, `public/locales/${lang}.json`)))
-    assert.match(dict['updates.requirements'], /V4\.4\/V4\.4\.1\/V4\.4\.2/, lang + ' update requirements are out of date')
+    assert.match(dict['updates.requirements'], /V4\.4\/V4\.4\.1\/V4\.4\.2\/V4\.4\.3/, lang + ' update requirements are out of date')
   }
 // DamiBFryta: the native chooser's visible field and both cursor areas must agree.
   await page.locator('details summary').click()
@@ -116,8 +117,8 @@ try {
   status.busy = false
   await page.waitForFunction(() => !document.querySelector('.cc2-update-file')?.disabled)
   for (const width of [1440, 768, 390]) {
-    await page.setViewportSize({ width, height: 1000 })
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'local file input overflow ' + width)
+    const geometry = await settledViewport(page, width, 1000)
+    assert(geometry.width <= geometry.viewport, `local file input overflow ${width}: ${JSON.stringify(geometry)}`)
     if (width === 390 && process.env.CC2_SCREENSHOTS) {
       await localFile.evaluate(input => input.scrollIntoView({ block: 'center' }))
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
@@ -150,9 +151,22 @@ try {
   assert.equal(await page.getByText(localized.en, { exact: true }).count(), 0, 'installed release notes must disappear')
   assert.equal(await page.getByLabel('Update channel', { exact: true }).count(), 0)
   assert.equal(await page.getByText('Experimental fixture', { exact: true }).count(), 0)
+  // A complete firmware reinstall retains the old updater journal on UDISK.
+  // It is history, not the selection for the newer running application.
+  const english = JSON.parse(await readFile(path.join(root, 'public/locales/en.json')))
+  Object.assign(status, { installed: '1.2.25', version: '1.2.24', phase: 'complete', busy: false })
+  await page.getByText(`${english['updates.status']} ${english['updates.idle']}`, { exact: true }).waitFor()
+  assert.equal(await page.getByText('Selected version: 1.2.24', { exact: true }).count(), 0)
+  assert.equal(await page.getByRole('button', { name: 'Reload CC2 Control', exact: true }).count(), 0)
+  await page.getByText('1.2.25', { exact: true }).waitFor()
+  Object.assign(status, { phase: 'failed' })
+  await page.getByText(`${english['updates.status']} ${english['updates.failed']}`, { exact: true }).waitFor()
+  await page.getByText('Selected version: 1.2.24', { exact: true }).waitFor()
+  Object.assign(status, { installed: '1.2.9', version: '1.2.9', phase: 'complete' })
+  await page.getByRole('button', { name: 'Reload CC2 Control', exact: true }).waitFor()
   for (const width of [1440,768,390]) {
-    await page.setViewportSize({width,height:1000})
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'settings overflow '+width)
+    const geometry = await settledViewport(page, width, 1000)
+    assert(geometry.width <= geometry.viewport, `settings overflow ${width}: ${JSON.stringify(geometry)}`)
   }
   await page.setViewportSize({ width: 1440, height: 1000 })
   index.releases[0].version = '1.2.10'

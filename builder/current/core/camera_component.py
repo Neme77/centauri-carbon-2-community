@@ -58,7 +58,7 @@ def install(root,component):
     init.write_bytes(patched)
     return manifest
 
-def audit(root,component):
+def audit(root,component,hook_transform=None):
     root=Path(root);component,manifest=load(component);destination=root/'opt/inst/cc2-camera-r2'
     for name in FILES:
         if sha(destination/name)!=manifest['files'][name]:raise RuntimeError('Rebuilt camera payload mismatch: '+name)
@@ -70,5 +70,7 @@ def audit(root,component):
     if init.read_text()!=patched_init((destination/'printer.original').read_text()) or sha(init)!=(destination/'patched.sha256').read_text().strip():
         raise RuntimeError('Rebuilt camera launch coordination mismatch')
     hook=root/'etc/init.d/cc2-camera-launch'
-    if sha(hook)!=manifest['files']['firmware-launcher.sh'] or hook.stat().st_mode&0o777!=0o755:
+    expected_hook=(component/'prepared/firmware-launcher.sh').read_bytes()
+    if hook_transform is not None:expected_hook=hook_transform(expected_hook.decode()).encode()
+    if hook.read_bytes()!=expected_hook or hook.stat().st_mode&0o777!=0o755:
         raise RuntimeError('Rebuilt camera launch hook mismatch')

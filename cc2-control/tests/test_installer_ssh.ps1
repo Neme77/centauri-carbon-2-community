@@ -23,10 +23,11 @@ try {
     New-Item -ItemType Directory -Path $temporary | Out-Null
     Copy-Item (Join-Path $PSScriptRoot '..\installer\Install-CC2-Control.ps1') $installer
     New-Item -ItemType File -Path (Join-Path $temporary 'cc2-control-payload.tar.gz') | Out-Null
+    Set-Content -LiteralPath (Join-Path $temporary 'pc-stage.sh') -Value '# fixture runner'
 
     $cases = @(
-        @{ Name='normal'; Reset=$false; Answer=''; KeyExit=0; Fails=$false; Calls='scp|ssh' },
-        @{ Name='confirmed'; Reset=$true; Answer='192.0.2.10'; KeyExit=0; Fails=$false; Calls='ssh-keygen -R 192.0.2.10|scp|ssh' },
+        @{ Name='normal'; Reset=$false; Answer=''; KeyExit=0; Fails=$false; Calls='ssh|scp|ssh' },
+        @{ Name='confirmed'; Reset=$true; Answer='192.0.2.10'; KeyExit=0; Fails=$false; Calls='ssh-keygen -R 192.0.2.10|ssh|scp|ssh' },
         @{ Name='cancelled'; Reset=$true; Answer='no'; KeyExit=0; Fails=$true; Calls='' },
         @{ Name='empty confirmation'; Reset=$true; Answer=''; KeyExit=0; Fails=$true; Calls='' },
         @{ Name='reset failure'; Reset=$true; Answer='192.0.2.10'; KeyExit=1; Fails=$true; Calls='ssh-keygen -R 192.0.2.10' }

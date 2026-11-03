@@ -1,69 +1,96 @@
-# Firmware builder V4.4.2 — CC2 Control 1.2.21
+# Current complete firmware builder
 
-Hardware-test candidate for the unchanged official ELEGOO base **02.01.01.07**.
-The complete firmware is generated **on the maintainer's PC**, using local
-official firmware and signing inputs. This source package is not a flashable image.
+This is the private hardware-test candidate for **Community Firmware 4.4.3**
+with **CC2 Control 1.2.25**, based on the exact official CC2 **02.01.01.07** OTA.
+The complete new OTA has not yet passed printer validation. Do not publish it or
+activate a stable update catalogue until that validation is recorded.
 
-## Build on Windows / WSL
+## Integrated components
 
-1. Extract the whole package to a local Windows drive. Keep `builder/`,
-   `cc2-control/` and `experimental/` together.
-2. Run `builder/current/Build-Release.cmd`. When requested, select the previous
-   qualified builder's `builder/current` directory. The launcher copies only
-   missing local keys, OpenSSH, SquashFS tools and the exact official firmware
-   input; it does not copy an old generated image or old application sources.
-3. Use the same Ubuntu WSL environment and qualified GCC 6.5.0/glibc 2.23 toolchain
-   as the validated V4.4.1 builds. Other firmware bases are refused.
-4. Keep the console open. The pipeline tests and prepares CC2 Control, extracts
-   the pinned native libco from the authenticated official input locally,
-   reproduces the reactor, checks the bundled R2 libraries, verifies signing
-   inputs, then generates the firmware in `builder/current/output/`.
+- The current cumulative CC2 Control application, including the experimental
+  nozzle/chamber features, native maintenance tools, Pressure Advance, quick
+  actions and update recovery. Experimental features retain their opt-in gates.
+- The reviewed native Obsidian/cyan display, original printer/Canvas artwork,
+  native callbacks and language support, and inline LAN information.
+- The qualified Connections manager and unchanged RTL8153 kernel modules,
+  supplied by the firmware rather than requiring a separate trial installer.
+- Existing Dual Trust, SSH, Z offset, HTTP/upload, camera coexistence, qualified
+  callback bridge and persistent camera R2 integration.
 
-The firmware release number is `RELEASE_VERSION` (4.4.2); the compatible
-application family remains `cc2-control/FIRMWARE_VERSION` (4.4). Application
-version is `cc2-control/VERSION` (1.2.21). The experimental 1.2.20 app is separate.
+The kernel remains byte-for-byte the qualified stock kernel. Firmware-shipped
+out-of-tree modules are **not** a newly compiled or built-in kernel driver.
+There is no unconditional Ethernet module autoload: user-enabled support and
+USB/ABI qualification still precede loading. A fresh configuration keeps native
+Wi-Fi active and Ethernet support disabled until the user enables it.
 
-## Integrated camera fix
+The physically tested profile is TP-Link UE300, Realtek RTL8153, USB
+`0bda:8153`, revision `31fd`. Revision `3000` remains an explicit experimental
+opt-in and is not physically qualified by fixture tests. Other products or
+revisions are not implicitly supported. The `r8152` driver name does not broaden
+that allow-list; RTL8139 is unrelated.
 
-R2 client-thread reaping and local/Matrix recovery are included as unchanged,
-fingerprint-qualified libraries. At the original camera startup position, a
-firmware launcher verifies the camera, startup and runtime, seeds the managed
-component atomically on mounted persistent storage and starts it. Fresh installs
-enable R2 on their first normal boot. Known prior updater-managed installations
-are migrated while retaining their enabled/disabled choice and an exact backup.
-Unknown, modified or incompatible state starts the native camera instead.
-The vendor camera executable is supplied by the user's official firmware input;
-it is not shipped in this builder. No cloud credentials are included.
+## First boot and persistent settings
 
-The managed component remains compatible with subsequent cumulative application
-updates. On an idle printer, `sh /opt/usr/cc2-control/camera/manage.sh status`
-shows activation. `disable` takes effect on the next camera start; `rollback`
-restores the qualified pre-camera startup and requires an idle-printer reboot.
-The original Dual Trust, SSH, Z offset, camera coexistence and callback bridge
-checks remain. Canvas UDS, Quiet and extended pull-back are not installed by this
-stable integration.
+The firmware contains the reviewed module files in `/lib/modules/5.4.61/cc2`
+and the complete checked runtime in `/opt/inst/cc2-connections`. Before native
+printer/display/camera processes start, the boot initializer seeds the regular
+files expected by the existing manager on mounted `/opt/usr`.
 
-## Validation boundary
+Known native and managed DHCP entry points are accepted. A prior component is
+retained in a timestamped backup; confirmed network settings are preserved.
+Unknown edits, symlinks, running services, damaged inputs and failed commits are
+refused, with rollback of the component and DHCP file. The bootstrap issues no
+module-load, heater, motion, network-configuration or service-restart command.
+The existing manager owns subsequent connection changes and recovery.
 
-Automated builder, startup, migration, rollback, native fallback and application
-checks precede delivery. They do not validate the newly generated OTA on hardware.
-After building locally, test first boot, camera in LAN and Matrix, restart,
-Canvas, Orca upload, controls and a print before publishing a firmware image.
-The preceding R2 camera patch has maintainer-reported seven-hour printing with
-AI and streaming enabled; the new complete firmware still needs its own test.
+The original printer startup script and service order remain unchanged. The
+selected A/B OTA branch sets the existing `ota_flag` so the native image/font
+synchronization runs before the GUI. New display resources are installed in
+`/opt/inst/images/theme_default`; no replacement GUI startup wrapper is used.
+Personal configuration, mesh, PID and calibration files are not replaced.
 
-Credit: **tharje** for camera diagnosis and evidence; **DamiBFryta**, our ultimate
-beta tester, for persistent testing and feedback; all original contributors and
-third-party notices are retained. See `../../docs/CONTRIBUTORS.md`.
+## Local build
 
-## Italiano
+Required inputs remain local and ignored by Git:
 
-Questo è il builder del **firmware completo V4.4.2**, con **CC2 Control 1.2.21**
-e fix webcam R2 integrato. Il firmware va costruito sul tuo PC: avvia
-`Build-Release.cmd` e indica la cartella `builder/current` del builder precedente.
-Restano necessari la base ufficiale esatta 02.01.01.07, gli input locali e
-l'ambiente WSL già utilizzato. Chiavi e firmware vendor non sono nel pacchetto.
-Su una nuova installazione il fix viene attivato al primo avvio normale;
-installazioni precedenti note mantengono la scelta attivo/disattivo. Se i
-controlli falliscono parte la webcam originale. Il nuovo firmware completo deve
-essere provato sulla stampante prima della pubblicazione.
+- `original_firmware/cc2_eeb001_02.01.01.07_20260922210235.zip.sig`;
+- the existing qualified keys, OpenSSH component and SquashFS 4.6.1 tools;
+- the exact Connections runtime identified in
+  `../../experimental/network-connections/runtime.json`;
+- WSL Ubuntu with the qualified GCC 6.5.0/glibc 2.23 ARM toolchain described in
+  `../../docs/BUILD.md`.
+
+From PowerShell, supply the reviewed local archive:
+
+```powershell
+.\Build-Release.cmd -Mode community -ConnectionsRuntime 'C:\path\connections-runtime.tar.gz'
+```
+
+The launcher finds the previous builder or accepts `-ExistingBuilder`. It copies
+only missing restricted inputs and never prints signing material. `stock` mode
+requires the exact qualified stock signing input; `community` mode requires the
+matching community key. No input, checksum, ABI or signature refusal is bypassed.
+
+The pipeline runs builder/launcher tests, validates and prepares the current
+application and camera/reactor components, repeats tests after preparation,
+checks keys and official OTA provenance, then builds and re-extracts the new
+RootFS for independent audits before signing the OTA chain. Logs and uniquely
+named outputs remain under `logs` and `output`.
+
+## Hardware acceptance
+
+Fixture and filesystem checks do not qualify a complete firmware on a printer.
+Test first boot and a second reboot, native display and Canvas, Wi-Fi without a
+USB adapter, enabled/disabled Ethernet support, qualified LAN switching and
+recovery, local/remote streaming, settings/calibration retention and a print.
+
+During Ethernet activation the Canvas may briefly flash red while native
+services realign. Wait for its normal connected state before printing. The
+complete firmware installation requires a full printer reboot; application
+updates that request a reboot must also be completed before printing.
+
+Credit: **Neme77** for integration and printer testing; **tharje** for camera
+investigation; **DamiBFryta** for sustained beta testing; and the original feature
+contributors documented in `../../docs/CONTRIBUTORS.md`. Retain all licensing and
+third-party notices. Vendor executables, original artwork and signing inputs
+must not be committed to this repository.
