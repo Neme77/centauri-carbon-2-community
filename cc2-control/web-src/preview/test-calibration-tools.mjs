@@ -39,6 +39,10 @@ try{
  await page.evaluate(()=>Object.assign(window.__TOOLS,{busy:false,active:28.8,reports:["Extruder 'extruder' rotation distance set to 28.800000"]}))
  await page.waitForFunction(()=>![...document.querySelectorAll('.cc2-native-tools button')].find(b=>b.textContent==='Read active distance').disabled)
  assert.equal(await button('Apply temporarily').isDisabled(),true,'a measurement must be entered after reading the baseline')
+ // The ready render enables the button before Preact's after-paint effect
+ // hydrates the read baseline and clears the previous measurement. Enter the
+ // next measurement only after that completed-read render has been painted.
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,0)))))
  const inputs=card.locator('input[type=number]')
  await inputs.nth(1).fill('95')
  await page.waitForFunction(()=>document.querySelector('.cc2-native-tools').textContent.includes('27.36 mm'))
