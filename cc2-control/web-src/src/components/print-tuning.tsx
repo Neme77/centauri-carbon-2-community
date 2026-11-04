@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ const TuningForm = ({
   compact,
   sliders,
   pressureAdvance,
+  children,
 }: {
   d: any
   rev: number
@@ -24,6 +26,7 @@ const TuningForm = ({
   compact: boolean
   sliders: boolean
   pressureAdvance: boolean
+  children?: ComponentChildren
 }) => {
   const [draft, setDraft] = useState({ speed: '', flow: '', 'pressure-advance': '' })
   const [pending, setPending] = useState<{ kind: Kind; value: number; rev: number } | null>(null)
@@ -174,6 +177,7 @@ const TuningForm = ({
       </div>
       {pressureAdvance && <p class="mt-2 text-xs text-muted">{t('tuning.pa_note')}</p>}
       {!compact && <div class="mt-3 text-sm">{tpl('tuning.live_velocity', { value: display(live) })}</div>}
+      {children}
       {!sliders && <p class="mt-2 text-xs text-muted">{t(ready ? 'tuning.manual_note' : 'tuning.unavailable')}</p>}
     </Card>
   )
@@ -183,10 +187,12 @@ export const PrintTuning = ({
   compact = false,
   sliders = false,
   pressureAdvance = false,
+  children,
 }: {
   compact?: boolean
   sliders?: boolean
   pressureAdvance?: boolean
+  children?: ComponentChildren
 }) => {
   const { data, rev, ok } = printer.use()
   return (
@@ -198,6 +204,7 @@ export const PrintTuning = ({
       compact={compact}
       sliders={sliders}
       pressureAdvance={pressureAdvance}
+      children={children}
     />
   )
 }

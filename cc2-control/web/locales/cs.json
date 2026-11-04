@@ -1339,5 +1339,6 @@
   "fanfloor.auto_accepted": "Automatické řízení obnoveno pro příští nativní cyklus.",
   "fanfloor.requested": "Požadované minimum: {percent}%",
   "fanfloor.not_ready": "Nativní součást není připravena. Restartujte nečinnou tiskárnu nebo zkontrolujte diagnostiku.",
-  "fanfloor.printing_required": "Dostupné během tisku s čerstvými daty. Pozastavení nebo konec požadavek zruší."
+  "fanfloor.printing_required": "Dostupné během tisku s čerstvými daty. Pozastavení nebo konec požadavek zruší.",
+  "caltools.calculator": "Kalkulačka kalibrace extruze"
 }

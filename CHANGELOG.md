@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reorganize Control with load-cell tools in their own Bed Levelling tab, full Rotation Distance below Pressure Advance, Input Shaper inside Movement and full-width material profiles. Add live nozzle/bed/chamber temperatures to Job details. Preserve the published Dashboard. Designed and approved by **Neme77** (follow-up to #283).
+
 ### Added
 
 - Source-only, explicit opt-in EXHAUST minimum for the current print, preserving native higher cooling and releasing on Automatic, pause/end/cancel or restart; requested and physically tested by **Neme77** for #285. The optional native trial must be disabled before ordinary updates; automatic delivery remains outside this change.

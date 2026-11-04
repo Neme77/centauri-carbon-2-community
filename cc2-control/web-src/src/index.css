@@ -543,3 +543,29 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 
 /* Keep all six Pressure Advance decimals readable in the compact Control card. */
 .cc2-tuning-field input.cc2-pressure-value { width: 96px; }
+
+/* Compact calibration tools and full-width material profiles. */
+.cc2-control-columns > div { min-width: 0; align-content: start; }
+.cc2-control-columns .cc2-tuning-fields { gap: 10px; }
+.cc2-rotation-tools input { min-width: 0; }
+.cc2-rotation-tools button { white-space: normal; }
+.cc2-rotation-tools pre { max-height: 6rem; }
+.cc2-cell-tools { max-width: 56rem; }
+.cc2-profile-fields > * { min-width: 0; }
+.cc2-job-temperatures small { overflow-wrap: anywhere; }
+
+/* Share desktop row boundaries while distributing movement controls naturally. */
+@media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
+  @container page (min-width: 1020px) {
+    .cc2-control-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; align-items: stretch; }
+    .cc2-control-columns > div { display: contents; }
+    .cc2-control-columns .cc2-movement { grid-column: 1; grid-row: 1 / span 2; display: flex; flex-direction: column; justify-content: space-between; }
+    .cc2-control-columns .cc2-temperatures { grid-column: 2; grid-row: 1; }
+    .cc2-control-columns .cc2-live-offset { grid-column: 3; grid-row: 1; }
+    .cc2-control-columns .cc2-fans { grid-column: 2; grid-row: 2; }
+    .cc2-control-columns .cc2-tuning { grid-column: 3; grid-row: 2; }
+    .cc2-movement .cc2-shaper { min-height: 190px; flex: 0 0 auto; padding-top: 14px; margin-top: 14px; }
+    .cc2-movement .cc2-shaper > button { min-height: 44px; margin-top: 8px; }
+    .cc2-movement .cc2-shaper > p { line-height: 1.5; }
+  }
+}

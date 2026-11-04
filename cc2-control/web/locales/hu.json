@@ -1339,5 +1339,6 @@
   "fanfloor.auto_accepted": "Automatikus vezérlés visszaállítva a következő natív ciklustól.",
   "fanfloor.requested": "Kért minimum: {percent}%",
   "fanfloor.not_ready": "A natív összetevő nem áll készen. Indítsa újra a tétlen nyomtatót, vagy ellenőrizze a diagnosztikát.",
-  "fanfloor.printing_required": "Friss adatokkal futó nyomtatás alatt érhető el. A szünet vagy a befejezés törli a kérést."
+  "fanfloor.printing_required": "Friss adatokkal futó nyomtatás alatt érhető el. A szünet vagy a befejezés törli a kérést.",
+  "caltools.calculator": "Extrudálás kalibrációs kalkulátor"
 }

@@ -1339,5 +1339,6 @@
   "fanfloor.auto_accepted": "Commande automatique rétablie au prochain cycle natif.",
   "fanfloor.requested": "Minimum demandé : {percent}%",
   "fanfloor.not_ready": "Le composant natif n’est pas prêt. Redémarrez l’imprimante inactive ou consultez le diagnostic.",
-  "fanfloor.printing_required": "Disponible pendant une impression avec des données récentes. La pause ou la fin annule la demande."
+  "fanfloor.printing_required": "Disponible pendant une impression avec des données récentes. La pause ou la fin annule la demande.",
+  "caltools.calculator": "Calcul de calibration de l’extrusion"
 }

@@ -1339,5 +1339,6 @@
   "fanfloor.auto_accepted": "Sterowanie automatyczne przywrócone od następnego cyklu natywnego.",
   "fanfloor.requested": "Żądane minimum: {percent}%",
   "fanfloor.not_ready": "Komponent natywny nie jest gotowy. Uruchom ponownie bezczynną drukarkę lub sprawdź diagnostykę.",
-  "fanfloor.printing_required": "Dostępne podczas wydruku z aktualnymi danymi. Pauza lub koniec anuluje żądanie."
+  "fanfloor.printing_required": "Dostępne podczas wydruku z aktualnymi danymi. Pauza lub koniec anuluje żądanie.",
+  "caltools.calculator": "Kalkulator kalibracji ekstruzji"
 }
