@@ -64,7 +64,8 @@
     "test:load-cell-guide": "node preview/test-load-cell-guide.mjs",
     "test:rotation-restore": "node preview/test-rotation-restore.mjs",
     "test:pressure-advance": "node preview/test-pressure-advance.mjs",
-    "test:quick-maintenance": "node preview/test-quick-maintenance.mjs"
+    "test:quick-maintenance": "node preview/test-quick-maintenance.mjs",
+    "test:control-restyle": "node preview/test-control-restyle.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

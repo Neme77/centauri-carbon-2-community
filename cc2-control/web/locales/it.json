@@ -1339,5 +1339,6 @@
   "fanfloor.auto_accepted": "Controllo automatico ripristinato dal prossimo ciclo nativo.",
   "fanfloor.requested": "Minimo richiesto: {percent}%",
   "fanfloor.not_ready": "Il componente nativo non è pronto. Riavvia la stampante inattiva o controlla Diagnosi.",
-  "fanfloor.printing_required": "Disponibile durante una stampa con dati aggiornati. Pausa e fine stampa annullano la richiesta."
+  "fanfloor.printing_required": "Disponibile durante una stampa con dati aggiornati. Pausa e fine stampa annullano la richiesta.",
+  "caltools.calculator": "Calcolo calibrazione estrusione"
 }

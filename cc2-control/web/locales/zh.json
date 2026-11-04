@@ -1339,5 +1339,6 @@
   "fanfloor.auto_accepted": "将在下一个原生控制周期恢复自动控制。",
   "fanfloor.requested": "请求的最低转速：{percent}%",
   "fanfloor.not_ready": "原生组件尚未就绪。请在打印机空闲时重启或检查诊断。",
-  "fanfloor.printing_required": "仅在打印运行且数据实时有效时可用。暂停或结束打印将清除此请求。"
+  "fanfloor.printing_required": "仅在打印运行且数据实时有效时可用。暂停或结束打印将清除此请求。",
+  "caltools.calculator": "挤出校准计算器"
 }

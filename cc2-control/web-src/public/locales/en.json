@@ -1339,5 +1339,6 @@
   "fanfloor.auto_accepted": "Automatic control restored for the next native cycle.",
   "fanfloor.requested": "Requested minimum: {percent}%",
   "fanfloor.not_ready": "The native component is not ready. Restart the idle printer or check Diagnostics.",
-  "fanfloor.printing_required": "Available during a fresh running print. Pausing or ending the print clears the request."
+  "fanfloor.printing_required": "Available during a fresh running print. Pausing or ending the print clears the request.",
+  "caltools.calculator": "Extrusion calibration calculator"
 }
