@@ -63,6 +63,16 @@ try {
   await match.click()
   await page.waitForFunction(() => document.querySelector('[data-mesh-match]')?.getAttribute('aria-pressed') === 'true')
   assert.deepEqual(posts.at(-1), ['/api/plates/match', 'on'])
+  // The blended meshes are written; the printer loads them after a restart, which asks first.
+  const written = page.locator('[data-blends="written"]')
+  await written.getByText('Blended meshes for 65, 70, 75, 80, 85, 95, 105 °C are written.', { exact: false }).waitFor()
+  await written.getByRole('button', { name: 'Restart printer now', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
+  assert.deepEqual(posts.at(-1), ['/api/plates/match', 'on'], 'cancelled: no restart')
+  await written.getByRole('button', { name: 'Restart printer now', exact: true }).click()
+  await confirm('Restart the printer now so it loads the blended meshes?')
+  await page.locator('[data-blends="ready"]').getByText('Blended meshes in the printer: 65, 70', { exact: false }).waitFor()
+  assert.deepEqual(posts.at(-1), ['/api/plates/blends/restart', ''])
   await match.click()
   await page.waitForFunction(() => document.querySelector('[data-mesh-match]')?.getAttribute('aria-pressed') === 'false')
   assert.deepEqual(posts.at(-1), ['/api/plates/match', 'off'])
@@ -261,5 +271,5 @@ try {
   })
   assert.deepEqual(lines.slice(3, 7), ['A', 'calibrate', '0', ''])
   assert.deepEqual(errors, [])
-  console.log('PASS: plate measurements by bed temperature, the bed-temperature match switch, mount (in place, with restart, with a chosen measurement), screen Z note with the nozzle correction, Z edit, nozzles, save, view, delete, idle guard, phone width and the print dialog choice')
+  console.log('PASS: plate measurements by bed temperature, the bed-temperature match switch and blended meshes with the restart, mount (in place, with restart, with a chosen measurement), screen Z note with the nozzle correction, Z edit, nozzles, save, view, delete, idle guard, phone width and the print dialog choice')
 } finally { await browser?.close(); await server.close() }

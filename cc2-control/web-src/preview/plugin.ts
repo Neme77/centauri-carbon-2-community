@@ -121,6 +121,7 @@ export function previewPlugin(): Plugin {
   let plateSlots: Record<'A' | 'B', number> = { A: 1, B: 2 }
   let plateCurrent = ''
   let plateMatch = false // #296: match the mesh to prints started elsewhere
+  let plateBlendsLive = false // the printer has loaded the blended meshes
   let plateResult = ''
   // The calibration CC2 Control runs; in the preview each POST /__preview/calibration-step moves it one stage on.
   const idleCalibration = () => ({
@@ -222,7 +223,18 @@ export function previewPlugin(): Plugin {
       nozzle: plateNozzle,
       mesh_profile: 'default',
       print_mesh: { state: 'off', measure: '', result: '', source: '' },
-      match: { enabled: plateMatch, result: '' },
+      match: {
+        enabled: plateMatch,
+        result: '',
+        blend_temp: 0,
+        blends: plateMatch
+          ? {
+              state: plateBlendsLive ? 'ready' : 'written',
+              step: 5,
+              temps: [65, 70, 75, 80, 85, 95, 105].map(temp => ({ temp, live: plateBlendsLive })),
+            }
+          : { state: 'off', step: 0, temps: [] },
+      },
       calibration,
       slots: { A: plateSlots.A ? 'mesh' : 'empty', B: plateSlots.B ? 'mesh' : 'empty' },
       nozzles,
@@ -737,6 +749,7 @@ export function previewPlugin(): Plugin {
           '/api/plates/mount',
           '/api/plates/unmount',
           '/api/plates/match',
+          '/api/plates/blends/restart',
           '/api/plates/measure',
           '/api/plates/measure/delete',
           '/api/plates/keep',
@@ -902,6 +915,12 @@ export function previewPlugin(): Plugin {
                 )
                 if (held) held.profile = true
                 return held
+              }
+              if (path === '/api/plates/blends/restart') {
+                if (!plateMatch || plateBlendsLive)
+                  return reply({ ok: false, error: 'No blended meshes are waiting for a restart' }, 409)
+                plateBlendsLive = true
+                return reply({ accepted: true, reboot: true }, 202)
               }
               if (path === '/api/plates/match') {
                 if (body !== 'on' && body !== 'off') return reply({ ok: false, error: 'Use on or off' }, 400)

@@ -740,7 +740,7 @@ static void test_measures(void) {
         assert(!strcmp(plates_auto.result, "armed") && !strcmp(plates_late.measure, first) && !strcmp(plates_late.source, "auto"));
         assert(plates_late.loads == 1 && strstr(profile_log, first));                         /* loaded in the same tick */
         assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"source\":\"auto\"") &&
-               strstr(response, "\"match\":{\"enabled\":true,\"result\":\"armed\"}"));
+               strstr(response, "\"match\":{\"enabled\":true,\"result\":\"armed\","));
         NEW_PRINT(85); plates_tick(&mqtt); assert(!strcmp(plates_late.measure, m80));       /* nearest: 80 */
         NEW_PRINT(100); plates_tick(&mqtt);                                                 /* the slot holds 100 */
         assert(!plates_late.state && !strcmp(plates_auto.result, "slot"));
@@ -1118,6 +1118,150 @@ static void test_background_transport(void) {
     close(pair[1]);plates_uds=fake_uds;
 }
 
+
+/* ---- blended meshes between measurements (#296) ------------------------------------ */
+static plate_blend memory_blends[PLATE_BLEND_MAX];
+static int memory_blend_count;
+static int blend_uds(const char *query, char **reply, size_t *length) {
+    if (!strstr(query, "\"profiles\"")) return fake_uds(query, reply, length);
+    json_builder b = {malloc(1 << 20), 0, 1 << 20, 0};
+    json_builder_printf(&b, "{\"id\":203,\"result\":{\"status\":{\"bed_mesh\":{\"profiles\":{");
+    for (int i = 0; i < memory_blend_count; ++i) {
+        const plate_mesh *m = &memory_blends[i].mesh;
+        json_builder_printf(&b, "%s\"%s\":{\"mesh_params\":{\"x_count\":%d,\"y_count\":%d,\"mesh_x_pps\":%d,\"mesh_y_pps\":%d,"
+            "\"min_x\":%.6f,\"max_x\":%.6f,\"min_y\":%.6f,\"max_y\":%.6f,\"tension\":%.6f,\"algo\":\"%s\"},\"points\":[",
+            i ? "," : "", memory_blends[i].name, m->x_count, m->y_count, m->x_pps, m->y_pps, m->min_x, m->max_x, m->min_y,
+            m->max_y, m->tension, m->algo);
+        for (int r = 0; r < m->y_count; ++r) {
+            json_builder_printf(&b, "%s[", r ? "," : "");
+            for (int c = 0; c < m->x_count; ++c) json_builder_printf(&b, "%s%.6f", c ? "," : "", m->points[r * m->x_count + c]);
+            json_builder_printf(&b, "]");
+        }
+        json_builder_printf(&b, "]}");
+    }
+    json_builder_printf(&b, "}}}}}");
+    assert(!b.failed); *reply = b.data; *length = b.length; return 0;
+}
+static void add_measure(const char *plate, const char *id, int temp, plate_mesh mesh, long long when) {
+    plate_measure *m = &plates.measures[plates.measure_count++];
+    memset(m, 0, sizeof(*m));
+    snprintf(m->id, sizeof(m->id), "%s", id); snprintf(m->plate, sizeof(m->plate), "%s", plate);
+    m->temp = temp; m->mesh = mesh; m->measured = when;
+}
+
+static void test_blends(void) {
+    mqtt_client mqtt; memset(&mqtt, 0, sizeof(mqtt)); fresh(&mqtt);
+    static char match_path[512]; snprintf(match_path, sizeof(match_path), "%s.match", plates_path);
+    plates_match_path = match_path; assert(plates_match_save(1) == 0);
+    const char *id = "7d29710cf494c5ff";
+    memset(&plates, 0, sizeof(plates)); plates_available = 1; plates.count = 1;
+    snprintf(plates.plates[0].id, sizeof(plates.plates[0].id), "%s", id);
+    snprintf(plates.plates[0].name, sizeof(plates.plates[0].name), "Supertack"); plates.plates[0].side = 'A';
+    plate_mesh m60 = grid(-0.8), m90 = grid(-0.7), m100 = grid(-0.75), m110 = grid(-0.74);
+    for (int i = 0; i < 121; ++i) m90.points[i] += (double)(i % 11) / 100.0; /* a different shape, not just height */
+    add_measure(id, "aa00000000000060", 60, m60, 1000); add_measure(id, "aa00000000000110", 110, m110, 1004);
+    add_measure(id, "aa00000000000090", 90, m90, 1002); add_measure(id, "aa00000000000100", 100, m100, 1003);
+    memcpy(plates.current, id, sizeof(plates.current));
+
+    /* the plan: every 5 C between measurements, none beyond them */
+    plate_blend b[PLATE_BLEND_MAX]; int step = 0;
+    int n = plate_blend_plan(&plates.plates[0], b, &step);
+    int want[] = {65, 70, 75, 80, 85, 95, 105};
+    assert(n == 7 && step == 5);
+    for (int i = 0; i < n; ++i) assert(b[i].temp == want[i]);
+    assert(!strcmp(b[0].name, "cc2b_7d29710cf494c5ff_65"));
+    for (int k = 0; k < 121; ++k) { /* 75 C is halfway between 60 and 90 */
+        assert(fabs(b[2].mesh.points[k] - round((m60.points[k] + m90.points[k]) / 2 * 1e6) / 1e6) < 1e-9);
+        assert(fabs(b[6].mesh.points[k] - round((m100.points[k] + m110.points[k]) / 2 * 1e6) / 1e6) < 1e-9);
+    }
+    /* the limit: more than PLATE_BLEND_MAX steps of 5 C gives the finest coarser multiple of 5 */
+    plates.measure_count = 0; add_measure(id, "aa00000000000030", 30, m60, 1); add_measure(id, "aa00000000000110", 110, m110, 2);
+    n = plate_blend_plan(&plates.plates[0], b, &step);
+    assert(step == 10 && n == 7 && b[0].temp == 40 && b[6].temp == 100);
+    /* a pair with different grids is not blended; one temperature measured twice uses the newest */
+    plates.measure_count = 0;
+    plate_mesh coarse = m90; coarse.x_count = coarse.y_count = 7;
+    add_measure(id, "aa00000000000060", 60, m60, 1000); add_measure(id, "aa00000000000090", 90, coarse, 1002);
+    add_measure(id, "aa00000000000100", 100, m100, 1003); add_measure(id, "aa00000000000101", 100, m90, 1001);
+    add_measure(id, "aa00000000000110", 110, m110, 1004);
+    n = plate_blend_plan(&plates.plates[0], b, &step);
+    assert(n == 1 && b[0].temp == 105);
+    for (int k = 0; k < 121; ++k) assert(fabs(b[0].mesh.points[k] - round((m100.points[k] + m110.points[k]) / 2 * 1e6) / 1e6) < 1e-9);
+    plates.measure_count = 0;
+    add_measure(id, "aa00000000000060", 60, m60, 1000); add_measure(id, "aa00000000000090", 90, m90, 1002);
+    add_measure(id, "aa00000000000100", 100, m100, 1003); add_measure(id, "aa00000000000110", 110, m110, 1004);
+    n = plate_blend_plan(&plates.plates[0], b, &step); assert(n == 7);
+
+    /* the file: blends added and removed, every other byte as it was */
+    plate_mesh slot_a = m110, slot_b = grid(0.1); write_autosave(&slot_a, &slot_b);
+    size_t original_length = 0, length = 0; char *original = slurp(printer_autosave_path, &original_length);
+    assert(plates_blends_in_file(b, n) == 0 && plates_blends_write(b, n) == 0 && plates_blends_in_file(b, n) == 1);
+    char *text = slurp(printer_autosave_path, &length), *bare; size_t bare_length = 0;
+    plate_mesh check; assert(autosave_find(text, length, "cc2b_7d29710cf494c5ff_75", &check) == 1 && plate_mesh_equal(&check, &b[2].mesh, 1));
+    assert(autosave_find(text, length, "default", &check) == 1 && plate_mesh_equal(&check, &slot_a, 1));
+    bare = autosave_with_blends(text, length, b, 0, &bare_length);
+    assert(bare && bare_length == original_length && !memcmp(bare, original, original_length)); /* removal restores the file */
+    free(bare); free(text);
+    assert(plates_blends_write(b, n) == 0);                                   /* already there: unchanged */
+    assert(plates_blends_write(b + 5, 2) == 0 && plates_blends_in_file(b + 5, 2) == 1);
+    text = slurp(printer_autosave_path, &length);
+    assert(autosave_find(text, length, "cc2b_7d29710cf494c5ff_75", &check) == 0 && autosave_find(text, length, "cc2b_7d29710cf494c5ff_95", &check) == 1);
+    free(text); free(original);
+
+    /* the main loop: written while idle, used only once the printer has them in memory */
+    plates_uds = blend_uds; memory_blend_count = 0; plates_blends.planned = 0;
+    telemetry.have_print_state = 1; strcpy(telemetry.print_state, "standby");
+    plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "written") && plates_blends.count == 7 && plates_blends_in_file(plates_blends.b, 7) == 1);
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "written") && !plates_blends.b[0].live);  /* not in memory before a restart */
+    assert(!plates_blend_for(&plates.plates[0], 104, measure_find("aa00000000000100")));
+    /* the restart button */
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"blends\":{\"state\":\"written\",\"step\":5,\"temps\":[{\"temp\":65,\"live\":false}"));
+    int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    plates_blends_restart_response(pair[0], &mqtt); close(pair[0]);
+    ssize_t got = recv(pair[1], response, sizeof(response) - 1, 0); response[got > 0 ? got : 0] = 0; close(pair[1]);
+    assert(status_of(response) == 202 && reboot_pending && reboot_guard == plates_reboot_guard);
+    reboot_pending = 0; reboot_guard = NULL;
+    /* after the restart the printer has them, with exactly the planned points */
+    memcpy(memory_blends, plates_blends.b, sizeof(memory_blends)); memory_blend_count = 7;
+    memory_blends[3].mesh.points[5] += 0.001;                                   /* one differs: that one is not used */
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "written") && plates_blends.b[0].live && !plates_blends.b[3].live);
+    memory_blends[3].mesh.points[5] -= 0.001;
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "ready"));
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair)); plates_blends_restart_response(pair[0], &mqtt); close(pair[0]);
+    got = recv(pair[1], response, sizeof(response) - 1, 0); response[got > 0 ? got : 0] = 0; close(pair[1]);
+    assert(status_of(response) == 409 && !reboot_pending);                      /* nothing waiting */
+    /* selection: a loaded blend closer than the nearest measurement wins */
+    const plate_blend *x = plates_blend_for(&plates.plates[0], 104, measure_find("aa00000000000100"));
+    assert(x && x->temp == 105);
+    assert(!plates_blend_for(&plates.plates[0], 101, measure_find("aa00000000000100")));   /* 100 is nearer */
+    x = plates_blend_for(&plates.plates[0], 76, measure_find("aa00000000000090")); assert(x && x->temp == 75);
+    /* a print started elsewhere at 104 C gets the 105 C blend */
+    plates_auto.phase = 0; plates_dialog_ms = -1; plates_late.state = 0;
+    strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0;
+    telemetry.present |= (UINT32_C(1) << U_LAYER) | (UINT32_C(1) << U_BG); telemetry.values[U_BG] = 104;
+    plates_auto_tick();
+    assert(!strcmp(plates_auto.result, "armed_blend") && !strcmp(plates_late.profile, "cc2b_7d29710cf494c5ff_105") &&
+           plates_late.blend_temp == 105 && !plates_late.measure[0]);
+    profile_log[0] = 0; plates_late_tick(); plates_late_tick();
+    assert(strstr(profile_log, "BED_MESH_PROFILE LOAD=cc2b_7d29710cf494c5ff_105"));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"blend_temp\":105"));
+    plates_late_finish("ended"); strcpy(telemetry.print_state, "complete"); plates_auto_tick();
+    /* a new measurement plans again */
+    add_measure(id, "aa00000000000080", 80, m90, 1005);
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(plates_blends.count == 6 && !strcmp(plates_blends.state, "written"));     /* 65 70 75 85 95 105 */
+    /* off: nothing is planned or written */
+    assert(plates_match_save(0) == 0); plates_blends_tick(&mqtt); assert(!strcmp(plates_blends.state, "off"));
+    plates_uds = fake_uds; unlink(match_path);
+    telemetry.present &= ~((UINT32_C(1) << U_LAYER) | (UINT32_C(1) << U_BG));
+    printf("PASS: blended meshes: 5 C plan within the measured range, limit of %d, same-grid pairs, exact points, file add/remove "
+           "keeping every other byte, memory check before use, restart only when waiting, nearest-wins selection, auto print\n", PLATE_BLEND_MAX);
+}
+
 int main(void) {
     char directory[] = "/tmp/cc2-plates-XXXXXX";
     assert(mkdtemp(directory));
@@ -1142,6 +1286,7 @@ int main(void) {
     test_empty_plate();
     test_print_setup();
     test_background_transport();
+    test_blends();
     printf("PASS: plate library\n");
     return 0;
 }

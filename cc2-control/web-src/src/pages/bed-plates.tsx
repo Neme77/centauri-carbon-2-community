@@ -33,6 +33,7 @@ import {
   calibrationForm,
   selectNozzle,
   tempOk,
+  restartForBlends,
   setMeshMatch,
   unmountPlate,
   zText,
@@ -670,6 +671,14 @@ const MeshSelector = ({ lib, idle, busy, act }: { lib: PlateLibrary; idle: boole
 // What happened to the measurement chosen for the latest print started here.
 const PrintMeshNotice = ({ lib }: { lib: PlateLibrary }) => {
   const { state, measure, result } = lib.print_mesh
+  const blendTemp = lib.match?.blend_temp || 0
+  if (blendTemp && !measure) {
+    if (state !== 'off') return <Notice icon="bolt">{tpl('plates.print_mesh_waiting', { temp: blendTemp })}</Notice>
+    if (result === 'loaded') return <Notice>{tpl('plates.print_mesh_blend_loaded', { temp: blendTemp })}</Notice>
+    if (result === 'missed') return <Warn>{tpl('plates.print_mesh_missed', { temp: blendTemp })}</Warn>
+    if (result === 'failed') return <Warn>{tpl('plates.print_mesh_failed', { temp: blendTemp })}</Warn>
+    return null
+  }
   const found = findMeasure(lib, measure)
   if (!found) return null
   const temp = found.measure.temp
@@ -686,15 +695,7 @@ const PrintMeshNotice = ({ lib }: { lib: PlateLibrary }) => {
 }
 
 // Match the mesh to the bed temperature of prints sent from a slicer or the touchscreen (#296).
-const MeshMatchSwitch = ({
-  lib,
-  busy,
-  act,
-}: {
-  lib: PlateLibrary
-  busy: boolean
-  act: (fn: () => Promise<unknown>) => Promise<void> | void
-}) => {
+const MeshMatchSwitch = ({ lib, busy, act }: { lib: PlateLibrary; busy: boolean; act: Act }) => {
   const on = Boolean(lib.match?.enabled)
   return (
     <div class="mt-3">
@@ -710,7 +711,38 @@ const MeshMatchSwitch = ({
         <small class={on ? 'text-cyan' : 'text-muted'}>{t(on ? 'plates.match_on' : 'plates.match_off')}</small>
       </Button>
       <p class="mt-1.5 text-xs text-muted">{t('plates.match_note')}</p>
+      {on && <BlendStatus lib={lib} busy={busy} act={act} />}
     </div>
+  )
+}
+
+// The blended meshes written for the mounted plate and whether the printer has loaded them.
+const BlendStatus = ({ lib, busy, act }: { lib: PlateLibrary; busy: boolean; act: Act }) => {
+  const blends = lib.match?.blends
+  if (!blends || blends.state === '' || blends.state === 'off') return null
+  const temps = blends.temps.map(b => b.temp).join(', ')
+  if (blends.state === 'too_few') return <p class="mt-1.5 text-xs text-muted">{t('plates.blends_too_few')}</p>
+  if (blends.state === 'write_failed') return <Warn>{t('plates.blends_write_failed')}</Warn>
+  if (blends.state === 'ready')
+    return (
+      <p class="mt-1.5 text-xs" data-blends="ready">
+        {tpl('plates.blends_ready', { temps })}
+      </p>
+    )
+  const restart = async () => {
+    if (!(await ask(t('plates.blends_restart_confirm')))) return
+    await restartForBlends()
+    notify(t('plates.blends_restart'))
+  }
+  return (
+    <Notice icon="bolt">
+      <span data-blends="written">
+        {tpl('plates.blends_written', { temps })}{' '}
+        <Button variant="ghost" class="text-xs" disabled={busy} onClick={() => act(restart)}>
+          {t('plates.blends_restart')}
+        </Button>
+      </span>
+    </Notice>
   )
 }
 
