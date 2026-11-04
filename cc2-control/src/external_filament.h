@@ -1,5 +1,6 @@
 #ifndef CC2_EXTERNAL_FILAMENT_H
 #define CC2_EXTERNAL_FILAMENT_H
+#include "thermal_limits.h"
 #include "canvas_json.h"
 typedef struct {int disconnected,idle,native_idle,active_channel,have_sensor,filament_detected;double temperature;const char *filament,*filament_end;} external_readback;
 static inline int external_parse(const char *json,size_t length,external_readback *out){
@@ -36,7 +37,7 @@ static inline int external_parse(const char *json,size_t length,external_readbac
         const char *temp=ccv_json_member(out->filament,out->filament_end,"nozzle_max_temp");
         if(temp&&*temp=='"'){
             char *tail=NULL;double v=strtod(temp+1,&tail);
-            if(tail>temp+1&&tail<out->filament_end&&*tail=='"'&&isfinite(v)&&v>=120&&v<=320)out->temperature=v;
+            if(tail>temp+1&&tail<out->filament_end&&*tail=='"'&&isfinite(v)&&v>=120&&v<=CC2_NOZZLE_TARGET_MAX)out->temperature=v;
         }
     }
     return 1;

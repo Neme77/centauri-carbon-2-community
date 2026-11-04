@@ -26,7 +26,7 @@
     "test:calibration": "node preview/test-mesh-calibration.mjs",
     "test:job-objects": "node preview/test-job-objects.mjs",
     "test:pid": "node preview/test-pid.mjs",
-    "test:print-temperatures": "node preview/test-print-temperatures.mjs",
+    "test:print-temperatures": "node preview/test-print-temperatures.mjs && node preview/test-nozzle-target-limits.mjs",
     "test:printer-reports": "node preview/test-printer-reports.mjs",
     "test:control-calibrations": "node preview/test-control-calibrations.mjs",
     "test:calibration-tools": "node preview/test-calibration-tools.mjs",

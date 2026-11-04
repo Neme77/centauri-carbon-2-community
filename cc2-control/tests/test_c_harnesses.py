@@ -64,6 +64,7 @@ HARNESSES = {
     "test_spools.c": BACKEND,
     "test_spoolman.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
+    "test_nozzle_target_limits.c": [ROOT / "src/control.c"],
 }
 
 with tempfile.TemporaryDirectory(prefix="cc2-c-harness-") as temporary:

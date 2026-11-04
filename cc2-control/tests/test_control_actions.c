@@ -64,7 +64,7 @@ int main(void){
     strcpy(mqtt.print_state,"paused");
     expect(control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets accepted for paused print");
     expect(!control_build_script("preheat:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"preheat remains blocked during print");
-    const char *bad_targets[]={"heaters:set:nan:60","heaters:set:210:inf","heaters:set:-1:60","heaters:set:301:60","heaters:set:200:121","heaters:set:200:60junk","heaters:set:200:60\nM112","heaters:set:200"};
+    const char *bad_targets[]={"heaters:set:nan:60","heaters:set:210:inf","heaters:set:-1:60","heaters:set:351:60","heaters:set:200:121","heaters:set:200:60junk","heaters:set:200:60\nM112","heaters:set:200"};
     for(size_t i=0;i<sizeof(bad_targets)/sizeof(bad_targets[0]);i++)expect(!control_build_script(bad_targets[i],&mqtt,script,sizeof(script),reason,sizeof(reason)),bad_targets[i]);
     mqtt.last_message-=30;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected stale");mqtt.last_message=time(NULL);
     mqtt.connected=0;expect(!control_build_script("heaters:set:210:60",&mqtt,script,sizeof(script),reason,sizeof(reason)),"temperature targets rejected disconnected");mqtt.connected=1;
