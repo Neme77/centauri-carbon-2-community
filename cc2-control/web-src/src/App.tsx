@@ -1,5 +1,6 @@
 import { PrintCompleted } from '@/components/print-completed'
 import { ChamberReady } from '@/components/chamber-ready'
+import { RunoutContinue } from '@/components/runout-continue'
 import { i18n } from '@/lib/i18n'
 import { menu, nav, printer } from '@/lib/state'
 import { PrinterReport, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
@@ -47,6 +48,7 @@ export const App = () => {
       <TitleSync />
       <PrintCompleted />
       <ChamberReady />
+      <RunoutContinue />
       <RefusalWatcher />
       <Sidebar />
       <Topbar />

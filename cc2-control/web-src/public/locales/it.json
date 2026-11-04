@@ -1340,5 +1340,19 @@
   "fanfloor.requested": "Minimo richiesto: {percent}%",
   "fanfloor.not_ready": "Il componente nativo non è pronto. Riavvia la stampante inattiva o controlla Diagnosi.",
   "fanfloor.printing_required": "Disponibile durante una stampa con dati aggiornati. Pausa e fine stampa annullano la richiesta.",
-  "caltools.calculator": "Calcolo calibrazione estrusione"
+  "caltools.calculator": "Calcolo calibrazione estrusione",
+  "runout.heading": "Filamento esaurito nel Canvas",
+  "runout.title": "Filamento esaurito nello slot {slot} del Canvas",
+  "runout.detail": "Lo slot {slot} ({material}, {tools}) è vuoto e la stampa è in pausa. Continua con un altro slot caricato: la stampante lo carica, spurga e riprende.",
+  "runout.continue_from": "Continua dallo slot {slot}",
+  "runout.same_material": "Stesso materiale",
+  "runout.other_material": "Altro materiale",
+  "runout.none_loaded": "Nessun altro slot è caricato. Carica una bobina nel Canvas, poi sceglila qui.",
+  "runout.confirm": "Continuare la stampa dallo slot {slot}? La stampante lo carica, spurga e riprende.",
+  "runout.confirm_mismatch": "Lo slot {slot} è etichettato {material}, non {expected}. Continuare comunque la stampa con questo slot?",
+  "runout.loading": "Caricamento dello slot {slot} e ripresa…",
+  "runout.failed": "Impossibile continuare: {error}",
+  "runout.no_match_auto": "Solo stesso materiale: nessun altro slot caricato contiene lo stesso materiale.",
+  "canvas.match_material": "Solo stesso materiale",
+  "canvas.match_material_hint": "Con la ricarica automatica attiva: se nessuno slot ha lo stesso filamento e colore, continua con uno slot caricato dello stesso tipo di materiale. Si basa sulle etichette: uno slot etichettato ASA deve contenere ASA."
 }
