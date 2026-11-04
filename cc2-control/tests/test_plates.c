@@ -146,6 +146,7 @@ static int call(int handler, const mqtt_client *mqtt, const char *body) {
         case 11: plates_nozzle_delete_response(pair[0], mqtt, body, length); break;
         case 12: plates_nozzle_select_response(pair[0], mqtt, body, length); break;
         case 13: plates_create_response(pair[0], mqtt, body, length); break;
+        case 14: plates_match_response(pair[0], body, length); break;
     }
     close(pair[0]);
     size_t used = 0; ssize_t n;
@@ -703,6 +704,60 @@ static void test_measures(void) {
     plates_tick(&mqtt); assert(plates_late.state == 1);
     plates_late.armed -= 181000; plates_tick(&mqtt); assert(!plates_late.state && !strcmp(plates_late_result, "not_started"));
     plates_print_arm("", 'A'); assert(!plates_late.state && !plates_late_result[0]);
+
+    /* Prints started elsewhere (#296): with matching on, the nearest usable measurement to the
+     * bed target is loaded like a dialog choice; off, or started from the dialog, nothing happens. */
+    {
+        static char match_path[512]; snprintf(match_path, sizeof(match_path), "%s.match", plates_path);
+        plates_match_path = match_path; plates_match_state = -1; unlink(match_path);
+        plates_dialog_ms = -1; plates_auto.phase = 0;
+        #define NEW_PRINT(bed) do { strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt); \
+            strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0; \
+            telemetry.values[U_BG] = (bed); telemetry.present |= UINT32_C(1) << U_BG; } while (0)
+        NEW_PRINT(62); plates_tick(&mqtt);
+        assert(!plates_late.state && !strcmp(plates_auto.result, "off"));                  /* off by default */
+        assert(call(14, &mqtt, "maybe") == 400 && call(14, &mqtt, "on") == 200 && plates_match_enabled());
+        plates_match_state = -1; assert(plates_match_enabled());                            /* persisted */
+        /* the bed target arrives after the start: wait for it */
+        NEW_PRINT(0); telemetry.present &= ~(UINT32_C(1) << U_BG); plates_tick(&mqtt);
+        assert(plates_auto.phase == 1 && !plates_late.state);
+        telemetry.values[U_BG] = 20; telemetry.present |= UINT32_C(1) << U_BG; plates_tick(&mqtt);
+        assert(plates_auto.phase == 1 && !plates_late.state);                                 /* not a bed target yet */
+        profile_log[0] = 0; telemetry.values[U_BG] = 62; plates_tick(&mqtt);
+        assert(!strcmp(plates_auto.result, "armed") && !strcmp(plates_late.measure, first) && !strcmp(plates_late.source, "auto"));
+        assert(plates_late.loads == 1 && strstr(profile_log, first));                         /* loaded in the same tick */
+        assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"source\":\"auto\"") &&
+               strstr(response, "\"match\":{\"enabled\":true,\"result\":\"armed\"}"));
+        NEW_PRINT(85); plates_tick(&mqtt); assert(!strcmp(plates_late.measure, m80));       /* nearest: 80 */
+        NEW_PRINT(100); plates_tick(&mqtt);                                                 /* the slot holds 100 */
+        assert(!plates_late.state && !strcmp(plates_auto.result, "slot"));
+        NEW_PRINT(110); plates_tick(&mqtt); assert(!strcmp(plates_auto.result, "slot"));    /* beyond: the nearest */
+        /* a print CC2 Control started itself keeps the dialog's choice */
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        plates_print_arm("", 'A'); NEW_PRINT(62); plates_tick(&mqtt);
+        assert(!plates_late.state && plates_auto.phase == 2 && !strcmp(plates_auto.result, ""));
+        plates_dialog_ms = -1;
+        /* first seen after the first layer began (a CC2 Control restart mid-print): left alone */
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        strcpy(telemetry.print_state, "printing"); telemetry.values[U_LAYER] = 5; telemetry.values[U_BG] = 62;
+        profile_log[0] = 0;
+        for (int i = 0; i < 4; ++i) { plates_late.sent = 0; plates_tick(&mqtt); }
+        assert(!plates_late.loads && !profile_log[0]);                                       /* never loaded */
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        assert(!plates_late.state && !strcmp(plates_late_result, "ended"));
+        /* no plate mounted: nothing */
+        char mounted[PLATE_ID_LEN + 1]; memcpy(mounted, plates.current, sizeof(mounted)); plates.current[0] = 0;
+        NEW_PRINT(62); plates_tick(&mqtt); assert(!plates_late.state && !strcmp(plates_auto.result, "off"));
+        memcpy(plates.current, mounted, sizeof(mounted));
+        /* a paused print resuming is not a new print */
+        NEW_PRINT(62); plates_tick(&mqtt); assert(plates_late.state);
+        plates_late_finish("ended"); strcpy(telemetry.print_state, "paused"); plates_tick(&mqtt);
+        strcpy(telemetry.print_state, "printing"); plates_tick(&mqtt); assert(!plates_late.state);
+        #undef NEW_PRINT
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        assert(call(14, &mqtt, "off") == 200 && !plates_match_enabled()); unlink(match_path);
+        telemetry.present &= ~(UINT32_C(1) << U_BG);
+    }
 
     /* Measurements leave one by one; a plate keeps its last one. */
     snprintf(body, sizeof(body), "%s", m100);

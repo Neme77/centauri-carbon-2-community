@@ -1062,9 +1062,15 @@ static struct {
     char measure[PLATE_ID_LEN + 1], profile[32], slot[16];
     long long armed, sent;
     plates_exchange x;
-} plates_late = {.x = {.fd = -1}};
+    const char *source; /* "dialog" or "auto" (#296) */
+} plates_late = {.x = {.fd = -1}, .source = ""};
 /* "", "loaded", "missed", "adaptive", "failed", "not_started" or "ended". */
 static const char *plates_late_result = "";
+/* Matching the mesh to the bed temperature of prints started elsewhere (#296): 0 no print,
+ * 1 a new print waiting for its bed target, 2 decided. */
+static struct { int phase; long long started; const char *result; } plates_auto = {0, 0, ""};
+static int plates_match_enabled(void);
+static int plates_match_save(int on);
 
 static void plates_get_response(int fd) {
     size_t file_length = 0;
@@ -1096,10 +1102,12 @@ static void plates_get_response(int fd) {
         plates_cal.measure, plates_cal.result, plates_cal.error);
     json_builder_string(&b, plates_cal.detail);
     if (have_bed) json_builder_printf(&b, ",\"bed\":%.1f}", bed); else json_builder_printf(&b, ",\"bed\":null}");
-    json_builder_printf(&b, ",\"print_mesh\":{\"state\":\"%s\",\"measure\":\"%s\",\"result\":\"%s\"},"
+    json_builder_printf(&b, ",\"print_mesh\":{\"state\":\"%s\",\"measure\":\"%s\",\"result\":\"%s\",\"source\":\"%s\"},"
+        "\"match\":{\"enabled\":%s,\"result\":\"%s\"},"
         "\"slots\":{\"A\":\"%s\",\"B\":\"%s\"},\"nozzles\":[",
         plates_late.state == 1 ? "waiting" : plates_late.state == 2 ? "active" : "off", plates_late.measure,
-        plates_late_result, present[0] < 0 ? "unreadable" : present[0] ? "mesh" : "empty",
+        plates_late_result, plates_late.source, plates_match_enabled() ? "true" : "false", plates_auto.result,
+        present[0] < 0 ? "unreadable" : present[0] ? "mesh" : "empty",
         present[1] < 0 ? "unreadable" : present[1] ? "mesh" : "empty");
     for (int i = 0; i < plates.nozzle_count; ++i) {
         if (i) json_builder_printf(&b, ",");
@@ -1426,6 +1434,14 @@ static void plates_delete_response(int fd, const mqtt_client *mqtt, const char *
 }
 
 /* Forget which plate is mounted; the printer keeps its mesh and offset. */
+/* on|off: match the mesh to the bed temperature of prints started elsewhere (#296). */
+static void plates_match_response(int fd, const char *body, size_t length) {
+    int on = length == 2 && !memcmp(body, "on", 2), off = length == 3 && !memcmp(body, "off", 3);
+    if (!on && !off) { plates_fail(fd, 400, "Use on or off"); return; }
+    if (plates_match_save(on) != 0) { plates_fail(fd, 500, "Cannot save the setting"); return; }
+    plates_reply(fd, 200, on ? "{\"ok\":true,\"enabled\":true}\n" : "{\"ok\":true,\"enabled\":false}\n");
+}
+
 static void plates_unmount_response(int fd) {
     if (!plates_open(fd)) return;
     char old[PLATE_ID_LEN + 1]; memcpy(old, plates.current, sizeof(old));
@@ -1858,18 +1874,99 @@ static const char *plates_print_prepare(const mqtt_client *mqtt, char side, int 
     return NULL;
 }
 
-/* The print was accepted: watch its start for the measurement chosen in plates_print_prepare. */
-static void plates_print_arm(const char *late, char side) {
+/* Watch a print start for measurement `id` of the mounted plate (see plates_late_tick). */
+static void plates_late_arm(const char *id, char side, const char *source) {
     if (plates_late.state) plates_late_finish("ended");
     plates_exchange_close(&plates_late.x);
-    plates_late_result = "";
-    const plate_measure *m = late && *late ? measure_find(late) : NULL;
+    plates_late_result = ""; plates_late.source = "";
+    const plate_measure *m = id && *id ? measure_find(id) : NULL;
     if (!m) return;
     memcpy(plates_late.measure, m->id, sizeof(plates_late.measure));
     plate_profile_name(plates_late.profile, sizeof(plates_late.profile), m);
     snprintf(plates_late.slot, sizeof(plates_late.slot), "%s", plate_slot(side));
     plates_late.state = 1; plates_late.layer_reset = 0; plates_late.loads = 0;
-    plates_late.armed = monotonic_ms(); plates_late.sent = 0;
+    plates_late.armed = monotonic_ms(); plates_late.sent = 0; plates_late.source = source;
+}
+
+/* The print was accepted: watch its start for the measurement chosen in plates_print_prepare. */
+static long long plates_dialog_ms = -1; /* when CC2 Control last started a print itself */
+static void plates_print_arm(const char *late, char side) {
+    plates_dialog_ms = monotonic_ms();
+    plates_late_arm(late, side, "dialog");
+}
+
+/* ---- matching the mesh to a print's bed temperature (#296) ---------------------- */
+
+/* Prints started elsewhere (the slicer, the touchscreen) load the side slot, which holds
+ * whichever measurement went in last. With matching on, a new print on the mounted plate
+ * gets the usable measurement nearest to its bed target, loaded the same way as one chosen
+ * in the print dialog. A print CC2 Control started itself keeps the dialog's choice. */
+static const char *plates_match_path = "./mesh-match.conf";
+static int plates_match_state = -1;
+static int plates_match_enabled(void) {
+    if (plates_match_state < 0) {
+        plates_match_state = 0;
+        FILE *f = fopen(plates_match_path, "r");
+        if (f) { char line[64]; while (fgets(line, sizeof(line), f)) if (!strncmp(line, "match_temperature=1", 19)) plates_match_state = 1; fclose(f); }
+    }
+    return plates_match_state;
+}
+static int plates_match_save(int on) {
+    char temp[256]; snprintf(temp, sizeof(temp), "%s.tmp", plates_match_path);
+    FILE *f = fopen(temp, "w");
+    if (!f) return -1;
+    int ok = fprintf(f, "match_temperature=%d\n", on ? 1 : 0) > 0;
+    ok = !fclose(f) && ok;
+    if (!ok || rename(temp, plates_match_path) != 0) { unlink(temp); return -1; }
+    plates_match_state = on ? 1 : 0;
+    return 0;
+}
+
+/* The plate's measurement a print at bed temperature `temp` should use: nearest temperature,
+ * then the selected nozzle, then the one in the side slot, then the newest. Only measurements
+ * a print can load (the slot's or one with its own printer profile) count. */
+static const plate_measure *plates_nearest(const plate_entry *p, double temp) {
+    const plate_measure *slot = plates_slot_measure(p->side), *best = NULL;
+    double best_rank[4] = {0};
+    for (int i = 0; i < plates.measure_count; ++i) {
+        const plate_measure *m = &plates.measures[i];
+        if (strcmp(m->plate, p->id) || (m != slot && !plates_has_profile(m))) continue;
+        double rank[4] = {fabs(m->temp - temp), strcmp(m->nozzle, plates.nozzle) ? 1 : 0, m == slot ? 0 : 1, -(double)m->measured};
+        int better = !best;
+        for (int k = 0; !better && k < 4; ++k) { if (rank[k] != best_rank[k]) { better = rank[k] < best_rank[k]; break; } }
+        if (better) { best = m; memcpy(best_rank, rank, sizeof(rank)); }
+    }
+    return best;
+}
+
+#define PLATES_AUTO_WAIT_MS (15 * 60000) /* a print start that sets no bed target in this time is left alone */
+static void plates_auto_tick(void) {
+    const char *state = uds_print_state(&telemetry);
+    if (!state) return;
+    int printing = !strcmp(state, "printing") || !strcmp(state, "paused");
+    long long now = monotonic_ms();
+    if (!printing) { plates_auto.phase = 0; return; }
+    if (plates_auto.phase == 0) {
+        plates_auto.phase = 1; plates_auto.started = now; plates_auto.result = "";
+        /* CC2 Control started this one: the dialog already chose. */
+        if (plates_late.state || (plates_dialog_ms >= 0 && now - plates_dialog_ms < 180000)) { plates_auto.phase = 2; return; }
+    }
+    if (plates_auto.phase != 1) return;
+    const plate_entry *p = plates_available && plates.current[0] && !plates.pending[0] ? plate_find(plates.current) : NULL;
+    if (!plates_match_enabled() || !p || plates_cal.stage) { plates_auto.phase = 2; plates_auto.result = "off"; return; }
+    /* No layer check here: plates_late_tick only loads with positive proof that this print is still
+     * before its first layer, so a print first seen mid-way (a CC2 Control restart) is never touched. */
+    double target = 0;
+    if (!uds_value(&telemetry, U_BG, &target) || target < PLATE_TEMP_MIN) {
+        if (now - plates_auto.started > PLATES_AUTO_WAIT_MS) { plates_auto.phase = 2; plates_auto.result = "no_bed_target"; }
+        return;
+    }
+    plates_auto.phase = 2;
+    const plate_measure *m = plates_nearest(p, target);
+    if (!m) { plates_auto.result = "no_measurement"; return; }
+    if (m == plates_slot_measure(p->side)) { plates_auto.result = "slot"; return; } /* the print start loads it anyway */
+    plates_late_arm(m->id, p->side, "auto");
+    plates_auto.result = "armed";
 }
 
 /* ---- bed mesh calibration ---------------------------------------------------------- */
@@ -2130,6 +2227,7 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
  * keep the mounted plate's Z offset applied while the printer is idle and load the
  * measurement chosen for a print. */
 static void plates_tick(const mqtt_client *mqtt) {
+    plates_auto_tick();
     plates_late_tick();
     if (telemetry.connections != plates_seen_connections) {
         plates_seen_connections = telemetry.connections;

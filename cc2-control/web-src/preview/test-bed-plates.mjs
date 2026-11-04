@@ -56,6 +56,17 @@ try {
   }
   await card('Smooth PEI').waitFor()
   assert.equal(await page.locator('[data-plate]').count(), 3)
+  // #296: matching the mesh to prints started elsewhere is off until chosen, then saved.
+  const match = page.locator('[data-mesh-match]')
+  assert.equal(await match.getAttribute('aria-pressed'), 'false')
+  await page.getByText("A print started here keeps the measurement chosen in its dialog.", { exact: false }).waitFor()
+  await match.click()
+  await page.waitForFunction(() => document.querySelector('[data-mesh-match]')?.getAttribute('aria-pressed') === 'true')
+  assert.deepEqual(posts.at(-1), ['/api/plates/match', 'on'])
+  await match.click()
+  await page.waitForFunction(() => document.querySelector('[data-mesh-match]')?.getAttribute('aria-pressed') === 'false')
+  assert.deepEqual(posts.at(-1), ['/api/plates/match', 'off'])
+  posts.length = 0
   assert.ok(await page.getByRole('tab', { name: 'Build Plates' }).getAttribute('aria-selected'))
   await card('Textured PEI').getByText('In printer', { exact: true }).waitFor()
   assert.equal(await card('Cool Plate').getByText('In printer', { exact: true }).count(), 0)
@@ -250,5 +261,5 @@ try {
   })
   assert.deepEqual(lines.slice(3, 7), ['A', 'calibrate', '0', ''])
   assert.deepEqual(errors, [])
-  console.log('PASS: plate measurements by bed temperature, mount (in place, with restart, with a chosen measurement), screen Z note with the nozzle correction, Z edit, nozzles, save, view, delete, idle guard, phone width and the print dialog choice')
+  console.log('PASS: plate measurements by bed temperature, the bed-temperature match switch, mount (in place, with restart, with a chosen measurement), screen Z note with the nozzle correction, Z edit, nozzles, save, view, delete, idle guard, phone width and the print dialog choice')
 } finally { await browser?.close(); await server.close() }

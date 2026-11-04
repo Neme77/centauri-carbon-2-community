@@ -33,6 +33,7 @@ import {
   calibrationForm,
   selectNozzle,
   tempOk,
+  setMeshMatch,
   unmountPlate,
   zText,
 } from '@/lib/plates'
@@ -673,10 +674,44 @@ const PrintMeshNotice = ({ lib }: { lib: PlateLibrary }) => {
   if (!found) return null
   const temp = found.measure.temp
   if (state !== 'off') return <Notice icon="bolt">{tpl('plates.print_mesh_waiting', { temp })}</Notice>
-  if (result === 'loaded') return <Notice>{tpl('plates.print_mesh_loaded', { temp })}</Notice>
+  if (result === 'loaded')
+    return (
+      <Notice>
+        {tpl(lib.print_mesh.source === 'auto' ? 'plates.print_mesh_auto_loaded' : 'plates.print_mesh_loaded', { temp })}
+      </Notice>
+    )
   if (result === 'missed') return <Warn>{tpl('plates.print_mesh_missed', { temp })}</Warn>
   if (result === 'failed') return <Warn>{tpl('plates.print_mesh_failed', { temp })}</Warn>
   return null
+}
+
+// Match the mesh to the bed temperature of prints sent from a slicer or the touchscreen (#296).
+const MeshMatchSwitch = ({
+  lib,
+  busy,
+  act,
+}: {
+  lib: PlateLibrary
+  busy: boolean
+  act: (fn: () => Promise<unknown>) => Promise<void> | void
+}) => {
+  const on = Boolean(lib.match?.enabled)
+  return (
+    <div class="mt-3">
+      <Button
+        wide
+        class="justify-between"
+        data-mesh-match
+        aria-pressed={on}
+        disabled={busy || !lib.available || !lib.match}
+        onClick={() => act(() => setMeshMatch(!on))}
+      >
+        {t('plates.match_temperature')}
+        <small class={on ? 'text-cyan' : 'text-muted'}>{t(on ? 'plates.match_on' : 'plates.match_off')}</small>
+      </Button>
+      <p class="mt-1.5 text-xs text-muted">{t('plates.match_note')}</p>
+    </div>
+  )
 }
 
 export const Plates = () => {
@@ -749,6 +784,7 @@ export const Plates = () => {
               </Notice>
             )}
             <MeshSelector lib={lib} idle={v.idle && ok} busy={busy || rebooting} act={act} />
+            <MeshMatchSwitch lib={lib} busy={busy} act={act} />
             <PrintMeshNotice lib={lib} />
             <div class="mt-3 grid gap-2.5 cc2-lg:grid-cols-2">
               {lib.plates.map(p => (
