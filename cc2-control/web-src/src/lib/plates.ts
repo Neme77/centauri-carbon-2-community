@@ -45,7 +45,7 @@ export type PrintMesh = {
 }
 // Matching the mesh to the bed temperature of prints started elsewhere (#296).
 export type MeshBlends = {
-  state: '' | 'off' | 'too_few' | 'written' | 'ready' | 'write_failed'
+  state: '' | 'off' | 'too_few' | 'planned' | 'written' | 'ready' | 'write_failed'
   step: number
   temps: { temp: number; live: boolean }[]
 }

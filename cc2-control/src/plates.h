@@ -1085,7 +1085,7 @@ static struct {
     int count, step, planned; /* planned: the plan below is for `plate` and the measurements in `sig` */
     unsigned long long sig;
     plate_blend b[PLATE_BLEND_MAX];
-    const char *state;  /* "", "off", "too_few", "written", "ready", "write_failed" */
+    const char *state;  /* "", "off", "too_few", "planned", "written", "ready", "write_failed" */
     long long next_ms;
     plates_exchange x;  /* the memory check */
 } plates_blends = {.state = "", .x = {.fd = -1}};
@@ -2107,7 +2107,7 @@ static void plates_blends_tick(const mqtt_client *mqtt) {
         memcpy(plates_blends.plate, p->id, sizeof(plates_blends.plate));
         plates_blends.count = plate_blend_plan(p, plates_blends.b, &plates_blends.step);
         plates_blends.planned = 1; plates_blends.next_ms = 0;
-        plates_blends.state = plates_blends.count ? "written" : "too_few";
+        plates_blends.state = plates_blends.count ? "planned" : "too_few"; /* written once the printer is idle */
     }
     if (!plates_blends.count) return;
     long long now = monotonic_ms();

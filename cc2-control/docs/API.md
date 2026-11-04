@@ -422,7 +422,7 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   printer restart; `/api/plates/blends/restart` (empty body) restarts the printer for that when blends wait.
   `GET /api/plates` reports `match` (`enabled`, `result` of the latest print: `armed`, `armed_blend`,
   `slot`, `off`, `no_measurement`, `no_bed_target`; `blend_temp` of a blend in use; `blends`: `state`
-  `off`, `too_few`, `written`, `ready` or `write_failed`, `step` and `temps` with `live`) and
+  `off`, `too_few`, `planned`, `written`, `ready` or `write_failed`, `step` and `temps` with `live`) and
   `print_mesh.source` (`dialog` or `auto`).
 - `/api/plates/save` (`A|B`, name, Z, temperature, nozzle; the last two optional, 60 °C and none) stores the
   mesh the printer keeps for that side as a new plate with that measurement. The slot in `autosave.cfg` and

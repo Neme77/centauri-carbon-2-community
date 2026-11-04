@@ -723,6 +723,8 @@ const BlendStatus = ({ lib, busy, act }: { lib: PlateLibrary; busy: boolean; act
   const temps = blends.temps.map(b => b.temp).join(', ')
   if (blends.state === 'too_few') return <p class="mt-1.5 text-xs text-muted">{t('plates.blends_too_few')}</p>
   if (blends.state === 'write_failed') return <Warn>{t('plates.blends_write_failed')}</Warn>
+  if (blends.state === 'planned')
+    return <p class="mt-1.5 text-xs text-muted">{tpl('plates.blends_planned', { temps })}</p>
   if (blends.state === 'ready')
     return (
       <p class="mt-1.5 text-xs" data-blends="ready">

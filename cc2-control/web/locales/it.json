@@ -720,6 +720,7 @@
   "plates.match_off": "Disattivo",
   "plates.match_note": "Per le stampe inviate da uno slicer o avviate dal touchscreen, CC2 Control carica la misura del piatto montato più vicina alla temperatura del piano della stampa. Una stampa avviata qui mantiene la misura scelta nella sua finestra.",
   "plates.blends_ready": "Mesh miscelate nella stampante: {temps} °C. Una stampa tra due misure riceve la più vicina.",
+  "plates.blends_planned": "Le mesh miscelate per {temps} °C sono pianificate; CC2 Control le scrive appena la stampante è inattiva.",
   "plates.blends_written": "Le mesh miscelate per {temps} °C sono scritte. La stampante le carica al prossimo riavvio; fino ad allora le stampe usano la misura più vicina.",
   "plates.blends_restart": "Riavvia la stampante ora",
   "plates.blends_restart_confirm": "Riavviare ora la stampante perché carichi le mesh miscelate? Richiede circa due minuti.",

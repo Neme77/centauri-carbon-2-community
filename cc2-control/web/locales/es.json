@@ -720,6 +720,7 @@
   "plates.match_off": "Desactivado",
   "plates.match_note": "En las impresiones enviadas desde un laminador o iniciadas en la pantalla táctil, CC2 Control carga la medición de la placa montada más cercana a la temperatura de cama de la impresión. Una impresión iniciada aquí conserva la medición elegida en su diálogo.",
   "plates.blends_ready": "Mallas combinadas en la impresora: {temps} °C. Una impresión entre dos mediciones recibe la más cercana.",
+  "plates.blends_planned": "Las mallas combinadas para {temps} °C están planificadas; CC2 Control las escribe cuando la impresora esté inactiva.",
   "plates.blends_written": "Las mallas combinadas para {temps} °C están escritas. La impresora las carga en su próximo reinicio; hasta entonces las impresiones usan la medición más cercana.",
   "plates.blends_restart": "Reiniciar la impresora ahora",
   "plates.blends_restart_confirm": "¿Reiniciar la impresora ahora para que cargue las mallas combinadas? Tarda unos dos minutos.",

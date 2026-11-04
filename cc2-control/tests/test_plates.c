@@ -1211,7 +1211,9 @@ static void test_blends(void) {
     /* the main loop: written while idle, used only once the printer has them in memory */
     plates_uds = blend_uds; memory_blend_count = 0; plates_blends.planned = 0;
     telemetry.have_print_state = 1; strcpy(telemetry.print_state, "standby");
-    plates_blends_tick(&mqtt);
+    mqtt.machine_status = 2; plates_blends_tick(&mqtt);                         /* busy: planned, not written */
+    assert(!strcmp(plates_blends.state, "planned") && plates_blends_in_file(plates_blends.b, 7) == 0);
+    fresh(&mqtt); plates_blends_tick(&mqtt);
     assert(!strcmp(plates_blends.state, "written") && plates_blends.count == 7 && plates_blends_in_file(plates_blends.b, 7) == 1);
     plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
     assert(!strcmp(plates_blends.state, "written") && !plates_blends.b[0].live);  /* not in memory before a restart */
