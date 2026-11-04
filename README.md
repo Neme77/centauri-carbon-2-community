@@ -3,6 +3,8 @@
 Community firmware, local printer control and reproducible build tools for the
 **ELEGOO Centauri Carbon 2**, maintained by **Neme77**.
 
+[![Join our Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/FGfCaFpm38)
+
 > **NEW: NATIVE DISPLAY V4.4.3 + CC2 CONTROL 1.2.25.** Native Obsidian/cyan touchscreen, exhaust flaps, Pressure Advance, Rotation Distance, load-cell tools, experimental nozzle expansion/chamber preheat, optional qualified RTL8153 Ethernet and update recovery. [Download and complete notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.25-V4.4).
 
 <p align="center">
@@ -160,6 +162,12 @@ Installation details and compatibility requirements are maintained in the guides
 linked above.
 
 ## Community
+
+[**Join the Centauri Carbon 2 Community Firmware Discord**](https://discord.gg/FGfCaFpm38)
+for community discussions, setup help, print experiences and feedback.
+For reproducible bugs and feature requests, please keep using
+[GitHub Issues](https://github.com/Neme77/centauri-carbon-2-community/issues)
+so reports remain searchable and trackable.
 
 Thanks to **Surfoo, beanbo, efiten, Skcycos, pezso92, asiersan, Noahwhite2014,
 tharje, Nick Plateringen-Paul**, and every contributor, translator and tester.
