@@ -11,9 +11,15 @@ static char active_profile[32]="default";
 static int refuse_mesh_load, ignore_mesh_load, corrupt_active_matrix, missing_active_matrix;
 static char ran[256];            /* the last SET_GCODE_OFFSET */
 static char profile_log[1024];   /* BED_MESH_PROFILE scripts, separated by '|' */
+static char fake_print_file[64] = "local/job.gcode", fake_layer[16] = "null"; /* print_stats as the printer answers it */
 static int fake_uds(const char *query, char **reply, size_t *length) {
     if (uds_down) return -1;
     json_builder b = {malloc(65536), 0, 65536, 0};
+    if (strstr(query, "\"print_stats\"")) {
+        json_builder_printf(&b, "{\"id\":203,\"result\":{\"status\":{\"print_stats\":{\"filename\":\"%s\",\"info\":{\"current_layer\":%s,\"total_layer\":null}}}}}",
+                            fake_print_file, fake_layer);
+        *reply = b.data; *length = b.length; return 0;
+    }
     if (strstr(query, "gcode/script")) {
         const char *script = strstr(query, "\"script\":\"") + 10;
         int n = (int)(strchr(script, '"') - script);
@@ -770,6 +776,35 @@ static void test_measures(void) {
         strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
         assert(call(14, &mqtt, "off") == 200 && !plates_match_enabled()); unlink(match_path);
         telemetry.present &= ~(UINT32_C(1) << U_BG);
+    }
+
+    /* After a printer restart the layer count is never pushed for a new print that starts on layer 0
+     * (it did not change), and the file change cleared the old one: CC2 Control asks the printer. */
+    {
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        snprintf(telemetry.filename, sizeof(telemetry.filename), "local/job.gcode"); telemetry.have_filename = 1;
+        plates_late_arm(first, 'A', "auto");
+        strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default");
+        telemetry.present &= ~(UINT32_C(1) << U_LAYER);
+        strcpy(fake_layer, "null"); profile_log[0] = 0;
+        plates_late_tick(); plates_late_tick();
+        assert(plates_late.layer_reset && plates_late.loads == 1 && strstr(profile_log, first)); /* proof by asking */
+        /* the answer is for another file: no proof */
+        plates_late_arm(first, 'A', "auto"); snprintf(fake_print_file, sizeof(fake_print_file), "local/other.gcode");
+        profile_log[0] = 0; plates_late_tick(); plates_late_tick(); plates_late.asked -= 3000; plates_late_tick();
+        assert(!plates_late.loads && !profile_log[0]);
+        snprintf(fake_print_file, sizeof(fake_print_file), "local/job.gcode");
+        /* the first layer began: the next answer withdraws the proof, and an old answer expires */
+        plates_late_arm(first, 'A', "auto"); strcpy(fake_layer, "0");
+        plates_late_tick(); plates_late_tick(); assert(plates_late.loads == 1);
+        strcpy(fake_layer, "1"); plates_late.asked -= 3000; plates_late.sent -= 3000; plates_late_tick();
+        assert(!plates_late.layer0_at && plates_late.loads == 1);
+        strcpy(fake_layer, "0"); plates_late.layer0_at = monotonic_ms() - PLATES_LATE_LAYER_MS - 1; plates_late.asked = monotonic_ms();
+        plates_late.sent -= 3000; plates_late_tick(); assert(plates_late.loads == 1);    /* stale: not trusted */
+        /* telemetry that does carry the layer is used as before, without asking */
+        plates_late_finish("ended"); strcpy(fake_layer, "null");
+        telemetry.values[U_LAYER] = 0; telemetry.present |= UINT32_C(1) << U_LAYER;
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
     }
 
     /* The real transport, as on a CC2 on 2026-11-04: a load written while the print start waits for

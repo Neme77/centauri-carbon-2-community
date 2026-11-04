@@ -1069,7 +1069,9 @@ static struct {
     plates_exchange x;
     const char *source; /* "dialog" or "auto" (#296) */
     int blend_temp;     /* a blended profile's temperature, 0 for a measurement */
-} plates_late = {.x = {.fd = -1}, .source = ""};
+    plates_exchange q;  /* asks for the layer when telemetry has none (see plates_late_layer) */
+    long long layer0_at, asked; /* when the printer last answered layer 0 for this file; when last asked */
+} plates_late = {.x = {.fd = -1}, .source = "", .q = {.fd = -1}};
 /* "", "loaded", "missed", "adaptive", "failed", "not_started" or "ended". */
 static const char *plates_late_result = "";
 /* Matching the mesh to the bed temperature of prints started elsewhere (#296): 0 no print,
@@ -1807,7 +1809,7 @@ static void plates_background_failed(long long now){
 #define PLATES_LATE_REPLY_MS (10 * 60000)
 static int plates_late_active(void) { return plates_late.x.fd >= 0; }
 static void plates_late_finish(const char *result) {
-    plates_exchange_close(&plates_late.x);
+    plates_exchange_close(&plates_late.x); plates_exchange_close(&plates_late.q); plates_late.layer0_at = 0;
     if (plates_late.state) fprintf(stderr, "Plate mesh %s for this print: %s after %d load(s)\n", plates_late.profile, result, plates_late.loads);
     plates_late.state = 0; plates_late_result = result;
 }
@@ -1817,6 +1819,40 @@ static void plates_late_finish(const char *result) {
  * the slot is the active mesh before the first layer, the chosen measurement's
  * profile is loaded instead. The firmware runs it between file lines, before the
  * moves that follow, and keeps every request it receives, so loads are few. */
+/* The printer pushes print_stats.info only when it changes: after a restart, or when the last
+ * print also ended on layer 0, a new print's layer 0 is never pushed, and the file change has
+ * cleared the old count. Then CC2 Control asks for it: an answer for this same file reading layer
+ * 0 (or none yet) is the proof a load needs, trusted for PLATES_LATE_LAYER_MS. */
+#define PLATES_LATE_LAYER_MS 5000
+static const char plates_layer_query[] =
+    "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"print_stats\":[\"filename\",\"info\"]}}}\003";
+static int plates_layer_reply(const char *reply, size_t length) { /* 1 layer 0 of the current file, 0 not, -1 unknown */
+    const char *end = reply + length, *root = json_skip_space(reply, end), *e0, *e1, *e2, *e3, *e4, *name;
+    int count = 0; double layer = 0;
+    if (root >= end || *root != '{' || !(e0 = json_container_end(root, end))) return -1;
+    const char *result = json_member_object(root, e0, "result", '{', &e1);
+    const char *status = result ? json_member_object(result, e1, "status", '{', &e2) : NULL;
+    const char *ps = status ? json_member_object(status, e2, "print_stats", '{', &e3) : NULL;
+    if (!ps || !telemetry.have_filename || !json_member_raw_string(ps, e3, "filename", &name, &count) ||
+        (size_t)count != strlen(telemetry.filename) || memcmp(name, telemetry.filename, (size_t)count)) return -1;
+    const char *info = json_member_object(ps, e3, "info", '{', &e4), *v = info ? json_member(info, e4, "current_layer") : NULL;
+    if (!v) return -1;
+    if (end - v >= 4 && !memcmp(v, "null", 4)) return 1;
+    if (!plates_json_double(v, e4, &layer, NULL)) return -1;
+    return layer == 0 ? 1 : 0;
+}
+static void plates_late_layer(long long now) {
+    if (plates_late.q.fd < 0 && now - plates_late.asked < 2000) return;
+    if (plates_late.q.fd < 0) plates_late.asked = now;
+    char *reply = NULL; size_t length = 0;
+    int result = plates_exchange_step(&plates_late.q, plates_layer_query, &reply, &length);
+    if (result > 0) {
+        int zero = plates_layer_reply(reply, length);
+        if (zero == 1) plates_late.layer0_at = now; else if (zero == 0) plates_late.layer0_at = 0;
+    }
+    free(reply);
+}
+
 static void plates_late_tick(void) {
     if (!plates_late.state) return;
     long long now = monotonic_ms();
@@ -1833,12 +1869,15 @@ static void plates_late_tick(void) {
     if (!state || !profile) return; /* the stream reconnects; the print start waits for nothing */
     /* A new print resets the layer to 0, so a stale count from the last print is not the first layer. */
     if (have_layer && layer < 1) plates_late.layer_reset = 1;
+    if (!have_layer && !strcmp(state, "printing")) plates_late_layer(now);
+    int asked0 = !have_layer && plates_late.layer0_at && now - plates_late.layer0_at < PLATES_LATE_LAYER_MS;
+    if (asked0) plates_late.layer_reset = 1;
     if (plates_late.layer_reset && have_layer && layer >= 1) { plates_late_finish(ours ? "loaded" : "missed"); return; }
     if (!strcmp(profile, "ADAPTIVE")) { plates_late_finish("adaptive"); return; }
     /* A load needs positive proof that the first layer has not begun: fresh telemetry reading
-     * layer 0 of this print right now. A stream that reconnects during a print, or a count that
+     * layer 0 of this print right now, or a fresh answer saying so (plates_late_layer). A stream that reconnects during a print, or a count that
      * never showed this print's 0, therefore never loads. */
-    int startup = plates_late.layer_reset && have_layer && layer < 1 && !strcmp(state, "printing");
+    int startup = plates_late.layer_reset && ((have_layer && layer < 1) || asked0) && !strcmp(state, "printing");
     int slot = !strcmp(profile, plates_late.slot);
     if (plates_late.x.fd >= 0 && !startup && plates_late.x.sent < strlen(plates_late.x.request)) {
         plates_exchange_close(&plates_late.x); /* not sent yet: the window closed meanwhile */
@@ -1932,6 +1971,7 @@ static void plates_late_arm_profile(const char *id, const char *blend, int blend
     snprintf(plates_late.slot, sizeof(plates_late.slot), "%s", plate_slot(side));
     plates_late.state = 1; plates_late.layer_reset = 0; plates_late.loads = 0;
     plates_late.failures = 0; plates_late.reply_wait = 0;
+    plates_exchange_close(&plates_late.q); plates_late.layer0_at = plates_late.asked = 0;
     plates_late.armed = monotonic_ms(); plates_late.sent = 0; plates_late.source = source;
 }
 static void plates_late_arm(const char *id, char side, const char *source) { plates_late_arm_profile(id, NULL, 0, side, source); }
