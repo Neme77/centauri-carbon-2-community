@@ -1328,5 +1328,16 @@
   "tuning.pressure_advance": "Pressure Advance (s)",
   "tuning.actual_pa": "Aktuális: {value} s",
   "tuning.disable_pa": "Kikapcsolás (0)",
-  "tuning.pa_note": "Csak futás közben (0–1 s). A kezdő G-code felülírhatja ezt az értéket."
+  "tuning.pa_note": "Csak futás közben (0–1 s). A kezdő G-code felülírhatja ezt az értéket.",
+  "fanfloor.title": "Minimális EXHAUST fordulat ehhez a nyomtatáshoz",
+  "fanfloor.help": "A firmware e minimum fölé emelheti a hűtést. A nulla visszaállítja az automatikus vezérlést.",
+  "fanfloor.minimum_label": "Minimális EXHAUST fordulat (%)",
+  "fanfloor.apply": "Minimum alkalmazása",
+  "fanfloor.automatic": "Automatikus",
+  "fanfloor.pending": "Kérés mentése…",
+  "fanfloor.accepted": "Minimum kérve. A következő natív ciklusban érvényesül (legfeljebb 10 másodperc).",
+  "fanfloor.auto_accepted": "Automatikus vezérlés visszaállítva a következő natív ciklustól.",
+  "fanfloor.requested": "Kért minimum: {percent}%",
+  "fanfloor.not_ready": "A natív összetevő nem áll készen. Indítsa újra a tétlen nyomtatót, vagy ellenőrizze a diagnosztikát.",
+  "fanfloor.printing_required": "Friss adatokkal futó nyomtatás alatt érhető el. A szünet vagy a befejezés törli a kérést."
 }

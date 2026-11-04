@@ -1,6 +1,7 @@
 import { ExternalFilament } from './external-filament'
 import { BedDrying } from './bed-drying'
 import { ExhaustGrille } from './exhaust-grille'
+import { CavityFanFloor } from './cavity-fan-floor'
 import { CalibrationTools } from './calibration-tools'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
@@ -742,7 +743,12 @@ export const Control = () => {
                     disabled={!d?.connected}
                     onCommit={n => control(`fan:${k}:${n}`)}
                   />
-                  {k === 'box' && <ExhaustGrille />}
+                  {k === 'box' && (
+                    <>
+                      <ExhaustGrille />
+                      <CavityFanFloor />
+                    </>
+                  )}
                 </div>
               ))}
             </div>

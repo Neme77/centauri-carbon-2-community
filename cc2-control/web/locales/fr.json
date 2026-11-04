@@ -1328,5 +1328,16 @@
   "tuning.pressure_advance": "Pressure Advance (s)",
   "tuning.actual_pa": "Actuel : {value} s",
   "tuning.disable_pa": "Désactiver (0)",
-  "tuning.pa_note": "Valeur temporaire (0–1 s). Le G-code de démarrage peut la remplacer."
+  "tuning.pa_note": "Valeur temporaire (0–1 s). Le G-code de démarrage peut la remplacer.",
+  "fanfloor.title": "Vitesse minimale EXHAUST pour cette impression",
+  "fanfloor.help": "Le firmware peut augmenter le refroidissement au-delà de ce minimum. Zéro rétablit le mode automatique.",
+  "fanfloor.minimum_label": "Vitesse minimale EXHAUST (%)",
+  "fanfloor.apply": "Appliquer le minimum",
+  "fanfloor.automatic": "Automatique",
+  "fanfloor.pending": "Enregistrement…",
+  "fanfloor.accepted": "Minimum demandé. Application au prochain cycle natif (10 secondes maximum).",
+  "fanfloor.auto_accepted": "Commande automatique rétablie au prochain cycle natif.",
+  "fanfloor.requested": "Minimum demandé : {percent}%",
+  "fanfloor.not_ready": "Le composant natif n’est pas prêt. Redémarrez l’imprimante inactive ou consultez le diagnostic.",
+  "fanfloor.printing_required": "Disponible pendant une impression avec des données récentes. La pause ou la fin annule la demande."
 }

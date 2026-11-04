@@ -1328,5 +1328,16 @@
   "tuning.pressure_advance": "Pressure Advance (s)",
   "tuning.actual_pa": "Actual: {value} s",
   "tuning.disable_pa": "Disable (0)",
-  "tuning.pa_note": "Runtime only (0–1 s). Start G-code can override this value."
+  "tuning.pa_note": "Runtime only (0–1 s). Start G-code can override this value.",
+  "fanfloor.title": "Minimum exhaust speed for this print",
+  "fanfloor.help": "The firmware can increase cooling above this minimum. Zero returns to Automatic.",
+  "fanfloor.minimum_label": "Minimum exhaust speed (%)",
+  "fanfloor.apply": "Apply minimum",
+  "fanfloor.automatic": "Automatic",
+  "fanfloor.pending": "Saving request…",
+  "fanfloor.accepted": "Minimum requested. It takes effect on the next native cycle (up to 10 seconds).",
+  "fanfloor.auto_accepted": "Automatic control restored for the next native cycle.",
+  "fanfloor.requested": "Requested minimum: {percent}%",
+  "fanfloor.not_ready": "The native component is not ready. Restart the idle printer or check Diagnostics.",
+  "fanfloor.printing_required": "Available during a fresh running print. Pausing or ending the print clears the request."
 }
