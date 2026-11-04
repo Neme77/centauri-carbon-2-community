@@ -408,6 +408,7 @@ export const Canvas = () => {
               class="justify-between"
               disabled={!ok || autoRefill === null || refillBusy}
               aria-pressed={autoRefill === true}
+              data-auto-refill
               onClick={toggleRefill}
             >
               <span class="flex items-center gap-2">
