@@ -14,6 +14,7 @@ static int fake_rpc(const char *query, char **reply, size_t *length) {
 }
 
 #define L(text) "[2026-11-03 03:15:34.487] [info] " text "\n"
+#define LT(stamp, text) "[2026-11-03 " stamp "] [info] " text "\n"
 static const char *PREVIOUS_PRINT =
     L("[mmu.cpp:4520] [2024] CMD_canvas_set_color_table #1 T_vec.size 1 table_T 0 table_color 0xFF3700 table_channel 1")
     L("[virtual_sdcard.cpp:1095] [2024] cmd_SDCARD_PRINT_FILE slice_cfg_model:false auto_det:false filename:local/old.gcode")
@@ -67,6 +68,27 @@ static int call(int which, const char *body) {
 static int available(void) { assert(call(0, NULL) == 200); return strstr(response, "\"available\":true") != NULL; }
 static int reason(const char *expected) { assert(call(0, NULL) == 200); char key[64]; snprintf(key, sizeof(key), "\"reason\":\"%s\"", expected); return strstr(response, key) != NULL; }
 static void reset_job(void) { plates_exchange_close(&runout.x); runout.stage = RO_IDLE; runout.automatic = 0; runout.message[0] = runout.auto_note[0] = 0; }
+
+/* Feeds a whole log in one go and returns whether the latest print has a map. */
+static int map_of(const char *text, runout_table *t) {
+    runout_log s; runout_log_reset(&s); runout_log_feed(&s, text, strlen(text)); return runout_log_table(&s, t);
+}
+
+/* A printer socket that accepts and then says only what the test writes. */
+static int listener = -1, peer = -1;
+static void printer_socket(const char *path) {
+    struct sockaddr_un a; memset(&a, 0, sizeof(a)); a.sun_family = AF_UNIX;
+    assert(strlen(path) < sizeof(a.sun_path)); memcpy(a.sun_path, path, strlen(path) + 1);
+    unlink(path); listener = socket(AF_UNIX, SOCK_STREAM, 0); assert(listener >= 0);
+    assert(!bind(listener, (struct sockaddr *)&a, sizeof(a)) && !listen(listener, 4));
+}
+static void accept_peer(void) {
+    if (peer >= 0) close(peer);
+    peer = accept(listener, NULL, NULL); assert(peer >= 0);
+}
+static size_t drain(void) { /* what the printer has received so far */
+    char buffer[2048]; ssize_t n = recv(peer, buffer, sizeof(buffer), MSG_DONTWAIT); return n > 0 ? (size_t)n : 0;
+}
 
 int main(void) {
     char dir[] = "/tmp/cc2-runout-XXXXXX", older[300], current[300], settings[300];
@@ -125,6 +147,44 @@ int main(void) {
     assert(!rename(current, older)); write_file(current, "", "w");   /* rotation */
     assert(runout_refresh() && runout_log_table(&runout_reader.log, &t) && runout_log_channel(&runout_reader.log) == 2);
 
+    /* ---- whose map is it: the previous print's mid-print table is never the next print's */
+    {
+        const char *old_start =
+            LT("10:00:00.000", "[mmu.cpp:4520] [2024] CMD_canvas_set_color_table #1 T_vec.size 1 table_T 0 table_color 0xFF3700 table_channel 1")
+            LT("10:00:00.030", "[virtual_sdcard.cpp:1095] [2024] cmd_SDCARD_PRINT_FILE slice_cfg_model:false auto_det:false filename:local/a.gcode");
+        const char *old_continue = /* e.g. our own continue during print A */
+            LT("10:20:00.000", "[mmu.cpp:4520] [2024] CMD_canvas_set_color_table #1 T_vec.size 1 table_T 0 table_color 0xFF3700 table_channel 3");
+        const char *new_start_no_table =
+            LT("11:00:00.000", "[virtual_sdcard.cpp:1095] [2024] cmd_SDCARD_PRINT_FILE slice_cfg_model:false auto_det:false filename:local/b.gcode")
+            LT("11:10:00.000", "[mmu.cpp:3640] [2024] canvas check filament break, enter secondary confirmation!  channel 3");
+        char text[4096];
+        snprintf(text, sizeof(text), "%s", old_start); assert(map_of(text, &t) && t.e[0].channel == 1);   /* A's start table */
+        snprintf(text, sizeof(text), "%s%s", old_start, old_continue); assert(map_of(text, &t) && t.e[0].channel == 3);
+        snprintf(text, sizeof(text), "%s%s%s", old_start, old_continue, new_start_no_table);
+        assert(!map_of(text, &t));                                        /* B set no table: refused, not A's */
+        /* B's own table just before its start line is B's, whatever came before */
+        snprintf(text, sizeof(text), "%s%s%s%s", old_start, old_continue,
+                 LT("10:59:59.970", "[mmu.cpp:4520] [2024] CMD_canvas_set_color_table #1 T_vec.size 1 table_T 0 table_color 0x112233 table_channel 2"),
+                 new_start_no_table);
+        assert(map_of(text, &t) && t.e[0].channel == 2 && !strcmp(t.e[0].color, "0x112233"));
+        /* a table well before the start is not the start's own */
+        snprintf(text, sizeof(text), "%s%s%s", old_start,
+                 LT("10:58:00.000", "[mmu.cpp:4520] [2024] CMD_canvas_set_color_table #1 T_vec.size 1 table_T 0 table_color 0x112233 table_channel 2"),
+                 new_start_no_table);
+        assert(!map_of(text, &t));
+        /* nor one whose time is unknown */
+        snprintf(text, sizeof(text), "%s%s%s", old_start,
+                 "[mmu.cpp:4520] [2024] CMD_canvas_set_color_table #1 T_vec.size 1 table_T 0 table_color 0x112233 table_channel 2\n",
+                 new_start_no_table);
+        assert(!map_of(text, &t));
+        /* a table set during B (a continue) is B's */
+        snprintf(text, sizeof(text), "%s%s%s%s", old_start, old_continue, new_start_no_table,
+                 LT("11:11:00.000", "[mmu.cpp:4520] [2024] CMD_canvas_set_color_table #1 T_vec.size 1 table_T 0 table_color 0xFF3700 table_channel 0"));
+        assert(map_of(text, &t) && t.e[0].channel == 0);
+        assert(runout_line_ms("[2026-03-01 00:00:00.000] x") - runout_line_ms("[2026-02-28 23:59:59.970] x") == 30);
+        assert(runout_line_ms("[2026-11-03 10:00] x") == -1 && runout_line_ms("no stamp") == -1);
+    }
+
     /* ---- the API */
     plates_uds = fake_rpc;
     machine.connected = machine.registered = machine.canvas_direct_known = 1;
@@ -174,6 +234,60 @@ int main(void) {
     assert(strstr(sent, "M109 S230\\nRESUME")); reset_job();
     telemetry.values[U_EG] = 270;
 
+    /* ---- a queued continue is checked again before its first byte, and dropped if the runout moved on */
+    sends = 0;
+    assert(call(1, "slot=1") == 202); strcpy(telemetry.print_state, "printing"); fresh();   /* resumed elsewhere */
+    runout_tick(&machine); assert(sends == 0 && runout.stage == RO_FAILED && strstr(runout.message, "Not sent") && strstr(runout.message, "not_paused"));
+    strcpy(telemetry.print_state, "paused"); reset_job();
+    assert(call(1, "slot=1") == 202); event(1211, 1);                                       /* a new runout event */
+    runout_tick(&machine); assert(sends == 0 && runout.stage == RO_FAILED && strstr(runout.message, "runout_changed"));
+    reset_job();
+    assert(call(1, "slot=1") == 202); canvas(1, 0, 0, 1);                                   /* the chosen slot was pulled */
+    runout_tick(&machine); assert(sends == 0 && runout.stage == RO_FAILED && strstr(runout.message, "slot_not_loaded"));
+    canvas(1, 1, 0, 1); reset_job();
+    assert(call(1, "slot=1") == 202);                                                       /* another runout line for this print */
+    write_file(current, L("[mmu.cpp:3640] [2024] canvas check filament break, enter secondary confirmation!  channel 2"), "a");
+    runout_tick(&machine); assert(sends == 0 && runout.stage == RO_FAILED && strstr(runout.message, "runout_changed"));
+    reset_job(); event(1211, 1);
+    assert(call(1, "slot=1") == 202); runout_tick(&machine); assert(sends == 1 && runout.stage == RO_DONE); /* unchanged: sent */
+    reset_job(); sends = 0;
+
+    /* ---- the real transport: one absolute reply deadline, fixed when the request is written */
+    {
+        char sock[320]; snprintf(sock, sizeof(sock), "%s/native.sock", dir);
+        printer_socket(sock); const char *saved = object_query_path; object_query_path = sock; plates_uds = uds_query_json;
+        /* silence */
+        assert(call(1, "slot=1") == 202);
+        runout_tick(&machine); accept_peer();
+        for (int i = 0; i < 50 && !runout.reply_deadline_set; ++i) { runout_tick(&machine); usleep(2000); }
+        assert(runout.reply_deadline_set && drain() > 0);
+        long long deadline = runout.x.deadline, now = monotonic_ms();
+        assert(deadline > now + RUNOUT_REPLY_MS - 5000 && deadline <= now + RUNOUT_REPLY_MS);
+        usleep(20000); for (int i = 0; i < 20; ++i) runout_tick(&machine);
+        assert(runout.stage == RO_RUNNING && runout.x.deadline == deadline);                  /* never moved */
+        /* trickling bytes that never finish a frame do not move it either */
+        for (int i = 0; i < 5; ++i) { assert(send(peer, "{\"id\":7,", 8, 0) == 8); usleep(2000); runout_tick(&machine); }
+        assert(runout.stage == RO_RUNNING && runout.x.deadline == deadline);
+        /* nine minutes and 59 seconds later, still silent: a tick must not push the deadline out again */
+        long long almost = monotonic_ms() + 1000; runout.x.deadline = almost;
+        for (int i = 0; i < 5; ++i) runout_tick(&machine);
+        assert(runout.stage == RO_RUNNING && runout.x.deadline == almost);
+        runout.x.deadline = monotonic_ms() - 1;                                               /* ten minutes later */
+        runout_tick(&machine); assert(runout.stage == RO_FAILED && strstr(runout.message, "within 10 minutes"));
+        reset_job(); event(1211, 1);
+        /* a reply that arrives in fragments, after other frames, completes the job */
+        assert(call(1, "slot=1") == 202);
+        runout_tick(&machine); accept_peer();
+        for (int i = 0; i < 50 && !runout.reply_deadline_set; ++i) { runout_tick(&machine); usleep(2000); }
+        assert(drain() > 0);
+        const char *parts[] = {"{\"id\":203,\"result\":{}}\003{\"id\":2", "04,\"res", "ult\":{}}", "\003"};
+        for (int i = 0; i < 4; ++i) { assert(send(peer, parts[i], strlen(parts[i]), 0) == (ssize_t)strlen(parts[i])); usleep(2000); runout_tick(&machine); }
+        assert(runout.stage == RO_DONE && !runout.message[0]);
+        reset_job(); event(1211, 1);
+        close(peer); peer = -1; close(listener); unlink(sock);
+        object_query_path = saved; plates_uds = fake_rpc;
+    }
+
     /* ---- automatic, "match material only": once per runout, only with the firmware's auto refill on */
     assert(call(2, "maybe") == 400);
     assert(call(2, "on") == 200 && runout_setting());
@@ -191,6 +305,6 @@ int main(void) {
     assert(call(2, "off") == 200 && !runout_setting());
 
     unlink(older); unlink(current); unlink(settings); rmdir(dir);
-    puts("PASS: runout continue: log map and refills, incremental reader across rotation, guards, exact script, temperature fallback, automatic once per runout");
+    puts("PASS: runout continue: log map and refills, map provenance per print start, incremental reader across rotation, guards, exact script, temperature fallback, unsent job dropped when the runout changes, absolute reply deadline (silence, trickle, fragments), automatic once per runout");
     return 0;
 }

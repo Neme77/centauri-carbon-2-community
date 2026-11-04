@@ -19,7 +19,18 @@
  * entry of every CANVAS_SET_COLOR_TABLE (the print start's, and later ones such as ours), each
  * auto refill that moved a tool to another slot, the runout's slot and the print starts. The
  * log is read incrementally, so a poll only reads what was appended since the last one. A map
- * is only used when it was set after the previous print started, i.e. for this print.
+ * belongs to the latest print start only when it was completed after that start (a later
+ * CANVAS_SET_COLOR_TABLE, such as ours), or when the start set it: the print start logs its
+ * table a few milliseconds before the cmd_SDCARD_PRINT_FILE line, so a table completed after
+ * the previous start and at most RUNOUT_START_WINDOW_MS before this one counts. Anything else,
+ * such as the previous print's mid-print table followed by a start that set none, is refused.
+ *
+ * A continue is bound to the runout it was chosen for: the 1211 event, the print start, the
+ * runout line, the map and the chosen slot. Until the first byte of the request is written that
+ * context is checked again on every tick, and the job is dropped unsent if anything changed.
+ * Once a byte is written the request is committed (the firmware only runs complete frames, and
+ * a 500-byte local write is not split in practice): it is finished, then the reply is awaited
+ * until one absolute deadline set when the request was fully written, never extended.
  *
  * "Match material only" (off unless chosen) extends the firmware's auto refill, which only
  * switches to a slot with the same type and colour: when it gives up, the first loaded slot
@@ -29,13 +40,16 @@
 #define RUNOUT_REPLY_MS (10 * 60 * 1000) /* heat-up, the Canvas load and the purge */
 #define RUNOUT_TEMP_MIN 170
 #define RUNOUT_TEMP_MAX 320
+#define RUNOUT_START_WINDOW_MS 10000    /* a print start's own table precedes its start line by ~30 ms */
 
 typedef struct { int tool, channel; char color[9]; } runout_entry; /* color: "0xRRGGBB" */
 typedef struct { int count; runout_entry e[RUNOUT_TOOLS_MAX]; } runout_table;
 typedef struct {
     long line;                          /* lines parsed so far */
     long start_last, start_prev;        /* line of the latest print start, and of the one before */
+    long long start_ms;                 /* log time of start_last, -1 when its line has none */
     long table_line;                    /* line where `table` was completed */
+    long long table_ms;                 /* log time when `table` was completed, or -1 */
     runout_table table, pending;
     int pending_size;                   /* T_vec.size of the group being read, 0 for none */
     int refill_before;                  /* befor_channel of an auto refill in progress, -1 */
@@ -48,7 +62,21 @@ static const char *runout_settings_path = "./runout.conf";
 static void runout_log_reset(runout_log *s) {
     memset(s, 0, sizeof(*s));
     s->start_last = s->start_prev = s->table_line = s->channel_line = -1;
+    s->start_ms = s->table_ms = -1;
     s->refill_before = s->channel = -1;
+}
+
+/* Milliseconds of a line's leading "[YYYY-MM-DD HH:MM:SS.mmm]" stamp (days from a civil
+ * calendar, so only differences mean anything), or -1. */
+static long long runout_line_ms(const char *line) {
+    int y, mo, d, h, mi, sec, ms, n = 0;
+    if (sscanf(line, "[%4d-%2d-%2d %2d:%2d:%2d.%3d]%n", &y, &mo, &d, &h, &mi, &sec, &ms, &n) != 7 || n != 25) return -1;
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || sec > 60 || ms < 0) return -1;
+    y -= mo <= 2;
+    long long era = (y >= 0 ? y : y - 399) / 400, yoe = y - era * 400;
+    long long doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    long long days = era * 146097 + doe;
+    return ((days * 24 + h) * 60 + mi) * 60000LL + sec * 1000LL + ms;
 }
 
 /* The integer after `key` in a line, or -1. */
@@ -66,7 +94,7 @@ static void runout_log_line(runout_log *s, const char *line) {
     s->line++;
     const char *p;
     if (strstr(line, "cmd_SDCARD_PRINT_FILE")) {
-        s->start_prev = s->start_last; s->start_last = s->line;
+        s->start_prev = s->start_last; s->start_last = s->line; s->start_ms = runout_line_ms(line);
     } else if ((p = strstr(line, "CMD_canvas_set_color_table #1 T_vec.size"))) {
         /* One line per entry: T_vec.size N table_T t table_color 0xRRGGBB table_channel c */
         int size = runout_field(p, "T_vec.size", 1, RUNOUT_TOOLS_MAX);
@@ -88,7 +116,7 @@ static void runout_log_line(runout_log *s, const char *line) {
         runout_entry *e = &s->pending.e[s->pending.count++];
         e->tool = tool; e->channel = channel; memcpy(e->color, color, sizeof(color));
         if (s->pending.count == size) {
-            s->table = s->pending; s->table_line = s->line; s->pending_size = 0;
+            s->table = s->pending; s->table_line = s->line; s->table_ms = runout_line_ms(line); s->pending_size = 0;
         }
     } else if ((p = strstr(line, "exec auto refill filament start"))) {
         s->refill_before = runout_field(p, "befor_channel", 0, 3);
@@ -120,9 +148,13 @@ static size_t runout_log_feed(runout_log *s, const char *text, size_t length) {
     return used;
 }
 
-/* The current print's map, or 0. */
+/* The current print's map, or 0 when none can be tied to the latest print start. */
 static int runout_log_table(const runout_log *s, runout_table *out) {
-    if (s->start_last < 0 || s->table_line < 0 || s->table_line <= s->start_prev || !s->table.count) return 0;
+    if (s->start_last < 0 || s->table_line < 0 || !s->table.count) return 0;
+    int during = s->table_line > s->start_last;
+    int at_start = s->table_line > s->start_prev && s->table_line < s->start_last && s->table_ms >= 0 &&
+                   s->start_ms >= 0 && s->start_ms >= s->table_ms && s->start_ms - s->table_ms <= RUNOUT_START_WINDOW_MS;
+    if (!during && !at_start) return 0;
     *out = s->table; return 1;
 }
 /* The runout slot of the current print, or -1. */
@@ -248,6 +280,9 @@ static struct {
     int stage, slot, from, automatic;
     char query[RUNOUT_SCRIPT_MAX + 64], message[160];
     plates_exchange x;
+    /* what the request was built for; checked again until its first byte is written */
+    struct timespec event; long start_line, runout_line; runout_table table;
+    int reply_deadline_set;         /* the absolute reply deadline was fixed once the request was written */
     struct timespec auto_event;     /* the 1211 event an automatic continue already handled */
     char auto_note[96];
 } runout = {.x = {.fd = -1}};
@@ -273,12 +308,12 @@ static int runout_save_setting(int on) {
 }
 
 /* Why no continue is possible now, or NULL with the map and runout slot filled in. */
-static const char *runout_blocked(const mqtt_client *m, runout_table *table, int *channel, runout_slot slots[4]) {
+static const char *runout_check(const mqtt_client *m, runout_table *table, int *channel, runout_slot slots[4], int own_job) {
     if (!uds_fresh(&telemetry)) return "printer_unavailable";
     const char *state = uds_print_state(&telemetry);
     if (!state || strcmp(state, "paused")) return "not_paused";
     if (!telemetry.report_sequence || telemetry.report_code != 1211 || telemetry.report_level != 1) return "not_runout";
-    if (runout.stage == RO_RUNNING) return "busy";
+    if (runout.stage == RO_RUNNING && !own_job) return "busy";
     if (!runout_refresh()) return "log_unavailable";
     if (!runout_log_table(&runout_reader.log, table)) return "map_unknown";
     *channel = runout_log_channel(&runout_reader.log);
@@ -288,6 +323,15 @@ static const char *runout_blocked(const mqtt_client *m, runout_table *table, int
     if (!used) return "slot_unknown";
     if (!runout_slots(m, slots)) return "canvas_unavailable";
     return NULL;
+}
+static const char *runout_blocked(const mqtt_client *m, runout_table *table, int *channel, runout_slot slots[4]) {
+    return runout_check(m, table, channel, slots, 0);
+}
+static int runout_table_equal(const runout_table *a, const runout_table *b) {
+    if (a->count != b->count) return 0;
+    for (int i = 0; i < a->count; ++i)
+        if (a->e[i].tool != b->e[i].tool || a->e[i].channel != b->e[i].channel || strcmp(a->e[i].color, b->e[i].color)) return 0;
+    return 1;
 }
 /* A slot that can take over: loaded in the Canvas (present, not in the head) and not the empty one. */
 static int runout_slot_eligible(const runout_slot slots[4], int channel, int slot) {
@@ -334,25 +378,50 @@ static const char *runout_start(const mqtt_client *m, int slot, int automatic) {
     if (n < 0 || (size_t)n >= sizeof(runout.x.request)) return "map_too_large";
     plates_exchange_close(&runout.x);
     runout.stage = RO_RUNNING; runout.slot = slot; runout.from = channel; runout.automatic = automatic;
+    runout.event = telemetry.report_identity; runout.table = table; runout.reply_deadline_set = 0;
+    runout.start_line = runout_reader.log.start_last; runout.runout_line = runout_reader.log.channel_line;
     snprintf(runout.message, sizeof(runout.message), "%s", "");
+    return NULL;
+}
+
+/* NULL while the runout the job was built for is still the current, settled one. */
+static const char *runout_still_current(const mqtt_client *m) {
+    runout_table table; runout_slot slots[4]; int channel = -1;
+    const char *why = runout_check(m, &table, &channel, slots, 1);
+    if (why) return why;
+    if (telemetry.report_identity.tv_sec != runout.event.tv_sec || telemetry.report_identity.tv_nsec != runout.event.tv_nsec ||
+        runout_reader.log.start_last != runout.start_line || runout_reader.log.channel_line != runout.runout_line ||
+        channel != runout.from || !runout_table_equal(&table, &runout.table)) return "runout_changed";
+    if (!runout_slot_eligible(slots, channel, runout.slot)) return "slot_not_loaded";
     return NULL;
 }
 
 static void runout_tick(const mqtt_client *m) {
     if (runout.stage == RO_RUNNING) {
+        if (!runout.x.sent) { /* nothing written yet: drop the job if its runout is no longer current */
+            const char *why = runout_still_current(m);
+            if (why) {
+                plates_exchange_close(&runout.x); runout.stage = RO_FAILED;
+                snprintf(runout.message, sizeof(runout.message), "Not sent: the print changed before the command was sent (%s)", why);
+                return;
+            }
+        }
         char *reply = NULL; size_t length = 0;
         int result = plates_exchange_step(&runout.x, runout.query, &reply, &length);
         if (result == 0) {
-            /* Sent: the reply comes once RESUME has loaded the slot and the print runs again. */
-            if (runout.x.fd >= 0 && runout.x.sent == strlen(runout.query) && runout.x.deadline < monotonic_ms() + RUNOUT_REPLY_MS - 5000)
-                runout.x.deadline = monotonic_ms() + RUNOUT_REPLY_MS;
+            /* Written: the reply comes once RESUME has loaded the slot and the print runs again. The
+             * deadline is fixed once, here; the connect and send limits stay the exchange's own. */
+            if (!runout.reply_deadline_set && runout.x.fd >= 0 && runout.x.sent == strlen(runout.query)) {
+                runout.x.deadline = monotonic_ms() + RUNOUT_REPLY_MS; runout.reply_deadline_set = 1;
+            }
             return;
         }
         const char *end = reply ? reply + length : NULL;
         const char *error = reply ? json_member(reply, end, "error") : NULL;
         runout.stage = result > 0 && !error ? RO_DONE : RO_FAILED;
         snprintf(runout.message, sizeof(runout.message), "%s",
-                 result < 0 ? "No reply from the printer" : error ? "The printer refused the command" : "");
+                 result < 0 ? (runout.reply_deadline_set ? "No reply from the printer within 10 minutes; check the print" : "Could not send the command to the printer")
+                            : error ? "The printer refused the command" : "");
         free(reply);
         return;
     }
