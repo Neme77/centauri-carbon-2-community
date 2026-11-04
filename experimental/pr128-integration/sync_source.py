@@ -11,7 +11,7 @@ if args.spanish:
 else:
     commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
     subprocess.run(['git','diff','--quiet','HEAD','--','cc2-control'],cwd=root,check=True)
-    canonical=zipfile.ZipFile(io.BytesIO(subprocess.check_output(['git','archive','--format=zip','HEAD','cc2-control'],cwd=root)))
+    canonical=zipfile.ZipFile(io.BytesIO(subprocess.check_output(['git','-c','core.autocrlf=false','archive','--format=zip','HEAD','cc2-control'],cwd=root)))
     paths=[name for name in canonical.namelist() if not name.endswith('/')]
     archive=root/'builder/current/components/cc2-control/source/source.zip'
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as out:
