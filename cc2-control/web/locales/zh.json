@@ -1328,5 +1328,16 @@
   "tuning.pressure_advance": "Pressure Advance (s)",
   "tuning.actual_pa": "当前：{value} 秒",
   "tuning.disable_pa": "禁用（0）",
-  "tuning.pa_note": "仅在运行时生效（0–1 秒）。起始 G-code 可能覆盖此值。"
+  "tuning.pa_note": "仅在运行时生效（0–1 秒）。起始 G-code 可能覆盖此值。",
+  "fanfloor.title": "本次打印的 EXHAUST 最低转速",
+  "fanfloor.help": "固件仍可在此最低值之上增强冷却。设为零将恢复自动控制。",
+  "fanfloor.minimum_label": "EXHAUST 最低转速 (%)",
+  "fanfloor.apply": "应用最低值",
+  "fanfloor.automatic": "自动",
+  "fanfloor.pending": "正在保存请求…",
+  "fanfloor.accepted": "已请求最低转速，将在下一个原生控制周期生效（最多 10 秒）。",
+  "fanfloor.auto_accepted": "将在下一个原生控制周期恢复自动控制。",
+  "fanfloor.requested": "请求的最低转速：{percent}%",
+  "fanfloor.not_ready": "原生组件尚未就绪。请在打印机空闲时重启或检查诊断。",
+  "fanfloor.printing_required": "仅在打印运行且数据实时有效时可用。暂停或结束打印将清除此请求。"
 }

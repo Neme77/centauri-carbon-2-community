@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Source-only, explicit opt-in EXHAUST minimum for the current print, preserving native higher cooling and releasing on Automatic, pause/end/cancel or restart; requested and physically tested by **Neme77** for #285. The optional native trial must be disabled before ordinary updates; automatic delivery remains outside this change.
+
 ### Fixed
 
 - Align manual nozzle targets, preheat profiles, material ranges and backup restoration with the Centauri Carbon 2 native touchscreen limit of 350 C; preserve valid high-temperature targets after manual homing. Native thermal protections and separately qualified PID limits are unchanged. Reported by **Sangra6969** and reproduced by **Neme77** (#290).

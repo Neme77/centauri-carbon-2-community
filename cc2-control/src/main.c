@@ -3280,6 +3280,7 @@ static const char *pending_autosave_guard(void);
 #include "sha256.h"
 #include "canvas_unload.h"
 #include "calibration_tools.h"
+#include "cavity_floor_http.h"
 
 static const char *pending_autosave_guard(void) {
     if (cell_active()) return "Finish the load-cell calibration session before changing or saving printer settings";
@@ -4072,6 +4073,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         connections_action(fd,body,body_len,1,mqtt,console);
     } else if(!strcmp(path,"/api/network/select") || !strcmp(path,"/api/network/trial")) {
         app_update_fail(fd,410,"Reload CC2 Control to use the Connections manager");
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/cavity-fan-floor")){
+        cavity_floor_response(fd);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/cavity-fan-floor")){
+        cavity_floor_change(fd,mqtt,body,body_len);
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
         drying_response(fd,mqtt,console);
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/nozzle-expansion")){

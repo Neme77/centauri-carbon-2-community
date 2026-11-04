@@ -1328,5 +1328,16 @@
   "tuning.pressure_advance": "Pressure Advance (s)",
   "tuning.actual_pa": "Aktualnie: {value} s",
   "tuning.disable_pa": "Wyłącz (0)",
-  "tuning.pa_note": "Tylko bieżąca wartość (0–1 s). Początkowy G-code może ją nadpisać."
+  "tuning.pa_note": "Tylko bieżąca wartość (0–1 s). Początkowy G-code może ją nadpisać.",
+  "fanfloor.title": "Minimalna prędkość EXHAUST dla tego wydruku",
+  "fanfloor.help": "Firmware może zwiększyć chłodzenie powyżej tego minimum. Zero przywraca tryb automatyczny.",
+  "fanfloor.minimum_label": "Minimalna prędkość EXHAUST (%)",
+  "fanfloor.apply": "Zastosuj minimum",
+  "fanfloor.automatic": "Automatycznie",
+  "fanfloor.pending": "Zapisywanie żądania…",
+  "fanfloor.accepted": "Zażądano minimum. Zostanie zastosowane w następnym cyklu natywnym (do 10 sekund).",
+  "fanfloor.auto_accepted": "Sterowanie automatyczne przywrócone od następnego cyklu natywnego.",
+  "fanfloor.requested": "Żądane minimum: {percent}%",
+  "fanfloor.not_ready": "Komponent natywny nie jest gotowy. Uruchom ponownie bezczynną drukarkę lub sprawdź diagnostykę.",
+  "fanfloor.printing_required": "Dostępne podczas wydruku z aktualnymi danymi. Pauza lub koniec anuluje żądanie."
 }

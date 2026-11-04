@@ -1328,5 +1328,16 @@
   "tuning.pressure_advance": "Pressure Advance (s)",
   "tuning.actual_pa": "Aktuální: {value} s",
   "tuning.disable_pa": "Vypnout (0)",
-  "tuning.pa_note": "Pouze aktuální hodnota (0–1 s). Počáteční G-code ji může přepsat."
+  "tuning.pa_note": "Pouze aktuální hodnota (0–1 s). Počáteční G-code ji může přepsat.",
+  "fanfloor.title": "Minimální otáčky EXHAUST pro tento tisk",
+  "fanfloor.help": "Firmware může zvýšit chlazení nad toto minimum. Nula vrátí automatické řízení.",
+  "fanfloor.minimum_label": "Minimální otáčky EXHAUST (%)",
+  "fanfloor.apply": "Použít minimum",
+  "fanfloor.automatic": "Automaticky",
+  "fanfloor.pending": "Ukládání požadavku…",
+  "fanfloor.accepted": "Minimum vyžádáno. Použije se v příštím nativním cyklu (do 10 sekund).",
+  "fanfloor.auto_accepted": "Automatické řízení obnoveno pro příští nativní cyklus.",
+  "fanfloor.requested": "Požadované minimum: {percent}%",
+  "fanfloor.not_ready": "Nativní součást není připravena. Restartujte nečinnou tiskárnu nebo zkontrolujte diagnostiku.",
+  "fanfloor.printing_required": "Dostupné během tisku s čerstvými daty. Pozastavení nebo konec požadavek zruší."
 }
