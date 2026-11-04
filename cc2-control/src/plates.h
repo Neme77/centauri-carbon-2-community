@@ -1058,7 +1058,8 @@ static int plates_fields(const char *body, size_t length, char fields[][PLATE_NA
 typedef struct {int fd,connecting,id;size_t sent,used;long long deadline;char request[512];char *buffer;} plates_exchange;
 static struct {
     int state; /* 0 off, 1 waiting for the print to start, 2 printing before the first layer */
-    int layer_reset, loads;
+    int layer_reset, loads; /* loads: requests the printer answered */
+    int failures, reply_wait; /* requests that got no answer; the request in flight was fully written */
     char measure[PLATE_ID_LEN + 1], profile[32], slot[16];
     long long armed, sent;
     plates_exchange x;
@@ -1779,6 +1780,10 @@ static void plates_background_failed(long long now){
 /* ---- the measurement of a print ------------------------------------------------- */
 
 #define PLATES_LATE_LOADS 8
+#define PLATES_LATE_FAILURES 4
+/* The printer queues a request behind a running wait (heating, a soak) and answers it once the
+ * request has run, so a written load waits this long for its reply. */
+#define PLATES_LATE_REPLY_MS (10 * 60000)
 static int plates_late_active(void) { return plates_late.x.fd >= 0; }
 static void plates_late_finish(const char *result) {
     plates_exchange_close(&plates_late.x);
@@ -1818,18 +1823,32 @@ static void plates_late_tick(void) {
         plates_exchange_close(&plates_late.x); /* not sent yet: the window closed meanwhile */
         return;
     }
+    /* One load at a time. The print start loads the slot more than once (at the start of the file
+     * and again at G180 S7, after its waits), so whenever the slot is active again a new load
+     * follows the answered one; a load written during a wait runs, and is answered, after it. */
     if (plates_late.x.fd < 0) { /* a load already sent finishes even if the push about it came first */
-        if (slot && startup && plates_late.loads >= PLATES_LATE_LOADS && now - plates_late.sent >= 5000)
-            plates_late_finish("failed");
-        if (!slot || !startup || plates_late.loads >= PLATES_LATE_LOADS || now - plates_late.sent < 1500) return;
+        if (slot && startup && (plates_late.loads >= PLATES_LATE_LOADS || plates_late.failures >= PLATES_LATE_FAILURES) &&
+            now - plates_late.sent >= 5000)
+            { plates_late_finish("failed"); return; }
+        if (!slot || !startup || plates_late.loads >= PLATES_LATE_LOADS || plates_late.failures >= PLATES_LATE_FAILURES ||
+            now - plates_late.sent < 1500) return;
+        plates_late.reply_wait = 0;
     }
     char query[192], *reply = NULL; size_t length = 0;
     snprintf(query, sizeof(query), "{\"id\":204,\"method\":\"gcode/script\",\"params\":{\"script\":\"BED_MESH_PROFILE LOAD=%s\"}}\003",
              plates_late.profile);
     int result = plates_exchange_step(&plates_late.x, query, &reply, &length);
-    if (!result) return;
-    plates_late.loads++; plates_late.sent = now;
-    if (result > 0 && !plates_reply_ok(reply, length)) fprintf(stderr, "Plate mesh %s was refused\n", plates_late.profile);
+    if (!result) {
+        /* Written: wait for the answer until one deadline, fixed now and never extended. */
+        if (!plates_late.reply_wait && plates_late.x.fd >= 0 && plates_late.x.sent == strlen(plates_late.x.request)) {
+            plates_late.x.deadline = now + PLATES_LATE_REPLY_MS; plates_late.reply_wait = 1;
+        }
+        return;
+    }
+    plates_late.sent = now;
+    if (result < 0) { plates_late.failures++; fprintf(stderr, "Plate mesh %s: no answer from the printer\n", plates_late.profile); return; }
+    plates_late.loads++;
+    if (!plates_reply_ok(reply, length)) fprintf(stderr, "Plate mesh %s was refused\n", plates_late.profile);
     free(reply);
 }
 
@@ -1885,6 +1904,7 @@ static void plates_late_arm(const char *id, char side, const char *source) {
     plate_profile_name(plates_late.profile, sizeof(plates_late.profile), m);
     snprintf(plates_late.slot, sizeof(plates_late.slot), "%s", plate_slot(side));
     plates_late.state = 1; plates_late.layer_reset = 0; plates_late.loads = 0;
+    plates_late.failures = 0; plates_late.reply_wait = 0;
     plates_late.armed = monotonic_ms(); plates_late.sent = 0; plates_late.source = source;
 }
 

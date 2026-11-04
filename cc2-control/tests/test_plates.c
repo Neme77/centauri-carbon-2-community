@@ -186,6 +186,19 @@ static void restart_service(void) {
     assert(rename(next, service_socket) == 0);
 }
 
+
+/* A printer socket that answers only what the test writes (the real nonblocking transport). */
+static int fake_listener = -1, fake_peer = -1;
+static void fake_printer(const char *path) {
+    struct sockaddr_un a; memset(&a, 0, sizeof(a)); a.sun_family = AF_UNIX;
+    assert(strlen(path) < sizeof(a.sun_path)); memcpy(a.sun_path, path, strlen(path) + 1);
+    unlink(path); fake_listener = socket(AF_UNIX, SOCK_STREAM, 0); assert(fake_listener >= 0);
+    assert(!bind(fake_listener, (struct sockaddr *)&a, sizeof(a)) && !listen(fake_listener, 8));
+}
+static int fake_pending(void) { struct pollfd p = {fake_listener, POLLIN, 0}; return poll(&p, 1, 0) > 0; }
+static void fake_accept(void) { if (fake_peer >= 0) close(fake_peer); fake_peer = accept(fake_listener, NULL, NULL); assert(fake_peer >= 0); }
+static size_t fake_drain(void) { char b[2048]; ssize_t n = recv(fake_peer, b, sizeof(b), MSG_DONTWAIT); return n > 0 ? (size_t)n : 0; }
+
 static void new_process(void) { /* what a CC2 Control restart forgets */
     plates_reboot_requested = 0; plates_z_valid = 0; plates_result = ""; reboot_pending = 0; reboot_guard = NULL;
     plates_seen_connections = ULONG_MAX; plates_next_tick_ms = 0; ran[0] = 0;
@@ -757,6 +770,64 @@ static void test_measures(void) {
         strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
         assert(call(14, &mqtt, "off") == 200 && !plates_match_enabled()); unlink(match_path);
         telemetry.present &= ~(UINT32_C(1) << U_BG);
+    }
+
+    /* The real transport, as on a CC2 on 2026-11-04: a load written while the print start waits for
+     * its bed temperature is answered minutes later, and G180 S7 then loads the slot again. One
+     * load is in flight at a time, its answer is awaited without retries piling up, and the slot
+     * coming back gets a new load. */
+    {
+        static char sock[600]; snprintf(sock, sizeof(sock), "%s.sock", plates_path);
+        fake_printer(sock);
+        const char *saved_path = object_query_path; int (*saved_uds)(const char *, char **, size_t *) = plates_uds;
+        object_query_path = sock; plates_uds = uds_query_json;
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        plates_late_arm(first, 'A', "auto");
+        strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0;
+        plates_late_tick(); plates_late_tick();                            /* started, layer 0 seen, connecting */
+        fake_accept();
+        for (int i = 0; i < 50 && !plates_late.reply_wait; ++i) { plates_late_tick(); usleep(2000); }
+        assert(plates_late.reply_wait && fake_drain() > 0);
+        long long deadline = plates_late.x.deadline, now = monotonic_ms();
+        assert(deadline > now + PLATES_LATE_REPLY_MS - 5000 && deadline <= now + PLATES_LATE_REPLY_MS);
+        /* the printer is heating: nothing answers; no second request, nothing counted, deadline fixed */
+        for (int i = 0; i < 30; ++i) { plates_late.sent -= 2000; plates_late_tick(); }
+        long long almost = monotonic_ms() + 1000; plates_late.x.deadline = almost;     /* 9 m 59 s later */
+        for (int i = 0; i < 5; ++i) plates_late_tick();
+        assert(!fake_pending() && !plates_late.loads && !plates_late.failures && plates_late.x.deadline == almost);
+        /* the wait ends: the queued load runs and is answered */
+        const char *answer = "{\"id\":204,\"result\":{}}\003";
+        assert(send(fake_peer, answer, strlen(answer), 0) == (ssize_t)strlen(answer));
+        for (int i = 0; i < 20 && plates_late.x.fd >= 0; ++i) { plates_late_tick(); usleep(2000); }
+        assert(plates_late.loads == 1 && plates_late.x.fd < 0);
+        snprintf(telemetry.mesh_profile, sizeof(telemetry.mesh_profile), "cc2_%s", first);
+        plates_late.sent -= 2000; plates_late_tick(); assert(!fake_pending()); /* ours is active: nothing to do */
+        /* G180 S7 loads the slot again before the first layer: a new load follows */
+        strcpy(telemetry.mesh_profile, "default"); plates_late.sent -= 2000; plates_late_tick();
+        fake_accept();
+        for (int i = 0; i < 50 && !plates_late.reply_wait; ++i) { plates_late_tick(); usleep(2000); }
+        assert(fake_drain() > 0);
+        assert(send(fake_peer, answer, strlen(answer), 0) == (ssize_t)strlen(answer));
+        for (int i = 0; i < 20 && plates_late.x.fd >= 0; ++i) { plates_late_tick(); usleep(2000); }
+        assert(plates_late.loads == 2);
+        snprintf(telemetry.mesh_profile, sizeof(telemetry.mesh_profile), "cc2_%s", first);
+        telemetry.values[U_LAYER] = 1; plates_late_tick();
+        assert(!plates_late.state && !strcmp(plates_late_result, "loaded"));
+        /* a printer that never answers: the request expires once, then a few retries, then "failed" */
+        plates_late_arm(first, 'A', "auto"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0;
+        plates_late_tick(); plates_late_tick();
+        for (int round = 0; round < PLATES_LATE_FAILURES; ++round) {
+            fake_accept();
+            for (int i = 0; i < 50 && !plates_late.reply_wait; ++i) { plates_late_tick(); usleep(2000); }
+            assert(plates_late.reply_wait); plates_late.x.deadline = monotonic_ms() - 1;
+            plates_late_tick(); assert(plates_late.failures == round + 1 && !plates_late.loads);
+            plates_late.sent -= 2000; plates_late_tick();
+        }
+        plates_late.sent -= 6000; plates_late_tick();
+        assert(!plates_late.state && !strcmp(plates_late_result, "failed"));
+        close(fake_peer); fake_peer = -1; close(fake_listener); fake_listener = -1; unlink(sock);
+        object_query_path = saved_path; plates_uds = saved_uds;
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
     }
 
     /* Measurements leave one by one; a plate keeps its last one. */
