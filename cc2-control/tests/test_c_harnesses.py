@@ -52,6 +52,7 @@ HARNESSES = {
     "test_nozzle_expansion.c": BACKEND,
     "test_chamber_preheat.c": BACKEND,
     "test_runout.c": BACKEND,
+    "test_mesh_api.c": BACKEND,
     "test_uds_diagnostic.c": BACKEND,
     "test_tuning_api.c": BACKEND,
     "test_pressure_advance_api.c": BACKEND,
