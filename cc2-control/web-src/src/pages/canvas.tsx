@@ -1,4 +1,5 @@
 import { ExternalFilament } from './external-filament'
+import { RfidScan } from '@/components/rfid-scan'
 import { externalFeed } from '@/lib/external-feed'
 import { FilamentMaterial } from '@/components/filament-material'
 import { useEffect, useRef, useState } from 'preact/hooks'
@@ -52,6 +53,7 @@ export const Canvas = () => {
   const library = spools.use().data
   const tracking = Boolean(library?.available && library.enabled)
   const [dialog, setDialog] = useState(false)
+  const [rfidToggleTarget, setRfidToggleTarget] = useState<HTMLDivElement | null>(null)
   const [refillBusy, setRefillBusy] = useState(false)
   const [resetBusy, setResetBusy] = useState(false)
   const printerState = printer.use()
@@ -372,6 +374,7 @@ export const Canvas = () => {
               </Button>
             ))}
           </div>
+          <div class="cc2-canvas-rfid-toggle" ref={setRfidToggleTarget} />
         </div>
         {ok && idle && controls.some(c => c.reason_load === 'unassigned_head') && (
           <div role="status" data-canvas-recovery class="mb-3 rounded-md border border-edge bg-field p-3 text-sm">
@@ -398,6 +401,7 @@ export const Canvas = () => {
             {!idle ? reason('busy') : !selected?.load ? reason(selected?.reason_load) : reason(selected?.reason_unload)}
           </p>
         )}
+        <RfidScan idle={idle && ok} toggleTarget={rfidToggleTarget} />
       </Card>
       <div class="cc2-canvas-lower mt-3.5">
         <Card class="cc2-canvas-settings" data-canvas-settings>
