@@ -32,6 +32,7 @@
 #include "console.h"
 #include "control.h"
 #include "canvas_state.h"
+#include "maintenance_barrier.h"
 #include "uds.h"
 #include "http_guard.h"
 #include "experiments_state.h"
@@ -3946,11 +3947,13 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
 
 static int connections_busy(void);
 #include "rfid_http.h"
+#include "rfid_lifecycle_http.h"
 
 /* Release the steppers the firmware leaves energised once the printer has
  * stood idle with its heaters off; see control_idle_motors_due(). */
 static control_idle_motors idle_motors;
 static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
+    if(maintenance_barrier_active()||rn_blocks())return;
     control_idle_sample s={0};
     s.valid=gcode_idle_for_mutation(mqtt)&&mqtt->have_position&&
         uds_value(&telemetry,U_CF,&s.board_fan)&&uds_value(&telemetry,U_EG,&s.nozzle_target)&&
@@ -4038,6 +4041,14 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
         body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
     int console_emergency=!strcmp(method,"POST")&&!strcmp(path,"/api/console/command")&&body_len==4&&!memcmp(body,"M112",4);
+    int owned_rfid_cancel=rfid.child&&!strcmp(method,"POST")&&!strcmp(path,"/api/rfid/action")&&body_len==6&&!memcmp(body,"cancel",6);
+    if(maintenance_request_blocked(method,emergency,console_emergency)&&!owned_rfid_cancel){
+        app_update_fail(fd,409,"Installation or native maintenance is running; printer changes are paused");return 0;
+    }
+    if(rn_blocks()&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&
+       strcmp(path,"/api/rfid/lifecycle/action")&&!owned_rfid_cancel){
+        app_update_fail(fd,409,"RFID activation or recovery is incomplete; finish the lifecycle before changing the printer");return 0;
+    }
     if(rfid.child&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&strcmp(path,"/api/rfid/action")){
         plates_fail(fd,409,"Cancel the RFID scan before changing printer settings");return 0;
     }
@@ -4066,7 +4077,11 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
        !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
         app_update_fail(fd,409,"A nozzle expansion calibration is running; use the emergency stop to interrupt it");return 0;
     }
-    if(!strcmp(method,"GET")&&!strcmp(path,"/api/calibration-tools/status")) {
+    if(!strcmp(method,"GET")&&!strcmp(path,"/api/rfid/lifecycle")) {
+        rfid_native_status_response(fd);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/rfid/lifecycle/action")) {
+        rfid_native_action_response(fd,mqtt,console,body,body_len);
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/calibration-tools/status")) {
         tools_status(fd);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/calibration-tools/action")) {
         tools_action(fd,mqtt,body,body_len);
@@ -4423,6 +4438,7 @@ int main(int argc, char **argv) {
         nx_tick(&mqtt);
         tools_tick(&mqtt);
         rfid_tick(&mqtt,&console);
+        rfid_native_tick(&mqtt,&console);
         runout_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);

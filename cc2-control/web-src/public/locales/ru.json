@@ -1357,7 +1357,7 @@
   "canvas.match_material_hint": "При включённой автодозаправке: если ни в одном слоте нет того же филамента того же цвета, печать продолжается с заправленного слота того же типа материала. Используются метки слотов, поэтому в слоте с меткой ASA должен быть ASA.",
   "control.chamber_fan_management": "Chamber fan management",
   "rfid.title": "RFID spool reader",
-  "rfid.hint": "Private trial · scan, review, then select a Canvas slot. No automatic material assignment.",
+  "rfid.hint": "Scan, review, then select a Canvas slot. No automatic material assignment.",
   "rfid.scan": "Scan tag",
   "rfid.confirm": "Assign the captured {material} metadata to Canvas slot {slot}? No heating or loading will start.",
   "rfid.submitted": "Metadata request sent. Check the Canvas slot readback; this is not a confirmed write.",
@@ -1397,5 +1397,17 @@
   "rfid.present": "Detected at the Canvas inlet",
   "rfid.absent": "Not detected at the Canvas inlet",
   "rfid.presence_hint": "Tag reading and material assignment are separate from physical filament detection. The slot stays translucent until Canvas detects filament at its inlet; this does not mean RFID is still reading. No load to the nozzle is required to confirm inlet presence.",
-  "rfid.short_title": "RFID"
+  "rfid.short_title": "RFID",
+  "rfid.lifecycle_confirm": "This changes the Canvas RFID application or its host protection. Keep the idle, cold printer powered and connected. Follow each full-printer reboot prompt and retain the original backup. Continue?",
+  "rfid.lifecycle_recovery": "RFID recovery requires attention. Keep the original backup and operation log; do not retry a firmware transfer or remove the host protection.",
+  "rfid.lifecycle_working": "RFID preparation or verification is running. Keep the printer powered and connected; wait before restarting.",
+  "rfid.lifecycle_reboot": "A complete idle-printer reboot is required to continue RFID activation or restoration. This notice remains until a different kernel boot is observed.",
+  "rfid.lifecycle_dormant": "RFID components are installed but not activated. Activation requires a cold, idle printer and complete reboots.",
+  "rfid.lifecycle_stock": "The original Canvas application has been restored and verified after reboot. Host protection can now be removed.",
+  "rfid.lifecycle_retry": "Automatic RFID checks stopped after repeated failures. Review the operation log before resuming.",
+  "rfid.lifecycle_waiting": "RFID activation or restoration is waiting for a fresh, cold and idle printer with Canvas connected.",
+  "rfid.lifecycle_activate": "Activate RFID reader",
+  "rfid.lifecycle_resume": "Resume RFID checks",
+  "rfid.lifecycle_restore": "Restore original Canvas application",
+  "rfid.lifecycle_remove": "Restore original startup files"
 }

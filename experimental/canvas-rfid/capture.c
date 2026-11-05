@@ -20,6 +20,16 @@
 #ifndef CT_GUARD_SHA
 #define CT_GUARD_SHA "f1a38d4729d07e9cb86a1f495a1564764e808f97847f4c48b75d7ca0b4b05b0d"
 #endif
+#ifndef CT_GUARD_NATIVE
+#define CT_GUARD_NATIVE 0
+#endif
+#ifndef CT_GUARD_ARGUMENT
+#if CT_GUARD_NATIVE
+#define CT_GUARD_ARGUMENT "--check-active"
+#else
+#define CT_GUARD_ARGUMENT "check"
+#endif
+#endif
 #ifndef CT_LOGROOT
 #define CT_LOGROOT "/opt/usr/cc2-rfid-capture-r1a"
 #endif
@@ -83,7 +93,13 @@ static int ct_guard_once(unsigned attempt,int *stale){
     if(!child){
         signal(SIGINT,SIG_DFL);signal(SIGTERM,SIG_DFL);
         if(setsid()<0 || dup2(log,STDOUT_FILENO)<0 || dup2(log,STDERR_FILENO)<0)_exit(127);
-        close(log);execl("/bin/sh","sh",CT_GUARD,"check",(char*)NULL);_exit(127);
+        close(log);
+#if CT_GUARD_NATIVE
+        execl(CT_GUARD,CT_GUARD,CT_GUARD_ARGUMENT,(char*)NULL);
+#else
+        execl("/bin/sh","sh",CT_GUARD,CT_GUARD_ARGUMENT,(char*)NULL);
+#endif
+        _exit(127);
     }
     uint64_t deadline=rf_now()+45;int status=0,finished=0;
     while(!ct_interrupted && rf_now()<deadline){
@@ -93,10 +109,27 @@ static int ct_guard_once(unsigned attempt,int *stale){
         ct_sleep(20);
     }
     if(!finished){
+#if CT_GUARD_NATIVE
+        /* The configured coordinator may own the shared installer directory.
+         * Let its cooperative cleanup release that directory; killing it here
+         * would recreate the stale-lock failure fixed in the earlier trial. */
+        uint64_t next=0;
+        for(;;){
+            if(rf_now()>=next){
+                if(kill(-child,SIGTERM)&&errno!=ESRCH)fprintf(stderr,"guard_cancel_group_failed\n");
+                if(kill(child,SIGTERM)&&errno!=ESRCH)fprintf(stderr,"guard_cancel_failed\n");
+                next=rf_now()+1;
+            }
+            pid_t done=waitpid(child,&status,WNOHANG);
+            if(done==child||(done<0&&errno!=EINTR))break;
+            struct timespec pause={0,20000000};nanosleep(&pause,NULL);
+        }
+#else
         /* Only this freshly forked guard and its private process group. */
         if(kill(-child,SIGKILL) && errno!=ESRCH)fprintf(stderr,"guard_group_cleanup_failed\n");
         if(kill(child,SIGKILL) && errno!=ESRCH)fprintf(stderr,"guard_cleanup_failed\n");
         while(waitpid(child,&status,0)<0 && errno==EINTR){}
+#endif
     }
     char message[8193];ssize_t count=pread(log,message,sizeof(message)-1,0);
     int okay=finished && WIFEXITED(status) && WEXITSTATUS(status)==0;

@@ -3,10 +3,17 @@ import assert from 'node:assert/strict'
 import { fixture, launchOptions } from './fixture.mjs'
 const setup = `
 window.__RFID={installed:true,ready:true,busy:false,armed:false,state:'idle',generation:0,preview:null,actions:[]};
+window.__RFID_NATIVE={installed:false,metadata_valid:false,phase:-1,busy:false,reboot_required:false,recovery_required:false,retry_required:false,actions:[]};
+if(sessionStorage.getItem('rfid-reboot-fixture'))Object.assign(window.__RFID_NATIVE,{installed:true,metadata_valid:true,phase:1,reboot_required:true});
 const originalFetch=window.fetch;
 window.fetch=async function(input,options={}) {
  const url=typeof input==='string'?input:input.url;
  if(url==='/api/rfid')return new Response(JSON.stringify(window.__RFID),{headers:{'Content-Type':'application/json'}});
+ if(url==='/api/rfid/lifecycle')return new Response(JSON.stringify(window.__RFID_NATIVE),{headers:{'Content-Type':'application/json'}});
+ if(url==='/api/rfid/lifecycle/action'){
+  window.__RFID_NATIVE.actions.push(options.body);window.__RFID_NATIVE.busy=true;
+  return new Response('{"accepted":true}',{headers:{'Content-Type':'application/json'}});
+ }
  if(url==='/api/rfid/action'){
   const r=window.__RFID,action=options.body;r.actions.push(action);
   if(action==='scan'){r.generation++;r.busy=true;r.armed=false;r.state='scanning';r.preview=null;}
@@ -62,5 +69,35 @@ try {
  await page.waitForFunction(()=>document.querySelector('[data-rfid-blocked]')?.textContent.includes('50 °C'))
  await page.evaluate(()=>{window.__RFID.error='operation_locked'})
  await page.waitForFunction(()=>document.querySelector('[data-rfid-error]')?.textContent.includes('operation_locked'))
- console.log('PASS RFID browser controls: arming, preview, explicit slot, cancelled confirmation, one metadata request, scan cancel and busy printer refusal.')
+ await page.evaluate(()=>{
+  window.__CC2_PREVIEW.status=1;
+  Object.assign(window.__RFID_NATIVE,{installed:true,metadata_valid:true,phase:1,reboot_required:true});
+ })
+ await page.waitForFunction(()=>document.querySelector('[data-rfid-lifecycle]')?.textContent.includes('riavvio completo'))
+ await page.locator('[data-rfid-toggle]').click()
+ assert.equal(await page.locator('#cc2-rfid-panel').isVisible(),false)
+ assert.equal(await page.locator('[data-rfid-lifecycle]').isVisible(),true)
+ await page.evaluate(()=>sessionStorage.setItem('rfid-reboot-fixture','1'))
+ await page.reload()
+ await page.locator('[data-rfid-lifecycle]').waitFor()
+ assert((await page.locator('[data-rfid-lifecycle]').textContent()).includes('riavvio completo'))
+ assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
+ await page.locator('[data-rfid-toggle]').click()
+ await page.evaluate(()=>Object.assign(window.__RFID_NATIVE,{phase:-1,reboot_required:false,activation_requested:true}))
+ await page.waitForFunction(()=>document.querySelector('[data-rfid-lifecycle]')?.textContent.includes('attende dati freschi'))
+ assert.equal(await page.getByRole('button',{name:'Attiva lettore RFID',exact:true}).count(),0)
+ assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
+ await page.evaluate(()=>Object.assign(window.__RFID_NATIVE,{phase:-1,reboot_required:false,activation_requested:false}))
+ const activate=page.getByRole('button',{name:'Attiva lettore RFID',exact:true})
+ await activate.waitFor()
+ await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes('Attiva lettore RFID'))?.disabled)
+ await activate.click()
+ await page.getByRole('button',{name:'Annulla',exact:true}).last().click()
+ assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
+ await activate.click()
+ await page.getByRole('button',{name:'Conferma',exact:true}).click()
+ await page.waitForFunction(()=>window.__RFID_NATIVE.actions.length===1)
+ assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),['activate'])
+ await page.waitForFunction(()=>document.querySelector('[data-rfid-lifecycle]')?.textContent.includes('in corso'))
+ console.log('PASS RFID browser controls: scan/assignment/cancel guards, collapsed and reload-persistent reboot notice, explicit activation confirmation and one native action.')
 } finally {await browser.close();await demo.cleanup()}

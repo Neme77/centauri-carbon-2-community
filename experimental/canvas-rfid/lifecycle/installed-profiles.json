@@ -1,0 +1,68 @@
+{
+  "format": 1,
+  "scope": "Known captured maintainer frame-fix trial and its pre-RFID reactor/network/EXHAUST baseline; recognition only",
+  "kernel": "5.4.61",
+  "native_path": "/opt/usr/cc2-reactor-runtime-v2/elegoo_printer",
+  "native_sha": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+  "binary_pins": {
+    "/opt/bin/elegoo_printer": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+    "/opt/usr/cc2-reactor-runtime-v2/elegoo_printer": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+    "/opt/lib/libcolib.so": "14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403",
+    "/opt/usr/cc2-network-manager/control": "2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62",
+    "/opt/usr/cc2-control/camera/cc2-camera-reap-check": "dce1180e3c04512fea1c4f9868b131f3fbe9bda187ebc9342f9db633f0a57ea0",
+    "/opt/inst/ota/canvas_gd32-20251029_184624-00.00.00.44-app.bin": "f1267ee3219dcad73efffa8dc38e30ff0f17c02c0a1674cbead48a99bdff3228",
+    "/opt/usr/cc2-canvas-rfid-trial-r1a/original-stock-44.bin": "f1267ee3219dcad73efffa8dc38e30ff0f17c02c0a1674cbead48a99bdff3228"
+  },
+  "common_files": {
+    "/etc/init.d/printer": "e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd255d1bc4",
+    "/etc/init.d/cc2-reactor-launch": "7a30ece8b3566344d7471bfdc6b48e41858b5d36ee90911e390db2901b91dfc7",
+    "/opt/inst/cc2-reactor/launcher.sh": "a260865964759898cf47ed8e30e20eb8981506c1a22ada32611b9911b36b47fc",
+    "/opt/inst/cc2-reactor/preflight.sh": "27c3a5bfad9953ac2c64af39a86fd048c6affdd88141a5ea6d76e64b8bee05b2",
+    "/opt/inst/cc2-reactor/SHA256SUMS": "34104cb4166ca6384d4caaf9de37d7998754c010a8de81b7010cb259b6332361",
+    "/opt/usr/cc2-reactor-runtime-v2/preflight.sh": "27c3a5bfad9953ac2c64af39a86fd048c6affdd88141a5ea6d76e64b8bee05b2",
+    "/opt/usr/cc2-reactor-runtime-v2/firmware-payload.sha256": "84fadd738047b24e2ec9ea03490388f0342ebb899b2064b1a913e8f9fa25af0f",
+    "/opt/usr/cc2-network-manager/startup.sha256": "40073119766f33ecbdbf9626152b13dee13e809836451a3bd4e57bf28f156706",
+    "/opt/usr/cc2-cavity-floor/enabled": "bd925b9b6b76c1f0a513124be2b9310a217da065764bd184da874d4cfdccdd00"
+  },
+  "mapped_common": {
+    "/opt/usr/cc2-reactor-runtime-v2/libcc2-reactor-v2.so": "4639364c68489ec40c4e0c4f425550f3aa19e44c2ee61ed641affdc560e7e92c",
+    "/opt/usr/cc2-cavity-floor/libcc2-cavity-floor-r1.so": "52d400605dd51f89eb95248c42a1661b3c0e60fadec5453d27a987729332fb10"
+  },
+  "mapped_optional": {
+    "/opt/usr/cc2-network-manager/libcc2-network-compat-r1.so": "bde512195dd6bf3846f3103b5e1acbd89a62e5ee819e405389c97f5fc188ff3a"
+  },
+  "mapped_legacy": {
+    "/opt/usr/cc2-rfid-frame-fix-r1/libcc2-rfid-native-r2.so": "17367981b1b2183f978f1e5de5bd4f8097094e24e6a9a271735b52e7b6441104"
+  },
+  "legacy_plans": {
+    "cc2-rfid-native-r1": "bdf0620494a891b1c6e88a8043f56ab7cb48f3bab88907049a8d24502e553888",
+    "cc2-rfid-native-r2": "ddf779cc09db4aac2b04992f8d49023242519428d83404b0c9fbb2333cb9ed89",
+    "cc2-rfid-frame-fix-r1": "0f310dd3bf757d69d547af18f8a39ed9b6ae6708601bcb3514d0a835cd609450"
+  },
+  "variants": [
+    {
+      "id": "reactor-network-floor-baseline",
+      "legacy_rfid": false,
+      "files": {
+        "/opt/usr/cc2-reactor-runtime-v2/launcher.sh": "13c7f6181301bc99c3bea144550803610c425cb89b5b1b44c2976cc9f264f096",
+        "/opt/usr/cc2-reactor-runtime-v2/SHA256SUMS": "afb6c3715d67a6a58c9e9131bd43f13a3249cf126e9ba9ea182dc217a0ea70e8",
+        "/opt/usr/cc2-network-manager/profile.sh": "6dfc83283f15fb89bc09f2aa83c1546609f8be6f6bb1a6c8771c763634f7c4ef",
+        "/opt/usr/cc2-network-manager/reactor-entry.sh": "a0b6f77f608540fdb9a084e8cd3f23de98d5b5c8288bc2349509b257b29ce7a2",
+        "/opt/usr/cc2-network-manager/activate.sh": "bb0ed8c4f1535b748b0563da19447f4aecf2275e8b1d1799b5edb83a52aea6b7",
+        "/opt/usr/cc2-network-manager/SHA256SUMS": "48de7de764902e404c5338dea3c58046b797bfa9f8b3a4ecdbf293019f093f15"
+      }
+    },
+    {
+      "id": "legacy-frame-fix-network-floor",
+      "legacy_rfid": true,
+      "files": {
+        "/opt/usr/cc2-reactor-runtime-v2/launcher.sh": "4e1a3218aaa8a363feb477bc4fa8e772b66053aed2e92a3b506b36dd55e82616",
+        "/opt/usr/cc2-reactor-runtime-v2/SHA256SUMS": "8d71709bbaf64816f88536a4620fed8f82b3e4edb82ac9a8f91645d73eb7bd50",
+        "/opt/usr/cc2-network-manager/profile.sh": "aaf1f1f01c397e691675e08d59a0b6051dbbb2c64d55350df169a70906a34b4b",
+        "/opt/usr/cc2-network-manager/reactor-entry.sh": "19c384ebf690513d605c99084ab813a1086a194892d2198d96e6222c8d4c43ec",
+        "/opt/usr/cc2-network-manager/activate.sh": "785750ed7d1f0e8dbc5f9621f9864a7d0677bf9eb1c596dc2d24473bdd6e1290",
+        "/opt/usr/cc2-network-manager/SHA256SUMS": "5300c76b24d15addf614846ff7c625a7c43c12a10b615937b26af346d6232d60"
+      }
+    }
+  ]
+}

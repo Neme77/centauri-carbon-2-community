@@ -80,7 +80,7 @@ int main(void){
     assert(action(&m,&console,"scan")==200);
     for(unsigned i=0;i<100&&rfid.child;i++){rfid_tick(&m,&console);usleep(10000);}assert(!rfid.child&&rfid.valid);
 #endif
-    int verified=rfid_helper_open();assert(verified>=0);close(verified);
+    char helper_path[512];int verified=rfid_helper_open(helper_path);assert(verified>=0);close(verified);
     char helper_copy[4096];snprintf(helper_copy,sizeof(helper_copy),"%s.saved",CC2_RFID_HELPER);
     assert(!rename(CC2_RFID_HELPER,helper_copy));assert(!symlink(helper_copy,CC2_RFID_HELPER));
     assert(action(&m,&console,"scan")==409);assert(!unlink(CC2_RFID_HELPER));assert(!rename(helper_copy,CC2_RFID_HELPER));

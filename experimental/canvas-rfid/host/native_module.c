@@ -7,6 +7,9 @@
 #include "sha256.h"
 #include "arm_patch.h"
 #endif
+#ifndef RF_REQUIRED_NATIVE
+#define RF_REQUIRED_NATIVE 0
+#endif
 
 static pthread_mutex_t rf_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct rf_session rf_session;
@@ -182,7 +185,12 @@ __attribute__((constructor)) static void rf_activate(void) {
     /* Helpers inherited from a launcher must remain untouched. */
     if (strcmp(path, "/opt/usr/cc2-reactor-runtime-v2/elegoo_printer")) return;
     int enabled = rf_enabled();
-    if (!enabled) return;
+    if (!enabled) {
+        /* Coordinated mode must never silently start the native decoder with
+         * its protection disabled. Legacy trial behaviour stays opt-in. */
+        if (RF_REQUIRED_NATIVE) _exit(125);
+        return;
+    }
     if (enabled < 0) _exit(125);
     if (geteuid() != 0) _exit(125);
     int fd = open("/proc/self/exe", O_RDONLY | O_CLOEXEC);

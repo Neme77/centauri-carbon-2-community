@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from camera_component import functions as camera_functions, RESTORE as CAMERA_RESTORE
 from network_component import functions as network_functions, RUNTIME_SHA as NETWORK_RUNTIME_SHA
+from rfid_component import functions as rfid_functions, ORDINARY_GUARD as RFID_ORDINARY_GUARD, RESTORE_GUARD as RFID_RESTORE_GUARD
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -23,11 +24,14 @@ COMPATIBILITY = json.loads((HERE / 'compatibility.json').read_text())
 if hashlib.sha256((HERE.parent / 'FIRMWARE_VERSION').read_bytes()).hexdigest() != COMPATIBILITY['firmware_version_file_sha256']:
     raise ValueError('Updater firmware compatibility record does not match FIRMWARE_VERSION')
 
-def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None):
+def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None, rfid_runtime=None):
+    if rfid_runtime and (camera_runtime or connections_runtime):
+        raise ValueError('Closed-profile RFID trial must preserve the exact installed camera/network runtime')
     binary = (prepared / 'cc2-control').read_bytes()
     if len(binary) < 20 or binary[:6] != b'\x7fELF\x01\x01' or struct.unpack_from('<H', binary, 18)[0] != 40:
         raise ValueError('Payload requires a 32-bit little-endian ARM ELF')
     binary_hash = hashlib.sha256(binary).hexdigest()
+    rfid_code, rfid_tail = rfid_functions(rfid_runtime, binary_hash) if rfid_runtime else ('', '')
     files = {'cc2-control': binary}
     worker = (prepared / 'cc2-update-worker').read_bytes()
     if len(worker) < 20 or worker[:6] != b'\x7fELF\x01\x01' or struct.unpack_from('<H', worker, 18)[0] != 40:
@@ -57,6 +61,12 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         text = text.replace('@CAMERA_COMPONENT_PREFLIGHT@', 'camera_unpack\nsh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '')
         text = text.replace('@CONNECTIONS_COMPONENT_FUNCTIONS@', network_functions(connections_runtime) if connections_runtime else '')
         text = text.replace('@CONNECTIONS_COMPONENT_INSTALL@', 'install_phase network-component\n                network_install_component || exit 1' if connections_runtime else '')
+        text = text.replace('@RFID_COMPONENT_FUNCTIONS@', rfid_code)
+        text = text.replace('@RFID_COMPONENT_PREFLIGHT@', 'rfid_unpack || exit 1' if rfid_runtime else RFID_ORDINARY_GUARD)
+        text = text.replace('@RFID_COMPONENT_PUBLISH@', 'rfid_publish || exit 1' if rfid_runtime else '')
+        text = text.replace('@RFID_COMPONENT_COMPLETION@', "echo 'RFID ACTIVATION PENDING: after installer unlock, open Canvas RFID and follow full idle-printer reboot prompts. Keep power connected during transfer and preserve all original backups.'" if rfid_runtime else '')
+        text = text.replace('@RFID_RESTORE_GUARD@', RFID_RESTORE_GUARD)
+        if name == 'install-on-printer.sh': text += rfid_tail
         files[name] = text.encode()
     files['build-info.json'] = (json.dumps({
         'version': VERSION, 'binary_sha256': binary_hash,
@@ -64,7 +74,9 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         'change': 'CC2 Control application updater',
         'camera_component': 'reap-r2+recovery-r2' if camera_runtime else None,
         'connections_runtime_sha256': NETWORK_RUNTIME_SHA if connections_runtime else None,
-        'requires_full_printer_reboot': bool(camera_runtime),
+        'requires_full_printer_reboot': bool(camera_runtime or rfid_runtime),
+        'rfid_private_closed_profile': bool(rfid_runtime),
+        'rfid_activation_managed_after_installer_unlock': bool(rfid_runtime),
         'required_community_firmware': FIRMWARE_VERSION,
         'compatibility': COMPATIBILITY,
     }, indent=2) + '\n').encode()
@@ -110,11 +122,14 @@ if __name__ == '__main__':
     parser.add_argument('--release', action='store_true', help='Require the cumulative camera component for a public release')
     parser.add_argument('--connections-runtime', type=Path, help='Include the exact qualified optional Connections runtime')
     parser.add_argument('--application-only-trial', action='store_true', help='Explicitly build a development-only app package without the cumulative camera component')
+    parser.add_argument('--rfid-runtime', type=Path, help='Private closed-profile dormant RFID component; not a public release')
     args = parser.parse_args()
     if args.release and args.application_only_trial:
         parser.error('--release and --application-only-trial are mutually exclusive')
+    if args.rfid_runtime and (args.release or not args.application_only_trial):
+        parser.error('RFID runtime currently requires --application-only-trial and cannot be published')
     if args.camera_runtime is None and (args.release or not args.application_only_trial):
         parser.error('Public cumulative releases require --camera-runtime, including for users who skipped earlier updates')
     if args.release and args.connections_runtime is None:
         parser.error('Public cumulative releases require --connections-runtime; unsupported native profiles retain native Wi-Fi')
-    package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime, args.connections_runtime)
+    package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime, args.connections_runtime, args.rfid_runtime)

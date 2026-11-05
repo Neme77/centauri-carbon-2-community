@@ -45,8 +45,9 @@ require_cold() {
 }
 require_cold
 
-mkdir "$LOCK" || exit 1
+(umask 077; mkdir "$LOCK") || exit 1
 trap 'rmdir "$LOCK"' 0
+@RFID_RESTORE_GUARD@
 if [ -f "$BACKUP/printer-camera.before" ]; then camera_restore_startup "$BACKUP"; fi
 "$INIT" stop
 if ! wait_stopped; then echo 'Service did not stop.' >&2; exit 1; fi

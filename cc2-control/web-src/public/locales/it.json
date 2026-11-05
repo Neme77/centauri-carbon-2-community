@@ -1357,7 +1357,7 @@
   "canvas.match_material_hint": "Con la ricarica automatica attiva: se nessuno slot ha lo stesso filamento e colore, continua con uno slot caricato dello stesso tipo di materiale. Si basa sulle etichette: uno slot etichettato ASA deve contenere ASA.",
   "control.chamber_fan_management": "Gestione ventola camera",
   "rfid.title": "Lettore bobine RFID",
-  "rfid.hint": "Prova privata · scansiona, verifica e scegli lo slot Canvas. Nessuna assegnazione automatica.",
+  "rfid.hint": "Scansiona, verifica e scegli lo slot Canvas. Nessuna assegnazione automatica.",
   "rfid.scan": "Scansiona tag",
   "rfid.confirm": "Assegnare i dati {material} acquisiti allo slot Canvas {slot}? Non verranno avviati riscaldamenti o caricamenti.",
   "rfid.submitted": "Richiesta dati inviata. Controlla la rilettura dello slot Canvas: la scrittura non è ancora confermata.",
@@ -1397,5 +1397,17 @@
   "rfid.present": "Rilevato all’ingresso del Canvas",
   "rfid.absent": "Non rilevato all’ingresso del Canvas",
   "rfid.presence_hint": "Lettura del tag e assegnazione dei dati sono separate dalla presenza fisica del filamento. Lo slot resta semitrasparente finché il Canvas non rileva il filo all’ingresso: non significa che RFID stia ancora leggendo. Per confermare la presenza all’ingresso non serve caricarlo fino all’ugello.",
-  "rfid.short_title": "RFID"
+  "rfid.short_title": "RFID",
+  "rfid.lifecycle_confirm": "Questa operazione modifica l’applicazione RFID Canvas o la relativa protezione. Mantieni la stampante inattiva, fredda, alimentata e connessa. Segui ogni richiesta di riavvio completo e conserva il backup originale. Continuare?",
+  "rfid.lifecycle_recovery": "Il recupero RFID richiede attenzione. Conserva il backup originale e il registro dell’operazione; non ripetere il trasferimento firmware e non rimuovere la protezione.",
+  "rfid.lifecycle_working": "Preparazione o verifica RFID in corso. Mantieni alimentazione e connessione; attendi prima di riavviare.",
+  "rfid.lifecycle_reboot": "Per continuare l’attivazione o il ripristino RFID è necessario un riavvio completo della stampante inattiva. L’avviso rimane finché non viene rilevato un nuovo avvio del kernel.",
+  "rfid.lifecycle_dormant": "I componenti RFID sono installati ma non attivi. L’attivazione richiede la stampante fredda e inattiva e riavvii completi.",
+  "rfid.lifecycle_stock": "L’applicazione Canvas originale è stata ripristinata e verificata dopo il riavvio. Ora puoi rimuovere la protezione di avvio.",
+  "rfid.lifecycle_retry": "Le verifiche RFID automatiche si sono fermate dopo ripetuti errori. Controlla il registro prima di riprendere.",
+  "rfid.lifecycle_waiting": "L’attivazione o il ripristino RFID attende dati freschi, stampante fredda e inattiva e Canvas connesso.",
+  "rfid.lifecycle_activate": "Attiva lettore RFID",
+  "rfid.lifecycle_resume": "Riprendi verifiche RFID",
+  "rfid.lifecycle_restore": "Ripristina applicazione Canvas originale",
+  "rfid.lifecycle_remove": "Ripristina file di avvio originali"
 }

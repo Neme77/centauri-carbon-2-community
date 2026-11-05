@@ -10,6 +10,10 @@ FLAGS = ["-O2", "-std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-D_POS
 BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", ROOT / "src/panda.c", ROOT / "src/uds.c", ROOT / "src/network_status.c"]
 HARNESSES = {
     "test_panda_metadata.c": [],
+    "test_maintenance_barrier.c": [],
+    "test_maintenance_api.c": BACKEND,
+    "test_rfid_runtime.c": [],
+    "test_rfid_lifecycle.c": [],
     "test_backup.c": BACKEND,
     "test_external_filament.c": [ROOT / "src/control.c"],
     "test_canvas_state.c": [ROOT / "src/control.c"],
