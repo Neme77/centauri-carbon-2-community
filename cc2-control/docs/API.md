@@ -398,8 +398,8 @@ load that comes too late leaves the side mesh in use and is reported as `missed`
 
 Endpoints (all changes are `POST` with a text body, one field per line, and need `X-CC2-Request: 1`):
 
-- `GET /api/mesh` returns the printer's active mesh (`profile_name`, `mesh_min`, `mesh_max`, `probed_matrix`,
-  `mesh_matrix`) and, under `profiles`, the side slots `default`, `default1` and `ADAPTIVE` read from
+- `GET /api/mesh` returns the printer's active mesh (`profile_name`, `mesh_min`, `mesh_max` and the measured
+  `probed_matrix`; not the interpolated `mesh_matrix`) and, under `profiles`, the side slots `default`, `default1` and `ADAPTIVE` read from
   `autosave.cfg`. It never asks the printer for `{"bed_mesh":null}`: the firmware serialises every stored
   profile on its motion thread, which during a print can end in "MCU 'mcu' shutdown: Timer too close".
 - `GET /api/plates` returns the library, which plate is mounted, whether its Z offset has been applied

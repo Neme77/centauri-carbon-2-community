@@ -8,8 +8,7 @@
  * close". The side slots and the adaptive mesh come from autosave.cfg instead, in the firmware's shape. */
 static const char active[] =
     "{\"id\":201,\"result\":{\"eventtime\":570.05,\"status\":{\"bed_mesh\":{\"profile_name\":\"cc2b_7d29710cf494c5ff_105\","
-    "\"mesh_min\":[6.0,6.0],\"mesh_max\":[246.0,246.0],\"probed_matrix\":[[-1.0,-1.1,-1.2],[-0.9,-1.0,-1.1],[-0.8,-0.9,-1.0]],"
-    "\"mesh_matrix\":[[-1.0,-1.1,-1.2],[-0.9,-1.0,-1.1],[-0.8,-0.9,-1.0]]}}}}\003";
+    "\"mesh_min\":[6.0,6.0],\"mesh_max\":[246.0,246.0],\"probed_matrix\":[[-1.0,-1.1,-1.2],[-0.9,-1.0,-1.1],[-0.8,-0.9,-1.0]]}}}}\003";
 
 static char received[512];
 static int received_fd = -1;
@@ -68,7 +67,7 @@ int main(void) {
     pid_t pid = printer(sock, active);
     assert(call() == 200); waitpid(pid, NULL, 0); collect();
     /* the printer was asked for the active mesh only */
-    assert(strstr(received, "\"bed_mesh\":[\"profile_name\",\"mesh_min\",\"mesh_max\",\"probed_matrix\",\"mesh_matrix\"]"));
+    assert(strstr(received, "\"bed_mesh\":[\"profile_name\",\"mesh_min\",\"mesh_max\",\"probed_matrix\"]") && !strstr(received, "mesh_matrix"));
     assert(!strstr(received, "null") && !strstr(received, "profiles"));
     /* the reply keeps the printer's active mesh and gains the three shown profiles from the file */
     const char *body = strstr(response, "\r\n\r\n"); assert(body); body += 4;

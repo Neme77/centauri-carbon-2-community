@@ -3255,11 +3255,12 @@ static const char *pending_autosave_guard(void);
 /* GET /api/mesh. The firmware builds `{"bed_mesh":null}` with every stored profile and all its points
  * on the thread that schedules the motors: with many profiles (29-39 KB) that took 615 ms on a CC2
  * and, during a first layer, ended in "MCU 'mcu' shutdown: Timer too close". So the printer is only
- * asked for the active mesh, and the three profiles the pages show (the two side slots and the
+ * asked for the active mesh's measured points (not mesh_matrix, the interpolated grid: 17 KB of the
+ * 18 KB answer, and the pages draw probed_matrix), and the three profiles the pages show (the two side slots and the
  * adaptive mesh) are read from autosave.cfg, where the firmware keeps them, in the same shape. */
 #define MESH_REPLY_MAX (64 * 1024)
 static const char mesh_query[] =
-    "{\"id\":201,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":[\"profile_name\",\"mesh_min\",\"mesh_max\",\"probed_matrix\",\"mesh_matrix\"]}}}\003";
+    "{\"id\":201,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":[\"profile_name\",\"mesh_min\",\"mesh_max\",\"probed_matrix\"]}}}\003";
 static const char *const mesh_shown_profiles[] = {"default", "default1", "ADAPTIVE"};
 static void mesh_profiles_json(json_builder *b) {
     size_t length = 0;
