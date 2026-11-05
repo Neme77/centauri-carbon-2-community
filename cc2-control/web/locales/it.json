@@ -1376,8 +1376,6 @@
   "rfid.choose_slot": "Scegli uno slot…",
   "rfid.apply": "Verifica e assegna allo slot",
   "rfid.applies": "Assegna solo materiale, produttore, codice prodotto, colore e limiti ugello. Temperature piatto solo informative; peso e residuo restano sconosciuti.",
-  "rfid.open": "Apri",
-  "rfid.close": "Chiudi",
   "rfid.scanning": "Scansione…",
   "rfid.captured": "Tag acquisito",
   "rfid.nozzle_hot": "Attendi che l’ugello scenda sotto 50 °C.",

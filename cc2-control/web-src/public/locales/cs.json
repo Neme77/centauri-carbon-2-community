@@ -1376,8 +1376,6 @@
   "rfid.choose_slot": "Choose a slot…",
   "rfid.apply": "Review and assign to slot",
   "rfid.applies": "Assigns material, brand, product code, colour and nozzle limits only. Bed temperatures are shown for reference; weight and remaining filament stay unknown.",
-  "rfid.open": "Open",
-  "rfid.close": "Close",
   "rfid.scanning": "Scanning…",
   "rfid.captured": "Tag captured",
   "rfid.nozzle_hot": "Wait for the nozzle to cool below 50 °C.",
