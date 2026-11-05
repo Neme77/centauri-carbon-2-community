@@ -1354,5 +1354,6 @@
   "runout.failed": "Could not continue: {error}",
   "runout.no_match_auto": "Match material only: no other loaded slot holds the same material.",
   "canvas.match_material": "Match material only",
-  "canvas.match_material_hint": "With auto refill on: if no slot has the same filament and colour, continue with a loaded slot of the same material type. It trusts the slot labels, so a slot labelled ASA must hold ASA."
+  "canvas.match_material_hint": "With auto refill on: if no slot has the same filament and colour, continue with a loaded slot of the same material type. It trusts the slot labels, so a slot labelled ASA must hold ASA.",
+  "control.chamber_fan_management": "Chamber fan management"
 }

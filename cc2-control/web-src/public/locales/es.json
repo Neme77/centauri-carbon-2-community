@@ -1354,5 +1354,6 @@
   "runout.failed": "No se pudo continuar: {error}",
   "runout.no_match_auto": "Solo mismo material: ninguna otra ranura cargada tiene el mismo material.",
   "canvas.match_material": "Solo mismo material",
-  "canvas.match_material_hint": "Con la recarga automática activada: si ninguna ranura tiene el mismo filamento y color, continúa con una ranura cargada del mismo tipo de material. Confía en las etiquetas: una ranura etiquetada ASA debe contener ASA."
+  "canvas.match_material_hint": "Con la recarga automática activada: si ninguna ranura tiene el mismo filamento y color, continúa con una ranura cargada del mismo tipo de material. Confía en las etiquetas: una ranura etiquetada ASA debe contener ASA.",
+  "control.chamber_fan_management": "Chamber fan management"
 }

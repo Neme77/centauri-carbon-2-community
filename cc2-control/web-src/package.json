@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:fan-layout": "node preview/test-fan-layout.mjs",
     "dev": "vite",
     "build": "vite build",
     "check": "tsc -p . && biome check .",

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Arrange Control fan sliders above a separate Chamber fan management group, and lower Dashboard fan readouts by one element without stretching their card; designed and preview-reviewed with **Neme77** (PR pending).
+
 - Reorganize Control with load-cell tools in their own Bed Levelling tab, full Rotation Distance below Pressure Advance, Input Shaper inside Movement and full-width material profiles. Add live nozzle/bed/chamber temperatures to Job details. Preserve the published Dashboard. Designed and approved by **Neme77** (follow-up to #283).
 
 ### Added
