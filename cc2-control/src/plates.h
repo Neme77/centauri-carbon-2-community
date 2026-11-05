@@ -1079,12 +1079,12 @@ static const char *plates_late_result = "";
 static struct { int phase; long long started; const char *result; } plates_auto = {0, 0, ""};
 static int plates_match_enabled(void);
 /* Blended meshes between a plate's measurements (#296), see plates_blends_tick. */
-#define PLATE_BLEND_MAX 8
+#define PLATE_BLEND_MAX 4
 #define PLATE_BLEND_PREFIX "cc2b_"
 typedef struct { int temp; char name[40]; plate_mesh mesh; int live; } plate_blend;
 static struct {
     char plate[PLATE_ID_LEN + 1];
-    int count, step, planned; /* planned: the plan below is for `plate` and the measurements in `sig` */
+    int count, planned; /* planned: the plan below is for `plate` and the measurements in `sig` */
     unsigned long long sig;
     plate_blend b[PLATE_BLEND_MAX];
     const char *state;  /* "", "off", "too_few", "planned", "written", "ready", "write_failed" */
@@ -1124,10 +1124,10 @@ static void plates_get_response(int fd) {
     json_builder_string(&b, plates_cal.detail);
     if (have_bed) json_builder_printf(&b, ",\"bed\":%.1f}", bed); else json_builder_printf(&b, ",\"bed\":null}");
     json_builder_printf(&b, ",\"print_mesh\":{\"state\":\"%s\",\"measure\":\"%s\",\"result\":\"%s\",\"source\":\"%s\"},"
-        "\"match\":{\"enabled\":%s,\"result\":\"%s\",\"blend_temp\":%d,\"blends\":{\"state\":\"%s\",\"step\":%d,\"temps\":[",
+        "\"match\":{\"enabled\":%s,\"result\":\"%s\",\"blend_temp\":%d,\"blends\":{\"state\":\"%s\",\"temps\":[",
         plates_late.state == 1 ? "waiting" : plates_late.state == 2 ? "active" : "off", plates_late.measure,
         plates_late_result, plates_late.source, plates_match_enabled() ? "true" : "false", plates_auto.result,
-        plates_late.blend_temp, plates_blends.state, plates_blends.step);
+        plates_late.blend_temp, plates_blends.state);
     for (int i = 0; i < plates_blends.count; ++i)
         json_builder_printf(&b, "%s{\"temp\":%d,\"live\":%s}", i ? "," : "", plates_blends.b[i].temp, plates_blends.b[i].live ? "true" : "false");
     json_builder_printf(&b, "]}},\"slots\":{\"A\":\"%s\",\"B\":\"%s\"},\"nozzles\":[",
@@ -1987,9 +1987,10 @@ static void plates_print_arm(const char *late, char side) {
  *
  * The firmware only loads mesh profiles that are in autosave.cfg when it starts; nothing can hand
  * it mesh points. So for the mounted plate, with matching on, CC2 Control writes up to
- * PLATE_BLEND_MAX profiles "cc2b_<plate>_<temp>" between its measurements: every 5 C, or a
- * coarser multiple of 5 C when that would be more, each point linearly between the two
- * measurements around it (same grid only; never beyond the measured range). They are written
+ * PLATE_BLEND_MAX profiles "cc2b_<plate>_<temp>" between its measurements, where they help most
+ * (plate_blend_plan), each point linearly between the two measurements around it (same grid only;
+ * never beyond the measured range). Every stored profile is serialised whenever a client asks the
+ * firmware for the whole bed_mesh object, so the limit is small. They are written
  * only while the printer is idle, and are used only once a query shows them in printer memory
  * with exactly the planned points, i.e. after the printer's next restart; until then a print
  * gets the nearest measurement. A firmware save before that restart drops them from the file;
@@ -2015,30 +2016,56 @@ static int plate_measures_by_temp(const plate_entry *p, const plate_measure *out
     return n;
 }
 
-/* Fills `b` with the blends for plate p; returns how many (0 with fewer than two measurements). */
-static int plate_blend_plan(const plate_entry *p, plate_blend b[PLATE_BLEND_MAX], int *step_out) {
+/* How far apart two meshes are: the root mean square of their point differences, in mm. */
+static double plate_mesh_distance(const plate_mesh *a, const plate_mesh *b) {
+    double sum = 0; int n = a->x_count * a->y_count;
+    for (int k = 0; k < n; ++k) sum += (a->points[k] - b->points[k]) * (a->points[k] - b->points[k]);
+    return n ? sqrt(sum / n) : 0;
+}
+
+/* Fills `b` with the blends for plate p, coolest first; returns how many (0 with fewer than two
+ * measurements). Each pick goes where the nearest mesh would be furthest off: the span between
+ * neighbouring temperatures (measured or picked) whose measurements differ most per its share of
+ * their interval gets a blend at its middle, on a 5 C step, until PLATE_BLEND_MAX or until no span
+ * would be off by more than PLATE_BLEND_MIN_MM. Only measurements on the same grid are blended. */
+#define PLATE_BLEND_MIN_MM 0.003
+static int plate_blend_plan(const plate_entry *p, plate_blend b[PLATE_BLEND_MAX]) {
     const plate_measure *m[PLATE_MEASURES_MAX];
-    int n = plate_measures_by_temp(p, m), count = 0, step = 5;
-    if (n < 2) { *step_out = 0; return 0; }
-    for (;; step += 5) { /* the finest multiple of 5 C that stays within the limit */
-        int candidates = 0;
-        for (int i = 0; i + 1 < n; ++i)
-            for (int t = (m[i]->temp / step + 1) * step; t < m[i + 1]->temp; t += step) candidates++;
-        if (candidates <= PLATE_BLEND_MAX) break;
-    }
-    for (int i = 0; i + 1 < n; ++i) {
-        if (!plate_grid_same(&m[i]->mesh, &m[i + 1]->mesh)) continue;
-        for (int t = (m[i]->temp / step + 1) * step; t < m[i + 1]->temp && count < PLATE_BLEND_MAX; t += step) {
-            plate_blend *x = &b[count++];
-            double w = (double)(t - m[i]->temp) / (m[i + 1]->temp - m[i]->temp);
-            x->temp = t; x->live = 0; x->mesh = m[i]->mesh;
-            for (int k = 0; k < x->mesh.x_count * x->mesh.y_count; ++k)
-                x->mesh.points[k] = round(((1 - w) * m[i]->mesh.points[k] + w * m[i + 1]->mesh.points[k]) * 1e6) / 1e6;
-            x->mesh.offset = round(((1 - w) * m[i]->mesh.offset + w * m[i + 1]->mesh.offset) * 1e6) / 1e6;
-            snprintf(x->name, sizeof(x->name), PLATE_BLEND_PREFIX "%.16s_%d", p->id, t);
+    int n = plate_measures_by_temp(p, m), count = 0, temps[PLATE_BLEND_MAX];
+    if (n < 2) return 0;
+    while (count < PLATE_BLEND_MAX) {
+        double worst = PLATE_BLEND_MIN_MM; int pick = -1, pair = -1;
+        for (int i = 0; i + 1 < n; ++i) {
+            if (!plate_grid_same(&m[i]->mesh, &m[i + 1]->mesh)) continue;
+            double apart = plate_mesh_distance(&m[i]->mesh, &m[i + 1]->mesh);
+            int lo = m[i]->temp;
+            for (;;) { /* each span of [m_i, m_i+1] cut by the picks so far */
+                int hi = m[i + 1]->temp;
+                for (int k = 0; k < count; ++k) if (temps[k] > lo && temps[k] < hi) hi = temps[k];
+                int mid = (int)floor((lo + hi) / 10.0 + 0.5) * 5;
+                double off = apart * (hi - lo) / (m[i + 1]->temp - m[i]->temp) / 2;
+                if (mid > lo && mid < hi && off > worst) { worst = off; pick = mid; pair = i; }
+                if (hi == m[i + 1]->temp) break;
+                lo = hi;
+            }
         }
+        if (pick < 0) break;
+        (void)pair;
+        temps[count++] = pick;
     }
-    *step_out = step;
+    for (int i = 1; i < count; ++i) /* coolest first */
+        for (int k = i; k > 0 && temps[k - 1] > temps[k]; --k) { int t = temps[k]; temps[k] = temps[k - 1]; temps[k - 1] = t; }
+    for (int j = 0; j < count; ++j) {
+        int t = temps[j], i = 0;
+        while (i + 2 < n && m[i + 1]->temp < t) i++;
+        plate_blend *x = &b[j];
+        double w = (double)(t - m[i]->temp) / (m[i + 1]->temp - m[i]->temp);
+        x->temp = t; x->live = 0; x->mesh = m[i]->mesh;
+        for (int k = 0; k < x->mesh.x_count * x->mesh.y_count; ++k)
+            x->mesh.points[k] = round(((1 - w) * m[i]->mesh.points[k] + w * m[i + 1]->mesh.points[k]) * 1e6) / 1e6;
+        x->mesh.offset = round(((1 - w) * m[i]->mesh.offset + w * m[i + 1]->mesh.offset) * 1e6) / 1e6;
+        snprintf(x->name, sizeof(x->name), PLATE_BLEND_PREFIX "%.16s_%d", p->id, t);
+    }
     return count;
 }
 
@@ -2145,7 +2172,7 @@ static void plates_blends_tick(const mqtt_client *mqtt) {
         plates_blends.sig = sig;
         plates_exchange_close(&plates_blends.x);
         memcpy(plates_blends.plate, p->id, sizeof(plates_blends.plate));
-        plates_blends.count = plate_blend_plan(p, plates_blends.b, &plates_blends.step);
+        plates_blends.count = plate_blend_plan(p, plates_blends.b);
         plates_blends.planned = 1; plates_blends.next_ms = 0;
         plates_blends.state = plates_blends.count ? "planned" : "too_few"; /* written once the printer is idle */
     }

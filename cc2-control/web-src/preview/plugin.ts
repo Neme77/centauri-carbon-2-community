@@ -230,10 +230,9 @@ export function previewPlugin(): Plugin {
         blends: plateMatch
           ? {
               state: plateBlendsLive ? 'ready' : 'written',
-              step: 5,
-              temps: [65, 70, 75, 80, 85, 95, 105].map(temp => ({ temp, live: plateBlendsLive })),
+              temps: [70, 75, 85, 95].map(temp => ({ temp, live: plateBlendsLive })),
             }
-          : { state: 'off', step: 0, temps: [] },
+          : { state: 'off', temps: [] },
       },
       calibration,
       slots: { A: plateSlots.A ? 'mesh' : 'empty', B: plateSlots.B ? 'mesh' : 'empty' },

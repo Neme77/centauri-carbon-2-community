@@ -414,15 +414,15 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   elsewhere (slicer, touchscreen; #296). A new print on the mounted plate waits for its bed target and gets
   the nearest blended mesh in printer memory, or else the nearest usable measurement (then the selected
   nozzle, the side slot's, the newest), loaded like a measurement chosen in the print dialog; a print CC2
-  Control started keeps the dialog's choice. With it on, CC2 Control writes up to 8 blended profiles
-  `cc2b_<plate>_<temp>` for the mounted plate into `autosave.cfg` while the printer is idle: every 5 °C
-  between its measurements (a coarser multiple of 5 °C when that would be more), each point linear between
+  Control started keeps the dialog's choice. With it on, CC2 Control writes up to 4 blended profiles
+  `cc2b_<plate>_<temp>` for the mounted plate into `autosave.cfg` while the printer is idle, on 5 °C steps
+  where the nearest mesh would be furthest off (largest point difference first), each point linear between
   the two measurements around it, same grid only, never beyond the measured range. A blend is used only
   once a `bed_mesh.profiles` query shows it in memory with exactly those points, i.e. after the next
   printer restart; `/api/plates/blends/restart` (empty body) restarts the printer for that when blends wait.
   `GET /api/plates` reports `match` (`enabled`, `result` of the latest print: `armed`, `armed_blend`,
   `slot`, `off`, `no_measurement`, `no_bed_target`; `blend_temp` of a blend in use; `blends`: `state`
-  `off`, `too_few`, `planned`, `written`, `ready` or `write_failed`, `step` and `temps` with `live`) and
+  `off`, `too_few`, `planned`, `written`, `ready` or `write_failed`, and `temps` with `live`) and
   `print_mesh.source` (`dialog` or `auto`).
 - `/api/plates/save` (`A|B`, name, Z, temperature, nozzle; the last two optional, 60 °C and none) stores the
   mesh the printer keeps for that side as a new plate with that measurement. The slot in `autosave.cfg` and
