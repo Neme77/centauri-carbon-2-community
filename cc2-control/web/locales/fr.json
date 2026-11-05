@@ -718,7 +718,7 @@
   "plates.match_temperature": "Adapter le maillage à la température du plateau de l'impression",
   "plates.match_on": "Activé",
   "plates.match_off": "Désactivé",
-  "plates.match_note": "Pour les impressions envoyées depuis un trancheur ou lancées sur l'écran tactile, CC2 Control charge la mesure du plateau monté la plus proche de la température de plateau de l'impression. Une impression lancée ici garde la mesure choisie dans sa boîte de dialogue.",
+  "plates.match_note": "Pour les impressions envoyées depuis un trancheur ou lancées sur l'écran tactile, CC2 Control charge la mesure du plateau monté la plus proche de la température de plateau de l'impression. Une impression lancée ici garde la mesure choisie dans sa boîte de dialogue. Le désactiver retire les maillages mélangés du fichier de maillages de l'imprimante.",
   "plates.blends_ready": "Maillages mélangés dans l'imprimante : {temps} °C. Une impression entre deux mesures reçoit le plus proche.",
   "plates.blends_planned": "Les maillages mélangés pour {temps} °C sont prévus ; CC2 Control les écrit dès que l'imprimante est inactive.",
   "plates.blends_written": "Les maillages mélangés pour {temps} °C sont écrits. L'imprimante les charge à son prochain redémarrage ; d'ici là, les impressions utilisent la mesure la plus proche.",

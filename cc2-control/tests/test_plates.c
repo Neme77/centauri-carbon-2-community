@@ -1297,12 +1297,27 @@ static void test_blends(void) {
     add_measure(id, "aa00000000000080", 80, m90, 1005);
     plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
     assert(plates_blends.count == 4 && !strcmp(plates_blends.state, "written") && plates_blends.b[0].temp != 70); /* planned again */
-    /* off: nothing is planned or written */
-    assert(plates_match_save(0) == 0); plates_blends_tick(&mqtt); assert(!strcmp(plates_blends.state, "off"));
+    /* off: the written blends leave the file while idle, every other byte as it was */
+    text = slurp(printer_autosave_path, &length); bare = autosave_with_blends(text, length, NULL, 0, &bare_length); free(text);
+    assert(bare && bare_length < length);
+    assert(plates_match_save(0) == 0);
+    mqtt.machine_status = 2; plates_blends_tick(&mqtt);                         /* busy: left alone */
+    assert(!strcmp(plates_blends.state, "off") && !plates_blends.count && plates_blends_in_file(NULL, 0) == 0);
+    fresh(&mqtt); plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "off") && plates_blends_in_file(NULL, 0) == 1);
+    text = slurp(printer_autosave_path, &length);
+    assert(length == bare_length && !memcmp(text, bare, length) && !strstr(text, "cc2b_"));
+    assert(autosave_find(text, length, "default", &check) == 1 && plate_mesh_equal(&check, &slot_a, 1));
+    free(text); free(bare);
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt); assert(!strcmp(plates_blends.state, "off")); /* nothing more to do */
+    /* on again: planned and written again */
+    assert(plates_match_save(1) == 0); plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "written") && plates_blends_in_file(plates_blends.b, plates_blends.count) == 1);
+    assert(plates_match_save(0) == 0); plates_blends.next_ms = 0; plates_blends_tick(&mqtt); assert(plates_blends_in_file(NULL, 0) == 1);
     plates_uds = fake_uds; unlink(match_path);
     telemetry.present &= ~((UINT32_C(1) << U_LAYER) | (UINT32_C(1) << U_BG));
     printf("PASS: blended meshes: largest-error-first plan on 5 C steps within the measured range, limit of %d, same-grid pairs, exact points, file add/remove "
-           "keeping every other byte, memory check before use, restart only when waiting, nearest-wins selection, auto print\n", PLATE_BLEND_MAX);
+           "keeping every other byte, memory check before use, restart only when waiting, nearest-wins selection, auto print, removed when switched off\n", PLATE_BLEND_MAX);
 }
 
 int main(void) {

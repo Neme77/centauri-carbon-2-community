@@ -2163,10 +2163,22 @@ static unsigned long long plate_blend_signature(const plate_entry *p) {
     return h;
 }
 
-/* Main loop, idle only: keep the mounted plate's blends planned, written and checked in memory. */
+/* Main loop, idle only: keep the mounted plate's blends planned, written and checked in memory.
+ * Switched off, the written blends are taken out of the file again; the printer keeps the ones it
+ * loaded until its next restart, unused. */
 static void plates_blends_tick(const mqtt_client *mqtt) {
     const plate_entry *p = plates_available && plates.current[0] && !plates.pending[0] ? plate_find(plates.current) : NULL;
-    if (!plates_match_enabled() || !p) { plates_blends.state = "off"; plates_exchange_close(&plates_blends.x); return; }
+    if (!plates_match_enabled()) {
+        plates_exchange_close(&plates_blends.x);
+        if (plates_blends.planned) { plates_blends.planned = 0; plates_blends.count = 0; plates_blends.next_ms = 0; plates_blends.state = "off"; }
+        long long now = monotonic_ms();
+        if (now < plates_blends.next_ms || plates_printer_ready(mqtt) || plates_cal.stage || plates_late.state) return;
+        plates_blends.next_ms = now + 60000;
+        if (plates_blends_in_file(NULL, 0) == 0)
+            plates_blends.state = plates_blends_write(NULL, 0) == 0 ? "off" : "write_failed";
+        return;
+    }
+    if (!p) { plates_blends.state = "off"; plates_exchange_close(&plates_blends.x); return; }
     unsigned long long sig = plate_blend_signature(p);
     if (!plates_blends.planned || strcmp(plates_blends.plate, p->id) || plates_blends.sig != sig) {
         plates_blends.sig = sig;

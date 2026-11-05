@@ -733,7 +733,7 @@
   "plates.match_temperature": "A háló igazítása a nyomtatás ágyhőmérsékletéhez",
   "plates.match_on": "Be",
   "plates.match_off": "Ki",
-  "plates.match_note": "A szeletelőből küldött vagy az érintőképernyőn indított nyomtatásoknál a CC2 Control a felszerelt tálca azon mérését tölti be, amely a nyomtatás ágyhőmérsékletéhez a legközelebb van. Az itt indított nyomtatás a párbeszédablakban választott mérést használja.",
+  "plates.match_note": "A szeletelőből küldött vagy az érintőképernyőn indított nyomtatásoknál a CC2 Control a felszerelt tálca azon mérését tölti be, amely a nyomtatás ágyhőmérsékletéhez a legközelebb van. Az itt indított nyomtatás a párbeszédablakban választott mérést használja. Kikapcsolásakor a kevert hálók törlődnek a nyomtató hálófájljából.",
   "plates.blends_ready": "Kevert hálók a nyomtatóban: {temps} °C. A két mérés közötti nyomtatás a legközelebbit kapja.",
   "plates.blends_planned": "A(z) {temps} °C-os kevert hálók tervezve; a CC2 Control akkor írja ki őket, amikor a nyomtató tétlen.",
   "plates.blends_written": "A(z) {temps} °C-os kevert hálók elmentve. A nyomtató a következő újraindításkor tölti be őket; addig a nyomtatások a legközelebbi mérést használják.",

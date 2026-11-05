@@ -718,7 +718,7 @@
   "plates.match_temperature": "Přizpůsobit mapu teplotě podložky tisku",
   "plates.match_on": "Zapnuto",
   "plates.match_off": "Vypnuto",
-  "plates.match_note": "U tisků odeslaných ze sliceru nebo spuštěných na dotykovém displeji načte CC2 Control měření nasazené podložky nejbližší teplotě podložky tisku. Tisk spuštěný zde si ponechá měření zvolené v dialogu.",
+  "plates.match_note": "U tisků odeslaných ze sliceru nebo spuštěných na dotykovém displeji načte CC2 Control měření nasazené podložky nejbližší teplotě podložky tisku. Tisk spuštěný zde si ponechá měření zvolené v dialogu. Vypnutím se smíšené mapy odstraní ze souboru map tiskárny.",
   "plates.blends_ready": "Smíšené mapy v tiskárně: {temps} °C. Tisk mezi dvěma měřeními dostane tu nejbližší.",
   "plates.blends_planned": "Smíšené mapy pro {temps} °C jsou naplánované; CC2 Control je zapíše, jakmile bude tiskárna nečinná.",
   "plates.blends_written": "Smíšené mapy pro {temps} °C jsou zapsané. Tiskárna je načte při příštím restartu; do té doby tisky používají nejbližší měření.",

@@ -718,7 +718,7 @@
   "plates.match_temperature": "Dopasuj siatkę do temperatury stołu wydruku",
   "plates.match_on": "Włączone",
   "plates.match_off": "Wyłączone",
-  "plates.match_note": "Dla wydruków wysłanych ze slicera lub uruchomionych na ekranie dotykowym CC2 Control wczytuje pomiar zamontowanej płyty najbliższy temperaturze stołu wydruku. Wydruk uruchomiony tutaj zachowuje pomiar wybrany w oknie dialogowym.",
+  "plates.match_note": "Dla wydruków wysłanych ze slicera lub uruchomionych na ekranie dotykowym CC2 Control wczytuje pomiar zamontowanej płyty najbliższy temperaturze stołu wydruku. Wydruk uruchomiony tutaj zachowuje pomiar wybrany w oknie dialogowym. Wyłączenie usuwa mieszane siatki z pliku siatek drukarki.",
   "plates.blends_ready": "Mieszane siatki w drukarce: {temps} °C. Wydruk między dwoma pomiarami dostaje najbliższą.",
   "plates.blends_planned": "Mieszane siatki dla {temps} °C są zaplanowane; CC2 Control zapisze je, gdy drukarka będzie bezczynna.",
   "plates.blends_written": "Mieszane siatki dla {temps} °C są zapisane. Drukarka wczyta je przy następnym restarcie; do tego czasu wydruki używają najbliższego pomiaru.",

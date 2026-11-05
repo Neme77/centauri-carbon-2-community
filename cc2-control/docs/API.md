@@ -420,6 +420,8 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   the two measurements around it, same grid only, never beyond the measured range. A blend is used only
   once a `bed_mesh.profiles` query shows it in memory with exactly those points, i.e. after the next
   printer restart; `/api/plates/blends/restart` (empty body) restarts the printer for that when blends wait.
+  Turned off, CC2 Control takes every `cc2b_` profile out of `autosave.cfg` again while the printer is idle
+  (the printer keeps any it loaded until its next restart, unused).
   `GET /api/plates` reports `match` (`enabled`, `result` of the latest print: `armed`, `armed_blend`,
   `slot`, `off`, `no_measurement`, `no_bed_target`; `blend_temp` of a blend in use; `blends`: `state`
   `off`, `too_few`, `planned`, `written`, `ready` or `write_failed`, and `temps` with `live`) and

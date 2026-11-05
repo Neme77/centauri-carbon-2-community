@@ -718,7 +718,7 @@
   "plates.match_temperature": "Match the mesh to the print's bed temperature",
   "plates.match_on": "On",
   "plates.match_off": "Off",
-  "plates.match_note": "For prints sent from a slicer or started on the touchscreen, CC2 Control loads the mounted plate's measurement nearest to the print's bed temperature. A print started here keeps the measurement chosen in its dialog.",
+  "plates.match_note": "For prints sent from a slicer or started on the touchscreen, CC2 Control loads the mounted plate's measurement nearest to the print's bed temperature. A print started here keeps the measurement chosen in its dialog. Turning it off removes the blended meshes from the printer's mesh file.",
   "plates.blends_ready": "Blended meshes in the printer: {temps} °C. A print between two measurements gets the nearest one.",
   "plates.blends_planned": "Blended meshes for {temps} °C are planned; CC2 Control writes them once the printer is idle.",
   "plates.blends_written": "Blended meshes for {temps} °C are written. The printer loads them at its next restart; until then prints use the nearest measurement.",

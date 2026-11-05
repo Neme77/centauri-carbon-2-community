@@ -718,7 +718,7 @@
   "plates.match_temperature": "按打印的热床温度匹配网格",
   "plates.match_on": "开",
   "plates.match_off": "关",
-  "plates.match_note": "对于从切片软件发送或在触摸屏上启动的打印，CC2 Control 会加载已安装打印板上最接近该打印热床温度的测量。在此处启动的打印保留其对话框中选择的测量。",
+  "plates.match_note": "对于从切片软件发送或在触摸屏上启动的打印，CC2 Control 会加载已安装打印板上最接近该打印热床温度的测量。在此处启动的打印保留其对话框中选择的测量。关闭后，混合网格会从打印机的网格文件中删除。",
   "plates.blends_ready": "打印机中的混合网格：{temps} °C。介于两次测量之间的打印会使用最接近的那个。",
   "plates.blends_planned": "{temps} °C 的混合网格已规划；打印机空闲时 CC2 Control 会写入它们。",
   "plates.blends_written": "{temps} °C 的混合网格已写入。打印机会在下次重启时加载它们；在此之前打印使用最接近的测量。",
