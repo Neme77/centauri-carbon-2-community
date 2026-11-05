@@ -3230,41 +3230,9 @@ static void filament_source_response(int fd,console_state *console,mqtt_client *
     external_filament_response(fd,mqtt);
 }
 
-static void mesh_response(int fd) {
-    int uds = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (uds < 0) {
-        const char *error="{\"available\":false,\"error\":\"Cannot create UDS socket\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
-    }
-    struct timeval timeout={2,0};
-    setsockopt(uds,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
-    setsockopt(uds,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
-    struct sockaddr_un address; memset(&address,0,sizeof(address));
-    address.sun_family=AF_UNIX;
-    snprintf(address.sun_path,sizeof(address.sun_path),"%s","/tmp/elegoo_uds");
-    if(connect(uds,(struct sockaddr *)&address,sizeof(address))<0){
-        close(uds); const char *error="{\"available\":false,\"error\":\"Printer UDS unavailable\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
-    }
-    static const char query[]="{\"id\":201,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":null}}}\003";
-    if(send_all(uds,query,sizeof(query)-1)!=0){
-        close(uds); const char *error="{\"available\":false,\"error\":\"Mesh query failed\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
-    }
-    char *result=malloc(131073); size_t used=0;
-    if(!result){close(uds);return;}
-    while(used<131072){
-        ssize_t n=recv(uds,result+used,131072-used,0);
-        if(n<=0)break;
-        used+=(size_t)n;
-        char *end=memchr(result,3,used);
-        if(end){used=(size_t)(end-result);break;}
-    }
-    close(uds); result[used]='\0';
-    if(!used){free(result);const char *error="{\"available\":false,\"error\":\"No mesh response\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));return;}
-    respond(fd,200,"OK","application/json; charset=utf-8",result,used); free(result);
-}
+/* GET /api/mesh: the printer's active mesh plus the side and adaptive profiles; see
+ * mesh_response_body after the plate library, whose autosave.cfg reader it uses. */
+static void mesh_response(int fd);
 
 /* Cross-feature SAVE_CONFIG guards are implemented after both file editors. */
 static int canvas_unload_pending(void);
@@ -3283,6 +3251,83 @@ static const char *pending_autosave_guard(void);
 #include "runout.h"
 #include "calibration_tools.h"
 #include "cavity_floor_http.h"
+
+/* GET /api/mesh. The firmware builds `{"bed_mesh":null}` with every stored profile and all its points
+ * on the thread that schedules the motors: with many profiles (29-39 KB) that took 615 ms on a CC2
+ * and, during a first layer, ended in "MCU 'mcu' shutdown: Timer too close". So the printer is only
+ * asked for the active mesh's measured points (not mesh_matrix, the interpolated grid: 17 KB of the
+ * 18 KB answer, and the pages draw probed_matrix), and the three profiles the pages show (the two side slots and the
+ * adaptive mesh) are read from autosave.cfg, where the firmware keeps them, in the same shape. */
+#define MESH_REPLY_MAX (64 * 1024)
+static const char mesh_query[] =
+    "{\"id\":201,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":[\"profile_name\",\"mesh_min\",\"mesh_max\",\"probed_matrix\"]}}}\003";
+static const char *const mesh_shown_profiles[] = {"default", "default1", "ADAPTIVE"};
+static void mesh_profiles_json(json_builder *b) {
+    size_t length = 0;
+    char *text = plates_read_file(printer_autosave_path, AUTOSAVE_FILE_MAX, &length);
+    json_builder_printf(b, "\"profiles\":{");
+    for (size_t i = 0, first = 1; text && i < sizeof(mesh_shown_profiles) / sizeof(mesh_shown_profiles[0]); ++i) {
+        plate_mesh m;
+        if (autosave_find(text, length, mesh_shown_profiles[i], &m) != 1) continue;
+        json_builder_printf(b, "%s\"%s\":{\"mesh_params\":{\"min_x\":%.6f,\"max_x\":%.6f,\"min_y\":%.6f,\"max_y\":%.6f,"
+            "\"x_count\":%d,\"y_count\":%d,\"mesh_x_pps\":%d,\"mesh_y_pps\":%d,\"algo\":\"%s\",\"tension\":%.6f},\"points\":[",
+            first ? "" : ",", mesh_shown_profiles[i], m.min_x, m.max_x, m.min_y, m.max_y, m.x_count, m.y_count,
+            m.x_pps, m.y_pps, m.algo, m.tension);
+        for (int r = 0; r < m.y_count; ++r) {
+            json_builder_printf(b, "%s[", r ? "," : "");
+            for (int c = 0; c < m.x_count; ++c) json_builder_printf(b, "%s%.6f", c ? "," : "", m.points[r * m.x_count + c]);
+            json_builder_printf(b, "]");
+        }
+        json_builder_printf(b, "]}");
+        first = 0;
+    }
+    json_builder_printf(b, "}");
+    free(text);
+}
+static void mesh_fail(int fd, const char *error) {
+    char body[128]; int n = snprintf(body, sizeof(body), "{\"available\":false,\"error\":\"%s\"}\n", error);
+    respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", body, (size_t)n);
+}
+static void mesh_response(int fd) {
+    int uds = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (uds < 0) { mesh_fail(fd, "Cannot create UDS socket"); return; }
+    struct timeval timeout = {2, 0};
+    setsockopt(uds, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(uds, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    struct sockaddr_un address; memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", object_query_path);
+    if (connect(uds, (struct sockaddr *)&address, sizeof(address)) < 0) { close(uds); mesh_fail(fd, "Printer UDS unavailable"); return; }
+    if (send_all(uds, mesh_query, sizeof(mesh_query) - 1) != 0) { close(uds); mesh_fail(fd, "Mesh query failed"); return; }
+    char *reply = malloc(MESH_REPLY_MAX + 1); size_t used = 0;
+    if (!reply) { close(uds); mesh_fail(fd, "Out of memory"); return; }
+    while (used < MESH_REPLY_MAX) {
+        ssize_t n = recv(uds, reply + used, MESH_REPLY_MAX - used, 0);
+        if (n <= 0) break;
+        used += (size_t)n;
+        char *stop = memchr(reply, 3, used);
+        if (stop) { used = (size_t)(stop - reply); break; }
+    }
+    close(uds); reply[used] = 0;
+    /* The reply's bed_mesh object gets the profiles as its last member. */
+    const char *end = reply + used, *root = json_skip_space(reply, end), *e0, *e1, *e2, *e3;
+    const char *result = root < end && *root == '{' && (e0 = json_container_end(root, end)) ? json_member_object(root, e0, "result", '{', &e1) : NULL;
+    const char *status = result ? json_member_object(result, e1, "status", '{', &e2) : NULL;
+    const char *bed = status ? json_member_object(status, e2, "bed_mesh", '{', &e3) : NULL;
+    if (!bed) { free(reply); mesh_fail(fd, used ? "Unexpected mesh response" : "No mesh response"); return; }
+    json_builder b = {malloc(MESH_REPLY_MAX + 32768), 0, MESH_REPLY_MAX + 32768, 0};
+    if (!b.data) { free(reply); mesh_fail(fd, "Out of memory"); return; }
+    size_t head = (size_t)(e3 - 1 - reply); /* up to the bed_mesh object's closing brace */
+    json_builder_printf(&b, "%.*s", (int)head, reply);
+    const char *inside = json_skip_space(bed + 1, e3 - 1);
+    json_builder_printf(&b, "%s", inside < e3 - 1 ? "," : "");
+    mesh_profiles_json(&b);
+    json_builder_printf(&b, "%.*s", (int)(used - head), reply + head);
+    free(reply);
+    if (b.failed) { free(b.data); mesh_fail(fd, "Mesh response too large"); return; }
+    respond(fd, 200, "OK", "application/json; charset=utf-8", b.data, b.length);
+    free(b.data);
+}
 
 static const char *pending_autosave_guard(void) {
     if (cell_active()) return "Finish the load-cell calibration session before changing or saving printer settings";
