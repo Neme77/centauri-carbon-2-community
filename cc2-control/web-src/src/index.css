@@ -146,7 +146,7 @@
 }
 :root[data-theme="obsidian"] .cc2-dashboard .text-2xl:not(h2),
 :root[data-theme="obsidian"] .cc2-job-stats strong { color: var(--blue); }
-/* Inter (SIL OFL, see fonts/OFL.txt): variable 400â€“700, Latin + Latin-1 only, inlined by the build so it needs no request. */
+/* Inter (SIL OFL, see fonts/OFL.txt): variable 400Ã¢â‚¬â€œ700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
@@ -554,6 +554,22 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 .cc2-profile-fields > * { min-width: 0; }
 .cc2-job-temperatures small { overflow-wrap: anywhere; }
 
+/* Preview spacing, measured in each group's own fan element height:
+ * dashboard readout ~16px, Control slider row ~32.8px. Native auto-height
+ * Control cards keep their compact flow on smaller screens. */
+.cc2-dashboard-fans > div:nth-child(2) { margin-top: 1.75rem; }
+/* Keep the reviewed management heading and divider fixed; lower only its
+ * controls by one Control element (~32.8px), carrying EXHAUST with them. */
+.cc2-camera-fan-management > .cc2-exhaust-grille { padding-top: 2.8rem; }
+
+/* Preview spacing, measured in each group's own fan element height:
+ * dashboard readout ~16px, Control slider row ~32.8px. Native auto-height
+ * Control cards keep their compact flow on smaller screens. */
+.cc2-dashboard-fans > div:nth-child(2) { margin-top: 1.75rem; }
+/* Keep the reviewed management heading and divider fixed; lower only its
+ * controls by one Control element (~32.8px), carrying EXHAUST with them. */
+.cc2-camera-fan-management > .cc2-exhaust-grille { padding-top: 2.8rem; }
+
 /* Share desktop row boundaries while distributing movement controls naturally. */
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
   @container page (min-width: 1020px) {
@@ -563,6 +579,14 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
     .cc2-control-columns .cc2-temperatures { grid-column: 2; grid-row: 1; }
     .cc2-control-columns .cc2-live-offset { grid-column: 3; grid-row: 1; }
     .cc2-control-columns .cc2-fans { grid-column: 2; grid-row: 2; }
+    /* Preserve the reviewed first-slider position while separating chamber
+     * management below the three fan rows, away from the card's bottom edge. */
+    .cc2-control-columns .cc2-fan-controls { padding-top: 1.915rem; }
+    .cc2-control-columns .cc2-camera-fan-management { margin-top: 2.25rem; }
+    /* Preserve the reviewed first-slider position while separating chamber
+     * management below the three fan rows, away from the card's bottom edge. */
+    .cc2-control-columns .cc2-fan-controls { padding-top: 1.915rem; }
+    .cc2-control-columns .cc2-camera-fan-management { margin-top: 2.25rem; }
     .cc2-control-columns .cc2-tuning { grid-column: 3; grid-row: 2; }
     .cc2-movement .cc2-shaper { min-height: 190px; flex: 0 0 auto; padding-top: 14px; margin-top: 14px; }
     .cc2-movement .cc2-shaper > button { min-height: 44px; margin-top: 8px; }

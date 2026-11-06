@@ -1354,5 +1354,6 @@
   "runout.failed": "Nem sikerült folytatni: {error}",
   "runout.no_match_auto": "Csak azonos anyag: egyik másik betöltött hely sem tartalmaz azonos anyagot.",
   "canvas.match_material": "Csak azonos anyag",
-  "canvas.match_material_hint": "Bekapcsolt automatikus utántöltéssel: ha egyik hely sem tartalmaz azonos filamentet és színt, egy azonos anyagtípusú betöltött hellyel folytatja. A helyek címkéire hagyatkozik, ezért egy ASA címkéjű helyen ASA-nak kell lennie."
+  "canvas.match_material_hint": "Bekapcsolt automatikus utántöltéssel: ha egyik hely sem tartalmaz azonos filamentet és színt, egy azonos anyagtípusú betöltött hellyel folytatja. A helyek címkéire hagyatkozik, ezért egy ASA címkéjű helyen ASA-nak kell lennie.",
+  "control.chamber_fan_management": "Chamber fan management"
 }

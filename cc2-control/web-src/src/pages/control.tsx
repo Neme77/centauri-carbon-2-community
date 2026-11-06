@@ -742,23 +742,29 @@ export const Control = () => {
           <Temperatures d={d} v={v} />
           <Card class="cc2-fans flex flex-col ">
             <CardHead icon="fan" title="common.fans" />
-            <div class="cc2-fan-controls flex flex-1 flex-col justify-center gap-5">
-              {(['part', 'aux', 'box'] as const).map(k => (
-                <div key={k}>
-                  <FanSlider
-                    label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
-                    pct={v.fan(k)}
-                    disabled={!d?.connected}
-                    onCommit={n => control(`fan:${k}:${n}`)}
-                  />
-                  {k === 'box' && (
-                    <>
-                      <ExhaustGrille />
-                      <CavityFanFloor />
-                    </>
-                  )}
-                </div>
-              ))}
+            <div class="cc2-fan-controls flex flex-1 flex-col">
+              <div class="grid gap-5">
+                {(['part', 'aux', 'box'] as const).map(k => (
+                  <div key={k}>
+                    <FanSlider
+                      label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
+                      pct={v.fan(k)}
+                      disabled={!d?.connected}
+                      onCommit={n => control(`fan:${k}:${n}`)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <section
+                class="cc2-camera-fan-management mt-6 border-t border-edge pt-3.5"
+                aria-labelledby="cc2-camera-fan-title"
+              >
+                <h3 id="cc2-camera-fan-title" class="text-base font-semibold">
+                  {t('control.chamber_fan_management')}
+                </h3>
+                <ExhaustGrille />
+                <CavityFanFloor />
+              </section>
             </div>
           </Card>
         </div>

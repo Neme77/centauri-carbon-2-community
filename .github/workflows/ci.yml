@@ -200,7 +200,7 @@ jobs:
         run: npm run test:print-temperatures
 
       - name: Pressure Advance control and readback
-        run: npm run test:pressure-advance && npm run test:quick-maintenance
+        run: npm run test:pressure-advance && npm run test:quick-maintenance && npm run test:fan-layout
 
       - name: Native printer report interaction regression
         run: npm run test:printer-reports
