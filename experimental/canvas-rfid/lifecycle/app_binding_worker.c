@@ -5,6 +5,7 @@
 #include "coordinator.c"
 #undef VC_ENTRY
 #include "app_binding_tx.h"
+#include "app_binding_observation.h"
 #ifndef AU_WORKER_CONFIG
 #error A qualified old/new app binding configuration is required
 #endif
@@ -75,7 +76,7 @@ static int aw_live_app(struct au_store *store,const char *app_sha){
         cl_profile(&store->native,&record)&&vc_backup(&store->native)&&vc_targets(&store->native)&&
         sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
         sc_one_process("cc2-control",AU_APP,app_sha,&app)&&
-        sc_native_profile(&first,1)&&sc_fresh()&&vc_canvas_http()&&sc_fresh()&&sc_native_profile(&last,1)&&
+        sc_native_profile(&first,1)&&aw_fresh_ready()&&aw_canvas_ready()&&aw_fresh_ready()&&sc_native_profile(&last,1)&&
         sc_one_process("cc2-control",AU_APP,app_sha,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
 }

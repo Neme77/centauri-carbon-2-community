@@ -26,7 +26,7 @@ def run():
         code,_,_=functions(bundle,'ab'*32)
         body=code[code.index('binding_rejected() {'):code.index('binding_unpack() {')]
         for shell in [['dash'],['busybox','sh']]:
-            for case in ['ready','recovers','persistent','guard-refused','foreign-failure','guard-changed']:
+            for case in ['ready','recovers','persistent','guard-refused','foreign-failure','guard-changed','unsafe-live','missing-live','canvas-refused']:
                 root=base/(shell[0]+'-'+case);root.mkdir();calls=root/'calls';observations=root/'observations'
                 candidate=root/'candidate';candidate.write_text(f'''#!/bin/sh
 n=0;[ ! -f '{calls}' ] || n=$(cat '{calls}');n=$((n+1));echo "$n" > '{calls}'
@@ -34,6 +34,9 @@ case '{case}' in
 ready) exit 0;;
 recovers) [ "$n" -lt 2 ] || exit 0;;
 foreign-failure) echo 'STOP: profile_changed';exit 7;;
+unsafe-live) echo 'STOP: app_binding_unsafe_live_observation';;
+missing-live) echo 'STOP: app_binding_observation_unavailable';;
+canvas-refused) echo 'STOP: app_binding_canvas_observation_refused';;
 esac
 echo 'STOP: fresh_idle_cold_observation_failed'
 echo 'STOP: qualified_app_binding_action_refused; retain transaction and backups'

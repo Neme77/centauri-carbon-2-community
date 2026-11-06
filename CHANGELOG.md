@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Acquire a fresh observation when an otherwise safe, quiet MQTT cache exceeds the five-second RFID update guard; retain the original guard, fresh native state and immediate rejection of unsafe observations. Diagnosed from **Neme77**'s captured live samples (PR pending; printer validation pending).
+
 - Keep camera and Connections payload literals outside unified-installer shell functions, reducing the instructions retained in memory while preserving the exact component archives and verification. Investigated with **Neme77** (PR pending; printer validation pending).
 
 - Read queued native telemetry before declaring a receive timeout after a delayed application turn, avoiding unnecessary UDS reconnections while retaining the five-second freshness checks. Investigated with **Neme77** (PR pending; printer validation pending).

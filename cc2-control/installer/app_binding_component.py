@@ -79,7 +79,8 @@ binding_run() {{
         if "$@" >"$binding_log" 2>&1;then cat "$binding_log";return 0;else binding_code=$?;fi
         cat "$binding_log"
         [ "$binding_attempt" -lt 3 ] &&
-        grep -qx 'STOP: fresh_idle_cold_observation_failed' "$binding_log" || {{ binding_rejected;return "$binding_code"; }}
+        grep -qx 'STOP: fresh_idle_cold_observation_failed' "$binding_log" &&
+        ! grep -Eq '^STOP: app_binding_(unsafe_live_observation|observation_unavailable|canvas_observation_refused)$' "$binding_log" || {{ binding_rejected;return "$binding_code"; }}
         echo 'Waiting briefly for a valid fresh Idle/cold observation; all original checks remain active.'
         sleep 2
         [ -f /opt/usr/cc2-rfid/fresh-reader ] && [ ! -L /opt/usr/cc2-rfid/fresh-reader ] &&
