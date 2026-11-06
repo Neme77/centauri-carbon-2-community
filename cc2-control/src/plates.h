@@ -75,6 +75,7 @@ typedef struct {
     char current[PLATE_ID_LEN + 1];
     char pending[PLATE_ID_LEN + 1]; /* mesh written, waiting for the printer restart */
     char nozzle[PLATE_ID_LEN + 1];  /* the selected nozzle, "" for none */
+    int match;                      /* match the mesh to every print's bed temperature (#296) */
     plate_entry plates[PLATES_MAX];
     plate_measure measures[PLATE_MEASURES_MAX];
     plate_nozzle nozzles[PLATE_NOZZLES_MAX];
@@ -790,7 +791,8 @@ static char *plates_encode(const plate_store *store, size_t *length) {
         if (i) json_builder_printf(&b, ",");
         plates_measure_json(&b, &store->measures[i], 1, -1, -1);
     }
-    json_builder_printf(&b, "]}\n");
+    /* Written only when on, so a library with matching off stays readable by older restores. */
+    json_builder_printf(&b, store->match ? "],\"match_temperature\":true}\n" : "]}\n");
     if (b.failed) { free(b.data); return NULL; }
     *length = b.length;
     return b.data;
@@ -982,6 +984,8 @@ static void plates_load(void) {
                 memcpy(plates.plates[i].measure, plates.measures[i].id, sizeof(plates.plates[i].measure));
             }
         }
+        const char *match = json_member(root, root_end, "match_temperature");
+        plates.match = match && root_end - match >= 4 && !memcmp(match, "true", 4);
         ok = ok && plates_consistent();
     }
     free(text);
@@ -1457,15 +1461,16 @@ static void plates_delete_response(int fd, const mqtt_client *mqtt, const char *
     plates_reply(fd, 200, "{\"deleted\":true}\n");
 }
 
-/* Forget which plate is mounted; the printer keeps its mesh and offset. */
 /* on|off: match the mesh to the bed temperature of prints started elsewhere (#296). */
 static void plates_match_response(int fd, const char *body, size_t length) {
     int on = length == 2 && !memcmp(body, "on", 2), off = length == 3 && !memcmp(body, "off", 3);
     if (!on && !off) { plates_fail(fd, 400, "Use on or off"); return; }
-    if (plates_match_save(on) != 0) { plates_fail(fd, 500, "Cannot save the setting"); return; }
+    if (!plates_available) { plates_fail(fd, 503, plates_error); return; }
+    if (plates_match_save(on) != 0) { plates_fail(fd, 500, "Cannot save the plate library"); return; }
     plates_reply(fd, 200, on ? "{\"ok\":true,\"enabled\":true}\n" : "{\"ok\":true,\"enabled\":false}\n");
 }
 
+/* Forget which plate is mounted; the printer keeps its mesh and offset. */
 static void plates_unmount_response(int fd) {
     if (!plates_open(fd)) return;
     char old[PLATE_ID_LEN + 1]; memcpy(old, plates.current, sizeof(old));
@@ -2236,24 +2241,13 @@ static void plates_blends_restart_response(int fd, const mqtt_client *mqtt) {
  * whichever measurement went in last. With matching on, a new print on the mounted plate
  * gets the usable measurement nearest to its bed target, loaded the same way as one chosen
  * in the print dialog. A print CC2 Control started itself keeps the dialog's choice. */
-static const char *plates_match_path = "./mesh-match.conf";
-static int plates_match_state = -1;
-static int plates_match_enabled(void) {
-    if (plates_match_state < 0) {
-        plates_match_state = 0;
-        FILE *f = fopen(plates_match_path, "r");
-        if (f) { char line[64]; while (fgets(line, sizeof(line), f)) if (!strncmp(line, "match_temperature=1", 19)) plates_match_state = 1; fclose(f); }
-    }
-    return plates_match_state;
-}
+/* The setting is kept in the plate library file, so it follows --plates and its backups. */
+static int plates_match_enabled(void) { return plates_available && plates.match; }
 static int plates_match_save(int on) {
-    char temp[256]; snprintf(temp, sizeof(temp), "%s.tmp", plates_match_path);
-    FILE *f = fopen(temp, "w");
-    if (!f) return -1;
-    int ok = fprintf(f, "match_temperature=%d\n", on ? 1 : 0) > 0;
-    ok = !fclose(f) && ok;
-    if (!ok || rename(temp, plates_match_path) != 0) { unlink(temp); return -1; }
-    plates_match_state = on ? 1 : 0;
+    if (!plates_available) return -1;
+    int old = plates.match;
+    plates.match = on ? 1 : 0;
+    if (plates_save() != 0) { plates.match = old; return -1; }
     return 0;
 }
 

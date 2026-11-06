@@ -89,6 +89,7 @@ static void seed(void) {
     for(int i=0;i<9;i++)m->mesh.points[i]=.001*i;
     snprintf(plates.current,sizeof(plates.current),"%s",p->id);
     snprintf(plates.nozzle,sizeof(plates.nozzle),"%s",n->id);
+    plates.match=1;
     assert(!plates_save());
     spool_entry *sp=&spools.spools[0];
     spools.count=1;
@@ -253,6 +254,15 @@ int main(void) {
     backup_data *data=calloc(1,sizeof(*data));
     assert(data&&bk_parse(backup,length,data));
     assert(data->sections==15&&data->plate_data.count==2&&data->plate_data.measure_count==1);
+    assert(data->plate_data.match&&strstr(backup,"\"match_temperature\":true"));       /* the #296 setting travels with the plates */
+    {
+        const char *plates_text="{\"version\":2,\"current\":\"\",\"pending\":\"\",\"nozzle\":\"\",\"nozzles\":[],\"plates\":[],\"uncalibrated\":[],\"measures\":[]";
+        char probe[256]; plate_store *store=calloc(1,sizeof(*store)); assert(store);
+        snprintf(probe,sizeof(probe),"%s}",plates_text); assert(bk_plates(probe,probe+strlen(probe),store)&&!store->match);
+        snprintf(probe,sizeof(probe),"%s,\"match_temperature\":false}",plates_text); assert(bk_plates(probe,probe+strlen(probe),store)&&!store->match);
+        snprintf(probe,sizeof(probe),"%s,\"match_temperature\":1}",plates_text); assert(!bk_plates(probe,probe+strlen(probe),store));
+        free(store);
+    }
     assert(data->spool_data.spools[0].remaining==991.875&&data->spool_data.log_count==1);
     char *stored=read_target(3);
     assert(strstr(stored,"998.000"));

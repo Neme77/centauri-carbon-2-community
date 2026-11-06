@@ -727,8 +727,6 @@ static void test_measures(void) {
     /* Prints started elsewhere (#296): with matching on, the nearest usable measurement to the
      * bed target is loaded like a dialog choice; off, or started from the dialog, nothing happens. */
     {
-        static char match_path[512]; snprintf(match_path, sizeof(match_path), "%s.match", plates_path);
-        plates_match_path = match_path; plates_match_state = -1; unlink(match_path);
         plates_dialog_ms = -1; plates_auto.phase = 0;
         #define NEW_PRINT(bed) do { strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt); \
             strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0; \
@@ -736,7 +734,7 @@ static void test_measures(void) {
         NEW_PRINT(62); plates_tick(&mqtt);
         assert(!plates_late.state && !strcmp(plates_auto.result, "off"));                  /* off by default */
         assert(call(14, &mqtt, "maybe") == 400 && call(14, &mqtt, "on") == 200 && plates_match_enabled());
-        plates_match_state = -1; assert(plates_match_enabled());                            /* persisted */
+        { size_t n; char *saved = slurp(plates_path, &n); assert(saved && strstr(saved, "\"match_temperature\":true")); free(saved); } /* persisted */
         /* the bed target arrives after the start: wait for it */
         NEW_PRINT(0); telemetry.present &= ~(UINT32_C(1) << U_BG); plates_tick(&mqtt);
         assert(plates_auto.phase == 1 && !plates_late.state);
@@ -774,7 +772,7 @@ static void test_measures(void) {
         strcpy(telemetry.print_state, "printing"); plates_tick(&mqtt); assert(!plates_late.state);
         #undef NEW_PRINT
         strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
-        assert(call(14, &mqtt, "off") == 200 && !plates_match_enabled()); unlink(match_path);
+        assert(call(14, &mqtt, "off") == 200 && !plates_match_enabled());
         telemetry.present &= ~(UINT32_C(1) << U_BG);
     }
 
@@ -1186,10 +1184,8 @@ static void add_measure(const char *plate, const char *id, int temp, plate_mesh 
 
 static void test_blends(void) {
     mqtt_client mqtt; memset(&mqtt, 0, sizeof(mqtt)); fresh(&mqtt);
-    static char match_path[512]; snprintf(match_path, sizeof(match_path), "%s.match", plates_path);
-    plates_match_path = match_path; assert(plates_match_save(1) == 0);
     const char *id = "7d29710cf494c5ff";
-    memset(&plates, 0, sizeof(plates)); plates_available = 1; plates.count = 1;
+    memset(&plates, 0, sizeof(plates)); plates_available = 1; plates.count = 1; plates.match = 1;
     snprintf(plates.plates[0].id, sizeof(plates.plates[0].id), "%s", id);
     snprintf(plates.plates[0].name, sizeof(plates.plates[0].name), "Supertack"); plates.plates[0].side = 'A';
     plate_mesh m60 = grid(-0.8), m90 = grid(-0.7), m100 = grid(-0.75), m110 = grid(-0.74);
@@ -1314,10 +1310,38 @@ static void test_blends(void) {
     assert(plates_match_save(1) == 0); plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
     assert(!strcmp(plates_blends.state, "written") && plates_blends_in_file(plates_blends.b, plates_blends.count) == 1);
     assert(plates_match_save(0) == 0); plates_blends.next_ms = 0; plates_blends_tick(&mqtt); assert(plates_blends_in_file(NULL, 0) == 1);
-    plates_uds = fake_uds; unlink(match_path);
+    plates_uds = fake_uds;
     telemetry.present &= ~((UINT32_C(1) << U_LAYER) | (UINT32_C(1) << U_BG));
     printf("PASS: blended meshes: largest-error-first plan on 5 C steps within the measured range, limit of %d, same-grid pairs, exact points, file add/remove "
            "keeping every other byte, memory check before use, restart only when waiting, nearest-wins selection, auto print, removed when switched off\n", PLATE_BLEND_MAX);
+}
+
+/* The match setting is part of the plate library: it follows --plates whatever the service's
+ * working directory is (the service starts in /), and it is backed up with the plates. */
+static void test_match_setting(void) {
+    char elsewhere[] = "/tmp/cc2-plates-cwd-XXXXXX", before[512];
+    assert(mkdtemp(elsewhere) && getcwd(before, sizeof(before)) && !chdir(elsewhere));
+    memset(&plates, 0, sizeof(plates)); plates_available = 1; plates.count = 1;           /* one uncalibrated plate */
+    snprintf(plates.plates[0].id, sizeof(plates.plates[0].id), "5a1e000000000001");
+    snprintf(plates.plates[0].name, sizeof(plates.plates[0].name), "Textured"); plates.plates[0].side = 'A';
+    assert(plates_save() == 0);
+    plates_load(); assert(plates_available && plates.count == 1 && !plates_match_enabled());
+    int plate_count = plates.count, measure_count = plates.measure_count;
+    assert(plates_match_save(1) == 0 && plates_match_enabled());
+    size_t n; char *saved = slurp(plates_path, &n);
+    assert(saved && strstr(saved, "\"match_temperature\":true}")); free(saved);
+    DIR *d = opendir("."); struct dirent *e; int entries = 0;
+    while ((e = readdir(d))) entries += strcmp(e->d_name, ".") && strcmp(e->d_name, "..");
+    closedir(d); assert(!entries);                                                  /* nothing written in the cwd */
+    plates_load(); assert(plates_match_enabled());                                 /* reloaded from --plates */
+    assert(plates.count == plate_count && plates.measure_count == measure_count);  /* the library is intact */
+    assert(plates_match_save(0) == 0 && !plates_match_enabled());
+    saved = slurp(plates_path, &n); assert(saved && !strstr(saved, "match_temperature")); free(saved);
+    plates_load(); assert(!plates_match_enabled());
+    plates_available = 0; assert(plates_match_save(1) != 0 && !plates_match_enabled()); /* no library: no setting */
+    plates_load();
+    assert(!chdir(before) && !rmdir(elsewhere));
+    printf("PASS: match setting stored in the plate library at --plates, independent of the working directory\n");
 }
 
 int main(void) {
@@ -1345,6 +1369,7 @@ int main(void) {
     test_print_setup();
     test_background_transport();
     test_blends();
+    test_match_setting();
     printf("PASS: plate library\n");
     return 0;
 }
