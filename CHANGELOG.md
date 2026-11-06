@@ -26,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Keep camera and Connections payload literals outside unified-installer shell functions, reducing the instructions retained in memory while preserving the exact component archives and verification. Investigated with **Neme77** (PR pending; printer validation pending).
+
+- Read queued native telemetry before declaring a receive timeout after a delayed application turn, avoiding unnecessary UDS reconnections while retaining the five-second freshness checks. Investigated with **Neme77** (PR pending; printer validation pending).
+
 - After a native preparation observation is refused, wait briefly and retry only when the unchanged, fingerprinted Idle/cold guard passes again; retain the three-attempt bound and all original temperature, motion and freshness limits. Reported by **Neme77** during unified-update qualification (PR pending).
 
 - Keep the spool-selection question and its draft open after an accidental click outside the popup; explicit Not now, Cancel and keyboard Escape remain available. Reported and reproduced with **Neme77**, follow-up to the Canvas/spool workflow (#299).

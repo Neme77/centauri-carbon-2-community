@@ -444,6 +444,13 @@ const char *uds_print_state(const uds_client *c){return uds_fresh(c)&&c->have_pr
 const char *uds_mesh_profile(const uds_client *c){return uds_fresh(c)&&c->have_mesh_profile?c->mesh_profile:NULL;}
 void uds_tick(uds_client *c,const char *path){
  struct timespec now=now_mono();
+ /* A delayed main-loop turn may leave a valid reply queued in the socket.
+  * Consume the bounded nonblocking receive batch before declaring silence;
+  * ignored/incomplete frames still cannot renew the five-second deadline. */
+ if(c->fd>=0&&elapsed(now,c->last_rx)>5){
+  uds_process(c);
+  now=now_mono();
+ }
  if(c->fd>=0&&elapsed(now,c->last_rx)>5)uds_disconnect(c,"receive_timeout",0);
  if(c->fd<0){
   if(c->retry.tv_sec&&elapsed(now,c->retry)<5)return;
@@ -479,7 +486,7 @@ void uds_process(uds_client *c){
  /* Bound each turn so telemetry cannot starve HTTP/MQTT processing. */
  char buffer[4096];
  for(int turn=0;turn<4&&c->fd>=0;turn++){
-  ssize_t n=recv(c->fd,buffer,sizeof(buffer),0);
+  ssize_t n=recv(c->fd,buffer,sizeof(buffer),MSG_DONTWAIT);
   if(n<0){if(errno==EINTR)continue;if(errno==EAGAIN||errno==EWOULDBLOCK)return;uds_disconnect(c,"receive_error",errno);return;}
   if(!n){uds_disconnect(c,"peer_closed",0);return;}
   for(ssize_t i=0;i<n;i++){

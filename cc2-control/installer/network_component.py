@@ -11,7 +11,7 @@ import tarfile
 RUNTIME_SHA = '649d0af3dba7e21bc399fc741115fbe298cc1e4b77c07cf51bd35bfd73762e9a'
 HELPER_SHA = '2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62'
 
-def functions(runtime: Path):
+def functions(runtime: Path, *, streamed=False):
     data = runtime.read_bytes()
     if hashlib.sha256(data).hexdigest() != RUNTIME_SHA:
         raise ValueError('Unqualified Connections runtime')
@@ -44,9 +44,15 @@ network_install_component() {
     fi
     NETWORK_SOURCE="$STAGE/connections-component-$$"
     (umask 077; mkdir "$NETWORK_SOURCE") || return 1''']
+    payload = []
+    if streamed:
+        lines.append("    sed -n '/^# CC2_NETWORK_DATA_BEGIN$/,/^# CC2_NETWORK_DATA_END$/p' \"$STAGE/install-on-printer.sh\" | sed '/^#/d' | sh > \"$NETWORK_SOURCE/payload.tar.gz\" || return 1")
     for start in range(0, len(data), 4096):
         chunk = ''.join('\\%03o' % byte for byte in data[start:start + 4096])
-        lines.append("    printf '" + chunk + "' " + ('>' if start == 0 else '>>') + ' "$NETWORK_SOURCE/payload.tar.gz" || return 1')
+        if streamed:
+            payload.append("printf '" + chunk + "' || exit 1")
+        else:
+            lines.append("    printf '" + chunk + "' " + ('>' if start == 0 else '>>') + ' "$NETWORK_SOURCE/payload.tar.gz" || return 1')
     lines += [
         f'    [ "$(sha256sum "$NETWORK_SOURCE/payload.tar.gz" | awk \'{{print $1}}\')" = {RUNTIME_SHA} ] || return 1',
         '    tar -xzf "$NETWORK_SOURCE/payload.tar.gz" -C "$NETWORK_SOURCE" || return 1',
@@ -61,4 +67,7 @@ network_install_component() {
         '      *) echo "Installed; unexpected temporary component retained";; esac',
         '    return 0',
         '}', '']
-    return '\n'.join(lines)
+    code = '\n'.join(lines)
+    if streamed:
+        return code, '\n# CC2_NETWORK_DATA_BEGIN\n' + '\n'.join(payload) + '\n# CC2_NETWORK_DATA_END\n'
+    return code

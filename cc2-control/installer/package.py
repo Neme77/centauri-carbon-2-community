@@ -40,6 +40,11 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
     rfid_code, rfid_tail = rfid_functions(rfid_runtime, binary_hash) if rfid_runtime else ('', '')
     binding_code, binding_tail, binding_restore = app_binding_functions(app_binding_runtime, binary_hash) if app_binding_runtime else ('', '', '')
     native = native_functions(native_runtime, binary_hash) if native_runtime else None
+    # Large literal printf bodies become a shell function AST even on routes
+    # that never invoke them. Keep unified component bytes in the same streamed
+    # data-tail format already used by RFID, without changing the signed format.
+    native_camera, native_camera_tail = camera_functions(HERE / 'camera', camera_runtime, streamed=True) if native and camera_runtime else ('', '')
+    native_network, native_network_tail = network_functions(connections_runtime, streamed=True) if native and connections_runtime else ('', '')
     files = {'cc2-control': binary}
     worker = (prepared / 'cc2-update-worker').read_bytes()
     if len(worker) < 20 or worker[:6] != b'\x7fELF\x01\x01' or struct.unpack_from('<H', worker, 18)[0] != 40:
@@ -90,9 +95,9 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
             substitutions = {
                 '@CAMERA_RESTORE_FUNCTION@': CAMERA_RESTORE,
                 '@CAMERA_FAILURE_RELEASE@': "echo 'Native installer barrier retained until camera startup recovery is resolved.' >&2",
-                '@CAMERA_COMPONENT_FUNCTIONS@': camera_functions(HERE / 'camera', camera_runtime) if camera_runtime else '',
+                '@CAMERA_COMPONENT_FUNCTIONS@': native_camera,
                 '@CAMERA_COMPONENT_PREFLIGHT@': 'camera_unpack\nsh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '',
-                '@CONNECTIONS_COMPONENT_FUNCTIONS@': network_functions(connections_runtime) if connections_runtime else '',
+                '@CONNECTIONS_COMPONENT_FUNCTIONS@': native_network,
                 '@CONNECTIONS_COMPONENT_INSTALL@': 'install_phase network-component\n                network_install_component || exit 1' if connections_runtime else '',
                 '@RFID_COMPONENT_FUNCTIONS@': native['functions'],
                 '@RFID_COMPONENT_PREFLIGHT@': native['preflight'],
@@ -109,7 +114,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
             for token,value in substitutions.items(): text = text.replace(token,value)
         else:
             text = text.replace('@NATIVE_UNCHANGED_ROLLBACK@', '').replace('@CAMERA_FAILURE_RELEASE@', 'rmdir "$LOCK"')
-        if name == 'install-on-printer.sh': text += native['tail'] if native else rfid_tail + binding_tail
+        if name == 'install-on-printer.sh': text += native['tail'] + native_camera_tail + native_network_tail if native else rfid_tail + binding_tail
         files[name] = text.encode()
     files['build-info.json'] = (json.dumps({
         'version': VERSION, 'binary_sha256': binary_hash,
