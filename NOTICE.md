@@ -1,5 +1,10 @@
 # Licensing scope and third-party notices
 
+The experimental Anycubic RFID field decoder follows OpenRFID (GPL-3.0),
+`src/tag/anycubic/processor.py`, blob 4823abc89b4f0b5e7b82fe485e480cbf98857b7a;
+OpenRFID credits DnG-Crafts/ACE-RFID. See `experimental/canvas-rfid/README.md`
+for scope, acknowledgements and the autonomous-activation release blocker.
+
 The GNU General Public License, version 3 (SPDX: GPL-3.0-only), applies to original code contributions supplied by the Centauri Carbon 2 Community project whose rights can be licensed by their contributors. Existing license notices and third-party terms take precedence for their respective material. No claim of ownership is made over third-party contributions.
 
 This repository-level license does not relicense ELEGOO firmware images, modified vendor executables, embedded third-party software, trademarks or signing keys. Their applicable terms must be preserved. Documentation is not assigned a separate reuse license by this code licensing notice.

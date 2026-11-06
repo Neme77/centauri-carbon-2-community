@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:rfid": "node preview/test-rfid.mjs",
     "test:fan-layout": "node preview/test-fan-layout.mjs",
     "dev": "vite",
     "build": "vite build",
