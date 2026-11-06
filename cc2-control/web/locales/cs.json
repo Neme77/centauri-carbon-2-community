@@ -1367,5 +1367,6 @@
   "runout.failed": "Nelze pokračovat: {error}",
   "runout.no_match_auto": "Jen stejný materiál: žádný jiný zavedený slot nemá stejný materiál.",
   "canvas.match_material": "Jen stejný materiál",
-  "canvas.match_material_hint": "Se zapnutým automatickým doplňováním: když žádný slot nemá stejný filament i barvu, pokračuje zavedeným slotem stejného typu materiálu. Spoléhá na označení slotů, slot označený ASA tedy musí obsahovat ASA."
+  "canvas.match_material_hint": "Se zapnutým automatickým doplňováním: když žádný slot nemá stejný filament i barvu, pokračuje zavedeným slotem stejného typu materiálu. Spoléhá na označení slotů, slot označený ASA tedy musí obsahovat ASA.",
+  "control.chamber_fan_management": "Chamber fan management"
 }
