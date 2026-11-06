@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Add a private, closed-profile coordinated application upgrade for an already active managed RFID installation: replace the four application-bound files with startup recovery and exact app/runtime rollback while preserving the native guard, Canvas journal and original backup. Developed and integration-tested with **Neme77** (PR pending); this does not yet enable public native first-install delivery.
+
 - Pause panel mutations while the application installer or native maintenance coordinator owns the shared installation barrier, preserving read-only status and both emergency-stop routes; developed with **Neme77** as part of the draft autonomous RFID update work (#299).
 
 - Arrange Control fan sliders above a separate Chamber fan management group, and lower Dashboard fan readouts by one element without stretching their card; designed and preview-reviewed with **Neme77** (PR pending).

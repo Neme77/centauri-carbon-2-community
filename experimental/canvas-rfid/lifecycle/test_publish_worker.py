@@ -17,7 +17,7 @@ CASES=['check','publish','retry','source-changed','source-symlink','source-publi
 def put(path,data,mode=0o600):
     path.parent.mkdir(parents=True,exist_ok=True,mode=0o700);path.write_bytes(data);path.chmod(mode)
 
-def run(target_name="cc2-rfid"):
+def run(target_name="cc2-rfid",app_binding=False):
     count=0
     with tempfile.TemporaryDirectory(prefix='cc2-publish-') as temporary:
         root=Path(temporary)
@@ -27,7 +27,14 @@ def run(target_name="cc2-rfid"):
                'activate-on-ready':b'fixture request','payload/0':b'future root delegate',
                'recover-worker':bytes(range(256))*1024}
         modes={n:(0o700 if n=='recover-worker' else 0o600) for n in files}
-        config=root/'configuration.h';config.write_bytes(configuration(files,modes,[('/etc/old-startup',sha(b'previous startup'),0o755)]))
+        probe='enabled'
+        if app_binding:
+            files={'worker':bytes(range(256))*1024,'recovery.json':b'closed fixture',
+                'incoming/coordinator':b'new coordinator','incoming/capture':b'new capture',
+                'incoming/app-integration.json':b'new metadata','incoming/activate-on-ready':b'new request'}
+            modes={n:0o700 if n in ['worker','incoming/coordinator','incoming/capture'] else 0o600 for n in files}
+            probe='incoming/coordinator'
+        config=root/'configuration.h';config.write_bytes(configuration(files,modes,[('/etc/old-startup',sha(b'previous startup'),0o755)],app_binding=app_binding))
         for arch,compiler,flags,runner in [
             ('host','gcc',[],[]),('arm','arm-linux-gnueabihf-gcc',['-static'],['qemu-arm']),
             ('sanitizers','gcc',['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie'],[])]:
@@ -35,7 +42,7 @@ def run(target_name="cc2-rfid"):
             binary=root/(arch+'-publisher')
             defines={'CP_PARENT':str(parent),'CP_PREFIX':str(tree),'CP_LOCK':str(lock),'CP_CONFIG':str(config),'CP_TARGET':target_name}
             subprocess.run([compiler,'-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror','-D_POSIX_C_SOURCE=200809L',
-                *flags,*['-D'+k+'='+json.dumps(v) for k,v in defines.items()],'-include',fault,HERE/'publish_worker.c','-o',binary],check=True,timeout=120)
+                *flags,*(['-DCP_APP_BINDING=1'] if app_binding else []),*['-D'+k+'='+json.dumps(v) for k,v in defines.items()],'-include',fault,HERE/'publish_worker.c','-o',binary],check=True,timeout=120)
             for case in CASES:
                 if fixture.exists():shutil.rmtree(fixture)
                 parent.mkdir(parents=True,mode=0o700);source.mkdir(mode=0o700);lock.mkdir(mode=0o700)
@@ -47,12 +54,12 @@ def run(target_name="cc2-rfid"):
                 if case in ['retry','active-journal']:
                     result=invoke('--publish');assert result.returncode==0,(arch,case,result.stderr)
                 if case=='active-journal':put(target/'lifecycle',b'foreign or active evidence')
-                if case=='source-changed':put(source/'enabled',b'changed')
+                if case=='source-changed':put(source/probe,b'changed')
                 if case=='source-symlink':
-                    (source/'enabled').unlink();(source/'enabled').symlink_to(dependency)
-                if case=='source-public':(source/'enabled').chmod(0o666)
+                    (source/probe).unlink();(source/probe).symlink_to(dependency)
+                if case=='source-public':(source/probe).chmod(0o666)
                 if case=='dependency-changed':put(dependency,b'changed',0o755)
-                if case=='dependency-symlink':dependency.unlink();dependency.symlink_to(source/'enabled')
+                if case=='dependency-symlink':dependency.unlink();dependency.symlink_to(source/probe)
                 if case=='dependency-mode':dependency.chmod(0o700)
                 if case=='busy-lock-absent':lock.rmdir()
                 if case=='lock-symlink':lock.rmdir();lock.symlink_to(source,target_is_directory=True)

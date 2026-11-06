@@ -12,14 +12,14 @@ import tarfile
 
 sha=lambda data:hashlib.sha256(data).hexdigest()
 
-def configuration(files,modes,before):
+def configuration(files,modes,before,app_binding=False):
     if not files or len(files)>40 or set(files)!=set(modes):
         raise ValueError('Incomplete bounded publisher configuration')
     rows=[]
     for name,data in sorted(files.items()):
         path=PurePosixPath(name)
         if (str(path)!=name or path.is_absolute() or '..' in path.parts or
-            (len(path.parts)!=1 and name not in [f'payload/{n}' for n in range(8)]) or
+            (len(path.parts)!=1 and name not in (['incoming/'+n for n in ('coordinator','capture','app-integration.json','activate-on-ready')] if app_binding else [f'payload/{n}' for n in range(8)])) or
             modes[name] not in [0o600,0o700] or len(data)>4*1024*1024):
             raise ValueError('Unsafe component publisher entry')
         rows.append('{%s,%du,0%o,%s},'%(json.dumps(name),len(data),modes[name],json.dumps(sha(data))))

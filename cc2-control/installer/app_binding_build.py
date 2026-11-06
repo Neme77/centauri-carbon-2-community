@@ -1,0 +1,102 @@
+"""Build a closed same-native-profile binding bundle, without installing it.
+
+Requires an exact previous qualified runtime and a separately qualified new app.
+No stock firmware image, key, serial operation or release publication is used.
+"""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+from app_binding_bundle import read_runtime, plan_components, descriptor
+from app_binding_component import functions
+
+ROOT=Path(__file__).resolve().parents[2]
+LIFE=ROOT/'experimental/canvas-rfid/lifecycle'
+sys.path.insert(0,str(LIFE))
+from publish_bundle import configuration, runtime
+
+sha=lambda data:hashlib.sha256(data).hexdigest()
+ARM=['-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror','-D_POSIX_C_SOURCE=200809L',
+     '-D_TIME_BITS=32','-D_FILE_OFFSET_BITS=32','-marm','-mcpu=cortex-a7','-mfpu=neon-vfpv4',
+     '-mfloat-abi=hard','-static']
+
+
+def compile_arm(source,target,defines,extra=()):
+    command=['arm-linux-gnueabihf-gcc',*ARM,'-I'+str(LIFE.parent/'host'),*extra,
+        *['-D'+k+'='+json.dumps(v) for k,v in defines.items()],source,'-lm','-o',target]
+    subprocess.run(list(map(str,command)),check=True,timeout=180)
+    dynamic=subprocess.check_output(['arm-linux-gnueabihf-readelf','-d',target],text=True,timeout=30)
+    if 'NEEDED' in dynamic:raise ValueError('Binding helper must be self-contained')
+    return target.read_bytes()
+
+
+def build(previous,new_app,output):
+    old,modes,old_metadata=read_runtime(previous)
+    app_bytes=new_app.read_bytes();new_sha=sha(app_bytes)
+    if len(app_bytes)<20 or app_bytes[:6]!=b'\x7fELF\x01\x01' or app_bytes[18:20]!=b'\x28\x00':
+        raise ValueError('New application must be a qualified ARM32 ELF')
+    # This builder admits only the tested cumulative owner profile. Other bases
+    # require their own explicit admission and tests, not a guessed version string.
+    if (old_metadata['app_sha256']!='8bfe407fe0ac61dd30f6485c4a45b408882807453ce46f92926845047196b4b3' or
+            old_metadata['profile_sha256']!='9efc21a14f3da203a0fc8b0cf710602ab4bbf02bef6a3517c827a52b89f67766'):
+        raise ValueError('Previous runtime is not the admitted cumulative profile')
+    pins={'fresh-reader':'3dd6d8699169c800689e5ed2c047a2d3cc43386d3fdad59adc41b929111b045a',
+          'transfer-worker':'dd4a3be0fcee2e5290e177091dbfda5b1f402b87bd9e00727e1687661610206a',
+          'libcc2-rfid.so':'fe6210eebfde592e4b0d276d2097abb0cfa3d53264da7ee9d83d8f24d7597ce2'}
+    for name,digest in pins.items():
+        if sha(old[name])!=digest:raise ValueError('Qualified native artifact changed: '+name)
+    output.mkdir(mode=0o700,parents=True,exist_ok=False)
+    defines={'SC_APP_SHA':new_sha,'SC_PROFILE_SHA':old_metadata['profile_sha256'],
+        'SC_FRESH_PATH':'/opt/usr/cc2-rfid/fresh-reader','SC_FRESH_SHA':pins['fresh-reader'],
+        'SC_STRICT_SHA':pins['libcc2-rfid.so'],'SC_TRANSFER_SHA':pins['transfer-worker']}
+    baseline=['-DSC_STOCK_BOOTSTRAP=1','-DSC_WITH_CAVITY=1',
+        '-DSC_CAVITY_BOOTSTRAP_OPTIONAL=1','-DSC_VERIFY_CAVITY_CHANNEL=1']
+    new=dict(old)
+    new['coordinator']=compile_arm(LIFE/'coordinator.c',output/'coordinator',defines,baseline)
+    new['capture']=compile_arm(LIFE.parent/'capture.c',output/'capture',{
+        'CT_MODULE':'/opt/usr/cc2-rfid/libcc2-rfid.so','CT_MODULE_SHA':pins['libcc2-rfid.so'],
+        'CT_GUARD':'/opt/usr/cc2-rfid/coordinator','CT_GUARD_SHA':sha(new['coordinator']),
+        'CT_LOGROOT':'/opt/usr/cc2-rfid'},['-DCT_GUARD_NATIVE=1'])
+    metadata={'protocol':1,'app_sha256':new_sha,'coordinator_sha256':sha(new['coordinator']),
+        'capture_sha256':sha(new['capture']),'profile_sha256':old_metadata['profile_sha256']}
+    new['app-integration.json']=(json.dumps(metadata,separators=(',',':'))+'\n').encode()
+    new['activate-on-ready']=f'CC2-RFID-ACTIVATE-1\n{new_sha}\n{old_metadata["profile_sha256"]}\n'.encode()
+    planned=plan_components(old,modes,old_metadata,new,modes,metadata)
+    config=output/'binding-plan.h';config.write_bytes(planned['configuration'])
+    worker_defines=dict(defines,SC_APP_SHA=old_metadata['app_sha256'],AU_WORKER_CONFIG=str(config),
+        AU_DIRECTORY='/opt/usr/cc2-rfid-app-updates/'+new_sha)
+    worker=compile_arm(LIFE/'app_binding_worker.c',output/'worker',worker_defines,
+        [*baseline,'-ffunction-sections','-fdata-sections','-Wl,--gc-sections'])
+    files={'worker':worker,'recovery.json':descriptor(worker,planned)}
+    files.update({'incoming/'+n:data for n,data in planned['incoming'].items()})
+    permissions={n:0o700 if n in ['worker','incoming/coordinator','incoming/capture'] else 0o600 for n in files}
+    # Only a complete exact old native inventory qualifies for publication.
+    dependencies=[('/opt/usr/cc2-rfid/'+n,sha(data),modes[n]) for n,data in sorted(old.items())]
+    dependencies.append(('/opt/usr/cc2-control/cc2-control',old_metadata['app_sha256'],0))
+    publisher_config=output/'publisher-plan.h'
+    publisher_config.write_bytes(configuration(files,permissions,dependencies,app_binding=True))
+    publisher=compile_arm(LIFE/'publish_worker.c',output/'publisher',{
+        'CP_PARENT':'/opt/usr/cc2-rfid-app-updates','CP_TARGET':new_sha,'CP_CONFIG':str(publisher_config)},
+        ['-DCP_APP_BINDING=1'])
+    bundle=output/'app-binding-runtime.tar.gz';bundle.write_bytes(runtime(files,permissions,publisher))
+    functions(bundle,new_sha)  # Validate the exact installer-side contract.
+    report={'protocol':1,'old_app_sha256':old_metadata['app_sha256'],'new_app_sha256':new_sha,
+        'profile_sha256':old_metadata['profile_sha256'],'plan_sha256':planned['plan_sha256'],
+        'bundle_sha256':sha(bundle.read_bytes()),'previous_runtime_sha256':sha(previous.read_bytes()),
+        'target_files':list(planned['incoming']),'native_files_unchanged':True,'Canvas_write':False,
+        'printer_accessed':False,'public_update':False,'installable_application_package_built':False}
+    (output/'binding-build.json').write_text(json.dumps(report,indent=2)+'\n')
+    print('BOUND ARTIFACTS BUILT: exact old profile preserved; four app-specific targets only. No application installer, printer access or Canvas write.',flush=True)
+    return report
+
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--previous-runtime',type=Path,required=True)
+    parser.add_argument('--app',type=Path,required=True)
+    parser.add_argument('--output',type=Path,required=True)
+    args=parser.parse_args()
+    build(args.previous_runtime,args.app,args.output)

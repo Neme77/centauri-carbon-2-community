@@ -70,7 +70,10 @@ static int vc_verify_mode(enum cl_event event,unsigned wanted,unsigned complete,
 }
 static int vc_verify(enum cl_event event,unsigned wanted,unsigned complete){return vc_verify_mode(event,wanted,complete,0);}
 #include "normal_flow.h"
-int main(int argc,char **argv){
+#ifndef VC_ENTRY
+#define VC_ENTRY main
+#endif
+int VC_ENTRY(int argc,char **argv){
     if(argc!=2){fprintf(stderr,"STOP: unsupported_coordinator_action\n");return 1;}
     if(!strcmp(argv[1],"--check")||!strcmp(argv[1],"--stage-host"))return coordinator_stage_main(argc,argv);
     if(!strcmp(argv[1],"--verify-host-boot"))return vc_verify(CL_VERIFY_HOST_BOOT,CL_HOST_STAGED,CL_HOST_READY);

@@ -43,19 +43,44 @@ static int cp_hash(int fd,const struct cp_file *file,int mode){
         (file->size==SIZE_MAX||(uint64_t)st.st_size==file->size)&&
         (!mode||(st.st_mode&07777)==file->mode)&&sha256_fd(fd,digest)&&!strcmp(digest,file->sha);
 }
+#ifdef CP_APP_BINDING
+#define CP_SUBDIR "incoming"
+static int cp_binding_name(const char *name){
+    return !strcmp(name,"coordinator")||!strcmp(name,"capture")||
+        !strcmp(name,"app-integration.json")||!strcmp(name,"activate-on-ready");
+}
+static int cp_target_valid(void){
+    if(strlen(CP_TARGET)!=64)return 0;
+    for(unsigned i=0;i<64;i++)if(!((CP_TARGET[i]>='0'&&CP_TARGET[i]<='9')||
+        (CP_TARGET[i]>='a'&&CP_TARGET[i]<='f')))return 0;
+    return 1;
+}
+#else
+#define CP_SUBDIR "payload"
+static int cp_target_valid(void){return !strcmp(CP_TARGET,"cc2-rfid")||!strcmp(CP_TARGET,"cc2-cavity-floor");}
+#endif
 static int cp_open(int root,const char *name){
+#ifdef CP_APP_BINDING
+    if(!strncmp(name,"incoming/",9)){
+        if(!cp_binding_name(name+9))return -1;
+        int sub=openat(root,"incoming",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
+        if(!cp_private(sub,1)){if(sub>=0)close(sub);return -1;}
+        int fd=openat(sub,name+9,O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);close(sub);return fd;
+    }
+#else
     if(!strncmp(name,"payload/",8)){
         if(strlen(name)!=9||name[8]<'0'||name[8]>'7')return -1;
         int sub=openat(root,"payload",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
         if(!cp_private(sub,1)){if(sub>=0)close(sub);return -1;}
         int fd=openat(sub,name+8,O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);close(sub);return fd;
     }
+#endif
     if(strchr(name,'/')||!strcmp(name,".")||!strcmp(name,".."))return -1;
     return openat(root,name,O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);
 }
 static int cp_expected(const char *name,int nested){
-    if(!nested&&!strcmp(name,"payload"))return 1;
-    char full[96];int n=snprintf(full,sizeof(full),nested?"payload/%s":"%s",name);
+    if(!nested&&!strcmp(name,CP_SUBDIR))return 1;
+    char full[96];int n=snprintf(full,sizeof(full),nested?CP_SUBDIR "/%s":"%s",name);
     if(n<1||(size_t)n>=sizeof(full))return 0;
     for(size_t i=0;i<sizeof(cp_files)/sizeof(cp_files[0]);i++)if(!strcmp(full,cp_files[i].name))return 1;
     return 0;
@@ -67,8 +92,8 @@ static int cp_names(int fd,int nested){
     while((entry=readdir64(dir))){
         if(!strcmp(entry->d_name,".")||!strcmp(entry->d_name,".."))continue;
         if(!cp_expected(entry->d_name,nested)){okay=0;break;}
-        if(!nested&&!strcmp(entry->d_name,"payload")){
-            int sub=openat(fd,"payload",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
+        if(!nested&&!strcmp(entry->d_name,CP_SUBDIR)){
+            int sub=openat(fd,CP_SUBDIR,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
             okay=cp_private(sub,1)&&cp_names(sub,1);if(sub>=0)close(sub);if(!okay)break;
         }
         errno=0;
@@ -119,12 +144,16 @@ static int cp_lock_identity(int held){
         (first.st_mode&07777)==0700&&now.st_dev==first.st_dev&&now.st_ino==first.st_ino;
 }
 int main(int argc,char **argv){
-    if(geteuid()!=0||argc!=3||(strcmp(CP_TARGET,"cc2-rfid")&&strcmp(CP_TARGET,"cc2-cavity-floor"))||(strcmp(argv[1],"--check")&&strcmp(argv[1],"--publish"))){fprintf(stderr,"STOP: expected_closed_profile_publish_action\n");return 1;}
+    if(geteuid()!=0||argc!=3||!cp_target_valid()||(strcmp(argv[1],"--check")&&strcmp(argv[1],"--publish"))){fprintf(stderr,"STOP: expected_closed_profile_publish_action\n");return 1;}
     umask(077);
     int lock=open(CP_LOCK,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
     int source=open(argv[2],O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
     int parent=open(CP_PARENT,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
     int okay=cp_lock_identity(lock)&&cp_tree(source,0)&&cp_private(parent,1)&&cp_dependencies();
+#ifdef CP_APP_BINDING
+    struct stat parent_stat;
+    okay=okay&&!fstat(parent,&parent_stat)&&(parent_stat.st_mode&07777)==0700;
+#endif
     int installed=-1;
     if(okay){
         installed=openat(parent,CP_TARGET,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
@@ -138,11 +167,11 @@ int main(int argc,char **argv){
         char stage[96];int n=snprintf(stage,sizeof(stage),".cc2-rfid-stage-%ld-%016llx",(long)getpid(),(unsigned long long)nonce);
         okay=okay&&n>0&&(size_t)n<sizeof(stage)&&!mkdirat(parent,stage,0700);
         int temporary=okay?openat(parent,stage,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC):-1;
-        okay=okay&&cp_private(temporary,1)&&!mkdirat(temporary,"payload",0700);
+        okay=okay&&cp_private(temporary,1)&&!mkdirat(temporary,CP_SUBDIR,0700);
         for(size_t i=0;okay&&i<sizeof(cp_files)/sizeof(cp_files[0]);i++){
             okay=cp_copy_file(source,temporary,cp_files+i);if(okay)CP_FAULT("copied");
         }
-        if(okay){int sub=openat(temporary,"payload",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);okay=sub>=0&&!fsync(sub);if(sub>=0)close(sub);}
+        if(okay){int sub=openat(temporary,CP_SUBDIR,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);okay=sub>=0&&!fsync(sub);if(sub>=0)close(sub);}
         okay=okay&&cp_tree(temporary,1)&&!fsync(temporary)&&cp_dependencies()&&cp_lock_identity(lock);
         if(okay){CP_FAULT("before-publish");okay=!syscall(SYS_renameat2,parent,stage,parent,CP_TARGET,1u);}
         if(okay){CP_FAULT("published");okay=!fsync(parent);}
