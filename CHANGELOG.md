@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Add a private, closed-profile coordinated application upgrade for an already active managed RFID installation: replace the four application-bound files with startup recovery and exact app/runtime rollback while preserving the native guard, Canvas journal and original backup. Developed and integration-tested with **Neme77** (PR pending); this does not yet enable public native first-install delivery.
+- Use one native-component installer for a supported first installation, an existing active RFID upgrade and an already current installation. Stage EXHAUST through the same authenticated application installer, retain the Canvas journal/original backup on upgrades, and restore app-bound files before rolling back the application. Developed with **Neme77** (PR pending; unified delivery qualification in progress).
 
 - Pause panel mutations while the application installer or native maintenance coordinator owns the shared installation barrier, preserving read-only status and both emergency-stop routes; developed with **Neme77** as part of the draft autonomous RFID update work (#299).
 

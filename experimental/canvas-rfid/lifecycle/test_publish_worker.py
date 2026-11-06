@@ -10,7 +10,7 @@ from publish_bundle import configuration
 
 HERE=Path(__file__).resolve().parent
 sha=lambda b:hashlib.sha256(b).hexdigest()
-CASES=['check','publish','retry','source-changed','source-symlink','source-public',
+CASES=['retire-dormant','retire-active','check','publish','retry','source-changed','source-symlink','source-public',
     'dependency-changed','dependency-symlink','dependency-mode','busy-lock-absent','lock-symlink',
     'foreign-root','root-symlink','active-journal','interrupted-copy','interrupted-publish','name-race']
 
@@ -51,9 +51,9 @@ def run(target_name="cc2-rfid",app_binding=False):
                 target=parent/target_name
                 def invoke(action,env=None):
                     return subprocess.run([*runner,binary,action,source],env=env,capture_output=True,text=True,timeout=15)
-                if case in ['retry','active-journal']:
+                if case in ['retry','active-journal','retire-dormant','retire-active']:
                     result=invoke('--publish');assert result.returncode==0,(arch,case,result.stderr)
-                if case=='active-journal':put(target/'lifecycle',b'foreign or active evidence')
+                if case in ['active-journal','retire-active']:put(target/'lifecycle',b'foreign or active evidence')
                 if case=='source-changed':put(source/probe,b'changed')
                 if case=='source-symlink':
                     (source/probe).unlink();(source/probe).symlink_to(dependency)
@@ -69,22 +69,27 @@ def run(target_name="cc2-rfid",app_binding=False):
                 if case=='interrupted-copy':env['CP_CRASH']='copied'
                 if case=='interrupted-publish':env['CP_CRASH']='published'
                 if case=='name-race':env['CP_CRASH']='name-race'
-                action='--check' if case=='check' else '--publish'
+                action='--retire-dormant' if case.startswith('retire-') else '--check' if case=='check' else '--publish'
                 result=invoke(action,env)
-                success=case in ['check','publish','retry']
+                retired=case=='retire-dormant' and target_name=='cc2-rfid'
+                success=case in ['check','publish','retry'] or retired
                 assert (result.returncode==0)==success,(arch,case,result.stdout,result.stderr)
                 if case.startswith('interrupted-'):
                     assert result.returncode==91
                     retry=invoke('--publish');assert retry.returncode==0,(arch,case,retry.stdout,retry.stderr)
                     success=True
-                if success and case!='check':
+                if retired:
+                    assert not target.exists()
+                    retired_root,=parent.glob('.cc2-rfid-dormant-*')
+                    for name,data in files.items():assert (retired_root/name).read_bytes()==data
+                if success and case!='check' and not retired:
                     for name,data in files.items():
                         assert (target/name).read_bytes()==data and (target/name).stat().st_mode&0o777==modes[name]
                     assert target.stat().st_mode&0o777==0o700
                 if case=='check':assert not target.exists()
                 if case=='name-race':assert target.is_dir() and not list(target.iterdir())
                 if case=='foreign-root':assert (target/'foreign').read_bytes()==b'preserve'
-                if case=='active-journal':assert (target/'lifecycle').read_bytes()==b'foreign or active evidence'
+                if case in ['active-journal','retire-active']:assert (target/'lifecycle').read_bytes()==b'foreign or active evidence'
                 assert lock.exists() or case=='busy-lock-absent'
                 count+=1
     print(f'PASS: {count} actual dormant publication host/ARM/sanitizer cases; no-replace rename, interrupted retry, foreign/active evidence refusal, exact dependencies and retained installer lock')

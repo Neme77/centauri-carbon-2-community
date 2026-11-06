@@ -79,7 +79,7 @@ finish() {
     if [ "$PASSED" -eq 0 ] && [ -n "$CAMERA_SOURCE" ] && [ -n "$BACKUP" ] && [ -f "$BACKUP/printer-camera.before" ]; then
         if ! camera_restore_startup "$BACKUP"; then
             echo "Camera startup restoration refused; inspect $BACKUP before reboot." >&2
-            rmdir "$LOCK"
+            @CAMERA_FAILURE_RELEASE@
             exit 1
         fi
     fi
@@ -98,6 +98,7 @@ finish() {
             echo "Previous installation restored/restarted. Backup: $BACKUP" >&2
         fi
     fi
+    @NATIVE_UNCHANGED_ROLLBACK@
     rmdir "$LOCK"
     exit "$code"
 }

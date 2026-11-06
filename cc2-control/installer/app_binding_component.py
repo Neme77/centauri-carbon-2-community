@@ -10,7 +10,7 @@ END = '# CC2_APP_BINDING_DATA_END'
 NAMES = ('coordinator', 'capture', 'app-integration.json', 'activate-on-ready')
 
 
-def functions(runtime, app_sha):
+def functions(runtime, app_sha, defer_publication=False):
     data = runtime.read_bytes()
     if not data or len(data) > 4 * 1024 * 1024:
         raise ValueError('Unbounded app binding bundle')
@@ -70,6 +70,9 @@ binding_unpack() {{
     (cd "$BINDING_SOURCE" && sha256sum -c SHA256SUMS) || return 1
     chmod 700 "$BINDING_SOURCE/publisher" "$BINDING_SOURCE/component" "$BINDING_SOURCE/component/worker" "$BINDING_SOURCE/component/incoming" "$BINDING_SOURCE/component/incoming/coordinator" "$BINDING_SOURCE/component/incoming/capture" || return 1
     exec 3< "$LOCK"
+    {' :' if defer_publication else 'binding_publish'}
+}}
+binding_publish() {{
     if [ -e {destination} ] || [ -L {destination} ]; then
         binding_verify_worker || return 1
     else

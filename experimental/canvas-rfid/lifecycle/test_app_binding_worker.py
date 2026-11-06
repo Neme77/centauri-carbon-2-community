@@ -122,6 +122,7 @@ def run(installer_only=False):
                                 assert n.poll() is None,(arch,case,'native stopped')
                                 count+=1
                                 continue
+                            assert invoke('--check-current',held).returncode!=0,'old app must not qualify as current'
                             prepared=invoke('--prepare',source,held)
                             early=case in ['wrong-phase','bad-backup','guard-refused','foreign-target','corrupt-descriptor']
                             if early:
@@ -155,6 +156,7 @@ def run(installer_only=False):
                                     if case=='recover-without-barrier':
                                         assert not barrier.exists();os.close(held);barrier.mkdir(mode=0o700);held=os.open(barrier,os.O_RDONLY|os.O_DIRECTORY)
                                     committed=invoke('--commit',held);assert committed.returncode==0,(arch,case,committed.stdout,committed.stderr)
+                                    assert invoke('--check-current',held).returncode==0,'complete current app verification failed'
                                     started.terminate();started.wait(timeout=5)
                                     if case in ['rollback','rollback-live','rollback-retry']:
                                         restored=invoke('--rollback',held);assert restored.returncode==0,(arch,case,restored.stderr)

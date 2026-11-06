@@ -12,6 +12,9 @@ LOCK=$BASE/lock
 HELD=0
 CHANGED=0
 READER=
+INSTALLER_OWNED=0
+INSTALLER_FD=
+INSTALLER_GUARD_SHA=
 fail(){ echo "STOP: $*" >&2;exit 1; }
 sha(){ sha256sum "$1" | awk '{print $1}'; }
 regular(){
@@ -120,7 +123,12 @@ idle(){
     printf '%s\n' "$uds" | grep -Eq '"print_state":"(standby|complete|cancelled)"' || fail native_print_active
     for endpoint in /api/app-update/status /api/network/manager /api/calibration-tools/status /api/console;do
         status=$(http "$endpoint") || fail operation_status_unavailable
-        printf '%s\n' "$status" | grep -q '"busy":false' || fail operation_busy
+        if [ "$endpoint" = /api/app-update/status ] && [ "$INSTALLER_OWNED" = 1 ];then
+            "$BASE/installer-barrier" --check "$INSTALLER_FD" || fail installer_barrier_changed
+            printf '%s\n' "$status" | grep -Eq '"busy":(true|false)' || fail operation_status_invalid
+        else
+            printf '%s\n' "$status" | grep -q '"busy":false' || fail operation_busy
+        fi
         printf '%s\n' "$status" | grep -q '"owned":true' && fail active_calibration
         if [ "$endpoint" = /api/network/manager ];then
             printf '%s\n' "$status" | grep -q '"pending":null' || fail network_confirmation_pending
@@ -187,6 +195,14 @@ prepare(){
 command=${1:-check}
 case "$command" in
     status) if [ -f "$BASE/enabled" ];then echo 'Enabled for next full boot';else echo 'Disabled';fi;exit 0;;
+    check-from-installer|enable-from-installer)
+        [ "$#" = 2 ] && [ -n "$INSTALLER_GUARD_SHA" ] || fail unsupported_installer_context
+        regular "$BASE/installer-barrier" && [ "$(sha "$BASE/installer-barrier")" = "$INSTALLER_GUARD_SHA" ] || fail damaged_installer_guard
+        INSTALLER_FD=$2
+        "$BASE/installer-barrier" --check "$INSTALLER_FD" || fail installer_barrier_not_owned
+        INSTALLER_OWNED=1
+        if [ "$command" = check-from-installer ];then command=check;else command=enable;fi
+        ;;
     check|enable|disable) ;;
     *) fail unknown_action;;
 esac

@@ -12,7 +12,7 @@ def manifest(directory,prefix=''):
     write(directory/'SHA256SUMS',''.join(digest(p.read_bytes())+'  '+prefix+p.relative_to(directory).as_posix()+'\n' for p in files).encode())
 def snapshot(files):return {str(p):(p.read_bytes(),stat.S_IMODE(p.stat().st_mode)) for p in files}
 
-cases=['check','success','reactor-dot','network-bare','duplicate-active-entry','without-network','copy-failure','cancelled-idle','minimal-machine','hot','heating','printing','stale','network-pending','console-busy','cell-owned','nozzle-active','foreign-launcher','damaged-reactor','foreign-profile','symlink-launcher','hardlink-launcher','damaged-payload','foreign-after-enable','damaged-disable']
+cases=['installer-busy','installer-wrong-barrier','installer-tampered-guard','installer-hot','installer-calibration','installer-busy-foreign','check','success','reactor-dot','network-bare','duplicate-active-entry','without-network','copy-failure','cancelled-idle','minimal-machine','hot','heating','printing','stale','network-pending','console-busy','cell-owned','nozzle-active','foreign-launcher','damaged-reactor','foreign-profile','symlink-launcher','hardlink-launcher','damaged-payload','foreign-after-enable','damaged-disable']
 for shell in [['dash'],['busybox','sh']]:
     for case in cases:
         with tempfile.TemporaryDirectory(prefix='cavity-manager-') as temporary:
@@ -44,19 +44,34 @@ for shell in [['dash'],['busybox','sh']]:
             text=text.replace('4639364c68489ec40c4e0c4f425550f3aa19e44c2ee61ed641affdc560e7e92c',digest(reactor))
             text=text.replace('PATH=/usr/sbin:/usr/bin:/sbin:/bin',f'PATH={fake}:/usr/sbin:/usr/bin:/sbin:/bin')
             write(base/'manage.sh',text.encode(),0o700)
+            installer_case=case.startswith('installer-')
+            shared=root/'shared-installer';borrowed=-1
+            if installer_case:
+                shared.mkdir(mode=0o700)
+                guard=base/'installer-barrier'
+                subprocess.run(['gcc','-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror',
+                    '-DNB_BARRIER='+json.dumps(str(shared)),repo/'experimental/cavity-fan-floor/installer_barrier.c','-o',guard],check=True,timeout=60)
+                guard.chmod(0o700)
+                text=text.replace('INSTALLER_GUARD_SHA=\n','INSTALLER_GUARD_SHA='+digest(guard.read_bytes())+'\n',1)
+                write(base/'manage.sh',text.encode(),0o700)
+                opened=shared
+                if case=='installer-wrong-barrier':opened=root/'foreign';opened.mkdir(mode=0o700)
+                borrowed=os.open(opened,os.O_RDONLY|os.O_DIRECTORY)
+                if case=='installer-tampered-guard':write(guard,b'changed guard',0o700)
             printer={'connected':True,'last_message_age':0,'extruder':{'temperature':25,'target':0},'heater_bed':{'temperature':25,'target':0},'machine':{'status':1,'status_name':'Idle','sub_status':0,'reason':0,'progress':0},'print':{'enabled':False},'bed_drying':{'active':False}}
             replies={'/api/printer':printer,'/api/uds':{'connected':True,'fresh':True,'print_state':'standby'},'/api/app-update/status':{'busy':False},'/api/network/manager':{'busy':False,'pending':None},'/api/calibration-tools/status':{'busy':False,'cell':{'owned':False}},'/api/console':{'busy':False},'/api/nozzle-expansion':{'state':'idle'}}
             if case=='minimal-machine':printer['machine']={'status':1}
             if case=='cancelled-idle':
                 printer['print']={'enabled':True,'state':'cancelled'};replies['/api/uds']['print_state']='cancelled'
-            if case=='hot':printer['extruder']['temperature']=51
+            if case in ['hot','installer-hot']:printer['extruder']['temperature']=51
             if case=='heating':printer['extruder']['target']=200
             if case=='printing':printer['machine']['status']=2
             if case=='stale':printer['last_message_age']=6
             if case=='network-pending':replies['/api/network/manager']['pending']={'id':1}
-            if case=='console-busy':replies['/api/console']['busy']=True
-            if case=='cell-owned':replies['/api/calibration-tools/status']['cell']['owned']=True
+            if case in ['console-busy','installer-busy-foreign']:replies['/api/console']['busy']=True
+            if case in ['cell-owned','installer-calibration']:replies['/api/calibration-tools/status']['cell']['owned']=True
             if case=='nozzle-active':replies['/api/nozzle-expansion']['state']='running'
+            if installer_case:replies['/api/app-update/status']['busy']=True
             write(root/'replies.json',json.dumps(replies,separators=(',',':')).encode())
             write(fake/'wget',('''#!/usr/bin/python3
 import json,sys
@@ -88,11 +103,15 @@ os.execv('/bin/cp',['cp',*sys.argv[1:]])
             manifest(base)
             if case=='damaged-payload':write(base/'libcc2-cavity-floor-r1.so',b'damaged\n')
             def invoke(action,okay=True,env=None):
-                result=subprocess.run([*shell,str(base/'manage.sh'),action],text=True,capture_output=True,timeout=30,env=env)
+                args=[action]
+                if installer_case and action in ['enable','check']:
+                    args=[action+'-from-installer',str(borrowed)]
+                result=subprocess.run([*shell,str(base/'manage.sh'),*args],text=True,capture_output=True,timeout=30,env=env,
+                    pass_fds=(borrowed,) if borrowed>=0 else ())
                 assert (result.returncode==0)==okay,(shell,case,action,result.returncode,result.stdout,result.stderr)
                 return result
             for name in ['manage.sh','launcher.sh','profile.sh']:subprocess.run([*shell,'-n',base/name],check=True)
-            refused=case in ['duplicate-active-entry','minimal-machine','hot','heating','printing','stale','network-pending','console-busy','cell-owned','nozzle-active','foreign-launcher','damaged-reactor','foreign-profile','symlink-launcher','hardlink-launcher','damaged-payload']
+            refused=case in ['installer-wrong-barrier','installer-tampered-guard','installer-hot','installer-calibration','installer-busy-foreign','duplicate-active-entry','minimal-machine','hot','heating','printing','stale','network-pending','console-busy','cell-owned','nozzle-active','foreign-launcher','damaged-reactor','foreign-profile','symlink-launcher','hardlink-launcher','damaged-payload']
             if refused:
                 current=snapshot(files)
                 invoke('enable',False);assert snapshot(files)==current
@@ -118,7 +137,11 @@ os.execv('/bin/cp',['cp',*sys.argv[1:]])
                     write(runtime/'launcher.sh',b'foreign\n',0o700);current=snapshot(files);invoke('disable',False);assert snapshot(files)==current
                 else:
                     if case=='damaged-disable':write(base/'libcc2-cavity-floor-r1.so',b'damaged\n')
+                    if installer_case:
+                        replies['/api/app-update/status']['busy']=False
+                        write(root/'replies.json',json.dumps(replies,separators=(',',':')).encode())
                     invoke('disable');assert snapshot(files)==before;assert not (base/'enabled').exists()
+            if borrowed>=0:os.close(borrowed)
             assert not (root/'stat-called').exists(),'The installer called the absent stat utility'
             print('PASS',shell,case,'stat unavailable',flush=True)
 print('PASS: actual private manager on dash/BusyBox, activation plus exact permissions/content rollback, LAN profile/manifest compatibility, no-LAN path, guards, foreign edits, symlinks, copy failure and damaged-payload disable. Only fake HTTP/files used.',flush=True)

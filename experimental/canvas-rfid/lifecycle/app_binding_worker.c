@@ -69,14 +69,14 @@ bad:
 static int aw_state(struct au_store *store,struct au_record *record){
     char plan[65];return au_plan_hash(&au_expected,plan)&&au_read_state(store,record)&&!strcmp(record->plan,plan);
 }
-static int aw_live_old(struct au_store *store){
+static int aw_live_app(struct au_store *store,const char *app_sha){
     struct cl_record record;struct sc_ready first={0},last={0};pid_t app=0,last_app=0;
     return cl_store_read(&store->native,&record)&&record.phase==CL_ACTIVE&&vc_profile_bound(&record)&&
         cl_profile(&store->native,&record)&&vc_backup(&store->native)&&vc_targets(&store->native)&&
         sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
-        sc_one_process("cc2-control",AU_APP,au_expected.old_app,&app)&&
+        sc_one_process("cc2-control",AU_APP,app_sha,&app)&&
         sc_native_profile(&first,1)&&sc_fresh()&&vc_canvas_http()&&sc_fresh()&&sc_native_profile(&last,1)&&
-        sc_one_process("cc2-control",AU_APP,au_expected.old_app,&last_app)&&
+        sc_one_process("cc2-control",AU_APP,app_sha,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
 }
 static int aw_prepare(struct au_store *store,int source,int held){
@@ -99,6 +99,14 @@ static int aw_prepare(struct au_store *store,int source,int held){
         }
     }else if(errno!=ENOENT)return 0;
     return au_prepare(store,&au_expected,source,held);
+}
+static int aw_check_current(int held){
+    struct au_store store;memset(&store,0,sizeof(store));
+    store.directory=store.lock=store.native.directory=store.native.lock=-1;
+    if(!au_barrier(held)||!au_app(au_expected.new_app)||!cl_store_open(&store.native,AU_COMPONENT))return 0;
+    int okay=aw_live_app(&store,au_expected.new_app);
+    for(unsigned i=0;okay&&i<AU_COUNT;i++)okay=au_current(&store,au_expected.files+i)==1;
+    au_close(&store);return okay;
 }
 static int aw_any_app(void){
     DIR *directory=opendir("/proc");if(!directory)return 1;
@@ -180,18 +188,19 @@ int main(int argc,char **argv){
         if(aw_recover()){puts("APP BINDING RECOVERED: native journal, startup, guard and Canvas unchanged.");return 0;}
         fputs("STOP: app_binding_recovery_incomplete; retain transaction and backups\n",stderr);return 1;
     }
-    int prepare=argc==4&&!strcmp(argv[1],"--prepare"),rollback=argc==3&&!strcmp(argv[1],"--rollback"),commit=argc==3&&!strcmp(argv[1],"--commit");
-    if(!prepare&&!rollback&&!commit)return 2;
+    int prepare=argc==4&&!strcmp(argv[1],"--prepare"),rollback=argc==3&&!strcmp(argv[1],"--rollback"),commit=argc==3&&!strcmp(argv[1],"--commit"),current=argc==3&&!strcmp(argv[1],"--check-current");
+    if(!prepare&&!rollback&&!commit&&!current)return 2;
     const char *number=argv[prepare?3:2];char *end=NULL;errno=0;long value=strtol(number,&end,10);
     if(errno||!number[0]||!end||*end||value<3||value>1048576)return 2;
     int held=(int)value;
     if(!au_barrier(held))return 1;
+    if(current)return aw_check_current(held)?0:1;
     struct au_store store;
     if(!au_open(&store,prepare))return 1;
     int okay=0;
     if(prepare){
         int source=open(argv[2],O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
-        okay=source>=0&&aw_descriptor(&store)&&aw_live_old(&store)&&
+        okay=source>=0&&aw_descriptor(&store)&&aw_live_app(&store,au_expected.old_app)&&
             aw_prepare(&store,source,held)&&aw_owner_save(&store,held);
         if(source>=0)close(source);
     }else if(rollback)okay=!aw_any_app()&&au_run(&store,&au_expected,held,1);

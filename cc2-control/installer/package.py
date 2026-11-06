@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from camera_component import functions as camera_functions, RESTORE as CAMERA_RESTORE
 from network_component import functions as network_functions, RUNTIME_SHA as NETWORK_RUNTIME_SHA
 from app_binding_component import functions as app_binding_functions
+from native_delivery import functions as native_functions
 from rfid_component import functions as rfid_functions, ORDINARY_GUARD as RFID_ORDINARY_GUARD, RESTORE_GUARD as RFID_RESTORE_GUARD
 
 HERE = Path(__file__).resolve().parent
@@ -25,7 +26,9 @@ COMPATIBILITY = json.loads((HERE / 'compatibility.json').read_text())
 if hashlib.sha256((HERE.parent / 'FIRMWARE_VERSION').read_bytes()).hexdigest() != COMPATIBILITY['firmware_version_file_sha256']:
     raise ValueError('Updater firmware compatibility record does not match FIRMWARE_VERSION')
 
-def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None, rfid_runtime=None, app_binding_runtime=None):
+def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None, rfid_runtime=None, app_binding_runtime=None, native_runtime=None):
+    if native_runtime and (rfid_runtime or app_binding_runtime):
+        raise ValueError("Unified delivery replaces separate RFID/binding inputs")
     if app_binding_runtime and (rfid_runtime or camera_runtime or connections_runtime):
         raise ValueError("App binding trial must preserve installed native components")
     if rfid_runtime and (camera_runtime or connections_runtime):
@@ -36,6 +39,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
     binary_hash = hashlib.sha256(binary).hexdigest()
     rfid_code, rfid_tail = rfid_functions(rfid_runtime, binary_hash) if rfid_runtime else ('', '')
     binding_code, binding_tail, binding_restore = app_binding_functions(app_binding_runtime, binary_hash) if app_binding_runtime else ('', '', '')
+    native = native_functions(native_runtime, binary_hash) if native_runtime else None
     files = {'cc2-control': binary}
     worker = (prepared / 'cc2-update-worker').read_bytes()
     if len(worker) < 20 or worker[:6] != b'\x7fELF\x01\x01' or struct.unpack_from('<H', worker, 18)[0] != 40:
@@ -79,7 +83,33 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         text = text.replace('@APP_BINDING_RESTORE_FUNCTIONS@', binding_restore)
         text = text.replace('@APP_BINDING_RESTORE_ROLLBACK@', 'exec 3< "$LOCK"\nbinding_rollback || exit 1' if app_binding_runtime else '')
         text = text.replace('@RFID_RESTORE_GUARD@', 'binding_verify_worker || exit 1' if app_binding_runtime else RFID_RESTORE_GUARD)
-        if name == 'install-on-printer.sh': text += rfid_tail + binding_tail
+        if native:
+            # Templates have already expanded the ordinary/private hooks; use
+            # the same tokens on a fresh template so only one route is emitted.
+            text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash).replace('@VERSION@', VERSION).replace('@FIRMWARE_VERSION@', FIRMWARE_VERSION).replace('@PRINTER_SHA256@', COMPATIBILITY['printer_sha256']).replace('@DAEMON_SHA256@', COMPATIBILITY['daemon_sha256'])
+            substitutions = {
+                '@CAMERA_RESTORE_FUNCTION@': CAMERA_RESTORE,
+                '@CAMERA_FAILURE_RELEASE@': "echo 'Native installer barrier retained until camera startup recovery is resolved.' >&2",
+                '@CAMERA_COMPONENT_FUNCTIONS@': camera_functions(HERE / 'camera', camera_runtime) if camera_runtime else '',
+                '@CAMERA_COMPONENT_PREFLIGHT@': 'camera_unpack\nsh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '',
+                '@CONNECTIONS_COMPONENT_FUNCTIONS@': network_functions(connections_runtime) if connections_runtime else '',
+                '@CONNECTIONS_COMPONENT_INSTALL@': 'install_phase network-component\n                network_install_component || exit 1' if connections_runtime else '',
+                '@RFID_COMPONENT_FUNCTIONS@': native['functions'],
+                '@RFID_COMPONENT_PREFLIGHT@': native['preflight'],
+                '@RFID_COMPONENT_PUBLISH@': native['prepare'],
+                '@RFID_COMPONENT_COMPLETION@': "echo 'Native components ready: follow Canvas RFID activation and full idle-printer reboot prompts when requested.'",
+                '@RFID_RESTORE_GUARD@': native['restore_guard'],
+                '@APP_BINDING_FUNCTIONS@': '', '@APP_BINDING_PREPARE@': '',
+                '@APP_BINDING_COMMIT@': native['commit'],
+                '@APP_BINDING_ROLLBACK@': native['rollback'],
+                '@APP_BINDING_RESTORE_FUNCTIONS@': native['restore_functions'],
+                '@APP_BINDING_RESTORE_ROLLBACK@': native['restore_rollback'],
+                '@NATIVE_UNCHANGED_ROLLBACK@': native['unchanged_rollback'],
+            }
+            for token,value in substitutions.items(): text = text.replace(token,value)
+        else:
+            text = text.replace('@NATIVE_UNCHANGED_ROLLBACK@', '').replace('@CAMERA_FAILURE_RELEASE@', 'rmdir "$LOCK"')
+        if name == 'install-on-printer.sh': text += native['tail'] if native else rfid_tail + binding_tail
         files[name] = text.encode()
     files['build-info.json'] = (json.dumps({
         'version': VERSION, 'binary_sha256': binary_hash,
@@ -87,9 +117,10 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         'change': 'CC2 Control application updater',
         'camera_component': 'reap-r2+recovery-r2' if camera_runtime else None,
         'connections_runtime_sha256': NETWORK_RUNTIME_SHA if connections_runtime else None,
-        'requires_full_printer_reboot': bool(camera_runtime or rfid_runtime),
+        'requires_full_printer_reboot': bool(camera_runtime or rfid_runtime or native_runtime),
         'rfid_private_closed_profile': bool(rfid_runtime),
         'rfid_private_same_profile_app_binding': bool(app_binding_runtime),
+        'unified_native_delivery': bool(native_runtime),
         'rfid_activation_managed_after_installer_unlock': bool(rfid_runtime),
         'required_community_firmware': FIRMWARE_VERSION,
         'compatibility': COMPATIBILITY,
@@ -138,9 +169,12 @@ if __name__ == '__main__':
     parser.add_argument('--application-only-trial', action='store_true', help='Explicitly build a development-only app package without the cumulative camera component')
     parser.add_argument('--rfid-runtime', type=Path, help='Private closed-profile dormant RFID component; not a public release')
     parser.add_argument('--app-binding-runtime', type=Path, help='Private same-profile app upgrade; not public native delivery')
+    parser.add_argument('--native-runtime', type=Path, help='Unified first-install and active native update runtime; qualification build only')
     args = parser.parse_args()
     if args.release and args.application_only_trial:
         parser.error('--release and --application-only-trial are mutually exclusive')
+    if args.native_runtime and (args.release or not args.application_only_trial):
+        parser.error('Unified native delivery requires --application-only-trial until complete qualification')
     if args.app_binding_runtime and (args.release or not args.application_only_trial):
         parser.error('App binding runtime requires --application-only-trial; public delivery remains disabled')
     if args.rfid_runtime and (args.release or not args.application_only_trial):
@@ -149,4 +183,4 @@ if __name__ == '__main__':
         parser.error('Public cumulative releases require --camera-runtime, including for users who skipped earlier updates')
     if args.release and args.connections_runtime is None:
         parser.error('Public cumulative releases require --connections-runtime; unsupported native profiles retain native Wi-Fi')
-    package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime, args.connections_runtime, args.rfid_runtime, args.app_binding_runtime)
+    package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime, args.connections_runtime, args.rfid_runtime, args.app_binding_runtime, args.native_runtime)

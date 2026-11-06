@@ -144,7 +144,10 @@ static int cp_lock_identity(int held){
         (first.st_mode&07777)==0700&&now.st_dev==first.st_dev&&now.st_ino==first.st_ino;
 }
 int main(int argc,char **argv){
-    if(geteuid()!=0||argc!=3||!cp_target_valid()||(strcmp(argv[1],"--check")&&strcmp(argv[1],"--publish"))){fprintf(stderr,"STOP: expected_closed_profile_publish_action\n");return 1;}
+    int retire=argc==3&&!strcmp(argv[1],"--retire-dormant");
+    if(geteuid()!=0||argc!=3||!cp_target_valid()||
+       (strcmp(argv[1],"--check")&&strcmp(argv[1],"--publish")&&!retire)||
+       (retire&&strcmp(CP_TARGET,"cc2-rfid"))){fprintf(stderr,"STOP: expected_closed_profile_publish_action\n");return 1;}
     umask(077);
     int lock=open(CP_LOCK,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
     int source=open(argv[2],O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
@@ -179,11 +182,22 @@ int main(int argc,char **argv){
         /* An interrupted/unpublished private stage is evidence, not garbage.
          * A later retry uses a new directory; no stale directory is deleted. */
     }
+    if(okay&&retire){
+        /* Exact dormant inventory only: any lifecycle/log/foreign evidence
+         * makes cp_tree fail above. Preserve the tree in a no-replace archive. */
+        uint64_t nonce=0;int random=open("/dev/urandom",O_RDONLY|O_CLOEXEC);
+        okay=installed>=0&&random>=0&&read(random,&nonce,sizeof(nonce))==(ssize_t)sizeof(nonce)&&nonce;
+        if(random>=0)close(random);
+        char archive[96];int n=snprintf(archive,sizeof(archive),".cc2-rfid-dormant-%ld-%016llx",(long)getpid(),(unsigned long long)nonce);
+        okay=okay&&n>0&&(size_t)n<sizeof(archive)&&cp_tree(installed,1)&&cp_lock_identity(lock);
+        if(okay)okay=!syscall(SYS_renameat2,parent,CP_TARGET,parent,archive,1u)&&!fsync(parent);
+    }
     if(installed>=0)close(installed);
     if(parent>=0)close(parent);
     if(source>=0)close(source);
     if(lock>=0)close(lock);
     if(!okay){fprintf(stderr,"STOP: dormant_component_publication_refused; retain existing component and staging\n");return 1;}
+    if(retire){puts("DORMANT COMPONENT ARCHIVED: exact inactive tree retained; native startup and Canvas unchanged.");return 0;}
     puts(!strcmp(argv[1],"--publish")?"RFID COMPONENT PREPARED: startup, native process and Canvas unchanged; bound activation waits for the verified app and installer unlock.":"RFID COMPONENT CHECK PASS: exact source and previous startup profile; no file changed.");
     return 0;
 }

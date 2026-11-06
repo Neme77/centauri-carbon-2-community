@@ -19,7 +19,7 @@ sha=lambda b:hashlib.sha256(b).hexdigest()
 NAMES=('coordinator','capture','app-integration.json','activate-on-ready')
 
 
-def run():
+def run(unified=False):
     count=0
     with tempfile.TemporaryDirectory(prefix='cc2-binding-delivery-') as temporary:
         root=Path(temporary);fixture=root/'fixture';updates=fixture/'updates'
@@ -45,6 +45,7 @@ int main(int argc,char **argv){
     FILE *f=fopen(trace,"a");if(!f)return 92;
     fprintf(f,"%s\\n",argv[1]);fclose(f);
     if(!strcmp(argv[1],"--prepare"))return access(marker,F_OK)?93:0;
+    if(!strcmp(argv[1],"--check-current"))return access(marker,F_OK)?97:0;
     if(!strcmp(argv[1],"--commit"))return access(marker,F_OK)?94:(fail&&!strcmp(fail,"commit"));
     if(!strcmp(argv[1],"--rollback"))return !access(marker,F_OK)?95:(fail&&!strcmp(fail,"rollback"));
     return 96;
@@ -54,6 +55,14 @@ int main(int argc,char **argv){
         files={'worker':worker.read_bytes(),'recovery.json':json.dumps({'protocol':1,'app_sha256':app_sha,
             'worker_sha256':sha(worker.read_bytes()),'plan_sha256':'ab'*32}).encode()}
         files.update({'incoming/'+n:('new '+n).encode() for n in NAMES})
+        if unified:
+            profile=b'inert recovery profile'
+            integration={'protocol':1,'app_sha256':app_sha,'coordinator_sha256':sha(binary),
+                'capture_sha256':sha(binary),'profile_sha256':sha(profile)}
+            fresh_files={'coordinator':binary,'capture':binary,'recovery-profile':profile,
+                'app-integration.json':json.dumps(integration).encode(),
+                'activate-on-ready':f'CC2-RFID-ACTIVATE-1\n{app_sha}\n{sha(profile)}\n'.encode()}
+            for name in NAMES:files['incoming/'+name]=fresh_files[name]
         modes={n:0o700 if n in ['worker','incoming/coordinator','incoming/capture'] else 0o600 for n in files}
         dependency=fixture/'native-proof';config=root/'publisher.h'
         config.write_bytes(configuration(files,modes,[(str(dependency),sha(b'native unchanged'),0o600)],app_binding=True))
@@ -66,16 +75,63 @@ int main(int argc,char **argv){
         try:functions(bundle,'ef'*32)
         except ValueError:count+=1
         else:raise AssertionError('wrong app admitted')
-        output=root/'update.zip';pkg.package(prepared,APP/'scripts',source,output,app_binding_runtime=bundle)
+        if unified:
+            # Real namespace publishers and descriptor guard; native service,
+            # floor manager actions and the app-bound worker are boundary doubles.
+            # The production floor manager/worker run in separate suites.
+            prefix=fixture/'opt/usr';floor_root=prefix/'cc2-cavity-floor'
+            def publisher_for(label,items,permissions,target):
+                header=root/(label+'.h');header.write_bytes(configuration(items,permissions,[(str(dependency),sha(b'native unchanged'),0o600)]))
+                result=root/label
+                defs={'CP_PARENT':str(prefix),'CP_TARGET':target,'CP_LOCK':str(fixture/'lock'),'CP_CONFIG':str(header)}
+                subprocess.run(['arm-linux-gnueabihf-gcc','-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror','-static',
+                    *['-D'+k+'='+json.dumps(v) for k,v in defs.items()],HERE/'publish_worker.c','-o',result],check=True,timeout=120)
+                return runtime(items,permissions,result.read_bytes())
+            rfid_modes={n:0o700 if n in ['coordinator','capture'] else 0o600 for n in fresh_files}
+            rfid_runtime=publisher_for('rfid-publisher',fresh_files,rfid_modes,'cc2-rfid')
+            guard=root/'installer-barrier'
+            subprocess.run(['arm-linux-gnueabihf-gcc','-O2','-Wall','-Wextra','-Werror','-static',
+                '-DNB_BARRIER='+json.dumps(str(fixture/'lock')),HERE.parents[1]/'cavity-fan-floor/installer_barrier.c','-o',guard],check=True,timeout=120)
+            library=Path('/qualified-floor/libcc2-cavity-floor-r1.so').read_bytes()
+            assert sha(library)=='52d400605dd51f89eb95248c42a1661b3c0e60fadec5453d27a987729332fb10'
+            manager=f'''#!/bin/sh
+INSTALLER_GUARD_SHA={sha(guard.read_bytes())}
+qemu-arm '{floor_root}/installer-barrier' --check "$2" || exit 1
+case "$1" in
+check-from-installer) echo floor-check >> '{fixture}/trace';;
+enable-from-installer) echo floor-enable >> '{fixture}/trace';;
+*) exit 1;;
+esac
+'''.encode()
+            floor_files={n:b'inert floor fixture' for n in ['activate.sh','launcher.sh','profile.original.sha256','profile.sh','reactor-entry.sh','thermal.awk']}
+            floor_files.update({'manage.sh':manager,'installer-barrier':guard.read_bytes(),'libcc2-cavity-floor-r1.so':library})
+            floor_files['SHA256SUMS']=''.join(sha(b)+'  '+n+'\n' for n,b in sorted(floor_files.items())).encode()
+            floor_modes={n:0o700 if n.endswith('.sh') or n=='installer-barrier' else 0o600 for n in floor_files}
+            cavity_runtime=publisher_for('floor-publisher',floor_files,floor_modes,'cc2-cavity-floor')
+            entries={'rfid.tar.gz':rfid_runtime,'cavity.tar.gz':cavity_runtime,'binding.tar.gz':bundle.read_bytes()}
+            entries['delivery.json']=json.dumps({'protocol':1,'app_sha256':app_sha,
+                'runtime_sha256':{n:sha(b) for n,b in entries.items()}}).encode()
+            combined=io.BytesIO()
+            with tarfile.open(fileobj=combined,mode='w:gz') as archive:
+                for name,data in entries.items():
+                    item=tarfile.TarInfo(name);item.size=len(data);item.mode=0o600;archive.addfile(item,io.BytesIO(data))
+            combined_runtime=root/'native.tar.gz';combined_runtime.write_bytes(combined.getvalue())
+        output=root/'update.zip'
+        pkg.package(prepared,APP/'scripts',source,output,**({'native_runtime':combined_runtime} if unified else {'app_binding_runtime':bundle}))
         with zipfile.ZipFile(output) as archive:
             payload=archive.read(next(n for n in archive.namelist() if n.endswith('/cc2-control-payload.tar.gz')))
         for shell in [['dash'],['busybox','sh']]:
-            for case in ['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed']:
+            for case in (['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed','fresh-success','fresh-failure','current'] if unified else ['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed']):
                 if fixture.exists():shutil.rmtree(fixture)
-                fixture.mkdir(mode=0o700);stage=fixture/'stage';stage.mkdir(mode=0o700)
+                fixture.mkdir(mode=0o700)
+                if unified:(fixture/'opt/usr').mkdir(parents=True,mode=0o700)
+                stage=fixture/'stage';stage.mkdir(mode=0o700)
                 with tarfile.open(fileobj=io.BytesIO(payload),mode='r:gz') as archive:
                     for entry in archive:put(stage/entry.name,archive.extractfile(entry).read(),entry.mode)
                 target=fixture/'app';put(target/'cc2-control',b'OLD APP');put(target/'spools.json',b'PRESERVE')
+                if unified and not case.startswith('fresh-'):
+                    put(prefix/'cc2-rfid/lifecycle',b'inert active native fixture')
+                if case=='current':put(target/'cc2-control',binary)
                 marker=fixture/'running';marker.touch();trace=fixture/'trace'
                 init=fixture/'init';put(init,f'#!/bin/sh\ncase "$1" in start) touch "{marker}";; stop) rm -f "{marker}";; esac\n',0o755)
                 put(stage/'cc2-control.init',init.read_bytes(),0o755)
@@ -84,7 +140,7 @@ int main(int argc,char **argv){
                 put(fixture/'native-journal',b'NATIVE JOURNAL PRESERVED')
                 if case=='foreign-destination':put(destination/'foreign',b'KEEP EVIDENCE')
                 commands=fixture/'bin';commands.mkdir()
-                health=json.dumps({'service':'cc2-control','version':pkg.VERSION if case!='health-failure' else 'wrong',
+                health=json.dumps({'service':'cc2-control','version':pkg.VERSION if case not in ['health-failure','fresh-failure'] else 'wrong',
                     'mqtt_registered':True,'snapshot_received':True},separators=(',',':'))
                 status='{"connected":true,"last_message_age":1,"extruder":{"temperature":24,"target":0},"heater_bed":{"temperature":22,"target":0},"machine":{"status":1,"sub_status":0}}'
                 put(commands/'wget',f'#!/bin/sh\ncase "$*" in */api/health*) echo \'{health}\';; *) echo \'{status}\';; esac\n',0o755)
@@ -95,16 +151,24 @@ int main(int argc,char **argv){
                     '/tmp/cc2-control-install.lock':str(fixture/'lock'),'/opt/usr/cc2-rfid-app-updates':str(updates),
                     '/opt/bin/elegoo_printer':str(printer),'/opt/inst/daemon-000/daemon-000':str(daemon),
                     '/proc/$printer_pid/exe':str(printer),'/proc/$RUN_PID/exe':str(target/'cc2-control'),
+                    '/opt/usr/cc2-rfid':str(prefix/'cc2-rfid') if unified else '/opt/usr/cc2-rfid',
+                    '/opt/usr/cc2-cavity-floor':str(floor_root) if unified else '/opt/usr/cc2-cavity-floor',
                     '/proc/meminfo':str(memory),pkg.COMPATIBILITY['printer_sha256']:sha(printer.read_bytes()),
                     pkg.COMPATIBILITY['daemon_sha256']:sha(daemon.read_bytes())}
                 script=(stage/'install-on-printer.sh').read_text()
                 for before,after in replacements.items():script=script.replace(before,after)
                 # Adapt executable calls only. All hash checks still inspect ARM ELFs.
+                for name in ['CAVITY_SOURCE','RFID_SOURCE']:
+                    for action in ['--publish','--retire-dormant']:
+                        script=script.replace('"$'+name+'/publisher" '+action,'qemu-arm "$'+name+'/publisher" '+action)
+                script=script.replace('"$BINDING_SOURCE/component/worker" --check-current','qemu-arm "$BINDING_SOURCE/component/worker" --check-current')
                 script=script.replace('"$BINDING_SOURCE/publisher" --publish','qemu-arm "$BINDING_SOURCE/publisher" --publish')
                 for action in ['--prepare','--commit','--rollback']:
                     script=script.replace(str(destination)+'/worker '+action,'qemu-arm '+str(destination)+'/worker '+action)
                 script=script.replace('"$tries" -lt 120','"$tries" -lt 2')
-                if case=='tampered-tail':script=script.replace("printf '\\037", "printf '\\000",1)
+                if case=='tampered-tail':
+                    marker=script.index('\n# CC2_APP_BINDING_DATA_BEGIN\n')
+                    script=script[:marker]+script[marker:].replace("printf '\\037", "printf '\\000",1)
                 put(stage/'install-on-printer.sh',script,0o755)
                 (stage/'SHA256SUMS').write_text(''.join(sha(p.read_bytes())+'  '+p.relative_to(stage).as_posix()+'\n'
                     for p in sorted(stage.rglob('*')) if p.is_file() and p.name!='SHA256SUMS'))
@@ -114,8 +178,11 @@ int main(int argc,char **argv){
                     health=health.replace(pkg.VERSION,'wrong')
                     put(commands/'wget',f'#!/bin/sh\ncase "$*" in */api/health*) echo \'{health}\';; *) echo \'{status}\';; esac\n',0o755)
                 result=subprocess.run([*shell,stage/'install-on-printer.sh'],env=env,capture_output=True,text=True,timeout=90)
-                assert (result.returncode==0)==(case=='success'),(shell,case,result.stdout,result.stderr)
+                assert (result.returncode==0)==(case in ['success','fresh-success','current']),(shell,case,result.stdout,result.stderr)
                 calls=trace.read_text().splitlines() if trace.exists() else []
+                if case=='fresh-success':assert calls==['floor-check','floor-enable'] and (prefix/'cc2-rfid').exists()
+                if case=='fresh-failure':assert not (prefix/'cc2-rfid').exists() and list(prefix.glob('.cc2-rfid-dormant-*')) and (target/'cc2-control').read_bytes()==b'OLD APP'
+                if case=='current':assert all(c=='--check-current' for c in calls) and len(calls)==3
                 if case=='success':assert calls==['--prepare','--commit'] and (target/'cc2-control').read_bytes()==binary
                 if case in ['commit-failure','health-failure']:
                     assert calls[-1]=='--rollback' and (target/'cc2-control').read_bytes()==b'OLD APP' and marker.exists(),(shell,case,calls)
@@ -124,12 +191,14 @@ int main(int argc,char **argv){
                     assert (fixture/'lock').exists(),'uncertain rollback must retain barrier'
                 else:assert not (fixture/'lock').exists()
                 if case in ['tampered-tail','foreign-destination','native-changed']:assert not calls and (target/'cc2-control').read_bytes()==b'OLD APP'
+                if unified and not case.startswith('fresh-'):assert not floor_root.exists(),'active/current route must not stage floor'
                 assert (target/'spools.json').read_bytes()==b'PRESERVE'
                 assert (fixture/'native-journal').read_bytes()==b'NATIVE JOURNAL PRESERVED'
                 if case=='success':
                     backup=next(fixture.glob('app-backup-*'))
                     restore=(backup/'restore.sh').read_text()
                     for before,after in replacements.items():restore=restore.replace(before,after)
+                    restore=restore.replace('"$BACKUP/native-check-worker" --check-current','qemu-arm "$BACKUP/native-check-worker" --check-current')
                     restore=restore.replace(str(destination)+'/worker --rollback','qemu-arm '+str(destination)+'/worker --rollback')
                     put(backup/'restore.sh',restore,0o755)
                     restored=subprocess.run([*shell,backup/'restore.sh'],env=env,capture_output=True,text=True,timeout=30)
@@ -138,7 +207,7 @@ int main(int argc,char **argv){
                     assert trace.read_text().splitlines()==['--prepare','--commit','--rollback']
                     assert not (fixture/'lock').exists()
                 count+=1
-    print(f'PASS: {count} real ARM publication and dash/BusyBox installer boundary cases; prepare/commit/rollback ordering, failure retention and preserved native journal; worker double at installer boundary only',flush=True)
+    print(f'PASS: {count} '+('unified first-install/active/current ' if unified else '')+f'real ARM publication and dash/BusyBox installer boundary cases; prepare/commit/rollback ordering, failure retention and preserved native journal; worker double at installer boundary only',flush=True)
     return count
 
-if __name__=='__main__':run()
+if __name__=='__main__':run(unified=sys.argv[1:]==['--unified'])

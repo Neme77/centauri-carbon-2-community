@@ -75,7 +75,7 @@ binding_rollback() {{ "{transaction}/worker" --rollback 3; }}
         '@CAMERA_COMPONENT_PREFLIGHT@':'','@RFID_COMPONENT_PREFLIGHT@':'',
         '@RFID_COMPONENT_PUBLISH@':'','@APP_BINDING_PREPARE@':'binding_prepare || exit 1',
         '@APP_BINDING_COMMIT@':'binding_commit || exit 1','@CONNECTIONS_COMPONENT_INSTALL@':'',
-        '@RFID_COMPONENT_COMPLETION@':'','@CAMERA_RESTORE_FUNCTION@':'',
+        '@RFID_COMPONENT_COMPLETION@':'','@CAMERA_RESTORE_FUNCTION@':'','@NATIVE_UNCHANGED_ROLLBACK@':'','@CAMERA_FAILURE_RELEASE@':'rmdir "$LOCK"',
         '@APP_BINDING_ROLLBACK@':'''if [ "${BINDING_PREPARED:-0}" -eq 1 ] && ! binding_rollback; then
                 echo 'Uncertain real binding rollback; retain candidate and barrier' >&2
                 exit 1

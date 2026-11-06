@@ -21,7 +21,7 @@ RESTORE_GUARD = '''if [ -e /opt/usr/cc2-rfid/lifecycle ] || [ -L /opt/usr/cc2-rf
     exit 1
 fi'''
 
-def functions(runtime: Path, app_sha: str):
+def functions(runtime: Path, app_sha: str, defer_profile_check=False):
     data = runtime.read_bytes()
     if not data or len(data) > 8 * 1024 * 1024:
         raise ValueError('RFID runtime must be a bounded private component')
@@ -86,4 +86,10 @@ rfid_publish() {{
         chunk = ''.join('\\%03o' % byte for byte in data[start:start + 4096])
         tail += "printf '" + chunk + "' || exit 1\n"
     tail += END + '\n'
+    if defer_profile_check:
+        # The unified installer prepares the chamber baseline immediately before
+        # publication. The publisher repeats its exact dependency check then.
+        line='    "$RFID_SOURCE/publisher" --check "$RFID_SOURCE/component"\n'
+        if text.count(line)!=1:raise ValueError('Unexpected RFID unpack template')
+        text=text.replace(line,'    :\n',1)
     return text, tail
