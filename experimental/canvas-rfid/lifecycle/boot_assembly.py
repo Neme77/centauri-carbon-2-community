@@ -36,7 +36,7 @@ def configure(name,changes):
     if b'UNCONFIGURED' in data:raise UnsupportedProfile('unconfigured_boot_template')
     return data
 
-def activation(old,guard_sha,stock=False):
+def activation(old,guard_sha,stock=False,cavity=False):
     # This boundary is an exact recognized old source, not a fuzzy patch of an
     # unknown activation program. Preserve camera/network policy and watchdogs.
     new=f'''    RFID={BASE}/libcc2-rfid.so
@@ -55,7 +55,8 @@ def activation(old,guard_sha,stock=False):
     if stock:
         # The caller recognizes the entire stock activation hash first. Strip
         # only the mandatory guard suffix for the unchanged reactor/shim checks.
-        needle=b'    case "$p" in "$REACTOR"|"$OLD:$REACTOR"|"$LIB:$REACTOR") ;;*) fail printer_preload;;esac\n'
+        needle=(b'    CAVITY=/opt/usr/cc2-cavity-floor/libcc2-cavity-floor-r1.so\n' if cavity else
+                b'    case "$p" in "$REACTOR"|"$OLD:$REACTOR"|"$LIB:$REACTOR") ;;*) fail printer_preload;;esac\n')
         result=replace_once(old,needle,new+needle)
         # Reuse already loaded network compatibility. A native restart must go
         # through the guarded full boot route, including a repair after failure.
@@ -85,13 +86,14 @@ def assemble(report,content,current_route,artifacts,catalogue=None):
     component=dict(artifacts)
     component['fresh-guard.sh']=(HERE/'fresh-guard.sh').read_bytes()
     stock=bool(catalogue and catalogue.get('stock_bootstrap'))
-    pins={path:digest for path,digest in PINS.items() if not stock or (path!=CAVITY and path!='/opt/usr/cc2-cavity-floor/enabled')}
+    cavity=not stock or bool(catalogue and catalogue.get('requires_cavity'))
+    pins={path:digest for path,digest in PINS.items() if cavity or (path!=CAVITY and path!='/opt/usr/cc2-cavity-floor/enabled')}
     pins[BASE+'/libcc2-rfid.so']=sha(artifacts['libcc2-rfid.so'])
     component['guarded.sha256']=''.join(f'{digest}  {path}\n' for path,digest in sorted(pins.items())).encode()
     component['guarded-entry.sh']=configure('guarded-entry.sh',{
         'MANIFEST_SHA=UNCONFIGURED':'MANIFEST_SHA='+sha(component['guarded.sha256']),
         'CORE_PRELOADS='+REACTOR+':'+BASE+'/libcc2-rfid.so':
-            'CORE_PRELOADS='+REACTOR+('' if stock else ':'+CAVITY)+':'+BASE+'/libcc2-rfid.so',
+            'CORE_PRELOADS='+REACTOR+(':'+CAVITY if cavity else '')+':'+BASE+'/libcc2-rfid.so',
         'NETWORK_CONTROL=\n':'NETWORK_CONTROL='+CONTROL+'\n',
         'NETWORK_LIBRARY=\n':'NETWORK_LIBRARY='+NETWORK+'\n',
     })
@@ -103,7 +105,7 @@ def assemble(report,content,current_route,artifacts,catalogue=None):
     root_gate=configure('startup-gate.sh',{'WORKER_SHA=UNCONFIGURED':'WORKER_SHA='+sha(artifacts['startup-worker'])})
     delegate=b'#!/bin/sh\nset -eu\nexec /etc/init.d/cc2-reactor-launch "$@"\n'
     view=Snapshot(report,content)
-    updated_activation=activation(view.regular(TARGETS['network-activation']),sha(artifacts['libcc2-rfid.so']),stock)
+    updated_activation=activation(view.regular(TARGETS['network-activation']),sha(artifacts['libcc2-rfid.so']),stock,cavity)
     plan=compile_plan(report,content,current_route,{
         ROOT_GATE:root_gate,TARGETS['reactor-launcher']:delegate,
         TARGETS['network-entry']:delegate,TARGETS['network-activation']:updated_activation,
@@ -125,4 +127,4 @@ def assemble(report,content,current_route,artifacts,catalogue=None):
             'recovery_profile_sha256':sha(component['recovery-profile']),
             'installation_authorized':False,'live_authorization_required':True,
             'initial_lifecycle_phase':'HOST_STAGED','physical_flash_readback_available':False,
-            'stock_bootstrap':stock,'requires_cavity':not stock}
+            'stock_bootstrap':stock,'requires_cavity':cavity}

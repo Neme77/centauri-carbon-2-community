@@ -15,7 +15,7 @@ def run(assembly):
     syntax=0;cases=0
     activation=(component/'payload/5').read_text()
     start=activation.index('    RFID=')
-    end=activation.index('    case "$p" in "$REACTOR"',start) if summary.get('stock_bootstrap') else activation.index('    CAVITY=',start)
+    end=activation.index('    CAVITY=',start) if summary.get('requires_cavity') else activation.index('    case "$p" in "$REACTOR"',start)
     block=activation[start:end]
     with tempfile.TemporaryDirectory(prefix='cc2-assembled-shell-') as temporary:
         root=Path(temporary)

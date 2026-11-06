@@ -138,7 +138,7 @@ def analyze_snapshot(report,content,catalogue=None):
         'installation_authorized':False,'live_idle_cold_preflight_required':True,
         'initial_lifecycle_phase':'HOST_STAGED','first_boot_requires_guard':True,
         'legacy_canvas_ack_is_not_flash_readback':True,
-        'preserve_roots':preserved+([] if catalogue.get('stock_bootstrap') else ['/opt/usr/cc2-cavity-floor'])+['/opt/usr/cc2-network-manager','/opt/usr/cc2-reactor-runtime-v2'],
+        'preserve_roots':preserved+([] if catalogue.get('stock_bootstrap') and not catalogue.get('requires_cavity') else ['/opt/usr/cc2-cavity-floor'])+['/opt/usr/cc2-network-manager','/opt/usr/cc2-reactor-runtime-v2'],
         'startup_targets':targets,'delete_legacy_backups':False,
         'must_verify_current_run_printer_before_install':True,
         'startup_delegate_must_preserve_prepare_only':True,

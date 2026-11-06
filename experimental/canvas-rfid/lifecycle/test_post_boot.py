@@ -61,8 +61,9 @@ class Handler(socketserver.BaseRequestHandler):
             for part in [response[:7],response[7:29],response[29:]]:self.request.sendall(part)
         except (BrokenPipeError,ConnectionResetError):pass
 
-def run(stock_bootstrap=False):
+def run(stock_bootstrap=False,with_cavity=False):
     stock=Path('/stock-canvas.bin').read_bytes();count=0
+    cases=CASES+(['missing-cavity','missing-cavity-channel','foreign-cavity-channel'] if with_cavity else [])
     flags=['-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror','-D_POSIX_C_SOURCE=200809L']
     with tempfile.TemporaryDirectory(prefix='cc2-post-boot-') as temporary:
         root=Path(temporary);dummy_source=root/'dummy.c';dummy=root/'dummy'
@@ -81,15 +82,16 @@ def run(stock_bootstrap=False):
                         'SC_APP_SHA':sha(data),'SC_NATIVE_SHA':sha(data),'SC_FRESH_SHA':sha(fresh),
                         'SC_RUN_SHA':sha((tree/'opt/bin/run_printer.sh').read_bytes()),
                         'SC_READY':str(folder/'ready'),'SC_ORIGINAL':str(folder/'stock.bin'),
+                        'CC2_CAVITY_CHANNEL':str(folder/'cavity-channel'),
                         'CC2_MAINTENANCE_LOCK':str(folder/'install.lock'),
                         'SC_STRICT_SHA':sha((component/'libcc2-rfid.so').read_bytes())}
                     for key,path in zip(['SC_REACTOR_SHA','SC_CAVITY_SHA','SC_NETWORK_SHA','SC_OLD_RFID_SHA'],MODULES):defines[key]=sha((tree/path[1:]).read_bytes())
                     binary=root/(arch+'-coordinator')
                     subprocess.run([compiler,*flags,*extra,'-DVC_PORT='+str(server.server_address[1]),
                         *['-D'+key+'='+json.dumps(value) for key,value in defines.items()],
-                        *(['-DSC_STOCK_BOOTSTRAP=1','-DSC_WITH_CAVITY=0'] if stock_bootstrap else []),
+                        *(['-DSC_STOCK_BOOTSTRAP=1',f'-DSC_WITH_CAVITY={int(with_cavity)}',*(['-DSC_CAVITY_BOOTSTRAP_OPTIONAL=1','-DSC_VERIFY_CAVITY_CHANNEL=1'] if with_cavity else [])] if stock_bootstrap else []),
                         '-I'+str(HERE.parent/'host'),HERE/'coordinator.c','-lm','-o',binary],check=True,timeout=120)
-                    for case in CASES:
+                    for case in cases:
                         shutil.rmtree(folder);component,tree,native,app,old,new,profile,fresh=fixture(folder,data,stock)
                         processes=[]
                         try:
@@ -100,10 +102,14 @@ def run(stock_bootstrap=False):
                             staged=subprocess.run([*runner,binary,'--stage-host'],env=env,capture_output=True,text=True,timeout=10)
                             assert staged.returncode==0,(arch,case,'stage',staged.stdout,staged.stderr)
                             n.terminate();n.wait(timeout=5)
-                            modules=[tree/MODULES[i][1:] for i in ([0,2] if stock_bootstrap else range(3))]
+                            modules=[tree/MODULES[i][1:] for i in ([0,2] if stock_bootstrap and not with_cavity else range(3))]
+                            if case=='missing-cavity':modules.remove(tree/MODULES[1][1:])
                             if case=='old-guard':modules.append(tree/MODULES[3][1:])
                             elif case!='strict-missing':modules.append(component/'libcc2-rfid.so')
                             n=spawn(native,modules);processes.append(n)
+                            if with_cavity and case!='missing-cavity-channel':
+                                wire_pid=n.pid+1 if case=='foreign-cavity-channel' else n.pid
+                                put(folder/'cavity-channel/state',f'CC2CF1 {wire_pid} 1122334455667788 1 0\n'.encode())
                             put(folder/'ready',struct.pack('<8sQQQII',b'CC2RF1\0\0',456,0,0,n.pid,1))
                             phase=4 if case=='filter' else 7 if case=='stock' else 2 if case=='idempotent' else 5 if case=='wrong-phase' else 1
                             seed_journal(component,profile,phase)

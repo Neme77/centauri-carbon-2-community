@@ -29,3 +29,5 @@ experimental/firmware-port/dual44-manifest.json -text
 experimental/firmware-port/http44-manifest.json -text
 experimental/firmware-port/network44-manifest.json -text
 experimental/firmware-port/cc2_community_release_public.pem -text
+
+experimental/native-display/thermal.awk text eol=lf

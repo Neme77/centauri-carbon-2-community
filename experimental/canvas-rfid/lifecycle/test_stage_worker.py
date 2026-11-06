@@ -76,11 +76,14 @@ def spawn(path,args):
     assert process.stdout.readline().strip()=='READY'
     return process
 
-def run(program=None,stock_bootstrap=False):
+def run(program=None,stock_bootstrap=False,with_cavity=False):
     if program is None:program=HERE/'stage_worker.c'
     stock=Path('/stock-canvas.bin').read_bytes();assert sha(stock)=='f1267ee3219dcad73efffa8dc38e30ff0f17c02c0a1674cbead48a99bdff3228'
     count=0
     cases=CASES if not stock_bootstrap else [c for c in CASES if c not in ['native-phase','active-scan','missing-cavity']]+['unexpected-cavity','unexpected-legacy','missing-reactor']
+    if with_cavity:
+        assert stock_bootstrap
+        cases=[c for c in cases if c!='unexpected-cavity']+['cavity-present']
     flags=['-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror','-D_POSIX_C_SOURCE=200809L']
     with tempfile.TemporaryDirectory(prefix='cc2-host-stage-') as temporary:
         root=Path(temporary);dummy_source=root/'dummy.c';dummy=root/'dummy'
@@ -103,13 +106,14 @@ def run(program=None,stock_bootstrap=False):
             binary=root/(arch+'-stage')
             subprocess.run([compiler,*flags,*extra,'-DSC_GUARD_TIMEOUT_MS=500',
                 *['-D'+k+'='+json.dumps(v) for k,v in defines.items()],
-                *(['-DSC_STOCK_BOOTSTRAP=1','-DSC_WITH_CAVITY=0'] if stock_bootstrap else []),'-include',fault,
+                *(['-DSC_STOCK_BOOTSTRAP=1',f'-DSC_WITH_CAVITY={int(with_cavity)}',*(['-DSC_CAVITY_BOOTSTRAP_OPTIONAL=1'] if with_cavity else [])] if stock_bootstrap else []),'-include',fault,
                 '-I'+str(HERE.parent/'host'),program,'-lm','-o',binary],check=True,timeout=120)
             for case in cases:
                 shutil.rmtree(folder);component,tree,native,app,old,new,profile,fresh=fixture(folder,dummy_bytes,stock)
                 native_args=[tree/p[1:] for p in MODULES]
                 if stock_bootstrap:
                     native_args=[tree/MODULES[i][1:] for i in [0,2]]
+                    if case=='cavity-present':native_args.append(tree/MODULES[1][1:])
                     if case=='unexpected-cavity':native_args.append(tree/MODULES[1][1:])
                     if case=='unexpected-legacy':native_args.append(tree/MODULES[3][1:])
                     if case=='missing-reactor':native_args.remove(tree/MODULES[0][1:])
@@ -155,7 +159,7 @@ def run(program=None,stock_bootstrap=False):
                         assert (folder/'fresh-count').exists();running.terminate();stdout,stderr=running.communicate(timeout=5)
                         result=subprocess.CompletedProcess([],running.returncode,stdout,stderr)
                     else:result=subprocess.run([*runner,binary,action],env=env,capture_output=True,text=True,timeout=10)
-                    okay=case in ['check','stage','retry','partial-resume','staged-old-boot'] or (stock_bootstrap and case=='ready-missing')
+                    okay=case in ['check','stage','retry','partial-resume','staged-old-boot'] or (stock_bootstrap and case=='ready-missing') or (with_cavity and case=='cavity-present')
                     assert (result.returncode==0)==okay,(arch,case,result.returncode,result.stdout,result.stderr)
                     if okay and case!='check':
                         assert [(tree/p[1:]).read_bytes() for p in PATHS]==new

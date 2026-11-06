@@ -7,6 +7,7 @@
 #include "profile.h"
 #include "../transfer/app_transfer.h"
 #include "../../../cc2-control/src/maintenance_barrier.h"
+#include "../../../cc2-control/src/cavity_floor_protocol.h"
 #include <dirent.h>
 #include <signal.h>
 #include <sys/vfs.h>
@@ -41,8 +42,17 @@
 #ifndef SC_WITH_CAVITY
 #define SC_WITH_CAVITY 1
 #endif
+#ifndef SC_CAVITY_BOOTSTRAP_OPTIONAL
+#define SC_CAVITY_BOOTSTRAP_OPTIONAL 0
+#endif
+#ifndef SC_VERIFY_CAVITY_CHANNEL
+#define SC_VERIFY_CAVITY_CHANNEL 0
+#endif
 #if (SC_STOCK_BOOTSTRAP != 0 && SC_STOCK_BOOTSTRAP != 1) || (SC_WITH_CAVITY != 0 && SC_WITH_CAVITY != 1)
 #error Unsupported native baseline selection
+#endif
+#if (SC_CAVITY_BOOTSTRAP_OPTIONAL != 0 && SC_CAVITY_BOOTSTRAP_OPTIONAL != 1) || (SC_CAVITY_BOOTSTRAP_OPTIONAL && (!SC_STOCK_BOOTSTRAP || !SC_WITH_CAVITY))
+#error Optional cavity bootstrap requires the closed cumulative stock profile
 #endif
 #ifndef SC_BOOT_ID
 #define SC_BOOT_ID "/proc/sys/kernel/random/boot_id"
@@ -178,7 +188,7 @@ static uint64_t sc_process_start(pid_t pid){
     errno=0;char *end=NULL;unsigned long long value=strtoull(p,&end,10);
     return !errno&&end&&*end==' '?(uint64_t)value:0;
 }
-static int sc_native_profile(struct sc_ready *ready,int strict){
+static int sc_native_profile_mode(struct sc_ready *ready,int strict,int initial){
     int stock=SC_STOCK_BOOTSTRAP&&!strict;
     int okay=1;
     if(!stock){
@@ -210,10 +220,17 @@ static int sc_native_profile(struct sc_ready *ready,int strict){
         seen|=1u<<index;
     }
     if(ferror(maps))okay=0;
-    unsigned required=1u|(SC_WITH_CAVITY?2u:0u)|(stock?0u:8u);
+    unsigned required=1u|((SC_WITH_CAVITY&&!(initial&&SC_STOCK_BOOTSTRAP&&SC_CAVITY_BOOTSTRAP_OPTIONAL))?2u:0u)|(stock?0u:8u);
+    if(okay&&SC_WITH_CAVITY&&SC_VERIFY_CAVITY_CHANNEL&&!initial){
+        cavity_identity cavity;char text[256];int channel=cavity_directory(0);
+        okay=channel>=0&&cavity_read_at(channel,"state",text)&&cavity_identity_parse(text,&cavity)&&
+            cavity.pid==(long)pid&&!cavity.printing;
+        if(channel>=0)close(channel);
+    }
     fclose(maps);return okay&&(seen&required)==required; /* shim optional; all mapped modules pinned */
 }
-static int sc_native(struct sc_ready *ready){return sc_native_profile(ready,0);}
+static int sc_native_profile(struct sc_ready *ready,int strict){return sc_native_profile_mode(ready,strict,0);}
+static int sc_native(struct sc_ready *ready){return SC_CAVITY_BOOTSTRAP_OPTIONAL?sc_native_profile_mode(ready,0,1):sc_native_profile(ready,0);}
 static int sc_fresh(void){
     if(sc_cancelled||!sc_hash(SC_FRESH_PATH,SC_FRESH_SHA))return 0;
     pid_t child=fork();if(child<0)return 0;

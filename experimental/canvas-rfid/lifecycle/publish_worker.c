@@ -22,6 +22,9 @@
 #ifndef CP_LOCK
 #define CP_LOCK "/tmp/cc2-control-install.lock"
 #endif
+#ifndef CP_TARGET
+#define CP_TARGET "cc2-rfid"
+#endif
 #ifndef CP_FAULT
 #define CP_FAULT(point) ((void)0)
 #endif
@@ -116,7 +119,7 @@ static int cp_lock_identity(int held){
         (first.st_mode&07777)==0700&&now.st_dev==first.st_dev&&now.st_ino==first.st_ino;
 }
 int main(int argc,char **argv){
-    if(geteuid()!=0||argc!=3||(strcmp(argv[1],"--check")&&strcmp(argv[1],"--publish"))){fprintf(stderr,"STOP: expected_closed_profile_publish_action\n");return 1;}
+    if(geteuid()!=0||argc!=3||(strcmp(CP_TARGET,"cc2-rfid")&&strcmp(CP_TARGET,"cc2-cavity-floor"))||(strcmp(argv[1],"--check")&&strcmp(argv[1],"--publish"))){fprintf(stderr,"STOP: expected_closed_profile_publish_action\n");return 1;}
     umask(077);
     int lock=open(CP_LOCK,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
     int source=open(argv[2],O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
@@ -124,7 +127,7 @@ int main(int argc,char **argv){
     int okay=cp_lock_identity(lock)&&cp_tree(source,0)&&cp_private(parent,1)&&cp_dependencies();
     int installed=-1;
     if(okay){
-        installed=openat(parent,"cc2-rfid",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
+        installed=openat(parent,CP_TARGET,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
         if(installed>=0)okay=cp_tree(installed,1);
         else if(errno!=ENOENT)okay=0;
     }
@@ -141,7 +144,7 @@ int main(int argc,char **argv){
         }
         if(okay){int sub=openat(temporary,"payload",O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);okay=sub>=0&&!fsync(sub);if(sub>=0)close(sub);}
         okay=okay&&cp_tree(temporary,1)&&!fsync(temporary)&&cp_dependencies()&&cp_lock_identity(lock);
-        if(okay){CP_FAULT("before-publish");okay=!syscall(SYS_renameat2,parent,stage,parent,"cc2-rfid",1u);}
+        if(okay){CP_FAULT("before-publish");okay=!syscall(SYS_renameat2,parent,stage,parent,CP_TARGET,1u);}
         if(okay){CP_FAULT("published");okay=!fsync(parent);}
         if(temporary>=0)close(temporary);
         /* An interrupted/unpublished private stage is evidence, not garbage.

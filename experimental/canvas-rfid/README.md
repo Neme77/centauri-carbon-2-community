@@ -38,28 +38,39 @@ MQTT allowance prevents treating a routine sixth-second snapshot age as a print
 transition. Preflight cancellation waits for bounded guard cleanup before
 interrupting the capture, preventing an orphaned manager lock.
 
-## Release blocker: autonomous activation/update lifecycle
+## Autonomous activation and restoration
 
-There is deliberately no public activation installer yet. The private trial
-used nested legacy R2/EXHAUST/LAN profiles and a separately verified stock image.
-Those owner-specific migration assumptions must not be treated as a general
-public installation profile. Before a 1.2.26 release, complete and test:
+The closed-profile private PC trial now prepares the host guard, requires a full
+kernel reboot and verifies the loaded guard before transferring the Canvas
+application. It then requires a second full reboot and live Canvas verification.
+The original image is backed up durably before transfer. The persistent lifecycle
+and guarded startup handle interrupted operations; a protocol ACK never claims
+physical flash readback. Restoration transfers the original Canvas first, verifies
+it after a new boot, then restores the original host startup and verifies again.
 
-1. One unattended-after-explicit-opt-in transaction, with fresh idle/cold and
-   exact platform checks; unsupported hardware refuses before any stop/write.
-2. Root-private verified original Canvas backup and recoverable host startup
-   transaction, preserving reactor, camera, LAN, EXHAUST, display and settings.
-3. Qualified host guard installed and boot-verified before any foreign-tag
-   firmware change, plus recovery after interrupted staging or failed transfer.
-4. Application-only Canvas transfer; preserve bootloader and power-recovery
-   policy. This protocol has acknowledgements, not physical flash readback.
-5. Original-Canvas restoration before removing its host guard, and a coordinated
-   ordinary application/base-firmware update path; preserve rollback dependencies.
-6. No manual SSH commands, repeated archive repairs or owner-only backup names
-   in the public flow. A necessary full reboot must remain clearly visible.
+Neme77 physically completed that activation, scan, original-Canvas restoration
+and host-removal cycle on a freshly reinstalled 4.4.3. A subsequent complete
+1.2.26 private trial verified autonomous activation, RFID, approved fan layout,
+flaps and the native EXHAUST minimum together. A Creality spool was also read;
+this is evidence for that spool, not a universal brand/format compatibility claim.
 
-No default app update in this draft flashes the Canvas. Do not publish a release
-or promote a catalog until this lifecycle has been physically qualified.
+`cumulative/` preserves the exact source of the PC staging correction: after
+checking SHA256, restore mode 0700 on the regular, non-symlink ARM publisher,
+because Windows/SCP may transfer it without execute permission. The old completed
+RFID component is archived reversibly; active or incomplete sessions are refused.
+EXHAUST is staged before RFID, and RFID restoration retains that floor baseline.
+The first staging observation can precede loading EXHAUST, but subsequent boot
+verification requires both the pinned mapping and its current-PID idle channel.
+
+## Public delivery remains blocked
+
+These are closed, fingerprinted 4.4.3 profiles, not universal installation
+permission. No stock Canvas image, native executable, signing key or proprietary
+library is distributed here. The ordinary public app updater still does not
+install this complete native suite or flash Canvas automatically. Public OTA,
+base-firmware migration and broader platform/update coverage must be completed
+and reviewed before publishing 1.2.26 or promoting the catalog. Keep this PR draft
+until that delivery decision is made. The #301 persistence work is not included.
 
 ## Build and tests
 
