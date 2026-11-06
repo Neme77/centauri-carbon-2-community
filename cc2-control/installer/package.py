@@ -121,7 +121,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         'rfid_private_closed_profile': bool(rfid_runtime),
         'rfid_private_same_profile_app_binding': bool(app_binding_runtime),
         'unified_native_delivery': bool(native_runtime),
-        'rfid_activation_managed_after_installer_unlock': bool(rfid_runtime),
+        'rfid_activation_managed_after_installer_unlock': bool(rfid_runtime or native_runtime),
         'required_community_firmware': FIRMWARE_VERSION,
         'compatibility': COMPATIBILITY,
     }, indent=2) + '\n').encode()
