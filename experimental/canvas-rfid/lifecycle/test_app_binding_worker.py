@@ -12,7 +12,7 @@ HERE=Path(__file__).resolve().parent
 sha=lambda b:hashlib.sha256(b).hexdigest()
 NAMES=['coordinator','capture','app-integration.json','activate-on-ready']
 CASES=['installer-dash-success','installer-dash-failure','installer-busybox-success','installer-busybox-failure','upgrade','rollback','rollback-live','rollback-retry','owner-dead','owner-nonempty','recover-without-barrier','partial-recovery','foreign-barrier',
-    'wrong-phase','bad-backup','guard-refused','foreign-target','corrupt-descriptor']
+       'wrong-phase','bad-backup','guard-refused','foreign-target','corrupt-descriptor','canvas-unavailable','retire-empty','retire-pending','retire-rolled-back']
 FLAGS=['-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror','-D_POSIX_C_SOURCE=200809L']
 
 RECOVERED='APP BINDING RECOVERED: native journal, startup, guard and Canvas unchanged.'
@@ -83,6 +83,7 @@ def run(installer_only=False):
                         subprocess.run(['gcc',*FLAGS,'-I'+str(HERE.parent/'host'),launcher_source,'-o',launcher],check=True,timeout=60)
                         worker_bytes=launcher.read_bytes()
                     for case in cases:
+                        server.mode='canvas-unavailable' if case=='canvas-unavailable' else 'host'
                         shutil.rmtree(folder);component,tree,native,app,olds,news,profile,fresh=fixture(folder,old_app,stock)
                         source=folder/'incoming';source.mkdir(mode=0o700);transaction.mkdir(parents=True,mode=0o700)
                         updates.chmod(0o700)
@@ -113,6 +114,13 @@ def run(installer_only=False):
                             if case=='foreign-target':put(component/NAMES[3],b'foreign')
                             if case=='corrupt-descriptor':put(transaction/'recovery.json',b'{}')
                             before={key:(component/key).read_bytes() for key in NAMES}
+                            if case=='retire-empty':
+                                retired=invoke('--retire-inactive',held)
+                                assert retired.returncode==0,(arch,case,retired.stdout,retired.stderr)
+                                assert not transaction.exists() and list(updates.glob('.retired-*'))
+                                assert {key:(component/key).read_bytes() for key in NAMES}==before
+                                assert (component/'lifecycle').read_bytes()==original_journal and n.poll() is None
+                                count+=1;continue
                             if case.startswith('installer-'):
                                 from test_app_binding_installer_live import run as installer_live
                                 os.close(held);held=-1;barrier.rmdir()
@@ -131,6 +139,12 @@ def run(installer_only=False):
                                 assert app.read_bytes()==old_app and a.poll() is None
                             else:
                                 assert prepared.returncode==0,(arch,case,prepared.stdout,prepared.stderr)
+                                if case=='retire-pending':
+                                    state=(transaction/'state').read_bytes()
+                                    assert invoke('--retire-inactive',held).returncode!=0
+                                    assert (transaction/'state').read_bytes()==state and not list(updates.glob('.retired-*'))
+                                    assert {key:(component/key).read_bytes() for key in NAMES}==before
+                                    count+=1;continue
                                 assert invoke('--recover').returncode!=0,'recovery requires the new app parent'
                                 a.terminate();a.wait(timeout=5);put(app,new_app,0o700)
                                 if case in ['recover-without-barrier','foreign-barrier']:
@@ -158,9 +172,17 @@ def run(installer_only=False):
                                     committed=invoke('--commit',held);assert committed.returncode==0,(arch,case,committed.stdout,committed.stderr)
                                     assert invoke('--check-current',held).returncode==0,'complete current app verification failed'
                                     started.terminate();started.wait(timeout=5)
-                                    if case in ['rollback','rollback-live','rollback-retry']:
+                                    if case in ['rollback','rollback-live','rollback-retry','retire-rolled-back']:
                                         restored=invoke('--rollback',held);assert restored.returncode==0,(arch,case,restored.stderr)
                                         assert {key:(component/key).read_bytes() for key in NAMES}==old_files
+                                        if case=='retire-rolled-back':
+                                            fields=(transaction/'owner').read_text().splitlines()[0].split();fields[2]='99999999'
+                                            payload=(' '.join(fields)+'\n').encode();put(transaction/'owner',payload+sha(payload).encode()+b'\n')
+                                            put(app,old_app,0o700);again=spawn(app,[]);processes.append(again)
+                                            retired=invoke('--retire-inactive',held)
+                                            assert retired.returncode==0,(arch,case,retired.stdout,retired.stderr)
+                                            assert not transaction.exists() and list(updates.glob('.retired-*'))
+                                            assert {key:(component/key).read_bytes() for key in NAMES}==old_files
                                         if case=='rollback-retry':
                                             put(app,old_app,0o700);again=spawn(app,[]);processes.append(again)
                                             retried=invoke('--prepare',source,held)
@@ -181,7 +203,7 @@ def run(installer_only=False):
                                         restarted=start_app(app,(arch,case,'finalized restart'));processes.append(restarted)
                                         if case=='owner-dead':assert not barrier.exists(),'proven owned empty barrier not retired'
                                         if case=='owner-nonempty':assert (barrier/'foreign').read_bytes()==b'preserved evidence'
-                            if case not in ['wrong-phase','upgrade','owner-dead','owner-nonempty','recover-without-barrier','partial-recovery']:
+                            if case not in ['wrong-phase','upgrade','canvas-unavailable','owner-dead','owner-nonempty','recover-without-barrier','partial-recovery']:
                                 assert (component/'lifecycle').read_bytes()==original_journal,(arch,case,'journal changed')
                             assert [(tree/p[1:]).read_bytes() for p in PATHS]==news,(arch,case,'startup changed')
                             assert n.poll() is None,(arch,case,'native stopped')

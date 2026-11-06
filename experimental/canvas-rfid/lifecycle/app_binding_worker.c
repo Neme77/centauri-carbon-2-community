@@ -76,7 +76,7 @@ static int aw_live_app(struct au_store *store,const char *app_sha){
         cl_profile(&store->native,&record)&&vc_backup(&store->native)&&vc_targets(&store->native)&&
         sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
         sc_one_process("cc2-control",AU_APP,app_sha,&app)&&
-        sc_native_profile(&first,1)&&aw_fresh_ready()&&aw_canvas_ready()&&aw_fresh_ready()&&sc_native_profile(&last,1)&&
+        sc_native_profile(&first,1)&&aw_fresh_ready()&&aw_fresh_ready()&&sc_native_profile(&last,1)&&
         sc_one_process("cc2-control",AU_APP,app_sha,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
 }
@@ -181,6 +181,39 @@ static int aw_recover(void){
     if(own.fd>=0&&!maintenance_barrier_release(&own))okay=0;
     au_close(&store);return okay;
 }
+static int aw_retire_inactive(struct au_store *store,int held){
+    struct stat st;struct au_record record;struct au_owner owner;char journal[65];
+    if(!au_barrier(held)||!aw_descriptor(store)||!aw_live_app(store,au_expected.old_app))return 0;
+    for(unsigned i=0;i<AU_COUNT;i++)if(au_current(store,au_expected.files+i)!=0)return 0;
+    if(!fstatat(store->directory,"state",&st,AT_SYMLINK_NOFOLLOW)){
+        if(!aw_state(store,&record)||record.phase!=AU_ROLLED_BACK||
+           !au_native(store,&au_expected,journal)||strcmp(record.journal,journal))return 0;
+        for(unsigned i=0;i<AU_COUNT;i++){
+            char name[32];snprintf(name,sizeof(name),"old.%u",i);
+            if(!au_match(store->directory,name,au_expected.files[i].before,0600))return 0;
+        }
+    }else if(errno!=ENOENT)return 0;
+    if(!fstatat(store->directory,"owner",&st,AT_SYMLINK_NOFOLLOW)){
+        if(!aw_owner_read(store,&owner)||aw_owner_alive(&owner))return 0;
+    }else if(errno!=ENOENT)return 0;
+    char path[1024];int n=snprintf(path,sizeof(path),"%s",AU_DIRECTORY);
+    if(n<1||(size_t)n>=sizeof(path))return 0;
+    char *name=strrchr(path,'/');if(!name||strcmp(name+1,au_expected.new_app))return 0;
+    *name++=0;
+    int parent=open(path,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);struct stat current,opened;
+    int okay=au_directory_private(parent)&&!fstat(store->directory,&opened)&&
+        !fstatat(parent,name,&current,AT_SYMLINK_NOFOLLOW)&&S_ISDIR(current.st_mode)&&
+        current.st_dev==opened.st_dev&&current.st_ino==opened.st_ino;
+    uint64_t nonce=0;int random=open("/dev/urandom",O_RDONLY|O_CLOEXEC);
+    okay=okay&&random>=0&&cl_io(random,(unsigned char*)&nonce,sizeof(nonce),0)&&nonce;
+    if(random>=0)close(random);
+    char archive[128];n=snprintf(archive,sizeof(archive),".retired-%s-%ld-%016llx",name,(long)getpid(),(unsigned long long)nonce);
+    okay=okay&&n>0&&(size_t)n<sizeof(archive)&&au_barrier(held);
+    if(okay)okay=!syscall(SYS_renameat2,parent,name,parent,archive,1u)&&!fsync(parent);
+    if(okay)printf("INACTIVE APP PREPARATION ARCHIVED=%s/%s; native state and backups retained.\n",path,archive);
+    if(parent>=0)close(parent);
+    return okay;
+}
 int main(int argc,char **argv){
     if(geteuid()!=0||(getenv("LD_PRELOAD")&&*getenv("LD_PRELOAD"))||
         strcmp(SC_APP_SHA,au_expected.old_app)||strcmp(SC_PROFILE_SHA,au_expected.profile))return 1;
@@ -189,8 +222,8 @@ int main(int argc,char **argv){
         if(aw_recover()){puts("APP BINDING RECOVERED: native journal, startup, guard and Canvas unchanged.");return 0;}
         fputs("STOP: app_binding_recovery_incomplete; retain transaction and backups\n",stderr);return 1;
     }
-    int prepare=argc==4&&!strcmp(argv[1],"--prepare"),rollback=argc==3&&!strcmp(argv[1],"--rollback"),commit=argc==3&&!strcmp(argv[1],"--commit"),current=argc==3&&!strcmp(argv[1],"--check-current");
-    if(!prepare&&!rollback&&!commit&&!current)return 2;
+    int prepare=argc==4&&!strcmp(argv[1],"--prepare"),rollback=argc==3&&!strcmp(argv[1],"--rollback"),commit=argc==3&&!strcmp(argv[1],"--commit"),current=argc==3&&!strcmp(argv[1],"--check-current"),retire=argc==3&&!strcmp(argv[1],"--retire-inactive");
+    if(!prepare&&!rollback&&!commit&&!current&&!retire)return 2;
     const char *number=argv[prepare?3:2];char *end=NULL;errno=0;long value=strtol(number,&end,10);
     if(errno||!number[0]||!end||*end||value<3||value>1048576)return 2;
     int held=(int)value;
@@ -199,7 +232,8 @@ int main(int argc,char **argv){
     struct au_store store;
     if(!au_open(&store,prepare))return 1;
     int okay=0;
-    if(prepare){
+    if(retire)okay=aw_retire_inactive(&store,held);
+    else if(prepare){
         int source=open(argv[2],O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
         okay=source>=0&&aw_descriptor(&store)&&aw_live_app(&store,au_expected.old_app)&&
             aw_prepare(&store,source,held)&&aw_owner_save(&store,held);
@@ -208,6 +242,7 @@ int main(int argc,char **argv){
     else okay=aw_finish(&store,held);
     au_close(&store);
     if(!okay){fputs("STOP: qualified_app_binding_action_refused; retain transaction and backups\n",stderr);return 1;}
+    if(retire)return 0;
     puts(prepare?"APP BINDING PREPARED: private recovery snapshots committed; application and native state unchanged.":
         rollback?"APP BINDING ROLLED BACK: exact prior app-specific files restored; native journal preserved.":
         "APP BINDING COMMITTED: new app and runtime binding verified; no Canvas transfer performed.");

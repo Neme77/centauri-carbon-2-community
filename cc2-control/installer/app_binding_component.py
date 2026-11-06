@@ -102,13 +102,19 @@ binding_unpack() {{
 }}
 binding_publish() {{
     if [ -e {destination} ] || [ -L {destination} ]; then
-        binding_verify_worker || return 1
-    else
+        if ! binding_verify_worker;then
+            [ -f {destination}/worker ] && [ ! -L {destination}/worker ] &&
+            [ -f {destination}/recovery.json ] && [ ! -L {destination}/recovery.json ] || return 1
+            "$BINDING_SOURCE/component/worker" --retire-inactive 3 || return 1
+        fi
+    fi
+    if [ ! -e {destination} ] && [ ! -L {destination} ];then
         if [ ! -e /opt/usr/cc2-rfid-app-updates ] && [ ! -L /opt/usr/cc2-rfid-app-updates ]; then
             (umask 077; mkdir /opt/usr/cc2-rfid-app-updates) || return 1
         fi
         "$BINDING_SOURCE/publisher" --publish "$BINDING_SOURCE/component" || return 1
     fi
+    binding_verify_worker
 }}
 binding_prepare() {{
     binding_verify_worker && binding_run {destination}/worker --prepare "$BINDING_SOURCE/component/incoming" 3 || return 1

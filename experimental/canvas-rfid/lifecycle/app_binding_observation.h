@@ -23,11 +23,6 @@ static int aw_mqtt_only_expired(const ng_json *p,const ng_json *u){
            ng_field_bool(p,drying,"active",0);
 }
 
-static int aw_canvas_ready(void){
-    if(vc_canvas_http())return 1;
-    fputs("STOP: app_binding_canvas_observation_refused\n",stderr);return 0;
-}
-
 static int aw_fresh_ready(void){
     if(sc_fresh())return 1;
     uint64_t now=sc_now(),deadline=now+10000u;int requested=0;
@@ -53,7 +48,11 @@ static int aw_fresh_ready(void){
         if(!requested){
             /* GET Canvas enables the application's existing bounded native
              * information poll. It never sends a printer-control command. */
-            if(!aw_canvas_ready())break;
+            /* This GET only enables the ordinary read-side information poll.
+             * Its Canvas payload cannot authorize or veto an app-only update;
+             * the original printer/UDS readiness guard remains authoritative. */
+            char *hint=NULL;size_t hint_size=0;
+            (void)vc_http_body("/api/canvas",&hint,&hint_size);free(hint);
             requested=1;
             puts("ACQUIRING FRESH MQTT: quiet cached sample expired; original five-second guard unchanged.");fflush(stdout);
         }

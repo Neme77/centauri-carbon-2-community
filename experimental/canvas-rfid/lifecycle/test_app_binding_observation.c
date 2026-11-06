@@ -9,8 +9,11 @@ static int sc_cancelled,scenario,guards,requests,reads,pauses;
 static uint64_t stamp;
 static uint64_t sc_now(void){return stamp;}
 static int sc_fresh(void){guards++;return scenario==0||(guards>1&&scenario!=4);}
-static int vc_canvas_http(void){requests++;return scenario!=3;}
 static int vc_http_body(const char *path,char **out,size_t *size){
+    if(!strcmp(path,"/api/canvas")){
+        requests++;if(scenario==3)return 0;
+        *out=strdup("Canvas read hint, not permission");if(!*out)return 0;*size=strlen(*out);return 1;
+    }
     reads++;if(scenario==5)return 0;
     char body[1024];int age=scenario==2?16:(stamp>=1500&&scenario!=1?0:7);
     int target=scenario==6||(scenario==7&&stamp>=1250)?200:0;
@@ -33,11 +36,11 @@ int main(void){
     for(scenario=0;scenario<12;scenario++){
         stamp=1000;sc_cancelled=guards=requests=reads=pauses=0;
         int okay=aw_fresh_ready();
-        assert(okay==(scenario==0||scenario==12));
+        assert(okay==(scenario==0||scenario==3||scenario==12));
         if(scenario==0)assert(guards==1&&requests==0&&reads==0);
         if(scenario==1)assert(stamp>=11000&&guards==1&&requests==1);
         if(scenario==2||scenario==6||scenario==8||scenario==9||scenario==10)assert(requests==0&&pauses==0&&guards==1);
-        if(scenario==3)assert(requests==1&&pauses==0);
+        if(scenario==3)assert(requests==1&&guards==2); /* No Canvas firmware operation exists here. */
         if(scenario==4)assert(guards==2); /* Collected ready never bypasses pinned guard. */
         if(scenario==7)assert(requests==1&&pauses==1&&guards==1);
         if(scenario==11)assert(sc_cancelled&&guards==1);

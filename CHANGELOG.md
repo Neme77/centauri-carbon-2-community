@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Preserve an already active Canvas during application-only RFID updates without requiring a live Canvas payload; firmware-transfer checks remain in the transfer coordinator. Retain obsolete, never-applied or fully rolled-back app preparations in a verified archive when updating their helper. Investigated with **Neme77** (PR pending; printer validation pending).
+
 - Verify and preserve installed Connections against the authenticated composed startup profile during unified updates, retaining kernel, Wi-Fi and component-file checks instead of requiring the untouched stock launcher. Reported by **Neme77** (PR pending; printer validation pending).
 
 - Acquire a fresh observation when an otherwise safe, quiet MQTT cache exceeds the five-second RFID update guard; retain the original guard, fresh native state and immediate rejection of unsafe observations. Diagnosed from **Neme77**'s captured live samples (PR pending; printer validation pending).
