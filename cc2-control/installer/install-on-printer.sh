@@ -60,7 +60,7 @@ installer_http_get() (
     fi
 )
 
-mkdir "$LOCK" || { echo 'Another installation is active.' >&2; exit 1; }
+(umask 077; mkdir "$LOCK") || { echo 'Another installation is active.' >&2; exit 1; }
 CHANGED=0
 STOPPED=0
 PASSED=0
@@ -68,6 +68,7 @@ BACKUP=''
 CAMERA_SOURCE=''
 @CAMERA_COMPONENT_FUNCTIONS@
 @CONNECTIONS_COMPONENT_FUNCTIONS@
+@RFID_COMPONENT_FUNCTIONS@
 
 finish() {
     code=$?
@@ -139,6 +140,8 @@ require_cold() {
 require_cold
 install_phase camera-preflight
 @CAMERA_COMPONENT_PREFLIGHT@
+install_phase rfid-preflight
+@RFID_COMPONENT_PREFLIGHT@
 BACKUP="/opt/usr/cc2-control-backup-$(date +%Y%m%d-%H%M%S)-$$"
 mkdir "$BACKUP"
 install_phase backup-copy
@@ -150,6 +153,8 @@ install_phase printer-status-after-backup
 STATUS=$(installer_http_get http://127.0.0.1:8081/api/printer)
 case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Printer state changed; update cancelled.' >&2; exit 1;; esac
 require_cold
+install_phase rfid-component-prepare
+@RFID_COMPONENT_PUBLISH@
 install_phase stop-service
 STOPPED=1
 "$INIT" stop
@@ -212,6 +217,7 @@ while [ "$tries" -lt 120 ] && [ "$(awk '{print int($1)}' /proc/uptime)" -lt "$VE
                 fi
                 @CONNECTIONS_COMPONENT_INSTALL@
                 PASSED=1
+                @RFID_COMPONENT_COMPLETION@
                 echo "$RESULT"
                 echo "INSTALLATION PASSED. Backup: $BACKUP"
                 echo "Restore while Idle: sh $BACKUP/restore.sh"

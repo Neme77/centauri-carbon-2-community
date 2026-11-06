@@ -8,11 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Pause panel mutations while the application installer or native maintenance coordinator owns the shared installation barrier, preserving read-only status and both emergency-stop routes; developed with **Neme77** as part of the draft autonomous RFID update work (#299).
+
 - Arrange Control fan sliders above a separate Chamber fan management group, and lower Dashboard fan readouts by one element without stretching their card; designed and preview-reviewed with **Neme77** (PR pending).
 
 - Reorganize Control with load-cell tools in their own Bed Levelling tab, full Rotation Distance below Pressure Advance, Input Shaper inside Movement and full-width material profiles. Add live nozzle/bed/chamber temperatures to Job details. Preserve the published Dashboard. Designed and approved by **Neme77** (follow-up to #283).
 
 ### Added
+
+- Experimental Anycubic RFID capture, reviewed Canvas slot assignment and separate material/presence feedback, with explicit ownership, freshness and cancellation guards; developed and physically tested with **Neme77**, with decoder-layout attribution to **OpenRFID / DnG-Crafts** (#299). The autonomous activation/update lifecycle is not complete and release publication remains blocked.
 
 - Continue a print from another Canvas slot after a runout, with or without the printer's auto refill: while the print waits on a Canvas runout, a card on every page offers the loaded slots (same material first) and, once confirmed, points the tools that used the empty slot at the chosen one, reheats and resumes; the printer loads it, purges and carries on, keeping the rest of the print's slot map. Optional **Match material only** under Auto refill continues automatically from a loaded slot of the same material when no slot has the same colour (it trusts the slot labels). Requested by **mcknight89**, tested on a CC2 and implemented by **Noahwhite2014** (#284).
 - Build Plates: optional "Match the mesh to the print's bed temperature". Prints sent from a slicer or started on the touchscreen get the mounted plate's mesh nearest to their bed temperature, including up to 4 blended meshes between measurements (where the nearest mesh would be furthest off, written while idle and used after the next printer restart, removed again when the option is turned off), loaded one at a time after the print start's own mesh load; implemented and physically tested by **Noahwhite2014** (#296).

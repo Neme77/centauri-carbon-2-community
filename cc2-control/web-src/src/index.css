@@ -452,6 +452,8 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 
 .cc2-canvas-actionbar { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; }
 .cc2-canvas-actionheading>div { margin:0; padding:0; border:0; }
+.cc2-canvas-rfid-toggle { margin-left:auto; }
+.cc2-canvas-rfid-toggle:empty { display:none; }
 
 [data-canvas-action-reason] { min-height:4.35em; }
 @container page (min-width:720px) { [data-canvas-action-reason] { min-height:1.45em; } }
