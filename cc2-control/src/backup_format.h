@@ -261,7 +261,7 @@ static int bk_plate_item(const char *o, const char *end, void *opaque) {
 
 static int bk_plates(const char *o,const char *end,plate_store *s) {
     memset(s,0,sizeof(*s));
-    if (!bk_keys(o,end,",version,current,pending,nozzle,nozzles,plates,uncalibrated,measures,") ||
+    if (!bk_keys(o,end,",version,current,pending,nozzle,nozzles,plates,uncalibrated,measures,match_temperature,") ||
         !bk_int(o,end,"version",2,2,NULL) || !plates_parse_id(o,end,"current",s->current) ||
         !plates_parse_id(o,end,"pending",s->pending) || !plates_parse_id(o,end,"nozzle",s->nozzle)) return 0;
     bk_plate_context ctx={s,0};
@@ -272,6 +272,10 @@ static int bk_plates(const char *o,const char *end,plate_store *s) {
     if (!bk_array(o,end,"uncalibrated",bk_plate_item,&ctx,PLATES_MAX)) return 0;
     ctx.kind=3;
     if (!bk_array(o,end,"measures",bk_plate_item,&ctx,PLATE_MEASURES_MAX)) return 0;
+    const char *match=json_member(o,end,"match_temperature");
+    if(match){if(end-match>=4&&!memcmp(match,"true",4))s->match=1;
+        else if(end-match<5||memcmp(match,"false",5))return 0;
+    }
     for(int i=0;i<s->measure_count;i++) {
         plate_measure *m=&s->measures[i];
         int plate=0,nozzle=!m->nozzle[0];

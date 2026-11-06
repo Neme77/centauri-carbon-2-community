@@ -56,6 +56,27 @@ try {
   }
   await card('Smooth PEI').waitFor()
   assert.equal(await page.locator('[data-plate]').count(), 3)
+  // #296: matching the mesh to prints started elsewhere is off until chosen, then saved.
+  const match = page.locator('[data-mesh-match]')
+  assert.equal(await match.getAttribute('aria-pressed'), 'false')
+  await page.getByText("A print started here keeps the measurement chosen in its dialog.", { exact: false }).waitFor()
+  await match.click()
+  await page.waitForFunction(() => document.querySelector('[data-mesh-match]')?.getAttribute('aria-pressed') === 'true')
+  assert.deepEqual(posts.at(-1), ['/api/plates/match', 'on'])
+  // The blended meshes are written; the printer loads them after a restart, which asks first.
+  const written = page.locator('[data-blends="written"]')
+  await written.getByText('Blended meshes for 70, 75, 85, 95 °C are written.', { exact: false }).waitFor()
+  await written.getByRole('button', { name: 'Restart printer now', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
+  assert.deepEqual(posts.at(-1), ['/api/plates/match', 'on'], 'cancelled: no restart')
+  await written.getByRole('button', { name: 'Restart printer now', exact: true }).click()
+  await confirm('Restart the printer now so it loads the blended meshes?')
+  await page.locator('[data-blends="ready"]').getByText('Blended meshes in the printer: 70, 75', { exact: false }).waitFor()
+  assert.deepEqual(posts.at(-1), ['/api/plates/blends/restart', ''])
+  await match.click()
+  await page.waitForFunction(() => document.querySelector('[data-mesh-match]')?.getAttribute('aria-pressed') === 'false')
+  assert.deepEqual(posts.at(-1), ['/api/plates/match', 'off'])
+  posts.length = 0
   assert.ok(await page.getByRole('tab', { name: 'Build Plates' }).getAttribute('aria-selected'))
   await card('Textured PEI').getByText('In printer', { exact: true }).waitFor()
   assert.equal(await card('Cool Plate').getByText('In printer', { exact: true }).count(), 0)
@@ -250,5 +271,5 @@ try {
   })
   assert.deepEqual(lines.slice(3, 7), ['A', 'calibrate', '0', ''])
   assert.deepEqual(errors, [])
-  console.log('PASS: plate measurements by bed temperature, mount (in place, with restart, with a chosen measurement), screen Z note with the nozzle correction, Z edit, nozzles, save, view, delete, idle guard, phone width and the print dialog choice')
+  console.log('PASS: plate measurements by bed temperature, the bed-temperature match switch and blended meshes with the restart, mount (in place, with restart, with a chosen measurement), screen Z note with the nozzle correction, Z edit, nozzles, save, view, delete, idle guard, phone width and the print dialog choice')
 } finally { await browser?.close(); await server.close() }

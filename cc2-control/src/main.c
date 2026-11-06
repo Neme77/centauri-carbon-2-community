@@ -4318,6 +4318,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_nozzle_select_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/mount")==0) {
         plates_mount_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/match")==0) {
+        plates_match_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/blends/restart")==0) {
+        plates_blends_restart_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/unmount")==0) {
         plates_unmount_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spools")==0) {

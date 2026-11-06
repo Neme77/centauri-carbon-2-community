@@ -40,7 +40,15 @@ export type PrintMesh = {
   state: 'off' | 'waiting' | 'active'
   measure: string
   result: '' | 'loaded' | 'missed' | 'adaptive' | 'failed' | 'not_started' | 'ended'
+  // "dialog": chosen in CC2 Control's print dialog; "auto": matched to a print started elsewhere (#296)
+  source?: '' | 'dialog' | 'auto'
 }
+// Matching the mesh to the bed temperature of prints started elsewhere (#296).
+export type MeshBlends = {
+  state: '' | 'off' | 'too_few' | 'planned' | 'written' | 'ready' | 'write_failed'
+  temps: { temp: number; live: boolean }[]
+}
+export type MeshMatch = { enabled: boolean; result: string; blend_temp?: number; blends?: MeshBlends }
 // A bed mesh calibration CC2 Control runs: homing, heating, holding the bed at the temperature, probing and
 // saving to a plate. `remaining` counts the soak in seconds; `bed` is the bed temperature now.
 export type Calibration = {
@@ -69,6 +77,7 @@ export type PlateLibrary = {
   nozzle: string
   mesh_profile: string | null
   print_mesh: PrintMesh
+  match?: MeshMatch
   calibration: Calibration
   slots: { A: string; B: string }
   nozzles: Nozzle[]
@@ -185,3 +194,13 @@ export const saveNozzle = (id: string, name: string, diameter: number, z: number
   post('/api/plates/nozzle', `${id}\n${name}\n${diameter.toFixed(2)}\n${z.toFixed(3)}`)
 export const deleteNozzle = (id: string) => post('/api/plates/nozzle/delete', id)
 export const selectNozzle = (id: string) => post('/api/plates/nozzle/select', id)
+
+export async function setMeshMatch(on: boolean) {
+  await post('/api/plates/match', on ? 'on' : 'off')
+  await refreshPlates()
+}
+
+// Restart the printer so it loads the blended meshes written for the mounted plate (#296).
+export async function restartForBlends() {
+  await post('/api/plates/blends/restart', '')
+}
