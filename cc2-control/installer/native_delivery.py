@@ -11,6 +11,7 @@ from app_binding_bundle import unique_pairs
 from app_binding_component import functions as binding_functions
 from cavity_component import functions as cavity_functions
 from rfid_component import functions as rfid_functions
+from network_component import preserve_managed
 
 
 class Blob:
@@ -18,7 +19,7 @@ class Blob:
     def read_bytes(self):return self.data
 
 
-def functions(runtime,app_sha):
+def functions(runtime,app_sha,*,preserve_connections=False):
     data=runtime.read_bytes()
     if not data or len(data)>16*1024*1024:raise ValueError('Unbounded unified native runtime')
     files={};total=0
@@ -45,6 +46,15 @@ def functions(runtime,app_sha):
     with tarfile.open(fileobj=io.BytesIO(files['rfid.tar.gz']),mode='r:gz') as archive:
         if any(archive.extractfile('component/'+n).read()!=b for n,b in incoming.items()):
             raise ValueError('First-install and upgrade must deliver identical application-bound RFID files')
+        connections=''
+        if preserve_connections:
+            # Protocol1 startup role6 is the network manager's SHA256SUMS.
+            # Bind both composed profiles from the signed startup plan.
+            plan=archive.extractfile('component/startup-plan').read().decode('ascii')
+            rows=[line.split() for line in plan.splitlines() if line.startswith('6 ')]
+            if not plan.startswith('CC2-STARTUP-PLAN-1\n') or len(rows)!=1 or len(rows[0])!=5:
+                raise ValueError('Missing qualified Connections startup role')
+            connections=preserve_managed(rows[0][3],rows[0][4])
     code=rfid+cavity+binding+f'''NATIVE_ROUTE=''
 NATIVE_PREPARED=0
 native_current() {{
@@ -116,7 +126,7 @@ native_restore_binding() {{
     case "$(cat "$BACKUP/native-route")" in upgrade) binding_rollback;; current|fresh) :;; *) return 1;;esac
 }}
 '''
-    return {'functions':code,'tail':rtail+ctail+btail,'restore_functions':restore,
+    return {'functions':code+connections,'tail':rtail+ctail+btail,'restore_functions':restore,
         'preflight':'native_unpack || exit 1','prepare':'native_prepare || exit 1',
         'commit':'native_commit || exit 1','restore_guard':'native_restore_guard || exit 1',
         'restore_rollback':'native_restore_binding || exit 1',

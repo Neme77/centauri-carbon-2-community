@@ -33,6 +33,13 @@ def functions(runtime: Path, *, streamed=False):
     config=$(zcat /proc/config.gz | sha256sum) || return 1
     [ "${config%% *}" = 8fa0a87f203d69cb9c4e027e8db11a9a0d92c5d2ea8ae83f87b34714aae7ec4a ]
 }
+network_platform_supported() {
+    [ "$(uname -r)" = 5.4.61 ] && [ "$(uname -m)" = armv7l ] || return 1
+    [ -f /bin/wifi_daemon ] && [ ! -L /bin/wifi_daemon ] || return 1
+    [ "$(sha256sum /bin/wifi_daemon | awk '{print $1}')" = 8e19a620921c6f4f21bde910cc3d960af5400d223493041eb96f1e921dcbe3c1 ] || return 1
+    config=$(zcat /proc/config.gz | sha256sum) || return 1
+    [ "${config%% *}" = 8fa0a87f203d69cb9c4e027e8db11a9a0d92c5d2ea8ae83f87b34714aae7ec4a ]
+}
 network_install_component() {
     if ! network_profile_supported; then
         if [ -e /opt/usr/cc2-network-manager ] || [ -L /opt/usr/cc2-network-manager ]; then
@@ -71,3 +78,28 @@ network_install_component() {
     if streamed:
         return code, '\n# CC2_NETWORK_DATA_BEGIN\n' + '\n'.join(payload) + '\n# CC2_NETWORK_DATA_END\n'
     return code
+
+
+def preserve_managed(before_sha, after_sha):
+    """The authenticated lifecycle plan binds both composed manifest versions."""
+    import re
+    if not all(re.fullmatch('[0-9a-f]{64}', value) for value in (before_sha, after_sha)):
+        raise ValueError('Invalid managed Connections manifest binding')
+    return f'''native_connections_component() {{
+    NETWORK_INSTALLED=/opt/usr/cc2-network-manager
+    if [ ! -e "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ];then
+        network_install_component;return $?
+    fi
+    [ -d "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ] &&
+    [ -f "$NETWORK_INSTALLED/SHA256SUMS" ] && [ ! -L "$NETWORK_INSTALLED/SHA256SUMS" ] || return 1
+    network_platform_supported || {{ echo 'STOP: Connections platform not qualified' >&2;return 1; }}
+    case "$NATIVE_ROUTE" in
+      fresh) network_expected={before_sha};;
+      upgrade|current) network_expected={after_sha};;
+      *) return 1;;
+    esac
+    [ "$(sha256sum "$NETWORK_INSTALLED/SHA256SUMS" | awk '{{print $1}}')" = "$network_expected" ] || {{ echo 'STOP: Connections manifest differs from qualified native plan' >&2;return 1; }}
+    (cd "$NETWORK_INSTALLED" && sha256sum -c SHA256SUMS) || return 1
+    echo 'CONNECTIONS_COMPONENT_PRESERVED: qualified managed startup and component files verified.'
+}}
+'''

@@ -39,7 +39,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
     binary_hash = hashlib.sha256(binary).hexdigest()
     rfid_code, rfid_tail = rfid_functions(rfid_runtime, binary_hash) if rfid_runtime else ('', '')
     binding_code, binding_tail, binding_restore = app_binding_functions(app_binding_runtime, binary_hash) if app_binding_runtime else ('', '', '')
-    native = native_functions(native_runtime, binary_hash) if native_runtime else None
+    native = native_functions(native_runtime, binary_hash, preserve_connections=bool(connections_runtime)) if native_runtime else None
     # Large literal printf bodies become a shell function AST even on routes
     # that never invoke them. Keep unified component bytes in the same streamed
     # data-tail format already used by RFID, without changing the signed format.
@@ -98,7 +98,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
                 '@CAMERA_COMPONENT_FUNCTIONS@': native_camera,
                 '@CAMERA_COMPONENT_PREFLIGHT@': 'camera_unpack\nsh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '',
                 '@CONNECTIONS_COMPONENT_FUNCTIONS@': native_network,
-                '@CONNECTIONS_COMPONENT_INSTALL@': 'install_phase network-component\n                network_install_component || exit 1' if connections_runtime else '',
+                '@CONNECTIONS_COMPONENT_INSTALL@': 'install_phase network-component\n                native_connections_component || exit 1' if connections_runtime else '',
                 '@RFID_COMPONENT_FUNCTIONS@': native['functions'],
                 '@RFID_COMPONENT_PREFLIGHT@': native['preflight'],
                 '@RFID_COMPONENT_PUBLISH@': native['prepare'],
