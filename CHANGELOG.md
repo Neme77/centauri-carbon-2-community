@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Keep the spool-selection question and its draft open after an accidental click outside the popup; explicit Not now, Cancel and keyboard Escape remain available. Reported and reproduced with **Neme77**, follow-up to the Canvas/spool workflow (#299).
+
 - `/api/mesh` (the bed mesh view and the print dialog's mesh check) asks the printer only for the active mesh and reads the side and adaptive profiles from `autosave.cfg`. Its `{"bed_mesh":null}` query made the firmware serialise every stored profile (about 30 KB, up to 615 ms with more profiles) on its motion thread; opened during a first layer it ended a print with "MCU 'mcu' shutdown: Timer too close"; found and fixed by **Noahwhite2014**.
 - Align manual nozzle targets, preheat profiles, material ranges and backup restoration with the Centauri Carbon 2 native touchscreen limit of 350 C; preserve valid high-temperature targets after manual homing. Native thermal protections and separately qualified PID limits are unchanged. Reported by **Sangra6969** and reproduced by **Neme77** (#290).
 
