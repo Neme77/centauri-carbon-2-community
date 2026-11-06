@@ -61,6 +61,33 @@ binding_rollback() {{
 }}
 '''
     code = restore_functions + f'''BINDING_PREPARED=0
+BINDING_OBSERVATION=0
+binding_rejected() {{
+    command -v installer_http_get >/dev/null 2>&1 || return 0
+    echo 'Latest read-only observations after the refused check (not the rejected historical samples):'
+    for binding_endpoint in /api/printer /api/uds;do
+        echo "$binding_endpoint"
+        installer_http_get "http://127.0.0.1:8081$binding_endpoint" || true
+        echo
+    done
+}}
+binding_run() {{
+    BINDING_OBSERVATION=$((BINDING_OBSERVATION+1))
+    binding_attempt=1
+    while :;do
+        binding_log="$BINDING_SOURCE/observation-$BINDING_OBSERVATION-$binding_attempt.log"
+        if "$@" >"$binding_log" 2>&1;then cat "$binding_log";return 0;else binding_code=$?;fi
+        cat "$binding_log"
+        [ "$binding_attempt" -lt 3 ] &&
+        grep -qx 'STOP: fresh_idle_cold_observation_failed' "$binding_log" || {{ binding_rejected;return "$binding_code"; }}
+        echo 'Waiting briefly for a valid fresh Idle/cold observation; all original checks remain active.'
+        sleep 2
+        [ -f /opt/usr/cc2-rfid/fresh-reader ] && [ ! -L /opt/usr/cc2-rfid/fresh-reader ] &&
+        [ "$(sha256sum /opt/usr/cc2-rfid/fresh-reader | awk '{{print $1}}')" = 3dd6d8699169c800689e5ed2c047a2d3cc43386d3fdad59adc41b929111b045a ] &&
+        /opt/usr/cc2-rfid/fresh-reader --check || {{ binding_rejected;return "$binding_code"; }}
+        binding_attempt=$((binding_attempt+1))
+    done
+}}
 binding_unpack() {{
     BINDING_SOURCE="$STAGE/app-binding-$$"
     (umask 077; mkdir "$BINDING_SOURCE") || return 1
@@ -83,7 +110,7 @@ binding_publish() {{
     fi
 }}
 binding_prepare() {{
-    binding_verify_worker && {destination}/worker --prepare "$BINDING_SOURCE/component/incoming" 3 || return 1
+    binding_verify_worker && binding_run {destination}/worker --prepare "$BINDING_SOURCE/component/incoming" 3 || return 1
     BINDING_PREPARED=1
 }}
 binding_commit() {{

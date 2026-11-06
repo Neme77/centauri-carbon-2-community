@@ -48,7 +48,7 @@ def functions(runtime,app_sha):
     code=rfid+cavity+binding+f'''NATIVE_ROUTE=''
 NATIVE_PREPARED=0
 native_current() {{
-    "$BINDING_SOURCE/component/worker" --check-current 3
+    binding_run "$BINDING_SOURCE/component/worker" --check-current 3
 }}
 native_unpack() {{
     exec 3< "$LOCK"

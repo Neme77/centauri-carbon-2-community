@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- After a native preparation observation is refused, wait briefly and retry only when the unchanged, fingerprinted Idle/cold guard passes again; retain the three-attempt bound and all original temperature, motion and freshness limits. Reported by **Neme77** during unified-update qualification (PR pending).
+
 - Keep the spool-selection question and its draft open after an accidental click outside the popup; explicit Not now, Cancel and keyboard Escape remain available. Reported and reproduced with **Neme77**, follow-up to the Canvas/spool workflow (#299).
 
 - `/api/mesh` (the bed mesh view and the print dialog's mesh check) asks the printer only for the active mesh and reads the side and adaptive profiles from `autosave.cfg`. Its `{"bed_mesh":null}` query made the firmware serialise every stored profile (about 30 KB, up to 615 ms with more profiles) on its motion thread; opened during a first layer it ended a print with "MCU 'mcu' shutdown: Timer too close"; found and fixed by **Noahwhite2014**.
