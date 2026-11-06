@@ -13,6 +13,7 @@ export const DialogTitle = ({ children, class: c = '' }: { children: ComponentCh
 export const Dialog = ({
   onClose,
   locked,
+  closeOnBackdrop = true,
   children,
   width = 520,
   class: className = '',
@@ -20,6 +21,7 @@ export const Dialog = ({
 }: {
   onClose?: () => void
   locked?: boolean
+  closeOnBackdrop?: boolean
   children: ComponentChildren
   width?: number
   class?: string
@@ -60,7 +62,7 @@ export const Dialog = ({
     <div
       role="presentation"
       class="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4"
-      onClick={e => e.target === e.currentTarget && !locked && onClose?.()}
+      onClick={e => e.target === e.currentTarget && closeOnBackdrop && !locked && onClose?.()}
     >
       <div
         ref={box}

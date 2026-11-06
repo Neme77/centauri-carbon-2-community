@@ -644,7 +644,13 @@ const SpoolChooser = ({
     })
   const radio = 'mt-0.5 shrink-0 accent-cyan'
   return (
-    <Dialog onClose={() => !busy && close()} locked={busy} width={700} label={tpl(title, { place: placeName(slot) })}>
+    <Dialog
+      onClose={() => !busy && close()}
+      locked={busy}
+      closeOnBackdrop={false}
+      width={700}
+      label={tpl(title, { place: placeName(slot) })}
+    >
       <div class="text-xs text-muted">{t('spools.title')}</div>
       <DialogTitle class="my-2">{tpl(title, { place: placeName(slot) })}</DialogTitle>
       {tray && (
