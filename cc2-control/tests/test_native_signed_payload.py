@@ -15,7 +15,14 @@ def run(payload_path):
     with tarfile.open(fileobj=io.BytesIO(payload),mode='r:') as archive:
         expected={m.name:archive.extractfile(m).read() for m in archive if m.isfile()}
     count=0
-    def command(args):return subprocess.run(list(map(str,args)),check=True,capture_output=True,timeout=120)
+    def command(args):
+        result=subprocess.run(list(map(str,args)),capture_output=True,timeout=120)
+        if result.returncode:
+            # Retain compiler/verifier diagnostics instead of hiding stderr in
+            # CalledProcessError. No release/private key is used by this test.
+            sys.stderr.write(result.stderr.decode('utf-8',errors='replace'))
+            result.check_returncode()
+        return result
     with tempfile.TemporaryDirectory(prefix='cc2-native-signed-payload-') as temporary:
         base=Path(temporary);key=base/'disposable.pem'
         command(['openssl','genpkey','-algorithm','ED25519','-out',key])
@@ -32,7 +39,8 @@ def run(payload_path):
         signed=header+(base/'signature').read_bytes()+manifest+payload
         package=base/'test-signed-update';package.write_bytes(signed)
         for arch,compiler,flags,runner in [('host','gcc',[],[]),
-            ('arm','arm-linux-gnueabihf-gcc',['-static','-D_TIME_BITS=32','-D_FILE_OFFSET_BITS=32'],['qemu-arm'])]:
+            # Keep the executable ARM32, with large-file off_t for the verifier's 64-bit stream bounds.
+            ('arm','arm-linux-gnueabihf-gcc',['-static','-D_TIME_BITS=32','-D_FILE_OFFSET_BITS=64'],['qemu-arm'])]:
             binary=base/('verify-'+arch)
             command([compiler,'-O2','-std=c11','-Wall','-Wextra','-Werror',*flags,
                 '-DCC2_CONTROL_VERSION="1.2.25"','-DCC2_COMMUNITY_FIRMWARE_VERSION="4.4"',
