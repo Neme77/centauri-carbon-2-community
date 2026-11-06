@@ -26,6 +26,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Acquire a fresh MQTT observation before arming a read-only RFID scan when the quiet heartbeat has expired; retain the five-second acceptance limit and immediate refusal of unsafe native states. Reported by **Neme77**, verified on host/ARM fixtures (PR pending; printer validation pending).
+- Show the actual capture failure after a recovered readiness refusal, rather than repeating the earlier stale-cache error. Developed with **Neme77** (PR pending).
+
 - Preserve an already active Canvas during application-only RFID updates without requiring a live Canvas payload; firmware-transfer checks remain in the transfer coordinator. Retain obsolete, never-applied or fully rolled-back app preparations in a verified archive when updating their helper. Investigated with **Neme77** (PR pending; printer validation pending).
 
 - Verify and preserve installed Connections against the authenticated composed startup profile during unified updates, retaining kernel, Wi-Fi and component-file checks instead of requiring the untouched stock launcher. Reported by **Neme77** (PR pending; printer validation pending).

@@ -38,11 +38,17 @@ def build(previous,new_app,output):
     app_bytes=new_app.read_bytes();new_sha=sha(app_bytes)
     if len(app_bytes)<20 or app_bytes[:6]!=b'\x7fELF\x01\x01' or app_bytes[18:20]!=b'\x28\x00':
         raise ValueError('New application must be a qualified ARM32 ELF')
-    # This builder admits only the tested cumulative owner profile. Other bases
-    # require their own explicit admission and tests, not a guessed version string.
-    if (old_metadata['app_sha256']!='8bfe407fe0ac61dd30f6485c4a45b408882807453ce46f92926845047196b4b3' or
+    # Closed source-qualified predecessors. The active upgrade below was also
+    # accepted on the printer; an arbitrary same-version runtime is not admitted.
+    allowed={
+        '8bfe407fe0ac61dd30f6485c4a45b408882807453ce46f92926845047196b4b3':
+            '15537ed3765f76cef1d02f41d9cf099c41bbe177b670a17b1c523847878cf07b',
+        '5262efc92724ff2b1cba5d9c1e0b5c8daecee9e2b35b50ae258cebb3dac5d054':
+            '0f2be5fa958ec81b73d70ff5238a99a108bcb35a3a418b5a16c0ff07db77847b',
+    }
+    if (allowed.get(old_metadata['app_sha256'])!=sha(previous.read_bytes()) or
             old_metadata['profile_sha256']!='9efc21a14f3da203a0fc8b0cf710602ab4bbf02bef6a3517c827a52b89f67766'):
-        raise ValueError('Previous runtime is not the admitted cumulative profile')
+        raise ValueError('Previous runtime is not an admitted qualified predecessor')
     pins={'fresh-reader':'3dd6d8699169c800689e5ed2c047a2d3cc43386d3fdad59adc41b929111b045a',
           'transfer-worker':'dd4a3be0fcee2e5290e177091dbfda5b1f402b87bd9e00727e1687661610206a',
           'libcc2-rfid.so':'fe6210eebfde592e4b0d276d2097abb0cfa3d53264da7ee9d83d8f24d7597ce2'}

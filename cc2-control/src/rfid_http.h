@@ -118,7 +118,12 @@ static void rfid_tick(mqtt_client *mqtt,console_state *console){
     rfid.output[rfid.used]=0;
     if(done<0||!WIFEXITED(status)||WEXITSTATUS(status)||memchr(rfid.output,0,rfid.used)){
         rfid.state="scan_failed";
-        const char *stop=strstr(rfid.output,"STOP: ");
+        /* A quiet-cache refusal may be recovered before SCAN ARMED. Report
+         * the first failure after the latest successful readiness check,
+         * rather than presenting the already recovered refusal to the user. */
+        const char *from=rfid.output,*passed;
+        while((passed=strstr(from,"LIVE GUARD PASS:")))from=passed+strlen("LIVE GUARD PASS:");
+        const char *stop=strstr(from,"STOP: ");
         if(stop){stop+=6;size_t n=strspn(stop,"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_");
             if(n&&n<sizeof(rfid.error)){memcpy(rfid.error,stop,n);rfid.error[n]=0;}}
         return;

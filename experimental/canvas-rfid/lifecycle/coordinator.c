@@ -4,6 +4,7 @@
 #include "stage_worker.c"
 #undef main
 #include "canvas_observation.h"
+#include "app_binding_observation.h"
 static int vc_targets_state(struct cl_store *store,int state){
     struct tx_file files[8];memset(files,0,sizeof(files));char plan[65];
     int okay=sc_read_plan(store,files)&&tx_plan(files,8,plan);
@@ -51,11 +52,15 @@ static int vc_verify_mode(enum cl_event event,unsigned wanted,unsigned complete,
     if(!maintenance_barrier_acquire(&barrier)){fprintf(stderr,"STOP: installer_or_maintenance_busy\n");return 1;}
     struct cl_store store;struct cl_record record={0};char boot[37]={0};pid_t app=0,last_app=0;
     struct sc_ready first={0},last={0};
+    /* Only the read-only scan preflight acquires a new quiet MQTT sample.
+     * Firmware transfer and boot verification keep their existing checks. */
+    int scan_check=wanted==CL_ACTIVE&&complete==CL_ACTIVE&&event==CL_VERIFY_FILTER_BOOT&&!disabled;
     int okay=cl_store_open(&store,SC_BASE)&&cl_store_read(&store,&record)&&cl_profile(&store,&record);
     okay=okay&&vc_profile_bound(&record)&&(record.phase==wanted||record.phase==complete)&&vc_boot(boot)&&
         vc_backup(&store)&&(disabled?vc_targets_state(&store,0):vc_targets(&store))&&sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
         sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&app)&&
-        sc_native_profile(&first,!disabled)&&sc_fresh()&&vc_canvas_http()&&sc_fresh()&&sc_native_profile(&last,!disabled)&&
+        sc_native_profile(&first,!disabled)&&(scan_check?aw_fresh_ready():sc_fresh())&&vc_canvas_http()&&
+        (scan_check?aw_fresh_ready():sc_fresh())&&sc_native_profile(&last,!disabled)&&
         sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
     if(okay&&record.phase!=complete){
