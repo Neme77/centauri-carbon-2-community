@@ -85,7 +85,20 @@ def preserve_managed(before_sha, after_sha):
     import re
     if not all(re.fullmatch('[0-9a-f]{64}', value) for value in (before_sha, after_sha)):
         raise ValueError('Invalid managed Connections manifest binding')
-    return f'''native_connections_component() {{
+    return f'''native_connections_preflight() {{
+    NETWORK_INSTALLED=/opt/usr/cc2-network-manager
+    if [ ! -e "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ];then return 0;fi
+    [ -d "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ] &&
+    [ -f "$NETWORK_INSTALLED/SHA256SUMS" ] && [ ! -L "$NETWORK_INSTALLED/SHA256SUMS" ] || return 1
+    network_platform_supported || return 1
+    case "$NATIVE_ROUTE" in
+      fresh) [ "$NATIVE_NETWORK_BASE_VERIFIED" = 1 ] || return 1;;
+      upgrade|current) [ "$(sha256sum "$NETWORK_INSTALLED/SHA256SUMS" | awk '{{print $1}}')" = {after_sha} ] || return 1;;
+      *) return 1;;
+    esac
+    (cd "$NETWORK_INSTALLED" && sha256sum -c SHA256SUMS)
+}}
+native_connections_component() {{
     NETWORK_INSTALLED=/opt/usr/cc2-network-manager
     if [ ! -e "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ];then
         network_install_component;return $?

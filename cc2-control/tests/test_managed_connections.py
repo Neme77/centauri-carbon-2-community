@@ -15,7 +15,8 @@ with tempfile.TemporaryDirectory(prefix='cc2-managed-connections-') as temporary
     base=Path(temporary);count=0
     for shell in [['dash'],['busybox','sh']]:
         for route in ['fresh','upgrade','current']:
-            for case in ['good','bad-manifest','bad-file','bad-platform','manifest-link','manager-link','missing']:
+            for case in ['good','bad-manifest','bad-file','bad-platform','manifest-link','manager-link','missing','unverified-base']:
+                if case=='unverified-base' and route!='fresh':continue
                 root=base/(shell[0]+'-'+route+'-'+case);root.mkdir()
                 manager=root/'manager';manager.mkdir();(manager/'control').write_bytes(b'qualified control')
                 before=(digest(b'qualified control')+'  control\n').encode()
@@ -32,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='cc2-managed-connections-') as temporary
                     (manager/'control').unlink();(manager/'SHA256SUMS').unlink();manager.rmdir()
                 code=preserve_managed(digest(before),digest(after)).replace('/opt/usr/cc2-network-manager',str(manager))
                 script=root/'run.sh'
-                script.write_text('set -eu\nNATIVE_ROUTE='+route+'\nnetwork_platform_supported(){ return '+('1' if case=='bad-platform' else '0')+'; }\nnetwork_install_component(){ echo LEGACY_INSTALL; }\n'+code+'\nnative_connections_component\n')
+                script.write_text('set -eu\nNATIVE_ROUTE='+route+'\nNATIVE_NETWORK_BASE_VERIFIED='+('0' if case=='unverified-base' else '1')+'\nnetwork_platform_supported(){ return '+('1' if case=='bad-platform' else '0')+'; }\nnetwork_install_component(){ echo LEGACY_INSTALL; }\n'+code+'\nnative_connections_preflight\nnative_connections_component\n')
                 subprocess.run([*shell,'-n',str(script)],check=True,timeout=10)
                 result=subprocess.run([*shell,str(script)],capture_output=True,text=True,timeout=10)
                 assert (result.returncode==0)==(case in ['good','missing']),(shell,route,case,result.stdout,result.stderr)

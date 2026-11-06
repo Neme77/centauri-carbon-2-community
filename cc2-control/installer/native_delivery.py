@@ -57,6 +57,7 @@ def functions(runtime,app_sha,*,preserve_connections=False):
             connections=preserve_managed(rows[0][3],rows[0][4])
     code=rfid+cavity+binding+f'''NATIVE_ROUTE=''
 NATIVE_PREPARED=0
+NATIVE_NETWORK_BASE_VERIFIED=0
 native_current() {{
     binding_run "$BINDING_SOURCE/component/worker" --check-current 3
 }}
@@ -73,8 +74,10 @@ native_unpack() {{
         fi
     else
         cavity_unpack && rfid_unpack || return 1
+        NATIVE_NETWORK_BASE_VERIFIED=1
         NATIVE_ROUTE=fresh
     fi
+    {'native_connections_preflight || return 1' if preserve_connections else ':'}
 }}
 native_prepare() {{
     (umask 077; printf '%s\\n' "$NATIVE_ROUTE" > "$BACKUP/native-route") || return 1
