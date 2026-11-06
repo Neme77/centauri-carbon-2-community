@@ -16,6 +16,7 @@ from camera_component import functions as camera_functions, RESTORE as CAMERA_RE
 from network_component import functions as network_functions, RUNTIME_SHA as NETWORK_RUNTIME_SHA
 from app_binding_component import functions as app_binding_functions
 from native_delivery import functions as native_functions
+from native_release import validate_release
 from rfid_component import functions as rfid_functions, ORDINARY_GUARD as RFID_ORDINARY_GUARD, RESTORE_GUARD as RFID_RESTORE_GUARD
 
 HERE = Path(__file__).resolve().parent
@@ -26,7 +27,7 @@ COMPATIBILITY = json.loads((HERE / 'compatibility.json').read_text())
 if hashlib.sha256((HERE.parent / 'FIRMWARE_VERSION').read_bytes()).hexdigest() != COMPATIBILITY['firmware_version_file_sha256']:
     raise ValueError('Updater firmware compatibility record does not match FIRMWARE_VERSION')
 
-def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None, rfid_runtime=None, app_binding_runtime=None, native_runtime=None):
+def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None, rfid_runtime=None, app_binding_runtime=None, native_runtime=None, *, release=False):
     if native_runtime and (rfid_runtime or app_binding_runtime):
         raise ValueError("Unified delivery replaces separate RFID/binding inputs")
     if app_binding_runtime and (rfid_runtime or camera_runtime or connections_runtime):
@@ -36,6 +37,10 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
     binary = (prepared / 'cc2-control').read_bytes()
     if len(binary) < 20 or binary[:6] != b'\x7fELF\x01\x01' or struct.unpack_from('<H', binary, 18)[0] != 40:
         raise ValueError('Payload requires a 32-bit little-endian ARM ELF')
+    if release:
+        if not (native_runtime and camera_runtime and connections_runtime):
+            raise ValueError('Public 1.2.26 requires native, camera and Connections runtimes')
+        validate_release(native_runtime,binary,VERSION)
     binary_hash = hashlib.sha256(binary).hexdigest()
     rfid_code, rfid_tail = rfid_functions(rfid_runtime, binary_hash) if rfid_runtime else ('', '')
     binding_code, binding_tail, binding_restore = app_binding_functions(app_binding_runtime, binary_hash) if app_binding_runtime else ('', '', '')
@@ -126,6 +131,8 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         'rfid_private_closed_profile': bool(rfid_runtime),
         'rfid_private_same_profile_app_binding': bool(app_binding_runtime),
         'unified_native_delivery': bool(native_runtime),
+        'native_release_qualified': bool(release and native_runtime),
+        'native_community_base': '4.4.3' if native_runtime else None,
         'rfid_activation_managed_after_installer_unlock': bool(rfid_runtime or native_runtime),
         'required_community_firmware': FIRMWARE_VERSION,
         'compatibility': COMPATIBILITY,
@@ -144,7 +151,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
               ('Install-CC2-Control.ps1', 'Install-Windows.cmd', 'install-cc2-control.sh', 'README.md')}
     for name in ('README-TEST.md', 'README-EXPERIMENTAL.md'):
         trial_notes = HERE / name
-        if trial_notes.is_file(): public[name] = trial_notes.read_bytes()
+        if trial_notes.is_file() and not release: public[name] = trial_notes.read_bytes()
     public['cc2-control-payload.tar.gz'] = payload.getvalue()
     public['pc-stage.sh'] = (HERE / 'pc-stage.sh.in').read_text(encoding='utf-8').replace('@PAYLOAD_SHA@', hashlib.sha256(payload.getvalue()).hexdigest()).encode('utf-8')
     public['cc2-control-sources.zip'] = source.read_bytes()
@@ -174,12 +181,12 @@ if __name__ == '__main__':
     parser.add_argument('--application-only-trial', action='store_true', help='Explicitly build a development-only app package without the cumulative camera component')
     parser.add_argument('--rfid-runtime', type=Path, help='Private closed-profile dormant RFID component; not a public release')
     parser.add_argument('--app-binding-runtime', type=Path, help='Private same-profile app upgrade; not public native delivery')
-    parser.add_argument('--native-runtime', type=Path, help='Unified first-install and active native update runtime; qualification build only')
+    parser.add_argument('--native-runtime', type=Path, help='Unified first-install/update runtime; public release requires exact native-release.json qualification')
     args = parser.parse_args()
     if args.release and args.application_only_trial:
         parser.error('--release and --application-only-trial are mutually exclusive')
-    if args.native_runtime and (args.release or not args.application_only_trial):
-        parser.error('Unified native delivery requires --application-only-trial until complete qualification')
+    if args.native_runtime and not (args.release or args.application_only_trial):
+        parser.error('Unified native delivery requires --release or --application-only-trial')
     if args.app_binding_runtime and (args.release or not args.application_only_trial):
         parser.error('App binding runtime requires --application-only-trial; public delivery remains disabled')
     if args.rfid_runtime and (args.release or not args.application_only_trial):
@@ -188,4 +195,6 @@ if __name__ == '__main__':
         parser.error('Public cumulative releases require --camera-runtime, including for users who skipped earlier updates')
     if args.release and args.connections_runtime is None:
         parser.error('Public cumulative releases require --connections-runtime; unsupported native profiles retain native Wi-Fi')
-    package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime, args.connections_runtime, args.rfid_runtime, args.app_binding_runtime, args.native_runtime)
+    if args.release and args.native_runtime is None:
+        parser.error('Public 1.2.26 requires the qualified unified --native-runtime')
+    package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime, args.connections_runtime, args.rfid_runtime, args.app_binding_runtime, args.native_runtime, release=args.release)

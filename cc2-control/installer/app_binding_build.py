@@ -45,6 +45,8 @@ def build(previous,new_app,output):
             '15537ed3765f76cef1d02f41d9cf099c41bbe177b670a17b1c523847878cf07b',
         '5262efc92724ff2b1cba5d9c1e0b5c8daecee9e2b35b50ae258cebb3dac5d054':
             '0f2be5fa958ec81b73d70ff5238a99a108bcb35a3a418b5a16c0ff07db77847b',
+        '85af6b14faccdc2e3dfc2f679339c8ef4db5ce82d2c42a4591cdf10fc8081c96':
+            'efa503d59478be6f15386eb58698dc1bd7555ce7122643ea7b894484254a6c06',
     }
     if (allowed.get(old_metadata['app_sha256'])!=sha(previous.read_bytes()) or
             old_metadata['profile_sha256']!='9efc21a14f3da203a0fc8b0cf710602ab4bbf02bef6a3517c827a52b89f67766'):
