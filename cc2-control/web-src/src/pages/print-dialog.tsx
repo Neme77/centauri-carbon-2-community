@@ -555,6 +555,7 @@ const Form = ({ job }: { job: Pending }) => {
             </div>
             {launch === 'queue' && (
               <div class="flex items-center gap-2.5">
+                <span>{t('print.copies')}</span>
                 <div class="inline-flex h-10 items-center rounded-md border border-edge bg-field">
                   <Button
                     variant="ghost"
@@ -589,7 +590,6 @@ const Form = ({ job }: { job: Pending }) => {
                     <Plus size={16} strokeWidth={1} />
                   </Button>
                 </div>
-                <span>{t('print.copies')}</span>
               </div>
             )}
           </div>

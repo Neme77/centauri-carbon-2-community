@@ -158,16 +158,24 @@ export function previewPlugin(): Plugin {
     queuePolicy = { after: 'wait', delay: 60, remove_done: false }
   }
   resetQueue()
+  const queueComplete = (job: QueueJob) => {
+    job.done++
+    job.last_result = ''
+    job.state = job.done >= job.copies ? 'done' : 'pending'
+    if (job.state === 'done' && queuePolicy.remove_done) queueJobs = queueJobs.filter(j => j !== job)
+    queueRevision++
+  }
   const queueView = () => {
+    // The scene only colours the view: while the printer "prints", the running (or head) job shows as
+    // printing. Stored state changes only through the queue routes and /__preview/queue-complete.
     const printing = scene === 'printing' || scene === 'paused'
-    for (const job of queueJobs)
-      if (!printing && (job.state === 'printing' || job.state === 'starting')) job.state = 'pending'
-    if (printing && !queueJobs.some(j => j.state === 'printing')) {
-      const head = queueJobs.find(j => j.state === 'pending' && j.present)
-      if (head) head.state = 'printing'
+    const items = queueJobs.map(j => ({ ...j }))
+    let active = items.find(j => j.state === 'printing' || j.state === 'starting')
+    if (printing) {
+      if (!active) active = items.find(j => j.state === 'pending' && j.present)
+      if (active) active.state = 'printing'
     }
-    const active = queueJobs.find(j => j.state === 'printing' || j.state === 'starting')
-    const next = active ? null : queueJobs.find(j => j.state === 'pending' && j.present)
+    const next = items.find(j => j.state === 'pending' && j.present) // as the backend: named even while a copy runs
     return {
       available: true,
       error: '',
@@ -176,7 +184,8 @@ export function previewPlugin(): Plugin {
       policy: queuePolicy,
       active: active?.id ?? null,
       next: next?.id ?? null,
-      items: queueJobs,
+      auto_in: null,
+      items,
     }
   }
   // Build-plate library: which simulated plate mesh each printer side slot holds, as /api/plates reports it.
@@ -870,6 +879,8 @@ export function previewPlugin(): Plugin {
           '/api/queue/copies',
           '/api/queue/policy',
           '/api/queue/clear-done',
+          '/__preview/queue-complete',
+          '/api/queue/hold',
         ]
         if (!simulated.includes(path)) return reply({ error: 'Operation disabled in isolated preview' }, 403)
         let body = ''
@@ -886,6 +897,12 @@ export function previewPlugin(): Plugin {
         req.on('end', () => {
           if (oversized) return
           try {
+            if (path === '/__preview/queue-complete' && req.method === 'POST') {
+              const active = queueJobs.find(j => j.state === 'starting' || j.state === 'printing')
+              if (!active) return reply({ ok: false, error: 'No running copy' }, 409)
+              queueComplete(active)
+              return reply({ ok: true })
+            }
             if (path.startsWith('/api/queue/') && req.method === 'POST') {
               const lines = body.replace(/\n+$/, '').split('\n')
               const find = () => queueJobs.find(j => j.id === Number(lines[0]))
@@ -930,16 +947,16 @@ export function previewPlugin(): Plugin {
                 if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
                 if (job.state !== 'pending' || !job.present)
                   return reply({ ok: false, error: 'This job has no copy left to print' }, 409)
-                // The preview prints instantly: the copy counts at once.
-                job.done++
+                // As on the printer: the copy runs until it is reported finished (/__preview/queue-complete,
+                // or the scene leaving printing); nothing is counted at the start.
+                if (queueJobs.some(j => j.state === 'starting' || j.state === 'printing'))
+                  return reply({ ok: false, error: 'A queued copy is already running' }, 409)
+                job.state = 'starting'
                 job.last_result = ''
-                if (job.done >= job.copies) {
-                  job.state = 'done'
-                  if (queuePolicy.remove_done) queueJobs = queueJobs.filter(j => j !== job)
-                }
                 return reply({ accepted: true, method: 1020, storage_media: 'local', filename: job.path }, 202)
               }
               const job = find()
+              if (path === '/api/queue/hold') return reply({ ok: true })
               if (path === '/api/queue/clear-done') {
                 queueJobs = queueJobs.filter(j => j.state !== 'done')
                 return reply({ ok: true })

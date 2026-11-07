@@ -31,6 +31,7 @@ export type Queue = {
   policy: QueuePolicy
   active: number | null
   next: number | null
+  auto_in: number | null // seconds until a pending automatic start
   items: QueueItem[]
 }
 
@@ -121,3 +122,5 @@ export const setQueuedCopies = (id: number, copies: number) => post('/api/queue/
 export const setQueuePolicy = (p: QueuePolicy) =>
   post('/api/queue/policy', `${p.after}\n${p.delay}\n${p.remove_done ? 1 : 0}`)
 export const clearFinished = () => post('/api/queue/clear-done')
+// Cancels a pending automatic start; the policy stays as it is.
+export const holdQueue = () => post('/api/queue/hold')

@@ -46,11 +46,20 @@ try {
   assert.equal(await page.locator('[data-queue-count]').textContent(), '4', 'the menu counts the open jobs')
   await page.locator('[data-queue-totals]').getByText('4', { exact: true }).first().waitFor()
 
-  // Start: one POST, the toast names the copy, the counter moves on.
+  // Start: one POST, the toast names the copy; the copy then runs until the printer reports it finished,
+  // and nothing else can start meanwhile.
   await hero.locator('[data-queue-start]').click()
   await page.getByText('Copy 3 of 5 requested: CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode', { exact: true }).waitFor()
   assert.deepEqual(lastPost(), ['/api/queue/start', '1'])
+  const active = page.locator('[data-queue-hero="active"]')
+  await active.waitFor()
+  assert.equal(await active.locator('[data-queue-start]').isDisabled(), true, 'no start while a copy runs')
+  await rows.nth(0).getByText('Starting…', { exact: true }).waitFor()
+  assert.equal(await rows.nth(0).locator('[data-queue-remove]').isDisabled(), true, 'the running job cannot be removed')
+  const complete = () => page.request.post(`${origin}/__preview/queue-complete`, { headers: { 'X-CC2-Request': '1' } })
+  assert.equal((await complete()).status(), 200)
   await hero.getByText('Copy 4 of 5', { exact: true }).waitFor()
+  await hero.locator('[data-queue-start]').isEnabled()
 
   // Copies: the stepper of the second job.
   const second = rows.nth(1)
@@ -122,8 +131,11 @@ try {
   await quick.getByText('Next in queue', { exact: true }).waitFor()
   await quick.getByText('CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode', { exact: true }).first().waitFor()
   await quick.locator('[data-dashboard-queue-start]').click()
-  await page.waitForFunction(() => Array.from(document.querySelectorAll('*')).some(n => n.childElementCount === 0 && /Copy 1 of 3 requested/.test(n.textContent || '')))
+  await page.getByText('Copy 1 of 3 requested: CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode', { exact: true }).waitFor()
   assert.equal(lastPost()[0], '/api/queue/start')
+  await quick.waitFor({ state: 'hidden' }) // a running copy hides the quick start
+  assert.equal((await complete()).status(), 200)
+  await quick.getByText('Copy 2 of 3', { exact: false }).waitFor() // the counter shares its line with the estimate
 
   assert.deepEqual(errors, [])
   console.log('PASS: print queue page, Files chip, dialog choice and Dashboard quick start')

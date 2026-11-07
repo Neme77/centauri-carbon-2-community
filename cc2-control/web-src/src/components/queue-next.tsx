@@ -7,7 +7,7 @@ import { duration } from '@/lib/format'
 import { t, tpl } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
 import { Tag } from '@/components/ui/badge'
-import { openJobs, queue, queuedCopiesFor, queueNext, refreshQueue, startQueued } from '@/lib/queue'
+import { holdQueue, openJobs, queue, queuedCopiesFor, queueNext, refreshQueue, startQueued } from '@/lib/queue'
 import { printer, refreshPrinter, view } from '@/lib/state'
 
 // Marks a file of the Files page that still has copies in the queue.
@@ -43,6 +43,16 @@ export const QueueNext = () => {
     await Promise.all([refreshQueue(), refreshPrinter()])
     setBusy(false)
   }
+  const hold = async () => {
+    setBusy(true)
+    try {
+      await holdQueue()
+    } catch (e) {
+      notify(tpl('queue.failed', { error: errText(e) }), 'error')
+    }
+    await refreshQueue()
+    setBusy(false)
+  }
   return (
     <div class="mb-3 rounded-lg border border-cyan/60 bg-field p-3" data-dashboard-queue>
       <div class="mb-1.5 flex items-center gap-2">
@@ -72,6 +82,14 @@ export const QueueNext = () => {
           {t('queue.start_next')}
         </Button>
       </div>
+      {q.auto_in !== null && (
+        <div class="mt-2 flex items-center gap-2 text-xs text-amber" data-dashboard-queue-auto>
+          {tpl('queue.auto_in_n', { n: q.auto_in })}
+          <Button class="min-h-8 px-2 text-xs" disabled={busy} onClick={hold}>
+            {t('queue.hold')}
+          </Button>
+        </div>
+      )}
       <div class="mt-2 text-xs text-muted">{t('queue.remove_part_hint')}</div>
     </div>
   )

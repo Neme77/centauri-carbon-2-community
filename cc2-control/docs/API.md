@@ -754,7 +754,8 @@ unless the `auto` policy is chosen.
   `mapping`, `side`, `leveling`, `timelapse`, `measure`, `nozzle`, `copies`, `done`, `estimated_seconds` and
   `filament_grams` (`null` when unknown), `added`, `state` (`pending`, `starting`, `printing` or `done`),
   `last_result` (`""`, `stopped`, `not_started` or `auto_failed`) and `present` (the file is in place).
-  `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing.
+  `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing;
+  `auto_in` the seconds until a pending automatic start, else `null`.
 - `POST /api/queue/add` takes the eight newline-separated fields of `/api/gcode-files/print` (storage,
   filename, Canvas mapping, plate side, leveling mode, timelapse, measurement, nozzle), then `copies` (1–99),
   `position` (`end`, or `next` to go to the head behind a running copy) and optionally the slicer's
@@ -766,15 +767,22 @@ unless the `auto` policy is chosen.
   exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx) and an accepted start marks the
   job `starting`.
 - `POST /api/queue/remove` (id; never the running job), `/api/queue/reorder` (`id\nindex`, 0 is the head),
-  `/api/queue/copies` (`id\ncopies`, never fewer than already printed), `/api/queue/policy`
-  (`wait|auto\ndelay 10–3600\n0|1` for `remove_done`) and `/api/queue/clear-done`. Every change is saved
-  atomically before it is acknowledged; a failed save leaves the queue as it was.
+  `/api/queue/copies` (`id\ncopies`, never fewer than already printed, and for the running job at least one
+  more; a total that equals the printed count finishes the job, which `remove_done` then drops),
+  `/api/queue/policy` (`wait|auto\ndelay 10–3600\n0|1` for `remove_done`; a change never starts anything by
+  itself, the automatic delay counts only from a copy counted while `auto` was on), `/api/queue/hold` (cancels
+  the pending automatic start, the policy stays) and `/api/queue/clear-done`.
+  The measurement and nozzle fields are plate library ids or empty. Every change is saved atomically before it
+  is acknowledged; a failed save leaves the queue as it was.
 
 Copies are counted on the backend, so a closed browser misses nothing. A `starting` job becomes `printing`
-once fresh telemetry shows the printer busy with its file (within three minutes, else `not_started`). The copy
-counts when the printer is idle again with `print_stats.state` `complete` and the reported file name is the
-job's; `cancelled` or `error`, another job taking over, or an idle printer without `complete` for a minute
-leave it uncounted (`stopped`). Telemetry older than 15 s decides nothing. The last copy sets `done` and, with
+once fresh telemetry shows the printer busy with the file it was given (a USB import prints under its
+`CC2_USB_…` copy). While the printer is busy with the start itself (homing, bed mesh, heating) the wait goes
+on; three idle minutes, another file running, or thirty minutes in all end it as `not_started`. The copy
+counts when the printer is idle again with `print_stats.state` `complete`, the reported file name is the
+job's, and this copy's own print_stats were seen running (a `complete` left over from the previous copy of
+the same file does not count); `cancelled` or `error`, another job taking over, or an idle printer without
+`complete` for a minute leave it uncounted (`stopped`). Telemetry older than 15 s decides nothing. The last copy sets `done` and, with
 `remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a counted
 completion if the printer is idle; it is meant for a bed that clears itself and is off by default. A queue file
 that cannot be parsed keeps the queue closed (`available: false`) and is never rewritten.

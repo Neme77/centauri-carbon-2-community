@@ -20,6 +20,7 @@ import {
   clearFinished,
   copiesLeft,
   finishedJobs,
+  holdQueue,
   mappingSlots,
   openJobs,
   type Queue as QueueData,
@@ -239,7 +240,7 @@ const Hero = ({
       <div class="flex flex-wrap items-start gap-3.5">
         <Thumb item={item} />
         <div class="grid min-w-0 flex-1 basis-64 gap-2">
-          <div class="text-[17px] font-semibold [overflow-wrap:anywhere]">{item.path}</div>
+          <div class="text-lg font-semibold [overflow-wrap:anywhere]">{item.path}</div>
           <div class="text-muted">
             <strong class="font-semibold text-cyan">{copyText(item)}</strong>
             {item.estimated_seconds !== null && ` · ≈ ${duration(item.estimated_seconds)}`}
@@ -265,7 +266,7 @@ const Hero = ({
       <div class="mt-3.5 flex flex-wrap items-center gap-2.5 border-t border-edge pt-3">
         <Button
           variant="primary"
-          class="min-h-11 px-5 text-[15px]"
+          class="min-h-11 px-5 text-base"
           disabled={!canStart || busy}
           onClick={start}
           data-queue-start
@@ -282,6 +283,14 @@ const Hero = ({
             <SkipForward {...I} />
             {t('queue.skip')}
           </Button>
+        )}
+        {!active && q.auto_in !== null && (
+          <span class="flex items-center gap-2 text-xs text-amber" data-queue-auto>
+            {tpl('queue.auto_in_n', { n: q.auto_in })}
+            <Button class="min-h-8 px-2 text-xs" onClick={() => act(() => holdQueue())}>
+              {t('queue.hold')}
+            </Button>
+          </span>
         )}
         <span class="text-xs text-muted">{t(active ? 'queue.start_locked' : 'queue.remove_part_hint')}</span>
       </div>
@@ -362,7 +371,7 @@ const Totals = ({ q }: { q: QueueData }) => {
   const cell = (label: Key, value: string | number) => (
     <div class="rounded-md border border-edge px-2.5 py-2">
       <div class="text-xs text-muted">{t(label)}</div>
-      <div class="text-[22px] font-semibold">{value}</div>
+      <div class="text-xl font-semibold">{value}</div>
     </div>
   )
   return (
@@ -397,11 +406,22 @@ const lastResult = (item: QueueItem) =>
 const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: QueueData; lib: PlateLibrary | null }) => {
   const jobs = openJobs(q)
   const running = item.id === q.active
-  const copies = (n: number) => act(() => setQueuedCopies(item.id, n))
-  const remove = async () => {
-    if (await ask(tpl('queue.remove_confirm', { name: item.path }), true)) await act(() => removeQueued(item.id))
+  // One change at a time per row: the next click waits for the refreshed queue, so it never repeats a stale value.
+  const [busy, setBusy] = useState(false)
+  const run = async (fn: () => Promise<unknown>) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await act(fn)
+    } finally {
+      setBusy(false)
+    }
   }
-  const move = (to: number) => act(() => reorderQueued(item.id, q.items.indexOf(jobs[to])))
+  const copies = (n: number) => run(() => setQueuedCopies(item.id, n))
+  const remove = async () => {
+    if (await ask(tpl('queue.remove_confirm', { name: item.path }), true)) await run(() => removeQueued(item.id))
+  }
+  const move = (to: number) => run(() => reorderQueued(item.id, q.items.indexOf(jobs[to])))
   const note = lastResult(item)
   return (
     <div
@@ -427,7 +447,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
             variant="ghost"
             class="min-h-7 px-2"
             aria-label={t('queue.fewer_copies')}
-            disabled={item.copies <= 1 || item.copies <= item.done || (running && item.copies <= item.done + 1)}
+            disabled={busy || item.copies <= 1 || item.copies <= item.done || (running && item.copies <= item.done + 1)}
             onClick={() => copies(item.copies - 1)}
           >
             <Minus {...I} />
@@ -440,7 +460,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
             variant="ghost"
             class="min-h-7 px-2"
             aria-label={t('queue.more_copies')}
-            disabled={item.copies >= 99}
+            disabled={busy || item.copies >= 99}
             onClick={() => copies(item.copies + 1)}
           >
             <Plus {...I} />
@@ -459,7 +479,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
           variant="ghost"
           class="px-2"
           aria-label={t('queue.move_up')}
-          disabled={running || index === 0}
+          disabled={busy || running || index === 0}
           onClick={() => move(index - 1)}
         >
           <ChevronUp {...I} />
@@ -468,7 +488,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
           variant="ghost"
           class="px-2"
           aria-label={t('queue.move_down')}
-          disabled={running || index >= jobs.length - 1}
+          disabled={busy || running || index >= jobs.length - 1}
           onClick={() => move(index + 1)}
         >
           <ChevronDown {...I} />
@@ -477,7 +497,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
           variant="ghost"
           class="px-2 text-red"
           aria-label={t('queue.remove')}
-          disabled={running}
+          disabled={busy || running}
           onClick={remove}
           data-queue-remove
         >
@@ -589,8 +609,9 @@ export const Queue = () => {
             ) : next ? (
               <Hero q={q} item={next} active={false} filaments={filaments} mesh={mesh} lib={lib} />
             ) : (
-              <Card class="text-muted" data-queue-hero="none">
-                {t('queue.nothing_to_start')}
+              <Card data-queue-hero={openJobs(q).length ? 'none' : 'done'}>
+                <CardHead icon="queue" title="queue.next_job" />
+                <p class="text-muted">{t(openJobs(q).length ? 'queue.nothing_to_start' : 'queue.all_done')}</p>
               </Card>
             )}
             <div class="grid content-start gap-3.5">

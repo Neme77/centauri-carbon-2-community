@@ -238,7 +238,7 @@ export const Sidebar = () => {
                   {p === 'queue' && queued > 0 && (
                     <span
                       data-queue-count
-                      class="absolute left-8 top-2 min-w-4 rounded-full bg-cyan px-1 text-center text-[10px] font-semibold leading-4 text-ink"
+                      class="absolute left-8 top-2 min-w-4 rounded-full bg-cyan px-1 text-center text-xs font-semibold leading-4 text-ink"
                       aria-hidden="true"
                     >
                       {queued}

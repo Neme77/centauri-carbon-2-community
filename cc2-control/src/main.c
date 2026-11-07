@@ -2048,8 +2048,11 @@ static int build_calibrated_start_script(char *script, size_t cap, int force_ful
 
 static int canvas_color_table_clear(void);
 
+/* Answers the client and returns the HTTP status it sent. With `started` (PATH_MAX_LOCAL bytes), an
+ * accepted start also reports the file the printer was given, which differs from the request for a
+ * USB import. */
 static int gcode_start_response(int fd, mqtt_client *mqtt,
-                                 const char *body, size_t body_len) {
+                                 const char *body, size_t body_len, char *started) {
     char storage[16], filename[PATH_MAX_LOCAL];
     const char *mapping, *root, *media; size_t mapping_len = 0;
     if (!gcode_request_file(body, body_len, storage, filename, &mapping, &mapping_len,
@@ -2238,6 +2241,7 @@ static int gcode_start_response(int fd, mqtt_client *mqtt,
         print_media, escaped, strcmp(storage, "usb") == 0 ? "true" : "false",
         print_layout, leveling, timelapse ? "true" : "false", late);
     /* The start request is on its way whatever happens to the reply below. */
+    if (started) snprintf(started, PATH_MAX_LOCAL, "%s", print_filename);
     if (accepted_len > 0 && (size_t)accepted_len < sizeof(accepted))
         respond(fd, 202, "Accepted", "application/json; charset=utf-8", accepted, (size_t)accepted_len);
     return 202;
@@ -4285,7 +4289,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         gcode_copy_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/print")==0) {
         if(plates_background_active())plates_fail(fd,409,"Plate verification is still running");
-        else gcode_start_response(fd,mqtt,body,body_len);
+        else gcode_start_response(fd,mqtt,body,body_len,NULL);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/exclude-objects")==0) {
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
@@ -4344,6 +4348,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         queue_policy_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/clear-done")==0) {
         queue_clear_done_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/hold")==0) {
+        queue_hold_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spools")==0) {
         spools_get_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/enable")==0) {
