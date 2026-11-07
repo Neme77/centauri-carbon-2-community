@@ -1522,5 +1522,6 @@
   "print.run_now_hint": "确认后立即开始打印，与以往相同。不影响队列。",
   "print.adding_to_queue": "正在加入队列…",
   "queue.auto_in_n": "{n} 秒后自动开始",
-  "queue.hold": "取消自动开始"
+  "queue.hold": "取消自动开始",
+  "queue.abandon": "取消启动"
 }

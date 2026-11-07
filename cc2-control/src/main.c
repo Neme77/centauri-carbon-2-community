@@ -3253,6 +3253,9 @@ static const char *pending_autosave_guard(void);
 
 #include "plates.h"
 #include "spools.h"
+/* The exclusive sessions during which the request dispatcher refuses every printer change; the print
+ * queue asks before an automatic start. Defined once the sessions themselves are. */
+static const char *printer_change_blocked(void);
 #include "queue.h"
 #include "spoolman.h"
 #include "sha256.h"
@@ -4040,6 +4043,19 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 #include "app_update_catalog.h"
 #include "bed_drying.h"
 #include "nozzle_expansion.h"
+
+/* Mirrors the POST refusals of handle_client below for a start that no request carries. */
+static const char *printer_change_blocked(void) {
+    if (maintenance_barrier_active()) return "Installation or native maintenance is running; printer changes are paused";
+    if (rn_blocks()) return "RFID activation or recovery is incomplete; finish the lifecycle before changing the printer";
+    if (rfid.child) return "Cancel the RFID scan before changing printer settings";
+    if (tools.busy) return "A native calibration tool is still running";
+    if (cell_active()) return "Finish the load-cell calibration session first";
+    if (app_update_active() || connections_busy()) return "Application update is running; printer changes are paused";
+    if (drying_active()) return "Stop bed heating and wait for confirmation before another operation";
+    if (nx_active()) return "A nozzle expansion calibration is running; use the emergency stop to interrupt it";
+    return NULL;
+}
 #include "experiments.h"
 #include "backup.h"
 #include "network_status_http.h"
@@ -4288,7 +4304,9 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/copy")==0) {
         gcode_copy_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/print")==0) {
+        queue_item *waiting=queue_find(queue.active_id);
         if(plates_background_active())plates_fail(fd,409,"Plate verification is still running");
+        else if(waiting&&!strcmp(waiting->state,"starting"))plates_fail(fd,409,"A queued copy is starting");
         else gcode_start_response(fd,mqtt,body,body_len,NULL);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/exclude-objects")==0) {
         exclude_objects_response(fd, mqtt);
@@ -4350,6 +4368,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         queue_clear_done_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/hold")==0) {
         queue_hold_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/abandon")==0) {
+        queue_abandon_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spools")==0) {
         spools_get_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/enable")==0) {

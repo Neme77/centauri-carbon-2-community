@@ -109,6 +109,7 @@ export function previewPlugin(): Plugin {
   let queueNextId = 1
   let queuePolicy = { after: 'wait' as 'wait' | 'auto', delay: 60, remove_done: true }
   let queueRevision = 0
+  let queueArmedAt: number | null = null // when a copy completed under the auto policy
   const queueJob = (
     id: number,
     path: string,
@@ -163,6 +164,7 @@ export function previewPlugin(): Plugin {
     job.last_result = ''
     job.state = job.done >= job.copies ? 'done' : 'pending'
     if (job.state === 'done' && queuePolicy.remove_done) queueJobs = queueJobs.filter(j => j !== job)
+    queueArmedAt = queuePolicy.after === 'auto' ? Date.now() : null
     queueRevision++
   }
   const queueView = () => {
@@ -184,7 +186,10 @@ export function previewPlugin(): Plugin {
       policy: queuePolicy,
       active: active?.id ?? null,
       next: next?.id ?? null,
-      auto_in: null,
+      auto_in:
+        queueArmedAt !== null && !active
+          ? Math.max(0, Math.ceil((queueArmedAt + queuePolicy.delay * 1000 - Date.now()) / 1000))
+          : null,
       items,
     }
   }
@@ -881,6 +886,7 @@ export function previewPlugin(): Plugin {
           '/api/queue/clear-done',
           '/__preview/queue-complete',
           '/api/queue/hold',
+          '/api/queue/abandon',
         ]
         if (!simulated.includes(path)) return reply({ error: 'Operation disabled in isolated preview' }, 403)
         let body = ''
@@ -953,10 +959,21 @@ export function previewPlugin(): Plugin {
                   return reply({ ok: false, error: 'A queued copy is already running' }, 409)
                 job.state = 'starting'
                 job.last_result = ''
+                queueArmedAt = null
                 return reply({ accepted: true, method: 1020, storage_media: 'local', filename: job.path }, 202)
               }
               const job = find()
-              if (path === '/api/queue/hold') return reply({ ok: true })
+              if (path === '/api/queue/hold') {
+                queueArmedAt = null
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/abandon') {
+                const waiting = queueJobs.find(j => j.state === 'starting')
+                if (!waiting) return reply({ ok: false, error: 'No start is waiting' }, 409)
+                waiting.state = 'pending'
+                waiting.last_result = 'not_started'
+                return reply({ ok: true })
+              }
               if (path === '/api/queue/clear-done') {
                 queueJobs = queueJobs.filter(j => j.state !== 'done')
                 return reply({ ok: true })
@@ -966,6 +983,7 @@ export function previewPlugin(): Plugin {
                 if ((after !== 'wait' && after !== 'auto') || !(Number(delay) >= 10 && Number(delay) <= 3600))
                   return reply({ ok: false, error: 'Invalid queue policy' }, 400)
                 queuePolicy = { after, delay: Number(delay), remove_done: remove === '1' }
+                queueArmedAt = null
                 return reply({ ok: true })
               }
               if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)

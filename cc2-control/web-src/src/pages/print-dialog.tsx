@@ -258,7 +258,7 @@ const Form = ({ job }: { job: Pending }) => {
         } catch {
           /* the queue shows no time for this job */
         }
-        const numberOrNull = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : null)
+        const numberOrNull = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null)
         await addToQueue({
           storage: job.storage,
           path: job.path,
@@ -595,7 +595,7 @@ const Form = ({ job }: { job: Pending }) => {
           </div>
           {launch === 'queue' ? (
             <>
-              <div class="mt-2.5 flex flex-wrap gap-4 text-[13px]">
+              <div class="mt-2.5 flex flex-wrap gap-3">
                 <label class="flex items-center gap-2">
                   <input
                     type="radio"

@@ -1522,5 +1522,6 @@
   "print.run_now_hint": "The print starts right after confirmation, as before. The queue is not affected.",
   "print.adding_to_queue": "Adding to the queue…",
   "queue.auto_in_n": "Automatic start in {n} s",
-  "queue.hold": "Cancel automatic start"
+  "queue.hold": "Cancel automatic start",
+  "queue.abandon": "Cancel start"
 }

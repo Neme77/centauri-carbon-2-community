@@ -8,8 +8,8 @@
 #include <assert.h>
 
 /* How the print queue follows a copy from the start request to its end, from the MQTT cache and
- * the UDS telemetry alone; what it decides on stale or foreign evidence; the guards of its HTTP
- * handlers while a copy runs; and the automatic policy, with the MQTT start mocked away. */
+ * the UDS telemetry alone; what it decides on stale, foreign or missing evidence; the guards of its
+ * HTTP handlers while a copy runs; and the automatic policy, with the MQTT start mocked away. */
 static mqtt_client machine;
 static int starts_sent;
 static char start_file[PATH_MAX_LOCAL];
@@ -60,13 +60,21 @@ static queue_item *job(int id, int copies, int done) {
     return it;
 }
 
+/* What queue_start_item records when the printer accepts a start. */
 static void requested(queue_item *it) {
+    double value;
     snprintf(it->state, sizeof(it->state), "starting");
-    it->started_ms = it->requested_ms = monotonic_ms(); it->job_uuid[0] = 0; it->native_seen = 0;
+    snprintf(it->print_name, sizeof(it->print_name), "%s", it->path);
+    snprintf(it->request_uuid, sizeof(it->request_uuid), "%s", machine.uuid);
+    it->started_ms = it->requested_ms = monotonic_ms(); it->mismatch_ms = 0;
+    it->job_uuid[0] = 0; it->native_seen = 0;
+    it->duration_baseline = uds_value(&telemetry, U_TOTAL_DURATION, &value) ? value : -1;
+    it->bed_baseline = uds_value(&telemetry, U_BG, &value) ? value : 0;
+    it->nozzle_baseline = uds_value(&telemetry, U_EG, &value) ? value : 0;
     queue.active_id = it->id;
 }
 
-/* The printer runs the copy: MQTT and the printer service both show the file printing. */
+/* The printer runs the copy: MQTT and the printer service both show the file printing, as a new job. */
 static void copy_starts(queue_item *it, const char *uuid) {
     requested(it);
     printer_says(2, "printing", "part.gcode", uuid); telemetry_says("printing", "local/part.gcode");
@@ -103,7 +111,7 @@ int main(void) {
     assert(queue_available && queue.count == 0 && !strcmp(queue.after, "wait") && queue.remove_done);
     queue.remove_done = 0; /* finished jobs stay listed until the section that tests removal */
 
-    /* A copy: start request, the printer runs the file, the printer finishes it. */
+    /* A copy: start request, the printer runs the file as a new job, the printer finishes it. */
     queue_item *it = job(1, 2, 0);
     assert(queue_save() == 0);
     copy_starts(it, "u1");
@@ -123,81 +131,111 @@ int main(void) {
 
     /* A start the printer never reported running: idle for the grace period. */
     requested(it); it->started_ms = monotonic_ms() - QUEUE_START_GRACE_MS - 1;
-    printer_says(1, "standby", "", ""); telemetry_says("standby", NULL);
+    printer_says(1, "standby", "", "u2"); telemetry_says("standby", NULL);
     queue_tick(&machine);
     assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "not_started") && queue.active_id == 0);
 
     /* A calibrated start keeps the printer busy for minutes before the file prints: the wait goes on
-     * while the printer is not idle or heats, and only idle time counts towards the grace. */
+     * while the printer is not idle or heats beyond what it was heating, and only idle time counts. */
     requested(it); it->started_ms = monotonic_ms() - QUEUE_START_GRACE_MS - 1;
-    printer_says(5, "standby", "", ""); telemetry_says("standby", NULL);
+    printer_says(5, "standby", "", "u2"); telemetry_says("standby", NULL);
     queue_tick(&machine);
     assert(!strcmp(it->state, "starting") && monotonic_ms() - it->started_ms < 1000);
     it->started_ms = monotonic_ms() - QUEUE_START_GRACE_MS - 1;
-    printer_says(1, "standby", "", ""); telemetry_says("standby", NULL); telemetry_heating(60);
+    printer_says(1, "standby", "", "u2"); telemetry_says("standby", NULL); telemetry_heating(60);
     queue_tick(&machine);
     assert(!strcmp(it->state, "starting") && monotonic_ms() - it->started_ms < 1000);
     printer_says(2, "printing", "part.gcode", "u3"); telemetry_says("printing", "local/part.gcode");
     queue_tick(&machine);
-    assert(!strcmp(it->state, "printing") && it->native_seen);
+    assert(!strcmp(it->state, "printing") && it->native_seen && !strcmp(it->job_uuid, "u3"));
     printer_says(1, "complete", "", "u3"); telemetry_says("complete", "local/part.gcode");
     queue_tick(&machine);
     assert(it->done == 2 && !strcmp(it->state, "done") && queue.count == 1 && queue.active_id == 0);
-    it->copies = 4; snprintf(it->state, sizeof(it->state), "pending");
-    /* ...but a start request this old is given up whatever the printer shows. */
-    requested(it); it->requested_ms = monotonic_ms() - QUEUE_START_CAP_MS - 1;
-    printer_says(5, "standby", "", ""); telemetry_says("standby", NULL);
+    it->copies = 5; snprintf(it->state, sizeof(it->state), "pending");
+    /* A bed kept warm before the request is not the start script: the idle grace still runs out. */
+    printer_says(1, "complete", "", "u3"); telemetry_says("complete", NULL); telemetry_heating(60);
+    requested(it); it->started_ms = monotonic_ms() - QUEUE_START_GRACE_MS - 1;
     queue_tick(&machine);
     assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "not_started") && queue.active_id == 0);
-    /* The printer running another file means our start did not happen. */
+    /* ...but a start request this old is given up whatever the printer shows. */
+    requested(it); it->requested_ms = monotonic_ms() - QUEUE_START_CAP_MS - 1;
+    printer_says(5, "standby", "", "u3"); telemetry_says("standby", NULL);
+    queue_tick(&machine);
+    assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "not_started") && queue.active_id == 0);
+    /* The printer running another file for a while means our start did not happen; one tick does not. */
     requested(it);
     printer_says(2, "printing", "other.gcode", "u4"); telemetry_says("printing", "local/other.gcode");
     queue_tick(&machine);
+    assert(!strcmp(it->state, "starting") && it->mismatch_ms > 0);
+    it->mismatch_ms -= QUEUE_FOREIGN_MS + 1;
+    queue_tick(&machine);
     assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "not_started") && queue.active_id == 0);
+    /* MQTT reports our file before the printer service has moved on from the previous one: the copy starts. */
+    requested(it);
+    printer_says(2, "printing", "part.gcode", "u5"); telemetry_says("complete", "local/previous.gcode");
+    queue_tick(&machine);
+    assert(!strcmp(it->state, "printing") && it->native_seen); /* the new MQTT job uuid is proof enough */
 
     /* Another file completing is not this job's copy; it ends uncounted once the printer stays idle. */
-    copy_starts(it, "u5"); it->started_ms = monotonic_ms() - QUEUE_IDLE_GRACE_MS - 1;
+    it->started_ms = monotonic_ms() - QUEUE_IDLE_GRACE_MS - 1;
     printer_says(1, "complete", "other.gcode", "u5"); telemetry_says("complete", "local/other.gcode");
     queue_tick(&machine);
     assert(it->done == 2 && !strcmp(it->last_result, "stopped") && queue.active_id == 0);
 
     /* Idle again without "complete" for a minute: the copy ended otherwise. */
     copy_starts(it, "u6"); it->started_ms = monotonic_ms() - QUEUE_IDLE_GRACE_MS - 1;
-    printer_says(1, "standby", "", ""); telemetry_says("standby", NULL);
+    printer_says(1, "standby", "", "u6"); telemetry_says("standby", NULL);
     queue_tick(&machine);
     assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "stopped") && it->done == 2);
 
-    /* A "complete" left over from the previous copy of the same file: this copy's print_stats were never
-     * seen running (the printer service was silent), so it is not counted. */
-    requested(it);
-    printer_says(2, "printing", "part.gcode", "u7"); telemetry_says("complete", "local/part.gcode"); telemetry_stale();
+    /* A "complete" left over from the previous copy of the same file, with no new job: MQTT still carries
+     * the previous job's uuid and the printer service is silent, so the copy is never seen running. */
+    requested(it); /* request_uuid is u6, the job before */
+    printer_says(2, "printing", "part.gcode", "u6"); telemetry_says("complete", "local/part.gcode"); telemetry_stale();
     queue_tick(&machine);
-    assert(!strcmp(it->state, "printing") && !it->native_seen);
-    printer_says(1, "complete", "", "u7"); telemetry_stale();
+    assert(!strcmp(it->state, "printing") && !it->native_seen && !it->job_uuid[0]);
+    printer_says(1, "complete", "", "u6"); telemetry_stale();
     queue_tick(&machine);
     assert(!strcmp(it->state, "printing") && it->done == 2);
     it->started_ms = monotonic_ms() - QUEUE_IDLE_GRACE_MS - 1;
     queue_tick(&machine);
     assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "stopped") && it->done == 2);
-    /* The same evidence with the printer service showing the file running counts. */
-    copy_starts(it, "u8");
-    printer_says(1, "complete", "", "u8"); telemetry_says("complete", "local/part.gcode");
+    /* The printer service down for the whole copy: MQTT's new job uuid is this copy's proof. */
+    requested(it);
+    printer_says(2, "printing", "part.gcode", "u7"); telemetry_stale();
+    queue_tick(&machine);
+    assert(!strcmp(it->state, "printing") && it->native_seen && !strcmp(it->job_uuid, "u7"));
+    printer_says(1, "complete", "", "u7"); telemetry_stale();
     queue_tick(&machine);
     assert(it->done == 3 && !strcmp(it->state, "pending") && !it->last_result[0]);
 
-    /* Stale MQTT decides nothing, in either direction. */
-    copy_starts(it, "u9");
-    printer_says(1, "complete", "", "u9"); machine.last_message = time(NULL) - 60; telemetry_says("complete", "local/part.gcode");
+    /* A pause, a filament load or a recovery is not the end of the copy, whatever the machine status. */
+    copy_starts(it, "u8"); it->started_ms = monotonic_ms() - QUEUE_IDLE_GRACE_MS - 1;
+    printer_says(3, "paused", "part.gcode", "u8"); telemetry_says("paused", "local/part.gcode");
     queue_tick(&machine);
-    assert(!strcmp(it->state, "printing") && queue.active_id == 1 && it->done == 3);
+    assert(!strcmp(it->state, "printing") && monotonic_ms() - it->started_ms < 1000);
+    printer_says(1, "complete", "", "u8"); telemetry_says("complete", "local/part.gcode");
+    queue_tick(&machine);
+    assert(it->done == 4 && !strcmp(it->state, "pending"));
+    /* Another job taking over while ours runs: ours is over, not counted. */
+    copy_starts(it, "u9");
+    printer_says(2, "printing", "part.gcode", "u10"); telemetry_says("printing", "local/part.gcode");
+    queue_tick(&machine);
+    assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "stopped") && it->done == 4 && queue.active_id == 0);
+
+    /* Stale MQTT decides nothing, in either direction. */
+    copy_starts(it, "u11");
+    printer_says(1, "complete", "", "u11"); machine.last_message = time(NULL) - 60; telemetry_says("complete", "local/part.gcode");
+    queue_tick(&machine);
+    assert(!strcmp(it->state, "printing") && queue.active_id == 1 && it->done == 4);
     machine.last_message = time(NULL);
     queue_tick(&machine);
-    assert(it->done == 4 && !strcmp(it->state, "done") && queue.count == 1 && queue.active_id == 0);
+    assert(it->done == 5 && !strcmp(it->state, "done") && queue.count == 1 && queue.active_id == 0);
 
     /* The last copy with remove_done drops the job; so does lowering the copies to the printed count. */
     queue.count = 0; it = job(2, 1, 0); queue.remove_done = 1;
-    copy_starts(it, "u10");
-    printer_says(1, "complete", "part.gcode", "u10"); telemetry_says("complete", NULL);
+    copy_starts(it, "u12");
+    printer_says(1, "complete", "part.gcode", "u12"); telemetry_says("complete", NULL);
     queue_tick(&machine);
     assert(queue.count == 0 && queue.active_id == 0);
     it = job(3, 3, 1); queue_available = 1;
@@ -207,23 +245,23 @@ int main(void) {
     /* A USB job prints as the copy gcode_import_usb() made in internal memory; the start records that name. */
     it = job(4, 1, 0); snprintf(it->storage, sizeof(it->storage), "usb"); snprintf(it->path, sizeof(it->path), "stick/part.gcode");
     requested(it); snprintf(it->print_name, sizeof(it->print_name), "CC2_USB_0badf00d_part.gcode");
-    printer_says(2, "printing", "CC2_USB_0badf00d_part.gcode", "u11"); telemetry_says("printing", "local/CC2_USB_0badf00d_part.gcode");
+    printer_says(2, "printing", "CC2_USB_0badf00d_part.gcode", "u13"); telemetry_says("printing", "local/CC2_USB_0badf00d_part.gcode");
     queue_tick(&machine);
     assert(!strcmp(it->state, "printing") && it->native_seen);
-    printer_says(1, "complete", "", "u11"); telemetry_says("complete", "local/CC2_USB_0badf00d_part.gcode");
+    printer_says(1, "complete", "", "u13"); telemetry_says("complete", "local/CC2_USB_0badf00d_part.gcode");
     queue_tick(&machine);
     assert(queue.count == 0 && queue.active_id == 0); /* counted: the last copy, removed */
-    it = job(5, 1, 0); requested(it); it->started_ms = monotonic_ms() - QUEUE_IDLE_GRACE_MS - 1;
-    printer_says(2, "printing", "CC2_USB_0badf00d_part.gcode", "u12"); telemetry_says("printing", "local/CC2_USB_0badf00d_part.gcode");
-    queue_tick(&machine);
+    it = job(5, 1, 0); requested(it);
+    printer_says(2, "printing", "CC2_USB_0badf00d_part.gcode", "u14"); telemetry_says("printing", "local/CC2_USB_0badf00d_part.gcode");
+    queue_tick(&machine); it->mismatch_ms -= QUEUE_FOREIGN_MS + 1; queue_tick(&machine);
     assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "not_started")); /* an internal job is not the import */
     queue.count = 0;
 
     /* Changing the policy never starts anything: a copy counted under "wait" leaves no pending delay,
      * and switching to "auto" afterwards does not create one. */
     it = job(6, 3, 0); queue.remove_done = 0;
-    copy_starts(it, "u13");
-    printer_says(1, "complete", "", "u13"); telemetry_says("complete", "local/part.gcode");
+    copy_starts(it, "u15");
+    printer_says(1, "complete", "", "u15"); telemetry_says("complete", "local/part.gcode");
     queue_tick(&machine);
     assert(it->done == 1 && queue.complete_ms == 0);
     queue_policy_response(begin(), "auto\n10\n0", 10); assert(finish() == 200);
@@ -231,8 +269,8 @@ int main(void) {
     queue_tick(&machine);
     assert(queue.active_id == 0 && starts_sent == 0 && !it->last_result[0]);
     /* Under "auto" a counted copy arms the delay; a print the operator starts by hand disarms it. */
-    copy_starts(it, "u14");
-    printer_says(1, "complete", "", "u14"); telemetry_says("complete", "local/part.gcode");
+    copy_starts(it, "u16");
+    printer_says(1, "complete", "", "u16"); telemetry_says("complete", "local/part.gcode");
     queue_tick(&machine);
     assert(it->done == 2 && queue.complete_ms > 0);
     printer_says(2, "printing", "manual.gcode", "m1"); telemetry_says("printing", "local/manual.gcode");
@@ -253,36 +291,55 @@ int main(void) {
     /* The automatic start goes through the protected print path after the delay, once; the running
      * copy is then followed like any other. */
     queue.delay = 10; queue.complete_ms = monotonic_ms() - 5000;
-    printer_says(1, "complete", "", ""); telemetry_says("complete", NULL);
+    printer_says(1, "complete", "", "u16"); telemetry_says("complete", NULL);
     queue_tick(&machine);
     assert(queue.complete_ms != 0 && starts_sent == 0); /* not before the delay */
     queue.complete_ms = monotonic_ms() - 11000;
     queue_tick(&machine);
     assert(starts_sent == 1 && !strcmp(start_file, "part.gcode") && !strcmp(it->state, "starting") && queue.active_id == 6);
-    assert(!strcmp(it->print_name, "part.gcode") && queue.complete_ms == 0 && !it->last_result[0]);
+    assert(!strcmp(it->print_name, "part.gcode") && !strcmp(it->request_uuid, "u16") && queue.complete_ms == 0 && !it->last_result[0]);
+    queue_load(); it = &queue.items[0]; /* the start was saved before the request went out */
+    assert(queue.count == 1 && !strcmp(it->state, "starting") && queue.active_id == 6);
     queue_tick(&machine);
     assert(starts_sent == 1 && !strcmp(it->state, "starting")); /* no second start while it waits */
-    printer_says(2, "printing", "part.gcode", "u15"); telemetry_says("printing", "local/part.gcode");
+    printer_says(2, "printing", "part.gcode", "u17"); telemetry_says("printing", "local/part.gcode");
     queue_tick(&machine);
     assert(!strcmp(it->state, "printing"));
-    printer_says(1, "complete", "", "u15"); telemetry_says("complete", "local/part.gcode");
+    printer_says(1, "complete", "", "u17"); telemetry_says("complete", "local/part.gcode");
     queue_tick(&machine);
     assert(it->done == 3 && !strcmp(it->state, "done") && queue.active_id == 0 && queue.count == 1);
-    /* Without a printer link the print path refuses; the refusal is recorded, not retried. */
+    /* An exclusive session (here a native calibration tool) refuses the automatic start; the refusal is recorded. */
     queue.count = 0; it = job(7, 2, 0);
-    queue.complete_ms = monotonic_ms() - 11000;
-    printer_says(1, "complete", "", ""); machine.registered = 0; telemetry_says("complete", NULL);
+    queue.complete_ms = monotonic_ms() - 11000; tools.busy = 1;
+    printer_says(1, "complete", "", "u17"); telemetry_says("complete", NULL);
     queue_tick(&machine);
     assert(queue.complete_ms == 0 && !strcmp(it->last_result, "auto_failed") && queue.active_id == 0 && starts_sent == 1);
+    tools.busy = 0; it->last_result[0] = 0;
+    /* Without a printer link the print path refuses; the refusal is recorded, not retried. */
+    queue.complete_ms = monotonic_ms() - 11000;
+    machine.registered = 0;
+    queue_tick(&machine);
+    assert(queue.complete_ms == 0 && !strcmp(it->last_result, "auto_failed") && queue.active_id == 0 && starts_sent == 1);
+    assert(!strcmp(it->state, "pending") && !it->print_name[0]); /* the refused start left no trace */
     machine.registered = 1;
     /* The "wait" policy never starts. */
     snprintf(queue.after, sizeof(queue.after), "wait"); queue.complete_ms = monotonic_ms() - 11000; it->last_result[0] = 0;
     queue_tick(&machine);
     assert(!it->last_result[0] && queue.active_id == 0 && starts_sent == 1);
 
+    /* The operator can give up a start the printer never ran, while it is idle; not a running copy. */
+    requested(it);
+    printer_says(2, "printing", "", "u17"); telemetry_says("printing", NULL);
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 409);
+    printer_says(1, "standby", "", "u17"); telemetry_says("standby", NULL);
+    queue_abandon_response(begin(), &machine, "99", 2); assert(finish() == 404);
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
+    assert(!strcmp(it->state, "pending") && !strcmp(it->last_result, "not_started") && queue.active_id == 0);
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 409);
+
     /* The HTTP handlers while a copy runs: nothing else starts, the running job stays, its copies keep one
      * for the running print, and "next" queues behind it. */
-    copy_starts(it, "u16"); /* job 7, copies 2, done 0, printing */
+    copy_starts(it, "u18"); /* job 7, copies 2, done 0, printing */
     assert(queue.active_id == 7);
     queue_start_response(begin(), &machine, "", 0); assert(finish() == 409 && strstr(reply_body, "already running"));
     queue_start_response(begin(), &machine, "7", 1); assert(finish() == 409);
@@ -312,7 +369,7 @@ int main(void) {
     assert(!queue_available && queue.count == 0);
 
     unlink(gcode); unlink(file); unlink(autosave); rmdir(internal); rmdir(dir);
-    puts("PASS copies counted only from this copy's own completion seen fresh; stops, foreign jobs, long starts, "
-         "USB imports, policy changes, the automatic start and the running-copy guards handled");
+    puts("PASS copies counted only from this copy's own completion seen fresh; stops, foreign jobs, long starts, pauses, "
+         "USB imports, policy changes, the automatic start with its guards and the running-copy handlers covered");
     return 0;
 }

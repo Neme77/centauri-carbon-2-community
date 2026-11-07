@@ -1522,5 +1522,6 @@
   "print.run_now_hint": "La impresión empieza justo tras confirmar, como antes. La cola no cambia.",
   "print.adding_to_queue": "Añadiendo a la cola…",
   "queue.auto_in_n": "Inicio automático en {n} s",
-  "queue.hold": "Cancelar el inicio automático"
+  "queue.hold": "Cancelar el inicio automático",
+  "queue.abandon": "Cancelar el inicio"
 }

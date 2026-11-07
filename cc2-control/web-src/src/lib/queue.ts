@@ -124,3 +124,5 @@ export const setQueuePolicy = (p: QueuePolicy) =>
 export const clearFinished = () => post('/api/queue/clear-done')
 // Cancels a pending automatic start; the policy stays as it is.
 export const holdQueue = () => post('/api/queue/hold')
+// Gives up a start the printer never ran (only while it is idle): the job goes back to pending.
+export const abandonQueued = (id?: number) => post('/api/queue/abandon', id ? String(id) : '')

@@ -59,7 +59,8 @@ try {
   const complete = () => page.request.post(`${origin}/__preview/queue-complete`, { headers: { 'X-CC2-Request': '1' } })
   assert.equal((await complete()).status(), 200)
   await hero.getByText('Copy 4 of 5', { exact: true }).waitFor()
-  await hero.locator('[data-queue-start]').isEnabled()
+  await page.waitForFunction(() => !document.querySelector('[data-queue-hero="next"] [data-queue-start]')?.hasAttribute('disabled'))
+  assert.equal(await hero.locator('[data-queue-start]').isEnabled(), true, 'the next copy can start once the copy is counted')
 
   // Copies: the stepper of the second job.
   const second = rows.nth(1)
@@ -136,9 +137,17 @@ try {
   await quick.waitFor({ state: 'hidden' }) // a running copy hides the quick start
   assert.equal((await complete()).status(), 200)
   await quick.getByText('Copy 2 of 3', { exact: false }).waitFor() // the counter shares its line with the estimate
+  // Under the automatic policy the counted copy arms the delay; the countdown shows where the operator looks,
+  // and its button cancels the start.
+  const countdown = quick.locator('[data-dashboard-queue-auto]')
+  await countdown.waitFor()
+  assert.match(await countdown.textContent(), /^Automatic start in \d+ s/) // the text node shares the box with the button
+  await countdown.getByRole('button', { name: 'Cancel automatic start', exact: true }).click()
+  await countdown.waitFor({ state: 'hidden' })
+  assert.deepEqual(lastPost(), ['/api/queue/hold', ''])
 
   assert.deepEqual(errors, [])
-  console.log('PASS: print queue page, Files chip, dialog choice and Dashboard quick start')
+  console.log('PASS: print queue page, Files chip, dialog choice, Dashboard quick start and automatic countdown')
 } finally {
   await browser?.close()
   await server.close()

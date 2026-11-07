@@ -7,7 +7,8 @@ import { printer, view } from '@/lib/state'
 import { t, tpl } from '@/lib/i18n'
 import { errText, notify } from '@/lib/api'
 import { duration } from '@/lib/format'
-import { queue, queueNext, refreshQueue, startQueued } from '@/lib/queue'
+import { holdQueue, queue, queueNext, refreshQueue, startQueued } from '@/lib/queue'
+import { usePoll } from '@/lib/poll'
 import { startFile } from '@/pages/print-dialog'
 const storageKey = 'cc2-completed-print-seen'
 const readSeen = () => {
@@ -50,10 +51,22 @@ export const PrintCompleted = () => {
   }
   // The queue's next copy is one tap away once the part is off the bed.
   const q = queue.use().data
-  useEffect(() => {
-    if (notice) void refreshQueue()
-  }, [notice])
+  // The notice is where an automatic countdown must be visible: poll fast while it shows (otherwise
+  // this only joins the slower poll of the layout).
+  usePoll(refreshQueue, notice ? 2000 : 30000)
   const next = notice && q?.available && !q.active ? queueNext(q) : null
+  const autoIn = next && q ? q.auto_in : null
+  const hold = async () => {
+    setBusy(true)
+    try {
+      await holdQueue()
+    } catch (e) {
+      notify(tpl('queue.failed', { error: errText(e) }), 'error')
+    } finally {
+      setBusy(false)
+      void refreshQueue()
+    }
+  }
   const startNext = async () => {
     if (!next) return
     setBusy(true)
@@ -94,7 +107,16 @@ export const PrintCompleted = () => {
           <div class="font-semibold [overflow-wrap:anywhere]">
             {next.path} — {tpl('queue.copy_k_of_n', { k: next.done + 1, n: next.copies })}
           </div>
-          <div class="text-xs text-muted">{t('queue.remove_part_hint')}</div>
+          {autoIn === null ? (
+            <div class="text-xs text-muted">{t('queue.remove_part_hint')}</div>
+          ) : (
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-amber" data-completed-queue-auto>
+              {tpl('queue.auto_in_n', { n: autoIn })}
+              <Button class="min-h-8 px-2 text-xs" disabled={busy} onClick={hold}>
+                {t('queue.hold')}
+              </Button>
+            </div>
+          )}
         </div>
       )}
       <div class="mt-3 flex flex-wrap gap-2">

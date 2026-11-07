@@ -763,9 +763,16 @@ unless the `auto` policy is chosen.
   checks (mapping against the file, mesh, measurement, nozzle) run at each start. 201 `{"ok":true,"id","count"}`;
   the queue holds at most 32 jobs.
 - `POST /api/queue/start` with a job id, or an empty body for `next`: refused (409) while a queued copy is
-  starting or printing, while plate verification runs, or when the job has no copy left; otherwise it answers
-  exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx) and an accepted start marks the
-  job `starting`.
+  starting or printing, when the job has no copy left, while plate verification runs, or while another
+  session holds the printer (the refusals every print control shares: maintenance, the Canvas and filament
+  tools, a camera cell, an application update, a managed connection, drying, the nozzle test); otherwise it
+  answers exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx). The job is saved as
+  `starting` before the request goes to the printer, so a restart in between still follows the copy.
+- `POST /api/queue/abandon` (optionally the job id) gives up a `starting` copy the printer never ran: only
+  while the printer is idle with fresh telemetry (409 otherwise, or when no start is waiting); the job goes
+  back to `pending` with `last_result` `not_started`.
+- `POST /api/gcode-files/print` answers 409 `A queued copy is starting` while a queued start waits for the
+  printer; a queued copy that is already printing is protected by the printer's own busy state.
 - `POST /api/queue/remove` (id; never the running job), `/api/queue/reorder` (`id\nindex`, 0 is the head),
   `/api/queue/copies` (`id\ncopies`, never fewer than already printed, and for the running job at least one
   more; a total that equals the printed count finishes the job, which `remove_done` then drops),
@@ -776,16 +783,21 @@ unless the `auto` policy is chosen.
   is acknowledged; a failed save leaves the queue as it was.
 
 Copies are counted on the backend, so a closed browser misses nothing. A `starting` job becomes `printing`
-once fresh telemetry shows the printer busy with the file it was given (a USB import prints under its
-`CC2_USB_…` copy). While the printer is busy with the start itself (homing, bed mesh, heating) the wait goes
-on; three idle minutes, another file running, or thirty minutes in all end it as `not_started`. The copy
-counts when the printer is idle again with `print_stats.state` `complete`, the reported file name is the
-job's, and this copy's own print_stats were seen running (a `complete` left over from the previous copy of
-the same file does not count); `cancelled` or `error`, another job taking over, or an idle printer without
-`complete` for a minute leave it uncounted (`stopped`). Telemetry older than 15 s decides nothing. The last copy sets `done` and, with
-`remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a counted
-completion if the printer is idle; it is meant for a bed that clears itself and is off by default. A queue file
-that cannot be parsed keeps the queue closed (`available: false`) and is never rewritten.
+once fresh MQTT state shows the printer printing the file it was given (a USB import prints under its
+`CC2_USB_…` copy); the printer service's file name is trusted only while it reports a running print, so a
+name left over from the previous job cannot block the start. While the printer is busy with the start itself
+(homing, bed mesh, heating beyond the targets it had when the start was requested) the wait goes on; three
+idle minutes, another file printing for five seconds, or thirty minutes in all end it as `not_started`. A
+copy counts when the printer is idle again with `print_stats.state` `complete`, the reported file is the
+job's, and this copy's own job was seen running: the printer's job uuid changed from the one before the
+request, or the printer service showed the file printing (a `complete` left over from the previous copy of
+the same file, under the same uuid, does not count). `cancelled` or `error`, another job taking over (a new
+uuid), or an idle printer without `complete` for a minute leave it uncounted (`stopped`); a pause, a filament
+change or a recovery keeps it running. Telemetry older than 15 s decides nothing. The last copy sets `done`
+and, with `remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a
+counted completion if the printer is idle and no other session holds it, else the job notes `auto_failed`;
+it is meant for a bed that clears itself and is off by default. A queue file that cannot be parsed keeps the
+queue closed (`available: false`) and is never rewritten.
 
 ## Completed print readback
 

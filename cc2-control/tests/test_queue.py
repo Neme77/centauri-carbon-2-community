@@ -168,6 +168,7 @@ def main():
             assert server.get()["policy"] == {"after": "auto", "delay": 30, "remove_done": True}
             assert server.get()["auto_in"] is None, "no copy was counted, so no automatic start is pending"
             assert server.call("/api/queue/hold", "")[0] == 200
+            assert server.call("/api/queue/abandon", "")[0] == 409, "no start is waiting to be given up"
             assert server.call("/api/queue/policy", "auto\n5\n1")[0] == 400
             assert server.call("/api/queue/policy", "sometimes\n30\n1")[0] == 400
             assert server.call("/api/queue/policy", "wait\n60\n0")[0] == 200

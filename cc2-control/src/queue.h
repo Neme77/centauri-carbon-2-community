@@ -8,7 +8,8 @@
  *
  * The queue is kept in queue_path (--queue FILE) as JSON and survives restarts. It is
  * included part-way through main.c: it uses the static state above it (the MQTT cache,
- * the UDS telemetry, the plate library's file helpers and the print start itself). */
+ * the UDS telemetry, the plate library's file helpers and the print start itself) and
+ * printer_change_blocked(), defined after the sessions it asks about. */
 
 #define QUEUE_MAX 32
 #define QUEUE_FILE_MAX (128 * 1024)
@@ -18,6 +19,7 @@
 #define QUEUE_DELAY_MAX 3600
 #define QUEUE_START_GRACE_MS 180000   /* idle for this long after a start request: it never ran */
 #define QUEUE_START_CAP_MS 1800000    /* a start request this old is given up whatever the printer does */
+#define QUEUE_FOREIGN_MS 5000         /* MQTT must name another file for this long before the start counts as lost */
 #define QUEUE_IDLE_GRACE_MS 60000     /* idle again without "complete": the copy ended otherwise */
 
 typedef struct {
@@ -36,12 +38,15 @@ typedef struct {
     char state[12];             /* pending | starting | printing | done */
     char last_result[16];       /* "" | stopped | not_started | auto_failed */
     char print_name[PATH_MAX_LOCAL]; /* the file the printer was given for the running copy (USB imports are renamed) */
-    int native_seen;            /* this copy's print_stats were seen running: a later "complete" is its own */
-    char job_uuid[128];         /* the running job as MQTT reports it */
+    int native_seen;            /* this copy was seen as its own job: a later "complete" is its own */
+    char job_uuid[128];         /* the running job as MQTT reports it, once it differs from the one before */
     /* Runtime only. */
     long long started_ms;       /* monotonic; the last moment the printer was seen busy with the start */
     long long requested_ms;     /* monotonic; when the start was requested (restarts with the service) */
+    long long mismatch_ms;      /* monotonic; since when MQTT has named another file during the start */
     double duration_baseline;   /* print_stats.total_duration when the start was requested, or -1 */
+    double bed_baseline, nozzle_baseline; /* heater targets when the start was requested */
+    char request_uuid[128];     /* MQTT's job uuid when the start was requested: the previous job's */
 } queue_item;
 
 typedef struct {
@@ -281,18 +286,21 @@ static void queue_fail(int fd, int status, const char *error) {
     queue_reply(fd, status, body);
 }
 
+static int queue_mqtt_fresh(const mqtt_client *mqtt) {
+    time_t wall = time(NULL);
+    return mqtt->connected && mqtt->have_machine_status && mqtt->last_message > 0 &&
+           wall >= mqtt->last_message && wall - mqtt->last_message <= 15;
+}
+
 static void queue_get_response(int fd, const mqtt_client *mqtt) {
     char *data = malloc(QUEUE_FILE_MAX);
     if (!data) { queue_fail(fd, 500, "Out of memory"); return; }
     json_builder b = {data, 0, QUEUE_FILE_MAX, 0};
     const queue_item *next = queue_available ? queue_next() : NULL;
-    time_t wall = time(NULL);
-    int fresh = mqtt->connected && mqtt->have_machine_status && mqtt->last_message > 0 &&
-                wall >= mqtt->last_message && wall - mqtt->last_message <= 15;
     json_builder_printf(&b, "{\"available\":%s,\"error\":", queue_available ? "true" : "false");
     json_builder_string(&b, queue_error);
     json_builder_printf(&b, ",\"revision\":%lu,\"printer_idle\":%s,\"policy\":{\"after\":\"%s\",\"delay\":%d,\"remove_done\":%s},\"active\":",
-                        queue.revision, fresh && mqtt->machine_status == 1 ? "true" : "false",
+                        queue.revision, queue_mqtt_fresh(mqtt) && mqtt->machine_status == 1 ? "true" : "false",
                         queue.after, queue.delay, queue.remove_done ? "true" : "false");
     if (queue.active_id) json_builder_printf(&b, "%d", queue.active_id);
     else json_builder_printf(&b, "null");
@@ -406,25 +414,42 @@ static void queue_add_response(int fd, const char *body, size_t body_len) {
     queue_reply(fd, 201, reply);
 }
 
-/* Starts one copy of `item` through the protected print path. Returns the HTTP status sent. */
+/* The copy is over, counted or not: the item forgets the running job. */
+static void queue_clear_run(queue_item *item) {
+    item->job_uuid[0] = 0; item->request_uuid[0] = 0; item->print_name[0] = 0; item->native_seen = 0;
+    item->started_ms = item->requested_ms = item->mismatch_ms = 0;
+    item->duration_baseline = -1; item->bed_baseline = item->nozzle_baseline = 0;
+}
+
+/* Starts one copy of `item` through the protected print path. Returns the HTTP status sent. The
+ * running state is saved before the request goes out, so a restart right after it still knows. */
 static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item) {
     char body[PATH_MAX_LOCAL + 256];
     int length = snprintf(body, sizeof(body), "%s\n%s\n%s\n%c\n%s\n%d\n%s\n%s", item->storage, item->path, item->mapping,
                           item->side, item->leveling, item->timelapse ? 1 : 0, item->measure, item->nozzle);
     if (length <= 0 || (size_t)length >= sizeof(body)) { queue_fail(fd, 500, "Cannot build the print request"); return 500; }
+    queue_state saved = queue;
+    double value;
+    snprintf(item->state, sizeof(item->state), "starting");
+    snprintf(item->print_name, sizeof(item->print_name), "%s", item->path);
+    item->last_result[0] = 0; item->job_uuid[0] = 0; item->native_seen = 0; item->mismatch_ms = 0;
+    snprintf(item->request_uuid, sizeof(item->request_uuid), "%s", mqtt->uuid);
+    item->started_ms = item->requested_ms = monotonic_ms();
+    item->duration_baseline = uds_value(&telemetry, U_TOTAL_DURATION, &value) ? value : -1;
+    item->bed_baseline = uds_value(&telemetry, U_BG, &value) ? value : 0;
+    item->nozzle_baseline = uds_value(&telemetry, U_EG, &value) ? value : 0;
+    queue.active_id = item->id;
+    queue.complete_ms = 0;
+    if (queue_save() != 0) { queue = saved; queue_fail(fd, 500, "Cannot save the print queue"); return 500; }
     char started[PATH_MAX_LOCAL] = "";
     int status = gcode_start_response(fd, mqtt, body, (size_t)length, started);
-    if (status == 202) {
-        double total;
-        snprintf(item->state, sizeof(item->state), "starting");
-        snprintf(item->print_name, sizeof(item->print_name), "%s", started[0] ? started : item->path);
-        item->last_result[0] = 0; item->job_uuid[0] = 0; item->native_seen = 0;
-        item->started_ms = item->requested_ms = monotonic_ms();
-        item->duration_baseline = uds_value(&telemetry, U_TOTAL_DURATION, &total) ? total : -1;
-        queue.active_id = item->id;
-        queue.complete_ms = 0;
-        if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s after a start\n", queue_path);
+    if (status != 202) {
+        queue = saved;
+        if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s after a refused start\n", queue_path);
+        return status;
     }
+    if (started[0]) snprintf(item->print_name, sizeof(item->print_name), "%s", started);
+    if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s after a start\n", queue_path);
     return status;
 }
 
@@ -440,8 +465,28 @@ static void queue_start_response(int fd, mqtt_client *mqtt, const char *body, si
     if (queue.active_id) { queue_fail(fd, 409, "A queued copy is already running"); return; }
     if (!item && !(item = queue_next())) { queue_fail(fd, 409, "Nothing in the queue can start"); return; }
     if (strcmp(item->state, "pending")) { queue_fail(fd, 409, "This job has no copy left to print"); return; }
+    const char *blocked = printer_change_blocked();
+    if (blocked) { queue_fail(fd, 409, blocked); return; }
     if (plates_background_active()) { queue_fail(fd, 409, "Plate verification is still running"); return; }
     (void)queue_start_item(fd, mqtt, item);
+}
+
+static void queue_start_lost(queue_item *item);
+
+/* The operator gives up a start the printer never ran: only while the printer is idle. */
+static void queue_abandon_response(int fd, const mqtt_client *mqtt, const char *body, size_t body_len) {
+    if (!queue_available) { queue_fail(fd, 503, "The print queue is unavailable"); return; }
+    char scratch[64]; char *line[1];
+    if (queue_lines(body, body_len, scratch, sizeof(scratch), line, 1) < 0) { queue_fail(fd, 400, "Invalid queue request"); return; }
+    queue_item *item = queue_find(queue.active_id);
+    if (!item || strcmp(item->state, "starting")) { queue_fail(fd, 409, "No start is waiting"); return; }
+    if (line[0] && *line[0]) {
+        int id = 0;
+        if (!queue_parse_int(line[0], 1, 1000000000, &id) || id != item->id) { queue_fail(fd, 404, "No such queued job"); return; }
+    }
+    if (!queue_mqtt_fresh(mqtt) || mqtt->machine_status != 1) { queue_fail(fd, 409, "The printer is not idle"); return; }
+    queue_start_lost(item);
+    queue_reply(fd, 200, "{\"ok\":true}\n");
 }
 
 static void queue_remove_response(int fd, const char *body, size_t body_len) {
@@ -550,38 +595,49 @@ static int queue_name_matches(const queue_item *item, const char *reported) {
     return !strcmp(queue_basename(reported), queue_basename(item->print_name[0] ? item->print_name : item->path));
 }
 
-/* Whether the reported file names (MQTT and the printer service) name this copy's file. An empty
- * report is not evidence against it: the firmware clears the name once a job is over. */
+static int queue_native_running(void) {
+    const char *native = uds_print_state(&telemetry);
+    return native && (!strcmp(native, "printing") || !strcmp(native, "paused"));
+}
+
+/* Whether the reported file names name this copy's file. MQTT's name counts whenever it has one; the
+ * printer service's name only while its print_stats run (it keeps the previous job's name after
+ * "complete", and the two sockets do not deliver in step). An empty report is not evidence against it. */
 static int queue_job_file_matches(const queue_item *item, const mqtt_client *mqtt) {
     if (mqtt->filename[0] && !queue_name_matches(item, mqtt->filename)) return 0;
-    if (telemetry.have_filename && telemetry.filename[0] && !queue_name_matches(item, telemetry.filename)) return 0;
+    if (queue_native_running() && telemetry.have_filename && telemetry.filename[0] &&
+        !queue_name_matches(item, telemetry.filename)) return 0;
     return 1;
 }
 
-/* The printer is doing something: not idle, or heating. A start script (homing, bed mesh, heating)
- * runs before the file is reported as printing. */
-static int queue_printer_active(const mqtt_client *mqtt) {
+/* The printer is doing something for the start: not idle, or heating beyond what it was heating when
+ * the start was requested (a bed kept warm before the request is not the start script). */
+static int queue_printer_active(const queue_item *item, const mqtt_client *mqtt) {
     double target;
     if (mqtt->machine_status != 1) return 1;
-    if (uds_value(&telemetry, U_BG, &target) && target > 0) return 1;
-    if (uds_value(&telemetry, U_EG, &target) && target > 0) return 1;
+    if (uds_value(&telemetry, U_BG, &target) && target > item->bed_baseline + 0.5) return 1;
+    if (uds_value(&telemetry, U_EG, &target) && target > item->nozzle_baseline + 0.5) return 1;
     return 0;
 }
 
-/* This copy's own print_stats were seen: the file running, or the printer's total print time
- * dropping below what it was when the start was requested (a new job resets it). */
-static void queue_note_native(queue_item *item) {
-    if (item->native_seen) return;
-    const char *native = uds_print_state(&telemetry);
-    double total;
-    int running = native && (!strcmp(native, "printing") || !strcmp(native, "paused")) &&
-                  (!telemetry.have_filename || !telemetry.filename[0] || queue_name_matches(item, telemetry.filename));
-    int reset = item->duration_baseline >= 0 && uds_value(&telemetry, U_TOTAL_DURATION, &total) &&
-                total + 5 < item->duration_baseline;
-    if (running || reset) {
-        item->native_seen = 1;
-        if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
+/* This copy is its own job: the printer service shows its file running, the printer's total print time
+ * dropped below what it was when the start was requested (a new job resets it), or MQTT reports a job
+ * uuid other than the one it had when the start was requested. */
+static void queue_note_native(queue_item *item, const mqtt_client *mqtt) {
+    int changed = 0;
+    if (mqtt->uuid[0] && strcmp(mqtt->uuid, item->request_uuid) && !item->job_uuid[0]) {
+        snprintf(item->job_uuid, sizeof(item->job_uuid), "%s", mqtt->uuid);
+        changed = 1;
     }
+    if (!item->native_seen) {
+        double total;
+        int running = queue_native_running() &&
+                      (!telemetry.have_filename || !telemetry.filename[0] || queue_name_matches(item, telemetry.filename));
+        int reset = item->duration_baseline >= 0 && uds_value(&telemetry, U_TOTAL_DURATION, &total) &&
+                    total + 5 < item->duration_baseline;
+        if (running || reset || item->job_uuid[0]) { item->native_seen = 1; changed = 1; }
+    }
+    if (changed && queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
 }
 
 static void queue_copy_over(queue_item *item, int counted) {
@@ -593,8 +649,7 @@ static void queue_copy_over(queue_item *item, int counted) {
         snprintf(item->last_result, sizeof(item->last_result), "stopped");
         queue.complete_ms = 0;
     }
-    item->job_uuid[0] = 0; item->print_name[0] = 0; item->native_seen = 0;
-    item->started_ms = item->requested_ms = 0; item->duration_baseline = -1;
+    queue_clear_run(item);
     queue.active_id = 0;
     if (item->done >= item->copies) queue_finish_item(item);
     else snprintf(item->state, sizeof(item->state), "pending");
@@ -604,47 +659,47 @@ static void queue_copy_over(queue_item *item, int counted) {
 static void queue_start_lost(queue_item *item) {
     snprintf(item->state, sizeof(item->state), "pending");
     snprintf(item->last_result, sizeof(item->last_result), "not_started");
-    item->job_uuid[0] = 0; item->print_name[0] = 0; item->native_seen = 0;
-    item->started_ms = item->requested_ms = 0; item->duration_baseline = -1;
+    queue_clear_run(item);
     queue.active_id = 0;
     if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
 }
 
 static void queue_tick(mqtt_client *mqtt) {
     if (!queue_available) return;
-    time_t wall = time(NULL);
-    int fresh = mqtt->connected && mqtt->have_machine_status && mqtt->last_message > 0 &&
-                wall >= mqtt->last_message && wall - mqtt->last_message <= 15;
-    if (!fresh) return; /* stale evidence decides nothing */
+    if (!queue_mqtt_fresh(mqtt)) return; /* stale evidence decides nothing */
     long long now = monotonic_ms();
     const char *native = uds_print_state(&telemetry);
     const char *word = native && *native ? native : mqtt->print_state;
-    int busy = mqtt->machine_status == 2 && (!strcmp(word, "printing") || !strcmp(word, "paused") ||
-                                             !strcmp(mqtt->print_state, "printing") || !strcmp(mqtt->print_state, "paused"));
+    int running_word = !strcmp(word, "printing") || !strcmp(word, "paused") ||
+                       !strcmp(mqtt->print_state, "printing") || !strcmp(mqtt->print_state, "paused");
+    int busy = mqtt->machine_status == 2 && running_word;
+    /* Loading, pausing, a power-loss recovery or a foreign-object check interrupt a print without ending it. */
+    int held = mqtt->machine_status != 1 || running_word;
     queue_item *item = queue_find(queue.active_id);
     if (queue.active_id && !item) queue.active_id = 0;
     if (busy && !queue.active_id) queue.complete_ms = 0; /* another print ran: no automatic start after it */
     if (item && !strcmp(item->state, "starting")) {
-        queue_note_native(item);
+        queue_note_native(item, mqtt);
+        int foreign = busy && mqtt->filename[0] && !queue_name_matches(item, mqtt->filename);
+        if (!foreign) item->mismatch_ms = 0;
+        else if (!item->mismatch_ms) item->mismatch_ms = now;
         if (busy && queue_job_file_matches(item, mqtt)) {
             snprintf(item->state, sizeof(item->state), "printing");
-            snprintf(item->job_uuid, sizeof(item->job_uuid), "%s", mqtt->uuid);
             item->started_ms = now;
             if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
-        } else if (busy && mqtt->filename[0]) queue_start_lost(item); /* the printer runs another file */
+        } else if (foreign && now - item->mismatch_ms >= QUEUE_FOREIGN_MS) queue_start_lost(item); /* another file runs */
         else if (now - item->requested_ms >= QUEUE_START_CAP_MS) queue_start_lost(item);
-        else if (queue_printer_active(mqtt)) item->started_ms = now; /* homing, bed mesh, heating: keep waiting */
+        else if (queue_printer_active(item, mqtt)) item->started_ms = now; /* homing, bed mesh, heating: keep waiting */
         else if (now - item->started_ms >= QUEUE_START_GRACE_MS) queue_start_lost(item);
     } else if (item && !strcmp(item->state, "printing")) {
-        queue_note_native(item);
-        if (busy) {
-            /* Another job took over without ours completing: not counted. */
-            if (item->job_uuid[0] && mqtt->uuid[0] && strcmp(item->job_uuid, mqtt->uuid)) queue_copy_over(item, 0);
-            else item->started_ms = now;
-        } else if (!strcmp(word, "cancelled") || !strcmp(word, "error")) queue_copy_over(item, 0);
-        else if (mqtt->machine_status == 1 && !strcmp(word, "complete") && item->native_seen &&
-                 queue_job_file_matches(item, mqtt)) queue_copy_over(item, 1);
-        else if (mqtt->machine_status != 2 && now - item->started_ms >= QUEUE_IDLE_GRACE_MS) queue_copy_over(item, 0);
+        queue_note_native(item, mqtt);
+        if (busy && item->job_uuid[0] && mqtt->uuid[0] && strcmp(item->job_uuid, mqtt->uuid) &&
+            strcmp(mqtt->uuid, item->request_uuid)) {
+            queue_copy_over(item, 0); /* another job took over without ours completing: not counted */
+        } else if (held) item->started_ms = now;
+        else if (!strcmp(word, "cancelled") || !strcmp(word, "error")) queue_copy_over(item, 0);
+        else if (!strcmp(word, "complete") && item->native_seen && queue_job_file_matches(item, mqtt)) queue_copy_over(item, 1);
+        else if (now - item->started_ms >= QUEUE_IDLE_GRACE_MS) queue_copy_over(item, 0);
     }
     /* Automatic policy: only for a printer that clears its own bed; the delay lets the operator cancel. */
     if (!strcmp(queue.after, "auto") && queue.complete_ms && !queue.active_id &&
@@ -653,7 +708,7 @@ static void queue_tick(mqtt_client *mqtt) {
         queue_item *next = queue_next();
         if (!next) return;
         int status = 503;
-        if (mqtt->machine_status == 1 && !plates_background_active()) {
+        if (mqtt->machine_status == 1 && !printer_change_blocked() && !plates_background_active()) {
             int sink = open("/dev/null", O_WRONLY);
             status = sink >= 0 ? queue_start_item(sink, mqtt, next) : 500;
             if (sink >= 0) close(sink);

@@ -1522,5 +1522,6 @@
   "print.run_now_hint": "La stampa parte subito dopo la conferma, come prima. La coda non viene toccata.",
   "print.adding_to_queue": "Aggiunta alla coda…",
   "queue.auto_in_n": "Avvio automatico tra {n} s",
-  "queue.hold": "Annulla l’avvio automatico"
+  "queue.hold": "Annulla l’avvio automatico",
+  "queue.abandon": "Annulla l’avvio"
 }

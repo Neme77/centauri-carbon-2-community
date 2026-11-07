@@ -19,6 +19,7 @@ import { readMeshReadiness } from '@/pages/print-dialog'
 import {
   clearFinished,
   copiesLeft,
+  abandonQueued,
   finishedJobs,
   holdQueue,
   mappingSlots,
@@ -230,6 +231,11 @@ const Hero = ({
     setBusy(false)
   }
   const skip = () => act(() => reorderQueued(item.id, Math.max(0, q.items.length - 1)))
+  const guarded = async (fn: () => Promise<unknown>) => {
+    setBusy(true)
+    await act(fn)
+    setBusy(false)
+  }
   return (
     <Card class={active ? '' : 'border-cyan/60'} data-queue-hero={active ? 'active' : 'next'}>
       <CardHead
@@ -240,7 +246,7 @@ const Hero = ({
       <div class="flex flex-wrap items-start gap-3.5">
         <Thumb item={item} />
         <div class="grid min-w-0 flex-1 basis-64 gap-2">
-          <div class="text-lg font-semibold [overflow-wrap:anywhere]">{item.path}</div>
+          <h3 class="text-base font-semibold [overflow-wrap:anywhere]">{item.path}</h3>
           <div class="text-muted">
             <strong class="font-semibold text-cyan">{copyText(item)}</strong>
             {item.estimated_seconds !== null && ` · ≈ ${duration(item.estimated_seconds)}`}
@@ -263,7 +269,7 @@ const Hero = ({
           )}
         </div>
       </div>
-      <div class="mt-3.5 flex flex-wrap items-center gap-2.5 border-t border-edge pt-3">
+      <div class="mt-3.5 flex flex-wrap items-center gap-2 border-t border-edge pt-3">
         <Button
           variant="primary"
           class="min-h-11 px-5 text-base"
@@ -275,9 +281,21 @@ const Hero = ({
           {t(active ? 'queue.start_next' : 'print.start_print')}
         </Button>
         {active ? (
-          <Button class="min-h-11" onClick={() => openPage('job')}>
-            {t('queue.open_job')}
-          </Button>
+          <>
+            <Button class="min-h-11" onClick={() => openPage('job')}>
+              {t('queue.open_job')}
+            </Button>
+            {item.state === 'starting' && (
+              <Button
+                class="min-h-11"
+                disabled={busy}
+                onClick={() => guarded(() => abandonQueued(item.id))}
+                data-queue-abandon
+              >
+                {t('queue.abandon')}
+              </Button>
+            )}
+          </>
         ) : (
           <Button class="min-h-11" onClick={skip} disabled={busy || openJobs(q).length < 2} data-queue-skip>
             <SkipForward {...I} />
@@ -287,7 +305,7 @@ const Hero = ({
         {!active && q.auto_in !== null && (
           <span class="flex items-center gap-2 text-xs text-amber" data-queue-auto>
             {tpl('queue.auto_in_n', { n: q.auto_in })}
-            <Button class="min-h-8 px-2 text-xs" onClick={() => act(() => holdQueue())}>
+            <Button class="min-h-8 px-2 text-xs" disabled={busy} onClick={() => guarded(() => holdQueue())}>
               {t('queue.hold')}
             </Button>
           </span>
@@ -353,7 +371,7 @@ const Policy = ({ policy }: { policy: QueuePolicy }) => {
             <span class="text-xs text-amber">{t('queue.policy_auto_warning')}</span>
           </span>
         </label>
-        <div class="flex items-center justify-between gap-2.5 border-t border-edge pt-2.5">
+        <div class="flex items-center justify-between gap-2 border-t border-edge pt-2.5">
           <span>{t('queue.remove_done')}</span>
           <Switch
             on={policy.remove_done}
@@ -426,7 +444,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
   return (
     <div
       data-queue-item={item.id}
-      class={`grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-edge px-2 py-2 cc2-md:grid-cols-[28px_minmax(0,1.3fr)_170px_100px_minmax(0,1.2fr)_auto] ${
+      class={`grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 border-t border-edge px-2 py-2 cc2-md:grid-cols-[28px_minmax(0,1.3fr)_170px_100px_minmax(0,1.2fr)_auto] ${
         q.next === item.id ? 'rounded-md bg-cyan/5 outline outline-1 -outline-offset-1 outline-cyan' : ''
       }`}
     >
@@ -511,7 +529,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
 const Empty = () => (
   <Card data-queue-empty>
     <CardHead icon="queue" title="queue.empty_title" />
-    <div class="grid place-items-center gap-2.5 py-6 text-center">
+    <div class="grid place-items-center gap-2 py-6 text-center">
       <Icon n="queue" class="size-12 text-edge" />
       <p class="max-w-md text-muted">{t('queue.empty_hint')}</p>
       <Button variant="primary" onClick={() => openPage('files')}>
@@ -621,7 +639,7 @@ export const Queue = () => {
           </div>
           <Card class="mt-3.5" data-queue-list>
             <CardHead icon="queue" title="queue.list_title" end={t('queue.list_hint')} />
-            <div class="hidden cc2-md:grid cc2-md:grid-cols-[28px_minmax(0,1.3fr)_170px_100px_minmax(0,1.2fr)_auto] gap-2.5 px-2 pb-1.5 text-xs text-muted">
+            <div class="hidden cc2-md:grid cc2-md:grid-cols-[28px_minmax(0,1.3fr)_170px_100px_minmax(0,1.2fr)_auto] gap-2 px-2 pb-1.5 text-xs text-muted">
               <span>#</span>
               <span>{t('queue.col_file')}</span>
               <span>{t('queue.col_copies')}</span>
@@ -635,7 +653,7 @@ export const Queue = () => {
             {!openJobs(q).length && <p class="p-3 text-muted">{t('queue.all_done')}</p>}
             {done.length > 0 && (
               <div class="mt-2.5 border-t border-edge pt-2.5">
-                <div class="flex items-center justify-between gap-2.5">
+                <div class="flex items-center justify-between gap-2">
                   <Button variant="ghost" onClick={() => setShowDone(!showDone)} aria-expanded={showDone}>
                     {showDone ? <ChevronDown {...I} /> : <ChevronRight {...I} />}
                     {tpl('queue.finished_n', { n: done.length })}
@@ -648,7 +666,7 @@ export const Queue = () => {
                   done.map(item => (
                     <div
                       key={item.id}
-                      class="flex flex-wrap items-center gap-2.5 px-2 py-1.5 text-muted"
+                      class="flex flex-wrap items-center gap-2 px-2 py-1.5 text-muted"
                       data-queue-done={item.id}
                     >
                       <Tag tone="ok">
