@@ -42,7 +42,9 @@ static inline int vc_wait(int fd,short events,uint64_t deadline){
 }
 static inline int vc_http_body(const char *endpoint,char **output,size_t *body_size){
     *output=NULL;*body_size=0;
-    if(strcmp(endpoint,"/api/canvas")&&strcmp(endpoint,"/api/printer")&&strcmp(endpoint,"/api/uds"))return 0;
+    if(strcmp(endpoint,"/api/canvas")&&strcmp(endpoint,"/api/printer")&&strcmp(endpoint,"/api/uds")&&
+       strcmp(endpoint,"/api/rfid/lifecycle/restore-readiness")&&
+       strcmp(endpoint,"/api/rfid/lifecycle/host-restore-readiness"))return 0;
     char *bytes=malloc(32769);if(!bytes)return 0;
     int fd=socket(AF_INET,SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC,0);
     if(fd<0){free(bytes);return 0;}
@@ -99,6 +101,15 @@ static inline int vc_http_body(const char *endpoint,char **output,size_t *body_s
 static inline int vc_canvas_http(void){
     char *body=NULL;size_t size=0;
     int okay=vc_http_body("/api/canvas",&body,&size)&&vc_canvas_json(body,size);
+    free(body);return okay;
+}
+static inline int vc_native_ready(int require_canvas){
+    const char *endpoint=require_canvas?"/api/rfid/lifecycle/host-restore-readiness":
+        "/api/rfid/lifecycle/restore-readiness";
+    const char ready[]="{\"ready\":true}";
+    char *body=NULL;size_t size=0;
+    int okay=vc_http_body(endpoint,&body,&size)&&size==sizeof(ready)-1&&
+        !memcmp(body,ready,size);
     free(body);return okay;
 }
 #endif

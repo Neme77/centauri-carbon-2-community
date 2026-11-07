@@ -49,14 +49,19 @@ static int app_update_authorized(const char *request, const mqtt_client *mqtt) {
     return 1;
 }
 
+static int app_update_local_available(console_state *console) {
+    pthread_mutex_lock(&console->lock);
+    int busy=console->busy;
+    pthread_mutex_unlock(&console->lock);
+    return !busy&&!tools.busy&&!cell_active()&&!rotation_pending()&&!drying_active()&&
+        !plates_background_active()&&(!experiments.quiet_motors||experiments_normal_confirmed(console));
+}
+
 /* Idle, cold nozzle, heaters off; bed_max is the warmest bed allowed (50 C, or a print's
  * leftover heat for a chamber preheat). */
 static int app_update_ready_bed(const mqtt_client *mqtt, console_state *console, double bed_max) {
-    int busy;
-    pthread_mutex_lock(&console->lock); busy = console->busy; pthread_mutex_unlock(&console->lock);
     time_t age = time(NULL) - mqtt->last_message;
-    return !tools.busy && !cell_active() && !rotation_pending() && !drying_active() && (!experiments.quiet_motors || experiments_normal_confirmed(console)) &&
-        gcode_idle_for_mutation(mqtt) && age >= 0 && !busy && !plates_background_active() &&
+    return app_update_local_available(console) && gcode_idle_for_mutation(mqtt) && age >= 0 &&
         mqtt->have_extruder_temp && mqtt->have_extruder_target && mqtt->have_bed_temp && mqtt->have_bed_target &&
         isfinite(mqtt->extruder_temp) && mqtt->extruder_temp >= 0 && mqtt->extruder_temp <= 50 &&
         isfinite(mqtt->bed_temp) && mqtt->bed_temp >= 0 && mqtt->bed_temp <= bed_max &&
@@ -198,7 +203,7 @@ static void app_update_cleanup(const char *token) {
     app_update_clean_stage(stage);
 }
 
-static void app_update_status_response(int fd, const mqtt_client *mqtt, console_state *console) {
+static void app_update_status_response(int fd, console_state *console) {
     char token[33] = "", path[600], state[256], phase[24] = "none", version[32] = "", verified[256];
     int running = app_update_active();
     if (app_update_current(token) && app_update_path(path, sizeof(path), token, "status.json") && app_update_read(path, state, sizeof(state))) {
@@ -213,7 +218,7 @@ static void app_update_status_response(int fd, const mqtt_client *mqtt, console_
     }
     char body[600];
     int length = snprintf(body, sizeof(body), "{\"enabled\":%s,\"ready\":%s,\"busy\":%s,\"installed\":\"%s\",\"firmware\":\"%s\",\"job\":\"%s\",\"phase\":\"%s\",\"version\":\"%s\"}\n",
-        app_update_enabled() ? "true" : "false", app_update_ready(mqtt, console) ? "true" : "false", running ? "true" : "false",
+        app_update_enabled() ? "true" : "false", app_update_local_available(console) ? "true" : "false", running ? "true" : "false",
         CC2_CONTROL_VERSION, CC2_COMMUNITY_FIRMWARE_VERSION, token, phase, version);
     respond(fd, 200, "OK", "application/json", body, (size_t)length);
 }
@@ -361,7 +366,7 @@ done:
 static int app_update_upload_start(int fd, const char *request, size_t used, size_t header_length, const mqtt_client *mqtt, console_state *console, const char *download) {
     if (!app_update_enabled()) { app_update_fail(fd, 503, "Application updater is not installed"); return 0; }
     if (!app_update_authorized(request, mqtt)) { app_update_fail(fd, 401, "LAN code confirmation required or temporarily locked"); return 0; }
-    if (app_update_active() || !app_update_ready(mqtt, console)) { app_update_fail(fd, 409, "Printer must be connected, idle and cold with heating targets zero"); return 0; }
+    if (app_update_active() || !app_update_local_available(console)) { app_update_fail(fd, 409, "Printer has an active maintenance operation"); return 0; }
     size_t length = download ? APP_UPDATE_MAX : content_length_from_headers(request);
     if (length < 1108 || length > APP_UPDATE_MAX) { app_update_fail(fd, 400, "Invalid application update size"); return 0; }
     if ((mkdir(app_update_root, 0700) && errno != EEXIST) || !app_update_private(app_update_root)) {
@@ -411,7 +416,7 @@ static void app_update_install_response(int fd, const char *request, const char 
     if (length != 32 || !app_update_current(token)) { app_update_fail(fd, 400, "Invalid update job"); return; }
     memcpy(requested, body, 32); requested[32] = 0;
     if (!app_update_token_valid(requested) || strcmp(requested, token)) { app_update_fail(fd, 409, "Application update selection changed"); return; }
-    if (app_update_active() || !app_update_enabled() || !app_update_ready(mqtt, console)) {
+    if (app_update_active() || !app_update_enabled() || !app_update_local_available(console) || installer_native_status(0)) {
         app_update_fail(fd, 409, "Printer must be connected, idle and cold with heating targets zero"); return;
     }
     if (!app_update_path(path, sizeof(path), token, "status.json") || !app_update_read(path, state, sizeof(state)) ||

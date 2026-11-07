@@ -121,7 +121,7 @@ esac
         with zipfile.ZipFile(output) as archive:
             payload=archive.read(next(n for n in archive.namelist() if n.endswith('/cc2-control-payload.tar.gz')))
         for shell in [['dash'],['busybox','sh']]:
-            for case in (['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed','fresh-success','fresh-failure','fresh-without-canvas','fresh-without-canvas-failure','fresh-without-canvas-current','current'] if unified else ['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed']):
+            for case in (['success','unsafe-idle','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed','fresh-success','fresh-failure','fresh-without-canvas','fresh-without-canvas-failure','fresh-without-canvas-current','current'] if unified else ['success','unsafe-idle','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed']):
                 if fixture.exists():shutil.rmtree(fixture)
                 fixture.mkdir(mode=0o700)
                 if unified:(fixture/'opt/usr').mkdir(parents=True,mode=0o700)
@@ -140,6 +140,17 @@ esac
                 put(fixture/'native-journal',b'NATIVE JOURNAL PRESERVED')
                 if case=='foreign-destination':put(destination/'foreign',b'KEEP EVIDENCE')
                 commands=fixture/'bin';commands.mkdir()
+                connected_marker=fixture/'canvas-connected'
+                if not case.startswith('fresh-without-canvas'):connected_marker.touch()
+                put(commands/'native-probe',f'''#!/bin/sh
+[ "$#" -eq 2 ] || exit 90
+[ "$(sha256sum "$1" | cut -d ' ' -f 1)" = '{app_sha}' ] || exit 91
+case "$2" in
+    --installer-native-idle) [ '{case}' != unsafe-idle ] || exit 3;;
+    --installer-native-canvas) [ -f '{connected_marker}' ] || exit 2;;
+    *) exit 92;;
+esac
+''',0o755)
                 health=json.dumps({'service':'cc2-control','version':pkg.VERSION if case not in ['health-failure','fresh-failure','fresh-without-canvas-failure'] else 'wrong',
                     'mqtt_registered':True,'snapshot_received':True},separators=(',',':'))
                 status='{"connected":true,"last_message_age":1,"extruder":{"temperature":24,"target":0},"heater_bed":{"temperature":22,"target":0},"machine":{"status":1,"sub_status":0}}'
@@ -158,7 +169,11 @@ esac
                     pkg.COMPATIBILITY['daemon_sha256']:sha(daemon.read_bytes())}
                 script=(stage/'install-on-printer.sh').read_text()
                 for before,after in replacements.items():script=script.replace(before,after)
-                # Adapt executable calls only. All hash checks still inspect ARM ELFs.
+                # The mock ELF stays in place for checksum and copy checks.
+                # Only intercept the direct-console observation at its CLI boundary.
+                for option in ('--installer-native-idle','--installer-native-canvas'):
+                    script=script.replace('"$STAGE/cc2-control" '+option,'native-probe "$STAGE/cc2-control" '+option)
+                # Run the real ARM publishers and worker double via emulation.
                 for name in ['CAVITY_SOURCE','RFID_SOURCE']:
                     for action in ['--publish','--retire-dormant']:
                         script=script.replace('"$'+name+'/publisher" '+action,'qemu-arm "$'+name+'/publisher" '+action)
@@ -197,7 +212,8 @@ esac
                     assert calls[-1]=='--rollback' and (target/'cc2-control').read_bytes()==binary and not marker.exists()
                     assert (fixture/'lock').exists(),'uncertain rollback must retain barrier'
                 else:assert not (fixture/'lock').exists()
-                if case in ['tampered-tail','foreign-destination','native-changed']:assert not calls and (target/'cc2-control').read_bytes()==b'OLD APP'
+                if case in ['unsafe-idle','tampered-tail','foreign-destination','native-changed']:assert not calls and (target/'cc2-control').read_bytes()==b'OLD APP'
+                if case=='unsafe-idle':assert not list(fixture.glob('app-backup-*'))
                 if unified and not case.startswith('fresh-'):assert not floor_root.exists(),'active/current route must not stage floor'
                 assert (target/'spools.json').read_bytes()==b'PRESERVE'
                 assert (fixture/'native-journal').read_bytes()==b'NATIVE JOURNAL PRESERVED'
@@ -226,8 +242,7 @@ esac
                     # a connected accessory is observed. No separate package.
                     repeated=subprocess.run([*shell,stage/'install-on-printer.sh'],env=env,capture_output=True,text=True,timeout=90)
                     assert repeated.returncode==0 and not (prefix/'cc2-rfid').exists(),(shell,'no-Canvas repeat',repeated.stdout,repeated.stderr)
-                    canvas=json.dumps({'available':True,'telemetry':{'canvas_list':[{'connected':1}]}},separators=(',',':'))
-                    put(commands/'wget',f'#!/bin/sh\ncase "$*" in */api/canvas*) echo \'{canvas}\';; */api/health*) echo \'{health}\';; *) echo \'{status}\';; esac\n',0o755)
+                    connected_marker.touch()
                     connected=subprocess.run([*shell,stage/'install-on-printer.sh'],env=env,capture_output=True,text=True,timeout=90)
                     assert connected.returncode==0 and (prefix/'cc2-rfid').exists(),(shell,'later Canvas connection',connected.stdout,connected.stderr)
                     assert trace.read_text().splitlines()==['floor-check','floor-enable']*3

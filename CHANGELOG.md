@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Extended pull-back installer R6: CC2 Control 1.2.21 to 1.2.26 and Community Firmware V4.4.3 with the 1.2.26 EXHAUST startup files (pinned boot hook and launcher, same patch points); the EXHAUST minimum stays inactive while the extended program runs. Requested by **Neme77**, implemented and printer-tested by **Noahwhite2014** (#312, #314).
 
+### Fixed
+
+- Preserve the Canvas RFID lifecycle during application updates from the published CC2 Control 1.2.26 and require explicit resumption before a pending activation can flash Canvas. Allow reinstalling the same build from a PC. Reported by **Sceletor** (#313) and physically tested on a Combo by **Neme77**.
+
 ## [CC2 Control 1.2.26] - 2026-11-07
 
 ### Changed
