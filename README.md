@@ -5,20 +5,64 @@ Community firmware, local printer control and reproducible build tools for the
 
 [![Join our Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/FGfCaFpm38)
 
-> **NEW: NATIVE DISPLAY V4.4.3 + CC2 CONTROL 1.2.25.** Native Obsidian/cyan touchscreen, exhaust flaps, Pressure Advance, Rotation Distance, load-cell tools, experimental nozzle expansion/chamber preheat, optional qualified RTL8153 Ethernet and update recovery. [Download and complete notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.25-V4.4).
+> **CC2 CONTROL 1.2.26 — OPEN RFID, ONE INSTALLER.** An open, extensible path toward broader spool compatibility, autonomous guarded Canvas activation/restoration, EXHAUST minimum, improved calibration layout, mesh/runout improvements and installation fixes. **CC2 non Combo is supported without RFID activation.** [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.26-V4.4).
 
 <p align="center">
   <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.3/CC2_V4_4_3_STOCK_Control_1_2_25.zip.sig"><img src="https://img.shields.io/badge/DOWNLOAD-Firmware%20V4.4.3-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download complete firmware V4.4.3"></a>
   &nbsp;
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.25-V4.4/CC2-Control-1.2.25-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/DOWNLOAD-CC2%20Control%201.2.25-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download CC2 Control 1.2.25 multiplatform update"></a>
+  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.26-V4.4/CC2-Control-1.2.26-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/DOWNLOAD-CC2%20Control%201.2.26-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Download CC2 Control 1.2.26 multiplatform update"></a>
 </p>
 
-| **🖨️ Complete firmware · V4.4.3** | **🔄 CC2 Control · 1.2.25** |
+| **Complete firmware · V4.4.3** | **Application update · CC2 Control 1.2.26** |
 | --- | --- |
-| [**Download signed firmware**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.3/CC2_V4_4_3_STOCK_Control_1_2_25.zip.sig) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.3) | [**Download Windows / macOS / Linux package**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.25-V4.4/CC2-Control-1.2.25-Multiplatform-Update.zip) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.25-V4.4) |
-| Complete installation with Control **1.2.25**, the native display refresh, optional Ethernet components and existing webcam/reactor fixes. Allow the installation reboot and Canvas synchronization to finish. | For community firmware **V4.4/V4.4.1/V4.4.2/V4.4.3**. Cumulative app update; does not replace the native display. |
+| [Signed firmware](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.3/CC2_V4_4_3_STOCK_Control_1_2_25.zip.sig) · [Notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.3) | [Windows / macOS / Linux ZIP](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.26-V4.4/CC2-Control-1.2.26-Multiplatform-Update.zip) · [Signed panel update](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.26-V4.4/CC2-Control-1.2.26-V4.4.cc2update) |
+| The existing full firmware includes Control **1.2.25** and the native touchscreen refresh. Install it first when needed, then update the app. | Complete cumulative app/native-component update for the exact supported **V4.4.3** base. It does not replace the touchscreen or base firmware. |
 
-## New in CC2 Control 1.2.25 and firmware V4.4.3
+## Toward universal RFID: open, testable and extensible
+
+Use the Canvas reader beyond the original producer filter: **scan → review the
+material/colour/temperature preview → choose a Canvas slot → confirm**. Material
+assignment and physical filament presence are independent; insert the filament
+in the chosen inlet to mark it present. The reader stays in a collapsible menu
+on the right of Canvas Actions.
+
+**An Anycubic PETG tag and a Creality spool have been read on a real printer.**
+Other brands, tag technologies and data layouts still need testing. The aim is
+broader, potentially universal support for compatible tags—not a claim that every
+spool already works. The implementation is open to additional decoders, documented
+layouts and reproducible community tests. [Contribute](CONTRIBUTING.md) or
+[report a tag/format](https://github.com/Neme77/centauri-carbon-2-community/issues).
+
+One installer handles first activation, supported active updates and an already
+current installation. It preserves Canvas on an app-only update. On **CC2 non
+Combo**, or when Canvas is not currently available, the app, EXHAUST, camera and
+Connections update normally without waiting for an absent RFID reader. Rerun the
+same installer with Canvas connected if the accessory is added later.
+
+First RFID activation verifies the original Canvas backup and host protection,
+then follows full idle-printer reboot prompts for transfer and verification.
+**Do not interrupt power or reboot during transfer.** Original-Canvas restoration
+precedes host-guard removal. Protocol ACKs are distinct from physical flash
+readback. [English installation/recovery guide](docs/UPDATE_CC2.md) ·
+[Italian guide](docs/UPDATE_CC2.it.md).
+
+## Also new in 1.2.26
+
+- **Printing and cooling:** manual nozzle targets, profiles and backups align with the native 350 °C maximum; valid targets survive manual homing. Requested EXHAUST minimum applies to the current print, native cooling can demand more, and Automatic/pause/end/cancel/restart release it. Flap and minimum controls sit in the Chamber fan management group.
+- **Control and calibration:** load-cell functions have a dedicated Bed Levelling tab; full Rotation Distance sits below Pressure Advance, Input Shaper is grouped with Movement, material profiles use a compact full-width card, and Job details show live nozzle/bed/chamber temperatures. The approved Dashboard layout is retained.
+- **Meshes and runout:** active-mesh queries avoid serializing every saved profile on the motion thread; plate meshes can follow print bed temperature, including blended meshes. Continue a paused runout print from another suitable Canvas slot while preserving its tool mapping, with an optional material-only refill choice.
+- **Spools:** clicking outside the selection popup keeps the question and draft; explicit buttons and Escape remain available.
+- **Installer and telemetry:** one signed payload across PC and panel updates; exact native-profile verification, transactional app/RFID rebinding and rollback; lighter component parsing, queued UDS response recovery, fresh MQTT acquisition before scan/update and preservation of Connections/EXHAUST.
+
+**Credits:** **Neme77** for design, investigation, maintenance and extensive physical
+acceptance; **Noahwhite2014** for mesh/runout and retained print improvements;
+**OpenRFID / DnG-Crafts** for the Anycubic layout reference; **OpenCentauri/COSMOS**
+as a comparison reference; **mcknight89** and **Sangra6969** for requests/reports.
+Thanks to the contributors and translators listed below, and special thanks to
+**DamiBFryta** for extensive beta testing. Non-Combo routing has automated
+installation/rollback coverage; the physical acceptance was on a Combo printer.
+
+## Previously added in Control 1.2.25 and firmware V4.4.3
 
 The application update includes the controls and calibration tools below. The **native touchscreen refresh** is included in **full firmware V4.4.3**.
 
@@ -50,7 +94,7 @@ Actual 532 × 300 printer capture. Native functions and ELEGOO printer/Canvas ar
 
 > **Optional experiment · Canvas pull-back R4:** [**Download the Windows / Linux / macOS kit**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Canvas-Pullback-Experimental-R4.zip). Extends the configurable limit up to 1000 mm on qualified **V4.4.1/V4.4.2** with Control **1.2.21/1.2.22**. By **Noahwhite2014**. [Instructions](experimental/canvas-pullback-kit/README.en.md). Remove the component and reboot before app/firmware updates.
 
-**Updating from the CC2 Control panel?** [Download the signed `.cc2update` file](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.25-V4.4/CC2-Control-1.2.25-V4.4.cc2update) and select it in **Settings → Updates**. Follow every complete idle-printer reboot request, including component activation or recovery after a base-firmware reinstall. Canvas LEDs may briefly flash red during Ethernet activation while native services realign; wait for Canvas to reconnect before printing.
+**Updating from the panel?** Use **Settings → Updates** or the signed 1.2.26 download above. Follow the installation guide and every full idle-printer reboot prompt. Canvas may flash red while native services stop for transfer; wait for verification before printing.
 
 [Documentation](docs/README.md) · [Downloads](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Screenshots](docs/SCREENSHOTS.md)
 

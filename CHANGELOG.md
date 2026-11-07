@@ -545,3 +545,6 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 [V4.1 / CC2 Control 1.1.25]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.1
 
 [CC2 Control 1.2.22]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4
+
+[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.26-V4.4...HEAD
+[CC2 Control 1.2.26]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.26-V4.4

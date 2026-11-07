@@ -31,3 +31,6 @@ experimental/firmware-port/network44-manifest.json -text
 experimental/firmware-port/cc2_community_release_public.pem -text
 
 experimental/native-display/thermal.awk text eol=lf
+
+# Signed catalogs are binary even when their signature contains no NUL byte.
+*.cc2catalog -text
