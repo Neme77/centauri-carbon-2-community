@@ -398,6 +398,10 @@ load that comes too late leaves the side mesh in use and is reported as `missed`
 
 Endpoints (all changes are `POST` with a text body, one field per line, and need `X-CC2-Request: 1`):
 
+- `GET /api/mesh` returns the printer's active mesh (`profile_name`, `mesh_min`, `mesh_max` and the measured
+  `probed_matrix`; not the interpolated `mesh_matrix`) and, under `profiles`, the side slots `default`, `default1` and `ADAPTIVE` read from
+  `autosave.cfg`. It never asks the printer for `{"bed_mesh":null}`: the firmware serialises every stored
+  profile on its motion thread, which during a print can end in "MCU 'mcu' shutdown: Timer too close".
 - `GET /api/plates` returns the library, which plate is mounted, whether its Z offset has been applied
   (`z_applied`) and the value applied with the installed nozzle (`z_effective`), a mount waiting for the
   printer restart, the last mount result (`mounted`, `verify_failed`, `reboot_failed`), the printer's active
@@ -406,6 +410,22 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   nozzles. Per plate it tells whether the measurement it mounts with (`measure`) is the one now saved for
   its side (`in_printer`); per measurement its temperature, nozzle, date, mesh and whether it is the side
   slot (`slot`) or stored in the printer as its own profile (`profile`).
+- `/api/plates/match` (`on|off`, off by default) matches the mesh to the bed temperature of prints started
+  elsewhere (slicer, touchscreen; #296). A new print on the mounted plate waits for its bed target and gets
+  the nearest blended mesh in printer memory, or else the nearest usable measurement (then the selected
+  nozzle, the side slot's, the newest), loaded like a measurement chosen in the print dialog; a print CC2
+  Control started keeps the dialog's choice. With it on, CC2 Control writes up to 4 blended profiles
+  `cc2b_<plate>_<temp>` for the mounted plate into `autosave.cfg` while the printer is idle, on 5 °C steps
+  where the nearest mesh would be furthest off (largest point difference first), each point linear between
+  the two measurements around it, same grid only, never beyond the measured range. A blend is used only
+  once a `bed_mesh.profiles` query shows it in memory with exactly those points, i.e. after the next
+  printer restart; `/api/plates/blends/restart` (empty body) restarts the printer for that when blends wait.
+  Turned off, CC2 Control takes every `cc2b_` profile out of `autosave.cfg` again while the printer is idle
+  (the printer keeps any it loaded until its next restart, unused).
+  `GET /api/plates` reports `match` (`enabled`, `result` of the latest print: `armed`, `armed_blend`,
+  `slot`, `off`, `no_measurement`, `no_bed_target`; `blend_temp` of a blend in use; `blends`: `state`
+  `off`, `too_few`, `planned`, `written`, `ready` or `write_failed`, and `temps` with `live`) and
+  `print_mesh.source` (`dialog` or `auto`).
 - `/api/plates/save` (`A|B`, name, Z, temperature, nozzle; the last two optional, 60 °C and none) stores the
   mesh the printer keeps for that side as a new plate with that measurement. The slot in `autosave.cfg` and
   in printer memory must agree.

@@ -75,6 +75,7 @@ typedef struct {
     char current[PLATE_ID_LEN + 1];
     char pending[PLATE_ID_LEN + 1]; /* mesh written, waiting for the printer restart */
     char nozzle[PLATE_ID_LEN + 1];  /* the selected nozzle, "" for none */
+    int match;                      /* match the mesh to every print's bed temperature (#296) */
     plate_entry plates[PLATES_MAX];
     plate_measure measures[PLATE_MEASURES_MAX];
     plate_nozzle nozzles[PLATE_NOZZLES_MAX];
@@ -564,7 +565,11 @@ static int plates_json_params(const char *obj, const char *end, plate_mesh *m) {
 /* 1 slot in memory, 0 absent from memory, -1 query failed. Memory carries no offset. */
 static const char plates_profiles_query[] =
     "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":[\"profiles\"]}}}\003";
+static int plates_memory_profile_reply(const char *name,plate_mesh *mesh,const char *reply,size_t length);
 static int plates_memory_reply(char side,plate_mesh *mesh,const char *reply,size_t length) {
+    return plates_memory_profile_reply(plate_slot(side),mesh,reply,length);
+}
+static int plates_memory_profile_reply(const char *name,plate_mesh *mesh,const char *reply,size_t length) {
     const char *end = reply + length, *root = json_skip_space(reply, end), *root_end, *e1, *e2, *e3, *e4, *e5, *e6;
     int found = -1;
     if (root < end && *root == '{' && (root_end = json_container_end(root, end))) {
@@ -572,7 +577,7 @@ static int plates_memory_reply(char side,plate_mesh *mesh,const char *reply,size
         const char *status = result ? json_member_object(result, e1, "status", '{', &e2) : NULL;
         const char *bed = status ? json_member_object(status, e2, "bed_mesh", '{', &e3) : NULL;
         const char *profiles = bed ? json_member_object(bed, e3, "profiles", '{', &e4) : NULL;
-        const char *slot = profiles ? json_member_object(profiles, e4, plate_slot(side), '{', &e5) : NULL;
+        const char *slot = profiles ? json_member_object(profiles, e4, name, '{', &e5) : NULL;
         const char *params = slot ? json_member_object(slot, e5, "mesh_params", '{', &e6) : NULL;
         const char *points = slot ? json_member(slot, e5, "points") : NULL;
         memset(mesh, 0, sizeof(*mesh));
@@ -786,7 +791,8 @@ static char *plates_encode(const plate_store *store, size_t *length) {
         if (i) json_builder_printf(&b, ",");
         plates_measure_json(&b, &store->measures[i], 1, -1, -1);
     }
-    json_builder_printf(&b, "]}\n");
+    /* Written only when on, so a library with matching off stays readable by older restores. */
+    json_builder_printf(&b, store->match ? "],\"match_temperature\":true}\n" : "]}\n");
     if (b.failed) { free(b.data); return NULL; }
     *length = b.length;
     return b.data;
@@ -978,6 +984,8 @@ static void plates_load(void) {
                 memcpy(plates.plates[i].measure, plates.measures[i].id, sizeof(plates.plates[i].measure));
             }
         }
+        const char *match = json_member(root, root_end, "match_temperature");
+        plates.match = match && root_end - match >= 4 && !memcmp(match, "true", 4);
         ok = ok && plates_consistent();
     }
     free(text);
@@ -1058,13 +1066,36 @@ static int plates_fields(const char *body, size_t length, char fields[][PLATE_NA
 typedef struct {int fd,connecting,id;size_t sent,used;long long deadline;char request[512];char *buffer;} plates_exchange;
 static struct {
     int state; /* 0 off, 1 waiting for the print to start, 2 printing before the first layer */
-    int layer_reset, loads;
-    char measure[PLATE_ID_LEN + 1], profile[32], slot[16];
+    int layer_reset, loads; /* loads: requests the printer answered */
+    int failures, reply_wait; /* requests that got no answer; the request in flight was fully written */
+    char measure[PLATE_ID_LEN + 1], profile[48], slot[16];
     long long armed, sent;
     plates_exchange x;
-} plates_late = {.x = {.fd = -1}};
+    const char *source; /* "dialog" or "auto" (#296) */
+    int blend_temp;     /* a blended profile's temperature, 0 for a measurement */
+    plates_exchange q;  /* asks for the layer when telemetry has none (see plates_late_layer) */
+    long long layer0_at, asked; /* when the printer last answered layer 0 for this file; when last asked */
+} plates_late = {.x = {.fd = -1}, .source = "", .q = {.fd = -1}};
 /* "", "loaded", "missed", "adaptive", "failed", "not_started" or "ended". */
 static const char *plates_late_result = "";
+/* Matching the mesh to the bed temperature of prints started elsewhere (#296): 0 no print,
+ * 1 a new print waiting for its bed target, 2 decided. */
+static struct { int phase; long long started; const char *result; } plates_auto = {0, 0, ""};
+static int plates_match_enabled(void);
+/* Blended meshes between a plate's measurements (#296), see plates_blends_tick. */
+#define PLATE_BLEND_MAX 4
+#define PLATE_BLEND_PREFIX "cc2b_"
+typedef struct { int temp; char name[40]; plate_mesh mesh; int live; } plate_blend;
+static struct {
+    char plate[PLATE_ID_LEN + 1];
+    int count, planned; /* planned: the plan below is for `plate` and the measurements in `sig` */
+    unsigned long long sig;
+    plate_blend b[PLATE_BLEND_MAX];
+    const char *state;  /* "", "off", "too_few", "planned", "written", "ready", "write_failed" */
+    long long next_ms;
+    plates_exchange x;  /* the memory check */
+} plates_blends = {.state = "", .x = {.fd = -1}};
+static int plates_match_save(int on);
 
 static void plates_get_response(int fd) {
     size_t file_length = 0;
@@ -1096,10 +1127,15 @@ static void plates_get_response(int fd) {
         plates_cal.measure, plates_cal.result, plates_cal.error);
     json_builder_string(&b, plates_cal.detail);
     if (have_bed) json_builder_printf(&b, ",\"bed\":%.1f}", bed); else json_builder_printf(&b, ",\"bed\":null}");
-    json_builder_printf(&b, ",\"print_mesh\":{\"state\":\"%s\",\"measure\":\"%s\",\"result\":\"%s\"},"
-        "\"slots\":{\"A\":\"%s\",\"B\":\"%s\"},\"nozzles\":[",
+    json_builder_printf(&b, ",\"print_mesh\":{\"state\":\"%s\",\"measure\":\"%s\",\"result\":\"%s\",\"source\":\"%s\"},"
+        "\"match\":{\"enabled\":%s,\"result\":\"%s\",\"blend_temp\":%d,\"blends\":{\"state\":\"%s\",\"temps\":[",
         plates_late.state == 1 ? "waiting" : plates_late.state == 2 ? "active" : "off", plates_late.measure,
-        plates_late_result, present[0] < 0 ? "unreadable" : present[0] ? "mesh" : "empty",
+        plates_late_result, plates_late.source, plates_match_enabled() ? "true" : "false", plates_auto.result,
+        plates_late.blend_temp, plates_blends.state);
+    for (int i = 0; i < plates_blends.count; ++i)
+        json_builder_printf(&b, "%s{\"temp\":%d,\"live\":%s}", i ? "," : "", plates_blends.b[i].temp, plates_blends.b[i].live ? "true" : "false");
+    json_builder_printf(&b, "]}},\"slots\":{\"A\":\"%s\",\"B\":\"%s\"},\"nozzles\":[",
+        present[0] < 0 ? "unreadable" : present[0] ? "mesh" : "empty",
         present[1] < 0 ? "unreadable" : present[1] ? "mesh" : "empty");
     for (int i = 0; i < plates.nozzle_count; ++i) {
         if (i) json_builder_printf(&b, ",");
@@ -1423,6 +1459,15 @@ static void plates_delete_response(int fd, const mqtt_client *mqtt, const char *
     if (was_current) plates_result = "";
     if (!plates_printer_ready(mqtt)) for (int i = 0; i < dropped; ++i) plates_drop_profile(removed[i]);
     plates_reply(fd, 200, "{\"deleted\":true}\n");
+}
+
+/* on|off: match the mesh to the bed temperature of prints started elsewhere (#296). */
+static void plates_match_response(int fd, const char *body, size_t length) {
+    int on = length == 2 && !memcmp(body, "on", 2), off = length == 3 && !memcmp(body, "off", 3);
+    if (!on && !off) { plates_fail(fd, 400, "Use on or off"); return; }
+    if (!plates_available) { plates_fail(fd, 503, plates_error); return; }
+    if (plates_match_save(on) != 0) { plates_fail(fd, 500, "Cannot save the plate library"); return; }
+    plates_reply(fd, 200, on ? "{\"ok\":true,\"enabled\":true}\n" : "{\"ok\":true,\"enabled\":false}\n");
 }
 
 /* Forget which plate is mounted; the printer keeps its mesh and offset. */
@@ -1763,9 +1808,13 @@ static void plates_background_failed(long long now){
 /* ---- the measurement of a print ------------------------------------------------- */
 
 #define PLATES_LATE_LOADS 8
+#define PLATES_LATE_FAILURES 4
+/* The printer queues a request behind a running wait (heating, a soak) and answers it once the
+ * request has run, so a written load waits this long for its reply. */
+#define PLATES_LATE_REPLY_MS (10 * 60000)
 static int plates_late_active(void) { return plates_late.x.fd >= 0; }
 static void plates_late_finish(const char *result) {
-    plates_exchange_close(&plates_late.x);
+    plates_exchange_close(&plates_late.x); plates_exchange_close(&plates_late.q); plates_late.layer0_at = 0;
     if (plates_late.state) fprintf(stderr, "Plate mesh %s for this print: %s after %d load(s)\n", plates_late.profile, result, plates_late.loads);
     plates_late.state = 0; plates_late_result = result;
 }
@@ -1775,6 +1824,40 @@ static void plates_late_finish(const char *result) {
  * the slot is the active mesh before the first layer, the chosen measurement's
  * profile is loaded instead. The firmware runs it between file lines, before the
  * moves that follow, and keeps every request it receives, so loads are few. */
+/* The printer pushes print_stats.info only when it changes: after a restart, or when the last
+ * print also ended on layer 0, a new print's layer 0 is never pushed, and the file change has
+ * cleared the old count. Then CC2 Control asks for it: an answer for this same file reading layer
+ * 0 (or none yet) is the proof a load needs, trusted for PLATES_LATE_LAYER_MS. */
+#define PLATES_LATE_LAYER_MS 5000
+static const char plates_layer_query[] =
+    "{\"id\":203,\"method\":\"objects/query\",\"params\":{\"objects\":{\"print_stats\":[\"filename\",\"info\"]}}}\003";
+static int plates_layer_reply(const char *reply, size_t length) { /* 1 layer 0 of the current file, 0 not, -1 unknown */
+    const char *end = reply + length, *root = json_skip_space(reply, end), *e0, *e1, *e2, *e3, *e4, *name;
+    int count = 0; double layer = 0;
+    if (root >= end || *root != '{' || !(e0 = json_container_end(root, end))) return -1;
+    const char *result = json_member_object(root, e0, "result", '{', &e1);
+    const char *status = result ? json_member_object(result, e1, "status", '{', &e2) : NULL;
+    const char *ps = status ? json_member_object(status, e2, "print_stats", '{', &e3) : NULL;
+    if (!ps || !telemetry.have_filename || !json_member_raw_string(ps, e3, "filename", &name, &count) ||
+        (size_t)count != strlen(telemetry.filename) || memcmp(name, telemetry.filename, (size_t)count)) return -1;
+    const char *info = json_member_object(ps, e3, "info", '{', &e4), *v = info ? json_member(info, e4, "current_layer") : NULL;
+    if (!v) return -1;
+    if (end - v >= 4 && !memcmp(v, "null", 4)) return 1;
+    if (!plates_json_double(v, e4, &layer, NULL)) return -1;
+    return layer == 0 ? 1 : 0;
+}
+static void plates_late_layer(long long now) {
+    if (plates_late.q.fd < 0 && now - plates_late.asked < 2000) return;
+    if (plates_late.q.fd < 0) plates_late.asked = now;
+    char *reply = NULL; size_t length = 0;
+    int result = plates_exchange_step(&plates_late.q, plates_layer_query, &reply, &length);
+    if (result > 0) {
+        int zero = plates_layer_reply(reply, length);
+        if (zero == 1) plates_late.layer0_at = now; else if (zero == 0) plates_late.layer0_at = 0;
+    }
+    free(reply);
+}
+
 static void plates_late_tick(void) {
     if (!plates_late.state) return;
     long long now = monotonic_ms();
@@ -1791,29 +1874,46 @@ static void plates_late_tick(void) {
     if (!state || !profile) return; /* the stream reconnects; the print start waits for nothing */
     /* A new print resets the layer to 0, so a stale count from the last print is not the first layer. */
     if (have_layer && layer < 1) plates_late.layer_reset = 1;
+    if (!have_layer && !strcmp(state, "printing")) plates_late_layer(now);
+    int asked0 = !have_layer && plates_late.layer0_at && now - plates_late.layer0_at < PLATES_LATE_LAYER_MS;
+    if (asked0) plates_late.layer_reset = 1;
     if (plates_late.layer_reset && have_layer && layer >= 1) { plates_late_finish(ours ? "loaded" : "missed"); return; }
     if (!strcmp(profile, "ADAPTIVE")) { plates_late_finish("adaptive"); return; }
     /* A load needs positive proof that the first layer has not begun: fresh telemetry reading
-     * layer 0 of this print right now. A stream that reconnects during a print, or a count that
+     * layer 0 of this print right now, or a fresh answer saying so (plates_late_layer). A stream that reconnects during a print, or a count that
      * never showed this print's 0, therefore never loads. */
-    int startup = plates_late.layer_reset && have_layer && layer < 1 && !strcmp(state, "printing");
+    int startup = plates_late.layer_reset && ((have_layer && layer < 1) || asked0) && !strcmp(state, "printing");
     int slot = !strcmp(profile, plates_late.slot);
     if (plates_late.x.fd >= 0 && !startup && plates_late.x.sent < strlen(plates_late.x.request)) {
         plates_exchange_close(&plates_late.x); /* not sent yet: the window closed meanwhile */
         return;
     }
+    /* One load at a time. The print start loads the slot more than once (at the start of the file
+     * and again at G180 S7, after its waits), so whenever the slot is active again a new load
+     * follows the answered one; a load written during a wait runs, and is answered, after it. */
     if (plates_late.x.fd < 0) { /* a load already sent finishes even if the push about it came first */
-        if (slot && startup && plates_late.loads >= PLATES_LATE_LOADS && now - plates_late.sent >= 5000)
-            plates_late_finish("failed");
-        if (!slot || !startup || plates_late.loads >= PLATES_LATE_LOADS || now - plates_late.sent < 1500) return;
+        if (slot && startup && (plates_late.loads >= PLATES_LATE_LOADS || plates_late.failures >= PLATES_LATE_FAILURES) &&
+            now - plates_late.sent >= 5000)
+            { plates_late_finish("failed"); return; }
+        if (!slot || !startup || plates_late.loads >= PLATES_LATE_LOADS || plates_late.failures >= PLATES_LATE_FAILURES ||
+            now - plates_late.sent < 1500) return;
+        plates_late.reply_wait = 0;
     }
     char query[192], *reply = NULL; size_t length = 0;
     snprintf(query, sizeof(query), "{\"id\":204,\"method\":\"gcode/script\",\"params\":{\"script\":\"BED_MESH_PROFILE LOAD=%s\"}}\003",
              plates_late.profile);
     int result = plates_exchange_step(&plates_late.x, query, &reply, &length);
-    if (!result) return;
-    plates_late.loads++; plates_late.sent = now;
-    if (result > 0 && !plates_reply_ok(reply, length)) fprintf(stderr, "Plate mesh %s was refused\n", plates_late.profile);
+    if (!result) {
+        /* Written: wait for the answer until one deadline, fixed now and never extended. */
+        if (!plates_late.reply_wait && plates_late.x.fd >= 0 && plates_late.x.sent == strlen(plates_late.x.request)) {
+            plates_late.x.deadline = now + PLATES_LATE_REPLY_MS; plates_late.reply_wait = 1;
+        }
+        return;
+    }
+    plates_late.sent = now;
+    if (result < 0) { plates_late.failures++; fprintf(stderr, "Plate mesh %s: no answer from the printer\n", plates_late.profile); return; }
+    plates_late.loads++;
+    if (!plates_reply_ok(reply, length)) fprintf(stderr, "Plate mesh %s was refused\n", plates_late.profile);
     free(reply);
 }
 
@@ -1858,19 +1958,348 @@ static const char *plates_print_prepare(const mqtt_client *mqtt, char side, int 
     return NULL;
 }
 
-/* The print was accepted: watch its start for the measurement chosen in plates_print_prepare. */
-static void plates_print_arm(const char *late, char side) {
+/* Watch a print start for measurement `id` of the mounted plate (see plates_late_tick), or, with
+ * `blend` set, for that blended profile (#296; its temperature is `blend_temp`). */
+static void plates_late_arm_profile(const char *id, const char *blend, int blend_temp, char side, const char *source) {
     if (plates_late.state) plates_late_finish("ended");
     plates_exchange_close(&plates_late.x);
-    plates_late_result = "";
-    const plate_measure *m = late && *late ? measure_find(late) : NULL;
-    if (!m) return;
-    memcpy(plates_late.measure, m->id, sizeof(plates_late.measure));
-    plate_profile_name(plates_late.profile, sizeof(plates_late.profile), m);
+    plates_late_result = ""; plates_late.source = ""; plates_late.blend_temp = 0;
+    const plate_measure *m = id && *id ? measure_find(id) : NULL;
+    if (!m && !(blend && *blend)) return;
+    if (blend && *blend) {
+        plates_late.measure[0] = 0; plates_late.blend_temp = blend_temp;
+        snprintf(plates_late.profile, sizeof(plates_late.profile), "%s", blend);
+    } else {
+        memcpy(plates_late.measure, m->id, sizeof(plates_late.measure));
+        plate_profile_name(plates_late.profile, sizeof(plates_late.profile), m);
+    }
     snprintf(plates_late.slot, sizeof(plates_late.slot), "%s", plate_slot(side));
     plates_late.state = 1; plates_late.layer_reset = 0; plates_late.loads = 0;
-    plates_late.armed = monotonic_ms(); plates_late.sent = 0;
+    plates_late.failures = 0; plates_late.reply_wait = 0;
+    plates_exchange_close(&plates_late.q); plates_late.layer0_at = plates_late.asked = 0;
+    plates_late.armed = monotonic_ms(); plates_late.sent = 0; plates_late.source = source;
 }
+static void plates_late_arm(const char *id, char side, const char *source) { plates_late_arm_profile(id, NULL, 0, side, source); }
+
+/* The print was accepted: watch its start for the measurement chosen in plates_print_prepare. */
+static long long plates_dialog_ms = -1; /* when CC2 Control last started a print itself */
+static void plates_print_arm(const char *late, char side) {
+    plates_dialog_ms = monotonic_ms();
+    plates_late_arm(late, side, "dialog");
+}
+
+/* ---- blended meshes between measurements (#296) -------------------------------------
+ *
+ * The firmware only loads mesh profiles that are in autosave.cfg when it starts; nothing can hand
+ * it mesh points. So for the mounted plate, with matching on, CC2 Control writes up to
+ * PLATE_BLEND_MAX profiles "cc2b_<plate>_<temp>" between its measurements, where they help most
+ * (plate_blend_plan), each point linearly between the two measurements around it (same grid only;
+ * never beyond the measured range). Every stored profile is serialised whenever a client asks the
+ * firmware for the whole bed_mesh object, so the limit is small. They are written
+ * only while the printer is idle, and are used only once a query shows them in printer memory
+ * with exactly the planned points, i.e. after the printer's next restart; until then a print
+ * gets the nearest measurement. A firmware save before that restart drops them from the file;
+ * they are simply written again. */
+
+static int plate_grid_same(const plate_mesh *a, const plate_mesh *b) {
+    return a->x_count == b->x_count && a->y_count == b->y_count && a->x_pps == b->x_pps && a->y_pps == b->y_pps &&
+           !strcmp(a->algo, b->algo) && plate_close(a->min_x, b->min_x) && plate_close(a->max_x, b->max_x) &&
+           plate_close(a->min_y, b->min_y) && plate_close(a->max_y, b->max_y) && plate_close(a->tension, b->tension);
+}
+
+/* The plate's measurements by temperature, one per temperature (the newest). */
+static int plate_measures_by_temp(const plate_entry *p, const plate_measure *out[PLATE_MEASURES_MAX]) {
+    int n = 0;
+    for (int i = 0; i < plates.measure_count; ++i) {
+        const plate_measure *m = &plates.measures[i];
+        if (strcmp(m->plate, p->id)) continue;
+        int k = 0;
+        while (k < n && out[k]->temp < m->temp) k++;
+        if (k < n && out[k]->temp == m->temp) { if (m->measured > out[k]->measured) out[k] = m; continue; }
+        memmove(&out[k + 1], &out[k], (size_t)(n - k) * sizeof(out[0])); out[k] = m; n++;
+    }
+    return n;
+}
+
+/* How far apart two meshes are: the root mean square of their point differences, in mm. */
+static double plate_mesh_distance(const plate_mesh *a, const plate_mesh *b) {
+    double sum = 0; int n = a->x_count * a->y_count;
+    for (int k = 0; k < n; ++k) sum += (a->points[k] - b->points[k]) * (a->points[k] - b->points[k]);
+    return n ? sqrt(sum / n) : 0;
+}
+
+/* Fills `b` with the blends for plate p, coolest first; returns how many (0 with fewer than two
+ * measurements). Each pick goes where the nearest mesh would be furthest off: the span between
+ * neighbouring temperatures (measured or picked) whose measurements differ most per its share of
+ * their interval gets a blend at its middle, on a 5 C step, until PLATE_BLEND_MAX or until no span
+ * would be off by more than PLATE_BLEND_MIN_MM. Only measurements on the same grid are blended. */
+#define PLATE_BLEND_MIN_MM 0.003
+static int plate_blend_plan(const plate_entry *p, plate_blend b[PLATE_BLEND_MAX]) {
+    const plate_measure *m[PLATE_MEASURES_MAX];
+    int n = plate_measures_by_temp(p, m), count = 0, temps[PLATE_BLEND_MAX];
+    if (n < 2) return 0;
+    while (count < PLATE_BLEND_MAX) {
+        double worst = PLATE_BLEND_MIN_MM; int pick = -1, pair = -1;
+        for (int i = 0; i + 1 < n; ++i) {
+            if (!plate_grid_same(&m[i]->mesh, &m[i + 1]->mesh)) continue;
+            double apart = plate_mesh_distance(&m[i]->mesh, &m[i + 1]->mesh);
+            int lo = m[i]->temp;
+            for (;;) { /* each span of [m_i, m_i+1] cut by the picks so far */
+                int hi = m[i + 1]->temp;
+                for (int k = 0; k < count; ++k) if (temps[k] > lo && temps[k] < hi) hi = temps[k];
+                int mid = (int)floor((lo + hi) / 10.0 + 0.5) * 5;
+                double off = apart * (hi - lo) / (m[i + 1]->temp - m[i]->temp) / 2;
+                if (mid > lo && mid < hi && off > worst) { worst = off; pick = mid; pair = i; }
+                if (hi == m[i + 1]->temp) break;
+                lo = hi;
+            }
+        }
+        if (pick < 0) break;
+        (void)pair;
+        temps[count++] = pick;
+    }
+    for (int i = 1; i < count; ++i) /* coolest first */
+        for (int k = i; k > 0 && temps[k - 1] > temps[k]; --k) { int t = temps[k]; temps[k] = temps[k - 1]; temps[k - 1] = t; }
+    for (int j = 0; j < count; ++j) {
+        int t = temps[j], i = 0;
+        while (i + 2 < n && m[i + 1]->temp < t) i++;
+        plate_blend *x = &b[j];
+        double w = (double)(t - m[i]->temp) / (m[i + 1]->temp - m[i]->temp);
+        x->temp = t; x->live = 0; x->mesh = m[i]->mesh;
+        for (int k = 0; k < x->mesh.x_count * x->mesh.y_count; ++k)
+            x->mesh.points[k] = round(((1 - w) * m[i]->mesh.points[k] + w * m[i + 1]->mesh.points[k]) * 1e6) / 1e6;
+        x->mesh.offset = round(((1 - w) * m[i]->mesh.offset + w * m[i + 1]->mesh.offset) * 1e6) / 1e6;
+        snprintf(x->name, sizeof(x->name), PLATE_BLEND_PREFIX "%.16s_%d", p->id, t);
+    }
+    return count;
+}
+
+/* The file text without the [bed_mesh cc2b_...] sections not in the plan, and with every planned
+ * one present; NULL on an unknown format. A removed section takes the "#*#" lines just before it. */
+static char *autosave_with_blends(const char *text, size_t length, const plate_blend *b, int count, size_t *out_length) {
+    if (memchr(text, '\r', length) || memchr(text, '\0', length) || !strstr(text, AUTOSAVE_MARKER)) return NULL;
+    char *copy = malloc(length + 1); if (!copy) return NULL;
+    size_t used = 0; static const char head[] = "#*# [bed_mesh " PLATE_BLEND_PREFIX;
+    for (size_t pos = 0; pos < length;) {
+        size_t eol = autosave_line_end(text, length, pos), next = eol < length ? eol + 1 : length;
+        if (eol - pos > sizeof(head) - 1 && !memcmp(text + pos, head, sizeof(head) - 1) && text[eol - 1] == ']') {
+            char name[64]; size_t n = eol - pos - (sizeof("#*# [bed_mesh ") - 1) - 1;
+            int keep = 0;
+            if (n < sizeof(name)) {
+                memcpy(name, text + pos + sizeof("#*# [bed_mesh ") - 1, n); name[n] = 0;
+                for (int i = 0; i < count; ++i) if (!strcmp(name, b[i].name)) keep = 1;
+            }
+            if (!keep) {
+                /* with the separator lines before it (autosave_with_mesh appends two) */
+                while (used >= 4 && !memcmp(copy + used - 4, "#*#\n", 4) && (used == 4 || copy[used - 5] == '\n')) used -= 4;
+                while (next < length) { /* the section's key lines */
+                    size_t e = autosave_line_end(text, length, next);
+                    if (e - next < 5 || memcmp(text + next, "#*# ", 4) || text[next + 4] == '[') break;
+                    next = e < length ? e + 1 : length;
+                }
+                pos = next; continue;
+            }
+        }
+        memcpy(copy + used, text + pos, next - pos); used += next - pos; pos = next;
+    }
+    copy[used] = 0;
+    for (int i = 0; i < count; ++i) {
+        size_t n = 0; char *more = autosave_with_mesh(copy, used, b[i].name, &b[i].mesh, &n);
+        free(copy); if (!more) return NULL;
+        copy = more; used = n;
+    }
+    *out_length = used;
+    return copy;
+}
+
+/* 1 the file holds exactly the plan's blends, 0 not, -1 unreadable. */
+static int plates_blends_in_file(const plate_blend *b, int count) {
+    size_t length = 0, n = 0;
+    char *text = plates_read_file(printer_autosave_path, AUTOSAVE_FILE_MAX, &length);
+    if (!text) return -1;
+    char *wanted = autosave_with_blends(text, length, b, count, &n);
+    int same = wanted ? n == length && !memcmp(wanted, text, length) : -1;
+    free(wanted); free(text);
+    return same;
+}
+
+/* Writes the plan into the file, keeping every other byte; 0 written or already there. */
+static int plates_blends_write(const plate_blend *b, int count) {
+    size_t length = 0, n = 0, again_length = 0;
+    char *text = plates_read_file(printer_autosave_path, AUTOSAVE_FILE_MAX, &length);
+    if (!text) return -1;
+    char *wanted = autosave_with_blends(text, length, b, count, &n);
+    int result = -1;
+    if (wanted && n == length && !memcmp(wanted, text, length)) result = 0;
+    else if (wanted) {
+        char *again = plates_read_file(printer_autosave_path, AUTOSAVE_FILE_MAX, &again_length);
+        int unchanged = again && again_length == length && !memcmp(again, text, length); /* no save meanwhile */
+        free(again);
+        if (unchanged && plates_replace_file(printer_autosave_path, NULL, wanted, n, autosave_mode()) == 0) result = 0;
+    }
+    free(wanted); free(text);
+    return result;
+}
+
+/* The blend a print at bed target `target` should use, if one is closer than the nearest
+ * measurement `m` and in printer memory. */
+static const plate_blend *plates_blend_for(const plate_entry *p, double target, const plate_measure *m) {
+    if (!plates_blends.planned || strcmp(plates_blends.plate, p->id)) return NULL;
+    const plate_blend *best = NULL;
+    for (int i = 0; i < plates_blends.count; ++i) {
+        const plate_blend *x = &plates_blends.b[i];
+        if (x->live && (!best || fabs(x->temp - target) < fabs(best->temp - target))) best = x;
+    }
+    return best && (!m || fabs(best->temp - target) < fabs(m->temp - target)) ? best : NULL;
+}
+
+/* What the plan depends on: the plate's measurements (id, temperature, time, mesh). */
+static unsigned long long plate_blend_signature(const plate_entry *p) {
+    unsigned long long h = 1469598103934665603ULL;
+    for (int i = 0; i < plates.measure_count; ++i) {
+        const plate_measure *m = &plates.measures[i];
+        if (strcmp(m->plate, p->id)) continue;
+        const unsigned char *bytes[] = {(const unsigned char *)m->id, (const unsigned char *)&m->temp, (const unsigned char *)&m->measured,
+                                        (const unsigned char *)m->mesh.points};
+        size_t sizes[] = {strlen(m->id), sizeof(m->temp), sizeof(m->measured),
+                          (size_t)(m->mesh.x_count * m->mesh.y_count) * sizeof(double)};
+        for (int k = 0; k < 4; ++k) for (size_t j = 0; j < sizes[k]; ++j) { h ^= bytes[k][j]; h *= 1099511628211ULL; }
+    }
+    return h;
+}
+
+/* Main loop, idle only: keep the mounted plate's blends planned, written and checked in memory.
+ * Switched off, the written blends are taken out of the file again; the printer keeps the ones it
+ * loaded until its next restart, unused. */
+static void plates_blends_tick(const mqtt_client *mqtt) {
+    const plate_entry *p = plates_available && plates.current[0] && !plates.pending[0] ? plate_find(plates.current) : NULL;
+    if (!plates_match_enabled()) {
+        plates_exchange_close(&plates_blends.x);
+        if (plates_blends.planned) { plates_blends.planned = 0; plates_blends.count = 0; plates_blends.next_ms = 0; plates_blends.state = "off"; }
+        long long now = monotonic_ms();
+        if (now < plates_blends.next_ms || plates_printer_ready(mqtt) || plates_cal.stage || plates_late.state) return;
+        plates_blends.next_ms = now + 60000;
+        if (plates_blends_in_file(NULL, 0) == 0)
+            plates_blends.state = plates_blends_write(NULL, 0) == 0 ? "off" : "write_failed";
+        return;
+    }
+    if (!p) { plates_blends.state = "off"; plates_exchange_close(&plates_blends.x); return; }
+    unsigned long long sig = plate_blend_signature(p);
+    if (!plates_blends.planned || strcmp(plates_blends.plate, p->id) || plates_blends.sig != sig) {
+        plates_blends.sig = sig;
+        plates_exchange_close(&plates_blends.x);
+        memcpy(plates_blends.plate, p->id, sizeof(plates_blends.plate));
+        plates_blends.count = plate_blend_plan(p, plates_blends.b);
+        plates_blends.planned = 1; plates_blends.next_ms = 0;
+        plates_blends.state = plates_blends.count ? "planned" : "too_few"; /* written once the printer is idle */
+    }
+    if (!plates_blends.count) return;
+    long long now = monotonic_ms();
+    if (plates_blends.x.fd < 0 && now < plates_blends.next_ms) return;
+    if (plates_printer_ready(mqtt) || plates_cal.stage || plates_late.state) { plates_exchange_close(&plates_blends.x); return; }
+    if (plates_blends.x.fd < 0) {
+        plates_blends.next_ms = now + 60000;
+        int in_file = plates_blends_in_file(plates_blends.b, plates_blends.count);
+        if (in_file < 0) { plates_blends.state = "write_failed"; return; }
+        if (!in_file) {
+            for (int i = 0; i < plates_blends.count; ++i) plates_blends.b[i].live = 0;
+            plates_blends.state = plates_blends_write(plates_blends.b, plates_blends.count) == 0 ? "written" : "write_failed";
+            return;
+        }
+        int all = 1; for (int i = 0; i < plates_blends.count; ++i) all &= plates_blends.b[i].live;
+        if (all) { plates_blends.state = "ready"; return; }
+    }
+    char *reply = NULL; size_t length = 0;
+    int result = plates_exchange_step(&plates_blends.x, plates_profiles_query, &reply, &length);
+    if (!result) return;
+    if (result > 0) {
+        int all = 1;
+        for (int i = 0; i < plates_blends.count; ++i) {
+            plate_mesh memory; plate_blend *x = &plates_blends.b[i];
+            x->live = plates_memory_profile_reply(x->name, &memory, reply, length) == 1 && plate_mesh_equal(&memory, &x->mesh, 0);
+            all &= x->live;
+        }
+        plates_blends.state = all ? "ready" : "written";
+    }
+    free(reply);
+}
+
+/* POST /api/plates/blends/restart: restart the printer so it loads the written blends. */
+static void plates_blends_restart_response(int fd, const mqtt_client *mqtt) {
+    const char *reason;
+    if (!plates_blends.count || strcmp(plates_blends.state, "written")) { plates_fail(fd, 409, "No blended meshes are waiting for a restart"); return; }
+    if ((reason = plates_printer_ready(mqtt))) { plates_fail(fd, 409, reason); return; }
+    if (plates_blends_in_file(plates_blends.b, plates_blends.count) != 1) { plates_fail(fd, 409, "The blended meshes are not written yet"); return; }
+    plates_mqtt = mqtt; reboot_guard = plates_reboot_guard;
+    reboot_pending = 1; reboot_launched = 0; reboot_due = recovery_clock() + 2; reboot_error = "none";
+    plates_reply(fd, 202, "{\"accepted\":true,\"reboot\":true}\n");
+}
+
+/* ---- matching the mesh to a print's bed temperature (#296) ---------------------- */
+
+/* Prints started elsewhere (the slicer, the touchscreen) load the side slot, which holds
+ * whichever measurement went in last. With matching on, a new print on the mounted plate
+ * gets the usable measurement nearest to its bed target, loaded the same way as one chosen
+ * in the print dialog. A print CC2 Control started itself keeps the dialog's choice. */
+/* The setting is kept in the plate library file, so it follows --plates and its backups. */
+static int plates_match_enabled(void) { return plates_available && plates.match; }
+static int plates_match_save(int on) {
+    if (!plates_available) return -1;
+    int old = plates.match;
+    plates.match = on ? 1 : 0;
+    if (plates_save() != 0) { plates.match = old; return -1; }
+    return 0;
+}
+
+/* The plate's measurement a print at bed temperature `temp` should use: nearest temperature,
+ * then the selected nozzle, then the one in the side slot, then the newest. Only measurements
+ * a print can load (the slot's or one with its own printer profile) count. */
+static const plate_measure *plates_nearest(const plate_entry *p, double temp) {
+    const plate_measure *slot = plates_slot_measure(p->side), *best = NULL;
+    double best_rank[4] = {0};
+    for (int i = 0; i < plates.measure_count; ++i) {
+        const plate_measure *m = &plates.measures[i];
+        if (strcmp(m->plate, p->id) || (m != slot && !plates_has_profile(m))) continue;
+        double rank[4] = {fabs(m->temp - temp), strcmp(m->nozzle, plates.nozzle) ? 1 : 0, m == slot ? 0 : 1, -(double)m->measured};
+        int better = !best;
+        for (int k = 0; !better && k < 4; ++k) { if (rank[k] != best_rank[k]) { better = rank[k] < best_rank[k]; break; } }
+        if (better) { best = m; memcpy(best_rank, rank, sizeof(rank)); }
+    }
+    return best;
+}
+
+#define PLATES_AUTO_WAIT_MS (15 * 60000) /* a print start that sets no bed target in this time is left alone */
+static void plates_auto_tick(void) {
+    const char *state = uds_print_state(&telemetry);
+    if (!state) return;
+    int printing = !strcmp(state, "printing") || !strcmp(state, "paused");
+    long long now = monotonic_ms();
+    if (!printing) { plates_auto.phase = 0; return; }
+    if (plates_auto.phase == 0) {
+        plates_auto.phase = 1; plates_auto.started = now; plates_auto.result = "";
+        /* CC2 Control started this one: the dialog already chose. */
+        if (plates_late.state || (plates_dialog_ms >= 0 && now - plates_dialog_ms < 180000)) { plates_auto.phase = 2; return; }
+    }
+    if (plates_auto.phase != 1) return;
+    const plate_entry *p = plates_available && plates.current[0] && !plates.pending[0] ? plate_find(plates.current) : NULL;
+    if (!plates_match_enabled() || !p || plates_cal.stage) { plates_auto.phase = 2; plates_auto.result = "off"; return; }
+    /* No layer check here: plates_late_tick only loads with positive proof that this print is still
+     * before its first layer, so a print first seen mid-way (a CC2 Control restart) is never touched. */
+    double target = 0;
+    if (!uds_value(&telemetry, U_BG, &target) || target < PLATE_TEMP_MIN) {
+        if (now - plates_auto.started > PLATES_AUTO_WAIT_MS) { plates_auto.phase = 2; plates_auto.result = "no_bed_target"; }
+        return;
+    }
+    plates_auto.phase = 2;
+    const plate_measure *m = plates_nearest(p, target);
+    const plate_blend *blend = plates_blend_for(p, target, m);
+    if (blend) { plates_late_arm_profile(NULL, blend->name, blend->temp, p->side, "auto"); plates_auto.result = "armed_blend"; return; }
+    if (!m) { plates_auto.result = "no_measurement"; return; }
+    if (m == plates_slot_measure(p->side)) { plates_auto.result = "slot"; return; } /* the print start loads it anyway */
+    plates_late_arm(m->id, p->side, "auto");
+    plates_auto.result = "armed";
+}
+
 
 /* ---- bed mesh calibration ---------------------------------------------------------- */
 
@@ -2130,7 +2559,9 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
  * keep the mounted plate's Z offset applied while the printer is idle and load the
  * measurement chosen for a print. */
 static void plates_tick(const mqtt_client *mqtt) {
+    plates_auto_tick();
     plates_late_tick();
+    plates_blends_tick(mqtt);
     if (telemetry.connections != plates_seen_connections) {
         plates_seen_connections = telemetry.connections;
         if (!plates_service_unchanged()){

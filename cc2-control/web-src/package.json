@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:rfid": "node preview/test-rfid.mjs",
+    "test:fan-layout": "node preview/test-fan-layout.mjs",
     "dev": "vite",
     "build": "vite build",
     "check": "tsc -p . && biome check .",
@@ -22,11 +24,11 @@
     "test:filaments": "node preview/test-filament-mapping.mjs",
     "test:mesh-selector": "node preview/test-mesh-selector.mjs",
     "test:plates": "node preview/test-bed-plates.mjs",
-    "test:spools": "node preview/test-spools.mjs",
+    "test:spools": "node preview/test-spools.mjs && node preview/test-spool-popup.mjs",
     "test:calibration": "node preview/test-mesh-calibration.mjs",
     "test:job-objects": "node preview/test-job-objects.mjs",
     "test:pid": "node preview/test-pid.mjs",
-    "test:print-temperatures": "node preview/test-print-temperatures.mjs",
+    "test:print-temperatures": "node preview/test-print-temperatures.mjs && node preview/test-nozzle-target-limits.mjs",
     "test:printer-reports": "node preview/test-printer-reports.mjs",
     "test:control-calibrations": "node preview/test-control-calibrations.mjs",
     "test:calibration-tools": "node preview/test-calibration-tools.mjs",
@@ -64,7 +66,9 @@
     "test:load-cell-guide": "node preview/test-load-cell-guide.mjs",
     "test:rotation-restore": "node preview/test-rotation-restore.mjs",
     "test:pressure-advance": "node preview/test-pressure-advance.mjs",
-    "test:quick-maintenance": "node preview/test-quick-maintenance.mjs"
+    "test:quick-maintenance": "node preview/test-quick-maintenance.mjs",
+    "test:control-restyle": "node preview/test-control-restyle.mjs",
+    "test:runout": "node preview/test-runout-continue.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

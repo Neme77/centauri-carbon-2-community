@@ -1,6 +1,7 @@
 import { ExternalFilament } from './external-filament'
 import { BedDrying } from './bed-drying'
 import { ExhaustGrille } from './exhaust-grille'
+import { CavityFanFloor } from './cavity-fan-floor'
 import { CalibrationTools } from './calibration-tools'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ArrowBigDown, ArrowBigLeft, ArrowBigRight, ArrowBigUp } from 'lucide-preact'
@@ -17,6 +18,7 @@ import { t, tpl } from '@/lib/i18n'
 import { store } from '@/lib/store'
 import { stateText } from '@/lib/machine'
 import { num } from '@/lib/format'
+import { NOZZLE_TARGET_MAX } from '@/lib/thermal-limits'
 import { calibrationFocus, controlFocus } from '@/lib/quick'
 import { usePoll } from '@/lib/poll'
 import { presets, printer, refreshPrinter, savePresets, view, zoffset } from '@/lib/state'
@@ -25,7 +27,7 @@ const STEPS = [0.1, 1, 10, 30, 50]
 const I = { size: 20, strokeWidth: 1 }
 const B = { size: 22, strokeWidth: 1 }
 
-const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
+const Movement = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const [step, setStep] = useState(0.1)
   const can = (axis: string) => v.idle && v.homed.includes(axis)
   const move = (axis: string, dir: number) => control(`move:${axis}:${dir * step}`)
@@ -42,7 +44,7 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
   }
   const pad = 'min-h-11 text-xl'
   return (
-    <Card class="cc2-movement cc2-xl:row-span-2">
+    <Card class="cc2-movement">
       <CardHead icon="control" title="control.movement" />
       <Button wide class="min-h-12" disabled={!v.idle || homing} onClick={() => home('ALL')}>
         <Icon n="home" />
@@ -120,18 +122,20 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
           </div>
         </div>
       </div>
-      <small class="text-muted">{t('control.step_size')}</small>
-      <div class="my-2 flex gap-2">
-        {STEPS.map(s => (
-          <Button
-            key={s}
-            variant={s === step ? 'active' : 'default'}
-            class="min-w-0 flex-1 whitespace-nowrap px-1 text-xs"
-            onClick={() => setStep(s)}
-          >
-            {s} mm
-          </Button>
-        ))}
+      <div class="cc2-movement-step">
+        <small class="text-muted">{t('control.step_size')}</small>
+        <div class="my-2 flex gap-2">
+          {STEPS.map(s => (
+            <Button
+              key={s}
+              variant={s === step ? 'active' : 'default'}
+              class="min-w-0 flex-1 whitespace-nowrap px-1 text-xs"
+              onClick={() => setStep(s)}
+            >
+              {s} mm
+            </Button>
+          ))}
+        </div>
       </div>
       {!(v.idle && ['x', 'y', 'z'].every(a => v.homed.includes(a))) && (
         <Notice>{t('control.motion_requires_homing_commands')}</Notice>
@@ -158,6 +162,7 @@ const Movement = ({ v }: { v: ReturnType<typeof view> }) => {
           })}
         </div>
       </div>
+      <InputShaper d={d} v={v} embedded />
     </Card>
   )
 }
@@ -195,7 +200,7 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
       !bed.trim() ||
       !Number.isFinite(n) ||
       n < 0 ||
-      n > 300 ||
+      n > NOZZLE_TARGET_MAX ||
       !Number.isFinite(b) ||
       b < 0 ||
       b > 120
@@ -204,11 +209,11 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
     await control(`heaters:set:${n}:${b}`)
   }
   return (
-    <Card>
+    <Card class="cc2-temperatures">
       <CardHead icon="temp" title="common.temperatures" />
       {(
         [
-          ['red', 'common.nozzle', d?.extruder, nozzle, setNozzle, 300],
+          ['red', 'common.nozzle', d?.extruder, nozzle, setNozzle, NOZZLE_TARGET_MAX],
           ['blue', 'common.heated_bed', d?.heater_bed, bed, setBed, 120],
         ] as const
       ).map(([dot, label, heater, val, set, max]) => (
@@ -276,7 +281,7 @@ const Temperatures = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   )
 }
 
-const InputShaper = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
+const InputShaper = ({ d, v, embedded = false }: { d: any; v: ReturnType<typeof view>; embedded?: boolean }) => {
   const [status, setStatus] = useState<any>(null)
   const [sending, setSending] = useState(false)
   const lock = useRef(false)
@@ -313,15 +318,15 @@ const InputShaper = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
     }
   }
   const own = status?.command === 'SHAPER_CALIBRATE'
-  return (
-    <Card class="cc2-shaper">
+  const content = (
+    <>
       <CardHead icon="settings" title="control.shaper_title" />
       <p class="mb-3 text-xs text-muted">{t('control.shaper_help')}</p>
       <Button wide disabled={!can} onClick={start}>
         {t('control.shaper_start')}
       </Button>
       {!idle && <Notice>{t('common.available_when_idle')}</Notice>}
-      {idle && !homed && <Notice>{t('control.motion_requires_homing_commands')}</Notice>}
+      {idle && !homed && !embedded && <Notice>{t('control.motion_requires_homing_commands')}</Notice>}
       {own && (
         <p role="status" class="mt-3 text-xs text-muted">
           {t(
@@ -336,7 +341,12 @@ const InputShaper = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
       {own && status.output && (
         <pre class="mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs">{status.output}</pre>
       )}
-    </Card>
+    </>
+  )
+  return embedded ? (
+    <div class="cc2-shaper mt-3 border-t border-edge pt-3">{content}</div>
+  ) : (
+    <Card class="cc2-shaper">{content}</Card>
   )
 }
 
@@ -469,7 +479,7 @@ const Extruder = ({ d, v }: { d: any; v: ReturnType<typeof view> }) => {
   const [len, setLen] = useState('10')
   const ok = v.idle && Number(d?.extruder?.temperature) >= 170
   return (
-    <Card>
+    <Card class="cc2-extruder">
       <CardHead icon="control" title="control.extruder" />
       {!ok && (
         <Notice>
@@ -532,7 +542,7 @@ const ZOffset = () => {
   const undo = () =>
     off !== null && reference !== null && Math.abs(off - reference) >= 0.0001 && send(`zoffset:undo:${reference - off}`)
   return (
-    <Card>
+    <Card class="cc2-live-offset">
       <CardHead icon="z" title="common.live_z_offset" end={<Tag tone="warning">{t('common.session_only')}</Tag>} />
       <small class="text-muted">{t('control.protected_session_adjustment')}</small>
       <div class="my-2 text-3xl">
@@ -591,7 +601,7 @@ const Profiles = () => {
       !Number.isFinite(b) ||
       !/^[A-Z0-9+_-](?:[A-Z0-9 +_-]{0,14}[A-Z0-9+_-])?$/.test(n) ||
       nz < 0 ||
-      nz > 300 ||
+      nz > NOZZLE_TARGET_MAX ||
       b < 0 ||
       b > 120
     )
@@ -603,7 +613,7 @@ const Profiles = () => {
       nozzle: Math.round(nz),
       bed: Math.round(b),
       min: prev?.min || Math.max(120, Math.round(nz - 20)),
-      max: prev?.max || Math.min(320, Math.round(nz + 20)),
+      max: prev?.max ? Math.max(prev.max, Math.round(nz)) : Math.min(NOZZLE_TARGET_MAX, Math.round(nz + 20)),
     }
     const next = at >= 0 ? list.map((p, i) => (i === at ? item : p)) : [...list, item]
     try {
@@ -631,7 +641,7 @@ const Profiles = () => {
   return (
     <Card class="cc2-material-presets">
       <CardHead icon="temp" title="control.material_profiles" end={t('control.stored_on_the_printer')} />
-      <div class="grid grid-cols-2 items-end gap-2.5">
+      <div class="cc2-profile-fields grid grid-cols-2 items-end gap-2.5 cc2-lg:grid-cols-[1.4fr_1.2fr_1fr_1fr_auto_auto]">
         <label class={lab}>
           {t('control.profile')}
           <Select class="mt-1.5" value={String(idx)} onChange={e => load(+e.currentTarget.value)}>
@@ -652,7 +662,7 @@ const Profiles = () => {
             class="mt-1.5"
             type="number"
             min="0"
-            max="300"
+            max={NOZZLE_TARGET_MAX}
             value={nozzle}
             onInput={e => setNozzle(e.currentTarget.value)}
           />
@@ -725,35 +735,48 @@ export const Control = () => {
       }
     >
       <div class="cc2-control-columns grid gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
-        <div class="grid content-start gap-3.5 cc2-xl:contents">
-          <Movement v={v} />
+        <div class="grid content-start gap-3.5 ">
+          <Movement d={d} v={v} />
         </div>
-        <div class="grid content-start gap-3.5 cc2-xl:contents">
+        <div class="grid content-start gap-3.5 ">
           <Temperatures d={d} v={v} />
-          <Card class="cc2-fans flex flex-col cc2-xl:col-start-2 cc2-xl:row-start-2">
+          <Card class="cc2-fans flex flex-col ">
             <CardHead icon="fan" title="common.fans" />
-            <div class="cc2-fan-controls flex flex-1 flex-col justify-center gap-5">
-              {(['part', 'aux', 'box'] as const).map(k => (
-                <div key={k}>
-                  <FanSlider
-                    label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
-                    pct={v.fan(k)}
-                    disabled={!d?.connected}
-                    onCommit={n => control(`fan:${k}:${n}`)}
-                  />
-                  {k === 'box' && <ExhaustGrille />}
-                </div>
-              ))}
+            <div class="cc2-fan-controls flex flex-1 flex-col">
+              <div class="grid gap-5">
+                {(['part', 'aux', 'box'] as const).map(k => (
+                  <div key={k}>
+                    <FanSlider
+                      label={k === 'part' ? 'common.part_fan' : k === 'aux' ? 'common.aux_fan' : 'control.chamber_fan'}
+                      pct={v.fan(k)}
+                      disabled={!d?.connected}
+                      onCommit={n => control(`fan:${k}:${n}`)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <section
+                class="cc2-camera-fan-management mt-6 border-t border-edge pt-3.5"
+                aria-labelledby="cc2-camera-fan-title"
+              >
+                <h3 id="cc2-camera-fan-title" class="text-base font-semibold">
+                  {t('control.chamber_fan_management')}
+                </h3>
+                <ExhaustGrille />
+                <CavityFanFloor />
+              </section>
             </div>
           </Card>
         </div>
-        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 cc2-xl:contents">
+        <div class="grid content-start gap-3.5 cc2-lg:col-span-2 cc2-lg:grid-cols-2 cc2-xl:col-span-1 cc2-xl:grid-cols-1 ">
           <ZOffset />
-          <PrintTuning compact sliders pressureAdvance />
+          <PrintTuning compact sliders pressureAdvance>
+            <CalibrationTools panel="rotation" />
+          </PrintTuning>
         </div>
       </div>
       <div class="cc2-control-calibrations mt-3.5 grid items-stretch gap-3.5 cc2-xl:grid-cols-3">
-        <InputShaper d={d} v={v} />
+        <Extruder d={d} v={v} />
         <PidCalibration d={d} />
         <Card class="cc2-machine">
           <CardHead icon="settings" title="control.machine" />
@@ -840,14 +863,10 @@ export const Control = () => {
           </Notice>
         </Card>
       </div>
-      <div class="cc2-control-bottom mt-3.5 grid items-start gap-3.5 cc2-lg:grid-cols-2 cc2-xl:grid-cols-3">
-        <Extruder d={d} v={v} />
-        <div class="cc2-xl:col-span-2">
-          <Profiles />
-        </div>
+      <div class="cc2-control-profiles mt-3.5">
+        <Profiles />
       </div>
       <ExternalFilament />
-      <CalibrationTools />
       <BedDrying />
     </Page>
   )

@@ -1,3 +1,4 @@
+import { NOZZLE_TARGET_MAX } from '@/lib/thermal-limits'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { ChevronDown } from 'lucide-preact'
 import { cn } from '@/lib/utils'
@@ -628,7 +629,7 @@ const SpoolChooser = ({
       notify(tpl('spools.assigned_toast', { name: spoolLabel(chosen), place: placeName(slot) }))
       if (canWrite && write && preset) {
         const min = Number(preset.min || Math.max(120, preset.nozzle - 20)),
-          max = Number(preset.max || Math.min(320, preset.nozzle + 20))
+          max = Number(preset.max || Math.min(NOZZLE_TARGET_MAX, preset.nozzle + 20))
         // The spool's product line and maker go along, so the printer names the tray as the inventory does
         // and the next question suggests this spool; the backend takes only plain ASCII words for them.
         const plain = (v: string) => /^[A-Za-z0-9+_.-](?:[A-Za-z0-9 +_.-]{0,30}[A-Za-z0-9+_.-])?$/.test(v)
@@ -643,7 +644,13 @@ const SpoolChooser = ({
     })
   const radio = 'mt-0.5 shrink-0 accent-cyan'
   return (
-    <Dialog onClose={() => !busy && close()} locked={busy} width={700} label={tpl(title, { place: placeName(slot) })}>
+    <Dialog
+      onClose={() => !busy && close()}
+      locked={busy}
+      closeOnBackdrop={false}
+      width={700}
+      label={tpl(title, { place: placeName(slot) })}
+    >
       <div class="text-xs text-muted">{t('spools.title')}</div>
       <DialogTitle class="my-2">{tpl(title, { place: placeName(slot) })}</DialogTitle>
       {tray && (

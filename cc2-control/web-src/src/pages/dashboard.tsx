@@ -243,7 +243,7 @@ export const Dashboard = () => {
             </div>
           </div>
         </Card>
-        <Card>
+        <Card class="cc2-dashboard-fans">
           <CardHead icon="fan" title="common.fans" />
           <FanBar label="common.part_fan" pct={v.fan('part')} />
           <FanBar label="common.aux_fan" pct={v.fan('aux')} />

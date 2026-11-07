@@ -60,7 +60,7 @@ installer_http_get() (
     fi
 )
 
-mkdir "$LOCK" || { echo 'Another installation is active.' >&2; exit 1; }
+(umask 077; mkdir "$LOCK") || { echo 'Another installation is active.' >&2; exit 1; }
 CHANGED=0
 STOPPED=0
 PASSED=0
@@ -68,6 +68,8 @@ BACKUP=''
 CAMERA_SOURCE=''
 @CAMERA_COMPONENT_FUNCTIONS@
 @CONNECTIONS_COMPONENT_FUNCTIONS@
+@RFID_COMPONENT_FUNCTIONS@
+@APP_BINDING_FUNCTIONS@
 
 finish() {
     code=$?
@@ -77,7 +79,7 @@ finish() {
     if [ "$PASSED" -eq 0 ] && [ -n "$CAMERA_SOURCE" ] && [ -n "$BACKUP" ] && [ -f "$BACKUP/printer-camera.before" ]; then
         if ! camera_restore_startup "$BACKUP"; then
             echo "Camera startup restoration refused; inspect $BACKUP before reboot." >&2
-            rmdir "$LOCK"
+            @CAMERA_FAILURE_RELEASE@
             exit 1
         fi
     fi
@@ -86,6 +88,7 @@ finish() {
         if ! wait_stopped; then
             echo "Cannot restore while service is running. Backup: $BACKUP" >&2
         else
+            @APP_BINDING_ROLLBACK@
             if [ "$CHANGED" -eq 1 ]; then
                 rm -rf "$TARGET"
                 cp -a "$BACKUP/installation" "$TARGET"
@@ -95,6 +98,7 @@ finish() {
             echo "Previous installation restored/restarted. Backup: $BACKUP" >&2
         fi
     fi
+    @NATIVE_UNCHANGED_ROLLBACK@
     rmdir "$LOCK"
     exit "$code"
 }
@@ -139,6 +143,8 @@ require_cold() {
 require_cold
 install_phase camera-preflight
 @CAMERA_COMPONENT_PREFLIGHT@
+install_phase rfid-preflight
+@RFID_COMPONENT_PREFLIGHT@
 BACKUP="/opt/usr/cc2-control-backup-$(date +%Y%m%d-%H%M%S)-$$"
 mkdir "$BACKUP"
 install_phase backup-copy
@@ -150,6 +156,9 @@ install_phase printer-status-after-backup
 STATUS=$(installer_http_get http://127.0.0.1:8081/api/printer)
 case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Printer state changed; update cancelled.' >&2; exit 1;; esac
 require_cold
+install_phase rfid-component-prepare
+@RFID_COMPONENT_PUBLISH@
+@APP_BINDING_PREPARE@
 install_phase stop-service
 STOPPED=1
 "$INIT" stop
@@ -211,7 +220,9 @@ while [ "$tries" -lt 120 ] && [ "$(awk '{print int($1)}' /proc/uptime)" -lt "$VE
                     echo 'REBOOT REQUIRED: reboot the complete idle printer to activate the camera fixes.'
                 fi
                 @CONNECTIONS_COMPONENT_INSTALL@
+                @APP_BINDING_COMMIT@
                 PASSED=1
+                @RFID_COMPONENT_COMPLETION@
                 echo "$RESULT"
                 echo "INSTALLATION PASSED. Backup: $BACKUP"
                 echo "Restore while Idle: sh $BACKUP/restore.sh"

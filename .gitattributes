@@ -11,6 +11,8 @@ builder/current/tools/cc2_sig_tool_v1.1.py -text
 builder/current/core/firmware_builder.py -text
 
 # Standalone updater shell launchers.
+cc2-control/FIRMWARE_VERSION -text
+cc2-control/updater/trusted-key.json text eol=lf
 cc2-control/installer/*.sh text eol=lf
 cc2-control/installer/pc-stage.sh.in text eol=lf
 *.sh text eol=lf
@@ -27,3 +29,5 @@ experimental/firmware-port/dual44-manifest.json -text
 experimental/firmware-port/http44-manifest.json -text
 experimental/firmware-port/network44-manifest.json -text
 experimental/firmware-port/cc2_community_release_public.pem -text
+
+experimental/native-display/thermal.awk text eol=lf

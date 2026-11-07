@@ -236,3 +236,17 @@ vendor `ai_camera` investigation is distinct from the CC2 Control viewer's owner
 
 
 Nozzle expansion is disabled by default. Enable its dedicated switch in Settings → Integrations → Experimental integrations before starting a run or restoring the factory table. Existing experiment choices migrate without opting into this feature; enabling its controls starts no heating or motion. Recovery and a pending table restart remain accessible when opted out.
+
+
+### Nozzle temperature targets
+
+On the supported Centauri Carbon 2 firmware family, manual nozzle targets and
+preheat profiles accept 0–350 °C, matching the native touchscreen. This is a
+command/input limit, not a change to the native heater configuration, sensor
+limits or thermal shutdown protections. The hotend PID calibration retains its
+separately qualified 150–300 °C range. A material's recommended temperatures are
+not changed by this supported hardware range.
+
+Manual homing restores a previously valid nozzle target up to 350 °C after the
+native homing sequence. Merely opening the panel or saving/selecting a preheat
+profile does not start heating; applying a target is a separate action.

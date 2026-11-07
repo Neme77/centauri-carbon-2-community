@@ -1,7 +1,9 @@
-# Cumulative application trial: PR252 + PR253
+# Unified CC2 Control 1.2.26 candidate
 
-CC2 Control remains version 1.2.23. Includes Surfoo's corrected Z arrows and the calibration-saving text corrections. Arrow controls remain icon-only; existing positive/negative accessible names are retained. No new heating, motion limits or calibration commands.
+This candidate uses one installer for a qualified first installation from Community Firmware 4.4.3, an active managed RFID upgrade and a verified already-current installation. Selection is automatic; an unknown or unfinished native state is preserved and refused rather than guessed. Windows/Linux/macOS launchers and signed app updates consume the same installer payload.
 
-Extract the full ZIP and run Install-Windows.cmd, or the Linux/macOS installer. This is an SSH trial, not a signed panel upload. Use a connected, Idle, cold printer with heater targets zero and pause video. It updates only CC2 Control and preserves the already installed camera component; no complete printer reboot is required. Keep the printed backup/restore path. Reload with Ctrl+F5 after installation because the app version stays 1.2.23.
+Includes corrected PR301 and the spool popup fix PR303, approved Control/Canvas graphics, Pressure Advance, 350 C nozzle controls, flap, EXHAUST minimum, load-cell tools, calibration and autonomous Canvas RFID activation/recovery. Qualified camera/network runtimes remain included. The original native display and LAN drivers are not replaced by this application package.
 
-Test with the bed clear, axes homed and room for travel: select 0.1 mm first. The upper Z arrow should raise the bed (negative Z), the lower arrow should lower it (positive Z). Homing/Idle and backend movement limits are unchanged. Check the Input Shaper automatic-saving explanation and the explicit Save PID instruction; no need to rerun calibrations just to read the updated text. No physical-printer movement was performed by build automation. Report actual results before merge or release.
+For an instructed hardware trial use an idle, cold printer, zero heater targets and no RFID scan or calibration, and close camera viewers. Keep the printed backup path and logs. Follow complete-printer reboot prompts from the Canvas RFID panel; do not reboot during transfer. Already active same-profile updates preserve the Canvas application and loaded guard. Unknown/partial states retain their backups.
+
+This is a qualification candidate, not a public release. The build itself accesses no printer or physical serial port. Check the corresponding qualification report for actual simulation and hardware acceptance; protocol acknowledgements are not physical flash readback.

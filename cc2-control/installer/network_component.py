@@ -11,7 +11,7 @@ import tarfile
 RUNTIME_SHA = '649d0af3dba7e21bc399fc741115fbe298cc1e4b77c07cf51bd35bfd73762e9a'
 HELPER_SHA = '2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62'
 
-def functions(runtime: Path):
+def functions(runtime: Path, *, streamed=False):
     data = runtime.read_bytes()
     if hashlib.sha256(data).hexdigest() != RUNTIME_SHA:
         raise ValueError('Unqualified Connections runtime')
@@ -33,6 +33,13 @@ def functions(runtime: Path):
     config=$(zcat /proc/config.gz | sha256sum) || return 1
     [ "${config%% *}" = 8fa0a87f203d69cb9c4e027e8db11a9a0d92c5d2ea8ae83f87b34714aae7ec4a ]
 }
+network_platform_supported() {
+    [ "$(uname -r)" = 5.4.61 ] && [ "$(uname -m)" = armv7l ] || return 1
+    [ -f /bin/wifi_daemon ] && [ ! -L /bin/wifi_daemon ] || return 1
+    [ "$(sha256sum /bin/wifi_daemon | awk '{print $1}')" = 8e19a620921c6f4f21bde910cc3d960af5400d223493041eb96f1e921dcbe3c1 ] || return 1
+    config=$(zcat /proc/config.gz | sha256sum) || return 1
+    [ "${config%% *}" = 8fa0a87f203d69cb9c4e027e8db11a9a0d92c5d2ea8ae83f87b34714aae7ec4a ]
+}
 network_install_component() {
     if ! network_profile_supported; then
         if [ -e /opt/usr/cc2-network-manager ] || [ -L /opt/usr/cc2-network-manager ]; then
@@ -44,9 +51,15 @@ network_install_component() {
     fi
     NETWORK_SOURCE="$STAGE/connections-component-$$"
     (umask 077; mkdir "$NETWORK_SOURCE") || return 1''']
+    payload = []
+    if streamed:
+        lines.append("    sed -n '/^# CC2_NETWORK_DATA_BEGIN$/,/^# CC2_NETWORK_DATA_END$/p' \"$STAGE/install-on-printer.sh\" | sed '/^#/d' | sh > \"$NETWORK_SOURCE/payload.tar.gz\" || return 1")
     for start in range(0, len(data), 4096):
         chunk = ''.join('\\%03o' % byte for byte in data[start:start + 4096])
-        lines.append("    printf '" + chunk + "' " + ('>' if start == 0 else '>>') + ' "$NETWORK_SOURCE/payload.tar.gz" || return 1')
+        if streamed:
+            payload.append("printf '" + chunk + "' || exit 1")
+        else:
+            lines.append("    printf '" + chunk + "' " + ('>' if start == 0 else '>>') + ' "$NETWORK_SOURCE/payload.tar.gz" || return 1')
     lines += [
         f'    [ "$(sha256sum "$NETWORK_SOURCE/payload.tar.gz" | awk \'{{print $1}}\')" = {RUNTIME_SHA} ] || return 1',
         '    tar -xzf "$NETWORK_SOURCE/payload.tar.gz" -C "$NETWORK_SOURCE" || return 1',
@@ -61,4 +74,45 @@ network_install_component() {
         '      *) echo "Installed; unexpected temporary component retained";; esac',
         '    return 0',
         '}', '']
-    return '\n'.join(lines)
+    code = '\n'.join(lines)
+    if streamed:
+        return code, '\n# CC2_NETWORK_DATA_BEGIN\n' + '\n'.join(payload) + '\n# CC2_NETWORK_DATA_END\n'
+    return code
+
+
+def preserve_managed(before_sha, after_sha):
+    """The authenticated lifecycle plan binds both composed manifest versions."""
+    import re
+    if not all(re.fullmatch('[0-9a-f]{64}', value) for value in (before_sha, after_sha)):
+        raise ValueError('Invalid managed Connections manifest binding')
+    return f'''native_connections_preflight() {{
+    NETWORK_INSTALLED=/opt/usr/cc2-network-manager
+    if [ ! -e "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ];then return 0;fi
+    [ -d "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ] &&
+    [ -f "$NETWORK_INSTALLED/SHA256SUMS" ] && [ ! -L "$NETWORK_INSTALLED/SHA256SUMS" ] || return 1
+    network_platform_supported || return 1
+    case "$NATIVE_ROUTE" in
+      fresh|without-canvas) [ "$NATIVE_NETWORK_BASE_VERIFIED" = 1 ] || return 1;;
+      upgrade|current) [ "$(sha256sum "$NETWORK_INSTALLED/SHA256SUMS" | awk '{{print $1}}')" = {after_sha} ] || return 1;;
+      *) return 1;;
+    esac
+    (cd "$NETWORK_INSTALLED" && sha256sum -c SHA256SUMS)
+}}
+native_connections_component() {{
+    NETWORK_INSTALLED=/opt/usr/cc2-network-manager
+    if [ ! -e "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ];then
+        network_install_component;return $?
+    fi
+    [ -d "$NETWORK_INSTALLED" ] && [ ! -L "$NETWORK_INSTALLED" ] &&
+    [ -f "$NETWORK_INSTALLED/SHA256SUMS" ] && [ ! -L "$NETWORK_INSTALLED/SHA256SUMS" ] || return 1
+    network_platform_supported || {{ echo 'STOP: Connections platform not qualified' >&2;return 1; }}
+    case "$NATIVE_ROUTE" in
+      fresh|without-canvas) network_expected={before_sha};;
+      upgrade|current) network_expected={after_sha};;
+      *) return 1;;
+    esac
+    [ "$(sha256sum "$NETWORK_INSTALLED/SHA256SUMS" | awk '{{print $1}}')" = "$network_expected" ] || {{ echo 'STOP: Connections manifest differs from qualified native plan' >&2;return 1; }}
+    (cd "$NETWORK_INSTALLED" && sha256sum -c SHA256SUMS) || return 1
+    echo 'CONNECTIONS_COMPONENT_PRESERVED: qualified managed startup and component files verified.'
+}}
+'''

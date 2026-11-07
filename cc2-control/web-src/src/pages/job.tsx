@@ -7,7 +7,7 @@ import { CameraCard, Progress } from '@/components/shared'
 import { control } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { stateText } from '@/lib/machine'
-import { duration } from '@/lib/format'
+import { duration, num } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
 import { printer, refreshPrinter, view } from '@/lib/state'
 import { objects, refreshObjects } from '@/lib/objects'
@@ -94,6 +94,23 @@ export const Job = () => {
                 </div>
               ))}
             </div>
+            <fieldset
+              class="cc2-job-temperatures mt-4 grid grid-cols-3 gap-2 border-t border-edge pt-3"
+              aria-label={t('common.temperatures')}
+            >
+              {(
+                [
+                  ['common.nozzle', d?.extruder?.temperature],
+                  ['common.heated_bed', d?.heater_bed?.temperature],
+                  ['dashboard.chamber', d?.chamber?.temperature],
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label} class="min-w-0">
+                  <strong class="block text-[15px] text-cyan">{num(value)} °C</strong>
+                  <small class="text-xs text-muted">{t(label)}</small>
+                </div>
+              ))}
+            </fieldset>
             <div class="mt-auto">
               <JobControls v={v} />
             </div>

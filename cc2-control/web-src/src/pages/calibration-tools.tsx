@@ -34,7 +34,7 @@ const ToolProgress = ({ refresh }: { refresh: () => Promise<void> }) => {
   usePoll(refresh, 500)
   return null
 }
-export const CalibrationTools = () => {
+export const CalibrationTools = ({ panel = 'both' }: { panel?: 'both' | 'cell' | 'rotation' }) => {
   const link = printer.use(),
     d = link.data
   const [data, setData] = useState<ToolStatus | null>(null)
@@ -117,225 +117,238 @@ export const CalibrationTools = () => {
   const validMass = Number.isFinite(mass) && mass >= 50 && mass <= (cell?.max_grams || 0)
   const canApply = idle && !busy && !pending && !stage && current != null
   const restoreTarget = data?.configured
-  return (
-    <Card class="cc2-native-tools mt-3.5">
-      <CardHead icon="control" title="caltools.title" />
+  const content = (
+    <>
+      {panel !== 'rotation' && (
+        <CardHead icon="control" title={panel === 'cell' ? 'caltools.cell' : 'caltools.title'} />
+      )}
       {data?.busy && <ToolProgress refresh={refresh} />}
-      <div class="grid items-start gap-3.5 cc2-lg:grid-cols-2">
-        <div class="space-y-3">
-          <h3 class="text-base font-semibold">{t('caltools.cell')}</h3>
-          <p class="text-xs text-muted">{t('caltools.cell_hint')}</p>
-          <div class="grid grid-cols-2 gap-2">
-            <Button disabled={!idle || busy || !!stage} onClick={() => send('cell:read')}>
-              {t('caltools.read_cell')}
-            </Button>
-            <Button disabled={!idle || busy || !!stage} onClick={() => send('cell:diagnostic')}>
-              {t('caltools.diagnose')}
-            </Button>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <Button
-              disabled={!cold || busy || !!stage || pending}
-              onClick={() => send('cell:tare', t('cellguide.tare_confirm'))}
-            >
-              {t('cellguide.tare')}
-            </Button>
-            <Button
-              disabled={!cold || busy || !!stage || pending}
-              onClick={() => send('cell:start', t('cellguide.start_confirm'))}
-            >
-              {t('cellguide.start')}
-            </Button>
-          </div>
-          {!!stage && (
-            <fieldset
-              class="cc2-cell-guide space-y-3 rounded-md border border-edge bg-field p-3"
-              aria-label={t('cellguide.start')}
-            >
-              <p class="text-xs" role="status">
-                {t(
-                  stage === 1
-                    ? 'cellguide.zero_hint'
-                    : stage === 2
-                      ? 'cellguide.load_hint'
-                      : stage === 3
-                        ? 'cellguide.review_hint'
-                        : stage === 4
-                          ? 'cellguide.applied_hint'
-                          : stage === 5
-                            ? 'cellguide.saved_hint'
-                            : 'cellguide.unknown_hint'
-                )}
-              </p>
-              {stage >= 2 && stage <= 3 && (
-                <label class="block text-xs">
-                  {tpl('cellguide.grams', { max: String(cell?.max_grams || 0) })}
-                  <Input
-                    type="number"
-                    min="50"
-                    max={cell?.max_grams || 0}
-                    step="0.01"
-                    value={grams}
-                    disabled={!!busy}
-                    onInput={e => setGrams(e.currentTarget.value)}
-                  />
-                </label>
-              )}
-              {stage >= 3 && stage <= 5 && (
-                <p class="text-xs">{tpl('cellguide.used_mass', { value: String(cell?.grams) })}</p>
-              )}
-              {stage >= 3 && stage <= 5 && (
-                <p class="text-xs">
-                  {t('cellguide.result')}: {cell?.counts_per_gram} / {cell?.tare_counts ?? '—'}
+      <div class={panel === 'both' ? 'grid items-start gap-3.5 cc2-lg:grid-cols-2' : ''}>
+        {panel !== 'rotation' && (
+          <div class="space-y-3">
+            {panel === 'both' && <h3 class="text-base font-semibold">{t('caltools.cell')}</h3>}
+            <p class="text-xs text-muted">{t('caltools.cell_hint')}</p>
+            <div class="grid grid-cols-2 gap-2">
+              <Button disabled={!idle || busy || !!stage} onClick={() => send('cell:read')}>
+                {t('caltools.read_cell')}
+              </Button>
+              <Button disabled={!idle || busy || !!stage} onClick={() => send('cell:diagnostic')}>
+                {t('caltools.diagnose')}
+              </Button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <Button
+                disabled={!cold || busy || !!stage || pending}
+                onClick={() => send('cell:tare', t('cellguide.tare_confirm'))}
+              >
+                {t('cellguide.tare')}
+              </Button>
+              <Button
+                disabled={!cold || busy || !!stage || pending}
+                onClick={() => send('cell:start', t('cellguide.start_confirm'))}
+              >
+                {t('cellguide.start')}
+              </Button>
+            </div>
+            {!!stage && (
+              <fieldset
+                class="cc2-cell-guide space-y-3 rounded-md border border-edge bg-field p-3"
+                aria-label={t('cellguide.start')}
+              >
+                <p class="text-xs" role="status">
+                  {t(
+                    stage === 1
+                      ? 'cellguide.zero_hint'
+                      : stage === 2
+                        ? 'cellguide.load_hint'
+                        : stage === 3
+                          ? 'cellguide.review_hint'
+                          : stage === 4
+                            ? 'cellguide.applied_hint'
+                            : stage === 5
+                              ? 'cellguide.saved_hint'
+                              : 'cellguide.unknown_hint'
+                  )}
                 </p>
-              )}
-              <div class="grid grid-cols-2 gap-2">
-                {stage >= 1 && stage <= 3 && (
-                  <Button disabled={!cold || busy} onClick={() => send('cell:zero', t('cellguide.tare_confirm'))}>
-                    {t('cellguide.tare')}
-                  </Button>
-                )}
                 {stage >= 2 && stage <= 3 && (
-                  <Button
-                    disabled={!cold || busy || !validMass}
-                    onClick={() =>
-                      send(`cell:measure:${mass}`, tpl('cellguide.measure_confirm', { value: String(mass) }))
-                    }
-                  >
-                    {t('cellguide.measure')}
-                  </Button>
+                  <label class="block text-xs">
+                    {tpl('cellguide.grams', { max: String(cell?.max_grams || 0) })}
+                    <Input
+                      type="number"
+                      min="50"
+                      max={cell?.max_grams || 0}
+                      step="0.01"
+                      value={grams}
+                      disabled={!!busy}
+                      onInput={e => setGrams(e.currentTarget.value)}
+                    />
+                  </label>
                 )}
-                {stage === 3 && (
-                  <Button
-                    disabled={!cold || busy || mass !== cell?.grams}
-                    onClick={() => send('cell:accept', t('cellguide.accept_confirm'))}
-                  >
-                    {t('cellguide.accept')}
-                  </Button>
+                {stage >= 3 && stage <= 5 && (
+                  <p class="text-xs">{tpl('cellguide.used_mass', { value: String(cell?.grams) })}</p>
                 )}
-                {(stage <= 3 || stage === 6) && (
-                  <Button disabled={!idle || busy || !cell?.owned} onClick={() => send('cell:abort')}>
-                    {t('cellguide.abort')}
-                  </Button>
+                {stage >= 3 && stage <= 5 && (
+                  <p class="text-xs">
+                    {t('cellguide.result')}: {cell?.counts_per_gram} / {cell?.tare_counts ?? '—'}
+                  </p>
                 )}
-                {stage === 4 && (
-                  <>
-                    <Button disabled={!cold || busy} onClick={() => send('cell:save', t('cellguide.save_confirm'))}>
-                      {t('caltools.save')}
+                <div class="grid grid-cols-2 gap-2">
+                  {stage >= 1 && stage <= 3 && (
+                    <Button disabled={!cold || busy} onClick={() => send('cell:zero', t('cellguide.tare_confirm'))}>
+                      {t('cellguide.tare')}
                     </Button>
+                  )}
+                  {stage >= 2 && stage <= 3 && (
+                    <Button
+                      disabled={!cold || busy || !validMass}
+                      onClick={() =>
+                        send(`cell:measure:${mass}`, tpl('cellguide.measure_confirm', { value: String(mass) }))
+                      }
+                    >
+                      {t('cellguide.measure')}
+                    </Button>
+                  )}
+                  {stage === 3 && (
+                    <Button
+                      disabled={!cold || busy || mass !== cell?.grams}
+                      onClick={() => send('cell:accept', t('cellguide.accept_confirm'))}
+                    >
+                      {t('cellguide.accept')}
+                    </Button>
+                  )}
+                  {(stage <= 3 || stage === 6) && (
+                    <Button disabled={!idle || busy || !cell?.owned} onClick={() => send('cell:abort')}>
+                      {t('cellguide.abort')}
+                    </Button>
+                  )}
+                  {stage === 4 && (
+                    <>
+                      <Button disabled={!cold || busy} onClick={() => send('cell:save', t('cellguide.save_confirm'))}>
+                        {t('caltools.save')}
+                      </Button>
+                      <Button
+                        disabled={!cold || busy}
+                        onClick={() => send('cell:discard', t('cellguide.discard_confirm'))}
+                      >
+                        {t('cellguide.discard')}
+                      </Button>
+                    </>
+                  )}
+                  {stage === 5 && (
                     <Button
                       disabled={!cold || busy}
-                      onClick={() => send('cell:discard', t('cellguide.discard_confirm'))}
+                      onClick={() => send('cell:restart', t('cellguide.restart_confirm'))}
                     >
-                      {t('cellguide.discard')}
+                      {t('caltools.restart')}
                     </Button>
-                  </>
-                )}
-                {stage === 5 && (
-                  <Button disabled={!cold || busy} onClick={() => send('cell:restart', t('cellguide.restart_confirm'))}>
-                    {t('caltools.restart')}
-                  </Button>
-                )}
+                  )}
+                </div>
+              </fieldset>
+            )}
+            <p class="text-xs text-muted">{t('caltools.no_automatic_motion')}</p>
+          </div>
+        )}
+        {panel !== 'cell' && (
+          <div class="cc2-rotation space-y-2">
+            <h3 class="text-base font-semibold">Rotation Distance</h3>
+            <dl class="grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <dt class="text-muted">{t('caltools.configured')}</dt>
+                <dd>{number(data?.configured)}</dd>
               </div>
-            </fieldset>
-          )}
-          <p class="text-xs text-muted">{t('caltools.no_automatic_motion')}</p>
-        </div>
-        <div class="space-y-3">
-          <h3 class="text-base font-semibold">Rotation Distance</h3>
-          <p class="text-xs text-muted">{t('caltools.rotation_hint')}</p>
-          <dl class="grid grid-cols-3 gap-2 text-xs">
-            <div>
-              <dt class="text-muted">{t('caltools.configured')}</dt>
-              <dd>{number(data?.configured)}</dd>
+              <div>
+                <dt class="text-muted">{t('caltools.saved')}</dt>
+                <dd>{number(data?.saved)}</dd>
+              </div>
+              <div>
+                <dt class="text-muted">{t('caltools.active')}</dt>
+                <dd>{number(current)}</dd>
+              </div>
+            </dl>
+            <div class="grid grid-cols-2 gap-2">
+              <Button disabled={!idle || busy || !!stage} onClick={() => send('rotation:read')}>
+                {t('caltools.read_rotation')}
+              </Button>
+
+              <Button
+                disabled={!canApply || restoreTarget == null}
+                onClick={() =>
+                  send(
+                    `rotation:apply:${current}:${restoreTarget}`,
+                    tpl('caltools.apply_confirm', { value: number(restoreTarget) })
+                  )
+                }
+              >
+                {t('caltools.restore')}
+              </Button>
+              <Button
+                disabled={!idle || busy || !!stage || current == null || !data?.editable}
+                onClick={() => send(`rotation:save:${current}`, t('caltools.save_confirm'))}
+              >
+                {t('caltools.save')}
+              </Button>
+              <Button
+                disabled={
+                  !idle ||
+                  busy ||
+                  !pending ||
+                  !!stage ||
+                  data?.pending_conflict ||
+                  d?.extruder?.target !== 0 ||
+                  d?.heater_bed?.target !== 0
+                }
+                onClick={() => send('rotation:restart', t('caltools.restart_confirm'))}
+              >
+                {t('caltools.restart')}
+              </Button>
             </div>
-            <div>
-              <dt class="text-muted">{t('caltools.saved')}</dt>
-              <dd>{number(data?.saved)}</dd>
+            <div class="cc2-rotation-calculator space-y-2 border-t border-edge pt-2">
+              <h4 class="text-xs font-medium text-cyan">{t('caltools.calculator')}</h4>
+              <p class="my-2 text-xs text-muted">{t('caltools.rotation_hint')}</p>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="text-xs">
+                  {t('caltools.requested')}
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={requested}
+                    onInput={e => setRequested(e.currentTarget.value)}
+                  />
+                </label>
+                <label class="text-xs">
+                  {t('caltools.measured')}
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={measured}
+                    onInput={e => setMeasured(e.currentTarget.value)}
+                  />
+                </label>
+              </div>
+              <p class="text-xs">
+                {t('caltools.calculated')}: <strong>{valid ? number(calculated) : '—'}</strong>
+              </p>
+              <Button
+                disabled={!canApply || !valid || basis !== current}
+                onClick={() =>
+                  send(
+                    `rotation:apply:${current}:${calculated.toFixed(10)}`,
+                    tpl('caltools.apply_confirm', { value: number(calculated) })
+                  )
+                }
+              >
+                {t('caltools.apply')}
+              </Button>
             </div>
-            <div>
-              <dt class="text-muted">{t('caltools.active')}</dt>
-              <dd>{number(current)}</dd>
-            </div>
-          </dl>
-          <Button wide disabled={!idle || busy || !!stage} onClick={() => send('rotation:read')}>
-            {t('caltools.read_rotation')}
-          </Button>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="text-xs">
-              {t('caltools.requested')}
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={requested}
-                onInput={e => setRequested(e.currentTarget.value)}
-              />
-            </label>
-            <label class="text-xs">
-              {t('caltools.measured')}
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={measured}
-                onInput={e => setMeasured(e.currentTarget.value)}
-              />
-            </label>
+            {pending && (
+              <p class="text-xs text-amber">{t(data?.pending_conflict ? 'caltools.conflict' : 'caltools.pending')}</p>
+            )}
           </div>
-          <p class="text-xs">
-            {t('caltools.calculated')}: <strong>{valid ? number(calculated) : '—'}</strong>
-          </p>
-          <div class="grid grid-cols-2 gap-2">
-            <Button
-              disabled={!canApply || !valid || basis !== current}
-              onClick={() =>
-                send(
-                  `rotation:apply:${current}:${calculated.toFixed(10)}`,
-                  tpl('caltools.apply_confirm', { value: number(calculated) })
-                )
-              }
-            >
-              {t('caltools.apply')}
-            </Button>
-            <Button
-              disabled={!canApply || restoreTarget == null}
-              onClick={() =>
-                send(
-                  `rotation:apply:${current}:${restoreTarget}`,
-                  tpl('caltools.apply_confirm', { value: number(restoreTarget) })
-                )
-              }
-            >
-              {t('caltools.restore')}
-            </Button>
-            <Button
-              disabled={!idle || busy || !!stage || current == null || !data?.editable}
-              onClick={() => send(`rotation:save:${current}`, t('caltools.save_confirm'))}
-            >
-              {t('caltools.save')}
-            </Button>
-            <Button
-              disabled={
-                !idle ||
-                busy ||
-                !pending ||
-                !!stage ||
-                data?.pending_conflict ||
-                d?.extruder?.target !== 0 ||
-                d?.heater_bed?.target !== 0
-              }
-              onClick={() => send('rotation:restart', t('caltools.restart_confirm'))}
-            >
-              {t('caltools.restart')}
-            </Button>
-          </div>
-          {pending && (
-            <p class="text-xs text-amber">{t(data?.pending_conflict ? 'caltools.conflict' : 'caltools.pending')}</p>
-          )}
-        </div>
+        )}
       </div>
-      <p role="status" aria-live="polite" class="mt-3 min-h-9 text-xs">
+      <p role="status" aria-live="polite" class="mt-2 text-xs">
         {error
           ? tpl('common.rejected_error', { error })
           : data?.error && data.error !== 'none'
@@ -353,6 +366,11 @@ export const CalibrationTools = () => {
           {data.reports.join('\n')}
         </pre>
       )}
-    </Card>
+    </>
+  )
+  return panel === 'rotation' ? (
+    <div class="cc2-native-tools cc2-rotation-tools mt-3 border-t border-edge pt-3">{content}</div>
+  ) : (
+    <Card class="cc2-native-tools cc2-cell-tools">{content}</Card>
   )
 }

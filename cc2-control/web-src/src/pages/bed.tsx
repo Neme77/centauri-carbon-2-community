@@ -1,3 +1,4 @@
+import { CalibrationTools } from './calibration-tools'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import { ArrowBigDown, ArrowBigRight, ArrowBigUp, ArrowLeftRight, Sigma } from 'lucide-preact'
@@ -713,13 +714,16 @@ export const Bed = () => {
         items={[
           { id: 'mesh', label: t('bed.mesh_saved_profiles'), icon: <Icon n="grid" /> },
           { id: 'plates', label: t('bed.build_plates'), icon: <Icon n="layers" /> },
+          { id: 'cell', label: t('caltools.cell'), icon: <Icon n="target" /> },
           { id: 'screws', label: t('bed.screw_levelling'), icon: <Icon n="target" /> },
           { id: 'nozzle', label: t('nozzle.tab'), icon: <Icon n="temp" /> },
         ]}
         value={bed}
         onChange={id => openPage('bed', id as BedTab)}
       />
-      {bed === 'screws' ? (
+      {bed === 'cell' ? (
+        <CalibrationTools panel="cell" />
+      ) : bed === 'screws' ? (
         <div class="max-w-4xl">
           <Screws />
         </div>

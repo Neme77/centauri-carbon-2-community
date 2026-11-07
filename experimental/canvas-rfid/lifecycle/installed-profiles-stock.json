@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "scope": "Closed published firmware 4.4.3 seeded reactor/network profile; verified against post-reinstall inspection and firmware seed transformations",
+  "kernel": "5.4.61",
+  "native_path": "/opt/usr/cc2-reactor-runtime-v2/elegoo_printer",
+  "native_sha": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+  "binary_pins": {
+    "/opt/bin/elegoo_printer": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+    "/opt/usr/cc2-reactor-runtime-v2/elegoo_printer": "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745",
+    "/opt/lib/libcolib.so": "14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403",
+    "/opt/usr/cc2-network-manager/control": "2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62",
+    "/opt/usr/cc2-control/camera/cc2-camera-reap-check": "dce1180e3c04512fea1c4f9868b131f3fbe9bda187ebc9342f9db633f0a57ea0",
+    "/opt/inst/ota/canvas_gd32-20251029_184624-00.00.00.44-app.bin": "f1267ee3219dcad73efffa8dc38e30ff0f17c02c0a1674cbead48a99bdff3228"
+  },
+  "common_files": {
+    "/etc/init.d/printer": "e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd255d1bc4",
+    "/etc/init.d/cc2-reactor-launch": "7a30ece8b3566344d7471bfdc6b48e41858b5d36ee90911e390db2901b91dfc7",
+    "/opt/inst/cc2-reactor/launcher.sh": "a260865964759898cf47ed8e30e20eb8981506c1a22ada32611b9911b36b47fc",
+    "/opt/inst/cc2-reactor/preflight.sh": "27c3a5bfad9953ac2c64af39a86fd048c6affdd88141a5ea6d76e64b8bee05b2",
+    "/opt/inst/cc2-reactor/SHA256SUMS": "34104cb4166ca6384d4caaf9de37d7998754c010a8de81b7010cb259b6332361",
+    "/opt/usr/cc2-reactor-runtime-v2/preflight.sh": "27c3a5bfad9953ac2c64af39a86fd048c6affdd88141a5ea6d76e64b8bee05b2",
+    "/opt/usr/cc2-reactor-runtime-v2/firmware-payload.sha256": "84fadd738047b24e2ec9ea03490388f0342ebb899b2064b1a913e8f9fa25af0f",
+    "/opt/usr/cc2-network-manager/startup.sha256": "ea58315b95965bea4c8c2c5f423b730de220d26474d26eaa24db4e79b30ee9e1"
+  },
+  "mapped_common": {
+    "/opt/usr/cc2-reactor-runtime-v2/libcc2-reactor-v2.so": "4639364c68489ec40c4e0c4f425550f3aa19e44c2ee61ed641affdc560e7e92c"
+  },
+  "mapped_optional": {
+    "/opt/usr/cc2-network-manager/libcc2-network-compat-r1.so": "bde512195dd6bf3846f3103b5e1acbd89a62e5ee819e405389c97f5fc188ff3a"
+  },
+  "mapped_legacy": {},
+  "legacy_plans": {},
+  "variants": [
+    {
+      "id": "reactor-network-stock-443",
+      "legacy_rfid": false,
+      "files": {
+        "/opt/usr/cc2-reactor-runtime-v2/launcher.sh": "a260865964759898cf47ed8e30e20eb8981506c1a22ada32611b9911b36b47fc",
+        "/opt/usr/cc2-reactor-runtime-v2/SHA256SUMS": "34104cb4166ca6384d4caaf9de37d7998754c010a8de81b7010cb259b6332361",
+        "/opt/usr/cc2-network-manager/profile.sh": "2b6e8a4cdb3957887a339babda2b11ccb6623f216fb339a1c43e0c56e06b4e31",
+        "/opt/usr/cc2-network-manager/reactor-entry.sh": "914a1f49c39e90f37c27bb50ddcf9b02459bd6895131a8051f12b6f72c940adb",
+        "/opt/usr/cc2-network-manager/activate.sh": "0883272a7734f6f2206113eb215c9fc1d612fe9ecc62605ae6b8d6e8abc4be7d",
+        "/opt/usr/cc2-network-manager/SHA256SUMS": "99b501a380b5a6fb71c1df2c332a9df1e4c534dbc1b9c50c5e807bafd3da235e"
+      }
+    }
+  ],
+  "stock_bootstrap": true
+}

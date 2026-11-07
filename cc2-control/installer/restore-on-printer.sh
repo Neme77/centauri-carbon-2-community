@@ -5,6 +5,7 @@ TARGET=/opt/usr/cc2-control
 INIT=/etc/init.d/cc2-control
 LOCK=/tmp/cc2-control-install.lock
 @CAMERA_RESTORE_FUNCTION@
+@APP_BINDING_RESTORE_FUNCTIONS@
 wait_stopped() {
     stop_wait=0
     while pidof cc2-control >/dev/null 2>&1; do
@@ -45,11 +46,13 @@ require_cold() {
 }
 require_cold
 
-mkdir "$LOCK" || exit 1
+(umask 077; mkdir "$LOCK") || exit 1
 trap 'rmdir "$LOCK"' 0
+@RFID_RESTORE_GUARD@
 if [ -f "$BACKUP/printer-camera.before" ]; then camera_restore_startup "$BACKUP"; fi
 "$INIT" stop
 if ! wait_stopped; then echo 'Service did not stop.' >&2; exit 1; fi
+@APP_BINDING_RESTORE_ROLLBACK@
 # Keep current preferences and access configuration when reverting binaries.
 for keep in cc2-control.conf material-presets.json ui-preferences.json bed-plates.json spools.json; do
     if [ -f "$TARGET/$keep" ]; then cp -p "$TARGET/$keep" "$BACKUP/$keep.restore-current"; fi

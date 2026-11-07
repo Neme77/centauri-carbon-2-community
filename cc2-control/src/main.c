@@ -32,6 +32,7 @@
 #include "console.h"
 #include "control.h"
 #include "canvas_state.h"
+#include "maintenance_barrier.h"
 #include "uds.h"
 #include "http_guard.h"
 #include "experiments_state.h"
@@ -320,6 +321,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"files\":\"/api/gcode-files\","
             "\"console\":\"/api/console\","
             "\"preferences\":\"/api/preferences\","
+            "\"runout\":\"/api/runout\","
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
             "\"spools\":\"/api/spools\","
@@ -3229,41 +3231,9 @@ static void filament_source_response(int fd,console_state *console,mqtt_client *
     external_filament_response(fd,mqtt);
 }
 
-static void mesh_response(int fd) {
-    int uds = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (uds < 0) {
-        const char *error="{\"available\":false,\"error\":\"Cannot create UDS socket\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
-    }
-    struct timeval timeout={2,0};
-    setsockopt(uds,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
-    setsockopt(uds,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
-    struct sockaddr_un address; memset(&address,0,sizeof(address));
-    address.sun_family=AF_UNIX;
-    snprintf(address.sun_path,sizeof(address.sun_path),"%s","/tmp/elegoo_uds");
-    if(connect(uds,(struct sockaddr *)&address,sizeof(address))<0){
-        close(uds); const char *error="{\"available\":false,\"error\":\"Printer UDS unavailable\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
-    }
-    static const char query[]="{\"id\":201,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":null}}}\003";
-    if(send_all(uds,query,sizeof(query)-1)!=0){
-        close(uds); const char *error="{\"available\":false,\"error\":\"Mesh query failed\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error)); return;
-    }
-    char *result=malloc(131073); size_t used=0;
-    if(!result){close(uds);return;}
-    while(used<131072){
-        ssize_t n=recv(uds,result+used,131072-used,0);
-        if(n<=0)break;
-        used+=(size_t)n;
-        char *end=memchr(result,3,used);
-        if(end){used=(size_t)(end-result);break;}
-    }
-    close(uds); result[used]='\0';
-    if(!used){free(result);const char *error="{\"available\":false,\"error\":\"No mesh response\"}\n";
-        respond(fd,503,"Service Unavailable","application/json; charset=utf-8",error,strlen(error));return;}
-    respond(fd,200,"OK","application/json; charset=utf-8",result,used); free(result);
-}
+/* GET /api/mesh: the printer's active mesh plus the side and adaptive profiles; see
+ * mesh_response_body after the plate library, whose autosave.cfg reader it uses. */
+static void mesh_response(int fd);
 
 /* Cross-feature SAVE_CONFIG guards are implemented after both file editors. */
 static int canvas_unload_pending(void);
@@ -3279,7 +3249,86 @@ static const char *pending_autosave_guard(void);
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
+#include "runout.h"
 #include "calibration_tools.h"
+#include "cavity_floor_http.h"
+
+/* GET /api/mesh. The firmware builds `{"bed_mesh":null}` with every stored profile and all its points
+ * on the thread that schedules the motors: with many profiles (29-39 KB) that took 615 ms on a CC2
+ * and, during a first layer, ended in "MCU 'mcu' shutdown: Timer too close". So the printer is only
+ * asked for the active mesh's measured points (not mesh_matrix, the interpolated grid: 17 KB of the
+ * 18 KB answer, and the pages draw probed_matrix), and the three profiles the pages show (the two side slots and the
+ * adaptive mesh) are read from autosave.cfg, where the firmware keeps them, in the same shape. */
+#define MESH_REPLY_MAX (64 * 1024)
+static const char mesh_query[] =
+    "{\"id\":201,\"method\":\"objects/query\",\"params\":{\"objects\":{\"bed_mesh\":[\"profile_name\",\"mesh_min\",\"mesh_max\",\"probed_matrix\"]}}}\003";
+static const char *const mesh_shown_profiles[] = {"default", "default1", "ADAPTIVE"};
+static void mesh_profiles_json(json_builder *b) {
+    size_t length = 0;
+    char *text = plates_read_file(printer_autosave_path, AUTOSAVE_FILE_MAX, &length);
+    json_builder_printf(b, "\"profiles\":{");
+    for (size_t i = 0, first = 1; text && i < sizeof(mesh_shown_profiles) / sizeof(mesh_shown_profiles[0]); ++i) {
+        plate_mesh m;
+        if (autosave_find(text, length, mesh_shown_profiles[i], &m) != 1) continue;
+        json_builder_printf(b, "%s\"%s\":{\"mesh_params\":{\"min_x\":%.6f,\"max_x\":%.6f,\"min_y\":%.6f,\"max_y\":%.6f,"
+            "\"x_count\":%d,\"y_count\":%d,\"mesh_x_pps\":%d,\"mesh_y_pps\":%d,\"algo\":\"%s\",\"tension\":%.6f},\"points\":[",
+            first ? "" : ",", mesh_shown_profiles[i], m.min_x, m.max_x, m.min_y, m.max_y, m.x_count, m.y_count,
+            m.x_pps, m.y_pps, m.algo, m.tension);
+        for (int r = 0; r < m.y_count; ++r) {
+            json_builder_printf(b, "%s[", r ? "," : "");
+            for (int c = 0; c < m.x_count; ++c) json_builder_printf(b, "%s%.6f", c ? "," : "", m.points[r * m.x_count + c]);
+            json_builder_printf(b, "]");
+        }
+        json_builder_printf(b, "]}");
+        first = 0;
+    }
+    json_builder_printf(b, "}");
+    free(text);
+}
+static void mesh_fail(int fd, const char *error) {
+    char body[128]; int n = snprintf(body, sizeof(body), "{\"available\":false,\"error\":\"%s\"}\n", error);
+    respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", body, (size_t)n);
+}
+static void mesh_response(int fd) {
+    int uds = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (uds < 0) { mesh_fail(fd, "Cannot create UDS socket"); return; }
+    struct timeval timeout = {2, 0};
+    setsockopt(uds, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(uds, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    struct sockaddr_un address; memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof(address.sun_path), "%s", object_query_path);
+    if (connect(uds, (struct sockaddr *)&address, sizeof(address)) < 0) { close(uds); mesh_fail(fd, "Printer UDS unavailable"); return; }
+    if (send_all(uds, mesh_query, sizeof(mesh_query) - 1) != 0) { close(uds); mesh_fail(fd, "Mesh query failed"); return; }
+    char *reply = malloc(MESH_REPLY_MAX + 1); size_t used = 0;
+    if (!reply) { close(uds); mesh_fail(fd, "Out of memory"); return; }
+    while (used < MESH_REPLY_MAX) {
+        ssize_t n = recv(uds, reply + used, MESH_REPLY_MAX - used, 0);
+        if (n <= 0) break;
+        used += (size_t)n;
+        char *stop = memchr(reply, 3, used);
+        if (stop) { used = (size_t)(stop - reply); break; }
+    }
+    close(uds); reply[used] = 0;
+    /* The reply's bed_mesh object gets the profiles as its last member. */
+    const char *end = reply + used, *root = json_skip_space(reply, end), *e0, *e1, *e2, *e3;
+    const char *result = root < end && *root == '{' && (e0 = json_container_end(root, end)) ? json_member_object(root, e0, "result", '{', &e1) : NULL;
+    const char *status = result ? json_member_object(result, e1, "status", '{', &e2) : NULL;
+    const char *bed = status ? json_member_object(status, e2, "bed_mesh", '{', &e3) : NULL;
+    if (!bed) { free(reply); mesh_fail(fd, used ? "Unexpected mesh response" : "No mesh response"); return; }
+    json_builder b = {malloc(MESH_REPLY_MAX + 32768), 0, MESH_REPLY_MAX + 32768, 0};
+    if (!b.data) { free(reply); mesh_fail(fd, "Out of memory"); return; }
+    size_t head = (size_t)(e3 - 1 - reply); /* up to the bed_mesh object's closing brace */
+    json_builder_printf(&b, "%.*s", (int)head, reply);
+    const char *inside = json_skip_space(bed + 1, e3 - 1);
+    json_builder_printf(&b, "%s", inside < e3 - 1 ? "," : "");
+    mesh_profiles_json(&b);
+    json_builder_printf(&b, "%.*s", (int)(used - head), reply + head);
+    free(reply);
+    if (b.failed) { free(b.data); mesh_fail(fd, "Mesh response too large"); return; }
+    respond(fd, 200, "OK", "application/json; charset=utf-8", b.data, b.length);
+    free(b.data);
+}
 
 static const char *pending_autosave_guard(void) {
     if (cell_active()) return "Finish the load-cell calibration session before changing or saving printer settings";
@@ -3941,10 +3990,15 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }
 
+static int connections_busy(void);
+#include "rfid_http.h"
+#include "rfid_lifecycle_http.h"
+
 /* Release the steppers the firmware leaves energised once the printer has
  * stood idle with its heaters off; see control_idle_motors_due(). */
 static control_idle_motors idle_motors;
 static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
+    if(maintenance_barrier_active()||rn_blocks())return;
     control_idle_sample s={0};
     s.valid=gcode_idle_for_mutation(mqtt)&&mqtt->have_position&&
         uds_value(&telemetry,U_CF,&s.board_fan)&&uds_value(&telemetry,U_EG,&s.nozzle_target)&&
@@ -4032,6 +4086,17 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
         body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
     int console_emergency=!strcmp(method,"POST")&&!strcmp(path,"/api/console/command")&&body_len==4&&!memcmp(body,"M112",4);
+    int owned_rfid_cancel=rfid.child&&!strcmp(method,"POST")&&!strcmp(path,"/api/rfid/action")&&body_len==6&&!memcmp(body,"cancel",6);
+    if(maintenance_request_blocked(method,emergency,console_emergency)&&!owned_rfid_cancel){
+        app_update_fail(fd,409,"Installation or native maintenance is running; printer changes are paused");return 0;
+    }
+    if(rn_blocks()&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&
+       strcmp(path,"/api/rfid/lifecycle/action")&&!owned_rfid_cancel){
+        app_update_fail(fd,409,"RFID activation or recovery is incomplete; finish the lifecycle before changing the printer");return 0;
+    }
+    if(rfid.child&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&strcmp(path,"/api/rfid/action")){
+        plates_fail(fd,409,"Cancel the RFID scan before changing printer settings");return 0;
+    }
     if(tools.busy&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency){
         plates_fail(fd,409,"A native calibration tool is still running");return 0;
     }
@@ -4057,7 +4122,11 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
        !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
         app_update_fail(fd,409,"A nozzle expansion calibration is running; use the emergency stop to interrupt it");return 0;
     }
-    if(!strcmp(method,"GET")&&!strcmp(path,"/api/calibration-tools/status")) {
+    if(!strcmp(method,"GET")&&!strcmp(path,"/api/rfid/lifecycle")) {
+        rfid_native_status_response(fd);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/rfid/lifecycle/action")) {
+        rfid_native_action_response(fd,mqtt,console,body,body_len);
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/calibration-tools/status")) {
         tools_status(fd);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/calibration-tools/action")) {
         tools_action(fd,mqtt,body,body_len);
@@ -4072,6 +4141,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         connections_action(fd,body,body_len,1,mqtt,console);
     } else if(!strcmp(path,"/api/network/select") || !strcmp(path,"/api/network/trial")) {
         app_update_fail(fd,410,"Reload CC2 Control to use the Connections manager");
+    } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/cavity-fan-floor")){
+        cavity_floor_response(fd);
+    } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/cavity-fan-floor")){
+        cavity_floor_change(fd,mqtt,body,body_len);
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/bed-drying")){
         drying_response(fd,mqtt,console);
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/nozzle-expansion")){
@@ -4160,6 +4233,12 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         canvas_refresh_response(fd, mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/canvas/auto-refill")==0) {
         canvas_auto_refill_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/runout")==0) {
+        runout_response(fd,mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/runout/continue")==0) {
+        runout_continue_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/runout/match-material")==0) {
+        runout_setting_response(fd,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/canvas/unload")==0) {
         canvas_unload_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/canvas/unload")==0) {
@@ -4239,6 +4318,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_nozzle_select_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/mount")==0) {
         plates_mount_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/match")==0) {
+        plates_match_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/blends/restart")==0) {
+        plates_blends_restart_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/unmount")==0) {
         plates_unmount_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spools")==0) {
@@ -4280,6 +4363,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         filament_source_response(fd,console,mqtt,body,body_len);
     } else if (!strcmp(method,"GET")&&!strcmp(path,"/api/external-filament")) {
         external_filament_response(fd,mqtt);
+    } else if (!strcmp(method,"GET")&&!strcmp(path,"/api/rfid")) {
+        rfid_status_response(fd,mqtt,console);
+    } else if (!strcmp(method,"POST")&&!strcmp(path,"/api/rfid/action")) {
+        rfid_action_response(fd,mqtt,console,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/control")==0) {
         control_response(fd,console,mqtt,body,body_len);
     } else if (strcmp(method,"GET")!=0 && strcmp(method,"POST")!=0 && strcmp(method,"PUT")!=0) {
@@ -4292,7 +4379,12 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     return 0;
 }
 
+#include "rfid_app_update_boot.h"
 int main(int argc, char **argv) {
+    if(!rfid_app_update_boot()) {
+        fputs("RFID app-update recovery incomplete; retain the transaction and installation backup.\n",stderr);
+        return 1;
+    }
     int port = 8081;
     int panda_port = 7125;
     const char *web_root = "./web";
@@ -4399,6 +4491,9 @@ int main(int argc, char **argv) {
         drying_tick(&mqtt);
         nx_tick(&mqtt);
         tools_tick(&mqtt);
+        rfid_tick(&mqtt,&console);
+        rfid_native_tick(&mqtt,&console);
+        runout_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
         int max_fd=server;
@@ -4408,7 +4503,7 @@ int main(int argc, char **argv) {
         for(int i=0;i<HTTP_PENDING_MAX;i++)if(pending[i].fd>=0){
             FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
         }
-        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0||tools.busy||
+        int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0||tools.busy||runout.x.fd>=0||
             (nx.exchange.fd>=0&&nx.stage!=NX_RUNNING); /* the calibration's own reply takes up to hours */
         struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);

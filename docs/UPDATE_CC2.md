@@ -1,68 +1,92 @@
-# CC2 Control 1.2.25 update
+# CC2 Control 1.2.26 update
 
-For ELEGOO Centauri Carbon 2 on compatible Community Firmware V4.4 / V4.4.1 /
-V4.4.2 / V4.4.3, ELEGOO base 02.01.01.07. Exact native fingerprints are checked.
-This updates the web application and its cumulative optional components, not the
-native display. For the native touchscreen refresh install full firmware V4.4.3.
+This cumulative update is for the exact supported **Community Firmware V4.4.3**
+profile on the Centauri Carbon 2 (ELEGOO base 02.01.01.07, Canvas 00.00.00.44).
+It does not replace the native touchscreen or the base firmware. Stock, V4.3,
+modified startup files, unfinished native operations and unknown profiles are
+refused rather than overwritten. Update an older Community Firmware base to
+V4.4.3 before using this complete package.
 
-## Before installation
+One installer selects first installation, supported active RFID update or an
+already current installation automatically. Computer and signed panel updates
+use the same payload. Native/runtime hashes and the live printer state are
+verified independently of the displayed version.
 
-Use a connected, idle and cold printer, with both heater targets zero and nozzle
-and bed at most 50 C. Close video viewers. Keep backups. Remove any separately
-installed extended Canvas pull-back experiment and reboot according to its guide
-before ordinary app/firmware updates; this release does not qualify that component.
+## Install
 
-During Ethernet driver installation/activation, Canvas LEDs may briefly flash red
-while native services realign, then return to their normal operational state.
-Wait for Canvas to reconnect and follow any complete idle-printer reboot request
-before printing. Existing active camera fixes are preserved.
+Use an Idle, cold printer with both heater targets zero, no printing, scans or
+calibrations, and close camera viewers. Keep power and the local connection
+available. Windows: extract the whole ZIP and run **Install-Windows.cmd**.
+Linux/macOS: `sh ./install-cc2-control.sh PRINTER-IP`. OpenSSH is required; use
+root and the SSH password, separately from the panel LAN access code. Existing
+users can instead install the signed update through Settings → Updates.
 
-## Existing web panel
+The installer retains configuration, materials, preferences, plates, spools and
+calibrations. Record its printed backup path. Payloads use an exclusive
+persistent `/opt/usr` stage, not RAM-backed `/tmp`; at least 64 MiB free disk and
+24 MiB available RAM are required before transfer. Hashes, health, MQTT and
+running-app identity are checked. On success payload files are cleaned; logs
+and rollback backups remain. On failure preserve the reported stage and log.
 
-Open Settings -> Updates and check for updates. Download and verify 1.2.25, then
-confirm installation separately using the printer's LAN access code. This differs
-from the SSH password. Alternatively upload the signed
-CC2-Control-1.2.25-V4.4.cc2update file. An installer ZIP is not a panel upload.
+## Printers without Canvas
 
-After completion, reload the page. Follow the installer result and retain the
-backup/restore path. Unknown native profiles retain native Wi-Fi; they do not
-force activation of an unqualified Ethernet component.
+On a CC2 non Combo, or while Canvas is not currently connected, the installer
+updates CC2 Control, EXHAUST, camera and Connections without publishing an RFID
+activation request. The normal panel remains usable; it does not wait for an
+RFID reader that is absent. No Canvas firmware is written. If Canvas is added
+later, rerun this same installer with Canvas connected to stage guarded RFID
+activation. Existing active RFID updates retain their independent profile and
+safety checks and do not require a live Canvas response just to rebind the app.
 
-## Computer-assisted installer
+## First RFID activation
 
-Download CC2-Control-1.2.25-Multiplatform-Update.zip and extract it completely.
-Check SHA256SUMS.txt from the release. On Windows run Install-Windows.cmd; on
-Linux/macOS use sh install-cc2-control.sh PRINTER-IP. OpenSSH is required. Use root
-and your existing SSH password. Logs and rollback backups are retained.
+The package includes the EXHAUST minimum component, camera/recovery fixes and
+Connections runtime as well as the guarded RFID activation flow. It first saves
+and verifies the original Canvas application already present on the printer,
+then stages the host protection. **Follow the full idle-printer reboot prompts**
+in Canvas → RFID. After the guard is verified on the next boot, activation
+modifies the Canvas application to remove its producer filter. A further full
+reboot verifies the Canvas and native guard. Canvas LEDs can flash red while
+the native process is stopped for transfer. Do not interrupt power or reboot
+during a transfer. No automatic material assignment, heating or motion occurs.
 
-## Base-firmware reinstall
+An already active supported update preserves Canvas, loaded native libraries,
+startup files and the original backup; only the application and four linked
+RFID files are rebound. It performs no unnecessary Canvas firmware transfer.
+An already current installation is verified without replaying activation.
 
-An exact supported base-firmware reinstall can reset hooks while retaining
-/opt/usr. The installer recognizes the reviewed combination of originals,
-component files and missing hooks, backs up the previous state and stages the
-recovery without changing the live network. A complete idle-printer reboot is
-required when requested. Foreign edits remain refused; do not remove checksums
-or bypass the installer to force a recovery.
+RFID scans wait for fresh native/MQTT observations before arming. Present the
+tag only after the scan is armed, review the preview, choose a Canvas slot and
+confirm. Assignment and physical filament presence are separate: insert the
+filament in the chosen inlet to mark it present. An Anycubic PETG tag and a
+Creality spool were physically read; this does not establish all-brand/tag
+compatibility. The transfer protocol confirms ACKs, not physical flash readback.
 
-## Compatibility
+## Recovery and restore
 
-The physically qualified USB Ethernet profile is TP-Link UE300 / Realtek RTL8153,
-0bda:8153 revision31fd. Revision3000 is an explicit experiment; other revisions and
-USB IDs are not implicitly qualified. Wi-Fi works without an adapter. Enable
-Ethernet only when wanted; the stock kernel is unchanged.
+Keep the exact restore command printed by your installation. For a supported
+app-only upgrade it restores the prior app and its linked RFID files together.
+Before removing the native host protection or changing base firmware, use the
+RFID panel flow to restore the original Canvas, complete its required full
+reboot and verification, then remove the host protection and complete its
+reboot. Do not remove the guard while the modified Canvas remains active.
 
-## Restore
+If recovery is required, keep power connected, retain journal/logs/backups and
+follow the reported recovery state. Do not delete locks or overwrite startup
+files. A completed software rollback does not claim a physical flash readback.
 
-Use only the backup path and restore command printed by your own installation,
-with the printer idle and cold. Persistent configuration is retained. A firmware
-predecessor may launch /opt/inst/cc2-control, while an application update installs
-under /opt/usr/cc2-control; this difference is expected.
+## SSH host-key changes
 
-## Disk staging and memory
+Only for an expected change use `-ResetHostKey` (Windows) or `--reset-host-key`
+(Linux/macOS). Confirm the exact printer address; verify the new SSH fingerprint.
+Only that address is removed from default known_hosts. Custom known_hosts or
+HostKeyAlias require manual handling.
 
-The PC installer uses a private stage on persistent /opt/usr, not RAM-backed /tmp.
-It requires at least 64 MiB free disk and 24 MiB available RAM before transfer.
-The installer rechecks memory before parsing embedded components. Close viewers;
-if a resource check refuses, retain the message and retry only after resolving it.
-A successful attempt removes the verified input payload, retaining logs/backups.
-A failed attempt is retained for diagnosis.
+[Release notes](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.26-V4.4)
+· [English guide](https://github.com/Neme77/centauri-carbon-2-community/blob/develop/docs/UPDATE_CC2.md)
+· [Italian guide](https://github.com/Neme77/centauri-carbon-2-community/blob/develop/docs/UPDATE_CC2.it.md)
+
+The build/signing gate accepts only the reviewed app/native artifact hashes in
+`installer/native-release.json`. The package contains no vendor firmware image,
+private signing key or printer credentials. Source and native runtime provenance
+are attached to the release; exact runtime/profile admission remains required.

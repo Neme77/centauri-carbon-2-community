@@ -11,9 +11,15 @@ static char active_profile[32]="default";
 static int refuse_mesh_load, ignore_mesh_load, corrupt_active_matrix, missing_active_matrix;
 static char ran[256];            /* the last SET_GCODE_OFFSET */
 static char profile_log[1024];   /* BED_MESH_PROFILE scripts, separated by '|' */
+static char fake_print_file[64] = "local/job.gcode", fake_layer[16] = "null"; /* print_stats as the printer answers it */
 static int fake_uds(const char *query, char **reply, size_t *length) {
     if (uds_down) return -1;
     json_builder b = {malloc(65536), 0, 65536, 0};
+    if (strstr(query, "\"print_stats\"")) {
+        json_builder_printf(&b, "{\"id\":203,\"result\":{\"status\":{\"print_stats\":{\"filename\":\"%s\",\"info\":{\"current_layer\":%s,\"total_layer\":null}}}}}",
+                            fake_print_file, fake_layer);
+        *reply = b.data; *length = b.length; return 0;
+    }
     if (strstr(query, "gcode/script")) {
         const char *script = strstr(query, "\"script\":\"") + 10;
         int n = (int)(strchr(script, '"') - script);
@@ -146,6 +152,7 @@ static int call(int handler, const mqtt_client *mqtt, const char *body) {
         case 11: plates_nozzle_delete_response(pair[0], mqtt, body, length); break;
         case 12: plates_nozzle_select_response(pair[0], mqtt, body, length); break;
         case 13: plates_create_response(pair[0], mqtt, body, length); break;
+        case 14: plates_match_response(pair[0], body, length); break;
     }
     close(pair[0]);
     size_t used = 0; ssize_t n;
@@ -184,6 +191,19 @@ static void restart_service(void) {
     FILE *f = fopen(next, "wb"); assert(f); fclose(f);
     assert(rename(next, service_socket) == 0);
 }
+
+
+/* A printer socket that answers only what the test writes (the real nonblocking transport). */
+static int fake_listener = -1, fake_peer = -1;
+static void fake_printer(const char *path) {
+    struct sockaddr_un a; memset(&a, 0, sizeof(a)); a.sun_family = AF_UNIX;
+    assert(strlen(path) < sizeof(a.sun_path)); memcpy(a.sun_path, path, strlen(path) + 1);
+    unlink(path); fake_listener = socket(AF_UNIX, SOCK_STREAM, 0); assert(fake_listener >= 0);
+    assert(!bind(fake_listener, (struct sockaddr *)&a, sizeof(a)) && !listen(fake_listener, 8));
+}
+static int fake_pending(void) { struct pollfd p = {fake_listener, POLLIN, 0}; return poll(&p, 1, 0) > 0; }
+static void fake_accept(void) { if (fake_peer >= 0) close(fake_peer); fake_peer = accept(fake_listener, NULL, NULL); assert(fake_peer >= 0); }
+static size_t fake_drain(void) { char b[2048]; ssize_t n = recv(fake_peer, b, sizeof(b), MSG_DONTWAIT); return n > 0 ? (size_t)n : 0; }
 
 static void new_process(void) { /* what a CC2 Control restart forgets */
     plates_reboot_requested = 0; plates_z_valid = 0; plates_result = ""; reboot_pending = 0; reboot_guard = NULL;
@@ -704,6 +724,145 @@ static void test_measures(void) {
     plates_late.armed -= 181000; plates_tick(&mqtt); assert(!plates_late.state && !strcmp(plates_late_result, "not_started"));
     plates_print_arm("", 'A'); assert(!plates_late.state && !plates_late_result[0]);
 
+    /* Prints started elsewhere (#296): with matching on, the nearest usable measurement to the
+     * bed target is loaded like a dialog choice; off, or started from the dialog, nothing happens. */
+    {
+        plates_dialog_ms = -1; plates_auto.phase = 0;
+        #define NEW_PRINT(bed) do { strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt); \
+            strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0; \
+            telemetry.values[U_BG] = (bed); telemetry.present |= UINT32_C(1) << U_BG; } while (0)
+        NEW_PRINT(62); plates_tick(&mqtt);
+        assert(!plates_late.state && !strcmp(plates_auto.result, "off"));                  /* off by default */
+        assert(call(14, &mqtt, "maybe") == 400 && call(14, &mqtt, "on") == 200 && plates_match_enabled());
+        { size_t n; char *saved = slurp(plates_path, &n); assert(saved && strstr(saved, "\"match_temperature\":true")); free(saved); } /* persisted */
+        /* the bed target arrives after the start: wait for it */
+        NEW_PRINT(0); telemetry.present &= ~(UINT32_C(1) << U_BG); plates_tick(&mqtt);
+        assert(plates_auto.phase == 1 && !plates_late.state);
+        telemetry.values[U_BG] = 20; telemetry.present |= UINT32_C(1) << U_BG; plates_tick(&mqtt);
+        assert(plates_auto.phase == 1 && !plates_late.state);                                 /* not a bed target yet */
+        profile_log[0] = 0; telemetry.values[U_BG] = 62; plates_tick(&mqtt);
+        assert(!strcmp(plates_auto.result, "armed") && !strcmp(plates_late.measure, first) && !strcmp(plates_late.source, "auto"));
+        assert(plates_late.loads == 1 && strstr(profile_log, first));                         /* loaded in the same tick */
+        assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"source\":\"auto\"") &&
+               strstr(response, "\"match\":{\"enabled\":true,\"result\":\"armed\","));
+        NEW_PRINT(85); plates_tick(&mqtt); assert(!strcmp(plates_late.measure, m80));       /* nearest: 80 */
+        NEW_PRINT(100); plates_tick(&mqtt);                                                 /* the slot holds 100 */
+        assert(!plates_late.state && !strcmp(plates_auto.result, "slot"));
+        NEW_PRINT(110); plates_tick(&mqtt); assert(!strcmp(plates_auto.result, "slot"));    /* beyond: the nearest */
+        /* a print CC2 Control started itself keeps the dialog's choice */
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        plates_print_arm("", 'A'); NEW_PRINT(62); plates_tick(&mqtt);
+        assert(!plates_late.state && plates_auto.phase == 2 && !strcmp(plates_auto.result, ""));
+        plates_dialog_ms = -1;
+        /* first seen after the first layer began (a CC2 Control restart mid-print): left alone */
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        strcpy(telemetry.print_state, "printing"); telemetry.values[U_LAYER] = 5; telemetry.values[U_BG] = 62;
+        profile_log[0] = 0;
+        for (int i = 0; i < 4; ++i) { plates_late.sent = 0; plates_tick(&mqtt); }
+        assert(!plates_late.loads && !profile_log[0]);                                       /* never loaded */
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        assert(!plates_late.state && !strcmp(plates_late_result, "ended"));
+        /* no plate mounted: nothing */
+        char mounted[PLATE_ID_LEN + 1]; memcpy(mounted, plates.current, sizeof(mounted)); plates.current[0] = 0;
+        NEW_PRINT(62); plates_tick(&mqtt); assert(!plates_late.state && !strcmp(plates_auto.result, "off"));
+        memcpy(plates.current, mounted, sizeof(mounted));
+        /* a paused print resuming is not a new print */
+        NEW_PRINT(62); plates_tick(&mqtt); assert(plates_late.state);
+        plates_late_finish("ended"); strcpy(telemetry.print_state, "paused"); plates_tick(&mqtt);
+        strcpy(telemetry.print_state, "printing"); plates_tick(&mqtt); assert(!plates_late.state);
+        #undef NEW_PRINT
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        assert(call(14, &mqtt, "off") == 200 && !plates_match_enabled());
+        telemetry.present &= ~(UINT32_C(1) << U_BG);
+    }
+
+    /* After a printer restart the layer count is never pushed for a new print that starts on layer 0
+     * (it did not change), and the file change cleared the old one: CC2 Control asks the printer. */
+    {
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        snprintf(telemetry.filename, sizeof(telemetry.filename), "local/job.gcode"); telemetry.have_filename = 1;
+        plates_late_arm(first, 'A', "auto");
+        strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default");
+        telemetry.present &= ~(UINT32_C(1) << U_LAYER);
+        strcpy(fake_layer, "null"); profile_log[0] = 0;
+        plates_late_tick(); plates_late_tick();
+        assert(plates_late.layer_reset && plates_late.loads == 1 && strstr(profile_log, first)); /* proof by asking */
+        /* the answer is for another file: no proof */
+        plates_late_arm(first, 'A', "auto"); snprintf(fake_print_file, sizeof(fake_print_file), "local/other.gcode");
+        profile_log[0] = 0; plates_late_tick(); plates_late_tick(); plates_late.asked -= 3000; plates_late_tick();
+        assert(!plates_late.loads && !profile_log[0]);
+        snprintf(fake_print_file, sizeof(fake_print_file), "local/job.gcode");
+        /* the first layer began: the next answer withdraws the proof, and an old answer expires */
+        plates_late_arm(first, 'A', "auto"); strcpy(fake_layer, "0");
+        plates_late_tick(); plates_late_tick(); assert(plates_late.loads == 1);
+        strcpy(fake_layer, "1"); plates_late.asked -= 3000; plates_late.sent -= 3000; plates_late_tick();
+        assert(!plates_late.layer0_at && plates_late.loads == 1);
+        strcpy(fake_layer, "0"); plates_late.layer0_at = monotonic_ms() - PLATES_LATE_LAYER_MS - 1; plates_late.asked = monotonic_ms();
+        plates_late.sent -= 3000; plates_late_tick(); assert(plates_late.loads == 1);    /* stale: not trusted */
+        /* telemetry that does carry the layer is used as before, without asking */
+        plates_late_finish("ended"); strcpy(fake_layer, "null");
+        telemetry.values[U_LAYER] = 0; telemetry.present |= UINT32_C(1) << U_LAYER;
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+    }
+
+    /* The real transport, as on a CC2 on 2026-11-04: a load written while the print start waits for
+     * its bed temperature is answered minutes later, and G180 S7 then loads the slot again. One
+     * load is in flight at a time, its answer is awaited without retries piling up, and the slot
+     * coming back gets a new load. */
+    {
+        static char sock[600]; snprintf(sock, sizeof(sock), "%s.sock", plates_path);
+        fake_printer(sock);
+        const char *saved_path = object_query_path; int (*saved_uds)(const char *, char **, size_t *) = plates_uds;
+        object_query_path = sock; plates_uds = uds_query_json;
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+        plates_late_arm(first, 'A', "auto");
+        strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0;
+        plates_late_tick(); plates_late_tick();                            /* started, layer 0 seen, connecting */
+        fake_accept();
+        for (int i = 0; i < 50 && !plates_late.reply_wait; ++i) { plates_late_tick(); usleep(2000); }
+        assert(plates_late.reply_wait && fake_drain() > 0);
+        long long deadline = plates_late.x.deadline, now = monotonic_ms();
+        assert(deadline > now + PLATES_LATE_REPLY_MS - 5000 && deadline <= now + PLATES_LATE_REPLY_MS);
+        /* the printer is heating: nothing answers; no second request, nothing counted, deadline fixed */
+        for (int i = 0; i < 30; ++i) { plates_late.sent -= 2000; plates_late_tick(); }
+        long long almost = monotonic_ms() + 1000; plates_late.x.deadline = almost;     /* 9 m 59 s later */
+        for (int i = 0; i < 5; ++i) plates_late_tick();
+        assert(!fake_pending() && !plates_late.loads && !plates_late.failures && plates_late.x.deadline == almost);
+        /* the wait ends: the queued load runs and is answered */
+        const char *answer = "{\"id\":204,\"result\":{}}\003";
+        assert(send(fake_peer, answer, strlen(answer), 0) == (ssize_t)strlen(answer));
+        for (int i = 0; i < 20 && plates_late.x.fd >= 0; ++i) { plates_late_tick(); usleep(2000); }
+        assert(plates_late.loads == 1 && plates_late.x.fd < 0);
+        snprintf(telemetry.mesh_profile, sizeof(telemetry.mesh_profile), "cc2_%s", first);
+        plates_late.sent -= 2000; plates_late_tick(); assert(!fake_pending()); /* ours is active: nothing to do */
+        /* G180 S7 loads the slot again before the first layer: a new load follows */
+        strcpy(telemetry.mesh_profile, "default"); plates_late.sent -= 2000; plates_late_tick();
+        fake_accept();
+        for (int i = 0; i < 50 && !plates_late.reply_wait; ++i) { plates_late_tick(); usleep(2000); }
+        assert(fake_drain() > 0);
+        assert(send(fake_peer, answer, strlen(answer), 0) == (ssize_t)strlen(answer));
+        for (int i = 0; i < 20 && plates_late.x.fd >= 0; ++i) { plates_late_tick(); usleep(2000); }
+        assert(plates_late.loads == 2);
+        snprintf(telemetry.mesh_profile, sizeof(telemetry.mesh_profile), "cc2_%s", first);
+        telemetry.values[U_LAYER] = 1; plates_late_tick();
+        assert(!plates_late.state && !strcmp(plates_late_result, "loaded"));
+        /* a printer that never answers: the request expires once, then a few retries, then "failed" */
+        plates_late_arm(first, 'A', "auto"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0;
+        plates_late_tick(); plates_late_tick();
+        for (int round = 0; round < PLATES_LATE_FAILURES; ++round) {
+            fake_accept();
+            for (int i = 0; i < 50 && !plates_late.reply_wait; ++i) { plates_late_tick(); usleep(2000); }
+            assert(plates_late.reply_wait); plates_late.x.deadline = monotonic_ms() - 1;
+            plates_late_tick(); assert(plates_late.failures == round + 1 && !plates_late.loads);
+            plates_late.sent -= 2000; plates_late_tick();
+        }
+        plates_late.sent -= 6000; plates_late_tick();
+        assert(!plates_late.state && !strcmp(plates_late_result, "failed"));
+        close(fake_peer); fake_peer = -1; close(fake_listener); fake_listener = -1; unlink(sock);
+        object_query_path = saved_path; plates_uds = saved_uds;
+        strcpy(telemetry.print_state, "complete"); plates_tick(&mqtt);
+    }
+
     /* Measurements leave one by one; a plate keeps its last one. */
     snprintf(body, sizeof(body), "%s", m100);
     profile_log[0] = 0; measure_find(m80)->measured = 2000000000;
@@ -992,6 +1151,199 @@ static void test_background_transport(void) {
     close(pair[1]);plates_uds=fake_uds;
 }
 
+
+/* ---- blended meshes between measurements (#296) ------------------------------------ */
+static plate_blend memory_blends[PLATE_BLEND_MAX];
+static int memory_blend_count;
+static int blend_uds(const char *query, char **reply, size_t *length) {
+    if (!strstr(query, "\"profiles\"")) return fake_uds(query, reply, length);
+    json_builder b = {malloc(1 << 20), 0, 1 << 20, 0};
+    json_builder_printf(&b, "{\"id\":203,\"result\":{\"status\":{\"bed_mesh\":{\"profiles\":{");
+    for (int i = 0; i < memory_blend_count; ++i) {
+        const plate_mesh *m = &memory_blends[i].mesh;
+        json_builder_printf(&b, "%s\"%s\":{\"mesh_params\":{\"x_count\":%d,\"y_count\":%d,\"mesh_x_pps\":%d,\"mesh_y_pps\":%d,"
+            "\"min_x\":%.6f,\"max_x\":%.6f,\"min_y\":%.6f,\"max_y\":%.6f,\"tension\":%.6f,\"algo\":\"%s\"},\"points\":[",
+            i ? "," : "", memory_blends[i].name, m->x_count, m->y_count, m->x_pps, m->y_pps, m->min_x, m->max_x, m->min_y,
+            m->max_y, m->tension, m->algo);
+        for (int r = 0; r < m->y_count; ++r) {
+            json_builder_printf(&b, "%s[", r ? "," : "");
+            for (int c = 0; c < m->x_count; ++c) json_builder_printf(&b, "%s%.6f", c ? "," : "", m->points[r * m->x_count + c]);
+            json_builder_printf(&b, "]");
+        }
+        json_builder_printf(&b, "]}");
+    }
+    json_builder_printf(&b, "}}}}}");
+    assert(!b.failed); *reply = b.data; *length = b.length; return 0;
+}
+static void add_measure(const char *plate, const char *id, int temp, plate_mesh mesh, long long when) {
+    plate_measure *m = &plates.measures[plates.measure_count++];
+    memset(m, 0, sizeof(*m));
+    snprintf(m->id, sizeof(m->id), "%s", id); snprintf(m->plate, sizeof(m->plate), "%s", plate);
+    m->temp = temp; m->mesh = mesh; m->measured = when;
+}
+
+static void test_blends(void) {
+    mqtt_client mqtt; memset(&mqtt, 0, sizeof(mqtt)); fresh(&mqtt);
+    const char *id = "7d29710cf494c5ff";
+    memset(&plates, 0, sizeof(plates)); plates_available = 1; plates.count = 1; plates.match = 1;
+    snprintf(plates.plates[0].id, sizeof(plates.plates[0].id), "%s", id);
+    snprintf(plates.plates[0].name, sizeof(plates.plates[0].name), "Supertack"); plates.plates[0].side = 'A';
+    plate_mesh m60 = grid(-0.8), m90 = grid(-0.7), m100 = grid(-0.75), m110 = grid(-0.74);
+    for (int i = 0; i < 121; ++i) m90.points[i] += (double)(i % 11) / 100.0; /* a different shape, not just height */
+    add_measure(id, "aa00000000000060", 60, m60, 1000); add_measure(id, "aa00000000000110", 110, m110, 1004);
+    add_measure(id, "aa00000000000090", 90, m90, 1002); add_measure(id, "aa00000000000100", 100, m100, 1003);
+    memcpy(plates.current, id, sizeof(plates.current));
+
+    /* the plan: up to PLATE_BLEND_MAX, where the nearest mesh would be furthest off, never beyond the range.
+     * 60-90 differ most (0.1 mm and a different shape): 75 first, then 95 (90-100), then 70 and 85. */
+    plate_blend b[PLATE_BLEND_MAX];
+    int n = plate_blend_plan(&plates.plates[0], b);
+    int want[] = {70, 75, 85, 95};
+    assert(PLATE_BLEND_MAX == 4 && n == 4);
+    for (int i = 0; i < n; ++i) assert(b[i].temp == want[i]);
+    assert(!strcmp(b[0].name, "cc2b_7d29710cf494c5ff_70"));
+    for (int k = 0; k < 121; ++k) { /* 75 C is halfway between 60 and 90, 95 between 90 and 100 */
+        assert(fabs(b[1].mesh.points[k] - round((m60.points[k] + m90.points[k]) / 2 * 1e6) / 1e6) < 1e-9);
+        assert(fabs(b[3].mesh.points[k] - round((m90.points[k] + m100.points[k]) / 2 * 1e6) / 1e6) < 1e-9);
+        assert(fabs(b[0].mesh.points[k] - round((m60.points[k] * 2 + m90.points[k]) / 3 * 1e6) / 1e6) < 1e-9);
+    }
+    /* two measurements far apart: halves, then quarters */
+    plates.measure_count = 0; add_measure(id, "aa00000000000030", 30, m60, 1); add_measure(id, "aa00000000000110", 110, m90, 2);
+    n = plate_blend_plan(&plates.plates[0], b);
+    assert(n == 4 && b[0].temp == 40 && b[1].temp == 50 && b[2].temp == 70 && b[3].temp == 90);
+    /* nearly identical meshes need no blend */
+    plate_mesh near = m60; near.points[0] += 0.001;
+    plates.measure_count = 0; add_measure(id, "aa00000000000030", 30, m60, 1); add_measure(id, "aa00000000000110", 110, near, 2);
+    assert(plate_blend_plan(&plates.plates[0], b) == 0);
+    /* a pair with different grids is not blended; one temperature measured twice uses the newest */
+    plates.measure_count = 0;
+    plate_mesh coarse = m90; coarse.x_count = coarse.y_count = 7;
+    add_measure(id, "aa00000000000060", 60, m60, 1000); add_measure(id, "aa00000000000090", 90, coarse, 1002);
+    add_measure(id, "aa00000000000100", 100, m100, 1003); add_measure(id, "aa00000000000101", 100, m90, 1001);
+    add_measure(id, "aa00000000000110", 110, m110, 1004);
+    n = plate_blend_plan(&plates.plates[0], b);
+    assert(n == 1 && b[0].temp == 105);
+    for (int k = 0; k < 121; ++k) assert(fabs(b[0].mesh.points[k] - round((m100.points[k] + m110.points[k]) / 2 * 1e6) / 1e6) < 1e-9);
+    plates.measure_count = 0;
+    add_measure(id, "aa00000000000060", 60, m60, 1000); add_measure(id, "aa00000000000090", 90, m90, 1002);
+    add_measure(id, "aa00000000000100", 100, m100, 1003); add_measure(id, "aa00000000000110", 110, m110, 1004);
+    n = plate_blend_plan(&plates.plates[0], b); assert(n == 4);
+
+    /* the file: blends added and removed, every other byte as it was */
+    plate_mesh slot_a = m110, slot_b = grid(0.1); write_autosave(&slot_a, &slot_b);
+    size_t original_length = 0, length = 0; char *original = slurp(printer_autosave_path, &original_length);
+    assert(plates_blends_in_file(b, n) == 0 && plates_blends_write(b, n) == 0 && plates_blends_in_file(b, n) == 1);
+    char *text = slurp(printer_autosave_path, &length), *bare; size_t bare_length = 0;
+    plate_mesh check; assert(autosave_find(text, length, "cc2b_7d29710cf494c5ff_75", &check) == 1 && plate_mesh_equal(&check, &b[1].mesh, 1));
+    assert(autosave_find(text, length, "default", &check) == 1 && plate_mesh_equal(&check, &slot_a, 1));
+    bare = autosave_with_blends(text, length, b, 0, &bare_length);
+    assert(bare && bare_length == original_length && !memcmp(bare, original, original_length)); /* removal restores the file */
+    free(bare); free(text);
+    assert(plates_blends_write(b, n) == 0);                                   /* already there: unchanged */
+    assert(plates_blends_write(b + 2, 2) == 0 && plates_blends_in_file(b + 2, 2) == 1);
+    text = slurp(printer_autosave_path, &length);
+    assert(autosave_find(text, length, "cc2b_7d29710cf494c5ff_75", &check) == 0 && autosave_find(text, length, "cc2b_7d29710cf494c5ff_95", &check) == 1);
+    free(text); free(original);
+
+    /* the main loop: written while idle, used only once the printer has them in memory */
+    plates_uds = blend_uds; memory_blend_count = 0; plates_blends.planned = 0;
+    telemetry.have_print_state = 1; strcpy(telemetry.print_state, "standby");
+    mqtt.machine_status = 2; plates_blends_tick(&mqtt);                         /* busy: planned, not written */
+    assert(!strcmp(plates_blends.state, "planned") && plates_blends_in_file(plates_blends.b, 4) == 0);
+    fresh(&mqtt); plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "written") && plates_blends.count == 4 && plates_blends_in_file(plates_blends.b, 4) == 1);
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "written") && !plates_blends.b[0].live);  /* not in memory before a restart */
+    assert(!plates_blend_for(&plates.plates[0], 104, measure_find("aa00000000000100")));
+    /* the restart button */
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"blends\":{\"state\":\"written\",\"temps\":[{\"temp\":70,\"live\":false}"));
+    int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    plates_blends_restart_response(pair[0], &mqtt); close(pair[0]);
+    ssize_t got = recv(pair[1], response, sizeof(response) - 1, 0); response[got > 0 ? got : 0] = 0; close(pair[1]);
+    assert(status_of(response) == 202 && reboot_pending && reboot_guard == plates_reboot_guard);
+    reboot_pending = 0; reboot_guard = NULL;
+    /* after the restart the printer has them, with exactly the planned points */
+    memcpy(memory_blends, plates_blends.b, sizeof(memory_blends)); memory_blend_count = 4;
+    memory_blends[2].mesh.points[5] += 0.001;                                   /* one differs: that one is not used */
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "written") && plates_blends.b[0].live && !plates_blends.b[2].live);
+    memory_blends[2].mesh.points[5] -= 0.001;
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "ready"));
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair)); plates_blends_restart_response(pair[0], &mqtt); close(pair[0]);
+    got = recv(pair[1], response, sizeof(response) - 1, 0); response[got > 0 ? got : 0] = 0; close(pair[1]);
+    assert(status_of(response) == 409 && !reboot_pending);                      /* nothing waiting */
+    /* selection: a loaded blend closer than the nearest measurement wins */
+    const plate_blend *x = plates_blend_for(&plates.plates[0], 94, measure_find("aa00000000000090"));
+    assert(x && x->temp == 95);
+    assert(!plates_blend_for(&plates.plates[0], 99, measure_find("aa00000000000100")));    /* 100 is nearer */
+    x = plates_blend_for(&plates.plates[0], 76, measure_find("aa00000000000090")); assert(x && x->temp == 75);
+    /* a print started elsewhere at 94 C gets the 95 C blend */
+    plates_auto.phase = 0; plates_dialog_ms = -1; plates_late.state = 0;
+    strcpy(telemetry.print_state, "printing"); strcpy(telemetry.mesh_profile, "default"); telemetry.values[U_LAYER] = 0;
+    telemetry.present |= (UINT32_C(1) << U_LAYER) | (UINT32_C(1) << U_BG); telemetry.values[U_BG] = 94;
+    plates_auto_tick();
+    assert(!strcmp(plates_auto.result, "armed_blend") && !strcmp(plates_late.profile, "cc2b_7d29710cf494c5ff_95") &&
+           plates_late.blend_temp == 95 && !plates_late.measure[0]);
+    profile_log[0] = 0; plates_late_tick(); plates_late_tick();
+    assert(strstr(profile_log, "BED_MESH_PROFILE LOAD=cc2b_7d29710cf494c5ff_95"));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"blend_temp\":95"));
+    plates_late_finish("ended"); strcpy(telemetry.print_state, "complete"); plates_auto_tick();
+    /* a new measurement plans again */
+    add_measure(id, "aa00000000000080", 80, m90, 1005);
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(plates_blends.count == 4 && !strcmp(plates_blends.state, "written") && plates_blends.b[0].temp != 70); /* planned again */
+    /* off: the written blends leave the file while idle, every other byte as it was */
+    text = slurp(printer_autosave_path, &length); bare = autosave_with_blends(text, length, NULL, 0, &bare_length); free(text);
+    assert(bare && bare_length < length);
+    assert(plates_match_save(0) == 0);
+    mqtt.machine_status = 2; plates_blends_tick(&mqtt);                         /* busy: left alone */
+    assert(!strcmp(plates_blends.state, "off") && !plates_blends.count && plates_blends_in_file(NULL, 0) == 0);
+    fresh(&mqtt); plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "off") && plates_blends_in_file(NULL, 0) == 1);
+    text = slurp(printer_autosave_path, &length);
+    assert(length == bare_length && !memcmp(text, bare, length) && !strstr(text, "cc2b_"));
+    assert(autosave_find(text, length, "default", &check) == 1 && plate_mesh_equal(&check, &slot_a, 1));
+    free(text); free(bare);
+    plates_blends.next_ms = 0; plates_blends_tick(&mqtt); assert(!strcmp(plates_blends.state, "off")); /* nothing more to do */
+    /* on again: planned and written again */
+    assert(plates_match_save(1) == 0); plates_blends.next_ms = 0; plates_blends_tick(&mqtt);
+    assert(!strcmp(plates_blends.state, "written") && plates_blends_in_file(plates_blends.b, plates_blends.count) == 1);
+    assert(plates_match_save(0) == 0); plates_blends.next_ms = 0; plates_blends_tick(&mqtt); assert(plates_blends_in_file(NULL, 0) == 1);
+    plates_uds = fake_uds;
+    telemetry.present &= ~((UINT32_C(1) << U_LAYER) | (UINT32_C(1) << U_BG));
+    printf("PASS: blended meshes: largest-error-first plan on 5 C steps within the measured range, limit of %d, same-grid pairs, exact points, file add/remove "
+           "keeping every other byte, memory check before use, restart only when waiting, nearest-wins selection, auto print, removed when switched off\n", PLATE_BLEND_MAX);
+}
+
+/* The match setting is part of the plate library: it follows --plates whatever the service's
+ * working directory is (the service starts in /), and it is backed up with the plates. */
+static void test_match_setting(void) {
+    char elsewhere[] = "/tmp/cc2-plates-cwd-XXXXXX", before[512];
+    assert(mkdtemp(elsewhere) && getcwd(before, sizeof(before)) && !chdir(elsewhere));
+    memset(&plates, 0, sizeof(plates)); plates_available = 1; plates.count = 1;           /* one uncalibrated plate */
+    snprintf(plates.plates[0].id, sizeof(plates.plates[0].id), "5a1e000000000001");
+    snprintf(plates.plates[0].name, sizeof(plates.plates[0].name), "Textured"); plates.plates[0].side = 'A';
+    assert(plates_save() == 0);
+    plates_load(); assert(plates_available && plates.count == 1 && !plates_match_enabled());
+    int plate_count = plates.count, measure_count = plates.measure_count;
+    assert(plates_match_save(1) == 0 && plates_match_enabled());
+    size_t n; char *saved = slurp(plates_path, &n);
+    assert(saved && strstr(saved, "\"match_temperature\":true}")); free(saved);
+    DIR *d = opendir("."); struct dirent *e; int entries = 0;
+    while ((e = readdir(d))) entries += strcmp(e->d_name, ".") && strcmp(e->d_name, "..");
+    closedir(d); assert(!entries);                                                  /* nothing written in the cwd */
+    plates_load(); assert(plates_match_enabled());                                 /* reloaded from --plates */
+    assert(plates.count == plate_count && plates.measure_count == measure_count);  /* the library is intact */
+    assert(plates_match_save(0) == 0 && !plates_match_enabled());
+    saved = slurp(plates_path, &n); assert(saved && !strstr(saved, "match_temperature")); free(saved);
+    plates_load(); assert(!plates_match_enabled());
+    plates_available = 0; assert(plates_match_save(1) != 0 && !plates_match_enabled()); /* no library: no setting */
+    plates_load();
+    assert(!chdir(before) && !rmdir(elsewhere));
+    printf("PASS: match setting stored in the plate library at --plates, independent of the working directory\n");
+}
+
 int main(void) {
     char directory[] = "/tmp/cc2-plates-XXXXXX";
     assert(mkdtemp(directory));
@@ -1016,6 +1368,8 @@ int main(void) {
     test_empty_plate();
     test_print_setup();
     test_background_transport();
+    test_blends();
+    test_match_setting();
     printf("PASS: plate library\n");
     return 0;
 }
