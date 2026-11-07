@@ -39,19 +39,23 @@ export const queue = store({ data: null as Queue | null, ok: true })
 
 export async function refreshQueue() {
   try {
-    queue.set({ data: await request('/api/queue'), ok: true })
+    // A backend without the queue (or a demo that does not simulate it) may answer 200 with another
+    // shape: only a reply with an item list is a queue.
+    const data = await request('/api/queue')
+    queue.set({ data: Array.isArray(data?.items) ? (data as Queue) : null, ok: true })
   } catch {
     queue.set({ ok: false })
   }
 }
 
+const items = (q: Queue | null) => (Array.isArray(q?.items) ? q.items : [])
 export const queueItem = (q: Queue | null, id: number | null | undefined) =>
-  q && id ? q.items.find(i => i.id === id) || null : null
+  id ? items(q).find(i => i.id === id) || null : null
 export const queueNext = (q: Queue | null) => queueItem(q, q?.next)
 export const queueActive = (q: Queue | null) => queueItem(q, q?.active)
 export const copiesLeft = (i: QueueItem) => Math.max(0, i.copies - i.done)
-export const openJobs = (q: Queue | null) => q?.items.filter(i => i.state !== 'done') || []
-export const finishedJobs = (q: Queue | null) => q?.items.filter(i => i.state === 'done') || []
+export const openJobs = (q: Queue | null) => items(q).filter(i => i.state !== 'done')
+export const finishedJobs = (q: Queue | null) => items(q).filter(i => i.state === 'done')
 
 // Jobs and copies still to print, and their time when every job states an estimate.
 export const queueTotals = (q: Queue | null) => {
@@ -80,7 +84,9 @@ export const mappingSlots = (mapping: string) =>
 
 // Copies still queued for a file: the Files page marks it.
 export const queuedCopiesFor = (q: Queue | null, storage: string, path: string) =>
-  (q?.items || []).filter(i => i.storage === storage && i.path === path).reduce((n, i) => n + copiesLeft(i), 0)
+  items(q)
+    .filter(i => i.storage === storage && i.path === path)
+    .reduce((n, i) => n + copiesLeft(i), 0)
 
 export type QueueAdd = {
   storage: string

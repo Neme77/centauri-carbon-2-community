@@ -360,13 +360,42 @@ int main(void) {
     assert(strstr(reply_body, "\"active\":7") && strstr(reply_body, "\"measure\":\"0123456789abcdef\"") && strstr(reply_body, "\"next\":8"));
     assert(queue_save() == 0);
 
-    /* A loaded file with a running copy keeps following it; two running copies are refused. */
+    /* A loaded file with a running copy keeps following it, with the uuids of its run; two running copies are refused. */
     queue_load();
     assert(queue_available && queue.count == 3 && queue.active_id == 7 && !strcmp(queue.items[0].state, "printing"));
+    assert(!strcmp(queue.items[0].request_uuid, "u17") && !strcmp(queue.items[0].job_uuid, "u18") && queue.items[0].native_seen);
     assert(!strcmp(queue.items[2].measure, "0123456789abcdef"));
     snprintf(queue.items[1].state, sizeof(queue.items[1].state), "printing"); assert(queue_save() == 0);
     queue_load();
     assert(!queue_available && queue.count == 0);
+
+    /* A restart while a start waits: the printer still reports the previous job's uuid, which must not pass for
+     * this copy's own after the reload; the copy is recognised by the uuid that follows and counted. */
+    queue_available = 1; queue.active_id = 0; queue.count = 0; queue.remove_done = 0;
+    it = job(9, 1, 0);
+    printer_says(1, "complete", "", "u18"); telemetry_says("complete", "local/part.gcode");
+    requested(it); assert(queue_save() == 0);
+    queue_load(); it = &queue.items[0];
+    assert(queue_available && queue.count == 1 && !strcmp(it->state, "starting") && queue.active_id == 9);
+    assert(!strcmp(it->request_uuid, "u18") && !it->job_uuid[0] && !it->native_seen);
+    printer_says(2, "printing", "part.gcode", "u18"); telemetry_stale();
+    queue_tick(&machine);
+    assert(!strcmp(it->state, "printing") && !it->job_uuid[0] && !it->native_seen); /* the old uuid proves nothing */
+    printer_says(2, "printing", "part.gcode", "u19"); telemetry_stale();
+    queue_tick(&machine);
+    assert(!strcmp(it->state, "printing") && !strcmp(it->job_uuid, "u19") && it->native_seen); /* not a takeover */
+    printer_says(1, "complete", "", "u19"); telemetry_stale();
+    queue_tick(&machine);
+    assert(it->done == 1 && !strcmp(it->state, "done") && queue.active_id == 0 && !it->last_result[0]);
+    /* A record written before the uuid was stored still loads. */
+    FILE *old = fopen(file, "w");
+    assert(old && fputs("{\"version\":1,\"next_id\":11,\"policy\":{\"after\":\"wait\",\"delay\":60,\"remove_done\":false},\"items\":[{\"id\":10,"
+        "\"storage\":\"internal\",\"path\":\"part.gcode\",\"mapping\":\"\",\"side\":\"A\",\"leveling\":\"saved\",\"timelapse\":false,"
+        "\"measure\":\"\",\"nozzle\":\"\",\"copies\":2,\"done\":1,\"estimated_seconds\":-1,\"filament_grams\":-1,\"added\":1,"
+        "\"state\":\"pending\",\"last_result\":\"\",\"print_name\":\"\",\"native_seen\":false,\"job_uuid\":\"\"}]}\n", old) >= 0 &&
+        fclose(old) == 0);
+    queue_load();
+    assert(queue_available && queue.count == 1 && queue.items[0].id == 10 && !queue.items[0].request_uuid[0]);
 
     unlink(gcode); unlink(file); unlink(autosave); rmdir(internal); rmdir(dir);
     puts("PASS copies counted only from this copy's own completion seen fresh; stops, foreign jobs, long starts, pauses, "

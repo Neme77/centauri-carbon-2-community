@@ -137,6 +137,10 @@ static void queue_item_json(json_builder *b, const queue_item *item, int stored)
         json_builder_string(b, item->print_name);
         json_builder_printf(b, ",\"native_seen\":%s,\"job_uuid\":", item->native_seen ? "true" : "false");
         json_builder_string(b, item->job_uuid);
+        /* The uuid before the start travels with the record: after a restart the previous job's uuid, still
+         * reported while the printer starts, must not pass for this copy's own. */
+        json_builder_printf(b, ",\"request_uuid\":");
+        json_builder_string(b, item->request_uuid);
     } else {
         json_builder_printf(b, ",\"present\":%s", queue_present(item) ? "true" : "false");
     }
@@ -224,6 +228,10 @@ static int queue_load_item(const char *obj, const char *end, void *context) {
     if (!queue_json_bool(obj, end, "native_seen", &item->native_seen)) return 0;
     if (!spools_raw_member(obj, end, "job_uuid", item->job_uuid, sizeof(item->job_uuid))) return 0;
     for (const char *p = item->job_uuid; *p; ++p) if ((unsigned char)*p < 32 || *p == 127) return 0;
+    if (json_member(obj, end, "request_uuid")) { /* absent in files written before it was stored */
+        if (!spools_raw_member(obj, end, "request_uuid", item->request_uuid, sizeof(item->request_uuid))) return 0;
+        for (const char *p = item->request_uuid; *p; ++p) if ((unsigned char)*p < 32 || *p == 127) return 0;
+    }
     if (!strcmp(item->state, "done") != (item->done >= item->copies)) {
         /* Keep the counts, let the state follow them. */
         snprintf(item->state, sizeof(item->state), "%s", item->done >= item->copies ? "done" : "pending");
