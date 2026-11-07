@@ -1,6 +1,8 @@
 import { chromium } from 'playwright'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { fixture, launchOptions } from './fixture.mjs'
+const labels=JSON.parse(await readFile(new URL('../public/locales/it.json',import.meta.url),'utf8'))
 const setup = `
 window.__RFID={installed:true,ready:true,busy:false,armed:false,state:'idle',generation:0,preview:null,actions:[]};
 window.__RFID_NATIVE={installed:false,metadata_valid:false,phase:-1,busy:false,reboot_required:false,recovery_required:false,retry_required:false,actions:[]};
@@ -105,17 +107,18 @@ try {
   Object.assign(window.__RFID_NATIVE,{phase:-1,busy:false});
  })
  const firmware=page.locator('[data-canvas-firmware]')
- const install=firmware.getByRole('button',{name:'Installa firmware Canvas modificato'})
+ const install=firmware.getByRole('button',{name:labels['rfid.install_canvas_firmware'],exact:true})
  await install.click()
  await page.getByRole('button',{name:'Annulla',exact:true}).last().click()
  assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
  for(const [phase,label,action] of [
-  [-1,'Installa firmware Canvas modificato','activate'],
-  [5,'Ripristina applicazione Canvas originale','restore'],
-  [8,'Ripristina file di avvio originali','remove'],
+  [-1,'rfid.install_canvas_firmware','activate'],
+  [2,'rfid.lifecycle_resume','resume'],
+  [5,'rfid.lifecycle_restore','restore'],
+  [8,'rfid.lifecycle_remove','remove'],
  ]){
-  await page.evaluate(phase=>Object.assign(window.__RFID_NATIVE,{phase,busy:false}),phase)
-  const button=firmware.getByRole('button',{name:label,exact:true})
+  await page.evaluate(phase=>Object.assign(window.__RFID_NATIVE,{phase,busy:false,retry_required:phase===2}),phase)
+  const button=firmware.getByRole('button',{name:labels[label],exact:true})
   await button.click()
   await page.getByRole('button',{name:'Conferma',exact:true}).click()
   await page.waitForFunction(action=>window.__RFID_NATIVE.actions.at(-1)===action,action)
