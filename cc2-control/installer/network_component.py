@@ -92,7 +92,7 @@ def preserve_managed(before_sha, after_sha):
     [ -f "$NETWORK_INSTALLED/SHA256SUMS" ] && [ ! -L "$NETWORK_INSTALLED/SHA256SUMS" ] || return 1
     network_platform_supported || return 1
     case "$NATIVE_ROUTE" in
-      fresh) [ "$NATIVE_NETWORK_BASE_VERIFIED" = 1 ] || return 1;;
+      fresh|without-canvas) [ "$NATIVE_NETWORK_BASE_VERIFIED" = 1 ] || return 1;;
       upgrade|current) [ "$(sha256sum "$NETWORK_INSTALLED/SHA256SUMS" | awk '{{print $1}}')" = {after_sha} ] || return 1;;
       *) return 1;;
     esac
@@ -107,7 +107,7 @@ native_connections_component() {{
     [ -f "$NETWORK_INSTALLED/SHA256SUMS" ] && [ ! -L "$NETWORK_INSTALLED/SHA256SUMS" ] || return 1
     network_platform_supported || {{ echo 'STOP: Connections platform not qualified' >&2;return 1; }}
     case "$NATIVE_ROUTE" in
-      fresh) network_expected={before_sha};;
+      fresh|without-canvas) network_expected={before_sha};;
       upgrade|current) network_expected={after_sha};;
       *) return 1;;
     esac

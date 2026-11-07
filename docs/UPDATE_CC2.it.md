@@ -25,6 +25,16 @@ La preparazione usa il disco persistente `/opt/usr`, non `/tmp`: servono almeno
 I dati del payload vengono ripuliti soltanto dopo il successo; log e backup
 restano. Se fallisce, conservare la cartella indicata e il log.
 
+## CC2 non Combo o Canvas non collegato
+
+L'installer aggiorna normalmente app, EXHAUST, camera e Connessioni senza
+pubblicare una richiesta di attivazione RFID. Il pannello non resta in attesa
+di un lettore assente e non viene scritto alcun firmware Canvas. Se Canvas viene
+aggiunto in seguito, basta rilanciare lo stesso installer con l'accessorio
+collegato per preparare l'attivazione protetta. Un aggiornamento RFID già attivo
+mantiene i suoi controlli indipendenti, senza richiedere una risposta Canvas
+solo per aggiornare l'app.
+
 ## Prima attivazione RFID
 
 Sono inclusi EXHAUST minimo, camera/ripristino e Connessioni. Il flusso RFID

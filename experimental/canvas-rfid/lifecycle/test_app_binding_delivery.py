@@ -121,7 +121,7 @@ esac
         with zipfile.ZipFile(output) as archive:
             payload=archive.read(next(n for n in archive.namelist() if n.endswith('/cc2-control-payload.tar.gz')))
         for shell in [['dash'],['busybox','sh']]:
-            for case in (['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed','fresh-success','fresh-failure','current'] if unified else ['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed']):
+            for case in (['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed','fresh-success','fresh-failure','fresh-without-canvas','fresh-without-canvas-failure','fresh-without-canvas-current','current'] if unified else ['success','commit-failure','health-failure','rollback-failure','tampered-tail','foreign-destination','native-changed']):
                 if fixture.exists():shutil.rmtree(fixture)
                 fixture.mkdir(mode=0o700)
                 if unified:(fixture/'opt/usr').mkdir(parents=True,mode=0o700)
@@ -131,7 +131,7 @@ esac
                 target=fixture/'app';put(target/'cc2-control',b'OLD APP');put(target/'spools.json',b'PRESERVE')
                 if unified and not case.startswith('fresh-'):
                     put(prefix/'cc2-rfid/lifecycle',b'inert active native fixture')
-                if case=='current':put(target/'cc2-control',binary)
+                if case in ['current','fresh-without-canvas-current']:put(target/'cc2-control',binary)
                 marker=fixture/'running';marker.touch();trace=fixture/'trace'
                 init=fixture/'init';put(init,f'#!/bin/sh\ncase "$1" in start) touch "{marker}";; stop) rm -f "{marker}";; esac\n',0o755)
                 put(stage/'cc2-control.init',init.read_bytes(),0o755)
@@ -140,10 +140,11 @@ esac
                 put(fixture/'native-journal',b'NATIVE JOURNAL PRESERVED')
                 if case=='foreign-destination':put(destination/'foreign',b'KEEP EVIDENCE')
                 commands=fixture/'bin';commands.mkdir()
-                health=json.dumps({'service':'cc2-control','version':pkg.VERSION if case not in ['health-failure','fresh-failure'] else 'wrong',
+                health=json.dumps({'service':'cc2-control','version':pkg.VERSION if case not in ['health-failure','fresh-failure','fresh-without-canvas-failure'] else 'wrong',
                     'mqtt_registered':True,'snapshot_received':True},separators=(',',':'))
                 status='{"connected":true,"last_message_age":1,"extruder":{"temperature":24,"target":0},"heater_bed":{"temperature":22,"target":0},"machine":{"status":1,"sub_status":0}}'
-                put(commands/'wget',f'#!/bin/sh\ncase "$*" in */api/health*) echo \'{health}\';; *) echo \'{status}\';; esac\n',0o755)
+                canvas=json.dumps({'available':not case.startswith('fresh-without-canvas'),'telemetry':{'canvas_list':[{'connected':0 if case.startswith('fresh-without-canvas') else 1}]}},separators=(',',':'))
+                put(commands/'wget',f'#!/bin/sh\ncase "$*" in */api/canvas*) echo \'{canvas}\';; */api/health*) echo \'{health}\';; *) echo \'{status}\';; esac\n',0o755)
                 put(commands/'pidof',f'#!/bin/sh\ncase "$1" in elegoo_printer) echo 200;; cc2-control) [ -f "{marker}" ] && echo 100;; esac\n',0o755)
                 put(commands/'sleep','#!/bin/sh\n[ "$1" != 2 ] || exit 0\nexec /bin/sleep "$@"\n',0o755)
                 memory=fixture/'meminfo';put(memory,b'MemAvailable: 65000 kB\n')
@@ -176,11 +177,17 @@ esac
                     BINDING_FAIL='rollback' if case=='rollback-failure' else 'commit' if case=='commit-failure' else '')
                 if case=='rollback-failure':
                     health=health.replace(pkg.VERSION,'wrong')
-                    put(commands/'wget',f'#!/bin/sh\ncase "$*" in */api/health*) echo \'{health}\';; *) echo \'{status}\';; esac\n',0o755)
+                    put(commands/'wget',f'#!/bin/sh\ncase "$*" in */api/canvas*) echo \'{canvas}\';; */api/health*) echo \'{health}\';; *) echo \'{status}\';; esac\n',0o755)
                 result=subprocess.run([*shell,stage/'install-on-printer.sh'],env=env,capture_output=True,text=True,timeout=90)
-                assert (result.returncode==0)==(case in ['success','fresh-success','current']),(shell,case,result.stdout,result.stderr)
+                assert (result.returncode==0)==(case in ['success','fresh-success','fresh-without-canvas','fresh-without-canvas-current','current']),(shell,case,result.stdout,result.stderr)
                 calls=trace.read_text().splitlines() if trace.exists() else []
                 if case=='fresh-success':assert calls==['floor-check','floor-enable'] and (prefix/'cc2-rfid').exists()
+                if case.startswith('fresh-without-canvas'):
+                    assert not (prefix/'cc2-rfid').exists() and calls==['floor-check','floor-enable'],(shell,case,calls)
+                    assert not destination.exists(),'deferred RFID must not publish a binding worker'
+                    assert 'RFID DEFERRED:' in result.stdout
+                    if case=='fresh-without-canvas-failure':assert (target/'cc2-control').read_bytes()==b'OLD APP'
+                    else:assert (target/'cc2-control').read_bytes()==binary
                 if case=='fresh-failure':assert not (prefix/'cc2-rfid').exists() and list(prefix.glob('.cc2-rfid-dormant-*')) and (target/'cc2-control').read_bytes()==b'OLD APP'
                 if case=='current':assert all(c=='--check-current' for c in calls) and len(calls)==3
                 if case=='success':assert calls==['--prepare','--commit'] and (target/'cc2-control').read_bytes()==binary
@@ -206,6 +213,25 @@ esac
                     assert (target/'cc2-control').read_bytes()==b'OLD APP' and marker.exists()
                     assert trace.read_text().splitlines()==['--prepare','--commit','--rollback']
                     assert not (fixture/'lock').exists()
+                if case=='fresh-without-canvas':
+                    # Restore the ordinary app while no RFID lifecycle exists.
+                    backup=next(fixture.glob('app-backup-*'))
+                    restore=(backup/'restore.sh').read_text()
+                    for before,after in replacements.items():restore=restore.replace(before,after)
+                    put(backup/'restore.sh',restore,0o755)
+                    restored=subprocess.run([*shell,backup/'restore.sh'],env=env,capture_output=True,text=True,timeout=30)
+                    assert restored.returncode==0,(shell,'no-Canvas restore',restored.stdout,restored.stderr)
+                    assert (target/'cc2-control').read_bytes()==b'OLD APP' and not (prefix/'cc2-rfid').exists()
+                    # The same installer can be rerun, then can stage RFID once
+                    # a connected accessory is observed. No separate package.
+                    repeated=subprocess.run([*shell,stage/'install-on-printer.sh'],env=env,capture_output=True,text=True,timeout=90)
+                    assert repeated.returncode==0 and not (prefix/'cc2-rfid').exists(),(shell,'no-Canvas repeat',repeated.stdout,repeated.stderr)
+                    canvas=json.dumps({'available':True,'telemetry':{'canvas_list':[{'connected':1}]}},separators=(',',':'))
+                    put(commands/'wget',f'#!/bin/sh\ncase "$*" in */api/canvas*) echo \'{canvas}\';; */api/health*) echo \'{health}\';; *) echo \'{status}\';; esac\n',0o755)
+                    connected=subprocess.run([*shell,stage/'install-on-printer.sh'],env=env,capture_output=True,text=True,timeout=90)
+                    assert connected.returncode==0 and (prefix/'cc2-rfid').exists(),(shell,'later Canvas connection',connected.stdout,connected.stderr)
+                    assert trace.read_text().splitlines()==['floor-check','floor-enable']*3
+                    count+=3
                 count+=1
     print(f'PASS: {count} '+('unified first-install/active/current ' if unified else '')+f'real ARM publication and dash/BusyBox installer boundary cases; prepare/commit/rollback ordering, failure retention and preserved native journal; worker double at installer boundary only',flush=True)
     return count

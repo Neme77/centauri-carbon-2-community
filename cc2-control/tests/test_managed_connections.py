@@ -14,14 +14,14 @@ def digest(data):return hashlib.sha256(data).hexdigest()
 with tempfile.TemporaryDirectory(prefix='cc2-managed-connections-') as temporary:
     base=Path(temporary);count=0
     for shell in [['dash'],['busybox','sh']]:
-        for route in ['fresh','upgrade','current']:
+        for route in ['fresh','without-canvas','upgrade','current']:
             for case in ['good','bad-manifest','bad-file','bad-platform','manifest-link','manager-link','missing','unverified-base']:
-                if case=='unverified-base' and route!='fresh':continue
+                if case=='unverified-base' and route not in ['fresh','without-canvas']:continue
                 root=base/(shell[0]+'-'+route+'-'+case);root.mkdir()
                 manager=root/'manager';manager.mkdir();(manager/'control').write_bytes(b'qualified control')
                 before=(digest(b'qualified control')+'  control\n').encode()
                 after=(digest(b'qualified control')+'  ./control\n').encode()
-                (manager/'SHA256SUMS').write_bytes(before if route=='fresh' else after)
+                (manager/'SHA256SUMS').write_bytes(before if route in ['fresh','without-canvas'] else after)
                 if case=='bad-manifest':(manager/'SHA256SUMS').write_bytes(b'foreign manifest')
                 if case=='bad-file':(manager/'control').write_bytes(b'changed control')
                 if case=='manifest-link':
@@ -41,10 +41,10 @@ with tempfile.TemporaryDirectory(prefix='cc2-managed-connections-') as temporary
                 if case=='good':
                     assert 'CONNECTIONS_COMPONENT_PRESERVED' in result.stdout
                     assert (manager/'control').read_bytes()==b'qualified control'
-                    assert (manager/'SHA256SUMS').read_bytes()==(before if route=='fresh' else after)
+                    assert (manager/'SHA256SUMS').read_bytes()==(before if route in ['fresh','without-canvas'] else after)
                 count+=1
     for value in ['', '../escape','ab'*31,'A'*64]:
         try:preserve_managed(value,'ab'*32)
         except ValueError:pass
         else:raise AssertionError('Invalid binding accepted')
-print(f'PASS: {count} fresh/upgrade/current managed Connections dash/BusyBox cases, exact manifests/files and platform guard, no overwrite, wrong data/symlinks refused')
+print(f'PASS: {count} fresh/without-Canvas/upgrade/current managed Connections dash/BusyBox cases, exact manifests/files and platform guard, no overwrite, wrong data/symlinks refused')

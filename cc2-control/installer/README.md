@@ -28,6 +28,16 @@ persistent `/opt/usr` stage, not RAM-backed `/tmp`; at least 64 MiB free disk an
 running-app identity are checked. On success payload files are cleaned; logs
 and rollback backups remain. On failure preserve the reported stage and log.
 
+## Printers without Canvas
+
+On a CC2 non Combo, or while Canvas is not currently connected, the installer
+updates CC2 Control, EXHAUST, camera and Connections without publishing an RFID
+activation request. The normal panel remains usable; it does not wait for an
+RFID reader that is absent. No Canvas firmware is written. If Canvas is added
+later, rerun this same installer with Canvas connected to stage guarded RFID
+activation. Existing active RFID updates retain their independent profile and
+safety checks and do not require a live Canvas response just to rebind the app.
+
 ## First RFID activation
 
 The package includes the EXHAUST minimum component, camera/recovery fixes and

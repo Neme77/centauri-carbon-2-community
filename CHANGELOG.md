@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Defer optional RFID staging on CC2 non Combo or currently unavailable Canvas, keeping the normal application update and EXHAUST/camera/Connections usable; the same installer can stage RFID after a later Canvas connection. Requested by **Neme77** (release delivery follow-up to #299; simulated non-Combo qualification recorded separately).
+
 - Acquire a fresh MQTT observation before arming a read-only RFID scan when the quiet heartbeat has expired; retain the five-second acceptance limit and immediate refusal of unsafe native states. Reported by **Neme77**, verified on host/ARM fixtures (release delivery follow-up to #299; physically accepted by Neme77).
 - Show the actual capture failure after a recovered readiness refusal, rather than repeating the earlier stale-cache error. Developed with **Neme77** (release delivery follow-up to #299).
 
