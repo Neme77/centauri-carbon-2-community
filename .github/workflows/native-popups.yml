@@ -1,0 +1,27 @@
+name: Native pop-ups sources
+on:
+  push:
+    paths: ['experimental/native-popups/**', '.github/workflows/native-popups.yml']
+  pull_request:
+    paths: ['experimental/native-popups/**', '.github/workflows/native-popups.yml']
+permissions:
+  contents: read
+jobs:
+  vendor-free-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: experimental/native-popups
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install inert test dependencies
+        run: sudo apt-get update && sudo apt-get install -y busybox gcc-arm-linux-gnueabihf qemu-user wget
+      - name: Synthetic ARM patch and loader check
+        run: python3 test_patch.py -v
+      - name: Pop-up logic on the host with a fake LVGL, and the ARM compile
+        run: python3 test_nui.py
+      - name: Disk-only installer with dash and BusyBox
+        run: sh -n manage.sh && busybox sh -n manage.sh && python3 test_manage.py -v
