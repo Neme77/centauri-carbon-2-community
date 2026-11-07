@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from app_binding_bundle import read_runtime, plan_components, descriptor
+from app_binding_bundle import read_runtime, plan_components, descriptor, EXECUTABLES, TRANSFER
 from app_binding_component import functions
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -33,7 +33,7 @@ def compile_arm(source,target,defines,extra=()):
     return target.read_bytes()
 
 
-def build(previous,new_app,output):
+def build(previous,new_app,output,*,native_restore=False,preserve_lifecycle=False):
     old,modes,old_metadata=read_runtime(previous)
     app_bytes=new_app.read_bytes();new_sha=sha(app_bytes)
     if len(app_bytes)<20 or app_bytes[:6]!=b'\x7fELF\x01\x01' or app_bytes[18:20]!=b'\x28\x00':
@@ -48,12 +48,20 @@ def build(previous,new_app,output):
         '85af6b14faccdc2e3dfc2f679339c8ef4db5ce82d2c42a4591cdf10fc8081c96':
             'efa503d59478be6f15386eb58698dc1bd7555ce7122643ea7b894484254a6c06',
     }
+    staged_predecessor = '08718f176e4942a788130db566498862edb506ac441c36baaaeef1e6b94b4c04'
+    resume_staged = native_restore and old_metadata['app_sha256'] == staged_predecessor
+    if native_restore:
+        allowed[staged_predecessor] = 'a62f67e80fd216914db13fa92514b8323e85a82c81f5a11501739ff80860afa9'
+        allowed['437ee3417ff7908da569e8ab010ab3c316d06e7ab11fbe63ec59f7f99fc1ec78'] = (
+            '270025e28b7a39d68166e35b325bc3b2de13db32b2d9e3a65288cb1db4639313')
     if (allowed.get(old_metadata['app_sha256'])!=sha(previous.read_bytes()) or
             old_metadata['profile_sha256']!='9efc21a14f3da203a0fc8b0cf710602ab4bbf02bef6a3517c827a52b89f67766'):
         raise ValueError('Previous runtime is not an admitted qualified predecessor')
     pins={'fresh-reader':'3dd6d8699169c800689e5ed2c047a2d3cc43386d3fdad59adc41b929111b045a',
           'transfer-worker':'dd4a3be0fcee2e5290e177091dbfda5b1f402b87bd9e00727e1687661610206a',
           'libcc2-rfid.so':'fe6210eebfde592e4b0d276d2097abb0cfa3d53264da7ee9d83d8f24d7597ce2'}
+    if resume_staged:
+        pins['transfer-worker']=sha(old['transfer-worker'])  # Entire predecessor archive already matched its exact pin.
     for name,digest in pins.items():
         if sha(old[name])!=digest:raise ValueError('Qualified native artifact changed: '+name)
     output.mkdir(mode=0o700,parents=True,exist_ok=False)
@@ -63,6 +71,16 @@ def build(previous,new_app,output):
     baseline=['-DSC_STOCK_BOOTSTRAP=1','-DSC_WITH_CAVITY=1',
         '-DSC_CAVITY_BOOTSTRAP_OPTIONAL=1','-DSC_VERIFY_CAVITY_CHANNEL=1']
     new=dict(old)
+    if native_restore:
+        new[TRANSFER]=compile_arm(LIFE.parent/'transfer/canvas_worker.c',output/TRANSFER,{
+            'CV_BASE':'/opt/usr/cc2-rfid',
+            'CV_MODULE':'/opt/usr/cc2-rfid/libcc2-rfid.so',
+            'CV_MODULE_SHA':pins['libcc2-rfid.so'],
+            'CV_GUARD':'/opt/usr/cc2-rfid/fresh-reader',
+            'CV_GUARD_SHA':pins['fresh-reader'],
+        },['-DCV_COORDINATED=1','-DCV_NATIVE_RESTORE_GUARD=1'])
+        defines['SC_TRANSFER_SHA']=sha(new[TRANSFER])
+        baseline.append('-DSC_NATIVE_RESTORE_GUARD=1')
     new['coordinator']=compile_arm(LIFE/'coordinator.c',output/'coordinator',defines,baseline)
     new['capture']=compile_arm(LIFE.parent/'capture.c',output/'capture',{
         'CT_MODULE':'/opt/usr/cc2-rfid/libcc2-rfid.so','CT_MODULE_SHA':pins['libcc2-rfid.so'],
@@ -72,15 +90,24 @@ def build(previous,new_app,output):
         'capture_sha256':sha(new['capture']),'profile_sha256':old_metadata['profile_sha256']}
     new['app-integration.json']=(json.dumps(metadata,separators=(',',':'))+'\n').encode()
     new['activate-on-ready']=f'CC2-RFID-ACTIVATE-1\n{new_sha}\n{old_metadata["profile_sha256"]}\n'.encode()
+    binding_flags = ['-DAU_BIND_TRANSFER_WORKER=1'] if native_restore else []
+    if preserve_lifecycle:binding_flags.append('-DAU_PRESERVE_LIFECYCLE=1')
+    if resume_staged:binding_flags.append('-DAU_RESUME_STAGED_HOST=1')
+    return build_binding(old,modes,old_metadata,new,metadata,output,defines,
+                         baseline,binding_flags,sha(previous.read_bytes()))
+
+
+def build_binding(old,modes,old_metadata,new,metadata,output,defines,baseline,binding_flags,previous_sha):
+    new_sha=metadata['app_sha256']
     planned=plan_components(old,modes,old_metadata,new,modes,metadata)
     config=output/'binding-plan.h';config.write_bytes(planned['configuration'])
     worker_defines=dict(defines,SC_APP_SHA=old_metadata['app_sha256'],AU_WORKER_CONFIG=str(config),
         AU_DIRECTORY='/opt/usr/cc2-rfid-app-updates/'+new_sha)
     worker=compile_arm(LIFE/'app_binding_worker.c',output/'worker',worker_defines,
-        [*baseline,'-ffunction-sections','-fdata-sections','-Wl,--gc-sections'])
+        [*baseline,*binding_flags,'-ffunction-sections','-fdata-sections','-Wl,--gc-sections'])
     files={'worker':worker,'recovery.json':descriptor(worker,planned)}
     files.update({'incoming/'+n:data for n,data in planned['incoming'].items()})
-    permissions={n:0o700 if n in ['worker','incoming/coordinator','incoming/capture'] else 0o600 for n in files}
+    permissions={n:0o700 if n == 'worker' or n.removeprefix('incoming/') in EXECUTABLES else 0o600 for n in files}
     # Only a complete exact old native inventory qualifies for publication.
     dependencies=[('/opt/usr/cc2-rfid/'+n,sha(data),modes[n]) for n,data in sorted(old.items())]
     dependencies.append(('/opt/usr/cc2-control/cc2-control',old_metadata['app_sha256'],0))
@@ -93,11 +120,11 @@ def build(previous,new_app,output):
     functions(bundle,new_sha)  # Validate the exact installer-side contract.
     report={'protocol':1,'old_app_sha256':old_metadata['app_sha256'],'new_app_sha256':new_sha,
         'profile_sha256':old_metadata['profile_sha256'],'plan_sha256':planned['plan_sha256'],
-        'bundle_sha256':sha(bundle.read_bytes()),'previous_runtime_sha256':sha(previous.read_bytes()),
-        'target_files':list(planned['incoming']),'native_files_unchanged':True,'Canvas_write':False,
+        'bundle_sha256':sha(bundle.read_bytes()),'previous_runtime_sha256':previous_sha,
+        'target_files':list(planned['incoming']),'native_files_unchanged':planned['native_component_unchanged'],'Canvas_write':False,
         'printer_accessed':False,'public_update':False,'installable_application_package_built':False}
     (output/'binding-build.json').write_text(json.dumps(report,indent=2)+'\n')
-    print('BOUND ARTIFACTS BUILT: exact old profile preserved; four app-specific targets only. No application installer, printer access or Canvas write.',flush=True)
+    print('BOUND ARTIFACTS BUILT: exact old profile preserved; pinned targets only. No application installer, printer access or Canvas write.',flush=True)
     return report
 
 
