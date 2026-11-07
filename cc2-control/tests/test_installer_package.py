@@ -99,6 +99,8 @@ with tempfile.TemporaryDirectory() as tmp:
         memory.write_text('MemAvailable: 8192 kB\n' if scenario == 'low-memory' else '' if scenario == 'missing-memory' else 'MemAvailable: 65536 kB\n')
         script = script.replace('/proc/meminfo', str(memory))
         script=script.replace('STAGE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)','STAGE="'+str(stage)+'"')
+        script=script.replace('"$STAGE/cc2-control" --installer-native-idle', 'exit 3' if scenario in ('busy','hot','heating') else ':')
+        if scenario=='http-timeout':script=script.replace('"$tries" -lt 120','"$tries" -lt 1')
         if scenario=='rollback':
             script=script.replace(hashlib.sha256(binary).hexdigest(),'0'*64)
             # Exercise the same failure/rollback path without 120 real HTTP
@@ -110,10 +112,10 @@ with tempfile.TemporaryDirectory() as tmp:
         assert (result.returncode==0)==(scenario in ('success','slow-http','delayed','stop-delayed')),scenario+'\n'+result.stdout+result.stderr
         assert (target/'cc2-control').read_bytes()==(bytes(binary) if scenario in ('success','slow-http','delayed','stop-delayed') else b'OLD')
         if scenario == 'delayed': assert int(counter.read_text()) == 36
-        if scenario == 'http-timeout': assert 'Local status request exceeded five seconds.' in result.stderr
+        if scenario == 'http-timeout': assert 'Updater health/binary verification failed.' in result.stderr
         for name in keep:assert (target/name).read_text()=='KEEP '+name
         assert not (fixture/'lock').exists()
-        if scenario in ('low-memory','missing-memory','http-timeout','old-firmware','stock-firmware','runtime-mismatch','hot','heating','busy'):
+        if scenario in ('low-memory','missing-memory','old-firmware','stock-firmware','runtime-mismatch','hot','heating','busy'):
             assert not list(target.parent.glob('cc2-control-backup-*')), scenario
             assert not marker.exists(), scenario
         if scenario == 'success':

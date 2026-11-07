@@ -13,6 +13,13 @@ static volatile sig_atomic_t cv_cancelled, cv_recovering;
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <termios.h>
+#if defined(CV_COORDINATED) && defined(CV_NATIVE_RESTORE_GUARD)
+#define sc_now cv_milliseconds
+#define sc_cancelled cv_cancelled
+#include "../lifecycle/canvas_observation.h"
+#undef sc_cancelled
+#undef sc_now
+#endif
 #ifdef CV_COORDINATED
 #include "../lifecycle/profile.h"
 #endif
@@ -82,6 +89,7 @@ static int native_matches(const struct cv_ready *ready) {
     if(ferror(file))bad=1;
     fclose(file);return mapped && !bad;
 }
+#if !defined(CV_COORDINATED) || !defined(CV_NATIVE_RESTORE_GUARD)
 static int idle_guard(void) {
     if(!digest_matches(CV_GUARD,CV_GUARD_SHA))return 0;
     pid_t child=fork();if(child<0)return 0;
@@ -100,6 +108,7 @@ static int idle_guard(void) {
         struct timespec pause={0,20000000};nanosleep(&pause,NULL);
     }
 }
+#endif
 static int numeric(const char *text) {
     if(!*text)return 0;
     for(;*text;text++)if(*text<'0'||*text>'9')return 0;
@@ -330,7 +339,11 @@ int main(int argc,char **argv) {
         if(!load_ticket(base,&ticket) || !native_absent())return fail("same_boot_stopped_native_recovery_ticket_required");
     } else {
         if(!load_ready(&ready) || ready.phase!=1 || !native_matches(&ready) || !no_capture_active())return fail("qualified_idle_R2_no_capture_required");
+#if defined(CV_COORDINATED) && defined(CV_NATIVE_RESTORE_GUARD)
+        if(!vc_native_ready(!restore))return fail("native_transfer_readiness_failed");
+#else
         if(!idle_guard())return fail("fresh_idle_cold_guard_failed");
+#endif
         if(!load_ready(&second) || memcmp(&ready,&second,sizeof(ready)) || !native_matches(&ready) ||
            !no_capture_active() || cv_cancelled)return fail("native_changed_no_process_stopped");
         if(check) {

@@ -3,7 +3,7 @@ import hashlib
 import io
 import json
 import tarfile
-from app_binding_bundle import hex64, unique_pairs
+from app_binding_bundle import EXECUTABLES, TRANSFER, hex64, unique_pairs
 
 BEGIN = '# CC2_APP_BINDING_DATA_BEGIN'
 END = '# CC2_APP_BINDING_DATA_END'
@@ -17,15 +17,18 @@ def functions(runtime, app_sha, defer_publication=False):
     files = {}
     total = 0
     required = {'publisher', 'component/worker', 'component/recovery.json', 'SHA256SUMS'} | {'component/incoming/' + n for n in NAMES}
+    optional = 'component/incoming/' + TRANSFER
+    executables = {'component/worker', 'publisher'} | {'component/incoming/' + n for n in EXECUTABLES}
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
         for entry in archive:
             total += entry.size
-            if (not entry.isfile() or entry.name not in required or entry.name in files or
+            if (not entry.isfile() or entry.name not in required | {optional} or entry.name in files or
                     entry.size < 1 or entry.size > 1024 * 1024 or total > 4 * 1024 * 1024 or
-                    entry.uid or entry.gid or entry.mode != (0o700 if entry.name in
-                    ('component/worker', 'publisher', 'component/incoming/coordinator', 'component/incoming/capture') else 0o600)):
+                    entry.uid or entry.gid or entry.mode != (0o700 if entry.name in executables else 0o600)):
                 raise ValueError('Unsafe app binding member')
             files[entry.name] = archive.extractfile(entry).read()
+    if optional in files:
+        required.add(optional)
     if set(files) != required:
         raise ValueError('Incomplete app binding bundle')
     manifest = {}
@@ -58,6 +61,10 @@ def functions(runtime, app_sha, defer_publication=False):
 }}
 binding_rollback() {{
     binding_verify_worker && {destination}/worker --rollback 3
+}}
+binding_check_current() {{
+    exec 3< "$LOCK"
+    binding_verify_worker && {destination}/worker --check-current 3
 }}
 '''
     code = restore_functions + f'''BINDING_PREPARED=0
