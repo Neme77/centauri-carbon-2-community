@@ -7,6 +7,7 @@ import { request, post, errText, notify } from '@/lib/api'
 import { ask } from '@/lib/confirm'
 import { t, tpl } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
+import { rfidLifecycle } from '@/lib/rfid-lifecycle'
 import { canvas, canvasHex, refreshCanvas } from '@/lib/canvas'
 
 type Preview = {
@@ -32,19 +33,9 @@ type Status = {
   generation: number
   preview: Preview | null
 }
-type Lifecycle = {
-  installed: boolean
-  metadata_valid: boolean
-  phase: number
-  busy: boolean
-  reboot_required: boolean
-  recovery_required: boolean
-  retry_required: boolean
-  activation_requested: boolean
-}
 export const RfidScan = ({ idle, toggleTarget }: { idle: boolean; toggleTarget: HTMLElement | null }) => {
   const [status, setStatus] = useState<Status | null>(null)
-  const [lifecycle, setLifecycle] = useState<Lifecycle | null>(null)
+  const { data: lifecycle } = rfidLifecycle.use()
   const [slot, setSlot] = useState('')
   const [sending, setSending] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -52,9 +43,11 @@ export const RfidScan = ({ idle, toggleTarget }: { idle: boolean; toggleTarget: 
   const nativeCanvas = canvas.use()
   const lock = useRef(false)
   const refresh = useCallback(async () => {
-    const [scan, native] = await Promise.allSettled([request('/api/rfid'), request('/api/rfid/lifecycle')])
-    setStatus(scan.status === 'fulfilled' ? scan.value : null)
-    setLifecycle(native.status === 'fulfilled' ? native.value : null)
+    try {
+      setStatus(await request('/api/rfid'))
+    } catch {
+      setStatus(null)
+    }
   }, [])
   usePoll(refresh, status?.busy ? 700 : 3000)
   const action = async (command: string) => {
@@ -69,20 +62,6 @@ export const RfidScan = ({ idle, toggleTarget }: { idle: boolean; toggleTarget: 
       notify(errText(e), 'error')
       await refresh()
       return false
-    } finally {
-      lock.current = false
-      setSending(false)
-    }
-  }
-  const nativeAction = async (command: 'activate' | 'resume' | 'restore' | 'remove') => {
-    if (lock.current || !(await ask(t('rfid.lifecycle_confirm')))) return
-    lock.current = true
-    setSending(true)
-    try {
-      await post('/api/rfid/lifecycle/action', command)
-      await refresh()
-    } catch (e) {
-      notify(errText(e), 'error')
     } finally {
       lock.current = false
       setSending(false)
@@ -114,7 +93,6 @@ export const RfidScan = ({ idle, toggleTarget }: { idle: boolean; toggleTarget: 
       canvasHex(tray.filament_color, assigned.slot) === assigned.color.toUpperCase()
   )
   const present = tray ? Number(tray.status) > 0 : null
-  const nativePending = lifecycle?.installed && lifecycle.phase !== 5 && lifecycle.phase !== 10
   const toggle = (
     <div class="flex items-center gap-2">
       {!expanded && (status.busy || preview || assigned) && (
@@ -137,52 +115,9 @@ export const RfidScan = ({ idle, toggleTarget }: { idle: boolean; toggleTarget: 
   return (
     <div class={expanded ? 'mt-3.5 border-t border-edge pt-3.5' : undefined} data-rfid-scan>
       {toggleTarget && createPortal(toggle, toggleTarget)}
-      {lifecycle?.installed && (nativePending || lifecycle.busy) && (
-        <p role="status" class="mt-2 text-xs text-amber" data-rfid-lifecycle>
-          {t(
-            lifecycle.recovery_required
-              ? 'rfid.lifecycle_recovery'
-              : lifecycle.busy
-                ? 'rfid.lifecycle_working'
-                : lifecycle.reboot_required
-                  ? 'rfid.lifecycle_reboot'
-                  : lifecycle.phase === -1 && !lifecycle.activation_requested
-                    ? 'rfid.lifecycle_dormant'
-                    : lifecycle.phase === 8
-                      ? 'rfid.lifecycle_stock'
-                      : lifecycle.retry_required
-                        ? 'rfid.lifecycle_retry'
-                        : 'rfid.lifecycle_waiting'
-          )}
-        </p>
-      )}
       <div id="cc2-rfid-panel" hidden={!expanded}>
         <h3 class="mb-2 text-base font-semibold">{t('rfid.title')}</h3>
         <p class="text-xs text-muted">{t('rfid.hint')}</p>
-        {lifecycle?.metadata_valid && !lifecycle.busy && !lifecycle.recovery_required && (
-          <div class="mt-2 flex flex-wrap gap-2" data-rfid-native-actions>
-            {((lifecycle.phase === -1 && !lifecycle.activation_requested) || lifecycle.phase === 10) && (
-              <Button disabled={!idle || sending} onClick={() => void nativeAction('activate')}>
-                {t('rfid.lifecycle_activate')}
-              </Button>
-            )}
-            {lifecycle.retry_required && !lifecycle.reboot_required && (
-              <Button disabled={!idle || sending} onClick={() => void nativeAction('resume')}>
-                {t('rfid.lifecycle_resume')}
-              </Button>
-            )}
-            {lifecycle.phase === 5 && (
-              <Button disabled={!idle || status.busy || sending} onClick={() => void nativeAction('restore')}>
-                {t('rfid.lifecycle_restore')}
-              </Button>
-            )}
-            {lifecycle.phase === 8 && (
-              <Button disabled={!idle || sending} onClick={() => void nativeAction('remove')}>
-                {t('rfid.lifecycle_remove')}
-              </Button>
-            )}
-          </div>
-        )}
         {!status.ready && (
           <p role="status" class="mt-2 text-xs text-amber" data-rfid-blocked>
             {t(

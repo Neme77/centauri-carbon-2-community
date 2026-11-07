@@ -1,6 +1,8 @@
 import { chromium } from 'playwright'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { fixture, launchOptions } from './fixture.mjs'
+const labels=JSON.parse(await readFile(new URL('../public/locales/it.json',import.meta.url),'utf8'))
 const setup = `
 window.__RFID={installed:true,ready:true,busy:false,armed:false,state:'idle',generation:0,preview:null,actions:[]};
 window.__RFID_NATIVE={installed:false,metadata_valid:false,phase:-1,busy:false,reboot_required:false,recovery_required:false,retry_required:false,actions:[]};
@@ -73,31 +75,54 @@ try {
   window.__CC2_PREVIEW.status=1;
   Object.assign(window.__RFID_NATIVE,{installed:true,metadata_valid:true,phase:1,reboot_required:true});
  })
- await page.waitForFunction(()=>document.querySelector('[data-rfid-lifecycle]')?.textContent.includes('riavvio completo'))
- await page.locator('[data-rfid-toggle]').click()
- assert.equal(await page.locator('#cc2-rfid-panel').isVisible(),false)
- assert.equal(await page.locator('[data-rfid-lifecycle]').isVisible(),true)
+ const notice=page.locator('[data-rfid-reboot]')
+ await notice.waitFor()
  await page.evaluate(()=>sessionStorage.setItem('rfid-reboot-fixture','1'))
  await page.reload()
- await page.locator('[data-rfid-lifecycle]').waitFor()
- assert((await page.locator('[data-rfid-lifecycle]').textContent()).includes('riavvio completo'))
- assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
- await page.locator('[data-rfid-toggle]').click()
- await page.evaluate(()=>Object.assign(window.__RFID_NATIVE,{phase:-1,reboot_required:false,activation_requested:true}))
- await page.waitForFunction(()=>document.querySelector('[data-rfid-lifecycle]')?.textContent.includes('attende dati freschi'))
- assert.equal(await page.getByRole('button',{name:'Attiva lettore RFID',exact:true}).count(),0)
- assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
- await page.evaluate(()=>Object.assign(window.__RFID_NATIVE,{phase:-1,reboot_required:false,activation_requested:false}))
- const activate=page.getByRole('button',{name:'Attiva lettore RFID',exact:true})
- await activate.waitFor()
- await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes('Attiva lettore RFID'))?.disabled)
- await activate.click()
+ await notice.waitFor()
+ assert((await notice.textContent()).includes('riavvio completo'))
+ assert.equal(await page.locator('[data-canvas-firmware]').count(),0)
+ await page.evaluate(()=>{
+  window.__CC2_PREVIEW.connected=false;
+  window.location.hash='dashboard';
+  Object.assign(window.__RFID_NATIVE,{phase:4,reboot_required:true,busy:true});
+ })
+ await page.waitForFunction(()=>document.querySelector('.cc2-page-content')?.classList.contains('opacity-50'))
+ await notice.waitFor({state:'detached'})
+ await page.evaluate(()=>{window.__RFID_NATIVE.busy=false})
+ await notice.waitFor()
+ assert((await notice.textContent()).includes('secondo riavvio completo'))
+ assert.equal(await notice.evaluate(el=>!!el.closest('.opacity-50')),false)
+ assert.equal(await page.locator('[data-rfid-scan]').count(),0)
+ await page.evaluate(()=>Object.assign(window.__RFID_NATIVE,{phase:5,reboot_required:false}))
+ await notice.waitFor({state:'detached'})
+ await page.evaluate(()=>Object.assign(window.__RFID_NATIVE,{phase:7,reboot_required:true}))
+ await notice.waitFor()
+ assert((await notice.textContent()).includes('firmware Canvas originale completato'))
+ await page.evaluate(()=>Object.assign(window.__RFID_NATIVE,{phase:8,reboot_required:false}))
+ await notice.waitFor({state:'detached'})
+ await page.evaluate(()=>{
+  window.__CC2_PREVIEW.connected=true;
+  window.location.hash='settings/integrations';
+  Object.assign(window.__RFID_NATIVE,{phase:-1,busy:false});
+ })
+ const firmware=page.locator('[data-canvas-firmware]')
+ const install=firmware.getByRole('button',{name:labels['rfid.install_canvas_firmware'],exact:true})
+ await install.click()
  await page.getByRole('button',{name:'Annulla',exact:true}).last().click()
  assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
- await activate.click()
- await page.getByRole('button',{name:'Conferma',exact:true}).click()
- await page.waitForFunction(()=>window.__RFID_NATIVE.actions.length===1)
- assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),['activate'])
- await page.waitForFunction(()=>document.querySelector('[data-rfid-lifecycle]')?.textContent.includes('in corso'))
+ for(const [phase,label,action] of [
+  [-1,'rfid.install_canvas_firmware','activate'],
+  [2,'rfid.lifecycle_resume','resume'],
+  [5,'rfid.lifecycle_restore','restore'],
+  [8,'rfid.lifecycle_remove','remove'],
+ ]){
+  await page.evaluate(phase=>Object.assign(window.__RFID_NATIVE,{phase,busy:false,retry_required:phase===2}),phase)
+  const button=firmware.getByRole('button',{name:labels[label],exact:true})
+  await button.click()
+  await page.getByRole('button',{name:'Conferma',exact:true}).click()
+  await page.waitForFunction(action=>window.__RFID_NATIVE.actions.at(-1)===action,action)
+ }
+
  console.log('PASS RFID browser controls: scan/assignment/cancel guards, collapsed and reload-persistent reboot notice, explicit activation confirmation and one native action.')
 } finally {await browser.close();await demo.cleanup()}

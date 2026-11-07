@@ -24,6 +24,10 @@ camera_pid() {
     case "$PID" in ''|*' '*|*[!0-9]*) stop 'exactly one ai_camera process required';; esac
 }
 idle() {
+    if [ -n "${CC2_CAMERA_INSTALLER_PROBE:-}" ]; then
+        "$CC2_CAMERA_INSTALLER_PROBE" --installer-native-idle || stop 'native console did not confirm camera maintenance readiness'
+        return
+    fi
     STATE=$(wget -qO- http://127.0.0.1:8081/api/printer) || stop 'printer telemetry unavailable'
     case "$STATE" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) stop 'connected Idle printer required';; esac
     AGE=$(printf '%s' "$STATE" | sed -n 's/.*"last_message_age":\([0-9][0-9]*\),.*/\1/p')

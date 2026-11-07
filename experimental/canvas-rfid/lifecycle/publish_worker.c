@@ -47,7 +47,8 @@ static int cp_hash(int fd,const struct cp_file *file,int mode){
 #define CP_SUBDIR "incoming"
 static int cp_binding_name(const char *name){
     return !strcmp(name,"coordinator")||!strcmp(name,"capture")||
-        !strcmp(name,"app-integration.json")||!strcmp(name,"activate-on-ready");
+        !strcmp(name,"app-integration.json")||!strcmp(name,"activate-on-ready")||
+        !strcmp(name,"transfer-worker");
 }
 static int cp_target_valid(void){
     if(strlen(CP_TARGET)!=64)return 0;

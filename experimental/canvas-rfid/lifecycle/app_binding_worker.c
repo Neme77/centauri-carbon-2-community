@@ -71,6 +71,19 @@ static int aw_state(struct au_store *store,struct au_record *record){
     char plan[65];return au_plan_hash(&au_expected,plan)&&au_read_state(store,record)&&!strcmp(record->plan,plan);
 }
 static int aw_live_app(struct au_store *store,const char *app_sha){
+#ifdef AU_PRESERVE_LIFECYCLE
+    char journal[65];int busy=0;pid_t app=0;
+#ifdef AU_REQUIRE_DISABLED
+    struct cl_record record;struct sc_ready ready={0};
+    if(!cl_store_read(&store->native,&record)||record.phase!=CL_DISABLED||
+        !cl_profile(&store->native,&record)||!vc_targets_state(&store->native,0)||
+        !vc_backup(&store->native)||!sc_native_profile(&ready,0))return 0;
+#endif
+    return au_match(store->native.directory,"recovery-profile",au_expected.profile,0600)&&
+        au_native(store,&au_expected,journal)&&
+        vc_lock_busy(store->native.directory,"worker.lock",1,&busy)&&!busy&&
+        sc_one_process("cc2-control",AU_APP,app_sha,&app)&&!sc_cancelled;
+#else
     struct cl_record record;struct sc_ready first={0},last={0};pid_t app=0,last_app=0;
     return cl_store_read(&store->native,&record)&&record.phase==CL_ACTIVE&&vc_profile_bound(&record)&&
         cl_profile(&store->native,&record)&&vc_backup(&store->native)&&vc_targets(&store->native)&&
@@ -79,6 +92,7 @@ static int aw_live_app(struct au_store *store,const char *app_sha){
         sc_native_profile(&first,1)&&aw_fresh_ready()&&aw_fresh_ready()&&sc_native_profile(&last,1)&&
         sc_one_process("cc2-control",AU_APP,app_sha,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
+#endif
 }
 static int aw_prepare(struct au_store *store,int source,int held){
     struct stat st;struct au_record record;char journal[65];
@@ -127,12 +141,19 @@ static int aw_any_app(void){
     closedir(directory);return found;
 }
 static int aw_finish(struct au_store *store,int held){
+#ifdef AU_PRESERVE_LIFECYCLE
+    struct au_record record;char journal[65];
+    if(!au_barrier(held)||!aw_state(store,&record)||!au_app(au_expected.new_app)||
+        !au_native(store,&au_expected,journal)||strcmp(record.journal,journal)||
+        !aw_live_app(store,au_expected.new_app))return 0;
+#else
     struct au_record record;struct cl_record native;struct sc_ready identity={0};char journal[65];pid_t app=0;
     if(!au_barrier(held)||!aw_state(store,&record)||!au_app(au_expected.new_app)||
         !au_native(store,&au_expected,journal)||strcmp(record.journal,journal)||
         !sc_one_process("cc2-control",AU_APP,au_expected.new_app,&app)||
         !cl_store_read(&store->native,&native)||!cl_profile(&store->native,&native)||
         !vc_backup(&store->native)||!vc_targets(&store->native)||!sc_native_profile(&identity,1))return 0;
+#endif
     if(record.phase!=AU_APPLIED&&record.phase!=AU_COMMITTED)return 0;
     for(unsigned i=0;i<AU_COUNT;i++)if(au_current(store,au_expected.files+i)!=1)return 0;
     return record.phase==AU_COMMITTED||au_write_state(store,&record,AU_COMMITTED);

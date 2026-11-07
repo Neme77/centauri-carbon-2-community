@@ -20,28 +20,8 @@ class Blob:
 
 
 CANVAS_SELECTION = r'''native_canvas_available() {
-    # This read only chooses whether to defer optional RFID publication. It is
-    # never permission to write Canvas; the coordinator retains its independent
-    # full JSON/profile/Idle/cold checks after a guarded native boot.
-    if ! native_canvas_reply=$(installer_http_get http://127.0.0.1:8081/api/canvas);then
-        echo 'STOP: Canvas availability observation failed; no RFID preparation selected' >&2
-        return 1
-    fi
-    native_canvas_decision=$(printf '%s\n' "$native_canvas_reply" | awk '
-      {body=body $0}
-      END {
-        if(body !~ /^[ \t]*\{[ \t]*"available"[ \t]*:[ \t]*(true|false)[ \t]*[,}]/ ||
-           body !~ /\}[ \t]*$/){print "invalid";exit}
-        if(body ~ /^[ \t]*\{[ \t]*"available"[ \t]*:[ \t]*false[ \t]*[,}]/){print "deferred";exit}
-        connected=gsub(/"connected"[ \t]*:[ \t]*1[ \t]*[,}]/,"&",body)
-        print connected==1?"ready":"deferred"
-      }')
-    unset native_canvas_reply
-    case "$native_canvas_decision" in
-        ready) return 0;;
-        deferred) return 2;;
-        *) echo 'STOP: Canvas availability response not recognized; no RFID preparation selected' >&2;return 1;;
-    esac
+    # A direct read selects optional host preparation, never authorizes a transfer.
+    "$STAGE/cc2-control" --installer-native-canvas
 }
 '''
 
@@ -68,8 +48,8 @@ def functions(runtime,app_sha,*,preserve_connections=False):
     binding,btail,restore=binding_functions(Blob(files['binding.tar.gz']),app_sha,defer_publication=True)
     with tarfile.open(fileobj=io.BytesIO(files['binding.tar.gz']),mode='r:gz') as archive:
         worker_sha=hashlib.sha256(archive.extractfile('component/worker').read()).hexdigest()
-        incoming={n:archive.extractfile('component/incoming/'+n).read() for n in
-            ['coordinator','capture','app-integration.json','activate-on-ready']}
+        incoming={n.removeprefix('component/incoming/'):archive.extractfile(n).read()
+            for n in archive.getnames() if n.startswith('component/incoming/')}
     with tarfile.open(fileobj=io.BytesIO(files['rfid.tar.gz']),mode='r:gz') as archive:
         if any(archive.extractfile('component/'+n).read()!=b for n,b in incoming.items()):
             raise ValueError('First-install and upgrade must deliver identical application-bound RFID files')
@@ -86,14 +66,17 @@ def functions(runtime,app_sha,*,preserve_connections=False):
 NATIVE_PREPARED=0
 NATIVE_NETWORK_BASE_VERIFIED=0
 native_current() {{
-    binding_run "$BINDING_SOURCE/component/worker" --check-current 3
+    # Same app binary and existing RFID binding: query the native console
+    # directly, then verify the exact running app and bound files.
+    "$STAGE/cc2-control" --installer-native-idle &&
+    "$BINDING_SOURCE/component/worker" --check-current 3
 }}
 native_unpack() {{
     exec 3< "$LOCK"
     if [ -e /opt/usr/cc2-rfid ] || [ -L /opt/usr/cc2-rfid ]; then
         binding_unpack || return 1
         if [ "$(sha256sum "$TARGET/cc2-control" | awk '{{print $1}}')" = {app_sha} ]; then
-            native_current || return 1
+            native_current || {{ echo 'STOP: current app or RFID binding could not be verified' >&2;return 1; }}
             NATIVE_ROUTE=current
         else
             binding_publish || return 1
@@ -104,10 +87,10 @@ native_unpack() {{
         native_canvas_available || native_canvas_result=$?
         case "$native_canvas_result" in
             0) cavity_unpack && rfid_unpack || return 1;NATIVE_ROUTE=fresh;;
-            2)
+            2|3)
                 cavity_unpack || return 1
                 NATIVE_ROUTE=without-canvas
-                echo 'RFID DEFERRED: Canvas is not currently available. Application update continues without RFID staging; rerun this installer with Canvas connected to activate RFID.';;
+                echo 'RFID DEFERRED: Canvas is disconnected or its status is unknown. Application update continues without RFID staging; rerun this installer with Canvas connected to activate RFID.';;
             *) return 1;;
         esac
         NATIVE_NETWORK_BASE_VERIFIED=1
@@ -153,6 +136,7 @@ native_rollback() {{
         current)
             [ ! -L "$BACKUP/native-check-worker" ] &&
             [ "$(sha256sum "$BACKUP/native-check-worker" | awk '{{print $1}}')" = {worker_sha} ] &&
+            "$TARGET/cc2-control" --installer-native-idle &&
             "$BACKUP/native-check-worker" --check-current 3;;
         fresh|without-canvas)
             [ ! -e /opt/usr/cc2-rfid ] && [ ! -L /opt/usr/cc2-rfid ] || {{

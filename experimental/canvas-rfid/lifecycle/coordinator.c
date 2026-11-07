@@ -43,6 +43,13 @@ static int vc_profile_bound(const struct cl_record *record){
     for(unsigned i=0;i<32;i++){expected[i*2]=hex[record->plan[i]>>4];expected[i*2+1]=hex[record->plan[i]&15];}expected[64]=0;
     return !strcmp(expected,SC_PROFILE_SHA);
 }
+static int vc_boot_observation(int scan_check){
+#ifdef SC_NATIVE_RESTORE_GUARD
+    if(!scan_check)return vc_native_ready(1)&&vc_native_ready(1);
+#endif
+    return (scan_check?aw_fresh_ready():sc_fresh())&&vc_canvas_http()&&
+        (scan_check?aw_fresh_ready():sc_fresh());
+}
 static int vc_verify_mode(enum cl_event event,unsigned wanted,unsigned complete,int disabled){
     if(geteuid()!=0||strlen(SC_PROFILE_SHA)!=64||!tx_hex(SC_PROFILE_SHA)||
        strlen(SC_APP_SHA)!=64||!tx_hex(SC_APP_SHA)||strlen(SC_FRESH_SHA)!=64||!tx_hex(SC_FRESH_SHA)||
@@ -59,8 +66,8 @@ static int vc_verify_mode(enum cl_event event,unsigned wanted,unsigned complete,
     okay=okay&&vc_profile_bound(&record)&&(record.phase==wanted||record.phase==complete)&&vc_boot(boot)&&
         vc_backup(&store)&&(disabled?vc_targets_state(&store,0):vc_targets(&store))&&sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
         sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&app)&&
-        sc_native_profile(&first,!disabled)&&(scan_check?aw_fresh_ready():sc_fresh())&&vc_canvas_http()&&
-        (scan_check?aw_fresh_ready():sc_fresh())&&sc_native_profile(&last,!disabled)&&
+        sc_native_profile(&first,!disabled)&&vc_boot_observation(scan_check)&&
+        sc_native_profile(&last,!disabled)&&
         sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
     if(okay&&record.phase!=complete){
