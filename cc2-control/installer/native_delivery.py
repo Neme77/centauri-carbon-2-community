@@ -76,7 +76,7 @@ native_unpack() {{
     if [ -e /opt/usr/cc2-rfid ] || [ -L /opt/usr/cc2-rfid ]; then
         binding_unpack || return 1
         if [ "$(sha256sum "$TARGET/cc2-control" | awk '{{print $1}}')" = {app_sha} ]; then
-            native_current || return 1
+            native_current || {{ echo 'STOP: current app or RFID binding could not be verified' >&2;return 1; }}
             NATIVE_ROUTE=current
         else
             binding_publish || return 1
