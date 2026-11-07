@@ -4379,7 +4379,12 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     return 0;
 }
 
+#include "rfid_app_update_boot.h"
 int main(int argc, char **argv) {
+    if(!rfid_app_update_boot()) {
+        fputs("RFID app-update recovery incomplete; retain the transaction and installation backup.\n",stderr);
+        return 1;
+    }
     int port = 8081;
     int panda_port = 7125;
     const char *web_root = "./web";

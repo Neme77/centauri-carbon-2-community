@@ -62,6 +62,11 @@ int main(void){
     char doubled[2048];snprintf(doubled,sizeof(doubled),"%s\n%s\n",tag_fixture,tag_fixture);output_fixture(&m,&console,doubled,0);assert(!rfid.valid);
     output_fixture(&m,&console,"STOP: scan_deadline_expired\n",1);assert(!rfid.valid);
     assert(!strcmp(rfid.error,"scan_deadline_expired"));
+    output_fixture(&m,&console,"STOP: fresh_idle_cold_observation_failed\nLIVE GUARD PASS: recovered fixture\nSTOP: scan_deadline_expired\n",1);
+    assert(!strcmp(rfid.error,"scan_deadline_expired"));
+    snprintf(doubled,sizeof(doubled),"STOP: fresh_idle_cold_observation_failed\nLIVE GUARD PASS: recovered fixture\n%s\n",tag_fixture);
+    output_fixture(&m,&console,doubled,0);assert(rfid.valid);
+
     char oversized[13000];memset(oversized,'X',sizeof(oversized)-1);oversized[sizeof(oversized)-1]=0;
     output_fixture(&m,&console,oversized,0);assert(!rfid.valid&&!strcmp(rfid.state,"output_limit"));
     /* Cancellation before SCAN ARMED must let the bounded manager release its

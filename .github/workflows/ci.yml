@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install ARM cross-compiler and emulator
-        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user busybox
 
       - name: Bed heating ownership and timeout regression
         run: |
@@ -39,6 +39,9 @@ jobs:
 
       - name: Pending SAVE_CONFIG conflict regression on host and ARM
         run: python3 ../experimental/pending-autosave/qualify.py
+
+      - name: Root-owned application recovery bootstrap fixtures
+        run: sudo -n make test-app-update-boot
 
       - name: Host build and tests (warnings are errors)
         run: make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
@@ -72,6 +75,18 @@ jobs:
 
       - name: Package firmware-qualified application updater
         run: python3 installer/package.py --application-only-trial --prepared dist/cc2-control
+
+      - name: Actual packaged payload signatures and extraction on host and ARM
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          candidate, = Path('../output').glob('CC2-Control-*-Multiplatform-Update.zip')
+          with zipfile.ZipFile(candidate) as archive:
+              payload, = [n for n in archive.namelist() if n.endswith('/cc2-control-payload.tar.gz')]
+              Path('/tmp/cc2-ci-common-payload.tar.gz').write_bytes(archive.read(payload))
+          PY
+          make test-native-payload PAYLOAD=/tmp/cc2-ci-common-payload.tar.gz
 
       - name: Save application updater candidate
         uses: actions/upload-artifact@v7.0.2
@@ -232,6 +247,9 @@ jobs:
 
       - name: Lower mmap randomisation for the sanitizer runtimes
         run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Install shell fixture dependency
+        run: sudo apt-get update && sudo apt-get install -y busybox
 
       - name: Tests with sanitizers
         run: |

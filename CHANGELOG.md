@@ -6,23 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [CC2 Control 1.2.26] - 2026-11-07
+
 ### Changed
 
-- Pause panel mutations while the application installer or native maintenance coordinator owns the shared installation barrier, preserving read-only status and both emergency-stop routes; developed with **Neme77** as part of the draft autonomous RFID update work (#299).
+- Use one native-component installer for a supported first installation, an existing active RFID upgrade and an already current installation. Stage EXHAUST through the same authenticated application installer, retain the Canvas journal/original backup on upgrades, and restore app-bound files before rolling back the application. Developed with **Neme77** (release delivery follow-up to #299; first-install and active-update qualification completed).
 
-- Arrange Control fan sliders above a separate Chamber fan management group, and lower Dashboard fan readouts by one element without stretching their card; designed and preview-reviewed with **Neme77** (PR pending).
+- Pause panel mutations while the application installer or native maintenance coordinator owns the shared installation barrier, preserving read-only status and both emergency-stop routes; developed with **Neme77** as part of the autonomous RFID update work (#299).
+
+- Arrange Control fan sliders above a separate Chamber fan management group, and lower Dashboard fan readouts by one element without stretching their card; designed and preview-reviewed with **Neme77** (#298).
 
 - Reorganize Control with load-cell tools in their own Bed Levelling tab, full Rotation Distance below Pressure Advance, Input Shaper inside Movement and full-width material profiles. Add live nozzle/bed/chamber temperatures to Job details. Preserve the published Dashboard. Designed and approved by **Neme77** (follow-up to #283).
 
 ### Added
 
-- Experimental Anycubic RFID capture, reviewed Canvas slot assignment and separate material/presence feedback, with explicit ownership, freshness and cancellation guards; developed and physically tested with **Neme77**, with decoder-layout attribution to **OpenRFID / DnG-Crafts** (#299). The autonomous activation/update lifecycle is not complete and release publication remains blocked.
+- Experimental Anycubic RFID capture, reviewed Canvas slot assignment and separate material/presence feedback, with explicit ownership, freshness and cancellation guards; developed and physically tested with **Neme77**, with decoder-layout attribution to **OpenRFID / DnG-Crafts** (#299). Includes reboot-separated activation, original-Canvas restoration, host removal and same-profile app updates; physical acceptance recorded separately from protocol ACKs.
 
 - Continue a print from another Canvas slot after a runout, with or without the printer's auto refill: while the print waits on a Canvas runout, a card on every page offers the loaded slots (same material first) and, once confirmed, points the tools that used the empty slot at the chosen one, reheats and resumes; the printer loads it, purges and carries on, keeping the rest of the print's slot map. Optional **Match material only** under Auto refill continues automatically from a loaded slot of the same material when no slot has the same colour (it trusts the slot labels). Requested by **mcknight89**, tested on a CC2 and implemented by **Noahwhite2014** (#284).
 - Build Plates: optional "Match the mesh to the print's bed temperature". Prints sent from a slicer or started on the touchscreen get the mounted plate's mesh nearest to their bed temperature, including up to 4 blended meshes between measurements (where the nearest mesh would be furthest off, written while idle and used after the next printer restart, removed again when the option is turned off), loaded one at a time after the print start's own mesh load; implemented and physically tested by **Noahwhite2014** (#296).
-- Source-only, explicit opt-in EXHAUST minimum for the current print, preserving native higher cooling and releasing on Automatic, pause/end/cancel or restart; requested and physically tested by **Neme77** for #285. The optional native trial must be disabled before ordinary updates; automatic delivery remains outside this change.
+- Explicit opt-in EXHAUST minimum for the current print, preserving native higher cooling and releasing on Automatic, pause/end/cancel or restart; requested and physically tested by **Neme77** for #285. The complete installer stages the qualified native component and preserves it during supported app updates.
 
 ### Fixed
+
+- Defer optional RFID staging on CC2 non Combo or currently unavailable Canvas, keeping the normal application update and EXHAUST/camera/Connections usable; the same installer can stage RFID after a later Canvas connection. Requested by **Neme77** (release delivery follow-up to #299; simulated non-Combo qualification recorded separately).
+
+- Acquire a fresh MQTT observation before arming a read-only RFID scan when the quiet heartbeat has expired; retain the five-second acceptance limit and immediate refusal of unsafe native states. Reported by **Neme77**, verified on host/ARM fixtures (release delivery follow-up to #299; physically accepted by Neme77).
+- Show the actual capture failure after a recovered readiness refusal, rather than repeating the earlier stale-cache error. Developed with **Neme77** (release delivery follow-up to #299).
+
+- Preserve an already active Canvas during application-only RFID updates without requiring a live Canvas payload; firmware-transfer checks remain in the transfer coordinator. Retain obsolete, never-applied or fully rolled-back app preparations in a verified archive when updating their helper. Investigated with **Neme77** (release delivery follow-up to #299; physically accepted by Neme77).
+
+- Verify and preserve installed Connections against the authenticated composed startup profile during unified updates, retaining kernel, Wi-Fi and component-file checks instead of requiring the untouched stock launcher. Reported by **Neme77** (release delivery follow-up to #299; physically accepted by Neme77).
+
+- Acquire a fresh observation when an otherwise safe, quiet MQTT cache exceeds the five-second RFID update guard; retain the original guard, fresh native state and immediate rejection of unsafe observations. Diagnosed from **Neme77**'s captured live samples (release delivery follow-up to #299; physically accepted by Neme77).
+
+- Keep camera and Connections payload literals outside unified-installer shell functions, reducing the instructions retained in memory while preserving the exact component archives and verification. Investigated with **Neme77** (release delivery follow-up to #299; physically accepted by Neme77).
+
+- Read queued native telemetry before declaring a receive timeout after a delayed application turn, avoiding unnecessary UDS reconnections while retaining the five-second freshness checks. Investigated with **Neme77** (release delivery follow-up to #299; physically accepted by Neme77).
+
+- After a native preparation observation is refused, wait briefly and retry only when the unchanged, fingerprinted Idle/cold guard passes again; retain the three-attempt bound and all original temperature, motion and freshness limits. Reported by **Neme77** during unified-update qualification (release delivery follow-up to #299).
 
 - Keep the spool-selection question and its draft open after an accidental click outside the popup; explicit Not now, Cancel and keyboard Escape remain available. Reported and reproduced with **Neme77**, follow-up to the Canvas/spool workflow (#299).
 

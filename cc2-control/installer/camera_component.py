@@ -68,15 +68,24 @@ def component_archive(source: Path, runtime: Path):
     return gzip.compress(buf.getvalue(), mtime=0)
 
 
-def functions(source: Path, runtime: Path):
+def functions(source: Path, runtime: Path, *, streamed=False):
     data = component_archive(source, runtime)
     lines = [RESTORE, 'camera_unpack() {', '    CAMERA_SOURCE="$STAGE/camera-component-$$"',
              '    (umask 077; mkdir "$CAMERA_SOURCE") || return 1']
+    payload = []
+    if streamed:
+        lines.append("    sed -n '/^# CC2_CAMERA_DATA_BEGIN$/,/^# CC2_CAMERA_DATA_END$/p' \"$STAGE/install-on-printer.sh\" | sed '/^#/d' | sh > \"$CAMERA_SOURCE/payload.tar.gz\" || return 1")
     for start in range(0, len(data), 4096):
         chunk = ''.join('\\%03o' % byte for byte in data[start:start + 4096])
-        lines.append("    printf '" + chunk + "' " + ('>' if start == 0 else '>>') + ' "$CAMERA_SOURCE/payload.tar.gz" || return 1')
+        if streamed:
+            payload.append("printf '" + chunk + "' || exit 1")
+        else:
+            lines.append("    printf '" + chunk + "' " + ('>' if start == 0 else '>>') + ' "$CAMERA_SOURCE/payload.tar.gz" || return 1')
     lines += [f'    [ "$(sha256sum "$CAMERA_SOURCE/payload.tar.gz" | awk \'{{print $1}}\')" = "{hashlib.sha256(data).hexdigest()}" ] || return 1',
               '    tar -xzf "$CAMERA_SOURCE/payload.tar.gz" -C "$CAMERA_SOURCE" || return 1',
               '    rm -f "$CAMERA_SOURCE/payload.tar.gz"',
               '    (cd "$CAMERA_SOURCE" && sha256sum -c SHA256SUMS) || return 1', '}', '']
-    return '\n'.join(lines)
+    code = '\n'.join(lines)
+    if streamed:
+        return code, '\n# CC2_CAMERA_DATA_BEGIN\n' + '\n'.join(payload) + '\n# CC2_CAMERA_DATA_END\n'
+    return code

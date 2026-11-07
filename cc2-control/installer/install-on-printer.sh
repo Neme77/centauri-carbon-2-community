@@ -69,6 +69,7 @@ CAMERA_SOURCE=''
 @CAMERA_COMPONENT_FUNCTIONS@
 @CONNECTIONS_COMPONENT_FUNCTIONS@
 @RFID_COMPONENT_FUNCTIONS@
+@APP_BINDING_FUNCTIONS@
 
 finish() {
     code=$?
@@ -78,7 +79,7 @@ finish() {
     if [ "$PASSED" -eq 0 ] && [ -n "$CAMERA_SOURCE" ] && [ -n "$BACKUP" ] && [ -f "$BACKUP/printer-camera.before" ]; then
         if ! camera_restore_startup "$BACKUP"; then
             echo "Camera startup restoration refused; inspect $BACKUP before reboot." >&2
-            rmdir "$LOCK"
+            @CAMERA_FAILURE_RELEASE@
             exit 1
         fi
     fi
@@ -87,6 +88,7 @@ finish() {
         if ! wait_stopped; then
             echo "Cannot restore while service is running. Backup: $BACKUP" >&2
         else
+            @APP_BINDING_ROLLBACK@
             if [ "$CHANGED" -eq 1 ]; then
                 rm -rf "$TARGET"
                 cp -a "$BACKUP/installation" "$TARGET"
@@ -96,6 +98,7 @@ finish() {
             echo "Previous installation restored/restarted. Backup: $BACKUP" >&2
         fi
     fi
+    @NATIVE_UNCHANGED_ROLLBACK@
     rmdir "$LOCK"
     exit "$code"
 }
@@ -155,6 +158,7 @@ case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Pri
 require_cold
 install_phase rfid-component-prepare
 @RFID_COMPONENT_PUBLISH@
+@APP_BINDING_PREPARE@
 install_phase stop-service
 STOPPED=1
 "$INIT" stop
@@ -216,6 +220,7 @@ while [ "$tries" -lt 120 ] && [ "$(awk '{print int($1)}' /proc/uptime)" -lt "$VE
                     echo 'REBOOT REQUIRED: reboot the complete idle printer to activate the camera fixes.'
                 fi
                 @CONNECTIONS_COMPONENT_INSTALL@
+                @APP_BINDING_COMMIT@
                 PASSED=1
                 @RFID_COMPONENT_COMPLETION@
                 echo "$RESULT"

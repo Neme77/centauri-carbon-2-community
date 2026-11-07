@@ -22,14 +22,14 @@ HTTPS_DOWNLOAD := $(BUILD)/cc2-https-download
 TLS := $(BUILD)/tls/mbedtls-3.6.7
 UDS_PROBE := $(BUILD)/cc2-uds-probe
 
-.PHONY: all clean dist uds-probe test web
+.PHONY: all clean dist uds-probe test test-app-update-boot test-native-payload web
 
 all: dist
 
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(TARGET): src/rfid_lifecycle_http.h src/rfid_runtime.h src/maintenance_barrier.h src/cavity_floor_http.h src/cavity_floor_protocol.h src/thermal_limits.h src/load_cell_guide.h src/load_cell_guide_core.h src/calibration_tools.h src/rotation_core.h src/native_tools_transport.h src/external_feed_state.h src/external_filament.h src/bed_drying.h src/backup.h src/backup_format.h src/experiments.h src/experiments_state.h src/app_update_catalog.h src/app_updates.h src/main.c src/gcode_metadata.h src/gcode_download.h src/history.h src/plates.h src/spools.h src/canvas_unload.h src/runout.h src/sha256.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h src/network_status.c src/network_status_http.h src/connections_http.h src/status_core.h $(wildcard src/connections/*.h) VERSION FIRMWARE_VERSION | $(BUILD)
+$(TARGET): src/rfid_app_update_boot.h src/rfid_lifecycle_http.h src/rfid_runtime.h src/maintenance_barrier.h src/cavity_floor_http.h src/cavity_floor_protocol.h src/thermal_limits.h src/load_cell_guide.h src/load_cell_guide_core.h src/calibration_tools.h src/rotation_core.h src/native_tools_transport.h src/external_feed_state.h src/external_filament.h src/bed_drying.h src/backup.h src/backup_format.h src/experiments.h src/experiments_state.h src/app_update_catalog.h src/app_updates.h src/main.c src/gcode_metadata.h src/gcode_download.h src/history.h src/plates.h src/spools.h src/canvas_unload.h src/runout.h src/sha256.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h src/network_status.c src/network_status_http.h src/connections_http.h src/status_core.h $(wildcard src/connections/*.h) VERSION FIRMWARE_VERSION | $(BUILD)
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -DCC2_NETWORK_STATUS_LIBRARY -o $@ $(LDFLAGS) -lm
 
 $(UPDATE_WORKER): updater/verify.c updater/trusted-key.h updater/trusted-base.h third-party/monocypher/monocypher.c third-party/monocypher/monocypher.h third-party/monocypher/monocypher-ed25519.c third-party/monocypher/monocypher-ed25519.h VERSION FIRMWARE_VERSION | $(BUILD)
@@ -73,8 +73,19 @@ dist: $(TARGET) $(UPDATE_WORKER) $(HTTPS_DOWNLOAD)
 #   make clean test CROSS= CC=gcc
 # Tests that compile their own C harness receive the same extra and sanitizer
 # flags through CC2_TEST_CFLAGS.
+# These integrations need a root-owned fixture or an actual packaged payload;
+# CI invokes both explicitly rather than passing the app ELF as a payload.
+TESTS ?= $(filter-out tests/test_rfid_app_boot.py tests/test_native_signed_payload.py,$(wildcard tests/test_*.py))
+
+test-app-update-boot:
+	python3 tests/test_rfid_app_boot.py
+
+test-native-payload:
+	@test -n "$(PAYLOAD)" || { echo 'Set PAYLOAD to the packaged common tar.gz'; exit 1; }
+	python3 tests/test_native_signed_payload.py "$(PAYLOAD)"
+
 test: $(TARGET) $(UPDATE_WORKER) $(HTTPS_DOWNLOAD)
-	@set -e; for t in tests/test_*.py; do echo "== $$t"; CC2_TEST_CFLAGS="$(EXTRA_CFLAGS) $(SANITIZE_FLAGS)" python3 $$t $(TARGET); done
+	@set -e; for t in $(TESTS); do echo "== $$t"; CC2_TEST_CFLAGS="$(EXTRA_CFLAGS) $(SANITIZE_FLAGS)" python3 $$t $(TARGET); done
 
 clean:
 	rm -rf $(BUILD) dist
