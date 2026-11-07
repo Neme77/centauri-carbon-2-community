@@ -10,7 +10,7 @@ HERE=Path(__file__).resolve().parent
 REPO=HERE.parents[1]
 spec=importlib.util.spec_from_file_location('vendor_inputs',HERE/'core/firmware_builder.py')
 builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
-LIBCO_SHA='14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403'
+LIBCO_SHA=builder.QUALIFIED_PROFILE['sha256']['libcolib']
 
 def main():
     target=REPO/'experimental/firmware-port/reactor/vendor-link/libcolib.so'
@@ -18,7 +18,8 @@ def main():
         builder.reqhash(target,LIBCO_SHA,'local native libco');return
     aes=builder.req(HERE/'keys/cc2_aes_key_v1.bin','local AES input')
     builder.reqhash(aes,builder.EXPECTED['aes_key'],'AES input')
-    official=builder.req(HERE/'original_firmware/cc2_eeb001_02.01.01.07_20260922210235.zip.sig','official OTA')
+    # libco belongs to the qualified reactor port, so it is recovered from the qualified base only.
+    official=builder.req(HERE/'original_firmware'/builder.QUALIFIED_PROFILE['stock_package'],'official OTA')
     un=builder.find_squash_tool(None,'unsquashfs')
     with tempfile.TemporaryDirectory(prefix='cc2-vendor-input-') as temporary:
         work=Path(temporary)

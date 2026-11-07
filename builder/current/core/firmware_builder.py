@@ -18,30 +18,82 @@ from pathlib import Path
 import importlib.util
 import argparse, hashlib, json, os, re, shutil, stat, struct, subprocess, sys, tempfile, zipfile
 
+# The ELEGOO vendor base is selected in BASE_FIRMWARE and described by
+# base_profiles/<version>.json. Only the qualified profile is hash-pinned and
+# only it has a ported patch set; any other profile is refused before a build.
+BASE_PROFILE_DIR=Path(__file__).resolve().parent.parent/'base_profiles'
+BASE_FIRMWARE_FILE=Path(__file__).resolve().parent.parent/'BASE_FIRMWARE'
+QUALIFIED_BASE='02.01.01.07'
+QUALIFIED_PROFILE_SHA256='fd8dd6cb3224adab81ebb614cc3ea9c72f9a68f3ed9d349b083840eb5b74eef6'
+VENDOR_PIN_KEYS=("stock_outer","stock_inner","stock_swu","sw-description","resource","uboot","boot0","kernel","stock_rootfs","stock_gui","stock_printer","daemon_stock","stock_ai_camera","libcolib")
+
+def profile_placeholders(value,path=''):
+ """Return the dotted keys of all TODO_ placeholder values; _comment keys are ignored."""
+ found=[]
+ if isinstance(value,dict):
+  for k,v in value.items():
+   if not k.startswith('_'): found+=profile_placeholders(v,path+'.'+k if path else k)
+ elif isinstance(value,str) and value.startswith('TODO_'): found.append(f'{path} = {value}')
+ return found
+
+def load_base_profile(version,directory=None):
+ directory=Path(directory) if directory else BASE_PROFILE_DIR
+ if not re.fullmatch(r'\d{2}\.\d{2}\.\d{2}\.\d{2}',version or ''): raise RuntimeError(f'Invalid ELEGOO base version: {version!r}')
+ path=directory/(version+'.json')
+ if not path.is_file(): raise RuntimeError(f'Missing base profile: {path}')
+ data=path.read_bytes()
+ if version==QUALIFIED_BASE and hashlib.sha256(data).hexdigest()!=QUALIFIED_PROFILE_SHA256: raise RuntimeError('Qualified base profile SHA256 mismatch')
+ profile=json.loads(data)
+ if profile.get('version')!=version: raise RuntimeError(f'Base profile version mismatch in {path}')
+ pins=profile.get('sha256')
+ if not isinstance(pins,dict) or set(pins)!=set(VENDOR_PIN_KEYS): raise RuntimeError(f'Base profile {path} must pin exactly: {", ".join(VENDOR_PIN_KEYS)}')
+ for k,v in pins.items():
+  if not isinstance(v,str) or not (re.fullmatch(r'[0-9a-f]{64}',v) or v.startswith('TODO_SHA256_')): raise RuntimeError(f'Invalid SHA256 pin {k} in {path}')
+ for k in ('stock_package','embedded_filename_marker'):
+  if not isinstance(profile.get(k),str) or not profile[k]: raise RuntimeError(f'Missing {k} in {path}')
+ if not isinstance(profile.get('manifest'),dict) or set(profile['manifest'])!={'version','update_class'}: raise RuntimeError(f'Invalid manifest entry in {path}')
+ return profile
+
+def selected_base_version(path=None):
+ path=Path(path) if path else BASE_FIRMWARE_FILE
+ if not path.is_file(): raise RuntimeError(f'Missing {path}')
+ return path.read_text(encoding='utf-8').strip()
+
+def require_buildable_profile(profile):
+ todo=profile_placeholders(profile)
+ if todo: raise RuntimeError(f"Base profile {profile.get('version')} has {len(todo)} open placeholder(s); refusing to build:\n  "+'\n  '.join(todo))
+ if profile.get('ported_patch_set') is not True or profile.get('version')!=QUALIFIED_BASE:
+  raise RuntimeError(f"No ported and qualified patch set for ELEGOO base {profile.get('version')}; refusing to build (qualified base: {QUALIFIED_BASE})")
+ return profile
+
+QUALIFIED_PROFILE=load_base_profile(QUALIFIED_BASE)
+_QPIN=QUALIFIED_PROFILE['sha256']
+
 HEADER_SIZE=0x200; OFF_FLAGS=0x004; OFF_VERSION=0x005; OFF_SUBTYPE=0x006; OFF_DATA_SIZE=0x008
 OFF_FILENAME=0x010; OFF_CRYPT_START=0x090; OFF_CRYPT_SPAN=0x098; OFF_IV=0x0A0
 OFF_PAYLOAD_SIZE=0x0B0; OFF_SHA256=0x0E0; OFF_RSA=0x100; RSA_SIZE=256
 CPIO_FILES=["sw-description","resource","uboot","boot0","kernel","rootfs","cpio_item_md5"]
 MD5_FILES=["sw-description","resource","uboot","boot0","kernel","rootfs"]
 EXPECTED={
- "stock_swu":"0654a0de241415d5e168fae21faf4384a34dbbf59968ef48dc5102c3e4d1ba9a",
- "sw-description":"6598586ada5e7e9256316c63b801579e65e797d2a77e13ab360f09b3581ae2fb",
- "resource":"aacfe9a9d847f4be3e4b5a16f7c16cba93a60e25ba371efb77568568b0b37aad",
- "uboot":"769d55b96ed4dff486ff5b79f35d61a36d68c444f49f19e44059e2472d468f72",
- "boot0":"b18b3f31b3d378b56b4d01b1863a6b9f0f61211ba1f4ad8e7b672ff54887ec41",
- "kernel":"e1ca036e667f1976fb1a1944b6922df8a1c26d5870912dd8273e0fcc3bb4efec",
- "stock_rootfs":"20375a79e1ee2748f43fd39a62e5a48b23b945ed048dbe52a54d0a1f37b1acae",
- "stock_gui":"24d0e561287a4b5a87c8ec698c98f60acf2c70511114b36224b4eb9249283abd",
+ # Vendor pins of the qualified base come from base_profiles/02.01.01.07.json.
+ "stock_swu":_QPIN["stock_swu"],
+ "sw-description":_QPIN["sw-description"],
+ "resource":_QPIN["resource"],
+ "uboot":_QPIN["uboot"],
+ "boot0":_QPIN["boot0"],
+ "kernel":_QPIN["kernel"],
+ "stock_rootfs":_QPIN["stock_rootfs"],
+ "stock_gui":_QPIN["stock_gui"],
  "patched_gui":"5f3122852044f6750dbd36aeb2ebcbd0ea8c5e99f48a52c186def1f66c3ec58a",
  "sshd":"7746b7085a1539f0a8db1aea89a97ea0ed7e8e5e722fecd476fdedfa1e7a002c",
  "sshd_init":"69b42d5f0adf20eeffd5218bc9e955af1d3590d68a07c21ad90128ea7a6930d8",
  "sshd_config":"0b8f561d681101fff24bb5f65f469f6ea8f838d5c12576f104b73c85392eb066",
- "daemon_stock":"6fed6657e814f010fef87b40c5932d8fa7c5e9c044d7376f25fc2318daeb10f9",
+ "daemon_stock":_QPIN["daemon_stock"],
  "dual_payload":"04b9f093f439c336476f2a34f109b088b05e6c42a4f1baf2f10e798ed927aa75",
  "daemon_dual":"83433b14e49d1e8aa9523282ead03618378573f4b66de1ad8f7f3c444b11aada",
 
- "stock_outer":"278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406",
- "stock_inner":"5ae3d2e392fa47d7b0bc42981389fd84d702ad069d535c1392d50a7d32ca977b",
+ "stock_outer":_QPIN["stock_outer"],
+ "stock_inner":_QPIN["stock_inner"],
  "aes_key":"70adfb48a2156086ad2495cfc121557f455dd5373450017d8da1dcacd7cf1009",
  "zoffset_patcher":"a233e6eb18993bf2fa82534ceca3e351ccf7069654c7f28c01b1eadb6a2bc8a4",
  "dual_patcher":"32c2e71964b9194da02182d145cf656e8b788cd9460d8b12e8a27a74d2d252cd",
@@ -229,12 +281,13 @@ def pkcs7_unpad(data):
  if n<1 or n>16 or data[-n:]!=bytes([n])*n: raise RuntimeError('Invalid PKCS#7 padding')
  return data[:-n]
 
-def decode_stock_package(stock_pkg,aes_key,work):
+def decode_stock_package(stock_pkg,aes_key,work,profile=None):
+ profile=profile or QUALIFIED_PROFILE; pins=profile['sha256']; marker=profile['embedded_filename_marker']
  banner('VERIFY + DECODE OFFICIAL STOCK PACKAGE')
- reqhash(stock_pkg,EXPECTED['stock_outer'],'official stock outer .zip.sig')
+ reqhash(stock_pkg,pins['stock_outer'],'official stock outer .zip.sig')
  x=validate_eleg(stock_pkg,0x04,encrypted=False)
  verify_signature(stock_pkg,STOCK_PUBLIC)
- if '02.01.01.07' not in x['filename']: raise RuntimeError(f"Unexpected stock embedded filename: {x['filename']}")
+ if marker not in x['filename']: raise RuntimeError(f"Unexpected stock embedded filename: {x['filename']}")
  outer_zip=work/'stock_outer.zip'; outer_zip.write_bytes(x['payload'])
  if not zipfile.is_zipfile(outer_zip): raise RuntimeError('Stock outer payload is not a ZIP')
  with zipfile.ZipFile(outer_zip,'r') as z:
@@ -249,14 +302,14 @@ def decode_stock_package(stock_pkg,aes_key,work):
   if len(mp)!=mx['data_size']: raise RuntimeError('Stock manifest length mismatch')
   packages=json.loads(mp)['packages']
   if not any(v.get('file')==n and v.get('hash')==sha256(inner) for v in packages): raise RuntimeError('Stock manifest/SWU link mismatch')
- reqhash(inner,EXPECTED['stock_inner'],'official stock inner SWU.SIG')
+ reqhash(inner,pins['stock_inner'],'official stock inner SWU.SIG')
  y=validate_eleg(inner,0x80,encrypted=True)
  verify_signature(inner,STOCK_PUBLIC)
  dec=aes_cbc(y['payload'],aes_key,y['iv'],decrypt=True)
  plain=pkcs7_unpad(dec)
  if len(plain)!=y['data_size']: raise RuntimeError('Decoded stock SWU size mismatch')
  swu=work/'stock_decrypted.swu'; swu.write_bytes(plain)
- reqhash(swu,EXPECTED['stock_swu'],'decrypted stock SWU')
+ reqhash(swu,pins['stock_swu'],'decrypted stock SWU')
  if plain[:6] not in (b'070701',b'070702'): raise RuntimeError('Decoded stock SWU is not newc/crc CPIO')
  print(f"[OK] Stock chain: outer 0x04 -> ZIP -> SWU.SIG 0x80 -> SWU")
  return swu
@@ -451,9 +504,10 @@ def patch_printer44(printer):
   Path(printer).write_bytes(final.read_bytes())
 
 def main():
- ap=argparse.ArgumentParser(description='CC2 02.01.01.07 Dual-Trust firmware builder with CC2 Control and Panda compatibility')
+ ap=argparse.ArgumentParser(description='CC2 Dual-Trust firmware builder with CC2 Control and Panda compatibility (ELEGOO base from BASE_FIRMWARE)')
  here=Path(__file__).resolve().parent.parent
- ap.add_argument('stock_package',nargs='?',default=str(here/'original_firmware'/'cc2_eeb001_02.01.01.07_20260922210235.zip.sig'),help='official stock .zip.sig (default: original_firmware/...)')
+ ap.add_argument('stock_package',nargs='?',default=None,help='official stock .zip.sig (default: original_firmware/<stock_package of the selected base profile>)')
+ ap.add_argument('--base-version',help='ELEGOO base profile to use instead of BASE_FIRMWARE')
  ap.add_argument('--signing-mode',choices=['stock','community'],default='community',help='stock: initial install; community: later updates')
  ap.add_argument('--private-key',help='Private key for selected mode; explicit path required in stock mode')
  ap.add_argument('--check-signing-key-only',action='store_true',help='Check key pair and sign/verify a local challenge; no firmware or AES required')
@@ -481,6 +535,10 @@ def main():
  signing_key=verify_signing_key(priv,a.signing_mode)
  if a.check_signing_key_only:
   print('SIGNING KEY CHECK PASS; no firmware built or installed'); return 0
+ profile=require_buildable_profile(load_base_profile(a.base_version or selected_base_version()))
+ pins=profile['sha256']; base_version=profile['version']
+ print(f"[OK] ELEGOO base profile: {base_version}")
+ if a.stock_package is None: a.stock_package=str(here/'original_firmware'/profile['stock_package'])
  release_tag='STOCK_BOOTSTRAP' if a.signing_mode=='stock' else 'COMMUNITY'
  fw_tag=firmware_release_version().replace('.','_')
  a.output=a.output or ('CC2_FULL_V'+fw_tag+'_'+release_tag+'.zip.sig')
@@ -527,22 +585,22 @@ def main():
  target.parent.mkdir(parents=True,exist_ok=True)
  try:
   verify_squashfs(mk,un,work,a.toolchain_manifest)
-  stock=decode_stock_package(stock_pkg,aes,work)
+  stock=decode_stock_package(stock_pkg,aes,work,profile)
   if a.preflight_only:
    banner('PREFLIGHT PASS'); print('Stock package and prerequisites verified.'); print('Work:',work if a.keep_work else '(removed)'); return 0
   banner('EXTRACT STOCK SWU')
   with stock.open('rb') as f: run(['cpio','-idmu'],cwd=cpio,stdin=f)
   for n in CPIO_FILES: req(cpio/n,n)
-  for n in ['sw-description','resource','uboot','boot0','kernel']: reqhash(cpio/n,EXPECTED[n],f'stock {n}')
+  for n in ['sw-description','resource','uboot','boot0','kernel']: reqhash(cpio/n,pins[n],f'stock {n}')
   (cpio/'sw-description').write_bytes(resources.patch((cpio/'sw-description').read_bytes()))
-  reqhash(cpio/'rootfs',EXPECTED['stock_rootfs'],'stock rootfs')
+  reqhash(cpio/'rootfs',pins['stock_rootfs'],'stock rootfs')
   banner('EXTRACT + PATCH ROOTFS'); run([un,'-d',root,cpio/'rootfs'],capture=True)
   gui=root/'opt/bin/ec-eeb001-gui'
   printer=root/'opt/bin/elegoo_printer'
   daemon=root/'opt/inst/daemon-000/daemon-000'
-  reqhash(gui,EXPECTED['stock_gui'],'stock GUI')
-  reqhash(printer,'8039081f9c4b01e720d838d4ab6e4515a8979b9a71a33bd4164321c282e06074','stock elegoo_printer')
-  reqhash(daemon,EXPECTED['daemon_stock'],'stock update daemon')
+  reqhash(gui,pins['stock_gui'],'stock GUI')
+  reqhash(printer,pins['stock_printer'],'stock elegoo_printer')
+  reqhash(daemon,pins['daemon_stock'],'stock update daemon')
   patch_zoffset(gui)
   patch_printer44(printer)
   camera=root/'opt/bin/ai_camera'
@@ -600,7 +658,7 @@ def main():
    if not p.is_symlink() or os.readlink(p)!='../init.d/sshd': raise RuntimeError(f'Invalid rebuilt SSH symlink: {p}')
   banner('REBUILD SWU'); data=''.join(f'{md5(cpio/n)}  {n}\n' for n in MD5_FILES).encode('ascii')
   if len(data)!=254: raise RuntimeError('cpio_item_md5 format mismatch')
-  (cpio/'cpio_item_md5').write_bytes(data); swu=work/('CC2_02.01.01.07_V'+fw_tag+'_CC2_CONTROL.swu')
+  (cpio/'cpio_item_md5').write_bytes(data); swu=work/('CC2_'+base_version+'_V'+fw_tag+'_CC2_CONTROL.swu')
   # Match the historical WSL1-safe build path: real printf | cpio pipeline.
   # Restore the metadata used by the validated historical 02.01.01.07 build.
   for n in CPIO_FILES:
@@ -616,11 +674,11 @@ def main():
   swu_hash=sha256(swu); print('SWU SHA256:',swu_hash)
   g_swu=golden_report('rebuilt SWU',swu,'swu') if (a.golden_check or a.require_golden) else None
   banner('SIGN/PACK OTA CHAIN')
-  swusig_name='CC2_02.01.01.07_V'+fw_tag+'_CC2_CONTROL_'+release_tag+'.swu.sig'; swusig=work/swusig_name
+  swusig_name='CC2_'+base_version+'_V'+fw_tag+'_CC2_CONTROL_'+release_tag+'.swu.sig'; swusig=work/swusig_name
   eleg_encrypted(swu.read_bytes(),swusig,aes,priv,swusig_name[:-4],0x80); check_eleg(swusig,0x80)
   swusig_hash=sha256(swusig)
   g_swusig=golden_report('SWU.SIG',swusig,'swusig') if (a.golden_check or a.require_golden) else None
-  manifest_obj={"packages":[{"file":swusig_name,"hash":swusig_hash}],"version":"02.01.01.07","update_class":"00.00.00.00"}
+  manifest_obj={"packages":[{"file":swusig_name,"hash":swusig_hash}],"version":profile['manifest']['version'],"update_class":profile['manifest']['update_class']}
   manifest=json.dumps(manifest_obj,separators=(',',':')).encode('utf-8'); mansig=work/'ota-package-list.json.sig'
   eleg_encrypted(manifest,mansig,aes,priv,'ota-package-list.json',0x83); check_eleg(mansig,0x83)
   z=work/('CC2_FULL_V'+fw_tag+'_'+release_tag+'.zip')

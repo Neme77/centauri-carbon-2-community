@@ -1,0 +1,47 @@
+{
+ "version": "02.03.03.13",
+ "_comment": "PLACEHOLDER PROFILE. No value below was taken from the real ELEGOO 02.03.03.13 package; every TODO_ must be replaced with output of tools/inspect_base.py run on the user's own authenticated package. Even when complete, the build stays refused until a ported and tested patch set exists (ported_patch_set=false).",
+ "stock_package": "TODO_FILENAME_STOCK_PACKAGE",
+ "_comment_stock_package": "exact file name of the official 02.03.03.13 .zip.sig, placed in builder/current/original_firmware/",
+ "embedded_filename_marker": "TODO_VERSION_EMBEDDED_FILENAME",
+ "_comment_embedded_filename_marker": "version substring of the file name stored in the outer ELEG 0x04 header (inspect_base.py: outer.embedded_filename)",
+ "manifest": {
+  "version": "TODO_MANIFEST_VERSION",
+  "update_class": "TODO_MANIFEST_UPDATE_CLASS"
+ },
+ "_comment_manifest": "version and update_class fields of the decrypted official ota-package-list.json (inspect_base.py: manifest); copy them, never invent or raise them",
+ "ported_patch_set": false,
+ "_comment_ported_patch_set": "true only after Z-offset, HTTP/network, camera, Dual Trust and reactor patches are ported to this base, emulation-tested and hardware-tested",
+ "sha256": {
+  "stock_outer": "TODO_SHA256_STOCK_OUTER",
+  "stock_inner": "TODO_SHA256_STOCK_INNER",
+  "stock_swu": "TODO_SHA256_STOCK_SWU",
+  "sw-description": "TODO_SHA256_SW_DESCRIPTION",
+  "resource": "TODO_SHA256_RESOURCE",
+  "uboot": "TODO_SHA256_UBOOT",
+  "boot0": "TODO_SHA256_BOOT0",
+  "kernel": "TODO_SHA256_KERNEL",
+  "stock_rootfs": "TODO_SHA256_ROOTFS",
+  "stock_gui": "TODO_SHA256_EC_EEB001_GUI",
+  "stock_printer": "TODO_SHA256_ELEGOO_PRINTER",
+  "daemon_stock": "TODO_SHA256_DAEMON_000",
+  "stock_ai_camera": "TODO_SHA256_AI_CAMERA",
+  "libcolib": "TODO_SHA256_LIBCOLIB_SO"
+ },
+ "_comments_sha256": {
+  "stock_outer": "SHA-256 of the whole official .zip.sig package from ELEGOO 02.03.03.13",
+  "stock_inner": "SHA-256 of the single *.swu.sig member inside the outer ZIP from ELEGOO 02.03.03.13",
+  "stock_swu": "SHA-256 of the AES-decrypted SWU (CPIO newc/crc) from ELEGOO 02.03.03.13",
+  "sw-description": "SHA-256 of CPIO member sw-description from ELEGOO 02.03.03.13",
+  "resource": "SHA-256 of CPIO member resource from ELEGOO 02.03.03.13",
+  "uboot": "SHA-256 of CPIO member uboot from ELEGOO 02.03.03.13",
+  "boot0": "SHA-256 of CPIO member boot0 from ELEGOO 02.03.03.13",
+  "kernel": "SHA-256 of CPIO member kernel from ELEGOO 02.03.03.13",
+  "stock_rootfs": "SHA-256 of CPIO member rootfs (SquashFS image) from ELEGOO 02.03.03.13",
+  "stock_gui": "SHA-256 of rootfs opt/bin/ec-eeb001-gui from ELEGOO 02.03.03.13",
+  "stock_printer": "SHA-256 of rootfs opt/bin/elegoo_printer from ELEGOO 02.03.03.13",
+  "daemon_stock": "SHA-256 of rootfs opt/inst/daemon-000/daemon-000 from ELEGOO 02.03.03.13",
+  "stock_ai_camera": "SHA-256 of rootfs opt/bin/ai_camera from ELEGOO 02.03.03.13",
+  "libcolib": "SHA-256 of rootfs opt/lib/libcolib.so from ELEGOO 02.03.03.13"
+ }
+}

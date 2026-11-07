@@ -3,6 +3,7 @@
 import argparse
 import datetime
 import hashlib
+import json
 import re
 from pathlib import Path
 import subprocess
@@ -22,6 +23,23 @@ def sha256(path):
         for block in iter(lambda: f.read(1024 * 1024), b''):
             h.update(block)
     return h.hexdigest()
+
+def base_profile(root):
+    """Read the selected ELEGOO base profile; refuse placeholders or an unported base."""
+    version = (root / 'BASE_FIRMWARE').read_text(encoding='utf-8').strip()
+    profile = json.loads((root / 'base_profiles' / (version + '.json')).read_text(encoding='utf-8'))
+    if profile.get('version') != version:
+        raise RuntimeError('Profilo base non coerente: ' + version)
+    def todo(value, path=''):
+        if isinstance(value, dict):
+            return [x for k, v in value.items() if not k.startswith('_') for x in todo(v, path + '.' + k if path else k)]
+        return [path + ' = ' + value] if isinstance(value, str) and value.startswith('TODO_') else []
+    missing = todo(profile)
+    if missing:
+        raise RuntimeError('Base profile ' + version + ' has open placeholders:\n  ' + '\n  '.join(missing))
+    if profile.get('ported_patch_set') is not True:
+        raise RuntimeError('No ported patch set for ELEGOO base ' + version)
+    return profile
 
 def build_arguments(root, mode, preflight=False, check_key=False, keep_work=False):
     root = Path(root).resolve()
@@ -43,7 +61,7 @@ def build_arguments(root, mode, preflight=False, check_key=False, keep_work=Fals
     if check_key:
         command.append('--check-signing-key-only')
     else:
-        firmware = root / 'original_firmware/cc2_eeb001_02.01.01.07_20260922210235.zip.sig'
+        firmware = root / 'original_firmware' / base_profile(root)['stock_package']
         aes = root / 'keys/cc2_aes_key_v1.bin'
         mk = root / 'tools/squashfs-tools-4.6.1/bin/mksquashfs'
         un = root / 'tools/squashfs-tools-4.6.1/bin/unsquashfs'

@@ -34,3 +34,7 @@ experimental/native-display/thermal.awk text eol=lf
 
 # Signed catalogs are binary even when their signature contains no NUL byte.
 *.cc2catalog -text
+
+# ELEGOO base profiles: the qualified profile is SHA-256 pinned by the builder.
+builder/current/base_profiles/*.json -text
+builder/current/BASE_FIRMWARE text eol=lf

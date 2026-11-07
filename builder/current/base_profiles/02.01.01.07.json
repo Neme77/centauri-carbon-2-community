@@ -1,0 +1,27 @@
+{
+ "version": "02.01.01.07",
+ "_comment": "Qualified ELEGOO OTA base. Values copied unchanged from core/firmware_builder.py (EXPECTED, stock elegoo_printer pin, filename/manifest literals), prepare_vendor.py (LIBCO_SHA) and experimental/firmware-port/camera44-manifest.json (input_sha256).",
+ "stock_package": "cc2_eeb001_02.01.01.07_20260922210235.zip.sig",
+ "embedded_filename_marker": "02.01.01.07",
+ "manifest": {
+  "version": "02.01.01.07",
+  "update_class": "00.00.00.00"
+ },
+ "ported_patch_set": true,
+ "sha256": {
+  "stock_outer": "278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406",
+  "stock_inner": "5ae3d2e392fa47d7b0bc42981389fd84d702ad069d535c1392d50a7d32ca977b",
+  "stock_swu": "0654a0de241415d5e168fae21faf4384a34dbbf59968ef48dc5102c3e4d1ba9a",
+  "sw-description": "6598586ada5e7e9256316c63b801579e65e797d2a77e13ab360f09b3581ae2fb",
+  "resource": "aacfe9a9d847f4be3e4b5a16f7c16cba93a60e25ba371efb77568568b0b37aad",
+  "uboot": "769d55b96ed4dff486ff5b79f35d61a36d68c444f49f19e44059e2472d468f72",
+  "boot0": "b18b3f31b3d378b56b4d01b1863a6b9f0f61211ba1f4ad8e7b672ff54887ec41",
+  "kernel": "e1ca036e667f1976fb1a1944b6922df8a1c26d5870912dd8273e0fcc3bb4efec",
+  "stock_rootfs": "20375a79e1ee2748f43fd39a62e5a48b23b945ed048dbe52a54d0a1f37b1acae",
+  "stock_gui": "24d0e561287a4b5a87c8ec698c98f60acf2c70511114b36224b4eb9249283abd",
+  "stock_printer": "8039081f9c4b01e720d838d4ab6e4515a8979b9a71a33bd4164321c282e06074",
+  "daemon_stock": "6fed6657e814f010fef87b40c5932d8fa7c5e9c044d7376f25fc2318daeb10f9",
+  "stock_ai_camera": "ad888fec26ce214427eda038ae70b76cf68155f365c669ed647c1c09bad7a1f7",
+  "libcolib": "14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403"
+ }
+}
