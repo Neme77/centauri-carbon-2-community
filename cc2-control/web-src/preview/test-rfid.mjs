@@ -86,7 +86,7 @@ try {
   Object.assign(window.__RFID_NATIVE,{phase:4,reboot_required:true,busy:true});
  })
  await page.waitForFunction(()=>document.querySelector('.cc2-page-content')?.classList.contains('opacity-50'))
- assert.equal(await notice.count(),0)
+ await notice.waitFor({state:'detached'})
  await page.evaluate(()=>{window.__RFID_NATIVE.busy=false})
  await notice.waitFor()
  assert((await notice.textContent()).includes('secondo riavvio completo'))
