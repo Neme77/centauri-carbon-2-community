@@ -38,12 +38,12 @@ with tempfile.TemporaryDirectory() as temp:
                 item.size=len(b);tar.addfile(item,io.BytesIO(b))
         return out.getvalue()
     runtime=archive({'delivery.json':b'{}','rfid.tar.gz':archive(inner),'binding.tar.gz':b'inert','cavity.tar.gz':b'inert'})
-    policy={'protocol':1,'version':'1.2.26','community_base':'4.4.3','physical_flash_readback':False,
+    policy={'protocol':1,'version_sha256':sha((ROOT/'VERSION').read_text().strip().encode()),'community_base':'4.4.3','physical_flash_readback':False,
             'app_sha256':sha(app),'native_runtime_sha256':sha(runtime),'recovery_profile_sha256':sha(profile)}
     path=folder/'policy.json'
     path.write_text(json.dumps(policy))
     assert validate_release(Blob(runtime),app,'1.2.26',path)==policy
-    for key,value in [('protocol',True),('version','1.2.25'),('community_base','4.3'),
+    for key,value in [('protocol',True),('version_sha256','0'*64),('community_base','4.3'),
                       ('physical_flash_readback',True),('app_sha256','0'*64),
                       ('native_runtime_sha256','0'*64),('recovery_profile_sha256','0'*64)]:
         changed=dict(policy);changed[key]=value;path.write_text(json.dumps(changed))
