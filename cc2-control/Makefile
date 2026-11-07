@@ -22,7 +22,7 @@ HTTPS_DOWNLOAD := $(BUILD)/cc2-https-download
 TLS := $(BUILD)/tls/mbedtls-3.6.7
 UDS_PROBE := $(BUILD)/cc2-uds-probe
 
-.PHONY: all clean dist uds-probe test web
+.PHONY: all clean dist uds-probe test test-app-update-boot test-native-payload web
 
 all: dist
 
@@ -73,8 +73,19 @@ dist: $(TARGET) $(UPDATE_WORKER) $(HTTPS_DOWNLOAD)
 #   make clean test CROSS= CC=gcc
 # Tests that compile their own C harness receive the same extra and sanitizer
 # flags through CC2_TEST_CFLAGS.
+# These integrations need a root-owned fixture or an actual packaged payload;
+# CI invokes both explicitly rather than passing the app ELF as a payload.
+TESTS ?= $(filter-out tests/test_rfid_app_boot.py tests/test_native_signed_payload.py,$(wildcard tests/test_*.py))
+
+test-app-update-boot:
+	python3 tests/test_rfid_app_boot.py
+
+test-native-payload:
+	@test -n "$(PAYLOAD)" || { echo 'Set PAYLOAD to the packaged common tar.gz'; exit 1; }
+	python3 tests/test_native_signed_payload.py "$(PAYLOAD)"
+
 test: $(TARGET) $(UPDATE_WORKER) $(HTTPS_DOWNLOAD)
-	@set -e; for t in tests/test_*.py; do echo "== $$t"; CC2_TEST_CFLAGS="$(EXTRA_CFLAGS) $(SANITIZE_FLAGS)" python3 $$t $(TARGET); done
+	@set -e; for t in $(TESTS); do echo "== $$t"; CC2_TEST_CFLAGS="$(EXTRA_CFLAGS) $(SANITIZE_FLAGS)" python3 $$t $(TARGET); done
 
 clean:
 	rm -rf $(BUILD) dist
