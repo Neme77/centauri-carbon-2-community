@@ -13,6 +13,7 @@ import {
   Grid3x3,
   History,
   ListChecks,
+  ListOrdered,
   Settings,
   SlidersHorizontal,
   PanelLeftClose,
@@ -28,6 +29,8 @@ import { control, errText, notify, post, toast } from '@/lib/api'
 import { ask } from '@/lib/confirm'
 import { printerError, printerRequest } from '@/lib/machine'
 import { pandabreath, pandabreathName } from '@/lib/pandabreath'
+import { openJobs, queue, refreshQueue } from '@/lib/queue'
+import { usePoll } from '@/lib/poll'
 import { refreshPrinter, health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
 
 // Same query as the compact layout in index.css.
@@ -38,6 +41,7 @@ const items: [Page, NavIcon, Key][] = [
   ['control', SlidersHorizontal, 'common.control'],
   ['job', ListChecks, 'common.job'],
   ['files', FilesIcon, 'common.files'],
+  ['queue', ListOrdered, 'queue.title'],
   ['history', History, 'common.history'],
   ['bed', Grid3x3, 'common.bed_levelling'],
   ['canvas', CanvasIcon, 'common.canvas'],
@@ -140,6 +144,9 @@ export const Sidebar = () => {
   const h = health.use().data
   // Trays whose new filament still waits for "which spool is this?".
   const questions = printer.use().data?.spools?.questions?.length || 0
+  // Jobs waiting in the print queue; the count is refreshed slowly here and fast on the Queue page.
+  usePoll(refreshQueue, 20000)
+  const queued = openJobs(queue.use().data).length
   const { collapsed } = menu.use()
   const { open } = mobileMenu.use()
   const pb = pandabreath.use() // optional page, off unless turned on; named after the firmware
@@ -227,6 +234,15 @@ export const Sidebar = () => {
                       title={t('spools.question_tag')}
                       aria-hidden="true"
                     />
+                  )}
+                  {p === 'queue' && queued > 0 && (
+                    <span
+                      data-queue-count
+                      class="absolute left-8 top-2 min-w-4 rounded-full bg-cyan px-1 text-center text-[10px] font-semibold leading-4 text-ink"
+                      aria-hidden="true"
+                    >
+                      {queued}
+                    </span>
                   )}
                   {/* Always rendered: the sidebar width transition clips it progressively; invisible only starts once collapsed. */}
                   <span

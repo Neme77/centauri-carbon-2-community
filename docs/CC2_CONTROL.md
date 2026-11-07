@@ -167,6 +167,16 @@ The G-code library lists printable files from internal memory and USB storage, i
 
 The inventory is kept in `spools.json` under `/opt/usr/cc2-control`. The count is only as good as the remaining weight entered for each spool; weigh a spool to correct it. Moves made while a print is paused, such as a manual filament change, are not counted, nor is filament loaded outside a print.
 
+## Print queue
+
+**Queue** holds jobs prepared ahead: a G-code file, the choices of the print dialog (Canvas slots or the external feed, build plate side, bed calibration or saved mesh, timelapse, measurement and nozzle) and a number of copies. A job is added from the print dialog, which now offers **Start now** or **Add to queue**; the Files page marks files that still have copies queued.
+
+- The page shows the next job with a pre-flight check (file in place, the filament in each mapped slot against the file, the side's saved mesh, the installed nozzle, printer idle and bed temperature) and one **Start print** button: no dialog, every choice was made when the job was added. While a copy prints, the card follows its progress and the start waits.
+- Each copy is a separate print: the part is removed between copies. By default the next copy waits for the button, on the Queue page, in the Dashboard's **Next in queue** card or in the print-ended notice. **Start the next copy automatically** after a delay exists for a bed that clears itself and is off by default.
+- Copies are counted by CC2 Control on the printer, so the browser can be closed. A stopped or failed copy is not counted and the job stays first with a note. Jobs can be reordered, their copies changed, skipped or removed; finished jobs stay listed until cleared, or are removed automatically.
+
+The queue is kept in `print-queue.json` under `/opt/usr/cc2-control`. The printer's own touchscreen takes no part in it: the vendor application cannot be extended, and its print-completed dialog gives CC2 Control no signal.
+
 ## Printer sub-states and refusals
 
 Next to the machine state, the dashboard, Job and Control pages and the top bar (on wider screens) show what the printer is doing within it, for example **Printing · Heating bed**, **Printing · Paused** or **Manual homing · Failed**. The meaning of each vendor sub-state code depends on the state, as in ELEGOO's SDK.

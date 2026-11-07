@@ -85,6 +85,100 @@ export function previewPlugin(): Plugin {
   // Canvas pull-back: the printer's configured value and the autosave.cfg override, pending until a restart.
   let unload = { configured: 85, override: null as number | null, pending: false, extended: false }
   let videos: Record<string, number> = {}
+  // Print queue: jobs prepared ahead. The preview keeps them in memory and a start "prints" a copy at once.
+  type QueueJob = {
+    id: number
+    storage: 'internal' | 'usb'
+    path: string
+    mapping: string
+    side: 'A' | 'B'
+    leveling: string
+    timelapse: boolean
+    measure: string
+    nozzle: string
+    copies: number
+    done: number
+    estimated_seconds: number | null
+    filament_grams: number | null
+    added: number
+    state: 'pending' | 'starting' | 'printing' | 'done'
+    last_result: string
+    present: boolean
+  }
+  let queueJobs: QueueJob[] = []
+  let queueNextId = 1
+  let queuePolicy = { after: 'wait' as 'wait' | 'auto', delay: 60, remove_done: true }
+  let queueRevision = 0
+  const queueJob = (
+    id: number,
+    path: string,
+    copies: number,
+    done: number,
+    extra: Partial<QueueJob> = {}
+  ): QueueJob => ({
+    id,
+    storage: 'internal',
+    path,
+    mapping: '0:1',
+    side: 'A',
+    leveling: 'saved',
+    timelapse: false,
+    measure: '',
+    nozzle: '',
+    copies,
+    done,
+    estimated_seconds: 6000,
+    filament_grams: 42,
+    added: 1790899200,
+    state: done >= copies ? 'done' : 'pending',
+    last_result: '',
+    present: true,
+    ...extra,
+  })
+  const resetQueue = () => {
+    queueJobs = [
+      queueJob(1, 'CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode', 5, 2, { estimated_seconds: 1547, filament_grams: 12.5 }),
+      queueJob(2, 'CC2_Preview_Gear_housing_PETG.gcode', 2, 0, {
+        mapping: '0:0',
+        side: 'B',
+        leveling: 'calibrate',
+        timelapse: true,
+        estimated_seconds: 11100,
+        filament_grams: 118,
+      }),
+      queueJob(3, 'CC2_Preview_Phone_stand.gcode', 1, 0, { mapping: '', estimated_seconds: 3300, filament_grams: 23 }),
+      queueJob(4, 'CC2_Preview_Vase_missing.gcode', 1, 0, {
+        present: false,
+        estimated_seconds: null,
+        filament_grams: null,
+      }),
+      queueJob(5, 'CC2_Preview_Calibration_cube.gcode', 1, 1, { estimated_seconds: 1440, filament_grams: 8 }),
+    ]
+    queueNextId = 6
+    queuePolicy = { after: 'wait', delay: 60, remove_done: false }
+  }
+  resetQueue()
+  const queueView = () => {
+    const printing = scene === 'printing' || scene === 'paused'
+    for (const job of queueJobs)
+      if (!printing && (job.state === 'printing' || job.state === 'starting')) job.state = 'pending'
+    if (printing && !queueJobs.some(j => j.state === 'printing')) {
+      const head = queueJobs.find(j => j.state === 'pending' && j.present)
+      if (head) head.state = 'printing'
+    }
+    const active = queueJobs.find(j => j.state === 'printing' || j.state === 'starting')
+    const next = active ? null : queueJobs.find(j => j.state === 'pending' && j.present)
+    return {
+      available: true,
+      error: '',
+      revision: queueRevision,
+      printer_idle: scene === 'idle',
+      policy: queuePolicy,
+      active: active?.id ?? null,
+      next: next?.id ?? null,
+      items: queueJobs,
+    }
+  }
   // Build-plate library: which simulated plate mesh each printer side slot holds, as /api/plates reports it.
   const plateMesh = (tilt: number) => ({
     x_count: 11,
@@ -624,6 +718,8 @@ export function previewPlugin(): Plugin {
                   },
                 },
               })
+            case '/api/queue':
+              return reply(queueView())
             case '/api/plates':
               return reply(plateLibrary())
             case '/api/spools':
@@ -767,6 +863,13 @@ export function previewPlugin(): Plugin {
           '/api/spools/dismiss',
           '/api/spools/adjust',
           '/__preview/spool-insert',
+          '/api/queue/add',
+          '/api/queue/start',
+          '/api/queue/remove',
+          '/api/queue/reorder',
+          '/api/queue/copies',
+          '/api/queue/policy',
+          '/api/queue/clear-done',
         ]
         if (!simulated.includes(path)) return reply({ error: 'Operation disabled in isolated preview' }, 403)
         let body = ''
@@ -783,6 +886,92 @@ export function previewPlugin(): Plugin {
         req.on('end', () => {
           if (oversized) return
           try {
+            if (path.startsWith('/api/queue/') && req.method === 'POST') {
+              const lines = body.replace(/\n+$/, '').split('\n')
+              const find = () => queueJobs.find(j => j.id === Number(lines[0]))
+              queueRevision++
+              if (path === '/api/queue/add') {
+                if (lines.length < 9) return reply({ ok: false, error: 'Invalid queue request' }, 400)
+                const [
+                  storage,
+                  file,
+                  mapping,
+                  side,
+                  leveling,
+                  timelapse,
+                  measure,
+                  nozzle,
+                  copies,
+                  position,
+                  seconds,
+                  grams,
+                ] = lines
+                const job = queueJob(queueNextId++, file, Number(copies) || 1, 0, {
+                  storage: storage === 'usb' ? 'usb' : 'internal',
+                  mapping: mapping || '',
+                  side: side === 'B' ? 'B' : 'A',
+                  leveling: leveling || 'saved',
+                  timelapse: timelapse === '1',
+                  measure: measure || '',
+                  nozzle: nozzle || '',
+                  estimated_seconds: seconds ? Number(seconds) : null,
+                  filament_grams: grams ? Number(grams) : null,
+                  added: Math.floor(Date.now() / 1000),
+                })
+                const head = queueJobs.findIndex(j => j.state === 'pending')
+                if (position === 'next' && head >= 0) queueJobs.splice(head, 0, job)
+                else queueJobs.push(job)
+                return reply({ ok: true, id: job.id, count: queueJobs.length }, 201)
+              }
+              if (path === '/api/queue/start') {
+                if (scene !== 'idle')
+                  return reply({ accepted: false, error: 'Starting a file requires an idle printer' }, 409)
+                const job = lines[0] ? find() : queueJobs.find(j => j.state === 'pending' && j.present)
+                if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
+                if (job.state !== 'pending' || !job.present)
+                  return reply({ ok: false, error: 'This job has no copy left to print' }, 409)
+                // The preview prints instantly: the copy counts at once.
+                job.done++
+                job.last_result = ''
+                if (job.done >= job.copies) {
+                  job.state = 'done'
+                  if (queuePolicy.remove_done) queueJobs = queueJobs.filter(j => j !== job)
+                }
+                return reply({ accepted: true, method: 1020, storage_media: 'local', filename: job.path }, 202)
+              }
+              const job = find()
+              if (path === '/api/queue/clear-done') {
+                queueJobs = queueJobs.filter(j => j.state !== 'done')
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/policy') {
+                const [after, delay, remove] = lines
+                if ((after !== 'wait' && after !== 'auto') || !(Number(delay) >= 10 && Number(delay) <= 3600))
+                  return reply({ ok: false, error: 'Invalid queue policy' }, 400)
+                queuePolicy = { after, delay: Number(delay), remove_done: remove === '1' }
+                return reply({ ok: true })
+              }
+              if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
+              if (path === '/api/queue/remove') {
+                queueJobs = queueJobs.filter(j => j !== job)
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/reorder') {
+                const to = Math.min(Math.max(0, Number(lines[1]) || 0), queueJobs.length - 1)
+                queueJobs.splice(queueJobs.indexOf(job), 1)
+                queueJobs.splice(to, 0, job)
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/copies') {
+                const n = Number(lines[1])
+                if (!(n >= 1 && n <= 99) || n < job.done)
+                  return reply({ ok: false, error: 'Fewer copies than already printed' }, 409)
+                job.copies = n
+                job.state = job.done >= n ? 'done' : job.state === 'done' ? 'pending' : job.state
+                return reply({ ok: true })
+              }
+              return reply({ error: 'Unknown queue operation' }, 404)
+            }
             if (path === '/api/spoolman' && req.method === 'POST') {
               const form = Object.fromEntries(
                 body

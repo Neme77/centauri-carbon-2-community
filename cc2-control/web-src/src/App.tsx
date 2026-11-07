@@ -13,6 +13,7 @@ import { Dashboard } from '@/pages/dashboard'
 import { Control } from '@/pages/control'
 import { Job } from '@/pages/job'
 import { Files } from '@/pages/files'
+import { Queue } from '@/pages/queue'
 import { History } from '@/pages/history'
 import { Bed } from '@/pages/bed'
 import { Canvas } from '@/pages/canvas'
@@ -26,6 +27,7 @@ const pages = {
   control: Control,
   job: Job,
   files: Files,
+  queue: Queue,
   history: History,
   bed: Bed,
   canvas: Canvas,

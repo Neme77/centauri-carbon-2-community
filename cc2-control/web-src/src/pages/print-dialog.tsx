@@ -1,5 +1,7 @@
 import { useState } from 'preact/hooks'
+import { ListOrdered, Minus, Play, Plus } from 'lucide-preact'
 import { store } from '@/lib/store'
+import { addToQueue, refreshQueue } from '@/lib/queue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/field'
@@ -33,7 +35,7 @@ type MeshReadiness = { availability: MeshAvailability; error: string | null }
 
 // A failed or malformed mesh read is UNKNOWN, never evidence that no mesh exists.
 // This is a read-only request; retrying must not start calibration or a print.
-async function readMeshReadiness(): Promise<MeshReadiness> {
+export async function readMeshReadiness(): Promise<MeshReadiness> {
   try {
     const data = await request('/api/mesh')
     const profiles = meshRoot(data)?.profiles
@@ -159,6 +161,10 @@ const Form = ({ job }: { job: Pending }) => {
   const [side, setSide] = useState<'A' | 'B'>('A')
   const [calibrate, setCalibrate] = useState(false)
   const [timelapse, setTimelapse] = useState(false)
+  // Start now, or keep the job with these choices in the print queue (copies are separate prints).
+  const [launch, setLaunch] = useState<'now' | 'queue'>('now')
+  const [copies, setCopies] = useState(1)
+  const [position, setPosition] = useState<'end' | 'next'>('end')
   const [busy, setBusy] = useState(false)
   const [meshAvailable, setMeshAvailable] = useState(job.meshAvailable)
   const [meshError, setMeshError] = useState(job.meshError)
@@ -236,12 +242,49 @@ const Form = ({ job }: { job: Pending }) => {
   const submit = async (e: Event) => {
     e.preventDefault()
     if (busy || meshChecking) return
-    if (unknown && !calibrating)
+    if (launch === 'now' && unknown && !calibrating)
       return setNote(tpl('bed.mesh_unavailable_error', { error: meshError || t('state.unknown') }))
     if (useCanvas && job.tools.some(tool => !map[tool])) return setNote(t('print.choose_a_canvas_slot_for_every'))
     const mapping = useCanvas ? job.tools.map(tool => `${tool}:${map[tool]}`).join(',') : ''
     if (multi && !mapping) return setNote(t('print.a_multicolour_file_requires_canvas'))
     setBusy(true)
+    if (launch === 'queue') {
+      // The job keeps every choice above; the slicer's estimates are optional and read once here.
+      setNote(t('print.adding_to_queue'))
+      try {
+        let estimate: any = null
+        try {
+          estimate = await post('/api/gcode-files/metadata', `${job.storage}\n${job.path}`)
+        } catch {
+          /* the queue shows no time for this job */
+        }
+        const numberOrNull = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : null)
+        await addToQueue({
+          storage: job.storage,
+          path: job.path,
+          mapping,
+          side,
+          leveling: calibrating ? 'calibrate' : 'saved',
+          timelapse,
+          measure: measureId,
+          nozzle: nozzleId,
+          copies,
+          position,
+          estimatedSeconds: numberOrNull(estimate?.estimated_seconds),
+          filamentGrams: numberOrNull(estimate?.filament_grams),
+        })
+        const g = activeGeneration
+        activeGeneration = 0
+        pending.set({ job: null })
+        await clearOrcaPending(g)
+        notify(tpl('queue.added_to_queue', { name: job.path }))
+        void refreshQueue()
+      } catch (err) {
+        setNote(`${t('queue.not_added')} ${errText(err)}`)
+        setBusy(false)
+      }
+      return
+    }
     setNote(
       t(job.storage === 'usb' ? 'print.importing_usb_g_code_to_internal' : 'print.submitting_protected_print_request')
     )
@@ -479,6 +522,107 @@ const Form = ({ job }: { job: Pending }) => {
           />
           {t('print.enable_timelapse')}
         </label>
+        <fieldset class="my-4 rounded-lg border border-cyan/60 p-3" data-print-launch>
+          <legend class="px-1.5 font-semibold text-cyan">{t('print.launch')}</legend>
+          <div class="flex flex-wrap items-center gap-3.5">
+            <div
+              role="radiogroup"
+              aria-label={t('print.launch')}
+              class="inline-flex gap-1 rounded-md border border-edge bg-field p-1"
+            >
+              <Button
+                variant={launch === 'now' ? 'active' : 'ghost'}
+                role="radio"
+                aria-checked={launch === 'now'}
+                disabled={busy}
+                onClick={() => setLaunch('now')}
+                data-launch="now"
+              >
+                <Play size={16} strokeWidth={1} />
+                {t('print.run_now')}
+              </Button>
+              <Button
+                variant={launch === 'queue' ? 'active' : 'ghost'}
+                role="radio"
+                aria-checked={launch === 'queue'}
+                disabled={busy}
+                onClick={() => setLaunch('queue')}
+                data-launch="queue"
+              >
+                <ListOrdered size={16} strokeWidth={1} />
+                {t('print.add_to_queue')}
+              </Button>
+            </div>
+            {launch === 'queue' && (
+              <div class="flex items-center gap-2.5">
+                <div class="inline-flex h-10 items-center rounded-md border border-edge bg-field">
+                  <Button
+                    variant="ghost"
+                    class="min-h-9 px-2.5"
+                    aria-label={t('queue.fewer_copies')}
+                    disabled={busy || copies <= 1}
+                    onClick={() => setCopies(copies - 1)}
+                  >
+                    <Minus size={16} strokeWidth={1} />
+                  </Button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={copies}
+                    aria-label={t('print.copies')}
+                    disabled={busy}
+                    class="h-9 w-16 border-x border-edge bg-transparent text-center text-base font-semibold text-fg"
+                    onInput={e => {
+                      const n = Number(e.currentTarget.value)
+                      if (Number.isInteger(n) && n >= 1 && n <= 99) setCopies(n)
+                    }}
+                    data-print-copies
+                  />
+                  <Button
+                    variant="ghost"
+                    class="min-h-9 px-2.5"
+                    aria-label={t('queue.more_copies')}
+                    disabled={busy || copies >= 99}
+                    onClick={() => setCopies(copies + 1)}
+                  >
+                    <Plus size={16} strokeWidth={1} />
+                  </Button>
+                </div>
+                <span>{t('print.copies')}</span>
+              </div>
+            )}
+          </div>
+          {launch === 'queue' ? (
+            <>
+              <div class="mt-2.5 flex flex-wrap gap-4 text-[13px]">
+                <label class="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="queuePosition"
+                    checked={position === 'end'}
+                    disabled={busy}
+                    onChange={() => setPosition('end')}
+                  />{' '}
+                  {t('print.queue_position_end')}
+                </label>
+                <label class="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="queuePosition"
+                    checked={position === 'next'}
+                    disabled={busy}
+                    onChange={() => setPosition('next')}
+                  />{' '}
+                  {t('print.queue_position_next')}
+                </label>
+              </div>
+              <div class="mt-2 text-xs text-muted">{t('print.queue_copies_hint')}</div>
+            </>
+          ) : (
+            <div class="mt-2 text-xs text-muted">{t('print.run_now_hint')}</div>
+          )}
+        </fieldset>
         <div class="min-h-7 text-[13px] text-muted" role="status">
           {note}
         </div>
@@ -486,8 +630,13 @@ const Form = ({ job }: { job: Pending }) => {
           <Button onClick={close} disabled={busy}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" variant="primary" disabled={busy || meshChecking || (unknown && !calibrating)}>
-            {t('print.start_print')}
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy || meshChecking || (launch === 'now' && unknown && !calibrating)}
+            data-print-submit
+          >
+            {launch === 'queue' ? tpl('print.add_to_queue_n', { n: copies }) : t('print.start_print')}
           </Button>
         </div>
       </form>

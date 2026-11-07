@@ -741,6 +741,44 @@ than 1 °C short of the target), `plateau` (the
 estimated level the chamber is heading for, °C or null), `fan` (aux fan PWM 0–255 sent by the
 session) and `bed_limit`. `state` is `"handed_off"` while a print that took over the bed runs.
 
+## Print queue
+
+Jobs prepared ahead of time: a G-code file, the print dialog's choices and a number of copies, kept in
+`print-queue.json` (`--queue FILE`, next to the plate and spool libraries) and shown on the Queue page, the
+Dashboard's current-job card and the print-ended notice. Every copy is one protected start through the same
+code as `POST /api/gcode-files/print`, with the same guards; nothing starts without the operator's button
+unless the `auto` policy is chosen.
+
+- `GET /api/queue` returns `{"available","error","revision","printer_idle","policy":{"after":"wait"|"auto",
+  "delay","remove_done"},"active","next","items":[…]}`. Items are in queue order with `id`, `storage`, `path`,
+  `mapping`, `side`, `leveling`, `timelapse`, `measure`, `nozzle`, `copies`, `done`, `estimated_seconds` and
+  `filament_grams` (`null` when unknown), `added`, `state` (`pending`, `starting`, `printing` or `done`),
+  `last_result` (`""`, `stopped`, `not_started` or `auto_failed`) and `present` (the file is in place).
+  `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing.
+- `POST /api/queue/add` takes the eight newline-separated fields of `/api/gcode-files/print` (storage,
+  filename, Canvas mapping, plate side, leveling mode, timelapse, measurement, nozzle), then `copies` (1–99),
+  `position` (`end`, or `next` to go to the head behind a running copy) and optionally the slicer's
+  `estimated_seconds` and `filament_grams`. The syntax and the file are checked now; the printer-dependent
+  checks (mapping against the file, mesh, measurement, nozzle) run at each start. 201 `{"ok":true,"id","count"}`;
+  the queue holds at most 32 jobs.
+- `POST /api/queue/start` with a job id, or an empty body for `next`: refused (409) while a queued copy is
+  starting or printing, while plate verification runs, or when the job has no copy left; otherwise it answers
+  exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx) and an accepted start marks the
+  job `starting`.
+- `POST /api/queue/remove` (id; never the running job), `/api/queue/reorder` (`id\nindex`, 0 is the head),
+  `/api/queue/copies` (`id\ncopies`, never fewer than already printed), `/api/queue/policy`
+  (`wait|auto\ndelay 10–3600\n0|1` for `remove_done`) and `/api/queue/clear-done`. Every change is saved
+  atomically before it is acknowledged; a failed save leaves the queue as it was.
+
+Copies are counted on the backend, so a closed browser misses nothing. A `starting` job becomes `printing`
+once fresh telemetry shows the printer busy with its file (within three minutes, else `not_started`). The copy
+counts when the printer is idle again with `print_stats.state` `complete` and the reported file name is the
+job's; `cancelled` or `error`, another job taking over, or an idle printer without `complete` for a minute
+leave it uncounted (`stopped`). Telemetry older than 15 s decides nothing. The last copy sets `done` and, with
+`remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a counted
+completion if the printer is idle; it is meant for a bed that clears itself and is off by default. A queue file
+that cannot be parsed keeps the queue closed (`available: false`) and is never rewritten.
+
 ## Completed print readback
 
 `GET /api/printer` adds `print.native` when the existing UDS cache has a fresh

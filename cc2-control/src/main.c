@@ -107,6 +107,7 @@ static const char *mqtt_config_path = "./cc2-control.conf";
 static const char *ui_preferences_path = "./ui-preferences.json";
 static const char *plates_path = "./bed-plates.json";
 static const char *spools_path = "./spools.json";
+static const char *queue_path = "./print-queue.json";
 static const char *printer_autosave_path = "/opt/usr/cfg/autosave.cfg";
 static const char *gcode_internal_root = GCODE_INTERNAL_ROOT;
 static const char *gcode_usb_root = GCODE_USB_ROOT;
@@ -2047,7 +2048,7 @@ static int build_calibrated_start_script(char *script, size_t cap, int force_ful
 
 static int canvas_color_table_clear(void);
 
-static void gcode_start_response(int fd, mqtt_client *mqtt,
+static int gcode_start_response(int fd, mqtt_client *mqtt,
                                  const char *body, size_t body_len) {
     char storage[16], filename[PATH_MAX_LOCAL];
     const char *mapping, *root, *media; size_t mapping_len = 0;
@@ -2055,12 +2056,12 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
                             &root, &media)) {
         const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 400;
     }
     if (!gcode_file_is_printable(root, filename)) {
         const char *error = "{\"accepted\":false,\"error\":\"File is unavailable or unsafe\"}\n";
         respond(fd, 404, "Not Found", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 404;
     }
     const char *layout_line = memchr(mapping, '\n', mapping_len);
     size_t map_len = layout_line ? (size_t)(layout_line - mapping) : mapping_len;
@@ -2094,7 +2095,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     if (measure_len >= sizeof(measure) || nozzle_len >= sizeof(nozzle)) {
         const char *error = "{\"accepted\":false,\"error\":\"Invalid build plate measurement\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 400;
     }
     if (measure_len) memcpy(measure, measure_line, measure_len);
     if (nozzle_len) memcpy(nozzle, nozzle_line, nozzle_len);
@@ -2103,7 +2104,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         if (layout_len != 1 || (layout_line[0] != 'A' && layout_line[0] != 'B')) {
             const char *error = "{\"accepted\":false,\"error\":\"Invalid build plate side\"}\n";
             respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 400;
         }
         print_layout = layout_line[0];
     }
@@ -2111,7 +2112,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     if(video_line){
         if(video_len!=1||(video_line[0]!='0'&&video_line[0]!='1')){
             const char *error="{\"accepted\":false,\"error\":\"Invalid timelapse option\"}\n";
-            respond(fd,400,"Bad Request","application/json",error,strlen(error));return;
+            respond(fd,400,"Bad Request","application/json",error,strlen(error));return 400;
         }
         timelapse=video_line[0]=='1';
     }
@@ -2120,32 +2121,32 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         if (level_len >= sizeof(leveling)) {
             const char *error = "{\"accepted\":false,\"error\":\"Invalid bed leveling mode\"}\n";
             respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 400;
         }
         memcpy(leveling, level_line, level_len); leveling[level_len] = '\0';
         if (strcmp(leveling, "saved") != 0 && strcmp(leveling, "calibrate") != 0 &&
             strcmp(leveling, "adaptive") != 0 && strcmp(leveling, "full") != 0) {
             const char *error = "{\"accepted\":false,\"error\":\"Invalid bed leveling mode\"}\n";
             respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 400;
         }
     }
     int tools[GCODE_TOOLS_MAX], trays[GCODE_TOOLS_MAX]; size_t slot_count = 0;
     if (!parse_slot_map(mapping, map_len, tools, trays, &slot_count)) {
         const char *error = "{\"accepted\":false,\"error\":\"Invalid Canvas slot mapping\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 400;
     }
     int adaptive = 0;
     if (gcode_has_adaptive_mesh(root, filename, &adaptive) != 0) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot inspect bed leveling commands\"}\n";
         respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 500;
     }
     if (strcmp(leveling, "adaptive") == 0 && !adaptive) {
         const char *error = "{\"accepted\":false,\"error\":\"Selected leveling mode does not match this G-code\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 409;
     }
     if (slot_count) {
         int detected[GCODE_TOOLS_MAX]; size_t detected_count = 0;
@@ -2153,7 +2154,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
             detected_count != slot_count) {
             const char *error = "{\"accepted\":false,\"error\":\"Canvas mapping does not match this G-code\"}\n";
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 409;
         }
         for (size_t expected = 0; expected < detected_count; ++expected) {
             int found = 0;
@@ -2162,19 +2163,19 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
             if (!found) {
                 const char *error = "{\"accepted\":false,\"error\":\"Canvas mapping does not match this G-code\"}\n";
                 respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-                return;
+                return 409;
             }
         }
     }
     if (!mqtt->connected || !mqtt->registered) {
         const char *error = "{\"accepted\":false,\"error\":\"Printer MQTT is not ready\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 503;
     }
     if (!mqtt->have_machine_status || mqtt->machine_status != 1) {
         const char *error = "{\"accepted\":false,\"error\":\"Starting a file requires an idle printer\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 409;
     }
     int missing_plate_mesh = !saved_plate_mesh_exists(print_layout);
     int calibration_requested = strcmp(leveling, "calibrate") == 0;
@@ -2188,7 +2189,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         json_escape(escaped, sizeof(escaped), plate_problem);
         snprintf(error, sizeof(error), "{\"accepted\":false,\"error\":\"%s\"}\n", escaped);
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 409;
     }
     char print_filename[PATH_MAX_LOCAL];
     const char *print_media = media;
@@ -2196,7 +2197,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         if (gcode_import_usb(filename, print_filename) != 0) {
             const char *error = "{\"accepted\":false,\"error\":\"Cannot import the USB file into internal memory\"}\n";
             respond(fd, 507, "Insufficient Storage", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 507;
         }
         print_media = "local";
     } else {
@@ -2206,12 +2207,12 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     if (calibrated_start && (strchr(print_filename, '"') || strchr(print_filename, '\\'))) {
         const char *error = "{\"accepted\":false,\"error\":\"Filename is incompatible with calibrated printing\"}\n";
         respond(fd, 422, "Unprocessable Content", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 422;
     }
     if (!slot_count && canvas_color_table_clear() != 0) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot clear the Canvas colour table for the external feed\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 503;
     }
     if (calibrated_start) {
         char script[4096];
@@ -2227,7 +2228,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     if (start_result != 0) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot send the printer start request\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 503;
     }
     plates_print_arm(late, print_layout);
     char accepted[PATH_MAX_LOCAL * 2 + 128], escaped[PATH_MAX_LOCAL * 2];
@@ -2236,8 +2237,10 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         "{\"accepted\":true,\"method\":1020,\"storage_media\":\"%s\",\"filename\":\"%s\",\"imported_from_usb\":%s,\"print_layout\":\"%c\",\"leveling\":\"%s\",\"timelapse\":%s,\"late_mesh\":\"%s\"}\n",
         print_media, escaped, strcmp(storage, "usb") == 0 ? "true" : "false",
         print_layout, leveling, timelapse ? "true" : "false", late);
+    /* The start request is on its way whatever happens to the reply below. */
     if (accepted_len > 0 && (size_t)accepted_len < sizeof(accepted))
         respond(fd, 202, "Accepted", "application/json; charset=utf-8", accepted, (size_t)accepted_len);
+    return 202;
 }
 
 static const char *machine_status_name(int status) {
@@ -3246,6 +3249,7 @@ static const char *pending_autosave_guard(void);
 
 #include "plates.h"
 #include "spools.h"
+#include "queue.h"
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
@@ -4324,6 +4328,22 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_blends_restart_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/unmount")==0) {
         plates_unmount_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/queue")==0) {
+        queue_get_response(fd,mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/add")==0) {
+        queue_add_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/start")==0) {
+        queue_start_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/remove")==0) {
+        queue_remove_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/reorder")==0) {
+        queue_reorder_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/copies")==0) {
+        queue_copies_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/policy")==0) {
+        queue_policy_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/clear-done")==0) {
+        queue_clear_done_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spools")==0) {
         spools_get_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/enable")==0) {
@@ -4408,11 +4428,12 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
         else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
+        else if (strcmp(argv[i], "--queue") == 0 && i + 1 < argc) queue_path = argv[++i];
         else if (strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) printer_autosave_path = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--spools FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--spools FILE] [--queue FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
             return 2;
         }
     }
@@ -4445,6 +4466,7 @@ int main(int argc, char **argv) {
     plates_load();
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
+    queue_load();
     if (!spools_available) fprintf(stderr, "Spool library disabled: %s (%s)\n", spools_error, spools_path);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
@@ -4514,6 +4536,7 @@ int main(int argc, char **argv) {
         idle_motors_tick(&mqtt,&console);
         motor_mode_tick(&mqtt,&console);
         spools_tick(&mqtt);
+        queue_tick(&mqtt);
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
         if (spools_available) spoolman_tick((long long)now.tv_sec * 1000 + now.tv_nsec / 1000000);
         for(int i=0;i<HTTP_PENDING_MAX;i++){
