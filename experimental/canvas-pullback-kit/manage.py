@@ -11,10 +11,11 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
-from policy import BASE, STATE, HOOK, TARGETS, CONFIGS, MODES, digest, patched_files, clamp_config, validate_tar_member, select_profile
+from policy import BASE, STATE, HOOK, TARGETS, CONFIGS, MODES, digest, patched_files, clamp_config, validate_tar_member, select_profile, startup_profile
 from patch_pullback import ORIGINAL_SHA256, EXTENDED_SHA256
 
 HOME = Path(__file__).resolve().parent
+CONTROL_VERSIONS = ('1.2.21','1.2.22','1.2.23','1.2.24','1.2.25','1.2.26')
 META = {'printer.json','health.json','pid','exe','running.sha','checks','cmdline','activation','mapped','stat'}
 ALLOWED = set(TARGETS.values()) | set(CONFIGS.values()) | {BASE+'/firmware-payload.sha256', '/opt/inst/cc2-reactor/SHA256SUMS', STATE+'/manifest.json'} | {STATE+'/backup/'+k for k in TARGETS}
 
@@ -81,6 +82,7 @@ def qualify(snapshot):
     if checks != expected:raise ValueError('Native program/libco/runtime fingerprint mismatch')
     installed=STATE+'/manifest.json' in files
     original={k:files[STATE+'/backup/'+k] if installed else files[p] for k,p in TARGETS.items()}
+    profile,pins=startup_profile(profile,pins,original)
     extended=patched_files(original,pins)
     if installed:
         manifest=json.loads(files[STATE+'/manifest.json'])
@@ -100,8 +102,8 @@ def ready(meta):
         raise ValueError('Printer must be connected, Idle and freshly reported')
     if p.get('print',{}).get('enabled') is not False or p.get('print',{}).get('state') in ('printing','paused'):
         raise ValueError('An active or paused print prevents installation/removal')
-    if h.get('mqtt_registered') is not True or h.get('version') not in ('1.2.21','1.2.22'):
-        raise ValueError('This component requires registered CC2 Control 1.2.21 or 1.2.22')
+    if h.get('mqtt_registered') is not True or h.get('version') not in CONTROL_VERSIONS:
+        raise ValueError('This component requires registered CC2 Control '+', '.join(CONTROL_VERSIONS))
     for key in ('extruder','heater_bed'):
         item=p.get(key,{})
         if not number(item.get('temperature')) or not 0<=item['temperature']<=50 or not number(item.get('target')) or item['target']!=0:

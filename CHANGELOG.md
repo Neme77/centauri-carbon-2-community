@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Extended pull-back installer R6: CC2 Control 1.2.21 to 1.2.26 and Community Firmware V4.4.3 with the 1.2.26 EXHAUST startup files (pinned boot hook and launcher, same patch points); the EXHAUST minimum stays inactive while the extended program runs. Requested by **Neme77**, implemented and printer-tested by **Noahwhite2014** (#312, #314).
+
 ## [CC2 Control 1.2.26] - 2026-11-07
 
 ### Changed

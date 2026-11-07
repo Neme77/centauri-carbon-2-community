@@ -1,6 +1,6 @@
-# Retrazione Canvas estesa — prova R4
+# Retrazione Canvas estesa — prova R6
 
-Pacchetto sperimentale autonomo per Community Firmware **V4.4.1 oppure V4.4.2 / CC2 Control 1.2.21 o 1.2.22**. Riproduce la modifica di **Noahwhite2014** (#172 / #202): alza il limite accettato da 350 a 1000 mm. Non modifica automaticamente la distanza, non espelle filamento, non invia movimenti né riavvia la stampante. Non modifica la webcam o CC2 Control.
+Pacchetto sperimentale autonomo per Community Firmware **V4.4.1, V4.4.2 o V4.4.3 / CC2 Control da 1.2.21 a 1.2.26**. Riproduce la modifica di **Noahwhite2014** (#172 / #202): alza il limite accettato da 350 a 1000 mm. Non modifica automaticamente la distanza, non espelle filamento, non invia movimenti né riavvia la stampante. Non modifica la webcam o CC2 Control.
 
 **Prova controllata.** R1 è stata provata su V4.4.2 con scaricamento e ricaricamento a 500 mm. R2 ha completato il ciclo installazione/stato/rimozione sulla V4.4.1 di Noahwhite2014: override a 560 mm persistente, ritorno a 350 mm alla rimozione e webcam/CC2 Control funzionanti. In quel ciclo non sono stati inviati movimenti. Il controllo delle impronte non dimostra che una distanza sia adatta al proprio percorso filamento; 1000 mm non sono qualificati per ogni stampante.
 
@@ -46,8 +46,10 @@ Sorgenti e script, senza eseguibili vendor, credenziali o chiavi. La trasformazi
 Le impronte coincidono con il firmware V4.4.1 pubblicato. Installazione/stato/rimozione di R2 su questa versione sono stati provati da Noahwhite2014; prima di una nuova installazione occorre ripristinare i file originali da eventuali patch manuali. R1 è stata provata su V4.4.2 con scaricamento e ricaricamento a 500 mm. Il kit non modifica distanze o timeout di ricarica e non qualifica 1000 mm per ogni percorso fisico. Generazioni miste vengono rifiutate.
 
 
-## Validazione R3 e compatibilità R4
+## Validazione R3 e compatibilità R4–R6
 
 Noahwhite2014 ha completato sulla V4.4.1 il test R3: rifiuto con file/valore e hash immutati, installazione, riavvio, stato esteso, salvataggio 560 senza movimento, rimozione con ritorno a 350 e ripristino esatto degli originali, nome backup corretto e webcam funzionante. R4 aggiunge il riconoscimento esplicito di CC2 Control 1.2.22, oltre alla 1.2.21, e aggiorna le istruzioni. La trasformazione del programma e le impronte dei runtime non cambiano. Il nuovo controllo versione è verificato automaticamente; la prova sulla stampante riportata è quella di R3. La V4.4 non ha un profilo runtime qualificato in questo componente.
+
+R5 ha aggiunto CC2 Control 1.2.23 all’elenco delle versioni. R6 accetta CC2 Control da 1.2.21 a 1.2.26 e i file di avvio della Community Firmware V4.4.3 con il componente EXHAUST di CC2 Control 1.2.26, sulla stessa generazione runtime V4.4.2: l’hook di avvio con la voce del gestore di rete e il launcher con il precaricamento cavity. Entrambi sono verificati con SHA-256 e modificati negli stessi singoli punti di prima; ogni altra combinazione viene rifiutata. Mentre il programma esteso è in uso, il minimo EXHAUST di 1.2.26 resta inattivo, perché quel componente si attiva solo con il programma originale; l’avvio non cambia. Rimuovere questo componente prima di ogni aggiornamento di CC2 Control o del firmware: l’installer 1.2.26 verifica il launcher originale. R6 è stata provata sulla V4.4.3 di Noahwhite2014 con CC2 Control 1.2.26: verifica, installazione, riavvio, stato esteso e override a 560 mm; rimozione, aggiornamento e reinstallazione R5/R6 sono stati eseguiti anche per le versioni da 1.2.24 a 1.2.26.
 
 I controlli Carica/Scarica della bobina esterna in CC2 Control sono indipendenti: questa mod riguarda la retrazione Canvas dopo il taglio, non la corsa della bobina esterna.

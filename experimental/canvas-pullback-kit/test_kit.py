@@ -82,8 +82,9 @@ class PolicyTests(unittest.TestCase):
         health=dict(version='1.2.21',mqtt_registered=True)
         def check(p=printer,h=health):manage.ready({'printer.json':json.dumps(p).encode(),'health.json':json.dumps(h).encode()})
         check()
-        check(h=health|{'version':'1.2.22'})
-        for version in ('1.2.19','1.2.20','1.2.23','1.2.22-dev','',None):
+        for version in ('1.2.22','1.2.23','1.2.24','1.2.25','1.2.26'):
+            with self.subTest(version=version):check(h=health|{'version':version})
+        for version in ('1.2.19','1.2.20','1.2.27','1.2.23-dev','',None):
             with self.subTest(version=version),self.assertRaises(ValueError):check(h=health|{'version':version})
         for changes in ({'last_message_age':16},{'connected':False},{'machine':{'status':2}},{'print':{'enabled':True}},{'heater_bed':{'temperature':51,'target':0}},{'extruder':{'temperature':25,'target':1}}):
             with self.assertRaises(ValueError):check(printer|changes)
@@ -184,5 +185,26 @@ class TransactionTests(unittest.TestCase):
         self.script('mv',f'case "$*" in *launcher.sh.cc2-pb-new*) exit 1;; esac\nexec {native} "$@"')
         r=self.run_transaction();self.assertNotEqual(r.returncode,0);self.assertIn('Original files restored',r.stdout);self.assertTrue((self.state/'backup/boot').exists())
         for k,p in self.targets.items():self.assertEqual(p.read_bytes(),self.original[k])
+
+
+class StartupVariantTests(unittest.TestCase):
+    def test_v443_exhaust_variant_only(self):
+        import policy
+        base=policy.PROFILES['V4.4.2'];variant=policy.STARTUP_VARIANTS['V4.4.2']['V4.4.3+EXHAUST']
+        stock={k:b'stock-'+k.encode() for k in ('boot','launcher','sums')}
+        composed={k:b'composed-'+k.encode() for k in stock}
+        orig=policy.digest
+        try:
+            policy.digest=lambda d:{**{stock[k]:base[k] for k in stock},**{composed[k]:variant[k] for k in composed}}.get(d,orig(d))
+            self.assertEqual(policy.startup_profile('V4.4.2',base,stock),('V4.4.2',base))
+            name,pins=policy.startup_profile('V4.4.2',base,composed)
+            self.assertEqual(name,'V4.4.3+EXHAUST')
+            self.assertEqual({k:pins[k] for k in variant},variant)
+            self.assertEqual({k:pins[k] for k in base if k not in variant},{k:base[k] for k in base if k not in variant})
+            mixed=dict(composed,launcher=stock['launcher'])
+            with self.assertRaises(ValueError):policy.startup_profile('V4.4.2',base,mixed)
+            with self.assertRaises(ValueError):policy.startup_profile('V4.4.1',policy.PROFILES['V4.4.1'],composed)
+        finally:policy.digest=orig
+
 
 if __name__=='__main__':unittest.main(verbosity=2)
