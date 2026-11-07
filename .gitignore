@@ -54,3 +54,8 @@ builder/current/components/camera/prepared-manifest.json
 builder/current/components/connections/runtime.tar.gz
 builder/current/components/connections/prepared/
 builder/current/components/connections/prepared-manifest.json
+
+# Local vendor-base analysis and captured ELEGOO packages (never commit)
+builder/current/analysis/
+**/firmware_capture/
+*.zip.sig
