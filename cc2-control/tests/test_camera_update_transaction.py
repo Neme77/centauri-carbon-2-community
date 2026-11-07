@@ -76,7 +76,7 @@ esac
                ('/proc/$printer_pid/exe',str(vendor)),('/proc/$RUN_PID/exe',str(target/'cc2-control')),
                (pkg.COMPATIBILITY['printer_sha256'],sha(vendor)),(pkg.COMPATIBILITY['daemon_sha256'],sha(daemon)),
                ('bcabb1fa405b066b06c229c6d8cc6e474a0ccc57e31a1b5b387d3b55945be563',hashlib.sha256(original).hexdigest())]:text=text.replace(a,b)
-   return text
+   return text.replace('"$STAGE/cc2-control" --installer-native-idle', ':')
   script=root/'run.sh';script.write_text(rewrite((stage/'install-on-printer.sh').read_text()).replace('STAGE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)','STAGE="'+str(stage)+'"'))
   env=dict(os.environ,PATH=str(commands)+':'+os.environ['PATH'],CAMERA_CASE=mode,CAMERA_TARGET=str(target),CAMERA_INIT=str(camera_init))
   result=subprocess.run(['sh',str(script)],env=env,capture_output=True,text=True,timeout=20)

@@ -126,21 +126,7 @@ require_hash "/proc/$printer_pid/exe" "$expected_printer"
 test -d "$TARGET"
 test -x "$INIT"
 install_phase printer-status-before-backup
-STATUS=$(installer_http_get http://127.0.0.1:8081/api/printer)
-HEALTH=$(installer_http_get http://127.0.0.1:8081/api/health)
-case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Printer must be connected and Idle.' >&2; exit 1;; esac
-case "$HEALTH" in *'"mqtt_registered":true'*) ;; *) echo 'MQTT registration unavailable.' >&2; exit 1;; esac
-AGE=$(printf '%s' "$STATUS" | sed -n 's/.*"last_message_age":\([0-9][0-9]*\),.*/\1/p')
-case "$AGE" in ''|*[!0-9]*) echo 'Missing fresh printer state.' >&2; exit 1;; esac
-[ "$AGE" -le 15 ] || { echo 'Printer state is stale.' >&2; exit 1; }
-require_cold() {
-    for heater in extruder heater_bed; do
-        temperatures=$(printf '%s' "$STATUS" | sed -n "s/.*\"$heater\":{\"temperature\":\([-0-9.]*\),\"target\":\([-0-9.]*\)}.*/\1 \2/p")
-        printf '%s\n' "$temperatures" | awk 'NF == 2 && $1 ~ /^[0-9]+([.][0-9]+)?$/ && $2 ~ /^[0-9]+([.][0-9]+)?$/ && $1 <= 50 && $2 == 0 {valid=1} END {exit !valid}' ||
-            { echo 'Printer must be cold (heaters at most 50 C, targets zero) with valid readback.' >&2; exit 1; }
-    done
-}
-require_cold
+"$STAGE/cc2-control" --installer-native-idle
 install_phase camera-preflight
 @CAMERA_COMPONENT_PREFLIGHT@
 install_phase rfid-preflight
@@ -153,9 +139,7 @@ cp -p "$INIT" "$BACKUP/init.before"
 cp "$STAGE/restore-on-printer.sh" "$BACKUP/restore.sh"
 if [ -n "$CAMERA_SOURCE" ]; then cp -p /etc/init.d/printer "$BACKUP/printer-camera.before"; fi
 install_phase printer-status-after-backup
-STATUS=$(installer_http_get http://127.0.0.1:8081/api/printer)
-case "$STATUS" in *'"connected":true'*'"machine":{"status":1,'*) ;; *) echo 'Printer state changed; update cancelled.' >&2; exit 1;; esac
-require_cold
+"$STAGE/cc2-control" --installer-native-idle
 install_phase rfid-component-prepare
 @RFID_COMPONENT_PUBLISH@
 @APP_BINDING_PREPARE@
@@ -214,9 +198,8 @@ while [ "$tries" -lt 120 ] && [ "$(awk '{print int($1)}' /proc/uptime)" -lt "$VE
         case "$RUN_PID" in ''|*' '*) ;; *)
             RUN_HASH=$(sha256sum "/proc/$RUN_PID/exe" 2>/dev/null | awk '{print $1}')
             if [ "$RUN_HASH" = "$EXPECTED" ]; then
-                case "$RESULT" in *'"mqtt_registered":true'*'"snapshot_received":true'*) ;; *) tries=$((tries+1)); sleep 2; continue;; esac
                 if [ -n "$CAMERA_SOURCE" ]; then
-                    sh "$CAMERA_SOURCE/manage.sh" install || exit 1
+                    CC2_CAMERA_INSTALLER_PROBE="$STAGE/cc2-control" sh "$CAMERA_SOURCE/manage.sh" install || exit 1
                     echo 'REBOOT REQUIRED: reboot the complete idle printer to activate the camera fixes.'
                 fi
                 @CONNECTIONS_COMPONENT_INSTALL@

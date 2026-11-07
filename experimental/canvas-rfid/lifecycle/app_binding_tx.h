@@ -30,7 +30,11 @@
 #ifndef AU_FAULT
 #define AU_FAULT(point,index) ((void)0)
 #endif
+#ifdef AU_BIND_TRANSFER_WORKER
+#define AU_COUNT 5u
+#else
 #define AU_COUNT 4u
+#endif
 #define AU_LIMIT 1048576u
 enum au_phase {AU_PREPARED=1,AU_APPLYING,AU_APPLIED,AU_ROLLING_BACK,AU_ROLLED_BACK,AU_COMMITTED};
 struct au_file {const char *name,*before,*after;mode_t mode;};
@@ -61,7 +65,8 @@ static inline int au_match(int directory,const char *name,const char *digest,mod
     close(fd);return 1;
 }
 static inline int au_plan_hash(const struct au_plan *p,char digest[65]){
-    static const char *names[]={"coordinator","capture","app-integration.json","activate-on-ready"};
+    static const char *names[]={"coordinator","capture","app-integration.json","activate-on-ready",
+        "transfer-worker"};
     if(!p||!au_hex(p->old_app)||!au_hex(p->new_app)||!au_hex(p->profile)||!strcmp(p->old_app,p->new_app))return 0;
     sha256_state state;sha256_init(&state);char line[320];
     int n=snprintf(line,sizeof(line),"CC2RFUP1 %s %s %s\n",p->old_app,p->new_app,p->profile);
@@ -70,7 +75,7 @@ static inline int au_plan_hash(const struct au_plan *p,char digest[65]){
     for(unsigned i=0;i<AU_COUNT;i++){
         const struct au_file *f=p->files+i;
         if(!f->name||strcmp(f->name,names[i])||!au_hex(f->before)||!au_hex(f->after)||
-            f->mode!=(i<2?0700:0600))return 0;
+            f->mode!=((i<2||i==4)?0700:0600))return 0;
         n=snprintf(line,sizeof(line),"%s %04o %s %s\n",f->name,(unsigned)f->mode,f->before,f->after);
         if(n<0||(size_t)n>=sizeof(line))return 0;
         sha256_update(&state,(unsigned char*)line,(size_t)n);
@@ -108,7 +113,24 @@ static inline int au_app(const char *digest){
 }
 static inline int au_native(struct au_store *s,const struct au_plan *p,char journal[65]){
     struct cl_record record;char profile[65];static const char hex[]="0123456789abcdef";
-    if(!cl_store_read(&s->native,&record)||record.phase!=CL_ACTIVE)return 0;
+    if(!cl_store_read(&s->native,&record)){
+#if defined(AU_PRESERVE_LIFECYCLE) && !defined(AU_REQUIRE_DISABLED)
+        static const unsigned char missing[]="CC2-RFID-JOURNAL-ABSENT";
+        struct stat st;
+        if(fstatat(s->native.directory,"lifecycle",&st,AT_SYMLINK_NOFOLLOW)==0||errno!=ENOENT||
+            !au_match(s->native.directory,"recovery-profile",p->profile,0600))return 0;
+        sha256_state absent;sha256_init(&absent);
+        sha256_update(&absent,missing,sizeof(missing)-1);
+        sha256_hex(&absent,journal);return 1;
+#else
+        return 0;
+#endif
+    }
+#ifndef AU_PRESERVE_LIFECYCLE
+    if(record.phase!=CL_ACTIVE)return 0;
+#elif defined(AU_REQUIRE_DISABLED)
+    if(record.phase!=CL_DISABLED)return 0;
+#endif
     for(unsigned i=0;i<32;i++){profile[2*i]=hex[record.plan[i]>>4];profile[2*i+1]=hex[record.plan[i]&15];}profile[64]=0;
     if(strcmp(profile,p->profile))return 0;
     int fd=openat(s->native.directory,"lifecycle",O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);

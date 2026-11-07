@@ -27,6 +27,7 @@ import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
 import { spools, refreshSpools, saveSpoolmanConfig } from '@/lib/spools'
 import { usePoll } from '@/lib/poll'
+import { refreshRfidLifecycle, rfidLifecycle } from '@/lib/rfid-lifecycle'
 import {
   pandabreath,
   pandabreathDefaultHost,
@@ -194,6 +195,85 @@ const SpoolmanIntegration = () => {
   )
 }
 
+const CanvasFirmware = () => {
+  const { data } = rfidLifecycle.use()
+  const [busy, setBusy] = useState(false)
+  const lock = useRef(false)
+  if (!data?.installed) return null
+  const available = data.metadata_valid && !data.recovery_required && !data.reboot_required
+  const action =
+    available &&
+    (data.phase === 5
+      ? 'restore'
+      : data.phase === 8
+        ? 'remove'
+        : data.phase === -1 || data.phase === 10
+          ? 'activate'
+          : (data.retry_required || data.result === 1) && [1, 2, 4, 7, 9].includes(data.phase)
+            ? 'resume'
+            : null)
+  const message = data.recovery_required
+    ? 'rfid.lifecycle_recovery'
+    : busy || data.busy
+      ? 'rfid.lifecycle_working'
+      : data.reboot_required
+        ? null
+        : data.result === 1 || data.retry_required
+          ? 'rfid.lifecycle_action_failed'
+          : data.phase === 8
+            ? 'rfid.lifecycle_stock'
+            : data.phase === -1 || data.phase === 10
+              ? 'rfid.lifecycle_dormant'
+              : action
+                ? null
+                : 'rfid.lifecycle_waiting'
+
+  const label =
+    action === 'restore'
+      ? 'rfid.lifecycle_restore'
+      : action === 'remove'
+        ? 'rfid.lifecycle_remove'
+        : action === 'resume'
+          ? 'rfid.lifecycle_resume'
+          : 'rfid.install_canvas_firmware'
+  const run = async () => {
+    if (!action || lock.current || data.busy || data.recovery_required || data.reboot_required) return
+    lock.current = true
+    setBusy(true)
+    try {
+      const confirmation =
+        action === 'restore'
+          ? 'rfid.lifecycle_restore_confirm'
+          : action === 'remove'
+            ? 'rfid.lifecycle_remove_confirm'
+            : 'rfid.lifecycle_confirm'
+      if (!(await ask(t(confirmation)))) return
+      await post('/api/rfid/lifecycle/action', action)
+      await refreshRfidLifecycle()
+    } catch (e) {
+      notify(errText(e), 'error')
+    } finally {
+      lock.current = false
+      setBusy(false)
+    }
+  }
+  return (
+    <Card data-canvas-firmware>
+      <CardHead icon="settings" title="rfid.canvas_firmware" />
+      {message && (
+        <p role="status" data-rfid-lifecycle class="mb-2 text-sm text-muted">
+          {t(message)}
+        </p>
+      )}
+      {action && (
+        <Button disabled={busy || data.busy} onClick={() => void run()}>
+          {t(label)}
+        </Button>
+      )}
+    </Card>
+  )
+}
+
 const Integrations = () => {
   const checking = useRef(false)
   const [orcaBusy, setOrcaBusy] = useState(false)
@@ -255,6 +335,7 @@ const Integrations = () => {
   }
   return (
     <Card>
+      <CanvasFirmware />
       <CardHead icon="plug" title="settings.integrations" sub="settings.service_configuration_for_local" />
       <SpoolmanIntegration />
       <div class={row}>

@@ -48,6 +48,13 @@ static void vc_retain_barrier(struct maintenance_barrier *barrier){
     barrier->fd=-1;
     puts("MAINTENANCE BARRIER RETAINED: no further printer changes; inspect lifecycle status and reboot only after the transfer worker has completed.");
 }
+static int vc_transfer_observation(int install){
+#ifdef SC_NATIVE_RESTORE_GUARD
+    return vc_native_ready(install)&&vc_native_ready(install);
+#else
+    return sc_fresh()&&(!install||vc_canvas_http())&&sc_fresh();
+#endif
+}
 static int vc_transfer(int install){
     if(geteuid()!=0||strlen(SC_TRANSFER_SHA)!=64||!tx_hex(SC_TRANSFER_SHA)||
        (getenv("LD_PRELOAD")&&*getenv("LD_PRELOAD"))){fprintf(stderr,"STOP: coordinated_transfer_unconfigured\n");return 1;}
@@ -64,7 +71,7 @@ static int vc_transfer(int install){
         else okay=before.phase==CL_ACTIVE||before.phase==CL_FILTER_ACKED;
     }
     okay=okay&&sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&app)&&
-        sc_native_profile(&first,1)&&sc_fresh()&&(!install||vc_canvas_http())&&sc_fresh()&&sc_native_profile(&last,1)&&
+        sc_native_profile(&first,1)&&vc_transfer_observation(install)&&sc_native_profile(&last,1)&&
         sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
     cl_store_close(&store);
@@ -122,7 +129,7 @@ static int vc_remove_host(void){
         sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&app);
     int strict=okay&&sc_native_profile(&first,1);
     if(okay&&!strict)okay=record.phase==CL_HOST_REMOVE_INTENT&&sc_native_profile(&first,0);
-    okay=okay&&sc_fresh()&&vc_canvas_http()&&sc_fresh()&&sc_native_profile(&last,strict)&&
+    okay=okay&&vc_boot_observation(0)&&sc_native_profile(&last,strict)&&
         sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
     if(okay){

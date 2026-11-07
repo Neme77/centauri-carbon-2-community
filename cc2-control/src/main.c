@@ -2716,6 +2716,25 @@ static void mqtt_diagnostic_response(int fd, const mqtt_client *mqtt) {
     free(body);
 }
 
+/* The lifecycle verifier needs the native MQTT reply even when the UI uses UDS. */
+static void canvas_lifecycle_observation_response(int fd, mqtt_client *mqtt) {
+    struct sockaddr_in peer;
+    socklen_t peer_size=sizeof(peer);
+    if(getpeername(fd,(struct sockaddr *)&peer,&peer_size)||peer_size!=sizeof(peer)||
+       peer.sin_family!=AF_INET||peer.sin_addr.s_addr!=htonl(INADDR_LOOPBACK)){
+        respond(fd,403,"Forbidden","text/plain","Forbidden",9);return;
+    }
+    mqtt->canvas_watch_until=time(NULL)+15;
+    size_t length=mqtt->canvas_snapshot_len;
+    char body[sizeof(mqtt->canvas_snapshot)+160];
+    json_builder b={body,0,sizeof(body),0};
+    json_builder_printf(&b,"{\"available\":%s,\"machine_status\":%d,\"source\":\"mqtt\"",
+        mqtt->registered&&length?"true":"false",mqtt->machine_status);
+    if(length)json_builder_printf(&b,",\"telemetry\":%.*s",(int)length,mqtt->canvas_snapshot);
+    json_builder_printf(&b,"}\n");
+    if(!b.failed)respond(fd,200,"OK","application/json",body,b.length);
+}
+
 static void canvas_response(int fd, const mqtt_client *mqtt) {
     size_t snapshot_length;const char *snapshot=mqtt_canvas_snapshot(mqtt,&snapshot_length);
     size_t cap=snapshot_length+2304;
@@ -4039,6 +4058,8 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
     motor_mode_requested="normal";
 }
 
+static int installer_native_status(int canvas_only);
+static int installer_native_observation(int canvas_only,int canvas_transfer);
 #include "app_updates.h"
 #include "app_update_catalog.h"
 #include "bed_drying.h"
@@ -4149,7 +4170,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     if(!strcmp(method,"GET")&&!strcmp(path,"/api/rfid/lifecycle")) {
         rfid_native_status_response(fd);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/rfid/lifecycle/action")) {
-        rfid_native_action_response(fd,mqtt,console,body,body_len);
+        rfid_native_action_response(fd,console,body,body_len);
     } else if(!strcmp(method,"GET")&&!strcmp(path,"/api/calibration-tools/status")) {
         tools_status(fd);
     } else if(!strcmp(method,"POST")&&!strcmp(path,"/api/calibration-tools/action")) {
@@ -4200,7 +4221,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/experiments")==0) {
         experiments_put_response(fd,request,body,body_len,mqtt,console);
     } else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/app-update/status") == 0) {
-        app_update_status_response(fd, mqtt, console);
+        app_update_status_response(fd, console);
     } else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/app-update/upload") == 0) {
         return header_end ? app_update_upload_start(fd, request, used, (size_t)(body-request), mqtt, console, NULL) : 0;
     } else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/app-update/catalog") == 0) {
@@ -4250,6 +4271,15 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/server/database/item")==0 &&
                query && strcmp(query,"namespace=lane_data")==0) {
         orca_lane_data_response(fd, mqtt);
+    } else if (strcmp(method,"GET")==0 && (strcmp(path,"/api/rfid/lifecycle/restore-readiness")==0||
+               strcmp(path,"/api/rfid/lifecycle/host-restore-readiness")==0)) {
+        int require_canvas=strcmp(path,"/api/rfid/lifecycle/host-restore-readiness")==0;
+        int ready=maintenance_barrier_active()&&rn_restore_available(console)&&
+            (!require_canvas||installer_native_observation(1, 0)==0)&&installer_native_observation(0, 1)==0;
+        const char *reply=ready?"{\"ready\":true}":"{\"ready\":false}";
+        respond(fd,200,"OK","application/json; charset=utf-8",reply,strlen(reply));
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/rfid/lifecycle/canvas-observation")==0) {
+        canvas_lifecycle_observation_response(fd,mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/canvas")==0) {
         mqtt->canvas_watch_until=time(NULL)+15;
         canvas_response(fd, mqtt);
@@ -4425,8 +4455,58 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     return 0;
 }
 
+#include "connections/json.h"
+
+static int installer_native_heater_safe(const ng_json *reply,int heater,double limit,int strict){
+    double temperature,target;
+    return ng_number(reply,heater,"temperature",&temperature)&&temperature>=0&&(strict?temperature<limit:temperature<=limit)&&
+        ng_number(reply,heater,"target",&target)&&target==0;
+}
+
+static int installer_native_observation(int canvas_only,int canvas_transfer){
+    static const char safety[]=
+        "{\"id\":1,\"method\":\"objects/query\",\"params\":{\"objects\":{\"print_stats\":[\"state\",\"machine_status\"],"
+        "\"extruder\":[\"temperature\",\"target\"],\"heater_bed\":[\"temperature\",\"target\"],"
+        "\"motion_report\":[\"live_velocity\"]}}}\003";
+    static const char canvas_query[]=
+        "{\"id\":1,\"method\":\"objects/query\",\"params\":{\"objects\":{\"canvas_dev\":[\"canvas_lite\"]}}}\003";
+    char *body=NULL;size_t length=0;
+    ng_json *reply=malloc(sizeof(*reply));
+    int status=-1;
+    if(reply&&!uds_query_json(canvas_only?canvas_query:safety,&body,&length)&&ng_json_parse(reply,body,length))
+        status=ng_member(reply,ng_member(reply,0,"result"),"status");
+    int result=3;
+    if(status>=0&&canvas_only){
+        double connected;
+        int canvas=ng_member(reply,ng_member(reply,status,"canvas_dev"),"canvas_lite");
+        if(ng_number(reply,canvas,"connected",&connected)&&(connected==0||connected==1))
+            result=connected==1?0:2;
+    }else if(status>=0){
+        double machine,velocity;
+        int print=ng_member(reply,status,"print_stats");
+        const char *state=ng_string(reply,print,"state");
+        if(state&&(!strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled"))&&
+           ng_number(reply,print,"machine_status",&machine)&&machine==1&&
+           ng_number(reply,ng_member(reply,status,"motion_report"),"live_velocity",&velocity)&&velocity==0&&
+           installer_native_heater_safe(reply,ng_member(reply,status,"extruder"),50,canvas_transfer)&&
+           installer_native_heater_safe(reply,ng_member(reply,status,"heater_bed"),canvas_transfer?40:50,canvas_transfer))result=0;
+    }
+    free(reply);free(body);object_query_close();
+    return result;
+}
+
+static int installer_native_status(int canvas_only){return installer_native_observation(canvas_only,0);}
+
 #include "rfid_app_update_boot.h"
 int main(int argc, char **argv) {
+    if(argc>=2&&(!strcmp(argv[1],"--installer-native-idle")||!strcmp(argv[1],"--installer-native-canvas"))){
+        if(argc==4&&!strcmp(argv[2],"--uds-socket"))object_query_path=argv[3];
+        else if(argc!=2)return 3;
+        int canvas_only=!strcmp(argv[1],"--installer-native-canvas");
+        int result=installer_native_status(canvas_only);
+        if(!canvas_only&&result)fputs("STOP: native console did not confirm Idle, no motion and cold heaters with zero targets.\n",stderr);
+        return result;
+    }
     if(!rfid_app_update_boot()) {
         fputs("RFID app-update recovery incomplete; retain the transaction and installation backup.\n",stderr);
         return 1;
@@ -4540,7 +4620,7 @@ int main(int argc, char **argv) {
         nx_tick(&mqtt);
         tools_tick(&mqtt);
         rfid_tick(&mqtt,&console);
-        rfid_native_tick(&mqtt,&console);
+        rfid_native_tick(&console);
         runout_tick(&mqtt);
         fd_set read_set;
         FD_ZERO(&read_set); FD_SET(server,&read_set);
