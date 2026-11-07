@@ -18,6 +18,7 @@ class Blob:
 
 
 sha=lambda b:hashlib.sha256(b).hexdigest()
+version=(ROOT/'VERSION').read_text().strip()
 with tempfile.TemporaryDirectory() as temp:
     folder=Path(temp)
     app=b'not an actual app; fixture only'
@@ -38,25 +39,28 @@ with tempfile.TemporaryDirectory() as temp:
                 item.size=len(b);tar.addfile(item,io.BytesIO(b))
         return out.getvalue()
     runtime=archive({'delivery.json':b'{}','rfid.tar.gz':archive(inner),'binding.tar.gz':b'inert','cavity.tar.gz':b'inert'})
-    policy={'protocol':1,'version_sha256':sha((ROOT/'VERSION').read_text().strip().encode()),'community_base':'4.4.3','physical_flash_readback':False,
+    policy={'protocol':1,'version_sha256':sha(version.encode()),'community_base':'4.4.3','physical_flash_readback':False,
             'app_sha256':sha(app),'native_runtime_sha256':sha(runtime),'recovery_profile_sha256':sha(profile)}
     path=folder/'policy.json'
     path.write_text(json.dumps(policy))
-    assert validate_release(Blob(runtime),app,'1.2.26',path)==policy
+    assert validate_release(Blob(runtime),app,version,path)==policy
+    try:validate_release(Blob(runtime),app,version+'.0',path)
+    except ValueError:pass
+    else:raise AssertionError('wrong version admitted')
     for key,value in [('protocol',True),('version_sha256','0'*64),('community_base','4.3'),
                       ('physical_flash_readback',True),('app_sha256','0'*64),
                       ('native_runtime_sha256','0'*64),('recovery_profile_sha256','0'*64)]:
         changed=dict(policy);changed[key]=value;path.write_text(json.dumps(changed))
-        try:validate_release(Blob(runtime),app,'1.2.26',path)
+        try:validate_release(Blob(runtime),app,version,path)
         except ValueError:pass
         else:raise AssertionError(key)
     path.write_text(json.dumps(policy))
     for blob,binary in [(runtime+b'changed',app),(runtime,app+b'changed')]:
-        try:validate_release(Blob(blob),binary,'1.2.26',path)
+        try:validate_release(Blob(blob),binary,version,path)
         except ValueError:pass
         else:raise AssertionError('changed artifact admitted')
     path.write_text('{"protocol":1,"protocol":1}')
-    try:validate_release(Blob(runtime),app,'1.2.26',path)
+    try:validate_release(Blob(runtime),app,version,path)
     except ValueError:pass
     else:raise AssertionError('duplicate policy admitted')
-print('PASS: 11 public native admission cases; accepted bytes only, version/base/profile mismatch and modified artifacts refused')
+print('PASS: 12 public native admission cases; accepted bytes only, version/base/profile mismatch and modified artifacts refused')

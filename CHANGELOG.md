@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Experimental long-press pop-ups on the V4.4.3 touchscreen Home: hold the Nozzle card to choose the installed nozzle, or the Build plate card to choose the plate and bed mesh, from the CC2 Control plate library, as native LVGL panels built into an owner-supplied copy of the screen program (`experimental/native-popups`); implemented and tested on a CC2 by **Noahwhite2014** (#315).
 
+### Fixed
+
+- Preserve the Canvas RFID lifecycle during application updates from the published CC2 Control 1.2.26 and require explicit resumption before a pending activation can flash Canvas. Allow reinstalling the same build from a PC. Reported by **Sceletor** (#313) and physically tested on a Combo by **Neme77**.
+
 ## [CC2 Control 1.2.26] - 2026-11-07
 
 ### Changed

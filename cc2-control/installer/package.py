@@ -27,11 +27,19 @@ COMPATIBILITY = json.loads((HERE / 'compatibility.json').read_text())
 if hashlib.sha256((HERE.parent / 'FIRMWARE_VERSION').read_bytes()).hexdigest() != COMPATIBILITY['firmware_version_file_sha256']:
     raise ValueError('Updater firmware compatibility record does not match FIRMWARE_VERSION')
 
-def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None, rfid_runtime=None, app_binding_runtime=None, native_runtime=None, *, release=False):
+def package(prepared, scripts, source, output, camera_runtime=None, connections_runtime=None, rfid_runtime=None, app_binding_runtime=None, native_runtime=None, *, release=False, trial_readme=None, previous_app_sha=None, private_restore_version=None):
+    if release and trial_readme is not None:
+        raise ValueError('Trial notes require a private package')
     if native_runtime and (rfid_runtime or app_binding_runtime):
         raise ValueError("Unified delivery replaces separate RFID/binding inputs")
     if app_binding_runtime and (rfid_runtime or camera_runtime or connections_runtime):
         raise ValueError("App binding trial must preserve installed native components")
+    if previous_app_sha is not None and (not app_binding_runtime or release or len(previous_app_sha)!=64
+            or any(c not in '0123456789abcdef' for c in previous_app_sha)):
+        raise ValueError('Exact previous application required for the private optional binding route')
+    if private_restore_version is not None and (release or not app_binding_runtime or previous_app_sha is None):
+        raise ValueError('Private restore requires a pinned source application and binding')
+    version = private_restore_version or VERSION
     if rfid_runtime and (camera_runtime or connections_runtime):
         raise ValueError('Closed-profile RFID trial must preserve the exact installed camera/network runtime')
     binary = (prepared / 'cc2-control').read_bytes()
@@ -73,13 +81,54 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
     if 'web/index.html' not in files or 'web/locales/en.json' not in files:
         raise ValueError('Prepared UI is incomplete')
     for name in ('install-on-printer.sh', 'restore-on-printer.sh'):
-        text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash).replace('@VERSION@', VERSION).replace('@FIRMWARE_VERSION@', FIRMWARE_VERSION).replace('@PRINTER_SHA256@', COMPATIBILITY['printer_sha256']).replace('@DAEMON_SHA256@', COMPATIBILITY['daemon_sha256'])
+        text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash).replace('@VERSION@', version).replace('@FIRMWARE_VERSION@', FIRMWARE_VERSION).replace('@PRINTER_SHA256@', COMPATIBILITY['printer_sha256']).replace('@DAEMON_SHA256@', COMPATIBILITY['daemon_sha256'])
         text = text.replace('@CAMERA_RESTORE_FUNCTION@', CAMERA_RESTORE)
         text = text.replace('@CAMERA_COMPONENT_FUNCTIONS@', camera_functions(HERE / 'camera', camera_runtime) if camera_runtime else '')
-        text = text.replace('@CAMERA_COMPONENT_PREFLIGHT@', 'camera_unpack\nsh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '')
+        text = text.replace('@CAMERA_COMPONENT_PREFLIGHT@', 'camera_unpack\nCC2_CAMERA_INSTALLER_PROBE="$STAGE/cc2-control" sh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '')
         text = text.replace('@CONNECTIONS_COMPONENT_FUNCTIONS@', network_functions(connections_runtime) if connections_runtime else '')
         text = text.replace('@CONNECTIONS_COMPONENT_INSTALL@', 'install_phase network-component\n                network_install_component || exit 1' if connections_runtime else '')
         text = text.replace('@RFID_COMPONENT_FUNCTIONS@', rfid_code)
+        if previous_app_sha is not None:
+            current_case = '' if private_restore_version else f'''
+    {binary_hash}) BINDING_ROUTE=current;;'''
+            optional_binding = f'''case "$(sha256sum "$TARGET/cc2-control" | awk '{{print $1}}')" in
+    {previous_app_sha}) BINDING_ROUTE=absent;;{current_case}
+    *) echo 'STOP: exact public predecessor required' >&2; exit 1;;
+esac
+if [ -e /opt/usr/cc2-rfid ] || [ -L /opt/usr/cc2-rfid ]; then
+    if [ "$BINDING_ROUTE" = current ]; then
+        binding_check_current || exit 1
+        BINDING_ROUTE=current-managed
+    else
+        binding_unpack || exit 1
+        BINDING_ROUTE=managed
+    fi
+fi'''
+            text = text.replace('@RFID_COMPONENT_PREFLIGHT@', optional_binding)
+            text = text.replace('@APP_BINDING_PREPARE@', '''printf '%s\n' "$BINDING_ROUTE" > "$BACKUP/native-route"
+if [ "$BINDING_ROUTE" = managed ]; then binding_prepare || exit 1; fi''')
+            text = text.replace('@APP_BINDING_COMMIT@', '''case "$BINDING_ROUTE" in
+    managed) binding_commit || exit 1;;
+    current-managed) binding_check_current || exit 1;;
+esac''')
+            text = text.replace('@RFID_RESTORE_GUARD@', '''BINDING_ROUTE=$(cat "$BACKUP/native-route")
+case "$BINDING_ROUTE" in
+    managed) binding_verify_worker || exit 1;;
+    current-managed) binding_check_current || exit 1;;
+    absent|current) [ ! -e /opt/usr/cc2-rfid ] && [ ! -L /opt/usr/cc2-rfid ] || exit 1;;
+    *) exit 1;;
+esac''')
+            text = text.replace('@APP_BINDING_RESTORE_ROLLBACK@',
+                'if [ "$BINDING_ROUTE" = managed ]; then exec 3< "$LOCK"; binding_rollback || exit 1; fi')
+        if private_restore_version is not None and name=='install-on-printer.sh':
+            # Only the pinned R6 predecessor supports the native idle probe.
+            # Check it before both invocations, while it is still installed.
+            text = text.replace('"$STAGE/cc2-control" --installer-native-idle', f'''[ "$(sha256sum "$TARGET/cc2-control" | awk '{{print $1}}')" = {previous_app_sha} ] ||
+    {{ echo 'STOP: exact R6 predecessor required' >&2; exit 1; }}
+"$TARGET/cc2-control" --installer-native-idle''')
+            text = text.replace('case "$(sha256sum "$TARGET/cc2-control"', '''[ -d /opt/usr/cc2-rfid ] && [ ! -L /opt/usr/cc2-rfid ] ||
+    { echo 'STOP: phase-10 RFID component required' >&2; exit 1; }
+case "$(sha256sum "$TARGET/cc2-control"''')
         text = text.replace('@RFID_COMPONENT_PREFLIGHT@', 'rfid_unpack || exit 1' if rfid_runtime else ('binding_unpack || exit 1' if app_binding_runtime else RFID_ORDINARY_GUARD))
         text = text.replace('@RFID_COMPONENT_PUBLISH@', 'rfid_publish || exit 1' if rfid_runtime else '')
         text = text.replace('@RFID_COMPONENT_COMPLETION@', "echo 'RFID ACTIVATION PENDING: after installer unlock, open Canvas RFID and follow full idle-printer reboot prompts. Keep power connected during transfer and preserve all original backups.'" if rfid_runtime else '')
@@ -101,13 +150,13 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
                 '@CAMERA_RESTORE_FUNCTION@': CAMERA_RESTORE,
                 '@CAMERA_FAILURE_RELEASE@': "echo 'Native installer barrier retained until camera startup recovery is resolved.' >&2",
                 '@CAMERA_COMPONENT_FUNCTIONS@': native_camera,
-                '@CAMERA_COMPONENT_PREFLIGHT@': 'camera_unpack\nsh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '',
+                '@CAMERA_COMPONENT_PREFLIGHT@': 'camera_unpack\nCC2_CAMERA_INSTALLER_PROBE="$STAGE/cc2-control" sh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '',
                 '@CONNECTIONS_COMPONENT_FUNCTIONS@': native_network,
                 '@CONNECTIONS_COMPONENT_INSTALL@': 'install_phase network-component\n                native_connections_component || exit 1' if connections_runtime else '',
                 '@RFID_COMPONENT_FUNCTIONS@': native['functions'],
                 '@RFID_COMPONENT_PREFLIGHT@': native['preflight'],
                 '@RFID_COMPONENT_PUBLISH@': native['prepare'],
-                '@RFID_COMPONENT_COMPLETION@': "echo 'Native components ready: follow Canvas RFID activation and full idle-printer reboot prompts when requested.'",
+                '@RFID_COMPONENT_COMPLETION@': "echo 'Native components ready. Canvas firmware changes require an explicit action under Settings > Integrations in CC2 Control.'",
                 '@RFID_RESTORE_GUARD@': native['restore_guard'],
                 '@APP_BINDING_FUNCTIONS@': '', '@APP_BINDING_PREPARE@': '',
                 '@APP_BINDING_COMMIT@': native['commit'],
@@ -122,7 +171,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         if name == 'install-on-printer.sh': text += native['tail'] + native_camera_tail + native_network_tail if native else rfid_tail + binding_tail
         files[name] = text.encode()
     files['build-info.json'] = (json.dumps({
-        'version': VERSION, 'binary_sha256': binary_hash,
+        'version': version, 'binary_sha256': binary_hash,
         'source_archive_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
         'change': 'CC2 Control application updater',
         'camera_component': 'reap-r2+recovery-r2' if camera_runtime else None,
@@ -149,9 +198,12 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
                 archive.addfile(entry, io.BytesIO(data))
     public = {name: (HERE / name).read_bytes() for name in
               ('Install-CC2-Control.ps1', 'Install-Windows.cmd', 'install-cc2-control.sh', 'README.md')}
-    for name in ('README-TEST.md', 'README-EXPERIMENTAL.md'):
-        trial_notes = HERE / name
-        if trial_notes.is_file() and not release: public[name] = trial_notes.read_bytes()
+    if trial_readme is not None:
+        public['README.md'] = trial_readme.encode('utf-8')
+    elif not release:
+        for name in ('README-TEST.md', 'README-EXPERIMENTAL.md'):
+            trial_notes = HERE / name
+            if trial_notes.is_file(): public[name] = trial_notes.read_bytes()
     public['cc2-control-payload.tar.gz'] = payload.getvalue()
     public['pc-stage.sh'] = (HERE / 'pc-stage.sh.in').read_text(encoding='utf-8').replace('@PAYLOAD_SHA@', hashlib.sha256(payload.getvalue()).hexdigest()).encode('utf-8')
     public['cc2-control-sources.zip'] = source.read_bytes()

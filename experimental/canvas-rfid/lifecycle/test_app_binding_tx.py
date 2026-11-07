@@ -1,22 +1,27 @@
-"""Actual four-file transaction; process exits model interruptions, no device I/O."""
+"""Actual binding transaction; process exits model interruptions, no device I/O."""
 from pathlib import Path
 import fcntl, hashlib, json, os, shutil, struct, subprocess, tempfile
 
 HERE=Path(__file__).resolve().parent
 NAMES=['coordinator','capture','app-integration.json','activate-on-ready']
+WITH_TRANSFER=os.environ.get('CC2_TEST_BIND_TRANSFER')=='1'
+PRESERVE_LIFECYCLE=os.environ.get('CC2_TEST_PRESERVE_LIFECYCLE')=='1'
+if WITH_TRANSFER:NAMES.append('transfer-worker')
+MODES={name:0o700 if name in ('coordinator','capture','transfer-worker') else 0o600 for name in NAMES}
 OLD={n:('original '+n+'\n').encode() for n in NAMES}
 NEW={n:('updated '+n+'\n').encode() for n in NAMES}
 OLD_APP=b'qualified old application fixture';NEW_APP=b'qualified new application fixture'
-PROFILE='a7'*32
 sha=lambda b:hashlib.sha256(b).hexdigest()
+PROFILE_BYTES=b'qualified recovery profile fixture'
+PROFILE=sha(PROFILE_BYTES) if PRESERVE_LIFECYCLE else 'a7'*32
 BASE_CASES=['normal','retry','old-app','new-source','old-target','source-symlink','target-symlink',
     'target-hardlink','barrier-absent','barrier-public','wrong-barrier-fd','component-public',
     'component-symlink','tx-public','tx-symlink','nonactive','bad-journal','wrong-profile',
     'foreign-state','bad-state','bad-snapshot','snapshot-symlink','changed-generation',
     'foreign-target-after-prepare','wrong-new-app','lifecycle-lock','binding-lock']
-CRASH_CASES=['snapshot:'+str(i) for i in range(4)]+['state:1']
-APPLY_CRASH=['replace:'+str(i) for i in range(4)]+['state:2','state:3']
-ROLLBACK_CRASH=['replace:'+str(i) for i in range(4)]+['state:4','state:5']
+CRASH_CASES=['snapshot:'+str(i) for i in range(len(NAMES))]+['state:1']
+APPLY_CRASH=['replace:'+str(i) for i in range(len(NAMES))]+['state:2','state:3']
+ROLLBACK_CRASH=['replace:'+str(i) for i in range(len(NAMES))]+['state:4','state:5']
 
 def put(p,data,mode=0o600):
     p.parent.mkdir(parents=True,exist_ok=True,mode=0o700);p.write_bytes(data);p.chmod(mode)
@@ -33,7 +38,7 @@ def run():
         root=Path(temporary);fixture=root/'fixture';component=fixture/'component';source=fixture/'source'
         tx=fixture/'transaction';barrier=fixture/'barrier';app=fixture/'cc2-control';other=fixture/'other'
         config=root/'config.h'
-        rows=['{%s,%s,%s,0%o}'%(json.dumps(n),json.dumps(sha(OLD[n])),json.dumps(sha(NEW[n])),0o700 if i<2 else 0o600) for i,n in enumerate(NAMES)]
+        rows=['{%s,%s,%s,0%o}'%(json.dumps(n),json.dumps(sha(OLD[n])),json.dumps(sha(NEW[n])),MODES[n]) for n in NAMES]
         config.write_text('static const struct au_plan test_plan={%s,%s,%s,{%s}};\n'%(
             json.dumps(sha(OLD_APP)),json.dumps(sha(NEW_APP)),json.dumps(PROFILE),','.join(rows)))
         for arch,compiler,extra,runner in [
@@ -44,12 +49,18 @@ def run():
             defines={'AU_COMPONENT':str(component),'AU_DIRECTORY':str(tx),'AU_APP':str(app),
                 'AU_BARRIER':str(barrier),'AU_TEST_CONFIG':str(config),'AU_TEST_SOURCE':str(source),'AU_TEST_OTHER':str(other)}
             subprocess.run([compiler,'-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror',*extra,
+                *(['-DAU_BIND_TRANSFER_WORKER=1'] if WITH_TRANSFER else []),
+                *(['-DAU_PRESERVE_LIFECYCLE=1'] if PRESERVE_LIFECYCLE else []),
                 *['-D'+k+'='+json.dumps(v) for k,v in defines.items()],HERE/'test_app_binding_tx.c','-o',binary],check=True,timeout=120)
             cases=BASE_CASES+[('prepare-crash',x) for x in CRASH_CASES]+[('apply-crash',x) for x in APPLY_CRASH]+[('rollback-crash',x) for x in ROLLBACK_CRASH]
+            if PRESERVE_LIFECYCLE:
+                cases=[case for case in cases if case!='nonactive']
+                cases += [('lifecycle-phase',phase) for phase in range(11)]
+                cases.append('no-journal')
             for case in cases:
                 if fixture.exists():shutil.rmtree(fixture)
                 fixture.mkdir(mode=0o700);component.mkdir(mode=0o700);source.mkdir(mode=0o700);barrier.mkdir(mode=0o700);other.mkdir(mode=0o700)
-                for i,n in enumerate(NAMES):put(component/n,OLD[n],0o700 if i<2 else 0o600);put(source/n,NEW[n],0o700 if i<2 else 0o600)
+                for n in NAMES:put(component/n,OLD[n],MODES[n]);put(source/n,NEW[n],MODES[n])
                 put(component/'lifecycle',journal());put(component/'original-stock-44.bin',b'untouched stock fixture');put(component/'startup-sentinel',b'untouched startup fixture')
                 put(app,OLD_APP,0o755)
                 env=dict(os.environ)
@@ -77,6 +88,11 @@ def run():
                     if kind=='tx-symlink':tx.rename(fixture/'saved-tx');tx.symlink_to(fixture/'saved-tx',target_is_directory=True)
                     if kind=='foreign-state':put(tx/'state',b'foreign')
                 if kind=='nonactive':put(component/'lifecycle',journal(phase=3))
+                if kind=='lifecycle-phase':put(component/'lifecycle',journal(phase=case[1]))
+                if kind=='no-journal':
+                    put(component/'recovery-profile',PROFILE_BYTES)
+                    (component/'lifecycle').unlink()
+                else:original_journal=(component/'lifecycle').read_bytes()
                 if kind=='bad-journal':put(component/'lifecycle',journal()[:-1]+b'x')
                 if kind=='wrong-profile':put(component/'lifecycle',journal(profile='b7'*32))
                 if kind in ['lifecycle-lock','binding-lock']:
@@ -120,7 +136,9 @@ def run():
                             assert invoke('--rollback').returncode==0
                             assert invoke('--apply').returncode!=0,'rollback intent must not roll forward'
                         else:assert {n:(component/n).read_bytes() for n in NAMES}==immediately_before
-                    if kind not in ['nonactive','bad-journal','wrong-profile','changed-generation']:
+                    if kind=='no-journal':
+                        assert not (component/'lifecycle').exists()
+                    elif kind not in ['nonactive','bad-journal','wrong-profile','changed-generation']:
                         assert (component/'lifecycle').read_bytes()==original_journal,(arch,case,'native journal modified')
                     assert (component/'original-stock-44.bin').read_bytes()==b'untouched stock fixture'
                     assert (component/'startup-sentinel').read_bytes()==b'untouched startup fixture'

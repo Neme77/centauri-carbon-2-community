@@ -1,7 +1,7 @@
 """Closed same-native-profile app rebind planning; no live action or signing.
 
 Inputs must be source-qualified component runtimes. This module validates their
-complete inventories and produces a fixed four-file C plan. It does not grant
+complete inventories and produces a pinned C plan. It does not grant
 permission to run an update or replace the worker's live preflight.
 """
 import hashlib,io,json,tarfile
@@ -9,6 +9,8 @@ from pathlib import PurePosixPath
 
 ROOT='/opt/usr/cc2-rfid'
 NAMES=('coordinator','capture','app-integration.json','activate-on-ready')
+TRANSFER='transfer-worker'
+EXECUTABLES={'coordinator','capture',TRANSFER}
 KEYS={'protocol','app_sha256','coordinator_sha256','capture_sha256','profile_sha256'}
 sha=lambda data:hashlib.sha256(data).hexdigest()
 
@@ -56,13 +58,14 @@ def read_runtime(path):
 def plan_components(old,old_modes,old_metadata,new,new_modes,new_metadata):
     if set(old)!=set(new) or old_modes!=new_modes:raise ValueError('Native component inventory or modes changed')
     changed={n for n in old if old[n]!=new[n]}
-    if not changed or not changed<=set(NAMES):raise ValueError('Native profile migration is not an app rebind')
+    names=NAMES+(TRANSFER,) if TRANSFER in changed else NAMES
+    if not changed or not changed<=set(names):raise ValueError('Native profile migration is not an app rebind')
     if old_metadata['app_sha256']==new_metadata['app_sha256']:raise ValueError('App did not change')
     if old_metadata['profile_sha256']!=new_metadata['profile_sha256'] or old['recovery-profile']!=new['recovery-profile']:raise ValueError('Recovery profile changed')
     old_app=old_metadata['app_sha256'];new_app=new_metadata['app_sha256'];profile=old_metadata['profile_sha256']
     text=f'CC2RFUP1 {old_app} {new_app} {profile}\n';rows=[]
-    for i,name in enumerate(NAMES):
-        mode=0o700 if i<2 else 0o600
+    for name in names:
+        mode=0o700 if name in EXECUTABLES else 0o600
         if old_modes[name]!=mode or new_modes[name]!=mode:raise ValueError('Wrong binding mode')
         before=sha(old[name]);after=sha(new[name])
         text+=f'{name} {mode:04o} {before} {after}\n'
@@ -70,8 +73,8 @@ def plan_components(old,old_modes,old_metadata,new,new_modes,new_metadata):
     header=('static const struct au_plan au_expected={%s,%s,%s,{%s}};\n'%(
         json.dumps(old_app),json.dumps(new_app),json.dumps(profile),','.join(rows))).encode()
     return {'plan_sha256':sha(text.encode()),'old_app_sha256':old_app,'new_app_sha256':new_app,
-        'profile_sha256':profile,'configuration':header,'incoming':{n:new[n] for n in NAMES},
-        'native_component_unchanged':True,'Canvas_write':False,'live_installation_authorized':False}
+        'profile_sha256':profile,'configuration':header,'incoming':{n:new[n] for n in names},
+        'native_component_unchanged':TRANSFER not in changed,'Canvas_write':False,'live_installation_authorized':False}
 
 def plan(old_path,new_path):
     old,om,metadata=read_runtime(old_path);new,nm,new_metadata=read_runtime(new_path)
