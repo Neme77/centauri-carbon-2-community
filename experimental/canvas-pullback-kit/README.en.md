@@ -1,14 +1,16 @@
-# Extended Canvas pull-back — R4 experimental component
+# Extended Canvas pull-back — R6 experimental component
 
-Standalone experimental installer for **Community Firmware V4.4.1 or V4.4.2 / CC2 Control 1.2.21 or 1.2.22**. Reproduces **Noahwhite2014**'s #172 / #202 change: raises the accepted maximum from 350 to 1000 mm. It does not set the distance, eject filament, request movement, restart services or reboot. It does not change the webcam or CC2 Control.
+Standalone experimental installer for **Community Firmware V4.4.1, V4.4.2 or V4.4.3 / CC2 Control 1.2.21 to 1.2.26**. Reproduces **Noahwhite2014**'s #172 / #202 change: raises the accepted maximum from 350 to 1000 mm. It does not set the distance, eject filament, request movement, restart services or reboot. It does not change the webcam or CC2 Control.
 
 **Controlled trial.** R1 installation and a 500 mm unload/reload cycle were tested on V4.4.2. R2 completed its installation/status/removal cycle on Noahwhite2014’s V4.4.1 printer, including a persistent 560 mm override, restoration to 350 mm on removal and working camera/CC2 Control. No movement was requested in that cycle. Fingerprints do not establish a safe physical distance. The contributor reported longer travel on a custom path; this does not qualify 1000 mm for every printer. Reload-distance and timeout settings are not changed. Restore any manual runtime patch from original backups before using this kit; mixed generations are refused.
 
-## R3 validation and R4 compatibility
+## R3 validation and R4–R6 compatibility
 
 Installation refusal now names the exact configuration path and unload_fila_dist value above 350 mm, including values in autosave_backup.cfg and SAVE_CONFIG sections. Removal retains backups under /opt/usr/cc2-canvas-pullback-1000.removed-<token> without the staging-directory prefix. The menu and archive now identify R4 consistently. The qualified program patch, fingerprints, configuration guards, reload distance and reload timeout are unchanged.
 
 R3 passed Noahwhite2014’s focused V4.4.1 printer retest: exact refusal path/value with no changed hashes, full installation/reboot/status, saved 560 mm override without movement, removal/clamp to 350 mm and exact original restoration, clean backup name and working camera. R4 adds an explicit CC2 Control 1.2.22 version allowance alongside 1.2.21 and updates these instructions. The executable transformation and runtime fingerprints are unchanged. R4’s version check is covered by automated tests; the reported physical installation/removal test used R3. V4.4 has no qualified runtime profile in this component.
+
+R5 added CC2 Control 1.2.23 to the version list. R6 lists CC2 Control 1.2.21 to 1.2.26 and accepts the startup files of Community Firmware V4.4.3 with the CC2 Control 1.2.26 EXHAUST component on the same V4.4.2 runtime generation: the boot hook with the network-manager entry and the launcher with the cavity preload. Both are pinned by SHA-256 and patched at the same single points as before; any other combination is refused. While the extended program runs, the 1.2.26 EXHAUST minimum stays inactive, because that component only activates for the stock program; startup is unaffected. Remove this component before every CC2 Control or firmware update, as the 1.2.26 installer checks the stock launcher. R6 was tested on Noahwhite2014's V4.4.3 printer with CC2 Control 1.2.26: check, installation, reboot, extended status and a 560 mm override; R5/R6 removal, update and reinstallation were also run there for 1.2.24 to 1.2.26.
 
 The external-spool Load/Unload card added to CC2 Control is independent. This component changes the Canvas cut-and-pull-back setting, not the external-spool motion distance.
 

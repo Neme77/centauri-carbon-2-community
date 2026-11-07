@@ -104,3 +104,22 @@ def validate_tar_member(member):
     if path.is_absolute() or '..' in path.parts or not member.isfile() or member.size > 32*1024*1024:
         raise ValueError('Unsupported snapshot member: '+member.name)
     return '/'+str(path)
+
+# Startup files as composed by later CC2 Control components on the same runtime
+# generation (V4.4.3 boot hook with the network-manager entry; CC2 Control
+# 1.2.26 EXHAUST launcher with the cavity preload). Same patch points.
+STARTUP_VARIANTS = {'V4.4.2': {'V4.4.3+EXHAUST': {
+    'boot': '7a30ece8b3566344d7471bfdc6b48e41858b5d36ee90911e390db2901b91dfc7',
+    'launcher': '13c7f6181301bc99c3bea144550803610c425cb89b5b1b44c2976cc9f264f096',
+    'sums': 'afb6c3715d67a6a58c9e9131bd43f13a3249cf126e9ba9ea182dc217a0ea70e8',
+}}}
+
+def startup_profile(profile, pins, original):
+    keys = ('boot', 'launcher', 'sums')
+    have = {k: digest(original[k]) for k in keys}
+    if all(have[k] == pins[k] for k in keys):
+        return profile, pins
+    for name, variant in STARTUP_VARIANTS.get(profile, {}).items():
+        if all(have[k] == variant[k] for k in keys):
+            return name, dict(pins, **variant)
+    raise ValueError('Unsupported or changed component: startup files')
