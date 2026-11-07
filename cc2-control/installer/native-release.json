@@ -1,6 +1,5 @@
 {
   "protocol": 1,
-  "version": "1.2.26",
   "community_base": "4.4.3",
   "app_sha256": "85af6b14faccdc2e3dfc2f679339c8ef4db5ce82d2c42a4591cdf10fc8081c96",
   "native_runtime_sha256": "6ab6e27a8a4dfe9478b746e1c829397df8d17d9c2d9c6ba6eca05c60b0937ea1",
@@ -16,5 +15,6 @@
     "exhaust-minimum",
     "connections-preserved"
   ],
-  "physical_flash_readback": false
+  "physical_flash_readback": false,
+  "version_sha256": "345a86a01b954c5e7b7eef0f4937a05554b53c182b2109c78758dc8c9c7c6ac0"
 }

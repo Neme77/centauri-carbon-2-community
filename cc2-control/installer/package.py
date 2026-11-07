@@ -39,7 +39,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
         raise ValueError('Payload requires a 32-bit little-endian ARM ELF')
     if release:
         if not (native_runtime and camera_runtime and connections_runtime):
-            raise ValueError('Public 1.2.26 requires native, camera and Connections runtimes')
+            raise ValueError('Public release requires native, camera and Connections runtimes')
         validate_release(native_runtime,binary,VERSION)
     binary_hash = hashlib.sha256(binary).hexdigest()
     rfid_code, rfid_tail = rfid_functions(rfid_runtime, binary_hash) if rfid_runtime else ('', '')
@@ -196,5 +196,5 @@ if __name__ == '__main__':
     if args.release and args.connections_runtime is None:
         parser.error('Public cumulative releases require --connections-runtime; unsupported native profiles retain native Wi-Fi')
     if args.release and args.native_runtime is None:
-        parser.error('Public 1.2.26 requires the qualified unified --native-runtime')
+        parser.error('Public release requires the qualified unified --native-runtime')
     package(args.prepared, args.scripts, args.source, args.output, args.camera_runtime, args.connections_runtime, args.rfid_runtime, args.app_binding_runtime, args.native_runtime, release=args.release)

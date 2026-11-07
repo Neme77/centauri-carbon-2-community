@@ -16,8 +16,9 @@ def validate_release(runtime, binary, version, policy_path=None):
     policy_path=Path(policy_path) if policy_path else Path(__file__).with_name('native-release.json')
     policy=json.loads(policy_path.read_text(),object_pairs_hook=unique_pairs)
     data=runtime.read_bytes()
+    current_version=Path(__file__).resolve().parents[1].joinpath('VERSION').read_text().strip()
     if (type(policy.get('protocol')) is not int or policy['protocol']!=1 or
-            policy.get('version')!=version or policy.get('community_base')!='4.4.3' or
+            version!=current_version or policy.get('version_sha256')!=hashlib.sha256(current_version.encode()).hexdigest() or policy.get('community_base')!='4.4.3' or
             policy.get('physical_flash_readback') is not False or
             hashlib.sha256(binary).hexdigest()!=policy.get('app_sha256') or
             hashlib.sha256(data).hexdigest()!=policy.get('native_runtime_sha256')):
