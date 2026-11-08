@@ -126,6 +126,12 @@ jobs:
       - name: Install browser for PID interaction regression
         run: npx playwright install --with-deps chromium
 
+      - name: Print queue page, dialog choice and quick start
+        run: npm run test:queue
+
+      - name: Connections EXHAUST activation messages
+        run: node preview/test-network-exhaust.mjs
+
       - name: Native external spool and shared Canvas material controls
         run: node preview/test-external-filament.mjs
 

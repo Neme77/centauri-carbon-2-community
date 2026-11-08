@@ -123,7 +123,8 @@ static int app_update_phase(const char *token, const char *phase, pid_t pid) {
 static int app_update_running(const char *token, const char *status) {
     char phase[24], path[600], cmdline[2048], stage[600];
     if (!extract_json_string(status, "phase", phase, sizeof(phase))) return 0;
-    if (!strcmp(phase, "complete") || !strcmp(phase, "failed") || !strcmp(phase, "interrupted") || !strcmp(phase, "ready")) return 0;
+    if (!strcmp(phase, "complete") || !strcmp(phase, "failed") || !strcmp(phase, "interrupted") ||
+        !strcmp(phase, "reconciled") || !strcmp(phase, "ready")) return 0;
     const char *number = strstr(status, "\"pid\":");
     long pid = number ? strtol(number + 6, NULL, 10) : 0;
     if (pid < 1 || pid > INT_MAX || !app_update_path(stage, sizeof(stage), token, "")) return 0;
@@ -203,8 +204,82 @@ static void app_update_cleanup(const char *token) {
     app_update_clean_stage(stage);
 }
 
+static int app_update_version_reached(const char *version) {
+    unsigned target[3], installed[3];
+    char suffix;
+    if (sscanf(version, "%6u.%6u.%6u%c", &target[0], &target[1], &target[2], &suffix) != 3 ||
+        sscanf(CC2_CONTROL_VERSION, "%6u.%6u.%6u%c", &installed[0], &installed[1], &installed[2], &suffix) != 3)
+        return 0;
+    for (unsigned i = 0; i < 3; i++)
+        if (installed[i] != target[i]) return installed[i] > target[i];
+    return 1;
+}
+
+/* Only fixed installer events leave the printer. Never forward arbitrary log lines. */
+static void app_update_progress_log(const char *token, char *out, size_t capacity) {
+    static const char *const phases[] = {
+        "initial", "payload-checks", "firmware-checks", "printer-status-before-backup",
+        "camera-preflight", "rfid-preflight", "backup-copy", "printer-status-after-backup",
+        "rfid-component-prepare", "stop-service", "install-files", "start-service",
+        "startup-verification", "network-component", "rollback"
+    };
+    static const char *const messages[] = {
+        "STOP: dormant_component_publication_refused; retain existing component and staging",
+        "STOP: exact public predecessor required",
+        "STOP: available memory unknown",
+        "STOP: less than 24 MiB available RAM; close viewers and retry from a fresh idle boot",
+        "Updater health/binary verification failed."
+    };
+    char path[600], line[512];
+    if (!app_update_path(path, sizeof(path), token, "install.log")) return;
+    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+    if (fd < 0) return;
+    struct stat st;
+    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 0022)) {
+        close(fd);
+        return;
+    }
+    FILE *log = fdopen(fd, "r");
+    if (!log) { close(fd); return; }
+    size_t used = 0, scanned = 0;
+    int continued = 0;
+    while (scanned < 65536 && fgets(line, sizeof(line), log)) {
+        size_t length = strlen(line);
+        scanned += length + 1;
+        int skip = continued;
+        continued = !length || line[length - 1] != '\n';
+        if (skip || continued) continue;
+        line[length - 1] = 0;
+        char event[128] = "";
+        for (unsigned i = 0; i < sizeof(phases) / sizeof(phases[0]); i++) {
+            int code;
+            char name[64], extra;
+            if (!strncmp(line, "INSTALL_PHASE=", 14) && !strcmp(line + 14, phases[i]))
+                snprintf(event, sizeof(event), "INSTALL_PHASE=%s", phases[i]);
+            else if (sscanf(line, "INSTALLER_EXIT=%3d LAST_PHASE=%63s%c", &code, name, &extra) == 2 &&
+                     code >= 0 && code <= 255 && !strcmp(name, phases[i]))
+                snprintf(event, sizeof(event), "INSTALLER_EXIT=%d LAST_PHASE=%s", code, phases[i]);
+        }
+        for (unsigned i = 0; i < sizeof(messages) / sizeof(messages[0]); i++)
+            if (!strcmp(line, messages[i])) snprintf(event, sizeof(event), "%s", messages[i]);
+        if (!strncmp(line, "Previous installation restored/restarted.",
+                     sizeof("Previous installation restored/restarted.") - 1))
+            snprintf(event, sizeof(event), "Previous installation restored/restarted.");
+        if (!event[0]) continue;
+        size_t count = strlen(event);
+        if (used + count + 2 >= capacity) break;
+        memcpy(out + used, event, count);
+        used += count;
+        out[used++] = '\\';
+        out[used++] = 'n';
+        out[used] = 0;
+    }
+    fclose(log);
+}
+
 static void app_update_status_response(int fd, console_state *console) {
     char token[33] = "", path[600], state[256], phase[24] = "none", version[32] = "", verified[256];
+    char progress[2048] = "";
     int running = app_update_active();
     if (app_update_current(token) && app_update_path(path, sizeof(path), token, "status.json") && app_update_read(path, state, sizeof(state))) {
         if (!extract_json_string(state, "phase", phase, sizeof(phase))) snprintf(phase, sizeof(phase), "interrupted");
@@ -214,12 +289,23 @@ static void app_update_status_response(int fd, console_state *console) {
         }
         if (app_update_path(path, sizeof(path), token, "verified.json") && app_update_read(path, verified, sizeof(verified)))
             extract_json_string(verified, "version", version, sizeof(version));
+        char pc[8];
+        int installed_from_pc = !running && !version[0] &&
+            app_update_path(path, sizeof(path), token, "pc-installed") &&
+            app_update_read(path, pc, sizeof(pc)) && !strcmp(pc, "ok\n");
+        if (!running && (!strcmp(phase, "failed") || !strcmp(phase, "interrupted")) &&
+            (installed_from_pc || app_update_version_reached(version))) {
+            snprintf(phase, sizeof(phase), "reconciled");
+            app_update_phase(token, phase, 0);
+        }
+        if (strcmp(phase, "reconciled")) app_update_progress_log(token, progress, sizeof(progress));
+        else { token[0] = 0; version[0] = 0; }
         if (!running && (!strcmp(phase, "complete") || !strcmp(phase, "failed") || !strcmp(phase, "interrupted"))) app_update_cleanup(token);
     }
-    char body[600];
-    int length = snprintf(body, sizeof(body), "{\"enabled\":%s,\"ready\":%s,\"busy\":%s,\"installed\":\"%s\",\"firmware\":\"%s\",\"job\":\"%s\",\"phase\":\"%s\",\"version\":\"%s\"}\n",
+    char body[2700];
+    int length = snprintf(body, sizeof(body), "{\"enabled\":%s,\"ready\":%s,\"busy\":%s,\"installed\":\"%s\",\"firmware\":\"%s\",\"job\":\"%s\",\"phase\":\"%s\",\"version\":\"%s\",\"progress_log\":\"%s\"}\n",
         app_update_enabled() ? "true" : "false", app_update_local_available(console) ? "true" : "false", running ? "true" : "false",
-        CC2_CONTROL_VERSION, CC2_COMMUNITY_FIRMWARE_VERSION, token, phase, version);
+        CC2_CONTROL_VERSION, CC2_COMMUNITY_FIRMWARE_VERSION, token, phase, version, progress);
     respond(fd, 200, "OK", "application/json", body, (size_t)length);
 }
 
@@ -322,6 +408,7 @@ static void *app_update_upload_worker(void *argument) {
     stage[strlen(stage) - 1] = 0;
     int result = open(verified, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
     if (result < 0) goto done;
+    app_update_phase(job->token, "verifying", getpid());
     /* Do not execute any uploaded file. The installed verifier authenticates
      * and extracts only known regular files using bounded buffers. */
     long maximum = sysconf(_SC_OPEN_MAX);

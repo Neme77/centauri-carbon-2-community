@@ -188,6 +188,7 @@ export const Network = () => {
   const here = Boolean(p?.ip && location.hostname === p.ip)
   const support = Boolean(m?.config.ethernet_support)
   const usbConsent = m?.usb?.approval_revision === '3000'
+  const exhaustReboot = m?.last_error === 'ethernet_exhaust_reboot_prepared'
   return (
     <div class="grid gap-3.5">
       <Card>
@@ -260,7 +261,16 @@ export const Network = () => {
       )}
       {(error || m?.last_error || (m && m.last_exit > 0)) && (
         <p role="alert" class="rounded-md border border-red/50 bg-red/10 p-3 text-red [overflow-wrap:anywhere]">
-          {error || t('network.action_failed')} {m?.last_error && <span class="text-xs">({m.last_error})</span>}
+          {exhaustReboot ? (
+            t('network.ethernet_exhaust_reboot_prepared')
+          ) : m?.last_error === 'native_activation_failed' &&
+            m.diagnostic?.trim() === 'activation:fan_trial_requires_full_idle_reboot' ? (
+            t('network.ethernet_exhaust_blocked')
+          ) : (
+            <>
+              {error || t('network.action_failed')} {m?.last_error && <span class="text-xs">({m.last_error})</span>}
+            </>
+          )}
         </p>
       )}
       {p && (

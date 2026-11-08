@@ -48,4 +48,5 @@ exec "$BASE/cc2-control" \
     --presets "$PERSIST/material-presets.json" \
     --preferences "$PERSIST/ui-preferences.json" \
     --plates "$PERSIST/bed-plates.json" \
-    --spools "$PERSIST/spools.json"
+    --spools "$PERSIST/spools.json" \
+    --queue "$PERSIST/print-queue.json"

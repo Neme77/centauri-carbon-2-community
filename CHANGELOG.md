@@ -6,7 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
+
+- Add the Turkish interface translation using the contributed language patch.
+
+- Print queue: prepare jobs ahead with the print dialog's new **Add to queue** choice (every print setting plus a number of copies), then start each copy with one button from the Queue page, the Dashboard or the print-ended notice, without the dialog. A pre-flight check shows the file, the filament in each mapped slot, the side's mesh, the nozzle and the printer state; copies are counted on the printer, stopped copies are not counted, and the next copy waits for the operator unless the automatic start is chosen for a self-clearing bed, which first checks that each mapped Canvas slot still holds the file's material. Designed and implemented by **beanbo** (#320).
+- German interface translation (Deutsch), selectable in Settings → Language. All 1533 interface strings are translated with the informal “du”; technical terms such as Pressure Advance, Input Shaper, Load Cell, Spool, Canvas and Idle are kept.
+
+### Changed
+
+- Simplified Chinese interface strings for the RFID reader lifecycle, external feed, chamber fan management and update requirements completed, and the build-plate save hint refreshed. By **Skycos** (#328).
+
 ### Fixed
+
+- Start preparing the qualified USB Ethernet link before the camera starts, and give the camera a bounded wait for carrier on Ethernet-enabled boots. Reported by **kalross** (#322).
+- Prepare USB Ethernet activation when the minimum EXHAUST feature is active. A full idle reboot loads both components, after which the normal Connections confirmation applies. Reported by **kalross** and reproduced by **Neme77** (#323).
 
 - Preserve the Canvas RFID lifecycle during application updates from the published CC2 Control 1.2.26 and require explicit resumption before a pending activation can flash Canvas. Allow reinstalling the same build from a PC. Reported by **Sceletor** (#313) and physically tested on a Combo by **Neme77**.
 

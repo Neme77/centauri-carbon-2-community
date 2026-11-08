@@ -10,12 +10,13 @@ export const Tag = ({
   tone: k = 'default',
   class: c,
   children,
+  ...p
 }: {
   tone?: keyof typeof tone
   class?: string
   children: ComponentChildren
-}) => (
-  <span class={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs', tone[k], c)}>
+} & Omit<preact.JSX.HTMLAttributes<HTMLSpanElement>, 'class' | 'children'>) => (
+  <span class={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs', tone[k], c)} {...p}>
     {children}
   </span>
 )
