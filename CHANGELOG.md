@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Start preparing the qualified USB Ethernet link before the camera starts, and give the camera a bounded wait for carrier on Ethernet-enabled boots. Reported by **kalross** (#322).
+- Prepare USB Ethernet activation when the minimum EXHAUST feature is active. A full idle reboot loads both components, after which the normal Connections confirmation applies. Reported by **kalross** and reproduced by **Neme77** (#323).
+
 - Preserve the Canvas RFID lifecycle during application updates from the published CC2 Control 1.2.26 and require explicit resumption before a pending activation can flash Canvas. Allow reinstalling the same build from a PC. Reported by **Sceletor** (#313) and physically tested on a Combo by **Neme77**.
 
 ## [CC2 Control 1.2.26] - 2026-11-07

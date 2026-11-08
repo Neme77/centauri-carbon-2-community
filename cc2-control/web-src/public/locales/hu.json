@@ -1191,6 +1191,8 @@
   "network.selected": "Használatban",
   "network.frequency": "Frekvencia",
   "network.action_pending": "Kapcsolatváltás…",
+  "network.ethernet_exhaust_reboot_prepared": "Az Ethernet előkészítése mentve. Tétlen állapotban kapcsolja ki, majd be a nyomtatót, és engedélyezze újra az USB Ethernetet a Kapcsolatok menüben.",
+  "network.ethernet_exhaust_blocked": "Az USB Ethernet nem aktiválható, ha az EXHAUST minimum aktív, és a futó nyomtatószolgáltatásokban nincs betöltve a hálózati összetevő.",
   "network.action_failed": "A művelet sikertelen. Az eredményt a diagnosztikában ellenőrizheti.",
   "network.connections": "Kapcsolatok",
   "network.cc2_access": "CC2 hozzáférés",
