@@ -35,7 +35,7 @@ try {
   ] }
   let cache = { schema: 1, expires: 0, releases: [] }
   await page.route('**/i18n/*.json', async r => {
-    const code = new URL(r.request().url()).pathname.match(/^\/i18n\/(en|it|es|fr|pl|cs|hu|ru|zh|de)\.json$/)?.[1]
+    const code = new URL(r.request().url()).pathname.match(/^\/i18n\/(en|it|es|fr|pl|cs|hu|tr|ru|zh|de)\.json$/)?.[1]
     assert(code, 'unexpected locale request')
     return r.fulfill({ body: await readFile(path.join(root, `public/locales/${code}.json`), 'utf8'), contentType: 'application/json' })
   })
@@ -66,7 +66,7 @@ try {
   await page.getByRole('tab', { name: 'Updates', exact: true }).click()
   await page.getByText('Compatible update available: 1.2.9', { exact: true }).waitFor()
   // The application update requires the qualified V4.4.3 base in every locale.
-  for (const lang of ['en', 'hu', 'cs', 'es', 'fr', 'it', 'pl', 'ru', 'zh', 'de']) {
+  for (const lang of ['en', 'hu', 'cs', 'es', 'fr', 'it', 'pl', 'tr', 'ru', 'zh', 'de']) {
     const dict = JSON.parse(await readFile(path.join(root, `public/locales/${lang}.json`)))
     assert.deepEqual(dict['updates.requirements'].match(/V\d+\.\d+(?:\.\d+)?/g), ['V4.4.3'], lang + ' update requirements are out of date')
   }

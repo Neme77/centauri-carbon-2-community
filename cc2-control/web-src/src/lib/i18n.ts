@@ -11,6 +11,7 @@ export const LANGUAGE_NAMES: Record<string, string> = {
   de: 'Deutsch',
   ru: 'Русский',
   pl: 'Polski',
+  tr: 'Türkçe',
   cs: 'Čeština',
   hu: 'Magyar',
   es: 'Español',
