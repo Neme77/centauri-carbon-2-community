@@ -185,6 +185,20 @@ Siehe `docs/CAPTURE_VENDOR_PACKAGE.de.md`.
 
 Auf Stock gibt es also kein SSH, und über das Netzwerk lässt sich nichts auslesen.
 
+## 7. Prüfergebnis (macOS, 2026-11-08)
+
+- `bash -n`: 54 Shell-Skripte, 0 Fehler. **shellcheck** ist nicht installiert und wurde nicht ausgeführt.
+- `python3 -m py_compile`: 214 Python-Dateien, 0 Fehler.
+- Builder-Suite (`unittest discover -s builder/current/tests`): 47 Tests, 1 Fehler, 3 übersprungen.
+  - Der Fehler ist `test_connections_firmware…test_actual_bootstrap_success_refusal_and_rollback` („offline image must provide both shells“, braucht BusyBox `ash`). **[belegt]** Er tritt identisch auf unverändertem `develop` auf (46 Tests, gleicher Fehler) und ist umgebungsbedingt.
+  - Neu und bestanden: `test_base_profiles.py` und `test_inspect_base.py`.
+- `launch_helpers/tests/test_launcher.py`: PASS. Auf `develop` schlug der Test unter macOS wegen `/var` → `/private/var` fehl; der Test-Root wird jetzt aufgelöst.
+- CC2 Control `make clean test CROSS= CC=gcc`: lässt sich unter macOS nicht bauen (`O_NOFOLLOW` u.a. Linux-Header in `src/network_status.c`). `cc2-control/` wurde nicht geändert. Ausführen unter Linux bzw. in der CI.
+- Trockenlauf:
+  - `firmware_builder.py --preflight-only` bricht wie erwartet ab: „Base profile 02.03.03.13 has 18 open placeholder(s); refusing to build“.
+  - Mit `--base-version 02.01.01.07` wird das Profil akzeptiert, und der Lauf scheitert erwartungsgemäß am fehlenden lokalen Signierschlüssel; Paket, AES-Schlüssel und SquashFS liegen ebenfalls nicht vor.
+- PowerShell-Änderung (`Build-Release.ps1`) nicht ausgeführt: `pwsh` ist nicht installiert.
+
 ---
 
 ## Anhang A – Versions-Fundstellen (grep `0?2.0?1.0?[01].x`)
