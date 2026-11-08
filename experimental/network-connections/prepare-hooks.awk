@@ -3,6 +3,7 @@
 mode == "camera-entry" && /^CC2_CAMERA_REAP_TRIAL=1 .*exec "\$CAMERA" "\$@"$/ {
     print "if /opt/usr/cc2-network-manager/control --enabled;then"
     print "    /opt/usr/cc2-network-manager/control --ensure || true"
+    print "    /opt/usr/cc2-network-manager/control --wait-camera-link || true"
     line=$0
     sub(/LD_PRELOAD="/, "CC2_NETWORK_COMPAT_TRIAL=1 LD_PRELOAD=\"/opt/usr/cc2-network-manager/libcc2-network-compat-r1.so:", line)
     print "    " line
