@@ -43,7 +43,7 @@ int mock_mqtt_prepare_timelapse(mqtt_client *c, int enabled) {
 static int start(mqtt_client *mqtt, const char *body, char *response, size_t cap) {
     events[0] = 0; query[0] = 0;
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-    gcode_start_response(pair[0], mqtt, body, strlen(body));
+    gcode_start_response(pair[0], mqtt, body, strlen(body), NULL);
     close(pair[0]);
     size_t used = 0; ssize_t n;
     while (used + 1 < cap && (n = recv(pair[1], response + used, cap - 1 - used, 0)) > 0) used += (size_t)n;

@@ -69,6 +69,7 @@ HARNESSES = {
     "test_pending_autosave.c": BACKEND,
     "test_spools.c": BACKEND,
     "test_spoolman.c": BACKEND,
+    "test_queue_tracking.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
     "test_nozzle_target_limits.c": [ROOT / "src/control.c"],
 }

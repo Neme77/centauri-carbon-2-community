@@ -8,6 +8,7 @@ export type Page =
   | 'control'
   | 'job'
   | 'files'
+  | 'queue'
   | 'history'
   | 'bed'
   | 'canvas'
@@ -20,6 +21,7 @@ const PAGES: Page[] = [
   'control',
   'job',
   'files',
+  'queue',
   'history',
   'bed',
   'canvas',
