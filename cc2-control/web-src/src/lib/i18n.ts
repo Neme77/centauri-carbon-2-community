@@ -8,6 +8,7 @@ export const LANGUAGE_NAMES: Record<string, string> = {
   it: 'Italiano',
   fr: 'Français',
   zh: '中文',
+  de: 'Deutsch',
   ru: 'Русский',
   pl: 'Polski',
   cs: 'Čeština',
