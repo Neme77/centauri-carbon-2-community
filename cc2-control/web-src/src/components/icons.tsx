@@ -14,6 +14,7 @@ import {
   Layers,
   Lightbulb,
   Link,
+  ListOrdered,
   Lock,
   LockOpen,
   MessageSquare,
@@ -67,6 +68,7 @@ const icons = {
   info: Info,
   motors: Power,
   spool: Spool,
+  queue: ListOrdered,
 }
 
 // Lucide icons (plus the Canvas glyph, drawn the same way), with a 1 px stroke everywhere.

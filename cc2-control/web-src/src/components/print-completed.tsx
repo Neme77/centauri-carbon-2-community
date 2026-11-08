@@ -5,8 +5,10 @@ import { CompletionTracker, replayable, type Completion } from '@/lib/print-comp
 import { ls } from '@/lib/store'
 import { printer, view } from '@/lib/state'
 import { t, tpl } from '@/lib/i18n'
-import { notify } from '@/lib/api'
+import { errText, notify } from '@/lib/api'
 import { duration } from '@/lib/format'
+import { holdQueue, queue, queueNext, refreshQueue, startQueued } from '@/lib/queue'
+import { usePoll } from '@/lib/poll'
 import { startFile } from '@/pages/print-dialog'
 const storageKey = 'cc2-completed-print-seen'
 const readSeen = () => {
@@ -47,7 +49,46 @@ export const PrintCompleted = () => {
     }
     setNotice(null)
   }
+  // The queue's next copy is one tap away once the part is off the bed.
+  const q = queue.use().data
+  // The notice is where an automatic countdown must be visible: poll fast while it shows (otherwise
+  // this only joins the slower poll of the layout).
+  usePoll(refreshQueue, notice ? 2000 : 30000)
+  const next = notice && q?.available && !q.active ? queueNext(q) : null
+  const autoIn = next && q ? q.auto_in : null
+  const hold = async () => {
+    setBusy(true)
+    try {
+      await holdQueue()
+    } catch (e) {
+      notify(tpl('queue.failed', { error: errText(e) }), 'error')
+    } finally {
+      setBusy(false)
+      void refreshQueue()
+    }
+  }
+  const startNext = async () => {
+    if (!next) return
+    setBusy(true)
+    try {
+      await startQueued(next.id)
+      notify(tpl('queue.started', { k: next.done + 1, n: next.copies, name: next.path }))
+      dismiss()
+    } catch (e) {
+      notify(tpl('queue.failed', { error: errText(e) }), 'error')
+    } finally {
+      setBusy(false)
+      void refreshQueue()
+    }
+  }
   if (!notice) return null
+  const ready =
+    ok &&
+    data?.connected &&
+    Number.isFinite(Number(data?.last_message_age)) &&
+    Number(data?.last_message_age) >= 0 &&
+    Number(data?.last_message_age) <= 15 &&
+    view(data).idle
   return (
     <Card
       role="region"
@@ -60,19 +101,38 @@ export const PrintCompleted = () => {
       <p class="mt-2 text-muted">
         {notice.seconds > 0 ? duration(notice.seconds) : '—'} · {t('completed.hint')}
       </p>
+      {next && (
+        <div class="mt-3 rounded-md border border-edge bg-field p-2.5" data-completed-queue>
+          <div class="text-xs text-muted">{t('queue.next_in_queue')}</div>
+          <div class="font-semibold [overflow-wrap:anywhere]">
+            {next.path} — {tpl('queue.copy_k_of_n', { k: next.done + 1, n: next.copies })}
+          </div>
+          {autoIn === null ? (
+            <div class="text-xs text-muted">{t('queue.remove_part_hint')}</div>
+          ) : (
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-amber" data-completed-queue-auto>
+              {tpl('queue.auto_in_n', { n: autoIn })}
+              <Button class="min-h-8 px-2 text-xs" disabled={busy} onClick={hold}>
+                {t('queue.hold')}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
       <div class="mt-3 flex flex-wrap gap-2">
         <Button onClick={dismiss}>{t('completed.acknowledge')}</Button>
+        {next && (
+          <Button
+            variant="primary"
+            disabled={busy || !ready || !next.present}
+            onClick={startNext}
+            data-completed-queue-start
+          >
+            {t('queue.start_next')}
+          </Button>
+        )}
         <Button
-          disabled={
-            busy ||
-            !ok ||
-            !data?.connected ||
-            !Number.isFinite(Number(data?.last_message_age)) ||
-            Number(data?.last_message_age) < 0 ||
-            Number(data?.last_message_age) > 15 ||
-            !view(data).idle ||
-            !replayable(notice.path)
-          }
+          disabled={busy || !ready || !replayable(notice.path)}
           onClick={async () => {
             setBusy(true)
             try {
