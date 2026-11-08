@@ -11,7 +11,7 @@ Kennzeichnung:
 ## Ausgangslage
 
 - **[belegt]** Das Repo enthält kein `fwdl.sh` und keinen Code, der beschreibt, wohin die Firmware OTA-Updates lädt. Der Download läuft im Vendor-Programm (`daemon-000` bzw. `elegoo_printer`), daher ist **kein Cache-Pfad bekannt**.
-- **[belegt, Port-Check vom 2026-11-08 an 192.168.2.220]** Auf der Stock-Firmware 02.03.03.13:
+- **[gemessen, aber nicht aussagekräftig]** Port-Check vom 2026-11-08 an 192.168.2.220. Der Drucker wurde ungefähr zu dieser Zeit auf V4.4.3 gedowngradet; welcher Firmware-Stand geantwortet hat, ist unklar. Ergebnis:
 
   | Port | Ergebnis |
   |---|---|
@@ -22,7 +22,7 @@ Kennzeichnung:
   | 1883 | offen |
   | 8080 | offen |
 
-  Ohne SSH lässt sich nichts auslesen.
+  Dass Stock-Firmware SSH schließt, ist nur durch den Nutzerbericht #309 (auf 02.01.01.12) belegt. Auf V4.4.3 sollte Port 22 offen sein; das bitte nach dem Neustart prüfen.
 - **[Vermutung]** Auf 02.03.03.13 bietet „Auf Updates prüfen“ nichts an, weil die Version schon aktuell ist.
 
 **Gewählter Weg:** Zuerst Community-Firmware V4.4.3 per USB flashen; dann ist SSH offen. Danach das Online-Update auf 02.03.03.13 anstoßen und die Datei abgreifen, bevor sie installiert oder gelöscht wird. Parallel dazu als Rückfallebene den Netzwerkverkehr mitschneiden.
@@ -48,6 +48,23 @@ Kennzeichnung:
 4. **Noch nicht „Auf Updates prüfen“ antippen.** Erst Schritt 2 vorbereiten.
 
 ## Schritt 2 – Beobachtung starten (auf dem Drucker, nur lesend)
+
+**Empfohlen: das Grabber-Skript** `builder/current/tools/capture/ota_grabber.sh`. Es liegt als `ota_grabber.sh` im Hauptverzeichnis des USB-Sticks und erledigt die Schritte 2 und 3 automatisch:
+- Es beobachtet `/opt/usr`, `/tmp`, `/var/tmp` und übliche Update-Ordner.
+- Es kopiert jede neue Datei über 10 MB, sobald ihre Größe stabil bleibt, nach `/mnt/exUDISK/ota_grabbed/`, prüft die Prüfsumme und protokolliert alles in `/mnt/exUDISK/ota_grabber_log.txt`.
+
+```sh
+grep exUDISK /proc/mounts
+nohup sh /mnt/exUDISK/ota_grabber.sh >/dev/null 2>&1 &
+tail -f /mnt/exUDISK/ota_grabber_log.txt
+```
+
+Erst wenn im Log „Grabber started“ steht, am Display „Auf Updates prüfen“ antippen.
+
+- Meldet `grep` einen anderen Mount-Punkt, z.B. `/mnt/exUDISK/sda1`, starte das Skript mit `USB_ROOT=<dieser Pfad> sh <dieser Pfad>/ota_grabber.sh`.
+- Beenden: `kill "$(cat /mnt/exUDISK/ota_grabbed/.pid)"`.
+
+Die manuelle Variante unten bleibt als Kontrolle.
 
 In einem ersten Terminal per SSH auf dem Drucker:
 

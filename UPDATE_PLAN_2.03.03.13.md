@@ -172,7 +172,7 @@ Siehe `docs/CAPTURE_VENDOR_PACKAGE.de.md`.
 
 **[belegt]** Im Repo gibt es kein `fwdl.sh` und keinen Code, der den OTA-Download-Cache beschreibt. Der Download läuft im Vendor-Programm, ein Cache-Pfad ist also nicht belegt.
 
-**[belegt, Port-Check 2026-11-08 an 192.168.2.220, TCP-Connect ohne Login]:**
+**[gemessen, nicht aussagekräftig: Port-Check 2026-11-08 an 192.168.2.220 lief vermutlich während des Downgrades auf V4.4.3, TCP-Connect ohne Login]:**
 
 | Port | Ergebnis |
 |---|---|
@@ -183,7 +183,7 @@ Siehe `docs/CAPTURE_VENDOR_PACKAGE.de.md`.
 | 8081 | abgelehnt |
 | 7125 | abgelehnt |
 
-Auf Stock gibt es also kein SSH, und über das Netzwerk lässt sich nichts auslesen.
+Dass Stock-Firmware SSH schließt, ist nur durch #309 belegt. Zum Sichern dient `builder/current/tools/capture/ota_grabber.sh`, das du per SSH auf V4.4.3 startest; Schritte in `docs/CAPTURE_VENDOR_PACKAGE.de.md`.
 
 ## 7. Prüfergebnis (macOS, 2026-11-08)
 
