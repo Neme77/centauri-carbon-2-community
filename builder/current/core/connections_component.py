@@ -13,6 +13,8 @@ import subprocess
 
 REPO = Path(__file__).resolve().parents[3]
 RUNTIME_SHA256 = '649d0af3dba7e21bc399fc741115fbe298cc1e4b77c07cf51bd35bfd73762e9a'
+LAN_PREVIEW_SHA256 = '8c7c6a93ed64b9b35f944dc313faee9bbfca370958bec79d0ba5fe25d6e49669'
+LAN_PREVIEW_HELPER_SHA256 = '3f9e8ca97fcb668c694bc93aa08dc1753ddf50d1cddc17567acb274c91dbaaf4'
 BINARY_PINS = {
     'control': '2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62',
     'cc2_ue300_abi_probe.ko': '24c757788815abe5bbabb59d64b4768efedf7a65b1a8d93f3a6ce4d1e979a3f8',
@@ -27,16 +29,22 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def read_runtime(path):
+def read_runtime(path, *, lan_preview=False):
     path = Path(path)
     if path.is_symlink() or not path.is_file():
         raise RuntimeError('Missing regular qualified Connections archive')
     raw = path.read_bytes()
-    if sha(raw) != RUNTIME_SHA256:
+    expected_archive = LAN_PREVIEW_SHA256 if lan_preview else RUNTIME_SHA256
+    binary_pins = dict(BINARY_PINS)
+    if lan_preview:
+        binary_pins['control'] = LAN_PREVIEW_HELPER_SHA256
+    if sha(raw) != expected_archive:
         raise RuntimeError('Connections archive SHA256 mismatch')
     pointer = json.loads((REPO / 'experimental/network-connections/runtime.json').read_text())
-    if (pointer['sha256'] != RUNTIME_SHA256
-            or pointer['helper_sha256'] != BINARY_PINS['control']):
+    if lan_preview:
+        pointer = pointer['lan_preview']
+    if (pointer['sha256'] != expected_archive
+            or pointer['helper_sha256'] != binary_pins['control']):
         raise RuntimeError('Connections source and firmware input pins differ')
     files = {}
     with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as archive:
@@ -65,7 +73,7 @@ def read_runtime(path):
     for name, digest in declared.items():
         if sha(files[name]) != digest:
             raise RuntimeError('Connections checksum mismatch: ' + name)
-    for name, digest in BINARY_PINS.items():
+    for name, digest in binary_pins.items():
         if name not in files or sha(files[name]) != digest:
             raise RuntimeError('Unqualified Connections binary: ' + name)
     return files
@@ -240,3 +248,12 @@ def audit(root, prepared, hooks):
     link = root / 'etc/rc.d/S23cc2-network-manager'
     if not link.is_symlink() or str(link.readlink()) != '../init.d/cc2-network-manager':
         raise RuntimeError('Firmware Connections boot entry differs')
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Validate a Connections archive without building firmware.')
+    parser.add_argument('--lan-preview', required=True, type=Path, metavar='ARCHIVE')
+    args = parser.parse_args()
+    files = read_runtime(args.lan_preview, lan_preview=True)
+    print(f'PASS: {len(files)} Connections LAN preview files and exact binary pins')

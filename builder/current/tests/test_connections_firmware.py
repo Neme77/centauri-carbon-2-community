@@ -21,6 +21,10 @@ class ConnectionsInputTests(unittest.TestCase):
         self.assertEqual(pointer['sha256'],c.RUNTIME_SHA256)
         self.assertEqual(pointer['helper_sha256'],c.BINARY_PINS['control'])
         self.assertEqual(len([n for n in c.BINARY_PINS if n.endswith('.ko')]),4)
+        preview=pointer['lan_preview']
+        self.assertEqual(preview['sha256'],c.LAN_PREVIEW_SHA256)
+        self.assertEqual(preview['helper_sha256'],c.LAN_PREVIEW_HELPER_SHA256)
+        self.assertNotEqual(preview['sha256'],pointer['sha256'])
 
     def test_changed_or_missing_archive_refused(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -28,6 +32,7 @@ class ConnectionsInputTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'Missing'):c.read_runtime(path)
             path.write_bytes(b'not the reviewed archive')
             with self.assertRaisesRegex(RuntimeError,'SHA256'):c.read_runtime(path)
+            with self.assertRaisesRegex(RuntimeError,'SHA256'):c.read_runtime(path,lan_preview=True)
 
     def test_bootstrap_has_no_module_service_heater_or_motion_actions(self):
         text=(BASE/'components/connections/firmware-seed.sh').read_text()
