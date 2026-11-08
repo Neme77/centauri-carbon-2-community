@@ -1191,6 +1191,8 @@
   "network.selected": "W użyciu",
   "network.frequency": "Częstotliwość",
   "network.action_pending": "Zmiana połączenia…",
+  "network.ethernet_exhaust_reboot_prepared": "Zapisano przygotowanie Ethernetu. Gdy drukarka jest bezczynna, wyłącz ją i włącz ponownie, a następnie ponownie włącz Ethernet USB w Połączeniach.",
+  "network.ethernet_exhaust_blocked": "Nie można włączyć Ethernetu USB, gdy aktywne jest minimum EXHAUST, a składnik sieciowy nie został załadowany w działających usługach drukarki.",
   "network.action_failed": "Operacja nie powiodła się. Otwórz diagnostykę, aby sprawdzić wynik.",
   "network.connections": "Połączenia",
   "network.cc2_access": "Dostęp do CC2",

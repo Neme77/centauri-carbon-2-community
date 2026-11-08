@@ -8,6 +8,15 @@
 #include "connections/public.h"
 static pid_t connections_child;
 static int connections_result = -1;
+static int connections_helper_digest(const char *digest) {
+  if (!strcmp(digest, CC2_CONNECTIONS_HELPER_SHA))
+    return 1;
+#ifdef CC2_CONNECTIONS_PREVIEW_HELPER_SHA
+  return !strcmp(digest, CC2_CONNECTIONS_PREVIEW_HELPER_SHA);
+#else
+  return 0;
+#endif
+}
 static int connections_program(void) {
   int fd = open(NG_COMPONENT "/control", O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
   if (fd < 0)
@@ -16,7 +25,7 @@ static int connections_program(void) {
   char digest[65];
   int ok = !fstat(fd, &st) && S_ISREG(st.st_mode) && st.st_uid == geteuid() &&
            !(st.st_mode & 0022) && (st.st_mode & 0111) && st.st_nlink == 1 &&
-           sha256_fd(fd, digest) && !strcmp(digest, CC2_CONNECTIONS_HELPER_SHA);
+           sha256_fd(fd, digest) && connections_helper_digest(digest);
   if (!ok || lseek(fd, 0, SEEK_SET) < 0) {
     close(fd);
     return -1;

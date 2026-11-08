@@ -14,7 +14,7 @@ try {
   const language = page.locator('main select:has(option[value="hu"])')
   await page.getByRole('tab').nth(2).click()
   assert.deepEqual(await language.locator('option').allTextContents(),
-    ['Čeština', 'English', 'Español', 'Français', 'Italiano', 'Magyar', 'Polski', 'Türkçe', 'Русский', '中文'],
+    ['Čeština', 'Deutsch', 'English', 'Español', 'Français', 'Italiano', 'Magyar', 'Polski', 'Türkçe', 'Русский', '中文'],
     'language options follow displayed names, including accents, rather than language codes')
   for (const [code, name] of [['hu', 'Magyar']]) {
     await page.getByRole('tab').nth(2).click()

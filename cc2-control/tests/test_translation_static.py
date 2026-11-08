@@ -50,6 +50,11 @@ for locale, spot_checks in {
         "console.unlock_console_to_send_g_code":
             "解锁控制台以发送 G-code…",
     },
+    "de": {
+        "job.object_exclusion": "Objekt-Ausschluss",
+        "console.unlock_console_to_send_g_code":
+            "Konsole entsperren, um G-Code zu senden…",
+    },
     "ru": {
         "job.object_exclusion": "Исключение объектов",
         "console.unlock_console_to_send_g_code":

@@ -58,7 +58,7 @@ for path in files:
     # their missing-key regressions visible while the runtime still supports
     # per-key English fallbacks for other future/partial locales.
     missing = source_keys - set(data)
-    if path.stem in ("es", "ru", "zh"):
+    if path.stem in ("es", "ru", "zh", "de"):
         assert not missing, f"{path.name}: missing {len(missing)} source keys: {sorted(missing)[:5]}"
     elif missing:
         print(f"note: {path.name} is missing {len(missing)}/{len(source_keys)} key(s) "

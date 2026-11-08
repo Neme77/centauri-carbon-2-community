@@ -1191,6 +1191,8 @@
   "network.selected": "Kullanımda",
   "network.frequency": "Frekans",
   "network.action_pending": "Bağlantı değiştiriliyor…",
+  "network.ethernet_exhaust_reboot_prepared": "Ethernet hazırlığı kaydedildi. Yazıcı boştayken kapatıp açın, ardından Bağlantılar bölümünde USB Ethernet’i yeniden etkinleştirin.",
+  "network.ethernet_exhaust_blocked": "Minimum EXHAUST özelliği etkinken ve ağ bileşeni çalışan yazıcı hizmetlerine yüklenmemişken USB Ethernet etkinleştirilemez.",
   "network.action_failed": "İşlem başarısız oldu. Sonucu incelemek için Tanılama'yı açın.",
   "network.connections": "Bağlantılar",
   "network.cc2_access": "CC2 erişimi",
