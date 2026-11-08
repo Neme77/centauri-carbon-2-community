@@ -741,6 +741,69 @@ than 1 °C short of the target), `plateau` (the
 estimated level the chamber is heading for, °C or null), `fan` (aux fan PWM 0–255 sent by the
 session) and `bed_limit`. `state` is `"handed_off"` while a print that took over the bed runs.
 
+## Print queue
+
+Jobs prepared ahead of time: a G-code file, the print dialog's choices and a number of copies, kept in
+`print-queue.json` (`--queue FILE`, next to the plate and spool libraries) and shown on the Queue page, the
+Dashboard's current-job card and the print-ended notice. Every copy is one protected start through the same
+code as `POST /api/gcode-files/print`, with the same guards; nothing starts without the operator's button
+unless the `auto` policy is chosen.
+
+- `GET /api/queue` returns `{"available","error","revision","printer_idle","policy":{"after":"wait"|"auto",
+  "delay","remove_done"},"active","next","items":[…]}`. Items are in queue order with `id`, `storage`, `path`,
+  `mapping`, `side`, `leveling`, `timelapse`, `measure`, `nozzle`, `copies`, `done`, `estimated_seconds` and
+  `filament_grams` (`null` when unknown), `added`, `state` (`pending`, `starting`, `printing` or `done`),
+  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`) and `present` (the file is in place).
+  `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing;
+  `auto_in` the seconds until a pending automatic start, else `null`.
+- `POST /api/queue/add` takes the eight newline-separated fields of `/api/gcode-files/print` (storage,
+  filename, Canvas mapping, plate side, leveling mode, timelapse, measurement, nozzle), then `copies` (1–99),
+  `position` (`end`, or `next` to go to the head behind a running copy) and optionally the slicer's
+  `estimated_seconds` and `filament_grams`. The syntax and the file are checked now; the printer-dependent
+  checks (mapping against the file, mesh, measurement, nozzle) run at each start. 201 `{"ok":true,"id","count"}`;
+  the queue holds at most 32 jobs.
+- `POST /api/queue/start` with a job id, or an empty body for `next`: refused (409) while a queued copy is
+  starting or printing, when the job has no copy left, while plate verification runs, or while another
+  session holds the printer (the refusals every print control shares: maintenance, the Canvas and filament
+  tools, a camera cell, an application update, a managed connection, drying, the nozzle test); otherwise it
+  answers exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx). The job is saved as
+  `starting` before the request goes to the printer, so a restart in between still follows the copy.
+- `POST /api/queue/abandon` (optionally the job id) gives up a `starting` copy the printer never ran: only
+  while the printer is idle with fresh telemetry (409 otherwise, or when no start is waiting); the job goes
+  back to `pending` with `last_result` `not_started`.
+- `POST /api/gcode-files/print` answers 409 `A queued copy is starting` while a queued start waits for the
+  printer; a queued copy that is already printing is protected by the printer's own busy state.
+- `POST /api/queue/remove` (id; never the running job), `/api/queue/reorder` (`id\nindex`, 0 is the head),
+  `/api/queue/copies` (`id\ncopies`, never fewer than already printed, and for the running job at least one
+  more; a total that equals the printed count finishes the job, which `remove_done` then drops),
+  `/api/queue/policy` (`wait|auto\ndelay 10–3600\n0|1` for `remove_done`; a change never starts anything by
+  itself, the automatic delay counts only from a copy counted while `auto` was on), `/api/queue/hold` (cancels
+  the pending automatic start, the policy stays) and `/api/queue/clear-done`.
+  The measurement and nozzle fields are plate library ids or empty. Every change is saved atomically before it
+  is acknowledged; a failed save leaves the queue as it was.
+
+Copies are counted on the backend, so a closed browser misses nothing. A `starting` job becomes `printing`
+once fresh MQTT state shows the printer printing the file it was given (a USB import prints under its
+`CC2_USB_…` copy); the printer service's file name is trusted only while it reports a running print, so a
+name left over from the previous job cannot block the start. While the printer is busy with the start itself
+(homing, bed mesh, heating beyond the targets it had when the start was requested) the wait goes on; three
+idle minutes, another file printing for five seconds, or thirty minutes in all end it as `not_started`. A
+copy counts when the printer is idle again with `print_stats.state` `complete`, the reported file is the
+job's, and this copy's own job was seen running: the printer's job uuid changed from the one before the
+request, or the printer service showed the file printing (a `complete` left over from the previous copy of
+the same file, under the same uuid, does not count). `cancelled` or `error`, another job taking over (a new
+uuid), or an idle printer without `complete` for a minute leave it uncounted (`stopped`); a pause, a filament
+change or a recovery keeps it running. Telemetry older than 15 s decides nothing. The last copy sets `done`
+and, with `remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a
+counted completion if the printer is idle and no other session holds it, else the job notes `auto_failed`.
+Right before that start the backend checks the Canvas material the Queue page would warn about: every slot
+of the job's mapping must be present in fresh telemetry and hold the file's `filament_type` (the page's rule:
+the slot's type contains the file's material, or the file's material contains the slot's first word); a
+differing, empty or unknown slot, or a file without `filament_type`, holds the copy as `auto_material` for the
+operator, who can review the warning and start it by hand. The external feed (empty mapping) has nothing to
+check. The policy is meant for a bed that clears itself and is off by default. A queue file that cannot be parsed keeps the
+queue closed (`available: false`) and is never rewritten.
+
 ## Completed print readback
 
 `GET /api/printer` adds `print.native` when the existing UDS cache has a fresh

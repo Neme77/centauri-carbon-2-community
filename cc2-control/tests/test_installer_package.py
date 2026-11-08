@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory() as tmp:
         for line in (stage/'SHA256SUMS').read_text().splitlines():
             digest,name=line.split('  ',1);assert hashlib.sha256((stage/name).read_bytes()).hexdigest()==digest
         target=fixture/'opt/usr/cc2-control';target.mkdir(parents=True);(target/'cc2-control').write_bytes(b'OLD')
-        keep=('cc2-control.conf','material-presets.json','ui-preferences.json','bed-plates.json','spools.json')
+        keep=('cc2-control.conf','material-presets.json','ui-preferences.json','bed-plates.json','spools.json','print-queue.json')
         for name in keep:(target/name).write_text('KEEP '+name)
         init=fixture/'init';marker=fixture/'running'
         init.write_text('#!/bin/sh\ncase "$1" in start) touch "'+str(marker)+'";; stop) rm -f "'+str(marker)+'";; esac\n');init.chmod(0o755)

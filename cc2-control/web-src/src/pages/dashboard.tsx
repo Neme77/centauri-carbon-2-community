@@ -1,6 +1,7 @@
 import { useRef, useState } from 'preact/hooks'
 import { Settings } from 'lucide-preact'
 import { PrintTuning } from '@/components/print-tuning'
+import { QueueNext } from '@/components/queue-next'
 import { Card, CardHead } from '@/components/ui/card'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/field'
@@ -196,6 +197,7 @@ export const Dashboard = () => {
                 {t('common.choose_a_file_to_print')}
               </a>
             )}
+            <QueueNext />
             <Progress pct={v.progress} />
             <div class="cc2-job-stats mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 cc2-sm:grid-cols-4">
               {[
