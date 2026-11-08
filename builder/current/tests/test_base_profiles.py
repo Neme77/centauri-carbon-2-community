@@ -38,8 +38,9 @@ for path in sorted((BASE / 'base_profiles').glob('*.json')):
 
 candidate = b.load_base_profile('02.01.01.13')
 open_items = b.profile_placeholders(candidate)
-# Measured from the captured official package; only the AES-protected manifest fields stay open.
-assert open_items == ['manifest.version = TODO_MANIFEST_VERSION', 'manifest.update_class = TODO_MANIFEST_UPDATE_CLASS'], open_items
+# Measured from the captured official package, including the decrypted manifest.
+assert open_items == [], open_items
+assert candidate['manifest'] == {'version': '02.01.01.13', 'update_class': '00.00.00.00'}
 assert candidate['ported_patch_set'] is False and candidate['stock_package'] == 'cc2_eeb001_02.01.01.13_20261020214142.zip.sig'
 for key in ('uboot', 'boot0', 'sw-description', 'resource', 'daemon_stock', 'libcolib'):
     assert candidate['sha256'][key] == q['sha256'][key], key
@@ -73,7 +74,7 @@ with tempfile.TemporaryDirectory() as td:
     else:
         raise AssertionError('base without a patch implementation accepted')
     complete = json.loads((BASE / 'base_profiles/02.01.01.13.json').read_text())
-    complete['ported_patch_set'] = True
+    complete['manifest']['version'] = 'TODO_MANIFEST_VERSION'
     try:
         b.require_buildable_profile(complete)
     except RuntimeError as error:
@@ -84,5 +85,5 @@ with tempfile.TemporaryDirectory() as td:
 # The CLI refuses an unported base before reading keys, firmware or tools.
 r = subprocess.run([sys.executable, str(BASE / 'core/firmware_builder.py'), '--base-version', '02.01.01.13',
                     '--private-key', str(BASE / 'keys/cc2_stock_public.pem')], capture_output=True, text=True)
-assert r.returncode == 1 and 'open placeholder' in r.stderr and 'signing' not in r.stderr.lower(), r.stderr
-print(f'PASS: base profiles; qualified pins unchanged; {len(open_items)} placeholders refused for 02.01.01.13.')
+assert r.returncode == 1 and 'No ported and qualified patch set' in r.stderr and 'signing' not in r.stderr.lower(), r.stderr
+print('PASS: base profiles; qualified pins unchanged; complete 02.01.01.13 profile refused until a patch set is ported.')

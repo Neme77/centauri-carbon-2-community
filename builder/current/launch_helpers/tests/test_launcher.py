@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='cc2 launch test ') as td:
    assert ' ' in str(r) and str(builder) in cmd
  (r/'BASE_FIRMWARE').write_text('02.01.01.13\n')
  try:m.build_arguments(r,'stock',True)
- except RuntimeError as e:assert 'TODO_MANIFEST_VERSION' in str(e)
+ except RuntimeError as e:assert 'No ported patch set' in str(e)
  else:raise AssertionError('placeholder base profile accepted')
  (r/'BASE_FIRMWARE').write_text('02.01.01.07\n')
  try:m.build_arguments(r,'stock',True,True)

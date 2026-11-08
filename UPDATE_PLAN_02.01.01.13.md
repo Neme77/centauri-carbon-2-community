@@ -24,7 +24,9 @@ So wurde das Paket gesichert:
 | Entschlüsselte `.swu` | Länge = `data_size` im Kopf, CPIO newc/crc, gleiche 7 Einträge in gleicher Reihenfolge, `cpio_item_md5` stimmt |
 | RootFS | SquashFS xz, Blockgröße 262144 (wie bisher) |
 | Kernel | `Linux version 5.4.61 … #50 SMP PREEMPT Tue Oct 20` (neu gebaut, gleiche Hauptversion) |
-| Manifest-Inhalt (`version`, `update_class`) | nicht lesbar ohne AES-Eingabe → bleibt Platzhalter |
+| Manifest-Inhalt | `{"version":"02.01.01.13","update_class":"00.00.00.00"}`; das Manifest nennt die innere `.swu.sig` mit der SHA-256 `06fd9fc7…`, passend zu `stock_inner` |
+| AES-Schlüssel | liegt im RootFS als `/opt/inst/daemon-000/aes_key.key` (32 Bytes), SHA-256 identisch mit dem gepinnten AES key v1. Gefunden per Known-Plaintext-Prüfung mit der vom Drucker entschlüsselten `.swu`; lokal abgelegt in `builder/current/keys/cc2_aes_key_v1.bin` (ignoriert, nie veröffentlichen). Im selben Ordner liegt `otakey.pem` (1708 Bytes); diese Datei wurde nicht geöffnet. |
+| Builder-Dekodierung | `decode_stock_package` mit dem 02.01.01.13-Profil: alle Pins, Signaturen und die Entschlüsselung bestehen; die selbst entschlüsselte SWU ist byte-gleich mit der des Druckers |
 
 Pins im Profil `builder/current/base_profiles/02.01.01.13.json` im Vergleich mit 02.01.01.07:
 
@@ -59,7 +61,7 @@ Pins im Profil `builder/current/base_profiles/02.01.01.13.json` im Vergleich mit
 - Das Bootloader-Risiko beim Wechsel zwischen den beiden Basen entfällt: `uboot`/`boot0` sind identisch [belegt].
 - Dual Trust und Reactor-libco können unverändert bleiben [belegt: gleiche Hashes].
 - Zu portieren bleiben die Patches in GUI, `elegoo_printer` und `ai_camera`, die Reactor-Bindings für das neue `elegoo_printer` und eventuell die Kernelmodule (gleiche Version 5.4.61, aber neuer Build; ob sie geladen werden, ist ungeprüft).
-- Abschnitt 5 (Platzhalter) ist überholt: offen sind nur noch `manifest.version`, `manifest.update_class` und `ported_patch_set`.
+- Abschnitt 5 (Platzhalter) ist überholt: Das Profil hat keine Platzhalter mehr. Offen ist nur noch `ported_patch_set` (also die eigentliche Portierung).
 
 Kennzeichnung im ganzen Dokument:
 - **[belegt]** = im Code bzw. Repo gefunden, mit Datei:Zeile, oder selbst gemessen.

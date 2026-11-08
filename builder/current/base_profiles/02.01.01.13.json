@@ -1,14 +1,14 @@
 {
  "version": "02.01.01.13",
- "_comment": "Official ELEGOO OTA 02.01.01.13, captured on 2026-11-08 from the user's own printer (online update, hard-linked by tools/capture/ota_keeper.sh). Outer, inner and manifest ELEG signatures verify with keys/cc2_stock_public.pem and both embedded payload SHA-256 values match. Pins were measured with tools/inspect_base.py and unsquashfs 4.7.5. The build stays refused: the manifest fields need the AES input and no patch set is ported to this base.",
+ "_comment": "Official ELEGOO OTA 02.01.01.13, captured on 2026-11-08 from the user's own printer (online update, hard-linked by tools/capture/ota_keeper.sh). Outer, inner and manifest ELEG signatures verify with keys/cc2_stock_public.pem and both embedded payload SHA-256 values match. Pins were measured with tools/inspect_base.py and unsquashfs 4.7.5. The build stays refused until a patch set is ported to this base.",
  "stock_package": "cc2_eeb001_02.01.01.13_20261020214142.zip.sig",
  "_comment_stock_package": "the device stored it as /opt/usr/firmware/elegoo_firmware; this is the file name embedded in its outer ELEG header plus .sig",
  "embedded_filename_marker": "02.01.01.13",
  "manifest": {
-  "version": "TODO_MANIFEST_VERSION",
-  "update_class": "TODO_MANIFEST_UPDATE_CLASS"
+  "version": "02.01.01.13",
+  "update_class": "00.00.00.00"
  },
- "_comment_manifest": "version and update_class of the decrypted official ota-package-list.json (inspect_base.py with --aes-key). Not readable without the AES input; copy them, never invent or raise them. opt/inst/firmware_version/versions.json in this rootfs reports ota_version 02.01.01.13.",
+ "_comment_manifest": "Read from the decrypted official ota-package-list.json with tools/inspect_base.py and the AES input found as /opt/inst/daemon-000/aes_key.key in this base (same SHA-256 as AES key v1). The manifest also lists the inner .swu.sig with SHA-256 06fd9fc7...35f8, matching stock_inner.",
  "ported_patch_set": false,
  "_comment_ported_patch_set": "true only after Z-offset (GUI), HTTP/network (elegoo_printer) and camera (ai_camera) patches are ported to this base, emulation-tested and hardware-tested. daemon-000 and libcolib.so are byte-identical to 02.01.01.07.",
  "sha256": {
