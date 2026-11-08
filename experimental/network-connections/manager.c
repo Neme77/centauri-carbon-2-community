@@ -268,6 +268,8 @@ static int ng_confirm(ng_journal *j, const char *token, const char *local,
   j->error[0] = 0;
   if (!ng_journal_save(j))
     return 0;
+  if (j->op == NG_SUPPORT)
+    unlink(NG_STATE "/exhaust-network-boot");
   ng_event("connection_confirmed");
   return 1;
 }
@@ -460,7 +462,24 @@ static int ng_request_run(ng_request *r, const char *local, const char *peer,
     goto done;
   }
   if (desired.ethernet_support && !ng_runtime_enable(&j)) {
-    ng_restore(&j, "native_activation_failed", 0);
+    char diagnostic[128];
+    size_t size;
+    int exhaust = r->op == NG_SUPPORT && r->enabled &&
+                  !previous.ethernet_support &&
+                  ng_read_file(NG_RUN "/last-command.txt", diagnostic,
+                               sizeof(diagnostic), &size, 1) &&
+                  !strcmp(diagnostic,
+                          "activation:fan_trial_requires_full_idle_reboot\n");
+    int restored = ng_restore(&j, "native_activation_failed", 0);
+    if (exhaust && restored &&
+        ng_atomic(NG_STATE, "exhaust-network-boot", j.boot, 36)) {
+      ng_copy(j.error, sizeof(j.error), "ethernet_exhaust_reboot_prepared");
+      if (ng_journal_save(&j)) {
+        result = ng_error(j.error);
+        goto done;
+      }
+      unlink(NG_STATE "/exhaust-network-boot");
+    }
     result = ng_error("native_activation_failed");
     goto done;
   }
@@ -520,7 +539,9 @@ int main(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "--enabled")) {
     ng_config c;
     ng_event("startup_profile_check_started");
-    int enabled = ng_effective_config(&c) && c.ethernet_support &&
+    int enabled = ng_effective_config(&c) &&
+                  (c.ethernet_support ||
+                   ng_exhaust_boot_requested("/opt/usr/cc2-cavity-floor/enabled")) &&
                   ng_check_profile("boot");
     ng_event(enabled ? "startup_profile_check_ready"
                      : "startup_profile_check_inactive");
@@ -528,6 +549,8 @@ int main(int argc, char **argv) {
   }
   if (argc == 2 && !strcmp(argv[1], "--ensure"))
     return ng_ensure_boot() ? 0 : 1;
+  if (argc == 2 && !strcmp(argv[1], "--wait-camera-link"))
+    return ng_wait_camera_link() ? 0 : 1;
   if (argc == 2 && !strcmp(argv[1], "--boot"))
     return ng_boot_run() ? 0 : 1;
   if (argc == 2 && !strcmp(argv[1], "--seed"))

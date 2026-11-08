@@ -1191,6 +1191,8 @@
   "network.selected": "正在使用",
   "network.frequency": "频率",
   "network.action_pending": "正在切换连接…",
+  "network.ethernet_exhaust_reboot_prepared": "以太网准备已保存。请在打印机空闲时关机再开机，然后在连接页面重新启用 USB 以太网。",
+  "network.ethernet_exhaust_blocked": "当 EXHAUST 最低转速功能处于启用状态，且正在运行的打印机服务未加载网络组件时，无法启用 USB 以太网。",
   "network.action_failed": "操作失败。请打开诊断查看结果。",
   "network.connections": "连接",
   "network.cc2_access": "CC2 访问",

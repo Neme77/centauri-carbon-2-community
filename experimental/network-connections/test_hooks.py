@@ -17,6 +17,12 @@ with tempfile.TemporaryDirectory(prefix='connections-hooks-') as tmp:
             raw=source.read_bytes();assert hashlib.sha256(raw).hexdigest()==sha
             result=subprocess.run([*awk,'-v',f'mode={mode}','-f',root/'prepare-hooks.awk',source],check=True,capture_output=True).stdout
             assert result!=raw and result.count(b'/control --enabled')==1
+            wait=b'/control --wait-camera-link'
+            if mode=='camera-entry':
+                assert result.count(wait)==1
+                assert result.index(b'/control --ensure')<result.index(wait)<result.index(b'exec "$CAMERA"',result.index(wait))
+            else:
+                assert wait not in result
             # Every original line remains, in order, including all guards and
             # the unmodified native fallback. Only delegates are inserted.
             original=iter(result.splitlines())

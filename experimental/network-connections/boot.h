@@ -1,6 +1,17 @@
 #ifndef CC2_CONNECTIONS_BOOT_H
 #define CC2_CONNECTIONS_BOOT_H
 /* Included after the transaction functions. No long-lived manager daemon. */
+/* The request loads startup delegates only. The saved network configuration
+ * and the usual Ethernet confirmation transaction stay independent. */
+static inline int ng_exhaust_boot_requested(const char *floor_enabled) {
+  char requested[40], boot[40];
+  size_t size;
+  return ng_boot_id(boot) &&
+         ng_read_file(NG_STATE "/exhaust-network-boot", requested,
+                      sizeof(requested), &size, 1) &&
+         size == 36 && memcmp(requested, boot, 36) &&
+         !access(floor_enabled, F_OK);
+}
 static inline int ng_wifi_compatible(void) {
   char sha[65];
   return ng_hash_file("/bin/wifi_daemon", sha) &&
@@ -153,6 +164,19 @@ static inline int ng_seed_installation(void) {
   ng_seed_wifi();
   return ng_blob_write(NG_STATE, "config.bin", &c, sizeof(c));
 }
+static inline int ng_wait_camera_link(void) {
+  ng_config c;
+  if (!ng_effective_config(&c) || !c.managed || !c.ethernet_support ||
+      !c.link[NG_ETHERNET].enabled)
+    return 1;
+  long long deadline = ng_now() + 35000;
+  while (!ng_carrier(NG_ETHERNET) && ng_now() < deadline)
+    poll(NULL, 0, 250);
+  int ready = ng_carrier(NG_ETHERNET);
+  ng_event(ready ? "camera_ethernet_carrier_ready"
+                 : "camera_ethernet_carrier_timeout");
+  return ready;
+}
 static inline int ng_boot_run(void) {
   if (!ng_directory(NG_RUN) || !ng_directory(NG_STATE))
     return 0;
@@ -199,6 +223,15 @@ static inline int ng_boot_run(void) {
   }
   ng_event("boot_profile_check_ready");
   if (config.ethernet_support) {
+    /* The camera may be waiting for carrier before publishing its marker.
+     * Bring up the qualified link first; addresses and routes still follow
+     * native service verification. */
+    if (config.link[NG_ETHERNET].enabled &&
+        (!ng_load_drivers() ||
+         !ng_sysctl_iface(NG_ETHERNET, "ipv6", "disable_ipv6", "1\n") ||
+         !ng_command("ip", NULL, 0, 2, "link", "set", "dev",
+                     ng_name(NG_ETHERNET), "up", NULL)))
+      ng_event("boot_ethernet_link_preparation_failed");
     ng_event("boot_wait_native_services");
     long long wait = ng_now() + 80000;
     while (!ng_raw_runtime_markers() && ng_now() < wait)
