@@ -1,3 +1,6 @@
+#ifndef CC2_CONTROL_VERSION
+#define CC2_CONTROL_VERSION "1.2.27"
+#endif
 #define main cc2_original_main
 #include "../src/main.c"
 #undef main
