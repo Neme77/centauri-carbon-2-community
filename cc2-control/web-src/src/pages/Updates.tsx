@@ -2,6 +2,7 @@ import { lanRequest, useLanCode } from '@/lib/lan-code'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { PasswordInput } from '@/components/ui/field'
 import { ask } from '@/lib/confirm'
 import { errText, notify } from '@/lib/api'
@@ -12,7 +13,7 @@ import { checkUpdates, compatible, newer, refresh, releaseNotes, status, updateC
 export const Updates = () => {
   usePoll(refresh, 2000)
   const [code, setCode, clearCode] = useLanCode()
-  const state = status.use().data
+  const { data: state, disconnected } = status.use()
   const superseded = state?.phase === 'complete' && !state.busy && newer(state.installed, state.version)
   const phase = superseded ? 'none' : state?.phase
   const language = i18n.use().lang
@@ -20,12 +21,27 @@ export const Updates = () => {
   const [working, setWorking] = useState(false),
     [error, setError] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [showProgress, setShowProgress] = useState(false)
   const mounted = useRef(true),
     selection = useRef(0)
   const release = compatible(index, state?.firmware || '', 'stable')[0]
   const available = release && newer(release.version, state?.installed || '')
   const notes = available ? releaseNotes(release, language) : null
   const busy = working || Boolean(state?.busy)
+  const statusText =
+    disconnected && busy
+      ? t('updates.reconnecting')
+      : phase === 'reconciled'
+        ? t('updates.up_to_date')
+        : phase === 'complete'
+          ? t('updates.complete')
+          : phase === 'failed' || phase === 'interrupted'
+            ? t('updates.failed')
+            : phase === 'ready'
+              ? t('updates.verified')
+              : busy
+                ? t('updates.working')
+                : t('updates.idle')
   const runCheck = async (force = true) => {
     setError('')
     try {
@@ -162,19 +178,34 @@ export const Updates = () => {
         </Button>
       </details>
       <p class="mt-4">
-        {t('updates.status')}{' '}
-        {t(
-          phase === 'complete'
-            ? 'updates.complete'
-            : phase === 'failed' || phase === 'interrupted'
-              ? 'updates.failed'
-              : phase === 'ready'
-                ? 'updates.verified'
-                : busy
-                  ? 'updates.working'
-                  : 'updates.idle'
-        )}
+        {t('updates.status')} {statusText}
       </p>
+      <Button class="mt-3" onClick={() => setShowProgress(true)}>
+        {t('updates.progress')}
+      </Button>
+      {showProgress && (
+        <Dialog label={t('updates.progress')} onClose={() => setShowProgress(false)}>
+          <DialogTitle>{t('updates.progress')}</DialogTitle>
+          <p role="status" class="my-3">
+            {statusText}
+          </p>
+          {phase && phase !== 'none' && phase !== 'reconciled' && (
+            <p class="mb-3">
+              <code>{phase}</code>
+            </p>
+          )}
+          <label class="block">
+            {t('updates.progress_log')}
+            <textarea
+              class="my-2 block w-full font-mono text-sm"
+              rows={12}
+              readOnly
+              value={state?.progress_log || ''}
+            />
+          </label>
+          <Button onClick={() => setShowProgress(false)}>{t('updates.close_progress')}</Button>
+        </Dialog>
+      )}
       {state?.version && !superseded && (
         <p>
           {t('updates.selected')} {state.version}
