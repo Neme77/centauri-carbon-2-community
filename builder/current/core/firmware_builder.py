@@ -531,14 +531,16 @@ def main():
  ap.add_argument('--require-golden',action='store_true',help='fail on functional/content regression; byte-level metadata differences are informational')
  a=ap.parse_args()
  if a.signing_mode=='stock' and not a.private_key: ap.error('--signing-mode stock requires --private-key')
+ if not a.check_signing_key_only:
+  # Refuse an unported or incomplete ELEGOO base before keys, firmware or tools are read.
+  profile=require_buildable_profile(load_base_profile(a.base_version or selected_base_version()))
+  pins=profile['sha256']; base_version=profile['version']
+  print(f"[OK] ELEGOO base profile: {base_version}")
+  if a.stock_package is None: a.stock_package=str(here/'original_firmware'/profile['stock_package'])
  priv=req(a.private_key or here/'keys'/'cc2_community_release_private.pem','private key')
  signing_key=verify_signing_key(priv,a.signing_mode)
  if a.check_signing_key_only:
   print('SIGNING KEY CHECK PASS; no firmware built or installed'); return 0
- profile=require_buildable_profile(load_base_profile(a.base_version or selected_base_version()))
- pins=profile['sha256']; base_version=profile['version']
- print(f"[OK] ELEGOO base profile: {base_version}")
- if a.stock_package is None: a.stock_package=str(here/'original_firmware'/profile['stock_package'])
  release_tag='STOCK_BOOTSTRAP' if a.signing_mode=='stock' else 'COMMUNITY'
  fw_tag=firmware_release_version().replace('.','_')
  a.output=a.output or ('CC2_FULL_V'+fw_tag+'_'+release_tag+'.zip.sig')

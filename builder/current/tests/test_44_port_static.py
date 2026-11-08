@@ -22,7 +22,8 @@ assert "'-dumpversion'" in prepare and "'6.5.0'" in prepare
 assert "'test', 'CROSS=', 'CC=gcc'" in (BASE / 'prepare.py').read_text(encoding='utf-8')
 assert "shutil.copyfile(SOURCE/'dual_verify_44.bin',HERE/'dualtrust/dual_verify.bin')" in prepare
 launcher = (BASE / 'launch_helpers/run_build.py').read_text(encoding='utf-8')
-assert 'cc2_eeb001_02.01.01.07_20260922210235.zip.sig' in launcher
+assert "base_profile(root)['stock_package']" in launcher
+assert builder.QUALIFIED_PROFILE['stock_package'] == 'cc2_eeb001_02.01.01.07_20260922210235.zip.sig'
 assert '02.01.00.00' not in launcher
 entry = (BASE / 'Build-Release.ps1').read_text(encoding='utf-8')
 assert 'UpdaterOnly' not in entry and 'PrinterIp' not in entry
