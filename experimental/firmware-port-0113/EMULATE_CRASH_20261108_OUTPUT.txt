@@ -1,0 +1,8 @@
+Crash-Regressionstest gegen WORK/corrected_v2/elegoo_printer.patched
+  Einstieg 0xcc50c0 (bl get_mode), get_mode() auf 'aktiv' (1) gezwungen
+  erreichtes Ziel: 0x895504
+  korrektes Ziel (0x895504)? True
+  altes defektes Ziel (0x87b538)? False
+
+PASS: Absturzpfad vom 2026-11-08 (korrigiert, erreicht den richtigen Call)
+LIMIT: nur Kontrollfluss an dieser einen Stelle; Hardware-Bestaetigung bleibt noetig.

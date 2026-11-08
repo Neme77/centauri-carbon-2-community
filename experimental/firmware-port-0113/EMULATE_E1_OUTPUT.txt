@@ -1,4 +1,4 @@
-E1 Emulation gegen WORK/ec-eeb001-gui.patched
+E1 Emulation gegen WORK/corrected_v2/ec-eeb001-gui.patched
   Z-Offset-Pfad (0x74bd0) erreicht? True   (soll True)
   data_get_print_status (0xae640) aufgerufen? False   (soll False)
   PC-Pfad (Anfang): ['0x747c8', '0x74bd0', '0x74bd4', '0x74bd8', '0x811f8', '0x811fc']

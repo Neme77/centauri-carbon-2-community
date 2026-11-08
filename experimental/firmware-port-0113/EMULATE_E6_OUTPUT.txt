@@ -1,4 +1,4 @@
-E6 Emulation gegen WORK/elegoo_printer.k1
+E6 Emulation gegen WORK/corrected_v2/elegoo_printer.patched
   stop_http_server_file (0x827148) aufgerufen? False   (soll: False)
   Funktion bis Ruecksprung gelaufen? True   (soll: True)
   andere Aufrufe (andere Stop-Pfade): 7  -> ['0x8272c8', '0x257724', '0x7d9900', '0xd1b7c', '0xcc638', '0xc6170', '0x14a2a4']

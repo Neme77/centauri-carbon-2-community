@@ -2,16 +2,25 @@
 
 What to include, in what order, and what to explicitly leave out.
 
-## 1. Correct the existing GitHub issue first
+## 1. Correct the existing GitHub posts first
 
-The issue already posted references `elegoo_printer.k1`
-(`adb8529358f12c7f5f10dcfdd8a9e30a0c385cb6bfd8b404d8bcb42b5d6abcc6`), which
-`OPEN_QUESTIONS.md` point 0 shows has a defective payload body. Before
-sending anything else: either edit that issue or add a correction comment
-pointing at the corrected hash
-(`2828a99a42993788bbe39675909d832ed67fe1f2ab432d1ae305bad2524f8f4a`) and
-explaining why. Sending new material without correcting this first would
-leave two contradictory claims live at once.
+Two corrections are now pending, both already superseded by
+`WORK/corrected_v2/elegoo_printer.patched`
+(`688b7bf8a27762d56b35d9738ea5b0c3d45580b402e122b0f77ee49dab1a8cfd`):
+
+1. Issue #334 references `elegoo_printer.k1`
+   (`adb8529358f12c7f5f10dcfdd8a9e30a0c385cb6bfd8b404d8bcb42b5d6abcc6`),
+   which `OPEN_QUESTIONS.md` point 0 shows has a defective payload body.
+2. PR #336 references `WORK/corrected/elegoo_printer.patched`
+   (`2828a99a42993788bbe39675909d832ed67fe1f2ab432d1ae305bad2524f8f4a`),
+   which a real-hardware test crashed (SIGSEGV) — root cause and fix in
+   `OPEN_QUESTIONS.md`'s 2026-11-08 entry.
+
+Before sending anything else: push the fix and post a correction comment on
+both, pointing at `688b7bf8…` and explaining why (same pattern as the first
+correction already posted on issue #334). Sending new material without
+correcting this first would leave contradictory claims live at once — and
+in this case, an actually-crashing binary still referenced as current.
 
 ## 2. Documents to attach/link (all in `experimental/firmware-port-0113/`)
 
@@ -26,6 +35,8 @@ leave two contradictory claims live at once.
 | `emulate_e1.py`, `emulate_e2.py`, `emulate_e345.py`, `emulate_e6.py` | Emulation harnesses |
 | `compare_patched_binaries.py` | Diffs two patched binaries function-by-function — for comparing an independent port directly |
 | `DISASSEMBLY_LANSTRATEGY_START.txt`, `COMPARE_TOOL_SELFTEST_OUTPUT.txt` | Evidence: full disassembly confirming the one previously-inferred branch target; self-test of the comparison tool |
+| `scan_payload_branches.py`, `emulate_crash_20261108.py` | Found and regression-tests the 2026-11-08 real-hardware crash fix (6 unrelocated branches + 2 stale string pointers in the payload) |
+| `SCAN_PAYLOAD_BRANCHES_OUTPUT.txt`, `EMULATE_CRASH_20261108_OUTPUT.txt` | Evidence for that crash fix |
 | `VERIFY_OUTPUT.txt`, `EMULATE_E1_OUTPUT.txt`, `EMULATE_E2_OUTPUT.txt`, `EMULATE_E345_OUTPUT.txt`, `EMULATE_E6_OUTPUT.txt` | Captured evidence of the above (re-run against the corrected binary) |
 | Existing analysis docs (`README.md`, `DIFF_BLOCKS.md`, `PORTING_METHODOLOGY.md`, `PAYLOAD_BASE_FIXATION_AND_BRANCH_PLAN.md`, `K1_FEASIBILITY.md`, `K1_RESTRUCTURE_SPEC.md`, `TEST_MATRIX.md`, `RISK_LIST.md`, `COMPATIBILITY_AND_ROLLBACK.md`, `EMULATION_PLAN.md`, `HARDWARE_TEST_*.md`, `ROLLBACK_PLAN.md`) | Background, already referenced from the above |
 

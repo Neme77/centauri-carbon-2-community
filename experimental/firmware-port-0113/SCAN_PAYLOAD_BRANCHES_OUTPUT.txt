@@ -1,0 +1,17 @@
+OLD payload: ../../builder/current/analysis/stock-02.01.01.07/elegoo_printer
+NEW payload: ../../builder/current/analysis/02.01.01.13/rootfs/opt/bin/elegoo_printer
+Bereits bekannte (GROUP_B) Offsets: ['0x10c', '0x110', '0x114', '0x120', '0x12c', '0x13c', '0x170', '0x17c', '0x1d8', '0x1f0', '0x34', '0x38', '0x40', '0x58', '0x94', '0xdc', '0xfc']
+
+=== NEU GEFUNDENE, NICHT-RELOZIERTE BRANCHES (6) ===
+  off    0xc  b   cond=1  old_target=0x812498  -> communication::NetworkManager::set_mode(NetworkMode)+0x68c  NEW TARGET = 0x819c28  (eindeutig)
+  off   0x18  b   cond=0  old_target=0x812498  -> communication::NetworkManager::set_mode(NetworkMode)+0x68c  NEW TARGET = 0x819c28  (eindeutig)
+  off   0x24  b   cond=1  old_target=0x812498  -> communication::NetworkManager::set_mode(NetworkMode)+0x68c  NEW TARGET = 0x819c28  (eindeutig)
+  off   0x30  b   cond=0  old_target=0x812498  -> communication::NetworkManager::set_mode(NetworkMode)+0x68c  NEW TARGET = 0x819c28  (eindeutig)
+  off   0x50  b   cond=0  old_target=0x81f18c  -> communication::LanStrategy::start()+0x27c  NEW TARGET = 0x82691c  (eindeutig)
+  off  0x11c  b   cond=1  old_target=0x88dd74  -> api_module::DeviceStatus::post_change_message(nlohmann::json_abi_v3_12_0::basic_json<std::map, std::vector, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>, bool, long long, unsigned long long, double, std::allocator, nlohmann::json_abi_v3_12_0::adl_serializer, std::vector<unsigned char, std::allocator<unsigned char>>, void> const&) const+0x304  NEW TARGET = 0x895504  (eindeutig)
+
+=== movw/movt ABSOLUTE-ADDRESS PAARE (2) ===
+  off  0x1d0  r1  value=0xcd7974  self-reference (points inside the payload itself)  NEW TARGET = 0xcc5138  ()
+  off  0x1e8  r1  value=0xcd798c  self-reference (points inside the payload itself)  NEW TARGET = 0xcc5150  ()
+
+Alle gefundenen Stellen eindeutig aufgeloest.

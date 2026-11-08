@@ -46,6 +46,24 @@ real 02.01.01.07 payload logic in the first place — **see
 body instruction at that offset, not zero; the 17 words above are identical
 in both builds (only the surrounding ~353 bytes differ).
 
+### 2b. 6 additional payload-internal branches + 2 string-pointer relocations
+
+Found by `scan_payload_branches.py` after a real-hardware crash on
+2026-11-08 traced to the `0x11c` entry below; these were missing from the
+original "17 branches" list (section 2) and were never relocated in either
+prior corrected build. See `OPEN_QUESTIONS.md` for the crash analysis.
+
+| Payload off. | Type | Old target (stale) | New target (fixed) | Target symbol |
+|---|---|---|---|---|
+| `0x00c` | `b.c1` (cond 1) | `0x7ffc5c` (garbage) | `0x819c28` | `NetworkManager::set_mode+0x68c` |
+| `0x018` | `b.c0` (cond 0) | `0x7ffc5c` (garbage) | `0x819c28` | same |
+| `0x024` | `b.c1` | `0x7ffc5c` (garbage) | `0x819c28` | same |
+| `0x030` | `b.c0` | `0x7ffc5c` (garbage) | `0x819c28` | same |
+| `0x050` | `b.c0` | `0x80c950` (garbage) | `0x82691c` | `LanStrategy::start+0x27c` |
+| `0x11c` | `b.c1` | `0x87b538` (garbage, **the 2026-11-08 crash site**) | `0x895504` | `post_change_message+0x304` |
+| `0x1d0`/`0x1d4` (movw/movt r1, cond EQ) | data | `0xcd7974` (→ `spdlog::details::days` in new build) | `0xcc5138` | payload's own `"CC2_LAN_MQTT_CHECK_TICK"` string |
+| `0x1e8`/`0x1ec` (movw/movt r1, cond EQ) | data | `0xcd798c` (→ `spdlog::details::days+0x18`) | `0xcc5150` | payload's own `"CC2_LAN_MQTT_RETRY_CONNECTION"` string |
+
 ### 3. 2 verbatim block-inserts
 
 | Old VA | New VA | File offset | Size | Source |
@@ -110,6 +128,7 @@ need no recoding — verified byte-for-byte against both manifests).
 
 ## Totals
 
-17 payload-internal + 12 payload-reference + 2 cross-function + 10 verbatim +
-2 block-inserts (code) + 16 structural fields (no code) in `elegoo_printer`,
-plus 1 word each in `ec-eeb001-gui` and `ai_camera`.
+17 + 6 payload-internal branches + 2 string-pointer relocations + 12
+payload-reference + 2 cross-function + 10 verbatim + 2 block-inserts (code) +
+16 structural fields (no code) in `elegoo_printer`, plus 1 word each in
+`ec-eeb001-gui` and `ai_camera`.

@@ -10,8 +10,10 @@ What it writes, in order (elegoo_printer):
   1. Builds the 500-byte coexistence payload from the ORIGINAL
      experimental/firmware-port/network44-manifest.json "after" field for
      va=0xcd77e8 (the real 02.01.01.07 LAN/WAN coexistence logic), with the
-     17 payload-internal branch words (GROUP_B) overlaid at their
-     payload-relative offsets. See "Known issue fixed here" below.
+     17 payload-internal branch words (GROUP_B), 6 more branches
+     (EXTRA_BRANCHES) and 2 string-pointer relocations (STRING_RELOCS)
+     overlaid at their payload-relative offsets. See "Known issues fixed
+     here" below.
   2. Runs the K1 ELF restructure (same logic as k1_restructure.py) with that
      payload, producing the behavior-neutral restructured binary.
   3. Writes the two verbatim block-inserts (112 B @ old VA 0x812128, 444 B @
@@ -27,8 +29,8 @@ What it writes, in order (elegoo_printer):
 GUI and camera are single-instruction patches, written after a before-byte
 check against the stock file.
 
-Known issue fixed here (see OPEN_QUESTIONS.md, point 0): the elegoo_printer.k1
-built manually earlier in this port (SHA-256
+Known issue #1, fixed here (see OPEN_QUESTIONS.md, point 0): the
+elegoo_printer.k1 built manually earlier in this port (SHA-256
 adb8529358f12c7f5f10dcfdd8a9e30a0c385cb6bfd8b404d8bcb42b5d6abcc6, already
 referenced in the GitHub handoff issue) has its payload built from a template
 that was NOT the real network44-manifest after-field: ~353 of 500 payload
@@ -37,8 +39,25 @@ bytes are zero instead of the original LAN/WAN coexistence logic, so only the
 to connect is missing. verify_patched.py does not catch this because it only
 checks branch targets, not payload body content. This script sources the
 payload from the real manifest, so its output's payload-body hash differs
-from (and corrects) the earlier one. It does NOT overwrite the earlier
-elegoo_printer.k1; it writes to a new path for comparison.
+from (and corrects) the earlier one.
+
+Known issue #2, fixed here (see OPEN_QUESTIONS.md, the 2026-11-08 crash entry):
+a real-hardware test of the first corrected build (SHA-256
+2828a99a42993788bbe39675909d832ed67fe1f2ab432d1ae305bad2524f8f4a) crashed
+with SIGSEGV (pc=0) during "RTC WAN streaming enabled". Root cause: the
+"17 branches" list (GROUP_B) used to build the payload was itself incomplete.
+`scan_payload_branches.py` (read-only) found 6 more branches and 2
+movw/movt absolute-address pairs inside the payload that were never
+relocated and still pointed at stale 02.01.01.07 addresses -- one of them
+(payload offset 0x11c, right after a known-good branch whose return address
+matches the crash's reported `lr`) plausibly explains the crash directly.
+This script now also applies EXTRA_BRANCHES and STRING_RELOCS (both derived
+by, and cross-checked against, scan_payload_branches.py's output) on top of
+the GROUP_B branches, so its output's payload-body hash differs from (and
+corrects) that second build too.
+
+Neither corrected build overwrites the earlier one; each writes to a new
+path for comparison.
 
 Usage:
   python3 apply_patches.py STOCK_PRINTER STOCK_GUI STOCK_CAMERA OUT_DIR
@@ -76,6 +95,21 @@ BLOCK_INSERTS = [  # (old va, new va, size) -- after bytes read live from http44
 GUI_PATCH = dict(off=0x647C8, before="9ce700eb", after="000100ea", desc="b 0x74bd0 (skip data_get_print_status)")
 CAMERA_PATCH = dict(off=0x12287C, before="b1df00eb", after="dddf00eb", desc="bl 0x16a7f8 resume (was pause)")
 
+# 6 payload-internal branches GROUP_B missed (found by scan_payload_branches.py
+# after the 2026-11-08 real-hardware crash). (payload_offset, kind, cond, new_target)
+EXTRA_BRANCHES = [
+    (0x00C, "b", 0x1, 0x819C28),  # NetworkManager::set_mode+0x68c
+    (0x018, "b", 0x0, 0x819C28),
+    (0x024, "b", 0x1, 0x819C28),
+    (0x030, "b", 0x0, 0x819C28),
+    (0x050, "b", 0x0, 0x82691C),  # LanStrategy::start+0x27c
+    (0x11C, "b", 0x1, 0x895504),  # post_change_message+0x304 -- the crash site
+]
+
+# 2 movw/movt string-pointer pairs GROUP_B missed (self-references into the
+# payload's own embedded strings; relocate by the same delta as the payload).
+STRING_RELOCS = [0x1D0, 0x1E8]  # movw at this offset, movt at offset+4, both reg r1
+
 
 def fail(msg):
     print("FEHLER:", msg, file=sys.stderr)
@@ -102,6 +136,15 @@ def branch_word(src, dst, kind, cond=0xE):
     return struct.pack("<I", word)
 
 
+def rewrite_movwt_imm16(old_word, new_imm16):
+    """Replace only the 16-bit immediate of a movw/movt word, preserving its
+    condition code, opcode (movw vs movt) and destination register exactly."""
+    imm4 = (new_imm16 >> 12) & 0xF
+    imm12 = new_imm16 & 0xFFF
+    word = (old_word & ~(0xF << 16) & ~0xFFF) | (imm4 << 16) | imm12
+    return struct.pack("<I", word)
+
+
 def build_payload():
     """Payload = real network44 after-field + the 17 branch words overlaid."""
     net_manifest = os.path.join(REPO_FIRMWARE_PORT, "network44-manifest.json")
@@ -113,6 +156,23 @@ def build_payload():
         # Instruction kind comes from the GROUP_B label text ("bl ..." / "b  ...").
         kind = "bl" if label.strip().startswith("bl") else "b"
         base_payload[off:off + 4] = branch_word(off + PAYLOAD_VA, dst, kind)
+
+    # 6 additional branches scan_payload_branches.py found (not in GROUP_B).
+    for off, kind, cond, dst in EXTRA_BRANCHES:
+        base_payload[off:off + 4] = branch_word(off + PAYLOAD_VA, dst, kind, cond=cond)
+
+    # 2 movw/movt string-pointer pairs: relocate self-reference by the payload's
+    # own base delta, preserving each word's original condition code untouched.
+    delta = PAYLOAD_VA - OLD_PAYLOAD_VA
+    for off in STRING_RELOCS:
+        movw_old = struct.unpack_from("<I", base_payload, off)[0]
+        movt_old = struct.unpack_from("<I", base_payload, off + 4)[0]
+        old_imm16 = ((movw_old >> 16) & 0xF) << 12 | (movw_old & 0xFFF)
+        old_imm16_hi = ((movt_old >> 16) & 0xF) << 12 | (movt_old & 0xFFF)
+        old_abs = (old_imm16_hi << 16) | old_imm16
+        new_abs = old_abs + delta
+        base_payload[off:off + 4] = rewrite_movwt_imm16(movw_old, new_abs & 0xFFFF)
+        base_payload[off + 4:off + 8] = rewrite_movwt_imm16(movt_old, (new_abs >> 16) & 0xFFFF)
     return bytes(base_payload)
 
 
