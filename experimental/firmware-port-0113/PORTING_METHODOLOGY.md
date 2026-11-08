@@ -88,6 +88,26 @@ delta = 0x10800 − 0x10300 − 8 = 0x4F8
 word = 0xEA00013E  → bytes: 3E 01 00 EA
 ```
 
+Worked example (verified, real branch — NOT a patch). This reproduces an
+**unmodified** instruction already present in the 02.01.01.13 `elegoo_printer`
+build, as a check that the formula and the read addresses agree. It is a
+reference instruction, not a change to apply; its bytes are exactly what the
+listing already contains.
+
+`bl communication::HTTPServer::remove_client`, read at `A = 0x857264`, target
+`T = 0x859758`:
+```
+delta = 0x859758 − 0x857264 − 8 = 0x24EC
+0x24EC mod 4 = 0                      (word-aligned)
+−0x2000000 ≤ 0x24EC < 0x2000000       (in range)
+imm24 = (0x24EC >> 2) & 0xFFFFFF = 0x93B
+word  = 0xEB000000 | 0x93B = 0xEB00093B   (BL, base 0xEB000000)
+bytes = 3B 09 00 EB
+```
+The listing at `0x857264` already reads `3B 09 00 EB`, so the recomputed word
+matches the real instruction. This only confirms the encoding at a known-good
+`bl`; it is not a ported patch and must not be injected anywhere.
+
 ### 6. Distinguish branches from data-address loads
 Not every changed word is a branch. An address load uses `movw`/`movt`:
 ```

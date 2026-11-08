@@ -1,0 +1,46 @@
+Payload-Basis 0xcc4fac  (Arbeitsbasis, nicht final)
+  [PASS] Payload-Bereich nicht nur Null (platziert)
+  [PASS] [B] bl LanStrategy::start @0xcc4fe0 -> 0x8266a0 (erw 0x8266a0)
+  [PASS] [B] b  set_mode+0x68c @0xcc4fe4 -> 0x819c28 (erw 0x819c28)
+  [PASS] [B] bl get_instance (+0x2530) @0xcc4fec -> 0x25859c (erw 0x25859c)
+  [PASS] [B] b  start+0x11c (strukturell belegt) @0xcc5004 -> 0x8267bc (erw 0x8267bc)
+  [PASS] [B] bl stop_mqtt_client @0xcc5040 -> 0x8272c8 (erw 0x8272c8)
+  [PASS] [B] bl LanStrategy::report_message @0xcc5088 -> 0x8269dc (erw 0x8269dc)
+  [PASS] [B] b  LanStrategy::report_message @0xcc50a8 -> 0x8269dc (erw 0x8269dc)
+  [PASS] [B] b  WanStrategy::report_message @0xcc50b8 -> 0x825148 (erw 0x825148)
+  [PASS] [B] bl get_instance (+0x2530) @0xcc50bc -> 0x25859c (erw 0x25859c)
+  [PASS] [B] bl get_mode @0xcc50c0 -> 0x819c30 (erw 0x819c30)
+  [PASS] [B] b  post_change_message+0x57c @0xcc50cc -> 0x89577c (erw 0x89577c)
+  [PASS] [B] bl strcmp (PLT, -0xd8) @0xcc50d8 -> 0xbffb8 (erw 0xbffb8)
+  [PASS] [B] bl DeviceStatus::getInstance @0xcc50e8 -> 0x882290 (erw 0x882290)
+  [PASS] [B] bl std::string::append (PLT, -0xe4) @0xcc511c -> 0xbf70c (erw 0xbf70c)
+  [PASS] [B] bl strcmp (PLT, -0xd8) @0xcc5128 -> 0xbffb8 (erw 0xbffb8)
+  [PASS] [B] b  std::string ctor (PLT, -0xe4) @0xcc5184 -> 0xbf1e4 (erw 0xbf1e4)
+  [PASS] [B] b  std::string ctor (PLT, -0xe4) @0xcc519c -> 0xbf1e4 (erw 0xbf1e4)
+  [PASS] [A] 0x811c10 NetworkManager::stop @0x8193a0 -> 0xcc5008 (erw 0xcc5008)
+  [PASS] [A] 0x811c70 report_message @0x819400 -> 0xcc5050 (erw 0xcc5050)
+  [PASS] [A] 0x812124 set_mode @0x8198b4 -> 0xcc5008 (erw 0xcc5008)
+  [PASS] [A] 0x81f028 LanStrategy::start @0x8267b8 -> 0xcc4fe8 (erw 0xcc4fe8)
+  [PASS] [A] 0x88dd54 post_change_message @0x8954e4 -> 0xcc5090 (erw 0xcc5090)
+  [PASS] [A] 0x88dd70 post_change_message @0x895500 -> 0xcc50bc (erw 0xcc50bc)
+  [PASS] [A] 0x88dfc4 post_change_message @0x895754 -> 0xcc50ac (erw 0xcc50ac)
+  [PASS] [A] 0x812158 set_mode (DIFF) @0x8198e8 -> 0xcc4fac (erw 0xcc4fac)
+  [PASS] [A] 0x851754 check_token (DIFF) @0x858ee4 -> 0xcc50d0 (erw 0xcc50d0)
+  [PASS] [A] 0x851924 check_token (DIFF) @0x8590b4 -> 0xcc50d0 (erw 0xcc50d0)
+  [PASS] [A] 0x837168 AsyncMQTTConnector (DIFF) @0x83e8f8 -> 0xcc5170 (erw 0xcc5170)
+  [PASS] [A] 0x8371a0 AsyncMQTTConnector (DIFF) @0x83e930 -> 0xcc5188 (erw 0xcc5188)
+  [PASS] [X] 0x850eb4 handle_file_cancel -> handle_file_upload @0x858644 -> 0x857160 (erw 0x857160)
+  [PASS] [X] 0x852500 handle_upload_timeout -> handle_file_upload @0x859c90 -> 0x857140 (erw 0x857140)
+  [PASS] [V] 0x81f1b4 LanStrategy::stop NOP @0x816944
+  [PASS] [V] 0x811c0c NetworkManager owner (Daten) @0x80939c
+  [PASS] [V] 0x812120 NetworkManager owner (Daten) @0x8098b0
+  [PASS] [V] 0x84ec20 admit PRINTING=2 (Daten) @0x8463b0
+  [PASS] [V] 0x850238 upload guard (bl in-func) @0x8479c8
+  [PASS] [V] 0x8509a8 upload guard (bl in-func) @0x848138
+  [PASS] [V] 0x88db48 formatter (Daten) @0x8852d8
+  [PASS] [V] 0x812494 ensure HTTP started (b in-func) @0x809c24
+  [PASS] [V] 0x850000 upload guard (bl in-func) @0x847790
+  [PASS] [V] 0x8509c4 completion guard (bl in-func) @0x848154
+
+42 PASS, 0 FAIL
+Adress-/Branch-Konsistenz OK (Struktur); Emulation + Hardware weiterhin noetig.

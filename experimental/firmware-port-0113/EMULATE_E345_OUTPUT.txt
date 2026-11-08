@@ -1,0 +1,4 @@
+E3/E4/E5 Emulation gegen WORK/elegoo_printer.k1
+128 PASS, 0 FAIL  (128 Faelle: 32 Status x 4 Pfade)
+PASS-Kriterium: 128 PASS, 0 FAIL.
+LIMIT: Vendor-Funktionen abgefangen; HTTP/Netzwerk + Hardware unverifiziert.
