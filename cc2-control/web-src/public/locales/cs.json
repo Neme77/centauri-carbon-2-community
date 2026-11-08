@@ -1191,6 +1191,8 @@
   "network.selected": "Používá se",
   "network.frequency": "Frekvence",
   "network.action_pending": "Změna připojení…",
+  "network.ethernet_exhaust_reboot_prepared": "Příprava Ethernetu byla uložena. Až bude tiskárna nečinná, vypněte ji a znovu zapněte. Poté v Připojeních znovu povolte USB Ethernet.",
+  "network.ethernet_exhaust_blocked": "USB Ethernet nelze aktivovat, pokud je aktivní minimální rychlost EXHAUST a v běžících službách tiskárny chybí síťová komponenta.",
   "network.action_failed": "Operace se nezdařila. Výsledek zkontrolujte v diagnostice.",
   "network.connections": "Připojení",
   "network.cc2_access": "Přístup k CC2",

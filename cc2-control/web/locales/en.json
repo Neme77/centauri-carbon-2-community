@@ -1191,6 +1191,8 @@
   "network.selected": "In use",
   "network.frequency": "Frequency",
   "network.action_pending": "Changing connection…",
+  "network.ethernet_exhaust_reboot_prepared": "Ethernet preparation saved. With the printer idle, power it off and back on, then enable USB Ethernet again in Connections.",
+  "network.ethernet_exhaust_blocked": "USB Ethernet cannot be activated while the minimum EXHAUST feature is active and the network component is missing from the running printer services.",
   "network.action_failed": "The operation failed. Open Diagnostics to inspect the result.",
   "network.connections": "Connections",
   "network.cc2_access": "CC2 access",

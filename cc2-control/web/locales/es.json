@@ -1191,6 +1191,8 @@
   "network.selected": "En uso",
   "network.frequency": "Frecuencia",
   "network.action_pending": "Cambiando conexión…",
+  "network.ethernet_exhaust_reboot_prepared": "Se ha guardado la preparación de Ethernet. Con la impresora inactiva, apágala y enciéndela. Después, vuelve a habilitar Ethernet USB en Conexiones.",
+  "network.ethernet_exhaust_blocked": "No se puede activar Ethernet USB mientras el mínimo de EXHAUST esté activo y el componente de red no esté cargado en los servicios de la impresora.",
   "network.action_failed": "La operación ha fallado. Abre Diagnóstico para consultar el resultado.",
   "network.connections": "Conexiones",
   "network.cc2_access": "Acceso a CC2",

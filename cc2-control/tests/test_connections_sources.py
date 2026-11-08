@@ -17,6 +17,7 @@ else:
     assert (app / 'src/network_status.c').read_text() == status
     lock = json.loads((component / 'runtime.json').read_text())
     assert lock['helper_sha256'] in (app / 'src/connections/pin.h').read_text()
+    assert lock['lan_preview']['helper_sha256'] in (app / 'src/connections/pin.h').read_text()
     assert lock['qualified_profile']['usb_product'] == '8153'
     assert '8139' not in json.dumps(lock['qualified_profile'])
     print('PASS: helper/app source copies and exact RTL8153 runtime profile agree')

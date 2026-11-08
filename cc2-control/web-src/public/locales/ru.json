@@ -1191,6 +1191,8 @@
   "network.selected": "Используется",
   "network.frequency": "Частота",
   "network.action_pending": "Смена подключения…",
+  "network.ethernet_exhaust_reboot_prepared": "Подготовка Ethernet сохранена. Когда принтер бездействует, выключите и снова включите его, затем повторно включите USB Ethernet в разделе «Подключения».",
+  "network.ethernet_exhaust_blocked": "USB Ethernet нельзя включить, пока активен минимум EXHAUST и сетевой компонент не загружен в работающих службах принтера.",
   "network.action_failed": "Операция не выполнена. Откройте диагностику для проверки результата.",
   "network.connections": "Подключения",
   "network.cc2_access": "Доступ к CC2",

@@ -172,7 +172,7 @@ try {
   await failed.close()
   // Every Settings section must be fully visible without horizontal scrolling,
   // including the longer translated Backup label reported on the real printer.
-  for (const code of ['en', 'it', 'fr', 'es', 'hu', 'cs', 'pl', 'ru', 'zh']) {
+  for (const code of ['en', 'it', 'fr', 'es', 'hu', 'cs', 'pl', 'ru', 'zh', 'de']) {
     const context = await browser.newContext({ viewport: { width: 1536, height: 1000 }, reducedMotion: 'reduce' })
     const tabsPage = await context.newPage()
     await tabsPage.route('**/api/setup', r => r.fulfill({ json: { configured: true, required: false } }))
