@@ -373,7 +373,7 @@ static int bk_preferences(const char *o,const char *end,char out[512]) {
     int camera;
     if(!bk_text(o,end,"language",lang,sizeof(lang)) ||
         (*lang&&(strlen(lang)!=2||!isalpha((unsigned char)lang[0])||!isalpha((unsigned char)lang[1])||
-         !strstr(",en,it,fr,es,hu,cs,pl,ru,zh,",lang))) || !bk_text(o,end,"theme",theme_code,sizeof(theme_code)) ||
+         !strstr(",en,it,fr,es,hu,cs,pl,ru,zh,de,",lang))) || !bk_text(o,end,"theme",theme_code,sizeof(theme_code)) ||
         !theme_valid(theme_code,strlen(theme_code)) || !spools_bool_member(o,end,"camera_persistent",&camera))return 0;
     for(int i=0;i<4;i++) {
         char key[]="quick1";

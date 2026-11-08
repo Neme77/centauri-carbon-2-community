@@ -43,6 +43,15 @@ const labels = {
     'preview.reset': '重置',
     'preview.state': '状态',
   },
+  de: {
+    'preview.simulation': 'SIMULATION — kein Drucker',
+    'preview.idle': 'Idle',
+    'preview.printing': 'Druckt',
+    'preview.paused': 'Pausiert',
+    'preview.disconnected': 'Getrennt',
+    'preview.reset': 'Zurücksetzen',
+    'preview.state': 'Status',
+  },
   ru: {
     'preview.simulation': 'СИМУЛЯЦИЯ — без принтера',
     'preview.idle': 'Простой',
