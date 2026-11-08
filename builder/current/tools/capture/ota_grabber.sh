@@ -38,7 +38,7 @@ checksum() {
     else echo none; fi
 }
 
-key_of() { printf '%s' "$1" | cksum | tr ' ' '_'; }
+key_of() { printf '%s' "$1" | md5sum | cut -c1-32; }   # BusyBox on the CC2 has md5sum but no cksum
 
 # --- Preconditions: never guess a destination on internal storage. ---
 if [ ! -d "$USB_ROOT" ] || [ ! -w "$USB_ROOT" ]; then
