@@ -1528,5 +1528,6 @@
   "print.adding_to_queue": "正在加入队列…",
   "queue.auto_in_n": "{n} 秒后自动开始",
   "queue.hold": "取消自动开始",
-  "queue.abandon": "取消启动"
+  "queue.abandon": "取消启动",
+  "queue.auto_material": "自动启动已暂停：Canvas 料槽中的材料与文件不符或无法检查。请检查料槽后手动启动。"
 }

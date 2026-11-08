@@ -419,7 +419,9 @@ const lastResult = (item: QueueItem) =>
       ? t('queue.not_started')
       : item.last_result === 'auto_failed'
         ? t('queue.auto_failed')
-        : ''
+        : item.last_result === 'auto_material'
+          ? t('queue.auto_material')
+          : ''
 
 const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: QueueData; lib: PlateLibrary | null }) => {
   const jobs = openJobs(q)

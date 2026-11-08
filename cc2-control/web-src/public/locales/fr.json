@@ -1528,5 +1528,6 @@
   "print.adding_to_queue": "Ajout à la file…",
   "queue.auto_in_n": "Démarrage automatique dans {n} s",
   "queue.hold": "Annuler le démarrage automatique",
-  "queue.abandon": "Annuler le démarrage"
+  "queue.abandon": "Annuler le démarrage",
+  "queue.auto_material": "Démarrage automatique retenu : le slot Canvas ne contient pas le matériau du fichier ou n’a pas pu être vérifié. Vérifiez le slot et lancez manuellement."
 }

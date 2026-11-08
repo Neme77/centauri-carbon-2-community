@@ -1528,5 +1528,6 @@
   "print.adding_to_queue": "Añadiendo a la cola…",
   "queue.auto_in_n": "Inicio automático en {n} s",
   "queue.hold": "Cancelar el inicio automático",
-  "queue.abandon": "Cancelar el inicio"
+  "queue.abandon": "Cancelar el inicio",
+  "queue.auto_material": "Inicio automático retenido: la ranura de Canvas no contiene el material del archivo o no se pudo comprobar. Revise la ranura e inicie manualmente."
 }

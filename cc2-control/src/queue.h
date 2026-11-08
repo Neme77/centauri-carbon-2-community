@@ -181,7 +181,8 @@ static int queue_valid_mapping(const char *mapping) {
 static int queue_valid_ref(const char *text) { return !*text || plate_id_valid(text); }
 
 static int queue_valid_result(const char *text) {
-    return !*text || !strcmp(text, "stopped") || !strcmp(text, "not_started") || !strcmp(text, "auto_failed");
+    return !*text || !strcmp(text, "stopped") || !strcmp(text, "not_started") || !strcmp(text, "auto_failed") ||
+           !strcmp(text, "auto_material");
 }
 
 static int queue_json_bool(const char *obj, const char *end, const char *key, int *out) {
@@ -672,6 +673,44 @@ static void queue_start_lost(queue_item *item) {
     if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
 }
 
+static void queue_lower(char *out, size_t cap, const char *text) {
+    size_t n = 0;
+    for (; text[n] && n + 1 < cap; ++n) out[n] = (char)tolower((unsigned char)text[n]);
+    out[n] = 0;
+}
+/* The Queue page's rule for a slot: its type contains the file's material, or the file's material contains
+ * the slot type's first word ("PLA Basic" for "PLA", "PLA" for "PLA Silk"). */
+static int queue_material_matches(const char *slot_type, const char *wanted) {
+    char slot[SPOOL_MATERIAL_MAX + 1], want[65];
+    queue_lower(slot, sizeof(slot), slot_type);
+    queue_lower(want, sizeof(want), wanted);
+    if (strstr(slot, want)) return 1;
+    char *space = strchr(slot, ' ');
+    if (space) *space = 0;
+    return *slot && strstr(want, slot) != NULL;
+}
+/* Before an automatic start, what the operator would check on the Queue page: every slot of the job's
+ * mapping present in fresh Canvas telemetry and holding the file's material. A slot that differs, is empty
+ * or unknown, or a file that names no material, holds the copy for the operator. The external feed (an empty
+ * mapping) has nothing to verify. */
+static int queue_material_verified(const queue_item *item, const mqtt_client *mqtt) {
+    int tools[GCODE_TOOLS_MAX], slots[GCODE_TOOLS_MAX];
+    size_t count = 0;
+    if (!parse_slot_map(item->mapping, strlen(item->mapping), tools, slots, &count)) return 0;
+    if (!count) return 1;
+    if (!queue_mqtt_fresh(mqtt)) return 0;
+    spool_tray trays[4];
+    if (!spools_trays(mqtt, trays)) return 0;
+    gcode_filament_info info[GCODE_TOOLS_MAX];
+    if (gcode_read_filaments(queue_root(item), item->path, info) != 0) return 0;
+    for (size_t i = 0; i < count; ++i) {
+        const spool_tray *tray = &trays[slots[i]];
+        const char *type = tray->type[0] ? tray->type : tray->name, *wanted = info[tools[i]].material;
+        if (!tray->have || tray->status == 0 || !*type || !*wanted) return 0;
+        if (!queue_material_matches(type, wanted)) return 0;
+    }
+    return 1;
+}
 static void queue_tick(mqtt_client *mqtt) {
     if (!queue_available) return;
     if (!queue_mqtt_fresh(mqtt)) return; /* stale evidence decides nothing */
@@ -715,6 +754,12 @@ static void queue_tick(mqtt_client *mqtt) {
         queue.complete_ms = 0;
         queue_item *next = queue_next();
         if (!next) return;
+        if (!queue_material_verified(next, mqtt)) {
+            /* The Queue page would show the warning; nobody is there to read it, so the copy waits for the button. */
+            snprintf(next->last_result, sizeof(next->last_result), "auto_material");
+            if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
+            return;
+        }
         int status = 503;
         if (mqtt->machine_status == 1 && !printer_change_blocked() && !plates_background_active()) {
             int sink = open("/dev/null", O_WRONLY);

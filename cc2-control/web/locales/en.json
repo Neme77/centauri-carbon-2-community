@@ -1528,5 +1528,6 @@
   "print.adding_to_queue": "Adding to the queue…",
   "queue.auto_in_n": "Automatic start in {n} s",
   "queue.hold": "Cancel automatic start",
-  "queue.abandon": "Cancel start"
+  "queue.abandon": "Cancel start",
+  "queue.auto_material": "Automatic start held: the Canvas slot does not hold the file's material or could not be checked. Check the slot and start by hand."
 }

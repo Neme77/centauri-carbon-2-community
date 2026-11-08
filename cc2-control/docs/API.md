@@ -753,7 +753,7 @@ unless the `auto` policy is chosen.
   "delay","remove_done"},"active","next","items":[…]}`. Items are in queue order with `id`, `storage`, `path`,
   `mapping`, `side`, `leveling`, `timelapse`, `measure`, `nozzle`, `copies`, `done`, `estimated_seconds` and
   `filament_grams` (`null` when unknown), `added`, `state` (`pending`, `starting`, `printing` or `done`),
-  `last_result` (`""`, `stopped`, `not_started` or `auto_failed`) and `present` (the file is in place).
+  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`) and `present` (the file is in place).
   `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing;
   `auto_in` the seconds until a pending automatic start, else `null`.
 - `POST /api/queue/add` takes the eight newline-separated fields of `/api/gcode-files/print` (storage,
@@ -795,8 +795,13 @@ the same file, under the same uuid, does not count). `cancelled` or `error`, ano
 uuid), or an idle printer without `complete` for a minute leave it uncounted (`stopped`); a pause, a filament
 change or a recovery keeps it running. Telemetry older than 15 s decides nothing. The last copy sets `done`
 and, with `remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a
-counted completion if the printer is idle and no other session holds it, else the job notes `auto_failed`;
-it is meant for a bed that clears itself and is off by default. A queue file that cannot be parsed keeps the
+counted completion if the printer is idle and no other session holds it, else the job notes `auto_failed`.
+Right before that start the backend checks the Canvas material the Queue page would warn about: every slot
+of the job's mapping must be present in fresh telemetry and hold the file's `filament_type` (the page's rule:
+the slot's type contains the file's material, or the file's material contains the slot's first word); a
+differing, empty or unknown slot, or a file without `filament_type`, holds the copy as `auto_material` for the
+operator, who can review the warning and start it by hand. The external feed (empty mapping) has nothing to
+check. The policy is meant for a bed that clears itself and is off by default. A queue file that cannot be parsed keeps the
 queue closed (`available: false`) and is never rewritten.
 
 ## Completed print readback

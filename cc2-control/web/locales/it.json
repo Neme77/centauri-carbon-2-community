@@ -1528,5 +1528,6 @@
   "print.adding_to_queue": "Aggiunta alla coda…",
   "queue.auto_in_n": "Avvio automatico tra {n} s",
   "queue.hold": "Annulla l’avvio automatico",
-  "queue.abandon": "Annulla l’avvio"
+  "queue.abandon": "Annulla l’avvio",
+  "queue.auto_material": "Avvio automatico sospeso: lo slot Canvas non contiene il materiale del file o non è stato possibile verificarlo. Controlla lo slot e avvia manualmente."
 }

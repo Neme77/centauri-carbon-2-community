@@ -19,7 +19,7 @@ export type QueueItem = {
   filament_grams: number | null
   added: number
   state: 'pending' | 'starting' | 'printing' | 'done'
-  last_result: '' | 'stopped' | 'not_started' | 'auto_failed'
+  last_result: '' | 'stopped' | 'not_started' | 'auto_failed' | 'auto_material'
   present: boolean
 }
 export type QueuePolicy = { after: 'wait' | 'auto'; delay: number; remove_done: boolean }

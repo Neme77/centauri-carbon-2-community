@@ -47,6 +47,13 @@ static void telemetry_says(const char *state, const char *file) {
 }
 static void telemetry_stale(void) { telemetry.last_rx.tv_sec -= 30; }
 static void telemetry_heating(double bed_target) { telemetry.present |= 1u << U_BG; telemetry.values[U_BG] = bed_target; }
+/* The Canvas telemetry in the MQTT cache: one tray, as the printer's method 2005 reports it. */
+static void canvas_says(int tray, const char *type, int status) {
+    machine.canvas_uds_ready = 0;
+    machine.canvas_snapshot_len = (size_t)snprintf(machine.canvas_snapshot, sizeof(machine.canvas_snapshot),
+        "{\"id\":2005,\"result\":{\"canvas_info\":{\"canvas_list\":[{\"canvas_id\":0,\"connected\":1,\"tray_list\":["
+        "{\"tray_id\":%d,\"status\":%d,\"filament_type\":\"%s\"}]}]}}}", tray, status, type);
+}
 
 static queue_item *job(int id, int copies, int done) {
     queue_item *it = &queue.items[queue.count++];
@@ -98,11 +105,13 @@ static int finish(void) {
 int main(void) {
     char dir[] = "/tmp/cc2-queue-XXXXXX";
     assert(mkdtemp(dir));
-    static char file[640], internal[640], gcode[700], autosave[640];
+    static char file[640], internal[640], gcode[700], plain[700], autosave[640];
     snprintf(file, sizeof(file), "%s/print-queue.json", dir); queue_path = file;
     snprintf(internal, sizeof(internal), "%s/internal", dir); assert(mkdir(internal, 0755) == 0); gcode_internal_root = internal;
     snprintf(gcode, sizeof(gcode), "%s/part.gcode", internal);
-    FILE *out = fopen(gcode, "w"); assert(out && fputs("G28\nG1 X10 Y10 E1\n", out) >= 0 && fclose(out) == 0);
+    FILE *out = fopen(gcode, "w"); assert(out && fputs("; filament_type = PLA\nG28\nG1 X10 Y10 E1\n", out) >= 0 && fclose(out) == 0);
+    snprintf(plain, sizeof(plain), "%s/plain.gcode", internal); /* a file that names no material */
+    out = fopen(plain, "w"); assert(out && fputs("G28\nG1 X10 Y10 E1\n", out) >= 0 && fclose(out) == 0);
     snprintf(autosave, sizeof(autosave), "%s/autosave.cfg", dir); printer_autosave_path = autosave;
     out = fopen(autosave, "w"); assert(out && fputs("[bed_mesh default]\nx_count = 11\ny_count = 11\npoints =\n  0, 0\n", out) >= 0 && fclose(out) == 0);
     canvas_color_table_uds = fake_uds;
@@ -397,7 +406,31 @@ int main(void) {
     queue_load();
     assert(queue_available && queue.count == 1 && queue.items[0].id == 10 && !queue.items[0].request_uuid[0]);
 
-    unlink(gcode); unlink(file); unlink(autosave); rmdir(internal); rmdir(dir);
+    /* The automatic start checks the Canvas material at the moment it would start, as the Queue page shows it:
+     * a spool swapped during the countdown, an empty slot, missing telemetry or a file that names no material
+     * hold the copy for the operator; a slot holding the material starts. (The external feed, checked above
+     * with an empty mapping, has nothing to verify.) */
+    queue.count = 0; queue.active_id = 0;
+    it = job(12, 2, 0); snprintf(it->mapping, sizeof(it->mapping), "0:2");
+    snprintf(queue.after, sizeof(queue.after), "auto"); queue.delay = 10;
+    printer_says(1, "complete", "", "u19"); telemetry_says("complete", NULL);
+    int sent = starts_sent;
+    canvas_says(2, "PETG", 1); queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine); /* swapped during the countdown */
+    assert(starts_sent == sent && !strcmp(it->state, "pending") && !strcmp(it->last_result, "auto_material") && queue.complete_ms == 0);
+    it->last_result[0] = 0; canvas_says(2, "PLA", 0); queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine); /* slot empty */
+    assert(starts_sent == sent && !strcmp(it->last_result, "auto_material"));
+    it->last_result[0] = 0; machine.canvas_snapshot_len = 0; queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine); /* no telemetry */
+    assert(starts_sent == sent && !strcmp(it->last_result, "auto_material"));
+    queue_load(); it = &queue.items[0]; /* the hold is saved with the job */
+    assert(queue.count == 1 && it->id == 12 && !strcmp(it->last_result, "auto_material") && !strcmp(it->state, "pending"));
+    it->last_result[0] = 0; canvas_says(2, "Elegoo PLA Basic", 1); queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    assert(starts_sent == sent + 1 && !strcmp(it->state, "starting") && !it->last_result[0]); /* the slot's type contains the material */
+    queue.count = 0; queue.active_id = 0;
+    it = job(13, 1, 0); snprintf(it->path, sizeof(it->path), "plain.gcode"); snprintf(it->mapping, sizeof(it->mapping), "0:2");
+    canvas_says(2, "PLA", 1); queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine); /* the file names no material */
+    assert(starts_sent == sent + 1 && !strcmp(it->state, "pending") && !strcmp(it->last_result, "auto_material"));
+
+    unlink(gcode); unlink(plain); unlink(file); unlink(autosave); rmdir(internal); rmdir(dir);
     puts("PASS copies counted only from this copy's own completion seen fresh; stops, foreign jobs, long starts, pauses, "
          "USB imports, policy changes, the automatic start with its guards and the running-copy handlers covered");
     return 0;
