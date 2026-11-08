@@ -1,0 +1,38 @@
+{
+ "version": "02.01.01.13",
+ "_comment": "Official ELEGOO OTA 02.01.01.13, captured on 2026-11-08 from the user's own printer (online update, hard-linked by tools/capture/ota_keeper.sh). Outer, inner and manifest ELEG signatures verify with keys/cc2_stock_public.pem and both embedded payload SHA-256 values match. Pins were measured with tools/inspect_base.py and unsquashfs 4.7.5. The build stays refused: the manifest fields need the AES input and no patch set is ported to this base.",
+ "stock_package": "cc2_eeb001_02.01.01.13_20261020214142.zip.sig",
+ "_comment_stock_package": "the device stored it as /opt/usr/firmware/elegoo_firmware; this is the file name embedded in its outer ELEG header plus .sig",
+ "embedded_filename_marker": "02.01.01.13",
+ "manifest": {
+  "version": "TODO_MANIFEST_VERSION",
+  "update_class": "TODO_MANIFEST_UPDATE_CLASS"
+ },
+ "_comment_manifest": "version and update_class of the decrypted official ota-package-list.json (inspect_base.py with --aes-key). Not readable without the AES input; copy them, never invent or raise them. opt/inst/firmware_version/versions.json in this rootfs reports ota_version 02.01.01.13.",
+ "ported_patch_set": false,
+ "_comment_ported_patch_set": "true only after Z-offset (GUI), HTTP/network (elegoo_printer) and camera (ai_camera) patches are ported to this base, emulation-tested and hardware-tested. daemon-000 and libcolib.so are byte-identical to 02.01.01.07.",
+ "sha256": {
+  "stock_outer": "538b0ea40b7a5caeb887a9e29a26ea7f727216df0fa8e3b7013c04bb9a69be8a",
+  "stock_inner": "06fd9fc7b9c02857ce02995e930ed3aacac15e2414e1752b7e94b2e38dd435f8",
+  "stock_swu": "dcff98bc2e6513c6ac0ba5c8e08c6a582bef88226f915421566097ec46b6c6db",
+  "sw-description": "6598586ada5e7e9256316c63b801579e65e797d2a77e13ab360f09b3581ae2fb",
+  "resource": "aacfe9a9d847f4be3e4b5a16f7c16cba93a60e25ba371efb77568568b0b37aad",
+  "uboot": "769d55b96ed4dff486ff5b79f35d61a36d68c444f49f19e44059e2472d468f72",
+  "boot0": "b18b3f31b3d378b56b4d01b1863a6b9f0f61211ba1f4ad8e7b672ff54887ec41",
+  "kernel": "bf9659432181d534363d0357d5fbc0565130973d8f31fb9b7c1ebe84f96a817d",
+  "stock_rootfs": "30b63303eb13175ee0a2c65e3b94dd233cb148fe3cc68b6c1ddebca044650910",
+  "stock_gui": "8d6cac2aecb26b0e504b9d1b71a8b5bb9168fc14143eb0e8fcfc5d7d8f2507fc",
+  "stock_printer": "f0111e0b52c2ea39ff2aae70675c53b311f7340df8ed233e16e8e0cc9f883e14",
+  "daemon_stock": "6fed6657e814f010fef87b40c5932d8fa7c5e9c044d7376f25fc2318daeb10f9",
+  "stock_ai_camera": "e8df8e57fdc1866b4d7220c3abca08ebc16ca71d759cb7721afafc572f47365f",
+  "libcolib": "14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403"
+ },
+ "_same_as_02.01.01.07": [
+  "boot0",
+  "daemon_stock",
+  "libcolib",
+  "resource",
+  "sw-description",
+  "uboot"
+ ]
+}

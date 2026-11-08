@@ -1,5 +1,7 @@
 # Offizielles ELEGOO-Paket vom eigenen Drucker sichern (privat)
 
+> **Ergebnis vom 2026-11-08 [belegt]:** Gesichert wurde `cc2_eeb001_02.01.01.13_20261020214142.zip.sig`. Der erste Versuch mit `ota_grabber.sh` scheiterte, weil der Drucker etwa eine Minute nach dem Download neu startete, bevor die Kopie auf den Stick fertig war. Funktioniert hat `ota_keeper.sh`: Hardlink nach `/opt/usr/ota_keep/`, dann nach erneutem V4.4.3-Flash `sh /mnt/exUDISK/ota_keeper.sh export`. Hinweise: Auf dem Drucker fehlen `nohup`, `setsid`, `cksum` und `stat`. Das Paket liegt als `/opt/usr/firmware/elegoo_firmware`. Auf V4.4.3 ist der SSH-Host-Key nach jedem Flash neu (`ssh-keygen -R`).
+
 > **Nur lokal.** Diese Anleitung enthält die private Drucker-IP `192.168.2.220`.
 > Vor jeder Veröffentlichung durch `PRINTER-IP` ersetzen und ins Englische übersetzen.
 > Alle Schritte führst **du** am Drucker aus. Claude baut keine Verbindung zum Drucker auf.
@@ -23,13 +25,13 @@ Kennzeichnung:
   | 8080 | offen |
 
   Dass Stock-Firmware SSH schließt, ist nur durch den Nutzerbericht #309 (auf 02.01.01.12) belegt. Auf V4.4.3 sollte Port 22 offen sein; das bitte nach dem Neustart prüfen.
-- **[Vermutung]** Auf 02.03.03.13 bietet „Auf Updates prüfen“ nichts an, weil die Version schon aktuell ist.
+- **[Vermutung]** Auf 02.01.01.13 bietet „Auf Updates prüfen“ nichts an, weil die Version schon aktuell ist.
 
-**Gewählter Weg:** Zuerst Community-Firmware V4.4.3 per USB flashen; dann ist SSH offen. Danach das Online-Update auf 02.03.03.13 anstoßen und die Datei abgreifen, bevor sie installiert oder gelöscht wird. Parallel dazu als Rückfallebene den Netzwerkverkehr mitschneiden.
+**Gewählter Weg:** Zuerst Community-Firmware V4.4.3 per USB flashen; dann ist SSH offen. Danach das Online-Update auf 02.01.01.13 anstoßen und die Datei abgreifen, bevor sie installiert oder gelöscht wird. Parallel dazu als Rückfallebene den Netzwerkverkehr mitschneiden.
 
 ## Risiken vor dem Downgrade
 
-- **[belegt, Nutzerbericht #309]** Der Weg 02.01.01.12 → V4.4.3 per Offline-Update hat funktioniert. **[Vermutung]** Ob das auch von 02.03.03.13 aus geht, ist unbekannt.
+- **[belegt, Nutzerbericht #309]** Der Weg 02.01.01.12 → V4.4.3 per Offline-Update hat funktioniert. **[Vermutung]** Ob das auch von 02.01.01.13 aus geht, ist unbekannt.
 - **[belegt]** Das Paket enthält `uboot` und `boot0` (`builder/current/core/firmware_builder.py`, `CPIO_FILES`). Der Bootloader wird also ersetzt.
 - Lehnt der Drucker das Paket ab, hörst du auf und notierst die Meldung. Versionsdaten nicht ändern, Prüfungen nicht umgehen (`docs/INSTALL.md`).
 - Datensicherung: Laut #309 überlebt `/opt/usr` das Flashen, aber SSH-Host-Key und `authorized_keys` sind danach neu bzw. weg.
@@ -95,7 +97,7 @@ while true; do date; ls -lt /tmp /opt/usr 2>/dev/null | head -20; sleep 3; done
 ## Schritt 3 – Update anstoßen und Datei abgreifen
 
 1. Optional, parallel: Netzwerk-Mitschnitt starten (Schritt 4).
-2. Am Display **Einstellungen → Auf Updates prüfen** antippen. Wird 02.03.03.13 angeboten, den Download starten.
+2. Am Display **Einstellungen → Auf Updates prüfen** antippen. Wird 02.01.01.13 angeboten, den Download starten.
 3. Sobald in der Schleife eine große neue Datei erscheint: warten, bis ihre Größe zwischen zwei Durchläufen gleich bleibt. Dann sofort in einem **zweiten Terminal am Mac** kopieren, mit Pfad und Dateinamen aus der Schleife:
    ```bash
    mkdir -p ~/CC2-capture && cd ~/CC2-capture
@@ -123,7 +125,7 @@ Ziel ist nur, die Download-Quelle (Hostname, eventuell URL) zu sehen. Keine auto
 - **Wireshark/tcpdump:** Der Mac sieht den Verkehr des Druckers nur über einen Mirror-Port am Switch oder den Mitschnitt des Routers. Filter: `host 192.168.2.220`. Bei HTTPS siehst du nur den Hostnamen (TLS-SNI), nicht den Pfad **[Vermutung]**; bei HTTP auch die volle URL.
 - Eine gefundene URL nur öffnen, wenn sie eindeutig zu ELEGOO gehört. Die Datei danach genauso mit `shasum` und `inspect_base.py` prüfen.
 
-**Alternative:** den ELEGOO-Support nach dem offiziellen 02.03.03.13-Paket für das Offline-Update fragen.
+**Alternative:** den ELEGOO-Support nach dem offiziellen 02.01.01.13-Paket für das Offline-Update fragen.
 
 ## Schritt 5 – Datei an den Builder übergeben (am Mac)
 
@@ -139,4 +141,4 @@ shasum -a 256 builder/current/original_firmware/*
 python3 -I builder/current/tools/inspect_base.py builder/current/original_firmware/<datei> --aes-key builder/current/keys/cc2_aes_key_v1.bin --out builder/current/analysis
 ```
 
-`builder/current/original_firmware/` und `builder/current/analysis/` sind von Git ausgeschlossen. Danach die Werte aus `builder/current/analysis/report.json` (`profile_values`) in `builder/current/base_profiles/02.03.03.13.json` eintragen; siehe `UPDATE_PLAN_2.03.03.13.md`, Abschnitt 5.
+`builder/current/original_firmware/` und `builder/current/analysis/` sind von Git ausgeschlossen. Danach die Werte aus `builder/current/analysis/report.json` (`profile_values`) in `builder/current/base_profiles/02.01.01.13.json` eintragen; siehe `UPDATE_PLAN_02.01.01.13.md`, Abschnitt 5.

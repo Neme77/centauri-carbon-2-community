@@ -6,7 +6,7 @@ s=importlib.util.spec_from_file_location('launcher',ROOT/'launch_helpers/run_bui
 with tempfile.TemporaryDirectory(prefix='cc2 launch test ') as td:
  r=Path(td).resolve()  # macOS: /var is a symlink to /private/var
  (r/'BASE_FIRMWARE').write_text('02.01.01.07\n');(r/'base_profiles').mkdir()
- for v in ('02.01.01.07','02.03.03.13'):(r/'base_profiles'/(v+'.json')).write_bytes((ROOT/'base_profiles'/(v+'.json')).read_bytes())
+ for v in ('02.01.01.07','02.01.01.13'):(r/'base_profiles'/(v+'.json')).write_bytes((ROOT/'base_profiles'/(v+'.json')).read_bytes())
  stock_package=json.loads((r/'base_profiles/02.01.01.07.json').read_text())['stock_package']
  assert stock_package=='cc2_eeb001_02.01.01.07_20260922210235.zip.sig'
  builder=r/'core/firmware_builder.py';builder.parent.mkdir();builder.write_bytes((ROOT/'core/firmware_builder.py').read_bytes())
@@ -22,9 +22,9 @@ with tempfile.TemporaryDirectory(prefix='cc2 launch test ') as td:
    else:assert str(r/'original_firmware'/stock_package) in cmd
    if pre:assert '--preflight-only' in cmd
    assert ' ' in str(r) and str(builder) in cmd
- (r/'BASE_FIRMWARE').write_text('02.03.03.13\n')
+ (r/'BASE_FIRMWARE').write_text('02.01.01.13\n')
  try:m.build_arguments(r,'stock',True)
- except RuntimeError as e:assert 'TODO_FILENAME_STOCK_PACKAGE' in str(e)
+ except RuntimeError as e:assert 'TODO_MANIFEST_VERSION' in str(e)
  else:raise AssertionError('placeholder base profile accepted')
  (r/'BASE_FIRMWARE').write_text('02.01.01.07\n')
  try:m.build_arguments(r,'stock',True,True)

@@ -36,10 +36,15 @@ for path in sorted((BASE / 'base_profiles').glob('*.json')):
     else:
         raise AssertionError(f'unported base profile {path.stem} accepted')
 
-placeholder = b.load_base_profile('02.03.03.13')
-open_items = b.profile_placeholders(placeholder)
-assert len(open_items) == 18 and placeholder['ported_patch_set'] is False
-assert all(not v.startswith('TODO_') or v.startswith('TODO_SHA256_') for v in placeholder['sha256'].values())
+candidate = b.load_base_profile('02.01.01.13')
+open_items = b.profile_placeholders(candidate)
+# Measured from the captured official package; only the AES-protected manifest fields stay open.
+assert open_items == ['manifest.version = TODO_MANIFEST_VERSION', 'manifest.update_class = TODO_MANIFEST_UPDATE_CLASS'], open_items
+assert candidate['ported_patch_set'] is False and candidate['stock_package'] == 'cc2_eeb001_02.01.01.13_20261020214142.zip.sig'
+for key in ('uboot', 'boot0', 'sw-description', 'resource', 'daemon_stock', 'libcolib'):
+    assert candidate['sha256'][key] == q['sha256'][key], key
+for key in ('kernel', 'stock_rootfs', 'stock_gui', 'stock_printer', 'stock_ai_camera'):
+    assert candidate['sha256'][key] != q['sha256'][key], key
 
 with tempfile.TemporaryDirectory() as td:
     tampered = Path(td)
@@ -52,7 +57,22 @@ with tempfile.TemporaryDirectory() as td:
         assert 'SHA256 mismatch' in str(error)
     else:
         raise AssertionError('tampered qualified profile accepted')
-    complete = json.loads((BASE / 'base_profiles/02.03.03.13.json').read_text())
+    complete = json.loads((BASE / 'base_profiles/02.01.01.13.json').read_text())
+    complete['manifest'] = {'version': '02.01.01.13', 'update_class': '00.00.00.00'}
+    try:
+        b.require_buildable_profile(complete)
+    except RuntimeError as error:
+        assert 'No ported and qualified patch set' in str(error)
+    else:
+        raise AssertionError('unported base profile accepted')
+    complete['ported_patch_set'] = True
+    try:
+        b.require_buildable_profile(complete)
+    except RuntimeError as error:
+        assert 'No ported and qualified patch set' in str(error)
+    else:
+        raise AssertionError('base without a patch implementation accepted')
+    complete = json.loads((BASE / 'base_profiles/02.01.01.13.json').read_text())
     complete['ported_patch_set'] = True
     try:
         b.require_buildable_profile(complete)
@@ -62,7 +82,7 @@ with tempfile.TemporaryDirectory() as td:
         raise AssertionError('placeholder profile accepted')
 
 # The CLI refuses an unported base before reading keys, firmware or tools.
-r = subprocess.run([sys.executable, str(BASE / 'core/firmware_builder.py'), '--base-version', '02.03.03.13',
+r = subprocess.run([sys.executable, str(BASE / 'core/firmware_builder.py'), '--base-version', '02.01.01.13',
                     '--private-key', str(BASE / 'keys/cc2_stock_public.pem')], capture_output=True, text=True)
 assert r.returncode == 1 and 'open placeholder' in r.stderr and 'signing' not in r.stderr.lower(), r.stderr
-print(f'PASS: base profiles; qualified pins unchanged; {len(open_items)} placeholders refused for 02.03.03.13.')
+print(f'PASS: base profiles; qualified pins unchanged; {len(open_items)} placeholders refused for 02.01.01.13.')

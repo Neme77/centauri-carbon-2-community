@@ -1,8 +1,65 @@
-# Update-Plan: Elegoo-Basis 02.03.03.13
+# Update-Plan: Elegoo-Basis 02.01.01.13
 
 **Status:** private Vorbereitung auf dem lokalen Branch `update-2.03.03.13`. Nicht veröffentlichen.
 **Basis:** `develop` @ `47efbac0` (Merge von #321).
-**Ziel:** Der Community-Build soll auf der offiziellen Elegoo-Firmware **02.03.03.13** aufbauen, damit beim Flashen auf einen Drucker mit 02.03.03.13 kein Downgrade entsteht.
+**Ziel:** Der Community-Build soll auf der neuesten offiziellen Elegoo-Firmware aufbauen, damit beim Flashen kein Downgrade entsteht.
+
+## Korrektur: Die Zielversion ist 02.01.01.13, nicht 02.03.03.13
+
+**[belegt, 2026-11-08]** Das Online-Update deines Druckers hat `cc2_eeb001_02.01.01.13_20261020214142.zip.sig` geladen. `opt/inst/firmware_version/versions.json` im neuen RootFS meldet `ota_version` = `02.01.01.13`. Die Zeichenfolge „02.03.03.13“ kommt im RootFS nicht vor. Wo im Text unten noch „02.03.03.13“ steht, ist 02.01.01.13 gemeint. Der Branch-Name `update-2.03.03.13` bleibt vorerst unverändert.
+
+## Ergebnis der Analyse des Original-Pakets (belegt, offline am Mac gemessen)
+
+So wurde das Paket gesichert:
+- Online-Update auf V4.4.3, dabei Hardlink mit `builder/current/tools/capture/ota_keeper.sh`.
+- Danach `ota_keeper.sh export` auf den USB-Stick; jede Kopie wurde auf dem Drucker per `sha256sum` bestätigt.
+- Lokal liegen die Dateien in `builder/current/original_firmware/`, die Analyse in `builder/current/analysis/02.01.01.13/`. Beides ist von Git ausgeschlossen.
+
+| Prüfung | Ergebnis |
+|---|---|
+| Eingebettete SHA-256 im äußeren Paket (0x04) und in der inneren `.swu.sig` (0x80) | passt |
+| RSA-Signatur äußeres Paket, Manifest (0x83), innere SWU mit `keys/cc2_stock_public.pem` | alle **gültig**, kein Schlüsselwechsel |
+| ZIP-Inhalt | `ota-package-list.json.sig` (720 B) + eine `.swu.sig`; Einträge **deflated** (der Builder schreibt heute `ZIP_STORED`) |
+| `.swu.sig` im ZIP vs. gesicherte Datei | byte-gleich |
+| Entschlüsselte `.swu` | Länge = `data_size` im Kopf, CPIO newc/crc, gleiche 7 Einträge in gleicher Reihenfolge, `cpio_item_md5` stimmt |
+| RootFS | SquashFS xz, Blockgröße 262144 (wie bisher) |
+| Kernel | `Linux version 5.4.61 … #50 SMP PREEMPT Tue Oct 20` (neu gebaut, gleiche Hauptversion) |
+| Manifest-Inhalt (`version`, `update_class`) | nicht lesbar ohne AES-Eingabe → bleibt Platzhalter |
+
+Pins im Profil `builder/current/base_profiles/02.01.01.13.json` im Vergleich mit 02.01.01.07:
+
+| Pin | SHA-256 | vs. 02.01.01.07 |
+|---|---|---|
+| `stock_outer` | `538b0ea40b7a5cae…` | neu |
+| `stock_inner` | `06fd9fc7b9c02857…` | neu |
+| `stock_swu` | `dcff98bc2e6513c6…` | neu |
+| `sw-description` | `6598586ada5e7e92…` | **gleich** |
+| `resource` | `aacfe9a9d847f4be…` | **gleich** |
+| `uboot` | `769d55b96ed4dff4…` | **gleich** |
+| `boot0` | `b18b3f31b3d378b5…` | **gleich** |
+| `kernel` | `bf9659432181d534…` | neu |
+| `stock_rootfs` | `30b63303eb13175e…` | neu |
+| `stock_gui` | `8d6cac2aecb26b0e…` | neu |
+| `stock_printer` | `f0111e0b52c2ea39…` | neu |
+| `daemon_stock` | `6fed6657e814f010…` | **gleich** |
+| `stock_ai_camera` | `e8df8e57fdc1866b…` | neu |
+| `libcolib` | `14288a4a73c339b0…` | **gleich** |
+
+**Patch-Stellen** (`inspect_base.py`-Logik, Details in `analysis/02.01.01.13/patch_sites.json`):
+
+| Patch | Ergebnis |
+|---|---|
+| Dual Trust (`daemon-000`) | unverändert an der qualifizierten Stelle; das Programm ist byte-gleich |
+| HTTP/Upload (`elegoo_printer`, 11 Stellen) | 6 eindeutig wiedergefunden, mehrere mit gleichem Versatz +0x7790; 3 mehrdeutig, 2 fehlen |
+| Netzwerk (`elegoo_printer`, 18 Stellen) | 3 eindeutig, 9 mehrdeutig, 6 fehlen. Ein Teil davon ist erwartbar, weil die Vorher-Bytes vom HTTP-gepatchten Zwischenstand stammen. |
+| Z-Offset (`ec-eeb001-gui`) | nicht gefunden → neu ermitteln |
+| Kamera (`ai_camera`) | nicht gefunden → neu ermitteln |
+
+**Folgen [Vermutung, außer wo belegt]:**
+- Das Bootloader-Risiko beim Wechsel zwischen den beiden Basen entfällt: `uboot`/`boot0` sind identisch [belegt].
+- Dual Trust und Reactor-libco können unverändert bleiben [belegt: gleiche Hashes].
+- Zu portieren bleiben die Patches in GUI, `elegoo_printer` und `ai_camera`, die Reactor-Bindings für das neue `elegoo_printer` und eventuell die Kernelmodule (gleiche Version 5.4.61, aber neuer Build; ob sie geladen werden, ist ungeprüft).
+- Abschnitt 5 (Platzhalter) ist überholt: offen sind nur noch `manifest.version`, `manifest.update_class` und `ported_patch_set`.
 
 Kennzeichnung im ganzen Dokument:
 - **[belegt]** = im Code bzw. Repo gefunden, mit Datei:Zeile, oder selbst gemessen.

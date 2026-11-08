@@ -46,7 +46,7 @@ if (-not (Test-Path -LiteralPath $runtimeTarget -PathType Leaf)) {throw 'Supply 
 $baseVersion=(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'BASE_FIRMWARE') -Raw).Trim()
 $baseProfile=Get-Content -LiteralPath (Join-Path $PSScriptRoot ('base_profiles\'+$baseVersion+'.json')) -Raw | ConvertFrom-Json
 if ($baseProfile.version -ne $baseVersion) {throw 'Base profile does not match BASE_FIRMWARE.'}
-if ($baseProfile.stock_package -like 'TODO_*') {throw ('Base profile '+$baseVersion+' still has placeholders; see UPDATE_PLAN_2.03.03.13.md.')}
+if ((Get-Content -LiteralPath (Join-Path $PSScriptRoot ('base_profiles\'+$baseVersion+'.json')) -Raw) -match '"TODO_') {throw ('Base profile '+$baseVersion+' still has placeholders; see UPDATE_PLAN_02.01.01.13.md.')}
 $inputs=@('keys\cc2_aes_key_v1.bin','keys\cc2_stock_private.pem','keys\cc2_community_release_private.pem',
     'components\ssh\sshd','tools\squashfs-tools-4.6.1\bin\mksquashfs','tools\squashfs-tools-4.6.1\bin\unsquashfs',
     ('original_firmware\'+$baseProfile.stock_package))
