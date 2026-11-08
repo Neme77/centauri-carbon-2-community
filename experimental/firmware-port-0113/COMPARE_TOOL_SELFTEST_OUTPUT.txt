@@ -1,0 +1,25 @@
+A = ../../builder/current/analysis/02.01.01.13/rootfs/opt/bin/elegoo_printer
+B = WORK/corrected/elegoo_printer.patched
+Gemeinsame benannte Funktionen: 73656  |  nur in A: 0  |  nur in B: 0
+
+
+[SAME_SIZE_DIFFERENT_BYTES ] _fini                                                                   shift=     0x0  size=2731104  diff_bytes=35268 first_diff=+0x289f3c
+[SAME_SIZE_DIFFERENT_BYTES ] api_module::DeviceStatus::post_change_message(nlohmann::json_abi_v3_12  shift=     0x0  size=1412  diff_bytes=12 first_diff=+0xd8
+[SAME_SIZE_DIFFERENT_BYTES ] communication::HTTPServer::check_token(HttpRequest*)                    shift=     0x0  size=612  diff_bytes=3 first_diff=+0x17c
+[SAME_SIZE_DIFFERENT_BYTES ] communication::HTTPServer::check_token(std::__cxx11::basic_string<char  shift=     0x0  size=436  diff_bytes=3 first_diff=+0xe8
+[SAME_SIZE_DIFFERENT_BYTES ] communication::HTTPServer::handle_file_cancel(HttpRequest*, HttpRespon  shift=     0x0  size=1408  diff_bytes=4 first_diff=+0x110
+[SAME_SIZE_DIFFERENT_BYTES ] communication::HTTPServer::handle_file_upload(HttpRequest*, HttpRespon  shift=     0x0  size=8684  diff_bytes=425 first_diff=+0x68
+[SAME_SIZE_DIFFERENT_BYTES ] communication::HTTPServer::handle_upload_timeout()                      shift=     0x0  size=1008  diff_bytes=3 first_diff=+0x33c
+[SAME_SIZE_DIFFERENT_BYTES ] communication::LanStrategy::start()                                     shift=     0x0  size=644  diff_bytes=4 first_diff=+0x118
+[SAME_SIZE_DIFFERENT_BYTES ] communication::LanStrategy::stop()                                      shift=     0x0  size=184  diff_bytes=4 first_diff=+0x20
+[SAME_SIZE_DIFFERENT_BYTES ] communication::NetworkManager::report_message(std::__cxx11::basic_stri  shift=     0x0  size=96  diff_bytes=4 first_diff=+0x50
+[SAME_SIZE_DIFFERENT_BYTES ] communication::NetworkManager::set_mode(NetworkMode)                    shift=     0x0  size=1684  diff_bytes=118 first_diff=+0x314
+[SAME_SIZE_DIFFERENT_BYTES ] communication::NetworkManager::stop()                                   shift=     0x0  size=104  diff_bytes=8 first_diff=+0x54
+[SKIP                      ] data_start                                                            
+
+54688 identical (hidden by --only-diffs), 12 same-size-but-different (both patched, compare these), 0 size-differs (recompiled/restructured differently)
+
+CAVEAT: function size is estimated as "next symbol's start minus this one's",
+which overestimates near sparse/trailing symbols (e.g. _fini) with no next symbol
+nearby -- ignore SIZE_DIFFERS/byte-diff rows for those, they are a measurement
+artifact, not a real difference.

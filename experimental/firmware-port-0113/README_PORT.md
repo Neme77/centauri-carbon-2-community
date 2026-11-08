@@ -99,6 +99,27 @@ see `PATCH_SITES.md` for what each stage writes):
 GUI and camera hashes are identical between the earlier manual build and the
 corrected script output — only the printer payload body was affected.
 
+## Comparing against another independent port
+
+`compare_patched_binaries.py` (read-only) diffs two same-architecture ELF
+binaries function-by-function via their symbol tables — e.g. your own patched
+`elegoo_printer` against ours, or stock against patched to see what changed.
+It reports, per named function, whether it's byte-identical, same-size-but-
+different (both sides patched it — worth comparing), or size-differs (likely
+recompiled/restructured differently), without needing to know either side's
+patch offsets in advance.
+
+```sh
+python3 compare_patched_binaries.py YOUR_PATCHED_elegoo_printer WORK/corrected/elegoo_printer.patched --only-diffs
+```
+
+Self-test (stock 02.01.01.13 vs. this port's corrected output) correctly and
+automatically finds exactly our 12 patched functions and nothing else — see
+`COMPARE_TOOL_SELFTEST_OUTPUT.txt`. One caveat printed by the tool itself:
+its function-size estimate (next symbol's address minus this one's) can
+overestimate near sparse/trailing symbols (e.g. `_fini`); ignore size/byte
+diffs reported there.
+
 ## Status
 
 - `ported_patch_set` in `builder/current/base_profiles/02.01.01.13.json` stays

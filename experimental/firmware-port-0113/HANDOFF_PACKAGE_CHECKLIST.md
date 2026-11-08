@@ -24,6 +24,8 @@ leave two contradictory claims live at once.
 | `apply_patches.py` | Reproducibility script: stock inputs → 3 patched binaries, with verification |
 | `k1_restructure.py`, `stage0_verify.py`, `verify_patched.py` | Underlying restructure/verification tools `apply_patches.py` calls |
 | `emulate_e1.py`, `emulate_e2.py`, `emulate_e345.py`, `emulate_e6.py` | Emulation harnesses |
+| `compare_patched_binaries.py` | Diffs two patched binaries function-by-function — for comparing an independent port directly |
+| `DISASSEMBLY_LANSTRATEGY_START.txt`, `COMPARE_TOOL_SELFTEST_OUTPUT.txt` | Evidence: full disassembly confirming the one previously-inferred branch target; self-test of the comparison tool |
 | `VERIFY_OUTPUT.txt`, `EMULATE_E1_OUTPUT.txt`, `EMULATE_E2_OUTPUT.txt`, `EMULATE_E345_OUTPUT.txt`, `EMULATE_E6_OUTPUT.txt` | Captured evidence of the above (re-run against the corrected binary) |
 | Existing analysis docs (`README.md`, `DIFF_BLOCKS.md`, `PORTING_METHODOLOGY.md`, `PAYLOAD_BASE_FIXATION_AND_BRANCH_PLAN.md`, `K1_FEASIBILITY.md`, `K1_RESTRUCTURE_SPEC.md`, `TEST_MATRIX.md`, `RISK_LIST.md`, `COMPATIBILITY_AND_ROLLBACK.md`, `EMULATION_PLAN.md`, `HARDWARE_TEST_*.md`, `ROLLBACK_PLAN.md`) | Background, already referenced from the above |
 

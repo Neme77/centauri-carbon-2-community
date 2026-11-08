@@ -56,7 +56,7 @@ Neue Quell-VA im Payload = `PAYLOAD_BASE_NEW + (alte Quell-VA − 0xcd77e8)`
 | 1 | `0xcd781c` | `LanStrategy::start()` | `0x81ef10` | `0x8266a0` | `+0x7790` | Ja | `bl` | Einsprung Off 0 | verifiziert |
 | 2 | `0xcd7820` | `NetworkManager::set_mode` +0x68c | `0x812498` | `0x819c28` | `+0x7790` | Ja | `b` | Fenster identisch | verifiziert |
 | 3 | `0xcd7828` | `NetworkManager::get_instance()` | `0x25606c` | `0x25859c` | `+0x2530` | Ja | `bl` | Einsprung Off 0 | verifiziert |
-| 4 | `0xcd7840` | `LanStrategy::start()` +0x11c | `0x81f02c` | `0x8267bc` | `+0x7790` | eingegrenzt | `b` | Ziel `e1a00003` byte-identisch; nur Nachbar-Operanden reloziert | eingegrenzt, Emulation ausstehend |
+| 4 | `0xcd7840` | `LanStrategy::start()` +0x11c | `0x81f02c` | `0x8267bc` | `+0x7790` | **bestätigt** | `b` | Volle Capstone-Disassemblierung: 161/161 Instruktionen der Funktion identisch, Patch-Stelle Index 71 in beiden Builds `mov r0,r3` | bestätigt (2026-11-08) |
 | 5 | `0xcd787c` | `LanStrategy::stop_mqtt_client()` | `0x81fb38` | `0x8272c8` | `+0x7790` | Ja | `bl` | Einsprung Off 0 | verifiziert |
 | 6 | `0xcd78c4` | `LanStrategy::report_message()` | `0x81f24c` | `0x8269dc` | `+0x7790` | Ja | `bl` | Einsprung Off 0 | verifiziert |
 | 7 | `0xcd78e4` | `LanStrategy::report_message()` | `0x81f24c` | `0x8269dc` | `+0x7790` | Ja | `b` | Einsprung Off 0 | verifiziert |
@@ -71,8 +71,8 @@ Neue Quell-VA im Payload = `PAYLOAD_BASE_NEW + (alte Quell-VA − 0xcd77e8)`
 | 16 | `0xcd79c0` | `std::string` ctor | `0xbf2c8` | `0xbf1e4` | `-0xe4` | Ja | direkter Branch auf PLT-Stub, Sprung über GOT | `.rel.plt` | verifiziert |
 | 17 | `0xcd79d8` | `std::string` ctor | `0xbf2c8` | `0xbf1e4` | `-0xe4` | Ja | direkter Branch auf PLT-Stub, Sprung über GOT | `.rel.plt` | verifiziert |
 
-**13 von 13 Zielen adressseitig belegt** (12 verifiziert, 1 eingegrenzt:
-`LanStrategy::start+0x11c` → `0x8267bc`, strukturell belegt, Emulation ausstehend).
+**13 von 13 Zielen verifiziert** (inkl. `LanStrategy::start+0x11c` → `0x8267bc`,
+bestätigt durch vollständige Disassemblierung am 2026-11-08).
 **Kein Pauschal-Shift** — vier Shifts: `+0x7790` (9 Ziele), `+0x2530` (1), `-0xd8`
 (strcmp-PLT), `-0xe4` (zwei std::string-PLT). Alle direkte Branches; PLT = direkter
 Branch auf Stub, Sprung über GOT. Keine Branch-Bytes, keine `imm24`.

@@ -22,7 +22,7 @@ by `apply_patches.py`) or `K1_RESTRUCTURE_SPEC.md`.
 | `0x34` | `bl` | `00000000` | `ae85edeb` | `0x8266a0` | `LanStrategy::start()` |
 | `0x38` | `b` | `00000000` | `0f53edea` | `0x819c28` | `set_mode` internal (+0x68c) |
 | `0x40` | `bl` | `00000000` | `6a4dd6eb` | `0x25859c` | `NetworkManager::get_instance` (+0x2530 shift) |
-| `0x58` | `b` | `00000000` | `ec85edea` | `0x8267bc` | `LanStrategy::start+0x11c` (structurally inferred — see `OPEN_QUESTIONS.md` #1) |
+| `0x58` | `b` | `00000000` | `ec85edea` | `0x8267bc` | `LanStrategy::start+0x11c` (confirmed by full-function disassembly, 161/161 instructions match — `OPEN_QUESTIONS.md` #1) |
 | `0x94` | `bl` | `00000000` | `a088edeb` | `0x8272c8` | `stop_mqtt_client` |
 | `0xdc` | `bl` | `00000000` | `5386edeb` | `0x8269dc` | `LanStrategy::report_message` |
 | `0xfc` | `b` | `00000000` | `4b86edea` | `0x8269dc` | `LanStrategy::report_message` |

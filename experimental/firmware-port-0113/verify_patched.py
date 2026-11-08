@@ -31,7 +31,7 @@ GROUP_B = [
     (0xCD781C, 0x8266A0, "bl LanStrategy::start"),
     (0xCD7820, 0x819C28, "b  set_mode+0x68c"),
     (0xCD7828, 0x25859C, "bl get_instance (+0x2530)"),
-    (0xCD7840, 0x8267BC, "b  start+0x11c (strukturell belegt)"),
+    (0xCD7840, 0x8267BC, "b  start+0x11c (confirmed, 161/161-instruction disassembly match)"),
     (0xCD787C, 0x8272C8, "bl stop_mqtt_client"),
     (0xCD78C4, 0x8269DC, "bl LanStrategy::report_message"),
     (0xCD78E4, 0x8269DC, "b  LanStrategy::report_message"),

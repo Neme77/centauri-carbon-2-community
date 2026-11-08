@@ -39,27 +39,25 @@ reference the new hash instead of (or in addition to) the old one, with a
 note explaining the fix. (Not done automatically by this package — see
 `HANDOFF_PACKAGE_CHECKLIST.md`.)
 
-## Point 1 — `LanStrategy::start+0x11c` branch target not fully disassembled
+## Point 1 — `LanStrategy::start+0x11c` branch target — RESOLVED (2026-11-08)
 
-**What is open:** the payload branch at payload offset `0x58` targets
+**What was open:** the payload branch at payload offset `0x58` targets
 `0x8267bc` (`LanStrategy::start+0x11c` in the new build). This target was
-inferred structurally: the instruction at that address is byte-identical
-(`e1a00003`, `mov r0,r3`) to the old build's target, and the twelve
-surrounding instructions match after accounting for expected relocation of
-neighboring operands — but it was not confirmed by a full disassembly
-listing comparison the way the other 16 payload-internal targets were (each
-of which lands on a named function's entry point, offset 0, which is
-unambiguous).
+initially inferred structurally from a 12-instruction window, not a full
+disassembly.
 
-**Concrete test that closes it:** disassemble `LanStrategy::start` in both
-the 02.01.01.07 and 02.01.01.13 builds in Ghidra (or objdump), from the
-function's start through at least offset `+0x130`, and confirm the control-
-flow graph (not just the one instruction) matches between the old target
-`0x81f02c` and the new target `0x8267bc` — i.e., that both are reached by the
-same case of the same switch/branch structure.
+**Resolved by:** full Capstone disassembly of `LanStrategy::start` in both
+builds (0x81ef10, size 0x284, 02.01.01.07; 0x8266a0, 02.01.01.13) —
+**161/161 instructions structurally identical** (mnemonic + normalized
+operands; only branch targets and `movw`/`movt` immediates differ, as
+expected from relocation). The patch site is at **instruction index 71** in
+both functions, both `mov r0,r3` (old `0x81f02c`, new `0x8267bc`), with
+matching surrounding control flow (same preceding `bl`s and `sub`s, same
+following `bl`/`movw`/`movt` sequence). This is the whole-function
+control-flow-graph match the earlier version of this point asked for — not
+just the one instruction.
 
-**Priority: should-fix before hardware test of the LAN/WAN coexistence path**
-(this is 1 of 17 payload branches; the other 16 are solid).
+**Priority: closed.** `0x8267bc` is a confirmed branch target, not inferred.
 
 ## Point 2 — real HTTP/network/MQTT/camera integration not proven
 

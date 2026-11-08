@@ -315,7 +315,7 @@ zusätzlich von der finalen Payload-Basis ab.
 | 1 | `0xcd781c` | `LanStrategy::start()` | `0x81ef10` | `0x8266a0` | `+0x7790` | Ja | `bl` | Einsprung Off 0 | Ziel verifiziert |
 | 2 | `0xcd7820` | `NetworkManager::set_mode` +0x68c | `0x812498` | `0x819c28` | `+0x7790` | Ja | `b` | Fenster identisch | Ziel verifiziert |
 | 3 | `0xcd7828` | `NetworkManager::get_instance()` | `0x25606c` | `0x25859c` | `+0x2530` | Ja | `bl` | Einsprung Off 0 | Ziel verifiziert |
-| 4 | `0xcd7840` | `LanStrategy::start()` +0x11c | `0x81f02c` | `0x8267bc` | `+0x7790` | eingegrenzt | `b` | Ziel `e1a00003` byte-identisch; nur Nachbar-Operanden reloziert (12 passend, 0 echt) | eingegrenzt, Emulation ausstehend |
+| 4 | `0xcd7840` | `LanStrategy::start()` +0x11c | `0x81f02c` | `0x8267bc` | `+0x7790` | **bestätigt** | `b` | Vollständige Capstone-Disassemblierung der ganzen Funktion: 161/161 Instruktionen strukturell identisch, Patch-Stelle an Index 71 in beiden Builds `mov r0,r3` | bestätigt (2026-11-08) |
 | 5 | `0xcd787c` | `LanStrategy::stop_mqtt_client()` | `0x81fb38` | `0x8272c8` | `+0x7790` | Ja | `bl` | Einsprung Off 0 | Ziel verifiziert |
 | 6 | `0xcd78c4` | `LanStrategy::report_message()` | `0x81f24c` | `0x8269dc` | `+0x7790` | Ja | `bl` | Einsprung Off 0 | Ziel verifiziert |
 | 7 | `0xcd78e4` | `LanStrategy::report_message()` | `0x81f24c` | `0x8269dc` | `+0x7790` | Ja | `b` | Einsprung Off 0 | Ziel verifiziert |
@@ -334,14 +334,16 @@ zusätzlich von der finalen Payload-Basis ab.
 
 ##### Gruppe B — Vendor-Ziele im Payload
 
-Alle 13 Vendor-Ziele sind adressseitig belegt: 12 verifiziert, 1 eingegrenzt.
+Alle 13 Vendor-Ziele sind adressseitig belegt: 13 verifiziert.
 
-- `LanStrategy::start + 0x11c` (`0xcd7840`) → neu `0x8267bc` (`+0x7790`). Zuvor
-  „UNKLAR" wegen abweichendem 16-Byte-Fenster; der Opcode-Vergleich zeigt jedoch:
-  die Zielinstruktion `e1a00003` (`mov r0,r3`) ist byte-identisch und die Umgebung
-  strukturell gleich (12 passend, 0 echte Opcode-Unterschiede) — das Fenster wich
-  nur durch relozierte Nachbar-Operanden (`bl` auf PLT-Stub, `movw`/`movt`) ab.
-  Strukturell belegt; finale Bestätigung per Emulation.
+- `LanStrategy::start + 0x11c` (`0xcd7840`) → neu `0x8267bc` (`+0x7790`). **Bestätigt
+  (2026-11-08)** durch vollständige Capstone-Disassemblierung der ganzen Funktion
+  in beiden Builds: 161/161 Instruktionen strukturell identisch (Mnemonics +
+  normierte Operanden; nur Branch-Ziele und `movw`/`movt` unterscheiden sich
+  relozierungsbedingt). Patch-Stelle an Instruktions-Index 71 in beiden Funktionen,
+  dort jeweils `mov r0,r3` (alt `0x81f02c`, neu `0x8267bc`), mit übereinstimmendem
+  Kontrollfluss davor/danach. Kein struktureller Hinweis mehr, sondern
+  vollständiger Funktionsvergleich.
 
 Es liegen vier unterschiedliche Shifts vor. Ein pauschaler Shift von `+0x7790` wäre bei vier Zielen falsch:
 
@@ -399,7 +401,7 @@ final; die Wahl und die Durchführung bleiben Maintainer-/Toolchain-Arbeit.
 
 - Finale Payload-Basis: offen
 - Branch-Bytes für alle Gruppe-B-Referenzen: offen, abhängig von finaler Payload-Basis und Quelladresse
-- `LanStrategy::start + 0x11c` (`0xcd7840`): UNKLAR, Maintainer-Disassemblierung erforderlich
+- ~~`LanStrategy::start + 0x11c` (`0xcd7840`): UNKLAR~~ — bestätigt (2026-11-08), siehe oben
 - Gruppe-A-Referenzen: neue Adressen folgen erst aus der finalen Payload-Basis
 - Die erforderliche ELF-/Segment-Umstrukturierung ist noch nicht durchgeführt.
 - 3 UNKLAR-Stellen und 6 DIFF-Blöcke: separat, Maintainer-Disassemblierung
