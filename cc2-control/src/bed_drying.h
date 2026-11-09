@@ -21,6 +21,7 @@ enum { DRY_OFF, DRY_CHECK, DRY_ARM, DRY_HEAT, DRY_HEATING, DRY_HOLDING,
 static struct {
     int stage, temp, minutes, original_timeout, restore_only, stopping_started, target_seen;
     int preheat, chamber, previous_grille, previous_fan, fan_sent, fan_pending, ready, levelled, samples;
+    int keep_temp, keep_minutes, keep_started, own_target;
     long long since, hold_until, next_lease, retry_at, ready_since, next_fan, next_sample, stop_deadline;
     double plateau, chamber_log[DRY_SAMPLES];
     unsigned long connection, stop_messages;
@@ -178,7 +179,7 @@ static void drying_estimate(void) {
     else if(first>second)drying.plateau=t2+second*second/(first-second);
 }
 static void drying_stop(const char *reason,int restore_only) {
-    plates_exchange_close(&drying.exchange);drying.query[0]=0;drying.fan_pending=-1;
+    plates_exchange_close(&drying.exchange);drying.query[0]=0;drying.fan_pending=-1;drying.own_target=0;
     drying.stage=DRY_STOPPING;drying.since=drying_clock();drying.retry_at=0;
     drying.stop_deadline=drying_clock()+DRY_ABORT_MS;
     drying.reason=reason;drying.restore_only=restore_only;drying.stopping_started=0;
@@ -214,7 +215,8 @@ static void drying_tick(const mqtt_client *mqtt) {
         drying_stop(foreign?(drying.preheat&&drying.stage>=DRY_HEATING?"print":"busy"):"telemetry",foreign);
     }
     if(drying.stage>=DRY_CHECK&&drying.stage<=DRY_HEAT&&fresh&&target!=0&&
-       !(drying.stage==DRY_HEAT&&drying.exchange.sent>0&&fabs(target-drying.temp)<=0.5))
+       !(drying.stage==DRY_HEAT&&drying.exchange.sent>0&&fabs(target-drying.temp)<=0.5)&&
+       !(drying.own_target&&drying.stage==DRY_HEAT&&drying.exchange.sent>0&&target>drying.temp))
         drying_stop("changed",1);
     if(drying.stage==DRY_STOPPING&&mqtt->have_machine_status&&mqtt->machine_status!=1)
         drying.restore_only=1;
@@ -247,7 +249,17 @@ static void drying_tick(const mqtt_client *mqtt) {
         else if(drying.stage==DRY_HEATING&&fabs(bed-drying.temp)<=1) {
             drying.stage=DRY_HOLDING;drying.hold_until=now+(long long)drying.minutes*60000;
         }
-        else if(drying.stage==DRY_HOLDING&&now>=drying.hold_until)drying_stop("elapsed",0);
+        else if(drying.stage==DRY_HOLDING&&now>=drying.hold_until) {
+            if(drying.keep_minutes>0&&!drying.keep_started) {
+                /* Optional keep-warm instead of cooling: lower the setpoint once and keep
+                 * the same native lease; the hold timer restarts when the bed reaches it. */
+                drying.keep_started=1;drying.own_target=1;
+                drying.temp=drying.keep_temp;drying.minutes=drying.keep_minutes;
+                drying.target_seen=0;drying.since=now;drying.hold_until=0;
+                drying.stage=DRY_HEAT;
+                char command[32];snprintf(command,sizeof(command),"M140 S%d",drying.temp);drying_command(command);
+            } else drying_stop("elapsed",0);
+        }
     }
     if(drying.stage==DRY_STOPPING) {
         if(!fresh){if(strcmp(drying.reason,"print"))drying.reason="telemetry";return;} /* Do not cool somebody else's active print. */
@@ -310,7 +322,7 @@ static void drying_tick(const mqtt_client *mqtt) {
         drying.stage=DRY_HEAT;char command[32];snprintf(command,sizeof(command),"M140 S%d",drying.temp);drying_command(command);
     } else if(drying.stage==DRY_HEAT) {
         drying.stage=DRY_HEATING;drying.target_seen=0;drying.since=now;drying.next_lease=now+30000;
-        drying.next_sample=now;drying.next_fan=now+15000;
+        drying.next_sample=now;drying.next_fan=now+15000;drying.own_target=0;
     } else if(drying.stage==DRY_RESTORE) {
         if(unlink(drying_journal)&&errno!=ENOENT){drying.stage=DRY_RECOVERY;drying.reason="storage";return;}
         drying.stage=!strcmp(drying.reason,"elapsed")||!strcmp(drying.reason,"print")?DRY_DONE:DRY_INTERRUPTED;
@@ -329,18 +341,21 @@ static int drying_status_json(char *body,size_t capacity,const mqtt_client *mqtt
     if(isfinite(drying.plateau))snprintf(plateau,sizeof(plateau),"%.1f",drying.plateau);
     return snprintf(body,capacity,
         "{\"enabled\":%s,\"active\":%s,\"state\":\"%s\",\"reason\":\"%s\",\"temperature\":%d,\"minutes\":%d,\"remaining\":%lld,\"fresh\":%s,\"bed\":%.2f,\"target\":%.2f,"
-        "\"mode\":\"%s\",\"chamber_target\":%d,\"chamber\":%s,\"ready\":%s,\"levelled\":%s,\"plateau\":%s,\"fan\":%d,\"bed_limit\":%d}\n",
+        "\"mode\":\"%s\",\"chamber_target\":%d,\"chamber\":%s,\"ready\":%s,\"levelled\":%s,\"plateau\":%s,\"fan\":%d,\"bed_limit\":%d,"
+        "\"keep\":%d,\"keep_minutes\":%d,\"keeping\":%s}\n",
         experiments.bed_drying?"true":"false",drying_active()?"true":"false",
         state,drying.reason,drying.temp,drying.minutes,left>0?left:0,fresh?"true":"false",bed,target,
         drying.preheat?"preheat":"bed",drying.chamber,chamber_text,drying.ready?"true":"false",drying.levelled?"true":"false",plateau,
-        drying.preheat&&drying_active()?drying.fan_sent:0,drying_bed_limit()>DRY_PREHEAT_BED_MAX?DRY_PREHEAT_BED_MAX:drying_bed_limit());
+        drying.preheat&&drying_active()?drying.fan_sent:0,drying_bed_limit()>DRY_PREHEAT_BED_MAX?DRY_PREHEAT_BED_MAX:drying_bed_limit(),
+        drying.keep_temp,drying.keep_minutes,drying.keep_started&&drying_active()?"true":"false");
 }
 static void drying_response(int fd,const mqtt_client *mqtt,console_state *console) {
     (void)console;char body[DRY_STATUS_MAX];int n=drying_status_json(body,sizeof(body),mqtt);
     if(n>0&&(size_t)n<sizeof(body))respond(fd,200,"OK","application/json",body,(size_t)n);
 }
-static void drying_begin(int preheat,int temp,int minutes,int chamber) {
+static void drying_begin(int preheat,int temp,int minutes,int chamber,int keep_temp,int keep_minutes) {
     drying.preheat=preheat;drying.temp=temp;drying.minutes=minutes;drying.chamber=chamber;
+    drying.keep_temp=keep_temp;drying.keep_minutes=keep_minutes;drying.keep_started=drying.own_target=0;
     drying.previous_grille=drying.previous_fan=drying.fan_sent=drying.ready=drying.levelled=drying.samples=0;drying.fan_pending=-1;
     drying.ready_since=drying.hold_until=0;drying.plateau=NAN;
 }
@@ -352,15 +367,19 @@ static void drying_open(int fd,mqtt_client *mqtt,console_state *console) {
 }
 static void drying_start_response(int fd,const char *request,const char *body,size_t length,mqtt_client *mqtt,console_state *console) {
     if(!app_update_authorized(request,mqtt)){app_update_fail(fd,401,"LAN code confirmation required or temporarily locked");return;}
-    int temp=0,minutes=0;char canonical[32],input[32]={0};
-    if(length<4||length>6){app_update_fail(fd,400,"Invalid bed heating settings");return;}
+    int temp=0,minutes=0,keep_temp=0,keep_minutes=0;char canonical[32],input[32]={0};
+    if(length<4||length>13){app_update_fail(fd,400,"Invalid bed heating settings");return;}
     memcpy(input,body,length);
-    if(sscanf(input,"%d:%d",&temp,&minutes)!=2||temp<30||temp>90||minutes<1||minutes>720){app_update_fail(fd,400,"Use 30-90 C and 1-720 minutes");return;}
-    snprintf(canonical,sizeof(canonical),"%d:%d",temp,minutes);
+    int fields=sscanf(input,"%d:%d:%d:%d",&temp,&minutes,&keep_temp,&keep_minutes);
+    if((fields!=2&&fields!=4)||temp<30||temp>90||minutes<1||minutes>720||
+       (fields==4&&(keep_temp<30||keep_temp>temp||keep_minutes<1||keep_minutes>720))){
+        app_update_fail(fd,400,"Use 30-90 C and 1-720 minutes; keep warm holds 30 C up to the drying temperature for 1-720 minutes");return;
+    }
+    snprintf(canonical,sizeof(canonical),fields==4?"%d:%d:%d:%d":"%d:%d",temp,minutes,keep_temp,keep_minutes);
     if(strlen(canonical)!=length||memcmp(body,canonical,length)){app_update_fail(fd,400,"Invalid bed heating settings");return;}
     if(!drying_ready(mqtt,console,0)){app_update_fail(fd,409,"Bed heating needs an enabled experiment, fresh idle/cold printer and no other operation");return;}
     if(!drying_configured_timeout(&drying.original_timeout)){app_update_fail(fd,409,"Cannot verify the configured bed idle timeout");return;}
-    drying_begin(0,temp,minutes,0);
+    drying_begin(0,temp,minutes,0,keep_temp,keep_minutes);
     drying_open(fd,mqtt,console);
 }
 /* Bed-only chamber heating levels off around 40-50 C depending on the room. */
@@ -384,7 +403,7 @@ static void drying_preheat_response(int fd,const char *request,const char *body,
     }
     if(now_chamber>=chamber){app_update_fail(fd,409,"The chamber is already at the target");return;}
     if(!drying_configured_timeout(&drying.original_timeout)){app_update_fail(fd,409,"Cannot verify the configured bed idle timeout");return;}
-    drying_begin(1,bed,minutes,chamber);drying.previous_grille=grille>=0.5;drying.previous_fan=(int)lround(fan*255);
+    drying_begin(1,bed,minutes,chamber,0,0);drying.previous_grille=grille>=0.5;drying.previous_fan=(int)lround(fan*255);
     drying_open(fd,mqtt,console);
 }
 static void drying_stop_response(int fd,const char *request,mqtt_client *mqtt,console_state *console) {

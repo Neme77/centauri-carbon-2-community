@@ -31,6 +31,8 @@ export const BedDrying = () => {
   const session = data?.bed_drying
   const [temp, setTemp] = useState('70'),
     [minutes, setMinutes] = useState('360')
+  const [keepTemp, setKeepTemp] = useState('0'),
+    [keepMinutes, setKeepMinutes] = useState('0')
   const [chamber, setChamber] = useState('45'),
     [preheatBed, setPreheatBed] = useState('100'),
     [hold, setHold] = useState('30'),
@@ -46,9 +48,12 @@ export const BedDrying = () => {
   const bedLimit = Number(session.bed_limit) >= 60 ? Math.min(100, Number(session.bed_limit)) : 100
   const whole = (v: string, min: number, max: number) =>
     Number.isInteger(Number(v)) && Number(v) >= min && Number(v) <= max
+  const keep = Number(keepTemp)
+  const keepM = Number(keepMinutes)
+  const keepValid = keep === 0 || (whole(keepTemp, 30, Number(temp)) && whole(keepMinutes, 1, 720))
   const valid = preheat
     ? whole(chamber, 30, 55) && whole(preheatBed, 60, bedLimit) && whole(hold, 1, 240)
-    : whole(temp, 30, 90) && whole(minutes, 1, 720)
+    : whole(temp, 30, 90) && whole(minutes, 1, 720) && keepValid
   const startable =
     ok &&
     data?.connected &&
@@ -83,7 +88,9 @@ export const BedDrying = () => {
             ? ''
             : preheat
               ? `${Number(preheatBed)}:${Number(chamber)}:${Number(hold)}`
-              : `${Number(temp)}:${Number(minutes)}`,
+              : keep > 0
+                ? `${Number(temp)}:${Number(minutes)}:${keep}:${keepM}`
+                : `${Number(temp)}:${Number(minutes)}`,
       })
       await refreshPrinter()
     } catch (e) {
@@ -172,47 +179,79 @@ export const BedDrying = () => {
           </label>
         </div>
       ) : (
-        <div class="mt-3 grid gap-3 cc2-md:grid-cols-3">
-          <label htmlFor="drying-temperature">
-            {t('common.bed_temperature_c')}
-            <Input
-              id="drying-temperature"
-              class="mt-1"
-              type="number"
-              min={30}
-              max={90}
-              step={1}
-              value={temp}
-              disabled={busy || session.active}
-              onInput={e => setTemp(e.currentTarget.value)}
-            />
-          </label>
-          <label htmlFor="drying-duration">
-            {t('drying.minutes')}
-            <Input
-              id="drying-duration"
-              class="mt-1"
-              type="number"
-              min={1}
-              max={720}
-              step={1}
-              value={minutes}
-              disabled={busy || session.active}
-              onInput={e => setMinutes(e.currentTarget.value)}
-            />
-          </label>
-          <label htmlFor="drying-lan">
-            {t('experiments.lan_code')}
-            <PasswordInput
-              id="drying-lan"
-              class="mt-1"
-              value={code}
-              autoComplete="off"
-              disabled={busy}
-              onInput={e => setCode(e.currentTarget.value)}
-            />
-          </label>
-        </div>
+        <>
+          <div class="mt-3 grid gap-3 cc2-md:grid-cols-3">
+            <label htmlFor="drying-temperature">
+              {t('common.bed_temperature_c')}
+              <Input
+                id="drying-temperature"
+                class="mt-1"
+                type="number"
+                min={30}
+                max={90}
+                step={1}
+                value={temp}
+                disabled={busy || session.active}
+                onInput={e => setTemp(e.currentTarget.value)}
+              />
+            </label>
+            <label htmlFor="drying-duration">
+              {t('drying.minutes')}
+              <Input
+                id="drying-duration"
+                class="mt-1"
+                type="number"
+                min={1}
+                max={720}
+                step={1}
+                value={minutes}
+                disabled={busy || session.active}
+                onInput={e => setMinutes(e.currentTarget.value)}
+              />
+            </label>
+            <label htmlFor="drying-lan">
+              {t('experiments.lan_code')}
+              <PasswordInput
+                id="drying-lan"
+                class="mt-1"
+                value={code}
+                autoComplete="off"
+                disabled={busy}
+                onInput={e => setCode(e.currentTarget.value)}
+              />
+            </label>
+          </div>
+          <div class="mt-3 grid gap-3 cc2-md:grid-cols-2">
+            <label htmlFor="drying-keep-temp">
+              {t('drying.keep_temp')}
+              <Input
+                id="drying-keep-temp"
+                class="mt-1"
+                type="number"
+                min={0}
+                max={90}
+                step={1}
+                value={keepTemp}
+                disabled={busy || session.active}
+                onInput={e => setKeepTemp(e.currentTarget.value)}
+              />
+            </label>
+            <label htmlFor="drying-keep-minutes">
+              {t('drying.keep_minutes')}
+              <Input
+                id="drying-keep-minutes"
+                class="mt-1"
+                type="number"
+                min={0}
+                max={720}
+                step={1}
+                value={keepMinutes}
+                disabled={busy || session.active || keep === 0}
+                onInput={e => setKeepMinutes(e.currentTarget.value)}
+              />
+            </label>
+          </div>
+        </>
       )}
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <Button disabled={busy || !startable || !valid || !code.trim()} onClick={() => void send('start')}>
@@ -232,7 +271,8 @@ export const BedDrying = () => {
         {preheat && t('preheat.bed')}{' '}
         {session.fresh && ok ? `${session.bed.toFixed(1)} / ${session.target.toFixed(0)} °C` : t('drying.unavailable')}
         {preheat && session.active && ` · ${t('preheat.fan')} ${Math.round((session.fan / 255) * 100)} %`}
-        {session.state === 'holding' && ` · ${t('drying.remaining')}: ${duration(session.remaining)}`}
+        {session.state === 'holding' &&
+          ` · ${t(session.keeping ? 'drying.keeping' : 'drying.remaining')}: ${duration(session.remaining)}`}
       </p>
       {preheat && session.active && session.state === 'holding' && (
         <p
@@ -262,7 +302,11 @@ export const BedDrying = () => {
                 ? 'drying.manual_stopped'
                 : session.reason === 'elapsed'
                   ? 'drying.expired'
-                  : 'drying.interrupted_hint'
+                  : session.reason === 'restore_timeout'
+                    ? 'drying.restore_timeout'
+                    : session.reason === 'aborted'
+                      ? 'drying.aborted'
+                      : 'drying.interrupted_hint'
             )}
           </p>
         )

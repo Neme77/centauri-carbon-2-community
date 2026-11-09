@@ -9,6 +9,30 @@ when fresh bed readback reaches the setpoint within 1 °C. It continues if the
 page closes. It never resumes heating after a CC2/printer restart. There are no
 material presets or claims that bed temperature equals filament/air temperature.
 
+## Optional keep-warm hold
+
+The start request may add a keep-warm phase: `temp:minutes:keep_temp:keep_minutes`
+(for example `60:360:45:480` dries for 6 hours at 60 °C and then holds 45 °C for
+8 hours). The keep temperature is 30 °C up to the drying setpoint and the keep
+duration is 1–720 minutes; omitting both fields keeps the original behaviour.
+When the drying hold elapses, one correlated `M140 S<keep>` lowers the setpoint;
+the same 90-second native lease keeps being renewed and the keep timer starts
+when the bed reaches the lower setpoint. Stop, expiry, foreign prints and
+restarts behave exactly like the drying phase: a restart never resumes the keep
+hold, it only restores the configured idle timeout. The status JSON gained
+`keep`, `keep_minutes` and `keeping`, and the page shows the remaining keep time.
+
+## Bounded stop and restore
+
+A stop or restore that cannot complete (persistent reply refusal, dead UDS
+exchange or stale telemetry) would previously keep the session active forever:
+every later start was refused and only a reflash cleared it. Stop and restore
+are now bounded by a 15-minute budget; a foreign print's hand-off still waits
+as long as the print runs. Past the budget the marker is cleared and the
+session ends interrupted with reason `restore_timeout`. The stop request also
+terminates an unrecoverable session by hand (reason `aborted`), and recovery
+with an unreadable marker clears it immediately instead of waiting forever.
+
 ## Native heater lease
 
 The supplied G-code uses six hour-long G4 waits. This implementation sends no
