@@ -294,6 +294,17 @@ Preheat presets and calibration remain restricted to idle operation. A later
 G-code heater command can replace the manually selected target, as on Klipper.
 Manual temperature targets were validated during an active print on a physical CC2.
 
+## Interactive screw tramming
+
+`POST /api/control` accepts `screws:tram:start`, `screws:tram:probe:<FL|FR|RR|RL>[:2]`,
+`screws:tram:check[:2]` and `screws:tram:end`. Coordinates are taken from a fixed
+corner table; unknown IDs are refused. Start homes all axes (`G28`) and uses the
+same bed prep as `screws:measure`. Re-probe and the four-corner check home Z only
+(`G28 Z`) after a 30 s settle, and only while a session is active with X and Y
+homed. `GET /api/printer` reports `screws_session.active`. The session is cleared
+on disconnect, console error, timeout, emergency stop, `screws:measure` or end.
+End and session invalidation switch the heaters off. `screws:measure` is unchanged.
+
 ## Heater PID calibration
 
 `GET /api/pid` returns the selected heater, busy/ready/failed flags and the last

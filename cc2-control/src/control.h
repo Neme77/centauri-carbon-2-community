@@ -8,6 +8,22 @@ int control_build_script(const char *action, const mqtt_client *mqtt,
                          char *script, size_t script_cap,
                          char *reason, size_t reason_cap);
 
+/* Interactive screw-tramming session (issue #329). Corner IDs are FL/FR/RR/RL
+ * from a fixed table; re-probes home Z only after a session start that did G28.
+ * The session is memory-only and is cleared on disconnect, error, timeout,
+ * emergency stop, one-shot screws:measure, or an explicit end. */
+#define SCREWS_SETTLE_S 30
+#define SCREWS_SESSION_TIMEOUT_S 1200
+void control_screws_reset(void);
+void control_screws_invalidate(void);
+int control_screws_session_active(void);
+int control_screws_is_tram(const char *action);
+void control_screws_note_job(unsigned long generation);
+/* Returns 1 when an active session was just cleared and heaters should be
+ * switched off (timeout, disconnect, failed job, lost XY homing, estop). */
+int control_screws_tick(const mqtt_client *mqtt, int console_completed, int console_success,
+                        unsigned long generation, int emergency, time_t now);
+
 /* SET_TMC_FIELD values for the X/Y motor mode (motors:quiet / motors:normal).
  * The firmware refuses a literal 0, so the zero values overflow the field
  * width and are masked to 0 by the driver register helper. */

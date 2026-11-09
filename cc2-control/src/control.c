@@ -1,4 +1,5 @@
 #include "control.h"
+#include "console.h"
 #include "thermal_limits.h"
 #include "canvas_state.h"
 #include "external_filament_catalog.h"
@@ -50,6 +51,96 @@ static int valid_object_name(const char *name){
 /* print_status.enable is sticky on this firmware and may remain true after a
  * completed job. machine_status is the live authority: 1=Idle, 2=Printing. */
 static int printing(const mqtt_client *m){return m->have_machine_status&&m->machine_status==2;}
+
+/* Fixed screw-tramming corners. IDs only; coordinates never come from the request. */
+static const struct { char id[4]; int x, y; } SCREW_CORNERS[] = {
+    {"FL", 30, 30},
+    {"FR", 230, 30},
+    {"RR", 230, 225},
+    {"RL", 30, 225},
+};
+#define SCREW_CORNER_COUNT ((int)(sizeof(SCREW_CORNERS)/sizeof(SCREW_CORNERS[0])))
+
+static struct {
+    int active, start_done, job_pending, xy_seen;
+    unsigned long job_generation;
+    time_t last;
+} screws_session;
+
+void control_screws_reset(void){memset(&screws_session,0,sizeof(screws_session));}
+void control_screws_invalidate(void){control_screws_reset();}
+int control_screws_session_active(void){return screws_session.active;}
+int control_screws_is_tram(const char *action){return action&&!strncmp(action,"screws:tram:",12);}
+void control_screws_note_job(unsigned long generation){
+    if(!screws_session.active)return;
+    screws_session.job_pending=1;
+    screws_session.job_generation=generation;
+}
+static int tram_xy_homed(const mqtt_client *m){
+    return m&&m->have_position&&strchr(m->homed_axes,'x')&&strchr(m->homed_axes,'y');
+}
+static int tram_idle(const mqtt_client *m,char *reason,size_t cap){
+    time_t now=time(NULL);
+    if(printing(m))return reject(reason,cap,"Screw tramming is blocked while printing");
+    if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
+       m->last_message<=0||now<m->last_message||now-m->last_message>15)
+        return reject(reason,cap,"Screw tramming requires the printer to be idle with fresh telemetry");
+    return 1;
+}
+static int tram_script_ok(int n,size_t cap,char *reason,size_t reason_cap){
+    if(n<0||(size_t)n>=cap||(size_t)n>=CONSOLE_COMMAND_MAX)
+        return reject(reason,reason_cap,"Screw tramming command exceeds buffer capacity");
+    return 1;
+}
+static int append_tram_corners(char *script,size_t cap,size_t used,int only,int twice,
+                               char *reason,size_t reason_cap){
+    int from=only<0?0:only,to=only<0?SCREW_CORNER_COUNT:only+1;
+    for(int i=from;i<to;i++){
+        int n=snprintf(script+used,cap-used,
+            "G1 Z10 F600\nG1 X%d Y%d F12000\nPROBE SAMPLES=3\nG1 Z10 F600\n%s",
+            SCREW_CORNERS[i].x,SCREW_CORNERS[i].y,twice?"PROBE SAMPLES=3\nG1 Z10 F600\n":"");
+        if(!tram_script_ok(n,cap-used,reason,reason_cap))return 0;
+        used+=(size_t)n;
+    }
+    if(used>=CONSOLE_COMMAND_MAX)return reject(reason,reason_cap,"Screw tramming command exceeds buffer capacity");
+    return 1;
+}
+int control_screws_tick(const mqtt_client *m,int console_completed,int console_success,
+                        unsigned long generation,int emergency,time_t now){
+    if(!screws_session.active)return 0;
+    if(emergency||!m||!m->connected||!m->registered){
+        control_screws_invalidate();
+        return 1;
+    }
+    if(printing(m)||!m->have_machine_status||m->machine_status!=1){
+        control_screws_invalidate();
+        return 0;
+    }
+    if(m->last_message<=0||now<m->last_message||now-m->last_message>15){
+        control_screws_invalidate();
+        return 1;
+    }
+    if(screws_session.last&&now>=screws_session.last&&
+       now-screws_session.last>SCREWS_SESSION_TIMEOUT_S){
+        control_screws_invalidate();
+        return 1;
+    }
+    if(screws_session.job_pending&&console_completed&&generation==screws_session.job_generation){
+        screws_session.job_pending=0;
+        if(!console_success){
+            control_screws_invalidate();
+            return 1;
+        }
+        screws_session.start_done=1;
+        screws_session.last=now;
+    }
+    if(tram_xy_homed(m))screws_session.xy_seen=1;
+    else if(screws_session.xy_seen){
+        control_screws_invalidate();
+        return 1;
+    }
+    return 0;
+}
 
 /* The CC2 firmware heats the nozzle to 140 C while executing G28. Unlike the
  * stock display/app path, a raw G28 does not restore the previous heater
@@ -141,11 +232,77 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         snprintf(script,cap,"PID_CALIBRATE HEATER=%s TARGET=%.1f\nTURN_OFF_HEATERS",a,value);
         return 1;
     }
+    if(!strncmp(action,"screws:tram:",12)){
+        if(!tram_idle(m,reason,reason_cap))return 0;
+        if(!strcmp(action,"screws:tram:start")){
+            int n=snprintf(script,cap,
+                "SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n"
+                "M140 S60\n"
+                "G28\n"
+                "G180 S3\n"
+                "M190 S60\n"
+                "G90\n");
+            if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
+            if(!append_tram_corners(script,cap,(size_t)n,-1,0,reason,reason_cap))return 0;
+            control_screws_reset();
+            screws_session.active=1;
+            screws_session.last=time(NULL);
+            return 1;
+        }
+        if(!strcmp(action,"screws:tram:check")||!strcmp(action,"screws:tram:check:2")){
+            int twice=!strcmp(action,"screws:tram:check:2");
+            if(!screws_session.active)
+                return reject(reason,reason_cap,"Screw tramming session is not active");
+            if(!tram_xy_homed(m))
+                return reject(reason,reason_cap,"Screw tramming re-probe requires homed X and Y");
+            int n=snprintf(script,cap,
+                "SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n"
+                "G28 Z\n"
+                "G4 S%d\n"
+                "G90\n",SCREWS_SETTLE_S);
+            if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
+            if(!append_tram_corners(script,cap,(size_t)n,-1,twice,reason,reason_cap))return 0;
+            screws_session.last=time(NULL);
+            return 1;
+        }
+        if(!strncmp(action,"screws:tram:probe:",18)){
+            if(!screws_session.active)
+                return reject(reason,reason_cap,"Screw tramming session is not active");
+            if(!tram_xy_homed(m))
+                return reject(reason,reason_cap,"Screw tramming re-probe requires homed X and Y");
+            const char *rest=action+18;
+            char id[8];int end=0,twice=0,corner=-1;
+            if(sscanf(rest,"%7[^:]%n",id,&end)!=1||end<1)
+                return reject(reason,reason_cap,"Unknown screw corner");
+            if(rest[end]==0)twice=0;
+            else if(!strcmp(rest+end,":2"))twice=1;
+            else return reject(reason,reason_cap,"Unknown screw corner");
+            for(int i=0;i<SCREW_CORNER_COUNT;i++)if(!strcmp(SCREW_CORNERS[i].id,id)){corner=i;break;}
+            if(corner<0)return reject(reason,reason_cap,"Unknown screw corner");
+            int n=snprintf(script,cap,
+                "SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n"
+                "G28 Z\n"
+                "G4 S%d\n"
+                "G90\n",SCREWS_SETTLE_S);
+            if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
+            if(!append_tram_corners(script,cap,(size_t)n,corner,twice,reason,reason_cap))return 0;
+            screws_session.last=time(NULL);
+            return 1;
+        }
+        if(!strcmp(action,"screws:tram:end")){
+            int n=snprintf(script,cap,"M104 S0\nM140 S0");
+            if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
+            control_screws_invalidate();
+            return 1;
+        }
+        return reject(reason,reason_cap,"Unknown screw tramming action");
+    }
     /* Stage 2: guarded four-corner measurement, never called by print start. */
     if(strcmp(action,"screws:measure")==0){
         if(printing(m))return reject(reason,reason_cap,"Screw measurement is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)
             return reject(reason,reason_cap,"Screw measurement requires the printer to be idle");
+        control_screws_invalidate();
         /* Match the CC2 stock levelling preparation: heat the bed, run the
          * firmware-owned nozzle cleaning sequence (G180 S3), then wait for the
          * bed at 60 C before measuring.  The stock calibration completion path
@@ -230,6 +387,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
            m->last_message<=0||now<m->last_message||now-m->last_message>15)
             return reject(reason,reason_cap,"Heaters off requires the printer to be idle with fresh telemetry");
+        control_screws_invalidate();
         snprintf(script,cap,"TURN_OFF_HEATERS");return 1;
     }
     if(sscanf(action,"fan:%31[^:]:%lf",a,&value)==2){
@@ -382,7 +540,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Fans off requires the printer to be idle");
         snprintf(script,cap,"M106 S0\nM106 P2 S0\nSET_CAVITY_FAN SPEED=0");return 1;
     }
-    if(strcmp(action,"system:emergency_stop")==0){snprintf(script,cap,"M112");return 1;}
+    if(strcmp(action,"system:emergency_stop")==0){control_screws_invalidate();snprintf(script,cap,"M112");return 1;}
     if(sscanf(action,"light:%31s",a)==1){
         if(strcmp(a,"on")&&strcmp(a,"off"))return reject(reason,reason_cap,"Unknown light state");
         return reject(reason,reason_cap,"Light control requires the native printer API");

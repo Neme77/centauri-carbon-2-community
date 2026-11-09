@@ -15,9 +15,19 @@ import { type Key, t, tpl } from '@/lib/i18n'
 import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
-import { microns, screwPlan, screwValues } from '@/lib/screws'
+import { microns, SCREW_CORNERS, SCREW_KEYS, SCREW_SETTLE_S, screwPlan, screwValues, type ScrewId } from '@/lib/screws'
 import { usePoll } from '@/lib/poll'
-import { type BedTab, printer, nav, openPage, refreshConsole, screwText } from '@/lib/state'
+import {
+  type BedTab,
+  consoleStatus,
+  printer,
+  nav,
+  openPage,
+  refreshConsole,
+  refreshPrinter,
+  screwSession,
+  screwText,
+} from '@/lib/state'
 import {
   type Calibration,
   calibrate,
@@ -555,51 +565,97 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
 
 const Screws = () => {
   const measuring = useRef(false)
+  const [pending, setPending] = useState(false)
+  const [probeTwice, setProbeTwice] = useState(true)
   usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
-  const values = screwValues(screwText.use().text)
+  const session = screwSession.use()
+  const busy = consoleStatus.use().busy
+  const printerSession = Boolean(printer.use().data?.screws_session?.active)
+  const oneShot = screwValues(screwText.use().text)
+  const sessionReady = SCREW_KEYS.every(k => Number.isFinite(session.heights[k]))
+  const values = sessionReady ? session.heights : oneShot
   const plan = values ? screwPlan(values) : null
-  const rows: [string, string, string][] = [
-    ['FL', '30,30', '1'],
-    ['FR', '230,30', '2'],
-    ['RR', '230,225', '3'],
-    ['RL', '30,225', '4'],
-  ]
-  const plate: [number, string, string, string][] = [
-    [3, '4', 'RL', 'X30 Y225'],
-    [2, '3', 'RR', 'X230 Y225'],
-    [0, '1', 'FL', 'X30 Y30'],
-    [1, '2', 'FR', 'X230 Y30'],
-  ]
+  const locked = pending || busy
+  const rows = SCREW_CORNERS.map((c, i) => ({ ...c, i }))
+  const plate = [rows[3], rows[2], rows[0], rows[1]]
+  const statusKey: Key = busy
+    ? 'bed.tram_probing'
+    : printerSession
+      ? 'bed.tram_active'
+      : plan
+        ? 'bed.measured_results'
+        : 'bed.no_measurement'
+  const run = async (action: string, confirm?: Key) => {
+    if (measuring.current) return false
+    measuring.current = true
+    setPending(true)
+    try {
+      if (confirm && !(await ask(t(confirm)))) return false
+      const previous = await request('/api/console')
+      const nextGen = Number(previous.generation) + 1
+      if (action === 'screws:tram:start' || action === 'screws:measure') {
+        screwText.set({ text: '', minGeneration: nextGen })
+        screwSession.set({ heights: {}, previous: {}, pair: {}, appliedGeneration: 0, minGeneration: nextGen })
+      } else screwSession.set({ minGeneration: nextGen })
+      if (await control(action)) {
+        await Promise.all([refreshPrinter(), refreshConsole()])
+        openPage('bed', 'screws')
+        return true
+      }
+      return false
+    } catch (e) {
+      notify(errText(e), 'error')
+      return false
+    } finally {
+      measuring.current = false
+      setPending(false)
+    }
+  }
+  const probeAction = (id: ScrewId) => `screws:tram:probe:${id}${probeTwice ? ':2' : ''}`
   return (
     <Card id="screwFocus" class="flex-1">
       <CardHead
         icon="target"
         title="bed.four_screw_leveling"
-        end={<Tag tone="warning">{t(plan ? 'bed.measured_results' : 'bed.no_measurement')}</Tag>}
+        end={<Tag tone={printerSession ? 'ok' : 'warning'}>{t(statusKey)}</Tag>}
       />
       <p class="mb-3 text-xs text-muted">{t('bed.nozzle_load_cell_measurement_at')}</p>
+      <h3 class="mb-2 text-base font-semibold">{t('bed.tram_session')}</h3>
+      <p class="mb-3 text-xs text-muted">
+        {t('bed.tram_help')}
+        <br />
+        {tpl('bed.tram_settle', { seconds: SCREW_SETTLE_S })}
+      </p>
       <div class="grid gap-3 cc2-sm:grid-cols-[.9fr_1.1fr]">
         <div class="rounded-lg border border-edge p-3">
-          <div class="relative grid h-48 grid-cols-2 grid-rows-2 rounded-xl border-2 border-muted">
+          <div class="relative grid min-h-56 grid-cols-2 rounded-lg border-2 border-muted">
             <i class="absolute inset-y-2 left-1/2 border-l border-dashed border-edge" />
             <i class="absolute inset-x-2 top-1/2 border-t border-dashed border-edge" />
-            {plate.map(([i, n, name, xy]) => {
-              const v = plan ? plan.shown[i] : 0,
+            {plate.map(c => {
+              const v = plan ? plan.shown[c.i] : 0,
                 tint = plan
                   ? `rgba(${v > 0 ? '20,207,233' : '255,123,134'},${(0.06 + Math.min(1, Math.abs(v) / 0.2) * 0.2).toFixed(2)})`
                   : undefined
               return (
                 <div
-                  key={n}
-                  class="relative flex flex-col items-center justify-center rounded-lg text-xs"
+                  key={c.id}
+                  class="relative flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-xs"
                   style={{ background: tint }}
                 >
-                  <b class="mb-0.5 grid size-6.5 place-items-center rounded-full border border-muted font-medium">
-                    {n}
-                  </b>
-                  {name}
-                  <small class="text-xs text-muted">{xy}</small>
-                  {plan && <span class="mt-0.5 text-[13px] font-bold">{microns(v)}</span>}
+                  <b class="grid size-6.5 place-items-center rounded-full border border-muted font-medium">{c.n}</b>
+                  {c.id}
+                  <small class="text-xs text-muted">
+                    X{c.x} Y{c.y}
+                  </small>
+                  {plan && <span class="text-[13px] font-bold">{microns(v)}</span>}
+                  <Button
+                    class="min-h-8 px-2 text-xs"
+                    disabled={!printerSession || locked}
+                    aria-label={tpl('bed.tram_probe_corner', { corner: c.id })}
+                    onClick={() => void run(probeAction(c.id))}
+                  >
+                    {t('bed.tram_probe')}
+                  </Button>
                 </div>
               )
             })}
@@ -625,14 +681,28 @@ const Screws = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(([name], i) => {
-                  const d = plan?.shown[i] ?? 0,
+                {rows.map(c => {
+                  const d = plan?.shown[c.i] ?? 0,
                     within = Math.abs(d) <= 0.02,
-                    ref = plan && !plan.useOptimized && i === 0
+                    ref = plan && !plan.useOptimized && c.i === 0
+                  const pair = session.pair[c.key]
+                  const prev = session.previous[c.key]
                   return (
-                    <tr key={name} class={cn('border-t border-edge', plan?.useOptimized && i === 0 && 'bg-amber/10')}>
-                      <td class="p-2 font-semibold">{name}</td>
-                      <td class="p-2">{plan ? (ref ? t('bed.reference') : microns(d)) : '—'}</td>
+                    <tr key={c.id} class={cn('border-t border-edge', plan?.useOptimized && c.i === 0 && 'bg-amber/10')}>
+                      <td class="p-2 font-semibold">{c.id}</td>
+                      <td class="p-2">
+                        {plan ? (ref ? t('bed.reference') : microns(d)) : '—'}
+                        {pair && (
+                          <small class="mt-0.5 block text-xs text-muted">
+                            {tpl('bed.tram_drift', { amount: microns(pair.second - pair.first) })}
+                          </small>
+                        )}
+                        {!pair && prev != null && session.heights[c.key] != null && (
+                          <small class="mt-0.5 block text-xs text-muted">
+                            {tpl('bed.tram_previous', { value: microns(session.heights[c.key] - prev) })}
+                          </small>
+                        )}
+                      </td>
                       <td class={cn('p-2', !within && plan && !ref && (d > 0 ? 'text-cyan' : 'text-red'))}>
                         {plan ? (
                           ref ? (
@@ -681,22 +751,46 @@ const Screws = () => {
           })}
         </Notice>
       )}
-      <div class="mt-3">
+      <div class="mt-3.5 flex flex-col gap-2">
+        <label class="flex min-h-5 items-center gap-1.5 text-xs text-muted">
+          <input
+            type="checkbox"
+            class="size-4 shrink-0 accent-cyan"
+            checked={probeTwice}
+            disabled={locked}
+            aria-label={t('bed.tram_probe_twice')}
+            onChange={e => setProbeTwice(e.currentTarget.checked)}
+          />
+          {t('bed.tram_probe_twice')}
+        </label>
+        <div class="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            disabled={locked}
+            onClick={() => void run('screws:tram:start', 'bed.tram_start_confirm')}
+          >
+            <Icon n="target" class="size-5" />
+            {t('bed.tram_start')}
+          </Button>
+          <Button
+            disabled={!printerSession || locked}
+            onClick={() => void run(probeTwice ? 'screws:tram:check:2' : 'screws:tram:check', 'bed.tram_check_confirm')}
+          >
+            {t('bed.tram_check')}
+          </Button>
+          <Button
+            disabled={!printerSession || locked}
+            onClick={() => void run('screws:tram:end', 'bed.tram_end_confirm')}
+          >
+            {t('bed.tram_end')}
+          </Button>
+        </div>
+      </div>
+      <h3 class="mt-3.5 text-base font-semibold">{t('bed.tram_one_shot')}</h3>
+      <div class="mt-2">
         <Button
-          onClick={async () => {
-            if (measuring.current) return
-            measuring.current = true
-            try {
-              if (!(await ask(t('bed.start_the_four_screw_load_cell')))) return
-              const previous = await request('/api/console')
-              screwText.set({ text: '', minGeneration: Number(previous.generation) + 1 })
-              if (await control('screws:measure')) openPage('bed', 'screws')
-            } catch (e) {
-              notify(errText(e), 'error')
-            } finally {
-              measuring.current = false
-            }
-          }}
+          disabled={printerSession || locked}
+          onClick={() => void run('screws:measure', 'bed.start_the_four_screw_load_cell')}
         >
           <Icon n="target" class="size-5" />
           {t('bed.measure_screws')}

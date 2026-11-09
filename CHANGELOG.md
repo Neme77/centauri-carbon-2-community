@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Interactive screw-tramming on Bed → Screw Levelling: start a session with one click (full home and the existing bed prep), re-probe a single corner after turning its screw, or check all four, without repeating the full four-corner measurement. Re-probes home Z only, wait 30 s to settle, and can probe twice so thermal drift is visible. Requested by **sametsoyoz** (#329).
+
 - Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
 
 - Add the Turkish interface translation using the contributed language patch.

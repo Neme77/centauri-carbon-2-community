@@ -2657,13 +2657,14 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,pressure_advance,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
-        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status);
+        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status,
+        control_screws_session_active()?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -3904,6 +3905,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     memcpy(action,body,body_len);action[body_len]='\0';
     if(!strcmp(action,"system:emergency_stop")){
+        control_screws_invalidate();
         /* Straight to the firmware's emergency_stop endpoint; the queued M112 below is only the fallback. */
         char stop_reason[160];
         if(console_emergency_stop(console,stop_reason,sizeof(stop_reason))==0){
@@ -4007,9 +4009,14 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         else memcpy(script,next,(size_t)n+1);
     }
     if(!built||console_start(console,script,reason,sizeof(reason))!=0){
+        if(control_screws_is_tram(action)&&!strcmp(action,"screws:tram:start"))control_screws_invalidate();
         char escaped[300],response[420];json_escape(escaped,sizeof(escaped),reason);
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
+    }
+    if(control_screws_is_tram(action)&&strcmp(action,"screws:tram:end")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_job(generation);
     }
     if(!strcmp(action,"motors:quiet")||!strcmp(action,"motors:normal")){
         motor_mode_requested=action[7]=='q'?"quiet":"normal";motor_mode_connection=telemetry.connections;
@@ -4641,6 +4648,17 @@ int main(int argc, char **argv) {
         uds_motion_light(&telemetry,&mqtt);
         idle_motors_tick(&mqtt,&console);
         motor_mode_tick(&mqtt,&console);
+        {
+            int completed=0,success=0,busy=0;unsigned long generation=0;int emergency;
+            pthread_mutex_lock(&console.lock);
+            completed=console.completed;success=console.success;busy=console.busy;
+            generation=console.generation;
+            pthread_mutex_unlock(&console.lock);
+            emergency=atomic_load(&console.emergency_sent);
+            if(control_screws_tick(&mqtt,completed,success,generation,emergency,time(NULL))&&
+               !busy&&mqtt.have_machine_status&&mqtt.machine_status==1)
+                (void)send_local_gcode_script("TURN_OFF_HEATERS");
+        }
         spools_tick(&mqtt);
         queue_tick(&mqtt);
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
