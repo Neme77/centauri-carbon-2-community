@@ -9,6 +9,10 @@
 #define DRY_SAMPLES 240
 #define DRY_STATUS_MAX 1024
 #define DRY_FAN 51 /* 20 % */
+/* Stop and restore may need to wait out a foreign print, but a wedged exchange
+ * (dead UDS, refused replies, stale telemetry) must not refuse every later session
+ * forever: past this budget the marker is cleared and the app frees itself. */
+#define DRY_ABORT_MS 900000
 /* The vendor heater check wants 2 C per minute until the bed is within 5 C of its target.
  * The CC2 bed gains about that much near 100 C, so a 105 C target faults (error 101). */
 #define DRY_PREHEAT_BED_MAX 100
@@ -17,7 +21,7 @@ enum { DRY_OFF, DRY_CHECK, DRY_ARM, DRY_HEAT, DRY_HEATING, DRY_HOLDING,
 static struct {
     int stage, temp, minutes, original_timeout, restore_only, stopping_started, target_seen;
     int preheat, chamber, previous_grille, previous_fan, fan_sent, fan_pending, ready, levelled, samples;
-    long long since, hold_until, next_lease, retry_at, ready_since, next_fan, next_sample;
+    long long since, hold_until, next_lease, retry_at, ready_since, next_fan, next_sample, stop_deadline;
     double plateau, chamber_log[DRY_SAMPLES];
     unsigned long connection, stop_messages;
     const char *reason;
@@ -176,6 +180,7 @@ static void drying_estimate(void) {
 static void drying_stop(const char *reason,int restore_only) {
     plates_exchange_close(&drying.exchange);drying.query[0]=0;drying.fan_pending=-1;
     drying.stage=DRY_STOPPING;drying.since=drying_clock();drying.retry_at=0;
+    drying.stop_deadline=drying_clock()+DRY_ABORT_MS;
     drying.reason=reason;drying.restore_only=restore_only;drying.stopping_started=0;
 }
 static void drying_tick(const mqtt_client *mqtt) {
@@ -185,8 +190,23 @@ static void drying_tick(const mqtt_client *mqtt) {
     if(drying.stage==DRY_RECOVERY) {
         /* Never adopt a hot bed after a process restart. The last short lease
          * expires in the firmware; restore its configured timeout only at zero. */
-        if(fresh&&target==0&&drying.original_timeout){drying.stage=DRY_RESTORE;drying.reason="restart";drying.query[0]=0;}
+        if(!drying.original_timeout) {
+            /* An unreadable or unusable marker has nothing restorable in it: clear it
+             * instead of wedging every future session on a wait that can never pass. */
+            if(unlink(drying_journal)&&errno!=ENOENT){drying.reason="storage";return;}
+            drying.stage=DRY_INTERRUPTED;drying.reason="storage";return;
+        }
+        if(fresh&&target==0){drying.stage=DRY_RESTORE;drying.reason="restart";drying.query[0]=0;drying.stop_deadline=now+DRY_ABORT_MS;}
         else return;
+    }
+    if((drying.stage==DRY_STOPPING||drying.stage==DRY_RESTORE)&&drying.stop_deadline&&now>=drying.stop_deadline&&
+       !drying.restore_only&&strcmp(drying.reason,"print")) {
+        /* A foreign print's hand-off keeps waiting as long as it must; anything wedged
+         * past the budget (dead exchange, refused replies, stale telemetry) is abandoned
+         * instead of refusing every later session until a reflash. */
+        if(unlink(drying_journal)&&errno!=ENOENT){drying.stage=DRY_RECOVERY;drying.reason="storage";return;}
+        plates_exchange_close(&drying.exchange);drying.query[0]=0;drying.fan_pending=-1;
+        drying.stage=DRY_INTERRUPTED;drying.reason="restore_timeout";return;
     }
     if(drying.stage<DRY_STOPPING&&(!fresh||telemetry.connections!=drying.connection)) {
         int foreign=mqtt->have_machine_status&&mqtt->machine_status!=1;
@@ -369,7 +389,15 @@ static void drying_preheat_response(int fd,const char *request,const char *body,
 }
 static void drying_stop_response(int fd,const char *request,mqtt_client *mqtt,console_state *console) {
     if(!app_update_authorized(request,mqtt)){app_update_fail(fd,401,"LAN code confirmation required or temporarily locked");return;}
-    if(drying_active()&&drying.original_timeout)drying_stop("manual",0);
+    if(drying_active()) {
+        if(drying.original_timeout)drying_stop("manual",0);
+        else {
+            /* Recovery with nothing restorable (unreadable marker) must also be
+             * terminable by hand: without this the stop button stayed dead until a reflash. */
+            if(unlink(drying_journal)&&errno!=ENOENT){drying.stage=DRY_RECOVERY;drying.reason="storage";}
+            else {plates_exchange_close(&drying.exchange);drying.query[0]=0;drying.stage=DRY_INTERRUPTED;drying.reason="aborted";}
+        }
+    }
     drying_response(fd,mqtt,console);
 }
 #endif

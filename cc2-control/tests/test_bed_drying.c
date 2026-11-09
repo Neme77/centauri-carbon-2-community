@@ -98,6 +98,44 @@ int main(void){
     plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;drying_load();
     drying_stop("manual",0);tick();assert(offs==1);finish();assert(!drying_active()&&restores==1);
     reset();heat();telemetry.connections++;tick();assert(drying.stage==DRY_STOPPING);finish();
+    /* A wedged stop/restore no longer refuses every later session until a reflash. */
+    reset();heat();drying_stop("manual",0);fail=1;apply=0;
+    tick();assert(offs==1); /* M140 S0 sent; its reply fails and no readback follows */
+    clock_ms+=1000;tick();assert(drying_active()); /* retrying */
+    clock_ms+=DRY_ABORT_MS;tick();
+    assert(!drying_active()&&drying.stage==DRY_INTERRUPTED&&!strcmp(drying.reason,"restore_timeout"));
+    assert(access(journal,F_OK));
+    fail=0;apply=1;snapshot(25,0);start("70:1",200);tick();assert(drying.stage==DRY_ARM); /* app freed */
+    /* An unreadable marker clears instead of wedging recovery forever. */
+    reset();heat();
+    plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;
+    { FILE *j=fopen(journal,"w");assert(j);assert(fputs("garbage\n",j)>=0);fclose(j); }
+    drying_load();assert(drying.stage==DRY_RECOVERY&&!strcmp(drying.reason,"storage"));
+    tick();assert(!drying_active()&&drying.stage==DRY_INTERRUPTED&&access(journal,F_OK));
+    /* The stop request terminates even a session with nothing restorable. */
+    reset();heat();
+    plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;
+    { FILE *j=fopen(journal,"w");assert(j);assert(fputs("garbage\n",j)>=0);fclose(j); }
+    drying_load();assert(drying_active());
+    { int pair[2];char response[2048];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
+      const char *stop="POST /api/bed-drying/stop HTTP/1.1\r\nX-CC2-LAN: fixture-confirmation\r\n\r\n";
+      drying_stop_response(pair[0],stop,&machine,&commands);close(pair[0]);
+      ssize_t n=read(pair[1],response,sizeof(response)-1);assert(n>0);response[n]=0;close(pair[1]);
+      assert(strstr(response,"HTTP/1.1 200")); }
+    assert(!drying_active()&&drying.stage==DRY_INTERRUPTED&&!strcmp(drying.reason,"aborted")&&access(journal,F_OK));
+    /* The hand-off to a foreign print still waits past the budget; only a wedged exchange aborts. */
+    reset();heat();machine.machine_status=2;strcpy(telemetry.print_state,"printing");tick();
+    assert(drying.stage==DRY_STOPPING&&drying.restore_only);
+    clock_ms+=DRY_ABORT_MS+1000;tick();assert(drying_active()&&drying.stage==DRY_STOPPING);
+    machine.machine_status=1;strcpy(telemetry.print_state,"complete");snapshot(70,0);finish();
+    assert(!drying_active()&&restores==1);
+    /* Recovery hands a wedged restore over to the same bounded abort. */
+    reset();heat();
+    plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;
+    drying_load();snapshot(25,0);fail=1;tick();
+    assert(drying.stage==DRY_RESTORE);
+    clock_ms+=DRY_ABORT_MS;tick();
+    assert(!drying_active()&&drying.stage==DRY_INTERRUPTED&&access(journal,F_OK));fail=0;
     assert(!drying_result("{\"id\":204,\"error\":{},\"result\":{}}",33,0));
     reset();assert(!symlink("missing",journal));start("70:1",503);assert(!heats&&!leases);unlink(journal);
     unlink(config);assert(!rmdir(directory));close(pair[0]);close(pair[1]);pthread_mutex_destroy(&commands.lock);
