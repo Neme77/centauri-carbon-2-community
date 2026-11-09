@@ -23,8 +23,15 @@ import argparse, hashlib, json, os, re, shutil, stat, struct, subprocess, sys, t
 # only it has a ported patch set; any other profile is refused before a build.
 BASE_PROFILE_DIR=Path(__file__).resolve().parent.parent/'base_profiles'
 BASE_FIRMWARE_FILE=Path(__file__).resolve().parent.parent/'BASE_FIRMWARE'
+# Every qualified base maps its version to the SHA-256 of its own profile
+# file. A base is buildable only if it appears here (a reviewed code change),
+# so editing a profile JSON alone can never qualify a base. QUALIFIED_BASE is
+# the primary base whose base-independent helper pins seed EXPECTED below.
 QUALIFIED_BASE='02.01.01.07'
-QUALIFIED_PROFILE_SHA256='fd8dd6cb3224adab81ebb614cc3ea9c72f9a68f3ed9d349b083840eb5b74eef6'
+QUALIFIED_BASES={
+ '02.01.01.07':'fd8dd6cb3224adab81ebb614cc3ea9c72f9a68f3ed9d349b083840eb5b74eef6',
+}
+QUALIFIED_PROFILE_SHA256=QUALIFIED_BASES[QUALIFIED_BASE]
 VENDOR_PIN_KEYS=("stock_outer","stock_inner","stock_swu","sw-description","resource","uboot","boot0","kernel","stock_rootfs","stock_gui","stock_printer","daemon_stock","stock_ai_camera","libcolib")
 
 def profile_placeholders(value,path=''):
@@ -42,7 +49,7 @@ def load_base_profile(version,directory=None):
  path=directory/(version+'.json')
  if not path.is_file(): raise RuntimeError(f'Missing base profile: {path}')
  data=path.read_bytes()
- if version==QUALIFIED_BASE and hashlib.sha256(data).hexdigest()!=QUALIFIED_PROFILE_SHA256: raise RuntimeError('Qualified base profile SHA256 mismatch')
+ if version in QUALIFIED_BASES and hashlib.sha256(data).hexdigest()!=QUALIFIED_BASES[version]: raise RuntimeError('Qualified base profile SHA256 mismatch')
  profile=json.loads(data)
  if profile.get('version')!=version: raise RuntimeError(f'Base profile version mismatch in {path}')
  pins=profile.get('sha256')
@@ -62,8 +69,8 @@ def selected_base_version(path=None):
 def require_buildable_profile(profile):
  todo=profile_placeholders(profile)
  if todo: raise RuntimeError(f"Base profile {profile.get('version')} has {len(todo)} open placeholder(s); refusing to build:\n  "+'\n  '.join(todo))
- if profile.get('ported_patch_set') is not True or profile.get('version')!=QUALIFIED_BASE:
-  raise RuntimeError(f"No ported and qualified patch set for ELEGOO base {profile.get('version')}; refusing to build (qualified base: {QUALIFIED_BASE})")
+ if profile.get('ported_patch_set') is not True or profile.get('version') not in QUALIFIED_BASES:
+  raise RuntimeError(f"No ported and qualified patch set for ELEGOO base {profile.get('version')}; refusing to build (qualified bases: {', '.join(sorted(QUALIFIED_BASES))})")
  return profile
 
 QUALIFIED_PROFILE=load_base_profile(QUALIFIED_BASE)

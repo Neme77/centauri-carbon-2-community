@@ -82,6 +82,25 @@ with tempfile.TemporaryDirectory() as td:
     else:
         raise AssertionError('placeholder profile accepted')
 
+# QUALIFIED_BASES is the real gate: a base qualifies only by being listed there
+# (a reviewed code change), never by editing a profile file alone. 02.01.01.07
+# is listed and maps to its own profile hash; 02.01.01.13 is not listed, so a
+# complete, ported 02.01.01.13 profile is still refused.
+assert b.QUALIFIED_BASE in b.QUALIFIED_BASES
+assert b.QUALIFIED_BASES['02.01.01.07'] == b.QUALIFIED_PROFILE_SHA256
+assert '02.01.01.13' not in b.QUALIFIED_BASES
+saved = dict(b.QUALIFIED_BASES)
+try:
+    b.QUALIFIED_BASES['02.01.01.13'] = b.load_base_profile('02.01.01.13', None) and __import__('hashlib').sha256(
+        (BASE / 'base_profiles/02.01.01.13.json').read_bytes()).hexdigest()
+    ported = json.loads((BASE / 'base_profiles/02.01.01.13.json').read_text())
+    ported['ported_patch_set'] = True
+    assert b.require_buildable_profile(ported) is ported  # now accepted, proving the set is the gate
+finally:
+    b.QUALIFIED_BASES.clear()
+    b.QUALIFIED_BASES.update(saved)
+assert '02.01.01.13' not in b.QUALIFIED_BASES
+
 # The CLI refuses an unported base before reading keys, firmware or tools.
 r = subprocess.run([sys.executable, str(BASE / 'core/firmware_builder.py'), '--base-version', '02.01.01.13',
                     '--private-key', str(BASE / 'keys/cc2_stock_public.pem')], capture_output=True, text=True)
