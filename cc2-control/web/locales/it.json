@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (destra)",
   "bed.measure_order": "I numeri sono l'ordine di misura, a partire dal davanti a sinistra.",
   "bed.leave_screw": "Lasciala",
-  "bed.tram_start_hint": "Piatto a 60 °C, pulisci l'ugello e passa da ogni vite; poi si spegne solo l'ugello e il piatto resta a 60 °C. La stampante deve essere in attesa. Ogni misura attende {seconds} s prima del sondaggio.",
+  "bed.tram_start_hint": "Piatto a 60 °C, pulisci l'ugello e passa da ogni vite; poi si spegne solo l'ugello e il piatto resta a 60 °C. La stampante deve essere in attesa.",
   "bed.tram_check_hint": "Controllo finale di tutte e quattro. Fa l'homing solo di Z.",
   "bed.tram_end_hint": "Chiude la sessione e spegne i riscaldatori. Poi livella di nuovo e controlla la mesh. I quattro punti mostrano insieme l'inclinazione e la bombatura del piano.",
   "bed.tram_step_adjust": "2. Gira una vite, poi rimisura quell'angolo",

@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (sağ)",
   "bed.measure_order": "Numaralar ölçüm sırasıdır ve önden soldan başlar.",
   "bed.leave_screw": "Bırak",
-  "bed.tram_start_hint": "Tabla 60 °C, nozulu temizle ve her vidaya git; sonra yalnızca nozül kapanır, tabla 60 °C'de kalır. Yazıcı boşta olmalıdır. Her ölçüm, dokunmadan önce {seconds} s bekler.",
+  "bed.tram_start_hint": "Tabla 60 °C, nozulu temizle ve her vidaya git; sonra yalnızca nozül kapanır, tabla 60 °C'de kalır. Yazıcı boşta olmalıdır.",
   "bed.tram_check_hint": "Dördünün son kontrolü. Yalnızca Z home edilir.",
   "bed.tram_end_hint": "Oturumu bitirir ve ısıtıcıları kapatır. Sonra yeniden hizala ve ağı kontrol et. Dört nokta birlikte tablanın eğimini ve bombeleşini gösterir.",
   "bed.tram_step_adjust": "2. Vidayı çevir, sonra bu köşeyi yeniden ölç",

@@ -720,9 +720,7 @@ const Screws = () => {
         <Icon n="target" class="size-5" />
         <span>
           <strong class="block">{t('bed.tram_start')}</strong>
-          <small class="mt-1 block whitespace-normal text-xs font-normal">
-            {tpl('bed.tram_start_hint', { seconds: SCREW_SETTLE_S })}
-          </small>
+          <small class="mt-1 block whitespace-normal text-xs font-normal">{t('bed.tram_start_hint')}</small>
         </span>
       </Button>
       <h3 class="mt-3.5 mb-2 text-base font-semibold">{t('bed.tram_step_adjust')}</h3>

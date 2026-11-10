@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (derecha)",
   "bed.measure_order": "Los números son el orden de medición, empezando por delante a la izquierda.",
   "bed.leave_screw": "Déjalo",
-  "bed.tram_start_hint": "Cama a 60 °C, limpiar la boquilla y pasar por cada tornillo; después solo se apaga la boquilla y la cama se queda a 60 °C. La impresora debe estar en reposo. Cada medición espera {seconds} s antes de palpar.",
+  "bed.tram_start_hint": "Cama a 60 °C, limpiar la boquilla y pasar por cada tornillo; después solo se apaga la boquilla y la cama se queda a 60 °C. La impresora debe estar en reposo.",
   "bed.tram_check_hint": "Comprobación final de las cuatro. Solo hace homing de Z.",
   "bed.tram_end_hint": "Termina la sesión y apaga los calentadores. Después vuelve a nivelar y revisa la malla. Los cuatro puntos muestran juntos la inclinación y el alabeo de la placa.",
   "bed.tram_step_adjust": "2. Gira un tornillo y vuelve a medir esa esquina",

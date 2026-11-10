@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (jobbra)",
   "bed.measure_order": "A számok a mérési sorrend, elöl balról kezdve.",
   "bed.leave_screw": "Hagyd",
-  "bed.tram_start_hint": "Asztal 60 °C-ra, fúvóka tisztítása, minden csavarhoz odamegy; utána csak a fúvóka kapcsol ki, az asztal 60 °C-on marad. A nyomtatónak üresjáratban kell lennie. Minden mérés {seconds} s-ot vár a tapintás előtt.",
+  "bed.tram_start_hint": "Asztal 60 °C-ra, fúvóka tisztítása, minden csavarhoz odamegy; utána csak a fúvóka kapcsol ki, az asztal 60 °C-on marad. A nyomtatónak üresjáratban kell lennie.",
   "bed.tram_check_hint": "Mind a négy záró ellenőrzése. Csak Z homing.",
   "bed.tram_end_hint": "Befejezi a munkamenetet és kikapcsolja a fűtéseket. Utána szintezd újra, és ellenőrizd a hálót. A négy pont együtt mutatja a lap dőlését és görbületét.",
   "bed.tram_step_adjust": "2. Fordítsd el a csavart, majd mérd újra azt a sarkot",

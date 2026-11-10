@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (droite)",
   "bed.measure_order": "Les numéros indiquent l'ordre de mesure, en commençant par l'avant gauche.",
   "bed.leave_screw": "La laisser",
-  "bed.tram_start_hint": "Plateau à 60 °C, nettoyer la buse et passer à chaque vis ; ensuite seule la buse s'éteint et le plateau reste à 60 °C. L'imprimante doit être au repos. Chaque mesure attend {seconds} s avant le palpage.",
+  "bed.tram_start_hint": "Plateau à 60 °C, nettoyer la buse et passer à chaque vis ; ensuite seule la buse s'éteint et le plateau reste à 60 °C. L'imprimante doit être au repos.",
   "bed.tram_check_hint": "Contrôle final des quatre. Homing de Z seulement.",
   "bed.tram_end_hint": "Termine la session et éteint les chauffages. Ensuite, nivelez à nouveau et vérifiez le maillage. Les quatre points montrent ensemble l'inclinaison et le voile du plateau.",
   "bed.tram_step_adjust": "2. Tournez une vis, puis remesurez ce coin",

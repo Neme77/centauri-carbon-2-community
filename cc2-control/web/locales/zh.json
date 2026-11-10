@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X（右）",
   "bed.measure_order": "数字是测量顺序，从前左开始。",
   "bed.leave_screw": "保持不动",
-  "bed.tram_start_hint": "热床到 60 °C，清洁喷嘴，依次到每颗螺丝；之后只关闭喷嘴，热床保持 60 °C。打印机必须空闲。 每次测量在探测前等待 {seconds} 秒。",
+  "bed.tram_start_hint": "热床到 60 °C，清洁喷嘴，依次到每颗螺丝；之后只关闭喷嘴，热床保持 60 °C。打印机必须空闲。",
   "bed.tram_check_hint": "四角最终检查。只回零 Z。",
   "bed.tram_end_hint": "结束校准并关闭加热器。 之后重新调平并检查网格。四个点一起反映板的倾斜和翘曲。",
   "bed.tram_step_adjust": "2. 转动螺丝，然后重新测量这个角",

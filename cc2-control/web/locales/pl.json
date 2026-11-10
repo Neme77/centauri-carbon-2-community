@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (prawo)",
   "bed.measure_order": "Numery to kolejność pomiaru, od przodu po lewej.",
   "bed.leave_screw": "Zostaw",
-  "bed.tram_start_hint": "Stół do 60 °C, wyczyść dyszę i dojedź do każdej śruby; potem gaśnie tylko dysza, a stół zostaje na 60 °C. Drukarka musi być bezczynna. Każdy pomiar czeka {seconds} s przed sondowaniem.",
+  "bed.tram_start_hint": "Stół do 60 °C, wyczyść dyszę i dojedź do każdej śruby; potem gaśnie tylko dysza, a stół zostaje na 60 °C. Drukarka musi być bezczynna.",
   "bed.tram_check_hint": "Kontrola końcowa wszystkich czterech. Homing tylko Z.",
   "bed.tram_end_hint": "Kończy sesję i wyłącza grzejniki. Potem wypoziomuj ponownie i sprawdź siatkę. Cztery punkty razem pokazują pochylenie i wygięcie płyty.",
   "bed.tram_step_adjust": "2. Obróć śrubę, potem zmierz ten róg ponownie",

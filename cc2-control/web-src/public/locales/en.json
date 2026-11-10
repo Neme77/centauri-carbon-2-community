@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (right)",
   "bed.measure_order": "The numbers are the probing order, starting at the front left.",
   "bed.leave_screw": "Leave it",
-  "bed.tram_start_hint": "Bed to 60 °C, clean the nozzle, and visit each screw; afterwards only the nozzle turns off and the bed stays at 60 °C. The printer must be idle. Every measurement waits {seconds} s before probing.",
+  "bed.tram_start_hint": "Bed to 60 °C, clean the nozzle, and visit each screw; afterwards only the nozzle turns off and the bed stays at 60 °C. The printer must be idle.",
   "bed.tram_check_hint": "Final check of all four. Homes Z only.",
   "bed.tram_end_hint": "Ends the session and switches the heaters off. Then level again and check the mesh. The four points show the tilt and the warp of the plate together.",
   "bed.tram_step_adjust": "2. Turn a screw, then re-probe that corner",

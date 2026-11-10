@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (vpravo)",
   "bed.measure_order": "Čísla jsou pořadí měření, počínaje vpředu vlevo.",
   "bed.leave_screw": "Nechat",
-  "bed.tram_start_hint": "Podložka na 60 °C, vyčistit trysku a zajet ke každému šroubu; potom se vypne jen tryska a podložka zůstane na 60 °C. Tiskárna musí být nečinná. Každé měření čeká {seconds} s před sondováním.",
+  "bed.tram_start_hint": "Podložka na 60 °C, vyčistit trysku a zajet ke každému šroubu; potom se vypne jen tryska a podložka zůstane na 60 °C. Tiskárna musí být nečinná.",
   "bed.tram_check_hint": "Závěrečná kontrola všech čtyř. Homing jen Z.",
   "bed.tram_end_hint": "Ukončí relaci a vypne ohřevy. Potom znovu vyrovnej a zkontroluj síť. Čtyři body dohromady ukazují sklon a prohnutí desky.",
   "bed.tram_step_adjust": "2. Otoč šroubem a ten roh znovu změř",

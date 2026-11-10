@@ -24,6 +24,11 @@ const twice = referenceMove(
   ])
 )
 assert.equal(twice.change, '0 → +2 µm', '2× 3 uses the first sample')
+assert.equal(
+  referenceMove(trail([measure({ z: { FL: 1.8, FR: 1.74, RR: 1.72, RL: 1.7 } })])),
+  null,
+  'a single front-left reading shows no reference shift'
+)
 assert.equal(twice.sinceFullUm, 2)
 const shifted = referenceMove(
   trail([
@@ -185,6 +190,7 @@ try {
   assert.ok(await measure.isEnabled(), 'one-shot measurement stays available')
   await card.getByText('only the nozzle turns off').waitFor()
   await card.getByText('Every measurement waits 30 s').first().waitFor()
+  assert.equal(await card.getByText('Every measurement waits 30 s').count(), 1, 'the settle is stated once on the page')
   await card.getByText('level again and check the mesh').waitFor()
   assert.equal(await card.getByText('Each re-probe waits').count(), 0)
   await card.getByRole('checkbox', { name: '2× 3 probes', exact: true }).waitFor()

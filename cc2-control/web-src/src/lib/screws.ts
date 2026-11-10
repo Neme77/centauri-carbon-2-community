@@ -207,10 +207,12 @@ export function referenceMove(session: ScrewHistorySession): ReferenceMove | nul
   let current: number | undefined
   let full: number | undefined
   let pending = false
+  let readings = 0
   for (const m of session.measurements) {
     if (m.kind === 'quick') continue
     const fl = m.z.FL
     if (typeof fl !== 'number') continue
+    readings++
     if (first === undefined) first = fl
     current = fl
     if (m.kind === 'start' || m.kind === 'check') {
@@ -218,7 +220,8 @@ export function referenceMove(session: ScrewHistorySession): ReferenceMove | nul
       pending = false
     } else if (m.kind === 'probe' && m.corner === 'FL') pending = true
   }
-  if (first === undefined || current === undefined) return null
+  // A single front-left reading (the session start) has no shift to show yet.
+  if (first === undefined || current === undefined || readings < 2) return null
   const changeUm = Math.round((current - first) * 1000)
   const since = pending && full !== undefined ? Math.round((current - full) * 1000) : null
   return { change: `0 → ${umLabel(changeUm)} µm`, sinceFullUm: since }

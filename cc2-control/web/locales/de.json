@@ -29,7 +29,7 @@
   "bed.axis_x_right": "X (rechts)",
   "bed.measure_order": "Die Nummern sind die Antast-Reihenfolge, beginnend vorne links.",
   "bed.leave_screw": "So lassen",
-  "bed.tram_start_hint": "Bett auf 60 °C, Düse reinigen, jede Schraube anfahren; danach geht nur die Düse aus, das Bett bleibt auf 60 °C. Der Drucker muss im Leerlauf sein. Jede Messung wartet {seconds} s, bis die Düse beruhigt ist.",
+  "bed.tram_start_hint": "Bett auf 60 °C, Düse reinigen, jede Schraube anfahren; danach geht nur die Düse aus, das Bett bleibt auf 60 °C. Der Drucker muss im Leerlauf sein.",
   "bed.tram_check_hint": "Schlusskontrolle aller vier. Homet nur Z.",
   "bed.tram_end_hint": "Beendet die Sitzung und schaltet die Heizungen aus. Danach neu nivellieren und das Mesh prüfen. Die vier Punkte zeigen Neigung und Wölbung der Platte zusammen.",
   "bed.tram_step_adjust": "2. Schraube drehen, dann diese Ecke nachmessen",
