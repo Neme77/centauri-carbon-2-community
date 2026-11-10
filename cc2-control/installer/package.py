@@ -81,7 +81,7 @@ def package(prepared, scripts, source, output, camera_runtime=None, connections_
     if 'web/index.html' not in files or 'web/locales/en.json' not in files:
         raise ValueError('Prepared UI is incomplete')
     for name in ('install-on-printer.sh', 'restore-on-printer.sh'):
-        text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash).replace('@VERSION@', version).replace('@FIRMWARE_VERSION@', FIRMWARE_VERSION).replace('@PRINTER_SHA256@', COMPATIBILITY['printer_sha256']).replace('@DAEMON_SHA256@', COMPATIBILITY['daemon_sha256'])
+        text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash).replace('@VERSION@', version).replace('@FIRMWARE_VERSION@', FIRMWARE_VERSION).replace('@PRINTER_SHA256_LIST@', ' '.join(COMPATIBILITY['printer_sha256'])).replace('@DAEMON_SHA256@', COMPATIBILITY['daemon_sha256'])
         text = text.replace('@CAMERA_RESTORE_FUNCTION@', CAMERA_RESTORE)
         text = text.replace('@CAMERA_COMPONENT_FUNCTIONS@', camera_functions(HERE / 'camera', camera_runtime) if camera_runtime else '')
         text = text.replace('@CAMERA_COMPONENT_PREFLIGHT@', 'camera_unpack\nCC2_CAMERA_INSTALLER_PROBE="$STAGE/cc2-control" sh "$CAMERA_SOURCE/manage.sh" check' if camera_runtime else '')
@@ -145,7 +145,7 @@ case "$(sha256sum "$TARGET/cc2-control"''')
         if native:
             # Templates have already expanded the ordinary/private hooks; use
             # the same tokens on a fresh template so only one route is emitted.
-            text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash).replace('@VERSION@', VERSION).replace('@FIRMWARE_VERSION@', FIRMWARE_VERSION).replace('@PRINTER_SHA256@', COMPATIBILITY['printer_sha256']).replace('@DAEMON_SHA256@', COMPATIBILITY['daemon_sha256'])
+            text = (HERE / name).read_text().replace('@BINARY_SHA256@', binary_hash).replace('@VERSION@', VERSION).replace('@FIRMWARE_VERSION@', FIRMWARE_VERSION).replace('@PRINTER_SHA256_LIST@', ' '.join(COMPATIBILITY['printer_sha256'])).replace('@DAEMON_SHA256@', COMPATIBILITY['daemon_sha256'])
             substitutions = {
                 '@CAMERA_RESTORE_FUNCTION@': CAMERA_RESTORE,
                 '@CAMERA_FAILURE_RELEASE@': "echo 'Native installer barrier retained until camera startup recovery is resolved.' >&2",

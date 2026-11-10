@@ -74,7 +74,7 @@ esac
                ('/etc/init.d/.cc2-camera-restore-',str(root/'.camera-restore-')),('/tmp/cc2-control-install.lock',str(root/'lock')),
                ('/opt/bin/elegoo_printer',str(vendor)),('/opt/inst/daemon-000/daemon-000',str(daemon)),
                ('/proc/$printer_pid/exe',str(vendor)),('/proc/$RUN_PID/exe',str(target/'cc2-control')),
-               (pkg.COMPATIBILITY['printer_sha256'],sha(vendor)),(pkg.COMPATIBILITY['daemon_sha256'],sha(daemon)),
+               (pkg.COMPATIBILITY['printer_sha256'][0],sha(vendor)),(pkg.COMPATIBILITY['daemon_sha256'],sha(daemon)),
                ('bcabb1fa405b066b06c229c6d8cc6e474a0ccc57e31a1b5b387d3b55945be563',hashlib.sha256(original).hexdigest())]:text=text.replace(a,b)
    return text.replace('"$STAGE/cc2-control" --installer-native-idle', ':')
   script=root/'run.sh';script.write_text(rewrite((stage/'install-on-printer.sh').read_text()).replace('STAGE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)','STAGE="'+str(stage)+'"'))

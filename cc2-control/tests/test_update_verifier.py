@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='cc2-signed-update-') as temp:
         run('openssl','pkeyutl','-sign','-rawin','-inkey',key,'-in',base/'message','-out',base/'signature')
         return (base/'signature').read_bytes()
     def package(payload, version='1.2.22', firmware='4.4', printer=None):
-        manifest=(f'version={version}\nfirmware={firmware}\nprinter={printer or compatibility["printer_sha256"]}\n'
+        manifest=(f'version={version}\nfirmware={firmware}\nprinter={printer or compatibility["printer_sha256"][0]}\n'
             f'daemon={compatibility["daemon_sha256"]}\nsize={len(payload)}\nsha512={hashlib.sha512(payload).hexdigest()}\n').encode()
         header=b'CC2UPD1\n'+struct.pack('>IQ',len(manifest),len(payload))
         return header+sign(header+manifest)+manifest+payload
@@ -70,6 +70,8 @@ with tempfile.TemporaryDirectory(prefix='cc2-signed-update-') as temp:
         check(package(tar(),version=version),False)
     check(package(tar(),firmware='4.3'),False)
     check(package(tar(),printer='0'*64),False)
+    for accepted in compatibility["printer_sha256"]:   # every trusted base (07 and 0113) is accepted
+        check(package(tar(),printer=accepted),True)
     for extra in (('../escape',b'x',tarfile.REGTYPE),('cc2-control',bytes(arm),tarfile.REGTYPE),('web/link',b'',tarfile.SYMTYPE)):
         check(package(tar(extra)),False,True)
     check(package(tar(omit='cc2-https-download')),False,True)

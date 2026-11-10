@@ -94,7 +94,7 @@ with tempfile.TemporaryDirectory() as tmp:
         for p in commands.iterdir():p.chmod(0o755)
         (stage/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.relative_to(stage).as_posix()+'\n' for p in sorted(stage.rglob('*')) if p.is_file() and p.name!='SHA256SUMS'))
         script=(stage/'install-on-printer.sh').read_text().replace('/opt/usr/cc2-control',str(target)).replace('/etc/init.d/cc2-control',str(init)).replace('/tmp/cc2-control-install.lock',str(fixture/'lock')).replace('/proc/$RUN_PID/exe',str(target/'cc2-control'))
-        script=script.replace('/opt/bin/elegoo_printer',str(printer)).replace('/opt/inst/daemon-000/daemon-000',str(daemon)).replace('/proc/$printer_pid/exe',str(runtime)).replace(pkg.COMPATIBILITY['printer_sha256'],expected_printer).replace(pkg.COMPATIBILITY['daemon_sha256'],expected_daemon)
+        script=script.replace('/opt/bin/elegoo_printer',str(printer)).replace('/opt/inst/daemon-000/daemon-000',str(daemon)).replace('/proc/$printer_pid/exe',str(runtime)).replace(pkg.COMPATIBILITY['printer_sha256'][0],expected_printer).replace(pkg.COMPATIBILITY['daemon_sha256'],expected_daemon)
         memory = fixture / 'meminfo'
         memory.write_text('MemAvailable: 8192 kB\n' if scenario == 'low-memory' else '' if scenario == 'missing-memory' else 'MemAvailable: 65536 kB\n')
         script = script.replace('/proc/meminfo', str(memory))
@@ -124,7 +124,7 @@ with tempfile.TemporaryDirectory() as tmp:
             backup = next(target.parent.glob('cc2-control-backup-*'))
             (backup/'installation/cc2-control').unlink()
             restore = (backup/'restore.sh').read_text().replace('/opt/usr/cc2-control',str(target)).replace('/etc/init.d/cc2-control',str(init)).replace('/tmp/cc2-control-install.lock',str(fixture/'lock'))
-            restore=restore.replace('/opt/bin/elegoo_printer',str(printer)).replace('/opt/inst/daemon-000/daemon-000',str(daemon)).replace('/proc/$printer_pid/exe',str(runtime)).replace(pkg.COMPATIBILITY['printer_sha256'],expected_printer).replace(pkg.COMPATIBILITY['daemon_sha256'],expected_daemon)
+            restore=restore.replace('/opt/bin/elegoo_printer',str(printer)).replace('/opt/inst/daemon-000/daemon-000',str(daemon)).replace('/proc/$printer_pid/exe',str(runtime)).replace(pkg.COMPATIBILITY['printer_sha256'][0],expected_printer).replace(pkg.COMPATIBILITY['daemon_sha256'],expected_daemon)
             (backup/'restore.sh').write_text(restore)
             wget_script=(commands/'wget').read_text()
             (commands/'wget').write_text(wget_script.replace('"temperature":24','"temperature":80'))
