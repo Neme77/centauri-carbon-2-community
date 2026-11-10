@@ -195,6 +195,36 @@ int main(void) {
     fclose(f);
 
     char path[512];
+    {
+        /* An ElegooSlicer file with the layer count in its header is read only up to the
+         * end of the requested layer; the answer is the same as a full read. */
+        char text[65536];
+        size_t used = (size_t)snprintf(text, sizeof(text), "; HEADER_BLOCK_START\n; total layer number: 40\n; HEADER_BLOCK_END\n");
+        for (int l = 0; l < 40; l++)
+            used += (size_t)snprintf(text + used, sizeof(text) - used,
+                ";LAYER_CHANGE\n;Z:%.2f\nG1 Z%.2f\nG1 X10 Y%d\nG1 X60 Y%d E%d\nG1 X60 Y%d E%d\n",
+                0.2 * (l + 1), 0.2 * (l + 1), l, l, 2 * l + 1, l + 30, 2 * l + 2);
+        f = write_gcode(dir, "early.gcode", text);
+        expect_ok(parse_file(f, 3, &info, pts, starts), &info, 2);
+        long stopped = ftell(f);
+        assert(info.layer == 3 && info.total_layers == 40 && info.z > 0.59 && info.z < 0.61);
+        assert(stopped > 0 && (size_t)stopped < used / 4);
+        layer_path_info late;
+        rewind(f);
+        expect_ok(parse_file(f, 40, &late, pts, starts), &late, 2);
+        assert(late.layer == 40 && late.total_layers == 40 && late.z > 7.99 && late.z < 8.01);
+        rewind(f);
+        assert(parse_file(f, 41, &late, pts, starts) == LAYER_PATH_OUTSIDE);
+        fclose(f);
+        /* Without the header count the file is read to the end to count its layers. */
+        char *body = strstr(text, "; HEADER_BLOCK_END\n") + strlen("; HEADER_BLOCK_END\n");
+        f = write_gcode(dir, "nocount.gcode", body);
+        expect_ok(parse_file(f, 3, &info, pts, starts), &info, 2);
+        assert(info.total_layers == 40 && (size_t)ftell(f) == strlen(body));
+        fclose(f);
+        snprintf(path, sizeof(path), "%s/early.gcode", dir); unlink(path);
+        snprintf(path, sizeof(path), "%s/nocount.gcode", dir); unlink(path);
+    }
     snprintf(path, sizeof(path), "%s/layers.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/orca.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/elegoo.gcode", dir); unlink(path);
@@ -207,6 +237,6 @@ int main(void) {
     snprintf(path, sizeof(path), "%s/implicit.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/json.gcode", dir); unlink(path);
     rmdir(dir);
-    puts("PASS: layer-path query validation, layer markers, ElegooSlicer ;LAYER_CHANGE numbering and ;Z: height, empty layer, travel, relative/absolute extrusion, arcs and point cap");
+    puts("PASS: layer-path query validation, layer markers, ElegooSlicer ;LAYER_CHANGE numbering and ;Z: height, empty layer, travel, relative/absolute extrusion, arcs, point cap and early stop after the requested layer");
     return 0;
 }

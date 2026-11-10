@@ -593,7 +593,14 @@ static int gcode_layer_path_parse(FILE *file, int layer_1based,
             }
             continue;
         }
-        if (s.seen_marker && s.current > target0 && s.total_hint) continue;
+        if (s.seen_marker && s.current > target0 && s.total_hint) {
+            /* ;LAYER_CHANGE numbering only grows and the header gave the layer count, so
+             * nothing after the requested layer can change the answer: stop reading. A
+             * large file's early layers then cost a fraction of a full scan. Files numbered
+             * by ;LAYER:N alone (Cura) can repeat a number, so they are still read to the end. */
+            if (s.change_mode) break;
+            continue;
+        }
         layer_path_word_line(&s, line, target0);
     }
     if (ferror(file)) { free(keep); free(stack); return LAYER_PATH_IO; }
