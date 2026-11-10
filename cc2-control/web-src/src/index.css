@@ -109,7 +109,7 @@
 :root[data-theme="nord"] {
   color-scheme: dark;
   --bg: #2e3440; --panel: #3b4252; --edge: #4c566a; --text: #eceff4; --muted: #b4bfd3; --field: #434c5e; --ink: #2e3440;
-  --cyan: #88c0d0; --green: #a3be8c; --amber: #ebcb8b; --red: #d57780; --blue: #81a1c1;
+  --cyan: #9dcddb; --green: #a3be8c; --amber: #ebcb8b; --red: #ebbec2; --blue: #81a1c1;
   --well: #242933; --well-fg: #eceff4;
 }
 :root[data-theme="monokai"] {
@@ -121,7 +121,7 @@
 :root[data-theme="solarized-light"] {
   color-scheme: light;
   --bg: #eee8d5; --panel: #fdf6e3; --edge: #d6cfb9; --text: #073642; --muted: #586e75; --field: #f5eedb; --ink: #fdf6e3;
-  --cyan: #1c78bc; --green: #5f7000; --amber: #946c00; --red: #dc322f; --blue: #1c78bc;
+  --cyan: #156296; --green: #5f7000; --amber: #946c00; --red: #b01e1c; --blue: #1c78bc;
   --well: #002b36; --well-fg: #eee8d5;
 }
 /* Obsidian keeps semantic status colours separate from the purple action accent. */
