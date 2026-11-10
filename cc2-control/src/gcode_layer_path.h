@@ -236,9 +236,11 @@ typedef struct {
     double x, y, z, e;
     int abs_xy, abs_e, have_xy, have_e, have_z;
     int current, max_layer, total_hint, changes, seen_marker;
+    int change_mode; /* a ;LAYER_CHANGE was seen: it alone numbers the layers */
     int in_path, truncated;
     double layer_z;
     int have_layer_z;
+    int z_comment; /* layer_z came from the slicer's ;Z: comment; Z moves no longer override it */
     layer_point *pts;
     int *starts;
     unsigned char *keep;
@@ -335,7 +337,7 @@ static int layer_path_want(const layer_path_state *s, int target0) {
 }
 
 static void layer_path_note_z(layer_path_state *s, int target0) {
-    if (layer_path_want(s, target0) && s->have_z) {
+    if (layer_path_want(s, target0) && s->have_z && !s->z_comment) {
         s->layer_z = s->z;
         s->have_layer_z = 1;
     }
@@ -343,6 +345,21 @@ static void layer_path_note_z(layer_path_state *s, int target0) {
 
 static int layer_path_apply_marker(layer_path_state *s, int kind, int numbered, int target0) {
     int next;
+    /* Files with ;LAYER_CHANGE (OrcaSlicer, PrusaSlicer, ElegooSlicer) are numbered by
+     * that marker alone. ElegooSlicer also writes Cura-style ;LAYER:N comments, but
+     * puts ;LAYER:0 into the start block and numbers the printed layers ;LAYER:1..N,
+     * so trusting them shifts every layer by one and hides the last one. The first
+     * ;LAYER_CHANGE therefore restarts the numbering at layer 0 and discards anything
+     * collected under an earlier ;LAYER:N; later ;LAYER:N comments are ignored.
+     * Files without ;LAYER_CHANGE (Cura) keep the 0-based ;LAYER:N numbering. */
+    if (kind == 2 && s->change_mode) return 0;
+    if (kind == 1 && !s->change_mode) {
+        s->change_mode = 1;
+        s->changes = 0;
+        s->max_layer = -1;
+        s->seen_marker = 0;
+        s->have_layer_z = 0;
+    }
     if (kind == 1) next = s->changes++;
     else next = numbered;
     if (next > s->max_layer) s->max_layer = next;
@@ -356,6 +373,7 @@ static int layer_path_apply_marker(layer_path_state *s, int kind, int numbered, 
         layer_path_close(s);
     }
     s->current = next;
+    s->z_comment = 0;
     if (kind == 2 && next + 1 > s->changes) s->changes = next + 1;
     layer_path_note_z(s, target0);
     return 0;
@@ -548,6 +566,23 @@ static int gcode_layer_path_parse(FILE *file, int layer_1based,
         const char *comment = line;
         while (isspace((unsigned char)*comment)) comment++;
         if (*comment == ';') {
+            /* ;Z:<height> after ;LAYER_CHANGE (Orca/Prusa/ElegooSlicer) is the layer's
+             * print height. Prefer it over the last Z move, which can be a z-hop or the
+             * end G-code lifting the head after the last layer. */
+            const char *zc = comment + 1;
+            while (*zc == ' ' || *zc == '\t') zc++;
+            if (zc[0] == 'Z' && zc[1] == ':') {
+                if (s.seen_marker && layer_path_want(&s, target0)) {
+                    char *zend = NULL;
+                    double zv = strtod(zc + 2, &zend);
+                    if (zend != zc + 2 && isfinite(zv) && zv >= 0 && zv < 10000) {
+                        s.layer_z = zv;
+                        s.have_layer_z = 1;
+                        s.z_comment = 1;
+                    }
+                }
+                continue;
+            }
             static const char *markers[] = {
                 "total layer number", "total_layer_count", "total layers count",
                 "total layers", "layer_count:"
