@@ -91,6 +91,41 @@ int main(void) {
     assert(fabs(pts[0].x - 25) < 0.05);
     fclose(f);
 
+    /* ElegooSlicer writes ;LAYER_CHANGE together with Cura-style ;LAYER:N, puts
+     * ;LAYER:0 into the start block and numbers the printed layers ;LAYER:1..N.
+     * ;LAYER_CHANGE alone must number the layers, and ;Z: must win over a later
+     * z-hop or the end G-code lift. */
+    f = write_gcode(dir, "elegoo.gcode",
+        ";LAYER_COUNT:3\nG90\nM82\n"
+        ";LAYER:0\nG1 Z0.8 F600\nG0 X1 Y1\nG1 X60 Y1 E2\n"
+        ";LAYER_CHANGE\n;Z:0.2\n;LAYER:1\nG1 Z0.2 F600\nG0 X5 Y5\nG1 X15 Y5 E3\nG1 X15 Y15 E4\n"
+        ";LAYER_CHANGE\n;Z:0.4\n;LAYER:2\nG1 Z0.4 F600\nG0 X25 Y25\nG1 X35 Y25 E5\nG1 X35 Y35 E6\nG1 Z0.8\n"
+        ";LAYER_CHANGE\n;Z:0.6\n;LAYER:3\nG1 Z0.6 F600\nG0 X45 Y45\nG1 X55 Y45 E7\nG1 X55 Y55 E8\n"
+        "G1 Z5.6 F600\nG0 X0 Y200\nM104 S0\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.layer == 1 && info.total_layers == 3);
+    assert(info.path_count >= 1 && info.point_count >= 2);
+    assert(fabs(pts[0].x - 5) < 0.05 && fabs(pts[0].y - 5) < 0.05);
+    for (int i = 0; i < info.point_count; i++) assert(pts[i].x > 4 && pts[i].x < 16 && pts[i].y > 4 && pts[i].y < 16);
+    assert(fabs(info.z - 0.2) < 0.001);
+    rewind(f);
+    assert(parse_file(f, 2, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.layer == 2 && info.total_layers == 3);
+    assert(info.path_count >= 1 && info.point_count >= 2);
+    assert(fabs(pts[0].x - 25) < 0.05 && fabs(pts[0].y - 25) < 0.05);
+    for (int i = 0; i < info.point_count; i++) assert(pts[i].x > 24 && pts[i].x < 36 && pts[i].y > 24 && pts[i].y < 36);
+    assert(fabs(info.z - 0.4) < 0.001);
+    rewind(f);
+    assert(parse_file(f, 3, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.layer == 3 && info.total_layers == 3);
+    assert(info.path_count >= 1 && info.point_count >= 2);
+    assert(fabs(pts[0].x - 45) < 0.05 && fabs(pts[0].y - 45) < 0.05);
+    for (int i = 0; i < info.point_count; i++) assert(pts[i].x > 44 && pts[i].x < 56 && pts[i].y > 44 && pts[i].y < 56);
+    assert(fabs(info.z - 0.6) < 0.001);
+    rewind(f);
+    assert(parse_file(f, 4, &info, pts, starts) == LAYER_PATH_OUTSIDE);
+    fclose(f);
+
     f = write_gcode(dir, "travel.gcode",
         ";LAYER:0\nG90\nM82\nG1 X0 Y0 E1\nG1 X10 Y0 E2\nG0 X10 Y10\nG1 X20 Y10 E3\nG1 X20 Y20 E4\n");
     assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
@@ -162,6 +197,7 @@ int main(void) {
     char path[512];
     snprintf(path, sizeof(path), "%s/layers.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/orca.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/elegoo.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/travel.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/relative.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/abs.gcode", dir); unlink(path);
@@ -171,6 +207,6 @@ int main(void) {
     snprintf(path, sizeof(path), "%s/implicit.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/json.gcode", dir); unlink(path);
     rmdir(dir);
-    puts("PASS: layer-path query validation, layer markers, empty layer, travel, relative/absolute extrusion, arcs and point cap");
+    puts("PASS: layer-path query validation, layer markers, ElegooSlicer ;LAYER_CHANGE numbering and ;Z: height, empty layer, travel, relative/absolute extrusion, arcs and point cap");
     return 0;
 }
