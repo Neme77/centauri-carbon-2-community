@@ -66,8 +66,8 @@ Per-pin classification of `connections_component.py`:
 | `NATIVE etc/init.d/cc2-reactor-launch` | `8d4a19c9…` | independent | Community reactor hook (= reactor `FIRMWARE_LAUNCHER_SHA256`). |
 | `NATIVE bin/wifi_daemon` | `8e19a620…` | stock | **Device-verified 2026-11-10: 0113 = `8e19a620…` (match).** Base-independent. |
 | `NATIVE lib/modules/5.4.61/aic8800_fdrv.ko` | `2973d7d7…` | stock | **Device-verified 2026-11-10: 0113 = `2973d7d7…` (match).** Base-independent. |
-| `NATIVE etc/wifi/udhcpc_wlan0` | `b76f68e3…` | **stock** | Overwritten by connections on the device → needs the **decrypted 0113 stock rootfs** (or a pre-install backup). |
-| `NATIVE usr/share/udhcpc/set_lan.sh` | `53cf6af5…` | **stock** | Same: needs the decrypted 0113 stock rootfs. |
+| `NATIVE etc/wifi/udhcpc_wlan0` | `b76f68e3…` | stock | **Verified 2026-11-10 against the decrypted 0113 stock rootfs: `b76f68e3…` (match).** Base-independent. |
+| `NATIVE usr/share/udhcpc/set_lan.sh` | `53cf6af5…` | stock | **Verified 2026-11-10 against the decrypted 0113 stock rootfs: `53cf6af5…` (match).** Base-independent. |
 | `BINARY_PINS cc2_ue300_*.ko` (4) | — | **community/kernel-ABI** | USB-Ethernet modules built for the 07 kernel ABI; rebuild needs **0113 kernel headers/sources** (hard blocker). The kernel version string is unchanged (`5.4.61`), but the kernel binary differs (profile `kernel` hash), so ABI compatibility is not guaranteed. |
 | `BINARY_PINS control`, `libcc2-network-compat-r1.so` | — | community | Confirm base-independent when re-pinning. |
 | `MODULES` path `lib/modules/5.4.61/` | — | kernel version | **Device-verified 2026-11-10: `uname -r` = `5.4.61`, only that dir in `/lib/modules`.** Path correct for 0113. |
@@ -93,12 +93,24 @@ Both hashes match the `NATIVE` pins and the kernel version is unchanged, so
 `wifi_daemon`, `aic8800_fdrv.ko` and the `MODULES` path are confirmed correct
 for 0113.
 
+### Measured from the decrypted stock rootfs 2026-11-10 — done
+
+The two stock files that connections overwrites on the device were measured from
+the decrypted 0113 stock rootfs on the machine that holds the stock OTA and AES
+key (`tools/inspect_base.py <stock.zip.sig> --aes-key keys/cc2_aes_key_v1.bin`,
+then `unsquashfs` the `rootfs`):
+`etc/wifi/udhcpc_wlan0 b76f68e3…`, `usr/share/udhcpc/set_lan.sh 53cf6af5…`, and
+the control `opt/inst/daemon-000/daemon-000 6fed6657…` (= profile `daemon_stock`,
+confirming the decryption). All three match, so **both connections stock pins are
+already correct for 0113 — no change needed**, and the entire `NATIVE` set is now
+verified. Only the USB-Ethernet `.ko` remain.
+
 ## Net remaining external inputs for a full, buildable 0113
 
-1. **Decrypted 0113 stock rootfs** (stock OTA + AES key): only the stock
-   `udhcpc_wlan0` / `set_lan.sh` pins remain unverified (the other `NATIVE` stock
-   pins are device-confirmed, see above).
-2. **0113 kernel headers/sources**: rebuild the four `cc2_ue300_*.ko`.
+1. ~~Decrypted 0113 stock rootfs~~ — **done** (above): `udhcpc_wlan0` /
+   `set_lan.sh` verified, all `NATIVE` stock pins correct for 0113.
+2. **0113 kernel headers/sources**: rebuild the four `cc2_ue300_*.ko` (the only
+   remaining connections blocker).
 3. **Reactor**: fork 2's 0113 reactor sources into version control + the
    qualified toolchain to rebuild the `.so` + **hardware validation of the
    active reactor**.

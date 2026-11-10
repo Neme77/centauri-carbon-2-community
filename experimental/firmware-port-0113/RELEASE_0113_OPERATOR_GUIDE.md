@@ -17,7 +17,7 @@ output.
 | Qualified cross toolchain `/opt/cc2-cross/…` (GCC 6.5.0, glibc 2.23) | reactor `.so`, dual wrapper | `docs/BUILD.md` |
 | R2 camera runtime libs in `builder/current/components/camera/runtime/` | camera component | base-independent (pins in `cc2-control/installer/camera_component.py`) |
 | `libcolib.so` link stub (`14288a4a…`) | reactor build | `experimental/firmware-port/reactor/vendor-link/` |
-| Decrypted 02.01.01.13 stock rootfs (stock OTA + AES key) | two connections stock pins | needed only to confirm/measure |
+| ~~Decrypted 02.01.01.13 stock rootfs~~ | two connections stock pins | **done** — both match (step 3) |
 | 02.01.01.13 kernel headers/sources | USB-Ethernet `.ko` | **hard blocker** if ELEGOO does not publish them |
 | Private community release key + AES key v1 + stock OTA | signed build | maintainer only |
 
@@ -44,30 +44,29 @@ safe preflight and the active test whose `activation.marker` proves the
 corrected fingerprints pass. Not a release blocker only once the active test
 passes on hardware.
 
-## 3. Connections stock pins (needs the decrypted 0113 stock rootfs)
+## 3. Connections stock pins — DONE (verified)
 
-Already confirmed for 0113 (device, 2026-11-10): `bin/wifi_daemon` `8e19a620…`,
-`lib/modules/5.4.61/aic8800_fdrv.ko` `2973d7d7…`, kernel `5.4.61`, and the final
-init pin. Only two stock files are still unverified because the Community patch
-overwrites them on the device:
+All `NATIVE` stock pins are confirmed for 0113:
+- device (2026-11-10): `bin/wifi_daemon` `8e19a620…`,
+  `lib/modules/5.4.61/aic8800_fdrv.ko` `2973d7d7…`, kernel `5.4.61`, final init;
+- decrypted stock rootfs (2026-11-10), on the machine holding the stock OTA and
+  AES key: `etc/wifi/udhcpc_wlan0` `b76f68e3…`, `usr/share/udhcpc/set_lan.sh`
+  `53cf6af5…`, control `opt/inst/daemon-000/daemon-000` `6fed6657…` (= profile
+  `daemon_stock`).
 
-- `etc/wifi/udhcpc_wlan0` (pin `b76f68e3…`)
-- `usr/share/udhcpc/set_lan.sh` (pin `53cf6af5…`)
-
-Measure them from the **decrypted** 0113 stock rootfs (the builder can decode and
-extract it with the AES key; see `tools/inspect_base.py` and
-`firmware_builder.py --base-version 02.01.01.13 --preflight-only --keep-work`,
-then `unsquashfs` the `rootfs`):
+Both overwritten-on-device files match their pins (base-independent, like the
+Wi-Fi files), so **no change to `connections_component.py` is needed**. How it
+was measured, for reproduction where the inputs live:
 
 ```sh
-# inside the extracted stock rootfs
-sha256sum etc/wifi/udhcpc_wlan0 usr/share/udhcpc/set_lan.sh
+python3 builder/current/tools/inspect_base.py \
+  builder/current/original_firmware/cc2_eeb001_02.01.01.13_20261020214142.zip.sig \
+  --aes-key builder/current/keys/cc2_aes_key_v1.bin --unsquashfs $(command -v unsquashfs) --out <scratch outside the repo>
+unsquashfs -d <scratch>/rx <scratch>/cpio/rootfs \
+  etc/wifi/udhcpc_wlan0 usr/share/udhcpc/set_lan.sh opt/inst/daemon-000/daemon-000
+sha256sum <scratch>/rx/etc/wifi/udhcpc_wlan0 <scratch>/rx/usr/share/udhcpc/set_lan.sh <scratch>/rx/opt/inst/daemon-000/daemon-000
 ```
-- Match `b76f68e3…` / `53cf6af5…` → the `NATIVE` pins are already correct
-  (these stock files are base-independent, like the Wi-Fi ones), nothing to do.
-- Differ → update the two `NATIVE` entries in
-  `builder/current/core/connections_component.py` (a reviewed code change) to the
-  measured 0113 values.
+The decrypted rootfs is vendor material — keep it outside the repo, never commit.
 
 Not a hard blocker: the likely outcome is "already correct".
 
