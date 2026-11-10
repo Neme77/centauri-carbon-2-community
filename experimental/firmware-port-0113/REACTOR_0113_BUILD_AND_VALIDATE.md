@@ -128,12 +128,30 @@ removed the disable marker and rebooted. Result:
   `elegoo_printer`. So `activate()` returns immediately — the `.so` is loaded but
   inert, no patching.
 
-This is the previously documented device-launcher gap, now confirmed on hardware
-with the corrected `.so`: it is **not** a defect of the build. Rolled back to
-vendor mode (disable marker). To actually exercise `activate()` the boot hook
-needs a fix — `export CC2_REACTOR_RUNTIME_V2=1` and `exec "$BASE/elegoo_printer"`
-(not `/opt/bin/`) — which is a separate device-launcher change, and only then can
-the `activation.marker` run of 2a/2b complete.
+Root cause (diagnosed afterwards): **not** the committed component. The committed
+`firmware-launcher.sh` ends with `exec "$BASE/launcher.sh"`, and the component
+`launcher.sh` sets `CC2_REACTOR_RUNTIME_V2=1`, `LD_PRELOAD` and `exec
+"$BASE/elegoo_printer"`, so `activate()` would run; the connections
+`prepare-hooks.awk` only prepends a routing line and preserves that `exec`. The
+**device** carries fork 2's broken install instead: a stub `BASE/launcher.sh`
+(just runs `/opt/bin/elegoo_printer`) and a boot hook that `exec`s
+`/opt/bin/elegoo_printer` with `LD_PRELOAD` but no `CC2_REACTOR_RUNTIME_V2`.
+
+Two parts, split out:
+- **(A) builder-side — fixed.** The committed `firmware-launcher.sh` was
+  02.01.01.07-specific (`EXPECTED=19712b59…`); a 0113 build would have shipped
+  the 07 boot hook and fallen back. The boot hook is now base-specific, like
+  `fingerprints.h` / `bridge_test.cpp`: a 0113 `firmware-launcher.sh`
+  (`EXPECTED=688b7bf8…`) in the 0113 reactor tree, resolved with its own pin
+  (`FIRMWARE_LAUNCHER_SHAS`). Host-tested; 07 unchanged.
+- **(B) device-side — open.** Replace fork 2's broken launcher stubs with the
+  correct committed chain (a clean install of `firmware-launcher.sh` +
+  `launcher.sh`), then the boot hook → `launcher.sh` sets
+  `CC2_REACTOR_RUNTIME_V2=1` and `exec`s `$BASE/elegoo_printer`, and `activate()`
+  runs the fingerprint self-check and writes `activation.marker`.
+
+Rolled back to vendor mode (disable marker). The `activation.marker` run of 2a/2b
+completes only after (B).
 
 ### 2c. Rollback (always available)
 

@@ -24,6 +24,12 @@ branch; it survives only in a local backup
   (`instructions_equal_except_call_targets`).
 - `port-manifest.json`, `launcher.sh` — fork 2's 0113 versions (the runtime
   launcher pins the patched printer, `EXPECTED=688b7bf8…`).
+- `firmware-launcher.sh` — **0113 version of the boot hook** (installed as
+  `etc/init.d/cc2-reactor-launch`). Base-specific: it differs from the 07
+  component file only by `EXPECTED=688b7bf8…` (vs `19712b59…`). Without it a 0113
+  build would ship the 07 boot hook, whose printer-hash check fails on 0113 →
+  fallback → the reactor never activates. `reactor_component` resolves it and its
+  pin (`FIRMWARE_LAUNCHER_SHAS`) per base.
 - `bridge_test.cpp` — **0113 version (added here).** fork 2 reused the 07 file,
   but its vendor-call mock table (`FN(0xADDR, …)`) hard-codes the 18 vendor
   addresses, so with the 0113 `reactor_module.cpp` the mock test aborts

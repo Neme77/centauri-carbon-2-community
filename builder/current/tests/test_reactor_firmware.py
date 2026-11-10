@@ -36,6 +36,15 @@ class FirmwareReactorTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):reactor.reactor_source('reactor_module.cpp','02.01.01.99')
         # The committed 0113 reactor_module.cpp is byte-exact fork 2's source.
         self.assertEqual(sha((REPO/'experimental/firmware-port-0113/reactor/reactor_module.cpp').read_bytes()),'21ef738ba6a71312c4f1766414a49d0fb7c0627d0fe79b2766120620754620fa')
+        # The boot hook is base-specific (EXPECTED printer hash); each base pins its own,
+        # and the pin must equal the actual launcher file.
+        comp=BUILDER/'components/reactor'
+        self.assertEqual(reactor.firmware_launcher(comp,'02.01.01.07'),comp/'firmware-launcher.sh')
+        self.assertEqual(reactor.firmware_launcher(comp,'02.01.01.13'),REPO/'experimental/firmware-port-0113/reactor/firmware-launcher.sh')
+        for base in ('02.01.01.07','02.01.01.13'):
+            self.assertEqual(sha(reactor.firmware_launcher(comp,base).read_bytes()),reactor.FIRMWARE_LAUNCHER_SHAS[base],base)
+        # 0113 launcher differs from 07 only by its EXPECTED printer hash (688b7bf8 vs 19712b59).
+        self.assertIn(b'EXPECTED=688b7bf8',reactor.firmware_launcher(comp,'02.01.01.13').read_bytes())
 
     def test_preserves_vendor_arguments_and_special_branches(self):
         original='#!/bin/sh\nif [ "$MODE" = normal ]; then\n LD_BIND_NOW=1 elegoo_printer "$CFG" -s "$AUTO" -a "$UDS"&\nelse\n elegoo_printer_debug "$CFG"\nfi\n'

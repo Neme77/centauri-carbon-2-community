@@ -10,10 +10,16 @@ FILES=('libcc2-reactor-v2.so','cc2-reactor-bridge-test','launcher.sh','preflight
 # VENDOR_SHA256 is the base's PATCHED printer (the ABI the .so is built against);
 # default 02.01.01.07. load/install/audit take vendor_sha so a build for another
 # base passes its own value (port.outputs.printer_release.sha256). LIBCO_SHA256
-# (libcolib.so) and FIRMWARE_LAUNCHER_SHA256 (the boot hook) are base-independent.
+# (libcolib.so) is base-independent. FIRMWARE_LAUNCHER_SHA256 (the boot hook) is
+# base-specific via its EXPECTED printer hash; see FIRMWARE_LAUNCHER_SHAS.
 VENDOR_SHA256='19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745'
 LIBCO_SHA256='14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403'
 FIRMWARE_LAUNCHER_SHA256='8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636373fdaac43'
+# The boot hook (etc/init.d/cc2-reactor-launch source) differs per base only in its
+# EXPECTED printer hash, so each base pins its own: 07 is the committed component
+# file; 0113 lives in the 0113 reactor tree with EXPECTED=688b7bf8.
+FIRMWARE_LAUNCHER_SHAS={'02.01.01.07':FIRMWARE_LAUNCHER_SHA256,
+                       '02.01.01.13':'a52e9109b58d0317322fe8a9640e4945842ba4d28ebf547e2957ad71b142f5e9'}
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -36,9 +42,19 @@ def reactor_source(name,base_version='02.01.01.07'):
         return repo/'experimental/firmware-port-0113/reactor'/name
     raise RuntimeError('No reactor sources for ELEGOO base '+str(base_version))
 
+def firmware_launcher(component,base_version='02.01.01.07'):
+    """The reactor boot hook (etc/init.d/cc2-reactor-launch source) for a base.
+    Base-specific via its EXPECTED printer hash: 07 ships in the component, 0113
+    in the 0113 reactor tree. No cross-base fallback."""
+    if base_version=='02.01.01.07':
+        return Path(component)/'firmware-launcher.sh'
+    if base_version=='02.01.01.13':
+        return Path(__file__).resolve().parents[3]/'experimental/firmware-port-0113/reactor/firmware-launcher.sh'
+    raise RuntimeError('No reactor boot hook for ELEGOO base '+str(base_version))
+
 def load(component,vendor_sha=VENDOR_SHA256,base_version='02.01.01.07'):
     component=Path(component)
-    if digest(component/'firmware-launcher.sh')!=FIRMWARE_LAUNCHER_SHA256:
+    if digest(firmware_launcher(component,base_version))!=FIRMWARE_LAUNCHER_SHAS[base_version]:
         raise RuntimeError('Firmware reactor boot hook differs from pinned source')
     manifest=json.loads((component/'prepared-manifest.json').read_text())
     if manifest.get('optimization')!='O0' or manifest.get('gcc')!='6.5.0' or manifest.get('glibc')!='2.23':
@@ -97,7 +113,7 @@ def install(root,component,vendor_sha=VENDOR_SHA256,base_version='02.01.01.07'):
         shutil.copyfile(component/'prepared'/name,destination/name)
         (destination/name).chmod(0o700 if name!='SHA256SUMS' else 0o600)
     hook=root/'etc/init.d/cc2-reactor-launch'
-    shutil.copyfile(component/'firmware-launcher.sh',hook);hook.chmod(0o755)
+    shutil.copyfile(firmware_launcher(component,base_version),hook);hook.chmod(0o755)
     launcher=root/'opt/bin/run_printer.sh'
     original=launcher.read_text()
     (destination/'run_printer.original.sh').write_text(original)
@@ -116,7 +132,7 @@ def audit(root,component,printer_init_transform=None,hook_transform=None,vendor_
     for name,expected in manifest['files'].items():
         if digest(root/'opt/inst/cc2-reactor'/name)!=expected:
             raise RuntimeError('Rebuilt reactor checksum mismatch: '+name)
-    expected_hook=(component/'firmware-launcher.sh').read_bytes()
+    expected_hook=firmware_launcher(component,base_version).read_bytes()
     if hook_transform is not None:expected_hook=hook_transform(expected_hook.decode()).encode()
     if (root/'etc/init.d/cc2-reactor-launch').read_bytes()!=expected_hook:
         raise RuntimeError('Rebuilt reactor boot hook mismatch')
