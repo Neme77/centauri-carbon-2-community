@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Bed drying: optional keep-warm hold after the drying time. The start request takes `temp:minutes:keep_temp:keep_minutes` (keep temperature 30 °C up to the drying setpoint, keep duration 1–720 minutes); when the drying hold elapses, one correlated `M140` lowers the setpoint, the native lease keeps being renewed and the keep timer starts at the lower temperature. Stop, expiry, foreign prints and restarts behave as before; a restart never resumes the keep hold. The page shows the remaining keep time; English, German and Italian strings are included (other languages fall back to English).
+- Bed drying: optional keep-warm hold after the drying time. The start request takes `temp:minutes:keep_temp:keep_minutes` (keep temperature 30 °C up to the drying setpoint, keep duration 1–720 minutes); when the drying hold elapses, one correlated `M140` lowers the setpoint, the native lease keeps being renewed and the keep timer starts at the lower temperature. Stop, expiry, foreign prints and restarts behave as before; a restart never resumes the keep hold. The page shows the remaining keep time; all CC2 Control locales include the new strings.
 
 - Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
 
