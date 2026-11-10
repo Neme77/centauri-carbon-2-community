@@ -325,6 +325,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"runout\":\"/api/runout\","
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
+            "\"screws_history\":\"/api/screws/history\","
             "\"spools\":\"/api/spools\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
@@ -3273,6 +3274,53 @@ static int cell_active(void);
 static const char *pending_autosave_guard(void);
 
 #include "plates.h"
+#include "screw_history.h"
+/* Next to the UI preferences unless --screws-history names a file. */
+static const char *screws_history_path = NULL;
+static char screws_history_default_path[600];
+static screw_history_store screws_history;
+
+static void screws_history_init(void) {
+    if (!screws_history_path) {
+        const char *slash = strrchr(ui_preferences_path, '/');
+        int n = slash ? snprintf(screws_history_default_path, sizeof(screws_history_default_path), "%.*s/screw-history.txt",
+                                 (int)(slash - ui_preferences_path), ui_preferences_path)
+                      : snprintf(screws_history_default_path, sizeof(screws_history_default_path), "screw-history.txt");
+        screws_history_path = n > 0 && (size_t)n < sizeof(screws_history_default_path) ? screws_history_default_path
+                                                                                       : "./screw-history.txt";
+    }
+    if (!screw_history_load(&screws_history, screws_history_path))
+        fprintf(stderr, "Screw history unreadable, starting empty: %s\n", screws_history_path);
+}
+
+static int screws_history_store(void) {
+    if (screw_history_save(&screws_history, screws_history_path)) return 1;
+    fprintf(stderr, "Screw history could not be saved: %s\n", screws_history_path);
+    return 0;
+}
+
+static void screws_history_get_response(int fd) {
+    size_t length = 0;
+    char *body = screw_history_json(&screws_history, &length);
+    if (!body) {
+        const char *error = "{\"error\":\"Screw history is unavailable\"}\n";
+        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
+    respond(fd, 200, "OK", "application/json; charset=utf-8", body, length);
+    free(body);
+}
+
+static void screws_history_clear_response(int fd) {
+    memset(&screws_history, 0, sizeof(screws_history));
+    if (!screws_history_store()) {
+        const char *error = "{\"ok\":false,\"error\":\"Screw history could not be saved\"}\n";
+        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
+    const char *ok = "{\"ok\":true}\n";
+    respond(fd, 200, "OK", "application/json; charset=utf-8", ok, strlen(ok));
+}
 #include "spools.h"
 /* The exclusive sessions during which the request dispatcher refuses every printer change; the print
  * queue asks before an automatic start. Defined once the sessions themselves are. */
@@ -4016,6 +4064,10 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
     control_screws_note_action(action);
+    if(!strcmp(action,"screws:measure")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_quick(generation);
+    }
     if(control_screws_is_tram(action)&&strcmp(action,"screws:tram:end")){
         pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
         control_screws_note_job(generation);
@@ -4351,6 +4403,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
         mesh_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/screws/history")==0) {
+        screws_history_get_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/history/clear")==0) {
+        screws_history_clear_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/plates")==0) {
         plates_get_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/create")==0) {
@@ -4542,13 +4598,14 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--update-runner") == 0 && i + 1 < argc) app_update_runner = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
+        else if (strcmp(argv[i], "--screws-history") == 0 && i + 1 < argc) screws_history_path = argv[++i];
         else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
         else if (strcmp(argv[i], "--queue") == 0 && i + 1 < argc) queue_path = argv[++i];
         else if (strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) printer_autosave_path = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--spools FILE] [--queue FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--screws-history FILE] [--spools FILE] [--queue FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
             return 2;
         }
     }
@@ -4579,6 +4636,7 @@ int main(int argc, char **argv) {
     drying_load();
     nx_load();
     plates_load();
+    screws_history_init();
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
     queue_load();
@@ -4659,6 +4717,17 @@ int main(int argc, char **argv) {
             emergency=atomic_load(&console.emergency_sent);
             time_t tram_now=time(NULL);
             (void)control_screws_tick(&mqtt,completed,success,generation,emergency,tram_now);
+            /* Record the measured corners of a session job that just completed (#329). The
+             * console output still belongs to that job: nothing new starts within this tick. */
+            control_screws_job tram_job;
+            if(control_screws_take_finished(&tram_job)){
+                int recorded;
+                pthread_mutex_lock(&console.lock);
+                recorded=screw_history_record(&screws_history,&tram_job,console.output,console.output_len,tram_now);
+                pthread_mutex_unlock(&console.lock);
+                if(recorded)(void)screws_history_store();
+            }
+            if(screw_history_tick(&screws_history,control_screws_session_active(),tram_now))(void)screws_history_store();
             /* Keep the session's bed at 60 C, but only while telemetry still shows that
              * target: a target someone else set is left alone. */
             double tram_bed=0;

@@ -40,6 +40,22 @@ void control_screws_note_action(const char *action);
 int control_screws_bed_renew_due(time_t now);
 void control_screws_bed_renewed(time_t now, int delivered);
 
+/* A completed session job, for the persistent measurement history. corner is
+ * the SCREW_CORNERS index (FL, FR, RR, RL) of a single-corner re-probe, else -1;
+ * started identifies the session (time of its screws:tram:start). */
+enum { CONTROL_SCREWS_JOB_START, CONTROL_SCREWS_JOB_PROBE, CONTROL_SCREWS_JOB_CHECK, CONTROL_SCREWS_JOB_QUICK };
+typedef struct { int kind, corner, twice; time_t started; } control_screws_job;
+/* Returns 1 once after a session job or a one-shot screws:measure (kind QUICK,
+ * no session, no settle) completed successfully, and fills *job. */
+int control_screws_take_finished(control_screws_job *job);
+/* The queued console job is the one-shot screws:measure. */
+void control_screws_note_quick(unsigned long generation);
+#define CONTROL_SCREW_CORNERS 4
+/* Corner ID for a SCREW_CORNERS index, or NULL. */
+const char *control_screws_corner_id(int corner);
+/* SCREW_CORNERS index of a probe position (rounded to whole mm), or -1. */
+int control_screws_corner_at(double x, double y);
+
 /* SET_TMC_FIELD values for the X/Y motor mode (motors:quiet / motors:normal).
  * The firmware refuses a literal 0, so the zero values overflow the field
  * width and are masked to 0 by the driver register helper. */

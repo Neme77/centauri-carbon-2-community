@@ -64,10 +64,38 @@ static const struct { char id[4]; int x, y; } SCREW_CORNERS[] = {
 static struct {
     int active, start_done, job_pending, xy_seen;
     unsigned long job_generation;
-    time_t last, job_done, bed_renew_at;
+    time_t last, job_done, bed_renew_at, started;
+    control_screws_job job;
 } screws_session;
 /* Kept outside the session: it must survive the session being cleared. */
 static int screws_heaters_off_pending;
+/* The job the last built tram script runs; copied into the session once queued. */
+static control_screws_job screws_next;
+/* The session's last successfully completed job, reported once to the history. */
+static control_screws_job screws_finished;
+static int screws_finished_ready;
+/* The one-shot screws:measure runs without a session; tracked on its own. */
+static struct { int pending; unsigned long generation; control_screws_job job; } screws_quick;
+
+void control_screws_note_quick(unsigned long generation){
+    screws_quick.pending=1;
+    screws_quick.generation=generation;
+    screws_quick.job=(control_screws_job){CONTROL_SCREWS_JOB_QUICK,-1,0,time(NULL)};
+}
+int control_screws_take_finished(control_screws_job *job){
+    if(!screws_finished_ready)return 0;
+    screws_finished_ready=0;
+    if(job)*job=screws_finished;
+    return 1;
+}
+const char *control_screws_corner_id(int corner){
+    return corner>=0&&corner<SCREW_CORNER_COUNT?SCREW_CORNERS[corner].id:NULL;
+}
+int control_screws_corner_at(double x,double y){
+    for(int i=0;i<SCREW_CORNER_COUNT;i++)
+        if(lround(x)==SCREW_CORNERS[i].x&&lround(y)==SCREW_CORNERS[i].y)return i;
+    return -1;
+}
 
 void control_screws_reset(void){memset(&screws_session,0,sizeof(screws_session));}
 void control_screws_invalidate(void){control_screws_reset();}
@@ -110,6 +138,8 @@ void control_screws_note_job(unsigned long generation){
     if(!screws_session.active)return;
     screws_session.job_pending=1;
     screws_session.job_generation=generation;
+    screws_session.job=screws_next;
+    screws_session.job.started=screws_session.started;
 }
 static int tram_idle(const mqtt_client *m,char *reason,size_t cap){
     time_t now=time(NULL);
@@ -137,6 +167,12 @@ static int append_tram_corners(char *script,size_t cap,size_t used,int only,int 
     if(used>=CONSOLE_COMMAND_MAX)return reject(reason,reason_cap,"Screw tramming command exceeds buffer capacity");
     return 1;
 }
+/* Every session measurement settles for SCREWS_SETTLE_S before its first probe,
+ * the start too: on a 02.01.01.13 printer the start, probing right after M190,
+ * read up to 10 um away from the settled re-probes, which repeat within 2 um.
+ * The dwell is G4 P<milliseconds>: Klipper's G4 reads only P. With G4 S30 the
+ * printer did not wait (single-corner re-probes, including G28 Z and three
+ * probes, completed within 20 s of each other). */
 /* Full G28 (and the home:Z path) heat the nozzle to 140 C and leave that
  * target. G28 Z after a hot G28 is short, but the same restore is applied
  * fail-closed: probe while the nozzle is still at the homing temperature,
@@ -164,6 +200,10 @@ static int tram_own_job(time_t now){
 int control_screws_tick(const mqtt_client *m,int console_completed,int console_success,
                         unsigned long generation,int emergency,time_t now){
     if(m&&printing(m))screws_heaters_off_pending=0; /* A print owns the heaters now. */
+    if(screws_quick.pending&&(emergency||(console_completed&&generation==screws_quick.generation))){
+        screws_quick.pending=0;
+        if(!emergency&&console_success){screws_finished=screws_quick.job;screws_finished_ready=1;}
+    }
     if(!screws_session.active)return 0;
     if(emergency||!m||!m->connected||!m->registered)return tram_end_with_heaters_off();
     if(printing(m)){
@@ -174,6 +214,8 @@ int control_screws_tick(const mqtt_client *m,int console_completed,int console_s
     if(screws_session.job_pending&&console_completed&&generation==screws_session.job_generation){
         screws_session.job_pending=0;
         if(!console_success)return tram_end_with_heaters_off();
+        screws_finished=screws_session.job;
+        screws_finished_ready=1;
         screws_session.start_done=1;
         screws_session.job_done=now;
         screws_session.last=now;
@@ -290,13 +332,16 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
                 "G28\n"
                 "G180 S3\n"
                 "M190 S60\n"
-                "G90\n");
+                "G4 P%d\n"
+                "G90\n",SCREWS_SETTLE_S*1000);
             if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
             if(!append_tram_corners(script,cap,(size_t)n,-1,0,reason,reason_cap))return 0;
             if(!tram_close_script(script,cap,reason,reason_cap))return 0;
             control_screws_reset();
             screws_session.active=1;
             screws_session.last=time(NULL);
+            screws_session.started=screws_session.last;
+            screws_next=(control_screws_job){CONTROL_SCREWS_JOB_START,-1,0,0};
             return 1;
         }
         if(!strcmp(action,"screws:tram:check")||!strcmp(action,"screws:tram:check:2")){
@@ -308,12 +353,13 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             int n=snprintf(script,cap,
                 "SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n"
                 "G28 Z\n"
-                "G4 S%d\n"
-                "G90\n",SCREWS_SETTLE_S);
+                "G4 P%d\n"
+                "G90\n",SCREWS_SETTLE_S*1000);
             if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
             if(!append_tram_corners(script,cap,(size_t)n,-1,twice,reason,reason_cap))return 0;
             if(!tram_close_script(script,cap,reason,reason_cap))return 0;
             screws_session.last=time(NULL);
+            screws_next=(control_screws_job){CONTROL_SCREWS_JOB_CHECK,-1,twice,0};
             return 1;
         }
         if(!strncmp(action,"screws:tram:probe:",18)){
@@ -333,12 +379,13 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             int n=snprintf(script,cap,
                 "SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n"
                 "G28 Z\n"
-                "G4 S%d\n"
-                "G90\n",SCREWS_SETTLE_S);
+                "G4 P%d\n"
+                "G90\n",SCREWS_SETTLE_S*1000);
             if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
             if(!append_tram_corners(script,cap,(size_t)n,corner,twice,reason,reason_cap))return 0;
             if(!tram_close_script(script,cap,reason,reason_cap))return 0;
             screws_session.last=time(NULL);
+            screws_next=(control_screws_job){CONTROL_SCREWS_JOB_PROBE,corner,twice,0};
             return 1;
         }
         if(!strcmp(action,"screws:tram:end")){

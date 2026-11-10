@@ -300,8 +300,9 @@ Manual temperature targets were validated during an active print on a physical C
 `screws:tram:check[:2]` and `screws:tram:end`. Coordinates are taken from a fixed
 corner table; unknown IDs are refused. Start homes all axes (`G28`) and uses the
 same bed prep as `screws:measure`. Re-probe and the four-corner check home Z only
-(`G28 Z`) after a 30 s settle, and only while a session is active with X and Y
-homed. Each start/re-probe/check script restores `CC2_SCREW_TRAM` gcode state,
+(`G28 Z`), and only while a session is active with X and Y homed. Every session
+measurement, the start included, then waits 30 s (`G4 P30000`; the firmware's `G4`
+ignores `S`) before its first probe. Each start/re-probe/check script restores `CC2_SCREW_TRAM` gcode state,
 switches the nozzle off (`M104 S0`) and keeps the bed at 60 °C. `GET /api/printer`
 reports `screws_session.active` and `screws_session.xy_homed`. While the session's own
 job runs, and for 15 s after it completed, the printer may report Manual homing or
@@ -315,6 +316,42 @@ invalidation `TURN_OFF_HEATERS` stays pending and is retried until it is deliver
 while the printer is idle and the console free; a print start or a queued heater
 action (temperature, preset, preheat, PID, heaters off, a new tram start) cancels it.
 `screws:measure` is unchanged.
+
+### Screw tramming history
+
+Every successfully completed session job (start, re-probe, check) is recorded with
+the raw `Result is z=` value of each probed corner, taken from that job's console
+output. A completed one-shot `screws:measure` is recorded as its own closed entry with
+`"kind":"quick"`: it has no session and no 30 s settle, so its values are kept apart from
+session values. The newest 20 sessions (64 measurements each) and, separately, the newest
+10 quick entries are kept in `screw-history.txt` next to the UI preferences
+(`--screws-history FILE` overrides it), written atomically after each change, so they
+survive a reload, the end of the session and a restart. A session left open by a restart
+is closed at its last measurement. A failed job and a re-probe without a result for its
+corner are not recorded.
+
+`GET /api/screws/history` returns the newest entry first and its measurements
+oldest first. Each entry has `kind` `session` or `quick`. Times are Unix seconds (UTC);
+`ended` is `null` while a session runs; measurement `kind` is `start`, `probe`, `check`
+or (in a quick entry) `quick`; `corner` is set only for `probe`; `z` holds the corners the job measured (a re-probe
+only its own corner), in mm; `z2` is present only for `twice` and holds the second
+result of each corner. Offsets against the front-left screw are computed by the client.
+
+```json
+{"sessions":[
+  {"kind":"quick","started":1762801500,"ended":1762801680,"measurements":[
+    {"time":1762801680,"kind":"quick","corner":null,"twice":false,
+     "z":{"FL":-0.682100,"FR":-0.676000,"RR":-0.870400,"RL":-0.751000}}]},
+  {"kind":"session","started":1762800000,"ended":1762801200,"measurements":[
+    {"time":1762800300,"kind":"start","corner":null,"twice":false,
+     "z":{"FL":-0.681800,"FR":-0.675800,"RR":-0.869800,"RL":-0.750800}},
+    {"time":1762800420,"kind":"probe","corner":"RR","twice":true,
+     "z":{"RR":-0.700100},"z2":{"RR":-0.699400}}]}]}
+```
+
+`POST /api/screws/history/clear` deletes the whole history and returns `{"ok":true}`
+(`500` with `{"ok":false,"error":...}` when the file cannot be written). Both routes use
+the same authentication and browser guard as the other `/api` routes.
 
 ## Heater PID calibration
 

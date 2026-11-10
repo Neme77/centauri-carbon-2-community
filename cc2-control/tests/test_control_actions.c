@@ -92,7 +92,7 @@ int main(void){
         expect(!control_build_script("screws:tram:probe:FL",&mqtt,script,sizeof(script),reason,sizeof(reason)),"re-probe rejected without a session");
         expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tram session start accepted while idle");
         expect(strlen(script)<CONSOLE_COMMAND_MAX,"tram start fits the console transport");
-        expect(strstr(script,"M140 S60\nG28\nG180 S3\nM190 S60")!=NULL,"tram start homes fully then uses the stock bed prep");
+        expect(strstr(script,"M140 S60\nG28\nG180 S3\nM190 S60\nG4 P30000\nG90\n")!=NULL,"tram start homes fully, uses the stock bed prep, then settles before probing");
         expect(strstr(script,"G28 Z")==NULL,"tram start does not use Z-only homing");
         expect(strstr(script,"G1 Z10 F600\nG1 X30 Y30 F12000")&&strstr(script,"G1 Z10 F600\nG1 X230 Y30 F12000")&&
                strstr(script,"G1 Z10 F600\nG1 X230 Y225 F12000")&&strstr(script,"G1 Z10 F600\nG1 X30 Y225 F12000"),
@@ -112,7 +112,7 @@ int main(void){
         expect(control_build_script("screws:tram:probe:FL",&mqtt,script,sizeof(script),reason,sizeof(reason)),"re-probe FL accepted after session home");
         expect(strlen(script)<CONSOLE_COMMAND_MAX,"tram re-probe fits the console transport");
         expect(strstr(script,"G28 Z\n")!=NULL&&strstr(script,"G28\n")==NULL,"re-probe homes Z only");
-        expect(strstr(script,"G4 S30\n")!=NULL,"re-probe waits the settle constant before probing");
+        expect(strstr(script,"G4 P30000\n")!=NULL,"re-probe waits the settle constant (G4 P in milliseconds) before probing");
         expect(strstr(script,"G1 Z10 F600\nG1 X30 Y30 F12000\nPROBE SAMPLES=3")!=NULL,"re-probe lifts Z then moves to the FL table point");
         expect(strstr(script,"X230")==NULL&&strstr(script,"Y225")==NULL,"single-corner re-probe does not visit other corners");
         expect(!strstr(script,"30,30")&&!strstr(script,"FL"),"scripts do not echo user-supplied tokens");
@@ -136,7 +136,7 @@ int main(void){
         expect(control_build_script("screws:tram:check:2",&mqtt,script,sizeof(script),reason,sizeof(reason)),"probe-twice four-corner check accepted");
         expect(strlen(script)<CONSOLE_COMMAND_MAX,"probe-twice four-corner check fits the console transport");
         expect(strstr(script,"G28 Z\n")!=NULL&&strstr(script,"G28\n")==NULL,"probe-twice check homes Z only");
-        expect(strstr(script,"G4 S30\n")!=NULL,"probe-twice check waits the settle constant once");
+        expect(strstr(script,"G4 P30000\n")!=NULL&&!strstr(script,"G4 S"),"probe-twice check waits the settle constant once, in milliseconds");
         {
             const char *p=script;int probes=0;
             while((p=strstr(p,"PROBE SAMPLES=3"))){probes++;p+=15;}
@@ -173,9 +173,30 @@ int main(void){
         expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"session start for emergency invalidation");
         expect(control_build_script("system:emergency_stop",&mqtt,script,sizeof(script),reason,sizeof(reason)),"emergency stop accepted during a session");
         expect(!control_screws_session_active(),"session invalid after emergency stop");
+        {
+            /* One-shot screws:measure: reported to the history without a session. */
+            mqtt.machine_status=1;mqtt.last_message=time(NULL);
+            (void)control_screws_take_finished(NULL);
+            expect(control_build_script("screws:measure",&mqtt,script,sizeof(script),reason,sizeof(reason)),"one-shot measurement builds");
+            control_screws_note_quick(31);
+            control_screws_job job={-1,-1,-1,0};
+            expect(!control_screws_tick(&mqtt,0,0,31,0,time(NULL))&&!control_screws_take_finished(&job),"a running one-shot measurement is not reported yet");
+            (void)control_screws_tick(&mqtt,1,1,31,0,time(NULL));
+            expect(control_screws_take_finished(&job)&&job.kind==CONTROL_SCREWS_JOB_QUICK&&job.corner==-1&&!job.twice&&job.started>0,
+                   "a completed one-shot measurement is reported once as a quick job");
+            control_screws_note_quick(32);
+            (void)control_screws_tick(&mqtt,1,0,32,0,time(NULL));
+            expect(!control_screws_take_finished(NULL),"a failed one-shot measurement is not recorded");
+            control_screws_note_quick(33);
+            (void)control_screws_tick(&mqtt,0,0,33,1,time(NULL));
+            (void)control_screws_tick(&mqtt,1,1,33,0,time(NULL));
+            expect(!control_screws_take_finished(NULL),"an emergency stop drops a pending one-shot measurement");
+        }
         expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"session start for console-error invalidation");
         control_screws_note_job(9);
+        (void)control_screws_take_finished(NULL);
         expect(control_screws_tick(&mqtt,1,0,9,0,time(NULL)),"failed session job requests heaters off");
+        expect(!control_screws_take_finished(NULL),"a failed session job is not recorded in the history");
         expect(!control_screws_session_active(),"session invalid after a failed job");
         expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"session start for lost-homing invalidation");
         mqtt.have_position=1;strcpy(mqtt.homed_axes,"xyz");
@@ -200,6 +221,12 @@ int main(void){
             expect(!control_screws_tick(&mqtt,1,1,21,0,TRAM_AT(2))&&control_screws_session_active(),"Manual homing reported just after the job completed is still accepted");
             mqtt.machine_status=1;
             expect(!control_screws_tick(&mqtt,1,1,21,0,TRAM_AT(3))&&control_screws_session_active(),"session idle again after its job");
+            {
+                control_screws_job job={-1,-1,-1,0};
+                expect(control_screws_take_finished(&job)&&job.kind==CONTROL_SCREWS_JOB_START&&job.corner==-1&&!job.twice&&
+                       job.started>=t0&&job.started<=time(NULL),"completed session start is reported once to the history");
+                expect(!control_screws_take_finished(&job),"a completed job is reported only once");
+            }
             mqtt.last_message=time(NULL);
             expect(control_build_script("screws:tram:probe:FR",&mqtt,script,sizeof(script),reason,sizeof(reason)),"re-probe accepted after the start reported Manual homing");
             control_screws_note_action("screws:tram:probe:FR");control_screws_note_job(22);
@@ -207,6 +234,13 @@ int main(void){
             expect(!control_screws_tick(&mqtt,0,0,22,0,TRAM_AT(4))&&control_screws_session_active(),"Manual homing and a brief XY report gap during the re-probe keep the session");
             mqtt.machine_status=1;strcpy(mqtt.homed_axes,"xyz");
             expect(!control_screws_tick(&mqtt,1,1,22,0,TRAM_AT(40))&&control_screws_session_active(),"re-probe completes");
+            {
+                control_screws_job job={-1,-1,-1,0};
+                expect(control_screws_take_finished(&job)&&job.kind==CONTROL_SCREWS_JOB_PROBE&&job.corner==1&&!job.twice&&job.started>=t0,
+                       "completed FR re-probe is reported with its corner and session");
+                expect(!strcmp(control_screws_corner_id(job.corner),"FR")&&control_screws_corner_at(229.997,30.002)==1&&
+                       control_screws_corner_at(30,225)==3&&control_screws_corner_at(100,100)==-1,"corner IDs and probe positions map to the fixed table");
+            }
             expect(!control_screws_heaters_off_pending(),"no heaters-off pending while the session is fine");
             expect(!control_screws_bed_renew_due(t0+40+SCREWS_BED_RENEW_S-1),"bed target not renewed before ten minutes");
             expect(control_screws_bed_renew_due(t0+40+SCREWS_BED_RENEW_S),"bed target renewal due ten minutes after the last job");
