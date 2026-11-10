@@ -22,6 +22,12 @@ pinned={
     'patches/http-upload/http_upload_v1.json':b.HTTP_UPLOAD_MANIFEST_SHA256,
     'keys/cc2_stock_public.pem':b.PUBLIC_HASHES['stock'],
     'dualtrust/cc2_community_release_public.pem':b.PUBLIC_HASHES['community'],
+    # Integration-helper pin chain: the builder reqhash()es each helper module
+    # before importing it. A change to a helper must update its pin in the same
+    # commit, or a real build fails at that reqhash (uncaught by the other tests).
+    'core/reactor_component.py':b.REACTOR_HELPER_SHA256,
+    'core/camera_component.py':b.CAMERA_HELPER_SHA256,
+    **{f'core/{name}':pin for name,pin in b.INTEGRATION_HELPERS.items()},
 }
 for relative,expected in pinned.items():
     actual=hashlib.sha256((BASE/relative).read_bytes()).hexdigest()
