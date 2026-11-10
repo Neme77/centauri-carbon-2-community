@@ -37,49 +37,19 @@ provide under GPLv2 section 3. The device kernel `.config` is already captured a
 `CONFIG_MODVERSIONS` is off in the captured config, so no `Module.symvers` is
 required for module builds — a matching source tree plus the `.config` is enough.
 
-## Request template
+## Where to request
 
-Fill in `[Your name]` / `[Your contact details / order number]` and send via
-ELEGOO's official support or open-source contact channel (the address is on
-ELEGOO's support / open-source page). Do not invent a recipient address.
-
-> Subject: GPLv2 source code request — Centauri Carbon 2 firmware 02.01.01.13 (Linux kernel)
->
-> Hello ELEGOO Open Source / Support Team,
->
-> I own an ELEGOO Centauri Carbon 2 3D printer running firmware version
-> **02.01.01.13**. This firmware includes the Linux kernel (version **5.4.61**,
-> Allwinner TinaLinux) and other components licensed under the GNU General Public
-> License, version 2. Under GPLv2 section 3, the distribution of these binaries
-> carries an obligation to provide the complete corresponding source code on
-> request. I am writing to request that source.
->
-> Specifically, for firmware **02.01.01.13** as shipped on the Centauri Carbon 2,
-> please provide:
->
-> 1. The complete corresponding source code of the Linux kernel **5.4.61** as
->    built for this firmware, including all ELEGOO/Allwinner patches applied on
->    top of the upstream kernel.
-> 2. The exact kernel configuration (`.config`) used to build it.
-> 3. The build scripts and the toolchain details (compiler and version) needed to
->    build the kernel and **loadable kernel modules** that are binary-compatible
->    with the deployed kernel.
-> 4. The source code of any other GPL- or LGPL-licensed components distributed in
->    this firmware.
->
-> Context (to help you locate the exact build): the deployed kernel in this
-> firmware differs at the binary/ABI level from the publicly available 5.4.61
-> tree for earlier firmware, so the earlier source release does not correspond to
-> 02.01.01.13. A download link to an archive, or a written offer per GPLv2
-> section 3(b), would both be fine.
->
-> Thank you for your help and for honoring the open-source licenses in your
-> products. Please let me know if you need the printer serial number, order
-> number, or any additional detail to identify the exact firmware build.
->
-> Best regards,
-> [Your name]
-> [Your contact details / order number]
+ELEGOO's open-source materials for this printer live in the official
+[`elegooofficial/CentauriCarbon2`](https://github.com/elegooofficial/CentauriCarbon2)
+repository, which currently publishes the printer application layer and the MCU
+firmware — not the Linux kernel or the rest of the root filesystem. GPLv3
+compliance for the CC2 firmware is tracked there in issue
+[#8 "Out of compliance with GPLv3"](https://github.com/elegooofficial/CentauriCarbon2/issues/8),
+where an ELEGOO maintainer has acknowledged the request. The concrete,
+version-pinned ask above — kernel 5.4.61 source + `.config` + toolchain for
+firmware 02.01.01.13, with the ABI-mismatch rationale — has been raised in that
+issue. Follow up in that thread rather than by email; do not invent a contact
+address.
 
 ## When the source arrives
 
