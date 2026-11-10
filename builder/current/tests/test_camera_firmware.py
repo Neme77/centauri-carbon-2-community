@@ -44,10 +44,12 @@ class CameraFirmwareTests(unittest.TestCase):
             params=inspect.signature(fn).parameters
             self.assertIn('camera_sha',params,fn.__name__)
             self.assertIn('init_sha',params,fn.__name__)
-        # 02.01.01.13 carries its own camera pins (different from 07).
+        # 02.01.01.13 has its own patched camera (different from 07), but the init
+        # camera.install validates (stock+reactor, before the camera patch) is
+        # base-independent: device-verified bcabb1fa for 0113, identical to 07.
         out13=json.loads((BUILDER/'base_profiles/02.01.01.13.json').read_text())['port']['outputs']
         self.assertNotEqual(out13['camera_release'],camera.CAMERA_SHA)
-        self.assertNotEqual(out13['camera_init'],camera.INIT_SHA)
+        self.assertEqual(out13['camera_init'],camera.INIT_SHA)
 
     @unittest.skipUnless((BUILDER/'components/camera/prepared-manifest.json').is_file(),'qualified runtime supplied in builder packaging workflow')
     def test_rootfs_install_and_reextraction_audit(self):

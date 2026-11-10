@@ -66,9 +66,11 @@ In `base_profiles/02.01.01.13.json` dieselbe Struktur, 0113-Werte:
     "patched_gui": "668ab8cb490c74eb5bbd769b421f6e4ade4e91fba322e22257496b9645f9ebfe",
     "printer_release": {"sha256": "688b7bf8a27762d56b35d9738ea5b0c3d45580b402e122b0f77ee49dab1a8cfd", "md5": "a1cc4bd58769f31dd527dfdf8d0a081d", "size": 29238216},
     "camera_release": "90da7634c21b74b3bf943d68129da78668b47f9706620e158283697ab95553a7",
-    "native_gui": "TODO_NATIVE_DISPLAY_0113",
-    "camera_init": "e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd255d1bc4"
+    "camera_init": "bcabb1fa405b066b06c229c6d8cc6e474a0ccc57e31a1b5b387d3b55945be563"
   },
+  // native_gui is omitted: native display is declared not-included (components section).
+  // camera_init is the stock+reactor init camera.install validates (base-independent,
+  // device-verified for 0113), NOT the final installed init e7537298.
   "golden": {}
 }
 ```
@@ -123,13 +125,14 @@ unbemerkt ändert.
 
 ### Schritt 2.4 — Komponenten re-pinnen
 
-- **Kamera-Runtime** (`core/camera_component.py:13`): `INIT_SHA` ist der
-  07-Stock-`etc/init.d/printer`. Mach ihn basis-abhängig
-  (`port['outputs']['camera_init']`); 0113-Wert
-  `e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd255d1bc4`.
-  Danach prüfen, dass die Regex `^[ \t]*ai_camera &$` in `patched_init()`
-  im 0113-`printer`-Text noch greift (ist Text-basiert, hält
-  voraussichtlich).
+- **Kamera-Runtime** (`core/camera_component.py`): erledigt, s. u. `INIT_SHA`
+  ist der Init, den `camera.install` prüft (nach reactor, vor dem Kamera-Patch
+  = Stock+Reactor). **Wichtig:** dieser Zustand ist basis-unabhängig `bcabb1fa…`
+  — geräteverifiziert, da die Rückrechnung des Kamera-Patches aus dem
+  0113-Geräte-`/etc/init.d/printer` (final `e7537298…`) exakt `bcabb1fa…` ergibt
+  (identisch zu 07). Nur `CAMERA_SHA` (gepatchte Kamera, 0113 `90da7634…`) ist
+  basis-spezifisch. Die `patched_init()`-Regex `^[ \t]*ai_camera &$` greift im
+  0113-Text (geräteverifiziert).
 - **CC2-Control** (`cc2-control/installer/compatibility.json`):
   `printer_sha256` auf `688b7bf8…` und `firmware_version_file_sha256` auf
   den 0113-Wert setzen; `daemon_sha256` bleibt (byte-identisch). Für eine
