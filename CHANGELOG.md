@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Interactive screw-tramming on Bed → Screw Levelling: start a session with one click (full home and the existing bed prep), re-probe a single corner after turning its screw, or check all four, without repeating the full four-corner measurement. Re-probes home Z only, wait 30 s to settle, and can probe twice so thermal drift is visible. The nozzle is switched off after each probe; the bed stays at 60 °C until the session ends. Requested by **sametsoyoz** (#329).
+- Interactive screw-tramming on Bed → Screw Levelling: start a session with one click (full home and the existing bed prep), re-probe a single corner after turning its screw, or check all four, without repeating the full four-corner measurement. Re-probes home Z only, wait 30 s to settle, and can probe twice so thermal drift is visible. The nozzle is switched off after each probe; the bed stays at 60 °C until the session ends. The session survives the Manual homing / Auto leveling state its own homing and probing report, the bed target is renewed every ten minutes so the firmware's idle shutdown does not cool the bed between probes, and a bed left at 60 °C by an ended session is switched off once the printer is idle again. Requested by **sametsoyoz** (#329).
 
 - Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
 

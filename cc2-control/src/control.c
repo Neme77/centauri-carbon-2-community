@@ -64,12 +64,41 @@ static const struct { char id[4]; int x, y; } SCREW_CORNERS[] = {
 static struct {
     int active, start_done, job_pending, xy_seen;
     unsigned long job_generation;
-    time_t last;
+    time_t last, job_done, bed_renew_at;
 } screws_session;
+/* Kept outside the session: it must survive the session being cleared. */
+static int screws_heaters_off_pending;
 
 void control_screws_reset(void){memset(&screws_session,0,sizeof(screws_session));}
 void control_screws_invalidate(void){control_screws_reset();}
 int control_screws_session_active(void){return screws_session.active;}
+int control_screws_heaters_off_pending(void){return screws_heaters_off_pending;}
+void control_screws_heaters_off_sent(void){screws_heaters_off_pending=0;}
+/* A queued action that sets or clears heater targets hands the heaters back to
+ * the user (or starts a new session), so a deferred shutdown must not undo it. */
+void control_screws_note_action(const char *action){
+    static const char *const owners[]={"heaters:","heater:","pid:","preset:","preheat:","screws:",
+                                       "system:heaters_off","system:all_off"};
+    if(!action)return;
+    for(size_t i=0;i<sizeof(owners)/sizeof(owners[0]);i++)
+        if(!strncmp(action,owners[i],strlen(owners[i]))){screws_heaters_off_pending=0;return;}
+}
+/* The firmware switches an idle bed off 15 minutes after the last command (see
+ * plates_cal_keep_bed in plates.h). Between re-probes nothing else is sent, so a
+ * session that waits longer would measure a cooling bed. */
+int control_screws_bed_renew_due(time_t now){
+    return screws_session.active&&screws_session.start_done&&!screws_session.job_pending&&
+           screws_session.bed_renew_at&&now>=screws_session.bed_renew_at;
+}
+void control_screws_bed_renewed(time_t now,int delivered){
+    if(!screws_session.active)return;
+    screws_session.bed_renew_at=now+(delivered?SCREWS_BED_RENEW_S:30);
+}
+static int tram_end_with_heaters_off(void){
+    control_screws_invalidate();
+    screws_heaters_off_pending=1;
+    return 1;
+}
 static int tram_xy_homed(const mqtt_client *m){
     return m&&m->have_position&&strchr(m->homed_axes,'x')&&strchr(m->homed_axes,'y');
 }
@@ -123,40 +152,42 @@ static int tram_close_script(char *script,size_t cap,char *reason,size_t reason_
         return reject(reason,reason_cap,"Screw tramming command exceeds buffer capacity");
     return 1;
 }
+/* The session's own G28 / G28 Z / PROBE make the printer report Manual homing
+ * (10) or Auto leveling (5) instead of Idle, and the report trails the console
+ * job by a poll. Those two states are accepted while the session's own job runs
+ * and for a short grace period after it completed; nothing else is. */
+static int tram_own_job(time_t now){
+    if(screws_session.job_pending)return 1;
+    return screws_session.job_done&&now>=screws_session.job_done&&
+           now-screws_session.job_done<=SCREWS_STATUS_GRACE_S;
+}
 int control_screws_tick(const mqtt_client *m,int console_completed,int console_success,
                         unsigned long generation,int emergency,time_t now){
+    if(m&&printing(m))screws_heaters_off_pending=0; /* A print owns the heaters now. */
     if(!screws_session.active)return 0;
-    if(emergency||!m||!m->connected||!m->registered){
-        control_screws_invalidate();
-        return 1;
-    }
-    if(printing(m)||!m->have_machine_status||m->machine_status!=1){
+    if(emergency||!m||!m->connected||!m->registered)return tram_end_with_heaters_off();
+    if(printing(m)){
         control_screws_invalidate();
         return 0;
     }
-    if(m->last_message<=0||now<m->last_message||now-m->last_message>15){
-        control_screws_invalidate();
-        return 1;
-    }
-    if(screws_session.last&&now>=screws_session.last&&
-       now-screws_session.last>SCREWS_SESSION_TIMEOUT_S){
-        control_screws_invalidate();
-        return 1;
-    }
+    if(m->last_message<=0||now<m->last_message||now-m->last_message>15)return tram_end_with_heaters_off();
     if(screws_session.job_pending&&console_completed&&generation==screws_session.job_generation){
         screws_session.job_pending=0;
-        if(!console_success){
-            control_screws_invalidate();
-            return 1;
-        }
+        if(!console_success)return tram_end_with_heaters_off();
         screws_session.start_done=1;
+        screws_session.job_done=now;
         screws_session.last=now;
+        /* The job's closing M140 S60 restarted the firmware's bed idle count. */
+        screws_session.bed_renew_at=now+SCREWS_BED_RENEW_S;
     }
+    int own=tram_own_job(now);
+    if(!m->have_machine_status)return tram_end_with_heaters_off();
+    if(m->machine_status!=1&&!(own&&(m->machine_status==10||m->machine_status==5)))
+        return tram_end_with_heaters_off();
+    if(screws_session.last&&now>=screws_session.last&&
+       now-screws_session.last>SCREWS_SESSION_TIMEOUT_S)return tram_end_with_heaters_off();
     if(tram_xy_homed(m))screws_session.xy_seen=1;
-    else if(screws_session.xy_seen){
-        control_screws_invalidate();
-        return 1;
-    }
+    else if(screws_session.xy_seen&&!own)return tram_end_with_heaters_off();
     return 0;
 }
 

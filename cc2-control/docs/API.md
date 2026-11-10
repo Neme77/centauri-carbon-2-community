@@ -303,9 +303,18 @@ same bed prep as `screws:measure`. Re-probe and the four-corner check home Z onl
 (`G28 Z`) after a 30 s settle, and only while a session is active with X and Y
 homed. Each start/re-probe/check script restores `CC2_SCREW_TRAM` gcode state,
 switches the nozzle off (`M104 S0`) and keeps the bed at 60 °C. `GET /api/printer`
-reports `screws_session.active` and `screws_session.xy_homed`. The session is cleared
-on disconnect, console error, timeout, emergency stop, `screws:measure` or end.
-End and session invalidation switch both heaters off. `screws:measure` is unchanged.
+reports `screws_session.active` and `screws_session.xy_homed`. While the session's own
+job runs, and for 15 s after it completed, the printer may report Manual homing or
+Auto leveling instead of Idle; the session accepts those two states only then. The
+session is cleared on disconnect, console error, timeout, emergency stop, any other
+machine state, `screws:measure` or end. The firmware switches an idle bed off 15 minutes
+after the last command, so between jobs the session sends `M140 S60` again every ten
+minutes (retried after 30 s if not delivered), only while the printer is idle and
+telemetry still shows the 60 °C target. End switches both heaters off. After any other
+invalidation `TURN_OFF_HEATERS` stays pending and is retried until it is delivered
+while the printer is idle and the console free; a print start or a queued heater
+action (temperature, preset, preheat, PID, heaters off, a new tram start) cancels it.
+`screws:measure` is unchanged.
 
 ## Heater PID calibration
 

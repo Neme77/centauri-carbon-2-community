@@ -4015,6 +4015,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
+    control_screws_note_action(action);
     if(control_screws_is_tram(action)&&strcmp(action,"screws:tram:end")){
         pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
         control_screws_note_job(generation);
@@ -4656,9 +4657,20 @@ int main(int argc, char **argv) {
             generation=console.generation;
             pthread_mutex_unlock(&console.lock);
             emergency=atomic_load(&console.emergency_sent);
-            if(control_screws_tick(&mqtt,completed,success,generation,emergency,time(NULL))&&
-               !busy&&mqtt.have_machine_status&&mqtt.machine_status==1)
-                (void)send_local_gcode_script("TURN_OFF_HEATERS");
+            time_t tram_now=time(NULL);
+            (void)control_screws_tick(&mqtt,completed,success,generation,emergency,tram_now);
+            /* Keep the session's bed at 60 C, but only while telemetry still shows that
+             * target: a target someone else set is left alone. */
+            double tram_bed=0;
+            if(control_screws_bed_renew_due(tram_now)&&!busy&&mqtt.have_machine_status&&mqtt.machine_status==1&&
+               uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
+                control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
+            /* The session left the bed at 60 C: retry the shutdown on every tick
+             * until it is delivered while the printer is idle and the console free. */
+            if(control_screws_heaters_off_pending()&&!busy&&mqtt.connected&&mqtt.registered&&
+               mqtt.have_machine_status&&mqtt.machine_status==1&&
+               send_local_gcode_script("TURN_OFF_HEATERS")==0)
+                control_screws_heaters_off_sent();
         }
         spools_tick(&mqtt);
         queue_tick(&mqtt);

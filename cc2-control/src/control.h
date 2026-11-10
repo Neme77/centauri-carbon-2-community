@@ -14,6 +14,12 @@ int control_build_script(const char *action, const mqtt_client *mqtt,
  * emergency stop, one-shot screws:measure, or an explicit end. */
 #define SCREWS_SETTLE_S 30
 #define SCREWS_SESSION_TIMEOUT_S 1200
+/* Seconds after the session's own job completed during which Manual homing (10)
+ * and Auto leveling (5) are still accepted, because the report trails the job. */
+#define SCREWS_STATUS_GRACE_S 15
+/* Renew the session's 60 C bed target before the firmware's 15-minute idle
+ * bed shutdown; a failed send is retried after 30 s. */
+#define SCREWS_BED_RENEW_S 600
 void control_screws_reset(void);
 void control_screws_invalidate(void);
 int control_screws_session_active(void);
@@ -22,9 +28,17 @@ int control_screws_xy_homed(const mqtt_client *mqtt);
 int control_screws_is_tram(const char *action);
 void control_screws_note_job(unsigned long generation);
 /* Returns 1 when an active session was just cleared and heaters should be
- * switched off (timeout, disconnect, failed job, lost XY homing, estop). */
+ * switched off (timeout, disconnect, failed job, lost XY homing, estop,
+ * unexpected machine state). The shutdown also stays pending until
+ * control_screws_heaters_off_sent(), a print starts, or a queued heater
+ * action (control_screws_note_action) takes the heaters over. */
 int control_screws_tick(const mqtt_client *mqtt, int console_completed, int console_success,
                         unsigned long generation, int emergency, time_t now);
+int control_screws_heaters_off_pending(void);
+void control_screws_heaters_off_sent(void);
+void control_screws_note_action(const char *action);
+int control_screws_bed_renew_due(time_t now);
+void control_screws_bed_renewed(time_t now, int delivered);
 
 /* SET_TMC_FIELD values for the X/Y motor mode (motors:quiet / motors:normal).
  * The firmware refuses a literal 0, so the zero values overflow the field

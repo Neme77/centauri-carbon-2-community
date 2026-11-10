@@ -183,6 +183,71 @@ int main(void){
         strcpy(mqtt.homed_axes,"");
         expect(control_screws_tick(&mqtt,0,0,0,0,time(NULL)),"lost XY homing invalidates the session");
         expect(!control_screws_session_active(),"session invalid after XY is unhomed");
+        {
+            /* On the printer the session's own G28 / G28 Z / PROBE report Manual homing (10)
+             * or Auto leveling (5), and the report trails the console job by a poll. */
+            time_t t0=time(NULL);
+#define TRAM_AT(offset) (mqtt.last_message=t0+(offset),t0+(offset))
+            mqtt.machine_status=1;mqtt.have_position=1;strcpy(mqtt.homed_axes,"xyz");mqtt.last_message=t0;
+            control_screws_heaters_off_sent();
+            expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"session start for homing-state test");
+            control_screws_note_action("screws:tram:start");control_screws_note_job(21);
+            mqtt.machine_status=10;strcpy(mqtt.homed_axes,"");
+            expect(!control_screws_tick(&mqtt,0,0,21,0,TRAM_AT(0))&&control_screws_session_active(),"Manual homing during the session's own G28 keeps the session");
+            mqtt.machine_status=5;strcpy(mqtt.homed_axes,"xyz");
+            expect(!control_screws_tick(&mqtt,0,0,21,0,TRAM_AT(1))&&control_screws_session_active(),"Auto leveling during the session's own probing keeps the session");
+            mqtt.machine_status=10;
+            expect(!control_screws_tick(&mqtt,1,1,21,0,TRAM_AT(2))&&control_screws_session_active(),"Manual homing reported just after the job completed is still accepted");
+            mqtt.machine_status=1;
+            expect(!control_screws_tick(&mqtt,1,1,21,0,TRAM_AT(3))&&control_screws_session_active(),"session idle again after its job");
+            mqtt.last_message=time(NULL);
+            expect(control_build_script("screws:tram:probe:FR",&mqtt,script,sizeof(script),reason,sizeof(reason)),"re-probe accepted after the start reported Manual homing");
+            control_screws_note_action("screws:tram:probe:FR");control_screws_note_job(22);
+            mqtt.machine_status=10;strcpy(mqtt.homed_axes,"");
+            expect(!control_screws_tick(&mqtt,0,0,22,0,TRAM_AT(4))&&control_screws_session_active(),"Manual homing and a brief XY report gap during the re-probe keep the session");
+            mqtt.machine_status=1;strcpy(mqtt.homed_axes,"xyz");
+            expect(!control_screws_tick(&mqtt,1,1,22,0,TRAM_AT(40))&&control_screws_session_active(),"re-probe completes");
+            expect(!control_screws_heaters_off_pending(),"no heaters-off pending while the session is fine");
+            expect(!control_screws_bed_renew_due(t0+40+SCREWS_BED_RENEW_S-1),"bed target not renewed before ten minutes");
+            expect(control_screws_bed_renew_due(t0+40+SCREWS_BED_RENEW_S),"bed target renewal due ten minutes after the last job");
+            control_screws_bed_renewed(t0+40+SCREWS_BED_RENEW_S,0);
+            expect(!control_screws_bed_renew_due(t0+40+SCREWS_BED_RENEW_S+29)&&control_screws_bed_renew_due(t0+40+SCREWS_BED_RENEW_S+30),
+                   "a failed bed renewal is retried after 30 s");
+            control_screws_bed_renewed(t0+40+SCREWS_BED_RENEW_S+30,1);
+            expect(!control_screws_bed_renew_due(t0+40+2*SCREWS_BED_RENEW_S+29)&&control_screws_bed_renew_due(t0+40+2*SCREWS_BED_RENEW_S+30),
+                   "a delivered bed renewal waits another ten minutes");
+            control_screws_note_job(23);
+            expect(!control_screws_bed_renew_due(t0+40+3*SCREWS_BED_RENEW_S),"no bed renewal while the session's own job runs");
+            expect(!control_screws_tick(&mqtt,1,1,23,0,TRAM_AT(40))&&control_screws_session_active(),"third job completes");
+            mqtt.machine_status=10;
+            expect(control_screws_tick(&mqtt,1,1,22,0,TRAM_AT(40+SCREWS_STATUS_GRACE_S+1))&&!control_screws_session_active(),
+                   "Manual homing outside the session's own job ends the session");
+            expect(control_screws_heaters_off_pending(),"heaters-off stays pending after the session ended");
+            mqtt.machine_status=1;
+            expect(!control_screws_tick(&mqtt,0,0,0,0,TRAM_AT(60))&&control_screws_heaters_off_pending(),"heaters-off still pending until it is delivered");
+            control_screws_note_action("fan:aux:50");
+            expect(control_screws_heaters_off_pending(),"an unrelated action keeps the pending heaters-off");
+            control_screws_note_action("heaters:set:0:70");
+            expect(!control_screws_heaters_off_pending(),"a queued heater action takes the heaters over");
+            mqtt.last_message=time(NULL);
+            expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"session start for other-state test");
+            control_screws_note_action("screws:tram:start");
+            mqtt.machine_status=3;
+            expect(control_screws_tick(&mqtt,0,0,0,0,time(NULL))&&!control_screws_session_active()&&control_screws_heaters_off_pending(),
+                   "another operation (Loading) ends the session and leaves heaters-off pending");
+            mqtt.machine_status=2;
+            expect(!control_screws_tick(&mqtt,0,0,0,0,time(NULL))&&!control_screws_heaters_off_pending(),"a print takes the heaters over");
+            mqtt.machine_status=1;
+            expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"session start for pending-clear test");
+            mqtt.machine_status=3;
+            expect(control_screws_tick(&mqtt,0,0,0,0,time(NULL))&&control_screws_heaters_off_pending(),"pending heaters-off before a new start");
+            mqtt.machine_status=1;
+            expect(control_screws_tick(&mqtt,0,0,0,0,time(NULL))==0,"no session, nothing to do");
+            control_screws_note_action("screws:tram:start");
+            expect(!control_screws_heaters_off_pending(),"a new session start clears an old pending heaters-off");
+#undef TRAM_AT
+            mqtt.last_message=time(NULL);
+        }
         expect(control_build_script("screws:measure",&mqtt,script,sizeof(script),reason,sizeof(reason)),"screw measurement still accepted after tram tests");
         expect(!strcmp(script,measure),"one-shot screw measurement script is unchanged");
         expect(strstr(script,"G28")==NULL&&strstr(script,"RESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE")!=NULL,
