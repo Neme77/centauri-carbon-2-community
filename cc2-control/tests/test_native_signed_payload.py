@@ -31,7 +31,7 @@ def run(payload_path):
         (base/'trusted-base.h').write_bytes((APP/'updater/trusted-base.h').read_bytes())
         (base/'verify.c').write_bytes((APP/'updater/verify.c').read_bytes())
         compatibility=json.loads((APP/'installer/compatibility.json').read_text())
-        manifest=(f'version=1.2.26\nfirmware=4.4\nprinter={compatibility["printer_sha256"]}\n'
+        manifest=(f'version=1.2.26\nfirmware=4.4\nprinter={compatibility["printer_sha256"][0]}\n'
             f'daemon={compatibility["daemon_sha256"]}\nsize={len(payload)}\nsha512={hashlib.sha512(payload).hexdigest()}\n').encode()
         header=b'CC2UPD1\n'+struct.pack('>IQ',len(manifest),len(payload))
         (base/'message').write_bytes(header+manifest)

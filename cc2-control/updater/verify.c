@@ -35,6 +35,14 @@ static int fail(const char *reason) {
     return 0;
 }
 
+/* The manifest's printer fingerprint must match one of the accepted vendor
+ * bases (see trusted-base.h). Fail-closed: no match means reject. */
+static int printer_trusted(const char *printer) {
+    for (size_t i = 0; i < sizeof(cc2_update_printer_sha256) / sizeof(cc2_update_printer_sha256[0]); i++)
+        if (!strcmp(printer, cc2_update_printer_sha256[i])) return 1;
+    return 0;
+}
+
 static uint64_t big_endian(const unsigned char *p, unsigned n) {
     uint64_t v = 0;
     while (n--) v = (v << 8) | *p++;
@@ -128,7 +136,7 @@ static int verify(const char *path, package *pkg) {
     unsigned long long declared = strtoull(size, &end, 10);
     if (errno || *end || !isdigit((unsigned char)size[0]) || declared != pkg->size) return fail("payload length mismatch");
     if (strcmp(firmware, CC2_COMMUNITY_FIRMWARE_VERSION)) return fail("incompatible community firmware");
-    if (strcmp(printer, CC2_UPDATE_PRINTER_SHA256) || strcmp(daemon, CC2_UPDATE_DAEMON_SHA256))
+    if (!printer_trusted(printer) || strcmp(daemon, CC2_UPDATE_DAEMON_SHA256))
         return fail("incompatible firmware fingerprints");
     if (!newer(pkg->version)) return fail("version must be newer than the installed application");
     pkg->offset = ftell(pkg->file);

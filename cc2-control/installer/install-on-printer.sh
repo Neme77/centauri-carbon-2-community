@@ -112,17 +112,24 @@ install_phase payload-checks
 # The application-reported firmware number alone cannot identify the installed base.
 install_phase firmware-checks
 required_firmware='@FIRMWARE_VERSION@'
-expected_printer='@PRINTER_SHA256@'
+expected_printers='@PRINTER_SHA256_LIST@'
 expected_daemon='@DAEMON_SHA256@'
 require_hash() {
     actual=$(sha256sum "$1" 2>/dev/null | awk '{print $1}')
     [ "$actual" = "$2" ] || { echo "Incompatible firmware: Community Firmware V$required_firmware is required ($1)." >&2; exit 1; }
 }
-require_hash /opt/bin/elegoo_printer "$expected_printer"
+# The printer binary must match one of the accepted vendor bases (07 or 0113).
+require_hash_any() {
+    actual=$(sha256sum "$1" 2>/dev/null | awk '{print $1}')
+    for want in $2; do [ "$actual" = "$want" ] && return 0; done
+    echo "Incompatible firmware: Community Firmware V$required_firmware is required ($1)." >&2
+    exit 1
+}
+require_hash_any /opt/bin/elegoo_printer "$expected_printers"
 require_hash /opt/inst/daemon-000/daemon-000 "$expected_daemon"
 printer_pid=$(pidof elegoo_printer 2>/dev/null || true)
 case "$printer_pid" in ''|*' '*) echo 'Cannot identify the running printer process.' >&2; exit 1;; esac
-require_hash "/proc/$printer_pid/exe" "$expected_printer"
+require_hash_any "/proc/$printer_pid/exe" "$expected_printers"
 
 test -d "$TARGET"
 test -x "$INIT"

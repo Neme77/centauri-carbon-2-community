@@ -19,8 +19,11 @@ export function signedPackage(payload, version, firmware, compatibility, private
   const publicHex = publicDer.subarray(-32).toString('hex')
   if (trusted.algorithm !== 'Ed25519' || publicHex !== trusted.public_key)
     throw Error('Signing key does not match the installed verifier trust anchor')
-  const printer = compatibility.printer_sha256, daemon = compatibility.daemon_sha256
-  if (![printer, daemon].every(s => /^[a-f0-9]{64}$/.test(s))) throw Error('Invalid firmware fingerprints')
+  const printers = compatibility.printer_sha256, daemon = compatibility.daemon_sha256
+  if (!Array.isArray(printers) || printers.length < 1 || !printers.every(s => /^[a-f0-9]{64}$/.test(s)) || !/^[a-f0-9]{64}$/.test(daemon)) throw Error('Invalid firmware fingerprints')
+  // The payload is base-independent; the manifest declares the primary base and
+  // the on-device verifier accepts any trusted base (see trusted-base.h).
+  const printer = printers[0]
   const manifest = Buffer.from(`version=${version}\nfirmware=${firmware}\nprinter=${printer}\ndaemon=${daemon}\nsize=${payload.length}\nsha512=${createHash('sha512').update(payload).digest('hex')}\n`)
   if (manifest.length > 1024) throw Error('Manifest exceeds verifier limit')
   const header = Buffer.alloc(20)
