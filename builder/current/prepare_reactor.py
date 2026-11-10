@@ -38,14 +38,15 @@ def output(args):return run(args,stdout=subprocess.PIPE,text=True).stdout
 def main():
     ap=argparse.ArgumentParser(description='Compile the O0 reactor bridge for a base')
     ap.add_argument('--base-version',default='02.01.01.07')
-    base=ap.parse_args().base_version
+    ap.add_argument('--prefix',default=PREFIX,help='cross toolchain prefix for -g++/-readelf (default: the canonical /opt/cc2-cross path)')
+    args=ap.parse_args(); base=args.base_version; prefix=args.prefix
     profile=json.loads((HERE/'base_profiles'/(base+'.json')).read_text())
     vendor_sha=profile['port']['outputs']['printer_release']['sha256']
-    if output([PREFIX+'-g++','-dumpversion']).strip()!='6.5.0':raise RuntimeError('Requires GCC 6.5.0')
-    run([sys.executable,SOURCE/'assemble_dual44_gnu.py','--prefix',PREFIX])
+    if output([prefix+'-g++','-dumpversion']).strip()!='6.5.0':raise RuntimeError('Requires GCC 6.5.0')
+    run([sys.executable,SOURCE/'assemble_dual44_gnu.py','--prefix',prefix])
     # Both builder preflight paths must use the same newly reproduced, hash-qualified wrapper.
     shutil.copyfile(SOURCE/'dual_verify_44.bin',HERE/'dualtrust/dual_verify.bin')
-    libc=output([PREFIX+'-g++','-print-file-name=libc.so.6']).strip()
+    libc=output([prefix+'-g++','-print-file-name=libc.so.6']).strip()
     if 'release version 2.23' not in output(['strings',libc]):raise RuntimeError('Requires glibc 2.23')
     vendor=SOURCE/'reactor/vendor-link/libcolib.so'
     if not vendor.is_file() or digest(vendor)!=LIBCO:raise RuntimeError('Missing qualified native libco')
@@ -61,19 +62,19 @@ def main():
         for name,p in sources.items():shutil.copyfile(p,staging/name)  # co-locate so quote-includes resolve to this base
         build=staging
     try:
-        run([PREFIX+'-g++',*flags,'-fPIC','-fvisibility=hidden','-shared','-Wl,--no-undefined','-Wl,-z,now',build/'reactor_module.cpp','-o',module,'-ldl','-lm'])
-        run([PREFIX+'-g++',*flags,'-DCC2_NATIVE_CO','-I'+str(build),build/'bridge_test.cpp','-o',bridge,'-L'+str(vendor.parent),'-Wl,-rpath,/opt/lib','-lcolib','-ldl','-lm'])
+        run([prefix+'-g++',*flags,'-fPIC','-fvisibility=hidden','-shared','-Wl,--no-undefined','-Wl,-z,now',build/'reactor_module.cpp','-o',module,'-ldl','-lm'])
+        run([prefix+'-g++',*flags,'-DCC2_NATIVE_CO','-I'+str(build),build/'bridge_test.cpp','-o',bridge,'-L'+str(vendor.parent),'-Wl,-rpath,/opt/lib','-lcolib','-ldl','-lm'])
     finally:
         if staging is not None:shutil.rmtree(staging,ignore_errors=True)
     for path in (module,bridge):
         data=path.read_bytes()
         if data[:6]!=b'\x7fELF\x01\x01' or struct.unpack_from('<H',data,18)[0]!=40 or not struct.unpack_from('<I',data,36)[0]&0x400:raise RuntimeError('Requires ARM32 hard-float ELF')
-        if '.ARM.exidx' not in output([PREFIX+'-readelf','-SW',path]):raise RuntimeError('Missing unwind tables')
-        versions=output([PREFIX+'-readelf','--version-info',path])
+        if '.ARM.exidx' not in output([prefix+'-readelf','-SW',path]):raise RuntimeError('Missing unwind tables')
+        versions=output([prefix+'-readelf','--version-info',path])
         for name,maximum in [('GLIBC',(2,23)),('GLIBCXX',(3,4,22))]:
             for version in re.findall(r'\b'+name+r'_([0-9.]+)',versions):
                 if tuple(map(int,version.split('.')))>maximum:raise RuntimeError('Runtime dependency too new: '+version)
-    symbols=output([PREFIX+'-readelf','--wide','--symbols',module]);names={line.split()[-1] for line in symbols.splitlines() if line.split()}
+    symbols=output([prefix+'-readelf','--wide','--symbols',module]);names={line.split()[-1] for line in symbols.splitlines() if line.split()}
     if not {'cc2_callback','cc2_timers','cc2_poll','cc2_wait'}<=names:raise RuntimeError('Missing bridge entry points')
     for name in ('launcher.sh','preflight.sh'):
         (prepared/name).write_bytes(reactor_source(name,base).read_bytes());(prepared/name).chmod(0o700)

@@ -15,17 +15,25 @@ is expected to pass the self-check — which is exactly what step 2 confirms.
 ## 1. Rebuild the .so (host with the ARM toolchain)
 
 Prerequisites (same as the 07 reactor build, `docs/BUILD.md`):
-- the qualified cross toolchain at
-  `/opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf-g++`
-  (GCC 6.5.0, glibc 2.23);
+- the qualified cross toolchain (GCC 6.5.0, glibc 2.23), `…-g++` + `…-readelf`.
+  The default prefix is `/opt/cc2-cross/toolchain-out/bin/arm-cortex_a15-linux-gnueabihf`;
+  pass `--prefix` if yours lives elsewhere (e.g. inside a build container);
 - the vendor link stub `experimental/firmware-port/reactor/vendor-link/libcolib.so`
   (SHA-256 `14288a4a…`), supplied locally, never committed;
 - a clean, committed tree (the sources are hash-pinned).
 
-Build:
+Build (on a host with the toolchain on the default path):
 
 ```sh
 python3 builder/current/prepare_reactor.py --base-version 02.01.01.13
+```
+
+Or in a toolchain container (point `--prefix` at the container's g++ prefix):
+
+```sh
+docker run --rm -v "$PWD":/repo -w /repo ct-ng-builder:with-toolchain \
+  python3 builder/current/prepare_reactor.py --base-version 02.01.01.13 \
+  --prefix "$(docker run --rm ct-ng-builder:with-toolchain sh -c 'command -v arm-cortex_a15-linux-gnueabihf-g++' | sed 's/-g++$//')"
 ```
 
 This compiles from the 0113 sources (`reactor_module.cpp` `21ef738b…` +

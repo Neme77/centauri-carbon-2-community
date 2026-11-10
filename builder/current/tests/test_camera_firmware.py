@@ -16,6 +16,18 @@ spec=importlib.util.spec_from_file_location('firmware_camera',BUILDER/'core/came
 camera=importlib.util.module_from_spec(spec);spec.loader.exec_module(camera)
 sha=lambda b:hashlib.sha256(b).hexdigest()
 
+def _prepared_camera_is_07():
+    """A prepared component is present AND built for 02.01.01.07 (this test's
+    fixtures use the 07 camera/init pins). A component prepared for another base
+    (e.g. an operator ran prepare_camera --base-version 02.01.01.13) is skipped,
+    not failed."""
+    import json
+    p=BUILDER/'components/camera/prepared-manifest.json'
+    try:
+        return p.is_file() and json.loads(p.read_text()).get('camera_sha256')==camera.CAMERA_SHA
+    except Exception:
+        return False
+
 class CameraFirmwareTests(unittest.TestCase):
     def test_published_previous_manifest_identity(self):
         # Extracted from the immutable signed public 1.2.19 package:
@@ -51,7 +63,7 @@ class CameraFirmwareTests(unittest.TestCase):
         self.assertNotEqual(out13['camera_release'],camera.CAMERA_SHA)
         self.assertEqual(out13['camera_init'],camera.INIT_SHA)
 
-    @unittest.skipUnless((BUILDER/'components/camera/prepared-manifest.json').is_file(),'qualified runtime supplied in builder packaging workflow')
+    @unittest.skipUnless(_prepared_camera_is_07(),'07 qualified camera runtime present (fixtures are 02.01.01.07)')
     def test_rootfs_install_and_reextraction_audit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
