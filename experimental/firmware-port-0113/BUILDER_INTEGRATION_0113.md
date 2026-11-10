@@ -194,11 +194,12 @@ heute nichts, müssen aber vor einem echten 0113-Build portiert werden:
   basis-unabhängig. Operator-Schritt für 0113: `prepare_camera.py
   --base-version 02.01.01.13` (schreibt das gitignorete `prepared-manifest.json`
   mit `camera_sha256 = 90da7634…`; die Shell-Payload ist unverändert).
-  **Noch offen (separater cc2-control-PR):** die Rollback-`case` in
-  `cc2-control/installer/camera_component.py` akzeptiert nur die Init-Hashes
-  `bcabb1fa…`/`01924b3d…`; für 0113-Rollback muss `e7537298…` ergänzt werden.
-  Das ist eine cc2-control-Änderung mit Snapshot-Regen (AGENTS.md) und gehört
-  nicht in diesen Builder-PR (Snapshot-Konflikt-Regel).
+  **Kein cc2-control-Rollback-Fix nötig (korrigiert):** die Rollback-`case` in
+  `cc2-control/installer/camera_component.py` prüft `camera_before`, also den
+  Init **vor** dem Kamera-Patch (Stock+Reactor). Dieser ist geräteverifiziert
+  basis-unabhängig `bcabb1fa…` und steht bereits in der `case` — der finale
+  Init `e7537298…` ist hier irrelevant. 0113-Kamera-Rollback funktioniert ohne
+  Änderung.
 - **Reactor** (`core/reactor_component.py` + `components/reactor`): installiert
   `opt/inst/cc2-reactor/launcher.sh`, das Connections danach liest/umschreibt;
   Reihenfolge und Hashes sind gegen 07 gepinnt.
