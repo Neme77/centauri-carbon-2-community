@@ -89,6 +89,48 @@ export function previewPlugin(): Plugin {
   let flow = 100
   let tramSession = false
   let tramHeights: Record<string, number> = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+  type TramMeasure = {
+    time: number
+    kind: 'start' | 'probe' | 'check'
+    corner: string | null
+    twice: boolean
+    z: Record<string, number>
+    z2?: Record<string, number>
+  }
+  type TramSession = { started: number; ended: number | null; measurements: TramMeasure[] }
+  const seedScrewHistory = (): TramSession[] => [
+    {
+      started: 1762800000,
+      ended: 1762801200,
+      measurements: [
+        {
+          time: 1762800300,
+          kind: 'start',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6818, FR: -0.4938, RR: -0.8698, RL: -0.7508 },
+        },
+        {
+          time: 1762800900,
+          kind: 'check',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6818, FR: -0.6758, RR: -0.8698, RL: -0.7508 },
+        },
+      ],
+    },
+  ]
+  let screwSessions: TramSession[] = seedScrewHistory()
+  const screwNow = () => Math.floor(Date.now() / 1000)
+  const heightsZ = () => ({
+    FL: +tramHeights['30,30'].toFixed(4),
+    FR: +tramHeights['230,30'].toFixed(4),
+    RR: +tramHeights['230,225'].toFixed(4),
+    RL: +tramHeights['30,225'].toFixed(4),
+  })
+  const closeOpenScrew = () => {
+    for (const s of screwSessions) if (s.ended == null) s.ended = screwNow()
+  }
   let consoleJob = {
     busy: false,
     completed: false,
@@ -533,6 +575,7 @@ export function previewPlugin(): Plugin {
     cameraViewer = null
     tramSession = false
     tramHeights = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+    screwSessions = seedScrewHistory()
     consoleJob = {
       busy: false,
       completed: false,
@@ -733,6 +776,8 @@ export function previewPlugin(): Plugin {
               return reply({ pending: false })
             case '/api/console':
               return reply({ ...consoleJob })
+            case '/api/screws/history':
+              return reply({ sessions: screwSessions })
             case '/api/gcode-files':
               return reply({
                 internal: {
@@ -897,6 +942,7 @@ export function previewPlugin(): Plugin {
         const simulated = [
           '/__preview/scenario',
           '/api/control',
+          '/api/screws/history/clear',
           '/api/preferences',
           '/api/canvas/auto-refill',
           '/api/canvas/unload',
@@ -1460,6 +1506,10 @@ export function previewPlugin(): Plugin {
               spoolRevision++
               return reply({ ok: true, remaining: found.remaining })
             }
+            if (path === '/api/screws/history/clear' && req.method === 'POST') {
+              screwSessions = []
+              return reply({ ok: true })
+            }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()
               const tuning = action.match(/^tune:(speed|flow):(\d+)$/)
@@ -1478,6 +1528,13 @@ export function previewPlugin(): Plugin {
               else if (action.startsWith('screws:tram:') && scene === 'idle') {
                 if (action === 'screws:tram:start') {
                   tramSession = true
+                  closeOpenScrew()
+                  screwSessions.unshift({
+                    started: screwNow(),
+                    ended: null,
+                    measurements: [{ time: screwNow(), kind: 'start', corner: null, twice: false, z: heightsZ() }],
+                  })
+                  if (screwSessions.length > 20) screwSessions.length = 20
                   finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28\n', ['30,30', '230,30', '230,225', '30,225'])
                   return reply({ accepted: true, simulated: true })
                 }
@@ -1488,6 +1545,15 @@ export function previewPlugin(): Plugin {
                   if (!corner) return reply({ error: 'Unknown screw corner' }, 400)
                   const first = tramHeights[corner.key] - 0.02
                   const second = probe[2] ? first - 0.001 : first
+                  const open = screwSessions.find(s => s.ended == null)
+                  open?.measurements.push({
+                    time: screwNow(),
+                    kind: 'probe',
+                    corner: probe[1],
+                    twice: Boolean(probe[2]),
+                    z: { [probe[1]]: +first.toFixed(4) },
+                    ...(probe[2] ? { z2: { [probe[1]]: +second.toFixed(4) } } : {}),
+                  })
                   tramHeights[corner.key] = second
                   consoleJob = {
                     busy: false,
@@ -1500,11 +1566,24 @@ export function previewPlugin(): Plugin {
                   return reply({ accepted: true, simulated: true })
                 }
                 if (action === 'screws:tram:check' || action === 'screws:tram:check:2') {
+                  const twice = action.endsWith(':2')
+                  const z = heightsZ()
+                  screwSessions
+                    .find(s => s.ended == null)
+                    ?.measurements.push({
+                      time: screwNow(),
+                      kind: 'check',
+                      corner: null,
+                      twice,
+                      z,
+                      ...(twice ? { z2: z } : {}),
+                    })
                   finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', ['30,30', '230,30', '230,225', '30,225'])
                   return reply({ accepted: true, simulated: true })
                 }
                 if (action === 'screws:tram:end') {
                   tramSession = false
+                  closeOpenScrew()
                   consoleJob = {
                     ...consoleJob,
                     generation: consoleJob.generation + 1,

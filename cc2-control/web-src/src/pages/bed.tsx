@@ -10,12 +10,26 @@ import { Input, Select } from '@/components/ui/field'
 import { Tabs } from '@/components/ui/tabs'
 import { Icon } from '@/components/icons'
 import { Notice } from '@/components/shared'
-import { control, errText, notify, request } from '@/lib/api'
+import { control, errText, notify, post, request } from '@/lib/api'
 import { type Key, t, tpl } from '@/lib/i18n'
 import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
-import { microns, SCREW_CORNERS, SCREW_KEYS, SCREW_SETTLE_S, screwPlan, screwValues, type ScrewId } from '@/lib/screws'
+import {
+  cornerOffsets,
+  microns,
+  offsetChain,
+  parseScrewHistory,
+  SCREW_CORNERS,
+  SCREW_KEYS,
+  SCREW_SETTLE_S,
+  screwHistoryCsv,
+  screwPlan,
+  screwValues,
+  type ScrewHistorySession,
+  type ScrewId,
+} from '@/lib/screws'
+import { store } from '@/lib/store'
 import { usePoll } from '@/lib/poll'
 import {
   type BedTab,
@@ -563,12 +577,41 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
   )
 }
 
+const screwHistory = store({
+  supported: null as boolean | null,
+  sessions: [] as ScrewHistorySession[],
+  raw: null as unknown,
+})
+
+async function refreshScrewHistory() {
+  if (screwHistory.get().supported === false) return
+  try {
+    const data = await request('/api/screws/history')
+    screwHistory.set({ supported: true, sessions: parseScrewHistory(data), raw: data })
+  } catch (e: any) {
+    if (e?.status === 404) screwHistory.set({ supported: false, sessions: [], raw: null })
+  }
+}
+
+const saveText = (name: string, text: string, type: string) => {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 const Screws = () => {
   const measuring = useRef(false)
   const [pending, setPending] = useState(false)
   const [probeTwice, setProbeTwice] = useState(true)
   usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
+  usePoll(refreshScrewHistory, 2500) // the saved session trail arrives after each completed measurement
   const session = screwSession.use()
+  const history = screwHistory.use()
   const busy = consoleStatus.use().busy
   const tram = printer.use().data?.screws_session
   const printerSession = Boolean(tram?.active)
@@ -600,7 +643,7 @@ const Screws = () => {
         screwSession.set({ heights: {}, previous: {}, pair: {}, appliedGeneration: 0, minGeneration: nextGen })
       } else screwSession.set({ minGeneration: nextGen })
       if (await control(action)) {
-        await Promise.all([refreshPrinter(), refreshConsole()])
+        await Promise.all([refreshPrinter(), refreshConsole(), refreshScrewHistory()])
         openPage('bed', 'screws')
         return true
       }
@@ -627,6 +670,28 @@ const Screws = () => {
     session.heights[flKey] != null &&
     session.heights[flKey] !== session.previous[flKey] &&
     SCREW_KEYS.slice(1).every(k => session.previous[k] != null && session.heights[k] === session.previous[k])
+  const running = history.supported ? history.sessions.find(s => s.ended == null) : undefined
+  const series = running ? cornerOffsets(running) : null
+  const earlier = history.sessions.filter(s => s.ended != null)
+  const exportHistory = (kind: 'json' | 'csv') => {
+    const payload = history.raw ?? { sessions: history.sessions }
+    if (kind === 'json')
+      saveText(
+        'screw-levelling-history.json',
+        `${JSON.stringify(payload, null, 2)}\n`,
+        'application/json;charset=utf-8'
+      )
+    else saveText('screw-levelling-history.csv', screwHistoryCsv(history.sessions), 'text/csv;charset=utf-8')
+  }
+  const clearHistory = async () => {
+    if (!(await ask(t('bed.tram_history_clear_confirm'), true))) return
+    try {
+      await post('/api/screws/history/clear')
+      screwHistory.set({ supported: true, sessions: [], raw: { sessions: [] } })
+    } catch (e) {
+      notify(errText(e), 'error')
+    }
+  }
   return (
     <Card id="screwFocus" class="flex-1">
       <CardHead
@@ -705,7 +770,7 @@ const Screws = () => {
         </div>
         <div>
           <div class="overflow-hidden rounded-md border border-edge">
-            <table class="w-full border-collapse text-xs">
+            <table class="w-full table-fixed border-collapse text-xs">
               <thead>
                 <tr class="text-left text-xs text-muted">
                   <th class="p-2 font-normal">{t('common.position')}</th>
@@ -720,28 +785,31 @@ const Screws = () => {
                     ref = plan && !plan.useOptimized && c.i === 0
                   const pair = session.pair[c.key]
                   const prev = session.previous[c.key]
+                  const chain = series ? offsetChain(series[c.id]) : ''
+                  const showChain = Boolean(chain && series?.[c.id].some(v => Math.abs(Math.round(v * 1000)) >= 1))
                   return (
                     <tr key={c.id} class={cn('border-t border-edge', plan?.useOptimized && c.i === 0 && 'bg-amber/10')}>
-                      <td class="p-2 font-semibold">{t(cornerName[c.id])}</td>
-                      <td class="p-2">
+                      <td class="p-2 font-semibold break-words">{t(cornerName[c.id])}</td>
+                      <td class="p-2 break-words">
                         {plan ? (ref ? t('bed.reference') : microns(d)) : '—'}
+                        {showChain && <small class="mt-0.5 block text-xs break-words text-muted">{chain}</small>}
                         {pair && (
-                          <small class="mt-0.5 block text-xs text-muted">
+                          <small class="mt-0.5 block text-xs break-words text-muted">
                             {tpl('bed.tram_drift', { amount: microns(pair.second - pair.first) })}
                           </small>
                         )}
-                        {!pair && prev != null && session.heights[c.key] != null && (
-                          <small class="mt-0.5 block text-xs text-muted">
+                        {history.supported === false && !pair && prev != null && session.heights[c.key] != null && (
+                          <small class="mt-0.5 block text-xs break-words text-muted">
                             {tpl('bed.tram_previous', { value: microns(session.heights[c.key] - prev) })}
                           </small>
                         )}
                       </td>
-                      <td class={cn('p-2', !within && plan && !ref && (d > 0 ? 'text-cyan' : 'text-red'))}>
+                      <td class={cn('p-2 break-words', !within && plan && !ref && (d > 0 ? 'text-cyan' : 'text-red'))}>
                         {plan ? (
                           ref ? (
-                            t('bed.leave_screw')
+                            <span class="break-words">{t('bed.leave_screw')}</span>
                           ) : within ? (
-                            t('bed.within_tolerance')
+                            <span class="break-words">{t('bed.within_tolerance')}</span>
                           ) : d > 0 ? (
                             <span class="flex items-center gap-1">
                               <ArrowBigDown {...I} />
@@ -789,6 +857,49 @@ const Screws = () => {
           <span>{t('bed.tram_reference_stale')}</span>
         </Notice>
       )}
+      {history.supported && (
+        <div id="screw-history" class="mt-3.5">
+          <details class="rounded-md border border-edge px-3">
+            <summary class="flex min-h-11 cursor-pointer items-center text-base font-semibold">
+              {t('bed.tram_history')}
+            </summary>
+            {earlier.length === 0 ? (
+              <p class="pb-3 text-xs text-muted">{t('bed.tram_history_empty')}</p>
+            ) : (
+              earlier.map(s => {
+                const finals = cornerOffsets(s)
+                return (
+                  <div key={s.started} class="border-t border-edge py-2 text-xs">
+                    <div class="font-semibold">{new Date(s.started * 1000).toLocaleString()}</div>
+                    <div class="mt-1 flex flex-col gap-0.5">
+                      {SCREW_CORNERS.map(c => {
+                        const values = finals[c.id]
+                        const last = values.length ? values[values.length - 1] : null
+                        return (
+                          <span key={c.id} class="break-words">
+                            {t(cornerName[c.id])} {last == null ? '—' : microns(last)}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+            <div class="flex flex-wrap gap-2 border-t border-edge py-3">
+              <Button class="min-h-11" onClick={() => exportHistory('json')}>
+                {t('bed.tram_history_export_json')}
+              </Button>
+              <Button class="min-h-11" onClick={() => exportHistory('csv')}>
+                {t('bed.tram_history_export_csv')}
+              </Button>
+              <Button class="min-h-11" variant="danger" disabled={locked} onClick={() => void clearHistory()}>
+                {t('bed.tram_history_clear')}
+              </Button>
+            </div>
+          </details>
+        </div>
+      )}
       <div class="mt-3.5 flex flex-col gap-2">
         <label class="flex min-h-11 items-center gap-2 text-xs text-muted">
           <input
@@ -799,7 +910,10 @@ const Screws = () => {
             aria-label={t('bed.tram_probe_twice')}
             onChange={e => setProbeTwice(e.currentTarget.checked)}
           />
-          {t('bed.tram_probe_twice')}
+          <span>
+            {t('bed.tram_probe_twice')}
+            <small class="mt-0.5 block font-normal whitespace-normal">{t('bed.tram_probe_twice_hint')}</small>
+          </span>
         </label>
         <div class="flex flex-col gap-2">
           <Button

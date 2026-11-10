@@ -84,3 +84,138 @@ export function screwPlan(values: Record<string, number>) {
   }
 }
 export const microns = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(Math.round(v * 1000))} µm`
+
+export type ScrewHistoryMeasurement = {
+  time: number
+  kind: 'start' | 'probe' | 'check'
+  corner: ScrewId | null
+  twice: boolean
+  z: Partial<Record<ScrewId, number>>
+  z2?: Partial<Record<ScrewId, number>>
+}
+
+export type ScrewHistorySession = {
+  started: number
+  ended: number | null
+  measurements: ScrewHistoryMeasurement[]
+}
+
+const SCREW_IDS: ScrewId[] = ['FL', 'FR', 'RR', 'RL']
+const isScrewId = (v: unknown): v is ScrewId => SCREW_IDS.includes(v as ScrewId)
+
+const zBag = (v: unknown): Partial<Record<ScrewId, number>> => {
+  const out: Partial<Record<ScrewId, number>> = {}
+  if (!v || typeof v !== 'object') return out
+  for (const id of SCREW_IDS) {
+    const n = (v as Record<string, unknown>)[id]
+    if (typeof n === 'number' && Number.isFinite(n)) out[id] = n
+  }
+  return out
+}
+
+// The history endpoint is optional. Callers treat a missing array as no sessions.
+export function parseScrewHistory(data: unknown): ScrewHistorySession[] {
+  const list = (data as { sessions?: unknown } | null)?.sessions
+  if (!Array.isArray(list)) return []
+  const sessions: ScrewHistorySession[] = []
+  for (const raw of list.slice(0, 20)) {
+    if (!raw || typeof raw !== 'object') continue
+    const s = raw as Record<string, unknown>
+    const measurements: ScrewHistoryMeasurement[] = []
+    if (Array.isArray(s.measurements)) {
+      for (const item of s.measurements) {
+        if (!item || typeof item !== 'object') continue
+        const m = item as Record<string, unknown>
+        const kind = m.kind === 'start' || m.kind === 'probe' || m.kind === 'check' ? m.kind : null
+        if (!kind || typeof m.time !== 'number') continue
+        const twice = m.twice === true
+        measurements.push({
+          time: m.time,
+          kind,
+          corner: isScrewId(m.corner) ? m.corner : null,
+          twice,
+          z: zBag(m.z),
+          ...(twice ? { z2: zBag(m.z2) } : {}),
+        })
+      }
+    }
+    sessions.push({
+      started: typeof s.started === 'number' ? s.started : 0,
+      ended: typeof s.ended === 'number' ? s.ended : null,
+      measurements,
+    })
+  }
+  return sessions
+}
+
+// Offsets against the front-left raw Z, in millimetres, oldest first.
+// A single-corner probe keeps the last front-left value. Repeated identical micrometres are dropped.
+export function cornerOffsets(session: ScrewHistorySession): Record<ScrewId, number[]> {
+  const raw: Partial<Record<ScrewId, number>> = {}
+  const series: Record<ScrewId, number[]> = { FL: [], FR: [], RR: [], RL: [] }
+  for (const m of session.measurements) {
+    const bags = [m.z, ...(m.twice && m.z2 ? [m.z2] : [])]
+    for (const bag of bags) {
+      for (const id of SCREW_IDS) if (typeof bag[id] === 'number') raw[id] = bag[id]
+      if (typeof raw.FL !== 'number') continue
+      const fl = raw.FL
+      const touched: ScrewId[] = m.kind === 'probe' && m.corner ? [m.corner] : [...SCREW_IDS]
+      for (const id of touched) {
+        if (typeof bag[id] !== 'number') continue
+        const delta = id === 'FL' ? 0 : bag[id] - fl
+        const list = series[id]
+        const um = Math.round(delta * 1000)
+        const prev = list.length ? Math.round(list[list.length - 1] * 1000) : null
+        if (prev !== um) list.push(delta)
+      }
+    }
+  }
+  return series
+}
+
+const signedUm = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(Math.round(v * 1000))}`
+
+// Last five offsets, one unit at the end: "−188 → −62 → −8 µm".
+export function offsetChain(values: number[], limit = 5): string {
+  const last = values.slice(-limit)
+  if (!last.length) return ''
+  return `${last.map(signedUm).join(' → ')} µm`
+}
+
+export function screwHistoryCsv(sessions: ScrewHistorySession[]): string {
+  const lines = ['started,ended,time,kind,corner,twice,FL_mm,FR_mm,RR_mm,RL_mm,FL_um,FR_um,RR_um,RL_um']
+  for (const s of sessions) {
+    const raw: Partial<Record<ScrewId, number>> = {}
+    for (const m of s.measurements) {
+      const bags = [m.z, ...(m.twice && m.z2 ? [m.z2] : [])]
+      for (const bag of bags) {
+        for (const id of SCREW_IDS) if (typeof bag[id] === 'number') raw[id] = bag[id]
+        const fl = raw.FL
+        const um = (id: ScrewId) => {
+          if (typeof raw[id] !== 'number' || typeof fl !== 'number') return ''
+          return String(Math.round((id === 'FL' ? 0 : raw[id] - fl) * 1000))
+        }
+        const mm = (id: ScrewId) => (typeof bag[id] === 'number' ? String(bag[id]) : '')
+        lines.push(
+          [
+            s.started,
+            s.ended ?? '',
+            m.time,
+            m.kind,
+            m.corner ?? '',
+            m.twice ? '1' : '0',
+            mm('FL'),
+            mm('FR'),
+            mm('RR'),
+            mm('RL'),
+            um('FL'),
+            um('FR'),
+            um('RR'),
+            um('RL'),
+          ].join(',')
+        )
+      }
+    }
+  }
+  return `${lines.join('\n')}\n`
+}
