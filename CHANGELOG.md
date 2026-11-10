@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Screw levelling names each corner and says whether to raise or lower it against the front-left zero. The session is four steps: start, re-probe the screw you turned, check all four, then end. Measuring a corner twice is labelled as the drift check, and the one-shot measurement is marked as a measurement without a session (#329).
+
 - Complete Hungarian translations for the RFID reader lifecycle, print queue and update requirements. By **Neme77**.
 - Simplified Chinese interface strings for the RFID reader lifecycle, external feed, chamber fan management and update requirements completed, and the build-plate save hint refreshed. By **Skycos** (#328).
 

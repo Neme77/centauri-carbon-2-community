@@ -614,6 +614,19 @@ const Screws = () => {
     }
   }
   const probeAction = (id: ScrewId) => `screws:tram:probe:${id}${probeTwice ? ':2' : ''}`
+  const cornerName: Record<ScrewId, Key> = {
+    FL: 'bed.corner_front_left',
+    FR: 'bed.corner_front_right',
+    RR: 'bed.corner_rear_right',
+    RL: 'bed.corner_rear_left',
+  }
+  const flKey = SCREW_KEYS[0]
+  const referenceStale =
+    printerSession &&
+    session.previous[flKey] != null &&
+    session.heights[flKey] != null &&
+    session.heights[flKey] !== session.previous[flKey] &&
+    SCREW_KEYS.slice(1).every(k => session.previous[k] != null && session.heights[k] === session.previous[k])
   return (
     <Card id="screwFocus" class="flex-1">
       <CardHead
@@ -627,6 +640,22 @@ const Screws = () => {
         {t('bed.tram_help')}
         <br />
         {tpl('bed.tram_settle', { seconds: SCREW_SETTLE_S })}
+      </p>
+      <Button
+        variant="primary"
+        class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
+        disabled={locked}
+        onClick={() => void run('screws:tram:start', 'bed.tram_start_confirm')}
+      >
+        <Icon n="target" class="size-5" />
+        <span>
+          <strong class="block">{t('bed.tram_start')}</strong>
+          <small class="mt-1 block whitespace-normal text-xs font-normal">{t('bed.tram_start_hint')}</small>
+        </span>
+      </Button>
+      <h3 class="mt-3.5 mb-2 text-base font-semibold">{t('bed.tram_step_adjust')}</h3>
+      <p id="screw-need-session" class={cn('mb-2 text-xs text-muted', xyReady && 'hidden')}>
+        {t('bed.tram_need_session')}
       </p>
       <div class="grid gap-3 cc2-sm:grid-cols-[.9fr_1.1fr]">
         <div class="rounded-lg border border-edge p-3">
@@ -645,15 +674,16 @@ const Screws = () => {
                   style={{ background: tint }}
                 >
                   <b class="grid size-6.5 place-items-center rounded-full border border-muted font-medium">{c.n}</b>
-                  {c.id}
+                  <span class="px-1 text-center leading-tight">{t(cornerName[c.id])}</span>
                   <small class="text-xs text-muted">
                     X{c.x} Y{c.y}
                   </small>
-                  {plan && <span class="text-[13px] font-bold">{microns(v)}</span>}
+                  {plan && <span class="font-bold">{microns(v)}</span>}
                   <Button
-                    class="min-h-8 px-2 text-xs"
+                    class="min-h-11 px-3 text-xs"
                     disabled={!xyReady || locked}
-                    aria-label={tpl('bed.tram_probe_corner', { corner: c.id })}
+                    aria-describedby={xyReady ? undefined : 'screw-need-session'}
+                    aria-label={tpl('bed.tram_probe_corner', { corner: t(cornerName[c.id]) })}
                     onClick={() => void run(probeAction(c.id))}
                   >
                     {t('bed.tram_probe')}
@@ -663,12 +693,13 @@ const Screws = () => {
             })}
           </div>
           <div class="mt-1.5 text-center text-xs text-muted">{t('bed.top_view_front_edge_at_bottom')}</div>
+          <div class="mt-1 text-center text-xs text-muted">{t('bed.measure_order')}</div>
           <div class="mt-2 flex justify-between text-xs text-muted">
             <span class="flex items-center gap-1">
-              <ArrowBigUp size={12} strokeWidth={1} /> Y (back)
+              <ArrowBigUp size={12} strokeWidth={1} /> {t('bed.axis_y_back')}
             </span>
             <span class="flex items-center gap-1">
-              <ArrowBigRight size={12} strokeWidth={1} /> X (right)
+              <ArrowBigRight size={12} strokeWidth={1} /> {t('bed.axis_x_right')}
             </span>
           </div>
         </div>
@@ -691,7 +722,7 @@ const Screws = () => {
                   const prev = session.previous[c.key]
                   return (
                     <tr key={c.id} class={cn('border-t border-edge', plan?.useOptimized && c.i === 0 && 'bg-amber/10')}>
-                      <td class="p-2 font-semibold">{c.id}</td>
+                      <td class="p-2 font-semibold">{t(cornerName[c.id])}</td>
                       <td class="p-2">
                         {plan ? (ref ? t('bed.reference') : microns(d)) : '—'}
                         {pair && (
@@ -708,7 +739,7 @@ const Screws = () => {
                       <td class={cn('p-2', !within && plan && !ref && (d > 0 ? 'text-cyan' : 'text-red'))}>
                         {plan ? (
                           ref ? (
-                            '—'
+                            t('bed.leave_screw')
                           ) : within ? (
                             t('bed.within_tolerance')
                           ) : d > 0 ? (
@@ -753,8 +784,13 @@ const Screws = () => {
           })}
         </Notice>
       )}
+      {referenceStale && (
+        <Notice icon="info">
+          <span>{t('bed.tram_reference_stale')}</span>
+        </Notice>
+      )}
       <div class="mt-3.5 flex flex-col gap-2">
-        <label class="flex min-h-5 items-center gap-1.5 text-xs text-muted">
+        <label class="flex min-h-11 items-center gap-2 text-xs text-muted">
           <input
             type="checkbox"
             class="size-4 shrink-0 accent-cyan"
@@ -765,32 +801,36 @@ const Screws = () => {
           />
           {t('bed.tram_probe_twice')}
         </label>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-col gap-2">
           <Button
-            variant="primary"
-            disabled={locked}
-            onClick={() => void run('screws:tram:start', 'bed.tram_start_confirm')}
-          >
-            <Icon n="target" class="size-5" />
-            {t('bed.tram_start')}
-          </Button>
-          <Button
+            class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
             disabled={!xyReady || locked}
+            aria-describedby={xyReady ? undefined : 'screw-need-session'}
             onClick={() => void run(probeTwice ? 'screws:tram:check:2' : 'screws:tram:check', 'bed.tram_check_confirm')}
           >
-            {t('bed.tram_check')}
+            <span>
+              <strong class="block">{t('bed.tram_check')}</strong>
+              <small class="mt-1 block whitespace-normal text-xs font-normal">{t('bed.tram_check_hint')}</small>
+            </span>
           </Button>
           <Button
+            class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
             disabled={!printerSession || locked}
+            aria-describedby={printerSession ? undefined : 'screw-need-session'}
             onClick={() => void run('screws:tram:end', 'bed.tram_end_confirm')}
           >
-            {t('bed.tram_end')}
+            <span>
+              <strong class="block">{t('bed.tram_end')}</strong>
+              <small class="mt-1 block whitespace-normal text-xs font-normal">{t('bed.tram_end_hint')}</small>
+            </span>
           </Button>
         </div>
       </div>
       <h3 class="mt-3.5 text-base font-semibold">{t('bed.tram_one_shot')}</h3>
+      <p class="mt-1 text-xs text-muted">{t(printerSession ? 'bed.tram_one_shot_busy' : 'bed.tram_one_shot_help')}</p>
       <div class="mt-2">
         <Button
+          class="min-h-11"
           disabled={printerSession || locked}
           onClick={() => void run('screws:measure', 'bed.start_the_four_screw_load_cell')}
         >
