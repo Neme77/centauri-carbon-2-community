@@ -109,9 +109,22 @@ Narrowed 2026-11-10 from the device `/proc/config.gz`:
 
 So the only remaining external input is the **Allwinner TinaLinux 5.4.61 kernel
 source tree** matching build `#40` (`Linux version 5.4.61 … OpenWrt/Linaro GCC
-6.4-2017.11 … #40 Tue Sep 22 2026`) — configure it with the device `.config`,
-`make modules_prepare`, then build the four modules (plus the `cc2_ue300` module
-source) against it. `Module.symvers` is not required.
+6.4-2017.11 … #40 Tue Sep 22 2026`) plus the `cc2_ue300` module source.
+`Module.symvers` is not required.
+
+Build recipe once the kernel source (`$KSRC`) is available. The device `.config`
+sets `CONFIG_PM=y`/`CONFIG_PM_SLEEP=y`/`CONFIG_USB=y`/`CONFIG_USB_DEFAULT_PERSIST=y`
+(the fields that make `struct usb_device` differ from the 07 headers), and the
+toolchain is `arm-openwrt-linux-gnueabi-gcc 6.4.1` (`CONFIG_CC_VERSION_TEXT`):
+
+```sh
+ssh root@192.168.2.220 'zcat /proc/config.gz' > "$KSRC/.config"
+make -C "$KSRC" ARCH=arm CROSS_COMPILE=arm-openwrt-linux-gnueabi- olddefconfig modules_prepare
+make -C "$KSRC" M=<cc2_ue300 module source> ARCH=arm CROSS_COMPILE=arm-openwrt-linux-gnueabi- modules
+# confirm on the device (idle, reversible): insmod cc2_ue300_abi_probe.ko must NOT print
+# "CC2_UE300_ABI_R1 FAIL usb_device layout/revision"; rmmod afterwards.
+```
+Then repackage `runtime.tar.gz`, stage it, and update the four `BINARY_PINS`.
 
 ## 5. CC2 Control compatibility (runtime, separate PR)
 
