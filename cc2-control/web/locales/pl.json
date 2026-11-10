@@ -1546,6 +1546,8 @@
   "job.bed_map_layer_status_no_z": "Warstwa {n} / {total}",
   "job.bed_map_loading_layer": "Wczytywanie warstwy…",
   "job.bed_map_layer_unavailable": "Ścieżka warstwy niedostępna",
+  "job.bed_map_waiting_first_layer": "Oczekiwanie na warstwę 1",
+  "job.bed_map_printing_layer": "Drukowanie warstwy {n} / {total}",
   "job.bed_map_view": "Widok mapy stołu",
   "job.bed_map_nozzle": "Dysza",
   "job.bed_map_layer_legend": "Ścieżka warstwy"

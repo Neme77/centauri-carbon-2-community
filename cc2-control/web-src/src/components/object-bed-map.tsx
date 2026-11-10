@@ -17,6 +17,12 @@ import { cn } from '@/lib/utils'
 
 const ticks = [0, 50, 100, 150, 200, 250]
 const STORAGE = 'internal'
+// Rapid stepping or a fast Live layer change requests only the layer it settles on.
+const LAYER_SETTLE_MS = 350
+// A busy scan of a large file takes up to the backend's 20 s deadline.
+const LAYER_BUSY_RETRY_MS = 1500
+const LAYER_BUSY_RETRIES = 15
+const layerPathBusy = (error: unknown) => (error as { status?: number } | null)?.status === 503
 
 const pointsAttr = (path: LayerPathPolyline) => path.map(([x, y]) => `${x},${BED_SIZE - y}`).join(' ')
 
@@ -94,40 +100,64 @@ export const ObjectBedMap = ({
   const [unavailable, setUnavailable] = useState(false)
   const viewLayer = liveFollow ? printerLayer : manualLayer
   const totalLayers = path?.total_layers || printerTotal
-  const layerTab = Boolean(onClose) && tab === 'layer'
+  const expanded = Boolean(onClose)
+  const layerTab = expanded && tab === 'layer'
   const nozzleRaw = printerState.data?.motion
   const nozzle: [number, number] | null =
     typeof nozzleRaw?.x === 'number' && typeof nozzleRaw?.y === 'number' ? [nozzleRaw.x, nozzleRaw.y] : null
   const nozzleOnBed = onBed(nozzle)
 
+  // The backend scans one uncached layer at a time and keeps scanning after a
+  // request is abandoned. So the current layer is requested alone, after rapid
+  // layer changes have settled, and a busy reply is retried for the latest layer
+  // only. The previous layer comes from the client cache, or is fetched after
+  // the current layer has been drawn; it never decides whether the current one
+  // is shown. The effect depends on a stable flag, not on the onClose callback,
+  // so a parent render does not restart a pending request.
   useEffect(() => {
-    if (!onClose || tab !== 'layer') return
+    if (!expanded || tab !== 'layer') return
     if (!file || viewLayer < 1) {
+      // While the print prepares (layer 0), Live waits for layer 1 instead of failing.
       setPath(null)
       setPrevPath(null)
       setLoading(false)
-      setUnavailable(true)
+      setUnavailable(!(file && liveFollow))
       return
     }
     const ac = new AbortController()
-    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const wait = (ms: number) => new Promise<void>(resolve => (timer = setTimeout(resolve, ms)))
     const hit = cachedLayerPath(STORAGE, file, viewLayer)
+    const prevHit = viewLayer > 1 ? cachedLayerPath(STORAGE, file, viewLayer - 1) : undefined
     setPath(hit || null)
+    setPrevPath(prevHit || null)
     setLoading(!hit)
     setUnavailable(false)
     const load = async () => {
       try {
-        const [current, previous] = await Promise.all([
-          fetchLayerPath(STORAGE, file, viewLayer, ac.signal),
-          viewLayer > 1 ? fetchLayerPath(STORAGE, file, viewLayer - 1, ac.signal).catch(() => null) : null,
-        ])
-        if (cancelled) return
-        setPath(current)
-        setPrevPath(previous)
-        setLoading(false)
-        setUnavailable(false)
+        if (!hit) {
+          await wait(LAYER_SETTLE_MS)
+          let current: LayerPath | null = null
+          for (let attempt = 0; !current; attempt++) {
+            if (ac.signal.aborted) return
+            try {
+              current = await fetchLayerPath(STORAGE, file, viewLayer, ac.signal)
+            } catch (error) {
+              if (ac.signal.aborted) return
+              if (!layerPathBusy(error) || attempt >= LAYER_BUSY_RETRIES) throw error
+              await wait(LAYER_BUSY_RETRY_MS)
+            }
+          }
+          if (ac.signal.aborted) return
+          setPath(current)
+          setLoading(false)
+        }
+        if (viewLayer > 1 && !prevHit) {
+          const previous = await fetchLayerPath(STORAGE, file, viewLayer - 1, ac.signal).catch(() => null)
+          if (!ac.signal.aborted) setPrevPath(previous)
+        }
       } catch {
-        if (cancelled || ac.signal.aborted) return
+        if (ac.signal.aborted) return
         setPath(null)
         setPrevPath(null)
         setLoading(false)
@@ -136,10 +166,10 @@ export const ObjectBedMap = ({
     }
     void load()
     return () => {
-      cancelled = true
       ac.abort()
+      clearTimeout(timer)
     }
-  }, [onClose, tab, file, viewLayer])
+  }, [expanded, tab, file, viewLayer, liveFollow])
 
   const openLayer = () => setTab('layer')
   const followLive = () => {
@@ -147,7 +177,8 @@ export const ObjectBedMap = ({
     setLiveFollow(true)
   }
   const stepLayer = (delta: number) => {
-    const from = viewLayer >= 1 ? viewLayer : 1
+    // From layer 0 (print preparing) the first step lands on layer 1.
+    const from = viewLayer >= 1 ? viewLayer : 0
     const next = Math.max(1, totalLayers > 0 ? Math.min(totalLayers, from + delta) : from + delta)
     openLayer()
     setLiveFollow(false)
@@ -163,19 +194,27 @@ export const ObjectBedMap = ({
         : 'split'
   const { printed, remaining } = splitLayerPaths(path?.paths || [], nozzleOnBed ? nozzle : null, splitMode)
   const zValue = path?.z ?? (liveFollow && typeof nozzleRaw?.z === 'number' ? nozzleRaw.z : null)
+  const waitingFirstLayer = layerTab && liveFollow && Boolean(file) && printerLayer < 1
+  // The Objects tab shows every layer's outline, so it names only the layer being printed.
   const status = !onClose
     ? ''
-    : layerTab && loading
-      ? t('job.bed_map_loading_layer')
-      : layerTab && unavailable
-        ? t('job.bed_map_layer_unavailable')
-        : viewLayer >= 1 && totalLayers > 0 && zValue != null
-          ? tpl('job.bed_map_layer_status', { n: viewLayer, total: totalLayers, z: formatZ(zValue) })
-          : viewLayer >= 1 && totalLayers > 0
-            ? tpl('job.bed_map_layer_status_no_z', { n: viewLayer, total: totalLayers })
-            : layerTab
-              ? t('job.bed_map_layer_unavailable')
-              : ''
+    : !layerTab
+      ? printerLayer >= 1 && printerTotal > 0
+        ? tpl('job.bed_map_printing_layer', { n: printerLayer, total: printerTotal })
+        : ''
+      : waitingFirstLayer
+        ? t('job.bed_map_waiting_first_layer')
+        : layerTab && loading
+          ? t('job.bed_map_loading_layer')
+          : layerTab && unavailable
+            ? t('job.bed_map_layer_unavailable')
+            : viewLayer >= 1 && totalLayers > 0 && zValue != null
+              ? tpl('job.bed_map_layer_status', { n: viewLayer, total: totalLayers, z: formatZ(zValue) })
+              : viewLayer >= 1 && totalLayers > 0
+                ? tpl('job.bed_map_layer_status_no_z', { n: viewLayer, total: totalLayers })
+                : layerTab
+                  ? t('job.bed_map_layer_unavailable')
+                  : ''
 
   const content = (
     <div
@@ -234,7 +273,7 @@ export const ObjectBedMap = ({
               variant={liveFollow ? 'primary' : 'default'}
               aria-pressed={liveFollow}
               data-layer-live
-              disabled={!file || printerLayer < 1}
+              disabled={!file}
               onClick={followLive}
             >
               {t('job.bed_map_live')}

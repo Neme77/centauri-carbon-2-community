@@ -1546,6 +1546,8 @@
   "job.bed_map_layer_status_no_z": "Capa {n} / {total}",
   "job.bed_map_loading_layer": "Cargando capa…",
   "job.bed_map_layer_unavailable": "Trayectoria de capa no disponible",
+  "job.bed_map_waiting_first_layer": "Esperando la capa 1",
+  "job.bed_map_printing_layer": "Imprimiendo capa {n} / {total}",
   "job.bed_map_view": "Vista del mapa de la cama",
   "job.bed_map_nozzle": "Boquilla",
   "job.bed_map_layer_legend": "Trayectoria de capa"

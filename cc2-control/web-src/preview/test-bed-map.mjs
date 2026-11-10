@@ -119,7 +119,8 @@ try {
   assert.equal(await dialog.locator('[data-layer-nozzle]').getAttribute('aria-label'),'Nozzle')
   assert.ok(await dialog.locator('[data-layer-path="printed"]').count(),'printed path up to the nozzle')
   assert.ok(await dialog.locator('[data-layer-path="remain"]').count(),'remaining path after the nozzle')
-  assert.ok(await dialog.locator('[data-layer-path="prev"]').count(),'previous layer drawn underneath')
+  // The previous layer is requested after the current one has been drawn.
+  await page.waitForFunction(()=>document.querySelectorAll('[data-layer-path="prev"]').length>0)
   const rim=await frontLeft.evaluate(el=>({left:parseFloat(el.style.left)/100,bottom:parseFloat(el.style.bottom)/100}))
   assert(Math.abs(rim.left-70/256)<1e-6&&Math.abs(rim.bottom-70/256)<1e-6,'layer-path badges sit on the object rim')
   assert.equal(await dialog.locator('[data-bed-map] polygon').count(),1,'layer overlay uses polylines, not extra polygons')
@@ -190,10 +191,7 @@ try {
     }
     if(process.env.CC2_AXE_PATH){
       await page.addScriptTag({path:process.env.CC2_AXE_PATH})
-      // Nord and Solarized Light fail WCAG on the existing cyan-on-field list row and
-      // red-on-field exclude control (theme tokens). The Layer path surface is still checked.
-      const selector=['nord','solarized-light'].includes(theme)?'[data-bed-map]':'[role=dialog]'
-      const violations=await page.evaluate(async selector=> (await axe.run(document.querySelector(selector))).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),selector)
+      const violations=await page.evaluate(async()=> (await axe.run(document.querySelector('[role=dialog]'))).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})))
       assert.deepEqual(violations,[],`expanded accessibility ${theme}/${width}`)
     }
     if(process.env.CC2_SCREENSHOTS){

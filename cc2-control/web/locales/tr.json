@@ -1546,6 +1546,8 @@
   "job.bed_map_layer_status_no_z": "Katman {n} / {total}",
   "job.bed_map_loading_layer": "Katman yükleniyor…",
   "job.bed_map_layer_unavailable": "Katman yolu kullanılamıyor",
+  "job.bed_map_waiting_first_layer": "Katman 1 bekleniyor",
+  "job.bed_map_printing_layer": "Yazdırılan katman: {n} / {total}",
   "job.bed_map_view": "Yatak haritası görünümü",
   "job.bed_map_nozzle": "Nozul",
   "job.bed_map_layer_legend": "Katman yolu"

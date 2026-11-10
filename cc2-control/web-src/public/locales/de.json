@@ -1546,6 +1546,8 @@
   "job.bed_map_layer_status_no_z": "Schicht {n} / {total}",
   "job.bed_map_loading_layer": "Schicht wird geladen…",
   "job.bed_map_layer_unavailable": "Schichtpfad nicht verfügbar",
+  "job.bed_map_waiting_first_layer": "Wartet auf Schicht 1",
+  "job.bed_map_printing_layer": "Druckt Schicht {n} / {total}",
   "job.bed_map_view": "Bettkarten-Ansicht",
   "job.bed_map_nozzle": "Düse",
   "job.bed_map_layer_legend": "Schichtpfad"

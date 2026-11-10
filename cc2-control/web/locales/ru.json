@@ -1546,6 +1546,8 @@
   "job.bed_map_layer_status_no_z": "Слой {n} / {total}",
   "job.bed_map_loading_layer": "Загрузка слоя…",
   "job.bed_map_layer_unavailable": "Контур слоя недоступен",
+  "job.bed_map_waiting_first_layer": "Ожидание слоя 1",
+  "job.bed_map_printing_layer": "Печать слоя {n} / {total}",
   "job.bed_map_view": "Вид карты стола",
   "job.bed_map_nozzle": "Сопло",
   "job.bed_map_layer_legend": "Контур слоя"
