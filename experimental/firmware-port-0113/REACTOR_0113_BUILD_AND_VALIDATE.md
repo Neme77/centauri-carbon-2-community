@@ -110,6 +110,31 @@ fingerprint does not match, the launcher/constructor exits 125 (`fail(...)`) and
 the **vendor** printer runs unmodified. Treat that as a stop, diagnose, do not
 force.
 
+### 2b result on the device (2026-11-10) — ABI-clean load; activation blocked by the launcher
+
+Built the clean `.so` (from the committed `21ef738b` source, corrected
+fingerprints), installed it into `/opt/inst/cc2-reactor` (SOURCE) with a backup,
+removed the disable marker and rebooted. Result:
+
+- the boot hook re-seeded `/opt/usr/cc2-reactor-runtime-v2` from SOURCE, its
+  `preflight.sh` (the 0113 `bridge_test`) passed, and the printer came up clean
+  (**new PID, no crash**) with **`LD_PRELOAD=…/libcc2-reactor-v2.so`** set — so
+  the clean `.so` **loads ABI-compatibly on the 0113 kernel**;
+- but **no `activation.marker`** and **`CC2_REACTOR_RUNTIME_V2` is not in the
+  printer env**. `activate()` gates on `CC2_REACTOR_RUNTIME_V2=1`, and the stock
+  boot hook `/etc/init.d/cc2-reactor-launch` sets `LD_PRELOAD` but **never
+  exports `CC2_REACTOR_RUNTIME_V2`**, and it `exec`s `/opt/bin/elegoo_printer`
+  while `activate()` requires the exe path `/opt/usr/cc2-reactor-runtime-v2/`
+  `elegoo_printer`. So `activate()` returns immediately — the `.so` is loaded but
+  inert, no patching.
+
+This is the previously documented device-launcher gap, now confirmed on hardware
+with the corrected `.so`: it is **not** a defect of the build. Rolled back to
+vendor mode (disable marker). To actually exercise `activate()` the boot hook
+needs a fix — `export CC2_REACTOR_RUNTIME_V2=1` and `exec "$BASE/elegoo_printer"`
+(not `/opt/bin/`) — which is a separate device-launcher change, and only then can
+the `activation.marker` run of 2a/2b complete.
+
 ### 2c. Rollback (always available)
 
 ```sh
