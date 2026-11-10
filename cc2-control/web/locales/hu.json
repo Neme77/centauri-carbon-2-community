@@ -1536,5 +1536,17 @@
   "queue.auto_in_n": "Automatikus indítás {n} mp múlva",
   "queue.hold": "Automatikus indítás megszakítása",
   "queue.abandon": "Indítás megszakítása",
-  "queue.auto_material": "Az automatikus indítás felfüggesztve: a Canvas-hely nem a fájl anyagát tartalmazza, vagy nem ellenőrizhető. Ellenőrizze a helyet, és indítsa kézzel."
+  "queue.auto_material": "Az automatikus indítás felfüggesztve: a Canvas-hely nem a fájl anyagát tartalmazza, vagy nem ellenőrizhető. Ellenőrizze a helyet, és indítsa kézzel.",
+  "job.bed_map_objects": "Objektumok",
+  "job.bed_map_layer_path": "Rétegútvonal",
+  "job.bed_map_previous_layer": "Előző réteg",
+  "job.bed_map_next_layer": "Következő réteg",
+  "job.bed_map_live": "Élő",
+  "job.bed_map_layer_status": "Réteg {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Réteg {n} / {total}",
+  "job.bed_map_loading_layer": "Réteg betöltése…",
+  "job.bed_map_layer_unavailable": "A rétegútvonal nem érhető el",
+  "job.bed_map_view": "Ágytérkép nézet",
+  "job.bed_map_nozzle": "Fúvóka",
+  "job.bed_map_layer_legend": "Rétegútvonal"
 }

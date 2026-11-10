@@ -1536,5 +1536,17 @@
   "queue.auto_in_n": "Inicio automático en {n} s",
   "queue.hold": "Cancelar el inicio automático",
   "queue.abandon": "Cancelar el inicio",
-  "queue.auto_material": "Inicio automático retenido: la ranura de Canvas no contiene el material del archivo o no se pudo comprobar. Revise la ranura e inicie manualmente."
+  "queue.auto_material": "Inicio automático retenido: la ranura de Canvas no contiene el material del archivo o no se pudo comprobar. Revise la ranura e inicie manualmente.",
+  "job.bed_map_objects": "Objetos",
+  "job.bed_map_layer_path": "Trayectoria de capa",
+  "job.bed_map_previous_layer": "Capa anterior",
+  "job.bed_map_next_layer": "Capa siguiente",
+  "job.bed_map_live": "En vivo",
+  "job.bed_map_layer_status": "Capa {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Capa {n} / {total}",
+  "job.bed_map_loading_layer": "Cargando capa…",
+  "job.bed_map_layer_unavailable": "Trayectoria de capa no disponible",
+  "job.bed_map_view": "Vista del mapa de la cama",
+  "job.bed_map_nozzle": "Boquilla",
+  "job.bed_map_layer_legend": "Trayectoria de capa"
 }

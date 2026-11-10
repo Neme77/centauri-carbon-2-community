@@ -1536,5 +1536,17 @@
   "queue.auto_in_n": "Automatic start in {n} s",
   "queue.hold": "Cancel automatic start",
   "queue.abandon": "Cancel start",
-  "queue.auto_material": "Automatic start held: the Canvas slot does not hold the file's material or could not be checked. Check the slot and start by hand."
+  "queue.auto_material": "Automatic start held: the Canvas slot does not hold the file's material or could not be checked. Check the slot and start by hand.",
+  "job.bed_map_objects": "Objects",
+  "job.bed_map_layer_path": "Layer path",
+  "job.bed_map_previous_layer": "Previous layer",
+  "job.bed_map_next_layer": "Next layer",
+  "job.bed_map_live": "Live",
+  "job.bed_map_layer_status": "Layer {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Layer {n} / {total}",
+  "job.bed_map_loading_layer": "Loading layer…",
+  "job.bed_map_layer_unavailable": "Layer path not available",
+  "job.bed_map_view": "Bed map view",
+  "job.bed_map_nozzle": "Nozzle",
+  "job.bed_map_layer_legend": "Layer path"
 }

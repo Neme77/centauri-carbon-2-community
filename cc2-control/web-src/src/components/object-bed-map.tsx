@@ -1,12 +1,70 @@
-import { X } from 'lucide-preact'
+import { ChevronLeft, ChevronRight, X } from 'lucide-preact'
+import { useEffect, useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { t, tpl } from '@/lib/i18n'
+import {
+  cachedLayerPath,
+  fetchLayerPath,
+  splitLayerPaths,
+  type LayerPath,
+  type LayerPathPolyline,
+} from '@/lib/layer-path'
 import { objects } from '@/lib/objects'
 import { BED_SIZE, onBed } from '@/lib/object-layout'
+import { printer, view } from '@/lib/state'
 import { cn } from '@/lib/utils'
 
 const ticks = [0, 50, 100, 150, 200, 250]
+const STORAGE = 'internal'
+
+const pointsAttr = (path: LayerPathPolyline) => path.map(([x, y]) => `${x},${BED_SIZE - y}`).join(' ')
+
+function markerPoint(
+  center: [number, number] | null,
+  polygon: [number, number][] | null,
+  edge: boolean
+): [number, number] | null {
+  if (!center) return null
+  if (!edge) return center
+  if (!polygon?.length) {
+    return [Math.min(BED_SIZE, center[0] + 14), Math.min(BED_SIZE, center[1] + 14)]
+  }
+  let best = polygon[0]
+  let score = Number.NEGATIVE_INFINITY
+  for (const p of polygon) {
+    const s = p[0] - center[0] + (p[1] - center[1])
+    if (s > score) {
+      score = s
+      best = p
+    }
+  }
+  return best
+}
+
+const formatZ = (z: number) => (Math.round(z * 100) / 100).toFixed(2)
+
+function LayerPolylines({ paths, kind }: { paths: LayerPathPolyline[]; kind: 'prev' | 'printed' | 'remain' }) {
+  return (
+    <>
+      {paths.map((path, i) =>
+        path.length > 1 ? (
+          <polyline
+            key={`${kind}-${i}`}
+            data-layer-path={kind}
+            points={pointsAttr(path)}
+            class={cn(
+              'cc2-layer-path',
+              kind === 'prev' && 'cc2-layer-path-prev',
+              kind === 'printed' && 'cc2-layer-path-printed',
+              kind === 'remain' && 'cc2-layer-path-remain'
+            )}
+          />
+        ) : null
+      )}
+    </>
+  )
+}
 
 // Map prototype: Nick Plateringen-Paul. Single-view refinement: DamiBFryta.
 // Both sizes read the same model; selection never changes the original G-code ID.
@@ -20,10 +78,110 @@ export const ObjectBedMap = ({
   live: boolean
 }) => {
   const o = objects.use()
+  const printerState = printer.use()
+  const job = view(printerState.data)
   const selected = o.entries.find(e => e.id === o.selected)
   const missing = o.entries.filter(e => !onBed(e.center)).length
+  const printerLayer = Number(job.layer) || 0
+  const printerTotal = typeof job.total === 'number' ? job.total : 0
+  const file = job.rawFilename
+  const [tab, setTab] = useState<'objects' | 'layer'>('objects')
+  const [liveFollow, setLiveFollow] = useState(true)
+  const [manualLayer, setManualLayer] = useState(1)
+  const [path, setPath] = useState<LayerPath | null>(null)
+  const [prevPath, setPrevPath] = useState<LayerPath | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
+  const viewLayer = liveFollow ? printerLayer : manualLayer
+  const totalLayers = path?.total_layers || printerTotal
+  const layerTab = Boolean(onClose) && tab === 'layer'
+  const nozzleRaw = printerState.data?.motion
+  const nozzle: [number, number] | null =
+    typeof nozzleRaw?.x === 'number' && typeof nozzleRaw?.y === 'number' ? [nozzleRaw.x, nozzleRaw.y] : null
+  const nozzleOnBed = onBed(nozzle)
+
+  useEffect(() => {
+    if (!onClose || tab !== 'layer') return
+    if (!file || viewLayer < 1) {
+      setPath(null)
+      setPrevPath(null)
+      setLoading(false)
+      setUnavailable(true)
+      return
+    }
+    const ac = new AbortController()
+    let cancelled = false
+    const hit = cachedLayerPath(STORAGE, file, viewLayer)
+    setPath(hit || null)
+    setLoading(!hit)
+    setUnavailable(false)
+    const load = async () => {
+      try {
+        const [current, previous] = await Promise.all([
+          fetchLayerPath(STORAGE, file, viewLayer, ac.signal),
+          viewLayer > 1 ? fetchLayerPath(STORAGE, file, viewLayer - 1, ac.signal).catch(() => null) : null,
+        ])
+        if (cancelled) return
+        setPath(current)
+        setPrevPath(previous)
+        setLoading(false)
+        setUnavailable(false)
+      } catch {
+        if (cancelled || ac.signal.aborted) return
+        setPath(null)
+        setPrevPath(null)
+        setLoading(false)
+        setUnavailable(true)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
+  }, [onClose, tab, file, viewLayer])
+
+  const openLayer = () => setTab('layer')
+  const followLive = () => {
+    openLayer()
+    setLiveFollow(true)
+  }
+  const stepLayer = (delta: number) => {
+    const from = viewLayer >= 1 ? viewLayer : 1
+    const next = Math.max(1, totalLayers > 0 ? Math.min(totalLayers, from + delta) : from + delta)
+    openLayer()
+    setLiveFollow(false)
+    setManualLayer(next)
+  }
+
+  const splitMode = liveFollow
+    ? 'split'
+    : printerLayer > 0 && viewLayer < printerLayer
+      ? 'printed'
+      : printerLayer > 0 && viewLayer > printerLayer
+        ? 'remaining'
+        : 'split'
+  const { printed, remaining } = splitLayerPaths(path?.paths || [], nozzleOnBed ? nozzle : null, splitMode)
+  const zValue = path?.z ?? (liveFollow && typeof nozzleRaw?.z === 'number' ? nozzleRaw.z : null)
+  const status = !onClose
+    ? ''
+    : layerTab && loading
+      ? t('job.bed_map_loading_layer')
+      : layerTab && unavailable
+        ? t('job.bed_map_layer_unavailable')
+        : viewLayer >= 1 && totalLayers > 0 && zValue != null
+          ? tpl('job.bed_map_layer_status', { n: viewLayer, total: totalLayers, z: formatZ(zValue) })
+          : viewLayer >= 1 && totalLayers > 0
+            ? tpl('job.bed_map_layer_status_no_z', { n: viewLayer, total: totalLayers })
+            : layerTab
+              ? t('job.bed_map_layer_unavailable')
+              : ''
+
   const content = (
-    <div class={cn('cc2-object-map', onClose && 'cc2-object-map-expanded')}>
+    <div
+      class={cn('cc2-object-map', onClose && 'cc2-object-map-expanded')}
+      data-bed-map-tab={onClose ? tab : undefined}
+    >
       {onClose && (
         <div class="mb-3 flex items-center justify-between gap-3 border-b border-edge pb-3">
           <DialogTitle>{t('job.bed_map')}</DialogTitle>
@@ -33,6 +191,60 @@ export const ObjectBedMap = ({
         </div>
       )}
       <p class="mb-3 text-xs text-muted">{t('job.bed_map_hint')}</p>
+      {onClose && (
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <fieldset class="m-0 flex h-11 min-w-0 overflow-hidden rounded-md border border-edge p-0">
+            <legend class="sr-only">{t('job.bed_map_view')}</legend>
+            <Button
+              class="h-11 min-h-11 rounded-none border-0 px-3.5 whitespace-nowrap"
+              variant={tab === 'objects' ? 'primary' : 'default'}
+              aria-pressed={tab === 'objects'}
+              onClick={() => setTab('objects')}
+            >
+              {t('job.bed_map_objects')}
+            </Button>
+            <Button
+              class="h-11 min-h-11 rounded-none border-0 border-l border-edge px-3.5 whitespace-nowrap"
+              variant={tab === 'layer' ? 'primary' : 'default'}
+              aria-pressed={tab === 'layer'}
+              onClick={openLayer}
+            >
+              {t('job.bed_map_layer_path')}
+            </Button>
+          </fieldset>
+          <div class="flex items-center gap-2">
+            <Button
+              class="h-11 w-11 min-h-11 p-0"
+              aria-label={t('job.bed_map_previous_layer')}
+              disabled={viewLayer <= 1 || !file}
+              onClick={() => stepLayer(-1)}
+            >
+              <ChevronLeft size={18} />
+            </Button>
+            <Button
+              class="h-11 w-11 min-h-11 p-0"
+              aria-label={t('job.bed_map_next_layer')}
+              disabled={!file || (totalLayers > 0 && viewLayer >= totalLayers)}
+              onClick={() => stepLayer(1)}
+            >
+              <ChevronRight size={18} />
+            </Button>
+            <Button
+              class="h-11 min-h-11 px-3.5 whitespace-nowrap"
+              variant={liveFollow ? 'primary' : 'default'}
+              aria-pressed={liveFollow}
+              data-layer-live
+              disabled={!file || printerLayer < 1}
+              onClick={followLive}
+            >
+              {t('job.bed_map_live')}
+            </Button>
+          </div>
+          <p class="min-h-4 min-w-0 flex-1 text-xs text-muted whitespace-nowrap" data-layer-status role="status">
+            {status}
+          </p>
+        </div>
+      )}
       <div class="cc2-object-map-layout grid min-w-0 gap-3.5 cc2-md:grid-cols-2">
         <div class="min-w-0">
           <div class="cc2-object-map-frame">
@@ -43,7 +255,7 @@ export const ObjectBedMap = ({
               <span>Y ↑ · X →</span>
             </div>
             <div class="cc2-object-map-plate">
-              <div class="cc2-object-map-surface" data-bed-map>
+              <div class="cc2-object-map-surface" data-bed-map aria-busy={layerTab && loading ? 'true' : undefined}>
                 <svg
                   viewBox={`0 0 ${BED_SIZE} ${BED_SIZE}`}
                   class="pointer-events-none absolute inset-0 h-full w-full"
@@ -72,12 +284,21 @@ export const ObjectBedMap = ({
                         />
                       )
                   )}
+                  {layerTab && !unavailable && prevPath && <LayerPolylines paths={prevPath.paths} kind="prev" />}
+                  {layerTab && !unavailable && path && (
+                    <>
+                      <LayerPolylines paths={remaining} kind="remain" />
+                      <LayerPolylines paths={printed} kind="printed" />
+                    </>
+                  )}
                 </svg>
                 {o.entries.map((e, i) => {
                   if (!onBed(e.center)) return null
                   const excluded = o.excluded.includes(e.id)
                   const current = e.id === o.current
                   const chosen = e.id === o.selected
+                  const at = markerPoint(e.center, e.polygon, layerTab)
+                  if (!at) return null
                   return (
                     <button
                       type="button"
@@ -86,14 +307,15 @@ export const ObjectBedMap = ({
                       data-current={current ? 'true' : undefined}
                       data-selected={chosen ? 'true' : undefined}
                       data-excluded={excluded ? 'true' : undefined}
+                      data-layer-badge={layerTab ? 'true' : undefined}
                       aria-label={`${i + 1}. ${e.label} · X ${e.center[0].toFixed(1)} / Y ${e.center[1].toFixed(1)} mm${current ? ` · ${t('job.current_object')}` : ''}${excluded ? ` · ${t('job.excluded')}` : ''}`}
                       aria-pressed={chosen}
                       title={e.label}
                       disabled={excluded || !live}
                       class="cc2-object-map-marker focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan"
                       style={{
-                        left: `${(e.center[0] / BED_SIZE) * 100}%`,
-                        bottom: `${(e.center[1] / BED_SIZE) * 100}%`,
+                        left: `${(at[0] / BED_SIZE) * 100}%`,
+                        bottom: `${(at[1] / BED_SIZE) * 100}%`,
                       }}
                       onClick={() => objects.set({ selected: e.id })}
                     >
@@ -101,11 +323,28 @@ export const ObjectBedMap = ({
                     </button>
                   )
                 })}
+                {layerTab && !unavailable && nozzleOnBed && nozzle && (
+                  <span
+                    role="img"
+                    data-layer-nozzle
+                    class="cc2-layer-nozzle-dot"
+                    aria-label={t('job.bed_map_nozzle')}
+                    style={{
+                      left: `${(nozzle[0] / BED_SIZE) * 100}%`,
+                      bottom: `${(nozzle[1] / BED_SIZE) * 100}%`,
+                    }}
+                  />
+                )}
+                {layerTab && loading && (
+                  <div class="cc2-layer-path-status" role="status">
+                    {t('job.bed_map_loading_layer')}
+                  </div>
+                )}
               </div>
             </div>
             <p class="mt-2 text-center text-xs text-muted">{t('job.bed_map_front')}</p>
           </div>
-          <div class="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
+          <div class="cc2-object-map-legend mt-2 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
             <span class="flex items-center gap-1.5">
               <i class="h-2 w-2 rounded-full bg-cyan" />
               {t('job.bed_map_selected')}
@@ -118,6 +357,12 @@ export const ObjectBedMap = ({
               <i class="h-2 w-2 rounded-full bg-red" />
               {t('job.excluded')}
             </span>
+            {onClose && (
+              <span class="flex items-center gap-1.5">
+                <i class="cc2-layer-path-swatch" />
+                {t('job.bed_map_layer_legend')}
+              </span>
+            )}
           </div>
           {missing > 0 && <p class="mt-3 text-xs text-muted">{tpl('job.bed_map_missing', { n: missing })}</p>}
         </div>
@@ -204,7 +449,7 @@ export const ObjectBedMap = ({
     </div>
   )
   return onClose ? (
-    <Dialog onClose={onClose} width={1200} class="max-w-[calc(100vw-2rem)]" label={t('job.bed_map')}>
+    <Dialog onClose={onClose} width={1200} class="max-w-[calc(100vw-2rem)]" label={t('job.bed_map')} sheet>
       {content}
     </Dialog>
   ) : (

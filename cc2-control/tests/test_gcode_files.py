@@ -359,6 +359,41 @@ def main():
                 raise AssertionError("path traversal unexpectedly accepted")
             except urllib.error.HTTPError as error:
                 assert error.code == 404
+
+            (internal / "layers.gcode").write_text(
+                ";LAYER:0\nG90\nM82\nG1 X10 Y10 E1\nG1 X20 Y10 E2\n"
+                ";LAYER:1\nG1 X30 Y30 E3\nG1 X40 Y30 E4\n",
+                encoding="ascii",
+            )
+
+            def layer_path(query, timeout=5):
+                url = f"http://127.0.0.1:{port}/api/gcode-files/layer-path?{query}"
+                try:
+                    with urllib.request.urlopen(url, timeout=timeout) as response:
+                        return response.status, json.load(response)
+                except urllib.error.HTTPError as error:
+                    return error.code, json.loads(error.read().decode())
+
+            status, payload = layer_path("file=layers.gcode&layer=1")
+            assert status == 200, payload
+            assert payload["layer"] == 1 and payload["total_layers"] == 2
+            assert payload["file"] == "layers.gcode" and payload["storage"] == "internal"
+            assert payload["paths"] and payload["point_count"] >= 2
+            assert payload["paths"][0][0][0] == 10 and payload["paths"][0][0][1] == 10
+            status, cached = layer_path("file=layers.gcode&layer=1")
+            assert status == 200 and cached == payload
+            status, payload = layer_path("storage=internal&file=layers.gcode&layer=2")
+            assert status == 200 and payload["layer"] == 2 and payload["point_count"] >= 2
+            status, payload = layer_path("file=layers.gcode&layer=9")
+            assert status == 404 and payload["error"] == "Layer is outside the file"
+            status, payload = layer_path("file=missing.gcode&layer=1")
+            assert status == 404 and payload["error"] == "G-code file unavailable"
+            status, payload = layer_path("file=../escape.gcode&layer=1")
+            assert status == 400 and "path" in payload["error"].lower()
+            status, payload = layer_path("file=layers.gcode&layer=0")
+            assert status == 400 and payload["error"] == "Invalid layer"
+            status, payload = layer_path("storage=usb&file=folder/part.GCODE&layer=1")
+            assert status == 200 and payload["storage"] == "usb"
         finally:
             process.terminate()
             try:

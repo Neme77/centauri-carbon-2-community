@@ -1536,5 +1536,17 @@
   "queue.auto_in_n": "Avvio automatico tra {n} s",
   "queue.hold": "Annulla l’avvio automatico",
   "queue.abandon": "Annulla l’avvio",
-  "queue.auto_material": "Avvio automatico sospeso: lo slot Canvas non contiene il materiale del file o non è stato possibile verificarlo. Controlla lo slot e avvia manualmente."
+  "queue.auto_material": "Avvio automatico sospeso: lo slot Canvas non contiene il materiale del file o non è stato possibile verificarlo. Controlla lo slot e avvia manualmente.",
+  "job.bed_map_objects": "Oggetti",
+  "job.bed_map_layer_path": "Percorso layer",
+  "job.bed_map_previous_layer": "Layer precedente",
+  "job.bed_map_next_layer": "Layer successivo",
+  "job.bed_map_live": "Live",
+  "job.bed_map_layer_status": "Layer {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Layer {n} / {total}",
+  "job.bed_map_loading_layer": "Caricamento layer…",
+  "job.bed_map_layer_unavailable": "Percorso layer non disponibile",
+  "job.bed_map_view": "Vista mappa del piatto",
+  "job.bed_map_nozzle": "Ugello",
+  "job.bed_map_layer_legend": "Percorso layer"
 }
