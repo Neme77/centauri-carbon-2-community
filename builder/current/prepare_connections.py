@@ -5,7 +5,7 @@ import importlib.util
 import json
 
 HERE=Path(__file__).resolve().parent
-spec=importlib.util.spec_from_file_location('connections_component', HERE/'core/connections_component.py')
+spec=importlib.util.spec_from_file_location('connections_component', str(HERE/'core/connections_component.py'))
 component=importlib.util.module_from_spec(spec);spec.loader.exec_module(component)
 
 def main():

@@ -8,7 +8,7 @@ import shutil
 import struct
 
 HERE=Path(__file__).resolve().parent
-spec=importlib.util.spec_from_file_location('camera_firmware',HERE/'core/camera_component.py')
+spec=importlib.util.spec_from_file_location('camera_firmware',str(HERE/'core/camera_component.py'))
 camera=importlib.util.module_from_spec(spec);spec.loader.exec_module(camera)
 
 def main():
