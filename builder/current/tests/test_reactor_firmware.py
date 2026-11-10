@@ -16,6 +16,23 @@ reactor=importlib.util.module_from_spec(spec);spec.loader.exec_module(reactor)
 sha=lambda data:hashlib.sha256(data).hexdigest()
 
 class FirmwareReactorTests(unittest.TestCase):
+    def test_vendor_pin_base_aware_and_matches_07_profile(self):
+        import inspect
+        out=json.loads((BUILDER/'base_profiles/02.01.01.07.json').read_text())['port']['outputs']
+        self.assertEqual(out['printer_release']['sha256'],reactor.VENDOR_SHA256)
+        for fn in (reactor.load,reactor.install,reactor.audit):
+            params=inspect.signature(fn).parameters
+            self.assertIn('vendor_sha',params,fn.__name__);self.assertIn('base_version',params,fn.__name__)
+        # 07 keeps the historical source paths; 0113 base-specific sources resolve to
+        # the 0113 directory, while shared sources stay with 07; no cross-base fallback.
+        self.assertEqual(reactor.reactor_source('reactor_module.cpp','02.01.01.07'),REPO/'experimental/firmware-port/reactor/reactor_module.cpp')
+        self.assertEqual(reactor.reactor_source('launcher.sh','02.01.01.07'),REPO/'experimental/firmware-port/launcher.sh')
+        self.assertEqual(reactor.reactor_source('reactor_module.cpp','02.01.01.13'),REPO/'experimental/firmware-port-0113/reactor/reactor_module.cpp')
+        self.assertEqual(reactor.reactor_source('co_routine.h','02.01.01.13'),REPO/'experimental/firmware-port/reactor/co_routine.h')
+        with self.assertRaises(RuntimeError):reactor.reactor_source('reactor_module.cpp','02.01.01.99')
+        # The committed 0113 reactor_module.cpp is byte-exact fork 2's source.
+        self.assertEqual(sha((REPO/'experimental/firmware-port-0113/reactor/reactor_module.cpp').read_bytes()),'21ef738ba6a71312c4f1766414a49d0fb7c0627d0fe79b2766120620754620fa')
+
     def test_preserves_vendor_arguments_and_special_branches(self):
         original='#!/bin/sh\nif [ "$MODE" = normal ]; then\n LD_BIND_NOW=1 elegoo_printer "$CFG" -s "$AUTO" -a "$UDS"&\nelse\n elegoo_printer_debug "$CFG"\nfi\n'
         patched=reactor.patched_vendor_launcher(original)

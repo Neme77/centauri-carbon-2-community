@@ -7,6 +7,10 @@ import shutil
 import struct
 
 FILES=('libcc2-reactor-v2.so','cc2-reactor-bridge-test','launcher.sh','preflight.sh','SHA256SUMS')
+# VENDOR_SHA256 is the base's PATCHED printer (the ABI the .so is built against);
+# default 02.01.01.07. load/install/audit take vendor_sha so a build for another
+# base passes its own value (port.outputs.printer_release.sha256). LIBCO_SHA256
+# (libcolib.so) and FIRMWARE_LAUNCHER_SHA256 (the boot hook) are base-independent.
 VENDOR_SHA256='19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745'
 LIBCO_SHA256='14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403'
 FIRMWARE_LAUNCHER_SHA256='8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636373fdaac43'
@@ -14,22 +18,37 @@ FIRMWARE_LAUNCHER_SHA256='8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
-def load(component):
+def reactor_source(name,base_version='02.01.01.07'):
+    """Path to a reactor source for a base. reactor_module.cpp, fingerprints.h and
+    launcher.sh are base-specific (the printer addresses move); bridge_test.cpp,
+    co_routine.h and preflight.sh are base-independent and stay with the 07 tree.
+    The 02.01.01.07 paths are the historical ones unchanged; no cross-base fallback."""
+    repo=Path(__file__).resolve().parents[3]
+    root=repo/'experimental/firmware-port'
+    shared={'bridge_test.cpp':root/'reactor/bridge_test.cpp','co_routine.h':root/'reactor/co_routine.h','preflight.sh':root/'preflight.sh'}
+    if name in shared:
+        return shared[name]
+    if base_version=='02.01.01.07':
+        return root/'launcher.sh' if name=='launcher.sh' else root/'reactor'/name
+    if base_version=='02.01.01.13':
+        return repo/'experimental/firmware-port-0113/reactor'/name
+    raise RuntimeError(f'No reactor sources for ELEGOO base {base_version}')
+
+def load(component,vendor_sha=VENDOR_SHA256,base_version='02.01.01.07'):
     component=Path(component)
     if digest(component/'firmware-launcher.sh')!=FIRMWARE_LAUNCHER_SHA256:
         raise RuntimeError('Firmware reactor boot hook differs from pinned source')
     manifest=json.loads((component/'prepared-manifest.json').read_text())
     if manifest.get('optimization')!='O0' or manifest.get('gcc')!='6.5.0' or manifest.get('glibc')!='2.23':
         raise RuntimeError('Reactor requires qualified O0/GCC 6.5.0/glibc 2.23')
-    if manifest.get('vendor_sha256')!=VENDOR_SHA256 or manifest.get('libco_sha256')!=LIBCO_SHA256:
+    if manifest.get('vendor_sha256')!=vendor_sha or manifest.get('libco_sha256')!=LIBCO_SHA256:
         raise RuntimeError('Reactor ABI target differs from qualified firmware')
     if set(manifest.get('files',{}))!=set(FILES):
         raise RuntimeError('Unexpected reactor component files')
-    repo=Path(__file__).resolve().parents[3]
     for name,expected in manifest.get('sources',{}).items():
         if name not in ('reactor_module.cpp','bridge_test.cpp','co_routine.h','fingerprints.h'):
             raise RuntimeError('Unexpected reactor source')
-        if digest(repo/'experimental/firmware-port/reactor'/name)!=expected:
+        if digest(reactor_source(name,base_version))!=expected:
             raise RuntimeError('Stale reactor build: source changed')
     if len(manifest.get('sources',{}))!=4:
         raise RuntimeError('Missing reactor source provenance')
@@ -41,7 +60,7 @@ def load(component):
         if len(data)<20 or data[:6]!=b'\x7fELF\x01\x01' or struct.unpack_from('<H',data,18)[0]!=40:
             raise RuntimeError('Reactor component is not ARM32: '+name)
     for name in ('launcher.sh','preflight.sh'):
-        canonical=repo/'experimental/firmware-port'/name
+        canonical=reactor_source(name,base_version)
         if digest(canonical)!=manifest['files'][name]:
             raise RuntimeError('Stale reactor launcher: '+name)
     expected=''.join(manifest['files'][name]+'  '+name+'\n' for name in sorted(FILES) if name!='SHA256SUMS')
@@ -67,9 +86,9 @@ def patched_printer_init(text):
             +match['indent']+'/etc/init.d/cc2-reactor-launch --prepare-only || logger -t cc2-reactor "Preparation failed; normal launcher will recheck"\n\n')
     return text[:match.start()]+prefix+text[match.start():]
 
-def install(root,component):
-    root=Path(root);component,manifest=load(component)
-    if digest(root/'opt/bin/elegoo_printer')!=VENDOR_SHA256 or digest(root/'opt/lib/libcolib.so')!=LIBCO_SHA256:
+def install(root,component,vendor_sha=VENDOR_SHA256,base_version='02.01.01.07'):
+    root=Path(root);component,manifest=load(component,vendor_sha,base_version)
+    if digest(root/'opt/bin/elegoo_printer')!=vendor_sha or digest(root/'opt/lib/libcolib.so')!=LIBCO_SHA256:
         raise RuntimeError('Firmware reactor vendor/libco target mismatch')
     destination=root/'opt/inst/cc2-reactor';destination.mkdir(parents=True,exist_ok=True)
     for name in FILES:
@@ -90,8 +109,8 @@ def install(root,component):
     printer_init.write_text(init_patched)
     return manifest
 
-def audit(root,component,printer_init_transform=None,hook_transform=None):
-    root=Path(root);component,manifest=load(component)
+def audit(root,component,printer_init_transform=None,hook_transform=None,vendor_sha=VENDOR_SHA256,base_version='02.01.01.07'):
+    root=Path(root);component,manifest=load(component,vendor_sha,base_version)
     for name,expected in manifest['files'].items():
         if digest(root/'opt/inst/cc2-reactor'/name)!=expected:
             raise RuntimeError('Rebuilt reactor checksum mismatch: '+name)
