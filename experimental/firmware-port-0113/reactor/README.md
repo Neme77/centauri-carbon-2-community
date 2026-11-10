@@ -1,0 +1,80 @@
+# Reactor port for base 02.01.01.13 — sources (unbuilt, not yet wired)
+
+Device-verified source-level port of the experimental O0 reactor to ELEGOO base
+02.01.01.13. These files are **reference sources only**: nothing in the builder
+reads this directory yet, the `.so` is not built here, and the active reactor
+has **not** been hardware-validated on 0113. 0113 stays refused by the build
+gate regardless.
+
+## Provenance and review
+
+The 07 reactor is `experimental/firmware-port/reactor/`. fork 2
+(`update-2.03.03.13` line) produced a 0113 remap that was never committed to any
+branch; it survives only in a local backup
+(`cc2-backup-20261109/fork2-reactor-2.01.01.13/`, `uncommitted.patch`) and as the
+`.so` on the device (`opt/inst/cc2-reactor/libcc2-reactor-v2.so`, SHA-256
+`8f78646d…`).
+
+- `reactor_module.cpp` — fork 2's 0113 version, reconstructed by applying only
+  its reactor hunk to the 07 source. **Verified byte-exact**: SHA-256
+  `21ef738ba6a71312…`, identical to fork 2's `prepared-manifest.json` source
+  hash. It is a pure address remap of the 07 source (every change is an
+  `original<…>(0xOLD)` → `0xNEW` or `patch(0xOLD)` → `patch(0xNEW)`; logic
+  byte-identical), matching `port-manifest.json`'s mapping
+  (`instructions_equal_except_call_targets`).
+- `port-manifest.json`, `launcher.sh` — fork 2's 0113 versions (the runtime
+  launcher pins the patched printer, `EXPECTED=688b7bf8…`).
+- `bridge_test.cpp` and `co_routine.h` are **base-independent** (fork 2's build
+  reused the 07 files); a 0113 build takes them from
+  `experimental/firmware-port/reactor/`.
+
+Deliberately **excluded** from fork 2's patch (single-base, machine-specific, or
+conflicting with this branch's multi-base design):
+- `prepare_reactor.py` toolchain path (`/usr/local/bin/…`) and relaxed GCC check
+  — fork 2's local machine only.
+- `network44-manifest.json` `output_sha256` → `688b7bf8` — that is the **07**
+  two-stage printer patch; on this branch 02.01.01.13 is produced by
+  `apply_patches_0113` (K1 restructure), so 07's network44 stays `19712b59…`.
+
+## Device-verified correction: fork 2's `fingerprints.h` was not ported
+
+`reactor_module.cpp` `activate()` first checks, for each of the four patched
+functions, that the original 8 instruction bytes are present at the patch
+address, then overwrites the address. fork 2 remapped the four `patch()`
+addresses to 0113 but left `fingerprints.h` at the **07** addresses (their
+build pinned `fingerprints.h` SHA-256 `b41faf1e…`, the 07 file). So on the 0113
+printer `activate()` reads the wrong addresses and the self-check fails
+(`fail("original instruction fingerprint")`): **fork 2's 0113 `.so` cannot
+activate.** This fully explains the hardware observation that the reactor never
+activated on 0113 — it could not.
+
+Verified against the 0113 patched printer binary (`688b7bf8…`), reading the ELF
+LOAD segments:
+
+| function | 07 addr | 0113 addr | original bytes (at 0113 addr) |
+|---|---|---|---|
+| `cc2_callback` | `0x26ab5c` | `0x26d08c` | `30 48 2d e9 0c b0 8d e2` |
+| `cc2_timers` | `0x26ccac` | `0x26f1dc` | `70 48 2d e9 10 b0 8d e2` |
+| `cc2_poll` | `0x26e3a8` | `0x2708d8` | `10 48 2d e9 08 b0 8d e2` |
+| `cc2_wait` | `0x26a640` | `0x26cb70` | `10 48 2d e9 08 b0 8d e2` |
+
+The 07 byte patterns are **absent** at the 07 addresses in the 0113 printer and
+**present** at the new 0113 addresses (the functions moved; bytes unchanged).
+`fingerprints.h` here is regenerated with the four 0113 addresses and those
+(unchanged) bytes — the fix fork 2 missed.
+
+## Still required before a 0113 reactor release
+
+1. **Wire the component base-aware**: `reactor_component.py` / `prepare_reactor.py`
+   select this source directory and `VENDOR_SHA256 =
+   port.outputs.printer_release.sha256` (`688b7bf8…`) by base; `LIBCO_SHA256`
+   (`14288a4a…`) and the launch-hook transforms stay base-independent. 07 must
+   remain byte-identical.
+2. **Rebuild `libcc2-reactor-v2.so`** with the qualified toolchain
+   (`/opt/cc2-cross/…`, GCC 6.5.0, glibc 2.23) from these corrected sources.
+3. **Hardware-validate the active reactor** on 0113 (set `CC2_REACTOR_RUNTIME_V2=1`
+   and confirm the fingerprint self-check passes and the printer runs) before any
+   release decision. fork 2's `.so` was never validated active and, per above,
+   could not have activated.
+
+Never commit the `.so`; it is built by the operator from these sources.
