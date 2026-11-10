@@ -19,6 +19,7 @@ import {
   cornerOffsets,
   microns,
   offsetChain,
+  measurementOffsets,
   parseScrewHistory,
   SCREW_CORNERS,
   SCREW_KEYS,
@@ -664,12 +665,13 @@ const Screws = () => {
     RR: 'bed.corner_rear_right',
     RL: 'bed.corner_rear_left',
   }
-  const running = history.supported ? history.sessions.find(s => s.ended == null) : undefined
+  const running = history.supported ? history.sessions.find(s => s.kind !== 'quick' && s.ended == null) : undefined
   const moved = running ? referenceMove(running) : null
   const since = moved?.sinceFullUm
   const amount = since == null ? '' : microns(since / 1000)
   const series = running ? cornerOffsets(running) : null
-  const earlier = history.sessions.filter(s => s.ended != null)
+  const earlier = history.sessions.filter(s => s.kind !== 'quick' && s.ended != null)
+  const quick = history.sessions.filter(s => s.kind === 'quick')
   const exportHistory = (kind: 'json' | 'csv' | 'excel') => {
     const payload = history.raw ?? { sessions: history.sessions }
     if (kind === 'json')
@@ -889,7 +891,7 @@ const Screws = () => {
               earlier.map(s => {
                 const finals = cornerOffsets(s)
                 return (
-                  <div key={s.started} class="border-t border-edge py-2 text-xs">
+                  <div key={s.started} data-screw-kind="session" class="border-t border-edge py-2 text-xs">
                     <div class="font-semibold">{new Date(s.started * 1000).toLocaleString()}</div>
                     <div class="mt-1 flex flex-col gap-0.5">
                       {SCREW_CORNERS.map(c => {
@@ -906,6 +908,37 @@ const Screws = () => {
                 )
               })
             )}
+            <div class="mt-3.5 border-t border-edge pt-3">
+              <h3 class="text-base font-semibold">{t('bed.tram_quick_history')}</h3>
+              {quick.length === 0 ? (
+                <p class="py-2 text-xs text-muted">{t('bed.tram_quick_empty')}</p>
+              ) : (
+                quick.map(s => {
+                  const sample = [...s.measurements].reverse().find(m => m.kind === 'quick')
+                  const offsets = sample ? measurementOffsets(sample) : null
+                  return (
+                    <div
+                      key={`${s.started}-${sample?.time ?? 0}`}
+                      data-screw-kind="quick"
+                      class="border-t border-edge py-2 text-xs"
+                    >
+                      <div class="font-semibold">{t('bed.tram_quick_entry')}</div>
+                      <div class="mt-0.5">{new Date((sample?.time || s.started) * 1000).toLocaleString()}</div>
+                      <div class="mt-1 flex flex-col gap-0.5">
+                        {SCREW_CORNERS.map(c => {
+                          const value = offsets?.[c.id]
+                          return (
+                            <span key={c.id} class="break-words">
+                              {t(cornerName[c.id])} {value == null ? '—' : microns(value)}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
             <div class="flex flex-wrap gap-2 border-t border-edge py-3">
               <Button class="min-h-11" onClick={() => exportHistory('json')}>
                 {t('bed.tram_history_export_json')}

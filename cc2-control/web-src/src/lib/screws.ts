@@ -87,14 +87,18 @@ export const microns = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math
 
 export type ScrewHistoryMeasurement = {
   time: number
-  kind: 'start' | 'probe' | 'check'
+  kind: 'start' | 'probe' | 'check' | 'quick'
   corner: ScrewId | null
   twice: boolean
   z: Partial<Record<ScrewId, number>>
   z2?: Partial<Record<ScrewId, number>>
 }
 
+export type ScrewHistoryEntryKind = 'session' | 'quick'
+
 export type ScrewHistorySession = {
+  // Missing on an older backend. Callers treat that as a session.
+  kind: ScrewHistoryEntryKind
   started: number
   ended: number | null
   measurements: ScrewHistoryMeasurement[]
@@ -113,25 +117,36 @@ const zBag = (v: unknown): Partial<Record<ScrewId, number>> => {
   return out
 }
 
-// The history endpoint is optional. Callers treat a missing array as no sessions.
+const measurementKind = (v: unknown): ScrewHistoryMeasurement['kind'] | null =>
+  v === 'start' || v === 'probe' || v === 'check' || v === 'quick' ? v : null
+
+// Sessions and quick measurements have separate caps. An entry with no kind is an older session.
 export function parseScrewHistory(data: unknown): ScrewHistorySession[] {
   const list = (data as { sessions?: unknown } | null)?.sessions
   if (!Array.isArray(list)) return []
   const sessions: ScrewHistorySession[] = []
-  for (const raw of list.slice(0, 20)) {
+  let sessionCount = 0
+  let quickCount = 0
+  for (const raw of list) {
     if (!raw || typeof raw !== 'object') continue
     const s = raw as Record<string, unknown>
+    const kind: ScrewHistoryEntryKind | null =
+      s.kind === 'quick' ? 'quick' : s.kind === 'session' || s.kind == null ? 'session' : null
+    if (!kind) continue
+    if (kind === 'quick' ? quickCount >= 10 : sessionCount >= 20) continue
+    if (kind === 'quick') quickCount++
+    else sessionCount++
     const measurements: ScrewHistoryMeasurement[] = []
     if (Array.isArray(s.measurements)) {
       for (const item of s.measurements) {
         if (!item || typeof item !== 'object') continue
         const m = item as Record<string, unknown>
-        const kind = m.kind === 'start' || m.kind === 'probe' || m.kind === 'check' ? m.kind : null
-        if (!kind || typeof m.time !== 'number') continue
+        const measured = measurementKind(m.kind)
+        if (!measured || typeof m.time !== 'number') continue
         const twice = m.twice === true
         measurements.push({
           time: m.time,
-          kind,
+          kind: measured,
           corner: isScrewId(m.corner) ? m.corner : null,
           twice,
           z: zBag(m.z),
@@ -140,6 +155,7 @@ export function parseScrewHistory(data: unknown): ScrewHistorySession[] {
       }
     }
     sessions.push({
+      kind,
       started: typeof s.started === 'number' ? s.started : 0,
       ended: typeof s.ended === 'number' ? s.ended : null,
       measurements,
@@ -154,6 +170,7 @@ export function cornerOffsets(session: ScrewHistorySession): Record<ScrewId, num
   const raw: Partial<Record<ScrewId, number>> = {}
   const series: Record<ScrewId, number[]> = { FL: [], FR: [], RR: [], RL: [] }
   for (const m of session.measurements) {
+    if (m.kind === 'quick') continue
     const bags = [m.z, ...(m.twice && m.z2 ? [m.z2] : [])]
     for (const bag of bags) {
       for (const id of SCREW_IDS) if (typeof bag[id] === 'number') raw[id] = bag[id]
@@ -191,6 +208,7 @@ export function referenceMove(session: ScrewHistorySession): ReferenceMove | nul
   let full: number | undefined
   let pending = false
   for (const m of session.measurements) {
+    if (m.kind === 'quick') continue
     const fl = m.z.FL
     if (typeof fl !== 'number') continue
     if (first === undefined) first = fl
@@ -223,9 +241,23 @@ export function screwTimeLocal(unix: number): string {
   return `${date} ${clock}`
 }
 
+// One quick measurement against its own front-left sample. Not part of a session trail.
+export function measurementOffsets(m: ScrewHistoryMeasurement): Record<ScrewId, number | null> {
+  const fl = m.z.FL
+  const out: Record<ScrewId, number | null> = { FL: null, FR: null, RR: null, RL: null }
+  if (typeof fl !== 'number') return out
+  for (const id of SCREW_IDS) {
+    const z = m.z[id]
+    if (typeof z !== 'number') continue
+    out[id] = id === 'FL' ? 0 : z - fl
+  }
+  return out
+}
+
 const CSV_HEADER = [
   'started',
   'ended',
+  'entry_kind',
   'time',
   'time_local',
   'kind',
@@ -263,6 +295,7 @@ export function screwHistoryCsv(sessions: ScrewHistorySession[], style: 'comma' 
           [
             s.started,
             s.ended ?? '',
+            s.kind === 'quick' ? 'quick' : 'session',
             m.time,
             screwTimeLocal(m.time),
             m.kind,

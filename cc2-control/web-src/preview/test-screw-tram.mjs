@@ -4,7 +4,16 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { createServer } from 'vite'
 import { chromium } from 'playwright'
-import { cornerOffsets, offsetChain, referenceMove, screwHistoryCsv, screwPlan, screwTimeLocal } from '../src/lib/screws.ts'
+import {
+  cornerOffsets,
+  measurementOffsets,
+  offsetChain,
+  parseScrewHistory,
+  referenceMove,
+  screwHistoryCsv,
+  screwPlan,
+  screwTimeLocal,
+} from '../src/lib/screws.ts'
 
 const measure = (partial) => ({ time: 1, kind: 'start', corner: null, twice: false, z: {}, ...partial })
 const trail = (measurements) => ({ started: 1, ended: null, measurements })
@@ -59,16 +68,70 @@ const csv = screwHistoryCsv(csvSessions)
 assert.match(screwTimeLocal(1762800000), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
 assert.match(
   csv,
-  /^started,ended,time,time_local,kind,corner,twice,pass,FL_measured_mm,FR_measured_mm,RR_measured_mm,RL_measured_mm,FL_table_um/
+  /^started,ended,entry_kind,time,time_local,kind,corner,twice,pass,FL_measured_mm,FR_measured_mm,RR_measured_mm,RL_measured_mm,FL_table_um/
 )
+assert.match(csv, /,session,/)
 assert.match(csv, new RegExp(screwTimeLocal(1762800000).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
 assert.match(csv, /probe,FL,1,1,1\.8/)
 assert.match(csv, /probe,FL,1,2,1\.8/)
 const excel = screwHistoryCsv(csvSessions, 'excel')
-assert.match(excel, /^started;ended;time;time_local;/)
+assert.match(excel, /^started;ended;entry_kind;time;time_local;/)
 assert.match(excel, /probe;FL;1;1;1,8/)
 assert.match(excel, /probe;FL;1;2;1,8/)
 assert.equal(excel.includes('1.8'), false)
+const quickSample = {
+  time: 1762801680,
+  kind: 'quick',
+  corner: null,
+  twice: false,
+  z: { FL: -0.6821, FR: -0.676, RR: -0.8704, RL: -0.751 },
+}
+const parsed = parseScrewHistory({
+  sessions: [
+    { kind: 'quick', started: 1762801500, ended: 1762801680, measurements: [quickSample] },
+    {
+      started: 1762800000,
+      ended: 1762801200,
+      measurements: [
+        { time: 1762800300, kind: 'start', corner: null, twice: false, z: { FL: -0.6818, FR: -0.6758, RR: -0.8698, RL: -0.7508 } },
+      ],
+    },
+    { kind: 'session', started: 5, ended: 6, measurements: [{ time: 5, kind: 'probe', corner: 'FR', twice: false, z: { FR: 1.85 } }] },
+  ],
+})
+assert.deepEqual(parsed.map(s => s.kind), ['quick', 'session', 'session'])
+assert.equal(parsed[0].measurements[0].kind, 'quick')
+assert.equal(parsed[1].kind, 'session', 'an entry without kind stays a session')
+const quickUm = measurementOffsets(parsed[0].measurements[0])
+assert.equal(Math.round(quickUm.FR * 1000), 6)
+assert.equal(Math.round(quickUm.RR * 1000), -188)
+assert.equal(Math.round(quickUm.RL * 1000), -69)
+const isolated = cornerOffsets({
+  kind: 'session',
+  started: 1,
+  ended: null,
+  measurements: [
+    measure({ z: { FL: 1.8, FR: 1.85, RR: 1.82, RL: 1.79 } }),
+    measure({ time: 2, kind: 'quick', z: quickSample.z }),
+  ],
+})
+assert.equal(offsetChain(isolated.FR), '+50 µm', 'a quick sample does not join the session trail')
+assert.match(screwHistoryCsv(parsed), /entry_kind/)
+assert.match(screwHistoryCsv(parsed), /,quick,/)
+assert.match(screwHistoryCsv(parsed), /,session,/)
+const capped = parseScrewHistory({
+  sessions: [
+    ...Array.from({ length: 21 }, (_, i) => ({ started: 3000 - i, ended: 1, measurements: [] })),
+    ...Array.from({ length: 11 }, (_, i) => ({
+      kind: 'quick',
+      started: 4000 - i,
+      ended: 1,
+      measurements: [{ time: 1, kind: 'quick', corner: null, twice: false, z: { FL: 1 } }],
+    })),
+  ],
+})
+assert.equal(capped.filter(s => s.kind === 'session').length, 20)
+assert.equal(capped.filter(s => s.kind === 'quick').length, 10)
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 process.env.CC2_BACKEND = 'http://127.0.0.1:1'
@@ -131,8 +194,14 @@ try {
   assert.equal(await card.getByText('both heaters turn off afterwards').count(), 0)
   const history = card.locator('#screw-history')
   await history.getByText('Earlier sessions', { exact: true }).click()
-  await history.getByText('−188 µm').waitFor()
-  await history.getByText('Front right +6 µm').waitFor()
+  await history.getByText('−188 µm').first().waitFor()
+  await history.getByText('Front right +6 µm').first().waitFor()
+  await history.getByText('Quick measurements', { exact: true }).waitFor()
+  const quick = history.locator('[data-screw-kind="quick"]')
+  await quick.getByText('Quick measurement · no 30 s pause', { exact: true }).waitFor()
+  await quick.getByText('Front right +6 µm').waitFor()
+  await quick.getByText('Back right −188 µm').waitFor()
+  assert.equal(await history.locator('[data-screw-kind="session"]').getByText('Quick measurement').count(), 0)
   assert.deepEqual(
     await page.evaluate(async () => (await (await fetch('/api/printer')).json()).screws_session),
     { active: false, xy_homed: false }
@@ -235,6 +304,9 @@ try {
   await history.getByRole('button', { name: 'Export JSON', exact: true }).click()
   const jsonFile = await jsonDownload
   assert.equal(jsonFile.suggestedFilename(), 'screw-levelling-history.json')
+  const jsonText = await readFile(await jsonFile.path(), 'utf8')
+  assert.match(jsonText, /"kind": "quick"/)
+  assert.match(jsonText, /"kind": "session"/)
   const csvDownload = page.waitForEvent('download')
   await history.getByRole('button', { name: 'Export CSV', exact: true }).click()
   const csvFile = await csvDownload
@@ -242,17 +314,21 @@ try {
   const csvText = await readFile(await csvFile.path(), 'utf8')
   assert.match(
     csvText,
-    /started,ended,time,time_local,kind,corner,twice,pass,FL_measured_mm,.*FL_table_um/
+    /started,ended,entry_kind,time,time_local,kind,corner,twice,pass,FL_measured_mm,.*FL_table_um/
   )
   assert.match(csvText, /probe,FL,1,1,/)
   assert.match(csvText, /probe,FL,1,2,/)
+  assert.match(csvText, /,session,/)
+  assert.match(csvText, /,quick,/)
   assert.match(csvText, /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)
   const excelDownload = page.waitForEvent('download')
   await history.getByRole('button', { name: 'CSV for Excel (DE)', exact: true }).click()
   const excelFile = await excelDownload
   assert.equal(excelFile.suggestedFilename(), 'screw-levelling-history-excel.csv')
   const excelText = await readFile(await excelFile.path(), 'utf8')
-  assert.match(excelText, /started;ended;time;time_local;/)
+  assert.match(excelText, /started;ended;entry_kind;time;time_local;/)
+  assert.match(excelText, /;quick;/)
+  assert.match(excelText, /;session;/)
   assert.match(excelText, /1,78/)
   assert.equal(excelText.includes('FL_um'), false)
   const tramOutput = (heights) =>
@@ -323,7 +399,7 @@ try {
   await card.getByText('Reference moved: 0 → +12 µm').waitFor()
   assert.equal(await card.getByText('no longer match').count(), 0)
   preview = null
-  await history.getByText('−188 µm').waitFor()
+  await history.getByText('−188 µm').first().waitFor()
   const cleared = page.waitForRequest(
     r => r.method() === 'POST' && r.url().endsWith('/api/screws/history/clear')
   )
@@ -331,7 +407,7 @@ try {
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   assert.equal(
     await page.evaluate(async () => (await (await fetch('/api/screws/history')).json()).sessions.length),
-    2,
+    3,
     'cancel keeps the history'
   )
   await history.getByRole('button', { name: 'Clear history', exact: true }).click()

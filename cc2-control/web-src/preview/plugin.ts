@@ -91,14 +91,33 @@ export function previewPlugin(): Plugin {
   let tramHeights: Record<string, number> = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
   type TramMeasure = {
     time: number
-    kind: 'start' | 'probe' | 'check'
+    kind: 'start' | 'probe' | 'check' | 'quick'
     corner: string | null
     twice: boolean
     z: Record<string, number>
     z2?: Record<string, number>
   }
-  type TramSession = { started: number; ended: number | null; measurements: TramMeasure[] }
+  type TramSession = {
+    kind?: 'session' | 'quick'
+    started: number
+    ended: number | null
+    measurements: TramMeasure[]
+  }
   const seedScrewHistory = (): TramSession[] => [
+    {
+      kind: 'quick',
+      started: 1762801500,
+      ended: 1762801680,
+      measurements: [
+        {
+          time: 1762801680,
+          kind: 'quick',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6821, FR: -0.676, RR: -0.8704, RL: -0.751 },
+        },
+      ],
+    },
     {
       started: 1762800000,
       ended: 1762801200,
@@ -129,7 +148,21 @@ export function previewPlugin(): Plugin {
     RL: +tramHeights['30,225'].toFixed(4),
   })
   const closeOpenScrew = () => {
-    for (const s of screwSessions) if (s.ended == null) s.ended = screwNow()
+    for (const s of screwSessions) if (s.kind !== 'quick' && s.ended == null) s.ended = screwNow()
+  }
+  const trimScrewHistory = () => {
+    let sessions = 0
+    let quicks = 0
+    screwSessions = screwSessions.filter(s => {
+      if (s.kind === 'quick') {
+        if (quicks >= 10) return false
+        quicks++
+        return true
+      }
+      if (sessions >= 20) return false
+      sessions++
+      return true
+    })
   }
   let consoleJob = {
     busy: false,
@@ -1530,11 +1563,12 @@ export function previewPlugin(): Plugin {
                   tramSession = true
                   closeOpenScrew()
                   screwSessions.unshift({
+                    kind: 'session',
                     started: screwNow(),
                     ended: null,
                     measurements: [{ time: screwNow(), kind: 'start', corner: null, twice: false, z: heightsZ() }],
                   })
-                  if (screwSessions.length > 20) screwSessions.length = 20
+                  trimScrewHistory()
                   finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28\n', ['30,30', '230,30', '230,225', '30,225'])
                   return reply({ accepted: true, simulated: true })
                 }
