@@ -30,7 +30,7 @@ The plate Z offset is applied on top of the printer's own plate offset and again
 
 Four-screw corrections are displayed in **microns**. A guarded **Optimized reference adjustment** suggestion may be shown when it reduces the largest required correction and remains inside the protected movement range. The suggestion is advisory only; CC2 Control does not move or turn screws automatically.
 
-**Screw Levelling** also offers an interactive session: **Start session** homes all axes (`G28`), preheats the bed and cleans the nozzle like the one-shot measurement, then probes the four screws. After that, each corner can be re-probed with one click (`G28 Z` only, after a 30 s settle), and **Check all four** repeats the sweep without a full re-home. Heaters are switched off when the session ends. The original **Measure Screws** one-shot path is unchanged.
+**Screw Levelling** also offers an interactive session: **Start session** homes all axes (`G28`), preheats the bed and cleans the nozzle like the one-shot measurement, then probes the four screws and switches the nozzle off, leaving the bed at 60 °C. After that, each corner can be re-probed with one click (`G28 Z` only, after a 30 s settle; the nozzle is switched off again afterwards), and **Check all four** repeats the sweep without a full re-home. Re-probe and check stay disabled until X and Y are homed. Heaters are switched off when the session ends. The original **Measure Screws** one-shot path is unchanged.
 
 ## Quick Actions and global Emergency Stop
 

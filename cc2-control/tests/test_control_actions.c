@@ -97,10 +97,18 @@ int main(void){
         expect(strstr(script,"G1 Z10 F600\nG1 X30 Y30 F12000")&&strstr(script,"G1 Z10 F600\nG1 X230 Y30 F12000")&&
                strstr(script,"G1 Z10 F600\nG1 X230 Y225 F12000")&&strstr(script,"G1 Z10 F600\nG1 X30 Y225 F12000"),
                "tram start lifts Z before every XY move and probes the four fixed corners");
-        expect(strstr(script,"M104 S0")==NULL&&strstr(script,"M140 S0")==NULL,"tram start keeps heaters on for the session");
+        {
+            const char *close="RESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S60\n";
+            size_t n=strlen(script),e=strlen(close);
+            expect(n>=e&&!strcmp(script+n-e,close),"tram start restores state, switches the nozzle off and keeps the bed at 60 C");
+            expect(strstr(script,"PROBE SAMPLES=3")<strstr(script,"M104 S0"),"tram start turns the nozzle off after probing");
+        }
+        expect(strstr(script,"M140 S0")==NULL,"tram start does not switch the bed off");
         expect(control_screws_session_active(),"tram start arms the session");
+        expect(!control_screws_xy_homed(&mqtt),"xy_homed is false until X and Y are reported homed");
         expect(!control_build_script("screws:tram:probe:FL",&mqtt,script,sizeof(script),reason,sizeof(reason)),"re-probe rejected until XY is homed");
         mqtt.have_position=1;strcpy(mqtt.homed_axes,"xyz");
+        expect(control_screws_xy_homed(&mqtt),"xy_homed is true once the session has X and Y homed");
         expect(control_build_script("screws:tram:probe:FL",&mqtt,script,sizeof(script),reason,sizeof(reason)),"re-probe FL accepted after session home");
         expect(strlen(script)<CONSOLE_COMMAND_MAX,"tram re-probe fits the console transport");
         expect(strstr(script,"G28 Z\n")!=NULL&&strstr(script,"G28\n")==NULL,"re-probe homes Z only");
@@ -108,6 +116,11 @@ int main(void){
         expect(strstr(script,"G1 Z10 F600\nG1 X30 Y30 F12000\nPROBE SAMPLES=3")!=NULL,"re-probe lifts Z then moves to the FL table point");
         expect(strstr(script,"X230")==NULL&&strstr(script,"Y225")==NULL,"single-corner re-probe does not visit other corners");
         expect(!strstr(script,"30,30")&&!strstr(script,"FL"),"scripts do not echo user-supplied tokens");
+        {
+            const char *close="RESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S60\n";
+            size_t n=strlen(script),e=strlen(close);
+            expect(n>=e&&!strcmp(script+n-e,close),"re-probe restores state and switches the nozzle off after G28 Z");
+        }
         expect(control_build_script("screws:tram:probe:FR:2",&mqtt,script,sizeof(script),reason,sizeof(reason)),"probe-twice FR accepted");
         expect(strstr(script,"G1 X230 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nPROBE SAMPLES=3\nG1 Z10 F600\n")!=NULL,
                "probe-twice runs a second PROBE at the same corner");
@@ -115,6 +128,11 @@ int main(void){
         expect(strstr(script,"G28 Z\n")!=NULL&&strstr(script,"G28\n")==NULL,"final check homes Z only");
         expect(strstr(script,"G1 Z10 F600\nG1 X30 Y30 F12000")&&strstr(script,"G1 Z10 F600\nG1 X230 Y225 F12000"),
                "final check lifts Z before each XY move");
+        {
+            const char *close="RESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S60\n";
+            size_t n=strlen(script),e=strlen(close);
+            expect(n>=e&&!strcmp(script+n-e,close),"final check restores state and switches the nozzle off");
+        }
         expect(control_build_script("screws:tram:check:2",&mqtt,script,sizeof(script),reason,sizeof(reason)),"probe-twice four-corner check accepted");
         expect(strlen(script)<CONSOLE_COMMAND_MAX,"probe-twice four-corner check fits the console transport");
         expect(strstr(script,"G28 Z\n")!=NULL&&strstr(script,"G28\n")==NULL,"probe-twice check homes Z only");
@@ -123,6 +141,9 @@ int main(void){
             const char *p=script;int probes=0;
             while((p=strstr(p,"PROBE SAMPLES=3"))){probes++;p+=15;}
             expect(probes==8,"probe-twice check runs two PROBE commands at each of the four corners");
+            const char *close="RESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S60\n";
+            size_t n=strlen(script),e=strlen(close);
+            expect(n>=e&&!strcmp(script+n-e,close),"probe-twice check restores state and switches the nozzle off");
         }
         const char *bad_tram[]={"screws:tram:probe:XX","screws:tram:probe:fl","screws:tram:probe:FL:3",
             "screws:tram:probe:30,30","screws:tram:probe:FL:X30","screws:tram:probe:","screws:tram:start:extra",
@@ -143,7 +164,9 @@ int main(void){
         expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"session can start again after timeout");
         expect(control_build_script("screws:tram:end",&mqtt,script,sizeof(script),reason,sizeof(reason))&&
                !strcmp(script,"M104 S0\nM140 S0"),"tram end switches heaters off");
+        expect(strstr(script,"RESTORE_GCODE_STATE")==NULL,"tram end does not restore a consumed gcode state");
         expect(!control_screws_session_active(),"session cleared on end");
+        expect(!control_screws_xy_homed(&mqtt),"xy_homed is false after end");
         expect(control_build_script("screws:tram:start",&mqtt,script,sizeof(script),reason,sizeof(reason)),"session start for heaters-off invalidation");
         expect(control_build_script("heaters:off",&mqtt,script,sizeof(script),reason,sizeof(reason)),"heaters-off accepted during a session");
         expect(!control_screws_session_active(),"session invalid after heaters-off");

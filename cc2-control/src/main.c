@@ -2657,14 +2657,15 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s}}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,pressure_advance,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
         printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status,
-        control_screws_session_active()?"true":"false");
+        control_screws_session_active()?"true":"false",
+        control_screws_xy_homed(mqtt)?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }

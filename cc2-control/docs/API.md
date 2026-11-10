@@ -301,9 +301,11 @@ Manual temperature targets were validated during an active print on a physical C
 corner table; unknown IDs are refused. Start homes all axes (`G28`) and uses the
 same bed prep as `screws:measure`. Re-probe and the four-corner check home Z only
 (`G28 Z`) after a 30 s settle, and only while a session is active with X and Y
-homed. `GET /api/printer` reports `screws_session.active`. The session is cleared
+homed. Each start/re-probe/check script restores `CC2_SCREW_TRAM` gcode state,
+switches the nozzle off (`M104 S0`) and keeps the bed at 60 °C. `GET /api/printer`
+reports `screws_session.active` and `screws_session.xy_homed`. The session is cleared
 on disconnect, console error, timeout, emergency stop, `screws:measure` or end.
-End and session invalidation switch the heaters off. `screws:measure` is unchanged.
+End and session invalidation switch both heaters off. `screws:measure` is unchanged.
 
 ## Heater PID calibration
 

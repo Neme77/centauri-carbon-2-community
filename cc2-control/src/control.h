@@ -17,6 +17,8 @@ int control_build_script(const char *action, const mqtt_client *mqtt,
 void control_screws_reset(void);
 void control_screws_invalidate(void);
 int control_screws_session_active(void);
+/* Active session and MQTT currently reports homed X and Y. */
+int control_screws_xy_homed(const mqtt_client *mqtt);
 int control_screws_is_tram(const char *action);
 void control_screws_note_job(unsigned long generation);
 /* Returns 1 when an active session was just cleared and heaters should be

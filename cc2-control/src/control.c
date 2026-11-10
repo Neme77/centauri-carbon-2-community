@@ -70,14 +70,17 @@ static struct {
 void control_screws_reset(void){memset(&screws_session,0,sizeof(screws_session));}
 void control_screws_invalidate(void){control_screws_reset();}
 int control_screws_session_active(void){return screws_session.active;}
+static int tram_xy_homed(const mqtt_client *m){
+    return m&&m->have_position&&strchr(m->homed_axes,'x')&&strchr(m->homed_axes,'y');
+}
+int control_screws_xy_homed(const mqtt_client *m){
+    return screws_session.active&&tram_xy_homed(m);
+}
 int control_screws_is_tram(const char *action){return action&&!strncmp(action,"screws:tram:",12);}
 void control_screws_note_job(unsigned long generation){
     if(!screws_session.active)return;
     screws_session.job_pending=1;
     screws_session.job_generation=generation;
-}
-static int tram_xy_homed(const mqtt_client *m){
-    return m&&m->have_position&&strchr(m->homed_axes,'x')&&strchr(m->homed_axes,'y');
 }
 static int tram_idle(const mqtt_client *m,char *reason,size_t cap){
     time_t now=time(NULL);
@@ -103,6 +106,21 @@ static int append_tram_corners(char *script,size_t cap,size_t used,int only,int 
         used+=(size_t)n;
     }
     if(used>=CONSOLE_COMMAND_MAX)return reject(reason,reason_cap,"Screw tramming command exceeds buffer capacity");
+    return 1;
+}
+/* Full G28 (and the home:Z path) heat the nozzle to 140 C and leave that
+ * target. G28 Z after a hot G28 is short, but the same restore is applied
+ * fail-closed: probe while the nozzle is still at the homing temperature,
+ * then switch it off and keep the bed at 60 C. */
+static int tram_close_script(char *script,size_t cap,char *reason,size_t reason_cap){
+    size_t used=strlen(script);
+    int n=snprintf(script+used,cap>used?cap-used:0,
+        "RESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\n"
+        "M104 S0\n"
+        "M140 S60\n");
+    if(!tram_script_ok(n,cap>used?cap-used:0,reason,reason_cap))return 0;
+    if(used+(size_t)n>=CONSOLE_COMMAND_MAX)
+        return reject(reason,reason_cap,"Screw tramming command exceeds buffer capacity");
     return 1;
 }
 int control_screws_tick(const mqtt_client *m,int console_completed,int console_success,
@@ -244,6 +262,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
                 "G90\n");
             if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
             if(!append_tram_corners(script,cap,(size_t)n,-1,0,reason,reason_cap))return 0;
+            if(!tram_close_script(script,cap,reason,reason_cap))return 0;
             control_screws_reset();
             screws_session.active=1;
             screws_session.last=time(NULL);
@@ -262,6 +281,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
                 "G90\n",SCREWS_SETTLE_S);
             if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
             if(!append_tram_corners(script,cap,(size_t)n,-1,twice,reason,reason_cap))return 0;
+            if(!tram_close_script(script,cap,reason,reason_cap))return 0;
             screws_session.last=time(NULL);
             return 1;
         }
@@ -286,10 +306,13 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
                 "G90\n",SCREWS_SETTLE_S);
             if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
             if(!append_tram_corners(script,cap,(size_t)n,corner,twice,reason,reason_cap))return 0;
+            if(!tram_close_script(script,cap,reason,reason_cap))return 0;
             screws_session.last=time(NULL);
             return 1;
         }
         if(!strcmp(action,"screws:tram:end")){
+            /* Start/probe/check already RESTORE. Repeating it here would fail
+             * if the name is gone, or re-apply the pre-job motion state. */
             int n=snprintf(script,cap,"M104 S0\nM140 S0");
             if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
             control_screws_invalidate();

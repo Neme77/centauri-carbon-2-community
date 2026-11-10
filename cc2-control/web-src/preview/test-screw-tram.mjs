@@ -55,6 +55,10 @@ try {
   assert.ok(await end.isDisabled(), 'end is disabled before a session')
   assert.ok(await fl.isDisabled(), 'corner re-probe is disabled before a session')
   assert.ok(await measure.isEnabled(), 'one-shot measurement stays available')
+  assert.deepEqual(
+    await page.evaluate(async () => (await (await fetch('/api/printer')).json()).screws_session),
+    { active: false, xy_homed: false }
+  )
   await page.screenshot({ path: path.join(shots, 'screw-tram-idle-1440.png'), fullPage: true })
   await start.click()
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -65,6 +69,10 @@ try {
   await started
   await page.getByText('Session active', { exact: true }).waitFor()
   assert.deepEqual(actions, ['screws:tram:start'])
+  assert.deepEqual(
+    await page.evaluate(async () => (await (await fetch('/api/printer')).json()).screws_session),
+    { active: true, xy_homed: true }
+  )
   assert.ok(await check.isEnabled())
   assert.ok(await end.isEnabled())
   assert.ok(await fl.isEnabled())

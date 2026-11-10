@@ -570,7 +570,9 @@ const Screws = () => {
   usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
   const session = screwSession.use()
   const busy = consoleStatus.use().busy
-  const printerSession = Boolean(printer.use().data?.screws_session?.active)
+  const tram = printer.use().data?.screws_session
+  const printerSession = Boolean(tram?.active)
+  const xyReady = Boolean(tram?.active && tram?.xy_homed)
   const oneShot = screwValues(screwText.use().text)
   const sessionReady = SCREW_KEYS.every(k => Number.isFinite(session.heights[k]))
   const values = sessionReady ? session.heights : oneShot
@@ -650,7 +652,7 @@ const Screws = () => {
                   {plan && <span class="text-[13px] font-bold">{microns(v)}</span>}
                   <Button
                     class="min-h-8 px-2 text-xs"
-                    disabled={!printerSession || locked}
+                    disabled={!xyReady || locked}
                     aria-label={tpl('bed.tram_probe_corner', { corner: c.id })}
                     onClick={() => void run(probeAction(c.id))}
                   >
@@ -773,7 +775,7 @@ const Screws = () => {
             {t('bed.tram_start')}
           </Button>
           <Button
-            disabled={!printerSession || locked}
+            disabled={!xyReady || locked}
             onClick={() => void run(probeTwice ? 'screws:tram:check:2' : 'screws:tram:check', 'bed.tram_check_confirm')}
           >
             {t('bed.tram_check')}

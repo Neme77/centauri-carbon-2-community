@@ -626,7 +626,10 @@ export function previewPlugin(): Plugin {
       hardware: { camera: true, usb: true, light: 1, filament_detection: true, filament_detected: true },
       printer_error: null,
       camera_viewer: cameraViewer,
-      screws_session: { active: tramSession && scene === 'idle' },
+      screws_session: {
+        active: tramSession && scene === 'idle',
+        xy_homed: tramSession && scene === 'idle',
+      },
       spools: {
         enabled: spoolsOn,
         revision: spoolRevision,
