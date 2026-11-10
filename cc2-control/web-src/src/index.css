@@ -109,7 +109,7 @@
 :root[data-theme="nord"] {
   color-scheme: dark;
   --bg: #2e3440; --panel: #3b4252; --edge: #4c566a; --text: #eceff4; --muted: #b4bfd3; --field: #434c5e; --ink: #2e3440;
-  --cyan: #9dcddb; --green: #a3be8c; --amber: #ebcb8b; --red: #ebbec2; --blue: #81a1c1;
+  --cyan: #9dcddb; --green: #a3be8c; --amber: #ebcb8b; --red: #ffb0b4; --blue: #81a1c1;
   --well: #242933; --well-fg: #eceff4;
 }
 :root[data-theme="monokai"] {
