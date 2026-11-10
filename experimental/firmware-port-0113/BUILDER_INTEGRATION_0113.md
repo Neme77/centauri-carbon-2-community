@@ -177,18 +177,25 @@ am Qualified-Base-Gate (`ported_patch_set: false`, nicht in `QUALIFIED_BASES`).
 ## Verbleibende Komponenten-Arbeit für einen vollständigen 0113-Build
 
 Native Display ist damit kein Release-Blocker mehr (separater, eigens
-hardware-getesteter Port, NATIVE_DISPLAY_0113_ANALYSIS.md). Offen bleibt,
-dass drei Komponenten noch fest auf 07 gepinnt und als **ein gekoppeltes,
-kreuz-gepinntes Substrat** installiert werden — sie greifen erst, sobald das
-Qualified-Base-Gate für 0113 geöffnet wird, blockieren also heute nichts,
-müssen aber vor einem echten 0113-Build portiert werden:
+hardware-getesteter Port, NATIVE_DISPLAY_0113_ANALYSIS.md). Die Kamera-Runtime
+ist jetzt basis-fähig (s. u.). Offen bleibt, dass **Reactor und Connections**
+noch fest auf 07 gepinnt und als **ein gekoppeltes, kreuz-gepinntes Substrat**
+installiert werden (die Kamera-Launch-Hooks hängen an Connections) — sie greifen
+erst, sobald das Qualified-Base-Gate für 0113 geöffnet wird, blockieren also
+heute nichts, müssen aber vor einem echten 0113-Build portiert werden:
 
-- **Kamera-Runtime** (`core/camera_component.py`): `CAMERA_SHA` (gepatchte
-  Koexistenz-Kamera, 07 `ec5633b1…`) und `INIT_SHA` (07-Stock-`etc/init.d/
-  printer`) sind 07-fest. 0113-Werte stehen im Profil (`camera_release`
-  `90da7634…`, `camera_init` `e7537298…`). Basis-abhängig machen **und** eine
-  0113-`prepared-manifest.json` erzeugen (deren `camera_sha256` den
-  gepatchten 0113-Kamera-Hash nennt; die Shell-Payload ist basis-unabhängig).
+- **Kamera-Runtime** (`core/camera_component.py`): **erledigt.** `CAMERA_SHA`/
+  `INIT_SHA` sind jetzt Defaults für 07; `load`/`install`/`audit` nehmen
+  `camera_sha`/`init_sha`, die der Builder aus `port.outputs`
+  (`camera_release`/`camera_init`) durchreicht. `payload.PINS` (R2-Libs) sind
+  basis-unabhängig. Operator-Schritt für 0113: `prepare_camera.py
+  --base-version 02.01.01.13` (schreibt das gitignorete `prepared-manifest.json`
+  mit `camera_sha256 = 90da7634…`; die Shell-Payload ist unverändert).
+  **Noch offen (separater cc2-control-PR):** die Rollback-`case` in
+  `cc2-control/installer/camera_component.py` akzeptiert nur die Init-Hashes
+  `bcabb1fa…`/`01924b3d…`; für 0113-Rollback muss `e7537298…` ergänzt werden.
+  Das ist eine cc2-control-Änderung mit Snapshot-Regen (AGENTS.md) und gehört
+  nicht in diesen Builder-PR (Snapshot-Konflikt-Regel).
 - **Reactor** (`core/reactor_component.py` + `components/reactor`): installiert
   `opt/inst/cc2-reactor/launcher.sh`, das Connections danach liest/umschreibt;
   Reihenfolge und Hashes sind gegen 07 gepinnt.

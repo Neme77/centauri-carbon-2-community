@@ -12,6 +12,12 @@ spec=importlib.util.spec_from_file_location('camera_firmware',HERE/'core/camera_
 camera=importlib.util.module_from_spec(spec);spec.loader.exec_module(camera)
 
 def main():
+    import argparse
+    ap=argparse.ArgumentParser(description='Stage the qualified R2 camera runtime for a base')
+    ap.add_argument('--base-version',default='02.01.01.07',help='ELEGOO base whose camera the runtime is qualified with')
+    args=ap.parse_args()
+    profile=json.loads((HERE/'base_profiles'/(args.base_version+'.json')).read_text())
+    camera_sha=profile['port']['outputs']['camera_release']
     component=HERE/'components/camera';prepared=component/'prepared'
     runtime=component/'runtime'
     for name,expected in camera.payload.PINS.items():
@@ -31,8 +37,8 @@ def main():
     sums=''.join(camera.sha(prepared/name)+'  '+name+'\n' for name in sorted(camera.FILES) if name!='SHA256SUMS')
     (prepared/'SHA256SUMS').write_text(sums)
     files={name:camera.sha(prepared/name) for name in (*camera.FILES,'firmware-launcher.sh')}
-    (component/'prepared-manifest.json').write_text(json.dumps({'camera_sha256':camera.CAMERA_SHA,'files':files},indent=2)+'\n')
-    camera.load(component)
-    print('CAMERA PREPARED: unchanged qualified R2 libraries; vendor camera supplied only by the local official firmware input.')
+    (component/'prepared-manifest.json').write_text(json.dumps({'camera_sha256':camera_sha,'files':files},indent=2)+'\n')
+    camera.load(component,camera_sha)
+    print(f'CAMERA PREPARED for {args.base_version}: unchanged qualified R2 libraries; vendor camera supplied only by the local official firmware input.')
 
 if __name__=='__main__':main()

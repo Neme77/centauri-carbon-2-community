@@ -31,6 +31,24 @@ class CameraFirmwareTests(unittest.TestCase):
             data=path.read_bytes()
             self.assertTrue(data.startswith(b'#!/bin/sh\n'),str(path))
             self.assertNotIn(b'\r',data,str(path))
+    def test_base_pins_are_parametrised_and_match_07_profile(self):
+        import inspect, json
+        # The 07 profile port.outputs are the frozen defaults the builder threads
+        # into load/install/audit; passing them must equal the module constants.
+        out=json.loads((BUILDER/'base_profiles/02.01.01.07.json').read_text())['port']['outputs']
+        self.assertEqual(out['camera_release'],camera.CAMERA_SHA)
+        self.assertEqual(out['camera_init'],camera.INIT_SHA)
+        # load/install/audit accept per-base camera_sha/init_sha (default = 07).
+        self.assertIn('camera_sha',inspect.signature(camera.load).parameters)
+        for fn in (camera.install,camera.audit):
+            params=inspect.signature(fn).parameters
+            self.assertIn('camera_sha',params,fn.__name__)
+            self.assertIn('init_sha',params,fn.__name__)
+        # 02.01.01.13 carries its own camera pins (different from 07).
+        out13=json.loads((BUILDER/'base_profiles/02.01.01.13.json').read_text())['port']['outputs']
+        self.assertNotEqual(out13['camera_release'],camera.CAMERA_SHA)
+        self.assertNotEqual(out13['camera_init'],camera.INIT_SHA)
+
     @unittest.skipUnless((BUILDER/'components/camera/prepared-manifest.json').is_file(),'qualified runtime supplied in builder packaging workflow')
     def test_rootfs_install_and_reextraction_audit(self):
         with tempfile.TemporaryDirectory() as temporary:

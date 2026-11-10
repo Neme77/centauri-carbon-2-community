@@ -588,7 +588,7 @@ def main():
   port_cfg=profile['port']; port_outputs=port_cfg['outputs']
   display_included=component_included(profile,'native_display')
   gui_release_sha=port_outputs['native_gui'] if display_included else port_outputs['patched_gui']
-  camera_release_sha=port_outputs['camera_release']; printer_release_sha=port_outputs['printer_release']['sha256']
+  camera_release_sha=port_outputs['camera_release']; printer_release_sha=port_outputs['printer_release']['sha256']; camera_init_sha=port_outputs['camera_init']
   if not display_included: print(f"[OK] native display not included for {base_version}: {profile['components']['native_display']['reason'].split('.')[0]}")
   if a.stock_package is None: a.stock_package=str(here/'original_firmware'/profile['stock_package'])
  priv=req(a.private_key or here/'keys'/'cc2_community_release_private.pem','private key')
@@ -618,7 +618,7 @@ def main():
  spec=importlib.util.spec_from_file_location('camera_firmware_component',camera_helper)
  camera_runtime=importlib.util.module_from_spec(spec);spec.loader.exec_module(camera_runtime)
  camera_component=here/'components/camera'
- camera_runtime.load(camera_component)
+ camera_runtime.load(camera_component,camera_release_sha)
  integrated={}
  for relative,pin in INTEGRATION_INPUTS.items():
   reqhash(here.parents[1]/relative,pin,'Reviewed firmware integration source '+relative)
@@ -690,7 +690,7 @@ def main():
   patch_dual(daemon,dual)
   install_cc2_control(root,cc2_component,cc2_manifest)
   reactor.install(root,reactor_component)
-  camera_runtime.install(root,camera_component)
+  camera_runtime.install(root,camera_component,camera_release_sha,camera_init_sha)
   if display_included: display.install(root)
   connections_payload,connections_hooks=connections.install(root,connections_archive)
   camera_hook=lambda text:connections.hook_transform(text,'camera-launch',connections_input)
@@ -702,7 +702,7 @@ def main():
   reqhash(daemon,EXPECTED['daemon_dual'],'installed Dual Trust daemon')
   audit_cc2_control(root,cc2_component,cc2_manifest)
   reactor.audit(root,reactor_component,printer_init_transform=camera_runtime.patched_init,hook_transform=reactor_hook)
-  camera_runtime.audit(root,camera_component,hook_transform=camera_hook)
+  camera_runtime.audit(root,camera_component,hook_transform=camera_hook,camera_sha=camera_release_sha,init_sha=camera_init_sha)
   if display_included: display.audit(root)
   elif sha256(gui)!=port_outputs['patched_gui'] or sha256(gui)==display.GUI_SHA256: raise RuntimeError('native display declared not-included but the installed GUI is not the plain Z-offset GUI')
   connections.audit(root,connections_payload,connections_hooks)
@@ -718,7 +718,7 @@ def main():
   reqhash(vr/'opt/inst/daemon-000/daemon-000',EXPECTED['daemon_dual'],'rebuilt Dual Trust daemon')
   audit_cc2_control(vr,cc2_component,cc2_manifest)
   reactor.audit(vr,reactor_component,printer_init_transform=camera_runtime.patched_init,hook_transform=reactor_hook)
-  camera_runtime.audit(vr,camera_component,hook_transform=camera_hook)
+  camera_runtime.audit(vr,camera_component,hook_transform=camera_hook,camera_sha=camera_release_sha,init_sha=camera_init_sha)
   if display_included: display.audit(vr)
   elif sha256(vr/'opt/bin/ec-eeb001-gui')!=port_outputs['patched_gui'] or sha256(vr/'opt/bin/ec-eeb001-gui')==display.GUI_SHA256: raise RuntimeError('native display declared not-included but the rebuilt GUI is not the plain Z-offset GUI')
   connections.audit(vr,connections_payload,connections_hooks)
