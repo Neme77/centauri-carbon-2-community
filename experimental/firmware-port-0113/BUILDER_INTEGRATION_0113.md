@@ -148,24 +148,82 @@ unbemerkt ändert.
 - Bestehende Tests müssen grün bleiben; die aus dem Code entfernten
   07-Konstanten müssen zeichengleich in der 07-`port`-Sektion stehen.
 
-## Schicht 3: freischalten (erst nach 2 + den Blockern)
+## Stand 2026-11-10: validierter Umfang zuerst (umgesetzt)
 
-Wenn alle `port.outputs` gesetzt sind (inkl. `native_gui` aus 3a) und die
-Kernelmodule stehen (3b): im 0113-Profil `ported_patch_set: true`, 0113 in
-`QUALIFIED_BASES` eintragen (mit dem dann gültigen Profil-Hash),
-`test_base_profiles.py` erweitern.
+Entscheidung „Nur Native Display raus": das 0113-Profil deklariert in der
+neuen `components`-Sektion `native_display.included = false` mit Begründung
+(PIPELINE_MULTI_BASE_DESIGN.md §3.5). Umgesetzt im Builder:
+
+- `component_included(profile, name)` — Default „enthalten"; Ausschluss nur
+  explizit mit nicht-leerer Begründung (kein stilles Weglassen). 07 ohne
+  `components`-Sektion ist unverändert.
+- `display.install`/`display.audit` werden übersprungen, wenn nicht
+  enthalten; die gebaute GUI bleibt die validierte Z-Offset-GUI
+  (`668ab8cb…`), und ein Abwesenheits-Check stellt sicher, dass es **nicht**
+  die Native-GUI ist (beide Build-Pässe).
+- Patch-Weiche pro Basis: `port.printer_patch == 'patch44'` → 07er
+  Zweistufenpfad; `== 'apply_patches'` → `apply_patches_0113` (Printer-K1 +
+  GUI-Z-Offset + Kamera in einem Lauf), Ausgaben gegen `port.outputs`
+  verifiziert.
+- Oberflächen-Pins (installiert + nach SquashFS) kommen jetzt aus
+  `port.outputs` statt aus Modul-Globals; `native_gui`-Platzhalter entfällt.
+- `native_gui` ist aus `port.outputs` entfernt (wird für diese Basis nicht
+  erzeugt).
+
+Host-Suite unverändert grün (47 Tests, 1 vorbestehender macOS-Umgebungs-
+Failure in `test_connections_firmware`, 3 skips). 0113 bleibt **abgelehnt**
+am Qualified-Base-Gate (`ported_patch_set: false`, nicht in `QUALIFIED_BASES`).
+
+## Verbleibende Komponenten-Arbeit für einen vollständigen 0113-Build
+
+Native Display ist damit kein Release-Blocker mehr (separater, eigens
+hardware-getesteter Port, NATIVE_DISPLAY_0113_ANALYSIS.md). Offen bleibt,
+dass drei Komponenten noch fest auf 07 gepinnt und als **ein gekoppeltes,
+kreuz-gepinntes Substrat** installiert werden — sie greifen erst, sobald das
+Qualified-Base-Gate für 0113 geöffnet wird, blockieren also heute nichts,
+müssen aber vor einem echten 0113-Build portiert werden:
+
+- **Kamera-Runtime** (`core/camera_component.py`): `CAMERA_SHA` (gepatchte
+  Koexistenz-Kamera, 07 `ec5633b1…`) und `INIT_SHA` (07-Stock-`etc/init.d/
+  printer`) sind 07-fest. 0113-Werte stehen im Profil (`camera_release`
+  `90da7634…`, `camera_init` `e7537298…`). Basis-abhängig machen **und** eine
+  0113-`prepared-manifest.json` erzeugen (deren `camera_sha256` den
+  gepatchten 0113-Kamera-Hash nennt; die Shell-Payload ist basis-unabhängig).
+- **Reactor** (`core/reactor_component.py` + `components/reactor`): installiert
+  `opt/inst/cc2-reactor/launcher.sh`, das Connections danach liest/umschreibt;
+  Reihenfolge und Hashes sind gegen 07 gepinnt.
+- **Connections** (`core/connections_component.py`): prüft die von Kamera und
+  Reactor erzeugten Launch-Hooks per NATIVE-Pins (`etc/init.d/cc2-camera-
+  launch` `f05accc9…` u. a.), pinnt die Stock-Wifi-`.ko` am Kernelpfad
+  `lib/modules/5.4.61/aic8800_fdrv.ko` und bündelt die USB-Ethernet-`.ko`.
+  → Neue NATIVE/BINARY-Pins brauchen das **entschlüsselte 0113-Stock-Rootfs**
+  (Stock-OTA + AES-Key) zum Messen; die USB-Ethernet-`.ko` brauchen zusätzlich
+  die 0113-Kernelquellen (Blocker unten).
+
+Weil die Kamera-Boot-Integration über Connections läuft, lässt sich
+Connections nicht sauber weglassen, ohne die (validierte) Kamera zu brechen —
+deshalb bleibt der USB-Ethernet-Blocker für einen vollständigen Build bestehen.
+
+## Schicht 3: freischalten (erst nach den Komponenten-Ports + den Blockern)
+
+Erst wenn die Komponenten oben auf 0113 portiert und emulations-/hardware-
+geprüft sind (§6 Phase 4: Hardware-Test auf einem **vom Builder erzeugten**
+Image, nicht auf handinstallierten Binaries): im 0113-Profil
+`ported_patch_set: true`, 0113 in `QUALIFIED_BASES` eintragen (mit dem dann
+gültigen Profil-Hash), `test_base_profiles.py` erweitern. Das ist eine
+**Maintainer-Release-Entscheidung** (§5.8), nicht vom Builder ableitbar.
 
 ## Harte Blocker (nur mit deinen Inputs lösbar)
 
-1. **Natives Display (3a).** Das native Display überschreibt im Build die
-   Z-Offset-GUI (`firmware_builder.py:634`, Prüfung :639). Für 0113 müssen
-   `experimental/native-display/patch-plan.json` (`base_sha256`,
-   ELF-Offsets, `before_sha256`, `output_sha256`) und
-   `baseline-pins.txt` (Bild-Recolor) gegen die 0113-GUI (`668ab8cb…`) und
-   die **0113-Stock-Theme-Bilder** neu abgeleitet werden. Die Bilder
-   kommen aus dem entschlüsselten 0113-Stock-Rootfs → brauchen Stock-OTA +
-   AES-Key. Ergebnis ist der neue `native_gui`-Hash
-   (`TODO_NATIVE_DISPLAY_0113`).
+1. **Natives Display — kein Release-Blocker mehr (als nicht-enthalten
+   deklariert).** Für den validierten Umfang überspringt der Builder das
+   native Display und behält die Z-Offset-GUI. Eine spätere, eigenständige
+   Portierung (volle Neuableitung von `patch-plan.json` und
+   `baseline-pins.txt` gegen die 0113-GUI `668ab8cb…` und die
+   **0113-Stock-Theme-Bilder** aus dem entschlüsselten Stock-Rootfs; eigener
+   Hardware-Test) würde die `native_display`-Deklaration auf
+   `included: true` setzen und einen `native_gui`-Pin ergänzen. Details:
+   NATIVE_DISPLAY_0113_ANALYSIS.md.
 2. **USB-Ethernet-Kernelmodule (3b).** `cc2_ue300_*.ko` sind gegen die
    07-Kernel-ABI gebaut; der 0113-Kernel weicht ab (gleicher
    Versionsstring 5.4.61, anderer Hash). Neubau über

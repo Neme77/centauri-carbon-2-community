@@ -24,6 +24,10 @@ for key in ('stock_outer', 'stock_inner', 'stock_swu', 'sw-description', 'resour
             'boot0', 'kernel', 'stock_rootfs', 'stock_gui', 'daemon_stock'):
     assert b.EXPECTED[key] == q['sha256'][key], key
 assert q['manifest'] == {'version': '02.01.01.07', 'update_class': '00.00.00.00'}
+# The 07 base-specific release pins now live in the profile's port.outputs and
+# must stay character-identical to the module constants (frozen copy, section 4).
+assert q['port']['outputs']['printer_release']['sha256'] == b.PRINTER_RELEASE_SHA256
+assert q['port']['outputs']['camera_release'] == b.CAMERA_RELEASE_SHA256
 
 for path in sorted((BASE / 'base_profiles').glob('*.json')):
     profile = b.load_base_profile(path.stem)
@@ -38,9 +42,22 @@ for path in sorted((BASE / 'base_profiles').glob('*.json')):
 
 candidate = b.load_base_profile('02.01.01.13')
 open_items = b.profile_placeholders(candidate)
-# One known placeholder: native_gui is the native-display blocker (Schicht 3a),
-# intentionally TODO_ so the builder refuses 0113 until it is derived.
-assert open_items == ['port.outputs.native_gui = TODO_NATIVE_DISPLAY_0113'], open_items
+# Native display is declared not-included for 02.01.01.13 (components section),
+# so there is no native_gui placeholder: 0113 has no open placeholders and is
+# refused only by the qualified-base gate below.
+assert open_items == [], open_items
+# The validated surface excludes native display, with a documented reason; 07
+# (no components section) includes it by default.
+assert b.component_included(candidate, 'native_display') is False
+assert candidate['components']['native_display']['reason'].strip()
+assert b.component_included(q, 'native_display') is True
+# A component excluded without a reason is refused (no silent omission, 3.5).
+try:
+    b.component_included({'version': 'x', 'components': {'native_display': {'included': False}}}, 'native_display')
+except RuntimeError as error:
+    assert 'reason' in str(error), error
+else:
+    raise AssertionError('excluded component without a reason accepted')
 assert candidate['manifest'] == {'version': '02.01.01.13', 'update_class': '00.00.00.00'}
 assert candidate['ported_patch_set'] is False and candidate['stock_package'] == 'cc2_eeb001_02.01.01.13_20261020214142.zip.sig'
 for key in ('uboot', 'boot0', 'sw-description', 'resource', 'daemon_stock', 'libcolib'):
@@ -61,9 +78,8 @@ with tempfile.TemporaryDirectory() as td:
         raise AssertionError('tampered qualified profile accepted')
     complete = json.loads((BASE / 'base_profiles/02.01.01.13.json').read_text())
     complete['manifest'] = {'version': '02.01.01.13', 'update_class': '00.00.00.00'}
-    # Clear the known native_gui blocker placeholder so this check reaches the
-    # qualified-base gate rather than stopping at the placeholder check.
-    complete['port']['outputs']['native_gui'] = '0' * 64
+    # 0113 has no open placeholder (native display is declared not-included), so
+    # require_buildable_profile reaches the qualified-base gate directly.
     try:
         b.require_buildable_profile(complete)
     except RuntimeError as error:
@@ -99,7 +115,6 @@ try:
         (BASE / 'base_profiles/02.01.01.13.json').read_bytes()).hexdigest()
     ported = json.loads((BASE / 'base_profiles/02.01.01.13.json').read_text())
     ported['ported_patch_set'] = True
-    ported['port']['outputs']['native_gui'] = '0' * 64  # clear the native-display blocker placeholder
     assert b.require_buildable_profile(ported) is ported  # now accepted, proving the set is the gate
 finally:
     b.QUALIFIED_BASES.clear()
@@ -109,8 +124,8 @@ assert '02.01.01.13' not in b.QUALIFIED_BASES
 # The CLI refuses an unported base before reading keys, firmware or tools.
 r = subprocess.run([sys.executable, str(BASE / 'core/firmware_builder.py'), '--base-version', '02.01.01.13',
                     '--private-key', str(BASE / 'keys/cc2_stock_public.pem')], capture_output=True, text=True)
-# 02.01.01.13 is refused before any signing: either for its open native_gui
-# placeholder (Schicht 3a blocker) or, once that is filled, for not being a
-# qualified base. Both messages contain 'refusing to build'.
+# 02.01.01.13 is refused before any signing: it is not a qualified base (native
+# display is declared not-included, so there is no placeholder). The message
+# contains 'refusing to build'.
 assert r.returncode == 1 and 'refusing to build' in r.stderr and 'signing' not in r.stderr.lower(), r.stderr
 print('PASS: base profiles; qualified pins unchanged; complete 02.01.01.13 profile refused until a patch set is ported.')

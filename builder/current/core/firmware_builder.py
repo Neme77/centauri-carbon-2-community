@@ -73,6 +73,21 @@ def require_buildable_profile(profile):
   raise RuntimeError(f"No ported and qualified patch set for ELEGOO base {profile.get('version')}; refusing to build (qualified bases: {', '.join(sorted(QUALIFIED_BASES))})")
  return profile
 
+def component_included(profile,name):
+ """Whether a named Community component is built into this base. A component is
+ included unless the profile's optional 'components' section excludes it
+ explicitly with {"included": false, "reason": ...}. Exclusion must carry a
+ non-empty reason: no silent omission (PIPELINE_MULTI_BASE_DESIGN.md section 3.5).
+ The builder then skips that component's install and asserts its absence."""
+ spec=(profile.get('components') or {}).get(name)
+ if spec is None: return True
+ if not isinstance(spec,dict) or not isinstance(spec.get('included'),bool):
+  raise RuntimeError(f"Invalid components entry for {name!r} in base {profile.get('version')}: need a boolean 'included'")
+ if spec['included']: return True
+ if not isinstance(spec.get('reason'),str) or not spec['reason'].strip():
+  raise RuntimeError(f"Excluded component {name!r} in base {profile.get('version')} needs a non-empty reason (no silent omission)")
+ return False
+
 QUALIFIED_PROFILE=load_base_profile(QUALIFIED_BASE)
 _QPIN=QUALIFIED_PROFILE['sha256']
 
@@ -570,6 +585,11 @@ def main():
   profile=require_buildable_profile(load_base_profile(a.base_version or selected_base_version()))
   pins=profile['sha256']; base_version=profile['version']
   print(f"[OK] ELEGOO base profile: {base_version}")
+  port_cfg=profile['port']; port_outputs=port_cfg['outputs']
+  display_included=component_included(profile,'native_display')
+  gui_release_sha=port_outputs['native_gui'] if display_included else port_outputs['patched_gui']
+  camera_release_sha=port_outputs['camera_release']; printer_release_sha=port_outputs['printer_release']['sha256']
+  if not display_included: print(f"[OK] native display not included for {base_version}: {profile['components']['native_display']['reason'].split('.')[0]}")
   if a.stock_package is None: a.stock_package=str(here/'original_firmware'/profile['stock_package'])
  priv=req(a.private_key or here/'keys'/'cc2_community_release_private.pem','private key')
  signing_key=verify_signing_key(priv,a.signing_mode)
@@ -637,12 +657,25 @@ def main():
   reqhash(gui,pins['stock_gui'],'stock GUI')
   reqhash(printer,pins['stock_printer'],'stock elegoo_printer')
   reqhash(daemon,pins['daemon_stock'],'stock update daemon')
-  patch_zoffset(gui)
-  patch_printer44(printer)
   camera=root/'opt/bin/ai_camera'
-  camera_patched=work/'ai_camera.coexist'
-  port_module('patch_camera44').apply(camera,camera_patched)
-  camera.write_bytes(camera_patched.read_bytes())
+  if port_cfg['printer_patch']=='patch44':
+   patch_zoffset(gui)
+   patch_printer44(printer)
+   camera_patched=work/'ai_camera.coexist'
+   port_module('patch_camera44').apply(camera,camera_patched)
+   camera.write_bytes(camera_patched.read_bytes())
+  elif port_cfg['printer_patch']=='apply_patches':
+   # 02.01.01.13: one pass patches elegoo_printer (K1 ELF restructure), the GUI
+   # (Z-offset) and ai_camera. Stock hashes are gated by the profile pins here
+   # and re-verified inside apply_patches.py.
+   reqhash(camera,pins['stock_ai_camera'],'stock ai_camera')
+   pr_out,gui_out,cam_out=apply_patches_0113(printer,gui,camera,work/'port0113')
+   reqhash(pr_out,printer_release_sha,'0113 patched elegoo_printer')
+   reqhash(gui_out,port_outputs['patched_gui'],'0113 patched GUI (Z-offset)')
+   reqhash(cam_out,camera_release_sha,'0113 patched ai_camera')
+   printer.write_bytes(pr_out.read_bytes()); gui.write_bytes(gui_out.read_bytes()); camera.write_bytes(cam_out.read_bytes())
+  else:
+   raise RuntimeError(f"Unknown port.printer_patch {port_cfg['printer_patch']!r} for base {base_version}")
   (root/'usr/sbin').mkdir(parents=True,exist_ok=True); shutil.copy2(sshd,root/'usr/sbin/sshd'); os.chmod(root/'usr/sbin/sshd',0o755)
   (root/'etc/init.d').mkdir(parents=True,exist_ok=True); shutil.copy2(init,root/'etc/init.d/sshd'); os.chmod(root/'etc/init.d/sshd',0o755)
   (root/'etc/ssh').mkdir(parents=True,exist_ok=True); shutil.copy2(conf,root/'etc/ssh/sshd_config'); os.chmod(root/'etc/ssh/sshd_config',0o644)
@@ -658,19 +691,20 @@ def main():
   install_cc2_control(root,cc2_component,cc2_manifest)
   reactor.install(root,reactor_component)
   camera_runtime.install(root,camera_component)
-  display.install(root)
+  if display_included: display.install(root)
   connections_payload,connections_hooks=connections.install(root,connections_archive)
   camera_hook=lambda text:connections.hook_transform(text,'camera-launch',connections_input)
   reactor_hook=lambda text:connections.hook_transform(text,'reactor-launch',connections_input)
   # Verify intended rootfs surface before compression.
-  reqhash(gui,display.GUI_SHA256,'installed native Community display'); reqhash(root/'usr/sbin/sshd',EXPECTED['sshd'],'installed sshd')
-  reqhash(camera,CAMERA_RELEASE_SHA256,'installed coexistence camera')
-  reqhash(printer,PRINTER_RELEASE_SHA256,'installed patched elegoo_printer')
+  reqhash(gui,gui_release_sha,'installed native Community display' if display_included else 'installed GUI (Z-offset; native display not included for this base)'); reqhash(root/'usr/sbin/sshd',EXPECTED['sshd'],'installed sshd')
+  reqhash(camera,camera_release_sha,'installed coexistence camera')
+  reqhash(printer,printer_release_sha,'installed patched elegoo_printer')
   reqhash(daemon,EXPECTED['daemon_dual'],'installed Dual Trust daemon')
   audit_cc2_control(root,cc2_component,cc2_manifest)
   reactor.audit(root,reactor_component,printer_init_transform=camera_runtime.patched_init,hook_transform=reactor_hook)
   camera_runtime.audit(root,camera_component,hook_transform=camera_hook)
-  display.audit(root)
+  if display_included: display.audit(root)
+  elif sha256(gui)!=port_outputs['patched_gui'] or sha256(gui)==display.GUI_SHA256: raise RuntimeError('native display declared not-included but the installed GUI is not the plain Z-offset GUI')
   connections.audit(root,connections_payload,connections_hooks)
   banner('REBUILD SQUASHFS'); new=work/'rootfs.new'; log=run([mk,root,new,'-comp','xz','-b','262144','-noappend','-no-tailends','-exports','-all-root'],capture=True)
   if 'Failed to read file' in log: raise RuntimeError('mksquashfs reported Failed to read file')
@@ -678,14 +712,15 @@ def main():
   g_root=golden_report('rebuilt rootfs image (byte-level; metadata may differ)',cpio/'rootfs','rootfs') if (a.golden_check or a.require_golden) else None
   # Re-extract and audit the critical files after SquashFS creation.
   vr=work/'verify_rootfs'; run([un,'-d',vr,cpio/'rootfs'],capture=True)
-  reqhash(vr/'opt/bin/ec-eeb001-gui',display.GUI_SHA256,'rebuilt native Community display'); reqhash(vr/'usr/sbin/sshd',EXPECTED['sshd'],'rebuilt sshd')
-  reqhash(vr/'opt/bin/ai_camera',CAMERA_RELEASE_SHA256,'rebuilt coexistence camera')
-  reqhash(vr/'opt/bin/elegoo_printer',PRINTER_RELEASE_SHA256,'rebuilt patched elegoo_printer')
+  reqhash(vr/'opt/bin/ec-eeb001-gui',gui_release_sha,'rebuilt native Community display' if display_included else 'rebuilt GUI (Z-offset; native display not included for this base)'); reqhash(vr/'usr/sbin/sshd',EXPECTED['sshd'],'rebuilt sshd')
+  reqhash(vr/'opt/bin/ai_camera',camera_release_sha,'rebuilt coexistence camera')
+  reqhash(vr/'opt/bin/elegoo_printer',printer_release_sha,'rebuilt patched elegoo_printer')
   reqhash(vr/'opt/inst/daemon-000/daemon-000',EXPECTED['daemon_dual'],'rebuilt Dual Trust daemon')
   audit_cc2_control(vr,cc2_component,cc2_manifest)
   reactor.audit(vr,reactor_component,printer_init_transform=camera_runtime.patched_init,hook_transform=reactor_hook)
   camera_runtime.audit(vr,camera_component,hook_transform=camera_hook)
-  display.audit(vr)
+  if display_included: display.audit(vr)
+  elif sha256(vr/'opt/bin/ec-eeb001-gui')!=port_outputs['patched_gui'] or sha256(vr/'opt/bin/ec-eeb001-gui')==display.GUI_SHA256: raise RuntimeError('native display declared not-included but the rebuilt GUI is not the plain Z-offset GUI')
   connections.audit(vr,connections_payload,connections_hooks)
   reqhash(vr/'etc/init.d/sshd',EXPECTED['sshd_init'],'rebuilt sshd init')
   reqhash(vr/'etc/ssh/sshd_config',EXPECTED['sshd_config'],'rebuilt sshd config')
