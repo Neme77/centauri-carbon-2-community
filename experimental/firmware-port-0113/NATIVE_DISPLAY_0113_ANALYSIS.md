@@ -78,6 +78,32 @@ the symbol-match address mapping from the reactor port).
 - It changes the on-screen UI, so a wrong remap is user-visible, not
   silently fail-closed.
 
+## Measured 2026-11-10: the 0113 stock theme images are entirely different
+
+The 0113 stock theme images were pulled from the device
+(`/opt/inst/images/theme_default`, 1112 PNGs). Compared against the
+480 image entries in `baseline-pins.txt`: **0 match, 480 differ.** So the
+image/theme side changed wholesale between 07 and 0113. The recolor side
+(50 images in `recolor-plan.json`) therefore also needs full
+re-derivation against the 0113 stock inputs, and `baseline-pins.txt` must
+be regenerated for 0113 — it is not only the GUI ELF that moved.
+
+## The wall: no reference and no 07 native GUI
+
+To produce a **verifiable** `native_gui` the port needs a reference the
+project does not have here:
+- the **07 native-display GUI** (`5f3122…` input / `db09fa37…` output), or
+  a symbol map of it, to read what each of the 74 spans targets — the
+  spans' after-bytes encode 07 addresses and carry no semantic labels, so
+  without the 07 GUI the remap cannot be derived reliably;
+- a **reference output hash** for the 0113 native GUI — none exists, so
+  the result cannot be checked against anything;
+- a **hardware test** — native display never ran on the test device.
+
+Without the 07 native GUI, the 74-span GUI remap is not reliably doable
+from the patch-plan alone, and any result would be unvalidated on all
+three counts above.
+
 ## Recommendation
 
 Native display is a full re-port with no reference output and no prior
