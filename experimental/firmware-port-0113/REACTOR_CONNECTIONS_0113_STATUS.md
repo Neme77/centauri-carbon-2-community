@@ -109,8 +109,12 @@ verified. Only the USB-Ethernet `.ko` remain.
 
 1. ~~Decrypted 0113 stock rootfs~~ — **done** (above): `udhcpc_wlan0` /
    `set_lan.sh` verified, all `NATIVE` stock pins correct for 0113.
-2. **0113 kernel headers/sources**: rebuild the four `cc2_ue300_*.ko` (the only
-   remaining connections blocker).
+2. **Allwinner TinaLinux 5.4.61 kernel source** (build `#40`): rebuild the four
+   `cc2_ue300_*.ko` — the only remaining connections blocker. Narrowed from the
+   device `/proc/config.gz`: `CONFIG_MODVERSIONS` is **off**, so no
+   `Module.symvers` is needed, and the kernel `.config` is available from the
+   device; only the configured kernel source tree (for the `struct usb_device`
+   headers matching build #40) plus the `ue300` module source are still needed.
 3. **Reactor**: fork 2's 0113 reactor sources into version control + the
    qualified toolchain to rebuild the `.so` + **hardware validation of the
    active reactor**.

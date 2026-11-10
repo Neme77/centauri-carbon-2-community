@@ -94,8 +94,24 @@ To port:
 
 The cheap "do the 07 modules just work?" test is already done (above): they do
 not — `abi_probe` reports the `usb_device` layout mismatch. So this is a true
-blocker until the 0113 kernel headers/sources are available; vermagic matching is
-not enough.
+blocker until the 0113 kernel headers are available; vermagic matching is not
+enough.
+
+Narrowed 2026-11-10 from the device `/proc/config.gz`:
+- `# CONFIG_MODVERSIONS is not set` → **no `Module.symvers` is needed** (the
+  kernel checks no symbol CRCs; loading depends on vermagic only). The failure is
+  a compile-time `struct usb_device` layout difference, not a CRC mismatch.
+- The exact kernel `.config` is available from the device
+  (`ssh root@192.168.2.220 'zcat /proc/config.gz'`), so it is no longer an
+  unknown.
+- `# CONFIG_USB_NET_DRIVERS is not set` → the `cc2_ue300_*` are out-of-tree
+  modules, built separately.
+
+So the only remaining external input is the **Allwinner TinaLinux 5.4.61 kernel
+source tree** matching build `#40` (`Linux version 5.4.61 … OpenWrt/Linaro GCC
+6.4-2017.11 … #40 Tue Sep 22 2026`) — configure it with the device `.config`,
+`make modules_prepare`, then build the four modules (plus the `cc2_ue300` module
+source) against it. `Module.symvers` is not required.
 
 ## 5. CC2 Control compatibility (runtime, separate PR)
 
