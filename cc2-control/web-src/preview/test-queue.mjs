@@ -83,12 +83,23 @@ try {
   assert.deepEqual(lastPost(), ['/api/queue/remove', '4'])
 
   // Policy: the automatic start is a saved choice, the delay a number.
+  // The POST leaves before the card re-renders. The next control must see the saved choice, so wait
+  // until that radio is the one shown (the card also ignores a click while the previous save runs).
   const policy = page.locator('[data-queue-policy]')
-  await policy.getByRole('radio', { name: 'Start the next copy automatically', exact: false }).check()
-  await page.waitForFunction(() => document.querySelector('[data-queue-policy] input[type=radio]:nth-of-type(1)') !== null)
+  // click(), not check(): the choice is controlled, so the card re-renders before the saved policy
+  // arrives and a check() would see the radio snap back.
+  await policy.getByRole('radio', { name: 'Start the next copy automatically', exact: false }).click()
+  await page.waitForFunction(() => {
+    const radios = document.querySelectorAll('[data-queue-policy] input[type=radio]')
+    const sw = document.querySelector('[data-queue-policy] [role=switch]')
+    return radios.length === 2 && radios[1].checked && sw && !sw.hasAttribute('disabled')
+  })
   assert.deepEqual(lastPost(), ['/api/queue/policy', 'auto\n60\n0'])
   await policy.getByRole('switch').click()
-  await page.waitForFunction(() => document.querySelector('[data-queue-policy] [role=switch]')?.getAttribute('aria-checked') === 'true')
+  await page.waitForFunction(() => {
+    const sw = document.querySelector('[data-queue-policy] [role=switch]')
+    return sw?.getAttribute('aria-checked') === 'true' && !sw.hasAttribute('disabled')
+  })
   assert.deepEqual(lastPost(), ['/api/queue/policy', 'auto\n60\n1'])
 
   // Finished jobs are folded away and can be cleared.

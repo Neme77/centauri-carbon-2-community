@@ -30,14 +30,25 @@ export const PasswordInput = ({ class: c, ...p }: Omit<preact.JSX.InputHTMLAttri
 export const Select = ({ class: c, ...p }: preact.JSX.SelectHTMLAttributes<HTMLSelectElement>) => (
   <select class={cn(base, wide(c as string))} {...p} />
 )
-export const Switch = ({ on, onClick, label }: { on: boolean; onClick?: () => void; label: string }) => (
+export const Switch = ({
+  on,
+  onClick,
+  label,
+  disabled,
+}: {
+  on: boolean
+  onClick?: () => void
+  label: string
+  disabled?: boolean
+}) => (
   <button
     type="button"
     role="switch"
     aria-checked={on}
     aria-label={label}
+    disabled={disabled}
     onClick={onClick}
-    class={cn('flex h-5.5 w-10 shrink-0 rounded-full p-0.75', on ? 'bg-cyan' : 'bg-edge')}
+    class={cn('flex h-5.5 w-10 shrink-0 rounded-full p-0.75 disabled:opacity-60', on ? 'bg-cyan' : 'bg-edge')}
   >
     <i class={cn('size-4 rounded-full bg-white transition-all', on && 'ml-auto')} />
   </button>

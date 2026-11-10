@@ -318,8 +318,18 @@ const Hero = ({
 
 const Policy = ({ policy }: { policy: QueuePolicy }) => {
   const [delay, setDelay] = useState(String(policy.delay))
+  // One change at a time: a second click before the refresh would resend the policy from the previous render.
+  const [busy, setBusy] = useState(false)
   useEffect(() => setDelay(String(policy.delay)), [policy.delay])
-  const save = (p: QueuePolicy) => act(() => setQueuePolicy(p))
+  const save = async (p: QueuePolicy) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await act(() => setQueuePolicy(p))
+    } finally {
+      setBusy(false)
+    }
+  }
   const commitDelay = () => {
     const n = Number(delay)
     if (Number.isInteger(n) && n >= 10 && n <= 3600 && n !== policy.delay) save({ ...policy, delay: n })
@@ -362,6 +372,7 @@ const Policy = ({ policy }: { policy: QueuePolicy }) => {
               class="inline-block w-20"
               aria-label={t('queue.policy_delay_label')}
               value={delay}
+              disabled={busy}
               onInput={e => setDelay(e.currentTarget.value)}
               onBlur={commitDelay}
               onKeyDown={e => e.key === 'Enter' && commitDelay()}
@@ -376,6 +387,7 @@ const Policy = ({ policy }: { policy: QueuePolicy }) => {
           <Switch
             on={policy.remove_done}
             label={t('queue.remove_done')}
+            disabled={busy}
             onClick={() => save({ ...policy, remove_done: !policy.remove_done })}
           />
         </div>
