@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Bed drying: optional keep-warm hold after the drying time. The start request takes `temp:minutes:keep_temp:keep_minutes` (keep temperature 30 °C up to the drying setpoint, keep duration 1–720 minutes); when the drying hold elapses, one correlated `M140` lowers the setpoint, the native lease keeps being renewed and the keep timer starts at the lower temperature. Stop, expiry, foreign prints and restarts behave as before; a restart never resumes the keep hold. The page shows the remaining keep time; all CC2 Control locales include the new strings.
+
 - Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
 
 - Add the Turkish interface translation using the contributed language patch.
@@ -21,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Simplified Chinese interface strings for the RFID reader lifecycle, external feed, chamber fan management and update requirements completed, and the build-plate save hint refreshed. By **Skycos** (#328).
 
 ### Fixed
+
+- Free a wedged bed-drying stop/restore instead of refusing every later session until a reflash. A stop or restore that cannot complete (persistent reply refusal, dead UDS exchange or stale telemetry after a WebUI stop) previously kept the session active forever; it is now bounded by a 15-minute budget — a foreign print's hand-off still waits as long as the print runs — after which the marker is cleared and the session ends interrupted (`restore_timeout`). The stop request also terminates an unrecoverable session by hand (`aborted`), and recovery with an unreadable marker clears it immediately instead of waiting on a condition that cannot pass.
 
 - Start preparing the qualified USB Ethernet link before the camera starts, and give the camera a bounded wait for carrier on Ethernet-enabled boots. Reported by **kalross** (#322).
 - Prepare USB Ethernet activation when the minimum EXHAUST feature is active. A full idle reboot loads both components, after which the normal Connections confirmation applies. Reported by **kalross** and reproduced by **Neme77** (#323).

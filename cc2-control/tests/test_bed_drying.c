@@ -16,8 +16,10 @@ static void snapshot(double bed,double target){
 static int fake_rpc(const char *query,char **reply,size_t *length){
     const char *text="{\"id\":204,\"result\":{}}";
     if(strstr(query,"gcode/help"))text=support?"{\"id\":203,\"result\":{\"SET_HEATER_BED_IDLE_TIMEOUT\":\"Set the heater bed idle timeout\",\"SET_IDLE_TIMEOUT\":\"Set the idle timeout\"}}":"{\"id\":203,\"result\":{\"SET_IDLE_TIMEOUT\":\"Set the idle timeout\"}}";
-    else if(strstr(query,"M140 S70")){heats++;if(reject_heat)text="{\"id\":204,\"error\":{\"message\":\"Unknown command M140\"}}";else if(apply)snapshot(25,70);}
     else if(strstr(query,"M140 S0")){offs++;if(apply)snapshot(telemetry.values[U_BT],0);}
+    else if(strstr(query,"M140 S")){heats++;int set=atoi(strstr(query,"M140 S")+7);
+        if(reject_heat)text="{\"id\":204,\"error\":{\"message\":\"Unknown command M140\"}}";
+        else if(apply)snapshot(telemetry.values[U_BT],set);}
     else if(strstr(query,"TIMEOUT=90"))leases++;
     else if(strstr(query,"TIMEOUT=600"))restores++;
     else assert(0);
@@ -60,6 +62,9 @@ int main(void){
     snapshot(70,0);start("70:1",409);snapshot(25,0);
 
     start("999999999999999999999999:1",400);start("70:0",400);start("70:721",400);start("91:1",400);start("70:1x",400);start("070:1",400);
+    assert(!heats&&!leases);
+    /* Optional keep-warm: bounds validated against the drying settings. */
+    start("70:1:29:60",400);start("70:1:91:60",400);start("70:1:45",400);start("70:1:45:0",400);start("70:1:45:721",400);
     assert(!heats&&!leases);heat();
     tick();assert(drying.stage==DRY_HEATING&&drying.hold_until==0);
     clock_ms+=31000;snapshot(30,70);tick();assert(leases==2&&heats==1);
@@ -67,6 +72,20 @@ int main(void){
     clock_ms=until-1;tick();assert(drying.stage==DRY_HOLDING);
     clock_ms=until;tick();assert(offs==1&&drying.stage==DRY_STOPPING);finish();
     assert(drying.stage==DRY_DONE&&restores==1&&access(journal,F_OK));
+    /* Optional keep-warm: the drying hold hands over to a lower setpoint, the lease
+     * continues and the keep hold finishes like any other session. */
+    reset();start("70:2:45:3",200);tick();assert(drying.stage==DRY_ARM);tick();assert(leases==1);tick();
+    assert(heats==1&&drying.stage==DRY_HEATING);
+    snapshot(69,70);tick();assert(drying.stage==DRY_HOLDING);
+    clock_ms=drying.hold_until;tick();
+    assert(heats==2&&drying.stage==DRY_HEATING&&drying.temp==45&&drying.minutes==3&&drying.own_target==0);
+    snapshot(45,45);tick();assert(drying.stage==DRY_HOLDING);
+    clock_ms=drying.hold_until;tick();assert(offs==1&&drying.stage==DRY_STOPPING);finish();
+    assert(drying.stage==DRY_DONE&&restores==1);
+    /* Keep-warm never survives a restart: the journal restores only the timeout. */
+    reset();start("70:2:45:3",200);tick();tick();tick();snapshot(69,70);tick();assert(drying.stage==DRY_HOLDING);
+    plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;drying_load();
+    assert(drying.stage==DRY_RECOVERY);snapshot(25,0);tick();tick();assert(!drying_active()&&heats==1&&restores==1);
     reset();heat();drying_stop("manual",0);apply=0;tick();assert(offs==1&&drying_active());
     clock_ms+=1000;tick();assert(drying_active()&&restores==0);snapshot(25,0);tick();assert(!drying_active()&&restores==1);
     reset();heat();snapshot(25,55);tick();assert(drying_active()&&heats==1&&offs==0);clock_ms+=120000;tick();assert(leases==1&&offs==0);
@@ -98,6 +117,44 @@ int main(void){
     plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;drying_load();
     drying_stop("manual",0);tick();assert(offs==1);finish();assert(!drying_active()&&restores==1);
     reset();heat();telemetry.connections++;tick();assert(drying.stage==DRY_STOPPING);finish();
+    /* A wedged stop/restore no longer refuses every later session until a reflash. */
+    reset();heat();drying_stop("manual",0);fail=1;apply=0;
+    tick();assert(offs==1); /* M140 S0 sent; its reply fails and no readback follows */
+    clock_ms+=1000;tick();assert(drying_active()); /* retrying */
+    clock_ms+=DRY_ABORT_MS;tick();
+    assert(!drying_active()&&drying.stage==DRY_INTERRUPTED&&!strcmp(drying.reason,"restore_timeout"));
+    assert(access(journal,F_OK));
+    fail=0;apply=1;snapshot(25,0);start("70:1",200);tick();assert(drying.stage==DRY_ARM); /* app freed */
+    /* An unreadable marker clears instead of wedging recovery forever. */
+    reset();heat();
+    plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;
+    { FILE *j=fopen(journal,"w");assert(j);assert(fputs("garbage\n",j)>=0);fclose(j); }
+    drying_load();assert(drying.stage==DRY_RECOVERY&&!strcmp(drying.reason,"storage"));
+    tick();assert(!drying_active()&&drying.stage==DRY_INTERRUPTED&&access(journal,F_OK));
+    /* The stop request terminates even a session with nothing restorable. */
+    reset();heat();
+    plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;
+    { FILE *j=fopen(journal,"w");assert(j);assert(fputs("garbage\n",j)>=0);fclose(j); }
+    drying_load();assert(drying_active());
+    { int pair[2];char response[2048];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));
+      const char *stop="POST /api/bed-drying/stop HTTP/1.1\r\nX-CC2-LAN: fixture-confirmation\r\n\r\n";
+      drying_stop_response(pair[0],stop,&machine,&commands);close(pair[0]);
+      ssize_t n=read(pair[1],response,sizeof(response)-1);assert(n>0);response[n]=0;close(pair[1]);
+      assert(strstr(response,"HTTP/1.1 200")); }
+    assert(!drying_active()&&drying.stage==DRY_INTERRUPTED&&!strcmp(drying.reason,"aborted")&&access(journal,F_OK));
+    /* The hand-off to a foreign print still waits past the budget; only a wedged exchange aborts. */
+    reset();heat();machine.machine_status=2;strcpy(telemetry.print_state,"printing");tick();
+    assert(drying.stage==DRY_STOPPING&&drying.restore_only);
+    clock_ms+=DRY_ABORT_MS+1000;tick();assert(drying_active()&&drying.stage==DRY_STOPPING);
+    machine.machine_status=1;strcpy(telemetry.print_state,"complete");snapshot(70,0);finish();
+    assert(!drying_active()&&restores==1);
+    /* Recovery hands a wedged restore over to the same bounded abort. */
+    reset();heat();
+    plates_exchange_close(&drying.exchange);memset(&drying,0,sizeof(drying));drying.exchange.fd=-1;
+    drying_load();snapshot(25,0);fail=1;tick();
+    assert(drying.stage==DRY_RESTORE);
+    clock_ms+=DRY_ABORT_MS;tick();
+    assert(!drying_active()&&drying.stage==DRY_INTERRUPTED&&access(journal,F_OK));fail=0;
     assert(!drying_result("{\"id\":204,\"error\":{},\"result\":{}}",33,0));
     reset();assert(!symlink("missing",journal));start("70:1",503);assert(!heats&&!leases);unlink(journal);
     unlink(config);assert(!rmdir(directory));close(pair[0]);close(pair[1]);pthread_mutex_destroy(&commands.lock);
