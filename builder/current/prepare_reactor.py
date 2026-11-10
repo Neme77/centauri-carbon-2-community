@@ -33,7 +33,7 @@ reactor_source=_rc.reactor_source
 SRC_NAMES=('reactor_module.cpp','bridge_test.cpp','co_routine.h','fingerprints.h')
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def run(args,**kwargs):return subprocess.run([str(x) for x in args],check=True,**kwargs)
-def output(args):return run(args,stdout=subprocess.PIPE,text=True).stdout
+def output(args):return run(args,stdout=subprocess.PIPE,universal_newlines=True).stdout
 
 def main():
     ap=argparse.ArgumentParser(description='Compile the O0 reactor bridge for a base')
@@ -45,7 +45,7 @@ def main():
     if output([prefix+'-g++','-dumpversion']).strip()!='6.5.0':raise RuntimeError('Requires GCC 6.5.0')
     run([sys.executable,SOURCE/'assemble_dual44_gnu.py','--prefix',prefix])
     # Both builder preflight paths must use the same newly reproduced, hash-qualified wrapper.
-    shutil.copyfile(SOURCE/'dual_verify_44.bin',HERE/'dualtrust/dual_verify.bin')
+    shutil.copyfile(str(SOURCE/'dual_verify_44.bin'),str(HERE/'dualtrust/dual_verify.bin'))
     libc=output([prefix+'-g++','-print-file-name=libc.so.6']).strip()
     if 'release version 2.23' not in output(['strings',libc]):raise RuntimeError('Requires glibc 2.23')
     vendor=SOURCE/'reactor/vendor-link/libcolib.so'
@@ -59,7 +59,7 @@ def main():
         build=next(iter(sources.values())).parent  # 07: one directory, compile in place (byte-identical)
     else:
         staging=Path(tempfile.mkdtemp(prefix='cc2-reactor-build-'))
-        for name,p in sources.items():shutil.copyfile(p,staging/name)  # co-locate so quote-includes resolve to this base
+        for name,p in sources.items():shutil.copyfile(str(p),str(staging/name))  # co-locate so quote-includes resolve to this base
         build=staging
     try:
         run([prefix+'-g++',*flags,'-fPIC','-fvisibility=hidden','-shared','-Wl,--no-undefined','-Wl,-z,now',build/'reactor_module.cpp','-o',module,'-ldl','-lm'])
@@ -83,5 +83,5 @@ def main():
     files['SHA256SUMS']=digest(prepared/'SHA256SUMS')
     manifest={'optimization':'O0','gcc':'6.5.0','glibc':'2.23','vendor_sha256':vendor_sha,'libco_sha256':LIBCO,'sources':{name:digest(reactor_source(name,base)) for name in SRC_NAMES},'files':files}
     (COMPONENT/'prepared-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-    print(f'REACTOR BUILD PASS for {base}: hardware integration remains experimental')
+    print('REACTOR BUILD PASS for '+base+': hardware integration remains experimental')
 if __name__=='__main__':main()

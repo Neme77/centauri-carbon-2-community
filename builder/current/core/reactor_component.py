@@ -32,7 +32,7 @@ def reactor_source(name,base_version='02.01.01.07'):
         return root/'launcher.sh' if name=='launcher.sh' else root/'reactor'/name
     if base_version=='02.01.01.13':
         return repo/'experimental/firmware-port-0113/reactor'/name
-    raise RuntimeError(f'No reactor sources for ELEGOO base {base_version}')
+    raise RuntimeError('No reactor sources for ELEGOO base '+str(base_version))
 
 def load(component,vendor_sha=VENDOR_SHA256,base_version='02.01.01.07'):
     component=Path(component)

@@ -39,6 +39,6 @@ def main():
     files={name:camera.sha(prepared/name) for name in (*camera.FILES,'firmware-launcher.sh')}
     (component/'prepared-manifest.json').write_text(json.dumps({'camera_sha256':camera_sha,'files':files},indent=2)+'\n')
     camera.load(component,camera_sha)
-    print(f'CAMERA PREPARED for {args.base_version}: unchanged qualified R2 libraries; vendor camera supplied only by the local official firmware input.')
+    print('CAMERA PREPARED for '+args.base_version+': unchanged qualified R2 libraries; vendor camera supplied only by the local official firmware input.')
 
 if __name__=='__main__':main()

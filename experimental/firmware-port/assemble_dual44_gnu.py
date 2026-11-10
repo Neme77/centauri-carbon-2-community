@@ -16,7 +16,7 @@ def assemble(prefix):
     with tempfile.TemporaryDirectory(prefix='cc2-dual44-') as temporary:
         directory = Path(temporary)
         obj, elf, binary = (directory / name for name in ('wrapper.o', 'wrapper.elf', 'wrapper.bin'))
-        subprocess.run([prefix + '-as', '-march=armv7-a', '-o', str(obj), 'dual_verify_44.S'], cwd=ROOT, check=True)
+        subprocess.run([prefix + '-as', '-march=armv7-a', '-o', str(obj), 'dual_verify_44.S'], cwd=str(ROOT), check=True)
         subprocess.run([prefix + '-ld', '-Ttext', hex(manifest['payload_va']), '-e', 'dual_verify_wrapper',
                         '-o', str(elf), str(obj)], check=True)
         subprocess.run([prefix + '-objcopy', '-O', 'binary', '-j', '.text', str(elf), str(binary)], check=True)

@@ -20,7 +20,7 @@ prepare = (BASE / 'prepare_reactor.py').read_text(encoding='utf-8')
 assert 'assemble_dual44_gnu.py' in prepare
 assert "'-dumpversion'" in prepare and "'6.5.0'" in prepare
 assert "'test', 'CROSS=', 'CC=gcc'" in (BASE / 'prepare.py').read_text(encoding='utf-8')
-assert "shutil.copyfile(SOURCE/'dual_verify_44.bin',HERE/'dualtrust/dual_verify.bin')" in prepare
+assert "shutil.copyfile(str(SOURCE/'dual_verify_44.bin'),str(HERE/'dualtrust/dual_verify.bin'))" in prepare
 launcher = (BASE / 'launch_helpers/run_build.py').read_text(encoding='utf-8')
 assert "base_profile(root)['stock_package']" in launcher
 assert builder.QUALIFIED_PROFILE['stock_package'] == 'cc2_eeb001_02.01.01.07_20260922210235.zip.sig'
