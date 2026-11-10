@@ -29,6 +29,10 @@ class FirmwareReactorTests(unittest.TestCase):
         self.assertEqual(reactor.reactor_source('launcher.sh','02.01.01.07'),REPO/'experimental/firmware-port/launcher.sh')
         self.assertEqual(reactor.reactor_source('reactor_module.cpp','02.01.01.13'),REPO/'experimental/firmware-port-0113/reactor/reactor_module.cpp')
         self.assertEqual(reactor.reactor_source('co_routine.h','02.01.01.13'),REPO/'experimental/firmware-port/reactor/co_routine.h')
+        # bridge_test.cpp is base-specific too (its vendor-call mock table hard-codes
+        # the printer addresses), so 0113 takes it from the 0113 directory.
+        self.assertEqual(reactor.reactor_source('bridge_test.cpp','02.01.01.13'),REPO/'experimental/firmware-port-0113/reactor/bridge_test.cpp')
+        self.assertEqual(reactor.reactor_source('bridge_test.cpp','02.01.01.07'),REPO/'experimental/firmware-port/reactor/bridge_test.cpp')
         with self.assertRaises(RuntimeError):reactor.reactor_source('reactor_module.cpp','02.01.01.99')
         # The committed 0113 reactor_module.cpp is byte-exact fork 2's source.
         self.assertEqual(sha((REPO/'experimental/firmware-port-0113/reactor/reactor_module.cpp').read_bytes()),'21ef738ba6a71312c4f1766414a49d0fb7c0627d0fe79b2766120620754620fa')

@@ -19,13 +19,15 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def reactor_source(name,base_version='02.01.01.07'):
-    """Path to a reactor source for a base. reactor_module.cpp, fingerprints.h and
-    launcher.sh are base-specific (the printer addresses move); bridge_test.cpp,
-    co_routine.h and preflight.sh are base-independent and stay with the 07 tree.
-    The 02.01.01.07 paths are the historical ones unchanged; no cross-base fallback."""
+    """Path to a reactor source for a base. reactor_module.cpp, fingerprints.h,
+    bridge_test.cpp and launcher.sh are base-specific (they hard-code the vendor
+    printer addresses — reactor_module/fingerprints for the patches, bridge_test
+    for its vendor-call mock table); co_routine.h and preflight.sh are
+    base-independent and stay with the 07 tree. The 02.01.01.07 paths are the
+    historical ones unchanged; no cross-base fallback."""
     repo=Path(__file__).resolve().parents[3]
     root=repo/'experimental/firmware-port'
-    shared={'bridge_test.cpp':root/'reactor/bridge_test.cpp','co_routine.h':root/'reactor/co_routine.h','preflight.sh':root/'preflight.sh'}
+    shared={'co_routine.h':root/'reactor/co_routine.h','preflight.sh':root/'preflight.sh'}
     if name in shared:
         return shared[name]
     if base_version=='02.01.01.07':
