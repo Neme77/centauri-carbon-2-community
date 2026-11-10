@@ -112,7 +112,28 @@ source tree** matching build `#40` (`Linux version 5.4.61 … OpenWrt/Linaro GCC
 6.4-2017.11 … #40 Tue Sep 22 2026`) plus the `cc2_ue300` module source.
 `Module.symvers` is not required.
 
-Build recipe once the kernel source (`$KSRC`) is available. The device `.config`
+### Source availability (verified 2026-11-10) — why this stays blocked
+
+- **The matching 0113 kernel source is not public.** The existing probe harness
+  `experimental/network-connections/abi-probe/build.py` pins the only public
+  TinaLinux tree, `OpenCentauri/oc-linux` commit `cd4ee0cf` (18 Feb 2026) — the
+  **07-era** kernel used to build the 07 modules. That tree is **older** than the
+  0113 image (`#40`, 22 Sep 2026), and no newer public TinaLinux commit exists.
+  The 0113 kernel is known only by its package hash `bf965943…`. Headers matching
+  it are not publicly findable, so the `struct usb_device` layout change cannot be
+  reproduced from public source — it needs ELEGOO's 0113 kernel source (GPL).
+- **Three of the four module sources are missing.** Only the 3000 probe has source
+  in the repo (`experimental/network-connections/abi-probe/probe.c`, Makefile
+  target `cc2_ue300_abi_probe_3000`). `cc2_ue300_mii.ko`, `cc2_ue300_r8152.ko` and
+  the on-device-failing probe `cc2_ue300_abi_probe.ko` (`24c75778…`) are hash-only
+  (no `.c`, no `.ko` in the checkout) — also needed from ELEGOO.
+- `printer.config` already has `CONFIG_PM`/`CONFIG_PM_SLEEP`/
+  `CONFIG_USB_DEFAULT_PERSIST` on and `CONFIG_MODVERSIONS` off and the 07 modules
+  were built with it, so those switches alone do **not** explain the layout break;
+  it comes from a kernel-source difference in the 0113 build, not the config.
+
+Build recipe once the kernel source (`$KSRC`) is available (via the harness in
+`experimental/network-connections/abi-probe/`, repointed at the 0113 source). The device `.config`
 sets `CONFIG_PM=y`/`CONFIG_PM_SLEEP=y`/`CONFIG_USB=y`/`CONFIG_USB_DEFAULT_PERSIST=y`
 (the fields that make `struct usb_device` differ from the 07 headers), and the
 toolchain is `arm-openwrt-linux-gnueabi-gcc 6.4.1` (`CONFIG_CC_VERSION_TEXT`):
