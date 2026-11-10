@@ -59,6 +59,7 @@ def load_base_profile(version,directory=None):
  for k in ('stock_package','embedded_filename_marker'):
   if not isinstance(profile.get(k),str) or not profile[k]: raise RuntimeError(f'Missing {k} in {path}')
  if not isinstance(profile.get('manifest'),dict) or set(profile['manifest'])!={'version','update_class'}: raise RuntimeError(f'Invalid manifest entry in {path}')
+ validate_base_port(profile)
  return profile
 
 def selected_base_version(path=None):
@@ -87,6 +88,58 @@ def component_included(profile,name):
  if not isinstance(spec.get('reason'),str) or not spec['reason'].strip():
   raise RuntimeError(f"Excluded component {name!r} in base {profile.get('version')} needs a non-empty reason (no silent omission)")
  return False
+
+# port is the per-base patch contract. Every profile has the same four keys.
+# Output hashes follow the components section: native_gui exists only when
+# native display is included. _comment keys are documentation, not pins.
+PORT_KEYS=('dir','printer_patch','outputs','golden')
+PORT_PRINTER_PATCHES=('patch44','apply_patches')
+PORT_OUTPUT_KEYS=('patched_gui','printer_release','camera_release','camera_init')
+PORT_NATIVE_OUTPUT='native_gui'
+PORT_GOLDEN_KEYS=('rootfs','swu','swusig','zip','outer')
+
+def _port_sha256(value,label):
+ if not isinstance(value,str) or not re.fullmatch(r'[0-9a-f]{64}',value):
+  raise RuntimeError(f'Invalid SHA256 pin {label}')
+
+def validate_base_port(profile):
+ """Reject a profile whose port contract is missing, extended or ill-formed.
+
+ Called from load_base_profile. A qualified profile is still hash-pinned first,
+ so editing 02.01.01.07.json cannot pass this check under a new hash.
+ """
+ version=profile.get('version')
+ port=profile.get('port')
+ if not isinstance(port,dict) or set(port)!=set(PORT_KEYS):
+  raise RuntimeError(f"Base profile {version} port must have exactly: {', '.join(PORT_KEYS)}")
+ if not isinstance(port['dir'],str) or not port['dir'] or port['dir'].startswith(('/', '\\')) or '..' in Path(port['dir']).parts:
+  raise RuntimeError(f'Invalid port.dir in base profile {version}')
+ if port['printer_patch'] not in PORT_PRINTER_PATCHES:
+  raise RuntimeError(f"Unknown port.printer_patch {port['printer_patch']!r} in base profile {version}")
+ outputs=port['outputs']
+ if not isinstance(outputs,dict): raise RuntimeError(f'Invalid port.outputs in base profile {version}')
+ expected=set(PORT_OUTPUT_KEYS)
+ if component_included(profile,'native_display'): expected.add(PORT_NATIVE_OUTPUT)
+ actual={k for k in outputs if not str(k).startswith('_')}
+ if actual!=expected:
+  raise RuntimeError(f"Base profile {version} port.outputs must have exactly: {', '.join(sorted(expected))}")
+ for key in ('patched_gui','camera_release','camera_init',PORT_NATIVE_OUTPUT):
+  if key in actual: _port_sha256(outputs[key],f'port.outputs.{key}')
+ release=outputs['printer_release']
+ if not isinstance(release,dict) or set(release)!={'sha256','md5','size'}:
+  raise RuntimeError(f'Base profile {version} port.outputs.printer_release must have exactly: sha256, md5, size')
+ _port_sha256(release['sha256'],'port.outputs.printer_release.sha256')
+ if not isinstance(release['md5'],str) or not re.fullmatch(r'[0-9a-f]{32}',release['md5']):
+  raise RuntimeError(f'Invalid MD5 pin port.outputs.printer_release.md5 in base profile {version}')
+ if type(release['size']) is not int or release['size']<=0:
+  raise RuntimeError(f'Invalid port.outputs.printer_release.size in base profile {version}')
+ golden=port['golden']
+ if not isinstance(golden,dict): raise RuntimeError(f'Invalid port.golden in base profile {version}')
+ golden_keys={k for k in golden if not str(k).startswith('_')}
+ if not golden_keys<=set(PORT_GOLDEN_KEYS):
+  raise RuntimeError(f"Base profile {version} port.golden has unknown keys")
+ for key in golden_keys: _port_sha256(golden[key],f'port.golden.{key}')
+ return profile
 
 QUALIFIED_PROFILE=load_base_profile(QUALIFIED_BASE)
 _QPIN=QUALIFIED_PROFILE['sha256']
