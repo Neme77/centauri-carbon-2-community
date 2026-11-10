@@ -27,6 +27,18 @@
   "stock_ai_camera": "e8df8e57fdc1866b4d7220c3abca08ebc16ca71d759cb7721afafc572f47365f",
   "libcolib": "14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403"
  },
+  "port": {
+   "dir": "experimental/firmware-port-0113",
+   "printer_patch": "apply_patches",
+   "outputs": {
+    "patched_gui": "668ab8cb490c74eb5bbd769b421f6e4ade4e91fba322e22257496b9645f9ebfe",
+    "printer_release": {"sha256":"688b7bf8a27762d56b35d9738ea5b0c3d45580b402e122b0f77ee49dab1a8cfd","md5":"a1cc4bd58769f31dd527dfdf8d0a081d","size":29238216},
+    "camera_release": "90da7634c21b74b3bf943d68129da78668b47f9706620e158283697ab95553a7",
+    "native_gui": "TODO_NATIVE_DISPLAY_0113",
+    "camera_init": "e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd255d1bc4"
+   },
+   "golden": {}
+  },
  "_same_as_02.01.01.07": [
   "boot0",
   "daemon_stock",

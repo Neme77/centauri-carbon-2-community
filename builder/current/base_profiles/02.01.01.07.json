@@ -23,5 +23,23 @@
   "daemon_stock": "6fed6657e814f010fef87b40c5932d8fa7c5e9c044d7376f25fc2318daeb10f9",
   "stock_ai_camera": "ad888fec26ce214427eda038ae70b76cf68155f365c669ed647c1c09bad7a1f7",
   "libcolib": "14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403"
+ },
+ "port": {
+  "dir": "experimental/firmware-port",
+  "printer_patch": "patch44",
+  "outputs": {
+   "patched_gui": "5f3122852044f6750dbd36aeb2ebcbd0ea8c5e99f48a52c186def1f66c3ec58a",
+   "printer_release": {"sha256":"19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745","md5":"c29e0574fb1693dbb3c516acbf2ad624","size":29274740},
+   "camera_release": "ec5633b17de329d5b18c3f8d8de6ebf389391a04193536d976ba167022d07b99",
+   "native_gui": "db09fa37d378df259427aaac392a341282e08ceb26cd87603542c0dcbcbb91d1",
+   "camera_init": "bcabb1fa405b066b06c229c6d8cc6e474a0ccc57e31a1b5b387d3b55945be563"
+  },
+  "golden": {
+   "rootfs":"b9e46320d01d6c3fcc5e35a67c74e81df506afaba754b7a69b5502c78871015b",
+   "swu":"d3c0f5287c61cde457938a7c18600e0148873618c5f10f3acff8de1a50f92a8c",
+   "swusig":"b6872abd5131fbbdb8075619c56a1e5908d3d601f7698310bb1c698cfd5ff0d4",
+   "zip":"564ce9c760763109dd1c876b072357000f58622fa7f04ca8ccbbeacc7be81173",
+   "outer":"eeadf35d6310b7f847bc064d744c01fedf918e0b34e100cde37a3a0b2da0f2a4"
+  }
  }
 }

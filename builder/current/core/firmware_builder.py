@@ -29,7 +29,7 @@ BASE_FIRMWARE_FILE=Path(__file__).resolve().parent.parent/'BASE_FIRMWARE'
 # the primary base whose base-independent helper pins seed EXPECTED below.
 QUALIFIED_BASE='02.01.01.07'
 QUALIFIED_BASES={
- '02.01.01.07':'fd8dd6cb3224adab81ebb614cc3ea9c72f9a68f3ed9d349b083840eb5b74eef6',
+'02.01.01.07':'773acc7574aabd4e60b88a48711b6956e5779d9cf3429f1f773bc10643f175a9',
 }
 QUALIFIED_PROFILE_SHA256=QUALIFIED_BASES[QUALIFIED_BASE]
 VENDOR_PIN_KEYS=("stock_outer","stock_inner","stock_swu","sw-description","resource","uboot","boot0","kernel","stock_rootfs","stock_gui","stock_printer","daemon_stock","stock_ai_camera","libcolib")
