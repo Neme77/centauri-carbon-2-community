@@ -144,14 +144,34 @@ Two parts, split out:
   `fingerprints.h` / `bridge_test.cpp`: a 0113 `firmware-launcher.sh`
   (`EXPECTED=688b7bf8…`) in the 0113 reactor tree, resolved with its own pin
   (`FIRMWARE_LAUNCHER_SHAS`). Host-tested; 07 unchanged.
-- **(B) device-side — open.** Replace fork 2's broken launcher stubs with the
-  correct committed chain (a clean install of `firmware-launcher.sh` +
-  `launcher.sh`), then the boot hook → `launcher.sh` sets
-  `CC2_REACTOR_RUNTIME_V2=1` and `exec`s `$BASE/elegoo_printer`, and `activate()`
-  runs the fingerprint self-check and writes `activation.marker`.
+- **(B) device-side — done (2026-11-10).** Replaced fork 2's broken launcher
+  stubs with the correct committed chain: installed the 490-byte component
+  `launcher.sh` into SOURCE (`/opt/inst/cc2-reactor`), regenerated `SHA256SUMS`,
+  and installed the 0113 `firmware-launcher.sh` (`EXPECTED=688b7bf8…`, ending in
+  `exec "$BASE/launcher.sh"`) as `/etc/init.d/cc2-reactor-launch`. On reboot the
+  boot hook re-seeded `BASE`, the preflight passed, `launcher.sh` set
+  `CC2_REACTOR_RUNTIME_V2=1`, and `activate()` ran the self-check and wrote the
+  marker (next block).
 
-Rolled back to vendor mode (disable marker). The `activation.marker` run of 2a/2b
-completes only after (B).
+### 2b result (2026-11-10, after fix B) — ACTIVE; fingerprint self-check passed
+
+With the correct launcher chain in place, the reactor activated on the 0113
+printer (idle, reboot):
+
+    activation.marker: pid=2059 callback=0xb6f88ee0 timers=0xb6f89148 poll=0xb6f894f8 wait=0xb6f89b20
+    CC2_REACTOR_RUNTIME_V2=1        (printer process env)
+    libcc2-reactor-v2.so mapped into the process
+    elegoo_printer running (pid 2059)
+
+All four 2b criteria hold: the `activation.marker` records
+`callback/timers/poll/wait` — proof the fingerprint self-check passed at the
+corrected 0113 addresses (`0x26d08c/0x26f1dc/0x2708d8/0x26cb70`); the clean `.so`
+(built from the committed `21ef738b` source) loads ABI-compatibly and is mapped;
+the printer runs under `CC2_REACTOR_RUNTIME_V2=1`. This is the device proof that
+the 0113 reactor port activates — fork 2's `.so`, carrying the 07
+`fingerprints.h`, never could. Still to observe for full 2b sign-off: one
+complete idle → print → idle cycle (UI, MQTT, camera, a short real print) with a
+stable PID.
 
 ### 2c. Rollback (always available)
 
