@@ -68,7 +68,7 @@ Per-pin classification of `connections_component.py`:
 | `NATIVE lib/modules/5.4.61/aic8800_fdrv.ko` | `2973d7d7…` | stock | **Device-verified 2026-11-10: 0113 = `2973d7d7…` (match).** Base-independent. |
 | `NATIVE etc/wifi/udhcpc_wlan0` | `b76f68e3…` | stock | **Verified 2026-11-10 against the decrypted 0113 stock rootfs: `b76f68e3…` (match).** Base-independent. |
 | `NATIVE usr/share/udhcpc/set_lan.sh` | `53cf6af5…` | stock | **Verified 2026-11-10 against the decrypted 0113 stock rootfs: `53cf6af5…` (match).** Base-independent. |
-| `BINARY_PINS cc2_ue300_*.ko` (4) | — | **community/kernel-ABI** | USB-Ethernet modules built for the 07 kernel ABI; rebuild needs **0113 kernel headers/sources** (hard blocker). The kernel version string is unchanged (`5.4.61`), but the kernel binary differs (profile `kernel` hash), so ABI compatibility is not guaranteed. |
+| `BINARY_PINS cc2_ue300_*.ko` (4) | — | **community/kernel-ABI** | **Rebuild confirmed required (device 2026-11-10).** The 07 `.ko` load on the 0113 kernel (vermagic `5.4.61 SMP preempt mod_unload ARMv7 p2v8` + CRC pass), but `insmod cc2_ue300_abi_probe.ko` prints `CC2_UE300_ABI_R1 FAIL usb_device layout/revision` (init returns error, module auto-unloads). The 0113 kernel's `struct usb_device` layout differs, so the four modules must be rebuilt against the **0113 kernel headers/sources** — hard blocker. (Kernel: `5.4.61 #40`, OpenWrt/Linaro GCC 6.4-2017.11.) |
 | `BINARY_PINS control`, `libcc2-network-compat-r1.so` | — | community | Confirm base-independent when re-pinning. |
 | `MODULES` path `lib/modules/5.4.61/` | — | kernel version | **Device-verified 2026-11-10: `uname -r` = `5.4.61`, only that dir in `/lib/modules`.** Path correct for 0113. |
 

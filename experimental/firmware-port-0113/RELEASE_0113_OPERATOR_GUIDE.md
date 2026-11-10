@@ -70,11 +70,16 @@ The decrypted rootfs is vendor material — keep it outside the repo, never comm
 
 Not a hard blocker: the likely outcome is "already correct".
 
-## 4. USB-Ethernet kernel modules (hard blocker)
+## 4. USB-Ethernet kernel modules (hard blocker — rebuild confirmed required)
 
 `connections_component.py` `BINARY_PINS` pins four `cc2_ue300_*.ko` built for the
-07 kernel ABI. The 0113 kernel keeps the version string `5.4.61` but the kernel
-binary differs (profile `kernel` hash), so ABI compatibility is not guaranteed.
+07 kernel ABI. **Device-verified 2026-11-10** that a rebuild is required: the 07
+`.ko` do load on the 0113 kernel (vermagic `5.4.61 SMP preempt mod_unload ARMv7
+p2v8` matches, CRC pass), but the purpose-built probe fails —
+`insmod /lib/modules/5.4.61/cc2/cc2_ue300_abi_probe.ko` prints
+`CC2_UE300_ABI_R1 FAIL usb_device layout/revision` and auto-unloads (`insmod
+rc=255`, nothing left in `lsmod`). The 0113 kernel's `struct usb_device` layout
+differs, so the modules cannot be reused as-is.
 
 To port:
 1. Rebuild the four `cc2_ue300_{abi_probe,abi_probe_3000,mii,r8152}.ko` against
@@ -87,11 +92,10 @@ To port:
 3. Update the four `.ko` hashes in `BINARY_PINS`
    (`connections_component.py`) to the rebuilt values (reviewed code change).
 
-If the 0113 kernel sources are unavailable, first test whether the existing 07
-`.ko` load on the 0113 kernel (`insmod` on the device, idle, reversible) — the
-shared `5.4.61` version string may mean the ABI matches. If they load cleanly,
-the modules can stay as-is and only a re-measure is needed; if not, this stays
-blocked until the sources are available.
+The cheap "do the 07 modules just work?" test is already done (above): they do
+not — `abi_probe` reports the `usb_device` layout mismatch. So this is a true
+blocker until the 0113 kernel headers/sources are available; vermagic matching is
+not enough.
 
 ## 5. CC2 Control compatibility (runtime, separate PR)
 
