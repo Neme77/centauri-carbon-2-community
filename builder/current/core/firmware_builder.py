@@ -510,6 +510,33 @@ def patch_printer44(printer):
   reqhash(final,PRINTER_RELEASE_SHA256,'new vendor with HTTP/LAN/WAN patches')
   Path(printer).write_bytes(final.read_bytes())
 
+# Base 02.01.01.13 patch set. Unlike the two-stage 07 printer path, the 0113
+# printer is a single K1 ELF restructure + patch produced by apply_patches.py,
+# which also does the GUI and camera single-word patches. A profile whose
+# port.printer_patch is 'apply_patches' dispatches here (see
+# experimental/firmware-port-0113/BUILDER_INTEGRATION_0113.md).
+PORT_0113_DIR=BASE.parents[1]/"experimental/firmware-port-0113"
+PORT_0113_HASHES={
+ 'apply_patches.py':'88595c901cb51cc426caed9a5bcb190f045a2de92cb1b86b205f1381f5897f3a',
+ 'stage0_verify.py':'0d29bcc5789956ba7223a723e73f9fb52fdfa3002280e69c2b660741f9e962b1',
+ 'verify_patched.py':'06ceafd2a1b9985c31093fcee059b914245b9a7063f4d0e82574daa642fce011',
+ 'k1_restructure.py':'a1eec922e807987b82d8eef9a06eaba7b1652c1fa05e4cec16e25f705c129a89',
+ 'scan_payload_branches.py':'975fb882b38af394f0ca39822d6059854179aeae8cc0c7c32d2734493b36ec8e',
+}
+
+def validate_port_0113_inputs():
+ for name,expected in PORT_0113_HASHES.items(): reqhash(PORT_0113_DIR/name,expected,'0113 port '+name)
+
+def apply_patches_0113(stock_printer,stock_gui,stock_camera,out_dir):
+ """Run the pinned 0113 patch set over the three stock binaries. Returns the
+ patched (printer, gui, camera) paths. apply_patches.py also reads the
+ 07 network44/http44 manifests, which validate_port_inputs() pins."""
+ validate_port_0113_inputs()
+ out=Path(out_dir); out.mkdir(parents=True,exist_ok=True)
+ run([sys.executable,'-I',str(PORT_0113_DIR/'apply_patches.py'),
+      str(stock_printer),str(stock_gui),str(stock_camera),str(out)],capture=True)
+ return out/'elegoo_printer.patched',out/'ec-eeb001-gui.patched',out/'ai_camera.patched'
+
 def main():
  ap=argparse.ArgumentParser(description='CC2 Dual-Trust firmware builder with CC2 Control and Panda compatibility (ELEGOO base from BASE_FIRMWARE)')
  here=Path(__file__).resolve().parent.parent
