@@ -51,6 +51,12 @@ assert open_items == [], open_items
 assert b.component_included(candidate, 'native_display') is False
 assert candidate['components']['native_display']['reason'].strip()
 assert b.component_included(q, 'native_display') is True
+# USB-Ethernet is likewise declared not-included for 02.01.01.13 (the .ko cannot
+# be built against the 0113 kernel yet); native Wi-Fi Connections still ships. 07
+# keeps USB-Ethernet by default.
+assert b.component_included(candidate, 'connections_usb_ethernet') is False
+assert candidate['components']['connections_usb_ethernet']['reason'].strip()
+assert b.component_included(q, 'connections_usb_ethernet') is True
 # A component excluded without a reason is refused (no silent omission, 3.5).
 try:
     b.component_included({'version': 'x', 'components': {'native_display': {'included': False}}}, 'native_display')

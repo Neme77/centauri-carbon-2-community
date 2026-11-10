@@ -176,7 +176,7 @@ def payload(root, files):
     return result, hooks
 
 
-def install(root, archive):
+def install(root, archive, usb_ethernet=True):
     root = Path(root)
     files = read_runtime(archive)
     prepared, hooks = payload(root, files)
@@ -202,11 +202,16 @@ def install(root, archive):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         path.chmod(0o700 if name == 'control' or name.endswith('.sh') else 0o600)
-    for name in BINARY_PINS:
-        if name.endswith('.ko'):
-            path = root / MODULES / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(files[name]);path.chmod(0o644)
+    # The USB-Ethernet kernel modules are the one base-specific binary part: they
+    # are built against the vendor kernel ABI. A base that excludes USB-Ethernet
+    # (component 'connections_usb_ethernet') ships native Wi-Fi Connections without
+    # them; the modules are never written, and audit() asserts their absence.
+    if usb_ethernet:
+        for name in BINARY_PINS:
+            if name.endswith('.ko'):
+                path = root / MODULES / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(files[name]);path.chmod(0o644)
     for path, name in hooks.items():
         target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -216,7 +221,7 @@ def install(root, archive):
     return prepared, hooks
 
 
-def audit(root, prepared, hooks):
+def audit(root, prepared, hooks, usb_ethernet=True):
     root = Path(root)
     for name in ('bin/wifi_daemon','lib/modules/5.4.61/aic8800_fdrv.ko'):
         path = root / name
@@ -238,6 +243,10 @@ def audit(root, prepared, hooks):
     for name, digest in BINARY_PINS.items():
         if name.endswith('.ko'):
             path = root / MODULES / name
+            if not usb_ethernet:
+                if path.exists() or path.is_symlink():
+                    raise RuntimeError('USB-Ethernet module present though excluded: ' + name)
+                continue
             if path.is_symlink() or not path.is_file() or sha(path.read_bytes()) != digest:
                 raise RuntimeError('Firmware kernel module differs: ' + name)
             if path.stat().st_mode & 0o777 != 0o644:

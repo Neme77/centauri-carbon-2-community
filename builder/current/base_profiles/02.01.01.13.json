@@ -43,6 +43,10 @@
   "native_display": {
    "included": false,
    "reason": "Not ported to 02.01.01.13. The hardware-validated device runs the plain Z-offset GUI (port.outputs.patched_gui 668ab8cb...), never the native-display reskin, so the builder keeps that GUI, skips display.install and asserts the native display is absent (PIPELINE_MULTI_BASE_DESIGN.md section 3.5). Native display is a separate, independently hardware-tested port; see experimental/firmware-port-0113/NATIVE_DISPLAY_0113_ANALYSIS.md."
+  },
+  "connections_usb_ethernet": {
+   "included": false,
+   "reason": "Not ported to 02.01.01.13. The cc2_ue300_*.ko USB-Ethernet modules are built against the vendor kernel ABI; the 0113 kernel (TinaLinux 5.4.61 build #40, bf965943...) differs from the public 07-era tree (OpenCentauri/oc-linux cd4ee0cf) and abi_probe reports a struct usb_device layout mismatch, so the 07 modules cannot load. Native Wi-Fi Connections (stock aic8800_fdrv.ko, verified) ships normally; the builder skips the USB-Ethernet modules and asserts their absence (PIPELINE_MULTI_BASE_DESIGN.md section 3.5). A separate, later addition once the matching 0113 kernel source is available; see experimental/firmware-port-0113/REACTOR_CONNECTIONS_0113_STATUS.md."
   }
  },
  "_same_as_02.01.01.07": [

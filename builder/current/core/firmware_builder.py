@@ -542,7 +542,7 @@ def install_release_printer(printer,reference):
 
 REACTOR_HELPER_SHA256='ca468ebb7aac4e06c0c4b176030ad150f37a8a41d280a7ab52de9a4327bbc9f2'
 CAMERA_HELPER_SHA256='cda98dd7bb3f58f2862ea5fc7b6e69bfa1873f3880378d8c73c244f8942cc013'
-INTEGRATION_HELPERS={'connections_component.py': '35314d2c4fdec02c89a9fe1819888a0065d803dd8c701a1dcafabb792d25108d', 'native_display_component.py': '573d8b967f250326295726f9f1e3f22386fc8402f61bc97ae19d1137f068fb06', 'resource_update.py': '840c449879aaf008e41bdf5544df822c021f855f9fddc116b1792021ffaef749'}
+INTEGRATION_HELPERS={'connections_component.py': '49d0a0b92aa10fcd2ce9ec4b08e53bb73c4f057af8e189f366477e5b9861fc02', 'native_display_component.py': '573d8b967f250326295726f9f1e3f22386fc8402f61bc97ae19d1137f068fb06', 'resource_update.py': '840c449879aaf008e41bdf5544df822c021f855f9fddc116b1792021ffaef749'}
 INTEGRATION_INPUTS={'experimental/native-display/package.py': 'fccf9f487e541c2ce14ce82bf64eef20d226e661c8b0e951b5f7b6200616224b', 'experimental/native-display/patch.py': '1438fdd85310f5965f9562abdfdcac1a13e87c7b413755fa350b9795ba292b2c', 'experimental/native-display/patch-plan.json': '561acf7938fb7993ab91e6d6449faf33fde098882c269929a11b089b28fc7d09', 'experimental/native-display/baseline-pins.txt': 'c2f1356d42e695bcfc953e69e37560d7a6c6a976c70815cebe3422951dd246c6', 'experimental/native-display/png_palette.py': 'cdbf580042498acdf5a29e63978ad798639fad424c291a4fff03a36799e21882', 'experimental/native-display/recolor-plan.json': '0a8fe579afee1321a5d75bba743bb9ebf765beb2bdf0b26cbbdf14218f188616', 'experimental/native-display/elf_layout.py': 'c61b033a988e16c190303415544162721caa5a62c35a435487d8091d93098d28', 'experimental/native-display/assets/manifest.json': 'cb71218bdf34a87b3e55911b3eb8846e9d3a612b7d98eb77c6eea98d5a3fe435', 'experimental/native-display/manage.sh': '081f50e94bfe8ff5aff8894364f7bfb81d03ba6041fd4d85441db60d113ee0d0', 'experimental/native-display/thermal.awk': '1cb4534a5c6b447cfd8dd963c125614115effeb4d469b61e0eb0f50469f2d749', 'experimental/native-display/LICENSE-LUCIDE.txt': 'b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57', 'builder/current/components/connections/firmware-seed.sh': '75d3b459a83edb49c3330beeaa8531ec7ec75b1a42bdcacb39d361cf6409c052', 'builder/current/components/connections/firmware.init': '0023ae212221603e3012b5afa67ef3a07598c36d756dfb32a7a95ef73579d168'}
 
 
@@ -640,9 +640,11 @@ def main():
   print(f"[OK] ELEGOO base profile: {base_version}")
   port_cfg=profile['port']; port_outputs=port_cfg['outputs']
   display_included=component_included(profile,'native_display')
+  connections_usb_ethernet=component_included(profile,'connections_usb_ethernet')
   gui_release_sha=port_outputs['native_gui'] if display_included else port_outputs['patched_gui']
   camera_release_sha=port_outputs['camera_release']; printer_release_sha=port_outputs['printer_release']['sha256']; camera_init_sha=port_outputs['camera_init']
   if not display_included: print(f"[OK] native display not included for {base_version}: {profile['components']['native_display']['reason'].split('.')[0]}")
+  if not connections_usb_ethernet: print(f"[OK] USB-Ethernet not included for {base_version}: {profile['components']['connections_usb_ethernet']['reason'].split('.')[0]}")
   if a.stock_package is None: a.stock_package=str(here/'original_firmware'/profile['stock_package'])
  priv=req(a.private_key or here/'keys'/'cc2_community_release_private.pem','private key')
  signing_key=verify_signing_key(priv,a.signing_mode)
@@ -745,7 +747,7 @@ def main():
   reactor.install(root,reactor_component,vendor_sha=printer_release_sha,base_version=base_version)
   camera_runtime.install(root,camera_component,camera_release_sha,camera_init_sha)
   if display_included: display.install(root)
-  connections_payload,connections_hooks=connections.install(root,connections_archive)
+  connections_payload,connections_hooks=connections.install(root,connections_archive,usb_ethernet=connections_usb_ethernet)
   camera_hook=lambda text:connections.hook_transform(text,'camera-launch',connections_input)
   reactor_hook=lambda text:connections.hook_transform(text,'reactor-launch',connections_input)
   # Verify intended rootfs surface before compression.
@@ -758,7 +760,7 @@ def main():
   camera_runtime.audit(root,camera_component,hook_transform=camera_hook,camera_sha=camera_release_sha,init_sha=camera_init_sha)
   if display_included: display.audit(root)
   elif sha256(gui)!=port_outputs['patched_gui'] or sha256(gui)==display.GUI_SHA256: raise RuntimeError('native display declared not-included but the installed GUI is not the plain Z-offset GUI')
-  connections.audit(root,connections_payload,connections_hooks)
+  connections.audit(root,connections_payload,connections_hooks,usb_ethernet=connections_usb_ethernet)
   banner('REBUILD SQUASHFS'); new=work/'rootfs.new'; log=run([mk,root,new,'-comp','xz','-b','262144','-noappend','-no-tailends','-exports','-all-root'],capture=True)
   if 'Failed to read file' in log: raise RuntimeError('mksquashfs reported Failed to read file')
   shutil.copyfile(new,cpio/'rootfs'); root_hash=sha256(cpio/'rootfs'); print('rootfs SHA256:',root_hash)
@@ -774,7 +776,7 @@ def main():
   camera_runtime.audit(vr,camera_component,hook_transform=camera_hook,camera_sha=camera_release_sha,init_sha=camera_init_sha)
   if display_included: display.audit(vr)
   elif sha256(vr/'opt/bin/ec-eeb001-gui')!=port_outputs['patched_gui'] or sha256(vr/'opt/bin/ec-eeb001-gui')==display.GUI_SHA256: raise RuntimeError('native display declared not-included but the rebuilt GUI is not the plain Z-offset GUI')
-  connections.audit(vr,connections_payload,connections_hooks)
+  connections.audit(vr,connections_payload,connections_hooks,usb_ethernet=connections_usb_ethernet)
   reqhash(vr/'etc/init.d/sshd',EXPECTED['sshd_init'],'rebuilt sshd init')
   reqhash(vr/'etc/ssh/sshd_config',EXPECTED['sshd_config'],'rebuilt sshd config')
   for n in ('S50sshd','K50sshd'):
