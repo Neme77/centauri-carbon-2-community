@@ -23,6 +23,7 @@ import {
   SCREW_CORNERS,
   SCREW_KEYS,
   SCREW_SETTLE_S,
+  referenceMove,
   screwHistoryCsv,
   screwPlan,
   screwValues,
@@ -630,12 +631,12 @@ const Screws = () => {
       : plan
         ? 'bed.measured_results'
         : 'bed.no_measurement'
-  const run = async (action: string, confirm?: Key) => {
+  const run = async (action: string, confirm?: string) => {
     if (measuring.current) return false
     measuring.current = true
     setPending(true)
     try {
-      if (confirm && !(await ask(t(confirm)))) return false
+      if (confirm && !(await ask(confirm))) return false
       const previous = await request('/api/console')
       const nextGen = Number(previous.generation) + 1
       if (action === 'screws:tram:start' || action === 'screws:measure') {
@@ -663,23 +664,25 @@ const Screws = () => {
     RR: 'bed.corner_rear_right',
     RL: 'bed.corner_rear_left',
   }
-  const flKey = SCREW_KEYS[0]
-  const referenceStale =
-    printerSession &&
-    session.previous[flKey] != null &&
-    session.heights[flKey] != null &&
-    session.heights[flKey] !== session.previous[flKey] &&
-    SCREW_KEYS.slice(1).every(k => session.previous[k] != null && session.heights[k] === session.previous[k])
   const running = history.supported ? history.sessions.find(s => s.ended == null) : undefined
+  const moved = running ? referenceMove(running) : null
+  const since = moved?.sinceFullUm
+  const amount = since == null ? '' : microns(since / 1000)
   const series = running ? cornerOffsets(running) : null
   const earlier = history.sessions.filter(s => s.ended != null)
-  const exportHistory = (kind: 'json' | 'csv') => {
+  const exportHistory = (kind: 'json' | 'csv' | 'excel') => {
     const payload = history.raw ?? { sessions: history.sessions }
     if (kind === 'json')
       saveText(
         'screw-levelling-history.json',
         `${JSON.stringify(payload, null, 2)}\n`,
         'application/json;charset=utf-8'
+      )
+    else if (kind === 'excel')
+      saveText(
+        'screw-levelling-history-excel.csv',
+        screwHistoryCsv(history.sessions, 'excel'),
+        'text/csv;charset=utf-8'
       )
     else saveText('screw-levelling-history.csv', screwHistoryCsv(history.sessions), 'text/csv;charset=utf-8')
   }
@@ -710,12 +713,14 @@ const Screws = () => {
         variant="primary"
         class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
         disabled={locked}
-        onClick={() => void run('screws:tram:start', 'bed.tram_start_confirm')}
+        onClick={() => void run('screws:tram:start', tpl('bed.tram_start_confirm', { seconds: SCREW_SETTLE_S }))}
       >
         <Icon n="target" class="size-5" />
         <span>
           <strong class="block">{t('bed.tram_start')}</strong>
-          <small class="mt-1 block whitespace-normal text-xs font-normal">{t('bed.tram_start_hint')}</small>
+          <small class="mt-1 block whitespace-normal text-xs font-normal">
+            {tpl('bed.tram_start_hint', { seconds: SCREW_SETTLE_S })}
+          </small>
         </span>
       </Button>
       <h3 class="mt-3.5 mb-2 text-base font-semibold">{t('bed.tram_step_adjust')}</h3>
@@ -787,12 +792,22 @@ const Screws = () => {
                   const prev = session.previous[c.key]
                   const chain = series ? offsetChain(series[c.id]) : ''
                   const showChain = Boolean(chain && series?.[c.id].some(v => Math.abs(Math.round(v * 1000)) >= 1))
+                  const shift = c.i === 0 ? moved?.change : ''
                   return (
                     <tr key={c.id} class={cn('border-t border-edge', plan?.useOptimized && c.i === 0 && 'bg-amber/10')}>
                       <td class="p-2 font-semibold break-words">{t(cornerName[c.id])}</td>
                       <td class="p-2 break-words">
                         {plan ? (ref ? t('bed.reference') : microns(d)) : '—'}
-                        {showChain && <small class="mt-0.5 block text-xs break-words text-muted">{chain}</small>}
+                        {shift && (
+                          <small class="mt-0.5 block text-xs break-words text-muted">
+                            {tpl('bed.tram_reference_shift', { change: shift })}
+                          </small>
+                        )}
+                        {showChain && (
+                          <small class="mt-0.5 block text-xs break-words text-muted">
+                            {tpl('bed.tram_vs_front_left', { chain })}
+                          </small>
+                        )}
                         {pair && (
                           <small class="mt-0.5 block text-xs break-words text-muted">
                             {tpl('bed.tram_drift', { amount: microns(pair.second - pair.first) })}
@@ -835,7 +850,7 @@ const Screws = () => {
             <span>
               {t('bed.3_samples_per_point')}
               <br />
-              {t('bed.front_left_reference')}
+              {t(plan?.useOptimized ? 'bed.front_left_reference_optimized' : 'bed.front_left_reference')}
               <br />
               {t('bed.mesh_capture_stays_separate')}
             </span>
@@ -852,9 +867,14 @@ const Screws = () => {
           })}
         </Notice>
       )}
-      {referenceStale && (
+      {since != null && Math.abs(since) <= 5 && (
+        <p class="mt-3.5 text-xs text-muted">{tpl('bed.tram_reference_stable', { amount })}</p>
+      )}
+      {since != null && Math.abs(since) > 5 && (
         <Notice icon="info">
-          <span>{t('bed.tram_reference_stale')}</span>
+          <span>
+            {tpl(plan?.useOptimized ? 'bed.tram_reference_expected' : 'bed.tram_reference_stale', { amount })}
+          </span>
         </Notice>
       )}
       {history.supported && (
@@ -893,6 +913,9 @@ const Screws = () => {
               <Button class="min-h-11" onClick={() => exportHistory('csv')}>
                 {t('bed.tram_history_export_csv')}
               </Button>
+              <Button class="min-h-11" onClick={() => exportHistory('excel')}>
+                {t('bed.tram_history_export_csv_excel')}
+              </Button>
               <Button class="min-h-11" variant="danger" disabled={locked} onClick={() => void clearHistory()}>
                 {t('bed.tram_history_clear')}
               </Button>
@@ -920,7 +943,9 @@ const Screws = () => {
             class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
             disabled={!xyReady || locked}
             aria-describedby={xyReady ? undefined : 'screw-need-session'}
-            onClick={() => void run(probeTwice ? 'screws:tram:check:2' : 'screws:tram:check', 'bed.tram_check_confirm')}
+            onClick={() =>
+              void run(probeTwice ? 'screws:tram:check:2' : 'screws:tram:check', t('bed.tram_check_confirm'))
+            }
           >
             <span>
               <strong class="block">{t('bed.tram_check')}</strong>
@@ -931,7 +956,7 @@ const Screws = () => {
             class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
             disabled={!printerSession || locked}
             aria-describedby={printerSession ? undefined : 'screw-need-session'}
-            onClick={() => void run('screws:tram:end', 'bed.tram_end_confirm')}
+            onClick={() => void run('screws:tram:end', t('bed.tram_end_confirm'))}
           >
             <span>
               <strong class="block">{t('bed.tram_end')}</strong>
@@ -946,7 +971,7 @@ const Screws = () => {
         <Button
           class="min-h-11"
           disabled={printerSession || locked}
-          onClick={() => void run('screws:measure', 'bed.start_the_four_screw_load_cell')}
+          onClick={() => void run('screws:measure', t('bed.start_the_four_screw_load_cell'))}
         >
           <Icon n="target" class="size-5" />
           {t('bed.measure_screws')}

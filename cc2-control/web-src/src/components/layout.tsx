@@ -24,14 +24,25 @@ import {
   X,
 } from 'lucide-preact'
 import { Dot } from '@/components/ui/badge'
-import { type Key, t, tState, tpl } from '@/lib/i18n'
+import { type Key, t, tpl } from '@/lib/i18n'
 import { control, errText, notify, post, toast } from '@/lib/api'
 import { ask } from '@/lib/confirm'
-import { printerError, printerRequest } from '@/lib/machine'
+import { printerError, printerRequest, statusTitle } from '@/lib/machine'
 import { pandabreath, pandabreathName } from '@/lib/pandabreath'
 import { openJobs, queue, refreshQueue } from '@/lib/queue'
 import { usePoll } from '@/lib/poll'
-import { refreshPrinter, health, menu, mobileMenu, nav, printer, toggleMenu, view, type Page } from '@/lib/state'
+import {
+  consoleStatus,
+  refreshPrinter,
+  health,
+  menu,
+  mobileMenu,
+  nav,
+  printer,
+  toggleMenu,
+  view,
+  type Page,
+} from '@/lib/state'
 
 // Same query as the compact layout in index.css.
 const COMPACT = '(max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape)'
@@ -290,6 +301,8 @@ export const Topbar = () => {
   const { open } = mobileMenu.use()
   const { data: d, ok } = printer.use()
   const v = view(d)
+  consoleStatus.use()
+  const title = statusTitle(v.state)
   // The state under "CC2" is only shown while the link is healthy; otherwise it could be stale or unknown.
   // One link indicator: CC2 Control reachable → MQTT session up → printer messages recent (3 missed 10 s heartbeats = stale).
   const link: ['green' | 'amber' | 'red', Key] = !ok
@@ -321,8 +334,8 @@ export const Topbar = () => {
           <div>
             {link[0] === 'green' ? (
               <>
-                {tState(v.state)}
-                {v.detail && <span class="hidden md:inline"> · {v.detail}</span>}
+                {title.text}
+                {!title.replaced && v.detail && <span class="hidden md:inline"> · {v.detail}</span>}
                 {v.active ? ` · ${Math.round(v.progress)}%` : ''}
               </>
             ) : (

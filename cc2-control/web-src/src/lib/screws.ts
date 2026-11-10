@@ -174,6 +174,37 @@ export function cornerOffsets(session: ScrewHistorySession): Record<ScrewId, num
 }
 
 const signedUm = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(Math.round(v * 1000))}`
+const umLabel = (um: number) => `${um > 0 ? '+' : um < 0 ? '−' : ''}${Math.abs(um)}`
+
+export type ReferenceMove = {
+  // "0 → +2 µm": the latest front-left z against the first z of this session. Twice uses z, not z2.
+  change: string
+  // How far front left has moved since the last full measurement. Null once a later check caught up.
+  sinceFullUm: number | null
+}
+
+// The measurement reference is the raw front-left height. A single re-probe of that corner is zero
+// against itself, so the row shows how far that raw height has moved during the session.
+export function referenceMove(session: ScrewHistorySession): ReferenceMove | null {
+  let first: number | undefined
+  let current: number | undefined
+  let full: number | undefined
+  let pending = false
+  for (const m of session.measurements) {
+    const fl = m.z.FL
+    if (typeof fl !== 'number') continue
+    if (first === undefined) first = fl
+    current = fl
+    if (m.kind === 'start' || m.kind === 'check') {
+      full = fl
+      pending = false
+    } else if (m.kind === 'probe' && m.corner === 'FL') pending = true
+  }
+  if (first === undefined || current === undefined) return null
+  const changeUm = Math.round((current - first) * 1000)
+  const since = pending && full !== undefined ? Math.round((current - full) * 1000) : null
+  return { change: `0 → ${umLabel(changeUm)} µm`, sinceFullUm: since }
+}
 
 // Last five offsets, one unit at the end: "−188 → −62 → −8 µm".
 export function offsetChain(values: number[], limit = 5): string {
@@ -182,28 +213,62 @@ export function offsetChain(values: number[], limit = 5): string {
   return `${last.map(signedUm).join(' → ')} µm`
 }
 
-export function screwHistoryCsv(sessions: ScrewHistorySession[]): string {
-  const lines = ['started,ended,time,kind,corner,twice,FL_mm,FR_mm,RR_mm,RL_mm,FL_um,FR_um,RR_um,RL_um']
+const csvPad = (n: number) => String(n).padStart(2, '0')
+
+// "2026-11-10 20:40:54" in the browser's local time, beside the Unix timestamps.
+export function screwTimeLocal(unix: number): string {
+  const d = new Date(unix * 1000)
+  const date = `${d.getFullYear()}-${csvPad(d.getMonth() + 1)}-${csvPad(d.getDate())}`
+  const clock = `${csvPad(d.getHours())}:${csvPad(d.getMinutes())}:${csvPad(d.getSeconds())}`
+  return `${date} ${clock}`
+}
+
+const CSV_HEADER = [
+  'started',
+  'ended',
+  'time',
+  'time_local',
+  'kind',
+  'corner',
+  'twice',
+  'pass',
+  'FL_measured_mm',
+  'FR_measured_mm',
+  'RR_measured_mm',
+  'RL_measured_mm',
+  'FL_table_um',
+  'FR_table_um',
+  'RR_table_um',
+  'RL_table_um',
+]
+
+// excel uses ';' and a decimal comma so Excel (DE) opens the columns without a conversion step.
+export function screwHistoryCsv(sessions: ScrewHistorySession[], style: 'comma' | 'excel' = 'comma'): string {
+  const sep = style === 'excel' ? ';' : ','
+  const num = (n: number) => (style === 'excel' ? String(n).replace('.', ',') : String(n))
+  const lines = [CSV_HEADER.join(sep)]
   for (const s of sessions) {
     const raw: Partial<Record<ScrewId, number>> = {}
     for (const m of s.measurements) {
       const bags = [m.z, ...(m.twice && m.z2 ? [m.z2] : [])]
-      for (const bag of bags) {
+      bags.forEach((bag, index) => {
         for (const id of SCREW_IDS) if (typeof bag[id] === 'number') raw[id] = bag[id]
         const fl = raw.FL
         const um = (id: ScrewId) => {
           if (typeof raw[id] !== 'number' || typeof fl !== 'number') return ''
           return String(Math.round((id === 'FL' ? 0 : raw[id] - fl) * 1000))
         }
-        const mm = (id: ScrewId) => (typeof bag[id] === 'number' ? String(bag[id]) : '')
+        const mm = (id: ScrewId) => (typeof bag[id] === 'number' ? num(bag[id]) : '')
         lines.push(
           [
             s.started,
             s.ended ?? '',
             m.time,
+            screwTimeLocal(m.time),
             m.kind,
             m.corner ?? '',
             m.twice ? '1' : '0',
+            String(index + 1),
             mm('FL'),
             mm('FR'),
             mm('RR'),
@@ -212,9 +277,9 @@ export function screwHistoryCsv(sessions: ScrewHistorySession[]): string {
             um('FR'),
             um('RR'),
             um('RL'),
-          ].join(',')
+          ].join(sep)
         )
-      }
+      })
     }
   }
   return `${lines.join('\n')}\n`
