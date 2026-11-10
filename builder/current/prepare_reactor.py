@@ -65,7 +65,7 @@ def main():
         run([prefix+'-g++',*flags,'-fPIC','-fvisibility=hidden','-shared','-Wl,--no-undefined','-Wl,-z,now',build/'reactor_module.cpp','-o',module,'-ldl','-lm'])
         run([prefix+'-g++',*flags,'-DCC2_NATIVE_CO','-I'+str(build),build/'bridge_test.cpp','-o',bridge,'-L'+str(vendor.parent),'-Wl,-rpath,/opt/lib','-lcolib','-ldl','-lm'])
     finally:
-        if staging is not None:shutil.rmtree(staging,ignore_errors=True)
+        if staging is not None:shutil.rmtree(str(staging),ignore_errors=True)
     for path in (module,bridge):
         data=path.read_bytes()
         if data[:6]!=b'\x7fELF\x01\x01' or struct.unpack_from('<H',data,18)[0]!=40 or not struct.unpack_from('<I',data,36)[0]&0x400:raise RuntimeError('Requires ARM32 hard-float ELF')
