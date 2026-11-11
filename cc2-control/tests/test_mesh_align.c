@@ -91,7 +91,9 @@ static int fake_bed_off(void) { beds_off++; return 0; }
 static int bed_targets, bed_target_refused;
 static int fake_bed_target(int temp) { (void)temp; if (bed_target_refused > 0) { bed_target_refused--; return -1; } bed_targets++; return 0; }
 static int nozzle_offs, nozzle_off_refused;
-static int fake_nozzle_off(void) { if (nozzle_off_refused > 0) { nozzle_off_refused--; return -1; } nozzle_offs++; return 0; }
+/* The printer's nozzle target, as the delivered commands leave it. */
+static double nozzle_target;
+static int fake_nozzle_off(void) { if (nozzle_off_refused > 0) { nozzle_off_refused--; return -1; } nozzle_offs++; nozzle_target = 0; return 0; }
 
 /* The deferred shutdown as the main loop delivers it. */
 static int shutdowns, shutdown_refused;
@@ -99,6 +101,7 @@ static int fake_send(const char *script) {
     assert(!strcmp(script, "TURN_OFF_HEATERS"));
     if (shutdown_refused > 0) { shutdown_refused--; return -1; }
     shutdowns++;
+    nozzle_target = 0; telemetry.values[U_BG] = 0;
     return 0;
 }
 
@@ -177,7 +180,7 @@ static void reset(void) {
     pthread_mutex_lock(&console.lock); console.busy = 0; pthread_mutex_unlock(&console.lock);
     console_ok = 1; console_refuses = 0; uds_down = 0; shutdown_refused = 0;
     console_log[0] = scripts[0] = 0; beds_off = shutdowns = 0;
-    bed_targets = bed_target_refused = nozzle_offs = nozzle_off_refused = 0;
+    bed_targets = bed_target_refused = nozzle_offs = nozzle_off_refused = 0; nozzle_target = 0;
     bed(25, 0);
 }
 /* Runs the confirmed measurement up to the given stage of its calibration job. */
@@ -509,6 +512,66 @@ int main(void) {
     assert(bed_targets == before && !align.bed_rearm_due);
     assert(call(END, "CONFIRM") == 200);
 
+    /* #346 review, applied to this session: an explicit end keeps the heater shutdown pending until it
+     * is delivered. The nozzle still holds its homing temperature, the first shutdown command is
+     * rejected, the next tick retries it, and both heater targets reach zero. */
+    reset(); nozzle_off_refused = 99;
+    measure(&second);
+    nozzle_target = 140; bed(60, 60); loop(0);
+    assert(nozzle_target == 140 && align.nozzle_off_due);
+    shutdown_refused = 1;
+    assert(call(END, "CONFIRM") == 200 && !align.active && control_screws_heaters_off_pending());
+    loop(0);
+    assert(!shutdowns && control_screws_heaters_off_pending() && nozzle_target == 140 && telemetry.values[U_BG] == 60);
+    loop(0);
+    assert(shutdowns == 1 && !control_screws_heaters_off_pending() && nozzle_target == 0 && telemetry.values[U_BG] == 0);
+    loop(0); assert(shutdowns == 1);
+    /* The same for a session that ends with its save. */
+    reset(); nozzle_off_refused = 99;
+    measure(&third);
+    nozzle_target = 140; bed(60, 60); shutdown_refused = 1;
+    snprintf(body, sizeof(body), "%s\nCONFIRM", plate);
+    assert(call(SAVE, body) == 200 && !align.active && !strcmp(align.ended, "saved") && control_screws_heaters_off_pending());
+    loop(0);
+    assert(!shutdowns && control_screws_heaters_off_pending() && nozzle_target == 140);
+    loop(0);
+    assert(shutdowns == 1 && !control_screws_heaters_off_pending() && nozzle_target == 0 && telemetry.values[U_BG] == 0);
+
+    /* The ownership checks hold after an end whose shutdown was rejected: a heater action queued
+     * then, or a print that starts, takes the heaters over and nothing is switched off. */
+    reset(); measure(&second);
+    bed(60, 60); shutdown_refused = 1;
+    assert(call(END, "CONFIRM") == 200);
+    loop(0); assert(!shutdowns && control_screws_heaters_off_pending());
+    control_screws_note_action("heaters:set:0:70"); align_note_action("heaters:set:0:70"); bed(60, 70);
+    loop(0); loop(0);
+    assert(!shutdowns && !control_screws_heaters_off_pending() && telemetry.values[U_BG] == 70);
+    reset(); measure(&second);
+    bed(60, 60); shutdown_refused = 1;
+    assert(call(END, "CONFIRM") == 200);
+    loop(0); assert(!shutdowns && control_screws_heaters_off_pending());
+    mqtt.machine_status = 2; nozzle_target = 210; loop(0);
+    assert(!control_screws_heaters_off_pending());
+    fresh(); loop(0);
+    assert(!shutdowns && nozzle_target == 210 && telemetry.values[U_BG] == 60);
+
+    /* A heater action queued while the session waits between two measurements owns the heaters:
+     * the nozzle-off and the bed target the session still owed are dropped, the session stays.
+     * Any other action leaves them due. */
+    reset(); nozzle_off_refused = 1; bed_target_refused = 1;
+    measure(&second);
+    bed(58, 0); before = bed_targets;
+    loop(0);
+    assert(align.nozzle_off_due && align.bed_rearm_due && !nozzle_offs && bed_targets == before);
+    control_screws_note_action("fan:aux:50"); align_note_action("fan:aux:50");
+    assert(align.nozzle_off_due && align.bed_rearm_due);
+    control_screws_note_action("system:heaters_off"); align_note_action("system:heaters_off");
+    assert(!align.nozzle_off_due && !align.bed_rearm_due && align.active);
+    loop(0); loop(0);
+    assert(!nozzle_offs && bed_targets == before && align.active);
+    assert(call(END, "CONFIRM") == 200);
+    align_note_action("heaters:set:0:70");      /* without a session there is nothing to drop */
+
     /* The process is killed during an alignment session: the marker carries the session's bed
      * target, and the next process switches the heaters off only while the bed still shows it. */
     static char marker_path[128]; snprintf(marker_path, sizeof(marker_path), "%s/session", directory);
@@ -535,6 +598,6 @@ int main(void) {
     screws_marker_path = NULL;
 
     console_destroy(&console);
-    puts("PASS mesh-guided alignment session: listed before sent, no repeat after a refusal, failure, end, timeout, print, foreign bed target, emergency stop, a session left by a killed process, confirmation by token, nozzle off and bed renewal between rounds");
+    puts("PASS mesh-guided alignment session: listed before sent, no repeat after a refusal, failure, end, timeout, print, foreign bed target, emergency stop, an explicit end or save whose first shutdown is rejected, heater actions that take over, a session left by a killed process, confirmation by token, nozzle off and bed renewal between rounds");
     return 0;
 }

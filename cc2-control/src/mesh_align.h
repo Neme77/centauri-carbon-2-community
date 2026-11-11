@@ -61,6 +61,13 @@ static void align_finish(const char *why, int heaters_off) {
     align.ended = why;
 }
 
+/* A heater action queued while the session waits between two measurements hands the heaters to
+ * whoever sent it. What the session still owed them (the nozzle off, the bed set again) is dropped,
+ * as a deferred shutdown is; the session itself stays, and its end is the user's next decision. */
+static void align_note_action(const char *action) {
+    if (align.active && control_heater_action(action)) align.nozzle_off_due = align.bed_rearm_due = 0;
+}
+
 /* Main loop, after the calibration job's own tick. */
 static void align_tick(const mqtt_client *mqtt, int emergency, time_t now) {
     if (!align.active) return;

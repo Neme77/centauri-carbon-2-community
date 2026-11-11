@@ -4136,6 +4136,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
     control_screws_note_action(action);
+    align_note_action(action);
     if(!strcmp(action,"screws:measure")){
         pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
         control_screws_note_quick(generation);
