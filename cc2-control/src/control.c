@@ -69,6 +69,8 @@ static struct {
 } screws_session;
 /* Kept outside the session: it must survive the session being cleared. */
 static int screws_heaters_off_pending;
+/* The console job of an explicit screws:tram:end; its success confirms the shutdown. */
+static struct { int pending; unsigned long generation; } screws_end;
 /* The job the last built tram script runs; copied into the session once queued. */
 static control_screws_job screws_next;
 /* The session's last successfully completed job, reported once to the history. */
@@ -101,15 +103,20 @@ void control_screws_reset(void){memset(&screws_session,0,sizeof(screws_session))
 void control_screws_invalidate(void){control_screws_reset();}
 int control_screws_session_active(void){return screws_session.active;}
 int control_screws_heaters_off_pending(void){return screws_heaters_off_pending;}
-void control_screws_heaters_off_sent(void){screws_heaters_off_pending=0;}
+void control_screws_heaters_off_sent(void){screws_heaters_off_pending=0;screws_end.pending=0;}
+void control_screws_note_end(unsigned long generation){
+    screws_end.pending=1;
+    screws_end.generation=generation;
+}
 /* A queued action that sets or clears heater targets hands the heaters back to
  * the user (or starts a new session), so a deferred shutdown must not undo it. */
 void control_screws_note_action(const char *action){
     static const char *const owners[]={"heaters:","heater:","pid:","preset:","preheat:","screws:",
                                        "system:heaters_off","system:all_off"};
-    if(!action)return;
+    /* The explicit end is the shutdown itself: it stays pending until confirmed. */
+    if(!action||!strcmp(action,"screws:tram:end"))return;
     for(size_t i=0;i<sizeof(owners)/sizeof(owners[0]);i++)
-        if(!strncmp(action,owners[i],strlen(owners[i]))){screws_heaters_off_pending=0;return;}
+        if(!strncmp(action,owners[i],strlen(owners[i]))){screws_heaters_off_pending=0;screws_end.pending=0;return;}
 }
 /* The firmware switches an idle bed off 15 minutes after the last command (see
  * plates_cal_keep_bed in plates.h). Between re-probes nothing else is sent, so a
@@ -199,7 +206,13 @@ static int tram_own_job(time_t now){
 }
 int control_screws_tick(const mqtt_client *m,int console_completed,int console_success,
                         unsigned long generation,int emergency,time_t now){
-    if(m&&printing(m))screws_heaters_off_pending=0; /* A print owns the heaters now. */
+    if(m&&printing(m))screws_heaters_off_pending=screws_end.pending=0; /* A print owns the heaters now. */
+    /* An explicit end's M104 S0 / M140 S0 confirms the shutdown only once it has
+     * completed successfully; a failed or interrupted run leaves it pending. */
+    if(screws_end.pending&&(emergency||(console_completed&&generation==screws_end.generation))){
+        screws_end.pending=0;
+        if(!emergency&&console_success)screws_heaters_off_pending=0;
+    }
     if(screws_quick.pending&&(emergency||(console_completed&&generation==screws_quick.generation))){
         screws_quick.pending=0;
         if(!emergency&&console_success){screws_finished=screws_quick.job;screws_finished_ready=1;}
@@ -393,8 +406,9 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
              * if the name is gone, or re-apply the pre-job motion state. */
             int n=snprintf(script,cap,"M104 S0\nM140 S0");
             if(!tram_script_ok(n,cap,reason,reason_cap))return 0;
-            control_screws_invalidate();
-            return 1;
+            /* Pending until the script is confirmed (control_screws_note_end), so a
+             * rejected or failed run is retried by the main loop. */
+            return tram_end_with_heaters_off();
         }
         return reject(reason,reason_cap,"Unknown screw tramming action");
     }

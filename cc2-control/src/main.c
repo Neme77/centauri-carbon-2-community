@@ -3944,6 +3944,15 @@ static void pid_status_response(int fd,console_state *console) {
     respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
+/* The session left the bed at 60 C, or an explicit end has not been confirmed:
+ * retry the shutdown on every tick until it is delivered while the printer is
+ * idle and the console free. */
+static void screws_heaters_off_tick(const mqtt_client *mqtt,int busy,int (*send)(const char *script)){
+    if(control_screws_heaters_off_pending()&&!busy&&mqtt->connected&&mqtt->registered&&
+       mqtt->have_machine_status&&mqtt->machine_status==1&&send("TURN_OFF_HEATERS")==0)
+        control_screws_heaters_off_sent();
+}
+
 static void control_response(int fd,console_state *console,mqtt_client *mqtt,const char *body,size_t body_len){
     char action[160],script[700],reason[256];
     while(body_len&&isspace((unsigned char)*body)){body++;body_len--;}
@@ -4071,6 +4080,10 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     if(control_screws_is_tram(action)&&strcmp(action,"screws:tram:end")){
         pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
         control_screws_note_job(generation);
+    }
+    if(!strcmp(action,"screws:tram:end")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_end(generation);
     }
     if(!strcmp(action,"motors:quiet")||!strcmp(action,"motors:normal")){
         motor_mode_requested=action[7]=='q'?"quiet":"normal";motor_mode_connection=telemetry.connections;
@@ -4734,12 +4747,7 @@ int main(int argc, char **argv) {
             if(control_screws_bed_renew_due(tram_now)&&!busy&&mqtt.have_machine_status&&mqtt.machine_status==1&&
                uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
                 control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
-            /* The session left the bed at 60 C: retry the shutdown on every tick
-             * until it is delivered while the printer is idle and the console free. */
-            if(control_screws_heaters_off_pending()&&!busy&&mqtt.connected&&mqtt.registered&&
-               mqtt.have_machine_status&&mqtt.machine_status==1&&
-               send_local_gcode_script("TURN_OFF_HEATERS")==0)
-                control_screws_heaters_off_sent();
+            screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script);
         }
         spools_tick(&mqtt);
         queue_tick(&mqtt);

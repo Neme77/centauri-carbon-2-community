@@ -36,6 +36,10 @@ int control_screws_tick(const mqtt_client *mqtt, int console_completed, int cons
                         unsigned long generation, int emergency, time_t now);
 int control_screws_heaters_off_pending(void);
 void control_screws_heaters_off_sent(void);
+/* The console job (generation) running an explicit screws:tram:end. Its
+ * successful completion clears the pending shutdown; a rejected or failed
+ * run keeps it pending for the main loop to retry. */
+void control_screws_note_end(unsigned long generation);
 void control_screws_note_action(const char *action);
 int control_screws_bed_renew_due(time_t now);
 void control_screws_bed_renewed(time_t now, int delivered);
