@@ -610,6 +610,8 @@
   "history.clear_history": "Clear history",
   "history.delete_entry": "Delete entry",
   "history.delete_named": "Delete {name}",
+  "history.print_named": "Print {name}",
+  "history.file_gone": "This file is no longer on the printer.",
   "history.confirm_delete": "Delete these {n} print-history entries? This cannot be undone. G-code files and videos are not deleted.",
   "history.delete_requested": "History deletion requested.",
   "print.file_filament": "Filament in G-code",

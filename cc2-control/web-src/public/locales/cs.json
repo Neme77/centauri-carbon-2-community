@@ -610,6 +610,8 @@
   "history.clear_history": "Vymazat historii",
   "history.delete_entry": "Smazat záznam",
   "history.delete_named": "Smazat {name}",
+  "history.print_named": "Tisknout {name}",
+  "history.file_gone": "Tento soubor už v tiskárně není.",
   "history.confirm_delete": "Smazat těchto {n} záznamů historie tisku? Tuto akci nelze vrátit. Soubory G-code a videa nebudou smazány.",
   "history.delete_requested": "Vyžádáno smazání historie.",
   "print.file_filament": "Filament v G-code",

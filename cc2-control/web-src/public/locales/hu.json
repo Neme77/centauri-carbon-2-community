@@ -650,6 +650,8 @@
   "history.clear_history": "Előzmények törlése",
   "history.delete_entry": "Bejegyzés törlése",
   "history.delete_named": "Törlés: {name}",
+  "history.print_named": "Nyomtatás: {name}",
+  "history.file_gone": "Ez a fájl már nincs a nyomtatón.",
   "history.confirm_delete": "Törlöd ezt a(z) {n} nyomtatási előzménybejegyzést? Ez nem vonható vissza. A G-code fájlok és videók megmaradnak.",
   "history.delete_requested": "Előzmények törlése kérve.",
   "plates.title": "Tárgyasztallap-könyvtár",

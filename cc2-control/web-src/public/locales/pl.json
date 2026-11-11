@@ -610,6 +610,8 @@
   "history.clear_history": "Wyczyść historię",
   "history.delete_entry": "Usuń wpis",
   "history.delete_named": "Usuń {name}",
+  "history.print_named": "Drukuj {name}",
+  "history.file_gone": "Tego pliku nie ma już w drukarce.",
   "history.confirm_delete": "Usunąć te {n} wpisów historii druku? Tej operacji nie można cofnąć. Pliki G-code i filmy nie zostaną usunięte.",
   "history.delete_requested": "Zażądano usunięcia historii.",
   "print.file_filament": "Filament w G-code",

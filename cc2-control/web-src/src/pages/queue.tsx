@@ -1,16 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import {
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  FileText,
-  Minus,
-  Palette,
-  Play,
-  Plus,
-  SkipForward,
-  Trash2,
-} from 'lucide-preact'
+import { ChevronDown, ChevronRight, ChevronUp, Minus, Palette, Play, Plus, SkipForward, Trash2 } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
@@ -29,6 +18,7 @@ import { stateText } from '@/lib/machine'
 import { readMeshReadiness } from '@/pages/print-dialog'
 import { JobFilament, JobFilaments, missingNote } from '@/components/queue-next'
 import { JobFilamentDialog } from '@/components/queue-filament'
+import { FilePicture } from '@/components/file-picture'
 import {
   clearFinished,
   copiesLeft,
@@ -38,7 +28,6 @@ import {
   finishedJobs,
   holdQueue,
   jobFilaments,
-  jobPicture,
   missingFilaments,
   openJobs,
   type Queue as QueueData,
@@ -191,38 +180,11 @@ const Settings = ({ item, lib }: { item: QueueItem; lib: PlateLibrary | null }) 
   )
 }
 
-// The picture the slicer put in the job's G-code, or a file icon when it has none: large on the card of the
-// current job, small in a row of the list (where the file name next to it says what it shows).
-const Thumb = ({ item, row }: { item: QueueItem; row?: boolean }) => {
-  const [url, setUrl] = useState('')
-  useEffect(() => {
-    let dead = false
-    setUrl('')
-    jobPicture(item).then(made => !dead && setUrl(made))
-    return () => {
-      dead = true
-    }
-  }, [item.id, fileKey(item)])
-  return (
-    <div
-      data-queue-picture={url ? 'shown' : 'none'}
-      class={`grid shrink-0 place-items-center overflow-hidden border border-edge bg-well ${
-        row ? 'size-12 rounded-md' : 'size-28 rounded-lg'
-      }`}
-    >
-      {url ? (
-        <img
-          src={url}
-          alt={row ? '' : t('files.g_code_model_preview')}
-          draggable={false}
-          class={`size-full object-contain ${row ? 'p-0.5' : 'p-1.5'}`}
-        />
-      ) : (
-        <FileText size={row ? 22 : 40} strokeWidth={1} class="text-edge" />
-      )}
-    </div>
-  )
-}
+// The picture of the job's file: large on the card of the current job, small in a row of the list. A queue
+// item does not say which version of the file it means, so the picture is remembered for the job.
+const Thumb = ({ item, row }: { item: QueueItem; row?: boolean }) => (
+  <FilePicture storage={item.storage} path={item.path} tag={`job ${item.id}`} row={row} />
+)
 
 const copyText = (item: QueueItem) =>
   tpl('queue.copy_k_of_n', { k: Math.min(item.done + 1, item.copies), n: item.copies })

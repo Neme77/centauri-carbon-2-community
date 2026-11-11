@@ -400,11 +400,11 @@ try {
 
   // Every job shows the picture of its file; a file that has none keeps the icon. One request per job: the
   // card of the current job and its row share it, and a poll of the queue never repeats it.
-  await page.waitForFunction(() => document.querySelectorAll('[data-queue-rows] [data-queue-picture="shown"]').length === 5)
-  assert.equal(await job(14).locator('[data-queue-picture]').getAttribute('data-queue-picture'), 'none')
+  await page.waitForFunction(() => document.querySelectorAll('[data-queue-rows] [data-file-picture="shown"]').length === 5)
+  assert.equal(await job(14).locator('[data-file-picture]').getAttribute('data-file-picture'), 'none')
   assert.equal(await page.locator('[data-queue-rows] img').evaluateAll(all => all.every(i => i.complete && i.naturalWidth > 0 && i.getBoundingClientRect().width <= 48)), true)
   assert.deepEqual(await page.locator('[data-queue-handle] span').allTextContents(), ['1', '2', '3', '4', '5', '6'], 'a picture carries the place of its job')
-  await page.locator('[data-queue-hero="active"] [data-queue-picture="shown"]').waitFor()
+  await page.locator('[data-queue-hero="active"] [data-file-picture="shown"]').waitFor()
   await page.waitForTimeout(6500)
   assert.equal(pictureRequests, 6)
   assert.equal(await job(11).locator('[data-queue-handle]').getAttribute('data-queue-handle'), 'off', 'the job that prints at the head is not dragged')
@@ -506,7 +506,7 @@ try {
   await phone.goto(`${origin}/#queue`)
   const dragged = phone.locator('[data-queue-item="14"]')
   await dragged.waitFor()
-  await phone.waitForFunction(() => document.querySelectorAll('[data-queue-rows] [data-queue-picture="shown"]').length === 5)
+  await phone.waitForFunction(() => document.querySelectorAll('[data-queue-rows] [data-file-picture="shown"]').length === 5)
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no sideways scroll on a phone')
   await dragged.evaluate(row => row.scrollIntoView({ block: 'center' }))
   const [finger, above] = [await dragged.locator('[data-queue-handle]').boundingBox(), await phone.locator('[data-queue-item="16"]').boundingBox()]

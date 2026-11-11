@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'preact/hooks'
-import { Download, Film, RefreshCw, Trash2 } from 'lucide-preact'
+import { useEffect, useRef, useState } from 'preact/hooks'
+import { Download, Film, Play, RefreshCw, Trash2 } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Pagination, PAGE_SIZE, pageIndex } from '@/components/pagination'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
+import { FilePicture } from '@/components/file-picture'
 import { errText, notify } from '@/lib/api'
+import { type FileEntry, fileTag, listFiles } from '@/lib/files'
 import { ask } from '@/lib/confirm'
 import { type Key, t, tpl } from '@/lib/i18n'
 import { duration, fileSize } from '@/lib/format'
@@ -20,6 +22,7 @@ import {
 import { printerError } from '@/lib/machine'
 import { usePoll } from '@/lib/poll'
 import { printer, view } from '@/lib/state'
+import { startFile } from '@/pages/print-dialog'
 
 const I = { size: 16, strokeWidth: 1 }
 const RESULT: Record<number, [Key, 'ok' | 'warning' | 'default']> = {
@@ -105,7 +108,31 @@ export const History = () => {
       setDeleting(false)
     }
   }
+  // The printer's history names a file, not where it is. The file list says whether the file is still there:
+  // for its picture and for printing it again. Read when the page opens and with Refresh, never polled.
+  const [files, setFiles] = useState<Map<string, FileEntry> | null>(null)
+  const listing = useRef<AbortController | null>(null)
+  const readFiles = async () => {
+    listing.current?.abort()
+    const controller = new AbortController()
+    listing.current = controller
+    try {
+      const { entries } = await listFiles(controller.signal)
+      if (controller.signal.aborted) return
+      // A file in the root of a storage before one of the same name in a folder; the internal memory first.
+      const named = new Map<string, FileEntry>()
+      for (const entry of entries) if (!named.has(entry.file.path)) named.set(entry.file.path, entry)
+      for (const entry of entries) {
+        const name = String(entry.file.path).split('/').pop() || ''
+        if (!named.has(name)) named.set(name, entry)
+      }
+      setFiles(named)
+    } catch {
+      /* the list did not come: nothing is known about the files, so nothing is said about them */
+    }
+  }
   const refresh = async () => {
+    void readFiles()
     try {
       setPage(0)
       setFailure('')
@@ -117,6 +144,7 @@ export const History = () => {
   }
   useEffect(() => {
     void refresh()
+    return () => listing.current?.abort()
   }, [])
   const status = !h.loaded
     ? t('history.loading')
@@ -133,8 +161,9 @@ export const History = () => {
               : !h.tasks.length
                 ? t('history.empty')
                 : ''
+  // A narrow window gives the picture and the name the first line and the actions the second.
   const cols =
-    'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-edge px-1 py-2.5 cc2-md:grid-cols-[minmax(0,2.2fr)_1fr_.7fr_.8fr_13rem]'
+    'grid grid-cols-[48px_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 border-b border-edge px-1 py-2 cc2-md:grid-cols-[48px_minmax(0,2.2fr)_1fr_.7fr_.8fr_15.5rem]'
   return (
     <Page title="common.history" sub="history.jobs_recorded_by_the_printer_and">
       <Card>
@@ -162,6 +191,7 @@ export const History = () => {
         {h.tasks.length > 0 && (
           <div class="cc2-history-list">
             <div class={`${cols} hidden text-xs text-muted cc2-md:grid`}>
+              <span />
               <span>{t('common.name')}</span>
               <span>{t('history.started')}</span>
               <span>{t('history.duration')}</span>
@@ -170,8 +200,15 @@ export const History = () => {
             </div>
             {h.tasks.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map(task => {
               const [label, tone] = RESULT[task.status] ?? ['history.unknown', 'default']
+              const file = files?.get(task.name)
               return (
-                <div key={task.id} class={cols}>
+                <div key={task.id} class={cols} data-history-task={task.id}>
+                  <FilePicture
+                    storage={file?.storage || 'internal'}
+                    path={file ? file.file.path : ''}
+                    tag={file ? fileTag(file.file) : ''}
+                    row
+                  />
                   <div class="min-w-0">
                     <div class="font-semibold [overflow-wrap:anywhere]">{task.name || '—'}</div>
                     <small class="text-muted cc2-md:hidden">
@@ -183,19 +220,28 @@ export const History = () => {
                   <span class="hidden cc2-md:block">
                     <Tag tone={tone}>{t(label)}</Tag>
                   </span>
-                  <div class="justify-self-end">
-                    <div class="flex items-center justify-end gap-2">
-                      <Video task={task} idle={v.idle} busy={locked} />
-                      <Button
-                        class="px-2"
-                        title={t('history.delete_entry')}
-                        aria-label={tpl('history.delete_named', { name: task.name })}
-                        disabled={!v.idle || locked || task.status < 1 || task.status > 3}
-                        onClick={() => remove([task])}
-                      >
-                        <Trash2 {...I} />
-                      </Button>
-                    </div>
+                  <div class="col-span-2 flex items-center justify-end gap-2 cc2-md:col-span-1">
+                    <Video task={task} idle={v.idle} busy={locked} />
+                    {/* The print dialog of the Files page, for the file of this job while the printer still has it. */}
+                    <Button
+                      class="px-2"
+                      data-history-print
+                      title={file ? t('files.print') : files ? t('history.file_gone') : undefined}
+                      aria-label={tpl('history.print_named', { name: task.name })}
+                      disabled={!file}
+                      onClick={() => file && startFile(file.storage, file.file.path)}
+                    >
+                      <Play {...I} />
+                    </Button>
+                    <Button
+                      class="px-2"
+                      title={t('history.delete_entry')}
+                      aria-label={tpl('history.delete_named', { name: task.name })}
+                      disabled={!v.idle || locked || task.status < 1 || task.status > 3}
+                      onClick={() => remove([task])}
+                    >
+                      <Trash2 {...I} />
+                    </Button>
                   </div>
                 </div>
               )

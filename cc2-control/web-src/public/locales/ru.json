@@ -610,6 +610,8 @@
   "history.clear_history": "Очистить историю",
   "history.delete_entry": "Удалить запись",
   "history.delete_named": "Удалить {name}",
+  "history.print_named": "Напечатать {name}",
+  "history.file_gone": "Этого файла уже нет на принтере.",
   "history.confirm_delete": "Удалить эти {n} записей истории печати? Это действие нельзя отменить. Файлы G-code и видео не удаляются.",
   "history.delete_requested": "Запрошено удаление истории.",
   "print.file_filament": "Филамент в G-code",

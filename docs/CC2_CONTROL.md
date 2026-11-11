@@ -152,7 +152,7 @@ User-defined material presets are stored under `/opt/usr/cc2-control`.
 
 **Canvas → Canvas controls → Pull-back after cut** sets how far the Canvas pulls a filament back after cutting it (`[canvas_dev] unload_fila_dist`, 60–350 mm). Raise it when the tip parks inside a shared tube or an aftermarket 4-in-1 adapter. The value is stored as an override in the printer's `autosave.cfg`, so the vendor configuration is not edited, and **Use printer default** removes it. The printer reads it when it starts, so after saving CC2 Control offers to restart the printer (idle only, about a minute and a half); otherwise it applies at the next restart. On a printer running the program with the firmware's limit raised to 1000 mm (issue #172), CC2 Control recognises it by its exact fingerprint and accepts up to 1000 mm, with a note on the page. Set 350 mm or less before the printer goes back to a stock program, which refuses to start with a larger value.
 
-The G-code library lists printable files from internal memory and USB storage, including nested folders and thumbnails where available. USB jobs are validated and imported before the printer's native print-start workflow is used.
+The G-code library lists printable files from internal memory and USB storage, including nested folders and thumbnails where available. USB jobs are validated and imported before the printer's native print-start workflow is used. Every row of the list shows the picture embedded in its file, the same one the Queue and History lists show; a picture is read from the printer once, for the rows on screen.
 
 ## Spools
 
@@ -192,6 +192,7 @@ Requests CC2 Control sends over MQTT (print start, Canvas auto refill, history, 
 
 - **Download** streams a rendered time-lapse MP4 from the printer through CC2 Control; the browser never receives the LAN access code.
 - **Create video** renders the stored frames of a job into an MP4 (vendor method 1051). It is available only while the printer is Idle, one video at a time, and keeps the printer busy for several minutes.
+- The printer records a job by its file name only. While a file of that name is still in the G-code library (internal memory first), the job shows the file's picture and its **Print** button opens the print dialog of the Files page, to start the file again or to add it to the queue. A job whose file is gone keeps the file icon and cannot be printed from here.
 
 The printer lists its last 50 jobs (about 20 KB on the tested printer); replies larger than 256 KiB would not be loaded.
 

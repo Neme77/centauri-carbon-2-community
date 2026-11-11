@@ -18,7 +18,8 @@ const libraryGroup = start => {
 const originalFetch = window.fetch;
 window.fetch = (input,options={}) => {
   const url = typeof input === 'string' ? input : input.url;
-  if(url.includes('/api/gcode-files') && !url.includes('/upload')) {
+  // The list and its pages are counted; a row's picture is its own request (test-files-history-pages counts those).
+  if(url.includes('/api/gcode-files') && !url.includes('/upload') && !url.includes('/thumbnail')) {
     window.__libraryRequests.push(url);
     const parsed = new URL(url,'http://fixture');
     let group = libraryGroup(0);
