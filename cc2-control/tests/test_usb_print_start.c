@@ -1,9 +1,27 @@
 #define main cc2_main_original
 #define mqtt_start_print mock_mqtt_start_print
+#define console_emergency_stop mock_console_emergency_stop
 #include "../src/main.c"
 #undef main
 #undef mqtt_start_print
+#undef console_emergency_stop
 #include <assert.h>
+
+static int emergency_stops;
+int mock_console_emergency_stop(console_state *state, char *reason, size_t cap) {
+    (void)state; (void)reason; (void)cap; emergency_stops++; return 0;
+}
+
+/* Holds the worker right before the copy until the test releases it: a slow copy on demand. */
+static int gate[2];
+static void hold_copy(void) { char byte; assert(read(gate[0], &byte, 1) == 1); }
+static void release_copy(void) { assert(write(gate[1], "x", 1) == 1); }
+
+static double now_ms(void) {
+    struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
+    return (double)t.tv_sec * 1000.0 + (double)t.tv_nsec / 1e6;
+}
+
 
 /* #344: a print dialog start from USB scans and copies the file on a worker thread. The socket gets
  * its answer only from usb_start_tick() on the main loop, which checks the printer again first. */
@@ -24,6 +42,12 @@ int mock_mqtt_start_print(mqtt_client *c, const char *media, const char *filenam
     char text[32]; snprintf(text, sizeof(text), "1020:%s:%zu;", media, count); strcat(events, text);
     snprintf(started_name, sizeof(started_name), "%s", filename);
     return 0;
+}
+
+static int starts_sent(void) {
+    int count = 0;
+    for (const char *at = events; (at = strstr(at, "1020:")); at += 5) count++;
+    return count;
 }
 
 static void write_file(const char *path, const char *text) {
@@ -168,6 +192,49 @@ int main(void) {
     usb_start_tick(&mqtt);
     assert(answer(peer, response, sizeof(response)) == 404 && !events[0] && imports() == 0);
 
-    puts("PASS USB print start: copy on a worker, start from the main loop, refusals clean up");
+    /* #347 review: the browser gives up (timeout, closed tab) while a slow copy runs. The start
+     * is cancelled and never dispatched, and a retry cannot add a second print. */
+    assert(!pipe(gate));
+    usb_start_copy_hook = hold_copy;
+    peer = begin(&mqtt, "usb\ncube.gcode\n\nA\nsaved\n0", response, sizeof(response), &status);
+    assert(peer >= 0);
+    close(peer);
+    usb_start_tick(&mqtt);                       /* noticed while the copy is still held */
+    assert(usb_start_active() && usb_start_cancelled == 1 && !atomic_load(&usb_start_done));
+    assert(begin(&mqtt, "usb\ncube.gcode\n\nA\nsaved\n0", response, sizeof(response), &status) < 0);
+    assert(status == 409 && strstr(response, "still being copied"));
+    release_copy(); wait_worker(); usb_start_tick(&mqtt);
+    assert(!usb_start_active() && starts_sent() == 0 && imports() == 0);
+    usb_start_copy_hook = NULL;
+    peer = begin(&mqtt, "usb\ncube.gcode\n\nA\nsaved\n0", response, sizeof(response), &status);
+    assert(peer >= 0); wait_worker(); usb_start_tick(&mqtt);
+    assert(answer(peer, response, sizeof(response)) == 202 && starts_sent() == 1 && imports() == 1);
+    snprintf(copy, sizeof(copy), "gcode/%s", started_name); assert(!unlink(copy));
+    usb_start_tick(&mqtt);
+    assert(starts_sent() == 1);
+
+    /* The emergency stop answers at once during a large import, and the pending start is dropped. */
+    console_state console; console_init(&console, "/tmp/unused");
+    for (int i = 0; i < 2; i++) {
+        usb_start_copy_hook = hold_copy;
+        peer = begin(&mqtt, "usb\ncube.gcode\n\nA\nsaved\n0", response, sizeof(response), &status);
+        assert(peer >= 0);
+        int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+        double begun = now_ms();
+        if (i == 0) control_response(pair[0], &console, &mqtt, "system:emergency_stop", 21);
+        else console_command_response(pair[0], &console, &mqtt, "M112", 4);
+        close(pair[0]);
+        assert(answer(pair[1], response, sizeof(response)) == 202 && now_ms() - begun < 100);
+        assert(emergency_stops == i + 1 && usb_start_cancelled == 2);
+        release_copy(); wait_worker(); usb_start_tick(&mqtt);
+        assert(answer(peer, response, sizeof(response)) == 409 && strstr(response, "emergency stop"));
+        assert(!usb_start_active() && !events[0] && imports() == 0);
+    }
+    usb_start_copy_hook = NULL;
+    console_destroy(&console);
+    close(gate[0]); close(gate[1]);
+
+    puts("PASS USB print start: copy on a worker, start from the main loop, refusals clean up, "
+         "client disconnect and emergency stop cancel an undispatched start");
     return 0;
 }

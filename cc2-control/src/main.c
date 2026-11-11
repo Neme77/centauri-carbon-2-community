@@ -2311,8 +2311,23 @@ static int usb_start_fd = -1;
 static atomic_int usb_start_done;
 static char usb_start_body[PATH_MAX_LOCAL + 512];
 static size_t usb_start_length;
+/* Set by the main loop only: the client left (1) or the emergency stop was pressed (2) before
+ * the start was dispatched. The copy still finishes, but the print is never sent. */
+static int usb_start_cancelled;
+/* Test seam: runs on the worker right before the copy. */
+static void (*usb_start_copy_hook)(void);
 
 static int usb_start_active(void) { return usb_start_fd >= 0; }
+
+/* The emergency stop drops a USB start that has not been dispatched yet. */
+static void usb_start_cancel(void) { if (usb_start_active()) usb_start_cancelled = 2; }
+
+/* The request was read in full, so any readable state on the socket means the peer closed it. */
+static int usb_start_client_gone(int fd) {
+    char byte;
+    ssize_t n = recv(fd, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
+    return n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR);
+}
 
 static int gcode_request_is_usb(const char *body, size_t body_len) {
     return body_len > 4 && memcmp(body, "usb\n", 4) == 0;
@@ -2335,6 +2350,7 @@ static void *usb_start_worker(void *unused) {
         if (gcode_usb_import_name(job->filename, existing) == 0 &&
             snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, existing) < (int)sizeof(path))
             job->replaced = lstat(path, &info) == 0;
+        if (usb_start_copy_hook) usb_start_copy_hook();
         job->import_failed = gcode_import_usb(job->filename, job->imported) != 0;
         job->imported_ok = !job->import_failed;
     }
@@ -2359,6 +2375,7 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
     if (gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start) != 0) return 0;
     memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
     usb_start_length = body_len;
+    usb_start_cancelled = 0;
     atomic_store(&usb_start_done, 0);
     pthread_attr_t attr; pthread_t thread;
     int failed = pthread_attr_init(&attr);
@@ -2381,12 +2398,21 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
 
 /* Main loop: once the copy is complete, every check runs again (the printer may have started
  * something meanwhile) and the start is sent. A refused start removes the copy it made, unless
- * an earlier import had the same name: that file is left as the synchronous start left it. */
+ * an earlier import had the same name: that file is left as the synchronous start left it.
+ * A client that disconnects before then, or an emergency stop, cancels the start: the browser
+ * has reported a failure, so the print must not begin behind its back. */
 static void usb_start_tick(mqtt_client *mqtt) {
-    if (!usb_start_active() || !atomic_load(&usb_start_done)) return;
-    int fd = usb_start_fd;
-    usb_start.stage = USB_START_PREPARED;
-    int status = gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
+    if (!usb_start_active()) return;
+    if (!usb_start_cancelled && usb_start_client_gone(usb_start_fd)) usb_start_cancelled = 1;
+    if (!atomic_load(&usb_start_done)) return;
+    int fd = usb_start_fd, status = 409;
+    if (usb_start_cancelled == 2) {
+        const char *error = "{\"accepted\":false,\"error\":\"Print start cancelled by the emergency stop\"}\n";
+        respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+    } else if (!usb_start_cancelled) {
+        usb_start.stage = USB_START_PREPARED;
+        status = gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
+    }
     if (status != 202 && usb_start.imported_ok && !usb_start.replaced) {
         char path[PATH_MAX_LOCAL * 2];
         int length = snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, usb_start.imported);
@@ -3983,6 +4009,7 @@ static void console_command_response(int fd, console_state *console, const mqtt_
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error)); return;
     }
     memcpy(command,body,body_len); command[body_len]='\0';
+    if (!strcasecmp(command,"M112")) usb_start_cancel();
     /* M112 bypasses the console and the firmware's command queue; see console_emergency_stop(). */
     if (!strcasecmp(command,"M112") && console_emergency_stop(console,reason,sizeof(reason)) == 0) {
         const char *ok="{\"accepted\":true}\n";
@@ -4053,6 +4080,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     memcpy(action,body,body_len);action[body_len]='\0';
     if(!strcmp(action,"system:emergency_stop")){
+        usb_start_cancel();
         /* Straight to the firmware's emergency_stop endpoint; the queued M112 below is only the fallback. */
         char stop_reason[160];
         if(console_emergency_stop(console,stop_reason,sizeof(stop_reason))==0){
