@@ -11,9 +11,11 @@
  * lost its homing, another measurement took the slot), the token no longer matches and the
  * request is refused, so the caller reviews the new list.
  *
- * Between two measurements the nozzle is switched off and the bed target is renewed like the
- * tramming session's, but only while telemetry still shows the session's own target. Both
- * are part of the list the measurement was confirmed with.
+ * Between two measurements the nozzle is switched off and the bed is kept at the session's
+ * temperature. The firmware switches the bed off when BED_MESH_CALIBRATE ends (measured on
+ * the printer), so the session sets the target again once after each measurement, and then
+ * renews it like the tramming session's, only while telemetry still shows the session's own
+ * target. Both are part of the list the measurement was confirmed with.
  *
  * The session owns the heaters from its first measurement on. However it ends without a
  * print taking over (explicit end, saved, a failed or cancelled measurement, emergency
@@ -35,6 +37,7 @@ static struct {
     char nozzle[PLATE_ID_LEN + 1];
     time_t last;       /* the last accepted request or completed measurement */
     int nozzle_off_due; /* the last measurement left the nozzle at its homing temperature */
+    int bed_rearm_due;  /* the last measurement ended with the bed switched off by the firmware */
     time_t bed_renew_at;
     const char *ended; /* how the last session ended: "", "ended", "saved", "failed", "cancelled",
                         * "timeout", "print" or "estop" */
@@ -69,7 +72,7 @@ static void align_tick(const mqtt_client *mqtt, int emergency, time_t now) {
         align.measuring = 0;
         if (!strcmp(plates_cal.result, "done")) {
             align.round++; align.measured = 1; align.last = now;
-            align.nozzle_off_due = 1; align.bed_renew_at = now + SCREWS_BED_RENEW_S;
+            align.nozzle_off_due = 1; align.bed_rearm_due = 1; align.bed_renew_at = now + SCREWS_BED_RENEW_S;
             return;
         }
         /* The job switched the bed off where it still owned it; the nozzle may still hold the
@@ -83,7 +86,14 @@ static void align_tick(const mqtt_client *mqtt, int emergency, time_t now) {
     if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status || mqtt->machine_status != 1) return;
     if (align.nozzle_off_due && (align_nozzle_off ? align_nozzle_off : align_send_nozzle_off)() == 0) align.nozzle_off_due = 0;
     double target;
-    if (now >= align.bed_renew_at && uds_value(&telemetry, U_BG, &target) && fabs(target - align.temp) <= 0.5)
+    if (!uds_value(&telemetry, U_BG, &target)) return;
+    if (align.bed_rearm_due) {
+        /* Off (the firmware's doing) or still the session's: set it. Another target is someone else's. */
+        if (target > 0.5 && fabs(target - align.temp) > 0.5) align.bed_rearm_due = 0;
+        else if (plates_bed_target(align.temp) == 0) { align.bed_rearm_due = 0; align.bed_renew_at = now + SCREWS_BED_RENEW_S; }
+        return;
+    }
+    if (now >= align.bed_renew_at && fabs(target - align.temp) <= 0.5)
         align.bed_renew_at = now + (plates_bed_target(align.temp) == 0 ? SCREWS_BED_RENEW_S : 30);
 }
 
@@ -215,7 +225,7 @@ static void align_measure_response(int fd, const mqtt_client *mqtt, console_stat
         memcpy(align.nozzle, fields[3], sizeof(align.nozzle)); /* "" or a checked id */
     }
     align.ended = ""; align.measuring = 1; align.measured = 0; align.last = time(NULL);
-    align.nozzle_off_due = 0;
+    align.nozzle_off_due = align.bed_rearm_due = 0;
     char reply[96];
     snprintf(reply, sizeof(reply), "{\"started\":true,\"round\":%d,\"rounds\":%d}\n", align.round + 1, align.rounds);
     plates_reply(fd, 202, reply);

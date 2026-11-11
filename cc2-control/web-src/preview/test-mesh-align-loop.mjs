@@ -47,6 +47,12 @@ try {
   })
   let mesh = null
   await page.route('**/api/mesh', route => (mesh ? route.fulfill({ json: mesh }) : route.fallback()))
+  // The round limit below is changed in the settings block, an experimental opt-in.
+  await page.route('**/api/experiments', route =>
+    route.fulfill({
+      json: { schema: 1, editable: true, ready: true, canvas_uds: false, canvas_uds_available: false, quiet_motors: false, normal_confirmed: false, cli_canvas: false, mesh_align_settings: true },
+    })
+  )
   // One confirmed request can be refused the way the backend refuses it when the console is busy.
   let refuse = 0
   await page.route('**/api/screws/align/measure', route => {

@@ -5,6 +5,7 @@ import { Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
 import { Notice, Warn } from '@/components/shared'
 import { errText, notify, request } from '@/lib/api'
+import { experimental, refreshExperiments } from '@/lib/experiments'
 import { ask } from '@/lib/confirm'
 import { i18n, type Key, t, tpl } from '@/lib/i18n'
 import {
@@ -36,6 +37,7 @@ import { calibrationForm, findMeasure, nozzleName, plates, refreshPlates, tempOk
 import { usePoll } from '@/lib/poll'
 import { NozzleSelect } from '@/pages/bed-plates'
 import { SCREW_CORNERS } from '@/lib/screws'
+import { openSettings } from '@/lib/state'
 import { ls, store } from '@/lib/store'
 
 // Mesh-guided screw alignment (see lib/mesh-align.ts): what the screws have to do, from a plane through a
@@ -659,11 +661,23 @@ const Guide = ({ config }: { config: AlignConfig }) => {
 }
 
 export const MeshAlign = () => {
-  const config = alignConfig.use()
+  // The settings are an experimental opt-in (Settings → Experimental integrations). Without it the
+  // CC2 defaults apply, whatever this browser has stored, and the settings block is not shown.
+  const settingsEnabled = Boolean(experimental.use().data?.mesh_align_settings)
+  const stored = alignConfig.use()
+  const config = settingsEnabled ? stored : ALIGN_DEFAULTS
+  const configRef = useRef(config)
+  configRef.current = config
+  useEffect(() => {
+    void refreshExperiments()
+  }, [])
   const library = plates.use().data
   const [data, setData] = useState<any>(null)
   const [choice, setChoice] = useState('')
   const [loading, setLoading] = useState(false)
+  // The printer's own mesh has been asked for once: only then is a default chosen, so a saved
+  // measurement that loaded first is not shown for a moment in place of the active mesh.
+  const [answered, setAnswered] = useState(false)
   const alive = useRef(true)
   const load = async (manual = false) => {
     setLoading(true)
@@ -675,7 +689,10 @@ export const MeshAlign = () => {
       if (manual) notify(tpl('bed.mesh_unavailable_error', { error: errText(e) }), 'error')
       return null
     } finally {
-      if (alive.current) setLoading(false)
+      if (alive.current) {
+        setLoading(false)
+        setAnswered(true)
+      }
     }
   }
   // The guided loop runs on CC2 Control; the page follows it, faster while a session is active.
@@ -694,7 +711,7 @@ export const MeshAlign = () => {
       const live = reply?.result?.status?.bed_mesh?.profile_name === slot ? gridFromMeshReply(reply, 'active') : null
       const saved = gridFromMeshReply(reply, slot)
       const grid = live || saved || gridFromMeshReply(reply, 'active')
-      const measured = grid ? analyseMesh(grid, alignConfig.get()) : null
+      const measured = grid ? analyseMesh(grid, configRef.current) : null
       if (!measured) return
       setChoice(live || !saved ? 'active' : slot)
       alignRounds.set(state => ({
@@ -733,7 +750,7 @@ export const MeshAlign = () => {
     return out
   }, [data, library])
   // The mesh the printer applies now is analysed unless another one is chosen.
-  const source = sources.find(s => s.id === choice) || sources[0] || null
+  const source = sources.find(s => s.id === choice) || (answered ? sources[0] : null) || null
   const analysis = useMemo(() => (source ? analyseMesh(source.grid, config) : null), [source, config])
   const measured = source?.id.startsWith('measure:') ? findMeasure(library, source.id.slice(8)) : null
   const groups = [...new Set(sources.map(s => s.group).filter(Boolean))] as string[]
@@ -881,7 +898,17 @@ export const MeshAlign = () => {
         </>
       )}
       <Guide config={config} />
-      <Settings config={config} />
+      {settingsEnabled ? (
+        <Settings config={config} />
+      ) : (
+        <div
+          class="mt-3.5 flex flex-wrap items-center gap-2 rounded-md border border-edge px-3 py-2"
+          data-align="settings-off"
+        >
+          <p class="min-w-0 flex-1 text-xs text-muted">{t('bed.align_settings_off')}</p>
+          <Button onClick={() => openSettings('integrations')}>{t('bed.align_settings_open')}</Button>
+        </div>
+      )}
     </Card>
   )
 }

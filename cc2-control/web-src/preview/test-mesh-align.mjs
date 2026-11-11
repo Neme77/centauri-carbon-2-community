@@ -45,6 +45,13 @@ try {
     if (r.method() !== 'GET' && !r.url().includes('/__preview/')) writes.push(`${r.method()} ${new URL(r.url()).pathname}`)
   })
   let mesh = null
+  // The settings block is an experimental opt-in; the test starts without it.
+  let settingsOptIn = false
+  await page.route('**/api/experiments', route =>
+    route.fulfill({
+      json: { schema: 1, editable: true, ready: true, canvas_uds: false, canvas_uds_available: false, quiet_motors: false, normal_confirmed: false, cli_canvas: false, mesh_align_settings: settingsOptIn },
+    })
+  )
   await page.route('**/api/mesh', route => (mesh ? route.fulfill({ json: mesh }) : route.fallback()))
   // The demo serves only some locales; German comes straight from the locale file.
   await page.route('**/i18n/de.json', route => route.fulfill({ json: german }))
@@ -167,7 +174,20 @@ try {
   await screw('RR').getByText(lower, { exact: true }).waitFor()
 
   // Turns appear once a thread pitch and its source are set; the direction needs its own source.
+  // Without the opt-in the page says which defaults it uses and where to change them; no settings block.
+  assert.equal(await part('settings').count(), 0)
+  await part('settings-off').getByText('This page uses the CC2 defaults').waitFor()
+  await part('settings-off').getByRole('button', { name: 'Open experimental integrations', exact: true }).click()
+  await page.waitForFunction(() => location.hash === '#settings/integrations')
+  await page.getByRole('heading', { name: 'Mesh alignment settings', exact: true }).waitFor()
+  settingsOptIn = true
+  await page.evaluate(() => {
+    location.hash = '#bed/align'
+  })
+  await card.getByRole('heading', { name: 'Mesh-guided screw alignment', exact: true }).waitFor()
   const settings = part('settings')
+  await settings.waitFor()
+  assert.equal(await part('settings-off').count(), 0)
   await settings.getByText('Alignment settings', { exact: true }).click()
   await settings.getByText('Target, rounds and warning limit are estimates, not measured values.').waitFor()
   const field = name => settings.getByLabel(name, { exact: true })

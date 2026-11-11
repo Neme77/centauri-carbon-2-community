@@ -470,7 +470,10 @@ int main(void) {
     assert(nozzle_offs == 0 && align.nozzle_off_due);       /* refused once */
     loop(0);
     assert(nozzle_offs == 1 && !align.nozzle_off_due);
+    /* The firmware switched the bed off when the calibration ended: the session set it again, once. */
+    assert(!align.bed_rearm_due);
     int sent = bed_targets;
+    bed(60, 60);
     loop(0);
     assert(bed_targets == sent);                            /* not due yet */
     align.bed_renew_at = time(NULL) - 1;
@@ -487,6 +490,24 @@ int main(void) {
     assert(call(END, "CONFIRM") == 200);
     loop(0);
     assert(bed_targets == sent + 1);                        /* no renewal after the end */
+
+    /* After a measurement the bed is off (the firmware's doing). The session sets its target again,
+     * retried when refused; a target someone else set meanwhile is left alone. */
+    reset();
+    measure(&second);
+    bed(58, 0); bed_target_refused = 1;
+    int before = bed_targets;
+    loop(0);
+    assert(bed_targets == before && align.bed_rearm_due);
+    loop(0);
+    assert(bed_targets == before + 1 && !align.bed_rearm_due);
+    assert(call(END, "CONFIRM") == 200);
+    reset();
+    measure(&second);
+    bed(58, 45); before = bed_targets;
+    loop(0); loop(0);
+    assert(bed_targets == before && !align.bed_rearm_due);
+    assert(call(END, "CONFIRM") == 200);
 
     /* The process is killed during an alignment session: the marker carries the session's bed
      * target, and the next process switches the heaters off only while the bed still shows it. */

@@ -10,6 +10,7 @@ export type ExperimentState = {
   external_feed?: boolean
   bed_drying?: boolean
   nozzle_expansion?: boolean
+  mesh_align_settings?: boolean
   quiet_motors: boolean
   normal_confirmed: boolean
   cli_canvas: boolean

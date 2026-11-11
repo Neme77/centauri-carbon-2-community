@@ -24,37 +24,43 @@ export const Experiments = () => {
     }
   }, [])
   const change = async (
-    feature: 'canvas-uds' | 'quiet-motors' | 'bed-drying' | 'external-feed' | 'nozzle-expansion'
+    feature: 'canvas-uds' | 'quiet-motors' | 'bed-drying' | 'external-feed' | 'nozzle-expansion' | 'mesh-align-settings'
   ) => {
     if (!data || !ok || busy) return
     const enabled =
-      feature === 'nozzle-expansion'
-        ? data.nozzle_expansion
-        : feature === 'external-feed'
-          ? data.external_feed
-          : feature === 'canvas-uds'
-            ? data.canvas_uds
-            : feature === 'bed-drying'
-              ? data.bed_drying
-              : data.quiet_motors
-    const message =
-      feature === 'nozzle-expansion'
-        ? enabled
-          ? 'nozzle.disable_confirm'
-          : 'nozzle.enable_confirm'
-        : feature === 'external-feed'
-          ? 'feed.enable_confirm'
-          : feature === 'bed-drying'
-            ? enabled
-              ? 'drying.disable_confirm'
-              : 'drying.enable_confirm'
+      feature === 'mesh-align-settings'
+        ? data.mesh_align_settings
+        : feature === 'nozzle-expansion'
+          ? data.nozzle_expansion
+          : feature === 'external-feed'
+            ? data.external_feed
             : feature === 'canvas-uds'
+              ? data.canvas_uds
+              : feature === 'bed-drying'
+                ? data.bed_drying
+                : data.quiet_motors
+    const message =
+      feature === 'mesh-align-settings'
+        ? enabled
+          ? 'bed.align_settings_disable_confirm'
+          : 'bed.align_settings_enable_confirm'
+        : feature === 'nozzle-expansion'
+          ? enabled
+            ? 'nozzle.disable_confirm'
+            : 'nozzle.enable_confirm'
+          : feature === 'external-feed'
+            ? 'feed.enable_confirm'
+            : feature === 'bed-drying'
               ? enabled
-                ? 'experiments.canvas_off_confirm'
-                : 'experiments.canvas_on_confirm'
-              : enabled
-                ? 'experiments.quiet_off_confirm'
-                : 'experiments.quiet_on_confirm'
+                ? 'drying.disable_confirm'
+                : 'drying.enable_confirm'
+              : feature === 'canvas-uds'
+                ? enabled
+                  ? 'experiments.canvas_off_confirm'
+                  : 'experiments.canvas_on_confirm'
+                : enabled
+                  ? 'experiments.quiet_off_confirm'
+                  : 'experiments.quiet_on_confirm'
     if (!(await ask(t(message))) || !mounted.current) return
     setBusy(true)
     setError('')
@@ -187,6 +193,24 @@ export const Experiments = () => {
               {t(data?.nozzle_expansion ? 'experiments.disable' : 'experiments.enable')}
             </Button>
             {data?.nozzle_expansion && <Button onClick={() => openPage('bed', 'nozzle')}>{t('nozzle.tab')}</Button>}
+          </div>
+        </div>
+        <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
+          <h3 class="text-base font-semibold">{t('bed.align_settings_experiment')}</h3>
+          <p class="my-2 flex-1 text-sm text-muted">{t('bed.align_settings_experiment_hint')}</p>
+          <div class="flex flex-wrap items-stretch gap-2" data-experiment-actions>
+            <Button
+              role="switch"
+              aria-checked={Boolean(data?.mesh_align_settings)}
+              aria-label={t('bed.align_settings_experiment')}
+              disabled={disabled}
+              onClick={() => void change('mesh-align-settings')}
+            >
+              {t(data?.mesh_align_settings ? 'experiments.disable' : 'experiments.enable')}
+            </Button>
+            {data?.mesh_align_settings && (
+              <Button onClick={() => openPage('bed', 'align')}>{t('bed.align_tab')}</Button>
+            )}
           </div>
         </div>
       </div>

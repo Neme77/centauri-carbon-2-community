@@ -925,3 +925,5 @@ this notice does not acknowledge or operate the physical display.
 
 
 Nozzle expansion: `POST /api/experiments` accepts `nozzle-expansion:on` / `nozzle-expansion:off` with the existing LAN authorization and idle/cold checks. The choice defaults to off and migrates schema-1/2 settings without enabling it. `GET /api/nozzle-expansion` adds `enabled`; start/factory require the enabled, valid experiment. Recovery and an already-required restart do not require opting in.
+
+Mesh alignment settings: `POST /api/experiments` accepts `mesh-align-settings:on` / `mesh-align-settings:off` with the same LAN authorization and idle/cold checks, and `GET /api/experiments` reports `mesh_align_settings`. It defaults to off. It only shows the settings block of Bed Levelling → Mesh alignment (tilt span, limits, screw positions, thread pitch and turning direction, saved in the browser); without it the page uses the CC2 defaults. It sends nothing to the printer. The stored choices use schema 4; a schema-3 file keeps its choices with this one off.
