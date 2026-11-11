@@ -204,6 +204,9 @@ jobs:
       - name: Update notification, compatibility, cache and mobile header
         run: npm run test:update-notice
 
+      - name: Mesh-guided screw alignment (plane fit and display)
+        run: npm run test:mesh-align
+
       - name: Library mesh selection and guarded activation
         run: npm run test:mesh-selector
         env:

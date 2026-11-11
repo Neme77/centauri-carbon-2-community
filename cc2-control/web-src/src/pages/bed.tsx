@@ -59,6 +59,7 @@ import {
   stopCalibration,
   tempOk,
 } from '@/lib/plates'
+import { MeshAlign } from '@/pages/bed-align'
 import { NozzleSelect, Plates } from '@/pages/bed-plates'
 import { NozzleExpansion } from '@/pages/nozzle-expansion'
 
@@ -1031,6 +1032,7 @@ export const Bed = () => {
         <CalibrationTools panel="cell" />
       ) : bed === 'screws' ? (
         <div class="max-w-4xl">
+          <MeshAlign />
           <Screws />
         </div>
       ) : bed === 'plates' ? (
