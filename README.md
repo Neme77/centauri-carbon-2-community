@@ -9,12 +9,19 @@ testing from the community.
 [Report a problem](https://github.com/Neme77/centauri-carbon-2-community/issues) ·
 [Contributors](docs/CONTRIBUTORS.md)
 
-## Community Firmware 4.4.4 · CC2 Control 1.2.29
+## Community Firmware 4.4.4 · ELEGOO base 02.01.01.13 · CC2 Control 1.2.29
 
 **A new base on ELEGOO 02.01.01.13, with the Community touchscreen, local web
 dashboard and native integrations brought forward together.** This release
 combines the .13 port with the recent print, calibration, camera, network and
-interface work. The final firmware is byte-identical to the accepted RC4.
+interface work. The final firmware is the verified RC5: only five translated
+locale files differ from the physically accepted RC4. Backend and native
+components remain identical.
+
+**First-ever Community installation from original ELEGOO firmware? Do not run
+the probe or Prepare-Upgrade. Follow the stock-firmware offline installation
+route in the guide.** Reflashing stock on a previously modified printer does
+not make it a first installation: persistent Community files may remain.
 
 **Upgrading from Community 4.4.3? Restore modified Canvas firmware first, save
 your backups, and complete the supplied preparation before flashing. Do not

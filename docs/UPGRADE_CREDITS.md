@@ -26,7 +26,7 @@ for the work actually reported, not labelled as tests of the final RC4.
 
 - **Surfoo:** interface architecture, usability, localisation and test foundations.
 - **beanbo:** print queue, spool tracking, plate/mesh workflows and integrations.
-- **Noahwhite2014:** calibration, mesh, filament and pullback work.
+- **Noahwhite2014:** original extended Canvas pullback idea and binary patch (#172, #202 and #314), alongside calibration, mesh and filament work. Neme77 ported and integrated the extended range into the .13 firmware base; the original contribution remains Noahwhite2014's.
 - **lpgamerzockt-ops:** layer paths, screw tramming, USB responsiveness, theme
   contrast, German translation and independent printer testing.
 - **pezso92**, **Skycos**, and all translation contributors: language coverage

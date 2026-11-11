@@ -1,9 +1,15 @@
-# Upgrade to Community Firmware 4.4.4
+# Upgrade to Community Firmware 4.4.4 — ELEGOO base 02.01.01.13
 
 **Read this entire guide before starting. The preparation steps are mandatory
 for an existing 4.4.3 Community installation. Flashing the firmware first is
 not a substitute for preparation.** This is a complete firmware release with
 CC2 Control 1.2.29, based on ELEGOO 02.01.01.13; it is not a panel-only update.
+
+**First-ever Community installation from original ELEGOO firmware: skip the
+probe and Prepare-Upgrade. They prepare existing Community installations, not
+a printer that has never had Community Firmware. Follow the original-firmware
+offline installation route below.** A stock reflash on a previously modified
+printer is not a first installation and may leave persistent Community files.
 
 ## Choose the correct route
 
@@ -12,9 +18,9 @@ CC2 Control 1.2.29, based on ELEGOO 02.01.01.13; it is not a panel-only update.
 | Community 4.4.3, any panel version, no Canvas or RFID never enabled | Back up, run the preparation plan, apply it successfully, then install the firmware. The tool checks the native baseline and supported component evidence, not the panel version. |
 | Community 4.4.3 with modified Canvas firmware | Restore the original Canvas firmware and complete its startup restoration first. Then back up, prepare and install. |
 | Unfinished RFID activation/restoration, missing or inconsistent records | Stop and finish recovery. Do not delete markers or journals to force an upgrade. |
-| Original ELEGOO .13 with no previous Community installation | Install the signed complete firmware from the original touchscreen. A stock reflash on a previously modified printer does not prove that its persistent Community files are gone. |
+| Original ELEGOO .13 with no previous Community installation | **Do not run the probe or Prepare-Upgrade.** Install the signed complete firmware using Offline Update on the original touchscreen. A stock reflash on a previously modified printer does not prove that its persistent Community files are gone. |
 | A private .13 preview or a different/unknown Community base | Request a reviewed migration route. Do not run the 4.4.3 preparation script on it. The exact RC2 active-RFID to RC4 route was separately tested; that is not approval of all previews. |
-| The accepted 4.4.4 RC4 build | The release firmware is byte-identical to that RC4. Reinstallation is unnecessary. |
+| The accepted 4.4.4 RC4 build | The final RC5 changes only five translation files; backend and native components are identical. Use a reviewed .13 migration route if installing it. Do not run the 4.4.3 preparation tool on RC4. |
 
 You do not need to install CC2 Control 1.2.27 or 1.2.28 first. A supported
 4.4.3 printer can prepare directly. Compatibility is established by the tool's
