@@ -21,6 +21,10 @@ your backups, and complete the supplied preparation before flashing. Do not
 skip these steps.** You do not need an intermediate 1.2.27 or 1.2.28 panel
 installation. Private previews and unknown bases need a reviewed route.
 
+**With modified Canvas, finish both the Canvas firmware restoration and the
+printer startup restoration, including the requested reboots, before running
+preparation. Do not flash the signed firmware file first.**
+
 | Download | What it contains |
 | --- | --- |
 | [4.4.4 upgrade kit](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2-4.4.4-Upgrade-Kit.zip) | Signed complete firmware, mandatory instructions, PC backup, native-console inspection and verified quarantine tools. Start here. |
