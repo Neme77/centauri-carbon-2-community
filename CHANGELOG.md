@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Print queue: prepare jobs ahead with the print dialog's new **Add to queue** choice (every print setting plus a number of copies), then start each copy with one button from the Queue page, the Dashboard or the print-ended notice, without the dialog. A pre-flight check shows the file, the filament in each mapped slot, the side's mesh, the nozzle and the printer state; copies are counted on the printer, stopped copies are not counted, and the next copy waits for the operator unless the automatic start is chosen for a self-clearing bed, which first checks that each mapped Canvas slot still holds the file's material. Designed and implemented by **beanbo** (#320).
+- The print queue's job list shows the picture embedded in each G-code file, and a job is moved by dragging it by that picture, with a mouse or a finger; the arrows stay. Designed and implemented by **beanbo**.
 
 ### Changed
 

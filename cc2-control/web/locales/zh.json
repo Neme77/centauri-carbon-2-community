@@ -1477,7 +1477,7 @@
   "queue.policy_auto_warning": "仅适用于能自动清空的热床。否则喷嘴会撞上已打印的零件。",
   "queue.remove_done": "最后一份完成后移除任务",
   "queue.list_title": "任务",
-  "queue.list_hint": "用箭头调整顺序。",
+  "queue.list_hint": "拖动任务的图片或用箭头调整顺序。",
   "queue.col_file": "文件",
   "queue.col_copies": "份数",
   "queue.col_per_copy": "每份",

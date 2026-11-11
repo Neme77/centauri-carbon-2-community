@@ -1477,7 +1477,7 @@
   "queue.policy_auto_warning": "Solo para una cama que se vacía sola. Si no, la boquilla chocará con la pieza impresa.",
   "queue.remove_done": "Quitar un trabajo tras su última copia",
   "queue.list_title": "Trabajos",
-  "queue.list_hint": "Reordena con las flechas.",
+  "queue.list_hint": "Arrastra un trabajo por su imagen o usa las flechas para reordenar.",
   "queue.col_file": "Archivo",
   "queue.col_copies": "Copias",
   "queue.col_per_copy": "Por copia",

@@ -1477,7 +1477,7 @@
   "queue.policy_auto_warning": "Solo per un piano che si libera da solo. Altrimenti l’ugello urta il pezzo stampato.",
   "queue.remove_done": "Rimuovi un lavoro dopo l’ultima copia",
   "queue.list_title": "Lavori",
-  "queue.list_hint": "Riordina con le frecce.",
+  "queue.list_hint": "Trascina un lavoro dalla sua immagine o usa le frecce per riordinare.",
   "queue.col_file": "File",
   "queue.col_copies": "Copie",
   "queue.col_per_copy": "Per copia",

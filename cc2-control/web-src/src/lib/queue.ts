@@ -177,3 +177,32 @@ export const clearFinished = () => post('/api/queue/clear-done')
 export const holdQueue = () => post('/api/queue/hold')
 // Gives up a start the printer never ran (only while it is idle): the job goes back to pending.
 export const abandonQueued = (id?: number) => post('/api/queue/abandon', id ? String(id) : '')
+
+// The picture a slicer embedded in a job's G-code, as an object URL ('' when the file has none). The printer
+// reads up to 4 MB of a file to find it, so a job is asked for once per page load and the requests go one
+// at a time. Only "no picture" is remembered: a request that failed is made again when it is next needed.
+const pictures = new Map<number, { file: string; made: Promise<string> }>()
+let lastPicture: Promise<unknown> = Promise.resolve()
+export const jobPicture = (item: QueueItem): Promise<string> => {
+  const file = `${item.storage}\n${item.path}`
+  const known = pictures.get(item.id)
+  if (known?.file === file) return known.made
+  const made = lastPicture.then(async () => {
+    try {
+      const r = await fetch('/api/gcode-files/thumbnail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'X-CC2-Request': '1' },
+        body: file,
+      })
+      const blob = await r.blob()
+      if (r.ok && blob.type.startsWith('image/')) return URL.createObjectURL(blob)
+      if (r.status !== 404) pictures.delete(item.id)
+    } catch {
+      pictures.delete(item.id)
+    }
+    return ''
+  })
+  lastPicture = made
+  pictures.set(item.id, { file, made })
+  return made
+}

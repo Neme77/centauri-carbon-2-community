@@ -1477,7 +1477,7 @@
   "queue.policy_auto_warning": "Uniquement pour un plateau qui s’éjecte seul. Sinon la buse heurte la pièce imprimée.",
   "queue.remove_done": "Retirer une tâche après sa dernière copie",
   "queue.list_title": "Tâches",
-  "queue.list_hint": "Réordonner avec les flèches.",
+  "queue.list_hint": "Faites glisser une tâche par son image ou utilisez les flèches pour réordonner.",
   "queue.col_file": "Fichier",
   "queue.col_copies": "Copies",
   "queue.col_per_copy": "Par copie",

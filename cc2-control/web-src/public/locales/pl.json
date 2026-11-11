@@ -1477,7 +1477,7 @@
   "queue.policy_auto_warning": "Only for a bed that clears itself. Otherwise the nozzle hits the printed part.",
   "queue.remove_done": "Remove a job after its last copy",
   "queue.list_title": "Jobs",
-  "queue.list_hint": "Reorder with the arrows.",
+  "queue.list_hint": "Drag a job by its picture or use the arrows to reorder.",
   "queue.col_file": "File",
   "queue.col_copies": "Copies",
   "queue.col_per_copy": "Per copy",

@@ -366,8 +366,167 @@ try {
   await hero.locator('[data-queue-feed="ready"]').waitFor()
   await page.waitForFunction(() => document.querySelector('[data-queue-hero="next"] [data-queue-feed]')?.textContent === 'PLA · Slot 4')
 
+  // Pictures and dragging, against a queue of its own: six jobs, the first one printing, one name long enough
+  // to make its row taller than the others, one file without a picture.
+  const stock = await (await page.request.get(`${origin}/api/queue`)).json()
+  const plain = { ...stock.items[0], mapping: '', filaments: [], copies: 1, done: 0, last_result: '', present: true }
+  const names = ['Printing.gcode', 'Short.gcode', `${'A_long_name_that_wraps_'.repeat(9)}.gcode`, 'No_picture.gcode', 'Fourth.gcode', 'Fifth.gcode']
+  let own = names.map((name, i) => ({ ...plain, id: 11 + i, path: name, state: i ? 'pending' : 'printing' }))
+  let pictureRequests = 0
+  const ownQueue = async target => {
+    await target.route('**/api/queue', r => r.fulfill({ json: { ...stock, printer_idle: false, active: 11, next: own.find(j => j.state === 'pending').id, auto_in: null, items: own } }))
+    await target.route('**/api/queue/reorder', r => {
+      const [id, to] = r.request().postData().split('\n').map(Number)
+      const moving = own.find(j => j.id === id)
+      own = own.filter(j => j !== moving)
+      own.splice(to, 0, moving)
+      return r.fulfill({ json: { ok: true } })
+    })
+    await target.route('**/api/gcode-files/thumbnail', r => {
+      pictureRequests++
+      return r.request().postData().endsWith('No_picture.gcode')
+        ? r.fulfill({ status: 404, json: { error: 'No embedded thumbnail' } })
+        : r.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"><rect width="8" height="8" fill="#4caf50"/></svg>' })
+    })
+  }
+  await ownQueue(page)
+  const job = id => page.locator(`[data-queue-item="${id}"]`)
+  const box = id => job(id).boundingBox()
+  const order = () => page.locator('[data-queue-item]').evaluateAll(all => all.map(row => Number(row.dataset.queueItem)))
+  const inOrder = (target, ids) => target.waitForFunction(want => [...document.querySelectorAll('[data-queue-item]')].map(row => row.dataset.queueItem).join() === want, ids.join())
+  const shiftOf = id => job(id).evaluate(row => new DOMMatrixReadOnly(getComputedStyle(row).transform).m42)
+  await job(16).waitFor()
+  assert.deepEqual(await order(), [11, 12, 13, 14, 15, 16])
+
+  // Every job shows the picture of its file; a file that has none keeps the icon. One request per job: the
+  // card of the current job and its row share it, and a poll of the queue never repeats it.
+  await page.waitForFunction(() => document.querySelectorAll('[data-queue-rows] [data-queue-picture="shown"]').length === 5)
+  assert.equal(await job(14).locator('[data-queue-picture]').getAttribute('data-queue-picture'), 'none')
+  assert.equal(await page.locator('[data-queue-rows] img').evaluateAll(all => all.every(i => i.complete && i.naturalWidth > 0 && i.getBoundingClientRect().width <= 48)), true)
+  assert.deepEqual(await page.locator('[data-queue-handle] span').allTextContents(), ['1', '2', '3', '4', '5', '6'], 'a picture carries the place of its job')
+  await page.locator('[data-queue-hero="active"] [data-queue-picture="shown"]').waitFor()
+  await page.waitForTimeout(6500)
+  assert.equal(pictureRequests, 6)
+  assert.equal(await job(11).locator('[data-queue-handle]').getAttribute('data-queue-handle'), 'off', 'the job that prints at the head is not dragged')
+  assert.equal(await page.locator('[data-queue-handle="on"]').count(), 5)
+
+  // A job is taken by its picture. Job 15 goes up until its top edge has passed the middle of job 13's row: it
+  // would land there, and the two rows it passed move down by its height meanwhile. The drop is one request.
+  const grab = async id => {
+    const handle = job(id).locator('[data-queue-handle]')
+    await handle.evaluate(el => el.scrollIntoView({ block: 'center' }))
+    const b = await handle.boundingBox()
+    const at = [b.x + b.width / 2, b.y + b.height / 2]
+    await page.mouse.move(...at)
+    await page.mouse.down()
+    return at
+  }
+  const pull = async ([x, y], dy) => {
+    await page.mouse.move(x, y + dy / 2, { steps: 5 })
+    await page.mouse.move(x, y + dy, { steps: 5 })
+  }
+  const shifted = (id, by) => page.waitForFunction(([id, by]) => Math.abs(new DOMMatrixReadOnly(getComputedStyle(document.querySelector(`[data-queue-item="${id}"]`)).transform).m42 - by) < 0.5, [id, by])
+  let at = await grab(15)
+  const [b13, b15] = [await box(13), await box(15)]
+  await pull(at, b13.y + 4 - b15.y)
+  await page.locator('[data-queue-item="15"][data-queue-drag="lifted"]').waitFor()
+  await shifted(14, b15.height)
+  await shifted(13, b15.height)
+  assert.deepEqual([await shiftOf(12), await shiftOf(16)], [0, 0], 'only the rows it passed make room')
+  assert.ok(Math.abs((await box(15)).y - (b13.y + 4)) < 1, 'the row follows the pointer')
+  let sent = posts.length
+  await page.mouse.up()
+  await inOrder(page, [11, 12, 15, 13, 14, 16])
+  assert.deepEqual(posts.slice(sent), [['/api/queue/reorder', '15\n2']])
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-queue-item]')].every(row => !row.dataset.queueDrag && !row.style.transform && getComputedStyle(row).transform === 'none'))
+  assert.deepEqual(await page.locator('[data-queue-handle] span').allTextContents(), ['1', '2', '3', '4', '5', '6'])
+
+  // Dragged far above the list, a job stops right below the one that prints.
+  at = await grab(14)
+  await pull(at, 2 - at[1])
+  await page.waitForTimeout(250)
+  const [head, stopped] = [await box(11), await box(14)]
+  assert.ok(Math.abs(stopped.y - head.y - head.height) < 1.5, 'no job is dragged above the printing one')
+  await page.mouse.up()
+  await inOrder(page, [11, 14, 12, 15, 13, 16])
+  assert.deepEqual(lastPost(), ['/api/queue/reorder', '14\n1'])
+
+  // One place down past a taller row: nothing moves short of its middle, and past it the tall row makes room.
+  at = await grab(15)
+  const [tall, low] = [await box(13), await box(15)]
+  assert.ok(tall.height > low.height * 1.4, 'the long name makes a taller row')
+  await pull(at, tall.height / 2 - 4)
+  await page.waitForTimeout(250)
+  assert.equal(await shiftOf(13), 0)
+  await page.mouse.move(at[0], at[1] + tall.height / 2 + 4, { steps: 3 })
+  await shifted(13, -low.height)
+  await page.mouse.up()
+  await inOrder(page, [11, 14, 12, 13, 15, 16])
+  assert.deepEqual(lastPost(), ['/api/queue/reorder', '15\n4'])
+
+  // Escape gives the drag up, and a drop in the same place asks for nothing.
+  sent = posts.length
+  at = await grab(16)
+  await pull(at, -150)
+  await page.locator('[data-queue-item="16"][data-queue-drag="lifted"]').waitFor()
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => !document.querySelector('[data-queue-drag]') && !document.querySelector('[data-queue-item][style*="transform"]'))
+  await page.mouse.up()
+  at = await grab(16)
+  await pull(at, 6)
+  await page.mouse.up()
+  await page.waitForTimeout(300)
+  assert.equal(posts.length, sent)
+  assert.deepEqual(await order(), [11, 14, 12, 13, 15, 16])
+
+  // In a low window the page scrolls under a job held at its edge, and the job lands where it is dropped.
+  await page.setViewportSize({ width: 1440, height: 560 })
+  at = await grab(14)
+  const scrolled = await page.evaluate(() => window.scrollY)
+  await page.mouse.move(at[0], 556, { steps: 6 })
+  await page.waitForFunction(y => window.scrollY > y + 40, scrolled)
+  await page.waitForFunction(() => new Promise(done => { const y = window.scrollY; setTimeout(() => done(window.scrollY === y), 300) }))
+  await page.mouse.up()
+  await inOrder(page, [11, 12, 13, 15, 16, 14])
+  assert.deepEqual(lastPost(), ['/api/queue/reorder', '14\n5'])
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const lefts = await page.locator('[data-queue-handle]').evaluateAll(all => all.map(handle => Math.round(handle.getBoundingClientRect().left)))
+  assert.equal(new Set(lefts).size, 1, 'the pictures stand in one column')
+
+  // A phone: the same drag with a finger. The picture takes the touch, so the page does not scroll under it.
+  const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
+  const phoneErrors = [], phoneMoves = []
+  phone.on('pageerror', e => phoneErrors.push(e.message))
+  phone.on('request', r => r.url().endsWith('/api/queue/reorder') && phoneMoves.push(r.postData()))
+  await phone.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
+  await phone.route('**/api/gcode-files/inspect', r => r.fulfill({ json: { tools: [0], filaments: [], bed_temperature: 60, nozzle_diameter: 0.4 } }))
+  await phone.route('**/api/canvas', r => r.fulfill({ json: { available: false } }))
+  await phone.route('**/api/mesh', r => r.fulfill({ json: { result: { status: { bed_mesh: { profiles: { default: {}, default1: {} } } } } } }))
+  await ownQueue(phone)
+  await phone.goto(`${origin}/#queue`)
+  const dragged = phone.locator('[data-queue-item="14"]')
+  await dragged.waitFor()
+  await phone.waitForFunction(() => document.querySelectorAll('[data-queue-rows] [data-queue-picture="shown"]').length === 5)
+  assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no sideways scroll on a phone')
+  await dragged.evaluate(row => row.scrollIntoView({ block: 'center' }))
+  const [finger, above] = [await dragged.locator('[data-queue-handle]').boundingBox(), await phone.locator('[data-queue-item="16"]').boundingBox()]
+  assert.equal(Math.round(finger.width), 48)
+  const [fx, fy] = [finger.x + finger.width / 2, finger.y + finger.height / 2]
+  const screen = await phone.context().newCDPSession(phone)
+  const touch = (type, y) => screen.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: fx, y }] })
+  const still = await phone.evaluate(() => window.scrollY)
+  await touch('touchStart', fy)
+  for (let step = 1; step <= 8; step++) await touch('touchMove', fy - ((above.height / 2 + 8) * step) / 8)
+  await phone.locator('[data-queue-item="14"][data-queue-drag="lifted"]').waitFor()
+  assert.equal(await phone.evaluate(() => window.scrollY), still)
+  await touch('touchEnd', 0)
+  await inOrder(phone, [11, 12, 13, 15, 14, 16])
+  assert.deepEqual(phoneMoves, ['14\n4'])
+  assert.deepEqual(phoneErrors, [])
+  await phone.close()
+
   assert.deepEqual(errors, [])
-  console.log('PASS: print queue page, Files chip, dialog choice, Dashboard quick start, automatic countdown, jobs bound to filaments (the slot that holds one, a filament in no slot, another filament for a job, a job that waits for a filament of the inventory chosen by brand, material and colour)')
+  console.log('PASS: print queue page, Files chip, dialog choice, Dashboard quick start, automatic countdown, jobs bound to filaments (the slot that holds one, a filament in no slot, another filament for a job, a job that waits for a filament of the inventory chosen by brand, material and colour), a picture for every job, the order changed by dragging with a mouse and with a finger')
 } finally {
   await browser?.close()
   await server.close()
