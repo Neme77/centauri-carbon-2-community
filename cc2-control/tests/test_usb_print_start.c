@@ -17,11 +17,6 @@ static int gate[2];
 static void hold_copy(void) { char byte; assert(read(gate[0], &byte, 1) == 1); }
 static void release_copy(void) { assert(write(gate[1], "x", 1) == 1); }
 
-static double now_ms(void) {
-    struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
-    return (double)t.tv_sec * 1000.0 + (double)t.tv_nsec / 1e6;
-}
-
 
 /* #344: a print dialog start from USB scans and copies the file on a worker thread. The socket gets
  * its answer only from usb_start_tick() on the main loop, which checks the printer again first. */
@@ -220,11 +215,11 @@ int main(void) {
         peer = begin(&mqtt, "usb\ncube.gcode\n\nA\nsaved\n0", response, sizeof(response), &status);
         assert(peer >= 0);
         int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-        double begun = now_ms();
         if (i == 0) control_response(pair[0], &console, &mqtt, "system:emergency_stop", 21);
         else console_command_response(pair[0], &console, &mqtt, "M112", 4);
         close(pair[0]);
-        assert(answer(pair[1], response, sizeof(response)) == 202 && now_ms() - begun < 100);
+        /* Answered while the copy is still held: the stop does not wait for the import. */
+        assert(answer(pair[1], response, sizeof(response)) == 202 && !atomic_load(&usb_start_done));
         assert(emergency_stops == i + 1 && usb_start_cancelled == 2);
         release_copy(); wait_worker(); usb_start_tick(&mqtt);
         assert(answer(peer, response, sizeof(response)) == 409 && strstr(response, "emergency stop"));
