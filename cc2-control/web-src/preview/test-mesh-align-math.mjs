@@ -15,6 +15,10 @@ import {
   QUICK_TWIST_WARN_MM,
   referenceScrew,
   tiltsBelowTarget,
+  latestScrewProbes,
+  QUICK_PROBE_TEMP_C,
+  QUICK_REFERENCE_MAX_AGE_DAYS,
+  quickReference,
 } from '../src/lib/mesh-align.ts'
 import { SCREW_CORNERS } from '../src/lib/screws.ts'
 import { asProfileReply, bowl, dome, noiseSource, saddle, syntheticMesh, twist } from './mesh-align-synthetic.mjs'
@@ -377,6 +381,37 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
   const small = syntheticMesh({ tiltX: 0, tiltY: 0 })
   assert.equal(analyseScrewProbes(probes, { ...small, min_x: 60 }), null)
   assert.equal(analyseScrewProbes(probes, { ...reference, points: [[0, 0]] }), null)
+}
+
+// Quick check: which full mesh may serve as the plate shape, and which four probes are used.
+{
+  const now = 2_000_000_000
+  const mesh = syntheticMesh({ tiltX: 0, tiltY: 0 })
+  const m = (id, temp, daysAgo) => ({ id, temp, measured: now - daysAgo * 86400, mesh })
+  assert.deepEqual(quickReference(null, now), { ok: false, reason: 'no_plate' })
+  assert.deepEqual(quickReference({ measures: [] }, now), { ok: false, reason: 'no_reference' })
+  // A mesh at another bed temperature is not the plate shape of the four-point measurement.
+  assert.deepEqual(quickReference({ measures: [m('hot', 80, 1)] }, now), { ok: false, reason: 'no_reference' })
+  assert.equal(QUICK_PROBE_TEMP_C, 60)
+  const fresh = quickReference({ measures: [m('older', 60, 9), m('newer', 60, 2), m('hot', 80, 0)] }, now)
+  assert.equal(fresh.ok && fresh.measure.id, 'newer')
+  assert.equal(fresh.ok && fresh.age_days, 2)
+  assert.equal(quickReference({ measures: [m('edge', 60, QUICK_REFERENCE_MAX_AGE_DAYS)] }, now).ok, true)
+  assert.deepEqual(quickReference({ measures: [m('old', 60, QUICK_REFERENCE_MAX_AGE_DAYS + 1)] }, now), {
+    ok: false,
+    reason: 'old',
+    age_days: QUICK_REFERENCE_MAX_AGE_DAYS + 1,
+  })
+
+  const all = { FL: 0.1, FR: 0.2, RR: 0.3, RL: 0.4 }
+  assert.equal(latestScrewProbes([]), null)
+  // A single-screw probe is not a four-point measurement.
+  assert.equal(latestScrewProbes([{ measurements: [{ time: 5, z: { FL: 0.1 } }] }]), null)
+  const latest = latestScrewProbes([
+    { measurements: [{ time: 10, z: all }, { time: 30, z: { RR: 0.9 } }] },
+    { measurements: [{ time: 20, z: { ...all, RR: 0.5 } }] },
+  ])
+  assert.deepEqual(latest, { time: 20, z: { ...all, RR: 0.5 } })
 }
 
 console.log('PASS mesh-guided screw alignment: plane fit, tilt, residual, shape, reference screw, turns and direction gating, quick mode from four probes and a reference mesh')

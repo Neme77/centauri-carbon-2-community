@@ -20,7 +20,6 @@ import {
   microns,
   offsetChain,
   measurementOffsets,
-  parseScrewHistory,
   SCREW_CORNERS,
   SCREW_KEYS,
   SCREW_SETTLE_S,
@@ -28,10 +27,9 @@ import {
   screwHistoryCsv,
   screwPlan,
   screwValues,
-  type ScrewHistorySession,
   type ScrewId,
 } from '@/lib/screws'
-import { store } from '@/lib/store'
+import { refreshScrewHistory, screwHistory } from '@/lib/screw-history'
 import { usePoll } from '@/lib/poll'
 import {
   type BedTab,
@@ -578,22 +576,6 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
       <Notice>{note}</Notice>
     </>
   )
-}
-
-const screwHistory = store({
-  supported: null as boolean | null,
-  sessions: [] as ScrewHistorySession[],
-  raw: null as unknown,
-})
-
-async function refreshScrewHistory() {
-  if (screwHistory.get().supported === false) return
-  try {
-    const data = await request('/api/screws/history')
-    screwHistory.set({ supported: true, sessions: parseScrewHistory(data), raw: data })
-  } catch (e: any) {
-    if (e?.status === 404) screwHistory.set({ supported: false, sessions: [], raw: null })
-  }
 }
 
 const saveText = (name: string, text: string, type: string) => {

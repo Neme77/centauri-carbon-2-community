@@ -15,11 +15,18 @@ import {
   type AlignScrewId,
   type AlignShape,
   analyseMesh,
+  analyseScrewProbes,
   directionConfigured,
   gridFromMeshReply,
+  latestScrewProbes,
   type MeshAnalysis,
   type MeshGrid,
   parseAlignConfig,
+  QUICK_PROBE_TEMP_C,
+  QUICK_PROBES_STALE_MIN,
+  QUICK_REFERENCE_MAX_AGE_DAYS,
+  QUICK_TWIST_WARN_MM,
+  quickReference,
   type ScrewCorrection,
   tiltsBelowTarget,
   turnsConfigured,
@@ -36,6 +43,7 @@ import {
 import { calibrationForm, findMeasure, nozzleName, plates, refreshPlates, tempOk } from '@/lib/plates'
 import { usePoll } from '@/lib/poll'
 import { NozzleSelect } from '@/pages/bed-plates'
+import { refreshScrewHistory, screwHistory } from '@/lib/screw-history'
 import { SCREW_CORNERS } from '@/lib/screws'
 import { openSettings } from '@/lib/state'
 import { ls, store } from '@/lib/store'
@@ -391,6 +399,131 @@ const ENDED: Record<Exclude<AlignSession['ended'], ''>, Key> = {
   timeout: 'bed.align_ended_timeout',
   print: 'bed.align_ended_print',
   estop: 'bed.align_ended_estop',
+}
+
+const ScrewList = ({ screws, name }: { screws: ScrewCorrection[]; name: string }) => (
+  <ul class="overflow-hidden rounded-md border border-edge text-xs" data-align={name}>
+    {screws.map((s, i) => (
+      <li
+        key={s.id}
+        data-align-screw={s.id}
+        class={`flex flex-wrap items-center gap-x-3 gap-y-1 p-2 ${i ? 'border-t border-edge' : ''}`}
+      >
+        <b class="grid size-6.5 shrink-0 place-items-center rounded-full border border-muted font-medium">
+          {SCREW_CORNERS.find(c => c.id === s.id)?.n}
+        </b>
+        <span class="min-w-28 font-semibold">
+          {t(CORNER[s.id])}
+          <small class="block font-normal text-muted">
+            X{s.x} Y{s.y}
+          </small>
+        </span>
+        <span class="flex-1 break-words">{screwInstruction(s)}</span>
+      </li>
+    ))}
+  </ul>
+)
+
+const stamp = (seconds: number) =>
+  new Date(seconds * 1000).toLocaleString(i18n.get().lang, { dateStyle: 'short', timeStyle: 'short' })
+
+// The quick check: the last four-point measurement of the Screws tab, less the plate shape that the
+// saved full mesh of the mounted plate shows at the screws. It only reads; it sends nothing.
+const Quick = ({ config }: { config: AlignConfig }) => {
+  const library = plates.use().data
+  const history = screwHistory.use()
+  usePoll(refreshScrewHistory, 15000)
+  const mounted = library?.available ? library.plates.find(p => p.id === library.current) : null
+  const now = Date.now() / 1000
+  const reference = useMemo(() => quickReference(mounted, now), [mounted, Math.floor(now / 3600)])
+  const probes = useMemo(() => latestScrewProbes(history.sessions), [history.sessions])
+  const result = useMemo(
+    () => (reference.ok && probes ? analyseScrewProbes(probes.z, reference.measure.mesh, config) : null),
+    [reference, probes, config]
+  )
+  if (history.supported === false || !library?.available) return null
+  const age = probes ? Math.max(0, Math.round((now - probes.time) / 60)) : 0
+  const refusal = reference.ok
+    ? null
+    : reference.reason === 'no_plate'
+      ? t('bed.align_quick_no_plate')
+      : reference.reason === 'old'
+        ? tpl('bed.align_quick_old', {
+            name: mounted?.name || '',
+            days: reference.age_days || 0,
+            limit: QUICK_REFERENCE_MAX_AGE_DAYS,
+          })
+        : tpl('bed.align_quick_no_reference', { name: mounted?.name || '', temp: QUICK_PROBE_TEMP_C })
+  return (
+    <div
+      class="mt-3.5 border-t border-edge pt-3"
+      data-align="quick"
+      data-align-quick={refusal ? 'refused' : result ? 'result' : 'waiting'}
+    >
+      <h3 class="mb-2 text-base font-semibold">{t('bed.align_quick_title')}</h3>
+      <p class="mb-3 text-xs text-muted">{t('bed.align_quick_intro')}</p>
+      {refusal ? (
+        <div data-align="quick-refusal" data-align-reason={reference.ok ? '' : reference.reason}>
+          <Notice>{refusal}</Notice>
+        </div>
+      ) : !probes || !result || !reference.ok ? (
+        <Notice>{t('bed.align_quick_no_probes')}</Notice>
+      ) : (
+        <>
+          <p class="text-xs text-muted" data-align="quick-basis">
+            {tpl('bed.align_quick_basis', {
+              probes: stamp(probes.time),
+              name: mounted?.name || '',
+              temp: reference.measure.temp,
+              date: stamp(reference.measure.measured),
+            })}
+          </p>
+          <div class="mt-2 grid grid-cols-1 gap-2.5 cc2-sm:grid-cols-2">
+            <Tile
+              name="quick-tilt-x"
+              label={t('bed.align_tilt_x')}
+              value={`${signedMm(result.tilt_x)} mm`}
+              sub={tiltWords(result.tilt_x, 'bed.align_right_high', 'bed.align_left_high')}
+            />
+            <Tile
+              name="quick-tilt-y"
+              label={t('bed.align_tilt_y')}
+              value={`${signedMm(result.tilt_y)} mm`}
+              sub={tiltWords(result.tilt_y, 'bed.align_back_high', 'bed.align_front_high')}
+            />
+          </div>
+          <div class="mt-2">
+            <ScrewList screws={result.screws} name="quick-screws" />
+          </div>
+          {age > QUICK_PROBES_STALE_MIN && (
+            <div data-align="quick-stale">
+              <Warn>{tpl('bed.align_quick_stale', { minutes: age })}</Warn>
+            </div>
+          )}
+          {result.twist_warning && (
+            <div data-align="quick-twist">
+              <Warn>
+                {tpl('bed.align_quick_twist', { twist: mm(result.twist), limit: mm(QUICK_TWIST_WARN_MM, 2) })}
+              </Warn>
+            </div>
+          )}
+          <div data-align="quick-verdict" data-aligned={result.aligned ? 'yes' : 'no'}>
+            <Notice icon={result.aligned ? 'shield' : 'info'}>
+              <span>
+                {result.aligned
+                  ? t('bed.align_quick_done')
+                  : tpl('bed.align_verdict_open', {
+                      x: signedMm(result.tilt_x),
+                      y: signedMm(result.tilt_y),
+                      target: mm(config.target_tilt_mm),
+                    })}
+              </span>
+            </Notice>
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 // The guided loop: measure, turn the screws as listed, measure again, save the last mesh.
@@ -828,26 +961,7 @@ export const MeshAlign = () => {
 
           <h3 class="mt-3.5 mb-2 text-base font-semibold">{t('bed.align_screws_title')}</h3>
           <p class="mb-2 text-xs text-muted">{tpl('bed.align_screws_note', { span: analysis.span })}</p>
-          <ul class="overflow-hidden rounded-md border border-edge text-xs" data-align="screws">
-            {analysis.screws.map((s, i) => (
-              <li
-                key={s.id}
-                data-align-screw={s.id}
-                class={`flex flex-wrap items-center gap-x-3 gap-y-1 p-2 ${i ? 'border-t border-edge' : ''}`}
-              >
-                <b class="grid size-6.5 shrink-0 place-items-center rounded-full border border-muted font-medium">
-                  {SCREW_CORNERS.find(c => c.id === s.id)?.n}
-                </b>
-                <span class="min-w-28 font-semibold">
-                  {t(CORNER[s.id])}
-                  <small class="block font-normal text-muted">
-                    X{s.x} Y{s.y}
-                  </small>
-                </span>
-                <span class="flex-1 break-words">{screwInstruction(s)}</span>
-              </li>
-            ))}
-          </ul>
+          <ScrewList screws={analysis.screws} name="screws" />
           {!turnsConfigured(config) && <p class="mt-2 text-xs text-muted">{t('bed.align_no_turns')}</p>}
           {!directionConfigured(config) && <p class="mt-1 text-xs text-muted">{t('bed.align_no_direction')}</p>}
           {!analysis.covers_screws && <Warn>{t('bed.align_extrapolated')}</Warn>}
@@ -898,6 +1012,7 @@ export const MeshAlign = () => {
         </>
       )}
       <Guide config={config} />
+      <Quick config={config} />
       {settingsEnabled ? (
         <Settings config={config} />
       ) : (

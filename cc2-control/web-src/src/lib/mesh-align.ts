@@ -434,6 +434,47 @@ export function analyseScrewProbes(
   }
 }
 
+// The quick check reads a four-point measurement of the Screws tab. That measurement always runs with
+// the bed at 60 °C, so the plate shape has to come from a full mesh of the same plate at 60 °C.
+export const QUICK_PROBE_TEMP_C = 60
+// Estimates, not measured values: how old the full mesh and the four probes may be.
+export const QUICK_REFERENCE_MAX_AGE_DAYS = 30
+export const QUICK_PROBES_STALE_MIN = 60
+
+export type QuickMeasure = { id: string; temp: number; measured: number; mesh: MeshGrid }
+export type QuickReference =
+  | { ok: true; measure: QuickMeasure; age_days: number }
+  | { ok: false; reason: 'no_plate' | 'no_reference' | 'old'; age_days?: number }
+
+// The full mesh the quick check may use: the newest one of the mounted plate at the probe temperature.
+// Anything else is refused, because a wrong plate shape cannot be told from a tilt afterwards.
+export function quickReference(plate: { measures: QuickMeasure[] } | null | undefined, nowS: number): QuickReference {
+  if (!plate) return { ok: false, reason: 'no_plate' }
+  const fitting = plate.measures
+    .filter(m => m.temp === QUICK_PROBE_TEMP_C && finite(m.measured))
+    .sort((a, b) => b.measured - a.measured)[0]
+  if (!fitting) return { ok: false, reason: 'no_reference' }
+  const age = Math.max(0, Math.floor((nowS - fitting.measured) / 86400))
+  if (age > QUICK_REFERENCE_MAX_AGE_DAYS) return { ok: false, reason: 'old', age_days: age }
+  return { ok: true, measure: fitting, age_days: age }
+}
+
+export type QuickProbes = { time: number; z: Record<AlignScrewId, number> }
+
+// The newest measurement of the screw history that holds all four screws.
+export function latestScrewProbes(
+  sessions: { measurements: { time: number; z: Partial<Record<AlignScrewId, number>> }[] }[]
+): QuickProbes | null {
+  let best: QuickProbes | null = null
+  for (const s of sessions)
+    for (const m of s.measurements) {
+      const { FL, FR, RR, RL } = m.z
+      if (!finite(FL) || !finite(FR) || !finite(RR) || !finite(RL)) continue
+      if (!best || m.time > best.time) best = { time: m.time, z: { FL, FR, RR, RL } as Record<AlignScrewId, number> }
+    }
+  return best
+}
+
 // A mesh of GET /api/mesh: 'active' is the mesh the printer applies now, any other name a stored profile
 // (result.status.bed_mesh.profiles.<name>.points with its mesh_params).
 export function gridFromMeshReply(data: any, profile = 'active'): MeshGrid | null {
