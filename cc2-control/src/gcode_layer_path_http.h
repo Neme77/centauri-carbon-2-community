@@ -9,6 +9,20 @@ typedef struct {
     char response[LAYER_PATH_JSON_MAX];
 } layer_path_cache_slot;
 static layer_path_cache_slot layer_path_cached;
+/* The lowest layer of a file whose scan ran into the limit. Reading up to a later layer costs
+ * at least as much, so those requests are refused at once instead of scanning again: while
+ * a large file prints, every new layer would otherwise burn the whole budget. Guarded by
+ * layer_path_cache_lock; a changed file (size, time, inode) is scanned afresh, and so is
+ * any layer once LAYER_PATH_LIMIT_HOLD_S have passed, in case the printer was only busy. */
+#define LAYER_PATH_LIMIT_HOLD_S 300
+static struct {
+    int valid, layer;
+    char storage[16], file[PATH_MAX_LOCAL];
+    struct stat stamp;
+    struct timespec at;
+} layer_path_limited;
+/* Test seam: runs on the worker after the scan clock has started. */
+static void (*layer_path_scan_hook)(void);
 typedef struct {
     int client, source, layer;
     char storage[16], file[PATH_MAX_LOCAL];
@@ -53,14 +67,29 @@ static void *layer_path_worker(void *opaque) {
     layer_path_info info;
     struct timespec started;
     clock_gettime(CLOCK_MONOTONIC, &started);
+    if (layer_path_scan_hook) layer_path_scan_hook();
     int rc = gcode_layer_path_parse(file, job->layer, points, LAYER_PATH_COLLECT_MAX,
                                     starts, LAYER_PATH_PATHS_MAX, &info, &started,
                                     LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX);
     fclose(file);
     if (rc == LAYER_PATH_OUTSIDE)
         layer_path_fail(job->client, 404, "Not Found", "Layer is outside the file");
-    else if (rc == LAYER_PATH_LIMIT)
+    else if (rc == LAYER_PATH_LIMIT) {
         layer_path_fail(job->client, 413, "Payload Too Large", "Layer path scan limit reached");
+        pthread_mutex_lock(&layer_path_cache_lock);
+        int same = layer_path_limited.valid && !strcmp(layer_path_limited.storage, job->storage) &&
+                   !strcmp(layer_path_limited.file, job->file) &&
+                   layer_path_same_file(&job->stamp, &layer_path_limited.stamp);
+        if (!same || job->layer < layer_path_limited.layer) {
+            layer_path_limited.valid = 1;
+            layer_path_limited.layer = job->layer;
+            snprintf(layer_path_limited.storage, sizeof(layer_path_limited.storage), "%s", job->storage);
+            snprintf(layer_path_limited.file, sizeof(layer_path_limited.file), "%s", job->file);
+            layer_path_limited.stamp = job->stamp;
+            clock_gettime(CLOCK_MONOTONIC, &layer_path_limited.at);
+        }
+        pthread_mutex_unlock(&layer_path_cache_lock);
+    }
     else if (rc == LAYER_PATH_TOO_LARGE)
         layer_path_fail(job->client, 413, "Payload Too Large", "Layer path is too large");
     else if (rc != LAYER_PATH_OK)
@@ -121,7 +150,19 @@ static int gcode_layer_path_start(int fd, const char *query) {
         close(source);
         return 0;
     }
+    struct timespec limit_now;
+    clock_gettime(CLOCK_MONOTONIC, &limit_now);
+    if (layer_path_limited.valid && limit_now.tv_sec - layer_path_limited.at.tv_sec >= LAYER_PATH_LIMIT_HOLD_S)
+        layer_path_limited.valid = 0;
+    int limited = layer_path_limited.valid && layer >= layer_path_limited.layer &&
+                  !strcmp(layer_path_limited.storage, storage) && !strcmp(layer_path_limited.file, file) &&
+                  layer_path_same_file(&st, &layer_path_limited.stamp);
     pthread_mutex_unlock(&layer_path_cache_lock);
+    if (limited) {
+        close(source);
+        layer_path_fail(fd, 413, "Payload Too Large", "Layer path scan limit reached");
+        return 0;
+    }
     int previous = atomic_fetch_add(&active_layer_paths, 1);
     layer_path_job *job = NULL;
     pthread_attr_t attr;

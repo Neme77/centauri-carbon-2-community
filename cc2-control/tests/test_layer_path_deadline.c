@@ -1,16 +1,17 @@
 /* #342 review: force the layer-path scan deadline and check that the request reports the
  * limit, the scan worker is released for the next request, and the main loop keeps answering
- * while the scan runs. The budget is lowered so the deadline, not the byte cap, ends the scan. */
+ * while the scan runs. The budget is lowered and the worker is held past it, so the outcome
+ * does not depend on this machine's speed. */
 #define LAYER_PATH_TIME_MS 50
 #define main cc2_main_original
 #include "../src/main.c"
 #undef main
 #include <assert.h>
 
-static double now_ms(void) {
-    struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
-    return (double)t.tv_sec * 1000.0 + (double)t.tv_nsec / 1e6;
-}
+/* Holds the worker after its scan clock started until the test releases it: a scan that is
+ * slow on demand, independent of how fast this machine reads the file. */
+static int gate[2];
+static void hold_scan(void) { char byte; assert(read(gate[0], &byte, 1) == 1); }
 
 /* Starts a request; returns the peer when a worker took it, else the answered status in *code. */
 static int start(const char *query, int *code, char *reply, size_t cap) {
@@ -36,18 +37,16 @@ int main(void) {
     gcode_internal_root = dir;
     char path[512];
 
-    /* ~100 MB numbered by ;LAYER:N only and without a layer count, so a request past the
-     * end has to read the whole file: well under the byte cap, far beyond 50 ms. */
+    /* Numbered by ;LAYER:N only and without a layer count, so a request past the last layer
+     * has to read on: the deadline, not the end of the file, ends the scan. */
     snprintf(path, sizeof(path), "%s/big.gcode", dir);
     FILE *f = fopen(path, "w"); assert(f);
-    static char block[1 << 16]; size_t used = 0; int layer = 0;
-    for (long line = 0; line < 4000000; line++) {
-        if (line % 2000 == 0) used += (size_t)sprintf(block + used, ";LAYER:%d\nG1 Z%.2f\n", layer, 0.2 * (layer + 1)), layer++;
-        used += (size_t)sprintf(block + used, "G1 X%d.0 Y%d.0 E0.01\n", 20 + (int)(line % 200), 20 + (int)(line / 7 % 200));
-        if (used > sizeof(block) - 128) { assert(fwrite(block, 1, used, f) == used); used = 0; }
+    for (int layer = 0; layer < 200; layer++) {
+        assert(fprintf(f, ";LAYER:%d\nG1 Z%.2f\n", layer, 0.2 * (layer + 1)) > 0);
+        for (int line = 0; line < 500; line++)
+            assert(fprintf(f, "G1 X%d.0 Y%d.0 E0.01\n", 20 + line % 200, 20 + layer) > 0);
     }
-    assert(fwrite(block, 1, used, f) == used && !fclose(f));
-    struct stat st; assert(!stat(path, &st) && (size_t)st.st_size < LAYER_PATH_BYTES_MAX);
+    assert(!fclose(f));
 
     snprintf(path, sizeof(path), "%s/small.gcode", dir);
     f = fopen(path, "w"); assert(f);
@@ -55,21 +54,24 @@ int main(void) {
 
     char reply[LAYER_PATH_JSON_MAX + 512];
     int code;
-    double begun = now_ms();
+    assert(!pipe(gate));
+    layer_path_scan_hook = hold_scan;
     int peer = start("storage=internal&file=big.gcode&layer=999999", &code, reply, sizeof(reply));
-    assert(peer >= 0 && now_ms() - begun < 50);   /* handed to the worker, the main loop is free */
+    assert(peer >= 0);                            /* handed to the worker, the main loop is free */
 
     /* While the scan runs the main loop answers at once: a second scan is told to retry. */
-    begun = now_ms();
     assert(start("storage=internal&file=small.gcode&layer=1", &code, reply, sizeof(reply)) < 0 && code == 503);
-    assert(now_ms() - begun < 50 && strstr(reply, "Layer path busy"));
+    assert(strstr(reply, "Layer path busy") && atomic_load(&active_layer_paths) == 1);
 
+    /* Let the budget run out, then let the scan go on: it stops at once and reports the limit. */
+    struct timespec budget = {0, (LAYER_PATH_TIME_MS + 30) * 1000000L}; nanosleep(&budget, NULL);
+    assert(write(gate[1], "x", 1) == 1);
     code = finish(peer, reply, sizeof(reply));
     assert(code == 413 && strstr(reply, "Layer path scan limit reached"));
-    assert(now_ms() - begun < 5000);
+    layer_path_scan_hook = NULL;
 
     /* The worker is released: the next request gets a worker and a layer. */
-    for (int i = 0; i < 200 && atomic_load(&active_layer_paths); i++) {
+    for (int i = 0; i < 2000 && atomic_load(&active_layer_paths); i++) {
         struct timespec pause = {0, 5000000}; nanosleep(&pause, NULL);
     }
     assert(atomic_load(&active_layer_paths) == 0);
@@ -77,9 +79,55 @@ int main(void) {
     assert(peer >= 0);
     assert(finish(peer, reply, sizeof(reply)) == 200 && strstr(reply, "\"layer\":1"));
 
+    for (int i = 0; i < 2000 && atomic_load(&active_layer_paths); i++) {
+        struct timespec pause = {0, 5000000}; nanosleep(&pause, NULL);
+    }
+    /* The limit is remembered for that file: the same or a later layer is refused at once,
+     * without a worker, so a print's following layers do not each burn the budget. */
+    assert(start("storage=internal&file=big.gcode&layer=999999", &code, reply, sizeof(reply)) < 0 && code == 413);
+    assert(strstr(reply, "Layer path scan limit reached") && atomic_load(&active_layer_paths) == 0);
+    assert(start("storage=internal&file=big.gcode&layer=1000000", &code, reply, sizeof(reply)) < 0 && code == 413);
+    /* An earlier layer and another file are still scanned. */
+    peer = start("storage=internal&file=big.gcode&layer=1", &code, reply, sizeof(reply));
+    assert(peer >= 0);
+    assert(finish(peer, reply, sizeof(reply)) == 200 && strstr(reply, "\"layer\":1"));
+    for (int i = 0; i < 2000 && atomic_load(&active_layer_paths); i++) {
+        struct timespec pause = {0, 5000000}; nanosleep(&pause, NULL);
+    }
+    /* A changed file is scanned afresh: the worker takes the request again. */
+    snprintf(path, sizeof(path), "%s/big.gcode", dir);
+    f = fopen(path, "a"); assert(f && fputs("G1 X1 Y1\n", f) >= 0 && !fclose(f));
+    layer_path_scan_hook = hold_scan;
+    peer = start("storage=internal&file=big.gcode&layer=999999", &code, reply, sizeof(reply));
+    assert(peer >= 0);
+    nanosleep(&budget, NULL);
+    assert(write(gate[1], "x", 1) == 1);
+    assert(finish(peer, reply, sizeof(reply)) == 413);
+    layer_path_scan_hook = NULL;
+    for (int i = 0; i < 2000 && atomic_load(&active_layer_paths); i++) {
+        struct timespec pause = {0, 5000000}; nanosleep(&pause, NULL);
+    }
+    /* The memory expires: after the hold time the layer is scanned again. */
+    assert(start("storage=internal&file=big.gcode&layer=999999", &code, reply, sizeof(reply)) < 0 && code == 413);
+    pthread_mutex_lock(&layer_path_cache_lock);
+    layer_path_limited.at.tv_sec -= LAYER_PATH_LIMIT_HOLD_S;
+    pthread_mutex_unlock(&layer_path_cache_lock);
+    layer_path_scan_hook = hold_scan;
+    peer = start("storage=internal&file=big.gcode&layer=999999", &code, reply, sizeof(reply));
+    assert(peer >= 0);
+    nanosleep(&budget, NULL);
+    assert(write(gate[1], "x", 1) == 1);
+    assert(finish(peer, reply, sizeof(reply)) == 413);
+    layer_path_scan_hook = NULL;
+    for (int i = 0; i < 2000 && atomic_load(&active_layer_paths); i++) {
+        struct timespec pause = {0, 5000000}; nanosleep(&pause, NULL);
+    }
+    snprintf(path, sizeof(path), "%s/small.gcode", dir);
+    close(gate[0]); close(gate[1]);
+
     unlink(path);
     snprintf(path, sizeof(path), "%s/big.gcode", dir); unlink(path);
     rmdir(dir);
-    puts("PASS layer path deadline: limit reported, worker released, main loop answers during the scan");
+    puts("PASS layer path deadline: limit reported and remembered per file, worker released, main loop answers during the scan");
     return 0;
 }
