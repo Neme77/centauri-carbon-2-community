@@ -210,7 +210,7 @@ const wheel = (hex: string) => {
   const { hue, light } = hsl(hex)
   return hue < 0 ? [0, 1 - light] : [1, hue + (1 - light)]
 }
-const byWheel = (a: string, b: string) => {
+export const byWheel = (a: string, b: string) => {
   const [x, y] = [wheel(a), wheel(b)]
   return x[0] - y[0] || x[1] - y[1]
 }

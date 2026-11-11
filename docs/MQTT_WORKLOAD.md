@@ -34,6 +34,12 @@ Chamber, Canvas, job state, safety and Panda retain their MQTT inputs.
 - Canvas: one 2005 request per MQTT session while the printer has not reported
   `auto_refill` (discovery can complete from a status delta that omits it), and
   one after an accepted auto-refill change, to read the new value back.
+- Print queue: its starts are decided from the Canvas trays, so it watches the
+  Canvas the way an open Canvas page does (one 2005 request per 10 s while
+  watched), only while that decision is pending: when a page reads `/api/queue`
+  with the printer idle, no queued copy running and the next job fed from Canvas
+  slots, and during the delay before an automatic start, which also sends one
+  request at the counted completion. The queue requests nothing while a copy prints.
 - History: one 1036 request when the History page opens or Refresh is pressed,
   at most one in flight; nothing polls the printer. The printer lists its last
   50 jobs (19.6 KB, answered in 0.2 s on the tested printer), more than the

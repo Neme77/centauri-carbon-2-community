@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'preact/hooks'
-import { ChevronDown, ChevronRight, ChevronUp, FileText, Minus, Play, Plus, SkipForward, Trash2 } from 'lucide-preact'
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  FileText,
+  Minus,
+  Palette,
+  Play,
+  Plus,
+  SkipForward,
+  Trash2,
+} from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
@@ -16,13 +27,18 @@ import { canvas, refreshCanvas } from '@/lib/canvas'
 import { nozzleName, type PlateLibrary, plates, refreshPlates } from '@/lib/plates'
 import { stateText } from '@/lib/machine'
 import { readMeshReadiness } from '@/pages/print-dialog'
+import { JobFilament, JobFilaments, missingNote } from '@/components/queue-next'
+import { JobFilamentDialog } from '@/components/queue-filament'
 import {
   clearFinished,
   copiesLeft,
   abandonQueued,
+  type FilamentLabel,
+  filamentKnown,
   finishedJobs,
   holdQueue,
-  mappingSlots,
+  jobFilaments,
+  missingFilaments,
   openJobs,
   type Queue as QueueData,
   type QueueItem,
@@ -36,12 +52,14 @@ import {
   reorderQueued,
   setQueuePolicy,
   setQueuedCopies,
+  startBlocked,
   startQueued,
 } from '@/lib/queue'
 
 const I = { size: 16, strokeWidth: 1 }
 type Tone = 'ok' | 'warn' | 'bad' | 'info'
-type Check = { tone: Tone; text: string }
+// `filament`: the job's filament a check is about, shown after its text.
+type Check = { tone: Tone; text: string; filament?: FilamentLabel | null }
 type Filament = { tool: number; color: string; material: string }
 type MeshSides = { A: boolean | null; B: boolean | null }
 
@@ -66,14 +84,19 @@ function preflight(
       ? { tone: 'ok', text: tpl('queue.check_file_ok', { where: where(item.storage) }) }
       : { tone: 'bad', text: tpl('queue.check_file_missing', { where: where(item.storage) }) }
   )
-  const slots = mappingSlots(item.mapping)
-  if (!slots.length) checks.push({ tone: 'info', text: t('queue.check_external') })
-  for (const { tool, slot } of slots) {
-    const tray = trays.find(x => x && Number(x.tray_id) === slot)
+  const feeds = jobFilaments(item)
+  if (!feeds.length) checks.push({ tone: 'info', text: t('queue.check_external') })
+  // A filament of the job that is in no slot stops the start: said once per filament.
+  for (const f of missingFilaments(item))
+    checks.push({ tone: 'bad', text: missingNote(f), filament: filamentKnown(f) ? f : null })
+  // Every other tool prints from the slot that holds its filament now: that slot is checked against the file.
+  for (const { tool, use } of feeds) {
+    if (use === null) continue
+    const tray = trays.find(x => x && Number(x.tray_id) === use)
     const label = (tray && (tray.filament_name || tray.filament_type)) || ''
     const type = String(tray?.filament_type || tray?.filament_name || '')
     const wanted = filaments?.find(f => f.tool === tool)?.material || ''
-    const n = slot + 1
+    const n = use + 1
     if (!label) checks.push({ tone: 'warn', text: tpl('queue.check_slot_unknown', { n }) })
     else if (!wanted) checks.push({ tone: 'ok', text: tpl('queue.check_slot', { n, filament: label }) })
     else if (
@@ -121,27 +144,48 @@ const CheckList = ({ checks }: { checks: Check[] }) => (
             c.tone === 'ok' ? 'bg-green' : c.tone === 'warn' ? 'bg-amber' : c.tone === 'bad' ? 'bg-red' : 'bg-cyan'
           }`}
         />
-        <span class={c.tone === 'warn' ? 'text-amber' : c.tone === 'bad' ? 'text-red' : ''}>{c.text}</span>
+        <div class="min-w-0">
+          <span class={c.tone === 'warn' ? 'text-amber' : c.tone === 'bad' ? 'text-red' : ''}>{c.text}</span>
+          {c.filament && (
+            <>
+              {' '}
+              <JobFilament f={c.filament} />
+            </>
+          )}
+        </div>
       </li>
     ))}
   </ul>
 )
 
-// The job's print settings, as the dialog saved them.
+// The job's print settings, as the dialog saved them, and the filaments it is bound to, with the way to
+// give a tool another one.
 const Settings = ({ item, lib }: { item: QueueItem; lib: PlateLibrary | null }) => {
-  const slots = mappingSlots(item.mapping)
-  const chips: string[] = [tpl('queue.side_n', { side: item.side })]
-  chips.push(
-    slots.length ? slots.map(s => tpl('common.slot_n', { n: s.slot + 1 })).join(' · ') : t('queue.external_feed')
-  )
-  if (item.leveling !== 'saved') chips.push(t('queue.calibration'))
-  if (item.timelapse) chips.push(t('queue.timelapse'))
-  if (item.nozzle) chips.push(tpl('queue.nozzle_x', { name: nozzleName(lib, item.nozzle) || item.nozzle }))
+  const [edit, setEdit] = useState(false)
+  const more: string[] = []
+  if (item.leveling !== 'saved') more.push(t('queue.calibration'))
+  if (item.timelapse) more.push(t('queue.timelapse'))
+  if (item.nozzle) more.push(tpl('queue.nozzle_x', { name: nozzleName(lib, item.nozzle) || item.nozzle }))
   return (
-    <div class="flex flex-wrap gap-1.5">
-      {chips.map(c => (
+    <div class="flex flex-wrap items-center gap-1.5">
+      <Tag>{tpl('queue.side_n', { side: item.side })}</Tag>
+      <JobFilaments item={item} />
+      {jobFilaments(item).length > 0 && item.state !== 'done' && (
+        <Button
+          variant="ghost"
+          class="min-h-7 px-1.5"
+          aria-label={t('queue.filament_change')}
+          title={t('queue.filament_change')}
+          onClick={() => setEdit(true)}
+          data-queue-filament-edit
+        >
+          <Palette size={14} strokeWidth={1} />
+        </Button>
+      )}
+      {more.map(c => (
         <Tag key={c}>{c}</Tag>
       ))}
+      {edit && <JobFilamentDialog item={item} onClose={() => setEdit(false)} />}
     </div>
   )
 }
@@ -220,7 +264,7 @@ const Hero = ({
   const trays = canvas.use().model?.trays || []
   const [busy, setBusy] = useState(false)
   const checks = active ? [] : preflight(item, d, ok, trays, filaments, mesh, lib)
-  const canStart = !active && item.present && v.idle && ok && Boolean(d?.connected) && !q.active
+  const canStart = !active && item.present && !startBlocked(item) && v.idle && ok && Boolean(d?.connected) && !q.active
   const start = async () => {
     setBusy(true)
     await act(() => startQueued(item.id), {

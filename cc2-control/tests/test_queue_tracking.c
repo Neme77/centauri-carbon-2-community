@@ -13,12 +13,16 @@
 static mqtt_client machine;
 static int starts_sent;
 static char start_file[PATH_MAX_LOCAL];
+static int start_trays[GCODE_TOOLS_MAX]; /* the Canvas tray of each mapped tool in the last start */
+static size_t start_count;
 
 int mock_mqtt_start_print(mqtt_client *c, const char *media, const char *filename, const int *tools, const int *trays,
                           size_t count, char layout, int bedlevel_force, int timelapse) {
-    (void)c; (void)media; (void)tools; (void)trays; (void)count; (void)layout; (void)bedlevel_force; (void)timelapse;
+    (void)c; (void)media; (void)tools; (void)layout; (void)bedlevel_force; (void)timelapse;
     starts_sent++;
     snprintf(start_file, sizeof(start_file), "%s", filename);
+    start_count = count;
+    for (size_t i = 0; i < count && i < GCODE_TOOLS_MAX; ++i) start_trays[i] = trays[i];
     return 0;
 }
 int mock_mqtt_prepare_timelapse(mqtt_client *c, int enabled) { (void)c; (void)enabled; return -1; }
@@ -47,12 +51,22 @@ static void telemetry_says(const char *state, const char *file) {
 }
 static void telemetry_stale(void) { telemetry.last_rx.tv_sec -= 30; }
 static void telemetry_heating(double bed_target) { telemetry.present |= 1u << U_BG; telemetry.values[U_BG] = bed_target; }
-/* The Canvas telemetry in the MQTT cache: one tray, as the printer's method 2005 reports it. */
+/* The Canvas telemetry in the MQTT cache: one tray, as the printer's method 2005 reports it. Each call is a
+ * new report, as mqtt.c counts them. */
 static void canvas_says(int tray, const char *type, int status) {
-    machine.canvas_uds_ready = 0;
+    machine.canvas_uds_ready = 0; machine.canvas_revision++;
     machine.canvas_snapshot_len = (size_t)snprintf(machine.canvas_snapshot, sizeof(machine.canvas_snapshot),
         "{\"id\":2005,\"result\":{\"canvas_info\":{\"canvas_list\":[{\"canvas_id\":0,\"connected\":1,\"tray_list\":["
         "{\"tray_id\":%d,\"status\":%d,\"filament_type\":\"%s\"}]}]}}}", tray, status, type);
+}
+/* Several trays with their labels: status 0 is an empty tray, which keeps the label of the filament it held. */
+#define TRAY_NAMED(id, status, type, name, color) \
+    "{\"tray_id\":" #id ",\"status\":" #status ",\"filament_type\":\"" type "\",\"filament_name\":\"" name "\",\"filament_color\":\"" color "\"}"
+#define TRAY(id, status, type, color) TRAY_NAMED(id, status, type, type, color)
+static void canvas_list(const char *trays) {
+    machine.canvas_uds_ready = 0; machine.canvas_revision++;
+    machine.canvas_snapshot_len = (size_t)snprintf(machine.canvas_snapshot, sizeof(machine.canvas_snapshot),
+        "{\"id\":2005,\"result\":{\"canvas_info\":{\"canvas_list\":[{\"canvas_id\":0,\"connected\":1,\"tray_list\":[%s]}]}}}", trays);
 }
 
 static queue_item *job(int id, int copies, int done) {
@@ -101,17 +115,71 @@ static int finish(void) {
     assert(used > 0);
     return atoi(strchr(reply_body, ' ') + 1);
 }
+/* What GET /api/queue reports for one tool of a job: the filament it is bound to (empty texts: not known yet),
+ * the slot the job was added with (null: added for the filament alone), the slot a start would take (null: no
+ * slot holds the filament) and what was found ("", "empty", "other", "absent" or "unknown"). */
+#define FEED(tool, type, name, color, slot, use, reason) \
+    "{\"tool\":" #tool ",\"type\":\"" type "\",\"name\":\"" name "\",\"color\":\"" color "\",\"slot\":" #slot ",\"use\":" #use ",\"reason\":\"" reason "\"}"
+#define BLIND(tool, slot, use, reason) FEED(tool, "", "", "", slot, use, reason)
+#define RED(tool, slot, use, reason) FEED(tool, "PLA", "PLA", "#FF0000", slot, use, reason)
+#define PRO(tool, slot, use, reason) FEED(tool, "PETG", "PETG Pro", "#AEADAC", slot, use, reason)
+#define MATTE(tool, slot, use, reason) FEED(tool, "PLA", "PLA Matte", "#F72221", slot, use, reason)
+static int queue_reports(const char *part) {
+    queue_get_response(begin(), &machine);
+    return finish() == 200 && strstr(reply_body, part) != NULL;
+}
+/* A job's tools on Canvas slots, as an add request maps them ("tool:slot,..."): no filament known yet. */
+static void feed(queue_item *it, const char *mapping) { it->tools = 0; assert(queue_mapping_tools(it, mapping)); }
+static int holds(queue_item *it, int tool, const char *type, const char *name, const char *color) {
+    const queue_tool *t = queue_tool_of(it, tool);
+    return t && !strcmp(t->filament.type, type) && !strcmp(t->filament.name, name) && !strcmp(t->filament.color, color);
+}
+/* POST /api/queue/filament for a job: the status of the reply. */
+static int change(int id, const char *rest) {
+    char body[256];
+    snprintf(body, sizeof(body), "%d\n%s", id, rest);
+    queue_filament_response(begin(), &machine, body, strlen(body));
+    return finish();
+}
+static int add(const char *body) {
+    queue_add_response(begin(), &machine, body, strlen(body));
+    return finish();
+}
+static int stored_has(const char *needle) {
+    static char text[65536];
+    FILE *in = fopen(queue_path, "r");
+    assert(in);
+    size_t n = fread(text, 1, sizeof(text) - 1, in);
+    fclose(in); text[n] = 0;
+    return strstr(text, needle) != NULL;
+}
+/* A stored queue with one job, as a build of some version left it: whether it loads. */
+static int loads(int version, const char *mapping, const char *filaments) {
+    FILE *out = fopen(queue_path, "w");
+    assert(out);
+    fprintf(out, "{\"version\":%d,\"next_id\":41,\"policy\":{\"after\":\"wait\",\"delay\":60,\"remove_done\":false},\"items\":[{\"id\":40,"
+        "\"storage\":\"internal\",\"path\":\"part.gcode\",\"mapping\":\"%s\",\"side\":\"A\",\"leveling\":\"saved\",\"timelapse\":false,"
+        "\"measure\":\"\",\"nozzle\":\"\",\"copies\":2,\"done\":1,\"estimated_seconds\":-1,\"filament_grams\":-1,\"added\":1,"
+        "\"state\":\"pending\",\"last_result\":\"\",\"filaments\":[%s],"
+        "\"print_name\":\"\",\"native_seen\":false,\"job_uuid\":\"\",\"request_uuid\":\"\"}]}\n", version, mapping, filaments);
+    assert(fclose(out) == 0);
+    queue_load();
+    return queue_available && queue.count == 1;
+}
 
 int main(void) {
     char dir[] = "/tmp/cc2-queue-XXXXXX";
     assert(mkdtemp(dir));
-    static char file[640], internal[640], gcode[700], plain[700], autosave[640];
+    static char file[640], internal[640], gcode[700], plain[700], duo[700], autosave[640];
     snprintf(file, sizeof(file), "%s/print-queue.json", dir); queue_path = file;
     snprintf(internal, sizeof(internal), "%s/internal", dir); assert(mkdir(internal, 0755) == 0); gcode_internal_root = internal;
     snprintf(gcode, sizeof(gcode), "%s/part.gcode", internal);
     FILE *out = fopen(gcode, "w"); assert(out && fputs("; filament_type = PLA\nG28\nG1 X10 Y10 E1\n", out) >= 0 && fclose(out) == 0);
     snprintf(plain, sizeof(plain), "%s/plain.gcode", internal); /* a file that names no material */
     out = fopen(plain, "w"); assert(out && fputs("G28\nG1 X10 Y10 E1\n", out) >= 0 && fclose(out) == 0);
+    snprintf(duo, sizeof(duo), "%s/duo.gcode", internal); /* a file for two tools */
+    out = fopen(duo, "w");
+    assert(out && fputs("; filament_type = PLA;PLA\nG28\nT0\nG1 X10 Y10 E1\nT1\nG1 X20 Y20 E1\n", out) >= 0 && fclose(out) == 0);
     snprintf(autosave, sizeof(autosave), "%s/autosave.cfg", dir); printer_autosave_path = autosave;
     out = fopen(autosave, "w"); assert(out && fputs("[bed_mesh default]\nx_count = 11\ny_count = 11\npoints =\n  0, 0\n", out) >= 0 && fclose(out) == 0);
     canvas_color_table_uds = fake_uds;
@@ -277,11 +345,16 @@ int main(void) {
     assert(!strcmp(queue.after, "auto") && queue.complete_ms == 0);
     queue_tick(&machine);
     assert(queue.active_id == 0 && starts_sent == 0 && !it->last_result[0]);
-    /* Under "auto" a counted copy arms the delay; a print the operator starts by hand disarms it. */
+    /* Under "auto" a counted copy arms the delay; a print the operator starts by hand disarms it. The
+     * automatic start will judge the Canvas trays with nobody watching them: the queue asks for a report at
+     * once, notes the ones it had by then, and keeps the Canvas watched while the delay runs. */
     copy_starts(it, "u16");
+    machine.canvas_revision = 7; machine.canvas_refresh_due = 0; machine.canvas_watch_until = 0;
     printer_says(1, "complete", "", "u16"); telemetry_says("complete", "local/part.gcode");
     queue_tick(&machine);
     assert(it->done == 2 && queue.complete_ms > 0);
+    assert(machine.canvas_refresh_due == 1 && queue.complete_canvas == 7 && machine.canvas_watch_until > time(NULL));
+    machine.canvas_refresh_due = 0;
     printer_says(2, "printing", "manual.gcode", "m1"); telemetry_says("printing", "local/manual.gcode");
     queue_tick(&machine);
     assert(queue.complete_ms == 0 && queue.active_id == 0 && !strcmp(it->state, "pending"));
@@ -358,12 +431,12 @@ int main(void) {
     queue_copies_response(begin(), "7\n1", 3); assert(finish() == 409 && strstr(reply_body, "keep one copy more"));
     queue_copies_response(begin(), "7\n2", 3); assert(finish() == 200 && !strcmp(it->state, "printing") && it->copies == 2);
     static const char add_next[] = "internal\npart.gcode\n\nA\nsaved\n0\n\n\n1\nnext";
-    queue_add_response(begin(), add_next, strlen(add_next)); assert(finish() == 201);
+    queue_add_response(begin(), &machine, add_next, strlen(add_next)); assert(finish() == 201);
     assert(queue.count == 2 && queue.items[0].id == 7 && queue.items[1].id == 8 && !strcmp(queue.items[1].state, "pending"));
     static const char add_bad[] = "internal\npart.gcode\n\nA\nsaved\n0\n\nx\"y\n1";
-    queue_add_response(begin(), add_bad, strlen(add_bad)); assert(finish() == 400); /* not a nozzle id */
+    queue_add_response(begin(), &machine, add_bad, strlen(add_bad)); assert(finish() == 400); /* not a nozzle id */
     static const char add_measure[] = "internal\npart.gcode\n\nA\nsaved\n0\n0123456789abcdef\n\n1";
-    queue_add_response(begin(), add_measure, strlen(add_measure)); assert(finish() == 201);
+    queue_add_response(begin(), &machine, add_measure, strlen(add_measure)); assert(finish() == 201);
     queue_get_response(begin(), &machine); assert(finish() == 200);
     /* `next` names the first job that could start; the browser hides it behind `active`. */
     assert(strstr(reply_body, "\"active\":7") && strstr(reply_body, "\"measure\":\"0123456789abcdef\"") && strstr(reply_body, "\"next\":8"));
@@ -409,9 +482,10 @@ int main(void) {
     /* The automatic start checks the Canvas material at the moment it would start, as the Queue page shows it:
      * a spool swapped during the countdown, an empty slot, missing telemetry or a file that names no material
      * hold the copy for the operator; a slot holding the material starts. (The external feed, checked above
-     * with an empty mapping, has nothing to verify.) */
+     * with no tools, has nothing to verify.) These slots report no colour, so the job knows no filament and
+     * prints with whatever its slot holds. */
     queue.count = 0; queue.active_id = 0;
-    it = job(12, 2, 0); snprintf(it->mapping, sizeof(it->mapping), "0:2");
+    it = job(12, 2, 0); feed(it, "0:2");
     snprintf(queue.after, sizeof(queue.after), "auto"); queue.delay = 10;
     printer_says(1, "complete", "", "u19"); telemetry_says("complete", NULL);
     int sent = starts_sent;
@@ -423,15 +497,329 @@ int main(void) {
     assert(starts_sent == sent && !strcmp(it->last_result, "auto_material"));
     queue_load(); it = &queue.items[0]; /* the hold is saved with the job */
     assert(queue.count == 1 && it->id == 12 && !strcmp(it->last_result, "auto_material") && !strcmp(it->state, "pending"));
+    assert(it->tools == 1 && it->tool[0].tool == 0 && it->tool[0].slot == 2 && !queue_filament_known(&it->tool[0].filament));
     it->last_result[0] = 0; canvas_says(2, "Elegoo PLA Basic", 1); queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
     assert(starts_sent == sent + 1 && !strcmp(it->state, "starting") && !it->last_result[0]); /* the slot's type contains the material */
     queue.count = 0; queue.active_id = 0;
-    it = job(13, 1, 0); snprintf(it->path, sizeof(it->path), "plain.gcode"); snprintf(it->mapping, sizeof(it->mapping), "0:2");
+    it = job(13, 1, 0); snprintf(it->path, sizeof(it->path), "plain.gcode"); feed(it, "0:2");
     canvas_says(2, "PLA", 1); queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine); /* the file names no material */
     assert(starts_sent == sent + 1 && !strcmp(it->state, "pending") && !strcmp(it->last_result, "auto_material"));
 
-    unlink(gcode); unlink(plain); unlink(file); unlink(autosave); rmdir(internal); rmdir(dir);
+    /* A tool whose slot is empty takes the lowest other slot that holds the same filament: the same type, name
+     * and colour. A job that knows no filament for the tool yet judges the empty slot by its own label. The
+     * queue reports what a start would take, and the start sends it; the job itself does not change. */
+    queue.count = 0; queue.active_id = 0; queue.complete_ms = 0; snprintf(queue.after, sizeof(queue.after), "wait");
+    it = job(14, 3, 0); feed(it, "0:3");
+    printer_says(1, "complete", "", "u19"); telemetry_says("complete", NULL);
+    canvas_list(TRAY(0, 1, "PETG", "#2B5DC4") "," TRAY(1, 1, "PETG", "#aeadac") "," TRAY(2, 1, "PETG", "#AEADAC") ","
+                TRAY(3, 0, "PETG", "#AEADAC"));
+    machine.canvas_watch_until = 0;
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 1, "empty") "]")); /* tray 0 has another colour; tray 1 comes before tray 2 */
+    /* The printer answers a Canvas request and may say nothing by itself: while a start fed from the Canvas is
+     * on offer, whoever reads the queue keeps the Canvas watched. Not a busy printer, nor a running copy. */
+    assert(machine.canvas_watch_until > time(NULL));
+    machine.canvas_watch_until = 0;
+    printer_says(2, "printing", "other.gcode", "u19");
+    assert(queue_reports("\"filaments\"") && machine.canvas_watch_until == 0);
+    printer_says(1, "complete", "", "u19");
+    sent = starts_sent;
+    queue_start_response(begin(), &machine, "14", 2); assert(finish() == 202);
+    assert(starts_sent == sent + 1 && start_count == 1 && start_trays[0] == 1);
+    assert(!strcmp(it->state, "starting") && queue.active_id == 14 && it->tool[0].slot == 3);
+    assert(queue_reports("\"active\":14") && machine.canvas_watch_until == 0);
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200 && !strcmp(it->state, "pending"));
+    /* A slot loaded into the head feeds a start as well; a refilled slot is used again. */
+    canvas_list(TRAY(1, 2, "PETG", "#AEADAC") "," TRAY(3, 0, "PETG", "#AEADAC"));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 1, "empty") "]"));
+    canvas_list(TRAY(1, 1, "PETG", "#AEADAC") "," TRAY(3, 1, "PETG", "#AEADAC"));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 3, "") "]"));
+    queue_start_response(begin(), &machine, "14", 2); assert(finish() == 202 && start_trays[0] == 3);
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
+    /* Another colour, another material, another name, an empty slot or a slot without a label is not the same
+     * filament: the start is refused and nothing changes. */
+    canvas_list(TRAY(0, 1, "PETG", "#2B5DC4") "," TRAY(1, 0, "PETG", "#AEADAC") "," TRAY(2, 1, "PLA", "#AEADAC") ","
+                TRAY(3, 0, "PETG", "#AEADAC"));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, null, "empty") "]"));
+    sent = starts_sent; it->last_result[0] = 0;
+    queue_start_response(begin(), &machine, "14", 2);
+    assert(finish() == 409 && strstr(reply_body, "Canvas slot 4 is empty and no other slot holds the same filament"));
+    assert(starts_sent == sent && !strcmp(it->state, "pending") && queue.active_id == 0 && !it->last_result[0] && !it->print_name[0]);
+    canvas_list(TRAY_NAMED(0, 1, "PETG", "PETG Pro", "#AEADAC") "," TRAY(3, 0, "PETG", "#AEADAC"));
+    assert(queue_reports("\"use\":null"));
+    canvas_list(TRAY_NAMED(0, 1, "PLA", "Basic", "#AEADAC") "," TRAY_NAMED(3, 0, "PETG", "Basic", "#AEADAC"));
+    assert(queue_reports("\"use\":null")); /* one name and colour for two materials */
+    canvas_list("{\"tray_id\":0,\"status\":1},{\"tray_id\":3,\"status\":0}");
+    assert(queue_reports("\"use\":null"));
+    /* A tray the printer did not report, or telemetry that is not fresh: nothing is known to be empty. */
+    canvas_list(TRAY(1, 1, "PETG", "#AEADAC"));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 3, "") "]"));
+    canvas_list(TRAY(1, 1, "PETG", "#AEADAC") "," TRAY(3, 0, "PETG", "#AEADAC"));
+    machine.last_message = time(NULL) - 60;
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 3, "") "]"));
+    machine.last_message = time(NULL);
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 1, "empty") "]"));
+    /* Several tools: each takes the lowest slot that holds its filament, so tools with one filament share it. */
+    feed(it, "0:3,1:1");
+    canvas_list(TRAY(0, 1, "PETG", "#AEADAC") "," TRAY(1, 1, "PETG", "#AEADAC") "," TRAY(3, 0, "PETG", "#AEADAC"));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 0, "empty") "," BLIND(1, 1, 1, "") "]"));
+    canvas_list(TRAY(1, 1, "PETG", "#AEADAC") "," TRAY(3, 0, "PETG", "#AEADAC"));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 1, "empty") "," BLIND(1, 1, 1, "") "]"));
+    feed(it, "2:0,0:3,1:3"); /* the tools are kept in their own order */
+    canvas_list(TRAY(0, 0, "PETG", "#AEADAC") "," TRAY(1, 1, "PETG", "#AEADAC") "," TRAY(2, 1, "PETG", "#AEADAC") ","
+                TRAY(3, 0, "PETG", "#AEADAC"));
+    assert(queue_reports("\"mapping\":\"0:3,1:3,2:0\""));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 3, 1, "empty") "," BLIND(1, 3, 1, "empty") "," BLIND(2, 0, 1, "empty") "]"));
+    sent = starts_sent;
+    queue_start_response(begin(), &machine, "14", 2); /* part.gcode has one tool: the print path refuses three */
+    assert(finish() == 409 && strstr(reply_body, "Canvas mapping does not match this G-code") && starts_sent == sent);
+    /* The external feed has no tools, and nothing to ask the Canvas. */
+    it->tools = 0; machine.canvas_watch_until = 0;
+    assert(queue_reports("\"filaments\":[]") && queue_reports("\"mapping\":\"\"") && machine.canvas_watch_until == 0);
+
+    /* A tool added with a slot is bound to the filament the Canvas labels that slot with (an empty slot keeps
+     * its label). The filament travels with the job, and the queue reports it with the slot a start would take. */
+    queue.count = 0; queue.active_id = 0;
+    printer_says(1, "complete", "", "u19"); telemetry_says("complete", NULL);
+    canvas_list(TRAY(0, 1, "PETG", "#AEADAC") "," TRAY(1, 1, "PLA", "#FF0000") "," TRAY_NAMED(3, 0, "PETG", "PETG Pro", "#aeadac"));
+    assert(add("internal\nduo.gcode\n0:3,1:1\nA\nsaved\n0\n\n\n3") == 201);
+    it = &queue.items[0];
+    assert(it->tools == 2 && it->tool[0].tool == 0 && it->tool[0].slot == 3 && it->tool[1].tool == 1 && it->tool[1].slot == 1);
+    assert(holds(it, 0, "PETG", "PETG Pro", "#AEADAC") && holds(it, 1, "PLA", "PLA", "#FF0000"));
+    /* Slot 4 is empty and nothing holds its filament yet: slot 1 has that colour under another name. */
+    assert(queue_reports("\"mapping\":\"0:3,1:1\"") && queue_reports("\"filaments\":[" PRO(0, 3, null, "empty") "," RED(1, 1, 1, "") "]"));
+    assert(stored_has("\"version\":1") && stored_has("\"mapping\":\"0:3,1:1\"") &&
+           stored_has("\"filaments\":[{\"tool\":0,\"type\":\"PETG\",\"name\":\"PETG Pro\",\"color\":\"#AEADAC\"},"
+                      "{\"tool\":1,\"type\":\"PLA\",\"name\":\"PLA\",\"color\":\"#FF0000\"}]"));
+    queue_load(); it = &queue.items[0];
+    assert(queue_available && queue.count == 1 && it->tools == 2 && it->tool[0].slot == 3 && it->tool[1].slot == 1);
+    assert(holds(it, 0, "PETG", "PETG Pro", "#AEADAC") && holds(it, 1, "PLA", "PLA", "#FF0000"));
+
+    /* The slot the job was added with holds another filament now, and another slot holds the job's: a start
+     * takes that slot. Nothing about the job changes, and its own slot comes first when the filament is back. */
+    canvas_list(TRAY_NAMED(0, 1, "PETG", "PETG Pro", "#AEADAC") "," TRAY(1, 1, "PLA", "#FF0000") "," TRAY(3, 1, "PLA", "#0000FF"));
+    assert(queue_reports("\"filaments\":[" PRO(0, 3, 0, "other") "," RED(1, 1, 1, "") "]"));
+    sent = starts_sent;
+    queue_start_response(begin(), &machine, "", 0); assert(finish() == 202);
+    assert(starts_sent == sent + 1 && start_count == 2 && start_trays[0] == 0 && start_trays[1] == 1);
+    assert(it->tool[0].slot == 3 && holds(it, 0, "PETG", "PETG Pro", "#AEADAC"));
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
+    canvas_list(TRAY_NAMED(0, 1, "PETG", "PETG Pro", "#AEADAC") "," TRAY(1, 1, "PLA", "#FF0000") ","
+                TRAY_NAMED(3, 1, "petg", "petg pro", "#AEADAC")); /* the labels compare without case */
+    assert(queue_reports("\"filaments\":[" PRO(0, 3, 3, "") "," RED(1, 1, 1, "") "]"));
+
+    /* No slot holds the job's filament: the copy cannot start, whatever its old slot holds now, and the
+     * refusal changes nothing. */
+    canvas_list(TRAY(1, 1, "PLA", "#FF0000") "," TRAY(3, 1, "PLA", "#0000FF"));
+    assert(queue_reports("\"filaments\":[" PRO(0, 3, null, "other") "," RED(1, 1, 1, "") "]"));
+    sent = starts_sent;
+    queue_start_response(begin(), &machine, "", 0);
+    assert(finish() == 409 && strstr(reply_body, "No Canvas slot holds the job's filament: PETG Pro #AEADAC"));
+    assert(starts_sent == sent && !strcmp(it->state, "pending") && queue.active_id == 0 && !it->print_name[0]);
+    assert(it->tool[0].slot == 3 && holds(it, 0, "PETG", "PETG Pro", "#AEADAC"));
+    /* The operator gives the tool another filament: the one a slot holds now. The other tools keep theirs, and
+     * the change is saved. */
+    int id = it->id;
+    assert(change(id, "0:3") == 200);
+    assert(it->tool[0].slot == 3 && holds(it, 0, "PLA", "PLA", "#0000FF") && it->tool[1].slot == 1 && holds(it, 1, "PLA", "PLA", "#FF0000"));
+    assert(queue_reports("\"filaments\":[" FEED(0, "PLA", "PLA", "#0000FF", 3, 3, "") "," RED(1, 1, 1, "") "]"));
+    queue_load(); it = &queue.items[0];
+    assert(queue.count == 1 && it->id == id && it->tool[0].slot == 3 && holds(it, 0, "PLA", "PLA", "#0000FF"));
+    queue_start_response(begin(), &machine, "", 0); assert(finish() == 202 && start_trays[0] == 3 && start_trays[1] == 1);
+    /* Or a filament that is in no slot, by itself; also while a copy runs, which has its slots already. */
+    assert(change(id, "\n0\tPETG\tPETG Pro\t#aeadac") == 200);
+    assert(it->tool[0].slot == -1 && holds(it, 0, "PETG", "PETG Pro", "#AEADAC") && !strcmp(it->state, "starting") && it->tool[1].slot == 1);
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
+    assert(queue_reports("\"mapping\":\"1:1\"") && queue_reports("\"filaments\":[" PRO(0, null, null, "absent") "," RED(1, 1, 1, "") "]"));
+    /* What such a request cannot say: another job or a tool the job has not, a slot or a filament that is none,
+     * one tool twice, or nothing at all. */
+    assert(change(99, "0:3") == 404 && change(id, "5:1") == 409 && strstr(reply_body, "This job has no such tool"));
+    assert(change(id, "0:9") == 400 && change(id, "") == 400 && strstr(reply_body, "No filament to change"));
+    queue_filament_response(begin(), &machine, "1", 1); assert(finish() == 400);
+    assert(change(id, "\n0\tPLA\tPLA\tred") == 400 && strstr(reply_body, "Invalid filament"));
+    assert(change(id, "\n0\t\t\t#FF0000") == 400 && change(id, "\n0\tPLA\tPLA") == 400 && change(id, "\n0\tPLA\tPLA\t#FF0000\tx") == 400);
+    assert(change(id, "\nx\tPLA\tPLA\t#FF0000") == 400 && change(id, "\n16\tPLA\tPLA\t#FF0000") == 400);
+    assert(change(id, "\n0\tPL\"A\tPLA\t#FF0000") == 400 && change(id, "\n0\tPLA\t PLA\t#FF0000") == 400);
+    assert(change(id, "0:1\n0\tPLA\tPLA\t#FF0000") == 400 && strstr(reply_body, "A tool is named twice"));
+    assert(it->tool[0].slot == -1 && holds(it, 0, "PETG", "PETG Pro", "#AEADAC") && it->tool[1].slot == 1 && holds(it, 1, "PLA", "PLA", "#FF0000"));
+
+    /* An empty slot gives way to the slot that holds the tool's filament, whatever label the empty slot
+     * carries now; with that filament in no slot the start is refused. */
+    it->tool[0].slot = 3; /* as a job added with slot 4 */
+    canvas_list(TRAY_NAMED(0, 1, "PETG", "PETG Pro", "#AEADAC") "," TRAY(1, 1, "PLA", "#FF0000") "," TRAY(2, 1, "PETG", "#00FF00") ","
+                TRAY(3, 0, "PETG", "#00FF00"));
+    assert(queue_reports("\"filaments\":[" PRO(0, 3, 0, "empty") "," RED(1, 1, 1, "") "]"));
+    canvas_list(TRAY(1, 1, "PLA", "#FF0000") "," TRAY(2, 1, "PETG", "#00FF00") "," TRAY(3, 0, "PETG", "#00FF00"));
+    assert(queue_reports("\"filaments\":[" PRO(0, 3, null, "empty") "," RED(1, 1, 1, "") "]"));
+    sent = starts_sent;
+    queue_start_response(begin(), &machine, "", 0);
+    assert(finish() == 409 && strstr(reply_body, "Canvas slot 4 is empty and no other slot holds the same filament"));
+    assert(starts_sent == sent && !strcmp(it->state, "pending"));
+
+    /* Two spools that changed places: each tool follows its filament. */
+    canvas_list(TRAY_NAMED(1, 1, "PETG", "PETG Pro", "#AEADAC") "," TRAY(3, 1, "PLA", "#FF0000"));
+    assert(queue_reports("\"filaments\":[" PRO(0, 3, 1, "other") "," RED(1, 1, 3, "other") "]"));
+    /* Tools that print with one filament share the slot that holds it: the lowest one, unless a tool's own slot
+     * holds it. A slot that reports no label holds no filament of the job. */
+    it->tool[0].filament = it->tool[1].filament; /* as a job added with the same filament in both slots */
+    canvas_list(TRAY(1, 1, "PLA", "#FF0000") "," TRAY(3, 1, "PETG", "#00FF00"));
+    assert(queue_reports("\"filaments\":[" RED(0, 3, 1, "other") "," RED(1, 1, 1, "") "]"));
+    canvas_list(TRAY(0, 1, "PLA", "#FF0000") "," TRAY(1, 1, "PLA", "#FF0000") "," TRAY(3, 1, "PETG", "#00FF00"));
+    assert(queue_reports("\"filaments\":[" RED(0, 3, 0, "other") "," RED(1, 1, 1, "") "]"));
+    sent = starts_sent;
+    queue_start_response(begin(), &machine, "", 0);
+    assert(finish() == 202 && starts_sent == sent + 1 && start_count == 2 && start_trays[0] == 0 && start_trays[1] == 1);
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
+    canvas_list("{\"tray_id\":1,\"status\":1},{\"tray_id\":3,\"status\":1}");
+    assert(queue_reports("\"filaments\":[" RED(0, 3, null, "other") "," RED(1, 1, null, "other") "]"));
+
+    /* A job added while the Canvas had reported no label for its slot takes the filament from the first report
+     * that has one (a label without a colour names no filament), and keeps it when the label changes. */
+    queue.count = 0; machine.canvas_snapshot_len = 0;
+    assert(add("internal\npart.gcode\n0:2\nA\nsaved\n0\n\n\n2") == 201);
+    it = &queue.items[0];
+    assert(it->tools == 1 && it->tool[0].slot == 2 && !queue_filament_known(&it->tool[0].filament));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 2, 2, "") "]") && stored_has("\"filaments\":[]"));
+    canvas_list("{\"tray_id\":2,\"status\":1,\"filament_type\":\"PLA\"}"); queue_tick(&machine);
+    assert(!queue_filament_known(&it->tool[0].filament));
+    assert(queue_reports("\"filaments\":[" BLIND(0, 2, 2, "") "]")); /* nothing known: the slot is used as it is */
+    canvas_list(TRAY(2, 0, "PLA", "#112233")); queue_tick(&machine);
+    assert(holds(it, 0, "PLA", "PLA", "#112233"));
+    queue_load(); it = &queue.items[0]; /* saved when it was learnt */
+    assert(queue.count == 1 && it->tool[0].slot == 2 && holds(it, 0, "PLA", "PLA", "#112233"));
+    canvas_list(TRAY(2, 1, "PETG", "#445566")); queue_tick(&machine);
+    assert(holds(it, 0, "PLA", "PLA", "#112233"));
+    assert(queue_reports("\"filaments\":[" FEED(0, "PLA", "PLA", "#112233", 2, null, "other") "]"));
+    /* What the stored file may say about filaments. A filament of a tool of the mapping, or of a tool that is
+     * not in it: added for the filament alone. Such a queue is saved as version 2, which a build that knows
+     * only version 1 refuses rather than take the job for one that prints from the external feed. A record the
+     * queue could not have written keeps the queue closed. */
+    assert(loads(1, "0:1", "") && queue.items[0].tools == 1 && queue.items[0].tool[0].slot == 1);
+    assert(loads(1, "0:1", "{\"tool\":0,\"type\":\"PLA\",\"name\":\"\",\"color\":\"#FF0000\"}"));
+    assert(queue.items[0].tool[0].slot == 1 && holds(&queue.items[0], 0, "PLA", "", "#FF0000"));
+    assert(loads(2, "1:0", "{\"tool\":0,\"type\":\"\",\"name\":\"PLA Matte\",\"color\":\"#F72221\"}"));
+    assert(queue.items[0].tools == 2 && queue.items[0].tool[0].slot == -1 && holds(&queue.items[0], 0, "", "PLA Matte", "#F72221") &&
+           queue.items[0].tool[1].tool == 1 && queue.items[0].tool[1].slot == 0);
+    assert(queue_save() == 0 && stored_has("\"version\":2") && stored_has("\"mapping\":\"1:0\""));
+    assert(!loads(3, "0:1", "") && !queue_available);
+    assert(!loads(1, "0:1", "{\"tool\":0,\"type\":\"PLA\",\"name\":\"PLA\",\"color\":\"red\"}") && !queue_available);
+    assert(!loads(1, "0:1", "{\"tool\":0,\"type\":\"\",\"name\":\"\",\"color\":\"#FF0000\"}") && !queue_available);
+    assert(!loads(1, "0:1", "{\"tool\":16,\"type\":\"PLA\",\"name\":\"PLA\",\"color\":\"#FF0000\"}") && !queue_available);
+    assert(!loads(1, "0:1", "{\"type\":\"PLA\",\"name\":\"PLA\",\"color\":\"#FF0000\"}") && !queue_available);
+    assert(!loads(1, "0:1", "{\"tool\":0,\"type\":\"PLA\",\"name\":\"PLA\",\"color\":\"#FF0000\"},"
+                           "{\"tool\":0,\"type\":\"PLA\",\"name\":\"PLA\",\"color\":\"#00FF00\"}") && !queue_available);
+    assert(!loads(1, "", "{\"tool\":2,\"type\":\"PLA\",\"name\":\"PLA\",\"color\":\"#FF0000\"},"
+                        "{\"tool\":2,\"type\":\"PLA\",\"name\":\"PLA\",\"color\":\"#00FF00\"}") && !queue_available);
+    queue_available = 1; queue_error = ""; queue.remove_done = 0;
+
+    /* The automatic start takes the slot that holds the filament when that slot holds the file's material,
+     * and holds the copy when it does not. */
+    queue.count = 0; queue.active_id = 0;
+    it = job(15, 2, 0); feed(it, "0:2");
+    snprintf(queue.after, sizeof(queue.after), "auto"); queue.delay = 10;
+    printer_says(1, "complete", "", "u19"); telemetry_says("complete", NULL);
+    canvas_list(TRAY(0, 1, "PETG", "#FF0000") "," TRAY(2, 0, "PETG", "#FF0000")); /* the file is PLA */
+    sent = starts_sent; queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    assert(starts_sent == sent && !strcmp(it->state, "pending") && !strcmp(it->last_result, "auto_material"));
+    /* A Canvas report older than the copy that just completed checks nothing: the start waits for the answer
+     * to the request made at the completion, and the copy is held when none came. */
+    queue.count = 0; it = job(16, 2, 0); feed(it, "0:2");
+    canvas_list(TRAY(0, 1, "PLA", "#FF0000") "," TRAY(2, 0, "PLA", "#FF0000"));
+    queue.complete_canvas = machine.canvas_revision; queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    assert(starts_sent == sent && !strcmp(it->state, "pending") && !strcmp(it->last_result, "auto_material"));
+    it->last_result[0] = 0;
+    canvas_list(TRAY(0, 1, "PLA", "#FF0000") "," TRAY(2, 0, "PLA", "#FF0000")); /* the printer's answer */
+    queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    assert(starts_sent == sent + 1 && start_count == 1 && start_trays[0] == 0);
+    assert(!strcmp(it->state, "starting") && !it->last_result[0] && it->tool[0].slot == 2);
+    /* Nor does it print with another filament than the job's: with the job's filament in no slot the copy is
+     * held, although its old slot holds the file's material. When a slot holds it, the start takes that slot. */
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
+    assert(holds(it, 0, "PLA", "PLA", "#FF0000")); /* learnt from the first report */
+    it->last_result[0] = 0;
+    canvas_list(TRAY(0, 1, "PLA", "#00FF00") "," TRAY(2, 1, "PLA", "#0000FF"));
+    sent = starts_sent; queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    assert(starts_sent == sent && !strcmp(it->state, "pending") && !strcmp(it->last_result, "auto_material"));
+    assert(holds(it, 0, "PLA", "PLA", "#FF0000"));
+    it->last_result[0] = 0;
+    canvas_list(TRAY(0, 1, "PLA", "#00FF00") "," TRAY(1, 1, "PLA", "#FF0000") "," TRAY(2, 1, "PLA", "#0000FF"));
+    queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    assert(starts_sent == sent + 1 && start_count == 1 && start_trays[0] == 1);
+    assert(!strcmp(it->state, "starting") && !it->last_result[0] && holds(it, 0, "PLA", "PLA", "#FF0000"));
+
+    /* A job added for a filament alone, while the printer holds nothing of the kind: it waits until a slot
+     * holds that filament and then starts from it, whichever slot it is. */
+    queue.count = 0; queue.active_id = 0; queue.complete_ms = 0; queue.next_id = 50; snprintf(queue.after, sizeof(queue.after), "wait");
+    printer_says(1, "complete", "", "u19"); telemetry_says("complete", NULL);
+    canvas_list(TRAY(0, 1, "PETG", "#AEADAC") "," TRAY(1, 1, "PETG", "#2B5DC4"));
+    assert(add("internal\npart.gcode\n\nA\nsaved\n0\n\n\n2\nend\n\n\n0\tPLA\tPLA Matte\t#f72221") == 201);
+    it = &queue.items[0];
+    assert(it->id == 50 && it->tools == 1 && it->tool[0].tool == 0 && it->tool[0].slot == -1 && holds(it, 0, "PLA", "PLA Matte", "#F72221"));
+    machine.canvas_watch_until = 0;
+    assert(queue_reports("\"mapping\":\"\"") && queue_reports("\"filaments\":[" MATTE(0, null, null, "absent") "]"));
+    assert(machine.canvas_watch_until > time(NULL)); /* a start that looks for a filament keeps the Canvas watched too */
+    sent = starts_sent;
+    queue_start_response(begin(), &machine, "50", 2);
+    assert(finish() == 409 && strstr(reply_body, "No Canvas slot holds the job's filament: PLA Matte #F72221"));
+    assert(starts_sent == sent && !strcmp(it->state, "pending") && queue.active_id == 0);
+    assert(stored_has("\"version\":2") && stored_has("\"mapping\":\"\"") &&
+           stored_has("\"filaments\":[{\"tool\":0,\"type\":\"PLA\",\"name\":\"PLA Matte\",\"color\":\"#F72221\"}]"));
+    queue_load(); it = &queue.items[0];
+    assert(queue_available && queue.count == 1 && it->tools == 1 && it->tool[0].slot == -1 && holds(it, 0, "PLA", "PLA Matte", "#F72221"));
+    /* Another line or another colour of the material is not it, nor is an empty slot that is labelled with it. */
+    canvas_list(TRAY_NAMED(0, 1, "PLA", "PLA Silk", "#F72221") "," TRAY_NAMED(1, 1, "PLA", "PLA Matte", "#F88946") ","
+                TRAY_NAMED(2, 0, "PLA", "PLA Matte", "#F72221"));
+    assert(queue_reports("\"filaments\":[" MATTE(0, null, null, "absent") "]"));
+    /* The spool is loaded: the lowest slot that holds it, present or already in the head. */
+    canvas_list(TRAY(0, 1, "PETG", "#AEADAC") "," TRAY_NAMED(2, 2, "pla", "pla matte", "#F72221") ","
+                TRAY_NAMED(3, 1, "PLA", "PLA Matte", "#F72221"));
+    assert(queue_reports("\"filaments\":[" MATTE(0, null, 2, "") "]"));
+    queue_start_response(begin(), &machine, "50", 2); assert(finish() == 202);
+    assert(starts_sent == sent + 1 && start_count == 1 && start_trays[0] == 2 && it->tool[0].slot == -1);
+    queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
+    /* Without a fresh Canvas report there is nowhere to look. */
+    machine.last_message = time(NULL) - 60;
+    assert(queue_reports("\"filaments\":[" MATTE(0, null, null, "unknown") "]"));
+    machine.last_message = time(NULL); machine.canvas_snapshot_len = 0;
+    assert(queue_reports("\"filaments\":[" MATTE(0, null, null, "unknown") "]"));
+    sent = starts_sent;
+    queue_start_response(begin(), &machine, "50", 2);
+    assert(finish() == 409 && strstr(reply_body, "The Canvas has not reported its slots") && starts_sent == sent);
+    /* A filament stated without a product line is any line of that material in that colour; one stated by its
+     * line alone is that line, whatever type the slot gives it. */
+    canvas_list(TRAY_NAMED(1, 1, "PLA", "PLA Silk", "#F72221") "," TRAY_NAMED(2, 1, "PETG", "PLA", "#F72221"));
+    assert(change(50, "\n0\tPLA\t\t#F72221") == 200 && holds(it, 0, "PLA", "", "#F72221"));
+    assert(queue_reports("\"filaments\":[" FEED(0, "PLA", "", "#F72221", null, 1, "") "]"));
+    assert(change(50, "\n0\t\tPLA\t#F72221") == 200 && queue_reports("\"filaments\":[" FEED(0, "", "PLA", "#F72221", null, 2, "") "]"));
+    assert(change(50, "\n0\t\tPLA Matte\t#F72221") == 200 &&
+           queue_reports("\"filaments\":[" FEED(0, "", "PLA Matte", "#F72221", null, null, "absent") "]"));
+    /* One tool on a slot and one waiting for its filament; the filament lines follow the estimates of an add
+     * request, and empty lines are skipped. A request that names a tool twice or a filament that is none is
+     * refused whole. */
+    canvas_list(TRAY(0, 1, "PETG", "#AEADAC"));
+    assert(add("internal\nduo.gcode\n0:0\nA\nsaved\n0\n\n\n1\nend\n600\n12.5\n\n1\tPLA\tPLA Matte\t#F72221\n") == 201 && queue.count == 2);
+    queue_item *mixed = &queue.items[1];
+    assert(mixed->tools == 2 && mixed->tool[0].slot == 0 && holds(mixed, 0, "PETG", "PETG", "#AEADAC") &&
+           mixed->tool[1].slot == -1 && holds(mixed, 1, "PLA", "PLA Matte", "#F72221") && mixed->estimated_seconds == 600);
+    assert(queue_reports("\"filaments\":[" FEED(0, "PETG", "PETG", "#AEADAC", 0, 0, "") "," MATTE(1, null, null, "absent") "]"));
+    assert(add("internal\nduo.gcode\n0:0\nA\nsaved\n0\n\n\n1\nend\n\n\n0\tPLA\tPLA Matte\t#F72221") == 400 && strstr(reply_body, "A tool is named twice"));
+    assert(add("internal\nduo.gcode\n0:0\nA\nsaved\n0\n\n\n1\nend\n\n\n1\tPLA\tPLA Matte\tF72221") == 400 && strstr(reply_body, "Invalid filament"));
+    assert(add("internal\nduo.gcode\n\nA\nsaved\n0\n\n\n1\nend\n\n\n1\tPLA\tPLA Matte\t#F72221\n1\tPLA\tPLA Matte\t#F88946") == 400);
+    assert(queue.count == 2);
+    /* The automatic start holds a copy whose filament is in no slot, and takes the slot once one holds it. */
+    assert(change(50, "\n0\tPLA\tPLA Matte\t#F72221") == 200);
+    snprintf(queue.after, sizeof(queue.after), "auto"); queue.delay = 10;
+    canvas_list(TRAY(0, 1, "PETG", "#AEADAC"));
+    sent = starts_sent; queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    assert(starts_sent == sent && !strcmp(it->state, "pending") && !strcmp(it->last_result, "auto_material"));
+    it->last_result[0] = 0;
+    canvas_list(TRAY(0, 1, "PETG", "#AEADAC") "," TRAY_NAMED(3, 1, "PLA", "PLA Matte", "#F72221"));
+    queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    assert(starts_sent == sent + 1 && start_count == 1 && start_trays[0] == 3 && !strcmp(it->state, "starting") && !it->last_result[0]);
+
+    unlink(gcode); unlink(plain); unlink(duo); unlink(file); unlink(autosave); rmdir(internal); rmdir(dir);
     puts("PASS copies counted only from this copy's own completion seen fresh; stops, foreign jobs, long starts, pauses, "
-         "USB imports, policy changes, the automatic start with its guards and the running-copy handlers covered");
+         "USB imports, policy changes, the automatic start with its guards, the running-copy handlers, jobs bound to "
+         "filaments (the slot that holds one, a job added for a filament that is in no slot, another filament for a "
+         "tool) and their stored form covered");
     return 0;
 }

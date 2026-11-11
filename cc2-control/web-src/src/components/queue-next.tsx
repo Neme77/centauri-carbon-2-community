@@ -7,8 +7,102 @@ import { duration } from '@/lib/format'
 import { t, tpl } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
 import { Tag } from '@/components/ui/badge'
-import { holdQueue, openJobs, queue, queuedCopiesFor, queueNext, refreshQueue, startQueued } from '@/lib/queue'
+import { Swatch } from '@/components/spool-ui'
+import {
+  type FilamentLabel,
+  filamentKnown,
+  filamentName,
+  holdQueue,
+  jobFilaments,
+  missingFilaments,
+  openJobs,
+  type QueueFilament,
+  type QueueItem,
+  queue,
+  queuedCopiesFor,
+  queueNext,
+  refreshQueue,
+  startBlocked,
+  startQueued,
+} from '@/lib/queue'
 import { printer, refreshPrinter, view } from '@/lib/state'
+import { cn } from '@/lib/utils'
+
+// Why a job cannot start for one of its filaments: no slot holds it.
+export const missingNote = (f: QueueFilament) =>
+  f.reason === 'empty' && f.slot !== null
+    ? tpl('queue.check_slot_empty', { n: f.slot + 1 })
+    : f.reason === 'unknown'
+      ? t('queue.check_canvas_unknown')
+      : t('queue.check_filament_absent')
+
+// A filament of a job, on a line of its own under the note it belongs to: the colour and the name of its
+// Canvas label.
+export const JobFilament = ({ f }: { f: FilamentLabel }) => (
+  <span class="block text-muted [overflow-wrap:anywhere]" data-queue-filament>
+    {t('queue.job_filament')} <Swatch color={f.color} class="size-3 align-middle" /> {filamentName(f)}
+  </span>
+)
+
+// The filaments a job is bound to, one chip per tool: the colour and the name and, for a job that waits, the
+// slot a start would take, which is wherever the filament is now. A filament that is in no slot stops the
+// job: its chip is red. A tool that knows no filament yet shows the slot it was added with.
+export const JobFilaments = ({ item }: { item: QueueItem }) => {
+  const waiting = item.state === 'pending'
+  const feeds = jobFilaments(item)
+  if (!feeds.length) return <Tag data-queue-feed="external">{t('queue.external_feed')}</Tag>
+  return (
+    <>
+      {feeds.map(f => {
+        const known = filamentKnown(f)
+        const place = !waiting
+          ? known || f.slot === null
+            ? ''
+            : tpl('common.slot_n', { n: f.slot + 1 })
+          : f.use !== null
+            ? tpl('common.slot_n', { n: f.use + 1 })
+            : f.reason === 'empty' && f.slot !== null
+              ? tpl('queue.slot_n_empty', { n: f.slot + 1 })
+              : f.reason === 'unknown'
+                ? ''
+                : t('queue.not_in_printer')
+        const blocked = waiting && f.use === null
+        return (
+          <Tag
+            key={f.tool}
+            class={blocked ? 'border-red bg-red/10 text-red' : undefined}
+            data-queue-feed={!waiting ? 'running' : blocked ? 'blocked' : 'ready'}
+            data-queue-tool={f.tool}
+          >
+            {known && <Swatch color={f.color} class="size-3" />}
+            {[known ? filamentName(f) : '', place].filter(Boolean).join(' · ')}
+          </Tag>
+        )
+      })}
+    </>
+  )
+}
+
+// What stops the next start, for the places that offer it without the Queue page's pre-flight check.
+export const QueueFilamentNotes = ({ item, class: c }: { item: QueueItem; class?: string }) => {
+  const missing = missingFilaments(item)
+  if (!missing.length) return null
+  return (
+    <ul class={cn('grid gap-1.5 text-xs', c)} data-queue-filament-notes>
+      {missing.map(f => (
+        <li key={f.tool} class="text-red">
+          <span>{missingNote(f)}</span>
+          {filamentKnown(f) && (
+            <>
+              {' '}
+              <JobFilament f={f} />
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 // Marks a file of the Files page that still has copies in the queue.
 export const QueuedChip = ({ storage, path }: { storage: string; path: string }) => {
@@ -74,7 +168,7 @@ export const QueueNext = () => {
         <Button
           variant="primary"
           class="min-h-11"
-          disabled={busy || !ok || !data?.connected || !v.idle || !next.present}
+          disabled={busy || !ok || !data?.connected || !v.idle || !next.present || startBlocked(next)}
           onClick={start}
           data-dashboard-queue-start
         >
@@ -82,6 +176,10 @@ export const QueueNext = () => {
           {t('queue.start_next')}
         </Button>
       </div>
+      <div class="mt-2 flex flex-wrap gap-1.5" data-dashboard-queue-filaments>
+        <JobFilaments item={next} />
+      </div>
+      <QueueFilamentNotes item={next} class="mt-2" />
       {q.auto_in !== null && (
         <div class="mt-2 flex items-center gap-2 text-xs text-amber" data-dashboard-queue-auto>
           {tpl('queue.auto_in_n', { n: q.auto_in })}

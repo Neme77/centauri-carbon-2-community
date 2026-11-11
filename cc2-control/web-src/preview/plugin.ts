@@ -85,12 +85,76 @@ export function previewPlugin(): Plugin {
   // Canvas pull-back: the printer's configured value and the autosave.cfg override, pending until a restart.
   let unload = { configured: 85, override: null as number | null, pending: false, extended: false }
   let videos: Record<string, number> = {}
+  // Canvas trays as /api/canvas reports them. /__preview/canvas-tray empties or refills one, or changes its label.
+  const canvasTrays = ['#ef5350', '#42a5f5', '#fdd835', '#66bb6a'].map((color, tray_id) => ({
+    tray_id,
+    color,
+    filament_name: 'PLA',
+    filament_color: color,
+    remaining_percent: 75,
+    material: 'PLA',
+    status: 1,
+  }))
   // Print queue: jobs prepared ahead. The preview keeps them in memory and a start "prints" a copy at once.
+  // A job is bound to filaments, as on the backend: for every tool the filament as a Canvas slot labels it
+  // (empty until known) and the slot the job was added with (null: added for a filament alone).
+  type QueueLabel = { type: string; name: string; color: string }
+  type QueueTool = QueueLabel & { tool: number; slot: number | null }
+  const labelKnown = (f: QueueLabel) => Boolean((f.type || f.name) && f.color)
+  // The demo's trays report a filament name and a colour, no type.
+  const trayLabel = (slot: number): QueueLabel => {
+    const tray = canvasTrays[slot]
+    return { type: '', name: tray?.filament_name || '', color: (tray?.filament_color || '').toUpperCase() }
+  }
+  // As queue_filament_in: the same colour, and the type and the name the filament states.
+  const trayHolds = (slot: number, f: QueueLabel) => {
+    const label = trayLabel(slot)
+    return (
+      label.color === f.color.toUpperCase() &&
+      (!f.type || f.type.toLowerCase() === label.type.toLowerCase()) &&
+      (!f.name || f.name.toLowerCase() === label.name.toLowerCase())
+    )
+  }
+  // "tool:slot,...": tools on a chosen slot, their filament not known yet.
+  const mappingTools = (mapping: string): QueueTool[] =>
+    mapping
+      .split(',')
+      .filter(Boolean)
+      .map(pair => {
+        const [tool, slot] = pair.split(':').map(Number)
+        return { tool, slot, type: '', name: '', color: '' }
+      })
+  // "tool<TAB>type<TAB>name<TAB>#RRGGBB" lines: tools bound to a filament by itself. null: a line is not one.
+  const filamentTools = (lines: string[]): QueueTool[] | null => {
+    const out: QueueTool[] = []
+    for (const line of lines) {
+      if (!line) continue
+      const [tool, type, name, color, more] = line.split('\t')
+      if (more !== undefined || !/^\d+$/.test(tool) || !/^#[0-9a-f]{6}$/i.test(color || '') || !(type || name))
+        return null
+      out.push({ tool: Number(tool), slot: null, type, name, color: color.toUpperCase() })
+    }
+    return out
+  }
+  // A tool added with a slot takes the filament the slot is labelled with (queue_note_filaments).
+  const noteFilaments = (tools: QueueTool[]) => {
+    for (const t of tools) {
+      if (t.slot === null || labelKnown(t)) continue
+      const label = trayLabel(t.slot)
+      if (labelKnown(label)) Object.assign(t, label)
+    }
+    return tools.sort((a, b) => a.tool - b.tool)
+  }
+  const mappingText = (tools: QueueTool[]) =>
+    tools
+      .filter(t => t.slot !== null)
+      .map(t => `${t.tool}:${t.slot}`)
+      .join(',')
   type QueueJob = {
     id: number
     storage: 'internal' | 'usb'
     path: string
-    mapping: string
+    tools: QueueTool[]
     side: 'A' | 'B'
     leveling: string
     timelapse: boolean
@@ -110,17 +174,18 @@ export function previewPlugin(): Plugin {
   let queuePolicy = { after: 'wait' as 'wait' | 'auto', delay: 60, remove_done: true }
   let queueRevision = 0
   let queueArmedAt: number | null = null // when a copy completed under the auto policy
+  // `mapping`: the slots the job is added with ("tool:slot,...", '' for the external feed), unless `tools` says more.
   const queueJob = (
     id: number,
     path: string,
     copies: number,
     done: number,
-    extra: Partial<QueueJob> = {}
+    { mapping = '0:1', ...extra }: Partial<QueueJob> & { mapping?: string } = {}
   ): QueueJob => ({
     id,
     storage: 'internal',
     path,
-    mapping: '0:1',
+    tools: noteFilaments(mappingTools(mapping)),
     side: 'A',
     leveling: 'saved',
     timelapse: false,
@@ -167,11 +232,35 @@ export function previewPlugin(): Plugin {
     queueArmedAt = queuePolicy.after === 'auto' ? Date.now() : null
     queueRevision++
   }
+  // As the backend resolves a start (queue_resolve): every tool on the slot that holds its filament. The slot
+  // the job was added with while it holds that filament, otherwise the lowest tray that does; an empty tray
+  // (status 0) keeps its label and holds nothing. A tool that knows no filament yet stays on its slot, and an
+  // empty slot is then judged by its own label. `use` is null when no slot holds the filament.
+  type FeedReason = '' | 'empty' | 'other' | 'absent'
+  const queueFilaments = (job: Pick<QueueJob, 'tools'>) =>
+    job.tools.map(t => {
+      const own = t.slot === null ? null : canvasTrays[t.slot]
+      let want: QueueLabel = t
+      let use: number | null = null
+      let reason: FeedReason = ''
+      if (own && own.status !== 0 && (!labelKnown(want) || trayHolds(own.tray_id, want))) use = own.tray_id
+      else {
+        if (own && !labelKnown(want)) want = trayLabel(own.tray_id)
+        const held = labelKnown(want) ? canvasTrays.find(o => o.status !== 0 && trayHolds(o.tray_id, want)) : undefined
+        use = held ? held.tray_id : null
+        reason = own ? (own.status === 0 ? 'empty' : 'other') : use === null ? 'absent' : ''
+      }
+      return { tool: t.tool, type: t.type, name: t.name, color: t.color, slot: t.slot, use, reason }
+    })
   const queueView = () => {
     // The scene only colours the view: while the printer "prints", the running (or head) job shows as
     // printing. Stored state changes only through the queue routes and /__preview/queue-complete.
     const printing = scene === 'printing' || scene === 'paused'
-    const items = queueJobs.map(j => ({ ...j }))
+    const items = queueJobs.map(({ tools, ...job }) => ({
+      ...job,
+      mapping: mappingText(tools),
+      filaments: queueFilaments({ tools }),
+    }))
     let active = items.find(j => j.state === 'printing' || j.state === 'starting')
     if (printing) {
       if (!active) active = items.find(j => j.state === 'pending' && j.present)
@@ -807,15 +896,7 @@ export function previewPlugin(): Plugin {
                     canvas_list: [
                       {
                         connected: 1,
-                        tray_list: ['#ef5350', '#42a5f5', '#fdd835', '#66bb6a'].map((color, tray_id) => ({
-                          tray_id,
-                          color,
-                          filament_name: 'PLA',
-                          filament_color: color,
-                          remaining_percent: 75,
-                          material: 'PLA',
-                          status: 1,
-                        })),
+                        tray_list: canvasTrays,
                       },
                     ],
                   },
@@ -882,9 +963,11 @@ export function previewPlugin(): Plugin {
           '/api/queue/remove',
           '/api/queue/reorder',
           '/api/queue/copies',
+          '/api/queue/filament',
           '/api/queue/policy',
           '/api/queue/clear-done',
           '/__preview/queue-complete',
+          '/__preview/canvas-tray',
           '/api/queue/hold',
           '/api/queue/abandon',
         ]
@@ -909,6 +992,18 @@ export function previewPlugin(): Plugin {
               queueComplete(active)
               return reply({ ok: true })
             }
+            // "tray\nstatus[\ncolour[\nname]]": a spool runs out (0) or is put back (1), with the colour and the
+            // filament name of its label.
+            if (path === '/__preview/canvas-tray' && req.method === 'POST') {
+              const [id, status, colour, name] = body.replace(/\n+$/, '').split('\n')
+              const tray = canvasTrays[Number(id)]
+              if (!tray || !['0', '1', '2'].includes(status)) return reply({ ok: false, error: 'Invalid tray' }, 400)
+              tray.status = Number(status)
+              if (colour) tray.color = tray.filament_color = colour
+              if (name) tray.filament_name = tray.material = name
+              queueRevision++
+              return reply({ ok: true })
+            }
             if (path.startsWith('/api/queue/') && req.method === 'POST') {
               const lines = body.replace(/\n+$/, '').split('\n')
               const find = () => queueJobs.find(j => j.id === Number(lines[0]))
@@ -929,9 +1024,15 @@ export function previewPlugin(): Plugin {
                   seconds,
                   grams,
                 ] = lines
+                // The filaments of tools added without a slot follow the estimates.
+                const free = filamentTools(lines.slice(12))
+                if (!free) return reply({ ok: false, error: 'Invalid filament' }, 400)
+                const tools = [...mappingTools(mapping || ''), ...free]
+                if (new Set(tools.map(t => t.tool)).size !== tools.length)
+                  return reply({ ok: false, error: 'A tool is named twice' }, 400)
                 const job = queueJob(queueNextId++, file, Number(copies) || 1, 0, {
                   storage: storage === 'usb' ? 'usb' : 'internal',
-                  mapping: mapping || '',
+                  tools: noteFilaments(tools),
                   side: side === 'B' ? 'B' : 'A',
                   leveling: leveling || 'saved',
                   timelapse: timelapse === '1',
@@ -957,6 +1058,19 @@ export function previewPlugin(): Plugin {
                 // or the scene leaving printing); nothing is counted at the start.
                 if (queueJobs.some(j => j.state === 'starting' || j.state === 'printing'))
                   return reply({ ok: false, error: 'A queued copy is already running' }, 409)
+                // A filament of the job that is in no slot refuses the start, as on the backend.
+                const missing = queueFilaments(job).find(f => f.use === null)
+                if (missing)
+                  return reply(
+                    {
+                      ok: false,
+                      error:
+                        missing.reason === 'empty' && missing.slot !== null
+                          ? `Canvas slot ${missing.slot + 1} is empty and no other slot holds the same filament`
+                          : `No Canvas slot holds the job's filament: ${missing.name || missing.type} ${missing.color}`,
+                    },
+                    409
+                  )
                 job.state = 'starting'
                 job.last_result = ''
                 queueArmedAt = null
@@ -995,6 +1109,19 @@ export function previewPlugin(): Plugin {
                 const to = Math.min(Math.max(0, Number(lines[1]) || 0), queueJobs.length - 1)
                 queueJobs.splice(queueJobs.indexOf(job), 1)
                 queueJobs.splice(to, 0, job)
+                return reply({ ok: true })
+              }
+              // "id\nmapping\nfilament lines": other filaments for tools of the job, by slot or by themselves.
+              if (path === '/api/queue/filament') {
+                const free = filamentTools(lines.slice(2))
+                if (!free) return reply({ ok: false, error: 'Invalid filament' }, 400)
+                const named = [...mappingTools(lines[1] || ''), ...free]
+                if (new Set(named.map(t => t.tool)).size !== named.length)
+                  return reply({ ok: false, error: 'A tool is named twice' }, 400)
+                if (!named.length) return reply({ ok: false, error: 'No filament to change' }, 400)
+                if (named.some(t => !job.tools.some(own => own.tool === t.tool)))
+                  return reply({ ok: false, error: 'This job has no such tool' }, 409)
+                job.tools = noteFilaments(job.tools.map(own => named.find(t => t.tool === own.tool) ?? own))
                 return reply({ ok: true })
               }
               if (path === '/api/queue/copies') {
