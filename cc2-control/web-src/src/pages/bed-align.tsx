@@ -5,6 +5,7 @@ import { Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
 import { Notice, Warn } from '@/components/shared'
 import { errText, notify, request } from '@/lib/api'
+import { ask } from '@/lib/confirm'
 import { i18n, type Key, t, tpl } from '@/lib/i18n'
 import {
   ALIGN_DEFAULTS,
@@ -19,14 +20,27 @@ import {
   type MeshGrid,
   parseAlignConfig,
   type ScrewCorrection,
+  tiltsBelowTarget,
   turnsConfigured,
 } from '@/lib/mesh-align'
-import { findMeasure, nozzleName, plates, refreshPlates } from '@/lib/plates'
+import {
+  type AlignPreview,
+  type AlignSession,
+  alignRequest,
+  alignRounds,
+  alignSession,
+  refreshAlign,
+  tiltWorst,
+} from '@/lib/mesh-align-session'
+import { calibrationForm, findMeasure, nozzleName, plates, refreshPlates, tempOk } from '@/lib/plates'
+import { usePoll } from '@/lib/poll'
+import { NozzleSelect } from '@/pages/bed-plates'
 import { SCREW_CORNERS } from '@/lib/screws'
 import { ls, store } from '@/lib/store'
 
 // Mesh-guided screw alignment (see lib/mesh-align.ts): what the screws have to do, from a plane through a
-// whole bed mesh. This card only reads meshes; it sends nothing to the printer.
+// whole bed mesh. The analysis only reads meshes. The guided loop below it (lib/mesh-align-session.ts)
+// measures, and sends a printer command only after the user has confirmed that very command.
 
 const STORAGE = 'cc2-mesh-align'
 export const alignConfig = store<AlignConfig>(parseAlignConfig(ls.get(STORAGE)))
@@ -337,6 +351,312 @@ const Settings = ({ config }: { config: AlignConfig }) => {
   )
 }
 
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+const CAL_FAILED: Record<string, Key> = {
+  homing: 'bed.homing_did_not_finish',
+  heating: 'bed.cal_failed_heating',
+  busy: 'bed.cal_failed_busy',
+  telemetry: 'bed.cal_failed_telemetry',
+  probing: 'bed.cal_failed_probing',
+}
+// What a command of the list does, in the user's language. A command without an entry is shown as it is.
+const COMMANDS: [RegExp, Key][] = [
+  [/^G28$/, 'bed.align_cmd_home'],
+  [/^M140 S0$/, 'bed.align_cmd_bed_off'],
+  [/^M140 S/, 'bed.align_cmd_heat'],
+  [/^BED_MESH_CALIBRATE /, 'bed.align_cmd_probe'],
+  [/^BED_MESH_PROFILE LOAD=/, 'bed.align_cmd_profile_load'],
+  [/^BED_MESH_PROFILE SAVE=/, 'bed.align_cmd_profile_save'],
+  [/^SET_GCODE_OFFSET Z=/, 'bed.align_cmd_offset'],
+  [/^TURN_OFF_HEATERS$/, 'bed.align_cmd_heaters_off'],
+]
+// The confirmation shows every command the request will send, in order, exactly as the backend lists it.
+export const commandLines = (preview: AlignPreview, wait?: string) =>
+  preview.commands
+    .flatMap(command => {
+      const known = COMMANDS.find(([pattern]) => pattern.test(command))
+      const line = known ? `${command} — ${t(known[1])}` : command
+      return wait && /^M140 S[1-9]/.test(command) ? [line, wait] : [line]
+    })
+    .join('\n')
+
+const ENDED: Record<Exclude<AlignSession['ended'], ''>, Key> = {
+  ended: 'bed.align_ended_ended',
+  saved: 'bed.align_ended_saved',
+  failed: 'bed.align_ended_failed',
+  cancelled: 'bed.align_ended_cancelled',
+  timeout: 'bed.align_ended_timeout',
+  print: 'bed.align_ended_print',
+  estop: 'bed.align_ended_estop',
+}
+
+// The guided loop: measure, turn the screws as listed, measure again, save the last mesh.
+const Guide = ({ config }: { config: AlignConfig }) => {
+  const { data: session, supported } = alignSession.use()
+  const { rounds } = alignRounds.use()
+  const library = plates.use().data
+  const form = calibrationForm.use()
+  const [busy, setBusy] = useState(false)
+  const [plate, setPlate] = useState<string | null>(null)
+  const lock = useRef(false)
+  if (supported === false || !session) return null
+  const active = session.active
+  const side: 'A' | 'B' = active ? session.side : form.side === 'default1' ? 'B' : 'A'
+  const temp = active ? String(session.temp) : form.temp
+  const soak = active ? String(session.soak) : form.soak
+  const nozzle = active ? session.nozzle : (form.nozzle ?? library?.nozzle ?? '')
+  const candidates = library?.available ? library.plates.filter(p => p.side === side) : []
+  const plateId =
+    plate !== null && candidates.some(p => p.id === plate)
+      ? plate
+      : candidates.find(p => p.id === library?.current)?.id || candidates[0]?.id || ''
+  const stage = session.calibration.stage
+  const probing = stage === 'probing' || stage === 'saving'
+  const latest = rounds.find(r => r.round === session.round)
+  const before = rounds.find(r => r.round === session.round - 1)
+  const done = latest ? tiltsBelowTarget(latest.tilt_x, latest.tilt_y, config.target_tilt_mm) : false
+  const spent = active && session.round >= session.rounds
+
+  const run = async (work: () => Promise<void>) => {
+    if (lock.current) return
+    lock.current = true
+    setBusy(true)
+    try {
+      await work()
+    } catch (e) {
+      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+    } finally {
+      lock.current = false
+      setBusy(false)
+      void refreshAlign()
+    }
+  }
+  const measure = () =>
+    run(async () => {
+      if (!tempOk(temp)) return notify(t('common.invalid_bed_temperature'), 'error')
+      const lines = [
+        side,
+        String(Number(temp)),
+        String(Number(soak)),
+        nozzle,
+        String(active ? session.rounds : config.max_rounds),
+      ]
+      const reply = await alignRequest('measure', lines, preview =>
+        ask(
+          [
+            tpl('bed.align_guide_confirm_measure', { round: Number(preview.round), rounds: Number(preview.rounds) }),
+            commandLines(preview, tpl('bed.align_guide_wait', { temp: Number(temp), minutes: Number(preview.soak) })),
+            tpl('bed.align_guide_full', { command: 'BED_MESH_CALIBRATE' }),
+          ].join('\n\n')
+        )
+      )
+      if (reply && !active) alignRounds.set({ rounds: [] })
+    })
+  const save = () =>
+    run(async () => {
+      const target = candidates.find(p => p.id === plateId)
+      if (!target) return
+      const reply = await alignRequest('save', [target.id], preview =>
+        ask(
+          [
+            tpl('bed.align_guide_confirm_save', { name: target.name, temp: Number(preview.temp) }),
+            commandLines(preview),
+          ].join('\n\n')
+        )
+      )
+      if (reply?.saved) {
+        notify(tpl('bed.measure_saved', { name: target.name, temp: session.temp }))
+        void refreshPlates()
+      }
+    })
+  const end = () =>
+    run(async () => {
+      await alignRequest('end', [], preview =>
+        ask(
+          [t('bed.align_guide_confirm_end'), commandLines(preview), t('bed.align_guide_after_abort')].join('\n\n'),
+          true
+        )
+      )
+    })
+
+  const progress =
+    stage === 'homing'
+      ? t('bed.cal_homing')
+      : stage === 'heating'
+        ? tpl('bed.cal_heating', {
+            bed: session.calibration.bed === null ? '—' : Math.round(session.calibration.bed),
+            temp: session.temp,
+          })
+        : stage === 'soaking'
+          ? tpl('bed.cal_soaking', { temp: session.temp, left: clock(session.calibration.remaining) })
+          : tpl('bed.cal_probing', { side: session.side, temp: session.temp })
+  const failure = session.calibration.detail || t(CAL_FAILED[session.calibration.error] || 'bed.cal_failed_probing')
+  return (
+    <div class="mt-3.5 border-t border-edge pt-3" data-align="guide" data-align-active={active ? 'yes' : 'no'}>
+      <h3 class="mb-2 text-base font-semibold">{t('bed.align_guide_title')}</h3>
+      <p class="mb-3 text-xs text-muted">
+        {t('bed.align_guide_intro')}
+        <br />
+        {tpl('bed.align_guide_full', { command: 'BED_MESH_CALIBRATE' })}
+      </p>
+      <div class="grid gap-2 text-xs cc2-sm:grid-cols-2 cc2-lg:grid-cols-4">
+        <label class="grid gap-1">
+          {t('bed.calibration_plate_side')}
+          <Select
+            value={side}
+            disabled={active || busy}
+            onChange={e =>
+              calibrationForm.set({ side: e.currentTarget.value === 'B' ? 'default1' : 'default', target: null })
+            }
+          >
+            <option value="A">{t('bed.side_a_default')}</option>
+            <option value="B">{t('bed.side_b_default1')}</option>
+          </Select>
+        </label>
+        <label class="grid gap-1">
+          {t('common.bed_temperature_c')}
+          <Input
+            type="number"
+            min="30"
+            max="110"
+            step="1"
+            value={temp}
+            disabled={active || busy}
+            onInput={e => calibrationForm.set({ temp: e.currentTarget.value })}
+          />
+        </label>
+        <label class="grid gap-1">
+          {t('bed.soak_minutes')}
+          <Select
+            value={soak}
+            disabled={active || busy}
+            onChange={e => calibrationForm.set({ soak: e.currentTarget.value })}
+          >
+            {Array.from({ length: 61 }, (_, minutes) => (
+              <option key={minutes} value={String(minutes)}>
+                {minutes}
+              </option>
+            ))}
+          </Select>
+        </label>
+        {library && (
+          <label class="grid gap-1">
+            {t('common.nozzle')}
+            <NozzleSelect
+              lib={library}
+              value={nozzle}
+              disabled={active || busy}
+              onChange={id => calibrationForm.set({ nozzle: id })}
+            />
+          </label>
+        )}
+      </div>
+      {active && (
+        <p class="mt-3 text-sm font-semibold" data-align="round">
+          {tpl('bed.align_guide_rounds', {
+            round: session.measuring ? session.round + 1 : session.round,
+            rounds: session.rounds,
+          })}
+        </p>
+      )}
+      {rounds.length > 0 && active && (
+        <ul class="mt-1 text-xs text-muted" data-align="rounds">
+          {rounds.map(r => (
+            <li key={r.round}>
+              {tpl('bed.align_guide_round_result', { round: r.round, x: signedMm(r.tilt_x), y: signedMm(r.tilt_y) })}
+            </li>
+          ))}
+        </ul>
+      )}
+      {active && session.measuring && (
+        <div data-align="progress" data-align-stage={stage}>
+          <Notice icon="bolt">
+            <span>
+              {progress}
+              {probing && <small class="mt-1 block">{t('bed.align_guide_probing')}</small>}
+            </span>
+          </Notice>
+        </div>
+      )}
+      {active && !session.measuring && latest && (
+        <div data-align="advice">
+          {before && (
+            <p class="mt-2 text-xs text-muted" data-align="trend">
+              {t(tiltWorst(latest) < tiltWorst(before) ? 'bed.align_guide_smaller' : 'bed.align_guide_not_smaller')}
+            </p>
+          )}
+          <Notice icon={done ? 'shield' : 'info'}>
+            <span>
+              {done
+                ? t('bed.align_guide_done')
+                : spent
+                  ? tpl('bed.align_guide_out_of_rounds', { rounds: session.rounds })
+                  : t('bed.align_guide_turn')}
+            </span>
+          </Notice>
+        </div>
+      )}
+      {!active && session.ended && (
+        <div data-align="ended" data-align-ended={session.ended}>
+          <Notice>
+            <span>
+              {session.ended === 'failed'
+                ? tpl('bed.align_ended_failed', { error: failure })
+                : session.ended === 'timeout'
+                  ? tpl('bed.align_ended_timeout', { minutes: 20 })
+                  : t(ENDED[session.ended])}
+              {session.ended !== 'saved' && session.ended !== 'print' && (
+                <small class="mt-1 block">{t('bed.align_guide_after_abort')}</small>
+              )}
+            </span>
+          </Notice>
+        </div>
+      )}
+      {session.heaters_off_pending && <p class="mt-2 text-xs text-muted">{t('bed.align_heaters_pending')}</p>}
+      <div class="mt-3 flex flex-wrap items-end gap-2">
+        <Button
+          variant={active && (done || spent) ? 'default' : 'primary'}
+          class="min-h-11"
+          disabled={busy || session.measuring || spent}
+          onClick={() => void measure()}
+        >
+          {t(active ? 'bed.align_guide_measure_again' : 'bed.align_guide_measure')}
+        </Button>
+        {active && !session.measuring && session.measured && candidates.length > 0 && (
+          <>
+            <label class="grid min-w-40 gap-1 text-xs">
+              {t('bed.align_guide_save_to')}
+              <Select value={plateId} disabled={busy} onChange={e => setPlate(e.currentTarget.value)}>
+                {candidates.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <Button
+              variant={done || spent ? 'primary' : 'default'}
+              class="min-h-11"
+              disabled={busy}
+              onClick={() => void save()}
+            >
+              {t('bed.align_guide_save')}
+            </Button>
+          </>
+        )}
+        {active && (
+          <Button class="min-h-11" disabled={busy || (session.measuring && probing)} onClick={() => void end()}>
+            {t('bed.align_guide_end')}
+          </Button>
+        )}
+      </div>
+      {active && !session.measuring && session.measured && candidates.length === 0 && (
+        <p class="mt-2 text-xs text-muted">{t('bed.align_guide_no_plate')}</p>
+      )}
+    </div>
+  )
+}
+
 export const MeshAlign = () => {
   const config = alignConfig.use()
   const library = plates.use().data
@@ -349,12 +669,41 @@ export const MeshAlign = () => {
     try {
       const reply = await request('/api/mesh')
       if (alive.current) setData(reply)
+      return reply
     } catch (e) {
       if (manual) notify(tpl('bed.mesh_unavailable_error', { error: errText(e) }), 'error')
+      return null
     } finally {
       if (alive.current) setLoading(false)
     }
   }
+  // The guided loop runs on CC2 Control; the page follows it, faster while a session is active.
+  const session = alignSession.use().data
+  usePoll(refreshAlign, session?.active ? 2000 : 15000)
+  // A completed round: read the mesh it measured, show it and keep its tilt for the comparison.
+  const slot = session?.side === 'B' ? 'default1' : 'default'
+  useEffect(() => {
+    if (!session?.active || !session.measured || session.round < 1) return
+    if (alignRounds.get().rounds.some(r => r.round === session.round)) return
+    const round = session.round
+    void (async () => {
+      const reply = await load()
+      if (!alive.current || !reply) return
+      // The mesh the printer applies now when it is this side's, else the side slot as saved.
+      const live = reply?.result?.status?.bed_mesh?.profile_name === slot ? gridFromMeshReply(reply, 'active') : null
+      const saved = gridFromMeshReply(reply, slot)
+      const grid = live || saved || gridFromMeshReply(reply, 'active')
+      const measured = grid ? analyseMesh(grid, alignConfig.get()) : null
+      if (!measured) return
+      setChoice(live || !saved ? 'active' : slot)
+      alignRounds.set(state => ({
+        rounds: [
+          ...state.rounds.filter(r => r.round < round),
+          { round, tilt_x: measured.tilt_x, tilt_y: measured.tilt_y },
+        ],
+      }))
+    })()
+  }, [session?.active, session?.round, session?.measured])
   useEffect(() => {
     alive.current = true
     void load()
@@ -530,6 +879,7 @@ export const MeshAlign = () => {
           )}
         </>
       )}
+      <Guide config={config} />
       <Settings config={config} />
     </Card>
   )

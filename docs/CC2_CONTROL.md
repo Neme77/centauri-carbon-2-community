@@ -40,6 +40,8 @@ Four-screw corrections are displayed in **microns**. A guarded **Optimized refer
 
 "Aligned" is reported only when both tilts are below the target (0.05 mm by default). A plate shape with a range above 0.3 mm gets a warning that neither ends nor blocks the alignment. Target and warning limit are estimates and can be changed, like the span, the screw positions and the row order of the mesh. Turns are shown only when a thread pitch and its source are set, the turning direction only when the direction and its source are set; nothing is assumed. The analysis is read-only and sends nothing to the printer. Its settings are kept in the browser.
 
+The same card offers a **guided alignment**: measure the mesh, turn the screws as listed, measure again, until both tilts are below the target or the configured rounds (4 by default) are used up, then save the mesh to a plate of the plate library. Each round is the bed mesh calibration of the Mesh tab (heat, hold the bed for the soak time, `BED_MESH_CALIBRATE`); no shorter probing command is confirmed for this firmware, so every round measures the full mesh and the last round's mesh is the one saved. Every step first lists the printer commands it will send and sends them only after confirmation. The session runs on CC2 Control: when it is ended, saved, fails, or is left alone for 20 minutes, the heaters are switched off as soon as the printer is idle, unless a print started meanwhile or someone else set the bed target. See [the API details](../cc2-control/docs/API.md). The guided loop has not been validated on a printer yet.
+
 ## Quick Actions and global Emergency Stop
 
 The dashboard now provides operational Quick Actions for Home All, All Heaters Off, Fans Off and Motors Off.
