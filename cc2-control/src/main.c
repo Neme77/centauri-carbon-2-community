@@ -4205,7 +4205,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         const char *native=uds_print_state(&telemetry);double nozzle,bed;
         /* No raw servo/PWM commands: native grille policy also owns the exhaust fan.
          * A retained MQTT print.enabled flag alone does not mean a job is running. */
-        if(drying_active()||!native||(strcmp(native,"standby")&&strcmp(native,"complete"))||
+        if(drying_active()||!native||(strcmp(native,"standby")&&strcmp(native,"complete")&&strcmp(native,"cancelled"))||
            !uds_value(&telemetry,U_EG,&nozzle)||!uds_value(&telemetry,U_BG,&bed)||
            !isfinite(nozzle)||!isfinite(bed)||nozzle!=0||bed!=0){
             plates_fail(fd,409,"Exhaust grille controls require fresh native idle state, heaters off and no bed-heating session");return;

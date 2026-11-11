@@ -160,7 +160,8 @@ static void ns_interface_json(FILE *out,const ns_interface *i) {
     fputc('}',out);
 }
 static const char *ns_route_source(char *ip,size_t capacity) {
-    struct sockaddr_in peer={.sin_family=AF_INET,.sin_port=htons(9)},source;
+    struct sockaddr_in peer={0},source;
+    peer.sin_family=AF_INET;peer.sin_port=htons(9);
     int fd=socket(AF_INET,SOCK_DGRAM|SOCK_CLOEXEC,0);if(fd<0)return "unavailable";
     /* UDP connect performs a kernel route lookup only. No send, DNS, ARP or
      * public reachability probe. This includes policy rules, unlike /proc/net/route. */

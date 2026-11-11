@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Re-enable exhaust flap controls, Rotation Distance and load-cell calibration after a cancelled print once the machine is Idle. Treat native `cancelled` as a terminal job state while retaining active-print, pause, heater and competing-operation guards. Reported and diagnosed with **Neme77** (#350).
 - Starting a print of a large file from USB no longer stops CC2 Control from answering: the file is scanned and copied on a worker thread, so the print dialog no longer reports “print not started” for a print that then starts. Reported and fixed by **lpgamerzockt-ops** (#344, #347).
 - Nord and Solarized Light keep cyan and red text readable on the bed-map dialog, including the selected object row and Exclude Selected Object. The same tokens meet the contrast on the rest of the interface. Contributed by **lpgamerzockt-ops** (#345).
 - Solarized Light muted text and amber status tags meet the 4.5:1 text contrast on the page background and on the tag fill. Contributed by **lpgamerzockt-ops** (#345).
