@@ -687,6 +687,7 @@
   "control.pid_failed": "Kalibrace selhala nebo nebylo potvrzeno dokončení. Zkontrolujte konzoli.",
   "control.pid_help": "Kalibrujte vždy jedno topení a poté stisknutím Uložit PID uložte jeho hodnoty.",
   "bed.build_plates": "Tiskové desky",
+  "bed.align_tab": "Zarovnání podle sítě",
   "bed.align_title": "Vyrovnání šroubů podle sítě",
   "bed.align_intro": "Všemi body sítě podložky se proloží rovina. Její náklon lze opravit čtyřmi šrouby. Co zbude, je tvar desky, který šrouby nezmění.",
   "bed.align_mesh_source": "Síť k vyhodnocení",

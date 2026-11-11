@@ -687,6 +687,7 @@
   "control.pid_failed": "La calibracion fallo o la finalizacion no fue confirmada. Revise la consola.",
   "control.pid_help": "Calibra un calentador cada vez y pulsa Guardar PID para almacenar sus valores.",
   "bed.build_plates": "Placas de Construccion",
+  "bed.align_tab": "Alineación por malla",
   "bed.align_title": "Alineación de tornillos guiada por la malla",
   "bed.align_intro": "Se ajusta un plano a todos los puntos de una malla de la cama. Su inclinación es lo que pueden corregir los cuatro tornillos. Lo que queda es la forma de la placa, que los tornillos no cambian.",
   "bed.align_mesh_source": "Malla que se analiza",

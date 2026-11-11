@@ -54,7 +54,7 @@ try {
   await Promise.all([page.waitForEvent('load'), page.locator('#preview-scene').selectOption('idle')])
   await page.locator('#cc2-preview-banner').waitFor()
   await page.locator('#cc2-navigation a[href="#bed"]').click()
-  await page.getByRole('tab', { name: 'Screw Levelling', exact: true }).click()
+  await page.getByRole('tab', { name: 'Mesh alignment', exact: true }).click()
   const card = page.locator('#meshAlign')
   await card.getByRole('heading', { name: 'Mesh-guided screw alignment', exact: true }).waitFor()
   const part = name => card.locator(`[data-align="${name}"]`)
@@ -80,8 +80,13 @@ try {
   await part('shape').getByText('Nearly flat', { exact: true }).waitFor()
   assert.equal(await part('shape-warning').count(), 0)
   await card.getByText('Target: both tilts below 0.050 mm. This limit is an estimate').waitFor()
-  // The existing four-point card stays below it, unchanged.
+  // The alignment has its own tab; Screw Levelling keeps the four-point card, unchanged, without it.
+  await page.getByRole('tab', { name: 'Screw Levelling', exact: true }).click()
   await page.locator('#screwFocus').getByRole('button', { name: /Start session/ }).waitFor()
+  assert.equal(await page.locator('#meshAlign').count(), 0)
+  await page.getByRole('tab', { name: 'Mesh alignment', exact: true }).click()
+  await card.getByRole('heading', { name: 'Mesh-guided screw alignment', exact: true }).waitFor()
+  assert.equal(await page.locator('#screwFocus').count(), 0)
 
   // A dome under a small tilt: the alignment is done, the rest is plate shape, and the warning stays.
   const domeGrid = syntheticMesh({ tiltX: 0.03, tiltY: -0.02, shape: dome(0.5) })
@@ -248,7 +253,7 @@ try {
   await page.waitForFunction(() => document.documentElement.lang === 'de')
   assert.deepEqual(writes, ['PUT /api/preferences'], 'only the language choice was saved')
   await page.evaluate(() => {
-    location.hash = '#bed/screws'
+    location.hash = '#bed/align'
   })
   await card.getByRole('heading', { name: german['bed.align_title'], exact: true }).waitFor()
   const absenken = german['bed.align_lower'].replace('{amount}', number('de', rear, 2))

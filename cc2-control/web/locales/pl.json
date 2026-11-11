@@ -687,6 +687,7 @@
   "control.pid_failed": "Kalibracja nie powiodła się lub nie potwierdzono zakończenia. Sprawdź konsolę.",
   "control.pid_help": "Kalibruj jedną grzałkę naraz, a następnie naciśnij Zapisz PID, aby zapisać jej wartości.",
   "bed.build_plates": "Płyty robocze",
+  "bed.align_tab": "Wyrównanie wg siatki",
   "bed.align_title": "Ustawianie śrub według siatki",
   "bed.align_intro": "Przez wszystkie punkty siatki stołu dopasowywana jest płaszczyzna. Jej pochylenie można skorygować czterema śrubami. To, co zostaje, to kształt płyty, którego śruby nie zmienią.",
   "bed.align_mesh_source": "Siatka do analizy",

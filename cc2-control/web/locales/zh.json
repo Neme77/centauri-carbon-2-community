@@ -687,6 +687,7 @@
   "control.pid_failed": "校准失败或未能确认完成。请检查控制台。",
   "control.pid_help": "每次校准一个加热器，然后点击保存 PID 来保存其参数。",
   "bed.build_plates": "打印板",
+  "bed.align_tab": "网格校准",
   "bed.align_title": "按网格引导的螺丝调平",
   "bed.align_intro": "对热床网格的所有点拟合一个平面。平面的倾斜可以用四颗螺丝修正。剩下的是打印板本身的形状，螺丝无法改变。",
   "bed.align_mesh_source": "要分析的网格",

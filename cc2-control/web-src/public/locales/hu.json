@@ -149,6 +149,7 @@
   "bed.calibration_plate_side": "Kalibrálandó tárgyasztaloldal",
   "bed.choose_calibration_side": "Válaszd ki a felszerelt lap oldalát",
   "bed.build_plates": "Tárgyasztallapok",
+  "bed.align_tab": "Hálóalapú beállítás",
   "bed.align_title": "Csavarbeállítás a szintezési háló alapján",
   "bed.align_intro": "A szintezési háló minden pontjára egy síkot illesztünk. A sík dőlését a négy csavarral lehet javítani. Ami marad, az a lap alakja, amelyen a csavarok nem változtatnak.",
   "bed.align_mesh_source": "Elemzendő háló",

@@ -687,6 +687,7 @@
   "control.pid_failed": "Calibration failed or completion was not confirmed. Check the console.",
   "control.pid_help": "Calibrate one heater at a time, then press Save PID to store its values.",
   "bed.build_plates": "Build Plates",
+  "bed.align_tab": "Mesh alignment",
   "bed.align_title": "Mesh-guided screw alignment",
   "bed.align_intro": "A plane is fitted through every point of a bed mesh. Its tilt is what the four screws can correct. What remains is the shape of the plate, which the screws cannot change.",
   "bed.align_mesh_source": "Mesh to analyse",

@@ -687,6 +687,7 @@
   "control.pid_failed": "Calibrazione fallita o completamento non confermato. Controlla la console.",
   "control.pid_help": "Calibra un riscaldatore alla volta, poi premi Salva PID per memorizzarne i valori.",
   "bed.build_plates": "Piatti",
+  "bed.align_tab": "Allineamento con mesh",
   "bed.align_title": "Regolazione delle viti guidata dalla mesh",
   "bed.align_intro": "Un piano viene adattato a tutti i punti di una mesh del piatto. La sua inclinazione è ciò che le quattro viti possono correggere. Quello che resta è la forma della piastra, che le viti non cambiano.",
   "bed.align_mesh_source": "Mesh da analizzare",

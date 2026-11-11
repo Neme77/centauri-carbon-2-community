@@ -687,6 +687,7 @@
   "control.pid_failed": "Kalibrierung fehlgeschlagen oder Abschluss nicht bestätigt. Konsole prüfen.",
   "control.pid_help": "Jeweils eine Heizung kalibrieren, dann „PID speichern“ drücken, um ihre Werte zu speichern.",
   "bed.build_plates": "Druckplatten",
+  "bed.align_tab": "Mesh-Ausrichten",
   "bed.align_title": "Mesh-geführtes Schrauben-Ausrichten",
   "bed.align_intro": "Durch alle Punkte eines Bed-Meshs wird eine Ebene gelegt. Ihre Neigung lässt sich mit den vier Schrauben einstellen. Was übrig bleibt, ist die Form der Platte; die ändern die Schrauben nicht.",
   "bed.align_mesh_source": "Auszuwertendes Mesh",

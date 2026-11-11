@@ -32,7 +32,7 @@ Four-screw corrections are displayed in **microns**. A guarded **Optimized refer
 
 **Screw Levelling** also offers an interactive session: **Start session** homes all axes (`G28`), preheats the bed and cleans the nozzle like the one-shot measurement, then probes the four screws and switches the nozzle off, leaving the bed at 60 °C. After that, each corner can be re-probed with one click (`G28 Z` only, after a 30 s settle; the nozzle is switched off again afterwards), and **Check all four** repeats the sweep without a full re-home. Re-probe and check stay disabled until X and Y are homed. Heaters are switched off when the session ends. The original **Measure Screws** one-shot path is unchanged.
 
-**Mesh-guided screw alignment** (the first card on **Screw Levelling**) reads a whole bed mesh instead of four probes. It fits a least-squares plane `z = a + b·x + c·y` through every point of the chosen mesh (the active mesh, a side slot or a saved plate measurement) and shows three things apart:
+**Mesh-guided screw alignment** (the **Mesh alignment** tab of **Bed Levelling**) reads a whole bed mesh instead of four probes. It fits a least-squares plane `z = a + b·x + c·y` through every point of the chosen mesh (the active mesh, a side slot or a saved plate measurement) and shows three things apart:
 
 - the **tilt** in X and Y over a configurable span (240 mm by default), which is what the screws can correct;
 - the **correction at each screw** in millimetres, taken from the plane at the screw positions and relative to the screw that needs the least total movement (a positive value means "raise the bed at this corner"). The screws are closer together than the span, so these values are smaller than the tilt;

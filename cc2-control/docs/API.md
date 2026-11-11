@@ -355,7 +355,7 @@ the same authentication and browser guard as the other `/api` routes.
 
 ## Mesh-guided screw alignment
 
-The Screw Levelling page fits a plane through a whole bed mesh and tells what each screw has to do
+The Mesh alignment tab of Bed Levelling fits a plane through a whole bed mesh and tells what each screw has to do
 (see `docs/CC2_CONTROL.md`); that analysis runs in the browser on `GET /api/mesh` and the plate library.
 The guided loop around it is a session on CC2 Control. Each round is the calibration job of
 `/api/plates/calibrate` without a plate: `G28` when the printer is not homed, `M140`, the wait until

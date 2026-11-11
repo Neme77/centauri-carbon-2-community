@@ -1023,6 +1023,7 @@ export const Bed = () => {
           { id: 'plates', label: t('bed.build_plates'), icon: <Icon n="layers" /> },
           { id: 'cell', label: t('caltools.cell'), icon: <Icon n="target" /> },
           { id: 'screws', label: t('bed.screw_levelling'), icon: <Icon n="target" /> },
+          { id: 'align', label: t('bed.align_tab'), icon: <Icon n="grid" /> },
           { id: 'nozzle', label: t('nozzle.tab'), icon: <Icon n="temp" /> },
         ]}
         value={bed}
@@ -1032,8 +1033,11 @@ export const Bed = () => {
         <CalibrationTools panel="cell" />
       ) : bed === 'screws' ? (
         <div class="max-w-4xl">
-          <MeshAlign />
           <Screws />
+        </div>
+      ) : bed === 'align' ? (
+        <div class="max-w-4xl">
+          <MeshAlign />
         </div>
       ) : bed === 'plates' ? (
         <Plates />

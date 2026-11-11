@@ -687,6 +687,7 @@
   "control.pid_failed": "Kalibrasyon başarısız oldu veya tamamlandığı doğrulanmadı. Konsolu kontrol edin.",
   "control.pid_help": "Isıtıcıları tek tek kalibre edin, ardından değerlerini saklamak için PID'yi Kaydet'e basın.",
   "bed.build_plates": "Baskı Plakaları",
+  "bed.align_tab": "Ağ ile hizalama",
   "bed.align_title": "Ağ kılavuzlu vida hizalama",
   "bed.align_intro": "Yatak ağının tüm noktalarından bir düzlem geçirilir. Düzlemin eğimi dört vidayla düzeltilebilir. Geriye kalan, vidaların değiştiremediği plaka şeklidir.",
   "bed.align_mesh_source": "Analiz edilecek ağ",

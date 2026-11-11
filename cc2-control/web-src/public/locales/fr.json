@@ -687,6 +687,7 @@
   "control.pid_failed": "Calibration échouée ou fin non confirmée. Consultez la console.",
   "control.pid_help": "Calibrez un élément chauffant à la fois, puis appuyez sur Enregistrer les PID pour mémoriser ses valeurs.",
   "bed.build_plates": "Plaques",
+  "bed.align_tab": "Alignement par maillage",
   "bed.align_title": "Réglage des vis guidé par le maillage",
   "bed.align_intro": "Un plan est ajusté sur tous les points d'un maillage du plateau. Son inclinaison est ce que les quatre vis peuvent corriger. Ce qui reste est la forme de la plaque, que les vis ne changent pas.",
   "bed.align_mesh_source": "Maillage à analyser",

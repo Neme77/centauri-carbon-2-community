@@ -34,14 +34,14 @@ const PAGES: Page[] = [
 
 // Routes live in the URL hash (#files, #bed/plates, #bed/screws, #bed/nozzle): the backend only serves /, so no server change is needed.
 // #camera is the separate camera window opened from the camera card; it is not a menu page.
-export type BedTab = 'mesh' | 'plates' | 'screws' | 'nozzle' | 'cell'
+export type BedTab = 'mesh' | 'plates' | 'screws' | 'align' | 'nozzle' | 'cell'
 export type SettingsTab = 'connection' | 'integrations' | 'appearance' | 'about' | 'updates' | 'backup'
 const SETTINGS_TABS: SettingsTab[] = ['connection', 'integrations', 'appearance', 'about', 'updates', 'backup']
 const route = () => {
   const [p, sub] = location.hash.slice(1).split('/')
   return {
     page: (PAGES.includes(p as Page) ? p : 'dashboard') as Page,
-    bed: (p === 'bed' && (sub === 'plates' || sub === 'screws' || sub === 'nozzle' || sub === 'cell')
+    bed: (p === 'bed' && (sub === 'plates' || sub === 'screws' || sub === 'align' || sub === 'nozzle' || sub === 'cell')
       ? sub
       : 'mesh') as BedTab,
     settings: (p === 'settings' && SETTINGS_TABS.includes(sub as SettingsTab) ? sub : 'connection') as SettingsTab,

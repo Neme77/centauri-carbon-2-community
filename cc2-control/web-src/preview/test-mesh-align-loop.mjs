@@ -58,7 +58,7 @@ try {
   })
   const origin = server.resolvedUrls.local[0].replace(/\/$/, '')
   const open = async () => {
-    await page.goto(`${origin}/#bed/screws`)
+    await page.goto(`${origin}/#bed/align`)
     await page.locator('#cc2-preview-banner').waitFor()
   }
   await open()
