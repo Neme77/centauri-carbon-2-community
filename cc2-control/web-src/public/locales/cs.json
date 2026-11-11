@@ -1586,5 +1586,20 @@
   "queue.auto_in_n": "Automatic start in {n} s",
   "queue.hold": "Cancel automatic start",
   "queue.abandon": "Cancel start",
-  "queue.auto_material": "Automatic start held: the Canvas slot does not hold the file's material or could not be checked. Check the slot and start by hand."
+  "queue.auto_material": "Automatic start held: the Canvas slot does not hold the file's material or could not be checked. Check the slot and start by hand.",
+  "job.bed_map_objects": "Objekty",
+  "job.bed_map_layer_path": "Dráha vrstvy",
+  "job.bed_map_previous_layer": "Předchozí vrstva",
+  "job.bed_map_next_layer": "Následující vrstva",
+  "job.bed_map_live": "Živě",
+  "job.bed_map_layer_status": "Vrstva {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Vrstva {n} / {total}",
+  "job.bed_map_loading_layer": "Načítání vrstvy…",
+  "job.bed_map_layer_unavailable": "Dráha vrstvy není k dispozici",
+  "job.bed_map_layer_limit": "Dráha vrstvy vynechána: soubor je příliš velký na včasné načtení",
+  "job.bed_map_waiting_first_layer": "Čeká se na vrstvu 1",
+  "job.bed_map_printing_layer": "Tiskne se vrstva {n} / {total}",
+  "job.bed_map_view": "Zobrazení mapy podložky",
+  "job.bed_map_nozzle": "Tryska",
+  "job.bed_map_layer_legend": "Dráha vrstvy"
 }

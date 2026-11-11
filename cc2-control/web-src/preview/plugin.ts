@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
+import { demoExcludeObjects, demoLayerPath } from './layer-path-demo.ts'
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Match the source literally; never evaluate its template.
 const cameraSource = "export const camera = (q = '') => `http://${location.hostname}:8080/${q}`"
@@ -753,7 +754,8 @@ export function previewPlugin(): Plugin {
       const state = readFileSync(fileURLToPath(new URL('../src/lib/state.ts', import.meta.url)), 'utf8')
       if (!state.includes(cameraSource)) throw new Error('Preview camera isolation needs updating')
       server.middlewares.use((req, res, next) => {
-        const path = new URL(req.url || '/', 'http://localhost').pathname
+        const reqUrl = new URL(req.url || '/', 'http://localhost')
+        const path = reqUrl.pathname
         const reply = (data: unknown, status = 200) => {
           res.statusCode = status
           res.setHeader('Content-Type', 'application/json')
@@ -842,28 +844,16 @@ export function previewPlugin(): Plugin {
                 },
               })
             case '/api/exclude-objects':
-              return reply({
-                result: {
-                  status: {
-                    exclude_object: {
-                      objects: [
-                        {
-                          name: 'Buddha',
-                          center: [128, 128],
-                          polygon: [
-                            [110, 110],
-                            [146, 110],
-                            [146, 146],
-                            [110, 146],
-                          ],
-                        },
-                      ],
-                      excluded_objects: [],
-                      current_object: 'Buddha',
-                    },
-                  },
-                },
-              })
+              return reply(demoExcludeObjects())
+            case '/api/gcode-files/layer-path': {
+              const file = reqUrl.searchParams.get('file') || ''
+              const layer = Number(reqUrl.searchParams.get('layer'))
+              const storage = reqUrl.searchParams.get('storage') || 'internal'
+              if (!file || !Number.isInteger(layer) || layer < 1)
+                return reply({ error: 'invalid layer path request' }, 400)
+              if (layer > 227) return reply({ error: 'layer not found' }, 404)
+              return reply(demoLayerPath(file, layer, storage))
+            }
             case '/api/queue':
               return reply(queueView())
             case '/api/plates':

@@ -20,6 +20,7 @@ HARNESSES = {
     "test_canvas_recovery_load.c": [ROOT / "src/control.c"],
     "test_app_update_guards.c": BACKEND,
     "test_gcode_metadata.c": [],
+    "test_gcode_layer_path.c": [],
     "test_object_query.c": BACKEND,
     "test_exclude_objects.c": BACKEND,
     # test_file_ops.c and test_orca_upload.c include src/main.c themselves.
@@ -63,6 +64,7 @@ HARNESSES = {
     "test_pressure_advance_api.c": BACKEND,
     "test_quick_preferences.c": BACKEND,
     "test_pid_api.c": BACKEND,
+    "test_layer_path_deadline.c": BACKEND,
     "test_screw_tram_end.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,

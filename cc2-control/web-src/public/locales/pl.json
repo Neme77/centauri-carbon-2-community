@@ -1586,5 +1586,20 @@
   "queue.auto_in_n": "Automatic start in {n} s",
   "queue.hold": "Cancel automatic start",
   "queue.abandon": "Cancel start",
-  "queue.auto_material": "Automatic start held: the Canvas slot does not hold the file's material or could not be checked. Check the slot and start by hand."
+  "queue.auto_material": "Automatic start held: the Canvas slot does not hold the file's material or could not be checked. Check the slot and start by hand.",
+  "job.bed_map_objects": "Obiekty",
+  "job.bed_map_layer_path": "Ścieżka warstwy",
+  "job.bed_map_previous_layer": "Poprzednia warstwa",
+  "job.bed_map_next_layer": "Następna warstwa",
+  "job.bed_map_live": "Na żywo",
+  "job.bed_map_layer_status": "Warstwa {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Warstwa {n} / {total}",
+  "job.bed_map_loading_layer": "Wczytywanie warstwy…",
+  "job.bed_map_layer_unavailable": "Ścieżka warstwy niedostępna",
+  "job.bed_map_layer_limit": "Pominięto ścieżkę warstwy: plik jest zbyt duży, by odczytać go na czas",
+  "job.bed_map_waiting_first_layer": "Oczekiwanie na warstwę 1",
+  "job.bed_map_printing_layer": "Drukowanie warstwy {n} / {total}",
+  "job.bed_map_view": "Widok mapy stołu",
+  "job.bed_map_nozzle": "Dysza",
+  "job.bed_map_layer_legend": "Ścieżka warstwy"
 }

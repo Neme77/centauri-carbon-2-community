@@ -1586,5 +1586,20 @@
   "queue.auto_in_n": "{n} sn sonra otomatik olarak başlatılacak",
   "queue.hold": "Otomatik başlatmayı iptal et",
   "queue.abandon": "Başlatmayı iptal et",
-  "queue.auto_material": "Otomatik başlatma duraklatıldı. Canvas yuvasındaki filament dosyayla eşleşmiyor veya doğrulanamadı. Yuvayı kontrol edip baskıyı elle başlatın."
+  "queue.auto_material": "Otomatik başlatma duraklatıldı. Canvas yuvasındaki filament dosyayla eşleşmiyor veya doğrulanamadı. Yuvayı kontrol edip baskıyı elle başlatın.",
+  "job.bed_map_objects": "Nesneler",
+  "job.bed_map_layer_path": "Katman yolu",
+  "job.bed_map_previous_layer": "Önceki katman",
+  "job.bed_map_next_layer": "Sonraki katman",
+  "job.bed_map_live": "Canlı",
+  "job.bed_map_layer_status": "Katman {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Katman {n} / {total}",
+  "job.bed_map_loading_layer": "Katman yükleniyor…",
+  "job.bed_map_layer_unavailable": "Katman yolu kullanılamıyor",
+  "job.bed_map_layer_limit": "Katman yolu atlandı: dosya zamanında okunamayacak kadar büyük",
+  "job.bed_map_waiting_first_layer": "Katman 1 bekleniyor",
+  "job.bed_map_printing_layer": "Yazdırılan katman: {n} / {total}",
+  "job.bed_map_view": "Yatak haritası görünümü",
+  "job.bed_map_nozzle": "Nozul",
+  "job.bed_map_layer_legend": "Katman yolu"
 }
