@@ -29,15 +29,20 @@ export type Status = {
   job: string
   phase: string
   version: string
+  progress_log?: string
 }
-export const status = store<{ data: Status | null }>({ data: null })
+export const status = store<{ data: Status | null; disconnected: boolean }>({ data: null, disconnected: false })
 let statusPending: Promise<Status> | null = null
 export function refresh() {
   if (!statusPending)
     statusPending = request('/api/app-update/status')
       .then(data => {
-        status.set({ data })
+        status.set({ data, disconnected: false })
         return data as Status
+      })
+      .catch(error => {
+        status.set({ disconnected: true })
+        throw error
       })
       .finally(() => {
         statusPending = null

@@ -109,7 +109,7 @@
 :root[data-theme="nord"] {
   color-scheme: dark;
   --bg: #2e3440; --panel: #3b4252; --edge: #4c566a; --text: #eceff4; --muted: #b4bfd3; --field: #434c5e; --ink: #2e3440;
-  --cyan: #88c0d0; --green: #a3be8c; --amber: #ebcb8b; --red: #d57780; --blue: #81a1c1;
+  --cyan: #9dcddb; --green: #a3be8c; --amber: #ebcb8b; --red: #ffb0b4; --blue: #81a1c1;
   --well: #242933; --well-fg: #eceff4;
 }
 :root[data-theme="monokai"] {
@@ -120,8 +120,8 @@
 }
 :root[data-theme="solarized-light"] {
   color-scheme: light;
-  --bg: #eee8d5; --panel: #fdf6e3; --edge: #d6cfb9; --text: #073642; --muted: #586e75; --field: #f5eedb; --ink: #fdf6e3;
-  --cyan: #1c78bc; --green: #5f7000; --amber: #946c00; --red: #dc322f; --blue: #1c78bc;
+  --bg: #eee8d5; --panel: #fdf6e3; --edge: #d6cfb9; --text: #073642; --muted: #566b72; --field: #f5eedb; --ink: #fdf6e3;
+  --cyan: #156296; --green: #5f7000; --amber: #856100; --red: #b01e1c; --blue: #1c78bc;
   --well: #002b36; --well-fg: #eee8d5;
 }
 /* Obsidian keeps semantic status colours separate from the purple action accent. */
@@ -440,11 +440,95 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 .cc2-object-map-marker[data-excluded="true"] { border-color: var(--red); color: var(--red); text-decoration: line-through; opacity: .65; }
 .cc2-object-map-marker:disabled { cursor: not-allowed; }
 .cc2-object-map-marker:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+.cc2-object-map-marker[data-layer-badge="true"] {
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  border-width: 1px;
+  border-radius: 5px;
+  font-size: 10px;
+  opacity: .55;
+  box-shadow: none;
+}
+.cc2-object-map-marker[data-layer-badge="true"][data-current="true"]:not([data-excluded]) {
+  outline-width: 1px;
+  outline-offset: 2px;
+  box-shadow: none;
+}
 .cc2-object-map-list { max-height: 300px; }
-.cc2-object-map-expanded .cc2-object-map-frame { max-width: 680px; }
-.cc2-object-map-expanded .cc2-object-map-list { max-height: 480px; }
+.cc2-object-map-expanded .cc2-object-map-frame {
+  max-width: min(680px, calc(100vh - 22rem));
+}
+.cc2-object-map-expanded .cc2-object-map-plate { padding: 14px; }
+.cc2-object-map-expanded .cc2-object-map-list { max-height: min(480px, calc(100vh - 22rem)); }
+.cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline { fill-opacity: .08; }
+.cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline[data-selected="true"] { fill-opacity: .16; }
 @container page (min-width: 900px) {
   .cc2-object-map-expanded .cc2-object-map-layout { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+}
+
+.cc2-layer-path {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.cc2-layer-path-prev { stroke: var(--muted); stroke-width: 2.5px; opacity: .28; }
+.cc2-layer-path-remain { stroke-width: 1.25px; opacity: .35; }
+.cc2-layer-path-printed { stroke-width: 2.75px; opacity: 1; }
+.cc2-layer-nozzle-dot {
+  position: absolute;
+  z-index: 4;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, 50%);
+  border-radius: 50%;
+  background: var(--cyan);
+  border: 2px solid var(--ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 55%, transparent);
+  pointer-events: none;
+}
+.cc2-layer-path-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--cyan);
+}
+.cc2-layer-path-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--field) 78%, transparent);
+  color: var(--text);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* Keep the compact query identical to COMPACT in components/layout.tsx: the sheet starts
+   below the header so the emergency stop stays visible and tappable on a phone. */
+@media (max-width: 900px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
+  .cc2-dialog-sheet {
+    top: 68px;
+    padding: 0;
+    place-items: stretch;
+  }
+  .cc2-dialog-sheet > [role="dialog"] {
+    width: 100% !important;
+    max-width: none;
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .cc2-dialog-sheet { top: 52px; }
 }
 
 .cc2-canvas-slot-data>div, .cc2-canvas-remaining>div:first-child { border:0; padding:0; gap:8px; }

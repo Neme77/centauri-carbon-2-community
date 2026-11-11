@@ -129,6 +129,9 @@ jobs:
       - name: Print queue page, dialog choice and quick start
         run: npm run test:queue
 
+      - name: Connections EXHAUST activation messages
+        run: node preview/test-network-exhaust.mjs
+
       - name: Native external spool and shared Canvas material controls
         run: node preview/test-external-filament.mjs
 
@@ -184,7 +187,7 @@ jobs:
         run: npm run test:file-library
 
       - name: Single object map, original IDs and responsive expansion
-        run: npm run test:object-layout && npm run test:bed-map
+        run: npm run test:object-layout && npm run test:bed-map && npm run test:layer-path-flow
 
       - name: Sidebar geometry and accessible navigation regression
         run: node preview/test-ui-polish.mjs

@@ -18,6 +18,7 @@ export const Dialog = ({
   width = 520,
   class: className = '',
   label,
+  sheet,
 }: {
   onClose?: () => void
   locked?: boolean
@@ -26,6 +27,7 @@ export const Dialog = ({
   width?: number
   class?: string
   label?: string
+  sheet?: boolean
 }) => {
   const box = useRef<HTMLDivElement>(null),
     props = useRef({ onClose, locked })
@@ -61,7 +63,7 @@ export const Dialog = ({
     // biome-ignore lint/a11y/noStaticElementInteractions: a click on the backdrop is a pointer shortcut; Escape is the keyboard path
     <div
       role="presentation"
-      class="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4"
+      class={`fixed inset-0 z-50 grid place-items-center bg-black/80 p-4${sheet ? ' cc2-dialog-sheet' : ''}`}
       onClick={e => e.target === e.currentTarget && closeOnBackdrop && !locked && onClose?.()}
     >
       <div

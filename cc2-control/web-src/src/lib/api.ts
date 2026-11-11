@@ -6,7 +6,12 @@ export const request = async (path: string, options: RequestInit = {}) => {
   const controller = new AbortController()
   const timeout = window.setTimeout(
     () => controller.abort(),
-    /\/api\/gcode-files\/(metadata|inspect)$/.test(path) ? 120000 : 8000
+    /\/api\/gcode-files\/(metadata|inspect|layer-path)(\?|$)/.test(path)
+      ? 120000
+      : // A USB start answers only after the file has been copied to internal memory (#344).
+        /\/api\/gcode-files\/print$/.test(path)
+        ? 300000
+        : 8000
   )
   try {
     const headers = new Headers(options.headers)

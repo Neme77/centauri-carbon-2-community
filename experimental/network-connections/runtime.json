@@ -14,6 +14,16 @@
     "tested_model": "TP-Link UE300"
   },
   "physical_reference": "Owner accepted the corrected 31fd manager and Pressure Advance on 2026-11-02. Recovery installer and Quick Actions are newly qualified candidates; revision 3000 remains physically unqualified.",
+  "lan_preview": {
+    "asset_id": 722569687,
+    "release_id": 437972150,
+    "tag": "CC2-Connections-LAN-322-323-preview-1",
+    "filename": "CC2-Connections-Runtime-LAN-322-323-8c7c6a93ed64.tar.gz",
+    "sha256": "8c7c6a93ed64b9b35f944dc313faee9bbfca370958bec79d0ba5fe25d6e49669",
+    "helper_sha256": "3f9e8ca97fcb668c694bc93aa08dc1753ddf50d1cddc17567acb274c91dbaaf4",
+    "source_commit": "699c210728778bbd1acd22b526a1855a6e72ea4c",
+    "physical_reference": "Private R4 verified on V4.4.3 with RTL8153 31fd and EXHAUST."
+  },
   "experimental_profiles": [
     {
       "usb_vendor": "0bda",

@@ -24,6 +24,7 @@ try {
     cs: 'České poznámky: nastavení zachováno',
     hu: 'Magyar megjegyzések: beállítások megőrizve',
     ru: 'Русские примечания: настройки сохранены',
+    de: 'Deutsche Hinweise: Einstellungen beibehalten',
     zh: '中文发行说明：保留设置',
   }
   const status = { enabled: true, ready: true, busy: false, installed: '1.2.8', firmware: '4.4', job: '', phase: 'none', version: '' }
@@ -34,7 +35,7 @@ try {
   ] }
   let cache = { schema: 1, expires: 0, releases: [] }
   await page.route('**/i18n/*.json', async r => {
-    const code = new URL(r.request().url()).pathname.match(/^\/i18n\/(en|it|es|fr|pl|cs|hu|ru|zh)\.json$/)?.[1]
+    const code = new URL(r.request().url()).pathname.match(/^\/i18n\/(en|it|es|fr|pl|cs|hu|tr|ru|zh|de)\.json$/)?.[1]
     assert(code, 'unexpected locale request')
     return r.fulfill({ body: await readFile(path.join(root, `public/locales/${code}.json`), 'utf8'), contentType: 'application/json' })
   })
@@ -65,7 +66,7 @@ try {
   await page.getByRole('tab', { name: 'Updates', exact: true }).click()
   await page.getByText('Compatible update available: 1.2.9', { exact: true }).waitFor()
   // The application update requires the qualified V4.4.3 base in every locale.
-  for (const lang of ['en', 'hu', 'cs', 'es', 'fr', 'it', 'pl', 'ru', 'zh']) {
+  for (const lang of ['en', 'hu', 'cs', 'es', 'fr', 'it', 'pl', 'tr', 'ru', 'zh', 'de']) {
     const dict = JSON.parse(await readFile(path.join(root, `public/locales/${lang}.json`)))
     assert.deepEqual(dict['updates.requirements'].match(/V\d+\.\d+(?:\.\d+)?/g), ['V4.4.3'], lang + ' update requirements are out of date')
   }
@@ -161,6 +162,17 @@ try {
   await page.getByText('1.2.25', { exact: true }).waitFor()
   Object.assign(status, { phase: 'failed' })
   await page.getByText(`${english['updates.status']} ${english['updates.failed']}`, { exact: true }).waitFor()
+  await page.getByRole('button', { name: english['updates.progress'], exact: true }).click()
+  const progress = page.getByRole('dialog', { name: english['updates.progress'] })
+  const log = progress.getByRole('textbox', { name: english['updates.progress_log'] })
+  Object.assign(status, { phase: 'installing', busy: true, progress_log: 'INSTALL_PHASE=install-files\n' })
+  await progress.getByText('installing', { exact: true }).waitFor()
+  await page.waitForFunction(() => document.querySelector('[role="dialog"] textarea')?.value === 'INSTALL_PHASE=install-files\n')
+  assert.equal(await log.inputValue(), 'INSTALL_PHASE=install-files\n')
+  Object.assign(status, { phase: 'reconciled', busy: false, progress_log: '', installed: '1.2.9' })
+  await progress.getByText(english['updates.up_to_date'], { exact: true }).waitFor()
+  assert.equal(await log.inputValue(), '')
+  await progress.getByRole('button', { name: english['updates.close_progress'], exact: true }).click()
   await page.getByText('Selected version: 1.2.24', { exact: true }).waitFor()
   Object.assign(status, { installed: '1.2.9', version: '1.2.9', phase: 'complete' })
   await page.getByRole('button', { name: 'Reload CC2 Control', exact: true }).waitFor()
@@ -200,5 +212,5 @@ try {
   assert.equal(await page.getByText(localized.en, { exact: true }).count(), 0, 'older release notes must remain hidden')
   assert.equal(await page.getByText(previous['updates.notes_in_english'], { exact: true }).count(), 0)
   assert.deepEqual(errors, [])
-  console.log('PASS: native file chooser mouse/keyboard, light/dark styling, disabled cursors, mobile layout; update auth/confirmations, installed/older note hiding, 9-language selection and labelled fallback')
+  console.log('PASS: native file chooser mouse/keyboard, light/dark styling, disabled cursors, mobile layout; update auth/confirmations, installed/older note hiding, 10-language selection and labelled fallback')
 } finally { await browser?.close(); await server.close() }

@@ -8,15 +8,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Interactive screw-tramming on Bed → Screw Levelling: start a session with one click (full home and the existing bed prep), re-probe a single corner after turning its screw, or check all four, without repeating the full four-corner measurement. Re-probes home Z only. Every measurement, the start included, waits 30 s (`G4 P30000`) before probing so the nozzle has settled, and re-probes can probe twice to show whether it has. The nozzle is switched off after each probe; the bed stays at 60 °C until the session ends. The session survives the Manual homing / Auto leveling state its own homing and probing report, the bed target is renewed every ten minutes so the firmware's idle shutdown does not cool the bed between probes, and a bed left at 60 °C by an ended session is switched off once the printer is idle again. Requested by **sametsoyoz** (#329).
+- Screw-tramming history: CC2 Control records every completed start, re-probe and check of a tramming session with the measured value of each corner and keeps the last 20 sessions on the printer, so the results are still there after a reload, the end of the session or a restart, and the next levelling can start from the last one. A one-shot measurement without a session is kept separately as a quick entry (last 10), marked as such because it has no settle. Read with `GET /api/screws/history`, cleared with `POST /api/screws/history/clear` (#329).
+
+- Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
+
+- Add the Turkish interface translation using the contributed language patch.
+
+- Read-only `GET /api/gcode-files/layer-path` returns thinned extrusion polylines for one G-code layer in bed coordinates, with the same path checks as the other G-code file routes. The Job bed-map dialog adds a **Layer path** pane (Live / previous / next, nozzle from `/api/printer`) that loads that thinned path instead of the G-code file. The current layer is requested on its own and drawn first; the previous layer comes from the browser cache or is loaded afterwards, rapid layer changes request only the layer they settle on, and a busy backend is retried instead of being shown as unavailable. Requested by **SVLoneStar** (#342).
 - Print queue: prepare jobs ahead with the print dialog's new **Add to queue** choice (every print setting plus a number of copies), then start each copy with one button from the Queue page, the Dashboard or the print-ended notice, without the dialog. A pre-flight check shows the file, the filament in each mapped slot, the side's mesh, the nozzle and the printer state; copies are counted on the printer, stopped copies are not counted, and the next copy waits for the operator unless the automatic start is chosen for a self-clearing bed, which first checks that each mapped Canvas slot still holds the file's material. Designed and implemented by **beanbo** (#320).
 - The print queue's job list shows the picture embedded in each G-code file, and a job is moved by dragging it by that picture, with a mouse or a finger; the arrows stay. Designed and implemented by **beanbo**.
 - Files and History show the picture embedded in each G-code file in every row of their lists, as the print queue does, and a job in History can be printed again while its file is still on the printer: the button opens the print dialog of the Files page. On a narrow screen the file name takes a line of its own in both lists. Designed and implemented by **beanbo**.
+- German interface translation (Deutsch), selectable in Settings → Language. All 1533 interface strings are translated with the informal “du”; technical terms such as Pressure Advance, Input Shaper, Load Cell, Spool, Canvas and Idle are kept. Contributed by **lpgamerzockt-ops** (#332).
 
 ### Changed
 
 - Print queue jobs are bound to filaments, not to Canvas slots: each tool keeps the material and colour it was added with and prints from whichever slot holds that filament when a copy starts, so a job can be queued before its spool is loaded (in the print dialog from the spool inventory, through the API with any material and colour) and waits until a slot holds it. The job list shows each tool's filament and slot, its palette button gives a job other filaments, and the automatic start checks every filament of the job. Designed and implemented by **beanbo**.
+- Screw levelling names each corner and says whether to raise or lower it against the front-left zero. The session is four steps: start, re-probe the screw you turned, check all four, then end. The one-shot measurement is marked as a measurement without a session (#329).
+- Screw levelling keeps the bed at 60 °C for the session and only switches the nozzle off after start. The double measurement is labelled “2× 3 probes”. The table shows the running session’s offsets, and earlier sessions can be reviewed, exported or cleared (#329).
+
+- Complete Hungarian translations for the RFID reader lifecycle, print queue and update requirements. By **Neme77**.
+- Simplified Chinese interface strings for the RFID reader lifecycle, external feed, chamber fan management and update requirements completed, and the build-plate save hint refreshed. By **Skycos** (#328).
 
 ### Fixed
+
+- Starting a print of a large file from USB no longer stops CC2 Control from answering: the file is scanned and copied on a worker thread, so the print dialog no longer reports “print not started” for a print that then starts. Reported and fixed by **lpgamerzockt-ops** (#344, #347).
+- Nord and Solarized Light keep cyan and red text readable on the bed-map dialog, including the selected object row and Exclude Selected Object. The same tokens meet the contrast on the rest of the interface. Contributed by **lpgamerzockt-ops** (#345).
+- Solarized Light muted text and amber status tags meet the 4.5:1 text contrast on the page background and on the tag fill. Contributed by **lpgamerzockt-ops** (#345).
+
+- Start preparing the qualified USB Ethernet link before the camera starts, and give the camera a bounded wait for carrier on Ethernet-enabled boots. Reported by **kalross** (#322).
+- Prepare USB Ethernet activation when the minimum EXHAUST feature is active. A full idle reboot loads both components, after which the normal Connections confirmation applies. Reported by **kalross** and reproduced by **Neme77** (#323).
 
 - Preserve the Canvas RFID lifecycle during application updates from the published CC2 Control 1.2.26 and require explicit resumption before a pending activation can flash Canvas. Allow reinstalling the same build from a PC. Reported by **Sceletor** (#313) and physically tested on a Combo by **Neme77**.
 

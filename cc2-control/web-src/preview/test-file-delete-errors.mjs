@@ -12,7 +12,7 @@ try {
   await server.listen()
   browser = await chromium.launch({ headless: true, ...(process.env.CC2_BROWSER_PATH ? { executablePath: process.env.CC2_BROWSER_PATH } : {}) })
   const origin = server.resolvedUrls.local[0]
-  for (const language of ['en', 'it', 'hu', 'fr', 'es', 'pl', 'cs', 'ru', 'zh']) {
+  for (const language of ['en', 'it', 'hu', 'fr', 'es', 'pl', 'cs', 'ru', 'zh', 'de']) {
     const labels = JSON.parse(await readFile(path.join(root, `public/locales/${language}.json`), 'utf8'))
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
     const errors = []

@@ -30,6 +30,8 @@ The plate Z offset is applied on top of the printer's own plate offset and again
 
 Four-screw corrections are displayed in **microns**. A guarded **Optimized reference adjustment** suggestion may be shown when it reduces the largest required correction and remains inside the protected movement range. The suggestion is advisory only; CC2 Control does not move or turn screws automatically.
 
+**Screw Levelling** also offers an interactive session: **Start session** homes all axes (`G28`), preheats the bed and cleans the nozzle like the one-shot measurement, then probes the four screws and switches the nozzle off, leaving the bed at 60 °C. After that, each corner can be re-probed with one click (`G28 Z` only, after a 30 s settle; the nozzle is switched off again afterwards), and **Check all four** repeats the sweep without a full re-home. Re-probe and check stay disabled until X and Y are homed. Heaters are switched off when the session ends. The original **Measure Screws** one-shot path is unchanged.
+
 ## Quick Actions and global Emergency Stop
 
 The dashboard now provides operational Quick Actions for Home All, All Heaters Off, Fans Off and Motors Off.
@@ -81,7 +83,7 @@ Thanks to **@efiten** for the original proposal, analysis and printer-side valid
 
 The guided screw measurement probes above the four bed screws and reports each point relative to the reference corner. Measurements use the printer load-cell probe and remain isolated from the stored Bed Mesh.
 
-The operation requires the printer to be idle and performs homing before probing. It does not run `SAVE_CONFIG`.
+The one-shot measurement requires the printer to be idle. The interactive session homes with `G28` at start and with `G28 Z` on each re-probe. Neither path runs `SAVE_CONFIG`.
 
 ## Bed Mesh 2D and 3D
 

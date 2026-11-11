@@ -82,6 +82,45 @@
       const actual = { known: false, method: 'unknown', prefix: 0, gateway: '', dns1: '', dns2: '' }
       return reply({ schema: 1, installed: false, state_valid: false, configured: false, ready: false, busy: false, last_exit: -1, phase: 'idle', config, saved: config, actual: { wifi: actual, ethernet: actual }, last_error: '', pending: null, networks: null, diagnostic: '', automatic_selection: false, temporary: false })
     }
+    if (path === '/api/gcode-files/layer-path') {
+      const u = new URL(raw, location.href)
+      const file = u.searchParams.get('file') || ''
+      const layer = Number(u.searchParams.get('layer'))
+      const storage = u.searchParams.get('storage') || 'internal'
+      if (!file || !Number.isInteger(layer) || layer < 1) return reply({ error: 'invalid layer path request' }, 400)
+      if (layer > 10000) return reply({ error: 'layer not found' }, 404)
+      const r2 = n => Math.round(n * 100) / 100
+      const oval = (cx, cy, rx, ry, n = 32) => Array.from({length: n + 1}, (_, i) => {
+        const a = (i / n) * Math.PI * 2
+        return [r2(cx + rx * Math.cos(a)), r2(cy + ry * Math.sin(a))]
+      })
+      const island = (cx, cy, rx, ry, infill) => {
+        const paths = [oval(cx, cy, rx, ry), oval(cx, cy, rx * 0.78, ry * 0.78)]
+        if (!infill) return paths
+        const irx = rx * 0.7, iry = ry * 0.7
+        const inside = (x, y) => ((x - cx) / irx) ** 2 + ((y - cy) / iry) ** 2 <= 1
+        for (let offset = -irx * 1.7; offset <= irx * 1.7; offset += 4.2) {
+          const pts = []
+          for (let s = -1; s <= 1.001; s += 0.045) {
+            const x = cx + offset + s * irx, y = cy + s * iry
+            if (inside(x, y)) pts.push([r2(x), r2(y)])
+          }
+          if (pts.length >= 2) paths.push(pts)
+        }
+        return paths
+      }
+      const grow = layer % 2 === 0 ? 2.4 : 0
+      const paths = [
+        ...island(128, 120, 30 + grow, 24 + grow, true),
+        ...island(70, 192, 20 + grow * 0.7, 17 + grow * 0.7, true),
+        ...island(190, 190, 18 + grow * 0.7, 16 + grow * 0.7, true),
+      ]
+      if (layer <= 8) paths.push(...island(190, 48, 16, 11, false))
+      return reply({
+        storage, file, layer, total_layers: 227, z: Math.round(layer * 0.2 * 100) / 100,
+        paths, point_count: paths.reduce((n, p) => n + p.length, 0), truncated: false,
+      })
+    }
     if (path === '/api/printer') return reply(printer())
     if (path === '/api/health') return reply({ service: 'cc2-control', version: '1.2.3', mqtt_connected: state.connected })
     if (path === '/api/setup') return reply({ required: false, configured: true, mqtt_connected: state.connected })
