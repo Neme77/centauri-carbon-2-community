@@ -45,7 +45,7 @@ assert.deepEqual(
   SCREW_CORNERS.map(c => ({ id: c.id, x: c.x, y: c.y }))
 )
 assert.equal(ALIGN_DEFAULTS.tilt_span_mm, 240)
-assert.equal(ALIGN_DEFAULTS.target_tilt_mm, 0.05)
+assert.equal(ALIGN_DEFAULTS.target_tilt_mm, 0.1)
 assert.equal(ALIGN_DEFAULTS.max_rounds, 4)
 assert.equal(ALIGN_DEFAULTS.shape_warn_mm, 0.3)
 assert.equal(ALIGN_DEFAULTS.row0_is_min_y, true)
@@ -236,17 +236,17 @@ for (const [tiltX, tiltY, expected] of [
 
 // "Aligned" needs both tilts below the target; the shape warning is independent of it.
 {
-  const target = 0.05
-  const done = analyseMesh(syntheticMesh({ tiltX: 0.04, tiltY: -0.045, shape: dome(0.5) }))
+  const target = ALIGN_DEFAULTS.target_tilt_mm
+  const done = analyseMesh(syntheticMesh({ tiltX: 0.08, tiltY: -0.09, shape: dome(0.5) }))
   assert.equal(done.aligned, true)
   assert.equal(done.shape_warning, true, 'the warning stays although the alignment is done')
   assert.ok(done.residual_range > 0.3)
-  assert.equal(analyseMesh(syntheticMesh({ tiltX: 0.04, tiltY: 0.06 })).aligned, false, 'one tilt above the target')
-  assert.equal(analyseMesh(syntheticMesh({ tiltX: -0.07, tiltY: 0.01 })).aligned, false, 'the sign does not matter')
+  assert.equal(analyseMesh(syntheticMesh({ tiltX: 0.04, tiltY: 0.12 })).aligned, false, 'one tilt above the target')
+  assert.equal(analyseMesh(syntheticMesh({ tiltX: -0.13, tiltY: 0.01 })).aligned, false, 'the sign does not matter')
   assert.equal(tiltsBelowTarget(target, 0, target), false, 'at the target is not below it')
   assert.equal(tiltsBelowTarget(0, -target, target), false)
-  assert.equal(tiltsBelowTarget(0.0499, -0.0499, target), true)
-  assert.equal(analyseMesh(syntheticMesh({ tiltX: 0.06, tiltY: 0.06 }), config({ target_tilt_mm: 0.1 })).aligned, true)
+  assert.equal(tiltsBelowTarget(0.0999, -0.0999, target), true)
+  assert.equal(analyseMesh(syntheticMesh({ tiltX: 0.06, tiltY: 0.06 }), config({ target_tilt_mm: 0.05 })).aligned, false)
   const smooth = analyseMesh(syntheticMesh({ tiltX: 0.9, shape: dome(0.1) }))
   assert.equal(smooth.shape_warning, false, 'a large tilt alone is no shape warning')
   assert.equal(analyseMesh(syntheticMesh({ shape: dome(0.2) }), config({ shape_warn_mm: 0.15 })).shape_warning, true)
@@ -308,7 +308,7 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
     JSON.stringify({ tilt_span_mm: -1, target_tilt_mm: 'x', max_rounds: 99, thread_pitch_mm: 0, clockwise_raises_bed: 'yes' })
   )
   assert.equal(bad.tilt_span_mm, 240)
-  assert.equal(bad.target_tilt_mm, 0.05)
+  assert.equal(bad.target_tilt_mm, 0.1)
   assert.equal(bad.max_rounds, 4)
   assert.equal(bad.thread_pitch_mm, null)
   assert.equal(bad.clockwise_raises_bed, null)

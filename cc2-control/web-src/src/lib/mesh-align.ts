@@ -56,7 +56,7 @@ export const ALIGN_DEFAULTS: AlignConfig = {
   ],
   tilt_span_mm: 240,
   row0_is_min_y: true,
-  target_tilt_mm: 0.05,
+  target_tilt_mm: 0.1,
   max_rounds: 4,
   shape_warn_mm: 0.3,
   flat_range_mm: 0.1,

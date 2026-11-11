@@ -691,7 +691,7 @@
   "bed.align_settings_experiment_hint": "Shows the settings block on Bed Levelling → Mesh alignment: tilt span, target and warning limits, screw positions, and thread pitch and turning direction for an instruction in turns. Without this opt-in the page uses the CC2 defaults and shows millimetres only. The values are saved in this browser. Enabling it does not heat or move the printer.",
   "bed.align_settings_enable_confirm": "Show the settings of the mesh-guided alignment? Wrong values lead to wrong screw instructions.",
   "bed.align_settings_disable_confirm": "Hide the settings of the mesh-guided alignment? The CC2 defaults apply again.",
-  "bed.align_settings_off": "This page uses the CC2 defaults: tilt over 240 mm, target 0.05 mm, the four standard screw positions. Turns and turning direction are not shown. To change any of this, enable “Mesh alignment settings” under Settings → Integrations → Experimental integrations.",
+  "bed.align_settings_off": "This page uses the CC2 defaults: tilt over 240 mm, target 0.10 mm, the four standard screw positions. Turns and turning direction are not shown. To change any of this, enable “Mesh alignment settings” under Settings → Integrations → Experimental integrations.",
   "bed.align_settings_open": "Open experimental integrations",
   "bed.align_tab": "Alignement par maillage",
   "bed.align_title": "Réglage des vis guidé par le maillage",

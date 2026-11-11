@@ -86,7 +86,7 @@ try {
   await part('tag').getByText('Not aligned', { exact: true }).waitFor()
   await part('shape').getByText('Nearly flat', { exact: true }).waitFor()
   assert.equal(await part('shape-warning').count(), 0)
-  await card.getByText('Target: both tilts below 0.050 mm. This limit is an estimate').waitFor()
+  await card.getByText('Target: both tilts below 0.100 mm. This limit is an estimate').waitFor()
   // The alignment has its own tab; Screw Levelling keeps the four-point card, unchanged, without it.
   await page.getByRole('tab', { name: 'Screw Levelling', exact: true }).click()
   await page.locator('#screwFocus').getByRole('button', { name: /Start session/ }).waitFor()
@@ -149,7 +149,7 @@ try {
   await screw('RR').getByText(lower, { exact: true }).waitFor()
   await screw('RL').getByText(lower, { exact: true }).waitFor()
   await part('verdict').getByText(`Not aligned yet: tilt X is ${number('en', 0, 3)} mm and tilt Y is ${signed('en', tilted.tilt_y)} mm.`).waitFor()
-  await part('verdict').getByText('Both must be below 0.050 mm.').waitFor()
+  await part('verdict').getByText('Both must be below 0.100 mm.').waitFor()
   assert.equal(await part('shape-warning').count(), 0)
   // Without configured sources: millimetres only, and the page says why.
   await card.getByText('Turns are not shown: no thread pitch with a source is set.').waitFor()
@@ -234,7 +234,7 @@ try {
   await part('tilt-y').getByText('over 120 mm').waitFor()
   await screw('RR').getByText(`${lower} (${turns}, clockwise)`, { exact: true }).waitFor()
   await settings.getByRole('button', { name: 'Reset to the CC2 defaults', exact: true }).click()
-  await part('verdict').getByText('Both must be below 0.050 mm.').waitFor()
+  await part('verdict').getByText('Both must be below 0.100 mm.').waitFor()
   await screw('RR').getByText(lower, { exact: true }).waitFor()
   await part('tilt-y').getByText('over 240 mm').waitFor()
   assert.equal(await part('shape-warning').count(), 0)
