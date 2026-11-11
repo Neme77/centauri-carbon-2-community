@@ -165,7 +165,7 @@ try {
   await page.waitForFunction(()=>document.querySelectorAll('[data-bed-list-id]').length===4)
   await dialog.getByRole('button',{name:'Layer path',exact:true}).click()
   await page.waitForFunction(()=>document.querySelectorAll('[data-layer-path]').length>0)
-  for (const [theme,width] of [['dark',1440],['light',1440],['obsidian',1440],['nord',1440],['solarized-light',1440],['dark',390],['light',768]]) {
+  for (const [theme,width] of [['dark',1440],['light',1440],['obsidian',1440],['nord',1440],['solarized-light',1440],['dark',390],['nord',390],['solarized-light',390],['light',768]]) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme)
     await page.setViewportSize({width,height:900})
     await page.waitForTimeout(300)

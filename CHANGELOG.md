@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Nord and Solarized Light keep cyan and red text readable on the bed-map dialog, including the selected object row and Exclude Selected Object. The same tokens meet the contrast on the rest of the interface.
+- Solarized Light muted text and amber status tags meet the 4.5:1 text contrast on the page background and on the tag fill.
+
 - Start preparing the qualified USB Ethernet link before the camera starts, and give the camera a bounded wait for carrier on Ethernet-enabled boots. Reported by **kalross** (#322).
 - Prepare USB Ethernet activation when the minimum EXHAUST feature is active. A full idle reboot loads both components, after which the normal Connections confirmation applies. Reported by **kalross** and reproduced by **Neme77** (#323).
 
