@@ -10,14 +10,40 @@ import { Input, Select } from '@/components/ui/field'
 import { Tabs } from '@/components/ui/tabs'
 import { Icon } from '@/components/icons'
 import { Notice } from '@/components/shared'
-import { control, errText, notify, request } from '@/lib/api'
+import { control, errText, notify, post, request } from '@/lib/api'
 import { type Key, t, tpl } from '@/lib/i18n'
 import { signed } from '@/lib/format'
 import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, meshStats, type Cam } from '@/lib/meshdraw'
-import { microns, screwPlan, screwValues } from '@/lib/screws'
+import {
+  cornerOffsets,
+  microns,
+  offsetChain,
+  measurementOffsets,
+  parseScrewHistory,
+  SCREW_CORNERS,
+  SCREW_KEYS,
+  SCREW_SETTLE_S,
+  referenceMove,
+  screwHistoryCsv,
+  screwPlan,
+  screwValues,
+  type ScrewHistorySession,
+  type ScrewId,
+} from '@/lib/screws'
+import { store } from '@/lib/store'
 import { usePoll } from '@/lib/poll'
-import { type BedTab, printer, nav, openPage, refreshConsole, screwText } from '@/lib/state'
+import {
+  type BedTab,
+  consoleStatus,
+  printer,
+  nav,
+  openPage,
+  refreshConsole,
+  refreshPrinter,
+  screwSession,
+  screwText,
+} from '@/lib/state'
 import {
   type Calibration,
   calibrate,
@@ -553,70 +579,203 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
   )
 }
 
+const screwHistory = store({
+  supported: null as boolean | null,
+  sessions: [] as ScrewHistorySession[],
+  raw: null as unknown,
+})
+
+async function refreshScrewHistory() {
+  if (screwHistory.get().supported === false) return
+  try {
+    const data = await request('/api/screws/history')
+    screwHistory.set({ supported: true, sessions: parseScrewHistory(data), raw: data })
+  } catch (e: any) {
+    if (e?.status === 404) screwHistory.set({ supported: false, sessions: [], raw: null })
+  }
+}
+
+const saveText = (name: string, text: string, type: string) => {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 const Screws = () => {
   const measuring = useRef(false)
+  const [pending, setPending] = useState(false)
+  const [probeTwice, setProbeTwice] = useState(true)
   usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
-  const values = screwValues(screwText.use().text)
+  usePoll(refreshScrewHistory, 2500) // the saved session trail arrives after each completed measurement
+  const session = screwSession.use()
+  const history = screwHistory.use()
+  const busy = consoleStatus.use().busy
+  const tram = printer.use().data?.screws_session
+  const printerSession = Boolean(tram?.active)
+  const xyReady = Boolean(tram?.active && tram?.xy_homed)
+  const oneShot = screwValues(screwText.use().text)
+  const sessionReady = SCREW_KEYS.every(k => Number.isFinite(session.heights[k]))
+  const values = sessionReady ? session.heights : oneShot
   const plan = values ? screwPlan(values) : null
-  const rows: [string, string, string][] = [
-    ['FL', '30,30', '1'],
-    ['FR', '230,30', '2'],
-    ['RR', '230,225', '3'],
-    ['RL', '30,225', '4'],
-  ]
-  const plate: [number, string, string, string][] = [
-    [3, '4', 'RL', 'X30 Y225'],
-    [2, '3', 'RR', 'X230 Y225'],
-    [0, '1', 'FL', 'X30 Y30'],
-    [1, '2', 'FR', 'X230 Y30'],
-  ]
+  const locked = pending || busy
+  const rows = SCREW_CORNERS.map((c, i) => ({ ...c, i }))
+  const plate = [rows[3], rows[2], rows[0], rows[1]]
+  const statusKey: Key = busy
+    ? 'bed.tram_probing'
+    : printerSession
+      ? 'bed.tram_active'
+      : plan
+        ? 'bed.measured_results'
+        : 'bed.no_measurement'
+  const run = async (action: string, confirm?: string) => {
+    if (measuring.current) return false
+    measuring.current = true
+    setPending(true)
+    try {
+      if (confirm && !(await ask(confirm))) return false
+      const previous = await request('/api/console')
+      const nextGen = Number(previous.generation) + 1
+      if (action === 'screws:tram:start' || action === 'screws:measure') {
+        screwText.set({ text: '', minGeneration: nextGen })
+        screwSession.set({ heights: {}, previous: {}, pair: {}, appliedGeneration: 0, minGeneration: nextGen })
+      } else screwSession.set({ minGeneration: nextGen })
+      if (await control(action)) {
+        await Promise.all([refreshPrinter(), refreshConsole(), refreshScrewHistory()])
+        openPage('bed', 'screws')
+        return true
+      }
+      return false
+    } catch (e) {
+      notify(errText(e), 'error')
+      return false
+    } finally {
+      measuring.current = false
+      setPending(false)
+    }
+  }
+  const probeAction = (id: ScrewId) => `screws:tram:probe:${id}${probeTwice ? ':2' : ''}`
+  const cornerName: Record<ScrewId, Key> = {
+    FL: 'bed.corner_front_left',
+    FR: 'bed.corner_front_right',
+    RR: 'bed.corner_rear_right',
+    RL: 'bed.corner_rear_left',
+  }
+  const running = history.supported ? history.sessions.find(s => s.kind !== 'quick' && s.ended == null) : undefined
+  const moved = running ? referenceMove(running) : null
+  const since = moved?.sinceFullUm
+  const amount = since == null ? '' : microns(since / 1000)
+  const series = running ? cornerOffsets(running) : null
+  const earlier = history.sessions.filter(s => s.kind !== 'quick' && s.ended != null)
+  const quick = history.sessions.filter(s => s.kind === 'quick')
+  const exportHistory = (kind: 'json' | 'csv' | 'excel') => {
+    const payload = history.raw ?? { sessions: history.sessions }
+    if (kind === 'json')
+      saveText(
+        'screw-levelling-history.json',
+        `${JSON.stringify(payload, null, 2)}\n`,
+        'application/json;charset=utf-8'
+      )
+    else if (kind === 'excel')
+      saveText(
+        'screw-levelling-history-excel.csv',
+        screwHistoryCsv(history.sessions, 'excel'),
+        'text/csv;charset=utf-8'
+      )
+    else saveText('screw-levelling-history.csv', screwHistoryCsv(history.sessions), 'text/csv;charset=utf-8')
+  }
+  const clearHistory = async () => {
+    if (!(await ask(t('bed.tram_history_clear_confirm'), true))) return
+    try {
+      await post('/api/screws/history/clear')
+      screwHistory.set({ supported: true, sessions: [], raw: { sessions: [] } })
+    } catch (e) {
+      notify(errText(e), 'error')
+    }
+  }
   return (
     <Card id="screwFocus" class="flex-1">
       <CardHead
         icon="target"
         title="bed.four_screw_leveling"
-        end={<Tag tone="warning">{t(plan ? 'bed.measured_results' : 'bed.no_measurement')}</Tag>}
+        end={<Tag tone={printerSession ? 'ok' : 'warning'}>{t(statusKey)}</Tag>}
       />
       <p class="mb-3 text-xs text-muted">{t('bed.nozzle_load_cell_measurement_at')}</p>
+      <h3 class="mb-2 text-base font-semibold">{t('bed.tram_session')}</h3>
+      <p class="mb-3 text-xs text-muted">
+        {t('bed.tram_help')}
+        <br />
+        {tpl('bed.tram_settle', { seconds: SCREW_SETTLE_S })}
+      </p>
+      <Button
+        variant="primary"
+        class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
+        disabled={locked}
+        onClick={() => void run('screws:tram:start', tpl('bed.tram_start_confirm', { seconds: SCREW_SETTLE_S }))}
+      >
+        <Icon n="target" class="size-5" />
+        <span>
+          <strong class="block">{t('bed.tram_start')}</strong>
+          <small class="mt-1 block whitespace-normal text-xs font-normal">{t('bed.tram_start_hint')}</small>
+        </span>
+      </Button>
+      <h3 class="mt-3.5 mb-2 text-base font-semibold">{t('bed.tram_step_adjust')}</h3>
+      <p id="screw-need-session" class={cn('mb-2 text-xs text-muted', xyReady && 'hidden')}>
+        {t('bed.tram_need_session')}
+      </p>
       <div class="grid gap-3 cc2-sm:grid-cols-[.9fr_1.1fr]">
         <div class="rounded-lg border border-edge p-3">
-          <div class="relative grid h-48 grid-cols-2 grid-rows-2 rounded-xl border-2 border-muted">
+          <div class="relative grid min-h-56 grid-cols-2 rounded-lg border-2 border-muted">
             <i class="absolute inset-y-2 left-1/2 border-l border-dashed border-edge" />
             <i class="absolute inset-x-2 top-1/2 border-t border-dashed border-edge" />
-            {plate.map(([i, n, name, xy]) => {
-              const v = plan ? plan.shown[i] : 0,
+            {plate.map(c => {
+              const v = plan ? plan.shown[c.i] : 0,
                 tint = plan
                   ? `rgba(${v > 0 ? '20,207,233' : '255,123,134'},${(0.06 + Math.min(1, Math.abs(v) / 0.2) * 0.2).toFixed(2)})`
                   : undefined
               return (
                 <div
-                  key={n}
-                  class="relative flex flex-col items-center justify-center rounded-lg text-xs"
+                  key={c.id}
+                  class="relative flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-xs"
                   style={{ background: tint }}
                 >
-                  <b class="mb-0.5 grid size-6.5 place-items-center rounded-full border border-muted font-medium">
-                    {n}
-                  </b>
-                  {name}
-                  <small class="text-xs text-muted">{xy}</small>
-                  {plan && <span class="mt-0.5 text-[13px] font-bold">{microns(v)}</span>}
+                  <b class="grid size-6.5 place-items-center rounded-full border border-muted font-medium">{c.n}</b>
+                  <span class="px-1 text-center leading-tight">{t(cornerName[c.id])}</span>
+                  <small class="text-xs text-muted">
+                    X{c.x} Y{c.y}
+                  </small>
+                  {plan && <span class="font-bold">{microns(v)}</span>}
+                  <Button
+                    class="min-h-11 px-3 text-xs"
+                    disabled={!xyReady || locked}
+                    aria-describedby={xyReady ? undefined : 'screw-need-session'}
+                    aria-label={tpl('bed.tram_probe_corner', { corner: t(cornerName[c.id]) })}
+                    onClick={() => void run(probeAction(c.id))}
+                  >
+                    {t('bed.tram_probe')}
+                  </Button>
                 </div>
               )
             })}
           </div>
           <div class="mt-1.5 text-center text-xs text-muted">{t('bed.top_view_front_edge_at_bottom')}</div>
+          <div class="mt-1 text-center text-xs text-muted">{t('bed.measure_order')}</div>
           <div class="mt-2 flex justify-between text-xs text-muted">
             <span class="flex items-center gap-1">
-              <ArrowBigUp size={12} strokeWidth={1} /> Y (back)
+              <ArrowBigUp size={12} strokeWidth={1} /> {t('bed.axis_y_back')}
             </span>
             <span class="flex items-center gap-1">
-              <ArrowBigRight size={12} strokeWidth={1} /> X (right)
+              <ArrowBigRight size={12} strokeWidth={1} /> {t('bed.axis_x_right')}
             </span>
           </div>
         </div>
         <div>
           <div class="overflow-hidden rounded-md border border-edge">
-            <table class="w-full border-collapse text-xs">
+            <table class="w-full table-fixed border-collapse text-xs">
               <thead>
                 <tr class="text-left text-xs text-muted">
                   <th class="p-2 font-normal">{t('common.position')}</th>
@@ -625,20 +784,47 @@ const Screws = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(([name], i) => {
-                  const d = plan?.shown[i] ?? 0,
+                {rows.map(c => {
+                  const d = plan?.shown[c.i] ?? 0,
                     within = Math.abs(d) <= 0.02,
-                    ref = plan && !plan.useOptimized && i === 0
+                    ref = plan && !plan.useOptimized && c.i === 0
+                  const pair = session.pair[c.key]
+                  const prev = session.previous[c.key]
+                  const chain = series ? offsetChain(series[c.id]) : ''
+                  const showChain = Boolean(chain && series?.[c.id].some(v => Math.abs(Math.round(v * 1000)) >= 1))
+                  const shift = c.i === 0 ? moved?.change : ''
                   return (
-                    <tr key={name} class={cn('border-t border-edge', plan?.useOptimized && i === 0 && 'bg-amber/10')}>
-                      <td class="p-2 font-semibold">{name}</td>
-                      <td class="p-2">{plan ? (ref ? t('bed.reference') : microns(d)) : '—'}</td>
-                      <td class={cn('p-2', !within && plan && !ref && (d > 0 ? 'text-cyan' : 'text-red'))}>
+                    <tr key={c.id} class={cn('border-t border-edge', plan?.useOptimized && c.i === 0 && 'bg-amber/10')}>
+                      <td class="p-2 font-semibold break-words">{t(cornerName[c.id])}</td>
+                      <td class="p-2 break-words">
+                        {plan ? (ref ? t('bed.reference') : microns(d)) : '—'}
+                        {shift && (
+                          <small class="mt-0.5 block text-xs break-words text-muted">
+                            {tpl('bed.tram_reference_shift', { change: shift })}
+                          </small>
+                        )}
+                        {showChain && (
+                          <small class="mt-0.5 block text-xs break-words text-muted">
+                            {tpl('bed.tram_vs_front_left', { chain })}
+                          </small>
+                        )}
+                        {pair && (
+                          <small class="mt-0.5 block text-xs break-words text-muted">
+                            {tpl('bed.tram_drift', { amount: microns(pair.second - pair.first) })}
+                          </small>
+                        )}
+                        {history.supported === false && !pair && prev != null && session.heights[c.key] != null && (
+                          <small class="mt-0.5 block text-xs break-words text-muted">
+                            {tpl('bed.tram_previous', { value: microns(session.heights[c.key] - prev) })}
+                          </small>
+                        )}
+                      </td>
+                      <td class={cn('p-2 break-words', !within && plan && !ref && (d > 0 ? 'text-cyan' : 'text-red'))}>
                         {plan ? (
                           ref ? (
-                            '—'
+                            <span class="break-words">{t('bed.leave_screw')}</span>
                           ) : within ? (
-                            t('bed.within_tolerance')
+                            <span class="break-words">{t('bed.within_tolerance')}</span>
                           ) : d > 0 ? (
                             <span class="flex items-center gap-1">
                               <ArrowBigDown {...I} />
@@ -664,7 +850,7 @@ const Screws = () => {
             <span>
               {t('bed.3_samples_per_point')}
               <br />
-              {t('bed.front_left_reference')}
+              {t(plan?.useOptimized ? 'bed.front_left_reference_optimized' : 'bed.front_left_reference')}
               <br />
               {t('bed.mesh_capture_stays_separate')}
             </span>
@@ -681,22 +867,142 @@ const Screws = () => {
           })}
         </Notice>
       )}
-      <div class="mt-3">
-        <Button
-          onClick={async () => {
-            if (measuring.current) return
-            measuring.current = true
-            try {
-              if (!(await ask(t('bed.start_the_four_screw_load_cell')))) return
-              const previous = await request('/api/console')
-              screwText.set({ text: '', minGeneration: Number(previous.generation) + 1 })
-              if (await control('screws:measure')) openPage('bed', 'screws')
-            } catch (e) {
-              notify(errText(e), 'error')
-            } finally {
-              measuring.current = false
+      {since != null && Math.abs(since) <= 5 && (
+        <p class="mt-3.5 text-xs text-muted">{tpl('bed.tram_reference_stable', { amount })}</p>
+      )}
+      {since != null && Math.abs(since) > 5 && (
+        <Notice icon="info">
+          <span>
+            {tpl(plan?.useOptimized ? 'bed.tram_reference_expected' : 'bed.tram_reference_stale', { amount })}
+          </span>
+        </Notice>
+      )}
+      {history.supported && (
+        <div id="screw-history" class="mt-3.5">
+          <details class="rounded-md border border-edge px-3">
+            <summary class="flex min-h-11 cursor-pointer items-center text-base font-semibold">
+              {t('bed.tram_history')}
+            </summary>
+            {earlier.length === 0 ? (
+              <p class="pb-3 text-xs text-muted">{t('bed.tram_history_empty')}</p>
+            ) : (
+              earlier.map(s => {
+                const finals = cornerOffsets(s)
+                return (
+                  <div key={s.started} data-screw-kind="session" class="border-t border-edge py-2 text-xs">
+                    <div class="font-semibold">{new Date(s.started * 1000).toLocaleString()}</div>
+                    <div class="mt-1 flex flex-col gap-0.5">
+                      {SCREW_CORNERS.map(c => {
+                        const values = finals[c.id]
+                        const last = values.length ? values[values.length - 1] : null
+                        return (
+                          <span key={c.id} class="break-words">
+                            {t(cornerName[c.id])} {last == null ? '—' : microns(last)}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+            <div class="mt-3.5 border-t border-edge pt-3">
+              <h3 class="text-base font-semibold">{t('bed.tram_quick_history')}</h3>
+              {quick.length === 0 ? (
+                <p class="py-2 text-xs text-muted">{t('bed.tram_quick_empty')}</p>
+              ) : (
+                quick.map(s => {
+                  const sample = [...s.measurements].reverse().find(m => m.kind === 'quick')
+                  const offsets = sample ? measurementOffsets(sample) : null
+                  return (
+                    <div
+                      key={`${s.started}-${sample?.time ?? 0}`}
+                      data-screw-kind="quick"
+                      class="border-t border-edge py-2 text-xs"
+                    >
+                      <div class="font-semibold">{t('bed.tram_quick_entry')}</div>
+                      <div class="mt-0.5">{new Date((sample?.time || s.started) * 1000).toLocaleString()}</div>
+                      <div class="mt-1 flex flex-col gap-0.5">
+                        {SCREW_CORNERS.map(c => {
+                          const value = offsets?.[c.id]
+                          return (
+                            <span key={c.id} class="break-words">
+                              {t(cornerName[c.id])} {value == null ? '—' : microns(value)}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+            <div class="flex flex-wrap gap-2 border-t border-edge py-3">
+              <Button class="min-h-11" onClick={() => exportHistory('json')}>
+                {t('bed.tram_history_export_json')}
+              </Button>
+              <Button class="min-h-11" onClick={() => exportHistory('csv')}>
+                {t('bed.tram_history_export_csv')}
+              </Button>
+              <Button class="min-h-11" onClick={() => exportHistory('excel')}>
+                {t('bed.tram_history_export_csv_excel')}
+              </Button>
+              <Button class="min-h-11" variant="danger" disabled={locked} onClick={() => void clearHistory()}>
+                {t('bed.tram_history_clear')}
+              </Button>
+            </div>
+          </details>
+        </div>
+      )}
+      <div class="mt-3.5 flex flex-col gap-2">
+        <label class="flex min-h-11 items-center gap-2 text-xs text-muted">
+          <input
+            type="checkbox"
+            class="size-4 shrink-0 accent-cyan"
+            checked={probeTwice}
+            disabled={locked}
+            aria-label={t('bed.tram_probe_twice')}
+            onChange={e => setProbeTwice(e.currentTarget.checked)}
+          />
+          <span>
+            {t('bed.tram_probe_twice')}
+            <small class="mt-0.5 block font-normal whitespace-normal">{t('bed.tram_probe_twice_hint')}</small>
+          </span>
+        </label>
+        <div class="flex flex-col gap-2">
+          <Button
+            class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
+            disabled={!xyReady || locked}
+            aria-describedby={xyReady ? undefined : 'screw-need-session'}
+            onClick={() =>
+              void run(probeTwice ? 'screws:tram:check:2' : 'screws:tram:check', t('bed.tram_check_confirm'))
             }
-          }}
+          >
+            <span>
+              <strong class="block">{t('bed.tram_check')}</strong>
+              <small class="mt-1 block whitespace-normal text-xs font-normal">{t('bed.tram_check_hint')}</small>
+            </span>
+          </Button>
+          <Button
+            class="h-auto min-h-11 items-start justify-start px-3 py-2 text-left"
+            disabled={!printerSession || locked}
+            aria-describedby={printerSession ? undefined : 'screw-need-session'}
+            onClick={() => void run('screws:tram:end', t('bed.tram_end_confirm'))}
+          >
+            <span>
+              <strong class="block">{t('bed.tram_end')}</strong>
+              <small class="mt-1 block whitespace-normal text-xs font-normal">{t('bed.tram_end_hint')}</small>
+            </span>
+          </Button>
+        </div>
+      </div>
+      <h3 class="mt-3.5 text-base font-semibold">{t('bed.tram_one_shot')}</h3>
+      <p class="mt-1 text-xs text-muted">{t(printerSession ? 'bed.tram_one_shot_busy' : 'bed.tram_one_shot_help')}</p>
+      <div class="mt-2">
+        <Button
+          class="min-h-11"
+          disabled={printerSession || locked}
+          onClick={() => void run('screws:measure', t('bed.start_the_four_screw_load_cell'))}
         >
           <Icon n="target" class="size-5" />
           {t('bed.measure_screws')}

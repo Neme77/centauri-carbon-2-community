@@ -63,6 +63,7 @@ HARNESSES = {
     "test_pressure_advance_api.c": BACKEND,
     "test_quick_preferences.c": BACKEND,
     "test_pid_api.c": BACKEND,
+    "test_screw_tram_end.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,
     "test_plate_probe_result.c": BACKEND,
@@ -73,6 +74,7 @@ HARNESSES = {
     "test_queue_tracking.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
     "test_nozzle_target_limits.c": [ROOT / "src/control.c"],
+    "test_screw_history.c": [ROOT / "src/control.c"],
 }
 
 with tempfile.TemporaryDirectory(prefix="cc2-c-harness-") as temporary:

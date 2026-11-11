@@ -68,6 +68,23 @@ with tempfile.TemporaryDirectory(prefix="cc2-smoke-") as temporary:
         assert isinstance(health, dict) and health.get("version"), f"unexpected /api/health: {health}"
         status, _ = get(base + "/api/preferences")
         assert status == 200, f"/api/preferences returned {status}"
+        # The screw-tramming history lives next to the preferences and starts empty.
+        status, body = get(base + "/api/screws/history")
+        assert status == 200 and json.loads(body) == {"sessions": []}, f"/api/screws/history returned {status} {body!r}"
+        def clear_history(marker):
+            headers = {"X-CC2-Request": "1"} if marker else {}
+            req = urllib.request.Request(base + "/api/screws/history/clear", data=b"", method="POST", headers=headers)
+            try:
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return response.status, response.read()
+            except urllib.error.HTTPError as error:
+                return error.code, error.read()
+        status, _ = clear_history(False)
+        assert status == 403, f"history clear without the browser marker returned {status}"
+        assert not (state / "screw-history.txt").exists(), "refused history clear wrote the file"
+        status, body = clear_history(True)
+        assert status == 200 and json.loads(body) == {"ok": True}, f"history clear returned {status} {body!r}"
+        assert (state / "screw-history.txt").read_text(encoding="ascii") == "cc2-screw-history 1\n", "history file not written"
         status, _ = get(base + "/definitely-not-a-route")
         assert status == 404, f"unknown route returned {status}"
         # Browser remembering checks the supplied code without returning it or

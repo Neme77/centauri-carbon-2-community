@@ -87,6 +87,114 @@ export function previewPlugin(): Plugin {
   let scene: Scenario = 'printing'
   let speed = 100
   let flow = 100
+  let tramSession = false
+  let tramHeights: Record<string, number> = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+  type TramMeasure = {
+    time: number
+    kind: 'start' | 'probe' | 'check' | 'quick'
+    corner: string | null
+    twice: boolean
+    z: Record<string, number>
+    z2?: Record<string, number>
+  }
+  type TramSession = {
+    kind?: 'session' | 'quick'
+    started: number
+    ended: number | null
+    measurements: TramMeasure[]
+  }
+  const seedScrewHistory = (): TramSession[] => [
+    {
+      kind: 'quick',
+      started: 1762801500,
+      ended: 1762801680,
+      measurements: [
+        {
+          time: 1762801680,
+          kind: 'quick',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6821, FR: -0.676, RR: -0.8704, RL: -0.751 },
+        },
+      ],
+    },
+    {
+      started: 1762800000,
+      ended: 1762801200,
+      measurements: [
+        {
+          time: 1762800300,
+          kind: 'start',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6818, FR: -0.4938, RR: -0.8698, RL: -0.7508 },
+        },
+        {
+          time: 1762800900,
+          kind: 'check',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6818, FR: -0.6758, RR: -0.8698, RL: -0.7508 },
+        },
+      ],
+    },
+  ]
+  let screwSessions: TramSession[] = seedScrewHistory()
+  const screwNow = () => Math.floor(Date.now() / 1000)
+  const heightsZ = () => ({
+    FL: +tramHeights['30,30'].toFixed(4),
+    FR: +tramHeights['230,30'].toFixed(4),
+    RR: +tramHeights['230,225'].toFixed(4),
+    RL: +tramHeights['30,225'].toFixed(4),
+  })
+  const closeOpenScrew = () => {
+    for (const s of screwSessions) if (s.kind !== 'quick' && s.ended == null) s.ended = screwNow()
+  }
+  const trimScrewHistory = () => {
+    let sessions = 0
+    let quicks = 0
+    screwSessions = screwSessions.filter(s => {
+      if (s.kind === 'quick') {
+        if (quicks >= 10) return false
+        quicks++
+        return true
+      }
+      if (sessions >= 20) return false
+      sessions++
+      return true
+    })
+  }
+  let consoleJob = {
+    busy: false,
+    completed: false,
+    success: false,
+    generation: 0,
+    command: '',
+    output: '// CC2 UI preview: no hardware commands are executed.\n// All data is simulated.\n',
+  }
+  const tramCorner = (id: string) =>
+    ({
+      FL: { key: '30,30', x: 30, y: 30 },
+      FR: { key: '230,30', x: 230, y: 30 },
+      RR: { key: '230,225', x: 230, y: 225 },
+      RL: { key: '30,225', x: 30, y: 225 },
+    })[id]
+  const probeLines = (key: string, z: number) => {
+    const [x, y] = key.split(',')
+    return `${`// probe at ${x}.000,${y}.000 is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
+  }
+  const tramOutput = (keys: string[]) =>
+    `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n${keys.map(k => probeLines(k, tramHeights[k])).join('')}`
+  const finishTram = (command: string, keys: string[]) => {
+    consoleJob = {
+      busy: false,
+      completed: true,
+      success: true,
+      generation: consoleJob.generation + 1,
+      command,
+      output: tramOutput(keys),
+    }
+  }
   let preferences: Record<string, unknown> = { language: 'en', theme: 'dark' }
   let cameraViewer: string | null = null
   let deleted = new Set<string>()
@@ -498,6 +606,17 @@ export function previewPlugin(): Plugin {
     videos = {}
     deleted = new Set()
     cameraViewer = null
+    tramSession = false
+    tramHeights = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+    screwSessions = seedScrewHistory()
+    consoleJob = {
+      busy: false,
+      completed: false,
+      success: false,
+      generation: 0,
+      command: '',
+      output: '// CC2 UI preview: no hardware commands are executed.\n// All data is simulated.\n',
+    }
     resetPlates()
     resetSpools()
   }
@@ -583,6 +702,10 @@ export function previewPlugin(): Plugin {
       hardware: { camera: true, usb: true, light: 1, filament_detection: true, filament_detected: true },
       printer_error: null,
       camera_viewer: cameraViewer,
+      screws_session: {
+        active: tramSession && scene === 'idle',
+        xy_homed: tramSession && scene === 'idle',
+      },
       spools: {
         enabled: spoolsOn,
         revision: spoolRevision,
@@ -685,9 +808,9 @@ export function previewPlugin(): Plugin {
             case '/api/orca/pending-print':
               return reply({ pending: false })
             case '/api/console':
-              return reply({
-                output: '// CC2 UI preview: no hardware commands are executed.\n// All data is simulated.',
-              })
+              return reply({ ...consoleJob })
+            case '/api/screws/history':
+              return reply({ sessions: screwSessions })
             case '/api/gcode-files':
               return reply({
                 internal: {
@@ -852,6 +975,7 @@ export function previewPlugin(): Plugin {
         const simulated = [
           '/__preview/scenario',
           '/api/control',
+          '/api/screws/history/clear',
           '/api/preferences',
           '/api/canvas/auto-refill',
           '/api/canvas/unload',
@@ -1415,6 +1539,10 @@ export function previewPlugin(): Plugin {
               spoolRevision++
               return reply({ ok: true, remaining: found.remaining })
             }
+            if (path === '/api/screws/history/clear' && req.method === 'POST') {
+              screwSessions = []
+              return reply({ ok: true })
+            }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()
               const tuning = action.match(/^tune:(speed|flow):(\d+)$/)
@@ -1430,7 +1558,78 @@ export function previewPlugin(): Plugin {
               if (action === 'print:pause' && scene === 'printing') scene = 'paused'
               else if (action === 'print:resume' && scene === 'paused') scene = 'printing'
               else if (action === 'print:cancel' && ['printing', 'paused'].includes(scene)) scene = 'idle'
-              else return reply({ error: 'Operation disabled in isolated preview' }, 403)
+              else if (action.startsWith('screws:tram:') && scene === 'idle') {
+                if (action === 'screws:tram:start') {
+                  tramSession = true
+                  closeOpenScrew()
+                  screwSessions.unshift({
+                    kind: 'session',
+                    started: screwNow(),
+                    ended: null,
+                    measurements: [{ time: screwNow(), kind: 'start', corner: null, twice: false, z: heightsZ() }],
+                  })
+                  trimScrewHistory()
+                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28\n', ['30,30', '230,30', '230,225', '30,225'])
+                  return reply({ accepted: true, simulated: true })
+                }
+                if (!tramSession) return reply({ error: 'Screw tramming session is not active' }, 409)
+                const probe = action.match(/^screws:tram:probe:(FL|FR|RR|RL)(:2)?$/)
+                if (probe) {
+                  const corner = tramCorner(probe[1])
+                  if (!corner) return reply({ error: 'Unknown screw corner' }, 400)
+                  const first = tramHeights[corner.key] - 0.02
+                  const second = probe[2] ? first - 0.001 : first
+                  const open = screwSessions.find(s => s.ended == null)
+                  open?.measurements.push({
+                    time: screwNow(),
+                    kind: 'probe',
+                    corner: probe[1],
+                    twice: Boolean(probe[2]),
+                    z: { [probe[1]]: +first.toFixed(4) },
+                    ...(probe[2] ? { z2: { [probe[1]]: +second.toFixed(4) } } : {}),
+                  })
+                  tramHeights[corner.key] = second
+                  consoleJob = {
+                    busy: false,
+                    completed: true,
+                    success: true,
+                    generation: consoleJob.generation + 1,
+                    command: `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\nG1 X${corner.x} Y${corner.y}\n`,
+                    output: `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n${probeLines(corner.key, first)}${probe[2] ? probeLines(corner.key, second) : ''}`,
+                  }
+                  return reply({ accepted: true, simulated: true })
+                }
+                if (action === 'screws:tram:check' || action === 'screws:tram:check:2') {
+                  const twice = action.endsWith(':2')
+                  const z = heightsZ()
+                  screwSessions
+                    .find(s => s.ended == null)
+                    ?.measurements.push({
+                      time: screwNow(),
+                      kind: 'check',
+                      corner: null,
+                      twice,
+                      z,
+                      ...(twice ? { z2: z } : {}),
+                    })
+                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', ['30,30', '230,30', '230,225', '30,225'])
+                  return reply({ accepted: true, simulated: true })
+                }
+                if (action === 'screws:tram:end') {
+                  tramSession = false
+                  closeOpenScrew()
+                  consoleJob = {
+                    ...consoleJob,
+                    generation: consoleJob.generation + 1,
+                    command: 'M104 S0\nM140 S0',
+                    completed: true,
+                    success: true,
+                    busy: false,
+                  }
+                  return reply({ accepted: true, simulated: true })
+                }
+                return reply({ error: 'Unknown screw tramming action' }, 400)
+              } else return reply({ error: 'Operation disabled in isolated preview' }, 403)
               return reply({ accepted: true, simulated: true })
             }
             return reply({ error: 'Method unavailable in isolated preview' }, 405)

@@ -325,6 +325,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"runout\":\"/api/runout\","
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
+            "\"screws_history\":\"/api/screws/history\","
             "\"spools\":\"/api/spools\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
@@ -2832,13 +2833,15 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,pressure_advance,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
-        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status);
+        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status,
+        control_screws_session_active()?"true":"false",
+        control_screws_xy_homed(mqtt)?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -3446,6 +3449,53 @@ static int cell_active(void);
 static const char *pending_autosave_guard(void);
 
 #include "plates.h"
+#include "screw_history.h"
+/* Next to the UI preferences unless --screws-history names a file. */
+static const char *screws_history_path = NULL;
+static char screws_history_default_path[600];
+static screw_history_store screws_history;
+
+static void screws_history_init(void) {
+    if (!screws_history_path) {
+        const char *slash = strrchr(ui_preferences_path, '/');
+        int n = slash ? snprintf(screws_history_default_path, sizeof(screws_history_default_path), "%.*s/screw-history.txt",
+                                 (int)(slash - ui_preferences_path), ui_preferences_path)
+                      : snprintf(screws_history_default_path, sizeof(screws_history_default_path), "screw-history.txt");
+        screws_history_path = n > 0 && (size_t)n < sizeof(screws_history_default_path) ? screws_history_default_path
+                                                                                       : "./screw-history.txt";
+    }
+    if (!screw_history_load(&screws_history, screws_history_path))
+        fprintf(stderr, "Screw history unreadable, starting empty: %s\n", screws_history_path);
+}
+
+static int screws_history_store(void) {
+    if (screw_history_save(&screws_history, screws_history_path)) return 1;
+    fprintf(stderr, "Screw history could not be saved: %s\n", screws_history_path);
+    return 0;
+}
+
+static void screws_history_get_response(int fd) {
+    size_t length = 0;
+    char *body = screw_history_json(&screws_history, &length);
+    if (!body) {
+        const char *error = "{\"error\":\"Screw history is unavailable\"}\n";
+        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
+    respond(fd, 200, "OK", "application/json; charset=utf-8", body, length);
+    free(body);
+}
+
+static void screws_history_clear_response(int fd) {
+    memset(&screws_history, 0, sizeof(screws_history));
+    if (!screws_history_store()) {
+        const char *error = "{\"ok\":false,\"error\":\"Screw history could not be saved\"}\n";
+        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
+    const char *ok = "{\"ok\":true}\n";
+    respond(fd, 200, "OK", "application/json; charset=utf-8", ok, strlen(ok));
+}
 #include "spools.h"
 /* The exclusive sessions during which the request dispatcher refuses every printer change; the print
  * queue asks before an automatic start. Defined once the sessions themselves are. */
@@ -4070,6 +4120,54 @@ static void pid_status_response(int fd,console_state *console) {
     respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
+/* A session, and a shutdown that is still pending, live only in this process. The marker
+ * file tells the next process that one was left behind when this one was killed or
+ * replaced: without it the bed would stay at the session's 60 C with nobody to switch it
+ * off. It is kept in /tmp, which a reboot clears together with the heater targets. */
+static char screws_marker_default_path[64];
+static const char *screws_marker_path = NULL;
+static int screws_marker_present = -1; /* -1: not looked at yet */
+static int screws_resumed;             /* the pending shutdown comes from the marker */
+
+static void screws_marker_sync(void){
+    int want=control_screws_session_active()||control_screws_heaters_off_pending();
+    if(!screws_marker_path||want==screws_marker_present)return;
+    if(want){
+        int fd=open(screws_marker_path,O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW|O_CLOEXEC,0600);
+        if(fd<0)return; /* tried again on the next tick */
+        close(fd);
+    }else if(unlink(screws_marker_path)!=0&&errno!=ENOENT)return;
+    screws_marker_present=want;
+}
+/* At startup: a marker of our own from an earlier process makes the shutdown pending. */
+static void screws_marker_restore(int port){
+    if(!screws_marker_path){
+        snprintf(screws_marker_default_path,sizeof(screws_marker_default_path),"/tmp/cc2-control-%d-screw-session",port);
+        screws_marker_path=screws_marker_default_path;
+    }
+    struct stat info;
+    screws_marker_present=lstat(screws_marker_path,&info)==0;
+    if(!screws_marker_present||!S_ISREG(info.st_mode)||info.st_uid!=geteuid())return;
+    control_screws_restore_pending();
+    screws_resumed=1;
+}
+
+/* The session left the bed at 60 C, or an explicit end has not been confirmed:
+ * retry the shutdown on every tick until it is delivered while the printer is
+ * idle and the console free. A shutdown inherited from an earlier process is sent
+ * only while telemetry still shows the session's bed target: a bed that is off
+ * already, or that someone has set differently since, is left alone. */
+static void screws_heaters_off_tick(const mqtt_client *mqtt,int busy,int (*send)(const char *script),
+                                    int have_bed_target,double bed_target){
+    if(!control_screws_heaters_off_pending()){screws_resumed=0;return;}
+    if(busy||!mqtt->connected||!mqtt->registered||!mqtt->have_machine_status||mqtt->machine_status!=1)return;
+    if(screws_resumed){
+        if(!have_bed_target)return;
+        if(fabs(bed_target-60.0)>0.5){control_screws_heaters_off_sent();screws_resumed=0;return;}
+    }
+    if(send("TURN_OFF_HEATERS")==0){control_screws_heaters_off_sent();screws_resumed=0;}
+}
+
 static void control_response(int fd,console_state *console,mqtt_client *mqtt,const char *body,size_t body_len){
     char action[160],script[700],reason[256];
     while(body_len&&isspace((unsigned char)*body)){body++;body_len--;}
@@ -4080,6 +4178,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     memcpy(action,body,body_len);action[body_len]='\0';
     if(!strcmp(action,"system:emergency_stop")){
+        control_screws_invalidate();
         usb_start_cancel();
         /* Straight to the firmware's emergency_stop endpoint; the queued M112 below is only the fallback. */
         char stop_reason[160];
@@ -4184,9 +4283,23 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         else memcpy(script,next,(size_t)n+1);
     }
     if(!built||console_start(console,script,reason,sizeof(reason))!=0){
+        if(control_screws_is_tram(action)&&!strcmp(action,"screws:tram:start"))control_screws_invalidate();
         char escaped[300],response[420];json_escape(escaped,sizeof(escaped),reason);
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
+    }
+    control_screws_note_action(action);
+    if(!strcmp(action,"screws:measure")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_quick(generation);
+    }
+    if(control_screws_is_tram(action)&&strcmp(action,"screws:tram:end")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_job(generation);
+    }
+    if(!strcmp(action,"screws:tram:end")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_end(generation);
     }
     if(!strcmp(action,"motors:quiet")||!strcmp(action,"motors:normal")){
         motor_mode_requested=action[7]=='q'?"quiet":"normal";motor_mode_connection=telemetry.connections;
@@ -4522,6 +4635,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
         mesh_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/screws/history")==0) {
+        screws_history_get_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/history/clear")==0) {
+        screws_history_clear_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/plates")==0) {
         plates_get_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/create")==0) {
@@ -4713,13 +4830,14 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--update-runner") == 0 && i + 1 < argc) app_update_runner = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
+        else if (strcmp(argv[i], "--screws-history") == 0 && i + 1 < argc) screws_history_path = argv[++i];
         else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
         else if (strcmp(argv[i], "--queue") == 0 && i + 1 < argc) queue_path = argv[++i];
         else if (strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) printer_autosave_path = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--spools FILE] [--queue FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--screws-history FILE] [--spools FILE] [--queue FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
             return 2;
         }
     }
@@ -4750,6 +4868,8 @@ int main(int argc, char **argv) {
     drying_load();
     nx_load();
     plates_load();
+    screws_history_init();
+    screws_marker_restore(port);
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
     queue_load();
@@ -4821,6 +4941,36 @@ int main(int argc, char **argv) {
         uds_motion_light(&telemetry,&mqtt);
         idle_motors_tick(&mqtt,&console);
         motor_mode_tick(&mqtt,&console);
+        {
+            int completed=0,success=0,busy=0;unsigned long generation=0;int emergency;
+            pthread_mutex_lock(&console.lock);
+            completed=console.completed;success=console.success;busy=console.busy;
+            generation=console.generation;
+            pthread_mutex_unlock(&console.lock);
+            emergency=atomic_load(&console.emergency_sent);
+            time_t tram_now=time(NULL);
+            (void)control_screws_tick(&mqtt,completed,success,generation,emergency,tram_now);
+            /* Record the measured corners of a session job that just completed (#329). The
+             * console output still belongs to that job: nothing new starts within this tick. */
+            control_screws_job tram_job;
+            if(control_screws_take_finished(&tram_job)){
+                int recorded;
+                pthread_mutex_lock(&console.lock);
+                recorded=screw_history_record(&screws_history,&tram_job,console.output,console.output_len,tram_now);
+                pthread_mutex_unlock(&console.lock);
+                if(recorded)(void)screws_history_store();
+            }
+            if(screw_history_tick(&screws_history,control_screws_session_active(),tram_now))(void)screws_history_store();
+            /* Keep the session's bed at 60 C, but only while telemetry still shows that
+             * target: a target someone else set is left alone. */
+            double tram_bed=0;
+            if(control_screws_bed_renew_due(tram_now)&&!busy&&mqtt.have_machine_status&&mqtt.machine_status==1&&
+               uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
+                control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
+            int have_bed_target=uds_value(&telemetry,U_BG,&tram_bed);
+            screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script,have_bed_target,tram_bed);
+            screws_marker_sync();
+        }
         spools_tick(&mqtt);
         queue_tick(&mqtt);
         usb_start_tick(&mqtt);
