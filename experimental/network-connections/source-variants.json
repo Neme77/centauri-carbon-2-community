@@ -17,11 +17,6 @@
       "app_sha256": "1216ca3aaa6b43e61d5692538a494b238e2467bb156d6157f8802088e9ceb332",
       "reason": "The application HTTP bridge accepts the separately qualified .13 manager digest."
     },
-    "io.h": {
-      "helper_sha256": "9db377fe5f50ca62732e17e78496269e542cea4c810a13bfe9f023b9e937e8f7",
-      "app_sha256": "1acd8190ed4d49e41eac6e637edc335265fb97e77ac326d6c487573e1e961c6d",
-      "reason": "The helper uses zero initialisation accepted by the GCC 6.5 toolchain; the app copy uses equivalent designated initialisation."
-    },
     "native.h": {
       "helper_sha256": "f8589ba831e2fc16b76251026dae1759e2130cba080985479336b1cefeb08b67",
       "app_sha256": "fa9160874341f5452bf4c7771cf2866d92420d6611da6971d5a5cbc5f3dace68",
