@@ -63,6 +63,7 @@ HARNESSES = {
     "test_quick_preferences.c": BACKEND,
     "test_pid_api.c": BACKEND,
     "test_screw_tram_end.c": BACKEND,
+    "test_mesh_align.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,
     "test_plate_probe_result.c": BACKEND,

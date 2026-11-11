@@ -326,6 +326,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
             "\"screws_history\":\"/api/screws/history\","
+            "\"screws_align\":\"/api/screws/align\","
             "\"spools\":\"/api/spools\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
@@ -3944,6 +3945,8 @@ static void pid_status_response(int fd,console_state *console) {
     respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
+#include "mesh_align.h"
+
 /* The session left the bed at 60 C, or an explicit end has not been confirmed:
  * retry the shutdown on every tick until it is delivered while the printer is
  * idle and the console free. */
@@ -3977,6 +3980,8 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,409,"Conflict","application/json",error,strlen(error));return;
     }
     if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
+    /* The four-point measurements home, probe and set heater targets of their own. */
+    if(align_active() && !strncmp(action,"screws:",7)){plates_fail(fd,409,"End the mesh-guided alignment session first");return;}
     if(!strncmp(action,"grille:",7)){
         const char *native=uds_print_state(&telemetry);double nozzle,bed;
         /* No raw servo/PWM commands: native grille policy also owns the exhaust fan.
@@ -4436,8 +4441,16 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_measure_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/edit")==0) {
         plates_measure_edit_response(fd,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/screws/align")==0) {
+        align_get_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/measure")==0) {
+        align_measure_response(fd,mqtt,console,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/save")==0) {
+        align_save_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/end")==0) {
+        align_end_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate")==0) {
-        plates_calibrate_response(fd,mqtt,console,body,body_len);
+        align_plates_calibrate_response(fd,mqtt,console,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate/cancel")==0) {
         plates_calibrate_cancel_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/delete")==0) {
@@ -4747,6 +4760,7 @@ int main(int argc, char **argv) {
             if(control_screws_bed_renew_due(tram_now)&&!busy&&mqtt.have_machine_status&&mqtt.machine_status==1&&
                uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
                 control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
+            align_tick(&mqtt,emergency,tram_now);
             screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script);
         }
         spools_tick(&mqtt);

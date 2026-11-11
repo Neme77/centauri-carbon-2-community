@@ -353,6 +353,50 @@ result of each corner. Offsets against the front-left screw are computed by the 
 (`500` with `{"ok":false,"error":...}` when the file cannot be written). Both routes use
 the same authentication and browser guard as the other `/api` routes.
 
+## Mesh-guided screw alignment
+
+The Screw Levelling page fits a plane through a whole bed mesh and tells what each screw has to do
+(see `docs/CC2_CONTROL.md`); that analysis runs in the browser on `GET /api/mesh` and the plate library.
+The guided loop around it is a session on CC2 Control. Each round is the calibration job of
+`/api/plates/calibrate` without a plate: `G28` when the printer is not homed, `M140`, the wait until
+telemetry reads the temperature, the soak, then `BED_MESH_CALIBRATE PROFILE=<slot> BED_TEMP=<t>`. No
+shorter probing command is known for this firmware (a reduced `PROBE_COUNT` is untested), so every round
+measures the full mesh, and the mesh of the last round is the one saved at the end.
+
+Every change is a `POST` with a text body, one field per line. Without a final line `CONFIRM` a request
+sends nothing and answers `200` with `{"confirm_required":true,"commands":[...]}`, the G-code it would
+send, in order; with `CONFIRM` it acts. A request that is refused answers `4xx` with `{"ok":false,"error":...}`
+and has queued nothing, so it can be repeated.
+
+- `GET /api/screws/align` returns `active`, the completed `round` and the allowed `rounds`, `measuring`
+  (the session's calibration runs), `measured` (the side slot holds the session's last mesh), `side`,
+  `temp`, `soak` (minutes), `nozzle`, `idle_left` (seconds until an idle session ends), `ended` (how the
+  last session ended: `ended`, `saved`, `failed`, `cancelled`, `timeout`, `print` or `estop`),
+  `heaters_off_pending` and `calibration` (`stage`, soak seconds `remaining`, `bed`, `result`, `error`,
+  `detail` of the calibration job, as in `GET /api/plates`).
+- `POST /api/screws/align/measure` (`A|B`, temperature, soak minutes 0-60, nozzle or an empty line,
+  rounds 1-10) starts a session with its first measurement, or runs the next measurement of the running
+  session, whose settings it must repeat. It needs what `/api/plates/calibrate` needs, no screw-tramming
+  session and no emergency stop, and is refused once the session has used its rounds. `202` with
+  `{"started":true,"round","rounds"}`.
+- `POST /api/screws/align/save` (plate) makes the mesh of the last completed measurement the plate's
+  measurement at the session's temperature and nozzle, exactly as `/api/plates/measure` does
+  (`BED_MESH_PROFILE LOAD=<slot>` and `SAVE=cc2_<id>`, `SET_GCODE_OFFSET Z=`), and ends the session.
+  When it fails the session stays, so it can be repeated.
+- `POST /api/screws/align/end` ends the session. A measurement that has not begun probing is stopped
+  like `/api/plates/calibrate/cancel`; once probing has begun the request is refused (emergency stop).
+  Without a session it answers `200` and sends nothing.
+
+While a session is active, `/api/plates/calibrate` and the `screws:` actions of `/api/control` answer
+`409`. The session owns the heaters from its first measurement. When it ends by `end`, `save`, a failed
+or cancelled measurement, an emergency stop, or because nothing was requested for 20 minutes after the
+last measurement (the page was closed), the deferred `TURN_OFF_HEATERS` of the screw-tramming session is
+requested: it is retried until it is delivered while the printer is idle and the console free, and is
+dropped when a print starts or a heater action or a new calibration takes the heaters over. It is not
+requested when a print started (`print`) or when telemetry shows a bed target that is neither off nor the
+session's. The session does not repeat the bed target between rounds; the next round heats and soaks
+again. Requires printer validation.
+
 ## Heater PID calibration
 
 `GET /api/pid` returns the selected heater, busy/ready/failed flags and the last
