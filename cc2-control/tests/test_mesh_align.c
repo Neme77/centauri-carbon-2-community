@@ -119,7 +119,9 @@ static void loop(int emergency) {
     time_t now = time(NULL);
     (void)control_screws_tick(&mqtt, completed, success, generation, emergency, now);
     align_tick(&mqtt, emergency, now);
-    screws_heaters_off_tick(&mqtt, busy, fake_send);
+    double bed_target = 0; int have_bed_target = uds_value(&telemetry, U_BG, &bed_target);
+    screws_heaters_off_tick(&mqtt, busy, fake_send, have_bed_target, bed_target);
+    screws_marker_sync();
 }
 
 static char response[4096];
@@ -420,7 +422,32 @@ int main(void) {
     assert(call(CALIBRATE, "A\n60\n0") == 202 && plates_cal.stage == CAL_HEATING && !align.active);
     plates_cal_end(&mqtt, "cancelled", "", "", 0);
 
+    /* The process is killed during an alignment session: the marker carries the session's bed
+     * target, and the next process switches the heaters off only while the bed still shows it. */
+    static char marker_path[128]; snprintf(marker_path, sizeof(marker_path), "%s/session", directory);
+    screws_marker_path = marker_path; screws_marker_present = -1;
+    for (int taken = 0; taken < 2; taken++) {
+        reset();
+        assert(call(MEASURE, "A\n65\n2\n\n4\nCONFIRM") == 202 && align.active);
+        bed(65, 65); loop(0);
+        FILE *file = fopen(marker_path, "r"); assert(file);
+        int stored = 0; assert(fscanf(file, "%d", &stored) == 1 && stored == 65); fclose(file);
+        /* What the next process starts with: no session, nothing pending, only the file. */
+        memset(&align, 0, sizeof(align)); align.ended = "";
+        plates_cal_end(&mqtt, "", "", "", 0);
+        control_screws_heaters_taken();
+        screws_resumed = 0; screws_marker_bed = 0; shutdowns = 0;
+        screws_marker_restore(0);
+        assert(control_screws_heaters_off_pending() && screws_resumed_bed == 65);
+        bed(65, taken ? 60 : 65);
+        loop(0);
+        assert(shutdowns == (taken ? 0 : 1) && !control_screws_heaters_off_pending());
+        loop(0);
+        struct stat info; assert(lstat(marker_path, &info) != 0);
+    }
+    screws_marker_path = NULL;
+
     console_destroy(&console);
-    puts("PASS mesh-guided alignment session: listed before sent, no repeat after a refusal, failure, end, timeout, print, foreign bed target and emergency stop");
+    puts("PASS mesh-guided alignment session: listed before sent, no repeat after a refusal, failure, end, timeout, print, foreign bed target, emergency stop and a session left by a killed process");
     return 0;
 }

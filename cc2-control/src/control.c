@@ -108,6 +108,7 @@ void control_screws_heaters_off_sent(void){screws_heaters_off_pending=0;screws_e
  * timeout asks for it, and a calibration that heats the bed again takes the heaters over. */
 void control_screws_request_heaters_off(void){screws_heaters_off_pending=1;}
 void control_screws_heaters_taken(void){screws_heaters_off_pending=0;screws_end.pending=0;}
+void control_screws_restore_pending(void){screws_heaters_off_pending=1;}
 void control_screws_note_end(unsigned long generation){
     screws_end.pending=1;
     screws_end.generation=generation;

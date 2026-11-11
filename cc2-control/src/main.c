@@ -3947,13 +3947,71 @@ static void pid_status_response(int fd,console_state *console) {
 
 #include "mesh_align.h"
 
+/* A session, and a shutdown that is still pending, live only in this process. The marker
+ * file tells the next process that one was left behind when this one was killed or
+ * replaced: without it the bed would stay at the session's 60 C with nobody to switch it
+ * off. It is kept in /tmp, which a reboot clears together with the heater targets. */
+static char screws_marker_default_path[64];
+static const char *screws_marker_path = NULL;
+static int screws_marker_present = -1; /* -1: not looked at yet */
+static int screws_marker_bed;          /* the bed target written to the marker */
+static int screws_resumed;             /* the pending shutdown comes from the marker */
+static int screws_resumed_bed = 60;    /* the bed target the earlier process left */
+
+static void screws_marker_sync(void){
+    int want=control_screws_session_active()||control_screws_heaters_off_pending()||align_active();
+    /* The tramming session heats the bed to 60 C, the alignment session to its own setting. A
+     * shutdown that is only pending keeps the target of the session that asked for it. */
+    int bed=align_active()?align.temp:control_screws_session_active()?60:screws_marker_bed?screws_marker_bed:screws_resumed_bed;
+    if(!screws_marker_path||(want==screws_marker_present&&(!want||bed==screws_marker_bed)))return;
+    if(want){
+        char text[16];int n=snprintf(text,sizeof(text),"%d\n",bed);
+        int fd=open(screws_marker_path,O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW|O_CLOEXEC,0600);
+        if(fd<0)return; /* tried again on the next tick */
+        int written=n>0&&write(fd,text,(size_t)n)==n;
+        close(fd);
+        if(!written)return;
+        screws_marker_bed=bed;
+    }else{
+        if(unlink(screws_marker_path)!=0&&errno!=ENOENT)return;
+        screws_marker_bed=0;
+    }
+    screws_marker_present=want;
+}
+/* At startup: a marker of our own from an earlier process makes the shutdown pending. */
+static void screws_marker_restore(int port){
+    if(!screws_marker_path){
+        snprintf(screws_marker_default_path,sizeof(screws_marker_default_path),"/tmp/cc2-control-%d-screw-session",port);
+        screws_marker_path=screws_marker_default_path;
+    }
+    struct stat info;
+    screws_marker_present=lstat(screws_marker_path,&info)==0;
+    if(!screws_marker_present||!S_ISREG(info.st_mode)||info.st_uid!=geteuid())return;
+    /* The marker holds the bed target of the session it stood for; an empty one is the
+     * tramming session's 60 C. */
+    char text[16]={0};int fd=open(screws_marker_path,O_RDONLY|O_NOFOLLOW|O_CLOEXEC);
+    if(fd>=0){ssize_t n=read(fd,text,sizeof(text)-1);(void)n;close(fd);}
+    int bed=atoi(text);
+    screws_resumed_bed=bed>=30&&bed<=120?bed:60;
+    screws_marker_bed=screws_resumed_bed;
+    control_screws_restore_pending();
+    screws_resumed=1;
+}
+
 /* The session left the bed at 60 C, or an explicit end has not been confirmed:
  * retry the shutdown on every tick until it is delivered while the printer is
- * idle and the console free. */
-static void screws_heaters_off_tick(const mqtt_client *mqtt,int busy,int (*send)(const char *script)){
-    if(control_screws_heaters_off_pending()&&!busy&&mqtt->connected&&mqtt->registered&&
-       mqtt->have_machine_status&&mqtt->machine_status==1&&send("TURN_OFF_HEATERS")==0)
-        control_screws_heaters_off_sent();
+ * idle and the console free. A shutdown inherited from an earlier process is sent
+ * only while telemetry still shows the session's bed target: a bed that is off
+ * already, or that someone has set differently since, is left alone. */
+static void screws_heaters_off_tick(const mqtt_client *mqtt,int busy,int (*send)(const char *script),
+                                    int have_bed_target,double bed_target){
+    if(!control_screws_heaters_off_pending()){screws_resumed=0;return;}
+    if(busy||!mqtt->connected||!mqtt->registered||!mqtt->have_machine_status||mqtt->machine_status!=1)return;
+    if(screws_resumed){
+        if(!have_bed_target)return;
+        if(fabs(bed_target-screws_resumed_bed)>0.5){control_screws_heaters_off_sent();screws_resumed=0;return;}
+    }
+    if(send("TURN_OFF_HEATERS")==0){control_screws_heaters_off_sent();screws_resumed=0;}
 }
 
 static void control_response(int fd,console_state *console,mqtt_client *mqtt,const char *body,size_t body_len){
@@ -4663,6 +4721,7 @@ int main(int argc, char **argv) {
     nx_load();
     plates_load();
     screws_history_init();
+    screws_marker_restore(port);
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
     queue_load();
@@ -4761,7 +4820,9 @@ int main(int argc, char **argv) {
                uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
                 control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
             align_tick(&mqtt,emergency,tram_now);
-            screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script);
+            int have_bed_target=uds_value(&telemetry,U_BG,&tram_bed);
+            screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script,have_bed_target,tram_bed);
+            screws_marker_sync();
         }
         spools_tick(&mqtt);
         queue_tick(&mqtt);
