@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Read-only `GET /api/gcode-files/layer-path` returns thinned extrusion polylines for one G-code layer in bed coordinates, with the same path checks as the other G-code file routes. The Job bed-map dialog adds a **Layer path** pane (Live / previous / next, nozzle from `/api/printer`) that loads that thinned path instead of the G-code file. The current layer is requested on its own and drawn first; the previous layer comes from the browser cache or is loaded afterwards, rapid layer changes request only the layer they settle on, and a busy backend is retried instead of being shown as unavailable. Requested by **SVLoneStar** (#342).
 - Print queue: prepare jobs ahead with the print dialog's new **Add to queue** choice (every print setting plus a number of copies), then start each copy with one button from the Queue page, the Dashboard or the print-ended notice, without the dialog. A pre-flight check shows the file, the filament in each mapped slot, the side's mesh, the nozzle and the printer state; copies are counted on the printer, stopped copies are not counted, and the next copy waits for the operator unless the automatic start is chosen for a self-clearing bed, which first checks that each mapped Canvas slot still holds the file's material. Designed and implemented by **beanbo** (#320).
-- German interface translation (Deutsch), selectable in Settings → Language. All 1533 interface strings are translated with the informal “du”; technical terms such as Pressure Advance, Input Shaper, Load Cell, Spool, Canvas and Idle are kept.
+- German interface translation (Deutsch), selectable in Settings → Language. All 1533 interface strings are translated with the informal “du”; technical terms such as Pressure Advance, Input Shaper, Load Cell, Spool, Canvas and Idle are kept. Contributed by **lpgamerzockt-ops** (#332).
 
 ### Changed
 
@@ -29,8 +29,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Nord and Solarized Light keep cyan and red text readable on the bed-map dialog, including the selected object row and Exclude Selected Object. The same tokens meet the contrast on the rest of the interface.
-- Solarized Light muted text and amber status tags meet the 4.5:1 text contrast on the page background and on the tag fill.
+- Starting a print of a large file from USB no longer stops CC2 Control from answering: the file is scanned and copied on a worker thread, so the print dialog no longer reports “print not started” for a print that then starts. Reported and fixed by **lpgamerzockt-ops** (#344, #347).
+- Nord and Solarized Light keep cyan and red text readable on the bed-map dialog, including the selected object row and Exclude Selected Object. The same tokens meet the contrast on the rest of the interface. Contributed by **lpgamerzockt-ops** (#345).
+- Solarized Light muted text and amber status tags meet the 4.5:1 text contrast on the page background and on the tag fill. Contributed by **lpgamerzockt-ops** (#345).
 
 - Start preparing the qualified USB Ethernet link before the camera starts, and give the camera a bounded wait for carrier on Ethernet-enabled boots. Reported by **kalross** (#322).
 - Prepare USB Ethernet activation when the minimum EXHAUST feature is active. A full idle reboot loads both components, after which the normal Connections confirmation applies. Reported by **kalross** and reproduced by **Neme77** (#323).
