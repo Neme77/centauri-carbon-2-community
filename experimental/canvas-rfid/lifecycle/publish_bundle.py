@@ -26,7 +26,7 @@ def configuration(files,modes,before,app_binding=False):
         if (str(path)!=name or path.is_absolute() or '..' in path.parts or
             (len(path.parts)!=1 and name not in nested) or
             modes[name] not in [0o600,0o700] or len(data)>4*1024*1024):
-            raise ValueError('Unsafe component publisher entry')
+            raise ValueError(f'Unsafe component publisher entry {name!r}: {len(data)} bytes, mode {modes[name]:#o}')
         rows.append('{%s,%du,0%o,%s},'%(json.dumps(name),len(data),modes[name],json.dumps(sha(data))))
     dependencies=[]
     for path,digest,mode in before:

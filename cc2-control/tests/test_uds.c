@@ -94,6 +94,9 @@ int main(void){
  close(pair[1]);uds_process(&c);assert(c.fd==-1&&!c.ready&&!c.present&&!uds_print_state(&c)&&!uds_mesh_profile(&c));
  assert(c.disconnects==1&&!strcmp(c.last_disconnect,"peer_closed"));
  assert(c.report_sequence==4&&!strcmp(c.report_message,"\"Resume\""));
+ message(&c,"{\"report\":{\"error_code\":1263,\"error_level\":1}}");
+ message(&c,"{\"report\":{\"error_code\":2002,\"error_level\":3,\"message\":\"connect mqtt success\"}}");
+ assert(c.report_code==2002&&c.alert.code==1263&&c.alert.level==1&&c.alert.sequence+1==c.report_sequence);
  uds_init(&c);assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];
  assert(!fcntl(c.fd,F_SETFL,O_NONBLOCK));
  const char *bad="{broken\003";

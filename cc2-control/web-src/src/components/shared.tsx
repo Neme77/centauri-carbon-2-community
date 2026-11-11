@@ -34,7 +34,7 @@ export const Reading = ({
 
 export const FanBar = ({ label, pct }: { label: Key; pct: number }) => (
   <div class="my-2.5 grid grid-cols-[1fr_2.5rem_1fr] items-center gap-2 text-xs">
-    <span>{t(label)}</span>
+    <span class="text-muted">{t(label)}</span>
     <b>{pct}%</b>
     <div class="h-1.5 rounded bg-edge">
       <i class="block size-3 -translate-y-[3px] rounded-full bg-cyan" style={{ marginLeft: `${pct}%` }} />
@@ -193,7 +193,7 @@ export const Row = ({
   value: ComponentChildren
   class?: string
 }) => (
-  <div class={cn('flex justify-between gap-3 border-b border-edge py-2 text-xs', c)}>
+  <div class={cn('cc2-row flex justify-between gap-3 border-b border-edge py-2 text-xs', c)}>
     <span>{text ?? (label && t(label))}</span>
     <b class="min-w-0 text-right [overflow-wrap:anywhere]">{value}</b>
   </div>
@@ -201,10 +201,13 @@ export const Row = ({
 
 export const Progress = ({ pct }: { pct: number }) => (
   <div class="flex items-center gap-3">
-    <div class="h-3 flex-1 overflow-hidden rounded-full bg-edge">
-      <i class="block h-full rounded-full bg-cyan" style={{ width: `${pct}%` }} />
+    <div class="h-3 flex-1 overflow-hidden rounded-full bg-edge/70">
+      <i
+        class="cc2-progress-fill block h-full rounded-full bg-cyan transition-[width] duration-700"
+        style={{ width: `${pct}%` }}
+      />
     </div>
-    <strong class="text-lg">{Math.round(pct)}%</strong>
+    <strong class="min-w-[3.2ch] text-right text-xl font-semibold">{Math.round(pct)}%</strong>
   </div>
 )
 

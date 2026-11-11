@@ -34,3 +34,9 @@ experimental/native-display/thermal.awk text eol=lf
 
 # Signed catalogs are binary even when their signature contains no NUL byte.
 *.cc2catalog -text
+
+# The 4.4.4 qualification snapshot and native pins are byte-exact.
+# Preserve those reviewed bytes when staging/checking out the release sources.
+/cc2-control/** -text
+/builder/current/** -text
+/experimental/** -text

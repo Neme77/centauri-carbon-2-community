@@ -51,7 +51,7 @@ static void setup(int p[2]) {
     memset(&state,0,sizeof(state));__atomic_store_n(&server,NULL,__ATOMIC_SEQ_CST);
     initial_calls=initial_returns=connections=0;forwarded=start_count=connect_during_start=0;
     assert(!socketpair(AF_UNIX,SOCK_STREAM,0,p));clients[0]=p[0];clients[1]=-1;
-    memset(control_storage,0,sizeof(control_storage));memcpy(control_storage+0x34,&fixture_server,sizeof(fixture_server));
+    memset(control_storage,0,sizeof(control_storage));memcpy(control_storage+control_server_offset,&fixture_server,sizeof(fixture_server));
     native_assign=assign;native_accept=accept_native;native_send=transmit;native_broadcast=broadcast;native_start=start_native;
     event=(arm_string){cc2_insertion,(uint32_t)cc2_insertion_length,{0}};
 }
@@ -89,6 +89,7 @@ int main(void){
     close(p[0]);assert(!pthread_mutex_destroy(server_mutex(fixture_server)));
     /* Publish/broadcast synchronization, not merely pre-publication ordering. */
     for(unsigned i=0;i<200;i++) {
+        control_server_offset=i%2?CONTROL_SERVER_13:CONTROL_SERVER_07;
         setup(p);pthread_t t1,t2;assert(!pthread_create(&t1,NULL,startup_thread,NULL));
         assert(!pthread_create(&t2,NULL,publish_thread,NULL));assert(!pthread_join(t1,NULL));assert(!pthread_join(t2,NULL));
         expect_frame(p[1]);expect_empty(p[1]);assert(state.sent==1);finish(p);

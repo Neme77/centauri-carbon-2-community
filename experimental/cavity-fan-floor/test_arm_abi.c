@@ -36,23 +36,26 @@ __asm__(
     ".global state_return_end\nstate_return_end:\n");
 
 int main(void) {
-    unsigned char *page=mmap((void *)0x634000,4096,PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED,-1,0);
-    assert(page==(void *)0x634000);
-    memcpy(page+0xcc,continuation_start,(size_t)(continuation_end-continuation_start));
+    uintptr_t resume=CAVITY_CHOICE_ADDRESS+8;
+    void *choice_page=(void *)(resume&~(uintptr_t)4095);
+    unsigned char *page=mmap(choice_page,4096,PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED,-1,0);
+    assert(page==choice_page);
+    memcpy((void *)resume,continuation_start,(size_t)(continuation_end-continuation_start));
     __builtin___clear_cache((char *)page,(char *)page+4096);
     _Alignas(8) unsigned char owner[0x300]={0};double native=.25;memcpy(owner+0xc8,&native,8);
     assert(invoke_choice(owner,.1)==.6);
     assert(invoke_choice(owner,.9)==.9);
     assert(invoke_choice(owner,0)==.6);
     assert(isnan(invoke_choice(owner,NAN)));
-    unsigned char *state=mmap((void *)0x632000,4096,PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED,-1,0);
-    assert(state==(void *)0x632000);
+    void *state_page=(void *)(CAVITY_STATE_ADDRESS&~(uintptr_t)4095);
+    unsigned char *state=mmap(state_page,4096,PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED,-1,0);
+    assert(state==state_page);
     unsigned char prefix[8]={0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2};
-    memcpy(state+0x8b4,prefix,8);
-    memcpy(state+0x8bc,state_return_start,(size_t)(state_return_end-state_return_start));
+    memcpy((void *)CAVITY_STATE_ADDRESS,prefix,8);
+    memcpy((void *)(CAVITY_STATE_ADDRESS+8),state_return_start,(size_t)(state_return_end-state_return_start));
     unsigned char *trampoline=mmap(0,16,PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     assert(trampoline!=MAP_FAILED);memcpy(trampoline,prefix,8);
-    uint32_t jump[2]={0xe51ff004,0x6328bc};memcpy(trampoline+8,jump,8);
+    uint32_t jump[2]={0xe51ff004,CAVITY_STATE_ADDRESS+8};memcpy(trampoline+8,jump,8);
     __builtin___clear_cache((char *)state,(char *)state+4096);
     __builtin___clear_cache((char *)trampoline,(char *)trampoline+16);
     int (*call)(void *,void *);memcpy(&call,&trampoline,sizeof(call));assert(call(owner,0)==42);

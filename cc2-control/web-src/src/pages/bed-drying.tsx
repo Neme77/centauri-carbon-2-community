@@ -59,7 +59,8 @@ export const BedDrying = () => {
     (!preheat || (Number.isFinite(session.chamber) && session.chamber < Number(chamber))) &&
     data?.extruder?.target === 0 &&
     data?.heater_bed?.target === 0 &&
-    !session.active
+    !session.active &&
+    session.reason !== 'restore_pending'
   const manualStopped =
     ok &&
     data?.connected &&
@@ -221,19 +222,23 @@ export const BedDrying = () => {
         <Button disabled={busy || !ok || !session.active || !code.trim()} onClick={() => void send('stop')}>
           {t(preheat ? 'preheat.stop' : 'drying.stop')}
         </Button>
-        <span role="status" aria-live="polite">
-          {t(!ok ? 'drying.unavailable' : stages[session.state] || 'drying.interrupted')}
-        </span>
+        <div class="flex min-w-0 max-w-full flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span role="status" aria-live="polite">
+            {t(!ok ? 'drying.unavailable' : stages[session.state] || 'drying.interrupted')}
+          </span>
+          <p class="min-w-0 text-muted [overflow-wrap:anywhere]" data-drying-readback>
+            {preheat &&
+              Number.isFinite(session.chamber) &&
+              `${t('preheat.chamber')} ${session.chamber.toFixed(1)} / ${session.active ? session.chamber_target : Number(chamber)} °C · `}
+            {preheat && t('preheat.bed')}{' '}
+            {session.fresh && ok
+              ? `${session.bed.toFixed(1)} / ${session.target.toFixed(0)} °C`
+              : t('drying.unavailable')}
+            {preheat && session.active && ` · ${t('preheat.fan')} ${Math.round((session.fan / 255) * 100)} %`}
+            {session.state === 'holding' && ` · ${t('drying.remaining')}: ${duration(session.remaining)}`}
+          </p>
+        </div>
       </div>
-      <p class="mt-2 text-muted" data-drying-readback>
-        {preheat &&
-          Number.isFinite(session.chamber) &&
-          `${t('preheat.chamber')} ${session.chamber.toFixed(1)} / ${session.active ? session.chamber_target : Number(chamber)} °C · `}
-        {preheat && t('preheat.bed')}{' '}
-        {session.fresh && ok ? `${session.bed.toFixed(1)} / ${session.target.toFixed(0)} °C` : t('drying.unavailable')}
-        {preheat && session.active && ` · ${t('preheat.fan')} ${Math.round((session.fan / 255) * 100)} %`}
-        {session.state === 'holding' && ` · ${t('drying.remaining')}: ${duration(session.remaining)}`}
-      </p>
       {preheat && session.active && session.state === 'holding' && (
         <p
           class={`mt-2 font-semibold ${session.levelled ? 'text-amber' : 'text-green'}`}
@@ -258,11 +263,13 @@ export const BedDrying = () => {
         session.reason !== 'none' && (
           <p class="mt-2 text-muted">
             {t(
-              manualStopped
-                ? 'drying.manual_stopped'
-                : session.reason === 'elapsed'
-                  ? 'drying.expired'
-                  : 'drying.interrupted_hint'
+              session.reason === 'restore_pending'
+                ? 'drying.restore_pending'
+                : manualStopped
+                  ? 'drying.manual_stopped'
+                  : session.reason === 'elapsed'
+                    ? 'drying.expired'
+                    : 'drying.interrupted_hint'
             )}
           </p>
         )

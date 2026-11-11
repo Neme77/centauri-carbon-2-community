@@ -2732,6 +2732,17 @@ static void camera_claim_response(int fd, const char *body, size_t length) {
 
 static void spools_summary(char *out, size_t cap);
 
+static void printer_report_json(char *out,size_t size,unsigned long sequence,int code,int level,
+                                const char *message,struct timespec identity,struct timespec received) {
+    if(!sequence){snprintf(out,size,"null");return;}
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC,&now);
+    long age=now.tv_sec-received.tv_sec;
+    snprintf(out,size,
+        "{\"event_id\":\"%ld.%09ld-%lu\",\"sequence\":%lu,\"code\":%d,\"level\":%d,\"message\":%s,\"age\":%ld}",
+        (long)identity.tv_sec,identity.tv_nsec,sequence,sequence,code,level,message,age<0?0:age);
+}
+
 static void printer_response(int fd, const mqtt_client *mqtt) {
     /* Render from the two caches without copying MQTT transport/history buffers. */
     double live;
@@ -2743,7 +2754,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
-    char body[9216],filename[520],state[140],uuid[260],axes[40],drying_status[1024];
+    char body[10496],filename[520],state[140],uuid[260],axes[40],drying_status[1024];
     drying_status_json(drying_status,sizeof(drying_status),mqtt);
     char native_job[1400]="null",native_filename[1100],native_state[40],native_seconds[40];
     const char *native=uds_print_state(&telemetry);double native_duration;
@@ -2804,16 +2815,11 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     char printer_error[160]="null";
     if(mqtt->reply_errors)snprintf(printer_error,sizeof(printer_error),"{\"sequence\":%lu,\"method\":%d,\"code\":%d,\"age\":%ld}",
         mqtt->reply_errors,mqtt->reply_error_method,mqtt->reply_error_code,(long)(now-mqtt->reply_error_time));
-    char printer_report[1280]="null";
-    if(telemetry.report_sequence){
-        struct timespec received_now;clock_gettime(CLOCK_MONOTONIC,&received_now);
-        long report_age=received_now.tv_sec-telemetry.report_received.tv_sec;
-        snprintf(printer_report,sizeof(printer_report),
-            "{\"event_id\":\"%ld.%09ld-%lu\",\"sequence\":%lu,\"code\":%d,\"level\":%d,\"message\":%s,\"age\":%ld}",
-            (long)telemetry.report_identity.tv_sec,telemetry.report_identity.tv_nsec,telemetry.report_sequence,
-            telemetry.report_sequence,telemetry.report_code,telemetry.report_level,
-            telemetry.report_message,report_age<0?0:report_age);
-    }
+    char printer_report[1280],printer_alert[1280];
+    printer_report_json(printer_report,sizeof(printer_report),telemetry.report_sequence,
+        telemetry.report_code,telemetry.report_level,telemetry.report_message,telemetry.report_identity,telemetry.report_received);
+    printer_report_json(printer_alert,sizeof(printer_alert),telemetry.alert.sequence,
+        telemetry.alert.code,telemetry.alert.level,telemetry.alert.message,telemetry.alert.identity,telemetry.alert.received);
     char motor_mode[16]="null";
     if(motor_mode_requested&&telemetry.fd>=0&&telemetry.connections==motor_mode_connection)
         snprintf(motor_mode,sizeof(motor_mode),"\"%s\"",motor_mode_requested);
@@ -2835,12 +2841,12 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s}}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_alert\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,pressure_advance,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
-        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
+        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,printer_alert,
         printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status,
         control_screws_session_active()?"true":"false",
         control_screws_xy_homed(mqtt)?"true":"false");
@@ -4313,6 +4319,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
 }
 
 static int connections_busy(void);
+static int installer_native_observation(int canvas_only,int canvas_transfer);
 #include "rfid_http.h"
 #include "rfid_lifecycle_http.h"
 
@@ -4351,7 +4358,6 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 }
 
 static int installer_native_status(int canvas_only);
-static int installer_native_observation(int canvas_only,int canvas_transfer);
 #include "app_updates.h"
 #include "app_update_catalog.h"
 #include "bed_drying.h"
@@ -4564,6 +4570,12 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/server/database/item")==0 &&
                query && strcmp(query,"namespace=lane_data")==0) {
         orca_lane_data_response(fd, mqtt);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/rfid/lifecycle/scan-readiness")==0) {
+        int ready=rfid_native_scan()&&rfid.child&&rfid.native_child&&!rfid.cancelled&&
+            maintenance_barrier_active()&&rfid_same_identity()&&rfid_native_scan_available(console)&&
+            installer_native_observation(1,0)==0&&installer_native_observation(0,1)==0;
+        const char *reply=ready?"{\"ready\":true}":"{\"ready\":false}";
+        respond(fd,200,"OK","application/json; charset=utf-8",reply,strlen(reply));
     } else if (strcmp(method,"GET")==0 && (strcmp(path,"/api/rfid/lifecycle/restore-readiness")==0||
                strcmp(path,"/api/rfid/lifecycle/host-restore-readiness")==0)) {
         int require_canvas=strcmp(path,"/api/rfid/lifecycle/host-restore-readiness")==0;
@@ -4943,6 +4955,7 @@ int main(int argc, char **argv) {
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
         if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
         uds_motion_light(&telemetry,&mqtt);
+        quiet_disable_tick(&console);
         idle_motors_tick(&mqtt,&console);
         motor_mode_tick(&mqtt,&console);
         {

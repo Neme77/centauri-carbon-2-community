@@ -11,6 +11,10 @@ static int connections_result = -1;
 static int connections_helper_digest(const char *digest) {
   if (!strcmp(digest, CC2_CONNECTIONS_HELPER_SHA))
     return 1;
+#ifdef CC2_CONNECTIONS_STOCK13_HELPER_SHA
+  if (!strcmp(digest, CC2_CONNECTIONS_STOCK13_HELPER_SHA))
+    return 1;
+#endif
 #ifdef CC2_CONNECTIONS_PREVIEW_HELPER_SHA
   return !strcmp(digest, CC2_CONNECTIONS_PREVIEW_HELPER_SHA);
 #else

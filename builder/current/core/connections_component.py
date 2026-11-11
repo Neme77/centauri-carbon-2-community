@@ -106,6 +106,13 @@ NATIVE = {
     'etc/init.d/cc2-camera-launch': 'f05accc97f0195cf4cf481b53b643902424183bb335a27f42e6069a625813c6f',
     'etc/init.d/cc2-reactor-launch': '8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636373fdaac43',
 }
+STOCK_13 = {
+    name: digest for name, digest in NATIVE.items()
+    if name not in ('etc/init.d/cc2-camera-launch', 'etc/init.d/cc2-reactor-launch')
+}
+STOCK_13.update({
+    'etc/init.d/printer': '6e7c875d40386854028779fdd1573c45a5ce4a69aba828227fff1bb568f7020f',
+})
 ROOT = 'opt/inst/cc2-connections'
 MODULES = 'lib/modules/5.4.61/cc2'
 
@@ -126,12 +133,17 @@ def hook_transform(text, mode, files):
     return transform(files['prepare-hooks.awk'], text.encode(), mode).decode()
 
 
-def payload(root, files):
+def check_native(root, native):
     root = Path(root)
-    for name, expected in NATIVE.items():
+    for name, expected in native.items():
         path = root / name
         if path.is_symlink() or not path.is_file() or sha(path.read_bytes()) != expected:
             raise RuntimeError('Connections firmware native profile differs: ' + name)
+
+
+def payload(root, files, *, native=NATIVE, boot_delegates=None):
+    root = Path(root)
+    check_native(root, native)
     result = dict(files)
     original = {
         'native-udhcpc_wlan0': 'etc/wifi/udhcpc_wlan0',
@@ -141,11 +153,11 @@ def payload(root, files):
     }
     for name, path in original.items():
         result[name] = (root / path).read_bytes()
-    for name, path, mode in (
+    for name, path, mode in (() if boot_delegates is not None else (
             ('camera-entry.sh', 'opt/inst/cc2-camera-r2/boot-camera.sh', 'camera-entry'),
             ('reactor-entry.sh', 'opt/inst/cc2-reactor/launcher.sh', 'reactor-entry'),
             ('camera-launch.sh', 'etc/init.d/cc2-camera-launch', 'camera-launch'),
-            ('reactor-launch.sh', 'etc/init.d/cc2-reactor-launch', 'reactor-launch')):
+            ('reactor-launch.sh', 'etc/init.d/cc2-reactor-launch', 'reactor-launch'))):
         result[name] = transform(files['prepare-hooks.awk'], (root / path).read_bytes(), mode)
     result['native-wan.sh'] = transform(files['native-wan-policy.awk'], result['native-set_lan.sh'])
     # Before UDISK seeding, native DHCP must still have a complete immutable
@@ -167,6 +179,10 @@ def payload(root, files):
         'etc/init.d/cc2-network-manager': 'init.sh',
         'etc/hotplug.d/net/90-cc2-network-manager': 'hotplug.sh',
     }
+    if boot_delegates is not None:
+        for path, (name, data) in boot_delegates.items():
+            result[name] = data
+            hooks[path] = name
     startup = {path: sha(result[name]) for path, name in hooks.items()}
     startup['opt/usr/wifi/udhcpc_wlan0'] = sha(result['wifi-client.sh'])
     result['startup.sha256'] = ''.join(
@@ -176,10 +192,13 @@ def payload(root, files):
     return result, hooks
 
 
-def install(root, archive):
+def install(root, archive, *, lan_preview=False, native=NATIVE, overrides=None,
+            boot_delegates=None):
     root = Path(root)
-    files = read_runtime(archive)
-    prepared, hooks = payload(root, files)
+    files = read_runtime(archive, lan_preview=lan_preview)
+    if overrides is not None:
+        files.update(overrides)
+    prepared, hooks = payload(root, files, native=native, boot_delegates=boot_delegates)
     destination = root / ROOT
     link = root / 'etc/rc.d/S23cc2-network-manager'
     if destination.exists() or destination.is_symlink():
@@ -216,11 +235,11 @@ def install(root, archive):
     return prepared, hooks
 
 
-def audit(root, prepared, hooks):
+def audit(root, prepared, hooks, *, native=NATIVE):
     root = Path(root)
     for name in ('bin/wifi_daemon','lib/modules/5.4.61/aic8800_fdrv.ko'):
         path = root / name
-        if path.is_symlink() or not path.is_file() or sha(path.read_bytes()) != NATIVE[name]:
+        if path.is_symlink() or not path.is_file() or sha(path.read_bytes()) != native[name]:
             raise RuntimeError('Original Wi-Fi firmware component changed: ' + name)
     for name, data in prepared.items():
         path = root / ROOT / name
@@ -243,7 +262,7 @@ def audit(root, prepared, hooks):
             if path.stat().st_mode & 0o777 != 0o644:
                 raise RuntimeError('Firmware kernel module permissions differ: ' + name)
     init = root / 'etc/init.d/printer'
-    if sha(init.read_bytes()) != NATIVE['etc/init.d/printer'] or init.stat().st_mode & 0o777 != 0o755:
+    if sha(init.read_bytes()) != native['etc/init.d/printer'] or init.stat().st_mode & 0o777 != 0o755:
         raise RuntimeError('Native printer startup changed')
     link = root / 'etc/rc.d/S23cc2-network-manager'
     if not link.is_symlink() or str(link.readlink()) != '../init.d/cc2-network-manager':

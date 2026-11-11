@@ -12,6 +12,8 @@ export type ExperimentState = {
   nozzle_expansion?: boolean
   quiet_motors: boolean
   normal_confirmed: boolean
+  quiet_disable_ready?: boolean
+  quiet_disable_state?: 'idle' | 'running' | 'failed'
   cli_canvas: boolean
 }
 export const experimental = store({ data: null as ExperimentState | null, ok: false })

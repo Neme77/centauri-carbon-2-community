@@ -63,12 +63,12 @@ export const Dialog = ({
     // biome-ignore lint/a11y/noStaticElementInteractions: a click on the backdrop is a pointer shortcut; Escape is the keyboard path
     <div
       role="presentation"
-      class={`fixed inset-0 z-50 grid place-items-center bg-black/80 p-4${sheet ? ' cc2-dialog-sheet' : ''}`}
+      class={`fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 [backdrop-filter:blur(6px)]${sheet ? ' cc2-dialog-sheet' : ''}`}
       onClick={e => e.target === e.currentTarget && closeOnBackdrop && !locked && onClose?.()}
     >
       <div
         ref={box}
-        class={`max-h-[92vh] overflow-auto rounded-xl border border-edge bg-panel p-6 shadow-2xl ${className}`}
+        class={`cc2-dialog max-h-[92vh] overflow-auto rounded-xl border border-edge bg-panel p-6 shadow-pop ${className}`}
         style={{ width: `min(${width}px,96vw)` }}
         role="dialog"
         aria-modal="true"

@@ -1,3 +1,6 @@
+import { Fragment } from 'preact'
+import { openJobs, queue, refreshQueue } from '@/lib/queue'
+import { usePoll } from '@/lib/poll'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { cn } from '@/lib/utils'
 import { CanvasIcon } from '@/components/canvas-icon'
@@ -29,8 +32,6 @@ import { control, errText, notify, post, toast } from '@/lib/api'
 import { ask } from '@/lib/confirm'
 import { printerError, printerRequest, statusTitle } from '@/lib/machine'
 import { pandabreath, pandabreathName } from '@/lib/pandabreath'
-import { openJobs, queue, refreshQueue } from '@/lib/queue'
-import { usePoll } from '@/lib/poll'
 import {
   consoleStatus,
   refreshPrinter,
@@ -61,6 +62,9 @@ const items: [Page, NavIcon, Key][] = [
   ['console', SquareTerminal, 'common.console'],
   ['settings', Settings, 'common.settings'],
 ]
+
+// A separator is drawn before these pages: monitor | operate | calibrate | system.
+const groupStart: Page[] = ['control', 'bed', 'console']
 
 // Hold for one second to trigger the emergency stop; a plain click only explains how.
 const EStop = () => {
@@ -102,7 +106,7 @@ const EStop = () => {
         e.preventDefault()
         if (!fired.current) notify(t('app.hold_emergency_stop_for_one_second'))
       }}
-      class="cc2-emergency-stop relative flex h-11 shrink-0 touch-none select-none items-center justify-center overflow-hidden rounded-md border border-red bg-red/10 px-2 font-bold text-red md:px-3"
+      class="cc2-emergency-stop relative flex h-11 shrink-0 touch-none select-none items-center justify-center overflow-hidden rounded-lg border border-red bg-red/10 px-2 font-bold text-red md:px-3"
     >
       <i
         class={cn(
@@ -111,7 +115,7 @@ const EStop = () => {
         )}
       />
       <span class="relative flex items-center gap-1.5">
-        <TriangleAlert size={20} strokeWidth={1} />
+        <TriangleAlert size={20} strokeWidth={1.75} />
         <span class="cc2-header-action-label hidden md:inline">{t('app.emergency_stop')}</span>
       </span>
     </button>
@@ -142,22 +146,21 @@ const RestartPrinter = () => {
       onClick={restart}
       title={t(available ? 'recovery.restart' : 'recovery.requires_emergency')}
       aria-label={t('recovery.restart')}
-      class="flex h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-edge px-3 disabled:opacity-40 md:px-4"
+      class="flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-edge px-3 text-muted hover:enabled:text-fg disabled:opacity-40 md:px-4"
     >
-      <RotateCw size={20} strokeWidth={1} />
+      <RotateCw size={20} strokeWidth={1.75} />
       <span class="cc2-header-action-label hidden md:inline">{t('recovery.restart')}</span>
     </button>
   )
 }
 
 export const Sidebar = () => {
+  usePoll(refreshQueue, 20000)
+  const queued = openJobs(queue.use().data).length
   const { page } = nav.use()
   const h = health.use().data
   // Trays whose new filament still waits for "which spool is this?".
   const questions = printer.use().data?.spools?.questions?.length || 0
-  // Jobs waiting in the print queue; the count is refreshed slowly here and fast on the Queue page.
-  usePoll(refreshQueue, 20000)
-  const queued = openJobs(queue.use().data).length
   const { collapsed } = menu.use()
   const { open } = mobileMenu.use()
   const pb = pandabreath.use() // optional page, off unless turned on; named after the firmware
@@ -227,41 +230,43 @@ export const Sidebar = () => {
             .map(([p, Glyph, item]) => {
               const label = p === 'pandabreath' ? pandabreathName(pb) : item
               return (
-                <a
-                  key={p}
-                  href={`#${p}`}
-                  onClick={() => mobileMenu.set({ open: false })}
-                  aria-current={page === p ? 'page' : undefined}
-                  title={t(label)}
-                  class={cn(
-                    'relative flex h-13 items-center gap-3.5 border-l-4 border-transparent pl-[14px] hover:bg-field', // same icon x collapsed or not
-                    page === p && 'border-cyan bg-field text-cyan'
-                  )}
-                >
-                  <Glyph size={24} strokeWidth={1} class="shrink-0" />
-                  {p === 'spools' && questions > 0 && (
-                    <i
-                      class="absolute left-9 top-2.5 size-2.5 rounded-full bg-amber"
-                      title={t('spools.question_tag')}
-                      aria-hidden="true"
-                    />
-                  )}
-                  {p === 'queue' && queued > 0 && (
-                    <span
-                      data-queue-count
-                      class="absolute left-8 top-2 min-w-4 rounded-full bg-cyan px-1 text-center text-xs font-semibold leading-4 text-ink"
-                      aria-hidden="true"
-                    >
-                      {queued}
-                    </span>
-                  )}
-                  {/* Always rendered: the sidebar width transition clips it progressively; invisible only starts once collapsed. */}
-                  <span
-                    class={cn('hidden whitespace-nowrap transition-[visibility] md:inline', collapsed && 'invisible')}
+                <Fragment key={p}>
+                  {groupStart.includes(p) && <hr key={`sep-${p}`} class="cc2-nav-sep" />}
+                  <a
+                    href={`#${p}`}
+                    onClick={() => mobileMenu.set({ open: false })}
+                    aria-current={page === p ? 'page' : undefined}
+                    title={t(label)}
+                    class={cn(
+                      'cc2-nav-link relative flex h-11 items-center gap-3 border-l-4 border-transparent pl-[14px] text-[13.5px] hover:bg-field', // same icon x collapsed or not
+                      page === p && 'border-cyan bg-field text-cyan'
+                    )}
                   >
-                    {t(label)}
-                  </span>
-                </a>
+                    <Glyph size={20} strokeWidth={1.75} class="shrink-0" />
+                    {p === 'spools' && questions > 0 && (
+                      <i
+                        class="absolute left-7 top-2 size-2.5 rounded-full bg-amber ring-2 ring-panel"
+                        title={t('spools.question_tag')}
+                        aria-hidden="true"
+                      />
+                    )}
+                    {p === 'queue' && queued > 0 && (
+                      <span
+                        data-queue-count
+                        class="absolute left-8 top-2 min-w-4 rounded-full bg-cyan px-1 text-center text-xs font-semibold leading-4 text-ink"
+                        aria-hidden="true"
+                      >
+                        {queued}
+                      </span>
+                    )}
+                    {/* Always rendered: the sidebar width transition clips it progressively; invisible only starts once collapsed. */}
+                    <span
+                      class={cn('hidden whitespace-nowrap transition-[visibility] md:inline', collapsed && 'invisible')}
+                    >
+                      {t(label)}
+                    </span>
+                  </a>
+                </Fragment>
               )
             })}
         </nav>
@@ -325,11 +330,11 @@ export const Topbar = () => {
         aria-controls="cc2-navigation"
         onClick={() => mobileMenu.set({ open: !open })}
       >
-        <Menu size={22} strokeWidth={1} />
+        <Menu size={22} strokeWidth={1.75} />
       </button>
       <HeaderTitle />
       <div class="cc2-header-actions flex shrink-0 items-center gap-2">
-        <div class="cc2-header-status flex h-11 items-center gap-2 rounded-md border border-edge px-3">
+        <div class="cc2-header-status flex h-11 items-center gap-2 rounded-lg border border-edge px-3 font-medium">
           <PrinterIcon class="hidden size-6 sm:block" />
           <div>
             {link[0] === 'green' ? (
@@ -343,11 +348,12 @@ export const Topbar = () => {
             )}
           </div>
         </div>
-        <div class="hidden h-11 items-center gap-2 rounded-md border border-edge px-3 sm:flex">
+        <div class="cc2-header-link hidden h-11 items-center gap-2 rounded-lg border border-edge px-3 sm:flex">
           <Dot c={link[0]} />
           {t(link[1])}
         </div>
         <UpdateNotice />
+        <span class="cc2-header-divider hidden sm:block" aria-hidden="true" />
         <EStop />
         <RestartPrinter />
       </div>
@@ -412,7 +418,7 @@ export const Toast = () => {
     <div
       role={tone === 'error' ? 'alert' : 'status'}
       class={cn(
-        'fixed bottom-6 left-1/2 z-[70] flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-lg border bg-panel py-3 pl-5 pr-3 shadow-2xl',
+        'cc2-toast fixed bottom-6 left-1/2 z-[70] flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-lg border bg-panel py-3 pl-5 pr-3 shadow-pop',
         tone === 'error' ? 'border-red text-red' : 'border-cyan'
       )}
     >
@@ -433,7 +439,7 @@ export const Toast = () => {
 // No extra poll: retain the latest native event in the existing printer response.
 export const PrinterReport = () => {
   const { data, ok } = printer.use()
-  const report = data?.printer_report
+  const report = data?.printer_alert ?? data?.printer_report
   const storageKey = 'cc2-printer-report-seen'
   const eventId = report?.event_id ?? (report ? String(report.sequence) : '')
   const [dismissed, setDismissed] = useState<string | null>(() => {
@@ -443,14 +449,14 @@ export const PrinterReport = () => {
       return null
     }
   })
-  useEffect(() => {
-    if (!report || (report.level !== 1 && report.level !== 2)) return
+  const dismiss = () => {
+    setDismissed(eventId)
     try {
       localStorage.setItem(storageKey, eventId)
     } catch {
       // Storage restrictions must not prevent showing printer errors.
     }
-  }, [eventId, report?.level])
+  }
   if (!report || (report.level !== 1 && report.level !== 2) || dismissed === eventId) return null
   const title =
     report.level === 3
@@ -466,7 +472,7 @@ export const PrinterReport = () => {
         <strong>
           {t(title)} · {tpl('printer.report_code', { code: report.code })}
         </strong>
-        <button type="button" aria-label={t('printer.report_dismiss')} onClick={() => setDismissed(eventId)}>
+        <button type="button" aria-label={t('printer.report_dismiss')} onClick={dismiss}>
           <X size={18} />
         </button>
       </div>

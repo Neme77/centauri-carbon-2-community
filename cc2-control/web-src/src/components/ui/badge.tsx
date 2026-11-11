@@ -16,7 +16,7 @@ export const Tag = ({
   class?: string
   children: ComponentChildren
 } & Omit<preact.JSX.HTMLAttributes<HTMLSpanElement>, 'class' | 'children'>) => (
-  <span class={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs', tone[k], c)} {...p}>
+  <span class={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium', tone[k], c)} {...p}>
     {children}
   </span>
 )

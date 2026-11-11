@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/field'
 import { Button } from '@/components/ui/button'
 import { Dot, Tag } from '@/components/ui/badge'
 import { Icon } from '@/components/icons'
-import { CameraCard, FanBar, Progress, Row } from '@/components/shared'
+import { CameraCard, Progress, Row } from '@/components/shared'
 import { ThermalChart } from '@/components/thermal'
 import { control, errText, notify, post } from '@/lib/api'
 import {
@@ -20,22 +20,14 @@ import {
   quickAlwaysAvailable,
   saveQuickActions,
 } from '@/lib/quick'
-import { t, tpl } from '@/lib/i18n'
+import { type Key, t, tpl } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import { grilleAllowed, grilleBusy } from '@/lib/grille'
 import { stateText } from '@/lib/machine'
 import { num, duration } from '@/lib/format'
+import { findMeasure, plates, refreshPlates } from '@/lib/plates'
 import { usePoll } from '@/lib/poll'
-import {
-  health,
-  openPage,
-  openSettings,
-  type Page,
-  printer,
-  refreshHealth,
-  refreshPrinter,
-  view,
-  zoffset,
-} from '@/lib/state'
+import { health, openPage, openSettings, type Page, printer, refreshHealth, refreshPrinter, view, zoffset } from '@/lib/state'
 import { JobControls } from '@/pages/job'
 
 const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightOn: boolean }) => {
@@ -149,12 +141,44 @@ const QuickEditor = ({ onClose }: { onClose: () => void }) => {
   )
 }
 
+// One bordered tile per fan: speed as a large figure, a bar, and a fan icon that spins faster as speed rises.
+const FanTile = ({ label, pct }: { label: Key; pct: number }) => (
+  <div class="cc2-temp-tile cc2-fan-tile text-cyan">
+    <div class="flex items-center gap-2 text-xs text-muted">
+      <Icon
+        n="fan"
+        class={cn('size-4 text-cyan motion-reduce:animate-none', pct > 0 && 'animate-spin')}
+        style={{ animationDuration: `${Math.max(0.4, 3 - pct * 0.026)}s` }}
+      />
+      {t(label)}
+    </div>
+    <div class="cc2-temp-tile-value text-fg">
+      {pct}
+      <small>%</small>
+    </div>
+    <div class="cc2-temp-tile-bar">
+      <i style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+    </div>
+  </div>
+)
+
 export const Dashboard = () => {
   usePoll(refreshPrinter, 1500)
   usePoll(refreshHealth, 5000)
-  const d = printer.use().data
+  usePoll(refreshPlates, 30000)
+  const { data: d, ok: printerAvailable } = printer.use()
   const h = health.use().data
   const off = zoffset.use().v
+  const plateStatus = plates.use()
+  const plateLibrary = plateStatus.ok ? plateStatus.data : null
+  const mountedPlate = plateLibrary?.available && !plateLibrary.pending
+    ? plateLibrary.plates.find(plate => plate.id === plateLibrary.current)
+    : undefined
+  const mesh = plateLibrary?.mesh_profile
+  const meshMeasure = mesh?.startsWith('cc2_') ? findMeasure(plateLibrary, mesh.slice(4)) : null
+  const meshLabel = meshMeasure
+    ? `${meshMeasure.plate.name} · ${meshMeasure.measure.temp} °C`
+    : mesh || t('dashboard.mesh_not_detected')
   const v = view(d)
   const quickActions = quick.use().actions
   const [editing, setEditing] = useState(false)
@@ -221,45 +245,79 @@ export const Dashboard = () => {
       </div>
 
       <div class="grid gap-3.5 cc2-md:grid-cols-2 cc2-lg:grid-cols-4">
-        <Card class="cc2-md:col-span-2">
+        <Card class="flex flex-col cc2-md:col-span-2">
           <CardHead icon="temp" title="dashboard.thermals" end={t('dashboard.live_history_5_minutes')} />
-          <div class="grid items-center gap-4 cc2-sm:grid-cols-[1.6fr_1fr]">
-            <ThermalChart />
-            <div class="grid gap-3 text-xs">
+          <div class="grid gap-3.5">
+            <div class="grid gap-2.5 cc2-sm:grid-cols-3">
               {(
                 [
-                  ['red', 'common.nozzle', d?.extruder?.temperature, d?.extruder?.target],
-                  ['blue', 'common.heated_bed', d?.heater_bed?.temperature, d?.heater_bed?.target],
-                  ['amber', 'dashboard.chamber', d?.chamber?.temperature, 0],
+                  ['red', 'common.nozzle', d?.extruder?.temperature, d?.extruder?.target, 300],
+                  ['blue', 'common.heated_bed', d?.heater_bed?.temperature, d?.heater_bed?.target, 120],
+                  ['amber', 'dashboard.chamber', d?.chamber?.temperature, 0, 65],
                 ] as const
-              ).map(([dot, label, val, goal]) => (
-                <div key={label} class="flex items-center gap-2 whitespace-nowrap">
-                  <Dot c={dot} />
-                  {t(label)}
-                  <b class="ml-auto font-medium">
+              ).map(([dot, label, val, goal, max]) => (
+                <div key={label} class="cc2-temp-tile" style={{ color: `var(--${dot})` }}>
+                  <div class="flex items-center gap-2 text-xs text-muted">
+                    <Dot c={dot} />
+                    {t(label)}
+                  </div>
+                  <div class="cc2-temp-tile-value text-fg">
                     {num(val)}
-                    {target(goal)} °C
-                  </b>
+                    <small>{target(goal)} °C</small>
+                  </div>
+                  <div class="cc2-temp-tile-bar">
+                    <i style={{ width: `${Math.max(0, Math.min(100, (Number(val) / max) * 100)) || 0}%` }} />
+                  </div>
                 </div>
               ))}
             </div>
+            <ThermalChart />
           </div>
+          <dl class="mt-auto grid gap-2 pt-3 cc2-sm:grid-cols-2" data-heater-status>
+            {([
+              ['common.nozzle', d?.extruder?.target],
+              ['common.heated_bed', d?.heater_bed?.target],
+            ] as const).map(([label, goal]) => {
+              const known = printerAvailable && d?.connected === true && typeof goal === 'number' && Number.isFinite(goal)
+              return (
+                <div key={label} class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-edge px-2 py-2">
+                  <dt class="text-sm text-muted">{t(label)}</dt>
+                  <dd title={tpl('control.name_target', { name: t(label) })}>
+                    <Tag>{t(!known ? 'state.unknown' : goal > 0 ? 'control.on' : 'control.off')}</Tag>
+                  </dd>
+                </div>
+              )
+            })}
+          </dl>
         </Card>
-        <Card class="cc2-dashboard-fans">
+        <Card class="cc2-dashboard-fans flex flex-col">
           <CardHead icon="fan" title="common.fans" />
-          <FanBar label="common.part_fan" pct={v.fan('part')} />
-          <FanBar label="common.aux_fan" pct={v.fan('aux')} />
-          <FanBar label="dashboard.chamber" pct={v.fan('box')} />
+          <div class="mt-4 flex flex-1 flex-col gap-2.5 cc2-lg:mt-0 cc2-lg:gap-4.5">
+            <FanTile label="common.part_fan" pct={v.fan('part')} />
+            <FanTile label="common.aux_fan" pct={v.fan('aux')} />
+            <FanTile label="dashboard.chamber" pct={v.fan('box')} />
+          </div>
         </Card>
-        <Card class="flex flex-col">
-          <CardHead icon="z" title="dashboard.effective_z_offset" />
-          <div class="my-2 text-3xl">
-            {off === null ? '—' : (off > 0 ? '+' : '') + off.toFixed(2)} <small class="text-sm text-muted">mm</small>
-          </div>
-          <div class="mt-auto grid justify-items-start gap-1.5">
-            <small class="text-muted">{t('dashboard.z_offset_page_only')}</small>
-            <Tag tone="warning">{t('common.session_only')}</Tag>
-          </div>
+        <Card class="flex min-w-0 flex-col" data-first-layer>
+          <CardHead icon="z" title="dashboard.first_layer" />
+          <dl class="grid flex-1 grid-rows-2 gap-2 text-center">
+            <div class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3" title={t('dashboard.z_offset_page_only')}>
+              <dt class="text-base font-semibold text-fg">{t('dashboard.effective_z_offset')}</dt>
+              <dd class="mt-2 flex flex-col items-center gap-2">
+                <span class="text-3xl font-semibold tabular-nums">
+                  {off === null ? '—' : (off > 0 ? '+' : '') + off.toFixed(3)} <small class="text-sm text-muted">mm</small>
+                </span>
+                <Tag tone="warning">{t('common.session_only')}</Tag>
+              </dd>
+            </div>
+            <div class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3">
+              <dt class="text-base font-semibold text-fg">{t('bed.active_mesh')}</dt>
+              <dd class="mt-2 truncate text-xl font-semibold" title={meshLabel}>{meshLabel}</dd>
+              <dd class="mt-2 truncate text-base font-semibold text-fg" title={mountedPlate?.name}>
+                {mountedPlate ? tpl('plates.side_n', { side: mountedPlate.side }) : t('dashboard.plate_side_unknown')}
+              </dd>
+            </div>
+          </dl>
         </Card>
       </div>
 

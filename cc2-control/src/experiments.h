@@ -17,11 +17,34 @@ static int experiments_normal_confirmed(console_state *console) {
     return ok;
 }
 
+static enum { QUIET_DISABLE_IDLE, QUIET_DISABLE_RUNNING, QUIET_DISABLE_FAILED } quiet_disable_state;
+static unsigned long quiet_disable_generation;
+static int quiet_disable_ready(const mqtt_client *mqtt, console_state *console) {
+    return experiments.quiet_motors && quiet_disable_state != QUIET_DISABLE_RUNNING &&
+        !printer_change_blocked() && app_update_idle_cold(mqtt,console,50);
+}
+
+static void quiet_disable_tick(console_state *console) {
+    if(quiet_disable_state!=QUIET_DISABLE_RUNNING)return;
+    pthread_mutex_lock(&console->lock);
+    int same=console->generation==quiet_disable_generation;
+    int busy=same&&console->busy;
+    int success=same&&console->completed&&console->success;
+    pthread_mutex_unlock(&console->lock);
+    if(busy)return;
+    experiment_choices next=experiments;
+    next.quiet_motors=0;
+    quiet_disable_state=success&&telemetry.fd>=0&&telemetry.connections==motor_mode_connection&&
+        experiments_save(next)?QUIET_DISABLE_IDLE:QUIET_DISABLE_FAILED;
+}
+
 static void experiments_response(int fd, const mqtt_client *mqtt, console_state *console) {
+    static const char *const quiet_states[]={"idle","running","failed"};
     char body[640];
     int n = snprintf(body, sizeof(body),
         "{\"schema\":1,\"editable\":%s,\"ready\":%s,\"canvas_uds\":%s,\"canvas_uds_available\":%s,"
-        "\"external_feed\":%s,\"bed_drying\":%s,\"nozzle_expansion\":%s,\"quiet_motors\":%s,\"normal_confirmed\":%s,\"cli_canvas\":%s}\n",
+        "\"external_feed\":%s,\"bed_drying\":%s,\"nozzle_expansion\":%s,\"quiet_motors\":%s,\"normal_confirmed\":%s,\"cli_canvas\":%s,"
+        "\"quiet_disable_ready\":%s,\"quiet_disable_state\":\"%s\"}\n",
         experiments_storage_valid ? "true" : "false",
         !app_update_active() && app_update_ready(mqtt, console) ? "true" : "false",
         telemetry.canvas_enabled ? "true" : "false", uds_canvas_available(&telemetry) ? "true" : "false",
@@ -29,7 +52,8 @@ static void experiments_response(int fd, const mqtt_client *mqtt, console_state 
         experiments.bed_drying ? "true" : "false",
         experiments.nozzle_expansion ? "true" : "false",
         experiments.quiet_motors ? "true" : "false", experiments_normal_confirmed(console) ? "true" : "false",
-        experiments_cli_canvas ? "true" : "false");
+        experiments_cli_canvas ? "true" : "false",
+        quiet_disable_ready(mqtt,console)?"true":"false",quiet_states[quiet_disable_state]);
     respond(fd, 200, "OK", "application/json", body, (size_t)n);
 }
 
@@ -56,6 +80,22 @@ static void experiments_put_response(int fd, const char *request, const char *bo
     else if (length == 20 && !memcmp(body,"nozzle-expansion:off",20)) next.nozzle_expansion=0;
     else { app_update_fail(fd, 400, "Invalid experimental feature selection"); return; }
     if (!experiments_storage_valid) { app_update_fail(fd, 409, "Experimental settings storage is invalid"); return; }
+    if (experiments.quiet_motors && !next.quiet_motors && !experiments_normal_confirmed(console)) {
+        if(!quiet_disable_ready(mqtt,console)){
+            app_update_fail(fd,409,"Restoring Normal requires an idle and cold printer with heating targets zero");return;
+        }
+        char script[CONSOLE_COMMAND_MAX], reason[160];
+        if(!control_build_script("motors:normal",mqtt,script,sizeof(script),reason,sizeof(reason))||
+           console_start(console,script,reason,sizeof(reason))!=0){
+            app_update_fail(fd,409,reason);return;
+        }
+        pthread_mutex_lock(&console->lock);
+        quiet_disable_generation=console->generation;
+        pthread_mutex_unlock(&console->lock);
+        quiet_disable_state=QUIET_DISABLE_RUNNING;
+        motor_mode_requested="normal";motor_mode_connection=telemetry.connections;
+        experiments_response(fd,mqtt,console);return;
+    }
     if (app_update_active() || !app_update_ready(mqtt, console)) {
         app_update_fail(fd, 409, "Printer must be connected, idle and cold with heating targets zero"); return;
     }
@@ -72,6 +112,7 @@ static void experiments_put_response(int fd, const char *request, const char *bo
         }
         int source_changed = next.canvas_uds != experiments.canvas_uds;
         if (!experiments_save(next)) { app_update_fail(fd, 503, "Cannot save experimental settings"); return; }
+        if(!next.quiet_motors)quiet_disable_state=QUIET_DISABLE_IDLE;
         if (source_changed) {
             uds_close(&telemetry);
             telemetry.canvas_enabled = experiments.canvas_uds;

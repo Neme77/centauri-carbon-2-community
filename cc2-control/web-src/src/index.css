@@ -89,15 +89,22 @@
 }
 :root {
   color-scheme: dark;
-  --bg: #031622; --panel: #052131; --edge: #17445b; --text: #edf6fc; --muted: #8daebf; --field: #0a2b3f; --ink: #012331;
-  --cyan: #00d3ed; --green: #29e49b; --amber: #ffc54a; --red: #ff6170; --blue: #209eff;
+  --bg: #021320; --panel: #06202f; --edge: #14405a; --text: #eef7fc; --muted: #94b4c4; --field: #0b2c40; --ink: #012331;
+  --cyan: #00d3ed; --green: #29e49b; --amber: #ffc54a; --red: #ff6170; --blue: #3aa8ff;
   --well: #031521; --well-fg: #edf6fc; /* inset dark surfaces: 3D mesh, terminal */
+  --shadow-card: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 6px 20px -10px #0009;
+  --radius-card: 12px;
+  --shadow-pop: 0 10px 34px -6px rgb(1 8 14 / .55), 0 2px 8px rgb(1 8 14 / .4);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent), 0 2px 12px -2px color-mix(in srgb, var(--cyan) 45%, transparent);
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #eef0f2; --panel: #fff; --edge: #c5cbd0; --text: #17191b; --muted: #596168; --field: #f4f5f6; --ink: #fff;
+  --bg: #eef1f4; --panel: #fff; --edge: #d3d9de; --text: #15191c; --muted: #566067; --field: #f3f5f7; --ink: #fff;
   --cyan: #006f80; --green: #087748; --amber: #815700; --red: #ad2638; --blue: #166fa8;
   --well: #031521; --well-fg: #edf6fc;
+  --shadow-card: 0 1px 2px #0000000d, 0 6px 18px -12px #00000033;
+  --shadow-pop: 0 12px 36px -8px rgb(15 25 35 / .2), 0 2px 8px rgb(15 25 35 / .08);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 30%, transparent), 0 2px 10px -2px color-mix(in srgb, var(--cyan) 28%, transparent);
 }
 /* Extra palettes. Each one defines every token above; --cyan is the accent colour, --ink the text drawn on it. */
 :root[data-theme="dracula"] {
@@ -146,7 +153,7 @@
 }
 :root[data-theme="obsidian"] .cc2-dashboard .text-2xl:not(h2),
 :root[data-theme="obsidian"] .cc2-job-stats strong { color: var(--blue); }
-/* Inter (SIL OFL, see fonts/OFL.txt): variable 400Ã¢â‚¬â€œ700, Latin + Latin-1 only, inlined by the build so it needs no request. */
+/* Inter (SIL OFL, see fonts/OFL.txt): variable 400-700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
@@ -640,18 +647,6 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 .cc2-profile-fields > * { min-width: 0; }
 .cc2-job-temperatures small { overflow-wrap: anywhere; }
 
-/* Preview spacing, measured in each group's own fan element height:
- * dashboard readout ~16px, Control slider row ~32.8px. Native auto-height
- * Control cards keep their compact flow on smaller screens. */
-.cc2-dashboard-fans > div:nth-child(2) { margin-top: 1.75rem; }
-/* Keep the reviewed management heading and divider fixed; lower only its
- * controls by one Control element (~32.8px), carrying EXHAUST with them. */
-.cc2-camera-fan-management > .cc2-exhaust-grille { padding-top: 2.8rem; }
-
-/* Preview spacing, measured in each group's own fan element height:
- * dashboard readout ~16px, Control slider row ~32.8px. Native auto-height
- * Control cards keep their compact flow on smaller screens. */
-.cc2-dashboard-fans > div:nth-child(2) { margin-top: 1.75rem; }
 /* Keep the reviewed management heading and divider fixed; lower only its
  * controls by one Control element (~32.8px), carrying EXHAUST with them. */
 .cc2-camera-fan-management > .cc2-exhaust-grille { padding-top: 2.8rem; }
@@ -669,13 +664,94 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
      * management below the three fan rows, away from the card's bottom edge. */
     .cc2-control-columns .cc2-fan-controls { padding-top: 1.915rem; }
     .cc2-control-columns .cc2-camera-fan-management { margin-top: 2.25rem; }
-    /* Preserve the reviewed first-slider position while separating chamber
-     * management below the three fan rows, away from the card's bottom edge. */
-    .cc2-control-columns .cc2-fan-controls { padding-top: 1.915rem; }
-    .cc2-control-columns .cc2-camera-fan-management { margin-top: 2.25rem; }
     .cc2-control-columns .cc2-tuning { grid-column: 3; grid-row: 2; }
     .cc2-movement .cc2-shaper { min-height: 190px; flex: 0 0 auto; padding-top: 14px; margin-top: 14px; }
     .cc2-movement .cc2-shaper > button { min-height: 44px; margin-top: 8px; }
     .cc2-movement .cc2-shaper > p { line-height: 1.5; }
   }
 }
+
+
+/* ---------- Design layer: surfaces, hierarchy, details ---------- */
+body { font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
+b, strong, .tabular-nums, input[type=number], input[inputmode] { font-variant-numeric: tabular-nums; }
+.cc2-main section {
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  border-color: color-mix(in srgb, var(--edge) 85%, transparent);
+}
+.cc2-main section h2 { letter-spacing: -.005em; }
+
+/* Card header: icon sits in a tinted chip, the divider is a quiet hairline. */
+.cc2-card-head { border-bottom-color: color-mix(in srgb, var(--edge) 60%, transparent); }
+.cc2-card-chip {
+  display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px;
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+  color: var(--cyan);
+}
+.cc2-card-chip > svg { width: 16px; height: 16px; }
+
+/* Rows: label muted, value strong, hairline dividers that vanish on the last row. */
+.cc2-row { border-bottom-color: color-mix(in srgb, var(--edge) 55%, transparent); }
+.cc2-row:last-child { border-bottom: 0; }
+.cc2-row > span { color: var(--muted); }
+
+/* Sidebar: grouped, with a pill-style active marker. */
+.cc2-sidebar { background: color-mix(in srgb, var(--panel) 92%, var(--bg)); }
+.cc2-nav-group { padding: 14px 18px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--muted); white-space: nowrap; text-transform: uppercase; }
+.cc2-nav-group:first-child { padding-top: 6px; }
+.cc2-nav-sep { height: 1px; border: 0; margin: 8px 14px; background: color-mix(in srgb, var(--edge) 70%, transparent); }
+.cc2-nav-link { margin-inline: 8px; border-radius: 8px; border-left-width: 0 !important; padding-left: 12px !important; position: relative; }
+.cc2-nav-link[aria-current="page"] { background: color-mix(in srgb, var(--cyan) 13%, transparent) !important; font-weight: 600; }
+.cc2-nav-link[aria-current="page"]::before {
+  content: ""; position: absolute; left: -8px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--cyan);
+}
+.cc2-main-collapsed-hint { display: none; }
+
+/* Header: one status cluster, a divider before the safety actions. */
+.cc2-topbar { background: color-mix(in srgb, var(--panel) 94%, var(--bg)); }
+.cc2-header-status, .cc2-header-link { border-color: color-mix(in srgb, var(--edge) 80%, transparent); background: color-mix(in srgb, var(--field) 55%, transparent); }
+.cc2-header-divider { width: 1px; align-self: stretch; margin-block: 10px; background: var(--edge); opacity: .7; }
+.cc2-emergency-stop { background: color-mix(in srgb, var(--red) 16%, transparent) !important; letter-spacing: .01em; }
+.cc2-emergency-stop:hover { background: color-mix(in srgb, var(--red) 26%, transparent) !important; }
+
+/* Temperature tiles (Dashboard): the figures people watch most. */
+.cc2-temp-tile { border: 1px solid color-mix(in srgb, var(--edge) 70%, transparent); border-radius: 10px; padding: 10px 12px; background: color-mix(in srgb, var(--field) 55%, transparent); }
+.cc2-temp-tile-value { font-size: 22px; font-weight: 600; line-height: 1.15; }
+.cc2-temp-tile-value small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 2px; }
+.cc2-temp-tile-bar { height: 4px; margin-top: 8px; border-radius: 2px; background: color-mix(in srgb, var(--edge) 80%, transparent); overflow: hidden; }
+.cc2-temp-tile-bar > i { display: block; height: 100%; border-radius: 2px; background: currentColor; transition: width .6s ease; }
+
+/* Job progress: thicker bar with a soft glow. */
+.cc2-progress-fill { box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 45%, transparent); }
+
+/* Inputs: calmer fields, clearer focus. */
+.cc2-main input:not([type=range], [type=checkbox], [type=radio], [type=file]), .cc2-main select, .cc2-main textarea { border-radius: 8px; }
+.cc2-main input:not([type=range], [type=checkbox], [type=radio], [type=file]):focus, .cc2-main select:focus, .cc2-main textarea:focus {
+  outline: 0; border-color: var(--cyan); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 22%, transparent);
+}
+
+/* Fan tiles share the card height equally, so no empty band is left under them. */
+.cc2-fan-tile { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.cc2-fan-tile .cc2-temp-tile-bar { height: 6px; }
+
+/* ---------- Polish: elevation utilities, motion, selection, scrollbars ---------- */
+@utility shadow-pop { box-shadow: var(--shadow-pop); }
+@utility shadow-glow { box-shadow: var(--shadow-glow); }
+.cc2-emergency-stop { box-shadow: 0 0 0 1px color-mix(in srgb, var(--red) 40%, transparent), 0 2px 12px -2px color-mix(in srgb, var(--red) 45%, transparent); }
+::selection { background: color-mix(in srgb, var(--cyan) 32%, transparent); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 45%, var(--edge)) transparent; }
+
+/* Dialogs and toasts rise in. The toast animates the individual `translate` property
+   (what Tailwind uses for -translate-x-1/2) so it never drifts sideways while entering. */
+@keyframes cc2-rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
+@keyframes cc2-fade { from { opacity: 0; } }
+@keyframes cc2-toast-in { from { opacity: 0; translate: -50% 10px; } }
+@media (prefers-reduced-motion: no-preference) {
+  [role="dialog"] { animation: cc2-rise 200ms cubic-bezier(.2, .7, .2, 1) both; }
+  [role="presentation"]:has(> [role="dialog"]) { animation: cc2-fade 160ms ease-out both; }
+  .cc2-toast { animation: cc2-toast-in 220ms cubic-bezier(.2, .7, .2, 1) both; }
+}
+
+.cc2-main section section { box-shadow: none; }

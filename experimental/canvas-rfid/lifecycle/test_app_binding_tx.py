@@ -6,11 +6,16 @@ HERE=Path(__file__).resolve().parent
 NAMES=['coordinator','capture','app-integration.json','activate-on-ready']
 WITH_TRANSFER=os.environ.get('CC2_TEST_BIND_TRANSFER')=='1'
 PRESERVE_LIFECYCLE=os.environ.get('CC2_TEST_PRESERVE_LIFECYCLE')=='1'
-if WITH_TRANSFER:NAMES.append('transfer-worker')
+IMMUTABLE=os.environ.get('CC2_TEST_IMMUTABLE_BINDING')=='1'
+SAME_APP=os.environ.get('CC2_TEST_SAME_APP_HELPERS')=='1'
+if SAME_APP:assert IMMUTABLE and not PRESERVE_LIFECYCLE
+if IMMUTABLE:NAMES=NAMES[:3]
+elif WITH_TRANSFER:NAMES.append('transfer-worker')
 MODES={name:0o700 if name in ('coordinator','capture','transfer-worker') else 0o600 for name in NAMES}
 OLD={n:('original '+n+'\n').encode() for n in NAMES}
 NEW={n:('updated '+n+'\n').encode() for n in NAMES}
 OLD_APP=b'qualified old application fixture';NEW_APP=b'qualified new application fixture'
+if SAME_APP:NEW_APP=OLD_APP
 sha=lambda b:hashlib.sha256(b).hexdigest()
 PROFILE_BYTES=b'qualified recovery profile fixture'
 PROFILE=sha(PROFILE_BYTES) if PRESERVE_LIFECYCLE else 'a7'*32
@@ -41,17 +46,29 @@ def run():
         rows=['{%s,%s,%s,0%o}'%(json.dumps(n),json.dumps(sha(OLD[n])),json.dumps(sha(NEW[n])),MODES[n]) for n in NAMES]
         config.write_text('static const struct au_plan test_plan={%s,%s,%s,{%s}};\n'%(
             json.dumps(sha(OLD_APP)),json.dumps(sha(NEW_APP)),json.dumps(PROFILE),','.join(rows)))
-        for arch,compiler,extra,runner in [
+        platforms=[
             ('host','gcc',[],[]),
-            ('arm','arm-linux-gnueabihf-gcc',['-static','-D_TIME_BITS=32','-D_FILE_OFFSET_BITS=32'],['qemu-arm']),
-            ('sanitizers','gcc',['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie'],[])]:
+            ('arm',os.environ.get('CC2_TEST_ARM_CC','arm-linux-gnueabihf-gcc'),['-static','-D_TIME_BITS=32','-D_FILE_OFFSET_BITS=32'],[os.environ.get('CC2_TEST_QEMU','qemu-arm')]),
+            ('sanitizers','gcc',['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie'],[])]
+        if IMMUTABLE and os.environ.get('CC2_TEST_BINDING_ALL_ARCHES')!='1':platforms=platforms[:1]
+        for arch,compiler,extra,runner in platforms:
             binary=root/(arch+'-test')
             defines={'AU_COMPONENT':str(component),'AU_DIRECTORY':str(tx),'AU_APP':str(app),
                 'AU_BARRIER':str(barrier),'AU_TEST_CONFIG':str(config),'AU_TEST_SOURCE':str(source),'AU_TEST_OTHER':str(other)}
             subprocess.run([compiler,'-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror',*extra,
                 *(['-DAU_BIND_TRANSFER_WORKER=1'] if WITH_TRANSFER else []),
+                *(['-DAU_IMMUTABLE_BOOT_BINDING=1'] if IMMUTABLE else []),
+                *(['-DAU_SAME_APP_HELPER_UPDATE=1'] if SAME_APP else []),
                 *(['-DAU_PRESERVE_LIFECYCLE=1'] if PRESERVE_LIFECYCLE else []),
                 *['-D'+k+'='+json.dumps(v) for k,v in defines.items()],HERE/'test_app_binding_tx.c','-o',binary],check=True,timeout=120)
+            plan_check=subprocess.run([*runner,binary,'--check-plan'],capture_output=True,timeout=12)
+            assert plan_check.returncode==0,(arch,'valid plan refused')
+            bad_env=dict(os.environ,AU_TEST_UNCHANGED_FILE='1')
+            bad=subprocess.run([*runner,binary,'--check-plan'],env=bad_env,capture_output=True,timeout=12)
+            if SAME_APP:assert bad.returncode!=0,(arch,'same-app unchanged helper accepted')
+            if IMMUTABLE and not SAME_APP:
+                bad=subprocess.run([*runner,binary,'--check-plan'],env=dict(os.environ,AU_TEST_FORCE_SAME_APP='1'),capture_output=True,timeout=12)
+                assert bad.returncode!=0,(arch,'same-app accepted without dedicated qualification flag')
             cases=BASE_CASES+[('prepare-crash',x) for x in CRASH_CASES]+[('apply-crash',x) for x in APPLY_CRASH]+[('rollback-crash',x) for x in ROLLBACK_CRASH]
             if PRESERVE_LIFECYCLE:
                 cases=[case for case in cases if case!='nonactive']
@@ -62,7 +79,7 @@ def run():
                 fixture.mkdir(mode=0o700);component.mkdir(mode=0o700);source.mkdir(mode=0o700);barrier.mkdir(mode=0o700);other.mkdir(mode=0o700)
                 for n in NAMES:put(component/n,OLD[n],MODES[n]);put(source/n,NEW[n],MODES[n])
                 put(component/'lifecycle',journal());put(component/'original-stock-44.bin',b'untouched stock fixture');put(component/'startup-sentinel',b'untouched startup fixture')
-                put(app,OLD_APP,0o755)
+                put(app,NEW_APP if IMMUTABLE else OLD_APP,0o755)
                 env=dict(os.environ)
                 def invoke(action,crash=None):
                     e=dict(env)
@@ -71,8 +88,8 @@ def run():
                 original_journal=(component/'lifecycle').read_bytes();lock=None
                 kind=case[0] if isinstance(case,tuple) else case
                 if kind=='old-app':put(app,b'foreign app',0o755)
-                if kind=='new-source':put(source/NAMES[3],b'foreign')
-                if kind=='old-target':put(component/NAMES[3],b'foreign')
+                if kind=='new-source':put(source/NAMES[-1 if IMMUTABLE else 3],b'foreign')
+                if kind=='old-target':put(component/NAMES[-1 if IMMUTABLE else 3],b'foreign')
                 if kind in ['source-symlink','target-symlink','target-hardlink']:
                     path=(source if kind=='source-symlink' else component)/NAMES[0];saved=fixture/'foreign';path.rename(saved)
                     if kind=='target-hardlink':os.link(saved,path)
@@ -112,10 +129,11 @@ def run():
                         assert prepared.returncode==0,(arch,case,prepared.stderr)
                         assert invoke('--prepare').returncode==0,(arch,case,'not idempotent')
                         if kind=='bad-state':put(tx/'state',b'foreign')
-                        if kind=='bad-snapshot':put(tx/'new.3',b'foreign')
-                        if kind=='snapshot-symlink':(tx/'new.3').rename(tx/'saved');(tx/'new.3').symlink_to(tx/'saved')
+                        snapshot=tx/('new.2' if IMMUTABLE else 'new.3')
+                        if kind=='bad-snapshot':put(snapshot,b'foreign')
+                        if kind=='snapshot-symlink':snapshot.rename(tx/'saved');snapshot.symlink_to(tx/'saved')
                         if kind=='changed-generation':put(component/'lifecycle',journal(generation=6))
-                        if kind=='foreign-target-after-prepare':put(component/NAMES[3],b'foreign')
+                        if kind=='foreign-target-after-prepare':put(component/NAMES[-1 if IMMUTABLE else 3],b'foreign')
                         put(app,b'foreign application' if kind=='wrong-new-app' else NEW_APP,0o755)
                         expected=kind not in ['bad-state','bad-snapshot','snapshot-symlink','changed-generation','foreign-target-after-prepare','wrong-new-app']
                         immediately_before={n:(component/n).read_bytes() for n in NAMES}
@@ -145,6 +163,7 @@ def run():
                 finally:
                     if lock:lock.close()
                 count+=1
-    print(f'PASS: {count} actual app-binding transaction host/ARM/sanitizer cases; interrupted file/state commits resume, rollback exact, native journal/startup/stock retained',flush=True)
+    platforms_label='host' if IMMUTABLE and os.environ.get('CC2_TEST_BINDING_ALL_ARCHES')!='1' else 'host/ARM/sanitizer'
+    print(f'PASS: {count} actual app-binding transaction {platforms_label} cases; interrupted file/state commits resume, rollback exact, native journal/startup/stock retained',flush=True)
     return count
 if __name__=='__main__':run()
