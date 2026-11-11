@@ -111,7 +111,7 @@ try {
   assert.equal(await frontLeft.getAttribute('aria-pressed'),'true','list and map share selection')
   await page.evaluate(()=>window.__CC2_PREVIEW.objectRows=window.__CC2_PREVIEW.objectRows.filter(o=>o.name.startsWith('Buddha')))
   await page.waitForFunction(()=>document.querySelectorAll('[data-bed-list-id]').length===4)
-  for (const [theme,width] of [['dark',1440],['light',1440],['dark',390],['light',768]]) {
+  for (const [theme,width] of [['dark',1440],['light',1440],['nord',1440],['solarized-light',1440],['dark',390],['nord',390],['solarized-light',390],['light',768]]) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme)
     await page.setViewportSize({width,height:900})
     await page.waitForTimeout(300)
