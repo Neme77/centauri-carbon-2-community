@@ -3,8 +3,8 @@ from pathlib import Path
 import hashlib,subprocess,tempfile
 
 root=Path(__file__).resolve().parent
-for program in root.rglob('*.awk'):
-    assert b'\r' not in program.read_bytes(), f'AWK sources must use LF for BusyBox: {program}'
+for program in (*root.rglob('*.awk'), *root.glob('*.sh.in')):
+    assert b'\r' not in program.read_bytes(), f'Unix helpers must use LF for BusyBox: {program}'
 repo=root.parents[1]
 sources={
  'camera-launch':(repo/'builder/current/components/camera/firmware-launcher.sh','f05accc97f0195cf4cf481b53b643902424183bb335a27f42e6069a625813c6f'),

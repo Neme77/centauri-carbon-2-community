@@ -46,3 +46,4 @@ cc2-control/web-src/**/*.ts text eol=lf
 cc2-control/web-src/**/*.tsx text eol=lf
 cc2-control/web-src/biome.json text eol=lf
 experimental/**/*.awk text eol=lf
+experimental/**/*.sh.in text eol=lf
