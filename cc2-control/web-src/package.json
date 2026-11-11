@@ -66,6 +66,7 @@
     "test:external-feed": "node preview/test-external-feed.mjs",
     "test:z-direction": "node preview/test-z-direction.mjs",
     "test:load-cell-guide": "node preview/test-load-cell-guide.mjs",
+    "test:screw-tram": "node preview/test-screw-tram.mjs",
     "test:rotation-restore": "node preview/test-rotation-restore.mjs",
     "test:pressure-advance": "node preview/test-pressure-advance.mjs",
     "test:quick-maintenance": "node preview/test-quick-maintenance.mjs",

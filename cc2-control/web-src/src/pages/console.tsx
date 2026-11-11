@@ -10,9 +10,10 @@ import { Pip } from '@/components/ui/badge'
 import { Input, Switch } from '@/components/ui/field'
 import { Icon } from '@/components/icons'
 import { errText, notify, post } from '@/lib/api'
-import { type Key, t, tState, tpl } from '@/lib/i18n'
+import { type Key, t, tpl } from '@/lib/i18n'
+import { statusTitle } from '@/lib/machine'
 import { usePoll } from '@/lib/poll'
-import { consoleLog, printer, refreshConsole, view } from '@/lib/state'
+import { consoleLog, consoleStatus, printer, refreshConsole, view } from '@/lib/state'
 
 const I = { size: 16, strokeWidth: 1 }
 const expert = store({ on: false })
@@ -71,6 +72,7 @@ export const Console = () => {
   const on = expert.use().on
   const d = printer.use().data,
     v = view(d)
+  consoleStatus.use()
   const [filter, setFilter] = useState(''),
     [auto, setAuto] = useState(true),
     [cmd, setCmd] = useState(''),
@@ -271,7 +273,7 @@ export const Console = () => {
       </div>
       <div class="mt-3.5 flex justify-between border-t border-edge px-1 pt-3 text-xs text-muted">
         <span class="flex items-center gap-2">
-          <Activity {...I} /> CC2 {t('common.connected')} <Pip hollow /> {tState(v.state)}
+          <Activity {...I} /> CC2 {t('common.connected')} <Pip hollow /> {statusTitle(v.state).text}
         </span>
         <span>
           {t('console.messages_received')} {d?.messages || 0}

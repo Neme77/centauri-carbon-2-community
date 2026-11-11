@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Interactive screw-tramming on Bed → Screw Levelling: start a session with one click (full home and the existing bed prep), re-probe a single corner after turning its screw, or check all four, without repeating the full four-corner measurement. Re-probes home Z only. Every measurement, the start included, waits 30 s (`G4 P30000`) before probing so the nozzle has settled, and re-probes can probe twice to show whether it has. The nozzle is switched off after each probe; the bed stays at 60 °C until the session ends. The session survives the Manual homing / Auto leveling state its own homing and probing report, the bed target is renewed every ten minutes so the firmware's idle shutdown does not cool the bed between probes, and a bed left at 60 °C by an ended session is switched off once the printer is idle again. Requested by **sametsoyoz** (#329).
+- Screw-tramming history: CC2 Control records every completed start, re-probe and check of a tramming session with the measured value of each corner and keeps the last 20 sessions on the printer, so the results are still there after a reload, the end of the session or a restart, and the next levelling can start from the last one. A one-shot measurement without a session is kept separately as a quick entry (last 10), marked as such because it has no settle. Read with `GET /api/screws/history`, cleared with `POST /api/screws/history/clear` (#329).
+
 - Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
 
 - Add the Turkish interface translation using the contributed language patch.
@@ -17,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - German interface translation (Deutsch), selectable in Settings → Language. All 1533 interface strings are translated with the informal “du”; technical terms such as Pressure Advance, Input Shaper, Load Cell, Spool, Canvas and Idle are kept.
 
 ### Changed
+
+- Screw levelling names each corner and says whether to raise or lower it against the front-left zero. The session is four steps: start, re-probe the screw you turned, check all four, then end. The one-shot measurement is marked as a measurement without a session (#329).
+- Screw levelling keeps the bed at 60 °C for the session and only switches the nozzle off after start. The double measurement is labelled “2× 3 probes”. The table shows the running session’s offsets, and earlier sessions can be reviewed, exported or cleared (#329).
 
 - Complete Hungarian translations for the RFID reader lifecycle, print queue and update requirements. By **Neme77**.
 - Simplified Chinese interface strings for the RFID reader lifecycle, external feed, chamber fan management and update requirements completed, and the build-plate save hint refreshed. By **Skycos** (#328).

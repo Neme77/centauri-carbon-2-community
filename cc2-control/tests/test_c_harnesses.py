@@ -35,6 +35,7 @@ HARNESSES = {
     "test_mqtt_limits.c": [],
     "test_calibrated_start.c": BACKEND,
     "test_external_feed_start.c": BACKEND,
+    "test_usb_print_start.c": BACKEND,
     "test_external_feed.c": BACKEND,
     "test_filament_metadata.c": BACKEND,
     "test_orca_upload.c": BACKEND,
@@ -64,6 +65,7 @@ HARNESSES = {
     "test_quick_preferences.c": BACKEND,
     "test_pid_api.c": BACKEND,
     "test_layer_path_deadline.c": BACKEND,
+    "test_screw_tram_end.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,
     "test_plate_probe_result.c": BACKEND,
@@ -74,6 +76,7 @@ HARNESSES = {
     "test_queue_tracking.c": BACKEND,
     "test_control_actions.c": [ROOT / "src/control.c"],
     "test_nozzle_target_limits.c": [ROOT / "src/control.c"],
+    "test_screw_history.c": [ROOT / "src/control.c"],
 }
 
 with tempfile.TemporaryDirectory(prefix="cc2-c-harness-") as temporary:
