@@ -187,7 +187,7 @@ jobs:
         run: npm run test:file-library
 
       - name: Single object map, original IDs and responsive expansion
-        run: npm run test:object-layout && npm run test:bed-map
+        run: npm run test:object-layout && npm run test:bed-map && npm run test:layer-path-flow
 
       - name: Sidebar geometry and accessible navigation regression
         run: node preview/test-ui-polish.mjs

@@ -1705,5 +1705,20 @@
   "queue.auto_in_n": "Automatischer Start in {n} s",
   "queue.hold": "Automatischen Start abbrechen",
   "queue.abandon": "Start abbrechen",
-  "queue.auto_material": "Automatischer Start angehalten: Der Canvas-Slot enthält nicht das Material der Datei oder konnte nicht geprüft werden. Den Slot prüfen und von Hand starten."
+  "queue.auto_material": "Automatischer Start angehalten: Der Canvas-Slot enthält nicht das Material der Datei oder konnte nicht geprüft werden. Den Slot prüfen und von Hand starten.",
+  "job.bed_map_objects": "Objekte",
+  "job.bed_map_layer_path": "Schichtpfad",
+  "job.bed_map_previous_layer": "Vorherige Schicht",
+  "job.bed_map_next_layer": "Nächste Schicht",
+  "job.bed_map_live": "Live",
+  "job.bed_map_layer_status": "Schicht {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Schicht {n} / {total}",
+  "job.bed_map_loading_layer": "Schicht wird geladen…",
+  "job.bed_map_layer_unavailable": "Schichtpfad nicht verfügbar",
+  "job.bed_map_layer_limit": "Schichtpfad übersprungen: Datei zu groß, um sie rechtzeitig zu lesen",
+  "job.bed_map_waiting_first_layer": "Wartet auf Schicht 1",
+  "job.bed_map_printing_layer": "Druckt Schicht {n} / {total}",
+  "job.bed_map_view": "Bettkarten-Ansicht",
+  "job.bed_map_nozzle": "Düse",
+  "job.bed_map_layer_legend": "Schichtpfad"
 }

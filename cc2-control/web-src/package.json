@@ -50,6 +50,7 @@
     "test:mesh-side-labels": "node preview/test-mesh-side-labels.mjs",
     "test:plate-flow": "node preview/test-empty-plate-flow.mjs",
     "test:bed-map": "node preview/test-bed-map.mjs",
+    "test:layer-path-flow": "node preview/test-layer-path-flow.mjs",
     "test:file-library": "node preview/test-file-library.mjs",
     "test:canvas-layout": "node preview/test-canvas-layout.mjs",
     "test:spool-insertion": "node preview/test-spool-insertion.mjs",

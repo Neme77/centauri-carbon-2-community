@@ -1705,5 +1705,20 @@
   "queue.auto_in_n": "Автозапуск через {n} с",
   "queue.hold": "Отменить автозапуск",
   "queue.abandon": "Отменить запуск",
-  "queue.auto_material": "Автозапуск отложен: в слоте Canvas не тот материал, что в файле, или его не удалось проверить. Проверьте слот и запустите вручную."
+  "queue.auto_material": "Автозапуск отложен: в слоте Canvas не тот материал, что в файле, или его не удалось проверить. Проверьте слот и запустите вручную.",
+  "job.bed_map_objects": "Объекты",
+  "job.bed_map_layer_path": "Контур слоя",
+  "job.bed_map_previous_layer": "Предыдущий слой",
+  "job.bed_map_next_layer": "Следующий слой",
+  "job.bed_map_live": "Live",
+  "job.bed_map_layer_status": "Слой {n} / {total} · Z {z} мм",
+  "job.bed_map_layer_status_no_z": "Слой {n} / {total}",
+  "job.bed_map_loading_layer": "Загрузка слоя…",
+  "job.bed_map_layer_unavailable": "Контур слоя недоступен",
+  "job.bed_map_layer_limit": "Контур слоя пропущен: файл слишком большой для своевременного чтения",
+  "job.bed_map_waiting_first_layer": "Ожидание слоя 1",
+  "job.bed_map_printing_layer": "Печать слоя {n} / {total}",
+  "job.bed_map_view": "Вид карты стола",
+  "job.bed_map_nozzle": "Сопло",
+  "job.bed_map_layer_legend": "Контур слоя"
 }

@@ -1705,5 +1705,20 @@
   "queue.auto_in_n": "{n} 秒后自动开始",
   "queue.hold": "取消自动开始",
   "queue.abandon": "取消启动",
-  "queue.auto_material": "自动启动已暂停：Canvas 料槽中的材料与文件不符或无法检查。请检查料槽后手动启动。"
+  "queue.auto_material": "自动启动已暂停：Canvas 料槽中的材料与文件不符或无法检查。请检查料槽后手动启动。",
+  "job.bed_map_objects": "对象",
+  "job.bed_map_layer_path": "层路径",
+  "job.bed_map_previous_layer": "上一层",
+  "job.bed_map_next_layer": "下一层",
+  "job.bed_map_live": "实时",
+  "job.bed_map_layer_status": "第 {n} / {total} 层 · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "第 {n} / {total} 层",
+  "job.bed_map_loading_layer": "正在加载层…",
+  "job.bed_map_layer_unavailable": "层路径不可用",
+  "job.bed_map_layer_limit": "已跳过层路径：文件过大，无法及时读取",
+  "job.bed_map_waiting_first_layer": "等待第 1 层",
+  "job.bed_map_printing_layer": "正在打印第 {n} / {total} 层",
+  "job.bed_map_view": "热床图视图",
+  "job.bed_map_nozzle": "喷嘴",
+  "job.bed_map_layer_legend": "层路径"
 }

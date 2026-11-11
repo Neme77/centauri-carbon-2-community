@@ -657,6 +657,8 @@ static int gcode_storage_root(const char *storage, const char **root) {
 }
 
 #include "gcode_download.h"
+#include "gcode_layer_path.h"
+#include "gcode_layer_path_http.h"
 
 /* Cursor pages keep the fixed 128-entry window and all traversal guards.
  * A cursor is metadata for ordering only, never an instruction to open a path.
@@ -4639,6 +4641,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         gcode_page_response(fd,query);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
         return gcode_download_start(fd,query);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/layer-path")==0) {
+        return gcode_layer_path_start(fd,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
         return analysis_start(fd,0,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/thumbnail")==0) {

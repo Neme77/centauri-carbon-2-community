@@ -1705,5 +1705,20 @@
   "queue.auto_in_n": "Démarrage automatique dans {n} s",
   "queue.hold": "Annuler le démarrage automatique",
   "queue.abandon": "Annuler le démarrage",
-  "queue.auto_material": "Démarrage automatique retenu : le slot Canvas ne contient pas le matériau du fichier ou n’a pas pu être vérifié. Vérifiez le slot et lancez manuellement."
+  "queue.auto_material": "Démarrage automatique retenu : le slot Canvas ne contient pas le matériau du fichier ou n’a pas pu être vérifié. Vérifiez le slot et lancez manuellement.",
+  "job.bed_map_objects": "Objets",
+  "job.bed_map_layer_path": "Trajet de couche",
+  "job.bed_map_previous_layer": "Couche précédente",
+  "job.bed_map_next_layer": "Couche suivante",
+  "job.bed_map_live": "Live",
+  "job.bed_map_layer_status": "Couche {n} / {total} · Z {z} mm",
+  "job.bed_map_layer_status_no_z": "Couche {n} / {total}",
+  "job.bed_map_loading_layer": "Chargement de la couche…",
+  "job.bed_map_layer_unavailable": "Trajet de couche indisponible",
+  "job.bed_map_layer_limit": "Trajet de couche ignoré : fichier trop volumineux pour être lu à temps",
+  "job.bed_map_waiting_first_layer": "En attente de la couche 1",
+  "job.bed_map_printing_layer": "Impression de la couche {n} / {total}",
+  "job.bed_map_view": "Vue de la carte du plateau",
+  "job.bed_map_nozzle": "Buse",
+  "job.bed_map_layer_legend": "Trajet de couche"
 }
