@@ -14,7 +14,10 @@
 #define LAYER_PATH_COLLECT_MAX 8192
 #define LAYER_PATH_PATHS_MAX 512
 #define LAYER_PATH_JSON_MAX (96 * 1024)
-#define LAYER_PATH_TIME_SECONDS 20
+/* Wall-clock budget for one scan; a test build may lower it to force the limit. */
+#ifndef LAYER_PATH_TIME_MS
+#define LAYER_PATH_TIME_MS 20000
+#endif
 #define LAYER_PATH_BYTES_MAX (128UL * 1024UL * 1024UL)
 #define LAYER_PATH_LINE_MAX 4096
 #define LAYER_PATH_NAME_MAX 512
@@ -37,11 +40,12 @@ typedef struct {
     double z;
 } layer_path_info;
 
-static int layer_path_deadline(const struct timespec *start, int seconds) {
-    if (!start || seconds <= 0) return 0;
+static int layer_path_deadline(const struct timespec *start, long milliseconds) {
+    if (!start || milliseconds <= 0) return 0;
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    return now.tv_sec - start->tv_sec >= seconds;
+    long long elapsed = (long long)(now.tv_sec - start->tv_sec) * 1000LL + (now.tv_nsec - start->tv_nsec) / 1000000L;
+    return elapsed >= milliseconds;
 }
 
 static int layer_path_decode(char *out, size_t capacity, const char *in, size_t length) {
@@ -520,7 +524,7 @@ static int gcode_layer_path_parse(FILE *file, int layer_1based,
                                   layer_point *points, int points_cap,
                                   int *path_start, int paths_cap,
                                   layer_path_info *info,
-                                  const struct timespec *start, int time_seconds, size_t bytes_max) {
+                                  const struct timespec *start, long time_ms, size_t bytes_max) {
     memset(info, 0, sizeof(*info));
     info->layer = layer_1based;
     info->z = NAN;
@@ -554,7 +558,7 @@ static int gcode_layer_path_parse(FILE *file, int layer_1based,
             if (!s.seen_marker && s.count > 0 && target0 == 0) break;
             free(keep); free(stack); return LAYER_PATH_LIMIT;
         }
-        if (layer_path_deadline(start, time_seconds)) {
+        if (layer_path_deadline(start, time_ms)) {
             if ((s.seen_marker && s.max_layer >= target0) || (!s.seen_marker && s.count > 0 && target0 == 0)) break;
             free(keep); free(stack); return LAYER_PATH_LIMIT;
         }

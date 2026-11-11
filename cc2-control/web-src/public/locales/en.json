@@ -1546,6 +1546,7 @@
   "job.bed_map_layer_status_no_z": "Layer {n} / {total}",
   "job.bed_map_loading_layer": "Loading layer…",
   "job.bed_map_layer_unavailable": "Layer path not available",
+  "job.bed_map_layer_limit": "Layer path skipped: file too large to scan in time",
   "job.bed_map_waiting_first_layer": "Waiting for layer 1",
   "job.bed_map_printing_layer": "Printing layer {n} / {total}",
   "job.bed_map_view": "Bed map view",

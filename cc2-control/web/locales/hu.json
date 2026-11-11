@@ -1546,6 +1546,7 @@
   "job.bed_map_layer_status_no_z": "Réteg {n} / {total}",
   "job.bed_map_loading_layer": "Réteg betöltése…",
   "job.bed_map_layer_unavailable": "A rétegútvonal nem érhető el",
+  "job.bed_map_layer_limit": "Rétegútvonal kihagyva: a fájl túl nagy az időben történő beolvasáshoz",
   "job.bed_map_waiting_first_layer": "Várakozás az 1. rétegre",
   "job.bed_map_printing_layer": "Nyomtatott réteg: {n} / {total}",
   "job.bed_map_view": "Ágytérkép nézet",

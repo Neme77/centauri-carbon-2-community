@@ -17,7 +17,7 @@ try {
     const state = window.__CC2_PREVIEW
     Object.assign(state, { status: 2, filename: 'flow.gcode', current: '', excluded: [], layer: 0, totalLayers: 227, nozzleX: 60 })
     state.objectRows = [{ name: 'Part', center: [128, 128] }]
-    const scan = (state.scan = { busyUntil: 0, duration: 300, durations: {}, fail: {}, log: [] })
+    const scan = (state.scan = { busyUntil: 0, duration: 300, durations: {}, fail: {}, limit: {}, log: [] })
     const original = window.fetch
     const json = (body, status = 200) =>
       new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -43,6 +43,10 @@ try {
         if (scan.fail[layer]) {
           scan.log.push(`${layer}:404`)
           return Promise.resolve(json({ error: 'Layer is outside the file' }, 404))
+        }
+        if (scan.limit[layer]) {
+          scan.log.push(`${layer}:413`)
+          return Promise.resolve(json({ error: 'Layer path scan limit reached' }, 413))
         }
         if (now < scan.busyUntil) {
           scan.log.push(`${layer}:503`)
@@ -221,9 +225,21 @@ try {
   const reopened = await log()
   assert.ok(reopened.filter(e => e === '40:200').length === 2, `layer 40 rescanned once after reopening: ${reopened}`)
 
+  // The backend gives up on a layer (scan budget): the view says so, and the next layer loads.
+  await clearLog()
+  await setScan({ limit: { 50: true } })
+  await set({ layer: 50 })
+  await waitLog('50:413')
+  await page.waitForFunction(() =>
+    document.querySelector('[data-layer-status]')?.textContent.includes('Layer path skipped: file too large to scan in time')
+  )
+  assert.equal(await unavailable(), 0, 'a scan limit is reported as such, not as an unavailable path')
+  await set({ layer: 51 })
+  await waitLayer(51)
+
   assert.deepEqual(errors, [])
   console.log(
-    'PASS: layer path flow with a one-scan backend: waiting for layer 1 while preparing, cold cache, layer 1 -> 2, current before previous, busy retry, rapid stepping, back to Live, nozzle updates without fetch, obsolete responses, close/reopen'
+    'PASS: layer path flow with a one-scan backend: waiting for layer 1 while preparing, cold cache, layer 1 -> 2, current before previous, busy retry, rapid stepping, back to Live, nozzle updates without fetch, obsolete responses, close/reopen, scan limit reported'
   )
 } finally {
   await browser.close()

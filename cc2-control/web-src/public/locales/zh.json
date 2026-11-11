@@ -1546,6 +1546,7 @@
   "job.bed_map_layer_status_no_z": "第 {n} / {total} 层",
   "job.bed_map_loading_layer": "正在加载层…",
   "job.bed_map_layer_unavailable": "层路径不可用",
+  "job.bed_map_layer_limit": "已跳过层路径：文件过大，无法及时读取",
   "job.bed_map_waiting_first_layer": "等待第 1 层",
   "job.bed_map_printing_layer": "正在打印第 {n} / {total} 层",
   "job.bed_map_view": "热床图视图",

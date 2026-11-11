@@ -1546,6 +1546,7 @@
   "job.bed_map_layer_status_no_z": "Layer {n} / {total}",
   "job.bed_map_loading_layer": "Caricamento layer…",
   "job.bed_map_layer_unavailable": "Percorso layer non disponibile",
+  "job.bed_map_layer_limit": "Percorso layer saltato: file troppo grande da leggere in tempo",
   "job.bed_map_waiting_first_layer": "In attesa del layer 1",
   "job.bed_map_printing_layer": "Stampa del layer {n} / {total}",
   "job.bed_map_view": "Vista mappa del piatto",

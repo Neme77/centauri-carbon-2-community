@@ -20,7 +20,7 @@ static int parse_file(FILE *file, int layer, layer_path_info *info, layer_point 
     struct timespec start;
     clock_gettime(CLOCK_MONOTONIC, &start);
     return gcode_layer_path_parse(file, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
-                                  info, &start, LAYER_PATH_TIME_SECONDS, LAYER_PATH_BYTES_MAX);
+                                  info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX);
 }
 
 static void expect_ok(int rc, const layer_path_info *info, int min_points) {

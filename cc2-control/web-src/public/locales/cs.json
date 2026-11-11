@@ -1546,6 +1546,7 @@
   "job.bed_map_layer_status_no_z": "Vrstva {n} / {total}",
   "job.bed_map_loading_layer": "Načítání vrstvy…",
   "job.bed_map_layer_unavailable": "Dráha vrstvy není k dispozici",
+  "job.bed_map_layer_limit": "Dráha vrstvy vynechána: soubor je příliš velký na včasné načtení",
   "job.bed_map_waiting_first_layer": "Čeká se na vrstvu 1",
   "job.bed_map_printing_layer": "Tiskne se vrstva {n} / {total}",
   "job.bed_map_view": "Zobrazení mapy podložky",

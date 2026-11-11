@@ -23,6 +23,11 @@ const LAYER_SETTLE_MS = 350
 const LAYER_BUSY_RETRY_MS = 1500
 const LAYER_BUSY_RETRIES = 15
 const layerPathBusy = (error: unknown) => (error as { status?: number } | null)?.status === 503
+/* The backend gave up on the scan (time or size budget): say so instead of "not available". */
+const layerPathLimit = (error: unknown) => {
+  const e = error as { status?: number; data?: { error?: unknown } } | null
+  return e?.status === 413 && e.data?.error === 'Layer path scan limit reached'
+}
 
 const pointsAttr = (path: LayerPathPolyline) => path.map(([x, y]) => `${x},${BED_SIZE - y}`).join(' ')
 
@@ -97,7 +102,7 @@ export const ObjectBedMap = ({
   const [path, setPath] = useState<LayerPath | null>(null)
   const [prevPath, setPrevPath] = useState<LayerPath | null>(null)
   const [loading, setLoading] = useState(false)
-  const [unavailable, setUnavailable] = useState(false)
+  const [unavailable, setUnavailable] = useState<false | 'limit' | 'missing'>(false)
   const viewLayer = liveFollow ? printerLayer : manualLayer
   const totalLayers = path?.total_layers || printerTotal
   const expanded = Boolean(onClose)
@@ -121,7 +126,7 @@ export const ObjectBedMap = ({
       setPath(null)
       setPrevPath(null)
       setLoading(false)
-      setUnavailable(!(file && liveFollow))
+      setUnavailable(file && liveFollow ? false : 'missing')
       return
     }
     const ac = new AbortController()
@@ -156,12 +161,12 @@ export const ObjectBedMap = ({
           const previous = await fetchLayerPath(STORAGE, file, viewLayer - 1, ac.signal).catch(() => null)
           if (!ac.signal.aborted) setPrevPath(previous)
         }
-      } catch {
+      } catch (error) {
         if (ac.signal.aborted) return
         setPath(null)
         setPrevPath(null)
         setLoading(false)
-        setUnavailable(true)
+        setUnavailable(layerPathLimit(error) ? 'limit' : 'missing')
       }
     }
     void load()
@@ -207,7 +212,7 @@ export const ObjectBedMap = ({
         : layerTab && loading
           ? t('job.bed_map_loading_layer')
           : layerTab && unavailable
-            ? t('job.bed_map_layer_unavailable')
+            ? t(unavailable === 'limit' ? 'job.bed_map_layer_limit' : 'job.bed_map_layer_unavailable')
             : viewLayer >= 1 && totalLayers > 0 && zValue != null
               ? tpl('job.bed_map_layer_status', { n: viewLayer, total: totalLayers, z: formatZ(zValue) })
               : viewLayer >= 1 && totalLayers > 0

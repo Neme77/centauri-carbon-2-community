@@ -1546,6 +1546,7 @@
   "job.bed_map_layer_status_no_z": "Warstwa {n} / {total}",
   "job.bed_map_loading_layer": "Wczytywanie warstwy…",
   "job.bed_map_layer_unavailable": "Ścieżka warstwy niedostępna",
+  "job.bed_map_layer_limit": "Pominięto ścieżkę warstwy: plik jest zbyt duży, by odczytać go na czas",
   "job.bed_map_waiting_first_layer": "Oczekiwanie na warstwę 1",
   "job.bed_map_printing_layer": "Drukowanie warstwy {n} / {total}",
   "job.bed_map_view": "Widok mapy stołu",

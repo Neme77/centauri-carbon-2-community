@@ -1546,6 +1546,7 @@
   "job.bed_map_layer_status_no_z": "Couche {n} / {total}",
   "job.bed_map_loading_layer": "Chargement de la couche…",
   "job.bed_map_layer_unavailable": "Trajet de couche indisponible",
+  "job.bed_map_layer_limit": "Trajet de couche ignoré : fichier trop volumineux pour être lu à temps",
   "job.bed_map_waiting_first_layer": "En attente de la couche 1",
   "job.bed_map_printing_layer": "Impression de la couche {n} / {total}",
   "job.bed_map_view": "Vue de la carte du plateau",

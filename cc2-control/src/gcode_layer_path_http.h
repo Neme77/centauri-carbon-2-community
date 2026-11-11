@@ -55,7 +55,7 @@ static void *layer_path_worker(void *opaque) {
     clock_gettime(CLOCK_MONOTONIC, &started);
     int rc = gcode_layer_path_parse(file, job->layer, points, LAYER_PATH_COLLECT_MAX,
                                     starts, LAYER_PATH_PATHS_MAX, &info, &started,
-                                    LAYER_PATH_TIME_SECONDS, LAYER_PATH_BYTES_MAX);
+                                    LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX);
     fclose(file);
     if (rc == LAYER_PATH_OUTSIDE)
         layer_path_fail(job->client, 404, "Not Found", "Layer is outside the file");
