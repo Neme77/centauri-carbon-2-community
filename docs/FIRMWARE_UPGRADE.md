@@ -109,7 +109,8 @@ it through the printer's original offline firmware-update screen. Keep power
 connected and let the printer complete its restart.
 
 This file uses the stock-compatible signing route tested on the printer. The
-outer release filename changes; the accepted RC4 firmware bytes do not.
+outer release filename changes; the verified RC5 firmware bytes do not.
+Compared with the physically accepted RC4, only five translation files change.
 
 ## 6. Verify the first boot
 
@@ -129,6 +130,26 @@ If the printer shows zero temperatures or Canvas continues flashing red, do
 not start a print or flash Canvas again. Keep power/network available and send
 the preparation result and boot diagnostics to the maintainers. Do not restore
 old startup programs wholesale from the archive onto the new firmware.
+
+## Recovery and support
+
+The preparation procedure creates and verifies a PC backup before quarantining
+existing Community components. Retain that archive, the quarantine and all logs
+until the installation has been verified. Recovery and return-to-original
+firmware have been tested in the supported conditions described in this guide.
+This is not an unconditional guarantee that every error on every installation
+is reversible without loss or damage.
+
+If preparation fails, do not flash until the failure has been reviewed. If
+first-boot checks fail, do not start a print. [Open a support
+issue](https://github.com/Neme77/centauri-carbon-2-community/issues/new/choose)
+with your starting firmware and panel versions, the exact package filename,
+the failed step and its log. Remove passwords, LAN access codes and tokens.
+Keep backup and quarantine contents unchanged, and do not delete lifecycle
+records or copy old startup files over the new firmware. Maintainers can help
+select the appropriate recovery route. Returning to original ELEGOO firmware
+requires completing the Canvas restoration procedure first when modified
+Canvas firmware is active.
 
 ## Future updates
 

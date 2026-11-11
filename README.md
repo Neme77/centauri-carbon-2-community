@@ -132,6 +132,23 @@ Contributors must document and test their own PRs using the reference
 [testing guide](docs/TESTING.md) and [release policy](RELEASING.md). CI supports
 that evidence; it does not replace hardware testing or author responsibility.
 
+## Recovery and support
+
+Recovery is part of the upgrade procedure: existing Community installations
+receive a verified PC backup before files are moved into quarantine. Keep both
+until the new firmware has been checked. Return-to-stock and recovery routes
+have been tested for the documented supported states; they are not a guarantee
+against every failure or data loss on an unknown installation.
+
+If a check refuses the operation or the printer does not start correctly,
+stop and [open a support issue](https://github.com/Neme77/centauri-carbon-2-community/issues/new/choose).
+Include the starting firmware and CC2 Control versions, the exact package,
+the failed step and its log. Redact passwords, LAN access codes and tokens.
+Keep the backup, quarantine and installer logs; do not delete recovery records
+or repeatedly flash firmware to bypass a refusal. We can then help identify the
+appropriate recovery route. Follow the documented Canvas restoration steps
+before returning to original ELEGOO firmware.
+
 ## Built with the community
 
 Thanks to **Surfoo**, **beanbo**, **Noahwhite2014**, **lpgamerzockt-ops**,
