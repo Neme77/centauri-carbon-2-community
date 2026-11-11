@@ -222,14 +222,14 @@ const CanvasFirmware = () => {
         : continueValidation
           ? 'rfid.lifecycle_validation_ready'
           : data.result === 1 || data.retry_required
-          ? 'rfid.lifecycle_action_failed'
-          : data.phase === 8
-            ? 'rfid.lifecycle_stock'
-            : data.phase === -1 || data.phase === 10
-              ? 'rfid.lifecycle_dormant'
-              : action
-                ? null
-                : 'rfid.lifecycle_waiting'
+            ? 'rfid.lifecycle_action_failed'
+            : data.phase === 8
+              ? 'rfid.lifecycle_stock'
+              : data.phase === -1 || data.phase === 10
+                ? 'rfid.lifecycle_dormant'
+                : action
+                  ? null
+                  : 'rfid.lifecycle_waiting'
 
   const label =
     action === 'restore'
@@ -237,9 +237,9 @@ const CanvasFirmware = () => {
       : action === 'remove'
         ? 'rfid.lifecycle_remove'
         : action === 'resume'
-        ? continueValidation
-          ? 'rfid.lifecycle_continue_validation'
-          : 'rfid.lifecycle_resume'
+          ? continueValidation
+            ? 'rfid.lifecycle_continue_validation'
+            : 'rfid.lifecycle_resume'
           : 'rfid.install_canvas_firmware'
   const run = async () => {
     if (!action || lock.current || data.busy || data.recovery_required || data.reboot_required) return

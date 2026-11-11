@@ -16,7 +16,7 @@
 static char native_root[256];
 #define CC2_RFID_NATIVE_ROOT native_root
 #define CC2_RFID_OWNER_UID geteuid()
-typedef struct {int mode,active,phase,new_boot,requested;uint64_t generation;char coordinator[65];} rfid_runtime;
+typedef struct {int mode,active,phase,new_boot,requested;uint64_t generation;char app[65],coordinator[65],capture[65],profile[65];} rfid_runtime;
 typedef struct {pthread_mutex_t lock;int busy;} console_state;
 static console_state console={.lock=PTHREAD_MUTEX_INITIALIZER};
 typedef struct {uint32_t pid;} rfid_identity;
@@ -40,8 +40,10 @@ static int maintenance_barrier_active(void){return 0;}
 static double rfid_now(void){struct timespec t;assert(!clock_gettime(CLOCK_MONOTONIC,&t));return t.tv_sec+t.tv_nsec/1e9;}
 static void rfid_cancel(const char *reason){(void)reason;}
 static int reply;
+static char reply_body[512];
 static void respond(int fd,int code,const char *reason,const char *type,const char *body,size_t size){
-    (void)fd;(void)reason;(void)type;assert(size==strlen(body));reply=code;
+    (void)fd;(void)reason;(void)type;assert(size==strlen(body)&&size<sizeof(reply_body));reply=code;
+    memcpy(reply_body,body,size+1);
 }
 static void plates_fail(int fd,int code,const char *message){(void)fd;(void)message;reply=code;}
 #include "../src/rfid_lifecycle_http.h"
@@ -55,6 +57,7 @@ int main(int argc,char **argv){
     char root[]="/tmp/cc2-rfid-job-XXXXXX";assert(mkdtemp(root));
     assert(snprintf(native_root,sizeof(native_root),"%s",root)>0);
     fixture.mode=1;fixture.phase=1;fixture.generation=3;
+    memset(fixture.app,'a',64);fixture.app[64]=0;
     assert(rn_reboot(fixture)&&!rn_automatic(fixture,1)&&rn_blocks()&&!rn_resume_required(fixture));
     fixture.new_boot=1;assert(!strcmp(rn_automatic(fixture,0),"--stage-host"));
     assert(!strcmp(rn_automatic(fixture,1),"--advance"));
@@ -79,6 +82,7 @@ int main(int argc,char **argv){
     while(rfid_native_job.child&&rfid_now()<deadline){rfid_native_tick(&console);struct timespec pause={0,10000000};nanosleep(&pause,NULL);}
     assert(!rfid_native_job.child&&rfid_native_job.result==0);
     rfid_native_status_response(-1);assert(reply==200);
+    assert(strstr(reply_body,"\"app_binding_sha256\":\"")&&strstr(reply_body,fixture.app));
     fixture.phase=3;rfid_native_action_response(-1,&console,"resume",6);assert(reply==409);
     fd=open(helper,O_WRONLY|O_APPEND);assert(fd>=0&&write(fd,"x",1)==1&&!close(fd));assert(!rn_start("--advance"));
     copy_program(program,helper);

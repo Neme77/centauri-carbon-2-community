@@ -27,7 +27,17 @@ import { stateText } from '@/lib/machine'
 import { num, duration } from '@/lib/format'
 import { findMeasure, plates, refreshPlates } from '@/lib/plates'
 import { usePoll } from '@/lib/poll'
-import { health, openPage, openSettings, type Page, printer, refreshHealth, refreshPrinter, view, zoffset } from '@/lib/state'
+import {
+  health,
+  openPage,
+  openSettings,
+  type Page,
+  printer,
+  refreshHealth,
+  refreshPrinter,
+  view,
+  zoffset,
+} from '@/lib/state'
 import { JobControls } from '@/pages/job'
 
 const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightOn: boolean }) => {
@@ -171,9 +181,10 @@ export const Dashboard = () => {
   const off = zoffset.use().v
   const plateStatus = plates.use()
   const plateLibrary = plateStatus.ok ? plateStatus.data : null
-  const mountedPlate = plateLibrary?.available && !plateLibrary.pending
-    ? plateLibrary.plates.find(plate => plate.id === plateLibrary.current)
-    : undefined
+  const mountedPlate =
+    plateLibrary?.available && !plateLibrary.pending
+      ? plateLibrary.plates.find(plate => plate.id === plateLibrary.current)
+      : undefined
   const mesh = plateLibrary?.mesh_profile
   const meshMeasure = mesh?.startsWith('cc2_') ? findMeasure(plateLibrary, mesh.slice(4)) : null
   const meshLabel = meshMeasure
@@ -274,13 +285,19 @@ export const Dashboard = () => {
             <ThermalChart />
           </div>
           <dl class="mt-auto grid gap-2 pt-3 cc2-sm:grid-cols-2" data-heater-status>
-            {([
-              ['common.nozzle', d?.extruder?.target],
-              ['common.heated_bed', d?.heater_bed?.target],
-            ] as const).map(([label, goal]) => {
-              const known = printerAvailable && d?.connected === true && typeof goal === 'number' && Number.isFinite(goal)
+            {(
+              [
+                ['common.nozzle', d?.extruder?.target],
+                ['common.heated_bed', d?.heater_bed?.target],
+              ] as const
+            ).map(([label, goal]) => {
+              const known =
+                printerAvailable && d?.connected === true && typeof goal === 'number' && Number.isFinite(goal)
               return (
-                <div key={label} class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-edge px-2 py-2">
+                <div
+                  key={label}
+                  class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-edge px-2 py-2"
+                >
                   <dt class="text-sm text-muted">{t(label)}</dt>
                   <dd title={tpl('control.name_target', { name: t(label) })}>
                     <Tag>{t(!known ? 'state.unknown' : goal > 0 ? 'control.on' : 'control.off')}</Tag>
@@ -301,18 +318,24 @@ export const Dashboard = () => {
         <Card class="flex min-w-0 flex-col" data-first-layer>
           <CardHead icon="z" title="dashboard.first_layer" />
           <dl class="grid flex-1 grid-rows-2 gap-2 text-center">
-            <div class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3" title={t('dashboard.z_offset_page_only')}>
+            <div
+              class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3"
+              title={t('dashboard.z_offset_page_only')}
+            >
               <dt class="text-base font-semibold text-fg">{t('dashboard.effective_z_offset')}</dt>
               <dd class="mt-2 flex flex-col items-center gap-2">
                 <span class="text-3xl font-semibold tabular-nums">
-                  {off === null ? '—' : (off > 0 ? '+' : '') + off.toFixed(3)} <small class="text-sm text-muted">mm</small>
+                  {off === null ? '—' : (off > 0 ? '+' : '') + off.toFixed(3)}{' '}
+                  <small class="text-sm text-muted">mm</small>
                 </span>
                 <Tag tone="warning">{t('common.session_only')}</Tag>
               </dd>
             </div>
             <div class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3">
               <dt class="text-base font-semibold text-fg">{t('bed.active_mesh')}</dt>
-              <dd class="mt-2 truncate text-xl font-semibold" title={meshLabel}>{meshLabel}</dd>
+              <dd class="mt-2 truncate text-xl font-semibold" title={meshLabel}>
+                {meshLabel}
+              </dd>
               <dd class="mt-2 truncate text-base font-semibold text-fg" title={mountedPlate?.name}>
                 {mountedPlate ? tpl('plates.side_n', { side: mountedPlate.side }) : t('dashboard.plate_side_unknown')}
               </dd>

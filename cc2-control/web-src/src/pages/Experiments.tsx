@@ -74,9 +74,10 @@ export const Experiments = () => {
     }
   }
   const disabled = busy || !ok || !data?.editable || !data.ready || !code.trim()
-  const quietDisabled = data?.quiet_motors && !data.normal_confirmed
-    ? busy || !ok || !data.editable || !data.quiet_disable_ready || !code.trim()
-    : disabled || data?.quiet_disable_state === 'running'
+  const quietDisabled =
+    data?.quiet_motors && !data.normal_confirmed
+      ? busy || !ok || !data.editable || !data.quiet_disable_ready || !code.trim()
+      : disabled || data?.quiet_disable_state === 'running'
   return (
     <Card class="mt-3.5" data-experiments>
       <CardHead icon="settings" title="experiments.title" />
@@ -84,7 +85,9 @@ export const Experiments = () => {
       <p class="mt-2 text-muted">{t('experiments.guard')}</p>
       {ok && data?.quiet_motors && !data.normal_confirmed && (
         <div class="mt-3 rounded-md border border-amber/50 bg-amber/10 p-3" data-experiment-recovery role="status">
-          <p class="text-amber">{t(data.quiet_disable_ready ? 'experiments.normal_or_disable' : 'experiments.normal_required')}</p>
+          <p class="text-amber">
+            {t(data.quiet_disable_ready ? 'experiments.normal_or_disable' : 'experiments.normal_required')}
+          </p>
           <Button class="mt-2" onClick={() => openPage('control')}>
             {t('common.control')}
           </Button>
