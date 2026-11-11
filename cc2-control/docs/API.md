@@ -400,8 +400,9 @@ last measurement (the page was closed), the deferred `TURN_OFF_HEATERS` of the s
 requested: it is retried until it is delivered while the printer is idle and the console free, and is
 dropped when a print starts or a heater action or a new calibration takes the heaters over. It is not
 requested when a print started (`print`) or when telemetry shows a bed target that is neither off nor the
-session's. The session does not repeat the bed target between rounds; the next round heats and soaks
-again. Requires printer validation.
+session's. A heater action queued between two measurements takes the heaters over as well: the nozzle-off
+and the bed target the session still owed are dropped, and the session itself stays. Requires printer
+validation.
 
 ## Heater PID calibration
 
