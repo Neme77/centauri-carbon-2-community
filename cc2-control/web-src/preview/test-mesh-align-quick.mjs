@@ -77,7 +77,7 @@ try {
   // No four-point measurement yet: the section says so and shows no numbers.
   await open()
   await state('waiting')
-  await part('quick').getByText('There is no four-point measurement yet. Run one on the Screws tab.').waitFor()
+  await part('quick').getByText('There is no four-point measurement yet. Run one on the Screw Levelling tab.').waitFor()
   assert.ok(mounted, 'the demo has a mounted plate')
   const reference = mounted.measures.filter(m => m.temp === 60)[0]
   assert.ok(reference, 'the mounted demo plate has a 60 °C mesh')

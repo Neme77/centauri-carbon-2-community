@@ -79,8 +79,8 @@ try {
   // The demo's own active mesh: a pure tilt in X and Y, analysed without any request but GET.
   await part('basis').getByText('Plane through 121 mesh points').waitFor()
   assert.equal(await source.inputValue(), 'active')
-  await part('tilt-x').getByText('right side higher · over 240 mm').waitFor()
-  await part('tilt-y').getByText('front higher · over 240 mm').waitFor()
+  await part('tilt-x').getByText('right side higher · across 240 mm').waitFor()
+  await part('tilt-y').getByText('front higher · across 240 mm').waitFor()
   await part('verdict').getByText('Not aligned yet').waitFor()
   assert.equal(await part('verdict').getAttribute('data-aligned'), 'no')
   await part('tag').getByText('Not aligned', { exact: true }).waitFor()
@@ -141,8 +141,8 @@ try {
   assert.ok(rear < 0 && Math.abs(rear) < Math.abs(tilted.tilt_y))
   await show(asProfileReply('default', tiltedGrid))
   await part('tilt-y').getByText(`${signed('en', tilted.tilt_y)} mm`).waitFor()
-  await part('tilt-y').getByText('back higher · over 240 mm').waitFor()
-  await part('tilt-x').getByText('level · over 240 mm').waitFor()
+  await part('tilt-y').getByText('back higher · across 240 mm').waitFor()
+  await part('tilt-x').getByText('level · across 240 mm').waitFor()
   await screw('FL').getByText('Reference screw: leave it as it is', { exact: true }).waitFor()
   await screw('FR').getByText('Nothing to change here', { exact: true }).waitFor()
   const lower = `Lower the bed at this corner by ${number('en', rear, 2)} mm`
@@ -160,7 +160,7 @@ try {
   const lowRight = syntheticMesh({ tiltX: -0.6 })
   const raised = analyseMesh(lowRight)
   await show(asProfileReply('default', lowRight))
-  await part('tilt-x').getByText('left side higher · over 240 mm').waitFor()
+  await part('tilt-x').getByText('left side higher · across 240 mm').waitFor()
   for (const s of raised.screws) {
     const text = s.reference
       ? 'Reference screw: leave it as it is'
@@ -231,12 +231,12 @@ try {
   await field('Tilt span (mm)').fill('120')
   await field('Tilt span (mm)').blur()
   await part('tilt-y').getByText(`${signed('en', tilted.tilt_y / 2)} mm`).waitFor()
-  await part('tilt-y').getByText('over 120 mm').waitFor()
+  await part('tilt-y').getByText('across 120 mm').waitFor()
   await screw('RR').getByText(`${lower} (${turns}, clockwise)`, { exact: true }).waitFor()
   await settings.getByRole('button', { name: 'Reset to the CC2 defaults', exact: true }).click()
   await part('verdict').getByText('Both must be below 0.100 mm.').waitFor()
   await screw('RR').getByText(lower, { exact: true }).waitFor()
-  await part('tilt-y').getByText('over 240 mm').waitFor()
+  await part('tilt-y').getByText('across 240 mm').waitFor()
   assert.equal(await part('shape-warning').count(), 0)
   assert.equal(await field('Thread pitch (mm per turn)').inputValue(), '')
 

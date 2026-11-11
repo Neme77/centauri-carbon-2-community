@@ -255,7 +255,7 @@ try {
   // A print that starts between two rounds ends the session and keeps its heat.
   await Promise.all([page.waitForEvent('load'), page.locator('#preview-scene').selectOption('printing')])
   await open()
-  await part('ended').getByText('A print started, so the session ended. The heaters were left to the print.').waitFor()
+  await part('ended').getByText('A print started, so the session ended. The print keeps control of the heaters.').waitFor()
   assert.equal(await guide.getByText('The heaters are switched off').count(), 0)
   assert.deepEqual(
     (({ active, ended, heaters_off_pending }) => ({ active, ended, heaters_off_pending }))(await state()),

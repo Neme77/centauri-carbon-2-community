@@ -157,8 +157,8 @@ const ShapeMap = ({ analysis, config }: { analysis: MeshAnalysis; config: AlignC
         ))}
         {config.screws.map(s => (
           <g key={s.id}>
-            <circle cx={s.x} cy={top - s.y} r="9" fill="#0f172a" stroke="#f8fafc" stroke-width="1.5" />
-            <text x={s.x} y={top - s.y + 4} text-anchor="middle" font-size="11" fill="#f8fafc">
+            <circle cx={s.x} cy={top - s.y} r="9" fill="var(--well)" stroke="var(--well-fg)" stroke-width="1.5" />
+            <text x={s.x} y={top - s.y + 4} text-anchor="middle" font-size="11" fill="var(--well-fg)">
               {SCREW_CORNERS.find(c => c.id === s.id)?.n}
             </text>
           </g>
@@ -308,7 +308,7 @@ const Settings = ({ config }: { config: AlignConfig }) => {
           />
         </label>
       </div>
-      <p class="mt-3 text-xs text-muted">{t('bed.align_wiki_note')}</p>
+      <p class="mt-3.5 text-xs text-muted">{t('bed.align_wiki_note')}</p>
       <div class="mt-2 flex flex-wrap gap-2">
         <Button
           class="min-h-11"
@@ -343,7 +343,7 @@ const Settings = ({ config }: { config: AlignConfig }) => {
           </div>
         ))}
       </div>
-      <label class="mt-3 flex min-h-11 items-center gap-2 text-xs">
+      <label class="mt-3.5 flex min-h-11 items-center gap-2 text-xs">
         <input
           type="checkbox"
           class="size-4 shrink-0 accent-cyan"
@@ -478,7 +478,7 @@ const Quick = ({ config }: { config: AlignConfig }) => {
               date: stamp(reference.measure.measured),
             })}
           </p>
-          <div class="mt-2 grid grid-cols-1 gap-2.5 cc2-sm:grid-cols-2">
+          <div class="mt-2 grid grid-cols-1 gap-2 cc2-sm:grid-cols-2">
             <Tile
               name="quick-tilt-x"
               label={t('bed.align_tilt_x')}
@@ -688,7 +688,7 @@ const Guide = ({ config }: { config: AlignConfig }) => {
         )}
       </div>
       {active && (
-        <p class="mt-3 text-sm font-semibold" data-align="round">
+        <p class="mt-3.5 text-sm font-semibold" data-align="round">
           {tpl('bed.align_guide_rounds', {
             round: session.measuring ? session.round + 1 : session.round,
             rounds: session.rounds,
@@ -749,7 +749,7 @@ const Guide = ({ config }: { config: AlignConfig }) => {
         </div>
       )}
       {session.heaters_off_pending && <p class="mt-2 text-xs text-muted">{t('bed.align_heaters_pending')}</p>}
-      <div class="mt-3 flex flex-wrap items-end gap-2">
+      <div class="mt-3.5 flex flex-wrap items-end gap-2">
         <Button
           variant={active && (done || spent) ? 'default' : 'primary'}
           class="min-h-11"
@@ -943,7 +943,7 @@ export const MeshAlign = () => {
             {measured ? ` · ${measured.plate.name}` : ''}
           </p>
           <h3 class="mt-3.5 mb-2 text-base font-semibold">{t('bed.align_tilt_title')}</h3>
-          <div class="grid grid-cols-1 gap-2.5 cc2-sm:grid-cols-2">
+          <div class="grid grid-cols-1 gap-2 cc2-sm:grid-cols-2">
             <Tile
               name="tilt-x"
               label={t('bed.align_tilt_x')}
@@ -967,9 +967,9 @@ export const MeshAlign = () => {
           {!analysis.covers_screws && <Warn>{t('bed.align_extrapolated')}</Warn>}
 
           <h3 class="mt-3.5 mb-2 text-base font-semibold">{t('bed.align_shape_title')}</h3>
-          <div class="grid gap-3 cc2-sm:grid-cols-[minmax(0,18rem)_1fr]">
+          <div class="grid gap-3.5 cc2-sm:grid-cols-[minmax(0,18rem)_1fr]">
             <ShapeMap analysis={analysis} config={config} />
-            <div class="grid content-start gap-2.5">
+            <div class="grid content-start gap-2">
               <Tile
                 name="shape"
                 label={t('bed.align_shape_label')}
@@ -1020,7 +1020,7 @@ export const MeshAlign = () => {
           class="mt-3.5 flex flex-wrap items-center gap-2 rounded-md border border-edge px-3 py-2"
           data-align="settings-off"
         >
-          <p class="min-w-0 flex-1 text-xs text-muted">{t('bed.align_settings_off')}</p>
+          <p class="min-w-56 flex-1 text-xs text-muted">{t('bed.align_settings_off')}</p>
           <Button onClick={() => openSettings('integrations')}>{t('bed.align_settings_open')}</Button>
         </div>
       )}
