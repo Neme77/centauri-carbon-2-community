@@ -192,7 +192,7 @@ const NumberField = ({
   max: string
   onCommit: (value: number | null) => void
 }) => (
-  <label class="grid gap-1 text-xs">
+  <label class="grid content-between gap-1 text-xs">
     {label}
     <Input
       type="number"
@@ -267,7 +267,7 @@ const Settings = ({ config }: { config: AlignConfig }) => {
           max="5"
           onCommit={value => saveConfig({ thread_pitch_mm: value })}
         />
-        <label class="grid gap-1 text-xs">
+        <label class="grid content-between gap-1 text-xs">
           {t('bed.align_set_pitch_source')}
           <Input
             type="text"
@@ -276,7 +276,7 @@ const Settings = ({ config }: { config: AlignConfig }) => {
             onChange={e => saveConfig({ thread_pitch_source: e.currentTarget.value })}
           />
         </label>
-        <label class="grid gap-1 text-xs">
+        <label class="grid content-between gap-1 text-xs">
           {t('bed.align_set_rotation')}
           <Select
             value={rotation}
@@ -290,7 +290,7 @@ const Settings = ({ config }: { config: AlignConfig }) => {
             <option value="lowers">{t('bed.align_rotation_cw_lowers')}</option>
           </Select>
         </label>
-        <label class="grid gap-1 text-xs">
+        <label class="grid content-between gap-1 text-xs">
           {t('bed.align_set_rotation_source')}
           <Input
             type="text"

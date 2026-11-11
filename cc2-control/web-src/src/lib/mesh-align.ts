@@ -298,20 +298,11 @@ export const turnsConfigured = (config: AlignConfig) =>
 export const directionConfigured = (config: AlignConfig) =>
   typeof config.clockwise_raises_bed === 'boolean' && hasText(config.rotation_source)
 
-export function analyseMesh(grid: MeshGrid, config: AlignConfig = ALIGN_DEFAULTS): MeshAnalysis | null {
-  const points = gridPoints(grid, config.row0_is_min_y)
-  const plane = fitPlane(points)
-  if (!plane || !config.screws.length || !(config.tilt_span_mm > 0)) return null
-  const residual = points.map(p => ({ x: p.x, y: p.y, z: p.z - planeAt(plane, p.x, p.y) }))
-  const zs = points.map(p => p.z),
-    rs = residual.map(p => p.z)
-  const range = (v: number[]) => Math.max(...v) - Math.min(...v)
-  const residualRange = range(rs)
-  const heights = config.screws.map(s => planeAt(plane, s.x, s.y))
-  const ref = referenceScrew(heights)
+// What each screw has to move so that all four reach the height of the reference screw.
+function screwCorrections(config: AlignConfig, heights: number[], ref: number): ScrewCorrection[] {
   const pitch = turnsConfigured(config) ? (config.thread_pitch_mm as number) : null
   const clockwiseRaises = directionConfigured(config) ? config.clockwise_raises_bed : null
-  const screws: ScrewCorrection[] = config.screws.map((s, i) => {
+  return config.screws.map((s, i) => {
     const correction = i === ref ? 0 : heights[ref] - heights[i]
     const moves = Math.abs(correction) >= ALIGN_NOOP_MM
     return {
@@ -323,6 +314,20 @@ export function analyseMesh(grid: MeshGrid, config: AlignConfig = ALIGN_DEFAULTS
       direction: clockwiseRaises === null || !moves ? null : correction > 0 === clockwiseRaises ? 'cw' : 'ccw',
     }
   })
+}
+
+export function analyseMesh(grid: MeshGrid, config: AlignConfig = ALIGN_DEFAULTS): MeshAnalysis | null {
+  const points = gridPoints(grid, config.row0_is_min_y)
+  const plane = fitPlane(points)
+  if (!plane || !config.screws.length || !(config.tilt_span_mm > 0)) return null
+  const residual = points.map(p => ({ x: p.x, y: p.y, z: p.z - planeAt(plane, p.x, p.y) }))
+  const zs = points.map(p => p.z),
+    rs = residual.map(p => p.z)
+  const range = (v: number[]) => Math.max(...v) - Math.min(...v)
+  const residualRange = range(rs)
+  const heights = config.screws.map(s => planeAt(plane, s.x, s.y))
+  const ref = referenceScrew(heights)
+  const screws = screwCorrections(config, heights, ref)
   const tiltX = plane.b * config.tilt_span_mm,
     tiltY = plane.c * config.tilt_span_mm
   const xs = points.map(p => p.x),
@@ -347,6 +352,85 @@ export function analyseMesh(grid: MeshGrid, config: AlignConfig = ALIGN_DEFAULTS
     covers_screws: config.screws.every(s => s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1),
     aligned: tiltsBelowTarget(tiltX, tiltY, config.target_tilt_mm),
     shape_warning: residualRange > config.shape_warn_mm,
+  }
+}
+
+// Height of a mesh at a bed position, bilinear between the four points around it. Null outside the
+// measured area or next to a missing point: nothing is extrapolated.
+export function meshAt(grid: MeshGrid, x: number, y: number, row0IsMinY = true): number | null {
+  const rows = Array.isArray(grid?.points) ? grid.points : []
+  const width = Array.isArray(rows[0]) ? rows[0].length : 0
+  if (rows.length < 2 || width < 2 || !(grid.max_x > grid.min_x) || !(grid.max_y > grid.min_y)) return null
+  const u = ((x - grid.min_x) / (grid.max_x - grid.min_x)) * (width - 1)
+  const fy = (y - grid.min_y) / (grid.max_y - grid.min_y)
+  const v = (row0IsMinY ? fy : 1 - fy) * (rows.length - 1)
+  if (!(u >= 0 && u <= width - 1 && v >= 0 && v <= rows.length - 1)) return null
+  const c = Math.min(Math.floor(u), width - 2),
+    r = Math.min(Math.floor(v), rows.length - 2)
+  const z = [rows[r]?.[c], rows[r]?.[c + 1], rows[r + 1]?.[c], rows[r + 1]?.[c + 1]]
+  if (!z.every(finite)) return null
+  const tu = u - c,
+    tv = v - r
+  return (z[0] * (1 - tu) + z[1] * tu) * (1 - tv) + (z[2] * (1 - tu) + z[3] * tu) * tv
+}
+
+// The quick mode: four probes at the screws instead of a whole mesh. The plate shape comes from the
+// last full mesh of the same plate (the reference) and is taken off each probe, so what is left is
+// the tilt. A reference that does not fit the plate shows as a twist of the four points; a difference
+// that looks like a tilt cannot be told from a real one, which is why the reference has to be the
+// same plate at the same temperature. The limit is an estimate, not a measured value.
+export const QUICK_TWIST_WARN_MM = 0.05
+
+export type QuickAnalysis = {
+  plane: Plane
+  tilt_x: number
+  tilt_y: number
+  span: number
+  screws: ScrewCorrection[]
+  reference: AlignScrewId
+  aligned: boolean
+  // The plate shape of the reference mesh at each screw, in the order of the configured screws.
+  shape: number[]
+  // Range of what the four probes leave once shape and tilt are gone.
+  twist: number
+  twist_warning: boolean
+}
+
+export function analyseScrewProbes(
+  probes: Partial<Record<AlignScrewId, number>>,
+  reference: MeshGrid,
+  config: AlignConfig = ALIGN_DEFAULTS
+): QuickAnalysis | null {
+  const referencePlane = fitPlane(gridPoints(reference, config.row0_is_min_y))
+  if (!referencePlane || config.screws.length < 3 || !(config.tilt_span_mm > 0)) return null
+  const shape: number[] = [],
+    points: AlignPoint[] = []
+  for (const s of config.screws) {
+    const z = probes[s.id],
+      mesh = meshAt(reference, s.x, s.y, config.row0_is_min_y)
+    if (!finite(z) || mesh === null) return null
+    shape.push(mesh - planeAt(referencePlane, s.x, s.y))
+    points.push({ x: s.x, y: s.y, z: z - shape[shape.length - 1] })
+  }
+  const plane = fitPlane(points)
+  if (!plane) return null
+  const heights = config.screws.map(s => planeAt(plane, s.x, s.y))
+  const left = points.map((p, i) => p.z - heights[i])
+  const twist = Math.max(...left) - Math.min(...left)
+  const ref = referenceScrew(heights)
+  const tiltX = plane.b * config.tilt_span_mm,
+    tiltY = plane.c * config.tilt_span_mm
+  return {
+    plane,
+    tilt_x: tiltX,
+    tilt_y: tiltY,
+    span: config.tilt_span_mm,
+    screws: screwCorrections(config, heights, ref),
+    reference: config.screws[ref].id,
+    aligned: tiltsBelowTarget(tiltX, tiltY, config.target_tilt_mm),
+    shape,
+    twist,
+    twist_warning: twist > QUICK_TWIST_WARN_MM,
   }
 }
 

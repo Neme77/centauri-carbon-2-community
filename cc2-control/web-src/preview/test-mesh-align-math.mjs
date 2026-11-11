@@ -5,11 +5,14 @@ import {
   ALIGN_DEFAULTS,
   ALIGN_NOOP_MM,
   analyseMesh,
+  analyseScrewProbes,
   fitPlane,
   gridFromMeshReply,
   gridPoints,
+  meshAt,
   nameShape,
   parseAlignConfig,
+  QUICK_TWIST_WARN_MM,
   referenceScrew,
   tiltsBelowTarget,
 } from '../src/lib/mesh-align.ts'
@@ -307,4 +310,73 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
   assert.equal(bad.clockwise_raises_bed, null)
 }
 
-console.log('PASS mesh-guided screw alignment: plane fit, tilt, residual, shape, reference screw, turns and direction gating')
+// The quick mode: four probes at the screws, the plate shape taken from a reference mesh of the same plate.
+{
+  const reference = syntheticMesh({ tiltX: 0.02, tiltY: -0.03, shape: dome(0.4) })
+  // The interpolation returns the mesh points themselves and nothing outside the measured area.
+  near(meshAt(reference, reference.min_x, reference.min_y), reference.points[0][0], 1e-12, 'mesh at its first point')
+  near(meshAt(reference, reference.max_x, reference.max_y), reference.points.at(-1).at(-1), 1e-12, 'mesh at its last point')
+  near(
+    meshAt(reference, reference.max_x, reference.max_y, false),
+    reference.points[0].at(-1),
+    1e-12,
+    'rows read back to front'
+  )
+  assert.equal(meshAt(reference, reference.min_x - 1, 100), null)
+  assert.equal(meshAt(reference, 100, reference.max_y + 1), null)
+  const holed = { ...reference, points: reference.points.map((row, r) => row.map((z, c) => (r === 0 && c === 0 ? null : z))) }
+  assert.equal(meshAt(holed, reference.min_x + 1, reference.min_y + 1), null)
+
+  // The same plate after the screws were turned: the full mesh and the four probes agree.
+  const turned = syntheticMesh({ tiltX: 0.31, tiltY: -0.22, shape: dome(0.4) })
+  const full = analyseMesh(turned)
+  const probes = Object.fromEntries(ALIGN_DEFAULTS.screws.map(s => [s.id, meshAt(turned, s.x, s.y)]))
+  const quick = analyseScrewProbes(probes, reference)
+  near(quick.tilt_x, full.tilt_x, 1e-9, 'quick tilt X')
+  near(quick.tilt_y, full.tilt_y, 1e-9, 'quick tilt Y')
+  assert.equal(quick.reference, full.reference)
+  quick.screws.forEach((screw, i) => near(screw.correction, full.screws[i].correction, 1e-9, `quick correction ${screw.id}`))
+  near(quick.twist, 0, 1e-9, 'a fitting reference leaves no twist')
+  assert.equal(quick.twist_warning, false)
+  assert.equal(quick.aligned, false)
+
+  // Without the reference shape the same four probes would point at a tilt the plate does not have.
+  const flat = syntheticMesh({ tiltX: 0, tiltY: 0 })
+  const lopsided = syntheticMesh({ tiltX: 0, tiltY: 0, shape: (u, v) => 0.3 * u * u * u })
+  const lopsidedProbes = Object.fromEntries(ALIGN_DEFAULTS.screws.map(s => [s.id, meshAt(lopsided, s.x, s.y)]))
+  assert.ok(Math.abs(analyseScrewProbes(lopsidedProbes, flat).tilt_x) > 0.05)
+  const own = analyseScrewProbes(lopsidedProbes, lopsided)
+  near(own.tilt_x, analyseMesh(lopsided).tilt_x, 1e-9, 'own reference: tilt X')
+  assert.equal(own.aligned, analyseMesh(lopsided).aligned)
+
+  // A reference of another plate shows as a twist of the four points, and is warned about.
+  const other = syntheticMesh({ tiltX: 0, tiltY: 0, shape: twist(0.2) })
+  const wrong = analyseScrewProbes(probes, other)
+  assert.ok(wrong.twist > QUICK_TWIST_WARN_MM)
+  assert.equal(wrong.twist_warning, true)
+
+  // Turns and direction follow the same gating as the full mode.
+  const threaded = analyseScrewProbes(
+    probes,
+    reference,
+    config({ thread_pitch_mm: 0.5, thread_pitch_source: 'measured', clockwise_raises_bed: false, rotation_source: 'wiki' })
+  )
+  const fullThreaded = analyseMesh(
+    turned,
+    config({ thread_pitch_mm: 0.5, thread_pitch_source: 'measured', clockwise_raises_bed: false, rotation_source: 'wiki' })
+  )
+  threaded.screws.forEach((screw, i) => {
+    near(screw.turns, fullThreaded.screws[i].turns, 1e-9, `quick turns ${screw.id}`)
+    assert.equal(screw.direction, fullThreaded.screws[i].direction)
+  })
+  assert.equal(quick.screws[0].turns, null)
+
+  // Nothing is guessed: a missing probe, a screw outside the reference mesh or an unusable reference.
+  assert.equal(analyseScrewProbes({ ...probes, RR: undefined }, reference), null)
+  assert.equal(analyseScrewProbes({ ...probes, FL: Number.NaN }, reference), null)
+  const small = syntheticMesh({ tiltX: 0, tiltY: 0 })
+  assert.equal(analyseScrewProbes(probes, { ...small, min_x: 60 }), null)
+  assert.equal(analyseScrewProbes(probes, { ...reference, points: [[0, 0]] }), null)
+}
+
+console.log('PASS mesh-guided screw alignment: plane fit, tilt, residual, shape, reference screw, turns and direction gating, quick mode from four probes and a reference mesh')
