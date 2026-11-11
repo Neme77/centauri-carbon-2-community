@@ -1601,5 +1601,15 @@
   "job.bed_map_printing_layer": "Yazdırılan katman: {n} / {total}",
   "job.bed_map_view": "Yatak haritası görünümü",
   "job.bed_map_nozzle": "Nozul",
-  "job.bed_map_layer_legend": "Katman yolu"
+  "job.bed_map_layer_legend": "Katman yolu",
+  "dashboard.first_layer": "İlk katman",
+  "dashboard.mesh_not_detected": "Mesh algılanmadı",
+  "dashboard.plate_side_unknown": "Tabla yüzü bilinmiyor",
+  "drying.restore_pending": "Kurutma oturumu sona erdi. Tabla hedef sıcaklığını kontrol edin. Yazıcı boşta ve hedef sıcaklık sıfır olduğunda CC2 Control, tablanın boşta kalma zaman aşımını geri yüklemeyi yeniden deneyecek.",
+  "experiments.normal_or_disable": "Uygulama güncellemelerini etkinleştirmek için Kontrol bölümünde Normal modunu seçin veya Normal modunu geri yükleyip deneysel özelliği kapatmak için burada Sessiz modunu kapatın.",
+  "experiments.quiet_restore_failed": "Sessiz modu hâlâ etkin. Normal modunun geri yüklenmesi veya ayarın kaydedilmesi başarısız oldu. Konsolu kontrol edip yeniden deneyin.",
+  "experiments.quiet_restoring": "Normal motor modu geri yükleniyor…",
+  "rfid.lifecycle_continue_validation": "Güncelleme doğrulamasına devam et",
+  "rfid.lifecycle_validation_confirm": "Canvas RFID güncellemesinin doğrulamasına devam edilsin mi? Kontroller başarılı olursa firmware aktarımı başlayacak. Bir sonraki yeniden başlatma istemine kadar yazıcıyı boşta, soğuk ve açık tutun.",
+  "rfid.lifecycle_validation_ready": "İlk yeniden başlatma tamamlandı. Canvas RFID güncellemesinin doğrulamasına devam edebilirsiniz."
 }

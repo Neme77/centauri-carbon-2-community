@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Complete the ten new dashboard, drying, motor-mode and Canvas validation messages in French, Hungarian, Polish, Czech and Turkish; all eleven shipped locales now cover every English key. Integrated by **Neme77** (#350).
 - Screw levelling names each corner and says whether to raise or lower it against the front-left zero. The session is four steps: start, re-probe the screw you turned, check all four, then end. The one-shot measurement is marked as a measurement without a session (#329).
 - Screw levelling keeps the bed at 60 °C for the session and only switches the nozzle off after start. The double measurement is labelled “2× 3 probes”. The table shows the running session’s offsets, and earlier sessions can be reviewed, exported or cleared (#329).
 - Complete Hungarian translations for the RFID reader lifecycle, print queue and update requirements. By **Neme77**.

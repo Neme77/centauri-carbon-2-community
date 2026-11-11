@@ -1601,5 +1601,15 @@
   "job.bed_map_printing_layer": "Impression de la couche {n} / {total}",
   "job.bed_map_view": "Vue de la carte du plateau",
   "job.bed_map_nozzle": "Buse",
-  "job.bed_map_layer_legend": "Trajet de couche"
+  "job.bed_map_layer_legend": "Trajet de couche",
+  "dashboard.first_layer": "Première couche",
+  "dashboard.mesh_not_detected": "Mesh non détecté",
+  "dashboard.plate_side_unknown": "Face du plateau inconnue",
+  "drying.restore_pending": "Le séchage est terminé. Vérifiez la température cible du plateau. CC2 Control réessaiera de rétablir le délai d’inactivité du plateau lorsque l’imprimante sera au repos et que la température cible sera à zéro.",
+  "experiments.normal_or_disable": "Sélectionnez Normal dans Contrôle pour autoriser les mises à jour de l’application, ou désactivez Silencieux ici pour rétablir Normal et désactiver l’expérience.",
+  "experiments.quiet_restore_failed": "Le mode Silencieux est toujours activé. Le rétablissement du mode Normal ou l’enregistrement du réglage a échoué. Consultez la console et réessayez.",
+  "experiments.quiet_restoring": "Rétablissement du mode moteur Normal…",
+  "rfid.lifecycle_continue_validation": "Poursuivre la validation de la mise à jour",
+  "rfid.lifecycle_validation_confirm": "Poursuivre la validation de la mise à jour RFID de Canvas ? Si les vérifications réussissent, le transfert du firmware commencera. Laissez l’imprimante au repos, froide et sous tension jusqu’à la prochaine demande de redémarrage.",
+  "rfid.lifecycle_validation_ready": "Premier redémarrage terminé. Vous pouvez poursuivre la validation de la mise à jour RFID de Canvas."
 }

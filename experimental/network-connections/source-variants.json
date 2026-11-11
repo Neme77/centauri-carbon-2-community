@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "base": "02.01.01.13",
+  "variants": {
+    "boot.h": {
+      "helper_sha256": "0c7457a1100b4e8494af220828ab8d545890e8e59f400bd033acb1e90995b4b4",
+      "app_sha256": "fc8704176a4a558e553c706379595b3735cf03060d1c3073e3f1f63a4a6bfb43",
+      "reason": "The helper supports the immutable .13 boot marker path; the bundled legacy app header is not the helper boot entry."
+    },
+    "bootstrap.h": {
+      "helper_sha256": "b490e73a8e3796e2029ef24f3606555d75e2da0e0c05fbcf87ce9821a43a7bc1",
+      "app_sha256": "7fb0c5cea434af2531f5c17e5a818f9ff96e63ce4fafe0e526af78e159e2165d",
+      "reason": "The .13 manager uses a 15-second native runtime qualification bound; the app keeps its legacy helper copy."
+    },
+    "http.h": {
+      "helper_sha256": "eeadf596a99bb75893cceac29417db743fe0b221951deda4b37374f0e1432840",
+      "app_sha256": "1216ca3aaa6b43e61d5692538a494b238e2467bb156d6157f8802088e9ceb332",
+      "reason": "The application HTTP bridge accepts the separately qualified .13 manager digest."
+    },
+    "io.h": {
+      "helper_sha256": "9db377fe5f50ca62732e17e78496269e542cea4c810a13bfe9f023b9e937e8f7",
+      "app_sha256": "1acd8190ed4d49e41eac6e637edc335265fb97e77ac326d6c487573e1e961c6d",
+      "reason": "The helper uses zero initialisation accepted by the GCC 6.5 toolchain; the app copy uses equivalent designated initialisation."
+    },
+    "native.h": {
+      "helper_sha256": "f8589ba831e2fc16b76251026dae1759e2130cba080985479336b1cefeb08b67",
+      "app_sha256": "fa9160874341f5452bf4c7771cf2866d92420d6611da6971d5a5cbc5f3dace68",
+      "reason": "The .13 helper selects its immutable Camera Recovery path without the legacy Reap module."
+    },
+    "profile-pins.h": {
+      "helper_sha256": "99a14ef8b19bcbc74ed67358f72185b3f623f14348975e43582662364676d834",
+      "app_sha256": "c5182014f3ded819e42aa0b8c258b5b287bf3a0fa09081ebcff5b395157c418b",
+      "reason": "The helper has explicit stock13 compile-time native pins; the app snapshot retains legacy fallback pins."
+    },
+    "profile_cache.h": {
+      "helper_sha256": "0549891bd9f0ef22df59ee24f79c3c19851d220d61f5ff581b79e92bca6f1bad",
+      "app_sha256": "b3ce206292d551ddbe1ac4aef7f8b3c06c99cb0ceb10b24b2111559d3b20e767",
+      "reason": "The .13 helper caches its qualified module paths; the app snapshot keeps the legacy module list."
+    }
+  }
+}
