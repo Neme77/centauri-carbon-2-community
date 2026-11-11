@@ -26,7 +26,7 @@ let browser
 const errors = []
 // Every request to the session, with its body: a body ending in CONFIRM is the only one that acts.
 const sent = []
-const confirmed = () => sent.filter(r => /(^|\n)CONFIRM$/.test(r.body))
+const confirmed = () => sent.filter(r => /(^|\n)CONFIRM:[0-9a-f]{8}$/.test(r.body))
 const shots = path.join(root, 'preview/artifacts')
 try {
   await server.listen()
@@ -50,7 +50,7 @@ try {
   // One confirmed request can be refused the way the backend refuses it when the console is busy.
   let refuse = 0
   await page.route('**/api/screws/align/measure', route => {
-    if (refuse && /\nCONFIRM$/.test(route.request().postData() || '')) {
+    if (refuse && /\nCONFIRM:[0-9a-f]{8}$/.test(route.request().postData() || '')) {
       refuse--
       return route.fulfill({ status: 409, json: { ok: false, error: 'Another printer command is still running' } })
     }
@@ -101,7 +101,8 @@ try {
   await button('Measure the mesh').click()
   await dialog.getByText('Run measurement 1 of 4?').waitFor()
   const listed = await dialog.innerText()
-  assert.match(listed, /M140 S60 — heat the bed; repeated every ten minutes while it heats and soaks/)
+  assert.match(listed, /M140 S60 — heat the bed; while this target stays set it is renewed every ten minutes until the session ends/)
+  assert.match(listed, /M104 S0 — switch the nozzle off after the measurement/)
   assert.match(listed, /\(then CC2 Control waits until the bed reads 60 °C and holds it for 2 min; nothing is sent meanwhile\)/)
   assert.match(listed, /BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60 — probe the full mesh; it replaces the mesh of this side in the printer/)
   assert.match(listed, /No shorter probing command is confirmed for this firmware/)
@@ -121,7 +122,7 @@ try {
   await confirm()
   await part('round').getByText('Round 1 of 4', { exact: true }).waitFor()
   assert.equal(confirmed().length, 1)
-  assert.match(confirmed()[0].body, /^A\n60\n2\n[0-9a-f]*\n4\nCONFIRM$/)
+  assert.match(confirmed()[0].body, /^A\n60\n2\n[0-9a-f]*\n4\nCONFIRM:[0-9a-f]{8}$/)
   assert.equal(await guide.getAttribute('data-align-active'), 'yes')
   assert.ok(await button('Measure again').isDisabled(), 'no second round while one runs')
   await finishRound(tiltedGrid)
@@ -191,7 +192,7 @@ try {
   await confirm()
   await toast(`Saved to “${target.name}” as its 60 °C measurement.`)
   assert.equal(confirmed().length, 4)
-  assert.equal(confirmed()[3].body, `${target.id}\nCONFIRM`)
+  assert.match(confirmed()[3].body, new RegExp(`^${target.id}\\nCONFIRM:[0-9a-f]{8}$`))
   await part('ended').getByText('The mesh was saved and the session ended.').waitFor()
   await guide.getByText('The heaters are switched off as soon as the printer is idle.').waitFor()
   assert.equal(await guide.getAttribute('data-align-active'), 'no')
@@ -243,7 +244,7 @@ try {
   await part('advice').getByText('All 1 rounds are used and a tilt is still above the target. Save this mesh or end the session.').waitFor()
   assert.ok(await button('Measure again').isDisabled())
   assert.ok(await button('Save the mesh and finish').isEnabled())
-  assert.match(confirmed().at(-1).body, /\n1\nCONFIRM$/)
+  assert.match(confirmed().at(-1).body, /\n1\nCONFIRM:[0-9a-f]{8}$/)
 
   // A print that starts between two rounds ends the session and keeps its heat.
   await Promise.all([page.waitForEvent('load'), page.locator('#preview-scene').selectOption('printing')])

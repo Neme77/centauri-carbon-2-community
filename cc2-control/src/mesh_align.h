@@ -6,7 +6,14 @@
  * mesh is the one saved to the plate library at the end.
  *
  * Nothing is sent without the caller's confirmation: every request first answers with the
- * commands it would send ("confirm_required") and acts only when its last line is CONFIRM.
+ * commands it would send ("confirm_required") and a token over that list, and acts only when
+ * its last line is CONFIRM:<token>. If the list has changed since it was shown (the printer
+ * lost its homing, another measurement took the slot), the token no longer matches and the
+ * request is refused, so the caller reviews the new list.
+ *
+ * Between two measurements the nozzle is switched off and the bed target is renewed like the
+ * tramming session's, but only while telemetry still shows the session's own target. Both
+ * are part of the list the measurement was confirmed with.
  *
  * The session owns the heaters from its first measurement on. However it ends without a
  * print taking over (explicit end, saved, a failed or cancelled measurement, emergency
@@ -27,11 +34,15 @@ static struct {
     int temp, soak;    /* soak in minutes */
     char nozzle[PLATE_ID_LEN + 1];
     time_t last;       /* the last accepted request or completed measurement */
+    int nozzle_off_due; /* the last measurement left the nozzle at its homing temperature */
+    time_t bed_renew_at;
     const char *ended; /* how the last session ended: "", "ended", "saved", "failed", "cancelled",
                         * "timeout", "print" or "estop" */
 } align = {.ended = ""};
 
 static int align_active(void) { return align.active; }
+static int (*align_nozzle_off)(void); /* set below; a test may replace it */
+static int align_send_nozzle_off(void) { return send_local_gcode_script("M104 S0"); }
 
 /* The bed target is someone else's: telemetry shows a target that is neither off nor the session's. */
 static int align_bed_taken(void) {
@@ -58,6 +69,7 @@ static void align_tick(const mqtt_client *mqtt, int emergency, time_t now) {
         align.measuring = 0;
         if (!strcmp(plates_cal.result, "done")) {
             align.round++; align.measured = 1; align.last = now;
+            align.nozzle_off_due = 1; align.bed_renew_at = now + SCREWS_BED_RENEW_S;
             return;
         }
         /* The job switched the bed off where it still owned it; the nozzle may still hold the
@@ -65,24 +77,62 @@ static void align_tick(const mqtt_client *mqtt, int emergency, time_t now) {
         align_finish(!strcmp(plates_cal.result, "cancelled") ? "cancelled" : "failed", 1);
         return;
     }
-    if (now >= align.last && now - align.last > SCREWS_SESSION_TIMEOUT_S) align_finish("timeout", 1);
+    if (now >= align.last && now - align.last > SCREWS_SESSION_TIMEOUT_S) { align_finish("timeout", 1); return; }
+    /* Waiting for the screws to be turned: nozzle off, and the bed kept at the session's target
+     * while it is still the session's. Only to an idle printer; retried on the next tick. */
+    if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status || mqtt->machine_status != 1) return;
+    if (align.nozzle_off_due && (align_nozzle_off ? align_nozzle_off : align_send_nozzle_off)() == 0) align.nozzle_off_due = 0;
+    double target;
+    if (now >= align.bed_renew_at && uds_value(&telemetry, U_BG, &target) && fabs(target - align.temp) <= 0.5)
+        align.bed_renew_at = now + (plates_bed_target(align.temp) == 0 ? SCREWS_BED_RENEW_S : 30);
 }
 
-static void align_commands_begin(json_builder *b) { json_builder_printf(b, "{\"confirm_required\":true,\"commands\":["); }
-static void align_command(json_builder *b, int *count, const char *format, ...) {
-    char command[128]; va_list args;
-    va_start(args, format); vsnprintf(command, sizeof(command), format, args); va_end(args);
-    json_builder_printf(b, "%s", (*count)++ ? "," : "");
-    json_builder_string(b, command);
-}
 static void align_reply_built(int fd, json_builder *b) {
     if (b->failed) plates_fail(fd, 500, "Alignment reply is too large");
     else respond(fd, 200, "OK", "application/json; charset=utf-8", b->data, b->length);
     free(b->data);
 }
 
-static int align_confirmed(char fields[][PLATE_NAME_MAX + 1], int count, int at) {
-    return count == at + 1 && !strcmp(fields[at], ALIGN_CONFIRM);
+/* FNV-1a over the listed commands, separators included: the token of a command list. */
+static uint32_t align_token;
+static void align_commands_begin(json_builder *b) {
+    align_token = UINT32_C(2166136261);
+    json_builder_printf(b, "{\"confirm_required\":true,\"commands\":[");
+}
+static void align_command(json_builder *b, int *count, const char *format, ...) {
+    char command[128]; va_list args;
+    va_start(args, format); vsnprintf(command, sizeof(command), format, args); va_end(args);
+    for (const unsigned char *c = (const unsigned char *)command; ; c++) {
+        align_token = (align_token ^ *c) * UINT32_C(16777619);
+        if (!*c) break;
+    }
+    json_builder_printf(b, "%s", (*count)++ ? "," : "");
+    json_builder_string(b, command);
+}
+/* Closes the list with its token and the caller's extra fields. Without a confirmation the list is
+ * the reply (returns 0). With one, returns 1 when the token is that of the list just built, and
+ * otherwise answers 409: the commands are not the ones the caller was shown. */
+static int align_commands_end(int fd, json_builder *b, const char *given, const char *extra_format, ...) {
+    char extra[160]; va_list args;
+    va_start(args, extra_format); vsnprintf(extra, sizeof(extra), extra_format, args); va_end(args);
+    char token[16]; snprintf(token, sizeof(token), "%08x", (unsigned)align_token);
+    if (!given) {
+        json_builder_printf(b, "],\"token\":\"%s\"%s}\n", token, extra);
+        align_reply_built(fd, b);
+        return 0;
+    }
+    free(b->data);
+    if (strcmp(given, token)) { plates_fail(fd, 409, "The commands have changed; review them again"); return 0; }
+    return 1;
+}
+
+/* The token of a confirmation in field `at` ("CONFIRM:<token>"), or NULL when the request has none. */
+static const char *align_confirmation(char fields[][PLATE_NAME_MAX + 1], int count, int at) {
+    return count == at + 1 ? fields[at] + sizeof(ALIGN_CONFIRM) : NULL;
+}
+static int align_confirm_field(const char *field) {
+    size_t n = sizeof(ALIGN_CONFIRM) - 1;
+    return !strncmp(field, ALIGN_CONFIRM, n) && field[n] == ':' && strlen(field + n + 1) == 8;
 }
 
 /* GET /api/screws/align */
@@ -117,7 +167,7 @@ static void align_measure_response(int fd, const mqtt_client *mqtt, console_stat
     size_t digits = strlen(fields[4]);
     int rounds = digits && digits <= 2 && strspn(fields[4], "0123456789") == digits ? atoi(fields[4]) : 0;
     if (count < 5 || !plates_calibrate_fields(fields, 4, &temp, &soak) || rounds < 1 || rounds > ALIGN_ROUNDS_MAX ||
-        (count == 6 && strcmp(fields[5], ALIGN_CONFIRM))) {
+        (count == 6 && !align_confirm_field(fields[5]))) {
         plates_fail(fd, 400, "Invalid alignment measurement"); return;
     }
     char side = fields[0][0];
@@ -135,7 +185,7 @@ static void align_measure_response(int fd, const mqtt_client *mqtt, console_stat
         }
     }
     if ((reason = plates_calibrate_check(mqtt, side, "", &status))) { plates_fail(fd, status, reason); return; }
-    if (!align_confirmed(fields, count, 5)) {
+    {
         json_builder b = {malloc(1024), 0, 1024, 0}; int listed = 0;
         if (!b.data) { plates_fail(fd, 500, "Out of memory"); return; }
         align_commands_begin(&b);
@@ -149,10 +199,12 @@ static void align_measure_response(int fd, const mqtt_client *mqtt, console_stat
         if (!plates_homed(mqtt)) align_command(&b, &listed, "G28");
         align_command(&b, &listed, "M140 S%d", temp);
         align_command(&b, &listed, "BED_MESH_CALIBRATE PROFILE=%s BED_TEMP=%d", plate_slot(side), temp);
-        json_builder_printf(&b, "],\"round\":%d,\"rounds\":%d,\"soak\":%d}\n", align.active ? align.round + 1 : 1,
-                            align.active ? align.rounds : rounds, soak);
-        align_reply_built(fd, &b);
-        return;
+        /* Afterwards, while the session waits for the screws: nozzle off. The bed target above is
+         * renewed until the session ends; the page says so next to it. */
+        align_command(&b, &listed, "M104 S0");
+        if (!align_commands_end(fd, &b, align_confirmation(fields, count, 5), ",\"round\":%d,\"rounds\":%d,\"soak\":%d",
+                                align.active ? align.round + 1 : 1, align.active ? align.rounds : rounds, soak))
+            return;
     }
     if ((reason = plates_calibrate_start(mqtt, console, side, temp, soak, fields[3], ""))) {
         plates_fail(fd, 409, reason); return; /* nothing was queued: the session, if any, waits as before */
@@ -163,6 +215,7 @@ static void align_measure_response(int fd, const mqtt_client *mqtt, console_stat
         memcpy(align.nozzle, fields[3], sizeof(align.nozzle)); /* "" or a checked id */
     }
     align.ended = ""; align.measuring = 1; align.measured = 0; align.last = time(NULL);
+    align.nozzle_off_due = 0;
     char reply[96];
     snprintf(reply, sizeof(reply), "{\"started\":true,\"round\":%d,\"rounds\":%d}\n", align.round + 1, align.rounds);
     plates_reply(fd, 202, reply);
@@ -173,7 +226,7 @@ static void align_measure_response(int fd, const mqtt_client *mqtt, console_stat
 static void align_save_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
     char fields[2][PLATE_NAME_MAX + 1] = {{0}};
     int count = plates_fields(body, length, fields, 2), status = 409;
-    if (count < 1 || !plate_id_valid(fields[0]) || (count == 2 && strcmp(fields[1], ALIGN_CONFIRM))) {
+    if (count < 1 || !plate_id_valid(fields[0]) || (count == 2 && !align_confirm_field(fields[1]))) {
         plates_fail(fd, 400, "Invalid alignment save"); return;
     }
     if (!align.active) { plates_fail(fd, 409, "No alignment session is active"); return; }
@@ -185,7 +238,7 @@ static void align_save_response(int fd, const mqtt_client *mqtt, const char *bod
     const plate_entry *p = plate_find(fields[0]);
     if (!p) { plates_fail(fd, 404, "Unknown plate"); return; }
     if (p->side != align.side) { plates_fail(fd, 409, "The plate is on the other side"); return; }
-    if (!align_confirmed(fields, count, 1)) {
+    {
         json_builder b = {malloc(1024), 0, 1024, 0}; int listed = 0;
         if (!b.data) { plates_fail(fd, 500, "Out of memory"); return; }
         align_commands_begin(&b);
@@ -199,9 +252,9 @@ static void align_save_response(int fd, const mqtt_client *mqtt, const char *bod
         align_command(&b, &listed, "BED_MESH_PROFILE SAVE=" PLATE_PROFILE_PREFIX "%s", same ? same->id : "<id>");
         align_command(&b, &listed, "SET_GCODE_OFFSET Z=%.3f", plate_z_now(p));
         align_command(&b, &listed, "TURN_OFF_HEATERS");
-        json_builder_printf(&b, "],\"replaces\":%s,\"temp\":%d}\n", same ? "true" : "false", align.temp);
-        align_reply_built(fd, &b);
-        return;
+        if (!align_commands_end(fd, &b, align_confirmation(fields, count, 1), ",\"replaces\":%s,\"temp\":%d",
+                                same ? "true" : "false", align.temp))
+            return;
     }
     int profile = 0, applied = 0; plate_measure *m = NULL;
     reason = plates_take_measure(mqtt, p->id, align.temp, align.nozzle, 0, &status, &m, &profile, &applied);
@@ -218,20 +271,20 @@ static void align_save_response(int fd, const mqtt_client *mqtt, const char *bod
 static void align_end_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
     char fields[1][PLATE_NAME_MAX + 1] = {{0}};
     int count = plates_fields(body, length, fields, 1);
-    if (count < 0 || (count == 1 && strcmp(fields[0], ALIGN_CONFIRM))) { plates_fail(fd, 400, "Invalid alignment end"); return; }
+    if (count < 0 || (count == 1 && !align_confirm_field(fields[0]))) { plates_fail(fd, 400, "Invalid alignment end"); return; }
     if (!align.active) { plates_reply(fd, 200, "{\"ended\":true,\"active\":false}\n"); return; }
     if (align.measuring && (plates_cal.stage == CAL_PROBING || plates_cal.stage == CAL_SAVING)) {
         plates_fail(fd, 409, "The probing has started; use the emergency stop to interrupt it"); return;
     }
-    if (count != 1) {
+    {
         json_builder b = {malloc(512), 0, 512, 0}; int listed = 0;
         if (!b.data) { plates_fail(fd, 500, "Out of memory"); return; }
         align_commands_begin(&b);
         if (align.measuring && plates_cal.stage && plates_cal_owns_bed(mqtt)) align_command(&b, &listed, "M140 S0");
         align_command(&b, &listed, "TURN_OFF_HEATERS");
-        json_builder_printf(&b, "],\"measuring\":%s}\n", align.measuring ? "true" : "false");
-        align_reply_built(fd, &b);
-        return;
+        if (!align_commands_end(fd, &b, align_confirmation(fields, count, 0), ",\"measuring\":%s",
+                                align.measuring ? "true" : "false"))
+            return;
     }
     if (align.measuring && plates_cal.stage) plates_cal_end(mqtt, "cancelled", "", "", 1);
     align_finish("ended", 1);

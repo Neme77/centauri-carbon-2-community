@@ -364,6 +364,7 @@ const COMMANDS: [RegExp, Key][] = [
   [/^G28$/, 'bed.align_cmd_home'],
   [/^M140 S0$/, 'bed.align_cmd_bed_off'],
   [/^M140 S/, 'bed.align_cmd_heat'],
+  [/^M104 S0$/, 'bed.align_cmd_nozzle_off'],
   [/^BED_MESH_CALIBRATE /, 'bed.align_cmd_probe'],
   [/^BED_MESH_PROFILE LOAD=/, 'bed.align_cmd_profile_load'],
   [/^BED_MESH_PROFILE SAVE=/, 'bed.align_cmd_profile_save'],

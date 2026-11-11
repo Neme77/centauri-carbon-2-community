@@ -1303,7 +1303,22 @@ export function previewPlugin(): Plugin {
             }
             if (path.startsWith('/api/screws/align/') && req.method === 'POST') {
               const lines = body.replace(/\n+$/, '').split('\n')
-              const confirmed = lines[lines.length - 1] === 'CONFIRM'
+              // Like the backend: the confirmation carries the token of the list it was shown.
+              const last = lines[lines.length - 1] ?? ''
+              const given = /^CONFIRM:[0-9a-f]{8}$/.test(last) ? last.slice(8) : null
+              if (given !== null) lines.pop()
+              const tokenOf = (commands: string[]) => {
+                let h = 0x811c9dc5
+                for (const c of `${commands.join('\0')}\0`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0
+                return h.toString(16).padStart(8, '0')
+              }
+              // Returns the reply to send instead of acting: the list (no confirmation) or a refusal.
+              const gate = (commands: string[], extra: Record<string, unknown>) =>
+                given === null
+                  ? reply({ confirm_required: true, commands, token: tokenOf(commands), ...extra })
+                  : given !== tokenOf(commands)
+                    ? reply({ ok: false, error: 'The commands have changed; review them again' }, 409)
+                    : null
               const session = alignState()
               const slot = (side: string) => (side === 'B' ? 'default1' : 'default')
               if (path === '/api/screws/align/measure') {
@@ -1332,17 +1347,19 @@ export function previewPlugin(): Plugin {
                   )
                 if (calibration.stage !== 'off')
                   return reply({ ok: false, error: 'A bed mesh calibration is already running' }, 409)
-                if (!confirmed)
-                  return reply({
-                    confirm_required: true,
-                    commands: [
-                      `M140 S${Number(temp)}`,
-                      `BED_MESH_CALIBRATE PROFILE=${slot(side)} BED_TEMP=${Number(temp)}`,
-                    ],
+                const stop = gate(
+                  [
+                    `M140 S${Number(temp)}`,
+                    `BED_MESH_CALIBRATE PROFILE=${slot(side)} BED_TEMP=${Number(temp)}`,
+                    'M104 S0',
+                  ],
+                  {
                     round: session.active ? session.round + 1 : 1,
                     rounds: session.active ? session.rounds : Number(rounds),
                     soak: Number(soak),
-                  })
+                  }
+                )
+                if (stop !== null) return stop
                 if (!session.active)
                   alignSession = {
                     ...idleAlign(),
@@ -1375,18 +1392,16 @@ export function previewPlugin(): Plugin {
                 let m = measures.find(
                   x => x.plate === plate.id && x.temp === session.temp && x.nozzle === session.nozzle
                 )
-                if (!confirmed)
-                  return reply({
-                    confirm_required: true,
-                    commands: [
-                      `BED_MESH_PROFILE LOAD=${slot(session.side)}`,
-                      `BED_MESH_PROFILE SAVE=cc2_${m ? m.id : '<id>'}`,
-                      `SET_GCODE_OFFSET Z=${plate.z_offset.toFixed(3)}`,
-                      'TURN_OFF_HEATERS',
-                    ],
-                    replaces: Boolean(m),
-                    temp: session.temp,
-                  })
+                const stop = gate(
+                  [
+                    `BED_MESH_PROFILE LOAD=${slot(session.side)}`,
+                    `BED_MESH_PROFILE SAVE=cc2_${m ? m.id : '<id>'}`,
+                    `SET_GCODE_OFFSET Z=${plate.z_offset.toFixed(3)}`,
+                    'TURN_OFF_HEATERS',
+                  ],
+                  { replaces: Boolean(m), temp: session.temp }
+                )
+                if (stop !== null) return stop
                 if (!m) {
                   m = {
                     id: newId(),
@@ -1412,12 +1427,10 @@ export function previewPlugin(): Plugin {
                     { ok: false, error: 'The probing has started; use the emergency stop to interrupt it' },
                     409
                   )
-                if (!confirmed)
-                  return reply({
-                    confirm_required: true,
-                    commands: [...(session.measuring ? ['M140 S0'] : []), 'TURN_OFF_HEATERS'],
-                    measuring: session.measuring,
-                  })
+                const stop = gate([...(session.measuring ? ['M140 S0'] : []), 'TURN_OFF_HEATERS'], {
+                  measuring: session.measuring,
+                })
+                if (stop !== null) return stop
                 if (session.measuring) calibration = { ...calibration, stage: 'off', result: 'cancelled' }
                 alignEnd('ended', true)
                 return reply({ ended: true, active: false })

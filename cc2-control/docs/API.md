@@ -363,10 +363,13 @@ telemetry reads the temperature, the soak, then `BED_MESH_CALIBRATE PROFILE=<slo
 shorter probing command is known for this firmware (a reduced `PROBE_COUNT` is untested), so every round
 measures the full mesh, and the mesh of the last round is the one saved at the end.
 
-Every change is a `POST` with a text body, one field per line. Without a final line `CONFIRM` a request
-sends nothing and answers `200` with `{"confirm_required":true,"commands":[...]}`, the G-code it would
-send, in order; with `CONFIRM` it acts. A request that is refused answers `4xx` with `{"ok":false,"error":...}`
-and has queued nothing, so it can be repeated.
+Every change is a `POST` with a text body, one field per line. Without a confirmation a request sends
+nothing and answers `200` with `{"confirm_required":true,"commands":[...],"token":"<8 hex digits>"}`: the
+G-code it would send, in order, and a token over that list. Repeated with a final line `CONFIRM:<token>` it
+acts. If the list is no longer the one the token was issued for (the printer lost its homing, another
+measurement took the slot), the request answers `409` and nothing is sent; ask again and confirm the new
+list. A request that is refused answers `4xx` with `{"ok":false,"error":...}` and has queued nothing, so
+it can be repeated.
 
 - `GET /api/screws/align` returns `active`, the completed `round` and the allowed `rounds`, `measuring`
   (the session's calibration runs), `measured` (the side slot holds the session's last mesh), `side`,
@@ -378,7 +381,10 @@ and has queued nothing, so it can be repeated.
   rounds 1-10) starts a session with its first measurement, or runs the next measurement of the running
   session, whose settings it must repeat. It needs what `/api/plates/calibrate` needs, no screw-tramming
   session and no emergency stop, and is refused once the session has used its rounds. `202` with
-  `{"started":true,"round","rounds"}`.
+  `{"started":true,"round","rounds"}`. After a completed measurement the session switches the nozzle
+  off (`M104 S0`, listed) and renews the bed target every ten minutes while telemetry still shows the
+  session's own target, like the screw-tramming session; a target someone else set, or a bed that is
+  off, is left alone.
 - `POST /api/screws/align/save` (plate) makes the mesh of the last completed measurement the plate's
   measurement at the session's temperature and nozzle, exactly as `/api/plates/measure` does
   (`BED_MESH_PROFILE LOAD=<slot>` and `SAVE=cc2_<id>`, `SET_GCODE_OFFSET Z=`), and ends the session.

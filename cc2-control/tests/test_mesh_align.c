@@ -88,7 +88,10 @@ static int fake_console(console_state *c, const char *command) {
 }
 static int beds_off;
 static int fake_bed_off(void) { beds_off++; return 0; }
-static int fake_bed_target(int temp) { (void)temp; return 0; }
+static int bed_targets, bed_target_refused;
+static int fake_bed_target(int temp) { (void)temp; if (bed_target_refused > 0) { bed_target_refused--; return -1; } bed_targets++; return 0; }
+static int nozzle_offs, nozzle_off_refused;
+static int fake_nozzle_off(void) { if (nozzle_off_refused > 0) { nozzle_off_refused--; return -1; } nozzle_offs++; return 0; }
 
 /* The deferred shutdown as the main loop delivers it. */
 static int shutdowns, shutdown_refused;
@@ -126,7 +129,21 @@ static void loop(int emergency) {
 
 static char response[4096];
 enum { GET, MEASURE, SAVE, END, CALIBRATE, CONTROL, CREATE };
+static int call_raw(int handler, const char *body);
+/* A body whose last line is CONFIRM is sent the way the page does it: the request without that
+ * line first, to get the command list and its token, then again with CONFIRM:<token>. */
 static int call(int handler, const char *body) {
+    size_t n = body ? strlen(body) : 0;
+    int confirm = n >= 7 && !strcmp(body + n - 7, "CONFIRM") && (n == 7 || body[n - 8] == '\n');
+    if (!confirm) return call_raw(handler, body);
+    char first[256]; snprintf(first, sizeof(first), "%.*s", (int)(n > 7 ? n - 8 : 0), body);
+    int status = call_raw(handler, first);
+    const char *token = strstr(response, "\"token\":\"");
+    if (status != 200 || !token) return status;
+    char full[300]; snprintf(full, sizeof(full), "%s%sCONFIRM:%.8s", first, first[0] ? "\n" : "", token + 9);
+    return call_raw(handler, full);
+}
+static int call_raw(int handler, const char *body) {
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     size_t length = body ? strlen(body) : 0;
     switch (handler) {
@@ -160,6 +177,7 @@ static void reset(void) {
     pthread_mutex_lock(&console.lock); console.busy = 0; pthread_mutex_unlock(&console.lock);
     console_ok = 1; console_refuses = 0; uds_down = 0; shutdown_refused = 0;
     console_log[0] = scripts[0] = 0; beds_off = shutdowns = 0;
+    bed_targets = bed_target_refused = nozzle_offs = nozzle_off_refused = 0;
     bed(25, 0);
 }
 /* Runs the confirmed measurement up to the given stage of its calibration job. */
@@ -190,6 +208,7 @@ int main(void) {
     FILE *socket_file = fopen(service, "wb"); assert(socket_file); fclose(socket_file);
     printer_autosave_path = autosave; plates_path = library; object_query_path = service;
     plates_uds = fake_uds; plates_console = fake_console; plates_bed_off = fake_bed_off; plates_bed_target = fake_bed_target;
+    align_nozzle_off = fake_nozzle_off;
     uds_init(&telemetry);
     console_init(&console, "/tmp/unused");
     recovery_console = &console;
@@ -208,7 +227,8 @@ int main(void) {
     reset(); mqtt.homed_axes[0] = 0;
     assert(call(MEASURE, REQUEST) == 200);
     assert(strstr(response, "{\"confirm_required\":true,\"commands\":[\"G28\",\"M140 S60\","
-                            "\"BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60\"],\"round\":1,\"rounds\":4,\"soak\":2}"));
+                            "\"BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60\",\"M104 S0\"],\"token\":\""));
+    assert(strstr(response, "\",\"round\":1,\"rounds\":4,\"soak\":2}"));
     assert(!align.active && !plates_cal.stage && !console_log[0] && !scripts[0] && !control_screws_heaters_off_pending());
     assert(call(GET, NULL) == 200 && strstr(response, "{\"active\":false,\"round\":0,") && strstr(response, "\"ended\":\"\",\"heaters_off_pending\":false"));
     assert(call(SAVE, plate) == 409 && call(END, "") == 200 && !console_log[0] && !scripts[0]);
@@ -245,7 +265,8 @@ int main(void) {
     scripts[0] = 0;
     assert(call(SAVE, plate) == 200);
     assert(strstr(response, "\"commands\":[\"BED_MESH_PROFILE LOAD=default\",\"BED_MESH_PROFILE SAVE=cc2_<id>\","
-                            "\"SET_GCODE_OFFSET Z=0.000\",\"TURN_OFF_HEATERS\"],\"replaces\":false,\"temp\":60}"));
+                            "\"SET_GCODE_OFFSET Z=0.000\",\"TURN_OFF_HEATERS\"],\"token\":\""));
+    assert(strstr(response, "\",\"replaces\":false,\"temp\":60}"));
     assert(!scripts[0] && align.active && !plate_measure_count(plate) && !control_screws_heaters_off_pending());
     /* A save that fails keeps the session, so it can be repeated; nothing is switched off yet. */
     snprintf(body, sizeof(body), "%s\nCONFIRM", plate);
@@ -323,7 +344,8 @@ int main(void) {
     /* The end is listed first. Confirmed while the bed heats or soaks it stops the job, which switches
      * off the bed it owns, and the deferred shutdown follows. Once probing has begun it is refused. */
     reset(); measure_until(CAL_SOAKING);
-    assert(call(END, "") == 200 && strstr(response, "{\"confirm_required\":true,\"commands\":[\"M140 S0\",\"TURN_OFF_HEATERS\"],\"measuring\":true}"));
+    assert(call(END, "") == 200 && strstr(response, "{\"confirm_required\":true,\"commands\":[\"M140 S0\",\"TURN_OFF_HEATERS\"],\"token\":\"") &&
+           strstr(response, "\",\"measuring\":true}"));
     assert(align.active && plates_cal.stage == CAL_SOAKING && !beds_off && !control_screws_heaters_off_pending());
     assert(call(END, "CONFIRM") == 200 && strstr(response, "\"ended\":true"));
     assert(!align.active && !strcmp(align.ended, "ended") && !plates_cal.stage && !strcmp(plates_cal.result, "cancelled") && beds_off == 1);
@@ -335,7 +357,7 @@ int main(void) {
     printer_measured(&second); loop(0);
     assert(align.active && align.round == 1);
     /* Between rounds only the shutdown is listed, and an end without a session sends nothing. */
-    assert(call(END, "") == 200 && strstr(response, "\"commands\":[\"TURN_OFF_HEATERS\"],\"measuring\":false"));
+    assert(call(END, "") == 200 && strstr(response, "\"commands\":[\"TURN_OFF_HEATERS\"],\"token\":\"") && strstr(response, "\",\"measuring\":false"));
     assert(call(END, "CONFIRM") == 200 && control_screws_heaters_off_pending());
     loop(0); assert(shutdowns == 1);
     assert(call(END, "CONFIRM") == 200 && !control_screws_heaters_off_pending());
@@ -422,6 +444,50 @@ int main(void) {
     assert(call(CALIBRATE, "A\n60\n0") == 202 && plates_cal.stage == CAL_HEATING && !align.active);
     plates_cal_end(&mqtt, "cancelled", "", "", 0);
 
+    /* The commands are confirmed by their token. A list that changed after it was shown (here the
+     * printer lost its homing, so a G28 joins it) is refused, nothing is sent, and the new list
+     * can be confirmed. A made-up token and the bare word are refused as well. */
+    reset();
+    assert(call_raw(MEASURE, REQUEST) == 200 && !strstr(response, "G28"));
+    char shown[16]; snprintf(shown, sizeof(shown), "%.8s", strstr(response, "\"token\":\"") + 9);
+    mqtt.homed_axes[0] = 0;
+    snprintf(body, sizeof(body), REQUEST "\nCONFIRM:%s", shown);
+    assert(call_raw(MEASURE, body) == 409 && strstr(response, "commands have changed"));
+    assert(!align.active && !plates_cal.stage && !console_log[0] && !scripts[0]);
+    assert(call_raw(MEASURE, REQUEST "\nCONFIRM:00000000") == 409 && !align.active);
+    assert(call_raw(MEASURE, REQUEST "\nCONFIRM") == 400 && !align.active);
+    assert(call(MEASURE, CONFIRMED) == 202 && align.active);
+    assert(call_raw(END, "CONFIRM:00000000") == 409 && align.active);
+    assert(call(END, "CONFIRM") == 200 && !align.active);
+
+    /* Between two measurements: the nozzle is switched off (retried when refused), and the bed target
+     * is renewed only once it is due, only to an idle printer and only while it is still the session's. */
+    reset();
+    nozzle_off_refused = 1;
+    measure(&second);
+    assert(nozzle_offs == 0 && align.nozzle_off_due);       /* the tick that completed the round sent nothing */
+    loop(0);
+    assert(nozzle_offs == 0 && align.nozzle_off_due);       /* refused once */
+    loop(0);
+    assert(nozzle_offs == 1 && !align.nozzle_off_due);
+    int sent = bed_targets;
+    loop(0);
+    assert(bed_targets == sent);                            /* not due yet */
+    align.bed_renew_at = time(NULL) - 1;
+    mqtt.machine_status = 10; loop(0);
+    assert(bed_targets == sent);                            /* not idle */
+    mqtt.machine_status = 1; bed(60, 70); loop(0);
+    assert(bed_targets == sent);                            /* someone else's target */
+    bed(60, 0); loop(0);
+    assert(bed_targets == sent);                            /* switched off: left off */
+    bed(60, 60); bed_target_refused = 1; loop(0);
+    assert(bed_targets == sent && align.bed_renew_at <= time(NULL) + 30);
+    align.bed_renew_at = time(NULL) - 1; loop(0);
+    assert(bed_targets == sent + 1 && align.bed_renew_at >= time(NULL) + SCREWS_BED_RENEW_S - 1);
+    assert(call(END, "CONFIRM") == 200);
+    loop(0);
+    assert(bed_targets == sent + 1);                        /* no renewal after the end */
+
     /* The process is killed during an alignment session: the marker carries the session's bed
      * target, and the next process switches the heaters off only while the bed still shows it. */
     static char marker_path[128]; snprintf(marker_path, sizeof(marker_path), "%s/session", directory);
@@ -448,6 +514,6 @@ int main(void) {
     screws_marker_path = NULL;
 
     console_destroy(&console);
-    puts("PASS mesh-guided alignment session: listed before sent, no repeat after a refusal, failure, end, timeout, print, foreign bed target, emergency stop and a session left by a killed process");
+    puts("PASS mesh-guided alignment session: listed before sent, no repeat after a refusal, failure, end, timeout, print, foreign bed target, emergency stop, a session left by a killed process, confirmation by token, nozzle off and bed renewal between rounds");
     return 0;
 }
