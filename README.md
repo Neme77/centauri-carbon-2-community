@@ -131,6 +131,12 @@ and the extended physical qualification were carried out by **Neme77**.
 Original authorship and the wider project history remain in the
 [full credits](docs/CONTRIBUTORS.md) and [changelog](CHANGELOG.md).
 
+Special thanks to the **#327** testers and investigators: **Eldurinn**,
+**kalross**, **jgj1107**, **matefon**, **SVLoneStar**, **fechy**,
+**RoisinDubh79**, **lpgamerzockt-ops** and **Noahwhite2014**. Their different
+installation states, trial reports and recovery confirmations made the upgrade
+work more complete. [Individual contributions and report scope](docs/UPGRADE_CREDITS.md).
+
 ## Buy me a coffee
 
 If you enjoy my work and would like to buy me a coffee, your optional support
