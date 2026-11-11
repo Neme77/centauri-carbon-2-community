@@ -1601,5 +1601,15 @@
   "job.bed_map_printing_layer": "Tiskne se vrstva {n} / {total}",
   "job.bed_map_view": "Zobrazení mapy podložky",
   "job.bed_map_nozzle": "Tryska",
-  "job.bed_map_layer_legend": "Dráha vrstvy"
+  "job.bed_map_layer_legend": "Dráha vrstvy",
+  "dashboard.first_layer": "První vrstva",
+  "dashboard.mesh_not_detected": "Síť nebyla zjištěna",
+  "dashboard.plate_side_unknown": "Neznámá strana podložky",
+  "drying.restore_pending": "Sušení bylo dokončeno. Zkontrolujte cílovou teplotu podložky. CC2 Control se znovu pokusí obnovit časový limit nečinnosti podložky, až bude tiskárna nečinná a cílová teplota bude nulová.",
+  "experiments.normal_or_disable": "Chcete-li povolit aktualizace aplikace, vyberte režim Normální v nabídce Ovládání, nebo zde vypněte Tichý režim, čímž obnovíte Normální režim a vypnete experimentální funkci.",
+  "experiments.quiet_restore_failed": "Tichý režim je stále zapnutý. Obnovení Normálního režimu nebo uložení nastavení se nezdařilo. Zkontrolujte konzoli a zkuste to znovu.",
+  "experiments.quiet_restoring": "Obnovování normálního režimu motorů…",
+  "rfid.lifecycle_continue_validation": "Pokračovat v ověřování aktualizace",
+  "rfid.lifecycle_validation_confirm": "Pokračovat v ověřování aktualizace RFID Canvas? Pokud kontroly uspějí, začne přenos firmwaru. Ponechte tiskárnu nečinnou, studenou a zapnutou až do další výzvy k restartování.",
+  "rfid.lifecycle_validation_ready": "První restart byl dokončen. Můžete pokračovat v ověřování aktualizace RFID Canvas."
 }

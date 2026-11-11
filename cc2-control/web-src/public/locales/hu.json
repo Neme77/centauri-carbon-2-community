@@ -1601,5 +1601,15 @@
   "job.bed_map_printing_layer": "Nyomtatott réteg: {n} / {total}",
   "job.bed_map_view": "Ágytérkép nézet",
   "job.bed_map_nozzle": "Fúvóka",
-  "job.bed_map_layer_legend": "Rétegútvonal"
+  "job.bed_map_layer_legend": "Rétegútvonal",
+  "dashboard.first_layer": "Első réteg",
+  "dashboard.mesh_not_detected": "Nem észlelhető háló",
+  "dashboard.plate_side_unknown": "A nyomtatólap oldala ismeretlen",
+  "drying.restore_pending": "A szárítás befejeződött. Ellenőrizd az asztal célhőmérsékletét. A CC2 Control újra megpróbálja visszaállítani az asztal üresjárati időkorlátját, amikor a nyomtató tétlen és a célhőmérséklet nulla.",
+  "experiments.normal_or_disable": "Az alkalmazásfrissítések engedélyezéséhez válaszd a Normál módot a Vezérlés oldalon, vagy itt kapcsold ki a Csendes módot a Normál mód visszaállításához és a kísérleti funkció kikapcsolásához.",
+  "experiments.quiet_restore_failed": "A Csendes mód továbbra is be van kapcsolva. Nem sikerült visszaállítani a Normál módot vagy menteni a beállítást. Ellenőrizd a konzolt, majd próbáld újra.",
+  "experiments.quiet_restoring": "A Normál motormód visszaállítása…",
+  "rfid.lifecycle_continue_validation": "A frissítés ellenőrzésének folytatása",
+  "rfid.lifecycle_validation_confirm": "Folytatod a Canvas RFID-frissítésének ellenőrzését? Ha az ellenőrzések sikeresek, megkezdődik a firmware átvitele. A következő újraindítási kérésig hagyd a nyomtatót tétlenül, hidegen és bekapcsolva.",
+  "rfid.lifecycle_validation_ready": "Az első újraindítás befejeződött. Folytathatod a Canvas RFID-frissítésének ellenőrzését."
 }

@@ -1601,5 +1601,15 @@
   "job.bed_map_printing_layer": "Drukowanie warstwy {n} / {total}",
   "job.bed_map_view": "Widok mapy stołu",
   "job.bed_map_nozzle": "Dysza",
-  "job.bed_map_layer_legend": "Ścieżka warstwy"
+  "job.bed_map_layer_legend": "Ścieżka warstwy",
+  "dashboard.first_layer": "Pierwsza warstwa",
+  "dashboard.mesh_not_detected": "Nie wykryto siatki",
+  "dashboard.plate_side_unknown": "Nieznana strona płyty",
+  "drying.restore_pending": "Suszenie zostało zakończone. Sprawdź temperaturę docelową stołu. CC2 Control ponowi próbę przywrócenia limitu bezczynności stołu, gdy drukarka będzie bezczynna, a temperatura docelowa będzie wynosić zero.",
+  "experiments.normal_or_disable": "Wybierz tryb Normalny w panelu Sterowanie, aby odblokować aktualizacje aplikacji, lub wyłącz tutaj tryb Cichy, aby przywrócić tryb Normalny i wyłączyć funkcję eksperymentalną.",
+  "experiments.quiet_restore_failed": "Tryb Cichy jest nadal włączony. Przywrócenie trybu Normalnego lub zapisanie ustawienia nie powiodło się. Sprawdź konsolę i spróbuj ponownie.",
+  "experiments.quiet_restoring": "Przywracanie normalnego trybu silników…",
+  "rfid.lifecycle_continue_validation": "Kontynuuj weryfikację aktualizacji",
+  "rfid.lifecycle_validation_confirm": "Kontynuować weryfikację aktualizacji RFID Canvas? Jeśli kontrole zakończą się pomyślnie, rozpocznie się przesyłanie firmware. Pozostaw drukarkę bezczynną, zimną i włączoną do następnego monitu o ponowne uruchomienie.",
+  "rfid.lifecycle_validation_ready": "Pierwsze ponowne uruchomienie zakończone. Możesz kontynuować weryfikację aktualizacji RFID Canvas."
 }
