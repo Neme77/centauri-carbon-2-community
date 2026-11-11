@@ -10,6 +10,7 @@
  * and a print or heater action that takes the heaters over in between is left alone. */
 static int reject_console, reject_sends, sends;
 static double nozzle_target, bed_target;
+static int have_bed_target = 1;
 static char queued[700];
 
 int mock_console_start(console_state *state, const char *script, char *reason, size_t cap) {
@@ -44,7 +45,22 @@ static void step(console_state *state, mqtt_client *mqtt) {
     unsigned long generation = state->generation;
     pthread_mutex_unlock(&state->lock);
     (void)control_screws_tick(mqtt, completed, success, generation, 0, time(NULL));
-    screws_heaters_off_tick(mqtt, busy, fake_send);
+    screws_heaters_off_tick(mqtt, busy, fake_send, have_bed_target, bed_target);
+    screws_marker_sync();
+}
+
+static int marker(void) { struct stat info; return lstat(screws_marker_path, &info) == 0; }
+
+/* What a new process knows after the old one was killed: nothing but the marker file. */
+static void restart(console_state *state) {
+    control_screws_heaters_off_sent();
+    control_screws_reset();
+    screws_resumed = 0;
+    pthread_mutex_lock(&state->lock);
+    state->busy = 0; state->completed = 0; state->success = 0;
+    pthread_mutex_unlock(&state->lock);
+    sends = 0; reject_sends = 0; reject_console = 0;
+    screws_marker_restore(0);
 }
 
 static int act(console_state *state, mqtt_client *mqtt, const char *action) {
@@ -67,6 +83,9 @@ static void session(console_state *state, mqtt_client *mqtt) {
 }
 
 int main(void) {
+    char dir[] = "/tmp/screw-tram-end-XXXXXX"; assert(mkdtemp(dir));
+    static char marker_path[64]; snprintf(marker_path, sizeof(marker_path), "%s/session", dir);
+    screws_marker_path = marker_path;
     console_state state; console_init(&state, "/tmp/unused");
     mqtt_client mqtt; memset(&mqtt, 0, sizeof(mqtt));
     mqtt.connected = mqtt.registered = mqtt.have_machine_status = 1;
@@ -123,7 +142,80 @@ int main(void) {
     step(&state, &mqtt);
     assert(sends == 0 && !control_screws_heaters_off_pending() && bed_target == 70);
 
+    /* The marker file exists exactly while a session is active or a shutdown is pending. */
+    assert(!marker());
+    session(&state, &mqtt);
+    assert(marker());
+    assert(act(&state, &mqtt, "screws:tram:end") == 202);
+    step(&state, &mqtt);
+    assert(marker());                      /* the end is still running */
+    finish(&state, 1);
+    step(&state, &mqtt);
+    assert(!marker() && bed_target == 0);
+
+    /* The process is killed during a session: the next one finds the marker and switches the
+     * session's heaters off once the printer is idle and telemetry shows the session's bed. */
+    session(&state, &mqtt);
+    restart(&state);
+    assert(control_screws_heaters_off_pending() && !control_screws_session_active() && marker());
+    have_bed_target = 0;
+    step(&state, &mqtt);
+    assert(sends == 0 && control_screws_heaters_off_pending());   /* no telemetry yet: wait */
+    have_bed_target = 1; mqtt.machine_status = 10;
+    step(&state, &mqtt);
+    assert(sends == 0 && control_screws_heaters_off_pending());   /* not idle yet: wait */
+    mqtt.machine_status = 1; reject_sends = 1;
+    step(&state, &mqtt);
+    assert(sends == 1 && control_screws_heaters_off_pending() && marker());
+    step(&state, &mqtt);
+    assert(sends == 2 && !control_screws_heaters_off_pending() && nozzle_target == 0 && bed_target == 0);
+    step(&state, &mqtt);
+    assert(sends == 2 && !marker());
+
+    /* Killed while a rejected end was pending: the same recovery. */
+    session(&state, &mqtt);
+    reject_console = 1;
+    assert(act(&state, &mqtt, "screws:tram:end") == 409);
+    restart(&state);
+    step(&state, &mqtt);
+    assert(sends == 1 && bed_target == 0 && !control_screws_heaters_off_pending());
+    step(&state, &mqtt);
+    assert(!marker());
+
+    /* After the restart the bed is off already, or someone set another target: left alone. */
+    const double others[] = {0, 70};
+    for (int i = 0; i < 2; i++) {
+        session(&state, &mqtt);
+        restart(&state);
+        bed_target = others[i]; nozzle_target = 0;
+        step(&state, &mqtt);
+        assert(sends == 0 && !control_screws_heaters_off_pending() && bed_target == others[i]);
+        step(&state, &mqtt);
+        assert(!marker());
+    }
+
+    /* A print is running when the new process starts: it owns the heaters. */
+    session(&state, &mqtt);
+    restart(&state);
+    mqtt.machine_status = 2; nozzle_target = 210;
+    step(&state, &mqtt);
+    assert(sends == 0 && !control_screws_heaters_off_pending() && bed_target == 60 && nozzle_target == 210);
+    mqtt.machine_status = 1; mqtt.last_message = time(NULL);
+    step(&state, &mqtt);
+    assert(sends == 0 && !marker());
+
+    /* A marker that is not a plain file of ours is ignored. */
+    assert(!symlink("/tmp/unused", marker_path));
+    restart(&state);
+    assert(!control_screws_heaters_off_pending());
+    assert(!unlink(marker_path));
+    screws_marker_present = -1;
+    step(&state, &mqtt);
+    assert(!marker());
+
     console_destroy(&state);
-    puts("PASS explicit screw tramming end: shutdown pending until confirmed, retried after rejection or failure, takeovers respected");
+    rmdir(dir);
+    puts("PASS explicit screw tramming end: shutdown pending until confirmed, retried after rejection or failure, "
+         "takeovers respected, and a session left by a killed process is shut down by the next one");
     return 0;
 }
