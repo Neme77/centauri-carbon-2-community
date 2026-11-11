@@ -50,3 +50,20 @@ Tests involving stock packages, vendor reference binaries or signing keys must r
 - power-cycle persistence and update/rollback behaviour.
 
 Record the tested firmware hash, source commit, printer base version and any required post-install steps with the release.
+# Author evidence required for pull requests
+
+Authors must provide their own validation report following CONTRIBUTING.md and
+the PR template. Record the exact starting firmware base, application version,
+hardware and source/build identity. List the checks actually run, their results
+and any untested cases. Keep offline fixtures, CI and physical printer tests
+separate. Do not use a successful simulation as evidence of a successful flash,
+or protocol acknowledgements as evidence of physical flash readback.
+
+Changes affecting native firmware, motion, heating, Canvas, camera, networking
+or storage require the relevant real-printer evidence before release. If that
+evidence is unavailable, keep the PR draft or explicitly request a tester.
+Supply concise logs without LAN codes, tokens, passwords or personal archives.
+Document failure/recovery behaviour and RAM/time limits where affected.
+
+Uncertain firmware/native compatibility requires a new firmware base and a
+reviewed migration; compatible panel features stay on the normal app path.
