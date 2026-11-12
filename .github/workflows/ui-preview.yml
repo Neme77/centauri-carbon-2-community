@@ -40,6 +40,8 @@ jobs:
         run: npm run test:mesh
       - name: Verify paginated lists and storage display
         run: npm run test:list-pages
+      - name: Verify the bounded picture cache of Files, History and Queue
+        run: npm run test:file-pictures
       - name: Verify unavailable G-code dates and sorting without file writes
         run: npm run test:file-dates
       - name: Verify approved Dashboard controls and responsive layout

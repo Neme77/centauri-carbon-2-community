@@ -41,6 +41,7 @@
     "test:spanish": "node preview/test-spanish.mjs",
     "test:materials": "node preview/test-material-presets.mjs",
     "test:list-pages": "node preview/test-files-history-pages.mjs",
+    "test:file-pictures": "node preview/test-file-pictures.mjs",
     "test:file-dates": "node preview/test-file-dates.mjs",
     "test:update-notice": "node preview/test-update-notice.mjs",
     "test:updates": "node preview/test-updates.mjs",

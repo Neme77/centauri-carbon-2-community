@@ -183,7 +183,7 @@ const Settings = ({ item, lib }: { item: QueueItem; lib: PlateLibrary | null }) 
 // The picture of the job's file: large on the card of the current job, small in a row of the list. A queue
 // item does not say which version of the file it means, so the picture is remembered for the job.
 const Thumb = ({ item, row }: { item: QueueItem; row?: boolean }) => (
-  <FilePicture storage={item.storage} path={item.path} tag={`job ${item.id}`} row={row} />
+  <FilePicture storage={item.storage} path={item.path} tag={`job:${item.id}`} row={row} />
 )
 
 const copyText = (item: QueueItem) =>

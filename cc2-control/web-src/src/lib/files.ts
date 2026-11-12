@@ -6,8 +6,9 @@ export type FileEntry = { storage: 'internal' | 'usb'; file: any }
 // A storage whose list is partial (traversal guards, or an older backend): `n` of `total` files are shown.
 export type FileCut = { storage: string; n: number; total: number }
 
-// What tells this file from another one of the same name, for a cached picture.
-export const fileTag = (file: any) => `${Number(file?.size || 0)}:${Number(file?.modified || 0)}`
+// What tells this file from another one of the same name, for a cached picture: a new size or date is a new
+// version of the file, whose picture replaces the old one (lib/pictures.ts).
+export const fileTag = (file: any) => `file:${Number(file?.size || 0)}:${Number(file?.modified || 0)}`
 
 // Every G-code file of both storages: the first reply of /api/gcode-files and the pages that follow it.
 export async function listFiles(signal?: AbortSignal) {
