@@ -85,7 +85,13 @@ try {
   // Policy: the automatic start is a saved choice, the delay a number.
   const policy = page.locator('[data-queue-policy]')
   await policy.getByRole('radio', { name: 'Start the next copy automatically', exact: false }).check()
-  await page.waitForFunction(() => document.querySelector('[data-queue-policy] input[type=radio]:nth-of-type(1)') !== null)
+  // The native radio checks before POST + refresh finish. Wait for the server
+  // choice to reach the UI store before editing another field of that policy.
+  await page.waitForFunction(async () => {
+    const { queue } = await import('/src/lib/queue.ts')
+    return queue.get().data?.policy.after === 'auto'
+  })
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   assert.deepEqual(lastPost(), ['/api/queue/policy', 'auto\n60\n0'])
   await policy.getByRole('switch').click()
   await page.waitForFunction(() => document.querySelector('[data-queue-policy] [role=switch]')?.getAttribute('aria-checked') === 'true')

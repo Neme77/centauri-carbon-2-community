@@ -2,13 +2,20 @@
 
 Checklist for publishing a release. A release is a Git tag plus the files attached to it. Published files are never replaced: a fix gets a new tag.
 
+Firmware or native-component changes with uncertain compatibility require a
+new complete firmware base and documented migration requirements. Compatible
+panel feature updates continue through the normal application-update channel
+with explicit base checks. Do not promise universal compatibility from a panel
+version number alone. PR authors must provide the documentation and testing
+evidence required by CONTRIBUTING.md before a change is selected for release.
+
 ## Where the version lives
 
 `cc2-control/VERSION` is the only place the CC2 Control version is written, and `cc2-control/FIRMWARE_VERSION` the application updater compatibility-family identifier (currently `4.4`), not the full firmware patch-release label. The Makefile passes both to the compiler, `installer/package.py` and `builder/current/prepare.py` read it, and `tests/test_version_static.py` fails if a copy appears in code. The release tag (`V4.2-R5`), the README download links and the changelog name a release and are edited by hand.
 
 ## Before tagging
 
-1. Change `cc2-control/VERSION` if CC2 Control changes version, and `cc2-control/FIRMWARE_VERSION` if the firmware release number changes.
+1. Change `cc2-control/VERSION` if CC2 Control changes version. Change `cc2-control/FIRMWARE_VERSION` only when the application updater compatibility family changes; it is not the full firmware patch-release label.
 2. Update `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format): rename `## [Unreleased]` to `## [<release name>] - YYYY-MM-DD`, check that every user-visible change since the previous release has an entry, add a new empty `## [Unreleased]` above it, and update the link references at the bottom (`[Unreleased]` compares the new tag with `HEAD`, and the new release links to its GitHub release).
 3. Refresh the builder snapshot, which must contain exactly the committed `cc2-control/` tree (`test_cc2_control_source_snapshot.py` fails otherwise). Commit everything else first, then on a clean tree run:
    ```sh

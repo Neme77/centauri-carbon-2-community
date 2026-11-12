@@ -52,7 +52,7 @@ const Video = ({ task, idle, busy }: { task: Task; idle: boolean; busy: boolean 
       <Button class="h-auto min-w-0 px-2 py-1.5 text-xs" onClick={() => download(task)}>
         <Download {...I} />
         {t('history.download_video')}
-        {task.size > 0 && <small class="text-muted">{fileSize(task.size)}</small>}
+        {task.size > 0 && <small class="whitespace-nowrap text-muted">{fileSize(task.size)}</small>}
       </Button>
     )
   if (task.video !== 1 && task.video !== 3) return <small class="text-muted">{t('history.no_time_lapse')}</small>

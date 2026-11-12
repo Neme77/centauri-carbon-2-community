@@ -111,17 +111,24 @@ try {
  await install.click()
  await page.getByRole('button',{name:'Annulla',exact:true}).last().click()
  assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
- for(const [phase,label,action] of [
+ for(const [phase,label,action,result=0] of [
   [-1,'rfid.install_canvas_firmware','activate'],
-  [2,'rfid.lifecycle_resume','resume'],
+  [1,'rfid.lifecycle_continue_validation','resume'],
+  [2,'rfid.lifecycle_continue_validation','resume'],
+  [2,'rfid.lifecycle_resume','resume',1],
   [5,'rfid.lifecycle_restore','restore'],
   [8,'rfid.lifecycle_remove','remove'],
  ]){
-  await page.evaluate(phase=>Object.assign(window.__RFID_NATIVE,{phase,busy:false,retry_required:phase===2}),phase)
+  await page.evaluate(({phase,result})=>Object.assign(window.__RFID_NATIVE,{phase,result,busy:false,retry_required:phase===1||phase===2}),{phase,result})
   const button=firmware.getByRole('button',{name:labels[label],exact:true})
+  if(phase===1||phase===2)
+   await firmware.getByRole('status').getByText(
+    labels[result===1?'rfid.lifecycle_action_failed':'rfid.lifecycle_validation_ready'],{exact:true}).waitFor()
+  const count=await page.evaluate(()=>window.__RFID_NATIVE.actions.length)
   await button.click()
   await page.getByRole('button',{name:'Conferma',exact:true}).click()
-  await page.waitForFunction(action=>window.__RFID_NATIVE.actions.at(-1)===action,action)
+  await page.waitForFunction(({action,count})=>window.__RFID_NATIVE.actions.length===count+1&&
+   window.__RFID_NATIVE.actions.at(-1)===action,{action,count})
  }
 
  console.log('PASS RFID browser controls: scan/assignment/cancel guards, collapsed and reload-persistent reboot notice, explicit activation confirmation and one native action.')

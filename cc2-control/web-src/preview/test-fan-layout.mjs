@@ -34,11 +34,12 @@ try{
  assert((await page.locator('#cc2-camera-fan-title').textContent()).includes('Chamber fan management'))
  await page.goto(demo.url+'#dashboard')
  await page.locator('.cc2-dashboard-fans').waitFor()
- const gap=await page.locator('.cc2-dashboard-fans').evaluate(card=>{
-  const header=card.children[0].getBoundingClientRect(),fan=card.children[1].getBoundingClientRect()
-  return fan.top-header.bottom
+ const alignment=await page.evaluate(()=>{
+  const tiles=[...document.querySelectorAll('.cc2-dashboard-fans .cc2-fan-tile')].map(e=>e.getBoundingClientRect())
+  const chamber=document.querySelectorAll('.cc2-dashboard .cc2-temp-tile:not(.cc2-fan-tile)')[2].getBoundingClientRect()
+  return {top:Math.abs(tiles[0].top-chamber.top),middle:Math.abs(tiles[1].top-(tiles[0].top+tiles[2].top)/2)}
  })
- assert(gap>=27&&gap<=29)
+ assert(alignment.top<=1&&alignment.middle<=1,JSON.stringify(alignment))
  for(const width of [390,768]){
   await page.setViewportSize({width,height:1000})
   for(const section of ['control','dashboard']){

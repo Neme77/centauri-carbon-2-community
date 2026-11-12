@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 import sys
 
-def apply(source, destination):
-    manifest = json.loads(Path(__file__).with_name('http44-manifest.json').read_text())
+def apply(source, destination, *, stock13=False):
+    name = 'http13-manifest.json' if stock13 else 'http44-manifest.json'
+    manifest = json.loads(Path(__file__).with_name(name).read_text())
     data = bytearray(Path(source).read_bytes())
     if hashlib.sha256(data).hexdigest() != manifest['baseline_sha256']:
         raise ValueError('Unrecognized vendor executable')
@@ -24,6 +25,6 @@ def apply(source, destination):
     return manifest['output_sha256']
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        sys.exit('Usage: patch_http44.py INPUT_VENDOR NEW_OUTPUT')
-    print(apply(sys.argv[1], sys.argv[2]))
+    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != '--stock13'):
+        sys.exit('Usage: patch_http44.py INPUT_VENDOR NEW_OUTPUT [--stock13]')
+    print(apply(sys.argv[1], sys.argv[2], stock13=len(sys.argv) == 4))

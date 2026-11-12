@@ -478,7 +478,7 @@ static int queue_load_item(const char *obj, const char *end, void *context) {
     }
     /* Absent in files written before filaments were recorded: the first Canvas report fills them in. */
     if (json_member(obj, end, "filaments") && !plates_parse_list(obj, end, "filaments", queue_load_filament, item)) return 0;
-    if (!strcmp(item->state, "done") != (item->done >= item->copies)) {
+    if ((strcmp(item->state, "done") == 0) != (item->done >= item->copies)) {
         /* Keep the counts, let the state follow them. */
         snprintf(item->state, sizeof(item->state), "%s", item->done >= item->copies ? "done" : "pending");
     }

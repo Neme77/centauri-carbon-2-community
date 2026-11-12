@@ -21,7 +21,15 @@ try {
     await new Promise(resolve => setTimeout(resolve, printerDelay))
     await route.continue()
   })
+  let mesh = 'cc2_demo'
+  await page.route('**/api/plates', route => route.fulfill({ json: {
+    available: true, pending: '', current: 'plate', mesh_profile: mesh,
+    plates: [{ id: 'plate', name: 'Textured plate', side: 'A', measures: [{ id: 'demo', temp: 60 }] }],
+  } }))
   await page.goto(origin + '#dashboard')
+  const firstLayer = page.locator('[data-first-layer]')
+  await firstLayer.getByText('Textured plate · 60 °C', { exact: true }).waitFor()
+  await firstLayer.getByText('Side A', { exact: true }).waitFor()
   const slider = page.getByRole('slider', { name: 'Print speed (%)', exact: true })
   const speed = page.locator('#tune-speed')
   await slider.waitFor(); await page.waitForFunction(() => !document.querySelector('#tune-speed').disabled)
@@ -50,14 +58,23 @@ try {
     await page.getByRole('checkbox', { name: 'Keep active', exact: true }).waitFor()
     await page.locator('.cc2-quick-actions').waitFor({ state: 'visible' })
     await page.locator('.cc2-tuning').waitFor({ state: 'visible' })
+    await firstLayer.waitFor()
     await page.waitForFunction(expected => document.documentElement.dataset.theme === expected, mode)
     const layout = await page.evaluate(() => {
       const r = q => document.querySelector(q).getBoundingClientRect()
       return { overflow: document.documentElement.scrollWidth > innerWidth, quick: r('.cc2-quick-actions').bottom, tuning: r('.cc2-tuning').bottom, camera: r('.cc2-camera-frame').height }
     })
     assert.equal(layout.overflow, false); assert(layout.camera >= 180)
-    if (width === 1440) assert(Math.abs(layout.quick - layout.tuning) <= 1)
+    if (width === 1440) {
+      assert(Math.abs(layout.quick - layout.tuning) <= 1)
+      const card = await firstLayer.boundingBox()
+      const fans = await page.locator('.cc2-dashboard-fans').boundingBox()
+      assert(Math.abs(card.width - fans.width) <= 1 && Math.abs(card.height - fans.height) <= 1)
+    }
   }
+  mesh = null
+  await page.reload()
+  await firstLayer.getByText('Mesh not detected', { exact: true }).waitFor()
   await page.route('**/__preview/camera.svg*', r => r.abort())
   await page.getByRole('button', { name: 'Start live view', exact: true }).click()
   await page.getByRole('button', { name: 'Retry now', exact: true }).waitFor({ state: 'visible' })

@@ -138,3 +138,8 @@ Thanks to **Barry** for accessory feedback, **[DamiBFryta](https://www.reddit.co
 - **DamiBFryta, our ultimate beta tester**: spool history and continuing feedback (#220).
 
 Neme77 developed and printer-tested the integrated layouts, external-spool/material controls (#233), LAN remembering (#225), completion notice (#219), Spoolman switch (#227) and experiment refinements (#232). All earlier contributors retain their credits above and in the changelog.
+
+## 4.4.4 upgrade investigation and testing
+
+The reports and trials from issue #327 are credited individually in [Upgrade credits](UPGRADE_CREDITS.md), including their scope and limitations. Earlier credits above remain unchanged.
+

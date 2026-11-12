@@ -75,6 +75,10 @@ static void progress(unsigned offset,void *unused) {
 int main(int argc,char **argv) {
     if(geteuid()!=0)return stop("root_required");
     if(argc!=2 || (strcmp(argv[1],"--check") && strcmp(argv[1],"--recover-original") && strcmp(argv[1],"--boot-policy")))return stop("unsupported_recovery_action");
+#ifdef CL_NATIVE_SHA
+    if(!cl_digest_path("/opt/usr/cc2-reactor-runtime-v2/elegoo_printer",CL_NATIVE_SHA))
+        return stop("qualified_native_program_required");
+#endif
     int check=!strcmp(argv[1],"--check");umask(077);
     signal(SIGINT,interrupted);signal(SIGTERM,interrupted);signal(SIGHUP,interrupted);signal(SIGPIPE,SIG_IGN);
     struct cl_store store;

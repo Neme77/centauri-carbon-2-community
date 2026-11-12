@@ -49,23 +49,31 @@ static int app_update_authorized(const char *request, const mqtt_client *mqtt) {
     return 1;
 }
 
-static int app_update_local_available(console_state *console) {
+static int app_update_local_idle(console_state *console) {
     pthread_mutex_lock(&console->lock);
     int busy=console->busy;
     pthread_mutex_unlock(&console->lock);
     return !busy&&!tools.busy&&!cell_active()&&!rotation_pending()&&!drying_active()&&
-        !plates_background_active()&&(!experiments.quiet_motors||experiments_normal_confirmed(console));
+        !plates_background_active();
 }
 
 /* Idle, cold nozzle, heaters off; bed_max is the warmest bed allowed (50 C, or a print's
  * leftover heat for a chamber preheat). */
-static int app_update_ready_bed(const mqtt_client *mqtt, console_state *console, double bed_max) {
+static int app_update_idle_cold(const mqtt_client *mqtt, console_state *console, double bed_max) {
     time_t age = time(NULL) - mqtt->last_message;
-    return app_update_local_available(console) && gcode_idle_for_mutation(mqtt) && age >= 0 &&
+    return app_update_local_idle(console) && gcode_idle_for_mutation(mqtt) && age >= 0 &&
         mqtt->have_extruder_temp && mqtt->have_extruder_target && mqtt->have_bed_temp && mqtt->have_bed_target &&
         isfinite(mqtt->extruder_temp) && mqtt->extruder_temp >= 0 && mqtt->extruder_temp <= 50 &&
         isfinite(mqtt->bed_temp) && mqtt->bed_temp >= 0 && mqtt->bed_temp <= bed_max &&
         mqtt->extruder_target == 0 && mqtt->bed_target == 0;
+}
+static int app_update_local_available(console_state *console) {
+    return app_update_local_idle(console) &&
+        (!experiments.quiet_motors||experiments_normal_confirmed(console));
+}
+static int app_update_ready_bed(const mqtt_client *mqtt, console_state *console, double bed_max) {
+    return app_update_idle_cold(mqtt,console,bed_max) &&
+        (!experiments.quiet_motors||experiments_normal_confirmed(console));
 }
 static int app_update_ready(const mqtt_client *mqtt, console_state *console) {
     return app_update_ready_bed(mqtt, console, 50);
