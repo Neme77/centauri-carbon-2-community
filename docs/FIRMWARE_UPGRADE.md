@@ -1,9 +1,15 @@
-# Upgrade to Community Firmware 4.4.4
+# Upgrade to Community Firmware 4.4.4 — ELEGOO base 02.01.01.13
 
 **Read this entire guide before starting. The preparation steps are mandatory
 for an existing 4.4.3 Community installation. Flashing the firmware first is
 not a substitute for preparation.** This is a complete firmware release with
 CC2 Control 1.2.29, based on ELEGOO 02.01.01.13; it is not a panel-only update.
+
+**First-ever Community installation from original ELEGOO firmware: skip the
+probe and Prepare-Upgrade. They prepare existing Community installations, not
+a printer that has never had Community Firmware. Follow the original-firmware
+offline installation route below.** A stock reflash on a previously modified
+printer is not a first installation and may leave persistent Community files.
 
 ## Choose the correct route
 
@@ -12,9 +18,10 @@ CC2 Control 1.2.29, based on ELEGOO 02.01.01.13; it is not a panel-only update.
 | Community 4.4.3, any panel version, no Canvas or RFID never enabled | Back up, run the preparation plan, apply it successfully, then install the firmware. The tool checks the native baseline and supported component evidence, not the panel version. |
 | Community 4.4.3 with modified Canvas firmware | Restore the original Canvas firmware and complete its startup restoration first. Then back up, prepare and install. |
 | Unfinished RFID activation/restoration, missing or inconsistent records | Stop and finish recovery. Do not delete markers or journals to force an upgrade. |
-| Original ELEGOO .13 with no previous Community installation | Install the signed complete firmware from the original touchscreen. A stock reflash on a previously modified printer does not prove that its persistent Community files are gone. |
+| Original ELEGOO .13 with no previous Community installation | **Do not run the probe or Prepare-Upgrade.** Install the signed complete firmware using Offline Update on the original touchscreen. A stock reflash on a previously modified printer does not prove that its persistent Community files are gone. |
 | A private .13 preview or a different/unknown Community base | Request a reviewed migration route. Do not run the 4.4.3 preparation script on it. The exact RC2 active-RFID to RC4 route was separately tested; that is not approval of all previews. |
-| The accepted 4.4.4 RC4 build | The release firmware is byte-identical to that RC4. Reinstallation is unnecessary. |
+| A qualified 4.4.4 RC4/RC5 build | The final RC6 updates the app and its RFID-bound helpers, preserving native components and the recovery profile. The exact previous binding is checked by the migration; other compositions need review. Do not run the 4.4.3 preparation tool on these .13 builds. |
+| The accepted 4.4.4 RC6 build | The release package is byte-identical to RC6. Reinstallation is unnecessary. |
 
 You do not need to install CC2 Control 1.2.27 or 1.2.28 first. A supported
 4.4.3 printer can prepare directly. Compatibility is established by the tool's
@@ -103,7 +110,9 @@ it through the printer's original offline firmware-update screen. Keep power
 connected and let the printer complete its restart.
 
 This file uses the stock-compatible signing route tested on the printer. The
-outer release filename changes; the accepted RC4 firmware bytes do not.
+outer release filename changes; the verified, printer-tested RC6 firmware
+bytes do not. It includes the cancelled-print control fix and completed
+translations. Native components and file permissions remain unchanged.
 
 ## 6. Verify the first boot
 
@@ -123,6 +132,26 @@ If the printer shows zero temperatures or Canvas continues flashing red, do
 not start a print or flash Canvas again. Keep power/network available and send
 the preparation result and boot diagnostics to the maintainers. Do not restore
 old startup programs wholesale from the archive onto the new firmware.
+
+## Recovery and support
+
+The preparation procedure creates and verifies a PC backup before quarantining
+existing Community components. Retain that archive, the quarantine and all logs
+until the installation has been verified. Recovery and return-to-original
+firmware have been tested in the supported conditions described in this guide.
+This is not an unconditional guarantee that every error on every installation
+is reversible without loss or damage.
+
+If preparation fails, do not flash until the failure has been reviewed. If
+first-boot checks fail, do not start a print. [Open a support
+issue](https://github.com/Neme77/centauri-carbon-2-community/issues/new/choose)
+with your starting firmware and panel versions, the exact package filename,
+the failed step and its log. Remove passwords, LAN access codes and tokens.
+Keep backup and quarantine contents unchanged, and do not delete lifecycle
+records or copy old startup files over the new firmware. Maintainers can help
+select the appropriate recovery route. Returning to original ELEGOO firmware
+requires completing the Canvas restoration procedure first when modified
+Canvas firmware is active.
 
 ## Future updates
 

@@ -15,7 +15,7 @@ evidence required by CONTRIBUTING.md before a change is selected for release.
 
 ## Before tagging
 
-1. Change `cc2-control/VERSION` if CC2 Control changes version, and `cc2-control/FIRMWARE_VERSION` if the firmware release number changes.
+1. Change `cc2-control/VERSION` if CC2 Control changes version. Change `cc2-control/FIRMWARE_VERSION` only when the application updater compatibility family changes; it is not the full firmware patch-release label.
 2. Update `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format): rename `## [Unreleased]` to `## [<release name>] - YYYY-MM-DD`, check that every user-visible change since the previous release has an entry, add a new empty `## [Unreleased]` above it, and update the link references at the bottom (`[Unreleased]` compares the new tag with `HEAD`, and the new release links to its GitHub release).
 3. Refresh the builder snapshot, which must contain exactly the committed `cc2-control/` tree (`test_cc2_control_source_snapshot.py` fails otherwise). Commit everything else first, then on a clean tree run:
    ```sh
