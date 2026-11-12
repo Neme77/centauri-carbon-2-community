@@ -1382,7 +1382,7 @@
   "control.chamber_fan_management": "Kamraventilátor kezelése",
   "rfid.title": "RFID tekercsolvasó",
   "rfid.hint": "Olvassa be, ellenőrizze, majd válasszon Canvas-helyet. Nincs automatikus anyaghozzárendelés.",
-  "rfid.scan": "Scan tag",
+  "rfid.scan": "Címke beolvasása",
   "rfid.confirm": "Hozzárendeli a beolvasott {material} metaadatokat a(z) {slot}. Canvas-helyhez? Fűtés vagy betöltés nem indul el.",
   "rfid.submitted": "A metaadat-kérés elküldve. Ellenőrizze a Canvas-hely visszaolvasását; ez nem megerősített írás.",
   "rfid.armed": "Kész: tartsa a címkét az olvasóhoz 60 másodpercen belül.",
