@@ -107,6 +107,55 @@ presence of an integration does not mean every accessory or combination has
 been physically qualified. See the [changelog](CHANGELOG.md),
 [testing guide](docs/TESTING.md) and [API documentation](cc2-control/docs/API.md).
 
+## CC2 Control in pictures
+
+Actual screenshots from the 1.2.29 panel. Click any preview to open the
+full-size PNG in your browser. Available controls depend on printer state and
+connected accessories.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <p><strong>Dashboard, live camera and first-layer overview</strong></p>
+      <a href="https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/control-dashboard.png"><img src="docs/images/control-dashboard.png" alt="CC2 Control: Dashboard, live camera and first-layer overview" width="460"></a>
+    </td>
+    <td width="50%" valign="top">
+      <p><strong>Movement, cooling and calibration controls</strong></p>
+      <a href="https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/control-control.png"><img src="docs/images/control-control.png" alt="CC2 Control: Movement, cooling and calibration controls" width="460"></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <p><strong>Current job, camera and object exclusion</strong></p>
+      <a href="https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/control-job.png"><img src="docs/images/control-job.png" alt="CC2 Control: Current job, camera and object exclusion" width="460"></a>
+    </td>
+    <td width="50%" valign="top">
+      <p><strong>Interactive 3D bed mesh</strong></p>
+      <a href="https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/control-bed-mesh.png"><img src="docs/images/control-bed-mesh.png" alt="CC2 Control: Interactive 3D bed mesh" width="460"></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <p><strong>Canvas slots, external spool and RFID actions</strong></p>
+      <a href="https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/control-canvas.png"><img src="docs/images/control-canvas.png" alt="CC2 Control: Canvas slots, external spool and RFID actions" width="460"></a>
+    </td>
+    <td width="50%" valign="top">
+      <p><strong>Spool tracking and filament inventory</strong></p>
+      <a href="https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/control-spools.png"><img src="docs/images/control-spools.png" alt="CC2 Control: Spool tracking and filament inventory" width="460"></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <p><strong>Wi-Fi and USB Ethernet connection confirmation</strong></p>
+      <a href="https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/control-connections.png"><img src="docs/images/control-connections.png" alt="CC2 Control: Wi-Fi and USB Ethernet connection confirmation" width="460"></a>
+    </td>
+    <td width="50%" valign="top">
+      <p><strong>Optional integrations in the dark theme</strong></p>
+      <a href="https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/develop/docs/images/control-integrations.png"><img src="docs/images/control-integrations.png" alt="CC2 Control: Optional integrations in the dark theme" width="460"></a>
+    </td>
+  </tr>
+</table>
+
 ## Tested work, stated limits
 
 The .13 cycle included repeated printer installations, a stock-firmware
