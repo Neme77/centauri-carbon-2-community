@@ -14,6 +14,14 @@ network mutations require the exact installed helper. Wi-Fi works without an
 adapter. Confirmed choices persist; only unconfirmed changes expire and recover.
 No RSSI-based selection or display-IP interception is included.
 
+The LAN preview for #322 and #323 is listed under `lan_preview` in
+`runtime.json`. CC2 Control admits both exact manager builds. The firmware and
+application installers still select the established runtime. To validate the
+preview archive independently of firmware preparation, run
+`python builder/current/core/connections_component.py --lan-preview ARCHIVE`
+from the repository root. Installing the preview on an existing native profile
+requires a coordinated update of the app and the native startup manifests.
+
 Run build_public.py as root inside an isolated Linux test environment with GCC,
 the GNU ARM compiler, QEMU, BusyBox, dash, sha256sum and shasum. It executes only
 fixture sockets/processes and temporary directories, not real printer services.

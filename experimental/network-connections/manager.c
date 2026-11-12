@@ -4,8 +4,25 @@
 static inline int ng_mark_qualified(void);
 static inline int ng_adopt_legacy_rule(void);
 
+#ifdef CC2_NATIVE_STOCK13
+static const char ng_boot_diagnostic[] =
+    "activation:connections_requires_full_idle_reboot\n";
+static const char *const ng_boot_floor_marker = NULL;
+#else
+static const char ng_boot_diagnostic[] =
+    "activation:fan_trial_requires_full_idle_reboot\n";
+static const char *const ng_boot_floor_marker = "/opt/usr/cc2-cavity-floor/enabled";
+#endif
+
 static int ng_restore(ng_journal *journal, const char *reason, int boot);
 static int ng_guard(int port) {
+#ifdef CC2_NATIVE_STOCK13
+  (void)port;
+  char app[] = "/opt/inst/cc2-control/cc2-control";
+  char action[] = "--installer-native-idle";
+  char *args[] = {app, action, NULL};
+  return ng_exec(app, args, NULL, 0, 15);
+#else
   char printer[12288], uds[8192];
   ng_json *m = malloc(sizeof(*m)), *u = malloc(sizeof(*u));
   if (!m || !u) {
@@ -37,6 +54,7 @@ static int ng_guard(int port) {
   free(m);
   free(u);
   return ok;
+#endif
 }
 static int ng_phase_active(const ng_journal *j) {
   return j->phase == NG_APPLYING || j->phase == NG_PENDING ||
@@ -228,26 +246,38 @@ static int ng_route_proof(int iface, const char *local, const char *peer) {
   return at && (at[strlen(needle)] == 0 ||
                 isspace((unsigned char)at[strlen(needle)]));
 }
+static int ng_confirm_refused(const char *reason) {
+  ng_event(reason);
+  return 0;
+}
 static int ng_confirm(ng_journal *j, const char *token, const char *local,
                       const char *peer, int port) {
   if (strcmp(j->token, token))
-    return 0;
+    return ng_confirm_refused("confirm_token_mismatch");
   if (j->phase == NG_IDLE && !j->error[0])
     return 1;
   j->worker = (int)getpid();
   j->worker_start = ng_pid_start(getpid());
   if (!ng_journal_save(j))
-    return 0;
-  if (j->phase != NG_PENDING || ng_now() >= j->deadline ||
-      strcmp(local, j->expected_ip) || !ng_ready_watch(j) || !ng_guard(port) ||
-      !ng_route_proof(j->proof_interface, local, peer))
-    return 0;
+    return ng_confirm_refused("confirm_journal_write_failed");
+  if (j->phase != NG_PENDING || ng_now() >= j->deadline)
+    return ng_confirm_refused("confirm_not_pending_or_expired");
+  if (strcmp(local, j->expected_ip))
+    return ng_confirm_refused("confirm_wrong_local_address");
+  if (!ng_ready_watch(j))
+    return ng_confirm_refused("confirm_watchdog_unavailable");
+  if (!ng_guard(port))
+    return ng_confirm_refused("confirm_console_guard_failed");
+  if (!ng_route_proof(j->proof_interface, local, peer))
+    return ng_confirm_refused("confirm_return_route_failed");
   if (ng_now() >= j->deadline)
-    return 0;
+    return ng_confirm_refused("confirm_expired_after_checks");
   if (j->proof_interface == NG_WIFI && !ng_wifi_connected(j->target_network))
-    return 0;
+    return ng_confirm_refused("confirm_wifi_not_connected");
   if (j->desired.ethernet_support && !ng_runtime_ready())
-    return 0;
+    return ng_confirm_refused("confirm_native_runtime_not_ready");
+  if (ng_now() >= j->deadline)
+    return ng_confirm_refused("confirm_expired_after_checks");
   j->worker = (int)getpid();
   j->worker_start = ng_pid_start(getpid());
   j->phase = NG_SAVING;
@@ -268,6 +298,8 @@ static int ng_confirm(ng_journal *j, const char *token, const char *local,
   j->error[0] = 0;
   if (!ng_journal_save(j))
     return 0;
+  if (j->op == NG_SUPPORT)
+    unlink(NG_STATE "/exhaust-network-boot");
   ng_event("connection_confirmed");
   return 1;
 }
@@ -460,7 +492,23 @@ static int ng_request_run(ng_request *r, const char *local, const char *peer,
     goto done;
   }
   if (desired.ethernet_support && !ng_runtime_enable(&j)) {
-    ng_restore(&j, "native_activation_failed", 0);
+    char diagnostic[128];
+    size_t size;
+    int prepare_boot = r->op == NG_SUPPORT && r->enabled &&
+                  !previous.ethernet_support &&
+                  ng_read_file(NG_RUN "/last-command.txt", diagnostic,
+                               sizeof(diagnostic), &size, 1) &&
+                  !strcmp(diagnostic, ng_boot_diagnostic);
+    int restored = ng_restore(&j, "native_activation_failed", 0);
+    if (prepare_boot && restored &&
+        ng_atomic(NG_STATE, "exhaust-network-boot", j.boot, 36)) {
+      ng_copy(j.error, sizeof(j.error), "ethernet_exhaust_reboot_prepared");
+      if (ng_journal_save(&j)) {
+        result = ng_error(j.error);
+        goto done;
+      }
+      unlink(NG_STATE "/exhaust-network-boot");
+    }
     result = ng_error("native_activation_failed");
     goto done;
   }
@@ -520,7 +568,9 @@ int main(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "--enabled")) {
     ng_config c;
     ng_event("startup_profile_check_started");
-    int enabled = ng_effective_config(&c) && c.ethernet_support &&
+    int enabled = ng_effective_config(&c) &&
+                  (c.ethernet_support ||
+                   ng_exhaust_boot_requested(ng_boot_floor_marker)) &&
                   ng_check_profile("boot");
     ng_event(enabled ? "startup_profile_check_ready"
                      : "startup_profile_check_inactive");
@@ -528,6 +578,8 @@ int main(int argc, char **argv) {
   }
   if (argc == 2 && !strcmp(argv[1], "--ensure"))
     return ng_ensure_boot() ? 0 : 1;
+  if (argc == 2 && !strcmp(argv[1], "--wait-camera-link"))
+    return ng_wait_camera_link() ? 0 : 1;
   if (argc == 2 && !strcmp(argv[1], "--boot"))
     return ng_boot_run() ? 0 : 1;
   if (argc == 2 && !strcmp(argv[1], "--seed"))
@@ -563,9 +615,13 @@ int main(int argc, char **argv) {
   if (argc == 3 && !strcmp(argv[1], "--hotplug"))
     return ng_client_action("start", ng_interface_arg(argv[2])) ? 0 : 1;
   if (argc == 5 && !strcmp(argv[1], "--native-spawn")) {
+#ifdef CC2_NATIVE_STOCK13
+    return 1; /* The combined firmware launcher owns the preload chain. */
+#else
     if (strcmp(argv[4], "0") && strcmp(argv[4], "1"))
       return 1;
     return ng_native_spawn(argv[2], argv[3], argv[4][0] - '0') ? 0 : 1;
+#endif
   }
   if (argc == 5 && !strcmp(argv[1], "--request")) {
     char *end;

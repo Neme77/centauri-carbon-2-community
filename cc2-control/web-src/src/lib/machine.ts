@@ -1,4 +1,5 @@
 import { type Key, t, tpl, tState } from './i18n'
+import { consoleStatus, printer } from './state'
 
 // Codes and meanings below come from ELEGOO's elegoo-link SDK (Apache-2.0), CC2 LAN adapter
 // elegoo_fdm_cc2_message_adapter.cpp; see NOTICE.md. Only the numbers' meanings are used.
@@ -60,9 +61,19 @@ const SUB: Record<number, Record<number, Key[]>> = {
 export const subState = (machine: any) =>
   (SUB[Number(machine?.status)]?.[Number(machine?.sub_status)] ?? []).map(k => t(k)).join(' · ')
 
+// Firmware stays Idle during the screw-measurement dwell and while the nozzle is probing.
+// The status bar says so only while that session is active and the console command is still running.
+export function statusTitle(stateName: string) {
+  const data = printer.get().data
+  const replaced = Boolean(data?.screws_session?.active && consoleStatus.get().busy && /idle/i.test(stateName))
+  return { text: replaced ? t('bed.tram_measuring') : tState(stateName), replaced }
+}
+
 // The machine state followed by its detail, e.g. "Printing · Heating bed".
-export const stateText = (v: { state: string; detail: string }) =>
-  v.detail ? `${tState(v.state)} · ${v.detail}` : tState(v.state)
+export const stateText = (v: { state: string; detail: string }) => {
+  const title = statusTitle(v.state)
+  return !title.replaced && v.detail ? `${title.text} · ${v.detail}` : title.text
+}
 
 // result.error_code of a refused request (convertRequestErrorToElegooError and its documented list).
 const ERRORS: Record<number, Key> = {

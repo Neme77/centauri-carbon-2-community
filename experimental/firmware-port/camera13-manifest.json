@@ -1,0 +1,14 @@
+{
+  "input_sha256": "e8df8e57fdc1866b4d7220c3abca08ebc16ca71d759cb7721afafc572f47365f",
+  "output_sha256": "90da7634c21b74b3bf943d68129da78668b47f9706620e158283697ab95553a7",
+  "patches": [
+    {
+      "va": "0x13287c",
+      "offset": 1190012,
+      "before": "b1df00eb",
+      "after": "dddf00eb",
+      "reason": "Keep local MJPEG running when the WAN command enables RTC"
+    }
+  ],
+  "status": "static port; simultaneous Matrix and local video require hardware validation"
+}

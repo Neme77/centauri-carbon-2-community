@@ -6,6 +6,7 @@ window.__CC2_PREVIEW.preferences.language='en';
 const original=window.fetch;
 window.__TOOLS={busy:false,generation:0,error:'none',mode:0,active:null,original:null,configured:28.8,saved:null,editable:true,pending_restart:false,pending_conflict:false,reports:[]};
 window.__TOOL_ACTIONS=[];
+window.__TOOLS_NATIVE='standby';
 window.fetch=async(input,options={})=>{
  const path=String(input);
  const reply=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
@@ -15,7 +16,7 @@ window.fetch=async(input,options={})=>{
   window.__TOOLS.busy=true;window.__TOOLS.mode=String(options.body)==='rotation:read'?1:String(options.body).startsWith('rotation:apply:')?2:String(options.body).startsWith('rotation:save:')?3:String(options.body)==='cell:read'?4:5;window.__TOOLS.generation++;return reply({accepted:true},202);
  }
  const response=await original(input,options);
- if(path.endsWith('/api/printer')){const data=await response.json();data.print.native={state:window.__CC2_PREVIEW.status===2?'printing':'standby'};return reply(data)}
+ if(path.endsWith('/api/printer')){const data=await response.json();data.print.native={state:window.__CC2_PREVIEW.status===2?'printing':window.__TOOLS_NATIVE};return reply(data)}
  return response;
 };
 `)
@@ -31,6 +32,9 @@ try{
  await page.waitForFunction(()=>![...document.querySelectorAll('.cc2-native-tools button')].find(b=>b.textContent==='Read active distance').disabled)
  assert.equal(await button('Apply temporarily').isDisabled(),true)
  assert.equal((await actions()).length,0,'opening the card must not run any native command')
+ await page.evaluate(()=>{window.__TOOLS_NATIVE='cancelled'})
+ await page.waitForTimeout(1700)
+ assert.equal(await button('Read active distance').isDisabled(),false,'Idle after cancellation must allow reading Rotation Distance')
  await button('Read active distance').click()
  await page.waitForFunction(()=>document.querySelector('.cc2-native-tools [role=status]').textContent.includes('running'))
  assert.equal(await button('Save active value').isDisabled(),true)
@@ -81,6 +85,9 @@ try{
  assert.match(await card.locator('pre').textContent(),/<script>/)
  await page.evaluate(()=>{window.__CC2_PREVIEW.status=2})
  await page.waitForFunction(()=>[...document.querySelectorAll('.cc2-native-tools button')].every(b=>b.disabled))
+ await page.evaluate(()=>{window.__CC2_PREVIEW.status=1;window.__TOOLS_NATIVE='paused'})
+ await page.waitForTimeout(1700)
+ assert.equal(await button('Read load cell').isDisabled(),true,'an active native pause still refuses calibration')
  for(const width of [1440,768,390]){
   await page.setViewportSize({width,height:1200});await page.waitForTimeout(150);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`no overflow at ${width}: ${JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('.cc2-native-tools *')].filter(e=>e.getBoundingClientRect().right>innerWidth).map(e=>({tag:e.tagName,cls:e.className,w:e.getBoundingClientRect().width,text:e.textContent.slice(0,35)})).slice(0,12)))}`)
  }

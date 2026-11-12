@@ -23,6 +23,7 @@ typedef struct {long pid;unsigned long long nonce;unsigned generation;int printi
 /* statx avoids newer glibc fstat/time64 symbol requirements in the optional
  * shared object. Unsupported kernels leave the native policy unchanged. */
 static inline int cavity_stat(int fd,unsigned type,unsigned mode,unsigned links,unsigned limit) {
+#if defined(SYS_statx) && defined(STATX_BASIC_STATS)
     struct statx s;
     memset(&s,0,sizeof(s));
     if(syscall(SYS_statx,fd,"",AT_EMPTY_PATH|AT_SYMLINK_NOFOLLOW,STATX_BASIC_STATS,&s))return 0;
@@ -30,6 +31,14 @@ static inline int cavity_stat(int fd,unsigned type,unsigned mode,unsigned links,
     return (s.stx_mask&required)==required && s.stx_uid==0 &&
         (s.stx_mode&S_IFMT)==type && (s.stx_mode&0777)==mode &&
         (!links||s.stx_nlink==links) && (!limit||s.stx_size<=limit);
+#else
+    /* The static app can use fstat with the legacy firmware toolchain. */
+    struct stat s;
+    return !fstat(fd,&s) && s.st_uid==0 &&
+        (s.st_mode&S_IFMT)==type && (s.st_mode&0777)==mode &&
+        (!links||s.st_nlink==links) &&
+        (!limit||(s.st_size>=0 && (uintmax_t)s.st_size<=limit));
+#endif
 }
 static inline int cavity_directory(int create) {
     if(create && mkdir(CC2_CAVITY_CHANNEL,0700) && errno!=EEXIST)return -1;

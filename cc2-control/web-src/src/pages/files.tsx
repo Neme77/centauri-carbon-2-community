@@ -12,6 +12,7 @@ import { t, tpl } from '@/lib/i18n'
 import { duration, fileSize } from '@/lib/format'
 import { compareFileDates, fileModified } from '@/lib/file-date'
 import { startFile } from '@/pages/print-dialog'
+import { QueuedChip } from '@/components/queue-next'
 
 type Entry = { storage: 'internal' | 'usb'; file: any }
 const key = (e: { storage: string; path?: string; file?: any }) => `${e.storage}\n${e.path ?? e.file.path}`
@@ -334,6 +335,7 @@ export const Files = () => {
                   >
                     {e.file.path}
                   </button>
+                  <QueuedChip storage={e.storage} path={e.file.path} />
                 </div>
                 <span class="hidden cc2-md:inline">{fileSize(e.file.size)}</span>
                 <span class="hidden cc2-md:inline">

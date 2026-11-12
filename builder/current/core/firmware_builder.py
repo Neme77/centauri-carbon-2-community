@@ -79,8 +79,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_COMMIT='3cc616faa903886f6c9ca0ccae4be4315b34338c'
-CC2_CONTROL_SOURCE_SHA256='81eaf0edf6ea01e2218c886113e584425f2b25f8f5c758cd1acf842b599b8c96'
+CC2_CONTROL_SOURCE_COMMIT='b061f032df0454e15253c98c8cf72774657544ab'
+CC2_CONTROL_SOURCE_SHA256='0802af929a62282c4000a7fc5f363a3a5404d9717bddb7db15311cb4d006e7b9'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 CC2_UPDATE_FILES=('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
 # Translation files are optional and open-ended (one per language), unlike the
@@ -157,6 +157,37 @@ def audit_cc2_control(root,component,manifest):
   link=root/'etc/rc.d'/name
   if not link.is_symlink() or os.readlink(link)!='../init.d/cc2-control':
    raise RuntimeError(f'Invalid CC2 Control symlink: {link}')
+
+SSH_FILES = {
+ 'sshd': ('usr/sbin/sshd', 'sshd', 0o755),
+ 'sshd.init': ('etc/init.d/sshd', 'sshd_init', 0o755),
+ 'sshd_config': ('etc/ssh/sshd_config', 'sshd_config', 0o644),
+}
+SSH_LINKS = ('S50sshd', 'K50sshd')
+
+def install_ssh(root, sshd, init, config):
+ for source,(relative,_,mode) in zip((sshd,init,config),SSH_FILES.values()):
+  target=root/relative
+  target.parent.mkdir(parents=True,exist_ok=True)
+  shutil.copy2(source,target)
+  target.chmod(mode)
+ rc=root/'etc/rc.d'
+ rc.mkdir(parents=True,exist_ok=True)
+ for name in SSH_LINKS:
+  link=rc/name
+  if link.exists() or link.is_symlink():link.unlink()
+  link.symlink_to('../init.d/sshd')
+ for kind in ('rsa','ecdsa','ed25519'):
+  for suffix in ('','.pub'):
+   (root/'etc/ssh'/f'ssh_host_{kind}_key{suffix}').unlink(missing_ok=True)
+
+def audit_ssh(root):
+ for relative,pin,_ in SSH_FILES.values():
+  reqhash(root/relative,EXPECTED[pin],'installed SSH '+relative)
+ for name in SSH_LINKS:
+  link=root/'etc/rc.d'/name
+  if not link.is_symlink() or os.readlink(link)!='../init.d/sshd':
+   raise RuntimeError(f'Invalid SSH symlink: {link}')
 
 def run(cmd,cwd=None,stdin=None,capture=False):
  r=subprocess.run([str(x) for x in cmd],cwd=cwd,stdin=stdin,stdout=subprocess.PIPE if capture else None,stderr=subprocess.STDOUT if capture else None,text=capture)
@@ -337,13 +368,14 @@ def verify_digest(public,digest,signature):
   r=subprocess.run(['openssl','pkeyutl','-verify','-pubin','-inkey',str(public),'-sigfile',str(sig),'-pkeyopt','digest:sha256','-pkeyopt','rsa_padding_mode:pkcs1'],input=digest,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
   if r.returncode: raise RuntimeError('RSA signature verification failed')
 
-def verify_signing_key(private,mode='community'):
+def verify_signing_key(private,mode='community',*,dual_payload=None):
  public=signing_public(mode)
  if public_der(private,True)!=public_der(public): raise RuntimeError('Signing key does not match selected '+mode+' public key')
  # Keep the embedded fallback community key fixed in BOTH signing modes.
  community=signing_public('community')
- reqhash(BASE/'dualtrust/dual_verify.bin',EXPECTED['dual_payload'],'Dual Trust v2 payload')
- if community.read_bytes() not in (BASE/'dualtrust/dual_verify.bin').read_bytes(): raise RuntimeError('Community PEM missing from payload')
+ payload=Path(dual_payload) if dual_payload is not None else BASE/'dualtrust/dual_verify.bin'
+ reqhash(payload,EXPECTED['dual_payload'],'Dual Trust v2 payload')
+ if community.read_bytes() not in payload.read_bytes(): raise RuntimeError('Community PEM missing from payload')
  challenge=hashlib.sha256(b'CC2 builder local signing-key check'+os.urandom(32)).digest()
  verify_digest(public,challenge,sign_digest(private,challenge))
  print('[OK] '+mode+' RSA-2048 key match and signing/verification self-test')
@@ -414,8 +446,8 @@ def install_release_printer(printer,reference):
 
 REACTOR_HELPER_SHA256='d9af4d96820846d0fab1f6dfe5ef91c10221cbf6196653eba84446c69af9912a'
 CAMERA_HELPER_SHA256='74b8865cdb1fe12df4bcc54670a5b85bab7333ddbcf3959b47cc460cf0809d61'
-INTEGRATION_HELPERS={'connections_component.py': '05ec5c63170cc861b76aa4980f01e7105a13f5703358eed081545a2d8f51e66e', 'native_display_component.py': '573d8b967f250326295726f9f1e3f22386fc8402f61bc97ae19d1137f068fb06', 'resource_update.py': '840c449879aaf008e41bdf5544df822c021f855f9fddc116b1792021ffaef749'}
-INTEGRATION_INPUTS={'experimental/native-display/package.py': 'fccf9f487e541c2ce14ce82bf64eef20d226e661c8b0e951b5f7b6200616224b', 'experimental/native-display/patch.py': '1438fdd85310f5965f9562abdfdcac1a13e87c7b413755fa350b9795ba292b2c', 'experimental/native-display/patch-plan.json': '561acf7938fb7993ab91e6d6449faf33fde098882c269929a11b089b28fc7d09', 'experimental/native-display/baseline-pins.txt': 'c2f1356d42e695bcfc953e69e37560d7a6c6a976c70815cebe3422951dd246c6', 'experimental/native-display/png_palette.py': 'cdbf580042498acdf5a29e63978ad798639fad424c291a4fff03a36799e21882', 'experimental/native-display/recolor-plan.json': '0a8fe579afee1321a5d75bba743bb9ebf765beb2bdf0b26cbbdf14218f188616', 'experimental/native-display/elf_layout.py': 'c61b033a988e16c190303415544162721caa5a62c35a435487d8091d93098d28', 'experimental/native-display/assets/manifest.json': 'cb71218bdf34a87b3e55911b3eb8846e9d3a612b7d98eb77c6eea98d5a3fe435', 'experimental/native-display/manage.sh': '081f50e94bfe8ff5aff8894364f7bfb81d03ba6041fd4d85441db60d113ee0d0', 'experimental/native-display/thermal.awk': '1cb4534a5c6b447cfd8dd963c125614115effeb4d469b61e0eb0f50469f2d749', 'experimental/native-display/LICENSE-LUCIDE.txt': 'b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57', 'builder/current/components/connections/firmware-seed.sh': '75d3b459a83edb49c3330beeaa8531ec7ec75b1a42bdcacb39d361cf6409c052', 'builder/current/components/connections/firmware.init': '0023ae212221603e3012b5afa67ef3a07598c36d756dfb32a7a95ef73579d168'}
+INTEGRATION_HELPERS={'connections_component.py': 'c4d6794f747be1f9ae8b956dc12184db460e3a173f1f11d531a95383ef991249', 'native_display_component.py': '2e60032509fc1ed125ce40fc0524d148895d149f990fb7115a9c41a16cf04e6c', 'resource_update.py': '840c449879aaf008e41bdf5544df822c021f855f9fddc116b1792021ffaef749'}
+INTEGRATION_INPUTS={'experimental/native-display/package.py': 'b75ee7d630ed35379dab70e2d8dc1b95ef67826b44a0d97327bae0a0d0465a79', 'experimental/native-display/patch.py': '1438fdd85310f5965f9562abdfdcac1a13e87c7b413755fa350b9795ba292b2c', 'experimental/native-display/patch-plan.json': '561acf7938fb7993ab91e6d6449faf33fde098882c269929a11b089b28fc7d09', 'experimental/native-display/baseline-pins.txt': 'c2f1356d42e695bcfc953e69e37560d7a6c6a976c70815cebe3422951dd246c6', 'experimental/native-display/png_palette.py': 'cdbf580042498acdf5a29e63978ad798639fad424c291a4fff03a36799e21882', 'experimental/native-display/recolor-plan.json': '0a8fe579afee1321a5d75bba743bb9ebf765beb2bdf0b26cbbdf14218f188616', 'experimental/native-display/elf_layout.py': 'c61b033a988e16c190303415544162721caa5a62c35a435487d8091d93098d28', 'experimental/native-display/assets/manifest.json': 'cb71218bdf34a87b3e55911b3eb8846e9d3a612b7d98eb77c6eea98d5a3fe435', 'experimental/native-display/manage.sh': '081f50e94bfe8ff5aff8894364f7bfb81d03ba6041fd4d85441db60d113ee0d0', 'experimental/native-display/thermal.awk': '1cb4534a5c6b447cfd8dd963c125614115effeb4d469b61e0eb0f50469f2d749', 'experimental/native-display/LICENSE-LUCIDE.txt': 'b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57', 'builder/current/components/connections/firmware-seed.sh': 'fe9f93e04145fdfb9b656a8316d36eb38102cfcf0dfb51c18d6136c4515e38b0', 'builder/current/components/connections/firmware.init': '0023ae212221603e3012b5afa67ef3a07598c36d756dfb32a7a95ef73579d168'}
 
 
 def firmware_release_version():
@@ -431,7 +463,7 @@ def firmware_version():
 
 PORT_DIR=BASE.parents[1]/"experimental/firmware-port"
 CAMERA_RELEASE_SHA256="ec5633b17de329d5b18c3f8d8de6ebf389391a04193536d976ba167022d07b99"
-PORT_HASHES={'patch_camera44.py': '63ef66a15ed9a12d67fb0c6d919d249da7d5047f4d123cb184580abc06912e63', 'camera44-manifest.json': 'b32224bf3d2901395f8558b2ce4cd4e13d78ee16ee9faffaaf6783bfb49658ab', 'patch_zoffset44.py': '76519510503e2762b2878250a326bc0272c1411042d0627ab106db813a380e10', 'patch_dual44.py': '1281d7ea80e1629fd657678a7d06d9d6333eb4937c4ce092c0ca1425c92b7366', 'dual44-manifest.json': '4d8f775c924e31d1df01b14ad600e687bdb40a452d6fa98fa5a72d2b4b52eefc', 'dual_verify_44.bin': '04b9f093f439c336476f2a34f109b088b05e6c42a4f1baf2f10e798ed927aa75', 'patch_http44.py': '64c9f93dc3f4a52e9153252d184b2d837f1c1bc3a15e3af2ee933fd11f75e915', 'http44-manifest.json': '3e65a1ca3a051dad2cb661b4f6c1b4519a55f733c87e283968968e4a368e3bd4', 'patch_network44.py': '46098ae68477e4791b862ac1aac577b8b5dfcf93497de62e5ae3f7f8bc5cd482', 'network44-manifest.json': '34d90437d1310a3662943ec7b445b5c55fc351d94c6a27108a9f5151357631b9'}
+PORT_HASHES={'patch_camera44.py': '7d4b06e613543db22a9bc952f3452be1e0d3ef89efb17dfe3d6d24aeeddb00fb', 'camera44-manifest.json': 'b32224bf3d2901395f8558b2ce4cd4e13d78ee16ee9faffaaf6783bfb49658ab', 'patch_zoffset44.py': '23e7aadcac23fee4422681b5f5a328daaae35dbc23e0e190653db722baa0d2ce', 'patch_dual44.py': '1281d7ea80e1629fd657678a7d06d9d6333eb4937c4ce092c0ca1425c92b7366', 'dual44-manifest.json': '4d8f775c924e31d1df01b14ad600e687bdb40a452d6fa98fa5a72d2b4b52eefc', 'dual_verify_44.bin': '04b9f093f439c336476f2a34f109b088b05e6c42a4f1baf2f10e798ed927aa75', 'patch_http44.py': 'dd58ae76c7cac20a17a0a03cd8a4e357d6c271884398734f0308bc6cfb91c5e1', 'http44-manifest.json': '3e65a1ca3a051dad2cb661b4f6c1b4519a55f733c87e283968968e4a368e3bd4', 'patch_network44.py': '18249b3ba3a53ff600fd07a04a22ca6be3a6e53819610f358b2a4f6977c59213', 'network44-manifest.json': '34d90437d1310a3662943ec7b445b5c55fc351d94c6a27108a9f5151357631b9'}
 
 def validate_port_inputs():
  for name,expected in PORT_HASHES.items(): reqhash(PORT_DIR/name,expected,'new OTA port '+name)
@@ -549,17 +581,7 @@ def main():
   camera_patched=work/'ai_camera.coexist'
   port_module('patch_camera44').apply(camera,camera_patched)
   camera.write_bytes(camera_patched.read_bytes())
-  (root/'usr/sbin').mkdir(parents=True,exist_ok=True); shutil.copy2(sshd,root/'usr/sbin/sshd'); os.chmod(root/'usr/sbin/sshd',0o755)
-  (root/'etc/init.d').mkdir(parents=True,exist_ok=True); shutil.copy2(init,root/'etc/init.d/sshd'); os.chmod(root/'etc/init.d/sshd',0o755)
-  (root/'etc/ssh').mkdir(parents=True,exist_ok=True); shutil.copy2(conf,root/'etc/ssh/sshd_config'); os.chmod(root/'etc/ssh/sshd_config',0o644)
-  rc=root/'etc/rc.d'; rc.mkdir(parents=True,exist_ok=True)
-  for n in ('S50sshd','K50sshd'):
-   p=rc/n
-   if p.exists() or p.is_symlink(): p.unlink()
-   p.symlink_to('../init.d/sshd')
-  for n in ('ssh_host_rsa_key','ssh_host_rsa_key.pub','ssh_host_ecdsa_key','ssh_host_ecdsa_key.pub','ssh_host_ed25519_key','ssh_host_ed25519_key.pub'):
-   p=root/'etc/ssh'/n
-   if p.exists() or p.is_symlink(): p.unlink()
+  install_ssh(root,sshd,init,conf)
   patch_dual(daemon,dual)
   install_cc2_control(root,cc2_component,cc2_manifest)
   reactor.install(root,reactor_component)
@@ -593,11 +615,7 @@ def main():
   camera_runtime.audit(vr,camera_component,hook_transform=camera_hook)
   display.audit(vr)
   connections.audit(vr,connections_payload,connections_hooks)
-  reqhash(vr/'etc/init.d/sshd',EXPECTED['sshd_init'],'rebuilt sshd init')
-  reqhash(vr/'etc/ssh/sshd_config',EXPECTED['sshd_config'],'rebuilt sshd config')
-  for n in ('S50sshd','K50sshd'):
-   p=vr/'etc/rc.d'/n
-   if not p.is_symlink() or os.readlink(p)!='../init.d/sshd': raise RuntimeError(f'Invalid rebuilt SSH symlink: {p}')
+  audit_ssh(vr)
   banner('REBUILD SWU'); data=''.join(f'{md5(cpio/n)}  {n}\n' for n in MD5_FILES).encode('ascii')
   if len(data)!=254: raise RuntimeError('cpio_item_md5 format mismatch')
   (cpio/'cpio_item_md5').write_bytes(data); swu=work/('CC2_02.01.01.07_V'+fw_tag+'_CC2_CONTROL.swu')

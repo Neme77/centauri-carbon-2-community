@@ -13,6 +13,8 @@ import subprocess
 
 REPO = Path(__file__).resolve().parents[3]
 RUNTIME_SHA256 = '649d0af3dba7e21bc399fc741115fbe298cc1e4b77c07cf51bd35bfd73762e9a'
+LAN_PREVIEW_SHA256 = '8c7c6a93ed64b9b35f944dc313faee9bbfca370958bec79d0ba5fe25d6e49669'
+LAN_PREVIEW_HELPER_SHA256 = '3f9e8ca97fcb668c694bc93aa08dc1753ddf50d1cddc17567acb274c91dbaaf4'
 BINARY_PINS = {
     'control': '2a4dd2dd8e23aa3446348973ba6b8fa90a1fda16fcd96626015f8f0b816e9d62',
     'cc2_ue300_abi_probe.ko': '24c757788815abe5bbabb59d64b4768efedf7a65b1a8d93f3a6ce4d1e979a3f8',
@@ -27,16 +29,22 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def read_runtime(path):
+def read_runtime(path, *, lan_preview=False):
     path = Path(path)
     if path.is_symlink() or not path.is_file():
         raise RuntimeError('Missing regular qualified Connections archive')
     raw = path.read_bytes()
-    if sha(raw) != RUNTIME_SHA256:
+    expected_archive = LAN_PREVIEW_SHA256 if lan_preview else RUNTIME_SHA256
+    binary_pins = dict(BINARY_PINS)
+    if lan_preview:
+        binary_pins['control'] = LAN_PREVIEW_HELPER_SHA256
+    if sha(raw) != expected_archive:
         raise RuntimeError('Connections archive SHA256 mismatch')
     pointer = json.loads((REPO / 'experimental/network-connections/runtime.json').read_text())
-    if (pointer['sha256'] != RUNTIME_SHA256
-            or pointer['helper_sha256'] != BINARY_PINS['control']):
+    if lan_preview:
+        pointer = pointer['lan_preview']
+    if (pointer['sha256'] != expected_archive
+            or pointer['helper_sha256'] != binary_pins['control']):
         raise RuntimeError('Connections source and firmware input pins differ')
     files = {}
     with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as archive:
@@ -65,7 +73,7 @@ def read_runtime(path):
     for name, digest in declared.items():
         if sha(files[name]) != digest:
             raise RuntimeError('Connections checksum mismatch: ' + name)
-    for name, digest in BINARY_PINS.items():
+    for name, digest in binary_pins.items():
         if name not in files or sha(files[name]) != digest:
             raise RuntimeError('Unqualified Connections binary: ' + name)
     return files
@@ -98,6 +106,13 @@ NATIVE = {
     'etc/init.d/cc2-camera-launch': 'f05accc97f0195cf4cf481b53b643902424183bb335a27f42e6069a625813c6f',
     'etc/init.d/cc2-reactor-launch': '8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636373fdaac43',
 }
+STOCK_13 = {
+    name: digest for name, digest in NATIVE.items()
+    if name not in ('etc/init.d/cc2-camera-launch', 'etc/init.d/cc2-reactor-launch')
+}
+STOCK_13.update({
+    'etc/init.d/printer': '6e7c875d40386854028779fdd1573c45a5ce4a69aba828227fff1bb568f7020f',
+})
 ROOT = 'opt/inst/cc2-connections'
 MODULES = 'lib/modules/5.4.61/cc2'
 
@@ -118,12 +133,17 @@ def hook_transform(text, mode, files):
     return transform(files['prepare-hooks.awk'], text.encode(), mode).decode()
 
 
-def payload(root, files):
+def check_native(root, native):
     root = Path(root)
-    for name, expected in NATIVE.items():
+    for name, expected in native.items():
         path = root / name
         if path.is_symlink() or not path.is_file() or sha(path.read_bytes()) != expected:
             raise RuntimeError('Connections firmware native profile differs: ' + name)
+
+
+def payload(root, files, *, native=NATIVE, boot_delegates=None):
+    root = Path(root)
+    check_native(root, native)
     result = dict(files)
     original = {
         'native-udhcpc_wlan0': 'etc/wifi/udhcpc_wlan0',
@@ -133,11 +153,11 @@ def payload(root, files):
     }
     for name, path in original.items():
         result[name] = (root / path).read_bytes()
-    for name, path, mode in (
+    for name, path, mode in (() if boot_delegates is not None else (
             ('camera-entry.sh', 'opt/inst/cc2-camera-r2/boot-camera.sh', 'camera-entry'),
             ('reactor-entry.sh', 'opt/inst/cc2-reactor/launcher.sh', 'reactor-entry'),
             ('camera-launch.sh', 'etc/init.d/cc2-camera-launch', 'camera-launch'),
-            ('reactor-launch.sh', 'etc/init.d/cc2-reactor-launch', 'reactor-launch')):
+            ('reactor-launch.sh', 'etc/init.d/cc2-reactor-launch', 'reactor-launch'))):
         result[name] = transform(files['prepare-hooks.awk'], (root / path).read_bytes(), mode)
     result['native-wan.sh'] = transform(files['native-wan-policy.awk'], result['native-set_lan.sh'])
     # Before UDISK seeding, native DHCP must still have a complete immutable
@@ -159,6 +179,10 @@ def payload(root, files):
         'etc/init.d/cc2-network-manager': 'init.sh',
         'etc/hotplug.d/net/90-cc2-network-manager': 'hotplug.sh',
     }
+    if boot_delegates is not None:
+        for path, (name, data) in boot_delegates.items():
+            result[name] = data
+            hooks[path] = name
     startup = {path: sha(result[name]) for path, name in hooks.items()}
     startup['opt/usr/wifi/udhcpc_wlan0'] = sha(result['wifi-client.sh'])
     result['startup.sha256'] = ''.join(
@@ -168,10 +192,13 @@ def payload(root, files):
     return result, hooks
 
 
-def install(root, archive):
+def install(root, archive, *, lan_preview=False, native=NATIVE, overrides=None,
+            boot_delegates=None):
     root = Path(root)
-    files = read_runtime(archive)
-    prepared, hooks = payload(root, files)
+    files = read_runtime(archive, lan_preview=lan_preview)
+    if overrides is not None:
+        files.update(overrides)
+    prepared, hooks = payload(root, files, native=native, boot_delegates=boot_delegates)
     destination = root / ROOT
     link = root / 'etc/rc.d/S23cc2-network-manager'
     if destination.exists() or destination.is_symlink():
@@ -208,11 +235,11 @@ def install(root, archive):
     return prepared, hooks
 
 
-def audit(root, prepared, hooks):
+def audit(root, prepared, hooks, *, native=NATIVE):
     root = Path(root)
     for name in ('bin/wifi_daemon','lib/modules/5.4.61/aic8800_fdrv.ko'):
         path = root / name
-        if path.is_symlink() or not path.is_file() or sha(path.read_bytes()) != NATIVE[name]:
+        if path.is_symlink() or not path.is_file() or sha(path.read_bytes()) != native[name]:
             raise RuntimeError('Original Wi-Fi firmware component changed: ' + name)
     for name, data in prepared.items():
         path = root / ROOT / name
@@ -235,8 +262,17 @@ def audit(root, prepared, hooks):
             if path.stat().st_mode & 0o777 != 0o644:
                 raise RuntimeError('Firmware kernel module permissions differ: ' + name)
     init = root / 'etc/init.d/printer'
-    if sha(init.read_bytes()) != NATIVE['etc/init.d/printer'] or init.stat().st_mode & 0o777 != 0o755:
+    if sha(init.read_bytes()) != native['etc/init.d/printer'] or init.stat().st_mode & 0o777 != 0o755:
         raise RuntimeError('Native printer startup changed')
     link = root / 'etc/rc.d/S23cc2-network-manager'
     if not link.is_symlink() or str(link.readlink()) != '../init.d/cc2-network-manager':
         raise RuntimeError('Firmware Connections boot entry differs')
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Validate a Connections archive without building firmware.')
+    parser.add_argument('--lan-preview', required=True, type=Path, metavar='ARCHIVE')
+    args = parser.parse_args()
+    files = read_runtime(args.lan_preview, lan_preview=True)
+    print(f'PASS: {len(files)} Connections LAN preview files and exact binary pins')

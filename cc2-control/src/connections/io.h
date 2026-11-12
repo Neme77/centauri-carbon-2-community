@@ -433,8 +433,9 @@ static inline int ng_http(const char *endpoint, char *out, size_t cap,
   int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
   if (fd < 0)
     return 0;
-  struct sockaddr_in peer = {.sin_family = AF_INET,
-                             .sin_port = htons((unsigned short)port)};
+  struct sockaddr_in peer = {0};
+  peer.sin_family = AF_INET;
+  peer.sin_port = htons((unsigned short)port);
   inet_pton(AF_INET, "127.0.0.1", &peer.sin_addr);
   int ok = connect(fd, (struct sockaddr *)&peer, sizeof(peer)) == 0 ||
            errno == EINPROGRESS;

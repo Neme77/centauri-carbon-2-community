@@ -1,5 +1,6 @@
 #ifndef CC2_CONNECTIONS_PROFILE_CACHE_H
 #define CC2_CONNECTIONS_PROFILE_CACHE_H
+#include "profile-pins.h"
 /* Cache a successful full verification only within this boot. Every use checks
  * the identity, mode, ownership, size and nanosecond mtime/ctime of every file
  * in both manifests and every additional native input. Changed input reruns the
@@ -103,9 +104,13 @@ static inline int ng_profile_fingerprint(int full, char out[65]) {
       "/opt/usr/cc2-reactor-runtime-v2/elegoo_printer",
       "/opt/usr/cc2-reactor-runtime-v2/launcher.sh",
       "/etc/init.d/printer",
-      "/opt/usr/cc2-control/camera/libcc2-camera-reap-r2.so",
-      "/opt/usr/cc2-control/camera/libcc2-camera-recovery-r2.so",
+#ifdef NG_CAMERA_REAP_SO
+      NG_CAMERA_REAP_SO,
+#endif
+      NG_CAMERA_RECOVERY_SO,
+#ifdef NG_CAMERA_REAP_SO
       "/opt/usr/cc2-control/camera/cc2-camera-reap-check",
+#endif
       "/opt/usr/cc2-reactor-runtime-v2/libcc2-reactor-v2.so",
       "/lib/modules/5.4.61/aic8800_fdrv.ko",
       NULL};

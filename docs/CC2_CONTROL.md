@@ -30,6 +30,8 @@ The plate Z offset is applied on top of the printer's own plate offset and again
 
 Four-screw corrections are displayed in **microns**. A guarded **Optimized reference adjustment** suggestion may be shown when it reduces the largest required correction and remains inside the protected movement range. The suggestion is advisory only; CC2 Control does not move or turn screws automatically.
 
+**Screw Levelling** also offers an interactive session: **Start session** homes all axes (`G28`), preheats the bed and cleans the nozzle like the one-shot measurement, then probes the four screws and switches the nozzle off, leaving the bed at 60 °C. After that, each corner can be re-probed with one click (`G28 Z` only, after a 30 s settle; the nozzle is switched off again afterwards), and **Check all four** repeats the sweep without a full re-home. Re-probe and check stay disabled until X and Y are homed. Heaters are switched off when the session ends. The original **Measure Screws** one-shot path is unchanged.
+
 ## Quick Actions and global Emergency Stop
 
 The dashboard now provides operational Quick Actions for Home All, All Heaters Off, Fans Off and Motors Off.
@@ -81,7 +83,7 @@ Thanks to **@efiten** for the original proposal, analysis and printer-side valid
 
 The guided screw measurement probes above the four bed screws and reports each point relative to the reference corner. Measurements use the printer load-cell probe and remain isolated from the stored Bed Mesh.
 
-The operation requires the printer to be idle and performs homing before probing. It does not run `SAVE_CONFIG`.
+The one-shot measurement requires the printer to be idle. The interactive session homes with `G28` at start and with `G28 Z` on each re-probe. Neither path runs `SAVE_CONFIG`.
 
 ## Bed Mesh 2D and 3D
 
@@ -166,6 +168,16 @@ The G-code library lists printable files from internal memory and USB storage, i
 - The print dialog shows the spool each tool would draw from, its remaining weight and, when the file states its filament length, roughly how much the print needs.
 
 The inventory is kept in `spools.json` under `/opt/usr/cc2-control`. The count is only as good as the remaining weight entered for each spool; weigh a spool to correct it. Moves made while a print is paused, such as a manual filament change, are not counted, nor is filament loaded outside a print.
+
+## Print queue
+
+**Queue** holds jobs prepared ahead: a G-code file, the choices of the print dialog (Canvas slots or the external feed, build plate side, bed calibration or saved mesh, timelapse, measurement and nozzle) and a number of copies. A job is added from the print dialog, which now offers **Start now** or **Add to queue**; the Files page marks files that still have copies queued.
+
+- The page shows the next job with a pre-flight check (file in place, the filament in each mapped slot against the file, the side's saved mesh, the installed nozzle, printer idle and bed temperature) and one **Start print** button: no dialog, every choice was made when the job was added. While a copy prints, the card follows its progress and the start waits; a start the printer never picked up can be cancelled from the card while the printer is idle.
+- Each copy is a separate print: the part is removed between copies. By default the next copy waits for the button, on the Queue page, in the Dashboard's **Next in queue** card or in the print-ended notice. **Start the next copy automatically** after a delay exists for a bed that clears itself and is off by default; right before such a start CC2 Control checks that every mapped Canvas slot still holds the file's material, and a slot that differs, is empty or cannot be checked leaves the copy waiting for the button, with a note.
+- Copies are counted by CC2 Control on the printer, so the browser can be closed. A stopped or failed copy is not counted and the job stays first with a note. Jobs can be reordered, their copies changed, skipped or removed; finished jobs stay listed until cleared, or are removed automatically.
+
+The queue is kept in `print-queue.json` under `/opt/usr/cc2-control`. The printer's own touchscreen takes no part in it: the vendor application cannot be extended, and its print-completed dialog gives CC2 Control no signal.
 
 ## Printer sub-states and refusals
 

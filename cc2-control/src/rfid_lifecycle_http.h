@@ -95,8 +95,8 @@ static void rfid_native_tick(console_state *console){
 static void rfid_native_status_response(int fd){
     rfid_runtime mode=rfid_runtime_get(0);
     char body[512];int n=snprintf(body,sizeof(body),
-        "{\"installed\":%s,\"metadata_valid\":%s,\"phase\":%d,\"generation\":%llu,\"busy\":%s,\"reboot_required\":%s,\"recovery_required\":%s,\"result\":%d,\"retry_required\":%s,\"activation_requested\":false,\"physical_flash_readback\":false}\n",
-        mode.mode?"true":"false",mode.mode==1?"true":"false",mode.phase,(unsigned long long)mode.generation,
+        "{\"installed\":%s,\"metadata_valid\":%s,\"app_binding_sha256\":\"%s\",\"phase\":%d,\"generation\":%llu,\"busy\":%s,\"reboot_required\":%s,\"recovery_required\":%s,\"result\":%d,\"retry_required\":%s,\"activation_requested\":false,\"physical_flash_readback\":false}\n",
+        mode.mode?"true":"false",mode.mode==1?"true":"false",mode.app,mode.phase,(unsigned long long)mode.generation,
         rfid_native_job.child?"true":"false",rn_reboot(mode)?"true":"false",
         mode.mode<0||mode.phase==-2||mode.phase==3||mode.phase==6?"true":"false",rfid_native_job.result,
         rfid_native_job.failures>=3||rn_resume_required(mode)?"true":"false");

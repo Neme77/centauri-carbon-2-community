@@ -294,6 +294,65 @@ Preheat presets and calibration remain restricted to idle operation. A later
 G-code heater command can replace the manually selected target, as on Klipper.
 Manual temperature targets were validated during an active print on a physical CC2.
 
+## Interactive screw tramming
+
+`POST /api/control` accepts `screws:tram:start`, `screws:tram:probe:<FL|FR|RR|RL>[:2]`,
+`screws:tram:check[:2]` and `screws:tram:end`. Coordinates are taken from a fixed
+corner table; unknown IDs are refused. Start homes all axes (`G28`) and uses the
+same bed prep as `screws:measure`. Re-probe and the four-corner check home Z only
+(`G28 Z`), and only while a session is active with X and Y homed. Every session
+measurement, the start included, then waits 30 s (`G4 P30000`; the firmware's `G4`
+ignores `S`) before its first probe. Each start/re-probe/check script restores `CC2_SCREW_TRAM` gcode state,
+switches the nozzle off (`M104 S0`) and keeps the bed at 60 °C. `GET /api/printer`
+reports `screws_session.active` and `screws_session.xy_homed`. While the session's own
+job runs, and for 15 s after it completed, the printer may report Manual homing or
+Auto leveling instead of Idle; the session accepts those two states only then. The
+session is cleared on disconnect, console error, timeout, emergency stop, any other
+machine state, `screws:measure` or end. The firmware switches an idle bed off 15 minutes
+after the last command, so between jobs the session sends `M140 S60` again every ten
+minutes (retried after 30 s if not delivered), only while the printer is idle and
+telemetry still shows the 60 °C target. End switches both heaters off. After any other
+invalidation `TURN_OFF_HEATERS` stays pending and is retried until it is delivered
+while the printer is idle and the console free; a print start or a queued heater
+action (temperature, preset, preheat, PID, heaters off, a new tram start) cancels it.
+`screws:measure` is unchanged.
+
+### Screw tramming history
+
+Every successfully completed session job (start, re-probe, check) is recorded with
+the raw `Result is z=` value of each probed corner, taken from that job's console
+output. A completed one-shot `screws:measure` is recorded as its own closed entry with
+`"kind":"quick"`: it has no session and no 30 s settle, so its values are kept apart from
+session values. The newest 20 sessions (64 measurements each) and, separately, the newest
+10 quick entries are kept in `screw-history.txt` next to the UI preferences
+(`--screws-history FILE` overrides it), written atomically after each change, so they
+survive a reload, the end of the session and a restart. A session left open by a restart
+is closed at its last measurement. A failed job and a re-probe without a result for its
+corner are not recorded.
+
+`GET /api/screws/history` returns the newest entry first and its measurements
+oldest first. Each entry has `kind` `session` or `quick`. Times are Unix seconds (UTC);
+`ended` is `null` while a session runs; measurement `kind` is `start`, `probe`, `check`
+or (in a quick entry) `quick`; `corner` is set only for `probe`; `z` holds the corners the job measured (a re-probe
+only its own corner), in mm; `z2` is present only for `twice` and holds the second
+result of each corner. Offsets against the front-left screw are computed by the client.
+
+```json
+{"sessions":[
+  {"kind":"quick","started":1762801500,"ended":1762801680,"measurements":[
+    {"time":1762801680,"kind":"quick","corner":null,"twice":false,
+     "z":{"FL":-0.682100,"FR":-0.676000,"RR":-0.870400,"RL":-0.751000}}]},
+  {"kind":"session","started":1762800000,"ended":1762801200,"measurements":[
+    {"time":1762800300,"kind":"start","corner":null,"twice":false,
+     "z":{"FL":-0.681800,"FR":-0.675800,"RR":-0.869800,"RL":-0.750800}},
+    {"time":1762800420,"kind":"probe","corner":"RR","twice":true,
+     "z":{"RR":-0.700100},"z2":{"RR":-0.699400}}]}]}
+```
+
+`POST /api/screws/history/clear` deletes the whole history and returns `{"ok":true}`
+(`500` with `{"ok":false,"error":...}` when the file cannot be written). Both routes use
+the same authentication and browser guard as the other `/api` routes.
+
 ## Heater PID calibration
 
 `GET /api/pid` returns the selected heater, busy/ready/failed flags and the last
@@ -648,9 +707,10 @@ received, then `{event_id, sequence, code, level, message, age}`. This is the la
 event, not an assertion that a fault is still active. `age` is monotonic seconds.
 It survives UDS disconnects but resets when CC2 Control restarts. `message` is
 native text or null if missing, invalid or longer than 1023 encoded JSON bytes.
-The UI renders text, never HTML. Only WARNING and CRITICAL produce an alert;
-RESUME reports remain available in the API. The browser remembers the last shown
-event across reloads. Consecutive identical native reports retain their event ID;
+The same response includes `printer_alert`, the latest WARNING or CRITICAL
+report in the same format. Informational and RESUME events still update
+`printer_report` and leave `printer_alert` intact. The UI renders alert text and
+remembers explicit dismissal across reloads. Consecutive identical native reports retain their event ID;
 a warning following a RESUME is a new event, even with the same error code.
 The vendor stream does not provide an authoritative occurrence ID, so repeated
 identical warnings without an intervening transition cannot be distinguished.
@@ -740,6 +800,69 @@ are readable, and the chamber is below the target. The state then also reports `
 than 1 °C short of the target), `plateau` (the
 estimated level the chamber is heading for, °C or null), `fan` (aux fan PWM 0–255 sent by the
 session) and `bed_limit`. `state` is `"handed_off"` while a print that took over the bed runs.
+
+## Print queue
+
+Jobs prepared ahead of time: a G-code file, the print dialog's choices and a number of copies, kept in
+`print-queue.json` (`--queue FILE`, next to the plate and spool libraries) and shown on the Queue page, the
+Dashboard's current-job card and the print-ended notice. Every copy is one protected start through the same
+code as `POST /api/gcode-files/print`, with the same guards; nothing starts without the operator's button
+unless the `auto` policy is chosen.
+
+- `GET /api/queue` returns `{"available","error","revision","printer_idle","policy":{"after":"wait"|"auto",
+  "delay","remove_done"},"active","next","items":[…]}`. Items are in queue order with `id`, `storage`, `path`,
+  `mapping`, `side`, `leveling`, `timelapse`, `measure`, `nozzle`, `copies`, `done`, `estimated_seconds` and
+  `filament_grams` (`null` when unknown), `added`, `state` (`pending`, `starting`, `printing` or `done`),
+  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`) and `present` (the file is in place).
+  `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing;
+  `auto_in` the seconds until a pending automatic start, else `null`.
+- `POST /api/queue/add` takes the eight newline-separated fields of `/api/gcode-files/print` (storage,
+  filename, Canvas mapping, plate side, leveling mode, timelapse, measurement, nozzle), then `copies` (1–99),
+  `position` (`end`, or `next` to go to the head behind a running copy) and optionally the slicer's
+  `estimated_seconds` and `filament_grams`. The syntax and the file are checked now; the printer-dependent
+  checks (mapping against the file, mesh, measurement, nozzle) run at each start. 201 `{"ok":true,"id","count"}`;
+  the queue holds at most 32 jobs.
+- `POST /api/queue/start` with a job id, or an empty body for `next`: refused (409) while a queued copy is
+  starting or printing, when the job has no copy left, while plate verification runs, or while another
+  session holds the printer (the refusals every print control shares: maintenance, the Canvas and filament
+  tools, a camera cell, an application update, a managed connection, drying, the nozzle test); otherwise it
+  answers exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx). The job is saved as
+  `starting` before the request goes to the printer, so a restart in between still follows the copy.
+- `POST /api/queue/abandon` (optionally the job id) gives up a `starting` copy the printer never ran: only
+  while the printer is idle with fresh telemetry (409 otherwise, or when no start is waiting); the job goes
+  back to `pending` with `last_result` `not_started`.
+- `POST /api/gcode-files/print` answers 409 `A queued copy is starting` while a queued start waits for the
+  printer; a queued copy that is already printing is protected by the printer's own busy state.
+- `POST /api/queue/remove` (id; never the running job), `/api/queue/reorder` (`id\nindex`, 0 is the head),
+  `/api/queue/copies` (`id\ncopies`, never fewer than already printed, and for the running job at least one
+  more; a total that equals the printed count finishes the job, which `remove_done` then drops),
+  `/api/queue/policy` (`wait|auto\ndelay 10–3600\n0|1` for `remove_done`; a change never starts anything by
+  itself, the automatic delay counts only from a copy counted while `auto` was on), `/api/queue/hold` (cancels
+  the pending automatic start, the policy stays) and `/api/queue/clear-done`.
+  The measurement and nozzle fields are plate library ids or empty. Every change is saved atomically before it
+  is acknowledged; a failed save leaves the queue as it was.
+
+Copies are counted on the backend, so a closed browser misses nothing. A `starting` job becomes `printing`
+once fresh MQTT state shows the printer printing the file it was given (a USB import prints under its
+`CC2_USB_…` copy); the printer service's file name is trusted only while it reports a running print, so a
+name left over from the previous job cannot block the start. While the printer is busy with the start itself
+(homing, bed mesh, heating beyond the targets it had when the start was requested) the wait goes on; three
+idle minutes, another file printing for five seconds, or thirty minutes in all end it as `not_started`. A
+copy counts when the printer is idle again with `print_stats.state` `complete`, the reported file is the
+job's, and this copy's own job was seen running: the printer's job uuid changed from the one before the
+request, or the printer service showed the file printing (a `complete` left over from the previous copy of
+the same file, under the same uuid, does not count). `cancelled` or `error`, another job taking over (a new
+uuid), or an idle printer without `complete` for a minute leave it uncounted (`stopped`); a pause, a filament
+change or a recovery keeps it running. Telemetry older than 15 s decides nothing. The last copy sets `done`
+and, with `remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a
+counted completion if the printer is idle and no other session holds it, else the job notes `auto_failed`.
+Right before that start the backend checks the Canvas material the Queue page would warn about: every slot
+of the job's mapping must be present in fresh telemetry and hold the file's `filament_type` (the page's rule:
+the slot's type contains the file's material, or the file's material contains the slot's first word); a
+differing, empty or unknown slot, or a file without `filament_type`, holds the copy as `auto_material` for the
+operator, who can review the warning and start it by hand. The external feed (empty mapping) has nothing to
+check. The policy is meant for a bed that clears itself and is off by default. A queue file that cannot be parsed keeps the
+queue closed (`available: false`) and is never rewritten.
 
 ## Completed print readback
 

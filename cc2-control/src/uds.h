@@ -66,6 +66,12 @@ typedef struct {
  int report_code, report_level;
  struct timespec report_received, report_identity;
  char report_message[1024]; /* validated JSON string, or null */
+ struct {
+  unsigned long sequence;
+  int code, level;
+  struct timespec received, identity;
+  char message[1024];
+ } alert; /* Last warning/error for the panel, independent of informational events. */
 } uds_client;
 void uds_console_lease(uds_client *c);
 void uds_init(uds_client *c);

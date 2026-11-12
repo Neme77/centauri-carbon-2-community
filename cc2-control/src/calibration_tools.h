@@ -53,7 +53,8 @@ static int rotation_pending_intact(void){
 static const char *tools_ready(const mqtt_client *m){
     const char *reason=plates_printer_ready(m);if(reason)return reason;
     const char *state=uds_print_state(&telemetry);
-    if(!state||(strcmp(state,"standby")&&strcmp(state,"complete")))return "Native printer must be idle";
+    /* A cancelled job remains in print_stats after the machine returns Idle. */
+    if(!state||(strcmp(state,"standby")&&strcmp(state,"complete")&&strcmp(state,"cancelled")))return "Native printer must be idle";
     if(drying_active())return "Stop the bed-heating session first";
     if(plates_background_active())return "Plate verification is still running";
     return NULL;
@@ -167,7 +168,7 @@ static void tools_status(int fd){
 static int rotation_reboot_guard(void){
     const char *state=uds_print_state(&telemetry);double nozzle,bed;
     return plates_reboot_guard()&&!tools.busy&&!drying_active()&&state&&
-        (!strcmp(state,"standby")||!strcmp(state,"complete"))&&
+        (!strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled"))&&
         uds_value(&telemetry,U_EG,&nozzle)&&uds_value(&telemetry,U_BG,&bed)&&nozzle==0&&bed==0;
 }
 static void tools_action(int fd,mqtt_client *m,const char *body,size_t length){

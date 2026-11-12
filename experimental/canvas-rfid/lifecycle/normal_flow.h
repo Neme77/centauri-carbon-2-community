@@ -70,9 +70,9 @@ static int vc_transfer(int install){
         if(install)okay=before.phase==CL_HOST_READY;
         else okay=before.phase==CL_ACTIVE||before.phase==CL_FILTER_ACKED;
     }
-    okay=okay&&sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&app)&&
+    okay=okay&&sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&app)&&
         sc_native_profile(&first,1)&&vc_transfer_observation(install)&&sc_native_profile(&last,1)&&
-        sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&last_app)&&
+        sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
     cl_store_close(&store);
     if(!okay){
@@ -124,13 +124,14 @@ static int vc_remove_host(void){
     struct sc_ready first={0},last={0};pid_t app=0,last_app=0;char boot[37]={0};
     int okay=cl_store_open(&store,SC_BASE)&&cl_store_read(&store,&record)&&vc_profile_bound(&record)&&cl_profile(&store,&record)&&
         (record.phase==CL_STOCK_VERIFIED||record.phase==CL_HOST_REMOVE_INTENT)&&vc_backup(&store)&&
-        (record.phase!=CL_STOCK_VERIFIED||vc_targets(&store))&&sc_read_plan(&store,files)&&vc_boot(boot)&&
+        (record.phase!=CL_STOCK_VERIFIED||vc_targets(&store))&&
+        (SC_IMMUTABLE_BOOT||sc_read_plan(&store,files))&&vc_boot(boot)&&
         sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
-        sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&app);
+        sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&app);
     int strict=okay&&sc_native_profile(&first,1);
-    if(okay&&!strict)okay=record.phase==CL_HOST_REMOVE_INTENT&&sc_native_profile(&first,0);
+    if(okay&&!strict)okay=(SC_IMMUTABLE_BOOT||record.phase==CL_HOST_REMOVE_INTENT)&&sc_native_profile(&first,0);
     okay=okay&&vc_boot_observation(0)&&sc_native_profile(&last,strict)&&
-        sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&last_app)&&
+        sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
     if(okay){
         struct cl_facts facts={.profile=1,.backup=1,.barrier=1,.idle=1,.cold=1,.guard=1,.canvas=1};
@@ -140,13 +141,15 @@ static int vc_remove_host(void){
             if(previous==UINT64_MAX)okay=0;
             else{record.generation++;memcpy(record.boot,boot,37);okay=cl_store_commit(&store,&record,previous);}
         }
-        if(okay)okay=tx_run(&store,files,8,1);
+        if(okay&&!SC_IMMUTABLE_BOOT)okay=tx_run(&store,files,8,1);
     }
     for(unsigned i=0;i<8;i++)free((void*)files[i].bytes);
     cl_store_close(&store);
     if(!maintenance_barrier_release(&barrier))okay=0;
     if(!okay){fprintf(stderr,"STOP: verified_stock_host_removal_incomplete; preserve snapshots and journal\n");return 1;}
-    puts("HOST RESTORED: exact original eight startup files; complete idle reboot required. All legacy backups and the stock image remain preserved.");
+    puts(SC_IMMUTABLE_BOOT?
+         "HOST RESTORED: stock boot recorded; complete idle reboot required. Original backup retained.":
+         "HOST RESTORED: exact original eight startup files; complete idle reboot required. All legacy backups and the stock image remain preserved.");
     return 0;
 }
 static int vc_advance(void){

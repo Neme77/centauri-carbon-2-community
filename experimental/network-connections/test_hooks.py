@@ -3,6 +3,8 @@ from pathlib import Path
 import hashlib,subprocess,tempfile
 
 root=Path(__file__).resolve().parent
+for program in (*root.rglob('*.awk'), *root.glob('*.sh.in')):
+    assert b'\r' not in program.read_bytes(), f'Unix helpers must use LF for BusyBox: {program}'
 repo=root.parents[1]
 sources={
  'camera-launch':(repo/'builder/current/components/camera/firmware-launcher.sh','f05accc97f0195cf4cf481b53b643902424183bb335a27f42e6069a625813c6f'),
@@ -17,6 +19,12 @@ with tempfile.TemporaryDirectory(prefix='connections-hooks-') as tmp:
             raw=source.read_bytes();assert hashlib.sha256(raw).hexdigest()==sha
             result=subprocess.run([*awk,'-v',f'mode={mode}','-f',root/'prepare-hooks.awk',source],check=True,capture_output=True).stdout
             assert result!=raw and result.count(b'/control --enabled')==1
+            wait=b'/control --wait-camera-link'
+            if mode=='camera-entry':
+                assert result.count(wait)==1
+                assert result.index(b'/control --ensure')<result.index(wait)<result.index(b'exec "$CAMERA"',result.index(wait))
+            else:
+                assert wait not in result
             # Every original line remains, in order, including all guards and
             # the unmodified native fallback. Only delegates are inserted.
             original=iter(result.splitlines())

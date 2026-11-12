@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
+import { demoExcludeObjects, demoLayerPath } from './layer-path-demo.ts'
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Match the source literally; never evaluate its template.
 const cameraSource = "export const camera = (q = '') => `http://${location.hostname}:8080/${q}`"
@@ -43,6 +44,15 @@ const labels = {
     'preview.reset': '重置',
     'preview.state': '状态',
   },
+  de: {
+    'preview.simulation': 'SIMULATION — kein Drucker',
+    'preview.idle': 'Idle',
+    'preview.printing': 'Druckt',
+    'preview.paused': 'Pausiert',
+    'preview.disconnected': 'Getrennt',
+    'preview.reset': 'Zurücksetzen',
+    'preview.state': 'Status',
+  },
   ru: {
     'preview.simulation': 'СИМУЛЯЦИЯ — без принтера',
     'preview.idle': 'Простой',
@@ -78,6 +88,114 @@ export function previewPlugin(): Plugin {
   let scene: Scenario = 'printing'
   let speed = 100
   let flow = 100
+  let tramSession = false
+  let tramHeights: Record<string, number> = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+  type TramMeasure = {
+    time: number
+    kind: 'start' | 'probe' | 'check' | 'quick'
+    corner: string | null
+    twice: boolean
+    z: Record<string, number>
+    z2?: Record<string, number>
+  }
+  type TramSession = {
+    kind?: 'session' | 'quick'
+    started: number
+    ended: number | null
+    measurements: TramMeasure[]
+  }
+  const seedScrewHistory = (): TramSession[] => [
+    {
+      kind: 'quick',
+      started: 1762801500,
+      ended: 1762801680,
+      measurements: [
+        {
+          time: 1762801680,
+          kind: 'quick',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6821, FR: -0.676, RR: -0.8704, RL: -0.751 },
+        },
+      ],
+    },
+    {
+      started: 1762800000,
+      ended: 1762801200,
+      measurements: [
+        {
+          time: 1762800300,
+          kind: 'start',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6818, FR: -0.4938, RR: -0.8698, RL: -0.7508 },
+        },
+        {
+          time: 1762800900,
+          kind: 'check',
+          corner: null,
+          twice: false,
+          z: { FL: -0.6818, FR: -0.6758, RR: -0.8698, RL: -0.7508 },
+        },
+      ],
+    },
+  ]
+  let screwSessions: TramSession[] = seedScrewHistory()
+  const screwNow = () => Math.floor(Date.now() / 1000)
+  const heightsZ = () => ({
+    FL: +tramHeights['30,30'].toFixed(4),
+    FR: +tramHeights['230,30'].toFixed(4),
+    RR: +tramHeights['230,225'].toFixed(4),
+    RL: +tramHeights['30,225'].toFixed(4),
+  })
+  const closeOpenScrew = () => {
+    for (const s of screwSessions) if (s.kind !== 'quick' && s.ended == null) s.ended = screwNow()
+  }
+  const trimScrewHistory = () => {
+    let sessions = 0
+    let quicks = 0
+    screwSessions = screwSessions.filter(s => {
+      if (s.kind === 'quick') {
+        if (quicks >= 10) return false
+        quicks++
+        return true
+      }
+      if (sessions >= 20) return false
+      sessions++
+      return true
+    })
+  }
+  let consoleJob = {
+    busy: false,
+    completed: false,
+    success: false,
+    generation: 0,
+    command: '',
+    output: '// CC2 UI preview: no hardware commands are executed.\n// All data is simulated.\n',
+  }
+  const tramCorner = (id: string) =>
+    ({
+      FL: { key: '30,30', x: 30, y: 30 },
+      FR: { key: '230,30', x: 230, y: 30 },
+      RR: { key: '230,225', x: 230, y: 225 },
+      RL: { key: '30,225', x: 30, y: 225 },
+    })[id]
+  const probeLines = (key: string, z: number) => {
+    const [x, y] = key.split(',')
+    return `${`// probe at ${x}.000,${y}.000 is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
+  }
+  const tramOutput = (keys: string[]) =>
+    `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n${keys.map(k => probeLines(k, tramHeights[k])).join('')}`
+  const finishTram = (command: string, keys: string[]) => {
+    consoleJob = {
+      busy: false,
+      completed: true,
+      success: true,
+      generation: consoleJob.generation + 1,
+      command,
+      output: tramOutput(keys),
+    }
+  }
   let preferences: Record<string, unknown> = { language: 'en', theme: 'dark' }
   let cameraViewer: string | null = null
   let deleted = new Set<string>()
@@ -85,6 +203,114 @@ export function previewPlugin(): Plugin {
   // Canvas pull-back: the printer's configured value and the autosave.cfg override, pending until a restart.
   let unload = { configured: 85, override: null as number | null, pending: false, extended: false }
   let videos: Record<string, number> = {}
+  // Print queue: jobs prepared ahead. The preview keeps them in memory and a start "prints" a copy at once.
+  type QueueJob = {
+    id: number
+    storage: 'internal' | 'usb'
+    path: string
+    mapping: string
+    side: 'A' | 'B'
+    leveling: string
+    timelapse: boolean
+    measure: string
+    nozzle: string
+    copies: number
+    done: number
+    estimated_seconds: number | null
+    filament_grams: number | null
+    added: number
+    state: 'pending' | 'starting' | 'printing' | 'done'
+    last_result: string
+    present: boolean
+  }
+  let queueJobs: QueueJob[] = []
+  let queueNextId = 1
+  let queuePolicy = { after: 'wait' as 'wait' | 'auto', delay: 60, remove_done: true }
+  let queueRevision = 0
+  let queueArmedAt: number | null = null // when a copy completed under the auto policy
+  const queueJob = (
+    id: number,
+    path: string,
+    copies: number,
+    done: number,
+    extra: Partial<QueueJob> = {}
+  ): QueueJob => ({
+    id,
+    storage: 'internal',
+    path,
+    mapping: '0:1',
+    side: 'A',
+    leveling: 'saved',
+    timelapse: false,
+    measure: '',
+    nozzle: '',
+    copies,
+    done,
+    estimated_seconds: 6000,
+    filament_grams: 42,
+    added: 1790899200,
+    state: done >= copies ? 'done' : 'pending',
+    last_result: '',
+    present: true,
+    ...extra,
+  })
+  const resetQueue = () => {
+    queueJobs = [
+      queueJob(1, 'CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode', 5, 2, { estimated_seconds: 1547, filament_grams: 12.5 }),
+      queueJob(2, 'CC2_Preview_Gear_housing_PETG.gcode', 2, 0, {
+        mapping: '0:0',
+        side: 'B',
+        leveling: 'calibrate',
+        timelapse: true,
+        estimated_seconds: 11100,
+        filament_grams: 118,
+      }),
+      queueJob(3, 'CC2_Preview_Phone_stand.gcode', 1, 0, { mapping: '', estimated_seconds: 3300, filament_grams: 23 }),
+      queueJob(4, 'CC2_Preview_Vase_missing.gcode', 1, 0, {
+        present: false,
+        estimated_seconds: null,
+        filament_grams: null,
+      }),
+      queueJob(5, 'CC2_Preview_Calibration_cube.gcode', 1, 1, { estimated_seconds: 1440, filament_grams: 8 }),
+    ]
+    queueNextId = 6
+    queuePolicy = { after: 'wait', delay: 60, remove_done: false }
+  }
+  resetQueue()
+  const queueComplete = (job: QueueJob) => {
+    job.done++
+    job.last_result = ''
+    job.state = job.done >= job.copies ? 'done' : 'pending'
+    if (job.state === 'done' && queuePolicy.remove_done) queueJobs = queueJobs.filter(j => j !== job)
+    queueArmedAt = queuePolicy.after === 'auto' ? Date.now() : null
+    queueRevision++
+  }
+  const queueView = () => {
+    // The scene only colours the view: while the printer "prints", the running (or head) job shows as
+    // printing. Stored state changes only through the queue routes and /__preview/queue-complete.
+    const printing = scene === 'printing' || scene === 'paused'
+    const items = queueJobs.map(j => ({ ...j }))
+    let active = items.find(j => j.state === 'printing' || j.state === 'starting')
+    if (printing) {
+      if (!active) active = items.find(j => j.state === 'pending' && j.present)
+      if (active) active.state = 'printing'
+    }
+    const next = items.find(j => j.state === 'pending' && j.present) // as the backend: named even while a copy runs
+    return {
+      available: true,
+      error: '',
+      revision: queueRevision,
+      printer_idle: scene === 'idle',
+      policy: queuePolicy,
+      active: active?.id ?? null,
+      next: next?.id ?? null,
+      auto_in:
+        queueArmedAt !== null && !active
+          ? Math.max(0, Math.ceil((queueArmedAt + queuePolicy.delay * 1000 - Date.now()) / 1000))
+          : null,
+      items,
+    }
+  }
   // Build-plate library: which simulated plate mesh each printer side slot holds, as /api/plates reports it.
   const plateMesh = (tilt: number) => ({
     x_count: 11,
@@ -381,6 +607,17 @@ export function previewPlugin(): Plugin {
     videos = {}
     deleted = new Set()
     cameraViewer = null
+    tramSession = false
+    tramHeights = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+    screwSessions = seedScrewHistory()
+    consoleJob = {
+      busy: false,
+      completed: false,
+      success: false,
+      generation: 0,
+      command: '',
+      output: '// CC2 UI preview: no hardware commands are executed.\n// All data is simulated.\n',
+    }
     resetPlates()
     resetSpools()
   }
@@ -466,6 +703,10 @@ export function previewPlugin(): Plugin {
       hardware: { camera: true, usb: true, light: 1, filament_detection: true, filament_detected: true },
       printer_error: null,
       camera_viewer: cameraViewer,
+      screws_session: {
+        active: tramSession && scene === 'idle',
+        xy_homed: tramSession && scene === 'idle',
+      },
       spools: {
         enabled: spoolsOn,
         revision: spoolRevision,
@@ -513,7 +754,8 @@ export function previewPlugin(): Plugin {
       const state = readFileSync(fileURLToPath(new URL('../src/lib/state.ts', import.meta.url)), 'utf8')
       if (!state.includes(cameraSource)) throw new Error('Preview camera isolation needs updating')
       server.middlewares.use((req, res, next) => {
-        const path = new URL(req.url || '/', 'http://localhost').pathname
+        const reqUrl = new URL(req.url || '/', 'http://localhost')
+        const path = reqUrl.pathname
         const reply = (data: unknown, status = 200) => {
           res.statusCode = status
           res.setHeader('Content-Type', 'application/json')
@@ -568,9 +810,9 @@ export function previewPlugin(): Plugin {
             case '/api/orca/pending-print':
               return reply({ pending: false })
             case '/api/console':
-              return reply({
-                output: '// CC2 UI preview: no hardware commands are executed.\n// All data is simulated.',
-              })
+              return reply({ ...consoleJob })
+            case '/api/screws/history':
+              return reply({ sessions: screwSessions })
             case '/api/gcode-files':
               return reply({
                 internal: {
@@ -602,28 +844,18 @@ export function previewPlugin(): Plugin {
                 },
               })
             case '/api/exclude-objects':
-              return reply({
-                result: {
-                  status: {
-                    exclude_object: {
-                      objects: [
-                        {
-                          name: 'Buddha',
-                          center: [128, 128],
-                          polygon: [
-                            [110, 110],
-                            [146, 110],
-                            [146, 146],
-                            [110, 146],
-                          ],
-                        },
-                      ],
-                      excluded_objects: [],
-                      current_object: 'Buddha',
-                    },
-                  },
-                },
-              })
+              return reply(demoExcludeObjects())
+            case '/api/gcode-files/layer-path': {
+              const file = reqUrl.searchParams.get('file') || ''
+              const layer = Number(reqUrl.searchParams.get('layer'))
+              const storage = reqUrl.searchParams.get('storage') || 'internal'
+              if (!file || !Number.isInteger(layer) || layer < 1)
+                return reply({ error: 'invalid layer path request' }, 400)
+              if (layer > 227) return reply({ error: 'layer not found' }, 404)
+              return reply(demoLayerPath(file, layer, storage))
+            }
+            case '/api/queue':
+              return reply(queueView())
             case '/api/plates':
               return reply(plateLibrary())
             case '/api/spools':
@@ -733,6 +965,7 @@ export function previewPlugin(): Plugin {
         const simulated = [
           '/__preview/scenario',
           '/api/control',
+          '/api/screws/history/clear',
           '/api/preferences',
           '/api/canvas/auto-refill',
           '/api/canvas/unload',
@@ -767,6 +1000,16 @@ export function previewPlugin(): Plugin {
           '/api/spools/dismiss',
           '/api/spools/adjust',
           '/__preview/spool-insert',
+          '/api/queue/add',
+          '/api/queue/start',
+          '/api/queue/remove',
+          '/api/queue/reorder',
+          '/api/queue/copies',
+          '/api/queue/policy',
+          '/api/queue/clear-done',
+          '/__preview/queue-complete',
+          '/api/queue/hold',
+          '/api/queue/abandon',
         ]
         if (!simulated.includes(path)) return reply({ error: 'Operation disabled in isolated preview' }, 403)
         let body = ''
@@ -783,6 +1026,110 @@ export function previewPlugin(): Plugin {
         req.on('end', () => {
           if (oversized) return
           try {
+            if (path === '/__preview/queue-complete' && req.method === 'POST') {
+              const active = queueJobs.find(j => j.state === 'starting' || j.state === 'printing')
+              if (!active) return reply({ ok: false, error: 'No running copy' }, 409)
+              queueComplete(active)
+              return reply({ ok: true })
+            }
+            if (path.startsWith('/api/queue/') && req.method === 'POST') {
+              const lines = body.replace(/\n+$/, '').split('\n')
+              const find = () => queueJobs.find(j => j.id === Number(lines[0]))
+              queueRevision++
+              if (path === '/api/queue/add') {
+                if (lines.length < 9) return reply({ ok: false, error: 'Invalid queue request' }, 400)
+                const [
+                  storage,
+                  file,
+                  mapping,
+                  side,
+                  leveling,
+                  timelapse,
+                  measure,
+                  nozzle,
+                  copies,
+                  position,
+                  seconds,
+                  grams,
+                ] = lines
+                const job = queueJob(queueNextId++, file, Number(copies) || 1, 0, {
+                  storage: storage === 'usb' ? 'usb' : 'internal',
+                  mapping: mapping || '',
+                  side: side === 'B' ? 'B' : 'A',
+                  leveling: leveling || 'saved',
+                  timelapse: timelapse === '1',
+                  measure: measure || '',
+                  nozzle: nozzle || '',
+                  estimated_seconds: seconds ? Number(seconds) : null,
+                  filament_grams: grams ? Number(grams) : null,
+                  added: Math.floor(Date.now() / 1000),
+                })
+                const head = queueJobs.findIndex(j => j.state === 'pending')
+                if (position === 'next' && head >= 0) queueJobs.splice(head, 0, job)
+                else queueJobs.push(job)
+                return reply({ ok: true, id: job.id, count: queueJobs.length }, 201)
+              }
+              if (path === '/api/queue/start') {
+                if (scene !== 'idle')
+                  return reply({ accepted: false, error: 'Starting a file requires an idle printer' }, 409)
+                const job = lines[0] ? find() : queueJobs.find(j => j.state === 'pending' && j.present)
+                if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
+                if (job.state !== 'pending' || !job.present)
+                  return reply({ ok: false, error: 'This job has no copy left to print' }, 409)
+                // As on the printer: the copy runs until it is reported finished (/__preview/queue-complete,
+                // or the scene leaving printing); nothing is counted at the start.
+                if (queueJobs.some(j => j.state === 'starting' || j.state === 'printing'))
+                  return reply({ ok: false, error: 'A queued copy is already running' }, 409)
+                job.state = 'starting'
+                job.last_result = ''
+                queueArmedAt = null
+                return reply({ accepted: true, method: 1020, storage_media: 'local', filename: job.path }, 202)
+              }
+              const job = find()
+              if (path === '/api/queue/hold') {
+                queueArmedAt = null
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/abandon') {
+                const waiting = queueJobs.find(j => j.state === 'starting')
+                if (!waiting) return reply({ ok: false, error: 'No start is waiting' }, 409)
+                waiting.state = 'pending'
+                waiting.last_result = 'not_started'
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/clear-done') {
+                queueJobs = queueJobs.filter(j => j.state !== 'done')
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/policy') {
+                const [after, delay, remove] = lines
+                if ((after !== 'wait' && after !== 'auto') || !(Number(delay) >= 10 && Number(delay) <= 3600))
+                  return reply({ ok: false, error: 'Invalid queue policy' }, 400)
+                queuePolicy = { after, delay: Number(delay), remove_done: remove === '1' }
+                queueArmedAt = null
+                return reply({ ok: true })
+              }
+              if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
+              if (path === '/api/queue/remove') {
+                queueJobs = queueJobs.filter(j => j !== job)
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/reorder') {
+                const to = Math.min(Math.max(0, Number(lines[1]) || 0), queueJobs.length - 1)
+                queueJobs.splice(queueJobs.indexOf(job), 1)
+                queueJobs.splice(to, 0, job)
+                return reply({ ok: true })
+              }
+              if (path === '/api/queue/copies') {
+                const n = Number(lines[1])
+                if (!(n >= 1 && n <= 99) || n < job.done)
+                  return reply({ ok: false, error: 'Fewer copies than already printed' }, 409)
+                job.copies = n
+                job.state = job.done >= n ? 'done' : job.state === 'done' ? 'pending' : job.state
+                return reply({ ok: true })
+              }
+              return reply({ error: 'Unknown queue operation' }, 404)
+            }
             if (path === '/api/spoolman' && req.method === 'POST') {
               const form = Object.fromEntries(
                 body
@@ -1182,6 +1529,10 @@ export function previewPlugin(): Plugin {
               spoolRevision++
               return reply({ ok: true, remaining: found.remaining })
             }
+            if (path === '/api/screws/history/clear' && req.method === 'POST') {
+              screwSessions = []
+              return reply({ ok: true })
+            }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()
               const tuning = action.match(/^tune:(speed|flow):(\d+)$/)
@@ -1197,7 +1548,78 @@ export function previewPlugin(): Plugin {
               if (action === 'print:pause' && scene === 'printing') scene = 'paused'
               else if (action === 'print:resume' && scene === 'paused') scene = 'printing'
               else if (action === 'print:cancel' && ['printing', 'paused'].includes(scene)) scene = 'idle'
-              else return reply({ error: 'Operation disabled in isolated preview' }, 403)
+              else if (action.startsWith('screws:tram:') && scene === 'idle') {
+                if (action === 'screws:tram:start') {
+                  tramSession = true
+                  closeOpenScrew()
+                  screwSessions.unshift({
+                    kind: 'session',
+                    started: screwNow(),
+                    ended: null,
+                    measurements: [{ time: screwNow(), kind: 'start', corner: null, twice: false, z: heightsZ() }],
+                  })
+                  trimScrewHistory()
+                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28\n', ['30,30', '230,30', '230,225', '30,225'])
+                  return reply({ accepted: true, simulated: true })
+                }
+                if (!tramSession) return reply({ error: 'Screw tramming session is not active' }, 409)
+                const probe = action.match(/^screws:tram:probe:(FL|FR|RR|RL)(:2)?$/)
+                if (probe) {
+                  const corner = tramCorner(probe[1])
+                  if (!corner) return reply({ error: 'Unknown screw corner' }, 400)
+                  const first = tramHeights[corner.key] - 0.02
+                  const second = probe[2] ? first - 0.001 : first
+                  const open = screwSessions.find(s => s.ended == null)
+                  open?.measurements.push({
+                    time: screwNow(),
+                    kind: 'probe',
+                    corner: probe[1],
+                    twice: Boolean(probe[2]),
+                    z: { [probe[1]]: +first.toFixed(4) },
+                    ...(probe[2] ? { z2: { [probe[1]]: +second.toFixed(4) } } : {}),
+                  })
+                  tramHeights[corner.key] = second
+                  consoleJob = {
+                    busy: false,
+                    completed: true,
+                    success: true,
+                    generation: consoleJob.generation + 1,
+                    command: `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\nG1 X${corner.x} Y${corner.y}\n`,
+                    output: `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n${probeLines(corner.key, first)}${probe[2] ? probeLines(corner.key, second) : ''}`,
+                  }
+                  return reply({ accepted: true, simulated: true })
+                }
+                if (action === 'screws:tram:check' || action === 'screws:tram:check:2') {
+                  const twice = action.endsWith(':2')
+                  const z = heightsZ()
+                  screwSessions
+                    .find(s => s.ended == null)
+                    ?.measurements.push({
+                      time: screwNow(),
+                      kind: 'check',
+                      corner: null,
+                      twice,
+                      z,
+                      ...(twice ? { z2: z } : {}),
+                    })
+                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', ['30,30', '230,30', '230,225', '30,225'])
+                  return reply({ accepted: true, simulated: true })
+                }
+                if (action === 'screws:tram:end') {
+                  tramSession = false
+                  closeOpenScrew()
+                  consoleJob = {
+                    ...consoleJob,
+                    generation: consoleJob.generation + 1,
+                    command: 'M104 S0\nM140 S0',
+                    completed: true,
+                    success: true,
+                    busy: false,
+                  }
+                  return reply({ accepted: true, simulated: true })
+                }
+                return reply({ error: 'Unknown screw tramming action' }, 400)
+              } else return reply({ error: 'Operation disabled in isolated preview' }, 403)
               return reply({ accepted: true, simulated: true })
             }
             return reply({ error: 'Method unavailable in isolated preview' }, 405)

@@ -86,6 +86,7 @@ int main(void){
     m.have_auto_refill=0;assert(get(canvas_response,reply,sizeof(reply))==200&&strstr(reply,"\"auto_refill\":null"));
     /* /api/printer carries the latest printer refusal of our own requests. */
     assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":null,\"camera_viewer\":null,\"motor_mode\":null,\"experiments\":{\"quiet_motors\":false,\"canvas_uds\":false,\"bed_drying\":false},\"bed_drying\":{\"enabled\":false"));
+    assert(strstr(reply,"\"screws_session\":{\"active\":false,\"xy_homed\":false}"));
     m.reply_errors=3;m.reply_error_method=1020;m.reply_error_code=1026;m.reply_error_time=time(NULL);
     assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":{\"sequence\":3,\"method\":1020,\"code\":1026,\"age\":"));
     uds_init(&telemetry);

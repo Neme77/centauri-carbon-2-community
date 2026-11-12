@@ -20,6 +20,13 @@ case "$available" in ''|*[!0-9]*) echo 'STOP: memory readback unavailable';exit 
 mkdir "$BASE/payload"
 tar -xzf "$BASE/cc2-control-payload.tar.gz" -C "$BASE/payload"
 (cd "$BASE/payload" && sha256sum -c SHA256SUMS) || exit 1
+updates=/opt/usr/cc2-control-updates
+panel_job=''
+if [ -d "$updates" ] && [ ! -L "$updates" ] && [ -f "$updates/current" ] && [ ! -L "$updates/current" ]; then
+    panel_job=$(cat "$updates/current") || panel_job=''
+    case "$panel_job" in *[!0-9a-f]*) panel_job='';; esac
+    [ "${#panel_job}" -eq 32 ] || panel_job=''
+fi
 (
     set +e
     sh "$BASE/payload/install-on-printer.sh"
@@ -28,6 +35,14 @@ tar -xzf "$BASE/cc2-control-payload.tar.gz" -C "$BASE/payload"
     exit "$code"
 ) 2>&1 | tee "$BASE/install.log"
 [ -f "$BASE/installer.exit" ] && [ "$(cat "$BASE/installer.exit")" = 0 ] || { echo 'INSTALLATION FAILED: disk payload, log and backups retained';exit 1; }
+if [ -n "$panel_job" ]; then
+    job="$updates/job-$panel_job"
+    if [ -d "$job" ] && [ ! -L "$job" ] && marker=$(mktemp "$job/pc-installed.XXXXXX"); then
+        if ! (printf 'ok\n' > "$marker" && mv -f "$marker" "$job/pc-installed"); then
+            rm -f "$marker"
+        fi
+    fi
+fi
 check_archive || { echo 'INSTALLATION PASSED: changed archive retained; cleanup skipped';exit 0; }
 [ -d "$BASE/payload" ] && [ ! -L "$BASE/payload" ] || exit 1
 rm -rf "$BASE/payload"

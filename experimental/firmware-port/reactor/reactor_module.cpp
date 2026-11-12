@@ -14,6 +14,9 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include "fingerprints.h"
+#ifdef CC2_REACTOR_STOCK13
+#include "stock13_profile.h"
+#endif
 #if !defined(CC2_SYNTAX_ONLY) && !defined(CC2_BRIDGE_TEST)
 static_assert(sizeof(void*)==4,"ARM32 build required");
 #endif
@@ -25,6 +28,8 @@ uintptr_t test_resolve(uintptr_t address);
 template<class F> F original(uintptr_t address){
 #ifdef CC2_BRIDGE_TEST
  return reinterpret_cast<F>(test_resolve(address));
+#elif defined(CC2_REACTOR_STOCK13)
+ return reinterpret_cast<F>(stock13_address(address));
 #else
  return reinterpret_cast<F>(address);
 #endif
@@ -217,6 +222,9 @@ extern "C" void cc2_wait(void *out,void *self,double waketime,const void *fallba
 #if !defined(CC2_SYNTAX_ONLY) && !defined(CC2_BRIDGE_TEST)
 static void fail(const char *reason){dprintf(2,"CC2 REACTOR V2 STOP: %s\n",reason);_exit(125);}
 static void patch(uintptr_t address,void *destination){
+#ifdef CC2_REACTOR_STOCK13
+ address=stock13_address(address);
+#endif
  long page=sysconf(_SC_PAGESIZE);if(page<=0)fail("page size");uintptr_t base=address&~(uintptr_t(page)-1);
  if(mprotect(reinterpret_cast<void*>(base),page,PROT_READ|PROT_WRITE|PROT_EXEC))fail("mprotect writable");
  uint32_t words[2]={0xe51ff004,static_cast<uint32_t>(reinterpret_cast<uintptr_t>(destination))};
@@ -228,7 +236,12 @@ __attribute__((constructor)) static void activate(){
  const char *enabled=getenv("CC2_REACTOR_RUNTIME_V2");if(!enabled||std::strcmp(enabled,"1"))return;
  char path[512];ssize_t n=readlink("/proc/self/exe",path,sizeof(path)-1);if(n<0)fail("exe path");path[n]=0;
  if(std::strcmp(path,"/opt/usr/cc2-reactor-runtime-v2/elegoo_printer"))fail("unsupported executable path");
- for(const auto &f:fingerprints)if(std::memcmp(reinterpret_cast<void*>(f.address),f.bytes,8))fail("original instruction fingerprint");
+#ifdef CC2_REACTOR_STOCK13
+ const auto &profile=stock13_fingerprints;
+#else
+ const auto &profile=fingerprints;
+#endif
+ for(const auto &f:profile)if(std::memcmp(reinterpret_cast<void*>(f.address),f.bytes,8))fail("original instruction fingerprint");
  patch(0x26ab5c,reinterpret_cast<void*>(&bridge::cc2_callback));
  patch(0x26ccac,reinterpret_cast<void*>(&bridge::cc2_timers));
  patch(0x26e3a8,reinterpret_cast<void*>(&bridge::cc2_poll));

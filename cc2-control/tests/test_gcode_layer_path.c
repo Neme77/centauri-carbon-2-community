@@ -1,0 +1,242 @@
+#include "../src/gcode_layer_path.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+static FILE *write_gcode(const char *dir, const char *name, const char *text) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir, name);
+    FILE *f = fopen(path, "w+");
+    assert(f);
+    assert(fputs(text, f) >= 0);
+    assert(!fflush(f));
+    rewind(f);
+    return f;
+}
+
+static int parse_file(FILE *file, int layer, layer_path_info *info, layer_point *pts, int *starts) {
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    return gcode_layer_path_parse(file, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                  info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX);
+}
+
+static void expect_ok(int rc, const layer_path_info *info, int min_points) {
+    assert(rc == LAYER_PATH_OK);
+    assert(info->point_count >= min_points);
+    assert(info->point_count <= LAYER_PATH_POINTS_MAX);
+}
+
+int main(void) {
+    char dir[] = "/tmp/cc2-layer-XXXXXX";
+    assert(mkdtemp(dir));
+    layer_point pts[LAYER_PATH_COLLECT_MAX];
+    int starts[LAYER_PATH_PATHS_MAX];
+    layer_path_info info;
+    char storage[16], file[LAYER_PATH_NAME_MAX];
+    int layer = 0;
+
+    assert(gcode_layer_path_query("file=cube.gcode&layer=1", storage, file, &layer) == LAYER_PATH_OK);
+    assert(!strcmp(storage, "internal") && !strcmp(file, "cube.gcode") && layer == 1);
+    assert(gcode_layer_path_query("storage=usb&file=folder%2Fpart.gcode&layer=12", storage, file, &layer) == LAYER_PATH_OK);
+    assert(!strcmp(storage, "usb") && !strcmp(file, "folder/part.gcode") && layer == 12);
+    assert(gcode_layer_path_query("file=../cube.gcode&layer=1", storage, file, &layer) == LAYER_PATH_BAD_QUERY);
+    assert(gcode_layer_path_query("file=/etc/passwd.gcode&layer=1", storage, file, &layer) == LAYER_PATH_BAD_QUERY);
+    assert(gcode_layer_path_query("file=cube.txt&layer=1", storage, file, &layer) == LAYER_PATH_BAD_QUERY);
+    assert(gcode_layer_path_query("storage=other&file=cube.gcode&layer=1", storage, file, &layer) == LAYER_PATH_BAD_QUERY);
+    assert(gcode_layer_path_query("file=cube.gcode&layer=0", storage, file, &layer) == LAYER_PATH_BAD_LAYER);
+    assert(gcode_layer_path_query("file=cube.gcode&layer=-1", storage, file, &layer) == LAYER_PATH_BAD_LAYER);
+    assert(gcode_layer_path_query("file=cube.gcode&layer=1.5", storage, file, &layer) == LAYER_PATH_BAD_LAYER);
+    assert(gcode_layer_path_query("file=cube.gcode", storage, file, &layer) == LAYER_PATH_BAD_LAYER);
+    assert(gcode_layer_path_query("layer=1", storage, file, &layer) == LAYER_PATH_BAD_QUERY);
+    assert(gcode_layer_path_query("file=cube.gcode&layer=1&extra=1", storage, file, &layer) == LAYER_PATH_BAD_QUERY);
+    assert(gcode_layer_path_query("file=..%2Fcube.gcode&layer=1", storage, file, &layer) == LAYER_PATH_BAD_QUERY);
+    assert(gcode_layer_path_query(NULL, storage, file, &layer) == LAYER_PATH_BAD_QUERY);
+
+    FILE *f = write_gcode(dir, "layers.gcode",
+        ";LAYER:0\nG90\nM82\nG1 X10 Y10 E1\nG1 X20 Y10 E2\n"
+        ";LAYER:1\nG0 X0 Y0\n"
+        ";LAYER:2\nG0 X30 Y30\nG1 X40 Y30 E4\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    expect_ok(LAYER_PATH_OK, &info, 2);
+    assert(info.layer == 1 && info.total_layers == 3 && info.path_count >= 1);
+    assert(fabs(pts[0].x - 10) < 0.05 && fabs(pts[0].y - 10) < 0.05);
+    rewind(f);
+    assert(parse_file(f, 2, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.point_count == 0 && info.path_count == 0 && info.total_layers == 3);
+    rewind(f);
+    assert(parse_file(f, 3, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.path_count >= 1 && info.point_count >= 2);
+    assert(fabs(pts[0].x - 30) < 0.05 && fabs(pts[0].y - 30) < 0.05);
+    rewind(f);
+    assert(parse_file(f, 4, &info, pts, starts) == LAYER_PATH_OUTSIDE);
+    rewind(f);
+    assert(parse_file(f, 9, &info, pts, starts) == LAYER_PATH_OUTSIDE);
+    fclose(f);
+
+    f = write_gcode(dir, "orca.gcode",
+        ";LAYER_CHANGE\n;Z:0.2\nG1 Z0.2 F300\nG1 X5 Y5 E0.2\nG1 X15 Y5 E0.4\n"
+        ";BEFORE_LAYER_CHANGE\nG1 X15 Y15 E0.4\n"
+        ";LAYER_CHANGE\n;Z:0.4\nG1 Z0.4\nG0 X25 Y25\nG1 X35 Y25 E1.0\n"
+        ";AFTER_LAYER_CHANGE\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.total_layers == 2);
+    assert(info.point_count >= 2);
+    assert(fabs(pts[0].x - 5) < 0.05);
+    rewind(f);
+    assert(parse_file(f, 2, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.point_count >= 2);
+    assert(fabs(pts[0].x - 25) < 0.05);
+    fclose(f);
+
+    /* ElegooSlicer writes ;LAYER_CHANGE together with Cura-style ;LAYER:N, puts
+     * ;LAYER:0 into the start block and numbers the printed layers ;LAYER:1..N.
+     * ;LAYER_CHANGE alone must number the layers, and ;Z: must win over a later
+     * z-hop or the end G-code lift. */
+    f = write_gcode(dir, "elegoo.gcode",
+        ";LAYER_COUNT:3\nG90\nM82\n"
+        ";LAYER:0\nG1 Z0.8 F600\nG0 X1 Y1\nG1 X60 Y1 E2\n"
+        ";LAYER_CHANGE\n;Z:0.2\n;LAYER:1\nG1 Z0.2 F600\nG0 X5 Y5\nG1 X15 Y5 E3\nG1 X15 Y15 E4\n"
+        ";LAYER_CHANGE\n;Z:0.4\n;LAYER:2\nG1 Z0.4 F600\nG0 X25 Y25\nG1 X35 Y25 E5\nG1 X35 Y35 E6\nG1 Z0.8\n"
+        ";LAYER_CHANGE\n;Z:0.6\n;LAYER:3\nG1 Z0.6 F600\nG0 X45 Y45\nG1 X55 Y45 E7\nG1 X55 Y55 E8\n"
+        "G1 Z5.6 F600\nG0 X0 Y200\nM104 S0\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.layer == 1 && info.total_layers == 3);
+    assert(info.path_count >= 1 && info.point_count >= 2);
+    assert(fabs(pts[0].x - 5) < 0.05 && fabs(pts[0].y - 5) < 0.05);
+    for (int i = 0; i < info.point_count; i++) assert(pts[i].x > 4 && pts[i].x < 16 && pts[i].y > 4 && pts[i].y < 16);
+    assert(fabs(info.z - 0.2) < 0.001);
+    rewind(f);
+    assert(parse_file(f, 2, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.layer == 2 && info.total_layers == 3);
+    assert(info.path_count >= 1 && info.point_count >= 2);
+    assert(fabs(pts[0].x - 25) < 0.05 && fabs(pts[0].y - 25) < 0.05);
+    for (int i = 0; i < info.point_count; i++) assert(pts[i].x > 24 && pts[i].x < 36 && pts[i].y > 24 && pts[i].y < 36);
+    assert(fabs(info.z - 0.4) < 0.001);
+    rewind(f);
+    assert(parse_file(f, 3, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.layer == 3 && info.total_layers == 3);
+    assert(info.path_count >= 1 && info.point_count >= 2);
+    assert(fabs(pts[0].x - 45) < 0.05 && fabs(pts[0].y - 45) < 0.05);
+    for (int i = 0; i < info.point_count; i++) assert(pts[i].x > 44 && pts[i].x < 56 && pts[i].y > 44 && pts[i].y < 56);
+    assert(fabs(info.z - 0.6) < 0.001);
+    rewind(f);
+    assert(parse_file(f, 4, &info, pts, starts) == LAYER_PATH_OUTSIDE);
+    fclose(f);
+
+    f = write_gcode(dir, "travel.gcode",
+        ";LAYER:0\nG90\nM82\nG1 X0 Y0 E1\nG1 X10 Y0 E2\nG0 X10 Y10\nG1 X20 Y10 E3\nG1 X20 Y20 E4\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.path_count == 2);
+    assert(info.point_count >= 4);
+    fclose(f);
+
+    f = write_gcode(dir, "relative.gcode",
+        ";LAYER:0\nG91\nM83\nG92 X0 Y0 E0\nG1 X10 Y0 E0.5\nG1 X10 Y0 E0.5\nG1 X0 Y10 E-0.2\nG1 X10 Y0 E0.4\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.path_count == 2);
+    assert(fabs(pts[0].x) < 0.05 && fabs(pts[0].y) < 0.05);
+    assert(fabs(pts[1].x - 10) < 0.05);
+    fclose(f);
+
+    f = write_gcode(dir, "abs.gcode",
+        ";LAYER:0\nG90\nM82\nG1 X10 Y10 E1.0\nG1 X20 Y10 E1.5\nG1 X20 Y20 E1.2\nG1 X30 Y20 E2.0\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.path_count == 2);
+    fclose(f);
+
+    f = write_gcode(dir, "arc.gcode",
+        ";LAYER:0\nG90\nM83\nG1 X10 Y10 E0.1\nG3 X20 Y20 I0 J10 E1.0\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.point_count >= 4);
+    double cx = 10, cy = 20;
+    for (int i = 0; i < info.point_count; i++) {
+        double r = hypot(pts[i].x - cx, pts[i].y - cy);
+        assert(fabs(r - 10) < 0.6);
+    }
+    fclose(f);
+
+    f = write_gcode(dir, "g2.gcode",
+        ";LAYER:0\nG90\nM83\nG1 X20 Y10 E0.1\nG2 X10 Y20 I0 J10 E0.8\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.point_count >= 4);
+    fclose(f);
+
+    FILE *huge = write_gcode(dir, "huge.gcode", ";LAYER:0\nG90\nM83\nG1 X0 Y0 E0.01\n");
+    assert(!fseek(huge, 0, SEEK_END));
+    for (int i = 1; i <= 6000; i++) {
+        char line[80];
+        snprintf(line, sizeof(line), "G1 X%d Y%d E0.01\n", i % 2, i);
+        assert(fputs(line, huge) >= 0);
+    }
+    rewind(huge);
+    assert(parse_file(huge, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.point_count <= LAYER_PATH_POINTS_MAX);
+    assert(info.truncated);
+    fclose(huge);
+
+    f = write_gcode(dir, "implicit.gcode", "G90\nM83\nG1 X1 Y1 E0.2\nG1 X8 Y1 E0.2\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    assert(info.total_layers == 1 && info.point_count >= 2);
+    rewind(f);
+    assert(parse_file(f, 2, &info, pts, starts) == LAYER_PATH_OUTSIDE);
+    fclose(f);
+
+    char json[4096];
+    f = write_gcode(dir, "json.gcode", "; total layer number: 4\n;LAYER:0\nG1 X10 Y10 E1\nG1 X20 Y10 E2\n");
+    assert(parse_file(f, 1, &info, pts, starts) == LAYER_PATH_OK);
+    int n = gcode_layer_path_json(json, sizeof(json), "internal", "json.gcode", &info, pts, starts);
+    assert(n > 0);
+    assert(strstr(json, "\"layer\":1"));
+    assert(strstr(json, "\"total_layers\":4"));
+    assert(strstr(json, "\"paths\":["));
+    fclose(f);
+
+    char path[512];
+    {
+        /* An ElegooSlicer file with the layer count in its header is read only up to the
+         * end of the requested layer; the answer is the same as a full read. */
+        char text[65536];
+        size_t used = (size_t)snprintf(text, sizeof(text), "; HEADER_BLOCK_START\n; total layer number: 40\n; HEADER_BLOCK_END\n");
+        for (int l = 0; l < 40; l++)
+            used += (size_t)snprintf(text + used, sizeof(text) - used,
+                ";LAYER_CHANGE\n;Z:%.2f\nG1 Z%.2f\nG1 X10 Y%d\nG1 X60 Y%d E%d\nG1 X60 Y%d E%d\n",
+                0.2 * (l + 1), 0.2 * (l + 1), l, l, 2 * l + 1, l + 30, 2 * l + 2);
+        f = write_gcode(dir, "early.gcode", text);
+        expect_ok(parse_file(f, 3, &info, pts, starts), &info, 2);
+        long stopped = ftell(f);
+        assert(info.layer == 3 && info.total_layers == 40 && info.z > 0.59 && info.z < 0.61);
+        assert(stopped > 0 && (size_t)stopped < used / 4);
+        layer_path_info late;
+        rewind(f);
+        expect_ok(parse_file(f, 40, &late, pts, starts), &late, 2);
+        assert(late.layer == 40 && late.total_layers == 40 && late.z > 7.99 && late.z < 8.01);
+        rewind(f);
+        assert(parse_file(f, 41, &late, pts, starts) == LAYER_PATH_OUTSIDE);
+        fclose(f);
+        /* Without the header count the file is read to the end to count its layers. */
+        char *body = strstr(text, "; HEADER_BLOCK_END\n") + strlen("; HEADER_BLOCK_END\n");
+        f = write_gcode(dir, "nocount.gcode", body);
+        expect_ok(parse_file(f, 3, &info, pts, starts), &info, 2);
+        assert(info.total_layers == 40 && (size_t)ftell(f) == strlen(body));
+        fclose(f);
+        snprintf(path, sizeof(path), "%s/early.gcode", dir); unlink(path);
+        snprintf(path, sizeof(path), "%s/nocount.gcode", dir); unlink(path);
+    }
+    snprintf(path, sizeof(path), "%s/layers.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/orca.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/elegoo.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/travel.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/relative.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/abs.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/arc.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/g2.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/huge.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/implicit.gcode", dir); unlink(path);
+    snprintf(path, sizeof(path), "%s/json.gcode", dir); unlink(path);
+    rmdir(dir);
+    puts("PASS: layer-path query validation, layer markers, ElegooSlicer ;LAYER_CHANGE numbering and ;Z: height, empty layer, travel, relative/absolute extrusion, arcs, point cap and early stop after the requested layer");
+    return 0;
+}

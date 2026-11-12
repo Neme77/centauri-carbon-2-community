@@ -30,7 +30,9 @@
 #ifndef AU_FAULT
 #define AU_FAULT(point,index) ((void)0)
 #endif
-#ifdef AU_BIND_TRANSFER_WORKER
+#if defined(AU_IMMUTABLE_BOOT_BINDING)
+#define AU_COUNT 3u
+#elif defined(AU_BIND_TRANSFER_WORKER)
 #define AU_COUNT 5u
 #else
 #define AU_COUNT 4u
@@ -65,9 +67,17 @@ static inline int au_match(int directory,const char *name,const char *digest,mod
     close(fd);return 1;
 }
 static inline int au_plan_hash(const struct au_plan *p,char digest[65]){
+#ifdef AU_IMMUTABLE_BOOT_BINDING
+    static const char *names[]={"coordinator","capture","app-integration.json"};
+#else
     static const char *names[]={"coordinator","capture","app-integration.json","activate-on-ready",
         "transfer-worker"};
-    if(!p||!au_hex(p->old_app)||!au_hex(p->new_app)||!au_hex(p->profile)||!strcmp(p->old_app,p->new_app))return 0;
+#endif
+    if(!p||!au_hex(p->old_app)||!au_hex(p->new_app)||!au_hex(p->profile))return 0;
+    int same_app=!strcmp(p->old_app,p->new_app);
+#if !defined(AU_IMMUTABLE_BOOT_BINDING) || !defined(AU_SAME_APP_HELPER_UPDATE)
+    if(same_app)return 0;
+#endif
     sha256_state state;sha256_init(&state);char line[320];
     int n=snprintf(line,sizeof(line),"CC2RFUP1 %s %s %s\n",p->old_app,p->new_app,p->profile);
     if(n<0||(size_t)n>=sizeof(line))return 0;
@@ -76,6 +86,7 @@ static inline int au_plan_hash(const struct au_plan *p,char digest[65]){
         const struct au_file *f=p->files+i;
         if(!f->name||strcmp(f->name,names[i])||!au_hex(f->before)||!au_hex(f->after)||
             f->mode!=((i<2||i==4)?0700:0600))return 0;
+        if(same_app&&!strcmp(f->before,f->after))return 0;
         n=snprintf(line,sizeof(line),"%s %04o %s %s\n",f->name,(unsigned)f->mode,f->before,f->after);
         if(n<0||(size_t)n>=sizeof(line))return 0;
         sha256_update(&state,(unsigned char*)line,(size_t)n);
@@ -220,7 +231,12 @@ static inline int au_snapshot(struct au_store *s,int source,const char *name,con
 }
 static inline int au_prepare(struct au_store *s,const struct au_plan *p,int source,int borrowed){
     char plan[65],journal[65];struct au_record state;struct stat st;
-    if(!au_plan_hash(p,plan)||!au_barrier(borrowed)||!au_directory_private(source)||!au_app(p->old_app)||!au_native(s,p,journal))return 0;
+#ifdef AU_IMMUTABLE_BOOT_BINDING
+    const char *installed_app=p->new_app;
+#else
+    const char *installed_app=p->old_app;
+#endif
+    if(!au_plan_hash(p,plan)||!au_barrier(borrowed)||!au_directory_private(source)||!au_app(installed_app)||!au_native(s,p,journal))return 0;
     if(!fstatat(s->directory,"state",&st,AT_SYMLINK_NOFOLLOW)){
         if(!au_read_state(s,&state)||strcmp(state.plan,plan)||strcmp(state.journal,journal)||state.phase!=AU_PREPARED)return 0;
         for(unsigned i=0;i<AU_COUNT;i++){

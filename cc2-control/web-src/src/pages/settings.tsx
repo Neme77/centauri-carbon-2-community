@@ -212,21 +212,24 @@ const CanvasFirmware = () => {
           : (data.retry_required || data.result === 1) && [1, 2, 4, 7, 9].includes(data.phase)
             ? 'resume'
             : null)
+  const continueValidation = action === 'resume' && [1, 2].includes(data.phase) && data.result !== 1
   const message = data.recovery_required
     ? 'rfid.lifecycle_recovery'
     : busy || data.busy
       ? 'rfid.lifecycle_working'
       : data.reboot_required
         ? null
-        : data.result === 1 || data.retry_required
-          ? 'rfid.lifecycle_action_failed'
-          : data.phase === 8
-            ? 'rfid.lifecycle_stock'
-            : data.phase === -1 || data.phase === 10
-              ? 'rfid.lifecycle_dormant'
-              : action
-                ? null
-                : 'rfid.lifecycle_waiting'
+        : continueValidation
+          ? 'rfid.lifecycle_validation_ready'
+          : data.result === 1 || data.retry_required
+            ? 'rfid.lifecycle_action_failed'
+            : data.phase === 8
+              ? 'rfid.lifecycle_stock'
+              : data.phase === -1 || data.phase === 10
+                ? 'rfid.lifecycle_dormant'
+                : action
+                  ? null
+                  : 'rfid.lifecycle_waiting'
 
   const label =
     action === 'restore'
@@ -234,7 +237,9 @@ const CanvasFirmware = () => {
       : action === 'remove'
         ? 'rfid.lifecycle_remove'
         : action === 'resume'
-          ? 'rfid.lifecycle_resume'
+          ? continueValidation
+            ? 'rfid.lifecycle_continue_validation'
+            : 'rfid.lifecycle_resume'
           : 'rfid.install_canvas_firmware'
   const run = async () => {
     if (!action || lock.current || data.busy || data.recovery_required || data.reboot_required) return
@@ -246,7 +251,9 @@ const CanvasFirmware = () => {
           ? 'rfid.lifecycle_restore_confirm'
           : action === 'remove'
             ? 'rfid.lifecycle_remove_confirm'
-            : 'rfid.lifecycle_confirm'
+            : continueValidation
+              ? 'rfid.lifecycle_validation_confirm'
+              : 'rfid.lifecycle_confirm'
       if (!(await ask(t(confirmation)))) return
       await post('/api/rfid/lifecycle/action', action)
       await refreshRfidLifecycle()

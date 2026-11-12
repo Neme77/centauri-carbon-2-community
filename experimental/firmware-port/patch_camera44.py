@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 import sys
 
-def apply(source, destination):
-    manifest = json.loads(Path(__file__).with_name('camera44-manifest.json').read_text())
+def apply(source, destination, manifest_name='camera44-manifest.json'):
+    manifest = json.loads(Path(__file__).with_name(manifest_name).read_text())
     data = bytearray(Path(source).read_bytes())
     if hashlib.sha256(data).hexdigest() != manifest['input_sha256']:
         raise ValueError('Unrecognized vendor executable')

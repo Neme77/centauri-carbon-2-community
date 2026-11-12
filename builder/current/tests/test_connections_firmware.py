@@ -21,6 +21,10 @@ class ConnectionsInputTests(unittest.TestCase):
         self.assertEqual(pointer['sha256'],c.RUNTIME_SHA256)
         self.assertEqual(pointer['helper_sha256'],c.BINARY_PINS['control'])
         self.assertEqual(len([n for n in c.BINARY_PINS if n.endswith('.ko')]),4)
+        preview=pointer['lan_preview']
+        self.assertEqual(preview['sha256'],c.LAN_PREVIEW_SHA256)
+        self.assertEqual(preview['helper_sha256'],c.LAN_PREVIEW_HELPER_SHA256)
+        self.assertNotEqual(preview['sha256'],pointer['sha256'])
 
     def test_changed_or_missing_archive_refused(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -28,6 +32,7 @@ class ConnectionsInputTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'Missing'):c.read_runtime(path)
             path.write_bytes(b'not the reviewed archive')
             with self.assertRaisesRegex(RuntimeError,'SHA256'):c.read_runtime(path)
+            with self.assertRaisesRegex(RuntimeError,'SHA256'):c.read_runtime(path,lan_preview=True)
 
     def test_bootstrap_has_no_module_service_heater_or_motion_actions(self):
         text=(BASE/'components/connections/firmware-seed.sh').read_text()
@@ -62,18 +67,24 @@ class ConnectionsBootstrapTests(unittest.TestCase):
             # tokens once; never rewrite a path that was already expanded.
             script=re.sub(r'/opt/usr|/opt/inst|/proc/|/tmp/',lambda match:replacements[match[0]],script)
             script=script.replace('b76f68e345f1221d835d1a0d6279827c5df4823c2e7fadfe0298cd49ec7bb7df',sha(native)).replace('53cf6af55ad333d5781b0d48d89fd48bde22bc516bd22e76d45f098dc224443c',sha(wan))
-            env=dict(os.environ,TRACE=str(trace),FAIL_SEED='1' if case=='seed-failure' else '0')
-            old=case in ('retained','seed-failure','component-move-failure','dhcp-move-failure','retained-damage','mapped','running')
+            env=dict(os.environ,TRACE=str(trace),FAIL_SEED='1' if case in ('seed-failure','retained-damage-seed-failure') else '0')
+            old=case in ('retained','seed-failure','component-move-failure','dhcp-move-failure','retained-damage','mapped','running',
+                         'retained-native-damage','retained-link','retained-manifest-escape','retained-damage-seed-failure')
             if old:
                 root.mkdir();root.joinpath('native-udhcpc_wlan0').write_bytes(native);root.joinpath('native-set_lan.sh').write_bytes(wan)
                 root.joinpath('control').write_text('#!/bin/sh\necho OLD_COMPONENT_MUST_NOT_RUN >> "$TRACE"\nexit 90\n');root.joinpath('control').chmod(0o700)
                 root.joinpath('old-state').write_bytes(b'old component retained')
                 root.joinpath('SHA256SUMS').write_text(''.join(f'{sha(p.read_bytes())}  {p.name}\n' for p in sorted(root.iterdir())))
                 dhcp.write_bytes(delegate);dhcp.chmod(0o775)
+            if case=='retained-native-damage':root.joinpath('native-set_lan.sh').write_bytes(b'unknown native original')
+            if case=='retained-link':
+                root.joinpath('old-state').unlink()
+                root.joinpath('old-state').symlink_to(state)
+            if case=='retained-manifest-escape':root.joinpath('SHA256SUMS').write_text(sha(native)+'  ../outside\n')
             before={p.name:p.read_bytes() for p in root.iterdir()} if root.exists() else None
             old_dhcp=dhcp.read_bytes();old_mode=dhcp.stat().st_mode&0o777
             if case=='foreign-dhcp':dhcp.write_bytes(b'foreign DHCP');old_dhcp=dhcp.read_bytes()
-            if case=='retained-damage':root.joinpath('old-state').write_bytes(b'changed');before['old-state']=b'changed'
+            if case in ('retained-damage','retained-damage-seed-failure'):root.joinpath('old-state').write_bytes(b'changed');before['old-state']=b'changed'
             if case in ('running','mapped'):
                 process=proc/'12';process.mkdir()
                 if case=='running':process.joinpath('exe').symlink_to(root/'control')
@@ -102,9 +113,12 @@ class ConnectionsBootstrapTests(unittest.TestCase):
             if case=='damaged-source':source.joinpath('payload').write_bytes(b'changed')
             file=base/'boot.sh';file.write_text(script)
             result=subprocess.run([*shell,str(file)],env=env,text=True,capture_output=True,timeout=15)
-            success=case in ('fresh','retained','idempotent')
+            success=case in ('fresh','retained','retained-damage','idempotent','idempotent-damage')
             self.assertEqual(result.returncode==0,success,(shell,case,result.stdout,result.stderr))
-            reasons={'not-root':'root_required','foreign-dhcp':'foreign_persistent_dhcp','retained-damage':'retained_component_checksum',
+            reasons={'not-root':'root_required','foreign-dhcp':'foreign_persistent_dhcp',
+                     'retained-native-damage':'retained_native_profile','retained-link':'retained_component_symlink',
+                     'retained-manifest-escape':'retained_component_manifest',
+                     'retained-damage-seed-failure':'configuration_seed',
                      'damaged-source':'firmware_checksums','mapped':'component_mapped','running':'component_running',
                      'copy-failure':'stage_copy','component-move-failure':'component_commit',
                      'dhcp-move-failure':'dhcp_commit','seed-failure':'configuration_seed',
@@ -119,10 +133,22 @@ class ConnectionsBootstrapTests(unittest.TestCase):
                 self.assertEqual(dhcp.stat().st_mode&0o777,0o755)
                 self.assertEqual(root.joinpath('firmware-payload.sha256').read_text().strip(),sha(source.joinpath('SHA256SUMS').read_bytes()))
                 if old:self.assertTrue(list(usr.glob('cc2-network-firmware-backup-*/component/old-state')))
+                status=(usr/'cc2-connections-boot.status').read_text()
+                self.assertIn('READY=seeded',status)
+                if case=='retained-damage':
+                    self.assertIn('retained_checksum=changed',status)
+                    backup=next(usr.glob('cc2-network-firmware-backup-*/component/old-state'))
+                    self.assertEqual(backup.read_bytes(),b'changed')
                 if case=='idempotent':
                     result=subprocess.run([*shell,str(file)],env=env,text=True,capture_output=True,timeout=15)
                     self.assertEqual(result.returncode,0,result.stderr)
                     self.assertEqual(trace.read_text().splitlines(),['--seed'])
+                if case=='idempotent-damage':
+                    root.joinpath('payload').write_bytes(b'changed installed payload')
+                    result=subprocess.run([*shell,str(file)],env=env,text=True,capture_output=True,timeout=15)
+                    self.assertNotEqual(result.returncode,0)
+                    self.assertIn('CC2_CONNECTIONS_FIRMWARE_STOP=installed_checksums',result.stderr)
+                    self.assertEqual(root.joinpath('payload').read_bytes(),b'changed installed payload')
             else:
                 self.assertEqual(dhcp.read_bytes(),old_dhcp)
                 self.assertEqual(dhcp.stat().st_mode&0o777,old_mode)
@@ -134,7 +160,9 @@ class ConnectionsBootstrapTests(unittest.TestCase):
         shells=[['dash'],['busybox','sh']]
         for shell in shells:
             self.assertIsNotNone(shutil.which(shell[0]),'offline image must provide both shells')
-            for case in ('not-root','fresh','retained','idempotent','foreign-dhcp','retained-damage','damaged-source','mapped','running','native-running','copy-failure','component-move-failure','dhcp-move-failure','seed-failure'):
+            for case in ('not-root','fresh','retained','idempotent','foreign-dhcp','retained-damage','damaged-source','mapped','running','native-running','copy-failure','component-move-failure','dhcp-move-failure','seed-failure',
+                         'retained-native-damage','retained-link','retained-manifest-escape',
+                         'retained-damage-seed-failure','idempotent-damage'):
                 with self.subTest(shell=shell,case=case):self.fixture(shell,case)
 
 if __name__=='__main__':unittest.main()

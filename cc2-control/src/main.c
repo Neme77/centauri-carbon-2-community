@@ -107,6 +107,7 @@ static const char *mqtt_config_path = "./cc2-control.conf";
 static const char *ui_preferences_path = "./ui-preferences.json";
 static const char *plates_path = "./bed-plates.json";
 static const char *spools_path = "./spools.json";
+static const char *queue_path = "./print-queue.json";
 static const char *printer_autosave_path = "/opt/usr/cfg/autosave.cfg";
 static const char *gcode_internal_root = GCODE_INTERNAL_ROOT;
 static const char *gcode_usb_root = GCODE_USB_ROOT;
@@ -324,6 +325,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"runout\":\"/api/runout\","
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
+            "\"screws_history\":\"/api/screws/history\","
             "\"spools\":\"/api/spools\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
@@ -654,6 +656,8 @@ static int gcode_storage_root(const char *storage, const char **root) {
 }
 
 #include "gcode_download.h"
+#include "gcode_layer_path.h"
+#include "gcode_layer_path_http.h"
 
 /* Cursor pages keep the fixed 128-entry window and all traversal guards.
  * A cursor is metadata for ordering only, never an instruction to open a path.
@@ -1479,11 +1483,8 @@ static unsigned long gcode_path_hash(const char *text) {
 
 /* USB printing on the touchscreen uses a private import stage.  Method 1020
  * reliably accepts local files, so mirror that workflow before publishing. */
-static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL]) {
-    char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
-    char temporary[PATH_MAX_LOCAL * 2];
-    if (!gcode_resolved_path(gcode_usb_root, relative, source, sizeof(source))) return -1;
-
+/* The internal name a USB file is imported under: always the same for the same USB path. */
+static int gcode_usb_import_name(const char *relative, char imported[PATH_MAX_LOCAL]) {
     const char *base = strrchr(relative, '/');
     base = base ? base + 1 : relative;
     char safe_base[241]; size_t used = 0;
@@ -1497,8 +1498,15 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL])
 
     int length = snprintf(imported, PATH_MAX_LOCAL, GCODE_USB_IMPORT_PREFIX "%08lx_%s",
                           gcode_path_hash(relative), safe_base);
-    if (length < 0 || length >= PATH_MAX_LOCAL) return -1;
-    length = snprintf(destination, sizeof(destination), "%s/%s",
+    return length < 0 || length >= PATH_MAX_LOCAL ? -1 : 0;
+}
+
+static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL]) {
+    char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
+    char temporary[PATH_MAX_LOCAL * 2];
+    if (!gcode_resolved_path(gcode_usb_root, relative, source, sizeof(source))) return -1;
+    if (gcode_usb_import_name(relative, imported) != 0) return -1;
+    int length = snprintf(destination, sizeof(destination), "%s/%s",
                       gcode_internal_root, imported);
     if (length < 0 || (size_t)length >= sizeof(destination)) return -1;
     length = snprintf(temporary, sizeof(temporary), "%s.part", destination);
@@ -2047,20 +2055,53 @@ static int build_calibrated_start_script(char *script, size_t cap, int force_ful
 
 static int canvas_color_table_clear(void);
 
-static void gcode_start_response(int fd, mqtt_client *mqtt,
-                                 const char *body, size_t body_len) {
+/* A print dialog start from USB (#344) runs in two calls of gcode_start_run(): USB_START_CHECK parses
+ * the request and checks the printer without touching the file, then a worker thread scans the USB file
+ * and copies it into internal memory, then USB_START_PREPARED repeats every check with the worker's
+ * results and sends the start. Reading, scanning and copying a large file from the USB stick takes
+ * many seconds; none of it runs on the main loop. */
+enum { USB_START_CHECK = 1, USB_START_PREPARED };
+typedef struct {
+    int stage;
+    /* From USB_START_CHECK, for the worker. */
+    char filename[PATH_MAX_LOCAL], leveling[16];
+    int tools[GCODE_TOOLS_MAX]; size_t slot_count;
+    /* From the worker. */
+    int scan_failed, adaptive, detect_failed, detected[GCODE_TOOLS_MAX]; size_t detected_count;
+    int import_failed, imported_ok, replaced; char imported[PATH_MAX_LOCAL];
+} gcode_usb_start;
+
+/* Every tool the G-code uses must be mapped, and nothing else. */
+static int gcode_tools_conflict(const int *tools, size_t slot_count, int detect_failed,
+                                const int *detected, size_t detected_count) {
+    if (detect_failed || detected_count != slot_count) return 1;
+    for (size_t expected = 0; expected < detected_count; ++expected) {
+        int found = 0;
+        for (size_t supplied = 0; supplied < slot_count; ++supplied)
+            if (tools[supplied] == detected[expected]) found = 1;
+        if (!found) return 1;
+    }
+    return 0;
+}
+
+/* Answers the client and returns the HTTP status it sent. With `started` (PATH_MAX_LOCAL bytes), an
+ * accepted start also reports the file the printer was given, which differs from the request for a
+ * USB import. `usb` selects a stage of the threaded USB start above (NULL: everything in this call);
+ * USB_START_CHECK answers only a refusal and returns 0 when the request may go on to the worker. */
+static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t body_len,
+                           char *started, gcode_usb_start *usb) {
     char storage[16], filename[PATH_MAX_LOCAL];
     const char *mapping, *root, *media; size_t mapping_len = 0;
     if (!gcode_request_file(body, body_len, storage, filename, &mapping, &mapping_len,
                             &root, &media)) {
         const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 400;
     }
     if (!gcode_file_is_printable(root, filename)) {
         const char *error = "{\"accepted\":false,\"error\":\"File is unavailable or unsafe\"}\n";
         respond(fd, 404, "Not Found", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 404;
     }
     const char *layout_line = memchr(mapping, '\n', mapping_len);
     size_t map_len = layout_line ? (size_t)(layout_line - mapping) : mapping_len;
@@ -2094,7 +2135,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     if (measure_len >= sizeof(measure) || nozzle_len >= sizeof(nozzle)) {
         const char *error = "{\"accepted\":false,\"error\":\"Invalid build plate measurement\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 400;
     }
     if (measure_len) memcpy(measure, measure_line, measure_len);
     if (nozzle_len) memcpy(nozzle, nozzle_line, nozzle_len);
@@ -2103,7 +2144,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         if (layout_len != 1 || (layout_line[0] != 'A' && layout_line[0] != 'B')) {
             const char *error = "{\"accepted\":false,\"error\":\"Invalid build plate side\"}\n";
             respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 400;
         }
         print_layout = layout_line[0];
     }
@@ -2111,7 +2152,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     if(video_line){
         if(video_len!=1||(video_line[0]!='0'&&video_line[0]!='1')){
             const char *error="{\"accepted\":false,\"error\":\"Invalid timelapse option\"}\n";
-            respond(fd,400,"Bad Request","application/json",error,strlen(error));return;
+            respond(fd,400,"Bad Request","application/json",error,strlen(error));return 400;
         }
         timelapse=video_line[0]=='1';
     }
@@ -2120,61 +2161,78 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         if (level_len >= sizeof(leveling)) {
             const char *error = "{\"accepted\":false,\"error\":\"Invalid bed leveling mode\"}\n";
             respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 400;
         }
         memcpy(leveling, level_line, level_len); leveling[level_len] = '\0';
         if (strcmp(leveling, "saved") != 0 && strcmp(leveling, "calibrate") != 0 &&
             strcmp(leveling, "adaptive") != 0 && strcmp(leveling, "full") != 0) {
             const char *error = "{\"accepted\":false,\"error\":\"Invalid bed leveling mode\"}\n";
             respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 400;
         }
     }
     int tools[GCODE_TOOLS_MAX], trays[GCODE_TOOLS_MAX]; size_t slot_count = 0;
     if (!parse_slot_map(mapping, map_len, tools, trays, &slot_count)) {
         const char *error = "{\"accepted\":false,\"error\":\"Invalid Canvas slot mapping\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 400;
+    }
+    if (usb && usb->stage == USB_START_CHECK) {
+        if (strcmp(storage, "usb") != 0) {
+            const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
+            respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
+            return 400;
+        }
+        if (!mqtt->connected || !mqtt->registered) {
+            const char *error = "{\"accepted\":false,\"error\":\"Printer MQTT is not ready\"}\n";
+            respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
+            return 503;
+        }
+        if (!mqtt->have_machine_status || mqtt->machine_status != 1) {
+            const char *error = "{\"accepted\":false,\"error\":\"Starting a file requires an idle printer\"}\n";
+            respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+            return 409;
+        }
+        snprintf(usb->filename, sizeof(usb->filename), "%s", filename);
+        snprintf(usb->leveling, sizeof(usb->leveling), "%s", leveling);
+        memcpy(usb->tools, tools, sizeof(usb->tools)); usb->slot_count = slot_count;
+        return 0;
     }
     int adaptive = 0;
-    if (gcode_has_adaptive_mesh(root, filename, &adaptive) != 0) {
+    if (usb) adaptive = usb->adaptive;
+    if (usb ? usb->scan_failed : gcode_has_adaptive_mesh(root, filename, &adaptive) != 0) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot inspect bed leveling commands\"}\n";
         respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 500;
     }
     if (strcmp(leveling, "adaptive") == 0 && !adaptive) {
         const char *error = "{\"accepted\":false,\"error\":\"Selected leveling mode does not match this G-code\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 409;
     }
     if (slot_count) {
-        int detected[GCODE_TOOLS_MAX]; size_t detected_count = 0;
-        if (gcode_detect_tools(root, filename, detected, &detected_count, NULL) != 0 ||
-            detected_count != slot_count) {
+        int detected[GCODE_TOOLS_MAX]; size_t detected_count = 0; int detect_failed;
+        if (usb) {
+            detect_failed = usb->detect_failed; detected_count = usb->detected_count;
+            memcpy(detected, usb->detected, sizeof(detected));
+        } else {
+            detect_failed = gcode_detect_tools(root, filename, detected, &detected_count, NULL) != 0;
+        }
+        if (gcode_tools_conflict(tools, slot_count, detect_failed, detected, detected_count)) {
             const char *error = "{\"accepted\":false,\"error\":\"Canvas mapping does not match this G-code\"}\n";
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-            return;
-        }
-        for (size_t expected = 0; expected < detected_count; ++expected) {
-            int found = 0;
-            for (size_t supplied = 0; supplied < slot_count; ++supplied)
-                if (tools[supplied] == detected[expected]) found = 1;
-            if (!found) {
-                const char *error = "{\"accepted\":false,\"error\":\"Canvas mapping does not match this G-code\"}\n";
-                respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-                return;
-            }
+            return 409;
         }
     }
     if (!mqtt->connected || !mqtt->registered) {
         const char *error = "{\"accepted\":false,\"error\":\"Printer MQTT is not ready\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 503;
     }
     if (!mqtt->have_machine_status || mqtt->machine_status != 1) {
         const char *error = "{\"accepted\":false,\"error\":\"Starting a file requires an idle printer\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 409;
     }
     int missing_plate_mesh = !saved_plate_mesh_exists(print_layout);
     int calibration_requested = strcmp(leveling, "calibrate") == 0;
@@ -2188,15 +2246,16 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         json_escape(escaped, sizeof(escaped), plate_problem);
         snprintf(error, sizeof(error), "{\"accepted\":false,\"error\":\"%s\"}\n", escaped);
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 409;
     }
     char print_filename[PATH_MAX_LOCAL];
     const char *print_media = media;
     if (strcmp(storage, "usb") == 0) {
-        if (gcode_import_usb(filename, print_filename) != 0) {
+        if (usb) snprintf(print_filename, sizeof(print_filename), "%s", usb->imported);
+        if (usb ? usb->import_failed || !usb->imported_ok : gcode_import_usb(filename, print_filename) != 0) {
             const char *error = "{\"accepted\":false,\"error\":\"Cannot import the USB file into internal memory\"}\n";
             respond(fd, 507, "Insufficient Storage", "application/json; charset=utf-8", error, strlen(error));
-            return;
+            return 507;
         }
         print_media = "local";
     } else {
@@ -2206,12 +2265,12 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     if (calibrated_start && (strchr(print_filename, '"') || strchr(print_filename, '\\'))) {
         const char *error = "{\"accepted\":false,\"error\":\"Filename is incompatible with calibrated printing\"}\n";
         respond(fd, 422, "Unprocessable Content", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 422;
     }
     if (!slot_count && canvas_color_table_clear() != 0) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot clear the Canvas colour table for the external feed\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 503;
     }
     if (calibrated_start) {
         char script[4096];
@@ -2227,7 +2286,7 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
     if (start_result != 0) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot send the printer start request\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
-        return;
+        return 503;
     }
     plates_print_arm(late, print_layout);
     char accepted[PATH_MAX_LOCAL * 2 + 128], escaped[PATH_MAX_LOCAL * 2];
@@ -2236,8 +2295,134 @@ static void gcode_start_response(int fd, mqtt_client *mqtt,
         "{\"accepted\":true,\"method\":1020,\"storage_media\":\"%s\",\"filename\":\"%s\",\"imported_from_usb\":%s,\"print_layout\":\"%c\",\"leveling\":\"%s\",\"timelapse\":%s,\"late_mesh\":\"%s\"}\n",
         print_media, escaped, strcmp(storage, "usb") == 0 ? "true" : "false",
         print_layout, leveling, timelapse ? "true" : "false", late);
+    /* The start request is on its way whatever happens to the reply below. */
+    if (started) snprintf(started, PATH_MAX_LOCAL, "%s", print_filename);
     if (accepted_len > 0 && (size_t)accepted_len < sizeof(accepted))
         respond(fd, 202, "Accepted", "application/json; charset=utf-8", accepted, (size_t)accepted_len);
+    return 202;
+}
+
+static int gcode_start_response(int fd, mqtt_client *mqtt,
+                                 const char *body, size_t body_len, char *started) {
+    return gcode_start_run(fd, mqtt, body, body_len, started, NULL);
+}
+
+/* One threaded USB start at a time. The main loop owns the socket and `usb_start` except between
+ * usb_start_begin() and the worker's `usb_start_done`, when only the worker writes the results. */
+static gcode_usb_start usb_start;
+static int usb_start_fd = -1;
+static atomic_int usb_start_done;
+static char usb_start_body[PATH_MAX_LOCAL + 512];
+static size_t usb_start_length;
+/* Set by the main loop only: the client left (1) or the emergency stop was pressed (2) before
+ * the start was dispatched. The copy still finishes, but the print is never sent. */
+static int usb_start_cancelled;
+/* Test seam: runs on the worker right before the copy. */
+static void (*usb_start_copy_hook)(void);
+
+static int usb_start_active(void) { return usb_start_fd >= 0; }
+
+/* The emergency stop drops a USB start that has not been dispatched yet. */
+static void usb_start_cancel(void) { if (usb_start_active()) usb_start_cancelled = 2; }
+
+/* The request was read in full, so any readable state on the socket means the peer closed it. */
+static int usb_start_client_gone(int fd) {
+    char byte;
+    ssize_t n = recv(fd, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
+    return n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR);
+}
+
+static int gcode_request_is_usb(const char *body, size_t body_len) {
+    return body_len > 4 && memcmp(body, "usb\n", 4) == 0;
+}
+
+static void *usb_start_worker(void *unused) {
+    (void)unused;
+    gcode_usb_start *job = &usb_start;
+    job->scan_failed = gcode_has_adaptive_mesh(gcode_usb_root, job->filename, &job->adaptive) != 0;
+    if (!job->scan_failed && job->slot_count)
+        job->detect_failed = gcode_detect_tools(gcode_usb_root, job->filename, job->detected,
+                                                &job->detected_count, NULL) != 0;
+    /* A start the scan already refuses is answered without copying the file. */
+    int refused = job->scan_failed || (strcmp(job->leveling, "adaptive") == 0 && !job->adaptive) ||
+        (job->slot_count && gcode_tools_conflict(job->tools, job->slot_count, job->detect_failed,
+                                                  job->detected, job->detected_count));
+    if (!refused) {
+        /* An earlier import of the same USB file may still be in use (the touchscreen can print it). */
+        char existing[PATH_MAX_LOCAL], path[PATH_MAX_LOCAL * 2]; struct stat info;
+        if (gcode_usb_import_name(job->filename, existing) == 0 &&
+            snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, existing) < (int)sizeof(path))
+            job->replaced = lstat(path, &info) == 0;
+        if (usb_start_copy_hook) usb_start_copy_hook();
+        job->import_failed = gcode_import_usb(job->filename, job->imported) != 0;
+        job->imported_ok = !job->import_failed;
+    }
+    atomic_store(&usb_start_done, 1);
+    return NULL;
+}
+
+/* Returns 1 when the worker took the socket, 0 when the request has been answered. */
+static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
+    if (usb_start_active()) {
+        const char *error = "{\"accepted\":false,\"error\":\"A USB file is still being copied for another start\"}\n";
+        respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+        return 0;
+    }
+    if (body_len >= sizeof(usb_start_body)) {
+        const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
+        respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
+        return 0;
+    }
+    memset(&usb_start, 0, sizeof(usb_start));
+    usb_start.stage = USB_START_CHECK;
+    if (gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start) != 0) return 0;
+    memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
+    usb_start_length = body_len;
+    usb_start_cancelled = 0;
+    atomic_store(&usb_start_done, 0);
+    pthread_attr_t attr; pthread_t thread;
+    int failed = pthread_attr_init(&attr);
+    if (!failed) {
+        failed = pthread_attr_setstacksize(&attr, 256 * 1024);
+        if (!failed) failed = pthread_create(&thread, &attr, usb_start_worker, NULL);
+        pthread_attr_destroy(&attr);
+    }
+    if (failed) {
+        const char *error = "{\"accepted\":false,\"error\":\"Cannot start the USB import\"}\n";
+        respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
+        return 0;
+    }
+    pthread_detach(thread);
+    struct timeval timeout = {5, 0};
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    usb_start_fd = fd;
+    return 1;
+}
+
+/* Main loop: once the copy is complete, every check runs again (the printer may have started
+ * something meanwhile) and the start is sent. A refused start removes the copy it made, unless
+ * an earlier import had the same name: that file is left as the synchronous start left it.
+ * A client that disconnects before then, or an emergency stop, cancels the start: the browser
+ * has reported a failure, so the print must not begin behind its back. */
+static void usb_start_tick(mqtt_client *mqtt) {
+    if (!usb_start_active()) return;
+    if (!usb_start_cancelled && usb_start_client_gone(usb_start_fd)) usb_start_cancelled = 1;
+    if (!atomic_load(&usb_start_done)) return;
+    int fd = usb_start_fd, status = 409;
+    if (usb_start_cancelled == 2) {
+        const char *error = "{\"accepted\":false,\"error\":\"Print start cancelled by the emergency stop\"}\n";
+        respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+    } else if (!usb_start_cancelled) {
+        usb_start.stage = USB_START_PREPARED;
+        status = gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
+    }
+    if (status != 202 && usb_start.imported_ok && !usb_start.replaced) {
+        char path[PATH_MAX_LOCAL * 2];
+        int length = snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, usb_start.imported);
+        if (length > 0 && (size_t)length < sizeof(path)) unlink(path);
+    }
+    usb_start_fd = -1;
+    close(fd);
 }
 
 static const char *machine_status_name(int status) {
@@ -2547,6 +2732,17 @@ static void camera_claim_response(int fd, const char *body, size_t length) {
 
 static void spools_summary(char *out, size_t cap);
 
+static void printer_report_json(char *out,size_t size,unsigned long sequence,int code,int level,
+                                const char *message,struct timespec identity,struct timespec received) {
+    if(!sequence){snprintf(out,size,"null");return;}
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC,&now);
+    long age=now.tv_sec-received.tv_sec;
+    snprintf(out,size,
+        "{\"event_id\":\"%ld.%09ld-%lu\",\"sequence\":%lu,\"code\":%d,\"level\":%d,\"message\":%s,\"age\":%ld}",
+        (long)identity.tv_sec,identity.tv_nsec,sequence,sequence,code,level,message,age<0?0:age);
+}
+
 static void printer_response(int fd, const mqtt_client *mqtt) {
     /* Render from the two caches without copying MQTT transport/history buffers. */
     double live;
@@ -2558,7 +2754,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         if(uds_value(&telemetry,U_DURATION,&live))duration=(long)live;
     }
     char et[32], eg[32], bt[32], bg[32], ct[32], cf[32], hf[32], pf[32];
-    char body[9216],filename[520],state[140],uuid[260],axes[40],drying_status[1024];
+    char body[10496],filename[520],state[140],uuid[260],axes[40],drying_status[1024];
     drying_status_json(drying_status,sizeof(drying_status),mqtt);
     char native_job[1400]="null",native_filename[1100],native_state[40],native_seconds[40];
     const char *native=uds_print_state(&telemetry);double native_duration;
@@ -2619,16 +2815,11 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     char printer_error[160]="null";
     if(mqtt->reply_errors)snprintf(printer_error,sizeof(printer_error),"{\"sequence\":%lu,\"method\":%d,\"code\":%d,\"age\":%ld}",
         mqtt->reply_errors,mqtt->reply_error_method,mqtt->reply_error_code,(long)(now-mqtt->reply_error_time));
-    char printer_report[1280]="null";
-    if(telemetry.report_sequence){
-        struct timespec received_now;clock_gettime(CLOCK_MONOTONIC,&received_now);
-        long report_age=received_now.tv_sec-telemetry.report_received.tv_sec;
-        snprintf(printer_report,sizeof(printer_report),
-            "{\"event_id\":\"%ld.%09ld-%lu\",\"sequence\":%lu,\"code\":%d,\"level\":%d,\"message\":%s,\"age\":%ld}",
-            (long)telemetry.report_identity.tv_sec,telemetry.report_identity.tv_nsec,telemetry.report_sequence,
-            telemetry.report_sequence,telemetry.report_code,telemetry.report_level,
-            telemetry.report_message,report_age<0?0:report_age);
-    }
+    char printer_report[1280],printer_alert[1280];
+    printer_report_json(printer_report,sizeof(printer_report),telemetry.report_sequence,
+        telemetry.report_code,telemetry.report_level,telemetry.report_message,telemetry.report_identity,telemetry.report_received);
+    printer_report_json(printer_alert,sizeof(printer_alert),telemetry.alert.sequence,
+        telemetry.alert.code,telemetry.alert.level,telemetry.alert.message,telemetry.alert.identity,telemetry.alert.received);
     char motor_mode[16]="null";
     if(motor_mode_requested&&telemetry.fd>=0&&telemetry.connections==motor_mode_connection)
         snprintf(motor_mode,sizeof(motor_mode),"\"%s\"",motor_mode_requested);
@@ -2650,13 +2841,15 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"spools\":%s,\"printer_report\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_alert\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s}}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,pressure_advance,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
-        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,
-        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status);
+        mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,printer_alert,
+        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status,
+        control_screws_session_active()?"true":"false",
+        control_screws_xy_homed(mqtt)?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -3264,7 +3457,58 @@ static int cell_active(void);
 static const char *pending_autosave_guard(void);
 
 #include "plates.h"
+#include "screw_history.h"
+/* Next to the UI preferences unless --screws-history names a file. */
+static const char *screws_history_path = NULL;
+static char screws_history_default_path[600];
+static screw_history_store screws_history;
+
+static void screws_history_init(void) {
+    if (!screws_history_path) {
+        const char *slash = strrchr(ui_preferences_path, '/');
+        int n = slash ? snprintf(screws_history_default_path, sizeof(screws_history_default_path), "%.*s/screw-history.txt",
+                                 (int)(slash - ui_preferences_path), ui_preferences_path)
+                      : snprintf(screws_history_default_path, sizeof(screws_history_default_path), "screw-history.txt");
+        screws_history_path = n > 0 && (size_t)n < sizeof(screws_history_default_path) ? screws_history_default_path
+                                                                                       : "./screw-history.txt";
+    }
+    if (!screw_history_load(&screws_history, screws_history_path))
+        fprintf(stderr, "Screw history unreadable, starting empty: %s\n", screws_history_path);
+}
+
+static int screws_history_store(void) {
+    if (screw_history_save(&screws_history, screws_history_path)) return 1;
+    fprintf(stderr, "Screw history could not be saved: %s\n", screws_history_path);
+    return 0;
+}
+
+static void screws_history_get_response(int fd) {
+    size_t length = 0;
+    char *body = screw_history_json(&screws_history, &length);
+    if (!body) {
+        const char *error = "{\"error\":\"Screw history is unavailable\"}\n";
+        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
+    respond(fd, 200, "OK", "application/json; charset=utf-8", body, length);
+    free(body);
+}
+
+static void screws_history_clear_response(int fd) {
+    memset(&screws_history, 0, sizeof(screws_history));
+    if (!screws_history_store()) {
+        const char *error = "{\"ok\":false,\"error\":\"Screw history could not be saved\"}\n";
+        respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
+    const char *ok = "{\"ok\":true}\n";
+    respond(fd, 200, "OK", "application/json; charset=utf-8", ok, strlen(ok));
+}
 #include "spools.h"
+/* The exclusive sessions during which the request dispatcher refuses every printer change; the print
+ * queue asks before an automatic start. Defined once the sessions themselves are. */
+static const char *printer_change_blocked(void);
+#include "queue.h"
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
@@ -3823,6 +4067,7 @@ static void console_command_response(int fd, console_state *console, const mqtt_
         respond(fd,400,"Bad Request","application/json; charset=utf-8",error,strlen(error)); return;
     }
     memcpy(command,body,body_len); command[body_len]='\0';
+    if (!strcasecmp(command,"M112")) usb_start_cancel();
     /* M112 bypasses the console and the firmware's command queue; see console_emergency_stop(). */
     if (!strcasecmp(command,"M112") && console_emergency_stop(console,reason,sizeof(reason)) == 0) {
         const char *ok="{\"accepted\":true}\n";
@@ -3883,6 +4128,54 @@ static void pid_status_response(int fd,console_state *console) {
     respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
+/* A session, and a shutdown that is still pending, live only in this process. The marker
+ * file tells the next process that one was left behind when this one was killed or
+ * replaced: without it the bed would stay at the session's 60 C with nobody to switch it
+ * off. It is kept in /tmp, which a reboot clears together with the heater targets. */
+static char screws_marker_default_path[64];
+static const char *screws_marker_path = NULL;
+static int screws_marker_present = -1; /* -1: not looked at yet */
+static int screws_resumed;             /* the pending shutdown comes from the marker */
+
+static void screws_marker_sync(void){
+    int want=control_screws_session_active()||control_screws_heaters_off_pending();
+    if(!screws_marker_path||want==screws_marker_present)return;
+    if(want){
+        int fd=open(screws_marker_path,O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW|O_CLOEXEC,0600);
+        if(fd<0)return; /* tried again on the next tick */
+        close(fd);
+    }else if(unlink(screws_marker_path)!=0&&errno!=ENOENT)return;
+    screws_marker_present=want;
+}
+/* At startup: a marker of our own from an earlier process makes the shutdown pending. */
+static void screws_marker_restore(int port){
+    if(!screws_marker_path){
+        snprintf(screws_marker_default_path,sizeof(screws_marker_default_path),"/tmp/cc2-control-%d-screw-session",port);
+        screws_marker_path=screws_marker_default_path;
+    }
+    struct stat info;
+    screws_marker_present=lstat(screws_marker_path,&info)==0;
+    if(!screws_marker_present||!S_ISREG(info.st_mode)||info.st_uid!=geteuid())return;
+    control_screws_restore_pending();
+    screws_resumed=1;
+}
+
+/* The session left the bed at 60 C, or an explicit end has not been confirmed:
+ * retry the shutdown on every tick until it is delivered while the printer is
+ * idle and the console free. A shutdown inherited from an earlier process is sent
+ * only while telemetry still shows the session's bed target: a bed that is off
+ * already, or that someone has set differently since, is left alone. */
+static void screws_heaters_off_tick(const mqtt_client *mqtt,int busy,int (*send)(const char *script),
+                                    int have_bed_target,double bed_target){
+    if(!control_screws_heaters_off_pending()){screws_resumed=0;return;}
+    if(busy||!mqtt->connected||!mqtt->registered||!mqtt->have_machine_status||mqtt->machine_status!=1)return;
+    if(screws_resumed){
+        if(!have_bed_target)return;
+        if(fabs(bed_target-60.0)>0.5){control_screws_heaters_off_sent();screws_resumed=0;return;}
+    }
+    if(send("TURN_OFF_HEATERS")==0){control_screws_heaters_off_sent();screws_resumed=0;}
+}
+
 static void control_response(int fd,console_state *console,mqtt_client *mqtt,const char *body,size_t body_len){
     char action[160],script[700],reason[256];
     while(body_len&&isspace((unsigned char)*body)){body++;body_len--;}
@@ -3893,6 +4186,8 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     memcpy(action,body,body_len);action[body_len]='\0';
     if(!strcmp(action,"system:emergency_stop")){
+        control_screws_invalidate();
+        usb_start_cancel();
         /* Straight to the firmware's emergency_stop endpoint; the queued M112 below is only the fallback. */
         char stop_reason[160];
         if(console_emergency_stop(console,stop_reason,sizeof(stop_reason))==0){
@@ -3910,7 +4205,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         const char *native=uds_print_state(&telemetry);double nozzle,bed;
         /* No raw servo/PWM commands: native grille policy also owns the exhaust fan.
          * A retained MQTT print.enabled flag alone does not mean a job is running. */
-        if(drying_active()||!native||(strcmp(native,"standby")&&strcmp(native,"complete"))||
+        if(drying_active()||!native||(strcmp(native,"standby")&&strcmp(native,"complete")&&strcmp(native,"cancelled"))||
            !uds_value(&telemetry,U_EG,&nozzle)||!uds_value(&telemetry,U_BG,&bed)||
            !isfinite(nozzle)||!isfinite(bed)||nozzle!=0||bed!=0){
             plates_fail(fd,409,"Exhaust grille controls require fresh native idle state, heaters off and no bed-heating session");return;
@@ -3996,9 +4291,23 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         else memcpy(script,next,(size_t)n+1);
     }
     if(!built||console_start(console,script,reason,sizeof(reason))!=0){
+        if(control_screws_is_tram(action)&&!strcmp(action,"screws:tram:start"))control_screws_invalidate();
         char escaped[300],response[420];json_escape(escaped,sizeof(escaped),reason);
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
+    }
+    control_screws_note_action(action);
+    if(!strcmp(action,"screws:measure")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_quick(generation);
+    }
+    if(control_screws_is_tram(action)&&strcmp(action,"screws:tram:end")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_job(generation);
+    }
+    if(!strcmp(action,"screws:tram:end")){
+        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+        control_screws_note_end(generation);
     }
     if(!strcmp(action,"motors:quiet")||!strcmp(action,"motors:normal")){
         motor_mode_requested=action[7]=='q'?"quiet":"normal";motor_mode_connection=telemetry.connections;
@@ -4010,6 +4319,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
 }
 
 static int connections_busy(void);
+static int installer_native_observation(int canvas_only,int canvas_transfer);
 #include "rfid_http.h"
 #include "rfid_lifecycle_http.h"
 
@@ -4048,11 +4358,24 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 }
 
 static int installer_native_status(int canvas_only);
-static int installer_native_observation(int canvas_only,int canvas_transfer);
 #include "app_updates.h"
 #include "app_update_catalog.h"
 #include "bed_drying.h"
 #include "nozzle_expansion.h"
+
+/* Mirrors the POST refusals of handle_client below for a start that no request carries. */
+static const char *printer_change_blocked(void) {
+    if (maintenance_barrier_active()) return "Installation or native maintenance is running; printer changes are paused";
+    if (rn_blocks()) return "RFID activation or recovery is incomplete; finish the lifecycle before changing the printer";
+    if (rfid.child) return "Cancel the RFID scan before changing printer settings";
+    if (tools.busy) return "A native calibration tool is still running";
+    if (cell_active()) return "Finish the load-cell calibration session first";
+    if (app_update_active() || connections_busy()) return "Application update is running; printer changes are paused";
+    if (drying_active()) return "Stop bed heating and wait for confirmation before another operation";
+    if (nx_active()) return "A nozzle expansion calibration is running; use the emergency stop to interrupt it";
+    if (usb_start_active()) return "A USB file is still being copied for a print start";
+    return NULL;
+}
 #include "experiments.h"
 #include "backup.h"
 #include "network_status_http.h"
@@ -4247,6 +4570,12 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/server/database/item")==0 &&
                query && strcmp(query,"namespace=lane_data")==0) {
         orca_lane_data_response(fd, mqtt);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/rfid/lifecycle/scan-readiness")==0) {
+        int ready=rfid_native_scan()&&rfid.child&&rfid.native_child&&!rfid.cancelled&&
+            maintenance_barrier_active()&&rfid_same_identity()&&rfid_native_scan_available(console)&&
+            installer_native_observation(1,0)==0&&installer_native_observation(0,1)==0;
+        const char *reply=ready?"{\"ready\":true}":"{\"ready\":false}";
+        respond(fd,200,"OK","application/json; charset=utf-8",reply,strlen(reply));
     } else if (strcmp(method,"GET")==0 && (strcmp(path,"/api/rfid/lifecycle/restore-readiness")==0||
                strcmp(path,"/api/rfid/lifecycle/host-restore-readiness")==0)) {
         int require_canvas=strcmp(path,"/api/rfid/lifecycle/host-restore-readiness")==0;
@@ -4299,6 +4628,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         gcode_page_response(fd,query);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
         return gcode_download_start(fd,query);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/layer-path")==0) {
+        return gcode_layer_path_start(fd,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
         return analysis_start(fd,0,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/thumbnail")==0) {
@@ -4310,12 +4641,20 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/copy")==0) {
         gcode_copy_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/print")==0) {
+        queue_item *waiting=queue_find(queue.active_id);
         if(plates_background_active())plates_fail(fd,409,"Plate verification is still running");
-        else gcode_start_response(fd,mqtt,body,body_len);
+        else if(waiting&&!strcmp(waiting->state,"starting"))plates_fail(fd,409,"A queued copy is starting");
+        else if(usb_start_active())plates_fail(fd,409,"A USB file is still being copied for another start");
+        else if(gcode_request_is_usb(body,body_len))return usb_start_begin(fd,mqtt,body,body_len);
+        else gcode_start_response(fd,mqtt,body,body_len,NULL);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/exclude-objects")==0) {
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
         mesh_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/screws/history")==0) {
+        screws_history_get_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/history/clear")==0) {
+        screws_history_clear_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/plates")==0) {
         plates_get_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/create")==0) {
@@ -4354,6 +4693,26 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_blends_restart_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/unmount")==0) {
         plates_unmount_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/queue")==0) {
+        queue_get_response(fd,mqtt);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/add")==0) {
+        queue_add_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/start")==0) {
+        queue_start_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/remove")==0) {
+        queue_remove_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/reorder")==0) {
+        queue_reorder_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/copies")==0) {
+        queue_copies_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/policy")==0) {
+        queue_policy_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/clear-done")==0) {
+        queue_clear_done_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/hold")==0) {
+        queue_hold_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/abandon")==0) {
+        queue_abandon_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spools")==0) {
         spools_get_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/enable")==0) {
@@ -4487,12 +4846,14 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--update-runner") == 0 && i + 1 < argc) app_update_runner = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
+        else if (strcmp(argv[i], "--screws-history") == 0 && i + 1 < argc) screws_history_path = argv[++i];
         else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
+        else if (strcmp(argv[i], "--queue") == 0 && i + 1 < argc) queue_path = argv[++i];
         else if (strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) printer_autosave_path = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
-            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--spools FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--port 8081] [--web-root ./web] [--config FILE] [--presets FILE] [--preferences FILE] [--plates FILE] [--screws-history FILE] [--spools FILE] [--queue FILE] [--autosave FILE] [--gcode-internal DIR] [--gcode-usb DIR] [--uds-socket PATH]\n", argv[0]);
             return 2;
         }
     }
@@ -4523,8 +4884,11 @@ int main(int argc, char **argv) {
     drying_load();
     nx_load();
     plates_load();
+    screws_history_init();
+    screws_marker_restore(port);
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
+    queue_load();
     if (!spools_available) fprintf(stderr, "Spool library disabled: %s (%s)\n", spools_error, spools_path);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
@@ -4584,16 +4948,49 @@ int main(int argc, char **argv) {
             FD_SET(pending[i].fd,&read_set);if(pending[i].fd>max_fd)max_fd=pending[i].fd;receiving=1;
         }
         int short_wait=receiving||plates_background_active()||plates_late_active()||drying.exchange.fd>=0||tools.busy||runout.x.fd>=0||
-            (nx.exchange.fd>=0&&nx.stage!=NX_RUNNING); /* the calibration's own reply takes up to hours */
+            (nx.exchange.fd>=0&&nx.stage!=NX_RUNNING)||usb_start_active(); /* the calibration's own reply takes up to hours */
         struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
         if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
         if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
         uds_motion_light(&telemetry,&mqtt);
+        quiet_disable_tick(&console);
         idle_motors_tick(&mqtt,&console);
         motor_mode_tick(&mqtt,&console);
+        {
+            int completed=0,success=0,busy=0;unsigned long generation=0;int emergency;
+            pthread_mutex_lock(&console.lock);
+            completed=console.completed;success=console.success;busy=console.busy;
+            generation=console.generation;
+            pthread_mutex_unlock(&console.lock);
+            emergency=atomic_load(&console.emergency_sent);
+            time_t tram_now=time(NULL);
+            (void)control_screws_tick(&mqtt,completed,success,generation,emergency,tram_now);
+            /* Record the measured corners of a session job that just completed (#329). The
+             * console output still belongs to that job: nothing new starts within this tick. */
+            control_screws_job tram_job;
+            if(control_screws_take_finished(&tram_job)){
+                int recorded;
+                pthread_mutex_lock(&console.lock);
+                recorded=screw_history_record(&screws_history,&tram_job,console.output,console.output_len,tram_now);
+                pthread_mutex_unlock(&console.lock);
+                if(recorded)(void)screws_history_store();
+            }
+            if(screw_history_tick(&screws_history,control_screws_session_active(),tram_now))(void)screws_history_store();
+            /* Keep the session's bed at 60 C, but only while telemetry still shows that
+             * target: a target someone else set is left alone. */
+            double tram_bed=0;
+            if(control_screws_bed_renew_due(tram_now)&&!busy&&mqtt.have_machine_status&&mqtt.machine_status==1&&
+               uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
+                control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
+            int have_bed_target=uds_value(&telemetry,U_BG,&tram_bed);
+            screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script,have_bed_target,tram_bed);
+            screws_marker_sync();
+        }
         spools_tick(&mqtt);
+        queue_tick(&mqtt);
+        usb_start_tick(&mqtt);
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
         if (spools_available) spoolman_tick((long long)now.tv_sec * 1000 + now.tv_nsec / 1000000);
         for(int i=0;i<HTTP_PENDING_MAX;i++){

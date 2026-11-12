@@ -15,8 +15,19 @@ BACKUP=
 MOVED=0
 REPLACED=0
 DHCP_REPLACED=0
+RETAINED_CHECKSUM=absent
 sha(){ sha256sum "$1" | awk '{print $1}'; }
-fail(){ printf 'CC2_CONNECTIONS_FIRMWARE_STOP=%s\n' "$1" >&2;exit 1; }
+note(){
+    [ "$(id -u)" = 0 ] || return 0
+    [ -d /opt/usr ] && [ ! -L /opt/usr ] || return 0
+    grep -q ' /opt/usr ' /proc/mounts || return 0
+    target=/opt/usr/cc2-connections-boot.status
+    [ ! -L "$target" ] && { [ ! -e "$target" ] || [ -f "$target" ]; } || return 0
+    temporary=$(mktemp /opt/usr/.cc2-connections-status.XXXXXX) || return 0
+    printf '%s\n' "$1" >"$temporary" && chmod 600 "$temporary" &&
+        mv -f "$temporary" "$target" || { rm -f "$temporary";return 0; }
+}
+fail(){ note "STOP=$1";printf 'CC2_CONNECTIONS_FIRMWARE_STOP=%s\n' "$1" >&2;exit 1; }
 regular(){ [ -f "$1" ] && [ ! -L "$1" ]; }
 finish(){
     code=$?
@@ -52,6 +63,7 @@ if regular "$ROOT/firmware-payload.sha256" && [ "$(cat "$ROOT/firmware-payload.s
     [ -d "$ROOT" ] && [ ! -L "$ROOT" ] || fail component_type
     (cd "$ROOT" && sha256sum -c SHA256SUMS >/dev/null) || fail installed_checksums
     sha256sum -c "$ROOT/startup.sha256" >/dev/null || fail changed_startup
+    note 'READY=verified_existing_payload'
     exit 0
 fi
 regular "$DHCP" || fail persistent_dhcp_type
@@ -63,8 +75,18 @@ esac
 if [ -e "$ROOT" ] || [ -L "$ROOT" ];then
     [ -d "$ROOT" ] && [ ! -L "$ROOT" ] || fail retained_component_type
     [ -z "$(find "$ROOT" -type l -print)" ] || fail retained_component_symlink
+    [ -z "$(find "$ROOT" ! -type f ! -type d -print)" ] || fail retained_component_special_file
     regular "$ROOT/SHA256SUMS" || fail retained_component_manifest
-    (cd "$ROOT" && sha256sum -c SHA256SUMS >/dev/null) || fail retained_component_checksum
+    [ "$(wc -c <"$ROOT/SHA256SUMS")" -le 65536 ] || fail retained_component_manifest
+    awk 'NF!=2 || length($1)!=64 || $1~/[^0-9a-f]/ || $2!~/^[A-Za-z0-9_.\/-]+$/ || $2~/^\// || $2~/(^|\/)\.\.($|\/)/ {bad=1} END {exit bad || NR==0}' "$ROOT/SHA256SUMS" || fail retained_component_manifest
+    # Retained files are archived as data, never executed or copied into the
+    # replacement. Their self-manifest may describe a previous composition.
+    # Only the immutable firmware payload authorizes replacement code. Keep
+    # the native originals, in-use checks and transactional rollback mandatory.
+    RETAINED_CHECKSUM=valid
+    if ! (cd "$ROOT" && sha256sum -c SHA256SUMS >/dev/null 2>&1);then
+        RETAINED_CHECKSUM=changed
+    fi
     for item in 'native-udhcpc_wlan0 b76f68e345f1221d835d1a0d6279827c5df4823c2e7fadfe0298cd49ec7bb7df' 'native-set_lan.sh 53cf6af55ad333d5781b0d48d89fd48bde22bc516bd22e76d45f098dc224443c';do
         file="$ROOT/${item%% *}";expected=${item#* }
         regular "$file" && [ "$(sha "$file")" = "$expected" ] || fail retained_native_profile
@@ -97,4 +119,5 @@ sha256sum -c "$ROOT/startup.sha256" >/dev/null || fail startup_profile
 printf '%s\n' "$PAYLOAD" > "$ROOT/firmware-payload.sha256"
 # Committed. The existing network worker owns all later connection changes.
 MOVED=0;REPLACED=0;DHCP_REPLACED=0
+note "READY=seeded retained_checksum=$RETAINED_CHECKSUM backup=$BACKUP"
 printf 'CC2_CONNECTIONS_FIRMWARE_READY: settings preserved; kernel/modules unchanged\n'

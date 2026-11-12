@@ -2,12 +2,14 @@ import { store, ls } from './store'
 import { request } from './api'
 import { duration, finishTime } from './format'
 import { subState } from './machine'
+import { cornerHeights, probePair, SCREW_KEYS } from './screws'
 
 export type Page =
   | 'dashboard'
   | 'control'
   | 'job'
   | 'files'
+  | 'queue'
   | 'history'
   | 'bed'
   | 'canvas'
@@ -20,6 +22,7 @@ const PAGES: Page[] = [
   'control',
   'job',
   'files',
+  'queue',
   'history',
   'bed',
   'canvas',
@@ -77,6 +80,20 @@ export const printer = store({ data: null as any, rev: 0, ok: true, at: 0 })
 export const health = store({ data: null as any, setup: null as any })
 export const consoleLog = store({ text: null as string | null }) // null: nothing received yet, the page shows its own placeholder
 export const screwText = store({ text: '', minGeneration: 0 })
+export const consoleStatus = store({
+  busy: false,
+  completed: false,
+  success: false,
+  generation: 0,
+  command: '',
+})
+export const screwSession = store({
+  heights: {} as Record<string, number>,
+  previous: {} as Record<string, number>,
+  pair: {} as Record<string, { first: number; second: number }>,
+  appliedGeneration: 0,
+  minGeneration: 0,
+})
 
 export const thermalTimes = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
 export const thermalHistory = { nozzle: [] as number[], bed: [] as number[], chamber: [] as number[] }
@@ -135,9 +152,42 @@ export async function refreshConsole() {
   try {
     const status = await request('/api/console')
     const out = String(status.output || '')
-    if (status.generation >= screwText.get().minGeneration) {
-      const measured = String(status.command || '').includes('SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE')
+    const command = String(status.command || '')
+    const generation = Number(status.generation) || 0
+    consoleStatus.set({
+      busy: Boolean(status.busy),
+      completed: Boolean(status.completed),
+      success: Boolean(status.success),
+      generation,
+      command,
+    })
+    const measured = command.includes('SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE')
+    const tram = command.includes('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM')
+    if (generation >= screwText.get().minGeneration) {
       screwText.set({ text: measured && status.completed && status.success ? out : '' })
+    }
+    if (
+      tram &&
+      status.completed &&
+      status.success &&
+      generation >= screwSession.get().minGeneration &&
+      generation > screwSession.get().appliedGeneration
+    ) {
+      const next = cornerHeights(out)
+      const prev = { ...screwSession.get().heights }
+      const pair: Record<string, { first: number; second: number }> = { ...screwSession.get().pair }
+      for (const key of SCREW_KEYS) {
+        const twice = probePair(out, key)
+        if (twice) pair[key] = twice
+        else if (next[key] != null) delete pair[key]
+      }
+      screwSession.set({
+        heights: { ...prev, ...next },
+        previous: prev,
+        pair,
+        appliedGeneration: generation,
+        minGeneration: screwSession.get().minGeneration,
+      })
     }
     if ((out || null) !== consoleLog.get().text) {
       consoleLog.set({ text: out || null })

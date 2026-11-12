@@ -54,14 +54,10 @@ for path in files:
             assert placeholders(value) == placeholders(source[key]), f"{path.name}[{key!r}]: placeholders differ from en.json"
     extra = set(data) - source_keys
     assert not extra, f"{path.name}: {len(extra)} key(s) not present in {SOURCE}: {sorted(extra)[:5]}"
-    # Spanish, Russian and Chinese were completed for this release. Keep
-    # their missing-key regressions visible while the runtime still supports
-    # per-key English fallbacks for other future/partial locales.
+    # Every shipped locale is complete for this release. A newly added source
+    # key must be translated in every locale; runtime fallback is a resilience
+    # feature, not permission to ship an accidentally incomplete translation.
     missing = source_keys - set(data)
-    if path.stem in ("es", "ru", "zh"):
-        assert not missing, f"{path.name}: missing {len(missing)} source keys: {sorted(missing)[:5]}"
-    elif missing:
-        print(f"note: {path.name} is missing {len(missing)}/{len(source_keys)} key(s) "
-              f"present in {SOURCE} (falls back to English at runtime)", file=sys.stderr)
+    assert not missing, f"{path.name}: missing {len(missing)} source keys: {sorted(missing)[:5]}"
 
 print(f"PASS: {len(files)} locale file(s), {len(source_keys)} source keys, all present and structurally valid")

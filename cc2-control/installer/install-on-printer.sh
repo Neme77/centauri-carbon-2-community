@@ -84,6 +84,7 @@ finish() {
         fi
     fi
     if [ "$PASSED" -eq 0 ] && [ "$STOPPED" -eq 1 ]; then
+        install_phase rollback
         "$INIT" stop >/dev/null 2>&1
         if ! wait_stopped; then
             echo "Cannot restore while service is running. Backup: $BACKUP" >&2
