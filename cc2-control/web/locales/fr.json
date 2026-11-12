@@ -612,6 +612,8 @@
   "history.delete_named": "Supprimer {name}",
   "history.print_named": "Imprimer {name}",
   "history.file_gone": "Ce fichier n'est plus sur l'imprimante.",
+  "history.file_several": "Fichiers de ce nom sur l'imprimante : {n}. On ne sait pas lequel cette tâche a imprimé ; imprimez le bon depuis Fichiers.",
+  "history.file_changed": "Ce fichier a été modifié après la tâche : ce n'est peut-être pas celui qu'elle a imprimé. Imprimez-le depuis Fichiers si c'est le bon.",
   "history.confirm_delete": "Supprimer ces {n} entrées de l’historique ? Cette action est irréversible. Les fichiers G-code et les vidéos ne sont pas supprimés.",
   "history.delete_requested": "Suppression de l’historique demandée.",
   "print.file_filament": "Filament du G-code",

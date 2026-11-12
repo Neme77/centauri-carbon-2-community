@@ -612,6 +612,8 @@
   "history.delete_named": "{name} kaydını sil",
   "history.print_named": "Yazdır: {name}",
   "history.file_gone": "Bu dosya artık yazıcıda yok.",
+  "history.file_several": "Yazıcıda bu adda dosya sayısı: {n}. Bu işin hangisini yazdırdığı belli değil; doğru olanı Dosyalar'dan yazdırın.",
+  "history.file_changed": "Bu dosya işten sonra değiştirildi, işin yazdırdığı dosya olmayabilir. İstediğiniz dosyaysa Dosyalar'dan yazdırın.",
   "history.confirm_delete": "Bu {n} baskı geçmişi kaydı silinsin mi? Bu işlem geri alınamaz. G-code dosyaları ve videolar silinmez.",
   "history.delete_requested": "Geçmiş silme istendi.",
   "print.file_filament": "G-code'daki filament",

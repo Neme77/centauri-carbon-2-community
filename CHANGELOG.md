@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - The print queue's job list shows the picture embedded in each G-code file, and a job is moved by dragging it by that picture, with a mouse or a finger; the arrows stay. Designed and implemented by **beanbo** (#352).
-- Files and History show the picture embedded in each G-code file in every row of their lists, as the print queue does, and a job in History can be printed again while its file is still on the printer: the button opens the print dialog of the Files page. On a narrow screen the file name takes a line of its own in both lists. Designed and implemented by **beanbo** (#352).
+- Files and History show the picture embedded in each G-code file in every row of their lists, as the print queue does, and a job in History can be printed again while its file is known for certain to be the job's (one file of that name on the printer, written no later than the job began; otherwise the row says why not): the button opens the print dialog of the Files page. On a narrow screen the file name takes a line of its own in both lists. Designed and implemented by **beanbo** (#352).
 
 ### Changed
 

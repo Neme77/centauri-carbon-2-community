@@ -652,6 +652,8 @@
   "history.delete_named": "Törlés: {name}",
   "history.print_named": "Nyomtatás: {name}",
   "history.file_gone": "Ez a fájl már nincs a nyomtatón.",
+  "history.file_several": "Ilyen nevű fájlok a nyomtatón: {n}. Nem biztos, melyiket nyomtatta ez a feladat; a megfelelőt a Fájlok oldalról nyomtassa.",
+  "history.file_changed": "Ezt a fájlt a feladat után módosították, ezért lehet, hogy nem ezt nyomtatta a feladat. Ha ez a megfelelő, a Fájlok oldalról nyomtassa.",
   "history.confirm_delete": "Törlöd ezt a(z) {n} nyomtatási előzménybejegyzést? Ez nem vonható vissza. A G-code fájlok és videók megmaradnak.",
   "history.delete_requested": "Előzmények törlése kérve.",
   "plates.title": "Tárgyasztallap-könyvtár",

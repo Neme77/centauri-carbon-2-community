@@ -612,6 +612,8 @@
   "history.delete_named": "删除 {name}",
   "history.print_named": "打印 {name}",
   "history.file_gone": "该文件已不在打印机上。",
+  "history.file_several": "打印机上同名的文件：{n} 个。无法确定此任务打印的是哪一个，请从“文件”中打印正确的文件。",
+  "history.file_changed": "此文件在该任务之后被修改过，可能不是该任务打印的文件。如果确实是需要的文件，请从“文件”中打印。",
   "history.confirm_delete": "删除这 {n} 条打印历史记录？此操作无法撤销。G-code 文件和视频不会被删除。",
   "history.delete_requested": "已请求删除历史记录。",
   "print.file_filament": "G-code 中的耗材",

@@ -36,6 +36,25 @@ const when = (s: number) =>
   s > 0 ? new Date(s * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—'
 const took = (task: Task) => (task.end > task.begin && task.begin > 0 ? duration(task.end - task.begin) : '—')
 
+// The printer's history names a file, not where it is, and a file of that name may have been replaced since
+// (a USB print copies the stick's file over the internal one of that name). So a job is printed again only
+// when its file is known for certain: one file of that name on the printer, in any storage or folder, written
+// no later than the job began. A file copied for the job is written as it starts, hence SLACK seconds; a date
+// that is not known proves nothing either way.
+const SLACK = 30
+type Match = { entry: FileEntry } | { why: 'gone' | 'several' | 'changed'; n: number }
+const WHY = { gone: 'history.file_gone', several: 'history.file_several', changed: 'history.file_changed' } as const
+const base = (name: string) => name.split('/').pop() || name
+const matchOf = (task: Task, byName: Map<string, FileEntry[]>): Match => {
+  const found = new Set([...(byName.get(task.name) || []), ...(byName.get(base(task.name)) || [])])
+  if (!found.size) return { why: 'gone', n: 0 }
+  if (found.size > 1) return { why: 'several', n: found.size }
+  const [entry] = found
+  const modified = Number(entry.file.modified)
+  if (task.begin > 0 && Number.isFinite(modified) && modified > task.begin + SLACK) return { why: 'changed', n: 1 }
+  return { entry }
+}
+
 // Like G-code downloads: the browser streams the attachment, nothing is buffered in a Blob.
 const download = (task: Task) => {
   const link = document.createElement('a')
@@ -108,9 +127,9 @@ export const History = () => {
       setDeleting(false)
     }
   }
-  // The printer's history names a file, not where it is. The file list says whether the file is still there:
-  // for its picture and for printing it again. Read when the page opens and with Refresh, never polled.
-  const [files, setFiles] = useState<Map<string, FileEntry> | null>(null)
+  // The file list says which files of a job's name are on the printer (matchOf): for the job's picture and for
+  // printing it again. Read when the page opens and with Refresh, never polled.
+  const [files, setFiles] = useState<Map<string, FileEntry[]> | null>(null)
   const listing = useRef<AbortController | null>(null)
   const readFiles = async () => {
     listing.current?.abort()
@@ -119,12 +138,11 @@ export const History = () => {
     try {
       const { entries } = await listFiles(controller.signal)
       if (controller.signal.aborted) return
-      // A file in the root of a storage before one of the same name in a folder; the internal memory first.
-      const named = new Map<string, FileEntry>()
-      for (const entry of entries) if (!named.has(entry.file.path)) named.set(entry.file.path, entry)
+      // Every file under its path and under its name without the folder.
+      const named = new Map<string, FileEntry[]>()
       for (const entry of entries) {
-        const name = String(entry.file.path).split('/').pop() || ''
-        if (!named.has(name)) named.set(name, entry)
+        const path = String(entry.file.path)
+        for (const name of new Set([path, base(path)])) named.set(name, [...(named.get(name) || []), entry])
       }
       setFiles(named)
     } catch {
@@ -200,7 +218,10 @@ export const History = () => {
             </div>
             {h.tasks.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map(task => {
               const [label, tone] = RESULT[task.status] ?? ['history.unknown', 'default']
-              const file = files?.get(task.name)
+              const match = files ? matchOf(task, files) : null
+              const file = match && 'entry' in match ? match.entry : null
+              // Why the job cannot be printed again from here; said in the row when there is a file of its name.
+              const why = match && 'why' in match ? tpl(WHY[match.why], { n: match.n }) : ''
               return (
                 <div key={task.id} class={cols} data-history-task={task.id}>
                   <FilePicture
@@ -214,6 +235,11 @@ export const History = () => {
                     <small class="text-muted cc2-md:hidden">
                       {when(task.begin)} · {took(task)} · {t(label)}
                     </small>
+                    {match && 'why' in match && match.why !== 'gone' && (
+                      <small class="block text-xs text-amber" data-history-why={match.why}>
+                        {why}
+                      </small>
+                    )}
                   </div>
                   <span class="hidden cc2-md:block">{when(task.begin)}</span>
                   <span class="hidden cc2-md:block">{took(task)}</span>
@@ -226,7 +252,7 @@ export const History = () => {
                     <Button
                       class="px-2"
                       data-history-print
-                      title={file ? t('files.print') : files ? t('history.file_gone') : undefined}
+                      title={file ? t('files.print') : why || undefined}
                       aria-label={tpl('history.print_named', { name: task.name })}
                       disabled={!file}
                       onClick={() => file && startFile(file.storage, file.file.path)}

@@ -612,6 +612,8 @@
   "history.delete_named": "Usuń {name}",
   "history.print_named": "Drukuj {name}",
   "history.file_gone": "Tego pliku nie ma już w drukarce.",
+  "history.file_several": "Pliki o tej nazwie w drukarce: {n}. Nie wiadomo, który z nich wydrukowało to zadanie; wydrukuj właściwy z Plików.",
+  "history.file_changed": "Ten plik zmieniono po zadaniu, więc może to nie być ten, który wydrukowano. Wydrukuj go z Plików, jeśli to właściwy.",
   "history.confirm_delete": "Usunąć te {n} wpisów historii druku? Tej operacji nie można cofnąć. Pliki G-code i filmy nie zostaną usunięte.",
   "history.delete_requested": "Zażądano usunięcia historii.",
   "print.file_filament": "Filament w G-code",

@@ -612,6 +612,8 @@
   "history.delete_named": "{name} löschen",
   "history.print_named": "{name} drucken",
   "history.file_gone": "Diese Datei ist nicht mehr auf dem Drucker.",
+  "history.file_several": "Dateien mit diesem Namen auf dem Drucker: {n}. Es ist nicht sicher, welche dieser Auftrag gedruckt hat; die richtige unter Dateien drucken.",
+  "history.file_changed": "Diese Datei wurde nach dem Auftrag geändert und ist vielleicht nicht die gedruckte. Unter Dateien drucken, wenn es die richtige ist.",
   "history.confirm_delete": "Diese {n} Einträge des Druckverlaufs löschen? Das kann nicht rückgängig gemacht werden. G-Code-Dateien und Videos werden nicht gelöscht.",
   "history.delete_requested": "Löschen des Verlaufs angefordert.",
   "print.file_filament": "Filament im G-Code",

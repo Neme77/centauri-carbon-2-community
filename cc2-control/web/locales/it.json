@@ -612,6 +612,8 @@
   "history.delete_named": "Cancella {name}",
   "history.print_named": "Stampa {name}",
   "history.file_gone": "Questo file non è più sulla stampante.",
+  "history.file_several": "File con questo nome sulla stampante: {n}. Non è certo quale abbia stampato questo lavoro; stampa quello giusto da File.",
+  "history.file_changed": "Questo file è stato modificato dopo il lavoro, quindi potrebbe non essere quello stampato. Stampalo da File se è quello giusto.",
   "history.confirm_delete": "Cancellare queste {n} voci della cronologia? Non è possibile annullare. I file G-code e i video non vengono eliminati.",
   "history.delete_requested": "Cancellazione della cronologia richiesta.",
   "print.file_filament": "Filamento nel G-code",

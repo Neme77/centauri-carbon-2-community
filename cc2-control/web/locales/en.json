@@ -612,6 +612,8 @@
   "history.delete_named": "Delete {name}",
   "history.print_named": "Print {name}",
   "history.file_gone": "This file is no longer on the printer.",
+  "history.file_several": "Files of this name on the printer: {n}. It is not certain which one this job printed; print the right one from Files.",
+  "history.file_changed": "This file was changed after the job, so it may not be the one the job printed. Print it from Files if it is the one you want.",
   "history.confirm_delete": "Delete these {n} print-history entries? This cannot be undone. G-code files and videos are not deleted.",
   "history.delete_requested": "History deletion requested.",
   "print.file_filament": "Filament in G-code",

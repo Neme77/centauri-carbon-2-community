@@ -612,6 +612,8 @@
   "history.delete_named": "Smazat {name}",
   "history.print_named": "Tisknout {name}",
   "history.file_gone": "Tento soubor už v tiskárně není.",
+  "history.file_several": "Souborů s tímto názvem v tiskárně: {n}. Není jisté, který z nich tato úloha tiskla; vytiskněte ten správný ze Souborů.",
+  "history.file_changed": "Tento soubor byl po úloze změněn, takže to nemusí být ten, který se tiskl. Pokud je to ten správný, vytiskněte ho ze Souborů.",
   "history.confirm_delete": "Smazat těchto {n} záznamů historie tisku? Tuto akci nelze vrátit. Soubory G-code a videa nebudou smazány.",
   "history.delete_requested": "Vyžádáno smazání historie.",
   "print.file_filament": "Filament v G-code",

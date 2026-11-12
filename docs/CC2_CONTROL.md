@@ -194,7 +194,7 @@ Requests CC2 Control sends over MQTT (print start, Canvas auto refill, history, 
 
 - **Download** streams a rendered time-lapse MP4 from the printer through CC2 Control; the browser never receives the LAN access code.
 - **Create video** renders the stored frames of a job into an MP4 (vendor method 1051). It is available only while the printer is Idle, one video at a time, and keeps the printer busy for several minutes.
-- The printer records a job by its file name only. While a file of that name is still in the G-code library (internal memory first), the job shows the file's picture and its **Print** button opens the print dialog of the Files page, to start the file again or to add it to the queue. A job whose file is gone keeps the file icon and cannot be printed from here.
+- The printer records a job by its file name only, and a file of that name may have been replaced since (a USB print copies the stick's file over the internal one of that name). So a job is printed again from here only when its file is known for certain: exactly one file of that name in the G-code library, in either storage and any folder, written no later than the job began (30 s later for a file copied as the job starts). Then the job shows the file's picture and its **Print** button opens the print dialog of the Files page, to start the file again or to add it to the queue. Otherwise the job keeps the file icon and the button stays disabled: the file is gone, several files have the name, or the file was written after the job; the last two are said in the row, so the right file can be printed from Files.
 
 The printer lists its last 50 jobs (about 20 KB on the tested printer); replies larger than 256 KiB would not be loaded.
 
