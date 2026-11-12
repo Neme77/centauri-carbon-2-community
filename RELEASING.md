@@ -2,6 +2,13 @@
 
 Checklist for publishing a release. A release is a Git tag plus the files attached to it. Published files are never replaced: a fix gets a new tag.
 
+Firmware or native-component changes with uncertain compatibility require a
+new complete firmware base and documented migration requirements. Compatible
+panel feature updates continue through the normal application-update channel
+with explicit base checks. Do not promise universal compatibility from a panel
+version number alone. PR authors must provide the documentation and testing
+evidence required by CONTRIBUTING.md before a change is selected for release.
+
 ## Where the version lives
 
 `cc2-control/VERSION` is the only place the CC2 Control version is written, and `cc2-control/FIRMWARE_VERSION` the application updater compatibility-family identifier (currently `4.4`), not the full firmware patch-release label. The Makefile passes both to the compiler, `installer/package.py` and `builder/current/prepare.py` read it, and `tests/test_version_static.py` fails if a copy appears in code. The release tag (`V4.2-R5`), the README download links and the changelog name a release and are edited by hand.

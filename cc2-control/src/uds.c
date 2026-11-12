@@ -283,6 +283,11 @@ static int vendor_report(uds_client *c,const char *root,const char *end){
  c->report_sequence++;c->report_received=now_mono();
  clock_gettime(CLOCK_REALTIME,&c->report_identity);
  memcpy(c->report_message,text,sizeof(text));
+ if(level==1||level==2){
+  c->alert.sequence=c->report_sequence;c->alert.code=c->report_code;c->alert.level=c->report_level;
+  c->alert.received=c->report_received;c->alert.identity=c->report_identity;
+  memcpy(c->alert.message,c->report_message,sizeof(c->alert.message));
+ }
  return 1;
 }
 void uds_console_lease(uds_client *c) {

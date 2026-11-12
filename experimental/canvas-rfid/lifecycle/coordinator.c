@@ -5,7 +5,12 @@
 #undef main
 #include "canvas_observation.h"
 #include "app_binding_observation.h"
+#include "scan_profile.h"
 static int vc_targets_state(struct cl_store *store,int state){
+    if(SC_IMMUTABLE_BOOT){
+        struct cl_record record;
+        return cl_store_read(store,&record)&&cl_profile(store,&record);
+    }
     struct tx_file files[8];memset(files,0,sizeof(files));char plan[65];
     int okay=sc_read_plan(store,files)&&tx_plan(files,8,plan);
     int snapshots=-1;
@@ -45,31 +50,50 @@ static int vc_profile_bound(const struct cl_record *record){
 }
 static int vc_boot_observation(int scan_check){
 #ifdef SC_NATIVE_RESTORE_GUARD
-    if(!scan_check)return vc_native_ready(1)&&vc_native_ready(1);
+    if(scan_check)return vc_readiness_reply("/api/rfid/lifecycle/scan-readiness");
+    return vc_native_ready(1)&&vc_native_ready(1);
 #endif
     return (scan_check?aw_fresh_ready():sc_fresh())&&vc_canvas_http()&&
         (scan_check?aw_fresh_ready():sc_fresh());
 }
 static int vc_verify_mode(enum cl_event event,unsigned wanted,unsigned complete,int disabled){
     if(geteuid()!=0||strlen(SC_PROFILE_SHA)!=64||!tx_hex(SC_PROFILE_SHA)||
-       strlen(SC_APP_SHA)!=64||!tx_hex(SC_APP_SHA)||strlen(SC_FRESH_SHA)!=64||!tx_hex(SC_FRESH_SHA)||
+       strlen(SC_APP_SHA)!=64||!tx_hex(SC_APP_SHA)||
+       (!SC_IMMUTABLE_BOOT&&(strlen(SC_FRESH_SHA)!=64||!tx_hex(SC_FRESH_SHA)))||
        (getenv("LD_PRELOAD")&&*getenv("LD_PRELOAD")))return 1;
     signal(SIGINT,sc_signal);signal(SIGTERM,sc_signal);signal(SIGHUP,sc_signal);signal(SIGPIPE,SIG_IGN);umask(077);
     struct maintenance_barrier barrier=MAINTENANCE_BARRIER_INIT;
     if(!maintenance_barrier_acquire(&barrier)){fprintf(stderr,"STOP: installer_or_maintenance_busy\n");return 1;}
     struct cl_store store;struct cl_record record={0};char boot[37]={0};pid_t app=0,last_app=0;
     struct sc_ready first={0},last={0};
-    /* Only the read-only scan preflight acquires a new quiet MQTT sample.
-     * Firmware transfer and boot verification keep their existing checks. */
+    /* Scan readiness belongs to the capture process already launched by the app. */
     int scan_check=wanted==CL_ACTIVE&&complete==CL_ACTIVE&&event==CL_VERIFY_FILTER_BOOT&&!disabled;
-    int okay=cl_store_open(&store,SC_BASE)&&cl_store_read(&store,&record)&&cl_profile(&store,&record);
-    okay=okay&&vc_profile_bound(&record)&&(record.phase==wanted||record.phase==complete)&&vc_boot(boot)&&
+    int okay=cl_store_open(&store,SC_BASE)&&cl_store_read(&store,&record);
+    if(scan_check&&SC_IMMUTABLE_BOOT){
+        /* One full native hash in each observation, with no cache across
+         * scans or across the live-state query. The profile's native role must
+         * match that exact executable and digest, not merely an identical file.
+         * Immutable boot has no startup transaction to revalidate here. */
+        struct cl_record after={0};
+        okay=okay&&vc_profile_bound(&record)&&record.phase==CL_ACTIVE&&vc_boot(boot)&&
+            vc_backup(&store)&&sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
+            sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&app)&&
+            sc_native_profile(&first,1)&&
+            cl_profile_native_checked(&store,&record,
+                SC_PREFIX "/opt/usr/cc2-reactor-runtime-v2/elegoo_printer",SC_NATIVE_SHA)&&
+            vc_boot_observation(1)&&sc_native_profile(&last,1)&&
+            sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&last_app)&&
+            cl_store_read(&store,&after)&&!memcmp(&record,&after,sizeof(record))&&
+            app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
+    }else{
+    okay=okay&&cl_profile(&store,&record)&&vc_profile_bound(&record)&&(record.phase==wanted||record.phase==complete)&&vc_boot(boot)&&
         vc_backup(&store)&&(disabled?vc_targets_state(&store,0):vc_targets(&store))&&sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
-        sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&app)&&
+        sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&app)&&
         sc_native_profile(&first,!disabled)&&vc_boot_observation(scan_check)&&
         sc_native_profile(&last,!disabled)&&
-        sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&last_app)&&
+        sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&last_app)&&
         app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
+    }
     if(okay&&record.phase!=complete){
         struct cl_facts facts={.profile=1,.backup=1,.barrier=1,.idle=1,.cold=1,.guard=1,.canvas=1,.host_staged=1,.host_removed=disabled};
         okay=cl_advance(&store,event,&facts,boot);

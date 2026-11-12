@@ -61,11 +61,13 @@ int main(int argc, char **argv) {
   assert(ng_atomic(NG_RUN, "fixture-floor-enabled", "1", 1));
   assert(ng_atomic(NG_STATE, "exhaust-network-boot", j.boot, 36));
   assert(!ng_exhaust_boot_requested(floor));
+  assert(!ng_exhaust_boot_requested(NULL));
   assert(ng_atomic(NG_STATE, "exhaust-network-boot",
                    "00000000-0000-0000-0000-000000000000", 36));
   assert(ng_exhaust_boot_requested(floor));
   assert(!unlink(floor));
   assert(!ng_exhaust_boot_requested(floor));
+  assert(ng_exhaust_boot_requested(NULL));
   assert(!unlink(NG_STATE "/exhaust-network-boot"));
   assert(ng_journal_save(&j));
   assert(!ng_public_active());

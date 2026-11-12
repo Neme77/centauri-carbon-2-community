@@ -18,6 +18,12 @@ static void au_test_fault(const char *point,unsigned index){
 }
 int main(int argc,char **argv){
     if(argc!=2)return 2;
+    if(!strcmp(argv[1],"--check-plan")){
+        struct au_plan plan=test_plan;char digest[65];
+        if(getenv("AU_TEST_UNCHANGED_FILE"))plan.files[0].after=plan.files[0].before;
+        if(getenv("AU_TEST_FORCE_SAME_APP"))plan.new_app=plan.old_app;
+        return au_plan_hash(&plan,digest)?0:1;
+    }
     int prepare=!strcmp(argv[1],"--prepare"),apply=!strcmp(argv[1],"--apply"),rollback=!strcmp(argv[1],"--rollback");
     if(!prepare&&!apply&&!rollback)return 2;
     umask(077);

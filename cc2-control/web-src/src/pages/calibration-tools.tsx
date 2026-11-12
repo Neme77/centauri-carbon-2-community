@@ -79,7 +79,7 @@ export const CalibrationTools = ({ panel = 'both' }: { panel?: 'both' | 'cell' |
     d.machine?.status === 1 &&
     d.last_message_age >= 0 &&
     d.last_message_age <= 15 &&
-    (native === 'standby' || native === 'complete') &&
+    (native === 'standby' || native === 'complete' || native === 'cancelled') &&
     !d.bed_drying?.active
   const busy = sending || data?.busy
   const current = data?.active

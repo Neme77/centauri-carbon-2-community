@@ -71,9 +71,17 @@ const icons = {
   queue: ListOrdered,
 }
 
-// Lucide icons (plus the Canvas glyph, drawn the same way), with a 1 px stroke everywhere.
-export const Icon = ({ n, class: c = '' }: { n: string; class?: string }) => {
-  if (n === 'canvas') return <CanvasIcon strokeWidth={1} class={`size-5 shrink-0 ${c}`} />
+// Lucide icons (plus the Canvas glyph, drawn the same way), with a 1.75 px stroke everywhere.
+export const Icon = ({
+  n,
+  class: c = '',
+  style,
+}: {
+  n: string
+  class?: string
+  style?: Record<string, string | number>
+}) => {
+  if (n === 'canvas') return <CanvasIcon strokeWidth={1.75} class={`size-5 shrink-0 ${c}`} />
   const Glyph = icons[n as keyof typeof icons]
-  return <Glyph strokeWidth={1} aria-hidden="true" class={`size-5 shrink-0 ${c}`} />
+  return <Glyph strokeWidth={1.75} aria-hidden="true" class={`size-5 shrink-0 ${c}`} style={style} />
 }

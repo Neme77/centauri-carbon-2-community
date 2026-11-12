@@ -7,6 +7,20 @@
 #include "sha256.h"
 #include "arm_patch.h"
 #endif
+#ifdef CC2_NATIVE_STOCK13
+#include "../../firmware-port/native_profile13.h"
+#define RF_NATIVE_SHA256 CC2_NATIVE13_SHA256
+#define RF_PARSE_ADDRESS CC2_NATIVE13_RFID_PARSE
+#define RF_STATE_ADDRESS CC2_NATIVE13_RFID_STATE
+#define RF_READ_ADDRESS CC2_NATIVE13_RFID_READ
+#define RF_RESET_ADDRESS CC2_NATIVE13_RFID_RESET
+#else
+#define RF_NATIVE_SHA256 "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745"
+#define RF_PARSE_ADDRESS 0x5c7074
+#define RF_STATE_ADDRESS 0x5e4df0
+#define RF_READ_ADDRESS 0x5c4a44
+#define RF_RESET_ADDRESS 0x4a4f48
+#endif
 #ifndef RF_REQUIRED_NATIVE
 #define RF_REQUIRED_NATIVE 0
 #endif
@@ -160,10 +174,10 @@ int cc2_rfid_read(void *owner, int wait) {
 _Static_assert(sizeof(void *) == 4, "qualified ARM32 only");
 struct rf_patch {uintptr_t address; unsigned char prefix[8]; uintptr_t replacement;};
 static struct rf_patch rf_patches[] = {
-    {0x5c7074, {0xf0,0x48,0x2d,0xe9,0x14,0xb0,0x8d,0xe2}, 0},
-    {0x5e4df0, {0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2}, 0},
-    {0x5c4a44, {0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2}, 0},
-    {0x4a4f48, {0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2}, 0}
+    {RF_PARSE_ADDRESS, {0xf0,0x48,0x2d,0xe9,0x14,0xb0,0x8d,0xe2}, 0},
+    {RF_STATE_ADDRESS, {0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2}, 0},
+    {RF_READ_ADDRESS, {0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2}, 0},
+    {RF_RESET_ADDRESS, {0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2}, 0}
 };
 #define RF_PATCH_COUNT (sizeof(rf_patches)/sizeof(rf_patches[0]))
 static int rf_enabled(void) {
@@ -196,7 +210,7 @@ __attribute__((constructor)) static void rf_activate(void) {
     int fd = open("/proc/self/exe", O_RDONLY | O_CLOEXEC);
     if (fd < 0) _exit(125);
     int valid = sha256_fd(fd, digest); close(fd);
-    if (!valid || strcmp(digest, "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745")) _exit(125);
+    if (!valid || strcmp(digest, RF_NATIVE_SHA256)) _exit(125);
     for (unsigned i = 0; i < RF_PATCH_COUNT; i++) if (memcmp((const void *)rf_patches[i].address, rf_patches[i].prefix, 8)) _exit(125);
     fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0) _exit(125);

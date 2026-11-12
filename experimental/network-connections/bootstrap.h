@@ -130,7 +130,13 @@ static inline int ng_load_drivers(void) {
 }
 static inline int ng_runtime_ready(void) {
   char *args[] = {"sh", NG_COMPONENT "/activate.sh", "ready", NULL};
-  return ng_exec("/bin/sh", args, NULL, 0, 6);
+#ifdef CC2_NATIVE_STOCK13
+  /* The .13 profile hashes the native executables and the composed libraries. */
+  const int timeout = 15;
+#else
+  const int timeout = 6;
+#endif
+  return ng_exec("/bin/sh", args, NULL, 0, timeout);
 }
 static inline int ng_runtime_enable(const ng_journal *j) {
   if (ng_runtime_ready())

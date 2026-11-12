@@ -1,5 +1,6 @@
 #ifndef CC2_CONNECTIONS_NATIVE_H
 #define CC2_CONNECTIONS_NATIVE_H
+#include "profile-pins.h"
 /* Newly started native processes must not belong to the bounded transaction's
  * process group: cancelling a worker must never terminate a healthy printer. */
 static inline int ng_native_spawn(const char *role, const char *token,
@@ -50,13 +51,17 @@ static inline int ng_native_spawn(const char *role, const char *token,
     setenv("CC2_NETWORK_COMPAT_TRIAL", network ? "1" : "0", 1);
     char preload[1024];
     if (!strcmp(role, "camera")) {
-      snprintf(preload, sizeof(preload),
-               "%s%s/opt/usr/cc2-control/camera/libcc2-camera-reap-r2.so:/opt/"
-               "usr/cc2-control/camera/libcc2-camera-recovery-r2.so",
+      snprintf(preload, sizeof(preload), "%s%s"
+#ifdef NG_CAMERA_REAP_SO
+               NG_CAMERA_REAP_SO ":"
+#endif
+               NG_CAMERA_RECOVERY_SO,
                network ? NG_COMPONENT "/libcc2-network-compat-r1.so" : "",
                network ? ":" : "");
+#ifdef NG_CAMERA_REAP_SO
       setenv("CC2_CAMERA_REAP_TRIAL", "1", 1);
       setenv("CC2_CAMERA_REAP_ENABLE_LAN", "1", 1);
+#endif
       setenv("CC2_CAMERA_RECOVERY_TRIAL", "1", 1);
       setenv("LD_PRELOAD", preload, 1);
       char *args[] = {"/opt/bin/ai_camera", NULL};
