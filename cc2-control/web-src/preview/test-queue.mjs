@@ -409,6 +409,20 @@ try {
   await change.waitFor({ state: 'hidden' })
   assert.equal((await send('/__preview/canvas-tray', '2\n1\n#16191D\nPETG')).status(), 200)
   assert.equal((await send('/__preview/canvas-tray', '1\n0\n#42a5f5\nPLA')).status(), 200)
+  // On a phone the dialog keeps the backdrop's 16 px on both sides. It once took 96vw, which is more than the
+  // room between the two margins below 800 px, and ran into the right edge of the screen.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await hero.locator('[data-queue-filament-edit]').click()
+  await change.waitFor()
+  const sides = await page.getByRole('dialog').evaluate(async box => {
+    await Promise.all(box.getAnimations().map(a => a.finished))
+    const r = box.getBoundingClientRect()
+    return [Math.round(r.left), Math.round(innerWidth - r.right)]
+  })
+  assert.deepEqual(sides, [16, 16], 'the same margin on both sides of a phone screen')
+  await change.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await change.waitFor({ state: 'hidden' })
+  await page.setViewportSize({ width: 1440, height: 1000 })
 
   // Pictures and dragging, against a queue of its own: six jobs, the first one printing, one name long enough
   // to make its row taller than the others, one file without a picture.
