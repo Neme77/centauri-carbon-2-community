@@ -20,7 +20,8 @@ printer is not a first installation and may leave persistent Community files.
 | Unfinished RFID activation/restoration, missing or inconsistent records | Stop and finish recovery. Do not delete markers or journals to force an upgrade. |
 | Original ELEGOO .13 with no previous Community installation | **Do not run the probe or Prepare-Upgrade.** Install the signed complete firmware using Offline Update on the original touchscreen. A stock reflash on a previously modified printer does not prove that its persistent Community files are gone. |
 | A private .13 preview or a different/unknown Community base | Request a reviewed migration route. Do not run the 4.4.3 preparation script on it. The exact RC2 active-RFID to RC4 route was separately tested; that is not approval of all previews. |
-| The accepted 4.4.4 RC4 build | The final RC5 changes only five translation files; backend and native components are identical. Use a reviewed .13 migration route if installing it. Do not run the 4.4.3 preparation tool on RC4. |
+| A qualified 4.4.4 RC4/RC5 build | The final RC6 updates the app and its RFID-bound helpers, preserving native components and the recovery profile. The exact previous binding is checked by the migration; other compositions need review. Do not run the 4.4.3 preparation tool on these .13 builds. |
+| The accepted 4.4.4 RC6 build | The release package is byte-identical to RC6. Reinstallation is unnecessary. |
 
 You do not need to install CC2 Control 1.2.27 or 1.2.28 first. A supported
 4.4.3 printer can prepare directly. Compatibility is established by the tool's
@@ -109,8 +110,9 @@ it through the printer's original offline firmware-update screen. Keep power
 connected and let the printer complete its restart.
 
 This file uses the stock-compatible signing route tested on the printer. The
-outer release filename changes; the verified RC5 firmware bytes do not.
-Compared with the physically accepted RC4, only five translation files change.
+outer release filename changes; the verified, printer-tested RC6 firmware
+bytes do not. It includes the cancelled-print control fix and completed
+translations. Native components and file permissions remain unchanged.
 
 ## 6. Verify the first boot
 
