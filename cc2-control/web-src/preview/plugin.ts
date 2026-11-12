@@ -1118,14 +1118,14 @@ export function previewPlugin(): Plugin {
               return reply({ ok: true })
             }
             // "tray\nstatus[\ncolour[\nname]]": a spool runs out (0) or is put back (1), with the colour and the
-            // filament name of its label.
+            // filament name of its label; "-" leaves the label without that colour or name.
             if (path === '/__preview/canvas-tray' && req.method === 'POST') {
               const [id, status, colour, name] = body.replace(/\n+$/, '').split('\n')
               const tray = canvasTrays[Number(id)]
               if (!tray || !['0', '1', '2'].includes(status)) return reply({ ok: false, error: 'Invalid tray' }, 400)
               tray.status = Number(status)
-              if (colour) tray.color = tray.filament_color = colour
-              if (name) tray.filament_name = tray.material = name
+              if (colour) tray.color = tray.filament_color = colour === '-' ? '' : colour
+              if (name) tray.filament_name = tray.material = name === '-' ? '' : name
               queueRevision++
               return reply({ ok: true })
             }

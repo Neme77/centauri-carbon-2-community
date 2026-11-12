@@ -4,7 +4,16 @@ import { store } from '@/lib/store'
 import { addToQueue, refreshQueue, type ToolFilament } from '@/lib/queue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
-import { FeedChoice, isSlot, isStock, slotColour, slotLabel, stockBrands, stockOf } from '@/components/feed-choice'
+import {
+  FeedChoice,
+  isSlot,
+  isStock,
+  slotColour,
+  slotEmptyNote,
+  slotLabel,
+  stockBrands,
+  stockOf,
+} from '@/components/feed-choice'
 import { Select } from '@/components/ui/field'
 import { errText, notify, post, request, toast } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
@@ -324,6 +333,7 @@ const Form = ({ job }: { job: Pending }) => {
               <div class="mb-1.5 h-2 rounded" style={{ background: slotColour(tray(i), i) || 'var(--edge)' }} />
               <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
               <div>{slotLabel(tray(i))}</div>
+              {slotEmptyNote(tray(i)) && <div class="text-muted">{slotEmptyNote(tray(i))}</div>}
             </div>
           ))}
         </div>

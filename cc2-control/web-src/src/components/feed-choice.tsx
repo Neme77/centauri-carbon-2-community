@@ -18,7 +18,19 @@ export const slotColour = (tray: any, index: number) => {
   return null
 }
 
-export const slotLabel = (tray: any) => (tray && (tray.filament_name || tray.filament_type)) || t('print.not_reported')
+const labelOf = (tray: any) => (tray && (tray.filament_name || tray.filament_type)) || ''
+
+// A slot the Canvas reports as empty (status 0). It keeps the label of its last spool, which is the filament a
+// job bound to that slot takes, so a label alone does not tell an empty slot from a loaded one.
+export const slotEmpty = (tray: any) => tray?.status !== undefined && tray?.status !== null && Number(tray.status) === 0
+
+// What a slot holds as its label names it; without a label, whether it is empty or holds a filament the
+// printer does not report.
+export const slotLabel = (tray: any) =>
+  labelOf(tray) || (slotEmpty(tray) ? t('canvas.state_empty') : t('print.not_reported'))
+
+// Under the label of an empty slot: that the spool it names is no longer in it.
+export const slotEmptyNote = (tray: any) => (labelOf(tray) && slotEmpty(tray) ? t('canvas.state_empty') : '')
 
 // The filaments of the spool inventory, as it files them: brand, then material, then colour. A queued job can
 // be bound to one although no slot holds it. The job keeps the material and the colour, which is what the
@@ -215,8 +227,12 @@ export const FeedChoice = ({
     <>
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[0, 1, 2, 3].map(i => {
-          const color = slotColour(tray(i), i)
+          const slot = tray(i)
+          const color = slotColour(slot, i)
           const selected = value === String(i)
+          const empty = slotEmpty(slot)
+          // An unlabelled slot says what it is on the label line already
+          const note = empty ? slotEmptyNote(slot) : color || (labelOf(slot) ? t('print.not_reported') : '')
           return (
             <label
               key={i}
@@ -231,13 +247,21 @@ export const FeedChoice = ({
                 onChange={e => onChange(e.currentTarget.value)}
                 class="mt-0.5 shrink-0"
               />
-              <span class="grid min-w-0 gap-1 [overflow-wrap:anywhere]">
+              <span
+                class="grid min-w-0 gap-1 [overflow-wrap:anywhere]"
+                data-feed-slot={i}
+                data-feed-slot-state={empty ? 'empty' : labelOf(slot) ? 'labelled' : 'unknown'}
+              >
                 <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
                 <span class="flex items-center gap-1.5">
                   {color && <Square color={color} />}
-                  <span>{slotLabel(tray(i))}</span>
+                  <span data-feed-slot-label>{slotLabel(slot)}</span>
                 </span>
-                <span class="text-muted">{color || t('print.not_reported')}</span>
+                {note && (
+                  <span class="text-muted" data-feed-slot-note>
+                    {note}
+                  </span>
+                )}
               </span>
             </label>
           )

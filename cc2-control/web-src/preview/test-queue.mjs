@@ -375,6 +375,14 @@ try {
   // A queued job can be given a filament of the inventory as well, by the same three steps: blue PLA is in
   // slot 4 (slot 2, labelled with it, is empty). The job is saved once the choice is whole.
   await hero.locator('[data-queue-filament-edit]').click()
+  // The slot cards tell an empty slot from a loaded one: slot 2 keeps the label of its last spool and says it
+  // is empty, the others show the colour their labels name.
+  const slotCard = i => change.locator(`[data-feed-slot="${i}"]`)
+  await change.locator('[data-feed-slot="1"][data-feed-slot-state="empty"]').waitFor()
+  assert.deepEqual(await Promise.all([0, 1, 2, 3].map(i => slotCard(i).getAttribute('data-feed-slot-state'))), ['labelled', 'empty', 'labelled', 'labelled'])
+  assert.equal(await slotCard(1).locator('[data-feed-slot-label]').textContent(), 'PLA')
+  assert.equal(await slotCard(1).locator('[data-feed-slot-note]').textContent(), 'Empty')
+  assert.equal(await slotCard(3).locator('[data-feed-slot-note]').textContent(), '#42A5F5')
   const other = change.locator('[data-feed-stock="0"]')
   await other.locator('input[type=radio]').check()
   assert.equal(await change.locator('[data-queue-filament-save]').isDisabled(), true, 'the choice is not whole yet')
@@ -387,6 +395,20 @@ try {
   assert.deepEqual(lastPost(), ['/api/queue/filament', `${fedJob}\n\n0\t\tPLA\t#42A5F5`])
   await hero.locator('[data-queue-feed="ready"]').waitFor()
   await page.waitForFunction(() => document.querySelector('[data-queue-hero="next"] [data-queue-feed]')?.textContent === 'PLA · Slot 4')
+  // Slots without labels, as a Canvas reports them after a firmware update: the loaded one is not reported and
+  // the empty one says that it is empty, so the two can be told apart.
+  assert.equal((await send('/__preview/canvas-tray', '2\n1\n-\n-')).status(), 200)
+  assert.equal((await send('/__preview/canvas-tray', '1\n0\n-\n-')).status(), 200)
+  await hero.locator('[data-queue-filament-edit]').click()
+  await change.locator('[data-feed-slot="2"][data-feed-slot-state="unknown"]').waitFor()
+  assert.equal(await slotCard(2).locator('[data-feed-slot-label]').textContent(), 'Not reported')
+  assert.equal(await slotCard(1).getAttribute('data-feed-slot-state'), 'empty')
+  assert.equal(await slotCard(1).locator('[data-feed-slot-label]').textContent(), 'Empty')
+  assert.equal(await change.locator('[data-feed-slot-note]').count(), 2, 'a second line only for the slots with a colour')
+  await change.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await change.waitFor({ state: 'hidden' })
+  assert.equal((await send('/__preview/canvas-tray', '2\n1\n#16191D\nPETG')).status(), 200)
+  assert.equal((await send('/__preview/canvas-tray', '1\n0\n#42a5f5\nPLA')).status(), 200)
 
   // Pictures and dragging, against a queue of its own: six jobs, the first one printing, one name long enough
   // to make its row taller than the others, one file without a picture.
