@@ -134,6 +134,15 @@ try {
   assert.ok(corner[2] > corner[0], `the corner is low: ${fills[0]}`)
   await page.screenshot({ path: path.join(shots, 'mesh-align-done-1440.png'), fullPage: true })
 
+  // An exact plane has no shape: the map is one colour, not the rounding noise of the fit spread over the scale.
+  const planeGrid = syntheticMesh({ tiltX: 0.223, tiltY: -0.223 })
+  assert.ok(analyseMesh(planeGrid).residual_range < 0.0005)
+  await show(asProfileReply('default', planeGrid))
+  await part('tilt-x').getByText('right side higher · across 240 mm').waitFor()
+  const flat = await part('heatmap').locator('svg rect').evaluateAll(cells => cells.map(c => c.getAttribute('fill')))
+  assert.equal(flat.length, 121)
+  assert.deepEqual([...new Set(flat)], ['rgb(226,232,240)'], 'a plane is drawn in the neutral colour only')
+
   // A bed that rises to the back: tilt and screw correction are different numbers, shown apart.
   const tiltedGrid = syntheticMesh({ tiltX: 0, tiltY: 0.96, shape: dome(0.2) })
   const tilted = analyseMesh(tiltedGrid)

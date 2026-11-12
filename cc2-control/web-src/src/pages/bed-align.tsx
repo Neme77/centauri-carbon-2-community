@@ -134,7 +134,9 @@ const ShapeMap = ({ analysis, config }: { analysis: MeshAnalysis; config: AlignC
   const zs = points.map(p => p.z),
     low = Math.min(...zs),
     high = Math.max(...zs),
-    peak = Math.max(Math.abs(low), Math.abs(high))
+    span = Math.max(Math.abs(low), Math.abs(high)),
+    // Below the three decimals the page shows, the shape is rounding noise: the map stays one colour.
+    peak = span < 0.0005 ? 0 : span
   return (
     <div data-align="heatmap">
       <svg
