@@ -160,12 +160,12 @@ static int start_job(const char *id) {
     return status;
 }
 /* The delay of the automatic start has run out. A start fed from the Canvas asks for a report on that tick
- * and decides on a later one, once the printer has answered (here with the trays as they are). */
+ * and decides on a later one, once the printer has answered (here with the trays as they are). A tick that
+ * decided clears the delay, so a delay still armed means the start waits for the report it asked for. (Not
+ * told by the time of the request: two requests can fall in the same millisecond.) */
 static void auto_due(void) {
-    long long asked = queue.check_ms;
     queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
-    if (queue.check_ms != asked && queue.complete_ms) {
-        assert(machine.canvas_refresh_due == 1);
+    if (queue.complete_ms && queue.check_id) {
         machine.canvas_refresh_due = 0; machine.canvas_revision++; queue_tick(&machine);
     }
 }
