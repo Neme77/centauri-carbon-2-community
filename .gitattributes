@@ -34,3 +34,16 @@ experimental/native-display/thermal.awk text eol=lf
 
 # Signed catalogs are binary even when their signature contains no NUL byte.
 *.cc2catalog -text
+
+# The 4.4.4 qualification snapshot and native pins are byte-exact.
+# Preserve those reviewed bytes when staging/checking out the release sources.
+/cc2-control/** -text
+/builder/current/** -text
+/experimental/** -text
+
+# Web formatter inputs are canonical LF; retain native hash-pinned inputs above.
+cc2-control/web-src/**/*.ts text eol=lf
+cc2-control/web-src/**/*.tsx text eol=lf
+cc2-control/web-src/biome.json text eol=lf
+experimental/**/*.awk text eol=lf
+experimental/**/*.sh.in text eol=lf

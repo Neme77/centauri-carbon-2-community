@@ -14,6 +14,7 @@
 #include <errno.h>
 
 #define QUALIFIED "ec5633b17de329d5b18c3f8d8de6ebf389391a04193536d976ba167022d07b99"
+#define CANDIDATE_13 "90da7634c21b74b3bf943d68129da78668b47f9706620e158283697ab95553a7"
 typedef struct { const char *data; uint32_t length; unsigned char storage[16]; } arm_string;
 typedef struct { void *object,*control; } arm_shared;
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
@@ -68,6 +69,9 @@ static int presence(void *object,const arm_string *message,int present) {
 static int inserted(void *object,const arm_string *message){return presence(object,message,1);}
 static int removed(void *object,const arm_string *message){return presence(object,message,0);}
 
+enum { CONTROL_SERVER_07 = 0x34, CONTROL_SERVER_13 = 0x4c };
+static size_t control_server_offset = CONTROL_SERVER_07;
+
 /* The native main() calls Control::Start directly, without a device-insertion
  * notification. Announce after it returns, in the same order as the native
  * physical-insertion path. This is an initialization event, not an RTC token. */
@@ -75,7 +79,7 @@ static void initial_start(void *control) {
     take();++initial_calls;status_locked();release();
     native_start(control);
     void *object;
-    memcpy(&object,(unsigned char *)control+0x34,sizeof(object));
+    memcpy(&object,(unsigned char *)control+control_server_offset,sizeof(object));
     take();++initial_returns;status_locked();release();
     arm_string message={cc2_insertion,(uint32_t)cc2_insertion_length,{0}};
     memcpy(message.storage,&message.length,sizeof(message.length));
@@ -133,6 +137,13 @@ static uint32_t branch(uintptr_t site,uintptr_t destination) {
     if((d&3)||d< -33554432||d>33554428)refuse("branch range");
     return 0xeb000000u|((uint32_t)(d/4)&0xffffffu);
 }
+static void patch_instruction(uintptr_t site,uint32_t instruction) {
+    uintptr_t page=site&~(uintptr_t)4095;
+    if(mprotect((void *)page,4096,PROT_READ|PROT_WRITE|PROT_EXEC))refuse("text protection");
+    __atomic_store_n((uint32_t *)site,instruction,__ATOMIC_SEQ_CST);
+    __builtin___clear_cache((char *)site,(char *)site+4);
+    if(mprotect((void *)page,4096,PROT_READ|PROT_EXEC))refuse("text restoration");
+}
 __attribute__((constructor)) static void activate(void) {
     const char *enable=getenv("CC2_CAMERA_RECOVERY_TRIAL");
     if(!enable||strcmp(enable,"1"))return;
@@ -141,17 +152,29 @@ __attribute__((constructor)) static void activate(void) {
     if(n<0||n>=(ssize_t)sizeof(path)-1)refuse("path");
     path[n]=0;
     if(strcmp(path,"/opt/bin/ai_camera"))refuse("executable path");
-    if(cc2_sha256_file("/proc/self/exe",hash)||strcmp(hash,QUALIFIED))refuse("executable checksum");
-    const uintptr_t sites[]={0xea488,0xea570,0x1528ac,0x152a1c,0x152a50,0x7d098,0x152c70,0x152ec0};
-    const uint32_t expected[]={0xeb01a10d,0xeb01a0d3,0xeb000315,0xebfffdc7,0xebfffdba,0xeb01b3da,0xebfffed8,0xebfffe44};
-    uintptr_t a=0x153508;memcpy(&native_assign,&a,4);
-    a=0x1527d8;memcpy(&native_accept,&a,4);
-    a=0xea008;memcpy(&native_start,&a,4);
-    a=0x1528c4;memcpy(&native_broadcast,&a,4);
-    a=0x152140;memcpy(&native_send,&a,4);
-    if(*(const uint32_t *)0x1297cc!=0xeb00e6f3u)refuse("community camera fingerprint");
-    if(*(const uint32_t *)0xea008!=0xe92d4830u)refuse("native startup fingerprint");
+    if(cc2_sha256_file("/proc/self/exe",hash))refuse("executable checksum");
+    int stock13=!strcmp(hash,CANDIDATE_13);
+    if(!stock13&&strcmp(hash,QUALIFIED))refuse("executable checksum");
+    control_server_offset=stock13?CONTROL_SERVER_13:CONTROL_SERVER_07;
+    const uintptr_t sites07[]={0xea488,0xea570,0x1528ac,0x152a1c,0x152a50,0x7d098,0x152c70,0x152ec0};
+    const uintptr_t sites13[]={0xebe20,0xebf08,0x15ad0c,0x15ae7c,0x15aeb0,0x7e060,0x15b0d0,0x15b320};
+    const uint32_t expected07[]={0xeb01a10d,0xeb01a0d3,0xeb000315,0xebfffdc7,0xebfffdba,0xeb01b3da,0xebfffed8,0xebfffe44};
+    const uint32_t expected13[]={0xeb01bbbf,0xeb01bb85,0xeb000315,0xebfffdc7,0xebfffdba,0xeb01b5ce,0xebfffed8,0xebfffe44};
+    const uintptr_t *sites=stock13?sites13:sites07;
+    const uint32_t *expected=stock13?expected13:expected07;
+    uintptr_t a=stock13?0x15b968:0x153508;memcpy(&native_assign,&a,4);
+    a=stock13?0x15ac38:0x1527d8;memcpy(&native_accept,&a,4);
+    uintptr_t start=stock13?0xeb7a0:0xea008;memcpy(&native_start,&start,4);
+    a=stock13?0x15ad24:0x1528c4;memcpy(&native_broadcast,&a,4);
+    a=stock13?0x15a5a0:0x152140;memcpy(&native_send,&a,4);
+    uintptr_t coexist=stock13?0x13287c:0x1297cc;
+    if(*(const uint32_t *)coexist!=(stock13?0xeb00dfddu:0xeb00e6f3u))refuse("community camera fingerprint");
+    if(*(const uint32_t *)start!=0xe92d4830u)refuse("native startup fingerprint");
     for(unsigned i=0;i<8;i++)if(*(const uint32_t *)sites[i]!=expected[i])refuse("call fingerprint");
+    const uintptr_t http_start=0x16a078;
+    if(stock13&&(*(const uint32_t *)(http_start-4)!=0xe2833019u||
+                 *(const uint32_t *)http_start!=0xe3a01000u||
+                 *(const uint32_t *)(http_start+4)!=0xe1a00003u))refuse("HTTP startup fingerprint");
     long size=sysconf(_SC_PAGESIZE);if(size!=4096)refuse("page size");
     unsigned char *tramp=NULL;
     for(uintptr_t hint=0x1000000;hint<=0x2000000;hint+=0x200000) {
@@ -179,13 +202,9 @@ __attribute__((constructor)) static void activate(void) {
     memcpy(words+11,&s_fn,4);memcpy(words+13,&a_fn,4);memcpy(words+15,&a_fn,4);
     memcpy(tramp,words,sizeof(words));__builtin___clear_cache((char *)tramp,(char *)tramp+sizeof(words));
     if(mprotect(tramp,(size_t)size,PROT_READ|PROT_EXEC))refuse("trampoline protection");
-    for(unsigned i=0;i<8;i++) {
-        uintptr_t page=sites[i]&~(uintptr_t)4095;
-        uint32_t instruction=branch(sites[i],(uintptr_t)tramp+8*i);
-        if(mprotect((void *)page,(size_t)size,PROT_READ|PROT_WRITE|PROT_EXEC))refuse("text protection");
-        __atomic_store_n((uint32_t *)sites[i],instruction,__ATOMIC_SEQ_CST);
-        __builtin___clear_cache((char *)sites[i],(char *)sites[i]+4);
-        if(mprotect((void *)page,(size_t)size,PROT_READ|PROT_EXEC))refuse("text restoration");
-    }
+    for(unsigned i=0;i<8;i++)
+        patch_instruction(sites[i],branch(sites[i],(uintptr_t)tramp+8*i));
+    /* Start accepting local video clients before the first RTC event on .13. */
+    if(stock13)patch_instruction(http_start,0xe3a01001u);
     take();status_locked();release();unsetenv("CC2_CAMERA_RECOVERY_TRIAL");
 }

@@ -1,5 +1,6 @@
 #ifndef CC2_CONNECTIONS_BOOT_H
 #define CC2_CONNECTIONS_BOOT_H
+#include "profile-pins.h"
 /* Included after the transaction functions. No long-lived manager daemon. */
 /* The request loads startup delegates only. The saved network configuration
  * and the usual Ethernet confirmation transaction stay independent. */
@@ -10,7 +11,7 @@ static inline int ng_exhaust_boot_requested(const char *floor_enabled) {
          ng_read_file(NG_STATE "/exhaust-network-boot", requested,
                       sizeof(requested), &size, 1) &&
          size == 36 && memcmp(requested, boot, 36) &&
-         !access(floor_enabled, F_OK);
+         (!floor_enabled || !access(floor_enabled, F_OK));
 }
 static inline int ng_wifi_compatible(void) {
   char sha[65];
@@ -18,8 +19,7 @@ static inline int ng_wifi_compatible(void) {
          !strcmp(sha, "8e19a620921c6f4f21bde910cc3d960af5400d223493041eb96f1e92"
                       "1dcbe3c1") &&
          ng_hash_file("/etc/init.d/printer", sha) &&
-         !strcmp(sha, "e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd"
-                      "255d1bc4");
+         !strcmp(sha, NG_PRINTER_INIT_SHA);
 }
 static inline int ng_mark_qualified(void) {
   char boot[40];

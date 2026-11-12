@@ -12,32 +12,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Mesh-guided screw alignment on the Mesh alignment tab of Bed Levelling: a plane is fitted through every point of a bed mesh (the active mesh, a side slot or a saved plate measurement) instead of four probes. The card shows the tilt in X and Y over 240 mm, the correction at each screw in millimetres relative to an automatically chosen reference screw, and separately the plate shape that remains (heat map, range, RMS and a name such as dome or saddle), which the screws cannot change. “Aligned” needs both tilts below the target (0.10 mm, adjustable); a plate shape above 0.3 mm is a warning only. Turns and turning direction are shown only when their sources are configured. The analysis is read-only. A guided loop on the same card measures the mesh, shows what to turn and measures again until both tilts are below the target or the rounds are used up, then saves the mesh to a plate; every step lists its printer commands and sends them only after confirmation, and the heaters are switched off when the session ends, fails or is abandoned (`/api/screws/align`). Designed and implemented by **lpgamerzockt-ops** (#348).
 - Quick check on the Mesh alignment tab: the last four-point measurement of the Screw Levelling tab, less the plate shape that the saved 60 °C full mesh of the mounted plate shows at the screws, gives tilt and screw corrections without a new full mesh. It is refused without a mounted plate, without a full mesh at 60 °C or with one older than 30 days, warns about probes older than 60 minutes and about a twist above 0.05 mm, and sends nothing to the printer. The age and twist limits are estimates. Designed and implemented by **lpgamerzockt-ops** (#348).
 - Screw-tramming history: CC2 Control records every completed start, re-probe and check of a tramming session with the measured value of each corner and keeps the last 20 sessions on the printer, so the results are still there after a reload, the end of the session or a restart, and the next levelling can start from the last one. A one-shot measurement without a session is kept separately as a quick entry (last 10), marked as such because it has no settle. Read with `GET /api/screws/history`, cleared with `POST /api/screws/history/clear` (#329).
-
 - Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
-
 - Add the Turkish interface translation using the contributed language patch.
-
 - Read-only `GET /api/gcode-files/layer-path` returns thinned extrusion polylines for one G-code layer in bed coordinates, with the same path checks as the other G-code file routes. The Job bed-map dialog adds a **Layer path** pane (Live / previous / next, nozzle from `/api/printer`) that loads that thinned path instead of the G-code file. The current layer is requested on its own and drawn first; the previous layer comes from the browser cache or is loaded afterwards, rapid layer changes request only the layer they settle on, and a busy backend is retried instead of being shown as unavailable. Requested by **SVLoneStar** (#342).
 - Print queue: prepare jobs ahead with the print dialog's new **Add to queue** choice (every print setting plus a number of copies), then start each copy with one button from the Queue page, the Dashboard or the print-ended notice, without the dialog. A pre-flight check shows the file, the filament in each mapped slot, the side's mesh, the nozzle and the printer state; copies are counted on the printer, stopped copies are not counted, and the next copy waits for the operator unless the automatic start is chosen for a self-clearing bed, which first checks that each mapped Canvas slot still holds the file's material. Designed and implemented by **beanbo** (#320).
-- German interface translation (Deutsch), selectable in Settings → Language. All 1533 interface strings are translated with the informal “du”; technical terms such as Pressure Advance, Input Shaper, Load Cell, Spool, Canvas and Idle are kept.
+- German interface translation (Deutsch), selectable in Settings → Language. All 1533 interface strings are translated with the informal “du”; technical terms such as Pressure Advance, Input Shaper, Load Cell, Spool, Canvas and Idle are kept. Contributed by **lpgamerzockt-ops** (#332).
+- Display the current G-code layer path in the bed map with live following, bounded scan retries and scan-limit feedback. By **lpgamerzockt-ops** (#343).
+- Add interactive screw tramming, individual corner re-probes, a settling pause and measurement history. Preserve pending heater shutdown across interrupted sessions. By **lpgamerzockt-ops** (#346).
+- Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331), implemented in #335.
+- Add the German interface translation by **lpgamerzockt-ops** (#332) and the contributed Turkish interface translation (#333).
 
 ### Changed
 
+- Complete the ten new dashboard, drying, motor-mode and Canvas validation messages in French, Hungarian, Polish, Czech and Turkish; all eleven shipped locales now cover every English key. Integrated by **Neme77** (#350).
 - Screw levelling names each corner and says whether to raise or lower it against the front-left zero. The session is four steps: start, re-probe the screw you turned, check all four, then end. The one-shot measurement is marked as a measurement without a session (#329).
 - Screw levelling keeps the bed at 60 °C for the session and only switches the nozzle off after start. The double measurement is labelled “2× 3 probes”. The table shows the running session’s offsets, and earlier sessions can be reviewed, exported or cleared (#329).
-
 - Complete Hungarian translations for the RFID reader lifecycle, print queue and update requirements. By **Neme77**.
 - Simplified Chinese interface strings for the RFID reader lifecycle, external feed, chamber fan management and update requirements completed, and the build-plate save hint refreshed. By **Skycos** (#328).
+- Show live Z offset, the mounted plate side and the active mesh together in the existing dashboard card. Designed with **Neme77**.
 
 ### Fixed
 
-- Nord and Solarized Light keep cyan and red text readable on the bed-map dialog, including the selected object row and Exclude Selected Object. The same tokens meet the contrast on the rest of the interface.
-- Solarized Light muted text and amber status tags meet the 4.5:1 text contrast on the page background and on the tag fill.
-
+- Re-enable exhaust flap controls, Rotation Distance and load-cell calibration after a cancelled print once the machine is Idle. Treat native `cancelled` as a terminal job state while retaining active-print, pause, heater and competing-operation guards. Reported and diagnosed with **Neme77** (#350).
+- Starting a print of a large file from USB no longer stops CC2 Control from answering: the file is scanned and copied on a worker thread, so the print dialog no longer reports “print not started” for a print that then starts. Reported and fixed by **lpgamerzockt-ops** (#344, #347).
+- Nord and Solarized Light keep cyan and red text readable on the bed-map dialog, including the selected object row and Exclude Selected Object. The same tokens meet the contrast on the rest of the interface. Contributed by **lpgamerzockt-ops** (#345).
+- Solarized Light muted text and amber status tags meet the 4.5:1 text contrast on the page background and on the tag fill. Contributed by **lpgamerzockt-ops** (#345).
 - Start preparing the qualified USB Ethernet link before the camera starts, and give the camera a bounded wait for carrier on Ethernet-enabled boots. Reported by **kalross** (#322).
 - Prepare USB Ethernet activation when the minimum EXHAUST feature is active. A full idle reboot loads both components, after which the normal Connections confirmation applies. Reported by **kalross** and reproduced by **Neme77** (#323).
-
 - Preserve the Canvas RFID lifecycle during application updates from the published CC2 Control 1.2.26 and require explicit resumption before a pending activation can flash Canvas. Allow reinstalling the same build from a PC. Reported by **Sceletor** (#313) and physically tested on a Combo by **Neme77**.
+- Prepare qualified 4.4.3 installations for a firmware upgrade using coherent Canvas restoration evidence instead of a specific panel version; retain verified PC backups and refuse active, incomplete or inconsistent state. By **Neme77** (#327).
+- Preserve an active, exactly qualified .13 RFID installation while replacing its three app-bound helper files, including when the app is unchanged. Keep the lifecycle journal, Canvas image, transfer worker and loaded guard intact. Requested by **Neme77**.
+- Reduce RFID scan preparation work on the immutable .13 route by verifying the running native executable once before and once after the live-state check, and hashing each mapped module once per observation. Keep full process identity, profile binding and changed-journal refusal. Reported and timed by **Neme77**.
+- Prepare legacy Reactor-disable markers for quarantine, archive superseded Connections compositions before firmware replacement, and retain bounded boot status files without requiring `logread`. Reported by **lpgamerzockt-ops** (#327).
+- Import USB print files in a worker so the dashboard remains responsive. Cancel pending starts after a client disconnect or emergency stop. By **lpgamerzockt-ops** (#347).
+- Improve Nord and Solarized Light contrast in the bed map and status badges. By **lpgamerzockt-ops** (#345).
+- Preserve bed-drying timeout recovery after an interrupted stop and retry once the printer is idle with its bed target at zero. Reported by **computerkoenig** (#340).
+- Keep the latest printer warning or error visible until dismissed even if a later informational report arrives. Reported by **Sceletor** (#337).
+- Allow disabling Quiet motors after an application restart by restoring Normal first and saving only after the console confirms success. Reported by **kalross** (#324).
+- Explain that the first Canvas RFID restart is complete and prompt the operator to continue update validation. Reported and tested on the .13 trial by **Neme77**.
 
 ## [CC2 Control 1.2.26] - 2026-11-07
 

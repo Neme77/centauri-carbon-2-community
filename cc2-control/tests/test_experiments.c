@@ -1,10 +1,28 @@
 #define main cc2_original_main
+#define console_start fixture_console_start
 #include "../src/main.c"
 #undef main
+#undef console_start
 #include <assert.h>
 
 static mqtt_client machine;
 static console_state command_state;
+static unsigned queued_commands;
+/* Exercise the HTTP/transaction state machine without starting native I/O.
+ * The real console worker is covered by the console harnesses. */
+int fixture_console_start(console_state *state,const char *command,char *reason,size_t capacity) {
+    pthread_mutex_lock(&state->lock);
+    if(state->busy){pthread_mutex_unlock(&state->lock);snprintf(reason,capacity,"busy fixture");return -1;}
+    snprintf(state->command,sizeof(state->command),"%s",command);
+    state->busy=1;state->completed=state->success=0;state->generation++;queued_commands++;
+    pthread_mutex_unlock(&state->lock);return 0;
+}
+static void complete_normal(int success) {
+    pthread_mutex_lock(&command_state.lock);
+    command_state.busy=0;command_state.completed=1;command_state.success=success;
+    pthread_mutex_unlock(&command_state.lock);
+    quiet_disable_tick(&command_state);
+}
 static const char *authorization = "POST /api/experiments HTTP/1.1\r\nX-CC2-LAN: fixture-confirmation\r\n\r\n";
 static void call(const char *headers, const char *body, char *response, size_t capacity) {
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
@@ -14,7 +32,9 @@ static void call(const char *headers, const char *body, char *response, size_t c
 }
 static void put(const char *text, int status) {
     char response[4096], expected[32]; call(authorization, text, response, sizeof(response));
-    snprintf(expected, sizeof(expected), "HTTP/1.1 %d", status); assert(strstr(response, expected));
+    snprintf(expected, sizeof(expected), "HTTP/1.1 %d", status);
+    if(!strstr(response, expected))fprintf(stderr,"%s expected %d, received %.200s\n",text,status,response);
+    assert(strstr(response, expected));
 }
 static void overwrite(const char *text) {
     FILE *f = fopen(experiments_path, "w"); assert(f); assert(fputs(text, f) >= 0); assert(!fclose(f));
@@ -52,15 +72,21 @@ int main(void) {
     put("quiet-motors:on", 200); assert(experiments.canvas_uds && experiments.quiet_motors);
     assert(!motor_mode_requested && !command_state.command[0]); /* Enabling controls moves nothing. */
     assert(!app_update_ready(&machine, &command_state)); /* App restart must not lose a Quiet session. */
-    put("quiet-motors:off", 409); put("canvas-uds:off", 409);
+    /* #324: after an app restart, disabling schedules Normal first and keeps
+     * the opt-in until the matching console command succeeds. */
+    put("quiet-motors:off", 200);
+    assert(queued_commands==1&&experiments.quiet_motors&&quiet_disable_state==QUIET_DISABLE_RUNNING);
+    put("quiet-motors:off",409);put("canvas-uds:off",409);
+    complete_normal(0);
+    assert(experiments.quiet_motors&&quiet_disable_state==QUIET_DISABLE_FAILED);
+    experiments_load();assert(experiments.quiet_motors);
     int stream[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, stream)); telemetry.fd = stream[0]; telemetry.connections = 9;
-    motor_mode_requested = "normal"; motor_mode_connection = 8;
-    put("quiet-motors:off", 409);
-    motor_mode_connection = 9;
-    char reason[160]; assert(control_build_script("motors:normal", &machine, command_state.command,
-                                                 sizeof(command_state.command), reason, sizeof(reason)));
-    command_state.completed = 1; command_state.success = 0; put("quiet-motors:off", 409);
-    command_state.success = 1;
+    put("quiet-motors:off",200);assert(queued_commands==2&&motor_mode_connection==9);
+    telemetry.connections=10;complete_normal(1);
+    assert(experiments.quiet_motors&&quiet_disable_state==QUIET_DISABLE_FAILED);
+    put("quiet-motors:off",200);assert(queued_commands==3&&motor_mode_connection==10);
+    complete_normal(1);
+    assert(!experiments.quiet_motors&&quiet_disable_state==QUIET_DISABLE_IDLE);
     assert(app_update_ready(&machine, &command_state));
     put("quiet-motors:off", 200); assert(!experiments.quiet_motors && experiments.canvas_uds);
     put("canvas-uds:off", 200); assert(!experiments.canvas_uds && !telemetry.canvas_enabled);

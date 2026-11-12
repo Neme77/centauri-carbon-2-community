@@ -72,7 +72,7 @@ export const Experiments = () => {
       if (!mounted.current) return
       experimental.set({ data: updated, ok: true })
       clearCode()
-      notify(t('experiments.saved'))
+      if (updated.quiet_disable_state !== 'running') notify(t('experiments.saved'))
     } catch (e) {
       if (mounted.current) setError(errText(e))
     } finally {
@@ -80,6 +80,10 @@ export const Experiments = () => {
     }
   }
   const disabled = busy || !ok || !data?.editable || !data.ready || !code.trim()
+  const quietDisabled =
+    data?.quiet_motors && !data.normal_confirmed
+      ? busy || !ok || !data.editable || !data.quiet_disable_ready || !code.trim()
+      : disabled || data?.quiet_disable_state === 'running'
   return (
     <Card class="mt-3.5" data-experiments>
       <CardHead icon="settings" title="experiments.title" />
@@ -87,7 +91,9 @@ export const Experiments = () => {
       <p class="mt-2 text-muted">{t('experiments.guard')}</p>
       {ok && data?.quiet_motors && !data.normal_confirmed && (
         <div class="mt-3 rounded-md border border-amber/50 bg-amber/10 p-3" data-experiment-recovery role="status">
-          <p class="text-amber">{t('experiments.normal_required')}</p>
+          <p class="text-amber">
+            {t(data.quiet_disable_ready ? 'experiments.normal_or_disable' : 'experiments.normal_required')}
+          </p>
           <Button class="mt-2" onClick={() => openPage('control')}>
             {t('common.control')}
           </Button>
@@ -140,12 +146,14 @@ export const Experiments = () => {
               role="switch"
               aria-checked={Boolean(data?.quiet_motors)}
               aria-label={t('experiments.quiet_title')}
-              disabled={disabled || (data?.quiet_motors && !data.normal_confirmed)}
+              disabled={quietDisabled}
               onClick={() => void change('quiet-motors')}
             >
               {t(data?.quiet_motors ? 'experiments.disable' : 'experiments.enable')}
             </Button>
           </div>
+          {data?.quiet_disable_state === 'running' && <p role="status">{t('experiments.quiet_restoring')}</p>}
+          {data?.quiet_disable_state === 'failed' && <p role="alert">{t('experiments.quiet_restore_failed')}</p>}
         </div>
         <div class="flex min-w-0 flex-col items-start rounded-md border border-edge p-3">
           <h3 class="text-base font-semibold">{t('drying.title')}</h3>

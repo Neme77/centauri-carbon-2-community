@@ -61,18 +61,18 @@ class Handler(socketserver.BaseRequestHandler):
             for part in [response[:7],response[7:29],response[29:]]:self.request.sendall(part)
         except (BrokenPipeError,ConnectionResetError):pass
 
-def run(stock_bootstrap=False,with_cavity=False):
-    stock=Path('/stock-canvas.bin').read_bytes();count=0
+def run(stock_bootstrap=False,with_cavity=False,architectures=None,temporary_parent=None):
+    stock=Path(os.environ.get('CC2_TEST_STOCK_CANVAS','/stock-canvas.bin')).read_bytes();count=0
     cases=CASES+(['missing-cavity','missing-cavity-channel','foreign-cavity-channel'] if with_cavity else [])
     flags=['-O2','-std=c11','-Wall','-Wextra','-Wpedantic','-Werror','-D_POSIX_C_SOURCE=200809L']
-    with tempfile.TemporaryDirectory(prefix='cc2-post-boot-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='cc2-post-boot-',dir=temporary_parent) as temporary:
         root=Path(temporary);dummy_source=root/'dummy.c';dummy=root/'dummy'
         dummy_source.write_text('#include <fcntl.h>\n#include <stdio.h>\n#include <sys/mman.h>\n#include <unistd.h>\nint main(int n,char**v){for(int i=1;i<n;i++){int f=open(v[i],O_RDONLY);if(f<0||mmap(0,4096,PROT_READ,MAP_PRIVATE,f,0)==MAP_FAILED)return 2;close(f);}puts("READY");fflush(stdout);for(;;)pause();}\n')
         subprocess.run(['gcc',*flags,dummy_source,'-o',dummy],check=True,timeout=60);data=dummy.read_bytes()
         with Server(('127.0.0.1',0),Handler) as server:
             server.mode='host';thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
             try:
-                for arch,compiler,extra,runner in [
+                for arch,compiler,extra,runner in architectures or [
                     ('host','gcc',[],[]),('arm','arm-linux-gnueabihf-gcc',['-static','-D_TIME_BITS=32','-D_FILE_OFFSET_BITS=32'],['qemu-arm']),
                     ('sanitizers','gcc',['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie'],[]),
                 ]:

@@ -27,10 +27,9 @@ static const char *boot_id_path = "/proc/sys/kernel/random/boot_id";
 static int canvas_unload_restart_requested;
 
 /* A longer pull-back for a 4-in-1 merger far from the toolhead (issue #172) needs the
- * community firmware's elegoo_printer (ELEGOO 02.01.01.07) with one constant changed:
- * the 350.0 maximum of getdouble("unload_fila_dist") at file offset 0x5bba38 raised to
- * 1000.0. Only that exact program, while it is the one running, unlocks values above
- * 350; any other program would refuse to start with them.
+ * community firmware's elegoo_printer with the maximum of
+ * getdouble("unload_fila_dist") raised from 350.0 to 1000.0. Only the exact
+ * qualified .07 and .13 programs unlock values above 350 while running.
  *
  * Hashing the 29 MB file takes a few seconds on the printer, so it runs on a thread,
  * never in the HTTP loop, and the stock range applies until the result is known. A
@@ -42,6 +41,8 @@ static int canvas_unload_restart_requested;
  * program again just before it writes. No printer process, two of them, or any read
  * error keeps 350. */
 static const char *canvas_unload_extended_sha256 = "15ea20771b1424560bfa0c6e4170993e1ce20001b90715d2b00f57dfcb0ea1bc";
+static const char canvas_unload_extended_stock13_sha256[] =
+    "768a9e8c307d2398dc486be3a3ca8dfa6e9265677627d133f03b6914a1a34e59";
 static const char *canvas_unload_program = NULL; /* tests: this file instead of the running printer */
 static void (*canvas_unload_after_hash)(void) = NULL; /* tests: runs between hashing and storing the result */
 static pthread_mutex_t canvas_unload_check_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -143,7 +144,9 @@ static int canvas_unload_hash_program(const canvas_unload_program_id *id, char d
 static void *canvas_unload_check_worker(void *arg) {
     canvas_unload_program_id *job = arg, now;
     char digest[65];
-    int ok = canvas_unload_hash_program(job, digest) && !strcmp(digest, canvas_unload_extended_sha256);
+    int ok = canvas_unload_hash_program(job, digest) &&
+        (!strcmp(digest, canvas_unload_extended_sha256) ||
+         !strcmp(digest, canvas_unload_extended_stock13_sha256));
     if (canvas_unload_after_hash) canvas_unload_after_hash();
     /* Still the same process and file now that the result is known. */
     int current = canvas_unload_find_program(&now) && !strcmp(now.identity, job->identity);

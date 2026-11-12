@@ -5,6 +5,18 @@
 #ifndef CC2_CAVITY_TEST
 #include "../../cc2-control/src/sha256.h"
 #endif
+#ifdef CC2_NATIVE_STOCK13
+#include "../firmware-port/native_profile13.h"
+#define CAVITY_NATIVE_SHA256 CC2_NATIVE13_SHA256
+#define CAVITY_STATE_ADDRESS CC2_NATIVE13_EXHAUST_STATE
+#define CAVITY_CHOICE_ADDRESS CC2_NATIVE13_EXHAUST_CHOICE
+#else
+#define CAVITY_NATIVE_SHA256 "19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745"
+#define CAVITY_STATE_ADDRESS 0x6328b4
+#define CAVITY_CHOICE_ADDRESS 0x6340c4
+#endif
+#define CAVITY_ASM_STRING(value) CAVITY_ASM_LITERAL(value)
+#define CAVITY_ASM_LITERAL(value) #value
 
 typedef void (*cavity_state_fn)(void *,void *);
 static cavity_state_fn original_state;
@@ -105,7 +117,7 @@ __attribute__((naked)) void cc2_cavity_choice(void) {
         "ldr r3,[fp,#-0x60]\n"
         "vldr d6,[r3,#0xc8]\n"
         "ldr pc,[pc,#-4]\n"
-        ".word 0x6340cc\n");
+        ".word " CAVITY_ASM_STRING(CAVITY_CHOICE_ADDRESS) " + 8\n");
 }
 #endif
 
@@ -113,8 +125,8 @@ __attribute__((naked)) void cc2_cavity_choice(void) {
 _Static_assert(sizeof(void *)==4,"Qualified ARM32 ABI only");
 struct cavity_patch {uintptr_t address;unsigned char bytes[8];uintptr_t destination;};
 static struct cavity_patch patches[2]={
-    {0x6328b4,{0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2},0},
-    {0x6340c4,{0x60,0x30,0x1b,0xe5,0x32,0x6b,0x93,0xed},0}
+    {CAVITY_STATE_ADDRESS,{0x10,0x48,0x2d,0xe9,0x08,0xb0,0x8d,0xe2},0},
+    {CAVITY_CHOICE_ADDRESS,{0x60,0x30,0x1b,0xe5,0x32,0x6b,0x93,0xed},0}
 };
 static void cavity_jump(void *address,uintptr_t destination) {
     uint32_t code[2]={0xe51ff004,(uint32_t)destination};
@@ -130,7 +142,7 @@ __attribute__((constructor)) static void cavity_activate(void) {
     int fd=open("/proc/self/exe",O_RDONLY|O_CLOEXEC);
     if(fd<0)return;
     int okay=sha256_fd(fd,digest);close(fd);
-    if(!okay||strcmp(digest,"19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745"))return;
+    if(!okay||strcmp(digest,CAVITY_NATIVE_SHA256))return;
     for(unsigned i=0;i<2;i++)
         if(memcmp((const void *)patches[i].address,patches[i].bytes,8))return;
     fd=open("/dev/urandom",O_RDONLY|O_CLOEXEC|O_NONBLOCK);

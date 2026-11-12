@@ -13,6 +13,15 @@ static volatile sig_atomic_t cv_cancelled, cv_recovering;
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <termios.h>
+/* The firmware toolchain predates the ARM EABI pidfd header definitions. */
+#if defined(__arm__) && defined(__ARM_EABI__)
+#ifndef SYS_pidfd_send_signal
+#define SYS_pidfd_send_signal 424
+#endif
+#ifndef SYS_pidfd_open
+#define SYS_pidfd_open 434
+#endif
+#endif
 #if defined(CV_COORDINATED) && defined(CV_NATIVE_RESTORE_GUARD)
 #define sc_now cv_milliseconds
 #define sc_cancelled cv_cancelled
@@ -353,13 +362,18 @@ int main(int argc,char **argv) {
         memcpy(ticket.magic,"CC2-CANVAS-R1\0\0\0",16);
         ticket.issued=cv_milliseconds();ticket.pid=ready.pid;ticket.nonce=ready.nonce;
         if(!boot_id(ticket.boot) || !ticket.issued || !record_ticket(base,&ticket,CV_TICKET_PREPARED))return fail("recovery_ticket_not_durable_no_process_stopped");
-#ifdef CV_COORDINATED
-        if(!cv_coord_begin(install,ticket.boot))return fail("lifecycle_transfer_intent_not_durable_no_process_stopped");
-#endif
         int pidfd=(int)syscall(SYS_pidfd_open,(pid_t)ready.pid,0);
         if(pidfd<0)return fail("pidfd_unavailable_no_process_stopped");
         if(!load_ready(&second) || memcmp(&ready,&second,sizeof(ready)) || !native_matches(&ready) ||
            !no_capture_active() || cv_cancelled){close(pidfd);return fail("native_changed_no_process_stopped");}
+#ifdef CV_COORDINATED
+        if(syscall(SYS_pidfd_send_signal,pidfd,0,NULL,0)){
+            close(pidfd);return fail("pidfd_signal_unavailable_no_process_stopped");
+        }
+        if(!cv_coord_begin(install,ticket.boot)){
+            close(pidfd);return fail("lifecycle_transfer_intent_not_durable_no_process_stopped");
+        }
+#endif
         fflush(stdout);
         if(syscall(SYS_pidfd_send_signal,pidfd,SIGTERM,NULL,0)){close(pidfd);return fail("native_stop_failed");}
         int stopped=cv_wait(pidfd,POLLIN,cv_milliseconds()+15000);close(pidfd);

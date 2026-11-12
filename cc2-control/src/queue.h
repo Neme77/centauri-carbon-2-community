@@ -233,7 +233,7 @@ static int queue_load_item(const char *obj, const char *end, void *context) {
         if (!spools_raw_member(obj, end, "request_uuid", item->request_uuid, sizeof(item->request_uuid))) return 0;
         for (const char *p = item->request_uuid; *p; ++p) if ((unsigned char)*p < 32 || *p == 127) return 0;
     }
-    if (!strcmp(item->state, "done") != (item->done >= item->copies)) {
+    if ((strcmp(item->state, "done") == 0) != (item->done >= item->copies)) {
         /* Keep the counts, let the state follow them. */
         snprintf(item->state, sizeof(item->state), "%s", item->done >= item->copies ? "done" : "pending");
     }

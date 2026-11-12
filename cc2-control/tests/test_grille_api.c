@@ -35,9 +35,16 @@ int main(void){
     assert(action(&m,"grille:close")==202&&!strcmp(sent,"EXHAUST_GRILLE_CLOSE"));
     native_state("complete",0,0);m.print_enabled=1;
     assert(action(&m,"grille:open")==202); /* Retained completed-print flag is not active ownership. */
+    /* Real report: MQTT Idle + print.enabled retained + native cancelled. */
+    native_state("cancelled",0,0);
+    assert(action(&m,"grille:open")==202&&!strcmp(sent,"EXHAUST_GRILLE_OPEN"));
+    assert(action(&m,"grille:close")==202&&!strcmp(sent,"EXHAUST_GRILLE_CLOSE"));
+    m.machine_status=2;assert(action(&m,"grille:open")==409&&!sent[0]);m.machine_status=1;
+    native_state("cancelled",180,0);assert(action(&m,"grille:open")==409&&!sent[0]);
+    native_state("cancelled",0,50);assert(action(&m,"grille:close")==409&&!sent[0]);
     const char *bad[]={"grille:toggle","grille:open junk","grille:close\nM112","grille:"};
     for(size_t i=0;i<sizeof(bad)/sizeof(bad[0]);i++)assert(action(&m,bad[i])==409&&!sent[0]);
-    const char *busy[]={"printing","paused","error","cancelled"};
+    const char *busy[]={"printing","paused","error","","unknown"};
     for(size_t i=0;i<sizeof(busy)/sizeof(busy[0]);i++){
         native_state(busy[i],0,0);assert(action(&m,"grille:open")==409&&!sent[0]);
     }

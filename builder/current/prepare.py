@@ -13,8 +13,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 COMPONENT = ROOT / 'components/cc2-control'
 SOURCE = COMPONENT / 'source/source.zip'
-SOURCE_COMMIT='dafcb57d0f394b6a9528df540639809fb3afc2ae'
-SOURCE_SHA256='f294de9af21ff92a76696eb52ce45ff2fb5e12bed1354f83e780f53ad4d0d665'
+SOURCE_COMMIT='b061f032df0454e15253c98c8cf72774657544ab'
+SOURCE_SHA256='0802af929a62282c4000a7fc5f363a3a5404d9717bddb7db15311cb4d006e7b9'
 RUNTIME = COMPONENT / 'runtime'
 OUTPUT = COMPONENT / 'prepared'
 MANIFEST = COMPONENT / 'prepared-manifest.json'
@@ -31,14 +31,14 @@ def sha256(path):
 
 UPDATE_FILES = ('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
 
-def validate_arm_elf(path, require_version=True):
+def validate_arm_elf(path, require_version=True, version=VERSION):
     data = path.read_bytes()[:64]
     if len(data) < 20 or data[:4] != b'\x7fELF' or data[4] != 1 or data[5] != 1:
         raise RuntimeError('CC2 Control output is not a 32-bit little-endian ELF')
     if struct.unpack_from('<H', data, 18)[0] != 40:
         raise RuntimeError('CC2 Control output is not an ARM executable')
-    if require_version and VERSION.encode() not in path.read_bytes():
-        raise RuntimeError(f'CC2 Control binary does not identify version {VERSION}')
+    if require_version and version.encode() not in path.read_bytes():
+        raise RuntimeError(f'CC2 Control binary does not identify version {version}')
 
 def copy_shell_lf(source, destination):
     data = source.read_bytes()

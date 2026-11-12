@@ -97,6 +97,63 @@ def audit(root):
             raise RuntimeError('Native display firmware audit failed: ' + name)
 
 
+def apply_palette13(gui):
+    plan_bytes = (SOURCE / 'palette13-plan.json').read_bytes()
+    if sha(plan_bytes) != 'c638bfa0d576a0ae61ffd8b7f8e0947054ee1072061254a105719b2d985b8e88':
+        raise RuntimeError('Unexpected .13 palette plan')
+    plan = json.loads(plan_bytes)
+    if sha(gui) != plan['base_sha256']:
+        raise RuntimeError('Unexpected .13 Z-offset GUI for palette')
+    output = bytearray(gui)
+    previous_end = 0
+    for entry in plan['changes']:
+        start, length = entry['offset'], entry['length']
+        end = start + length
+        data = bytes.fromhex(entry['data'])
+        if (start < previous_end or end > len(output) or len(data) != length
+                or sha(output[start:end]) != entry['before_sha256']):
+            raise RuntimeError('Unexpected .13 palette instruction span')
+        output[start:end] = data
+        previous_end = end
+    if sha(output) != plan['output_sha256']:
+        raise RuntimeError('Unexpected .13 palette output')
+    return bytes(output)
+
+
+def audit_images(root):
+    root = Path(root)
+    for name, (_, after) in pins().items():
+        if name.startswith('images/') and not output_matches(
+                name, target(root, name).read_bytes(), after):
+            raise RuntimeError('Native display firmware audit failed: ' + name)
+
+
+def install_images(root):
+    """Install the reviewed PNG set independently of the GUI ELF port."""
+    root = Path(root)
+    expected = {name: digests for name, digests in pins().items()
+                if name.startswith('images/')}
+    for name, (before, _) in expected.items():
+        if sha(target(root, name).read_bytes()) != before:
+            raise RuntimeError('Unsupported native display firmware baseline: ' + name)
+    sys.path.insert(0, str(SOURCE))
+    try:
+        from package import build_images
+        changes = build_images(root / 'opt/inst/images/theme_default')
+    finally:
+        sys.path.pop(0)
+    if set(changes) != set(expected) - set(PRESERVED):
+        raise RuntimeError('Incomplete generated native display component')
+    for name, data in changes.items():
+        if not output_matches(name, data, expected[name][1]):
+            raise RuntimeError('Generated native display identity differs: ' + name)
+    for name, data in changes.items():
+        path = target(root, name)
+        path.write_bytes(data)
+        path.chmod(0o644)
+    audit_images(root)
+
+
 def install(root):
     root = Path(root)
     expected = pins()

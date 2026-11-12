@@ -14,10 +14,13 @@
 #define CC2_RFID_READY "/tmp/cc2-rfid-native-r2/ready"
 #endif
 #include "rfid_runtime.h"
+#ifndef CC2_RFID_NATIVE_SCAN
+#define CC2_RFID_NATIVE_SCAN 0
+#endif
 typedef struct {uint64_t epoch;uint32_t pid;} rfid_identity;
 static struct {
     pid_t child;int fd,valid,cancelled,cancel_sent,native_child;unsigned generation;
-    double deadline,expires;size_t used;char output[12288];
+    double deadline,expires,next_native_check;size_t used;char output[12288];
     const char *state;char error[96];rfid_identity identity;rfid_preview preview;
 } rfid={.fd=-1,.state="idle"};
 static double rfid_now(void){struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);return now.tv_sec+now.tv_nsec/1e9;}
@@ -43,7 +46,19 @@ static int rfid_printer_idle_limit(const mqtt_client *mqtt,console_state *consol
 }
 static int rfid_idle_limit(const mqtt_client *mqtt,console_state *console,time_t age_limit){return rfid_runtime_allowed(0)&&rfid_printer_idle_limit(mqtt,console,age_limit);}
 static int rfid_idle(const mqtt_client *mqtt,console_state *console){return rfid_idle_limit(mqtt,console,5);}
+static int rfid_native_scan(void){return CC2_RFID_NATIVE_SCAN&&rfid_runtime_get(0).mode==1;}
+static int rfid_native_scan_available(console_state *console){
+    pthread_mutex_lock(&console->lock);int busy=console->busy;pthread_mutex_unlock(&console->lock);
+    return !busy&&rfid_runtime_allowed(0)&&runout.x.fd<0&&!plates_late_active()&&
+        !app_update_active()&&!connections_busy()&&!plates_background_active()&&!cell_active()&&
+        !tools.busy&&!drying_active()&&!nx_active()&&!pending_autosave_guard()&&
+        !recovery_available()&&!reboot_pending;
+}
+static int rfid_scan_ready(const mqtt_client *mqtt,console_state *console){
+    return rfid_native_scan()?rfid_native_scan_available(console):rfid_idle(mqtt,console);
+}
 static const char *rfid_blocked_reason(const mqtt_client *mqtt,console_state *console){
+    if(rfid_native_scan())return rfid_native_scan_available(console)?"native_not_ready":"printer_not_ready";
     double value;
     if(uds_value(&telemetry,U_ET,&value)&&value>=50)return "nozzle_hot";
     if(uds_value(&telemetry,U_BT,&value)&&value>=40)return "bed_hot";
@@ -82,11 +97,18 @@ static int rfid_read_output(void){
     return 1;
 }
 static void rfid_tick(mqtt_client *mqtt,console_state *console){
-    /* Start/apply retain the exact five-second MQTT gate. During a read-only
-     * capture, fresh native UDS state (five seconds) also proves idle/heaters
-     * off; retain the app's existing 15-second MQTT allowance rather than
-     * treating a routine sixth second as a changed physical state. */
-    if((rfid.child||rfid.valid)&&(!rfid_idle_limit(mqtt,console,15)||!rfid_same_identity()))rfid_cancel("state_changed");
+    if(rfid.child||rfid.valid){
+        int safe=rfid_same_identity();
+        if(safe&&rfid_native_scan()){
+            safe=rfid_native_scan_available(console);
+            if(safe&&rfid.child&&!rfid.cancelled&&strstr(rfid.output,"SCAN ARMED:")&&
+               rfid_now()>=rfid.next_native_check){
+                safe=installer_native_observation(0,1)==0;
+                rfid.next_native_check=rfid_now()+1;
+            }
+        }else if(safe)safe=rfid_idle_limit(mqtt,console,15);
+        if(!safe)rfid_cancel("state_changed");
+    }
     if(rfid.valid&&rfid_now()>rfid.expires)rfid_cancel("expired");
     if(!rfid.child)return;
     for(unsigned count=0;count<4;count++){
@@ -128,6 +150,9 @@ static void rfid_tick(mqtt_client *mqtt,console_state *console){
             if(n&&n<sizeof(rfid.error)){memcpy(rfid.error,stop,n);rfid.error[n]=0;}}
         return;
     }
+    if(rfid_native_scan()&&installer_native_observation(0,1)!=0){
+        rfid_cancel("state_changed");return;
+    }
     unsigned results=0;rfid_preview preview={0};
     char *line=rfid.output;
     while(*line){char *end=strchr(line,'\n');if(end)*end=0;
@@ -147,7 +172,7 @@ static void rfid_status_response(int fd,mqtt_client *mqtt,console_state *console
         snprintf(preview,sizeof(preview),"{\"uid\":\"%s\",\"brand\":\"Anycubic\",\"material\":\"%s\",\"sku\":\"%s\",\"color\":\"#%s\",\"diameter\":1.75,\"nozzle_min\":%u,\"nozzle_max\":%u,\"bed_min\":%u,\"bed_max\":%u,\"weight\":null,\"remaining\":null}",
             p->uid,p->material,p->sku,p->color,p->nozzle_min,p->nozzle_max,p->bed_min,p->bed_max);
     }
-    int ready=installed&&rfid_identity_read(&identity)&&rfid_idle(mqtt,console);
+    int ready=installed&&rfid_identity_read(&identity)&&rfid_scan_ready(mqtt,console);
     snprintf(body,sizeof(body),"{\"installed\":%s,\"ready\":%s,\"busy\":%s,\"armed\":%s,\"state\":\"%s\",\"reason\":\"%s\",\"error\":\"%s\",\"generation\":%u,\"preview\":%s}",
         installed?"true":"false",ready?"true":"false",rfid.child?"true":"false",
         rfid.child&&strstr(rfid.output,"SCAN ARMED:")?"true":"false",rfid.state,ready?"none":rfid_blocked_reason(mqtt,console),rfid.error,rfid.generation,preview);
@@ -157,7 +182,7 @@ static void rfid_action_response(int fd,mqtt_client *mqtt,console_state *console
     rfid_tick(mqtt,console);
     if(length==6&&!memcmp(body,"cancel",6)){rfid_cancel("cancelled");rfid_status_response(fd,mqtt,console);return;}
     if(length==4&&!memcmp(body,"scan",4)){
-        if(rfid.child||!rfid_idle(mqtt,console)||!rfid_identity_read(&rfid.identity)){plates_fail(fd,409,"RFID requires fresh idle/cold state and the qualified host component");return;}
+        if(rfid.child||!rfid_scan_ready(mqtt,console)||!rfid_identity_read(&rfid.identity)){plates_fail(fd,409,"RFID requires idle/cold state and the qualified host component");return;}
         char helper_path[512];int helper=rfid_helper_open(helper_path),pipes[2];struct rlimit limit;
         if(helper<0){plates_fail(fd,409,"Qualified RFID scan helper is not installed");return;}
         if(getrlimit(RLIMIT_NOFILE,&limit)||limit.rlim_cur>1048576||pipe2(pipes,O_CLOEXEC)){close(helper);plates_fail(fd,503,"Cannot prepare bounded RFID scan");return;}
@@ -174,7 +199,7 @@ static void rfid_action_response(int fd,mqtt_client *mqtt,console_state *console
         int flags=fcntl(pipes[0],F_GETFL,0);
         if(flags<0||fcntl(pipes[0],F_SETFL,flags|O_NONBLOCK)<0){kill(pid,SIGKILL);waitpid(pid,NULL,0);close(pipes[0]);plates_fail(fd,503,"Cannot observe RFID scan");return;}
         rfid.child=pid;rfid.fd=pipes[0];rfid.used=0;rfid.output[0]=0;rfid.error[0]=0;rfid.valid=0;rfid.cancelled=0;rfid.cancel_sent=0;
-        rfid.native_child=rfid_runtime_get(0).mode==1;rfid.generation++;rfid.state="scanning";rfid.deadline=rfid_now()+(rfid.native_child?150:90);
+        rfid.next_native_check=0;rfid.native_child=rfid_runtime_get(0).mode==1;rfid.generation++;rfid.state="scanning";rfid.deadline=rfid_now()+(rfid.native_child?150:90);
         rfid_status_response(fd,mqtt,console);return;
     }
     unsigned generation;int slot,end=-1;char input[48];

@@ -13,12 +13,8 @@ from png_palette import recolor
 HERE = Path(__file__).resolve().parent
 
 
-def build(native, stock_images, baseline="clean"):
-    files = {"gui/ec-eeb001-gui": apply(native)}
-    pins = {}
-    for line in (HERE / "baseline-pins.txt").read_text().splitlines():
-        old, _new, name = line.split()
-        pins[name] = old
+def build_images(stock_images):
+    files = {}
     owned = json.loads((HERE / "assets/manifest.json").read_text())["assets"]
     for entry in owned:
         data = (HERE / "assets/png" / entry["name"]).read_bytes()
@@ -30,6 +26,15 @@ def build(native, stock_images, baseline="clean"):
         if Path(name).name != name:
             raise ValueError("Invalid resource name")
         files["images/" + name] = recolor((stock_images / name).read_bytes(), entry)
+    return files
+
+
+def build(native, stock_images, baseline="clean"):
+    files = {"gui/ec-eeb001-gui": apply(native), **build_images(stock_images)}
+    pins = {}
+    for line in (HERE / "baseline-pins.txt").read_text().splitlines():
+        old, _new, name = line.split()
+        pins[name] = old
     if set(files) != set(pins):
         raise ValueError("Resource set differs from the qualified allow-list")
     if baseline in ("r4", "reflash-r4"):

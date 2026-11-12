@@ -758,9 +758,10 @@ received, then `{event_id, sequence, code, level, message, age}`. This is the la
 event, not an assertion that a fault is still active. `age` is monotonic seconds.
 It survives UDS disconnects but resets when CC2 Control restarts. `message` is
 native text or null if missing, invalid or longer than 1023 encoded JSON bytes.
-The UI renders text, never HTML. Only WARNING and CRITICAL produce an alert;
-RESUME reports remain available in the API. The browser remembers the last shown
-event across reloads. Consecutive identical native reports retain their event ID;
+The same response includes `printer_alert`, the latest WARNING or CRITICAL
+report in the same format. Informational and RESUME events still update
+`printer_report` and leave `printer_alert` intact. The UI renders alert text and
+remembers explicit dismissal across reloads. Consecutive identical native reports retain their event ID;
 a warning following a RESUME is a new event, even with the same error code.
 The vendor stream does not provide an authoritative occurrence ID, so repeated
 identical warnings without an intervening transition cannot be distinguished.

@@ -8,7 +8,7 @@ export const Card = ({
   children,
   ...p
 }: { class?: string; children?: ComponentChildren } & preact.JSX.HTMLAttributes<HTMLElement>) => (
-  <section class={cn('min-w-0 rounded-lg border border-edge bg-panel p-3.5 [corner-shape:bevel]', c)} {...p}>
+  <section class={cn('min-w-0 rounded-xl border border-edge bg-panel p-4', c)} {...p}>
     {children}
   </section>
 )
@@ -26,8 +26,12 @@ export const CardHead = ({
   sub?: Key
   values?: Record<string, string | number>
 }) => (
-  <div class="mb-3 flex min-h-7 items-center gap-2.5 border-b border-edge pb-2.5">
-    {icon && <Icon n={icon} class="text-cyan" />}
+  <div class="cc2-card-head mb-3 flex min-h-7 items-center gap-2.5 border-b border-edge pb-2.5">
+    {icon && (
+      <span class="cc2-card-chip">
+        <Icon n={icon} class="size-4" />
+      </span>
+    )}
     <div class="min-w-0">
       <h2 class="text-base font-semibold">{values ? tpl(title, values) : t(title)}</h2>
       {sub && <small class="text-muted">{t(sub)}</small>}
@@ -50,7 +54,7 @@ export const Page = ({
   <>
     <div class="mb-4 flex min-w-0 flex-col gap-3 cc2-sm:flex-row cc2-sm:items-start cc2-sm:justify-between">
       <div class="min-w-0">
-        <h2 class="text-2xl font-semibold [overflow-wrap:anywhere]">{t(title)}</h2>
+        <h2 class="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">{t(title)}</h2>
         {sub && <p class="text-muted [overflow-wrap:anywhere]">{t(sub)}</p>}
       </div>
       {tags !== undefined && <div class="flex min-w-0 flex-wrap items-center gap-2 cc2-sm:justify-end">{tags}</div>}

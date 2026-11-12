@@ -19,6 +19,9 @@
 #ifndef SC_PREFIX
 #define SC_PREFIX ""
 #endif
+#ifndef SC_APP_PATH
+#define SC_APP_PATH SC_PREFIX "/opt/usr/cc2-control/cc2-control"
+#endif
 #ifndef SC_PROFILE_SHA
 #define SC_PROFILE_SHA "UNCONFIGURED"
 #endif
@@ -38,6 +41,12 @@
  * to require its existing RFID guard; the stock build never accepts it. */
 #ifndef SC_STOCK_BOOTSTRAP
 #define SC_STOCK_BOOTSTRAP 0
+#endif
+#ifndef SC_IMMUTABLE_BOOT
+#define SC_IMMUTABLE_BOOT 0
+#endif
+#if SC_IMMUTABLE_BOOT && !SC_STOCK_BOOTSTRAP
+#error Immutable boot requires the dormant stock baseline
 #endif
 #ifndef SC_WITH_CAVITY
 #define SC_WITH_CAVITY 1
@@ -206,7 +215,8 @@ static int sc_native_profile_mode(struct sc_ready *ready,int strict,int initial)
         ready->nonce=sc_process_start(pid);if(!ready->nonce)return 0;
     }else if(ready->pid!=(uint32_t)pid)return 0;
     const char *paths[]={SC_PREFIX "/opt/usr/cc2-reactor-runtime-v2/libcc2-reactor-v2.so",
-        SC_PREFIX "/opt/usr/cc2-cavity-floor/libcc2-cavity-floor-r1.so",
+        SC_IMMUTABLE_BOOT ? SC_PREFIX "/opt/inst/cc2-printer-extensions13/libcc2-cavity-floor-r1.so" :
+            SC_PREFIX "/opt/usr/cc2-cavity-floor/libcc2-cavity-floor-r1.so",
         SC_PREFIX "/opt/usr/cc2-network-manager/libcc2-network-compat-r1.so",
         strict?SC_BASE "/libcc2-rfid.so":SC_PREFIX "/opt/usr/cc2-rfid-frame-fix-r1/libcc2-rfid-native-r2.so"};
     const char *digests[]={SC_REACTOR_SHA,SC_CAVITY_SHA,SC_NETWORK_SHA,strict?SC_STRICT_SHA:SC_OLD_RFID_SHA};
@@ -216,7 +226,8 @@ static int sc_native_profile_mode(struct sc_ready *ready,int strict,int initial)
         char *p=strchr(line,'/');if(!p||!strstr(p,"libcc2-"))continue;
         p[strcspn(p,"\r\n")]=0;unsigned index=4;
         for(unsigned i=0;i<4;i++)if(!strcmp(paths[i],p))index=i;
-        if(index==4||(!SC_WITH_CAVITY&&index==1)||(stock&&index==3)||!sc_hash(paths[index],digests[index])){okay=0;break;}
+        if(index==4||(!SC_WITH_CAVITY&&index==1)||(stock&&index==3)||
+           (!(seen&(1u<<index))&&!sc_hash(paths[index],digests[index]))){okay=0;break;}
         seen|=1u<<index;
     }
     if(ferror(maps))okay=0;
@@ -231,10 +242,10 @@ static int sc_native_profile_mode(struct sc_ready *ready,int strict,int initial)
 }
 static int sc_native_profile(struct sc_ready *ready,int strict){return sc_native_profile_mode(ready,strict,0);}
 static int sc_native(struct sc_ready *ready){return SC_CAVITY_BOOTSTRAP_OPTIONAL?sc_native_profile_mode(ready,0,1):sc_native_profile(ready,0);}
-static int sc_fresh(void){
-    if(sc_cancelled||!sc_hash(SC_FRESH_PATH,SC_FRESH_SHA))return 0;
+static int sc_guard_command(const char *path,const char *digest,const char *action){
+    if(sc_cancelled||!sc_hash(path,digest))return 0;
     pid_t child=fork();if(child<0)return 0;
-    if(!child){if(setsid()<0)_exit(126);execl(SC_FRESH_PATH,SC_FRESH_PATH,"--check",(char*)NULL);_exit(127);}
+    if(!child){if(setsid()<0)_exit(126);execl(path,path,action,(char*)NULL);_exit(127);}
     uint64_t now=sc_now(),deadline=now+SC_GUARD_TIMEOUT_MS;int status=0;
     for(;;){
         pid_t result=waitpid(child,&status,WNOHANG);
@@ -248,6 +259,15 @@ static int sc_fresh(void){
         struct timespec pause={0,20000000};nanosleep(&pause,NULL);
     }
 }
+static int sc_fresh(void){
+    if(SC_IMMUTABLE_BOOT)
+        return sc_guard_command(SC_APP_PATH,SC_APP_SHA,"--installer-native-idle");
+    return sc_guard_command(SC_FRESH_PATH,SC_FRESH_SHA,"--check");
+}
+static int sc_initial_canvas(void){
+    return !SC_IMMUTABLE_BOOT||
+        sc_guard_command(SC_APP_PATH,SC_APP_SHA,"--installer-native-canvas");
+}
 static int sc_backup(struct cl_store *store,int write_it){
     int fd=open(SC_ORIGINAL,O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);if(fd<0)return 0;
     struct stat st;unsigned char *stock=malloc(AP_SIZE);int okay=stock&&!fstat(fd,&st)&&S_ISREG(st.st_mode)&&st.st_uid==0&&st.st_nlink==1&&st.st_size==AP_SIZE&&
@@ -255,11 +275,20 @@ static int sc_backup(struct cl_store *store,int write_it){
     if(okay&&write_it)okay=tx_save(store->directory,"original-stock-44.bin",stock,AP_SIZE,AP_STOCK_SHA);
     free(stock);return okay;
 }
+static int sc_publish_marker(struct cl_store *store){
+    static const unsigned char bytes[]="CC2-RFID-NATIVE-R2\n";
+    char digest[65];sha256_state hash;
+    sha256_init(&hash);sha256_update(&hash,bytes,sizeof(bytes)-1);sha256_hex(&hash,digest);
+    return tx_save(store->directory,"enabled",bytes,sizeof(bytes)-1,digest);
+}
 int main(int argc,char **argv){
     int stage=argc==2&&!strcmp(argv[1],"--stage-host");
     if(!stage&&(argc!=2||strcmp(argv[1],"--check"))){fprintf(stderr,"STOP: unsupported_host_stage_action\n");return 1;}
-    if(strlen(SC_PROFILE_SHA)!=64||strlen(SC_APP_SHA)!=64||strlen(SC_FRESH_SHA)!=64||
-       !tx_hex(SC_PROFILE_SHA)||!tx_hex(SC_APP_SHA)||!tx_hex(SC_FRESH_SHA)){fprintf(stderr,"STOP: host_stage_unconfigured\n");return 1;}
+    if(strlen(SC_PROFILE_SHA)!=64||strlen(SC_APP_SHA)!=64||
+       !tx_hex(SC_PROFILE_SHA)||!tx_hex(SC_APP_SHA)||
+       (!SC_IMMUTABLE_BOOT&&(strlen(SC_FRESH_SHA)!=64||!tx_hex(SC_FRESH_SHA)))){
+        fprintf(stderr,"STOP: host_stage_unconfigured\n");return 1;
+    }
     if(geteuid()!=0||(getenv("LD_PRELOAD")&&*getenv("LD_PRELOAD")))return 1;
     signal(SIGINT,sc_signal);signal(SIGTERM,sc_signal);signal(SIGHUP,sc_signal);signal(SIGPIPE,SIG_IGN);umask(077);
     struct maintenance_barrier barrier=MAINTENANCE_BARRIER_INIT;
@@ -270,21 +299,23 @@ int main(int argc,char **argv){
     const char *phase="profile_and_live_preflight";
     struct statfs fs;pid_t app=0;struct sc_ready first={0},last={0};
     okay=okay&&!fstatfs(store.directory,&fs)&&(unsigned long)fs.f_type!=0x01021994ul&&(unsigned long)fs.f_type!=0x858458f6ul&&
-        cl_profile(&store,&expected)&&sc_read_plan(&store,files)&&sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
-        sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&app)&&sc_native(&first)&&sc_fresh()&&sc_backup(&store,0);
+        cl_profile(&store,&expected)&&(SC_IMMUTABLE_BOOT||sc_read_plan(&store,files))&&
+        sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
+        sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&app)&&
+        sc_native(&first)&&sc_initial_canvas()&&sc_fresh()&&sc_backup(&store,0);
     struct cl_record record={0};int have_journal=0;
     if(okay){
         phase="journal_and_target_preflight";
         struct stat st;int exists=fstatat(store.directory,"lifecycle",&st,AT_SYMLINK_NOFOLLOW)==0;
         if(!exists&&errno!=ENOENT)okay=0;
         if(exists){have_journal=cl_store_read(&store,&record);okay=have_journal&&(record.phase==CL_HOST_STAGED||record.phase==CL_DISABLED)&&!memcmp(record.plan,expected.plan,32);}
-        for(unsigned i=0;okay&&i<8;i++){int state=tx_current(files+i);if(state<0||((!have_journal||record.phase==CL_DISABLED)&&state!=0))okay=0;}
+        for(unsigned i=0;!SC_IMMUTABLE_BOOT&&okay&&i<8;i++){int state=tx_current(files+i);if(state<0||((!have_journal||record.phase==CL_DISABLED)&&state!=0))okay=0;}
     }
     if(okay&&stage){
         phase="durable_backup_and_second_live_guard";
         pid_t last_app=0;
-        okay=sc_backup(&store,1)&&sc_fresh()&&sc_native(&last)&&
-            sc_one_process("cc2-control",SC_PREFIX "/opt/usr/cc2-control/cc2-control",SC_APP_SHA,&last_app)&&
+        okay=sc_backup(&store,1)&&sc_initial_canvas()&&sc_fresh()&&sc_native(&last)&&
+            sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&last_app)&&
             app==last_app&&first.pid==last.pid&&first.nonce==last.nonce&&!sc_cancelled;
         if(okay&&!have_journal){
             phase="host_staged_journal_commit";
@@ -307,13 +338,16 @@ int main(int argc,char **argv){
                 else{record.generation++;memcpy(record.boot,current,37);okay=cl_store_commit(&store,&record,previous);}
             }
         }
-        if(okay){phase="startup_file_transaction";okay=tx_prepare(&store,files,8)&&!sc_cancelled&&tx_run(&store,files,8,0);}
+        if(okay&&SC_IMMUTABLE_BOOT){phase="guard_marker_publication";okay=!sc_cancelled&&sc_publish_marker(&store);}
+        else if(okay){phase="startup_file_transaction";okay=tx_prepare(&store,files,8)&&!sc_cancelled&&tx_run(&store,files,8,0);}
     }
     for(unsigned i=0;i<8;i++)free((void*)files[i].bytes);
     cl_store_close(&store);
     if(!maintenance_barrier_release(&barrier)){okay=0;phase="operation_lock_release";}
     if(!okay){fprintf(stderr,"STOP: qualified_host_stage_failed phase=%s; retain component backup and journal\n",phase);return 1;}
-    puts(stage?"HOST STAGED: original backup and HOST_STAGED intent durable; eight targets committed. Full idle-printer reboot required; no process stopped or Canvas write performed.":
+    puts(stage?(SC_IMMUTABLE_BOOT?
+        "HOST STAGED: original backup, intent and guard marker durable. Full idle-printer reboot required.":
+        "HOST STAGED: original backup and HOST_STAGED intent durable; eight targets committed. Full idle-printer reboot required; no process stopped or Canvas write performed."):
         "HOST STAGE CHECK PASS: exact profile, running barrier-capable app/native, fresh idle/cold and original image verified; no startup target changed.");
     return 0;
 }

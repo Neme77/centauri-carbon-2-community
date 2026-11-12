@@ -10,7 +10,7 @@ export const grilleAllowed = (link: { ok: boolean; data: any }) => {
       d.last_message_age >= 0 &&
       d.last_message_age <= 15 &&
       d.machine?.status === 1 &&
-      (native === 'standby' || native === 'complete') &&
+      (native === 'standby' || native === 'complete' || native === 'cancelled') &&
       d.extruder?.target === 0 &&
       d.heater_bed?.target === 0 &&
       !d.bed_drying?.active

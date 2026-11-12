@@ -106,7 +106,8 @@ static void cell_reply(const char *command,const char *report){
 }
 static void cell_cases(void){
     cell_journal_path="cell-session";canvas_unload_program="native-program";put(canvas_unload_program,"fixture");
-    native("standby");
+    /* The full tare/calibrate/save wizard also works after a cancelled print. */
+    native("cancelled");
     const char temps[]="{\"id\":11,\"result\":{\"eventtime\":1,\"status\":{\"extruder\":{\"temperature\":24,\"target\":0},\"heater_bed\":{\"temperature\":22,\"target\":0}}}}";
     assert(uds_message(&telemetry,temps,strlen(temps)));
     plates_uds=cell_metadata;
@@ -191,6 +192,15 @@ int main(void){
     assert(!unlink(nx_pending_path));
     server=socket(AF_UNIX,SOCK_STREAM,0);assert(server>=0);struct sockaddr_un addr;memset(&addr,0,sizeof(addr));addr.sun_family=AF_UNIX;strcpy(addr.sun_path,"native.sock");assert(!bind(server,(struct sockaddr *)&addr,sizeof(addr))&&!listen(server,4));
     tools_config_read();assert(tools.editable&&tools.configured==28.8&&!tools.have_override);
+    /* Regression: real MQTT Idle + retained print.enabled + native cancelled.
+     * Read/apply below must work without a reboot, while busy states refuse. */
+    const char *active_states[]={"printing","paused","error","","unknown"};
+    for(size_t i=0;i<sizeof(active_states)/sizeof(active_states[0]);i++){
+        native(active_states[i]);assert(action("rotation:read")==409&&!tools.busy);
+    }
+    native("cancelled");model.machine_status=2;
+    assert(action("rotation:read")==409&&!tools.busy);model.machine_status=1;
+    assert(!tools_ready(&model));
     assert(action("rotation:read")==202);reply_rotation_label(28.8,"DISTANCE=0","extruder");assert(!tools.busy&&tools.valid&&tools.active==28.8);
     /* A real empty-label reading different from configuration must remain live
      * data; neither configured 28.8 nor a file write may stand in for it. */
@@ -206,13 +216,13 @@ int main(void){
     /* External native print ownership wins before the second stage sends. */
     assert(action("rotation:apply:29:28.8")==202);reply_rotation(29,"DISTANCE=0");assert(tools.busy);
     native("printing");tools_tick(&model);assert(!tools.busy);
-    int aborted=accept(server,NULL,NULL);assert(aborted>=0);char byte;assert(recv(aborted,&byte,1,0)==0);close(aborted);native("standby");
+    int aborted=accept(server,NULL,NULL);assert(aborted>=0);char byte;assert(recv(aborted,&byte,1,0)==0);close(aborted);native("cancelled");
     assert(action("rotation:save:27.36")==202);reply_rotation(27.36,"DISTANCE=0");assert(!tools.busy&&tools.valid&&rotation_pending()&&rotation_pending_intact());
     size_t length;char *saved=plates_read_file(printer_autosave_path,RD_CONFIG_MAX,&length);assert(saved);
     assert(strstr(saved,"rotation_distance = 27.3600000000")&&strstr(saved,"pid_Kp = 21.7")&&strstr(saved,"points = 0, 1, 2")&&strstr(saved,"z_offset = -0.5"));free(saved);
     assert(pending_autosave_guard()&&action("rotation:apply:27.36:28.8")==409);
     assert(action("rotation:restart")==202&&reboot_guard&&reboot_guard());
-    native("printing");assert(!reboot_guard());native("standby");assert(reboot_guard());reboot_pending=0;
+    native("printing");assert(!reboot_guard());native("cancelled");assert(reboot_guard());reboot_pending=0;
     put(printer_autosave_path,autosave);assert(rotation_pending()&&!rotation_pending_intact());assert(action("rotation:restart")==409);
     assert(action("rotation:save:27.36")==202);reply_rotation(27.36,"DISTANCE=0");assert(rotation_pending_intact());
     put(boot_id_path,"boot-two\n");assert(!rotation_pending());
