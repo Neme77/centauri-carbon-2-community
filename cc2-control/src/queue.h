@@ -27,6 +27,7 @@
 #define QUEUE_START_CAP_MS 1800000    /* a start request this old is given up whatever the printer does */
 #define QUEUE_FOREIGN_MS 5000         /* MQTT must name another file for this long before the start counts as lost */
 #define QUEUE_IDLE_GRACE_MS 60000     /* idle again without "complete": the copy ended otherwise */
+#define QUEUE_CHECK_MS 10000          /* how long a start waits for the Canvas report it asked for */
 
 /* A filament as a Canvas slot labels it: the material type ("PLA"), the product line ("PLA Matte") and the
  * colour as "#RRGGBB". A type or a name left empty is not stated. */
@@ -79,6 +80,10 @@ typedef struct {
     long long complete_ms;      /* when a queued copy was counted under the auto policy (0: none pending) */
     unsigned long complete_canvas; /* the Canvas reports received by then: the automatic start waits for a newer one */
     unsigned long learned_canvas;  /* the Canvas report the jobs last took their filaments from (queue_learn_filaments) */
+    /* Runtime only: the start that asked the Canvas for a report before taking its slots (queue_check_state). */
+    int check_id;
+    unsigned long check_canvas;    /* the Canvas reports received when it asked */
+    long long check_ms;            /* monotonic; when it asked */
     unsigned long revision;
 } queue_state;
 
@@ -732,10 +737,34 @@ static int queue_start_mapping(const queue_item *item, const spool_tray *trays, 
     return 0;
 }
 
+/* Every start fed from the Canvas, by the button or automatically, takes its slots from a Canvas report that
+ * arrived after the start was asked for: the report a page showed, or the last one before an automatic start,
+ * may be older than a spool just changed, and the printer does not always report a change by itself. So the
+ * start asks for a report (method 2005) and goes ahead on the printer's answer. It is needed for a job with
+ * tools while the printer is heard from and its Canvas has reported once; without such a report the start is
+ * judged as before (queue_start_mapping refuses what it cannot place). */
+static int queue_check_needed(const queue_item *item, const mqtt_client *mqtt) {
+    return item->tools && queue_mqtt_fresh(mqtt) && mqtt->registered && mqtt->canvas_discovery_complete;
+}
+
+/* 0: this start has not asked (another job asked, or it asked before `since`); 1: it asked and awaits the
+ * answer; 2: a report has arrived since it asked; 3: it asked and nothing arrived within QUEUE_CHECK_MS. */
+static int queue_check_state(const queue_item *item, const mqtt_client *mqtt, long long now, long long since) {
+    if (queue.check_id != item->id || queue.check_ms < since) return 0;
+    if (now - queue.check_ms > QUEUE_CHECK_MS) return 3;
+    return mqtt->canvas_revision != queue.check_canvas ? 2 : 1;
+}
+
+static void queue_check_ask(const queue_item *item, mqtt_client *mqtt, long long now) {
+    queue.check_id = item->id; queue.check_canvas = mqtt->canvas_revision; queue.check_ms = now;
+    mqtt->canvas_refresh_due = 1;
+}
+
 /* Starts one copy of `item` through the protected print path. Returns the HTTP status sent. The
  * running state is saved before the request goes out, so a restart right after it still knows. */
 static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item) {
     char body[PATH_MAX_LOCAL + 256], mapping[QUEUE_MAPPING_MAX], error[192];
+    queue.check_id = 0; /* the report it asked for is used now */
     spool_tray trays[4];
     int trays_known = queue_trays(mqtt, trays);
     if (queue_start_mapping(item, trays_known ? trays : NULL, mapping, sizeof(mapping), error, sizeof(error)) != 0) {
@@ -785,6 +814,16 @@ static void queue_start_response(int fd, mqtt_client *mqtt, const char *body, si
     const char *blocked = printer_change_blocked();
     if (blocked) { queue_fail(fd, 409, blocked); return; }
     if (plates_background_active()) { queue_fail(fd, 409, "Plate verification is still running"); return; }
+    if (queue_check_needed(item, mqtt)) {
+        long long now = monotonic_ms();
+        int check = queue_check_state(item, mqtt, now, now - QUEUE_CHECK_MS);
+        if (check != 2) {
+            if (check != 1) queue_check_ask(item, mqtt, now);
+            /* The page asks again shortly; the start goes out once the printer has answered. */
+            queue_reply(fd, 409, "{\"ok\":false,\"error\":\"Reading the Canvas slots before the start\",\"checking\":true}\n");
+            return;
+        }
+    }
     (void)queue_start_item(fd, mqtt, item);
 }
 
@@ -1104,11 +1143,20 @@ static void queue_tick(mqtt_client *mqtt) {
     /* Nobody may be showing the Canvas while the delay runs: keep its trays current for the check below. */
     if (waiting) mqtt->canvas_watch_until = time(NULL) + 15;
     if (waiting && now - queue.complete_ms >= (long long)queue.delay * 1000) {
-        queue.complete_ms = 0;
         queue_item *next = queue_next();
-        if (!next) return;
-        /* A job fed from the Canvas needs a report received after the copy before it: an older one checks nothing. */
-        int reported = !next->tools || mqtt->canvas_revision != queue.complete_canvas;
+        if (!next) { queue.complete_ms = 0; return; }
+        /* As for the button, a job fed from the Canvas takes its slots from a report asked for now: the delay
+         * goes on until the printer answers, and the copy is held when it does not answer in time. */
+        int check = 2;
+        if (queue_check_needed(next, mqtt)) {
+            check = queue_check_state(next, mqtt, now, queue.complete_ms + (long long)queue.delay * 1000);
+            if (check == 0) queue_check_ask(next, mqtt, now);
+            if (check <= 1) return;
+        }
+        queue.complete_ms = 0; queue.check_id = 0;
+        /* A job fed from the Canvas needs a report received after the copy before it, and after this start
+         * asked for one: an older report checks nothing. */
+        int reported = !next->tools || (check == 2 && mqtt->canvas_revision != queue.complete_canvas);
         if (!reported || !queue_material_verified(next, mqtt)) {
             /* The Queue page would show the warning; nobody is there to read it, so the copy waits for the button. */
             snprintf(next->last_result, sizeof(next->last_result), "auto_material");

@@ -292,6 +292,8 @@ export function previewPlugin(): Plugin {
   let queuePolicy = { after: 'wait' as 'wait' | 'auto', delay: 60, remove_done: true }
   let queueRevision = 0
   let queueArmedAt: number | null = null // when a copy completed under the auto policy
+  // The start that asked the Canvas for a report (/api/queue/start).
+  let queueCheck: { id: number; at: number } | null = null
   // `mapping`: the slots the job is added with ("tool:slot,...", '' for the external feed), unless `tools` says more.
   const queueJob = (
     id: number,
@@ -1181,6 +1183,16 @@ export function previewPlugin(): Plugin {
                 // or the scene leaving printing); nothing is counted at the start.
                 if (queueJobs.some(j => j.state === 'starting' || j.state === 'printing'))
                   return reply({ ok: false, error: 'A queued copy is already running' }, 409)
+                // As on the backend, a start fed from the Canvas first asks it for a report and goes on only
+                // once it has come (here 300 ms later): until then it is refused with `checking`.
+                if (queueFilaments(job).length) {
+                  const now = Date.now()
+                  if (!queueCheck || queueCheck.id !== job.id || now - queueCheck.at > 10000)
+                    queueCheck = { id: job.id, at: now }
+                  if (now - queueCheck.at < 300)
+                    return reply({ ok: false, error: 'Reading the Canvas slots before the start', checking: true }, 409)
+                  queueCheck = null
+                }
                 // A filament of the job that is in no slot refuses the start, as on the backend.
                 const missing = queueFilaments(job).find(f => f.use === null)
                 if (missing)

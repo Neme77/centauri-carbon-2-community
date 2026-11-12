@@ -1472,6 +1472,7 @@
   "queue.check_slot_empty": "Slot {n} vuoto e nessun altro slot contiene lo stesso filamento. Il lavoro non può partire",
   "queue.check_filament_absent": "Il filamento di questo lavoro non è in nessuno slot del Canvas. Caricalo in uno slot e imposta il filamento di quello slot, oppure assegna al lavoro un altro filamento. Il lavoro non può partire",
   "queue.check_canvas_unknown": "Il Canvas non ha comunicato il contenuto degli slot: il filamento di questo lavoro non si può trovare. Il lavoro non può partire",
+  "queue.canvas_check_failed": "Il Canvas non ha comunicato in tempo il contenuto degli slot, quindi il lavoro non è partito. Controlla il Canvas e avvialo di nuovo.",
   "queue.check_calibrate": "Lato {side}: calibrazione del piano prima della stampa",
   "queue.check_mesh_saved": "Lato {side}: mesh salvata",
   "queue.check_mesh_missing": "Lato {side}: nessuna mesh salvata, la copia partirà con una calibrazione",

@@ -1,5 +1,6 @@
 import { store } from './store'
 import { post, request } from './api'
+import { t } from './i18n'
 
 // The print queue: jobs prepared ahead (file, the print dialog's choices, copies). Every copy is a
 // protected print start on the backend; the browser only asks for it. See cc2-control/docs/API.md.
@@ -166,7 +167,22 @@ export const addToQueue = (a: QueueAdd) =>
 // for the ones bound to a filament by itself. The tools named in neither keep theirs.
 export const setQueuedFilaments = (id: number, mapping: string, filaments: ToolFilament[] = []) =>
   post('/api/queue/filament', [String(id), mapping, ...filamentLines(filaments)].join('\n'))
-export const startQueued = (id?: number) => post('/api/queue/start', id ? String(id) : '')
+// A start fed from the Canvas takes its slots from a Canvas report that the start itself asks for: the slots
+// on the page may be older than a spool just changed. Until the printer has answered, the backend says 409
+// with `checking`, and the start is asked for again, for up to CHECK_MS (one action, not a poll).
+const CHECK_MS = 12000
+export const startQueued = async (id?: number) => {
+  const until = Date.now() + CHECK_MS
+  for (;;) {
+    try {
+      return await post('/api/queue/start', id ? String(id) : '')
+    } catch (e: any) {
+      if (!(e?.status === 409 && e?.data?.checking)) throw e
+      if (Date.now() >= until) throw Error(t('queue.canvas_check_failed'))
+      await new Promise(done => setTimeout(done, 500))
+    }
+  }
+}
 export const removeQueued = (id: number) => post('/api/queue/remove', String(id))
 export const reorderQueued = (id: number, index: number) => post('/api/queue/reorder', `${id}\n${index}`)
 export const setQueuedCopies = (id: number, copies: number) => post('/api/queue/copies', `${id}\n${copies}`)

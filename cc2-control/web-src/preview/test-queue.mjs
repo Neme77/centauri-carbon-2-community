@@ -22,6 +22,11 @@ try {
     assert.equal(r.headers()['x-cc2-request'], '1', 'queue changes carry the mutation marker')
     posts.push([new URL(r.url()).pathname, r.postData() || ''])
   })
+  // What the backend answered to each start: a start fed from the Canvas is first refused with `checking`.
+  const startReplies = []
+  page.on('response', async r => {
+    if (new URL(r.url()).pathname === '/api/queue/start') startReplies.push([r.status(), Boolean((await r.json().catch(() => null))?.checking)])
+  })
   await page.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
   // The file's filaments and the saved meshes come from the printer; the preview answers for it here.
   await page.route('**/api/gcode-files/inspect', r => r.fulfill({ json: { tools: [0], filaments: [{ tool: 0, color: '#1a1a1a', material: 'PLA' }], bed_temperature: 60, nozzle_diameter: 0.4 } }))
@@ -46,11 +51,14 @@ try {
   assert.equal(await page.locator('[data-queue-count]').textContent(), '4', 'the menu counts the open jobs')
   await page.locator('[data-queue-totals]').getByText('4', { exact: true }).first().waitFor()
 
-  // Start: one POST, the toast names the copy; the copy then runs until the printer reports it finished,
-  // and nothing else can start meanwhile.
+  // Start: the backend first reads the Canvas slots, so the first request is refused with `checking` and the
+  // page asks again; the toast names the copy. The copy then runs until the printer reports it finished, and
+  // nothing else can start meanwhile.
   await hero.locator('[data-queue-start]').click()
   await page.getByText('Copy 3 of 5 requested: CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode', { exact: true }).waitFor()
   assert.deepEqual(lastPost(), ['/api/queue/start', '1'])
+  assert.deepEqual(posts.filter(p => p[0] === '/api/queue/start'), [['/api/queue/start', '1'], ['/api/queue/start', '1']], 'one start, asked twice')
+  assert.deepEqual(startReplies, [[409, true], [202, false]], 'the start waited for the Canvas report it asked for')
   const active = page.locator('[data-queue-hero="active"]')
   await active.waitFor()
   assert.equal(await active.locator('[data-queue-start]').isDisabled(), true, 'no start while a copy runs')

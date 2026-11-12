@@ -1462,6 +1462,7 @@
   "queue.check_slot_empty": "Yuva {n} boş ve başka hiçbir yuvada aynı filament yok. İş başlatılamıyor.",
   "queue.check_filament_absent": "Bu işin filamenti hiçbir Canvas yuvasında yok. Filamenti herhangi bir yuvaya takıp o yuvanın filamentini ayarlayın ya da işe başka bir filament verin. İş başlatılamıyor.",
   "queue.check_canvas_unknown": "Canvas yuvalarını bildirmedi, bu yüzden bu işin filamenti bulunamıyor. İş başlatılamıyor.",
+  "queue.canvas_check_failed": "Canvas yuvalarını zamanında bildirmedi, bu yüzden iş başlatılmadı. Canvas'ı kontrol edip işi yeniden başlatın.",
   "queue.check_calibrate": "Yüz {side}: baskıdan önce tabla kalibrasyonu",
   "queue.check_mesh_saved": "Yüz {side}: tabla ağı kayıtlı",
   "queue.check_mesh_missing": "Yüz {side}: kayıtlı tabla ağı yok, kopya kalibrasyonla başlar",

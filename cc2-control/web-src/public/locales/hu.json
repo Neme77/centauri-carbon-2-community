@@ -1462,6 +1462,7 @@
   "queue.check_slot_empty": "{n}. hely üres, és más hely sem tartalmazza ugyanazt a filamentet. A feladat nem indítható",
   "queue.check_filament_absent": "A feladat filamentje egyik Canvas-helyen sincs. Töltse be bármelyik helyre, és állítsa be annak filamentjét, vagy adjon a feladatnak másik filamentet. A feladat nem indítható",
   "queue.check_canvas_unknown": "A Canvas nem jelentette a helyeit, ezért a feladat filamentje nem található. A feladat nem indítható",
+  "queue.canvas_check_failed": "A Canvas nem jelentette időben a helyeit, ezért a feladat nem indult el. Ellenőrizze a Canvast, és indítsa újra.",
   "queue.check_calibrate": "Side {side}: bed calibration before the print",
   "queue.check_mesh_saved": "Side {side}: saved mesh",
   "queue.check_mesh_missing": "Side {side}: no saved mesh, the copy starts with a calibration",

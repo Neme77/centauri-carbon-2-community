@@ -842,6 +842,13 @@ unless the `auto` policy is chosen.
   job's filament cannot be found`); otherwise it answers exactly as `/api/gcode-files/print` would (202
   accepted, or its 4xx/5xx), with every tool mapped to the slot that holds its filament. The job is saved as
   `starting` before the request goes to the printer, so a restart in between still follows the copy.
+  A job fed from the Canvas takes its slots from a Canvas report that arrives after the start was asked for,
+  not from the one a page showed, which may be older than a spool just changed: while the printer is heard
+  from and its Canvas has reported once, the first request asks for a report (method 2005) and is answered
+  409 `{"ok":false,"error":"Reading the Canvas slots before the start","checking":true}`, and so is every
+  request for that job until the printer has answered; the request after the answer starts. A request more
+  than 10 s after the one that asked, with no answer, asks again. The UI asks again every 0.5 s for up to
+  12 s. The external feed starts at once.
 - `POST /api/queue/filament` gives tools of a job other filaments: `id`, then a mapping line and filament
   lines as in `/api/queue/add`. A tool named in the mapping takes the filament that slot is labelled with now
   (and that slot as the one it was added with); a tool named in a filament line takes that filament and no
@@ -881,8 +888,9 @@ the slot's type contains the file's material, or the file's material contains th
 differing or unknown slot, a filament of the job that is in no slot, or a file without `filament_type`,
 holds the copy
 as `auto_material` for the operator, who can review the warning and start it by hand. The check takes only a
-Canvas report received after the counted completion: the backend asks for one (method 2005) at the
-completion and keeps the Canvas watched while the delay runs; when none arrives the copy is held the same
+Canvas report received after the counted completion and after the delay ran out: the backend asks for one
+(method 2005) at the completion and again when the delay has run out, keeps the Canvas watched while the
+delay runs, and waits up to 10 s more for the second answer; when none arrives the copy is held the same
 way. The external feed (a job without tools) has nothing to check. The policy is meant for a bed that clears
 itself and is off by default. A queue file that cannot be parsed keeps the queue closed
 (`available: false`) and is never rewritten. The file's `version` is the one a reader needs: 1, or 2 while a

@@ -1462,6 +1462,7 @@
   "queue.check_slot_empty": "Slot {n} is empty and no other slot holds the same filament. The job cannot start",
   "queue.check_filament_absent": "This job's filament is in no Canvas slot. Load it into any slot and set that slot's filament, or give the job another filament. The job cannot start",
   "queue.check_canvas_unknown": "The Canvas has not reported its slots, so this job's filament cannot be found. The job cannot start",
+  "queue.canvas_check_failed": "The Canvas did not report its slots in time, so the job was not started. Check the Canvas and start it again.",
   "queue.check_calibrate": "Side {side}: bed calibration before the print",
   "queue.check_mesh_saved": "Side {side}: saved mesh",
   "queue.check_mesh_missing": "Side {side}: no saved mesh, the copy starts with a calibration",

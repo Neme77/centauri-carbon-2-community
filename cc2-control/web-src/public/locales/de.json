@@ -1463,6 +1463,7 @@
   "queue.check_slot_empty": "Slot {n} ist leer und kein anderer Slot enthält dasselbe Filament. Der Auftrag kann nicht starten",
   "queue.check_filament_absent": "Das Filament dieses Auftrags ist in keinem Canvas-Slot. Es in einen beliebigen Slot einlegen und dessen Filament einstellen oder dem Auftrag ein anderes Filament geben. Der Auftrag kann nicht starten",
   "queue.check_canvas_unknown": "Die Canvas-Slots wurden nicht gemeldet, daher lässt sich das Filament dieses Auftrags nicht finden. Der Auftrag kann nicht starten",
+  "queue.canvas_check_failed": "Der Canvas hat seine Slots nicht rechtzeitig gemeldet, daher wurde der Auftrag nicht gestartet. Den Canvas prüfen und erneut starten.",
   "queue.check_calibrate": "Seite {side}: Bettkalibrierung vor dem Druck",
   "queue.check_mesh_saved": "Seite {side}: gespeichertes Mesh",
   "queue.check_mesh_missing": "Seite {side}: kein gespeichertes Mesh, die Kopie startet mit einer Kalibrierung",

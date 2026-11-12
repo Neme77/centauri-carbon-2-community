@@ -1462,6 +1462,7 @@
   "queue.check_slot_empty": "Emplacement {n} vide et aucun autre emplacement ne contient le même filament. La tâche ne peut pas démarrer",
   "queue.check_filament_absent": "Le filament de cette tâche n’est dans aucun emplacement du Canvas. Chargez-le dans un emplacement et indiquez le filament de cet emplacement, ou donnez un autre filament à la tâche. La tâche ne peut pas démarrer",
   "queue.check_canvas_unknown": "Le Canvas n’a pas indiqué le contenu de ses emplacements : le filament de cette tâche est introuvable. La tâche ne peut pas démarrer",
+  "queue.canvas_check_failed": "Le Canvas n’a pas indiqué à temps le contenu de ses emplacements : la tâche n’a pas démarré. Vérifiez le Canvas et relancez-la.",
   "queue.check_calibrate": "Côté {side} : calibrage du plateau avant l’impression",
   "queue.check_mesh_saved": "Côté {side} : maillage enregistré",
   "queue.check_mesh_missing": "Côté {side} : aucun maillage, la copie démarrera par un calibrage",

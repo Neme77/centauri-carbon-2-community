@@ -1463,6 +1463,7 @@
   "queue.check_slot_empty": "槽位 {n} 为空，且其他槽位都没有相同的耗材。任务无法开始",
   "queue.check_filament_absent": "Canvas 的任何槽位都没有本任务的耗材。请把它装入任一槽位并设置该槽位的耗材，或为任务改选另一种耗材。任务无法开始",
   "queue.check_canvas_unknown": "Canvas 尚未报告各槽位的内容，无法找到本任务的耗材。任务无法开始",
+  "queue.canvas_check_failed": "Canvas 未能及时报告各槽位的内容，因此任务未启动。请检查 Canvas 后重新启动。",
   "queue.check_calibrate": "{side} 面：打印前进行热床校准",
   "queue.check_mesh_saved": "{side} 面：已保存网床",
   "queue.check_mesh_missing": "{side} 面：无已保存网床，该份将先校准",

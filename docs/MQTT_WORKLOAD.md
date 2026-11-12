@@ -39,7 +39,11 @@ Chamber, Canvas, job state, safety and Panda retain their MQTT inputs.
   watched), only while that decision is pending: when a page reads `/api/queue`
   with the printer idle, no queued copy running and the next job fed from Canvas
   slots, and during the delay before an automatic start, which also sends one
-  request at the counted completion. The queue requests nothing while a copy prints.
+  request at the counted completion. A start of a job fed from the Canvas, by
+  the button or automatically, sends one more request and waits for its answer,
+  so that the slots come from a report newer than the start; at most one per
+  start, and a repeated request waits for the same answer. The queue requests
+  nothing while a copy prints.
 - History: one 1036 request when the History page opens or Refresh is pressed,
   at most one in flight; nothing polls the printer. The printer lists its last
   50 jobs (19.6 KB, answered in 0.2 s on the tested printer), more than the

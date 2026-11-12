@@ -1463,6 +1463,7 @@
   "queue.check_slot_empty": "Ranura {n} vacía y ninguna otra ranura contiene el mismo filamento. El trabajo no puede empezar",
   "queue.check_filament_absent": "El filamento de este trabajo no está en ninguna ranura del Canvas. Cárguelo en una ranura e indique el filamento de esa ranura, o asigne otro filamento al trabajo. El trabajo no puede empezar",
   "queue.check_canvas_unknown": "El Canvas no ha informado del contenido de sus ranuras: no se puede encontrar el filamento de este trabajo. El trabajo no puede empezar",
+  "queue.canvas_check_failed": "El Canvas no informó a tiempo del contenido de sus ranuras, así que el trabajo no se inició. Revisa el Canvas e inícialo de nuevo.",
   "queue.check_calibrate": "Lado {side}: calibración de la cama antes de imprimir",
   "queue.check_mesh_saved": "Lado {side}: malla guardada",
   "queue.check_mesh_missing": "Lado {side}: sin malla guardada, la copia empezará con una calibración",
