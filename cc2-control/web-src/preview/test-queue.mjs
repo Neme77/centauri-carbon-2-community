@@ -286,10 +286,18 @@ try {
   const stockRadio = stockRow.locator('input[type=radio]')
   await stockRow.waitFor()
   assert.equal(await stockRadio.isDisabled(), true, 'a print that starts now needs a slot')
-  const closedBox = await stockRow.boundingBox()
+  // Where the row sits in the dialog's content, once the dialog has risen in: the dialog scrolls by itself, and
+  // a click scrolls what it clicks into view, so the place on the screen is not the one to compare.
+  const place = () => stockRow.evaluate(async row => {
+    const dialog = row.closest('[role=dialog]')
+    await Promise.all(dialog.getAnimations({ subtree: true }).map(a => a.finished))
+    const r = row.getBoundingClientRect(), d = dialog.getBoundingClientRect()
+    return { top: Math.round(r.top - d.top + dialog.scrollTop), left: Math.round(r.left - d.left), width: Math.round(r.width), height: Math.round(r.height) }
+  })
+  const closedPlace = await place()
   await print.locator('[data-launch="queue"]').click()
   await page.waitForFunction(() => !document.querySelector('[data-feed-stock="0"] input[type=radio]')?.hasAttribute('disabled'))
-  assert.deepEqual(await stockRow.boundingBox(), closedBox, 'the choice does not move when the queue is chosen')
+  assert.deepEqual(await place(), closedPlace, 'the choice does not move when the queue is chosen')
   // The inventory opens in three steps: the brand, then one of its materials, then one of that material's
   // colours, each with its square. Nothing is chosen until the colour is.
   await stockRadio.check()
