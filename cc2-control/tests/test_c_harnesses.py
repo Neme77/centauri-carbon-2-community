@@ -36,6 +36,7 @@ HARNESSES = {
     "test_calibrated_start.c": BACKEND,
     "test_external_feed_start.c": BACKEND,
     "test_usb_print_start.c": BACKEND,
+    "test_usb_copy_verified.c": BACKEND,
     "test_external_feed.c": BACKEND,
     "test_filament_metadata.c": BACKEND,
     "test_orca_upload.c": BACKEND,

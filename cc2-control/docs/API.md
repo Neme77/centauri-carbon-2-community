@@ -264,6 +264,22 @@ socket, as the touchscreen does. The print starts only after the printer acknowl
 the reply is 503 with `"error":"Cannot clear the Canvas colour table for the external feed"`, and
 nothing is started. Details are in `cc2-control/docs/GCODE-PROTOCOL.md`.
 
+## USB print starts
+
+A `POST /api/gcode-files/print` from `usb` copies the file into internal memory as
+`CC2_USB_<hash>_<name>` and prints that copy. The copy needs free space for itself, and once it
+has replaced an earlier copy of the same name the 16 MiB storage reserve that uploads keep must
+remain (the earlier copy counts towards the reserve, not towards the room the copy is written to);
+otherwise the start is refused before anything is written
+(`507`, `Insufficient free space for the USB copy and storage reserve`). The USB file must be the
+one that was scanned: if its size, inode or modification time differs, or fewer bytes were read
+than it holds, the copy is discarded (`507`, `The USB file changed while it was copied`). After
+`fsync` the copy is read back and compared with the bytes read from the stick (64-bit FNV-1a and
+length); a mismatch discards it (`507`, `The internal copy of the USB file failed verification`).
+Only a verified copy is renamed from its `.part` name. An emergency stop or a client that leaves
+stops the copy after the current 64 KiB block and removes the `.part` file; an earlier copy with
+the same name is left as it was.
+
 ## Delete print-history entries
 
 `POST /api/history/delete` takes one task ID per line, at most 50 distinct safe IDs of up to 64

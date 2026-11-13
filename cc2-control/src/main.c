@@ -1502,37 +1502,123 @@ static int gcode_usb_import_name(const char *relative, char imported[PATH_MAX_LO
     return length < 0 || length >= PATH_MAX_LOCAL ? -1 : 0;
 }
 
-static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL]) {
+/* Why an import was not completed; the start answers each one with its own message. */
+enum { GCODE_IMPORT_FAILED = -1, GCODE_IMPORT_NO_SPACE = -2, GCODE_IMPORT_CHANGED = -3,
+       GCODE_IMPORT_UNVERIFIED = -4, GCODE_IMPORT_CANCELLED = -5 };
+/* The USB file as it was before it was scanned: the copy must be of that same file. */
+typedef struct { int known; off_t size; dev_t dev; ino_t ino; struct timespec mtime; } gcode_source_stamp;
+static void gcode_source_stamp_of(gcode_source_stamp *stamp, const struct stat *info) {
+    stamp->known = 1; stamp->size = info->st_size; stamp->dev = info->st_dev; stamp->ino = info->st_ino;
+    stamp->mtime = info->st_mtim;
+}
+static int gcode_source_stamp_same(const gcode_source_stamp *a, const gcode_source_stamp *b) {
+    return a->size == b->size && a->dev == b->dev && a->ino == b->ino &&
+           a->mtime.tv_sec == b->mtime.tv_sec && a->mtime.tv_nsec == b->mtime.tv_nsec;
+}
+static int usb_import_has_space(uint64_t size, uint64_t replaced) {
+    struct statvfs st;
+    if (upload_statvfs(gcode_internal_root, &st)) return 0;
+    uint64_t block = st.f_frsize ? st.f_frsize : st.f_bsize;
+    if (!block) return 0;
+    uint64_t available = st.f_bavail > UINT64_MAX / block ? UINT64_MAX : (uint64_t)st.f_bavail * block;
+    uint64_t reserve = replaced >= UPLOAD_STORAGE_MARGIN ? 0 : UPLOAD_STORAGE_MARGIN - replaced;
+    return available >= size && available - size >= reserve;
+}
+/* FNV-1a, 64 bit: detects a copy that reads back different from the bytes read from the stick. */
+static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_t length) {
+    while (length--) { hash ^= *bytes++; hash *= 1099511628211ULL; }
+    return hash;
+}
+#define GCODE_COPY_HASH_SEED 14695981039346656037ULL
+/* Test seams: after each block written (with the bytes copied so far), and after the copy was synced. */
+static void (*usb_copy_block_hook)(size_t copied);
+static void (*usb_copy_synced_hook)(const char *path);
+
+/* Copies a USB file into internal memory as <imported>. The copy needs room for itself and the
+ * upload reserve, is read back from storage and compared with the bytes read from the stick, and
+ * is published (renamed from .part) only when it matches. `expected`, when set, is the file as it
+ * was before the scan: a different or changed file is not copied. `cancel`, when set, stops the
+ * copy after the current block. Returns 0 or a GCODE_IMPORT_* reason; nothing is left behind on
+ * failure, and an earlier import of the same name stays as it was. */
+static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
+                            const gcode_source_stamp *expected, const atomic_int *cancel,
+                            size_t *copied_out) {
     char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
     char temporary[PATH_MAX_LOCAL * 2];
-    if (!gcode_resolved_path(gcode_usb_root, relative, source, sizeof(source))) return -1;
-    if (gcode_usb_import_name(relative, imported) != 0) return -1;
+    if (copied_out) *copied_out = 0;
+    if (!gcode_resolved_path(gcode_usb_root, relative, source, sizeof(source))) return GCODE_IMPORT_FAILED;
+    if (gcode_usb_import_name(relative, imported) != 0) return GCODE_IMPORT_FAILED;
     int length = snprintf(destination, sizeof(destination), "%s/%s",
                       gcode_internal_root, imported);
-    if (length < 0 || (size_t)length >= sizeof(destination)) return -1;
+    if (length < 0 || (size_t)length >= sizeof(destination)) return GCODE_IMPORT_FAILED;
     length = snprintf(temporary, sizeof(temporary), "%s.part", destination);
-    if (length < 0 || (size_t)length >= sizeof(temporary)) return -1;
+    if (length < 0 || (size_t)length >= sizeof(temporary)) return GCODE_IMPORT_FAILED;
 
     FILE *input = fopen(source, "rb");
-    if (!input) return -1;
+    if (!input) return GCODE_IMPORT_FAILED;
+    struct stat info; gcode_source_stamp opened, closed;
+    if (fstat(fileno(input), &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
+        (uintmax_t)info.st_size > SIZE_MAX) { fclose(input); return GCODE_IMPORT_FAILED; }
+    gcode_source_stamp_of(&opened, &info);
+    if (expected && expected->known && !gcode_source_stamp_same(expected, &opened)) {
+        fclose(input); return GCODE_IMPORT_CHANGED;
+    }
+    /* Room for the copy, and the storage reserve uploads keep once it is in place. An earlier import
+     * of the same name is replaced by the rename only after the copy, so it counts towards the
+     * reserve, not towards the room the copy needs while it is written. */
+    struct stat earlier;
+    off_t replaced = lstat(destination, &earlier) == 0 && S_ISREG(earlier.st_mode) ? earlier.st_size : 0;
+    if (!usb_import_has_space((uint64_t)info.st_size, (uint64_t)replaced)) { fclose(input); return GCODE_IMPORT_NO_SPACE; }
+    if (cancel && atomic_load(cancel)) { fclose(input); return GCODE_IMPORT_CANCELLED; }
     FILE *output = fopen(temporary, "wb");
-    if (!output) { fclose(input); return -1; }
-    char buffer[65536]; int failed = 0;
+    if (!output) { fclose(input); return GCODE_IMPORT_FAILED; }
+    char buffer[65536]; int result = 0; size_t copied = 0;
+    uint64_t hash = GCODE_COPY_HASH_SEED;
     for (;;) {
         size_t count = fread(buffer, 1, sizeof(buffer), input);
-        if (count && fwrite(buffer, 1, count, output) != count) { failed = 1; break; }
+        if (count && fwrite(buffer, 1, count, output) != count) { result = GCODE_IMPORT_FAILED; break; }
+        copied += count;
+        hash = gcode_copy_hash(hash, (const unsigned char *)buffer, count);
+        if (usb_copy_block_hook) usb_copy_block_hook(copied);
+        if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
         if (count < sizeof(buffer)) {
-            if (ferror(input)) failed = 1;
+            if (ferror(input)) result = GCODE_IMPORT_FAILED;
             break;
         }
     }
-    if (!failed && fflush(output) != 0) failed = 1;
-    if (!failed && fsync(fileno(output)) != 0) failed = 1;
-    if (fclose(output) != 0) failed = 1;
+    if (copied_out) *copied_out = copied;
+    /* A file shortened, grown or rewritten while it was copied is not the file that was scanned. */
+    if (!result) {
+        if (fstat(fileno(input), &info) != 0) result = GCODE_IMPORT_FAILED;
+        else {
+            gcode_source_stamp_of(&closed, &info);
+            if (!gcode_source_stamp_same(&opened, &closed) || (uintmax_t)copied != (uintmax_t)opened.size)
+                result = GCODE_IMPORT_CHANGED;
+        }
+    }
+    if (!result && fflush(output) != 0) result = GCODE_IMPORT_FAILED;
+    if (!result && fsync(fileno(output)) != 0) result = GCODE_IMPORT_FAILED;
+    /* Drop the synced pages, so the read back below comes from storage where the kernel allows it. */
+    if (!result) (void)posix_fadvise(fileno(output), 0, 0, POSIX_FADV_DONTNEED);
+    if (fclose(output) != 0 && !result) result = GCODE_IMPORT_FAILED;
     fclose(input);
-    if (failed || rename(temporary, destination) != 0) {
+    if (!result) {
+        if (usb_copy_synced_hook) usb_copy_synced_hook(temporary);
+        FILE *check = fopen(temporary, "rb");
+        uint64_t back = GCODE_COPY_HASH_SEED; size_t read_back = 0; size_t count;
+        if (!check) result = GCODE_IMPORT_UNVERIFIED;
+        else {
+            while ((count = fread(buffer, 1, sizeof(buffer), check)) > 0) {
+                read_back += count;
+                back = gcode_copy_hash(back, (const unsigned char *)buffer, count);
+            }
+            if (ferror(check) || read_back != copied || back != hash) result = GCODE_IMPORT_UNVERIFIED;
+            fclose(check);
+        }
+    }
+    if (result || rename(temporary, destination) != 0) {
         unlink(temporary);
-        return -1;
+        return result ? result : GCODE_IMPORT_FAILED;
     }
     chmod(destination, 0644);
     return 0;
@@ -2070,6 +2156,7 @@ typedef struct {
     /* From the worker. */
     int scan_failed, adaptive, detect_failed, detected[GCODE_TOOLS_MAX]; size_t detected_count;
     int import_failed, imported_ok, replaced; char imported[PATH_MAX_LOCAL];
+    gcode_source_stamp source; int import_error; size_t import_copied;
 } gcode_usb_start;
 
 /* Every tool the G-code uses must be mapped, and nothing else. */
@@ -2253,8 +2340,18 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
     const char *print_media = media;
     if (strcmp(storage, "usb") == 0) {
         if (usb) snprintf(print_filename, sizeof(print_filename), "%s", usb->imported);
-        if (usb ? usb->import_failed || !usb->imported_ok : gcode_import_usb(filename, print_filename) != 0) {
-            const char *error = "{\"accepted\":false,\"error\":\"Cannot import the USB file into internal memory\"}\n";
+        int import_error = usb ? (usb->import_failed || !usb->imported_ok
+                                      ? (usb->import_error ? usb->import_error : GCODE_IMPORT_FAILED) : 0)
+                               : gcode_import_usb(filename, print_filename, NULL, NULL, NULL);
+        if (import_error) {
+            const char *error =
+                import_error == GCODE_IMPORT_NO_SPACE
+                    ? "{\"accepted\":false,\"error\":\"Insufficient free space for the USB copy and storage reserve\"}\n"
+                : import_error == GCODE_IMPORT_CHANGED
+                    ? "{\"accepted\":false,\"error\":\"The USB file changed while it was copied\"}\n"
+                : import_error == GCODE_IMPORT_UNVERIFIED
+                    ? "{\"accepted\":false,\"error\":\"The internal copy of the USB file failed verification\"}\n"
+                    : "{\"accepted\":false,\"error\":\"Cannot import the USB file into internal memory\"}\n";
             respond(fd, 507, "Insufficient Storage", "application/json; charset=utf-8", error, strlen(error));
             return 507;
         }
@@ -2316,8 +2413,9 @@ static atomic_int usb_start_done;
 static char usb_start_body[PATH_MAX_LOCAL + 512];
 static size_t usb_start_length;
 /* Set by the main loop only: the client left (1) or the emergency stop was pressed (2) before
- * the start was dispatched. The copy still finishes, but the print is never sent. */
-static int usb_start_cancelled;
+ * the start was dispatched. The worker stops copying after the current block and leaves
+ * nothing behind; the print is never sent. */
+static atomic_int usb_start_cancelled;
 /* Test seam: runs on the worker right before the copy. */
 static void (*usb_start_copy_hook)(void);
 
@@ -2340,6 +2438,12 @@ static int gcode_request_is_usb(const char *body, size_t body_len) {
 static void *usb_start_worker(void *unused) {
     (void)unused;
     gcode_usb_start *job = &usb_start;
+    /* The file as it is before the scan: the copy below must be of this same file. It stays open
+     * until the copy is done, so a FAT stick keeps the inode number it reported here. */
+    char source[PATH_MAX_LOCAL * 2]; struct stat before; int pinned = -1;
+    if (gcode_resolved_path(gcode_usb_root, job->filename, source, sizeof(source)) &&
+        (pinned = open(source, O_RDONLY | O_CLOEXEC)) >= 0 && fstat(pinned, &before) == 0)
+        gcode_source_stamp_of(&job->source, &before);
     job->scan_failed = gcode_has_adaptive_mesh(gcode_usb_root, job->filename, &job->adaptive) != 0;
     if (!job->scan_failed && job->slot_count)
         job->detect_failed = gcode_detect_tools(gcode_usb_root, job->filename, job->detected,
@@ -2355,9 +2459,12 @@ static void *usb_start_worker(void *unused) {
             snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, existing) < (int)sizeof(path))
             job->replaced = lstat(path, &info) == 0;
         if (usb_start_copy_hook) usb_start_copy_hook();
-        job->import_failed = gcode_import_usb(job->filename, job->imported) != 0;
+        job->import_error = gcode_import_usb(job->filename, job->imported, &job->source,
+                                             &usb_start_cancelled, &job->import_copied);
+        job->import_failed = job->import_error != 0;
         job->imported_ok = !job->import_failed;
     }
+    if (pinned >= 0) close(pinned);
     atomic_store(&usb_start_done, 1);
     return NULL;
 }
