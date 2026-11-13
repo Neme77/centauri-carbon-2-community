@@ -286,6 +286,13 @@ leaves processor time, storage and memory to the printer service and makes the c
 for 75 MB, 10 s for 250 MB in a desktop container). The pause is slept in 0.2 ms slices, so an
 emergency stop during it ends the copy without writing another block. The synchronous import of the
 print queue is not slowed down.
+When the print dialog inspected the same file just before (`POST /api/gcode-files/inspect`, same
+device, inode, size, modification and change time), the start takes its leveling and Canvas tool
+decision from that cached inspection instead of reading the file again, so a refused start still
+copies nothing. The copy then scans the bytes it copies with the same line logic and must reach the
+same decision; if it does not, the copy is discarded (`507`, `The USB file changed while it was
+copied`). Without such an entry (another client, a restart, another file inspected since) the file is
+scanned before the copy, as before.
 
 ## Delete print-history entries
 

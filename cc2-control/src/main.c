@@ -1604,6 +1604,94 @@ static int usb_copy_write_out(FILE *output, FILE *input, size_t from, size_t to)
 static void (*usb_copy_block_hook)(size_t copied);
 static void (*usb_copy_synced_hook)(const char *path);
 
+/* One line of the tool scan and of the adaptive-mesh scan. The file scans below (fgets with 2048 and
+ * 4096 bytes) and the scan that runs along with a USB copy cut lines the same way and call these, so
+ * both reach the same decision for the same bytes. */
+static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOOLS_MAX]);
+#define GCODE_TOOLS_LINE 2048
+#define GCODE_MESH_LINE 4096
+static void gcode_tools_line(char *line, int present[GCODE_TOOLS_MAX], double *lengths) {
+    char *comment = strchr(line, ';');
+    if (comment) {
+        if (lengths) gcode_filament_lengths(comment, lengths);
+        *comment = '\0';
+    }
+    for (char *cursor = line; *cursor; ++cursor) {
+        if ((*cursor != 'T' && *cursor != 't') ||
+            (cursor != line && !isspace((unsigned char)cursor[-1]))) continue;
+        char *number = cursor + 1, *end = number;
+        if (!isdigit((unsigned char)*number)) continue;
+        long tool = strtol(number, &end, 10);
+        if (tool < 0 || tool >= GCODE_TOOLS_MAX) continue;
+        if (*end && !isspace((unsigned char)*end) && *end != '*') continue;
+        present[tool] = 1;
+        cursor = end - 1;
+    }
+}
+static int gcode_mesh_line(const char *line) {
+    char upper[GCODE_MESH_LINE]; size_t index = 0;
+    for (; line[index] && index + 1 < sizeof(upper); ++index)
+        upper[index] = (char)toupper((unsigned char)line[index]);
+    upper[index] = '\0';
+    char *comment = strchr(upper, ';');
+    if (comment) *comment = '\0';
+    return strstr(upper, "BED_MESH_CALIBRATE") &&
+           (strstr(upper, "FROM_SLICER=1") ||
+            (strstr(upper, "MESH_MIN=") && strstr(upper, "MESH_MAX=")) ||
+            strstr(upper, "ADAPTIVE=1"));
+}
+/* The tools present, in ascending order; tool 0 when none is named (as the file scan reports). */
+static void gcode_tools_list(const int present[GCODE_TOOLS_MAX], int tools[GCODE_TOOLS_MAX], size_t *count) {
+    *count = 0;
+    for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool)
+        if (present[tool]) tools[(*count)++] = tool;
+    if (!*count) tools[(*count)++] = 0;
+}
+/* Both scans over bytes as they are copied, lines cut exactly as fgets cuts them: a line ends after
+ * its newline or after size - 1 bytes. */
+typedef struct {
+    char mesh[GCODE_MESH_LINE]; size_t mesh_used; int adaptive;
+    char tools[GCODE_TOOLS_LINE]; size_t tools_used; int present[GCODE_TOOLS_MAX];
+} gcode_stream_scan;
+static void gcode_stream_scan_byte(gcode_stream_scan *scan, char byte) {
+    scan->mesh[scan->mesh_used++] = byte;
+    if (byte == '\n' || scan->mesh_used == sizeof(scan->mesh) - 1) {
+        scan->mesh[scan->mesh_used] = '\0';
+        if (!scan->adaptive && gcode_mesh_line(scan->mesh)) scan->adaptive = 1;
+        scan->mesh_used = 0;
+    }
+    scan->tools[scan->tools_used++] = byte;
+    if (byte == '\n' || scan->tools_used == sizeof(scan->tools) - 1) {
+        scan->tools[scan->tools_used] = '\0';
+        gcode_tools_line(scan->tools, scan->present, NULL);
+        scan->tools_used = 0;
+    }
+}
+static void gcode_stream_scan_feed(gcode_stream_scan *scan, const char *bytes, size_t length) {
+    for (size_t i = 0; i < length; i++) gcode_stream_scan_byte(scan, bytes[i]);
+}
+static void gcode_stream_scan_finish(gcode_stream_scan *scan) {
+    if (scan->mesh_used) {
+        scan->mesh[scan->mesh_used] = '\0';
+        if (!scan->adaptive && gcode_mesh_line(scan->mesh)) scan->adaptive = 1;
+        scan->mesh_used = 0;
+    }
+    if (scan->tools_used) {
+        scan->tools[scan->tools_used] = '\0';
+        gcode_tools_line(scan->tools, scan->present, NULL);
+        scan->tools_used = 0;
+    }
+}
+/* The decision a USB start took before the copy, from the cached file analysis; the copy scans
+ * along and must reach the same one, or it is not printed. */
+typedef struct { int adaptive; int tools[GCODE_TOOLS_MAX]; size_t tool_count; } gcode_scan_expect;
+static int gcode_stream_scan_matches(const gcode_stream_scan *scan, const gcode_scan_expect *expect) {
+    int tools[GCODE_TOOLS_MAX]; size_t count;
+    gcode_tools_list(scan->present, tools, &count);
+    return !scan->adaptive == !expect->adaptive && count == expect->tool_count &&
+           !memcmp(tools, expect->tools, count * sizeof(tools[0]));
+}
+
 /* Copies a USB file into internal memory as <imported>. The copy needs room for itself and the
  * upload reserve, is read back from storage and compared with the bytes read from the stick, and
  * is published (renamed from .part) only when it matches. `expected`, when set, is the file as it
@@ -1612,7 +1700,7 @@ static void (*usb_copy_synced_hook)(const char *path);
  * failure, and an earlier import of the same name stays as it was. */
 static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
                             const gcode_source_stamp *expected, const atomic_int *cancel,
-                            size_t *copied_out, int throttle) {
+                            size_t *copied_out, int throttle, const gcode_scan_expect *decided) {
     char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
     char temporary[PATH_MAX_LOCAL * 2];
     if (copied_out) *copied_out = 0;
@@ -1645,11 +1733,14 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     if (!output) { fclose(input); return GCODE_IMPORT_FAILED; }
     char buffer[65536]; int result = 0; size_t copied = 0, written_out = 0;
     uint64_t hash = GCODE_COPY_HASH_SEED;
+    static _Thread_local gcode_stream_scan scan; /* 6 KiB of line buffers, off the worker's stack */
+    if (decided) memset(&scan, 0, sizeof(scan));
     for (;;) {
         size_t count = fread(buffer, 1, sizeof(buffer), input);
         if (count && fwrite(buffer, 1, count, output) != count) { result = GCODE_IMPORT_FAILED; break; }
         copied += count;
         hash = gcode_copy_hash(hash, (const unsigned char *)buffer, count);
+        if (decided) gcode_stream_scan_feed(&scan, buffer, count);
         if (usb_copy_block_hook) usb_copy_block_hook(copied);
         if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
         if (count < sizeof(buffer)) {
@@ -1668,6 +1759,11 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     }
     if (copied_out) *copied_out = copied;
     /* A file shortened, grown or rewritten while it was copied is not the file that was scanned. */
+    /* A start decided from the cached analysis: the copied bytes must give the same decision. */
+    if (!result && decided) {
+        gcode_stream_scan_finish(&scan);
+        if (!gcode_stream_scan_matches(&scan, decided)) result = GCODE_IMPORT_CHANGED;
+    }
     if (!result) {
         if (fstat(fileno(input), &info) != 0) result = GCODE_IMPORT_FAILED;
         else {
@@ -1730,37 +1826,17 @@ static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOO
 /* `lengths`, when given, receives each tool's slicer filament length in mm, or -1. */
 static int gcode_detect_tools(const char *root, const char *relative,
                               int tools[GCODE_TOOLS_MAX], size_t *tool_count, double *lengths) {
-    char path[PATH_MAX_LOCAL * 2], line[2048];
+    char path[PATH_MAX_LOCAL * 2], line[GCODE_TOOLS_LINE];
     if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
     FILE *file = fopen(path, "r");
     if (!file) return -1;
     int present[GCODE_TOOLS_MAX] = {0};
     if (lengths) for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool) lengths[tool] = -1;
-    while (fgets(line, sizeof(line), file)) {
-        char *comment = strchr(line, ';');
-        if (comment) {
-            if (lengths) gcode_filament_lengths(comment, lengths);
-            *comment = '\0';
-        }
-        for (char *cursor = line; *cursor; ++cursor) {
-            if ((*cursor != 'T' && *cursor != 't') ||
-                (cursor != line && !isspace((unsigned char)cursor[-1]))) continue;
-            char *number = cursor + 1, *end = number;
-            if (!isdigit((unsigned char)*number)) continue;
-            long tool = strtol(number, &end, 10);
-            if (tool < 0 || tool >= GCODE_TOOLS_MAX) continue;
-            if (*end && !isspace((unsigned char)*end) && *end != '*') continue;
-            present[tool] = 1;
-            cursor = end - 1;
-        }
-    }
+    while (fgets(line, sizeof(line), file)) gcode_tools_line(line, present, lengths);
     int failed = ferror(file);
     fclose(file);
     if (failed) return -1;
-    *tool_count = 0;
-    for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool)
-        if (present[tool]) tools[(*tool_count)++] = tool;
-    if (!*tool_count) tools[(*tool_count)++] = 0;
+    gcode_tools_list(present, tools, tool_count);
     return 0;
 }
 
@@ -1891,22 +1967,13 @@ static int gcode_read_setup(const char *root, const char *relative, double *bed,
 }
 
 static int gcode_has_adaptive_mesh(const char *root, const char *relative, int *adaptive) {
-    char path[PATH_MAX_LOCAL * 2], line[4096];
+    char path[PATH_MAX_LOCAL * 2], line[GCODE_MESH_LINE];
     if (!adaptive || !gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
     FILE *file = fopen(path, "r");
     if (!file) return -1;
     *adaptive = 0;
     while (fgets(line, sizeof(line), file)) {
-        char upper[sizeof(line)]; size_t index = 0;
-        for (; line[index] && index + 1 < sizeof(upper); ++index)
-            upper[index] = (char)toupper((unsigned char)line[index]);
-        upper[index] = '\0';
-        char *comment = strchr(upper, ';');
-        if (comment) *comment = '\0';
-        if (strstr(upper, "BED_MESH_CALIBRATE") &&
-            (strstr(upper, "FROM_SLICER=1") ||
-             (strstr(upper, "MESH_MIN=") && strstr(upper, "MESH_MAX=")) ||
-             strstr(upper, "ADAPTIVE=1"))) {
+        if (gcode_mesh_line(line)) {
             *adaptive = 1;
             break;
         }
@@ -2238,6 +2305,7 @@ typedef struct {
     int scan_failed, adaptive, detect_failed, detected[GCODE_TOOLS_MAX]; size_t detected_count;
     int import_failed, imported_ok, replaced; char imported[PATH_MAX_LOCAL];
     gcode_source_stamp source; int import_error; size_t import_copied;
+    int from_cache; /* the decision came from the dialog's cached inspection of the same file */
 } gcode_usb_start;
 
 /* Every tool the G-code uses must be mapped, and nothing else. */
@@ -2423,7 +2491,7 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
         if (usb) snprintf(print_filename, sizeof(print_filename), "%s", usb->imported);
         int import_error = usb ? (usb->import_failed || !usb->imported_ok
                                       ? (usb->import_error ? usb->import_error : GCODE_IMPORT_FAILED) : 0)
-                               : gcode_import_usb(filename, print_filename, NULL, NULL, NULL, 0);
+                               : gcode_import_usb(filename, print_filename, NULL, NULL, NULL, 0, NULL);
         if (import_error) {
             const char *error =
                 import_error == GCODE_IMPORT_NO_SPACE
@@ -2516,6 +2584,7 @@ static int gcode_request_is_usb(const char *body, size_t body_len) {
     return body_len > 4 && memcmp(body, "usb\n", 4) == 0;
 }
 
+static int analysis_cached_scan(const char *path, const struct stat *now, gcode_scan_expect *out);
 static void *usb_start_worker(void *unused) {
     (void)unused;
     gcode_usb_start *job = &usb_start;
@@ -2526,10 +2595,20 @@ static void *usb_start_worker(void *unused) {
     if (gcode_resolved_path(gcode_usb_root, job->filename, source, sizeof(source)) &&
         (pinned = open(source, O_RDONLY | O_CLOEXEC)) >= 0 && fstat(pinned, &before) == 0)
         gcode_source_stamp_of(&job->source, &before);
-    job->scan_failed = gcode_has_adaptive_mesh(gcode_usb_root, job->filename, &job->adaptive) != 0;
-    if (!job->scan_failed && job->slot_count)
-        job->detect_failed = gcode_detect_tools(gcode_usb_root, job->filename, job->detected,
-                                                &job->detected_count, NULL) != 0;
+    /* The dialog's own inspection of this same file decides before the copy, without reading it again;
+     * the copy then scans along and must agree. Otherwise the file is scanned first, as before. */
+    gcode_scan_expect decided;
+    job->from_cache = pinned >= 0 && job->source.known && analysis_cached_scan(source, &before, &decided);
+    if (job->from_cache) {
+        job->adaptive = decided.adaptive;
+        job->detected_count = decided.tool_count;
+        memcpy(job->detected, decided.tools, decided.tool_count * sizeof(decided.tools[0]));
+    } else {
+        job->scan_failed = gcode_has_adaptive_mesh(gcode_usb_root, job->filename, &job->adaptive) != 0;
+        if (!job->scan_failed && job->slot_count)
+            job->detect_failed = gcode_detect_tools(gcode_usb_root, job->filename, job->detected,
+                                                    &job->detected_count, NULL) != 0;
+    }
     /* A start the scan already refuses is answered without copying the file. */
     int refused = job->scan_failed || (strcmp(job->leveling, "adaptive") == 0 && !job->adaptive) ||
         (job->slot_count && gcode_tools_conflict(job->tools, job->slot_count, job->detect_failed,
@@ -2542,7 +2621,8 @@ static void *usb_start_worker(void *unused) {
             job->replaced = lstat(path, &info) == 0;
         if (usb_start_copy_hook) usb_start_copy_hook();
         job->import_error = gcode_import_usb(job->filename, job->imported, &job->source,
-                                             &usb_start_cancelled, &job->import_copied, 1);
+                                             &usb_start_cancelled, &job->import_copied, 1,
+                                             job->from_cache ? &decided : NULL);
         job->import_failed = job->import_error != 0;
         job->imported_ok = !job->import_failed;
     }
@@ -2789,16 +2869,53 @@ static void *analysis_worker(void *unused) {
         if(keyed && cache->valid && !strcmp(path,cache->path) && analysis_same_file(&before,&cache->stamp)) {
             respond(job.fd,200,"OK","application/json; charset=utf-8",cache->response,cache->length);
         } else {
-            cache->valid=0;cache->length=0;analysis_capture=cache;
+            /* Under the lock: a USB start reads the inspect cache from its own thread. */
+            pthread_mutex_lock(&analysis_mutex);cache->valid=0;cache->length=0;pthread_mutex_unlock(&analysis_mutex);
+            analysis_capture=cache;
             if(job.kind)gcode_metadata_response(job.fd,job.body,job.length);
             else gcode_inspect_response(job.fd,job.body,job.length);
             analysis_capture=NULL;
             if(keyed && cache->length && stat(path,&after)==0 && analysis_same_file(&before,&after)) {
+                pthread_mutex_lock(&analysis_mutex);
                 snprintf(cache->path,sizeof(cache->path),"%s",path);cache->stamp=after;cache->valid=1;
+                pthread_mutex_unlock(&analysis_mutex);
             }
         }
         close(job.fd);
     }
+}
+/* The print dialog inspects the file before it starts it (POST /api/gcode-files/inspect). When that
+ * analysis is cached for this very file (same device, inode, size, modification and change time), a
+ * USB start takes its leveling and tool decision from it instead of reading the file once more, so a
+ * refused start still copies nothing. Returns 1 with `out` filled, 0 when there is no usable entry. */
+static int analysis_cached_scan(const char *path, const struct stat *now, gcode_scan_expect *out) {
+    char response[sizeof(analysis_cached[0].response) + 1]; int hit = 0;
+    pthread_mutex_lock(&analysis_mutex);
+    const analysis_cache *cache = &analysis_cached[0];
+    if (cache->valid && !strcmp(cache->path, path) && analysis_same_file(now, &cache->stamp) &&
+        cache->length < sizeof(response)) {
+        memcpy(response, cache->response, cache->length); response[cache->length] = '\0'; hit = 1;
+    }
+    pthread_mutex_unlock(&analysis_mutex);
+    if (!hit) return 0;
+    const char *at = strstr(response, "{\"tools\":[");
+    if (!at) return 0;
+    at += strlen("{\"tools\":[");
+    out->tool_count = 0;
+    while (*at != ']') {
+        char *end = NULL; long tool = strtol(at, &end, 10);
+        if (end == at || tool < 0 || tool >= GCODE_TOOLS_MAX || out->tool_count == GCODE_TOOLS_MAX ||
+            (out->tool_count && tool <= out->tools[out->tool_count - 1])) return 0;
+        out->tools[out->tool_count++] = (int)tool;
+        at = end;
+        if (*at == ',') at++;
+        else if (*at != ']') return 0;
+    }
+    if (!out->tool_count) return 0;
+    if (strstr(response, ",\"adaptive_mesh\":true,")) out->adaptive = 1;
+    else if (strstr(response, ",\"adaptive_mesh\":false,")) out->adaptive = 0;
+    else return 0;
+    return 1;
 }
 static int analysis_start(int fd,int kind,const char *body,size_t length) {
     if(length>=sizeof(analysis_queue[0].body)) {
