@@ -42,6 +42,15 @@ const took = (task: Task) => (task.end > task.begin && task.begin > 0 ? duration
 // no later than the job began. A file copied for the job is written as it starts, hence SLACK seconds; a date
 // that is not known proves nothing either way.
 const SLACK = 30
+// What is known of the files on the printer. Only a whole list shows that a file is the only one of its name: a
+// storage whose scan the printer cut short may hold another one. So a list that is still being read, one that
+// could not be read and one that came cut short (listFiles' `cut`) match no job to a file.
+type Listing =
+  | { state: 'reading' }
+  | { state: 'failed'; error: string }
+  | { state: 'cut'; where: string[] }
+  | { state: 'whole'; byName: Map<string, FileEntry[]> }
+const STORAGE: Record<string, Key> = { internal: 'files.internal_memory', usb: 'files.usb_drive' }
 type Match = { entry: FileEntry } | { why: 'gone' | 'several' | 'changed'; n: number }
 const WHY = { gone: 'history.file_gone', several: 'history.file_several', changed: 'history.file_changed' } as const
 const base = (name: string) => name.split('/').pop() || name
@@ -128,25 +137,31 @@ export const History = () => {
     }
   }
   // The file list says which files of a job's name are on the printer (matchOf): for the job's picture and for
-  // printing it again. Read when the page opens and with Refresh, never polled.
-  const [files, setFiles] = useState<Map<string, FileEntry[]> | null>(null)
+  // printing it again. Read when the page opens and with Refresh, never polled. A new read drops what the last
+  // one found at once, and only the newest read sets the result: an older one that answers late changes nothing.
+  const [files, setFiles] = useState<Listing>({ state: 'reading' })
   const listing = useRef<AbortController | null>(null)
   const readFiles = async () => {
     listing.current?.abort()
     const controller = new AbortController()
     listing.current = controller
+    setFiles({ state: 'reading' })
     try {
-      const { entries } = await listFiles(controller.signal)
-      if (controller.signal.aborted) return
+      const { entries, cut } = await listFiles(controller.signal)
+      if (listing.current !== controller) return
+      if (cut.length) {
+        setFiles({ state: 'cut', where: [...new Set(cut.map(c => c.storage))] })
+        return
+      }
       // Every file under its path and under its name without the folder.
-      const named = new Map<string, FileEntry[]>()
+      const byName = new Map<string, FileEntry[]>()
       for (const entry of entries) {
         const path = String(entry.file.path)
-        for (const name of new Set([path, base(path)])) named.set(name, [...(named.get(name) || []), entry])
+        for (const name of new Set([path, base(path)])) byName.set(name, [...(byName.get(name) || []), entry])
       }
-      setFiles(named)
-    } catch {
-      /* the list did not come: nothing is known about the files, so nothing is said about them */
+      setFiles({ state: 'whole', byName })
+    } catch (e) {
+      if (listing.current === controller) setFiles({ state: 'failed', error: errText(e) })
     }
   }
   const refresh = async () => {
@@ -162,8 +177,20 @@ export const History = () => {
   }
   useEffect(() => {
     void refresh()
-    return () => listing.current?.abort()
+    return () => {
+      const last = listing.current
+      listing.current = null
+      last?.abort()
+    }
   }, [])
+  // Why no job is matched to a file: said once above the list, and by each job's disabled Print button.
+  const filesNote =
+    files.state === 'cut'
+      ? tpl('history.files_cut', { where: files.where.map(s => (STORAGE[s] ? t(STORAGE[s]) : s)).join(', ') })
+      : files.state === 'failed'
+        ? tpl('history.files_failed', { error: files.error })
+        : ''
+  const unmatched = files.state === 'reading' ? t('history.files_reading') : filesNote
   const status = !h.loaded
     ? t('history.loading')
     : h.pending
@@ -206,6 +233,11 @@ export const History = () => {
           }
         />
         {status && <p class="py-3 text-muted">{status}</p>}
+        {filesNote && h.tasks.length > 0 && (
+          <p class="pb-2 text-xs text-amber" data-history-files={files.state}>
+            {filesNote}
+          </p>
+        )}
         {h.tasks.length > 0 && (
           <div class="cc2-history-list">
             <div class={`${cols} hidden text-xs text-muted cc2-md:grid`}>
@@ -218,7 +250,7 @@ export const History = () => {
             </div>
             {h.tasks.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map(task => {
               const [label, tone] = RESULT[task.status] ?? ['history.unknown', 'default']
-              const match = files ? matchOf(task, files) : null
+              const match = files.state === 'whole' ? matchOf(task, files.byName) : null
               const file = match && 'entry' in match ? match.entry : null
               // Why the job cannot be printed again from here; said in the row when there is a file of its name.
               const why = match && 'why' in match ? tpl(WHY[match.why], { n: match.n }) : ''
@@ -252,7 +284,7 @@ export const History = () => {
                     <Button
                       class="px-2"
                       data-history-print
-                      title={file ? t('files.print') : why || undefined}
+                      title={file ? t('files.print') : why || unmatched || undefined}
                       aria-label={tpl('history.print_named', { name: task.name })}
                       disabled={!file}
                       onClick={() => file && startFile(file.storage, file.file.path)}

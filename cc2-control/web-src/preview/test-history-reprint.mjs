@@ -1,7 +1,9 @@
 // History prints a job again only when its file is known for certain: one file of the job's name on the printer
 // (any storage, any folder), written no later than the job began (30 s for a file copied as the job starts).
 // Several files of that name, a file written after the job and a file that is gone leave the button disabled
-// and say why; none of them shows a picture as if it were the job's.
+// and say why; none of them shows a picture as if it were the job's. Only a whole file list proves a file is
+// the only one of its name: a list cut short (internal memory, USB drive, an older backend's `truncated`), one
+// that could not be read and one still being read match no job, and of overlapping reads only the newest counts.
 import assert from 'node:assert/strict'
 import { createServer } from 'vite'
 import { chromium } from 'playwright'
@@ -53,7 +55,16 @@ try {
   await page.route('**/api/canvas', r => r.fulfill({ json: { available: false } }))
   await page.route('**/api/mesh', r => r.fulfill({ json: { result: { status: { bed_mesh: { profiles: { default: {} } } } } } }))
   await page.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
-  await page.route('**/api/gcode-files', r => r.fulfill({ json: { internal: { files: internal, space: null }, usb: { files: usb, space: null } } }))
+  // The file list the printer sends: whole at first. `next` gives the reply to the next request; a reply with
+  // `hold` is sent only once that promise settles, so a newer Refresh can overtake it.
+  const whole = () => ({ json: { internal: { files: internal, space: null }, usb: { files: usb, space: null } } })
+  let next = () => ({ response: whole() })
+  await page.route('**/api/gcode-files', async r => {
+    const reply = next()
+    if (reply.hold) await reply.hold
+    // The page aborts a read that a newer Refresh overtook: that request cannot be answered any more.
+    await r.fulfill(reply.response).catch(() => {})
+  })
   await page.route('**/api/history', r => r.fulfill({ json: { available: true, pending: false, error_code: 0, reply: { result: { history_task_list: tasks } } } }))
   await page.route('**/api/history/refresh', r => r.fulfill({ json: { accepted: true } }))
   await page.route('**/api/printer', r => r.fulfill({ json: { connected: true, machine: { status: 1, status_name: 'Idle' }, print: { enabled: false }, extruder: { temperature: 25, target: 0 }, heater_bed: { temperature: 25, target: 0 }, tuning: {}, motion: {}, hardware: {} } }))
@@ -101,6 +112,89 @@ try {
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'hidden' })
   }
+
+  // A list cut short: a storage whose scan stopped may hold another file of a job's name. Every Print button
+  // is disabled and says why, the card says it once, and no picture is shown or asked for as a job's.
+  const refresh = page.getByRole('button', { name: 'Refresh', exact: true })
+  const note = page.locator('[data-history-files]')
+  const read = async reply => {
+    next = () => reply
+    await Promise.all([page.waitForResponse(r => new URL(r.url()).pathname === '/api/gcode-files'), refresh.click()])
+  }
+  const refused = async (title, what) => {
+    for (const id of [1, 2, 3, 4, 5, 6]) assert.deepEqual(await state(id), { enabled: false, title, why: '', picture: 'none' }, `${what}: job ${id}`)
+  }
+  const printable = () => page.waitForFunction(() => document.querySelector('[data-history-task="1"] [data-history-print]')?.disabled === false)
+  const reading = 'Reading the list of files on the printer…'
+  const cutText = where => `The printer sent only part of its file list (${where}), so it is not certain which file a job printed. Jobs can be printed again from here once Refresh reads the whole list.`
+  const cutInternal = { json: { internal: { files: internal, scan_truncated: true, space: null }, usb: { files: usb, space: null } } }
+  const asked = pictures.length
+  for (const [what, response, where] of [
+    ['internal memory cut short', cutInternal, 'Internal memory'],
+    ['USB drive cut short', { json: { internal: { files: internal, space: null }, usb: { files: usb, scan_truncated: true, space: null } } }, 'USB drive'],
+    ['older backend: truncated', { json: { internal: { files: internal, truncated: true, total: internal.length + 3, space: null }, usb: { files: usb, space: null } } }, 'Internal memory'],
+  ]) {
+    await read({ response })
+    await page.locator('[data-history-files="cut"]', { hasText: `(${where})` }).waitFor()
+    assert.equal((await note.textContent()).trim(), cutText(where), what)
+    await refused(cutText(where), what)
+  }
+  assert.equal(pictures.length, asked, 'no picture is asked for while the list is not whole')
+
+  // A whole list, then a read that fails: the match the whole list gave is not kept.
+  await read({ response: whole() })
+  await printable()
+  assert.equal(await note.count(), 0)
+  assert.deepEqual(await state(1), { enabled: true, title: 'Print', why: '', picture: 'shown' })
+  await read({ response: { status: 503, json: { error: 'Storage is busy' } } })
+  await page.locator('[data-history-files="failed"]').waitFor()
+  const failed = 'The list of files on the printer could not be read: Storage is busy. Jobs can be printed again from here once Refresh reads it.'
+  assert.equal((await note.textContent()).trim(), failed)
+  await refused(failed, 'failed read')
+
+  // Refresh with a whole list gives every job its match again, the refusals included.
+  await read({ response: whole() })
+  await printable()
+  assert.equal(await note.count(), 0)
+  assert.deepEqual(await state(1), { enabled: true, title: 'Print', why: '', picture: 'shown' })
+  assert.equal((await state(2)).why, 'several')
+  assert.equal((await state(3)).why, 'changed')
+
+  // Overlapping reads: only the newest counts. A read held back answers after a newer one, with a whole list
+  // after a cut one and with an error after a whole one; neither changes what the newer read found.
+  // Refresh with a read that the route holds back; returns once that request is held, so a newer one follows it.
+  let release
+  const heldRead = async response => {
+    let held
+    const arrived = new Promise(done => { held = done })
+    next = () => {
+      held()
+      return { hold: new Promise(done => { release = done }), response }
+    }
+    await refresh.click()
+    await arrived
+  }
+  await heldRead(whole())
+  await page.waitForFunction(text => document.querySelector('[data-history-task="1"] [data-history-print]')?.title === text, reading)
+  assert.deepEqual(await state(1), { enabled: false, title: reading, why: '', picture: 'none' }, 'nothing is matched while the list is read')
+  await read({ response: cutInternal })
+  await page.locator('[data-history-files="cut"]').waitFor()
+  release()
+  await page.waitForTimeout(500)
+  assert.equal(await page.locator('[data-history-files="cut"]').count(), 1, 'a late whole list does not replace a newer cut one')
+  await refused(cutText('Internal memory'), 'after a late whole list')
+  await heldRead({ status: 503, json: { error: 'late' } })
+  await page.waitForFunction(text => document.querySelector('[data-history-task="1"] [data-history-print]')?.title === text, reading)
+  await read({ response: whole() })
+  await printable()
+  release()
+  await page.waitForTimeout(500)
+  assert.equal(await note.count(), 0, 'a late failure does not clear a newer whole list')
+  assert.deepEqual(await state(1), { enabled: true, title: 'Print', why: '', picture: 'shown' })
+
+  // The note fits a phone too: the widths below are checked with it shown.
+  await read({ response: cutInternal })
+  await page.locator('[data-history-files="cut"]').waitFor()
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 })
     await page.waitForTimeout(300)
@@ -108,7 +202,7 @@ try {
   }
   assert.deepEqual(writes, [], 'nothing was written')
   assert.deepEqual(errors, [])
-  console.log('PASS: History prints again only a file known for certain: a unique file, one copied as its job began and CC2 Control\'s USB copy can; several files of the name, a file written after the job and a file that is gone cannot, say why and show no picture; desktop and phone')
+  console.log('PASS: History prints again only a file known for certain: a unique file, one copied as its job began and CC2 Control\'s USB copy can; several files of the name, a file written after the job and a file that is gone cannot, say why and show no picture; a list cut short (internal, USB, older truncated), a failed read and a read in progress match no job, Refresh restores the matches and only the newest of overlapping reads counts; desktop and phone')
 } finally {
   await browser?.close()
   await server.close()
