@@ -21,6 +21,7 @@ import {
   isLineOf,
   isLow,
   isSealed,
+  lineCore,
   MATERIALS,
   matches,
   openChooser,
@@ -117,8 +118,10 @@ export const draftFrom = (
       densityTouched: true,
     }
   // A tray reports a product line ("PLA Matte") besides its type ("PLA"): the spool keeps the line as its
-  // material, which still fits the tray. Trays report a colour value only, so the name gets a colour word.
-  const line = tray && isLineOf(tray.name, tray.type) ? tray.name : ''
+  // material, without the maker's word before it ("RAPID PLA+" gives "PLA+"), which still fits the tray.
+  // Trays report a colour value only, so the name gets a colour word.
+  const core = tray ? lineCore(tray.name, tray.type) : ''
+  const line = tray && isLineOf(core, tray.type) ? core : ''
   const material = prefill?.material || line || tray?.type || 'PLA'
   const brand = tray?.brand && !/^generic$/i.test(tray.brand) ? tray.brand : ''
   const color = (prefill?.color || tray?.color || '#2196F3').toUpperCase()
@@ -673,6 +676,8 @@ const SpoolChooser = ({
               'flex cursor-pointer items-start gap-3 rounded-lg border p-2.5',
               choice === s.id ? 'border-cyan bg-field' : 'border-edge'
             )}
+            data-option={s.id}
+            data-hint={hint || undefined}
           >
             <input
               type="radio"
@@ -698,7 +703,9 @@ const SpoolChooser = ({
           </label>
         ))}
         {want && !options.some(o => suits(o.spool, want)) && (
-          <p class="text-xs text-muted">{t('spools.no_suitable')}</p>
+          <p class="text-xs text-muted" data-testid="spool-no-suitable">
+            {t('spools.no_suitable')}
+          </p>
         )}
         <Button
           variant="ghost"

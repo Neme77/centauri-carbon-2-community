@@ -299,34 +299,50 @@ export function spoolHierarchy(list: Spool[]): SpoolBrand[] {
 export const matches = (s: Spool, query: string) =>
   !query.trim() || [s.name, s.brand, s.material, s.note, s.color].some(v => norm(v).includes(norm(query)))
 
+// The product line a tray names, from its base type on, without the maker's own word before it: Elegoo's Rapid
+// PLA+ spools name "RAPID PLA+", which is the line "PLA+" of "PLA". A name in which no word starts a line of the
+// type is kept whole.
+export const lineCore = (name: string, type: string) => {
+  const words = name.trim().split(/\s+/)
+  const at = words.findIndex((_, i) => isLineOf(words.slice(i).join(' '), type))
+  return at < 0 ? name : words.slice(at).join(' ')
+}
+
 // Whether a spool could be the filament a tray reports: its maker, type and colour as chosen on the printer.
-// A tray that names a product line ("PLA Matte") takes that line or the plain type; one that names only its
-// type ("PLA") takes any line of it. A named maker takes its own spools and those with no maker recorded;
-// "Generic" names none. Colours need only read alike, as a colour picked by hand rarely matches the tray's
-// value exactly.
+// A tray that names a product line ("PLA Matte") takes that line or the plain type, also the line without the
+// maker's word before it ("RAPID PLA+" takes "PLA+"); one that names only its type ("PLA") takes any line of
+// it. A named maker takes its own spools and those with no maker recorded; "Generic" names none. Colours need
+// only read alike, as a colour picked by hand rarely matches the tray's value exactly.
 export const suits = (s: Spool, tray: { type: string; name?: string; color: string; brand?: string } | null) => {
   if (!tray) return true
   const m = s.material.trim().toLowerCase(),
     type = tray.type.trim().toLowerCase(),
     line = (tray.name || '').trim().toLowerCase(),
     maker = (tray.brand || '').trim()
-  const material = !type || (line && line !== type ? m === line || m === type : isLineOf(s.material, tray.type))
+  const material =
+    !type ||
+    (line && line !== type ? m === line || m === type || m === lineCore(line, type) : isLineOf(s.material, tray.type))
   const colour =
     !tray.color || s.color.toUpperCase() === tray.color.toUpperCase() || colourWord(s.color) === colourWord(tray.color)
   const brand = !maker || /^generic$/i.test(maker) || !s.brand.trim() || norm(s.brand) === norm(maker)
   return Boolean(material && colour && brand)
 }
 
-// The likeliest answers first: the tray's very colour, its product line and brand, then opened spools,
-// the emptiest first, as they are used up before a new one is opened.
+// The likeliest answers first: the tray's very colour, its product line as named, then without the maker's
+// word, and its brand, then opened spools, the emptiest first, as they are used up before a new one is opened.
 export const bySuit = (tray: { type: string; name?: string; color: string; brand?: string }) => {
-  const rank = (s: Spool) => [
-    s.color.toUpperCase() === tray.color.toUpperCase() ? 0 : 1,
-    s.material.trim().toLowerCase() === (tray.name || tray.type).trim().toLowerCase() ? 0 : 1,
-    tray.brand && !/^generic$/i.test(tray.brand) && norm(s.brand) === norm(tray.brand) ? 0 : 1,
-    isSealed(s) ? 1 : 0,
-    s.remaining,
-  ]
+  const line = (tray.name || tray.type).trim().toLowerCase(),
+    core = lineCore(line, tray.type.trim())
+  const rank = (s: Spool) => {
+    const m = s.material.trim().toLowerCase()
+    return [
+      s.color.toUpperCase() === tray.color.toUpperCase() ? 0 : 1,
+      m === line ? 0 : m === core ? 1 : 2,
+      tray.brand && !/^generic$/i.test(tray.brand) && norm(s.brand) === norm(tray.brand) ? 0 : 1,
+      isSealed(s) ? 1 : 0,
+      s.remaining,
+    ]
+  }
   return (a: Spool, b: Spool) => {
     const [x, y] = [rank(a), rank(b)]
     return x.reduce((d, v, i) => d || v - y[i], 0)
