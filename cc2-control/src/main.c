@@ -2631,21 +2631,32 @@ static void *usb_start_worker(void *unused) {
     return NULL;
 }
 
-/* Returns 1 when the worker took the socket, 0 when the request has been answered. */
-static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
+/* A copy for a queued job (U10): the queue sets the job to "starting" and sends the start only
+ * after the copy, from the main loop; until then the queue file keeps it "pending", so a restart of
+ * CC2 Control during the copy leaves it to be started again. An automatic start has no browser
+ * waiting: it passes one end of a socket pair and keeps the other here, so it never looks gone. */
+static int usb_start_queue_id, usb_start_queue_auto, usb_start_peer = -1;
+static int queue_usb_copied(int fd, mqtt_client *mqtt, int id, int automatic, const char *body, size_t length,
+                            gcode_usb_start *usb); /* queue.h */
+static void queue_usb_dropped(int id, int automatic); /* queue.h */
+
+/* Returns 1 when the worker took the socket, 0 when the request has been answered (`*status`). */
+static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size_t body_len,
+                               int queue_id, int automatic, int peer, int *status) {
+    int refused = 0; if (!status) status = &refused;
     if (usb_start_active()) {
         const char *error = "{\"accepted\":false,\"error\":\"A USB file is still being copied for another start\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        return 0;
+        *status = 409; return 0;
     }
     if (body_len >= sizeof(usb_start_body)) {
         const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-        return 0;
+        *status = 400; return 0;
     }
     memset(&usb_start, 0, sizeof(usb_start));
     usb_start.stage = USB_START_CHECK;
-    if (gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start) != 0) return 0;
+    if ((*status = gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start)) != 0) return 0;
     memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
     usb_start_length = body_len;
     usb_start_cancelled = 0;
@@ -2660,13 +2671,18 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
     if (failed) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot start the USB import\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
-        return 0;
+        *status = 503; return 0;
     }
     pthread_detach(thread);
     struct timeval timeout = {5, 0};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     usb_start_fd = fd;
+    usb_start_queue_id = queue_id; usb_start_queue_auto = automatic; usb_start_peer = peer;
+    *status = 0;
     return 1;
+}
+static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
+    return usb_start_begin_for(fd, mqtt, body, body_len, 0, 0, -1, NULL);
 }
 
 /* Main loop: once the copy is complete, every check runs again (the printer may have started
@@ -2684,8 +2700,12 @@ static void usb_start_tick(mqtt_client *mqtt) {
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
     } else if (!usb_start_cancelled) {
         usb_start.stage = USB_START_PREPARED;
-        status = gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
+        status = usb_start_queue_id
+                     ? queue_usb_copied(fd, mqtt, usb_start_queue_id, usb_start_queue_auto, usb_start_body,
+                                        usb_start_length, &usb_start)
+                     : gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
     }
+    if (usb_start_cancelled && usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
     if (status != 202 && usb_start.imported_ok && !usb_start.replaced) {
         char path[PATH_MAX_LOCAL * 2];
         int length = snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, usb_start.imported);
@@ -2693,6 +2713,8 @@ static void usb_start_tick(mqtt_client *mqtt) {
     }
     usb_start_fd = -1;
     close(fd);
+    if (usb_start_peer >= 0) close(usb_start_peer);
+    usb_start_peer = -1; usb_start_queue_id = usb_start_queue_auto = 0;
 }
 
 static const char *machine_status_name(int status) {
@@ -5037,7 +5059,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/add")==0) {
         queue_add_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/start")==0) {
-        queue_start_response(fd,mqtt,body,body_len);
+        if(queue_start_response(fd,mqtt,body,body_len))return 1; /* a USB copy holds the socket */
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/remove")==0) {
         queue_remove_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/reorder")==0) {

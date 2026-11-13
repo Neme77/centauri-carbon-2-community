@@ -908,7 +908,12 @@ unless the `auto` policy is chosen.
   session holds the printer (the refusals every print control shares: maintenance, the Canvas and filament
   tools, a camera cell, an application update, a managed connection, drying, the nozzle test); otherwise it
   answers exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx). The job is saved as
-  `starting` before the request goes to the printer, so a restart in between still follows the copy.
+  `starting` before the request goes to the printer, so a restart in between still follows the copy. A job
+  from USB is first copied on the worker thread, as from the print dialog: CC2 Control keeps answering, the
+  reply comes after the copy (the Queue page waits up to 300 s for it), and the job stays `pending`, also in
+  `print-queue.json`, until the copy is done; a restart during the copy leaves it pending. A job removed or
+  another queued copy started meanwhile is not started (409). An automatic start copies the same way; if it is
+  then refused or cancelled, the job gets `last_result` `auto_failed`.
 - `POST /api/queue/abandon` (optionally the job id) gives up a `starting` copy the printer never ran: only
   while the printer is idle with fresh telemetry (409 otherwise, or when no start is waiting); the job goes
   back to `pending` with `last_result` `not_started`.

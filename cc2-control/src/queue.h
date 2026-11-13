@@ -432,11 +432,30 @@ static void queue_clear_run(queue_item *item) {
 
 /* Starts one copy of `item` through the protected print path. Returns the HTTP status sent. The
  * running state is saved before the request goes out, so a restart right after it still knows. */
-static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item) {
+/* Returned by queue_start_item while a USB copy for the start runs on its worker: the socket is the
+ * worker's, and queue_usb_copied finishes the start from the main loop. */
+#define QUEUE_START_COPYING 1
+static int queue_start_send(int fd, mqtt_client *mqtt, queue_item *item, const char *body, int length,
+                            gcode_usb_start *usb);
+static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item, int automatic, int peer) {
     char body[PATH_MAX_LOCAL + 256];
     int length = snprintf(body, sizeof(body), "%s\n%s\n%s\n%c\n%s\n%d\n%s\n%s", item->storage, item->path, item->mapping,
                           item->side, item->leveling, item->timelapse ? 1 : 0, item->measure, item->nozzle);
     if (length <= 0 || (size_t)length >= sizeof(body)) { queue_fail(fd, 500, "Cannot build the print request"); return 500; }
+    /* A USB file is copied on the worker first, as from the print dialog; the main loop stays free. */
+    if (!strcmp(item->storage, "usb")) {
+        int status = 0;
+        if (usb_start_begin_for(fd, mqtt, body, (size_t)length, item->id, automatic, peer, &status))
+            return QUEUE_START_COPYING;
+        return status;
+    }
+    return queue_start_send(fd, mqtt, item, body, length, NULL);
+}
+
+/* Marks the copy "starting" (saved first, so a restart right after the request still knows), sends the
+ * start and keeps the outcome: the file the printer was given, or the earlier state on a refusal. */
+static int queue_start_send(int fd, mqtt_client *mqtt, queue_item *item, const char *body, int length,
+                            gcode_usb_start *usb) {
     queue_state saved = queue;
     double value;
     snprintf(item->state, sizeof(item->state), "starting");
@@ -451,7 +470,8 @@ static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item) {
     queue.complete_ms = 0;
     if (queue_save() != 0) { queue = saved; queue_fail(fd, 500, "Cannot save the print queue"); return 500; }
     char started[PATH_MAX_LOCAL] = "";
-    int status = gcode_start_response(fd, mqtt, body, (size_t)length, started);
+    int status = usb ? gcode_start_run(fd, mqtt, body, (size_t)length, started, usb)
+                     : gcode_start_response(fd, mqtt, body, (size_t)length, started);
     if (status != 202) {
         queue = saved;
         if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s after a refused start\n", queue_path);
@@ -462,22 +482,44 @@ static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item) {
     return status;
 }
 
-static void queue_start_response(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
-    if (!queue_available) { queue_fail(fd, 503, queue_error[0] ? queue_error : "The print queue is unavailable"); return; }
+/* The USB copy of a queued start is complete (main loop): the job must still be there and waiting. */
+static int queue_usb_copied(int fd, mqtt_client *mqtt, int id, int automatic, const char *body, size_t length,
+                            gcode_usb_start *usb) {
+    queue_item *item = queue_find(id);
+    int status;
+    if (!item || strcmp(item->state, "pending") || queue.active_id) {
+        queue_fail(fd, 409, "The queued job changed while its USB file was copied");
+        status = 409;
+    } else status = queue_start_send(fd, mqtt, item, body, (int)length, usb);
+    if (status != 202) queue_usb_dropped(id, automatic);
+    return status;
+}
+/* A queued USB start that did not go out (refused, cancelled): an automatic one is marked as failed,
+ * so the copy waits for the button, as when the automatic start fails at once. */
+static void queue_usb_dropped(int id, int automatic) {
+    queue_item *item = automatic ? queue_find(id) : NULL;
+    if (!item || strcmp(item->state, "pending")) return;
+    snprintf(item->last_result, sizeof(item->last_result), "auto_failed");
+    if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
+}
+
+/* Returns 1 when a USB copy for the start holds the socket. */
+static int queue_start_response(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
+    if (!queue_available) { queue_fail(fd, 503, queue_error[0] ? queue_error : "The print queue is unavailable"); return 0; }
     char scratch[64]; char *line[2];
-    if (queue_lines(body, body_len, scratch, sizeof(scratch), line, 2) < 0) { queue_fail(fd, 400, "Invalid queue request"); return; }
+    if (queue_lines(body, body_len, scratch, sizeof(scratch), line, 2) < 0) { queue_fail(fd, 400, "Invalid queue request"); return 0; }
     queue_item *item = NULL;
     if (line[0] && *line[0]) {
         int id = 0;
-        if (!queue_parse_int(line[0], 1, 1000000000, &id) || !(item = queue_find(id))) { queue_fail(fd, 404, "No such queued job"); return; }
+        if (!queue_parse_int(line[0], 1, 1000000000, &id) || !(item = queue_find(id))) { queue_fail(fd, 404, "No such queued job"); return 0; }
     }
-    if (queue.active_id) { queue_fail(fd, 409, "A queued copy is already running"); return; }
-    if (!item && !(item = queue_next())) { queue_fail(fd, 409, "Nothing in the queue can start"); return; }
-    if (strcmp(item->state, "pending")) { queue_fail(fd, 409, "This job has no copy left to print"); return; }
+    if (queue.active_id) { queue_fail(fd, 409, "A queued copy is already running"); return 0; }
+    if (!item && !(item = queue_next())) { queue_fail(fd, 409, "Nothing in the queue can start"); return 0; }
+    if (strcmp(item->state, "pending")) { queue_fail(fd, 409, "This job has no copy left to print"); return 0; }
     const char *blocked = printer_change_blocked();
-    if (blocked) { queue_fail(fd, 409, blocked); return; }
-    if (plates_background_active()) { queue_fail(fd, 409, "Plate verification is still running"); return; }
-    (void)queue_start_item(fd, mqtt, item);
+    if (blocked) { queue_fail(fd, 409, blocked); return 0; }
+    if (plates_background_active()) { queue_fail(fd, 409, "Plate verification is still running"); return 0; }
+    return queue_start_item(fd, mqtt, item, 0, -1) == QUEUE_START_COPYING;
 }
 
 static void queue_start_lost(queue_item *item);
@@ -762,9 +804,20 @@ static void queue_tick(mqtt_client *mqtt) {
         }
         int status = 503;
         if (mqtt->machine_status == 1 && !printer_change_blocked() && !plates_background_active()) {
-            int sink = open("/dev/null", O_WRONLY);
-            status = sink >= 0 ? queue_start_item(sink, mqtt, next) : 500;
-            if (sink >= 0) close(sink);
+            if (!strcmp(next->storage, "usb")) {
+                /* Copied on the worker; nobody waits for the reply, so the worker gets one end of a
+                 * pair and the other end stays open until the copy is done (usb_start_tick). */
+                int pair[2];
+                int paired = socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) == 0;
+                status = paired ? queue_start_item(pair[0], mqtt, next, 1, pair[1]) : 500;
+                if (status == QUEUE_START_COPYING) return; /* the outcome comes from queue_usb_copied */
+                /* Refused before the worker took them: both ends are still ours, whatever the status. */
+                if (paired) { close(pair[0]); close(pair[1]); }
+            } else {
+                int sink = open("/dev/null", O_WRONLY);
+                status = sink >= 0 ? queue_start_item(sink, mqtt, next, 1, -1) : 500;
+                if (sink >= 0) close(sink);
+            }
         }
         if (status != 202) {
             snprintf(next->last_result, sizeof(next->last_result), "auto_failed");
