@@ -10,6 +10,8 @@
 #include <poll.h>
 #include <stdint.h>
 #include <sys/statvfs.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
 #include <limits.h>
 #include <math.h>
 #include <signal.h>
@@ -1530,6 +1532,74 @@ static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_
     return hash;
 }
 #define GCODE_COPY_HASH_SEED 14695981039346656037ULL
+/* A USB start copies on its worker thread at low priority: nice USB_COPY_NICE and the best-effort I/O
+ * class at its lowest level 7. Not the idle class: that only gets I/O while nobody else uses the disk,
+ * so steady other I/O (camera, logs) could starve the copy until the start times out. It pauses
+ * USB_COPY_PAUSE_US after every full block that has more data after it, and every USB_COPY_FLUSH_BYTES
+ * it writes the copy out and drops those pages of source and copy from the cache, so a large file
+ * does not fill the printer's memory with dirty and cached pages (measured in a container: 250 MB peak
+ * dirty about 20 MB instead of 160 MB or more). These values are starting values: whether they relieve
+ * the printer is only measurable on the printer. The synchronous import of the print queue runs on the
+ * main loop and is not slowed down. */
+#define USB_COPY_NICE 10
+#define USB_COPY_IOPRIO (2 << 13 | 7) /* IOPRIO_CLASS_BE, level 7 */
+#define USB_COPY_PAUSE_US 2000
+#define USB_COPY_FLUSH_BYTES ((size_t)8 << 20)
+static long usb_copy_pause_us = USB_COPY_PAUSE_US; /* test seam */
+/* For tests, about the last import: pauses taken, early write-outs, bytes dropped from the cache. */
+static unsigned long usb_copy_pauses, usb_copy_flushes;
+static size_t usb_copy_dropped_in, usb_copy_dropped_out;
+static void usb_copy_lower_priority(void) {
+#if defined(__linux__) && defined(SYS_gettid)
+    pid_t tid = (pid_t)syscall(SYS_gettid);
+    (void)setpriority(PRIO_PROCESS, (id_t)tid, USB_COPY_NICE);
+#ifdef SYS_ioprio_set
+    (void)syscall(SYS_ioprio_set, 1 /* IOPRIO_WHO_PROCESS */, (int)tid, USB_COPY_IOPRIO);
+#endif
+#endif
+}
+/* The pause after a block, slept in slices of USB_COPY_PAUSE_SLICE_US up to a fixed end, so the whole
+ * pause stays USB_COPY_PAUSE_US and an emergency stop during it ends the copy within one slice instead of
+ * after the pause. Returns 1 when the copy was cancelled before or during the pause. */
+#define USB_COPY_PAUSE_SLICE_US 200
+static int usb_copy_pause_before(const struct timespec *a, const struct timespec *b) {
+    return a->tv_sec < b->tv_sec || (a->tv_sec == b->tv_sec && a->tv_nsec < b->tv_nsec);
+}
+static int usb_copy_pause(const atomic_int *cancel) {
+    struct timespec end, now;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long nanoseconds = end.tv_nsec + (usb_copy_pause_us % 1000000) * 1000;
+    end.tv_sec += usb_copy_pause_us / 1000000 + nanoseconds / 1000000000;
+    end.tv_nsec = nanoseconds % 1000000000;
+    for (;;) {
+        if (cancel && atomic_load(cancel)) return 1;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (!usb_copy_pause_before(&now, &end)) return 0;
+        struct timespec slice = now;
+        slice.tv_nsec += USB_COPY_PAUSE_SLICE_US * 1000L;
+        if (slice.tv_nsec >= 1000000000) { slice.tv_sec++; slice.tv_nsec -= 1000000000; }
+        if (usb_copy_pause_before(&end, &slice)) slice = end;
+        while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &slice, NULL) == EINTR) {}
+    }
+}
+/* Writes bytes [from, to) of the copy to storage and waits for them, then drops them and the same range
+ * of the source from the cache. A failed write-out fails the copy, as the final fsync would. */
+static int usb_copy_write_out(FILE *output, FILE *input, size_t from, size_t to) {
+    if (fflush(output) != 0) return -1;
+    int fd = fileno(output); off_t start = (off_t)from, length = (off_t)(to - from);
+#ifdef SYNC_FILE_RANGE_WRITE
+    if (sync_file_range(fd, start, length,
+                        SYNC_FILE_RANGE_WAIT_BEFORE | SYNC_FILE_RANGE_WRITE | SYNC_FILE_RANGE_WAIT_AFTER) != 0 &&
+        fdatasync(fd) != 0)
+        return -1;
+#else
+    if (fdatasync(fd) != 0) return -1;
+#endif
+    if (posix_fadvise(fd, start, length, POSIX_FADV_DONTNEED) == 0) usb_copy_dropped_out += to - from;
+    if (posix_fadvise(fileno(input), start, length, POSIX_FADV_DONTNEED) == 0) usb_copy_dropped_in += to - from;
+    usb_copy_flushes++;
+    return 0;
+}
 /* Test seams: after each block written (with the bytes copied so far), and after the copy was synced. */
 static void (*usb_copy_block_hook)(size_t copied);
 static void (*usb_copy_synced_hook)(const char *path);
@@ -1542,10 +1612,11 @@ static void (*usb_copy_synced_hook)(const char *path);
  * failure, and an earlier import of the same name stays as it was. */
 static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
                             const gcode_source_stamp *expected, const atomic_int *cancel,
-                            size_t *copied_out) {
+                            size_t *copied_out, int throttle) {
     char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
     char temporary[PATH_MAX_LOCAL * 2];
     if (copied_out) *copied_out = 0;
+    usb_copy_pauses = usb_copy_flushes = 0; usb_copy_dropped_in = usb_copy_dropped_out = 0;
     if (!gcode_resolved_path(gcode_usb_root, relative, source, sizeof(source))) return GCODE_IMPORT_FAILED;
     if (gcode_usb_import_name(relative, imported) != 0) return GCODE_IMPORT_FAILED;
     int length = snprintf(destination, sizeof(destination), "%s/%s",
@@ -1572,7 +1643,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     if (cancel && atomic_load(cancel)) { fclose(input); return GCODE_IMPORT_CANCELLED; }
     FILE *output = fopen(temporary, "wb");
     if (!output) { fclose(input); return GCODE_IMPORT_FAILED; }
-    char buffer[65536]; int result = 0; size_t copied = 0;
+    char buffer[65536]; int result = 0; size_t copied = 0, written_out = 0;
     uint64_t hash = GCODE_COPY_HASH_SEED;
     for (;;) {
         size_t count = fread(buffer, 1, sizeof(buffer), input);
@@ -1584,6 +1655,15 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
         if (count < sizeof(buffer)) {
             if (ferror(input)) result = GCODE_IMPORT_FAILED;
             break;
+        }
+        if (throttle && copied - written_out >= USB_COPY_FLUSH_BYTES) {
+            if (usb_copy_write_out(output, input, written_out, copied) != 0) { result = GCODE_IMPORT_FAILED; break; }
+            written_out = copied;
+            if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
+        }
+        if (throttle && usb_copy_pause_us > 0) {
+            usb_copy_pauses++;
+            if (usb_copy_pause(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
         }
     }
     if (copied_out) *copied_out = copied;
@@ -1600,6 +1680,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     if (!result && fsync(fileno(output)) != 0) result = GCODE_IMPORT_FAILED;
     /* Drop the synced pages, so the read back below comes from storage where the kernel allows it. */
     if (!result) (void)posix_fadvise(fileno(output), 0, 0, POSIX_FADV_DONTNEED);
+    if (!result && throttle) (void)posix_fadvise(fileno(input), 0, 0, POSIX_FADV_DONTNEED); /* the rest of the source */
     if (fclose(output) != 0 && !result) result = GCODE_IMPORT_FAILED;
     fclose(input);
     if (!result) {
@@ -2342,7 +2423,7 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
         if (usb) snprintf(print_filename, sizeof(print_filename), "%s", usb->imported);
         int import_error = usb ? (usb->import_failed || !usb->imported_ok
                                       ? (usb->import_error ? usb->import_error : GCODE_IMPORT_FAILED) : 0)
-                               : gcode_import_usb(filename, print_filename, NULL, NULL, NULL);
+                               : gcode_import_usb(filename, print_filename, NULL, NULL, NULL, 0);
         if (import_error) {
             const char *error =
                 import_error == GCODE_IMPORT_NO_SPACE
@@ -2438,6 +2519,7 @@ static int gcode_request_is_usb(const char *body, size_t body_len) {
 static void *usb_start_worker(void *unused) {
     (void)unused;
     gcode_usb_start *job = &usb_start;
+    usb_copy_lower_priority(); /* this thread only: the main loop keeps its priority */
     /* The file as it is before the scan: the copy below must be of this same file. It stays open
      * until the copy is done, so a FAT stick keeps the inode number it reported here. */
     char source[PATH_MAX_LOCAL * 2]; struct stat before; int pinned = -1;
@@ -2460,7 +2542,7 @@ static void *usb_start_worker(void *unused) {
             job->replaced = lstat(path, &info) == 0;
         if (usb_start_copy_hook) usb_start_copy_hook();
         job->import_error = gcode_import_usb(job->filename, job->imported, &job->source,
-                                             &usb_start_cancelled, &job->import_copied);
+                                             &usb_start_cancelled, &job->import_copied, 1);
         job->import_failed = job->import_error != 0;
         job->imported_ok = !job->import_failed;
     }
