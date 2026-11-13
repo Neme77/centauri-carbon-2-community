@@ -457,6 +457,47 @@ export function previewPlugin(): Plugin {
   })
   let calibration = idleCalibration()
   let nextTilt = 6
+  // Mesh-guided screw alignment session (/api/screws/align): its rounds are the simulated calibration above.
+  const idleAlign = () => ({
+    active: false,
+    round: 0,
+    rounds: 0,
+    measuring: false,
+    measured: false,
+    side: 'A' as 'A' | 'B',
+    temp: 0,
+    soak: 0,
+    nozzle: '',
+    ended: '',
+    heatersOff: false,
+  })
+  let alignSession = idleAlign()
+  const alignEnd = (ended: string, heatersOff: boolean) => {
+    alignSession = { ...alignSession, active: false, measuring: false, measured: false, ended, heatersOff }
+  }
+  // What the main loop does: a finished calibration completes the round or ends the session.
+  const alignState = () => {
+    const a = alignSession
+    if (a.active && scene !== 'idle') alignEnd('print', false)
+    else if (a.active && a.measuring && calibration.stage === 'off') {
+      if (calibration.result === 'done') alignSession = { ...a, measuring: false, measured: true, round: a.round + 1 }
+      else alignEnd(calibration.result === 'cancelled' ? 'cancelled' : 'failed', true)
+    }
+    const { heatersOff, ...rest } = alignSession
+    return {
+      ...rest,
+      idle_left: rest.active && !rest.measuring ? 1200 : 0,
+      heaters_off_pending: heatersOff,
+      calibration: {
+        stage: calibration.stage,
+        remaining: calibration.remaining,
+        bed: calibration.bed,
+        result: calibration.result,
+        error: calibration.error,
+        detail: calibration.detail,
+      },
+    }
+  }
   const newId = () => Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
   const resetPlates = () => {
     plates = [
@@ -521,6 +562,7 @@ export function previewPlugin(): Plugin {
     plateCurrent = 'a1b2c3d4e5f60718'
     plateResult = ''
     calibration = idleCalibration()
+    alignSession = idleAlign()
   }
   resetPlates()
   const plateMeasures = (p: PreviewPlate) =>
@@ -947,6 +989,8 @@ export function previewPlugin(): Plugin {
             }
             case '/api/queue':
               return reply(queueView())
+            case '/api/screws/align':
+              return reply(alignState())
             case '/api/plates':
               return reply(plateLibrary())
             case '/api/spools':
@@ -1075,6 +1119,9 @@ export function previewPlugin(): Plugin {
           '/api/plates/calibrate',
           '/api/plates/calibrate/cancel',
           '/__preview/calibration-step',
+          '/api/screws/align/measure',
+          '/api/screws/align/save',
+          '/api/screws/align/end',
           '/api/spoolman',
           '/api/spools/enable',
           '/api/spools/save',
@@ -1288,8 +1335,11 @@ export function previewPlugin(): Plugin {
             if (path === '/__preview/scenario' && req.method === 'POST') {
               const value = JSON.parse(body).scene
               if (!scenarios.includes(value)) return reply({ error: 'Unknown scenario' }, 400)
+              // A print that starts under a running alignment session ends it; the reset forgets the rest.
+              const aligning = alignSession.active && value !== 'idle'
               scene = value
               reset()
+              if (aligning) alignSession = { ...idleAlign(), ended: 'print' }
               return reply({ scene })
             }
             if (path === '/api/preferences' && req.method === 'PUT') {
@@ -1380,6 +1430,142 @@ export function previewPlugin(): Plugin {
               }
               return reply(calibration)
             }
+            if (path.startsWith('/api/screws/align/') && req.method === 'POST') {
+              const lines = body.replace(/\n+$/, '').split('\n')
+              // Like the backend: the confirmation carries the token of the list it was shown.
+              const last = lines[lines.length - 1] ?? ''
+              const given = /^CONFIRM:[0-9a-f]{8}$/.test(last) ? last.slice(8) : null
+              if (given !== null) lines.pop()
+              const tokenOf = (commands: string[]) => {
+                let h = 0x811c9dc5
+                for (const c of `${commands.join('\0')}\0`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0
+                return h.toString(16).padStart(8, '0')
+              }
+              // Returns the reply to send instead of acting: the list (no confirmation) or a refusal.
+              const gate = (commands: string[], extra: Record<string, unknown>) =>
+                given === null
+                  ? reply({ confirm_required: true, commands, token: tokenOf(commands), ...extra })
+                  : given !== tokenOf(commands)
+                    ? reply({ ok: false, error: 'The commands have changed; review them again' }, 409)
+                    : null
+              const session = alignState()
+              const slot = (side: string) => (side === 'B' ? 'default1' : 'default')
+              if (path === '/api/screws/align/measure') {
+                const [side, temp, soak, nozzle = '', rounds] = lines as ['A' | 'B', string, string, string, string]
+                if (!['A', 'B'].includes(side) || !(Number(rounds) >= 1 && Number(rounds) <= 10))
+                  return reply({ ok: false, error: 'Invalid alignment measurement' }, 400)
+                if (scene !== 'idle') return reply({ ok: false, error: 'The printer must be idle' }, 409)
+                if (tramSession) return reply({ ok: false, error: 'End the screw-tramming session first' }, 409)
+                if (session.active && session.measuring)
+                  return reply({ ok: false, error: 'The measurement of this session is still running' }, 409)
+                if (
+                  session.active &&
+                  (side !== session.side || Number(temp) !== session.temp || Number(soak) !== session.soak)
+                )
+                  return reply(
+                    { ok: false, error: 'The running alignment session uses other settings; end it first' },
+                    409
+                  )
+                if (session.active && session.round >= session.rounds)
+                  return reply(
+                    {
+                      ok: false,
+                      error: 'The session has used all its measurements; save the mesh or end the session',
+                    },
+                    409
+                  )
+                if (calibration.stage !== 'off')
+                  return reply({ ok: false, error: 'A bed mesh calibration is already running' }, 409)
+                const stop = gate(
+                  [
+                    `M140 S${Number(temp)}`,
+                    `BED_MESH_CALIBRATE PROFILE=${slot(side)} BED_TEMP=${Number(temp)}`,
+                    'M104 S0',
+                  ],
+                  {
+                    round: session.active ? session.round + 1 : 1,
+                    rounds: session.active ? session.rounds : Number(rounds),
+                    soak: Number(soak),
+                  }
+                )
+                if (stop !== null) return stop
+                if (!session.active)
+                  alignSession = {
+                    ...idleAlign(),
+                    active: true,
+                    rounds: Number(rounds),
+                    side,
+                    temp: Number(temp),
+                    soak: Number(soak),
+                    nozzle,
+                  }
+                alignSession = { ...alignSession, measuring: true, measured: false, ended: '', heatersOff: false }
+                calibration = {
+                  ...idleCalibration(),
+                  stage: 'heating',
+                  side,
+                  temp: Number(temp),
+                  soak: Number(soak) * 60,
+                  nozzle,
+                }
+                return reply({ started: true, round: alignSession.round + 1, rounds: alignSession.rounds }, 202)
+              }
+              if (path === '/api/screws/align/save') {
+                const plate = plates.find(p => p.id === lines[0])
+                if (!session.active) return reply({ ok: false, error: 'No alignment session is active' }, 409)
+                if (session.measuring || !session.measured)
+                  return reply({ ok: false, error: 'The session has no completed measurement to save' }, 409)
+                if (!plate) return reply({ ok: false, error: 'Unknown plate' }, 404)
+                if (plate.side !== session.side)
+                  return reply({ ok: false, error: 'The plate is on the other side' }, 409)
+                let m = measures.find(
+                  x => x.plate === plate.id && x.temp === session.temp && x.nozzle === session.nozzle
+                )
+                const stop = gate(
+                  [
+                    `BED_MESH_PROFILE LOAD=${slot(session.side)}`,
+                    `BED_MESH_PROFILE SAVE=cc2_${m ? m.id : '<id>'}`,
+                    `SET_GCODE_OFFSET Z=${plate.z_offset.toFixed(3)}`,
+                    'TURN_OFF_HEATERS',
+                  ],
+                  { replaces: Boolean(m), temp: session.temp }
+                )
+                if (stop !== null) return stop
+                if (!m) {
+                  m = {
+                    id: newId(),
+                    plate: plate.id,
+                    temp: session.temp,
+                    nozzle: session.nozzle,
+                    measured: 0,
+                    tilt: 0,
+                    profile: true,
+                  }
+                  measures.push(m)
+                }
+                Object.assign(m, { tilt: plateSlots[plate.side], measured: 1790990000, profile: true })
+                plate.measure = m.id
+                plateCurrent = plate.id
+                alignEnd('saved', true)
+                return reply({ saved: true, measure: m.id, profile: true, applied: true })
+              }
+              if (path === '/api/screws/align/end') {
+                if (!session.active) return reply({ ended: true, active: false })
+                if (session.measuring && ['probing', 'saving'].includes(calibration.stage))
+                  return reply(
+                    { ok: false, error: 'The probing has started; use the emergency stop to interrupt it' },
+                    409
+                  )
+                const stop = gate([...(session.measuring ? ['M140 S0'] : []), 'TURN_OFF_HEATERS'], {
+                  measuring: session.measuring,
+                })
+                if (stop !== null) return stop
+                if (session.measuring) calibration = { ...calibration, stage: 'off', result: 'cancelled' }
+                alignEnd('ended', true)
+                return reply({ ended: true, active: false })
+              }
+              return reply({ ok: false, error: 'Unknown alignment request' }, 404)
+            }
             if (path.startsWith('/api/plates/') && req.method === 'POST') {
               const lines = body.replace(/\n+$/, '').split('\n')
               const plate = plates.find(p => p.id === lines[0])
@@ -1417,6 +1603,8 @@ export function previewPlugin(): Plugin {
                 return reply({ mounted: false })
               }
               if (path === '/api/plates/calibrate') {
+                if (alignState().active)
+                  return reply({ ok: false, error: 'End the mesh-guided alignment session first' }, 409)
                 if (calibration.stage !== 'off')
                   return reply({ ok: false, error: 'A bed mesh calibration is already running' }, 409)
                 const [side, temp, soak, nozzle = '', plateId = ''] = lines as [
