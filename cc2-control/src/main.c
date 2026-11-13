@@ -326,6 +326,7 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
             "\"screws_history\":\"/api/screws/history\","
+            "\"screws_align\":\"/api/screws/align\","
             "\"spools\":\"/api/spools\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
@@ -4128,6 +4129,8 @@ static void pid_status_response(int fd,console_state *console) {
     respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
+#include "mesh_align.h"
+
 /* A session, and a shutdown that is still pending, live only in this process. The marker
  * file tells the next process that one was left behind when this one was killed or
  * replaced: without it the bed would stay at the session's 60 C with nobody to switch it
@@ -4135,16 +4138,28 @@ static void pid_status_response(int fd,console_state *console) {
 static char screws_marker_default_path[64];
 static const char *screws_marker_path = NULL;
 static int screws_marker_present = -1; /* -1: not looked at yet */
+static int screws_marker_bed;          /* the bed target written to the marker */
 static int screws_resumed;             /* the pending shutdown comes from the marker */
+static int screws_resumed_bed = 60;    /* the bed target the earlier process left */
 
 static void screws_marker_sync(void){
-    int want=control_screws_session_active()||control_screws_heaters_off_pending();
-    if(!screws_marker_path||want==screws_marker_present)return;
+    int want=control_screws_session_active()||control_screws_heaters_off_pending()||align_active();
+    /* The tramming session heats the bed to 60 C, the alignment session to its own setting. A
+     * shutdown that is only pending keeps the target of the session that asked for it. */
+    int bed=align_active()?align.temp:control_screws_session_active()?60:screws_marker_bed?screws_marker_bed:screws_resumed_bed;
+    if(!screws_marker_path||(want==screws_marker_present&&(!want||bed==screws_marker_bed)))return;
     if(want){
+        char text[16];int n=snprintf(text,sizeof(text),"%d\n",bed);
         int fd=open(screws_marker_path,O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW|O_CLOEXEC,0600);
         if(fd<0)return; /* tried again on the next tick */
+        int written=n>0&&write(fd,text,(size_t)n)==n;
         close(fd);
-    }else if(unlink(screws_marker_path)!=0&&errno!=ENOENT)return;
+        if(!written)return;
+        screws_marker_bed=bed;
+    }else{
+        if(unlink(screws_marker_path)!=0&&errno!=ENOENT)return;
+        screws_marker_bed=0;
+    }
     screws_marker_present=want;
 }
 /* At startup: a marker of our own from an earlier process makes the shutdown pending. */
@@ -4156,6 +4171,13 @@ static void screws_marker_restore(int port){
     struct stat info;
     screws_marker_present=lstat(screws_marker_path,&info)==0;
     if(!screws_marker_present||!S_ISREG(info.st_mode)||info.st_uid!=geteuid())return;
+    /* The marker holds the bed target of the session it stood for; an empty one is the
+     * tramming session's 60 C. */
+    char text[16]={0};int fd=open(screws_marker_path,O_RDONLY|O_NOFOLLOW|O_CLOEXEC);
+    if(fd>=0){ssize_t n=read(fd,text,sizeof(text)-1);(void)n;close(fd);}
+    int bed=atoi(text);
+    screws_resumed_bed=bed>=30&&bed<=120?bed:60;
+    screws_marker_bed=screws_resumed_bed;
     control_screws_restore_pending();
     screws_resumed=1;
 }
@@ -4171,7 +4193,7 @@ static void screws_heaters_off_tick(const mqtt_client *mqtt,int busy,int (*send)
     if(busy||!mqtt->connected||!mqtt->registered||!mqtt->have_machine_status||mqtt->machine_status!=1)return;
     if(screws_resumed){
         if(!have_bed_target)return;
-        if(fabs(bed_target-60.0)>0.5){control_screws_heaters_off_sent();screws_resumed=0;return;}
+        if(fabs(bed_target-screws_resumed_bed)>0.5){control_screws_heaters_off_sent();screws_resumed=0;return;}
     }
     if(send("TURN_OFF_HEATERS")==0){control_screws_heaters_off_sent();screws_resumed=0;}
 }
@@ -4201,6 +4223,8 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,409,"Conflict","application/json",error,strlen(error));return;
     }
     if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
+    /* The four-point measurements home, probe and set heater targets of their own. */
+    if(align_active() && !strncmp(action,"screws:",7)){plates_fail(fd,409,"End the mesh-guided alignment session first");return;}
     if(!strncmp(action,"grille:",7)){
         const char *native=uds_print_state(&telemetry);double nozzle,bed;
         /* No raw servo/PWM commands: native grille policy also owns the exhaust fan.
@@ -4297,6 +4321,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
     control_screws_note_action(action);
+    align_note_action(action);
     if(!strcmp(action,"screws:measure")){
         pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
         control_screws_note_quick(generation);
@@ -4671,8 +4696,16 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_measure_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/edit")==0) {
         plates_measure_edit_response(fd,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/screws/align")==0) {
+        align_get_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/measure")==0) {
+        align_measure_response(fd,mqtt,console,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/save")==0) {
+        align_save_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/end")==0) {
+        align_end_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate")==0) {
-        plates_calibrate_response(fd,mqtt,console,body,body_len);
+        align_plates_calibrate_response(fd,mqtt,console,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate/cancel")==0) {
         plates_calibrate_cancel_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/delete")==0) {
@@ -4984,6 +5017,7 @@ int main(int argc, char **argv) {
             if(control_screws_bed_renew_due(tram_now)&&!busy&&mqtt.have_machine_status&&mqtt.machine_status==1&&
                uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
                 control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
+            align_tick(&mqtt,emergency,tram_now);
             int have_bed_target=uds_value(&telemetry,U_BG,&tram_bed);
             screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script,have_bed_target,tram_bed);
             screws_marker_sync();

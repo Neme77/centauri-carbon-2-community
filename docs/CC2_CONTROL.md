@@ -32,6 +32,16 @@ Four-screw corrections are displayed in **microns**. A guarded **Optimized refer
 
 **Screw Levelling** also offers an interactive session: **Start session** homes all axes (`G28`), preheats the bed and cleans the nozzle like the one-shot measurement, then probes the four screws and switches the nozzle off, leaving the bed at 60 °C. After that, each corner can be re-probed with one click (`G28 Z` only, after a 30 s settle; the nozzle is switched off again afterwards), and **Check all four** repeats the sweep without a full re-home. Re-probe and check stay disabled until X and Y are homed. Heaters are switched off when the session ends. The original **Measure Screws** one-shot path is unchanged.
 
+**Mesh-guided screw alignment** (the **Mesh alignment** tab of **Bed Levelling**) reads a whole bed mesh instead of four probes. It fits a least-squares plane `z = a + b·x + c·y` through every point of the chosen mesh (the active mesh, a side slot or a saved plate measurement) and shows three things apart:
+
+- the **tilt** in X and Y over a configurable span (240 mm by default), which is what the screws can correct;
+- the **correction at each screw** in millimetres, taken from the plane at the screw positions and relative to the screw that needs the least total movement (a positive value means "raise the bed at this corner"). The screws are closer together than the span, so these values are smaller than the tilt;
+- the **plate shape** that remains (mesh minus plane) as a heat map with its range, RMS and a name (dome, bowl, saddle, nearly flat or irregular), which the screws cannot change.
+
+"Aligned" is reported only when both tilts are below the target (0.05 mm by default). A plate shape with a range above 0.3 mm gets a warning that neither ends nor blocks the alignment. Target and warning limit are estimates and can be changed, like the span, the screw positions and the row order of the mesh. Turns are shown only when a thread pitch and its source are set, the turning direction only when the direction and its source are set; nothing is assumed. The analysis is read-only and sends nothing to the printer. Its settings are kept in the browser.
+
+The same card offers a **guided alignment**: measure the mesh, turn the screws as listed, measure again, until both tilts are below the target or the configured rounds (4 by default) are used up, then save the mesh to a plate of the plate library. Each round is the bed mesh calibration of the Mesh tab (heat, hold the bed for the soak time, `BED_MESH_CALIBRATE`); no shorter probing command is confirmed for this firmware, so every round measures the full mesh and the last round's mesh is the one saved. Every step first lists the printer commands it will send and sends them only after confirmation. The session runs on CC2 Control: when it is ended, saved, fails, or is left alone for 20 minutes, the heaters are switched off as soon as the printer is idle, unless a print started meanwhile or someone else set the bed target. See [the API details](../cc2-control/docs/API.md). The guided loop has not been validated on a printer yet.
+
 ## Quick Actions and global Emergency Stop
 
 The dashboard now provides operational Quick Actions for Home All, All Heaters Off, Fans Off and Motors Off.

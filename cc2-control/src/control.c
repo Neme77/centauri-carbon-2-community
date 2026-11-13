@@ -104,20 +104,30 @@ void control_screws_invalidate(void){control_screws_reset();}
 int control_screws_session_active(void){return screws_session.active;}
 int control_screws_heaters_off_pending(void){return screws_heaters_off_pending;}
 void control_screws_heaters_off_sent(void){screws_heaters_off_pending=0;screws_end.pending=0;}
+/* The mesh-guided alignment session shares the deferred shutdown: its end, abort or
+ * timeout asks for it, and a calibration that heats the bed again takes the heaters over. */
+void control_screws_request_heaters_off(void){screws_heaters_off_pending=1;}
+void control_screws_heaters_taken(void){screws_heaters_off_pending=0;screws_end.pending=0;}
 void control_screws_restore_pending(void){screws_heaters_off_pending=1;}
 void control_screws_note_end(unsigned long generation){
     screws_end.pending=1;
     screws_end.generation=generation;
 }
+/* An action that sets or clears heater targets, or starts a session that does. */
+int control_heater_action(const char *action){
+    static const char *const owners[]={"heaters:","heater:","pid:","preset:","preheat:","screws:",
+                                       "system:heaters_off","system:all_off"};
+    if(!action)return 0;
+    for(size_t i=0;i<sizeof(owners)/sizeof(owners[0]);i++)
+        if(!strncmp(action,owners[i],strlen(owners[i])))return 1;
+    return 0;
+}
 /* A queued action that sets or clears heater targets hands the heaters back to
  * the user (or starts a new session), so a deferred shutdown must not undo it. */
 void control_screws_note_action(const char *action){
-    static const char *const owners[]={"heaters:","heater:","pid:","preset:","preheat:","screws:",
-                                       "system:heaters_off","system:all_off"};
     /* The explicit end is the shutdown itself: it stays pending until confirmed. */
     if(!action||!strcmp(action,"screws:tram:end"))return;
-    for(size_t i=0;i<sizeof(owners)/sizeof(owners[0]);i++)
-        if(!strncmp(action,owners[i],strlen(owners[i]))){screws_heaters_off_pending=0;screws_end.pending=0;return;}
+    if(control_heater_action(action)){screws_heaters_off_pending=0;screws_end.pending=0;}
 }
 /* The firmware switches an idle bed off 15 minutes after the last command (see
  * plates_cal_keep_bed in plates.h). Between re-probes nothing else is sent, so a

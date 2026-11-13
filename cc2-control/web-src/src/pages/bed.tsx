@@ -20,7 +20,6 @@ import {
   microns,
   offsetChain,
   measurementOffsets,
-  parseScrewHistory,
   SCREW_CORNERS,
   SCREW_KEYS,
   SCREW_SETTLE_S,
@@ -28,10 +27,9 @@ import {
   screwHistoryCsv,
   screwPlan,
   screwValues,
-  type ScrewHistorySession,
   type ScrewId,
 } from '@/lib/screws'
-import { store } from '@/lib/store'
+import { refreshScrewHistory, screwHistory } from '@/lib/screw-history'
 import { usePoll } from '@/lib/poll'
 import {
   type BedTab,
@@ -59,6 +57,7 @@ import {
   stopCalibration,
   tempOk,
 } from '@/lib/plates'
+import { MeshAlign } from '@/pages/bed-align'
 import { NozzleSelect, Plates } from '@/pages/bed-plates'
 import { NozzleExpansion } from '@/pages/nozzle-expansion'
 
@@ -579,22 +578,6 @@ const MeshActions = ({ reload, note }: { reload: () => void; note: string }) => 
   )
 }
 
-const screwHistory = store({
-  supported: null as boolean | null,
-  sessions: [] as ScrewHistorySession[],
-  raw: null as unknown,
-})
-
-async function refreshScrewHistory() {
-  if (screwHistory.get().supported === false) return
-  try {
-    const data = await request('/api/screws/history')
-    screwHistory.set({ supported: true, sessions: parseScrewHistory(data), raw: data })
-  } catch (e: any) {
-    if (e?.status === 404) screwHistory.set({ supported: false, sessions: [], raw: null })
-  }
-}
-
 const saveText = (name: string, text: string, type: string) => {
   const url = URL.createObjectURL(new Blob([text], { type }))
   const link = document.createElement('a')
@@ -1022,6 +1005,7 @@ export const Bed = () => {
           { id: 'plates', label: t('bed.build_plates'), icon: <Icon n="layers" /> },
           { id: 'cell', label: t('caltools.cell'), icon: <Icon n="target" /> },
           { id: 'screws', label: t('bed.screw_levelling'), icon: <Icon n="target" /> },
+          { id: 'align', label: t('bed.align_tab'), icon: <Icon n="grid" /> },
           { id: 'nozzle', label: t('nozzle.tab'), icon: <Icon n="temp" /> },
         ]}
         value={bed}
@@ -1032,6 +1016,10 @@ export const Bed = () => {
       ) : bed === 'screws' ? (
         <div class="max-w-4xl">
           <Screws />
+        </div>
+      ) : bed === 'align' ? (
+        <div class="max-w-4xl">
+          <MeshAlign />
         </div>
       ) : bed === 'plates' ? (
         <Plates />
