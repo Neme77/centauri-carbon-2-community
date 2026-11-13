@@ -673,6 +673,8 @@ const SpoolChooser = ({
               'flex cursor-pointer items-start gap-3 rounded-lg border p-2.5',
               choice === s.id ? 'border-cyan bg-field' : 'border-edge'
             )}
+            data-option={s.id}
+            data-hint={hint || undefined}
           >
             <input
               type="radio"
@@ -698,7 +700,9 @@ const SpoolChooser = ({
           </label>
         ))}
         {want && !options.some(o => suits(o.spool, want)) && (
-          <p class="text-xs text-muted">{t('spools.no_suitable')}</p>
+          <p class="text-xs text-muted" data-testid="spool-no-suitable">
+            {t('spools.no_suitable')}
+          </p>
         )}
         <Button
           variant="ghost"
