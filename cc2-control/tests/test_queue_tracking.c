@@ -305,6 +305,9 @@ int main(void) {
     assert(queue.complete_ms != 0 && starts_sent == 0); /* not before the delay */
     queue.complete_ms = monotonic_ms() - 11000;
     queue_tick(&machine);
+    /* The file is checked on the start worker (internal starts too); the start goes out on the next tick. */
+    for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    usb_start_tick(&machine);
     assert(starts_sent == 1 && !strcmp(start_file, "part.gcode") && !strcmp(it->state, "starting") && queue.active_id == 6);
     assert(!strcmp(it->print_name, "part.gcode") && !strcmp(it->request_uuid, "u16") && queue.complete_ms == 0 && !it->last_result[0]);
     queue_load(); it = &queue.items[0]; /* the start was saved before the request went out */
@@ -424,6 +427,8 @@ int main(void) {
     queue_load(); it = &queue.items[0]; /* the hold is saved with the job */
     assert(queue.count == 1 && it->id == 12 && !strcmp(it->last_result, "auto_material") && !strcmp(it->state, "pending"));
     it->last_result[0] = 0; canvas_says(2, "Elegoo PLA Basic", 1); queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
+    for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    usb_start_tick(&machine); /* checked on the start worker, sent on the next tick */
     assert(starts_sent == sent + 1 && !strcmp(it->state, "starting") && !it->last_result[0]); /* the slot's type contains the material */
     queue.count = 0; queue.active_id = 0;
     it = job(13, 1, 0); snprintf(it->path, sizeof(it->path), "plain.gcode"); snprintf(it->mapping, sizeof(it->mapping), "0:2");

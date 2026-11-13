@@ -784,6 +784,7 @@ static void gcode_delete_error(int fd, int status, const char *reason, const cha
     respond(fd,status,reason,"application/json",json,(size_t)n);
 }
 
+static int print_start_preparing(const char *file); /* a start of this file is checked on the worker */
 static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file) {
     time_t now = time(NULL);
     if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status ||
@@ -796,7 +797,7 @@ static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file)
     pthread_mutex_lock(&orca_pending_mutex);
     int pending = gcode_same_job_name(file, orca_pending_filename) || gcode_same_job_file(file, orca_pending_filename);
     pthread_mutex_unlock(&orca_pending_mutex);
-    if (pending) return "file_delete_pending_print";
+    if (pending || print_start_preparing(file)) return "file_delete_pending_print";
     const char *native = uds_print_state(&telemetry);
     int reported_job = mqtt->machine_status == 2 || !strcmp(mqtt->print_state, "printing") ||
                        !strcmp(mqtt->print_state, "paused") || !strcmp(mqtt->print_state, "error");
@@ -2306,6 +2307,7 @@ typedef struct {
     int import_failed, imported_ok, replaced; char imported[PATH_MAX_LOCAL];
     gcode_source_stamp source; int import_error; size_t import_copied;
     int from_cache; /* the decision came from the dialog's cached inspection of the same file */
+    int internal;   /* a start from internal memory: checked on the worker, nothing to copy */
 } gcode_usb_start;
 
 /* Every tool the G-code uses must be mapped, and nothing else. */
@@ -2415,11 +2417,7 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
         return 400;
     }
     if (usb && usb->stage == USB_START_CHECK) {
-        if (strcmp(storage, "usb") != 0) {
-            const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
-            respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-            return 400;
-        }
+        usb->internal = strcmp(storage, "usb") != 0;
         if (!mqtt->connected || !mqtt->registered) {
             const char *error = "{\"accepted\":false,\"error\":\"Printer MQTT is not ready\"}\n";
             respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
@@ -2507,6 +2505,19 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
         print_media = "local";
     } else {
         snprintf(print_filename, sizeof(print_filename), "%s", filename);
+        /* Checked on the worker: the start goes out only for the file that was checked. */
+        if (usb && usb->stage == USB_START_PREPARED && usb->internal) {
+            char path[PATH_MAX_LOCAL * 2]; struct stat now; gcode_source_stamp current; int same = 0;
+            if (usb->source.known && gcode_resolved_path(root, filename, path, sizeof(path)) && stat(path, &now) == 0) {
+                gcode_source_stamp_of(&current, &now);
+                same = gcode_source_stamp_same(&usb->source, &current);
+            }
+            if (!same) {
+                const char *error = "{\"accepted\":false,\"error\":\"The file changed while the start was prepared\"}\n";
+                respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+                return 409;
+            }
+        }
     }
     int start_result = -1;
     if (calibrated_start && (strchr(print_filename, '"') || strchr(print_filename, '\\'))) {
@@ -2554,7 +2565,9 @@ static int gcode_start_response(int fd, mqtt_client *mqtt,
     return gcode_start_run(fd, mqtt, body, body_len, started, NULL);
 }
 
-/* One threaded USB start at a time. The main loop owns the socket and `usb_start` except between
+/* The names say USB, but since the internal start moved here too (it only skips the copy), this is
+ * the one print-start worker for both media; the queue uses it as well.
+ * One threaded USB start at a time. The main loop owns the socket and `usb_start` except between
  * usb_start_begin() and the worker's `usb_start_done`, when only the worker writes the results. */
 static gcode_usb_start usb_start;
 static int usb_start_fd = -1;
@@ -2569,6 +2582,10 @@ static atomic_int usb_start_cancelled;
 static void (*usb_start_copy_hook)(void);
 
 static int usb_start_active(void) { return usb_start_fd >= 0; }
+/* The file list does not delete a file (or its name on the other medium) while its start is prepared. */
+static int print_start_preparing(const char *file) {
+    return usb_start_active() && gcode_same_job_name(file, usb_start.filename);
+}
 
 /* The emergency stop drops a USB start that has not been dispatched yet. */
 static void usb_start_cancel(void) { if (usb_start_active()) usb_start_cancelled = 2; }
@@ -2580,19 +2597,20 @@ static int usb_start_client_gone(int fd) {
     return n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR);
 }
 
-static int gcode_request_is_usb(const char *body, size_t body_len) {
-    return body_len > 4 && memcmp(body, "usb\n", 4) == 0;
-}
 
 static int analysis_cached_scan(const char *path, const struct stat *now, gcode_scan_expect *out);
 static void *usb_start_worker(void *unused) {
     (void)unused;
     gcode_usb_start *job = &usb_start;
     usb_copy_lower_priority(); /* this thread only: the main loop keeps its priority */
+    /* A start from internal memory runs the same checks here, so a large file does not hold up the
+     * main loop either; it has nothing to copy, and the main loop compares the file's stamp again
+     * before the start is sent. */
+    const char *root = job->internal ? gcode_internal_root : gcode_usb_root;
     /* The file as it is before the scan: the copy below must be of this same file. It stays open
      * until the copy is done, so a FAT stick keeps the inode number it reported here. */
     char source[PATH_MAX_LOCAL * 2]; struct stat before; int pinned = -1;
-    if (gcode_resolved_path(gcode_usb_root, job->filename, source, sizeof(source)) &&
+    if (gcode_resolved_path(root, job->filename, source, sizeof(source)) &&
         (pinned = open(source, O_RDONLY | O_CLOEXEC)) >= 0 && fstat(pinned, &before) == 0)
         gcode_source_stamp_of(&job->source, &before);
     /* The dialog's own inspection of this same file decides before the copy, without reading it again;
@@ -2604,16 +2622,18 @@ static void *usb_start_worker(void *unused) {
         job->detected_count = decided.tool_count;
         memcpy(job->detected, decided.tools, decided.tool_count * sizeof(decided.tools[0]));
     } else {
-        job->scan_failed = gcode_has_adaptive_mesh(gcode_usb_root, job->filename, &job->adaptive) != 0;
+        job->scan_failed = gcode_has_adaptive_mesh(root, job->filename, &job->adaptive) != 0;
         if (!job->scan_failed && job->slot_count)
-            job->detect_failed = gcode_detect_tools(gcode_usb_root, job->filename, job->detected,
+            job->detect_failed = gcode_detect_tools(root, job->filename, job->detected,
                                                     &job->detected_count, NULL) != 0;
     }
     /* A start the scan already refuses is answered without copying the file. */
     int refused = job->scan_failed || (strcmp(job->leveling, "adaptive") == 0 && !job->adaptive) ||
         (job->slot_count && gcode_tools_conflict(job->tools, job->slot_count, job->detect_failed,
                                                   job->detected, job->detected_count));
-    if (!refused) {
+    if (job->internal) {
+        if (usb_start_copy_hook) usb_start_copy_hook(); /* test seam: the point where a copy would start */
+    } else if (!refused) {
         /* An earlier import of the same USB file may still be in use (the touchscreen can print it). */
         char existing[PATH_MAX_LOCAL], path[PATH_MAX_LOCAL * 2]; struct stat info;
         if (gcode_usb_import_name(job->filename, existing) == 0 &&
@@ -2645,7 +2665,9 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
                                int queue_id, int automatic, int peer, int *status) {
     int refused = 0; if (!status) status = &refused;
     if (usb_start_active()) {
-        const char *error = "{\"accepted\":false,\"error\":\"A USB file is still being copied for another start\"}\n";
+        const char *error = usb_start.internal
+            ? "{\"accepted\":false,\"error\":\"Another print start is still being prepared\"}\n"
+            : "{\"accepted\":false,\"error\":\"A USB file is still being copied for another start\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
         *status = 409; return 0;
     }
@@ -2653,6 +2675,16 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
         const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
         *status = 400; return 0;
+    }
+    /* An internal file that cannot start anyway (no printer link, or the printer is not idle) gets the
+     * synchronous checks, as before this worker existed: the same refusal, in the same order (file checks
+     * first), at once and without a worker. Both conditions are refused there before anything is sent. */
+    const char *storage_end = memchr(body, '\n', body_len);
+    size_t storage_len = storage_end ? (size_t)(storage_end - body) : body_len;
+    int internal = !(storage_len == 3 && memcmp(body, "usb", 3) == 0);
+    if (internal && (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status || mqtt->machine_status != 1)) {
+        *status = gcode_start_run(fd, mqtt, body, body_len, NULL, NULL);
+        return 0;
     }
     memset(&usb_start, 0, sizeof(usb_start));
     usb_start.stage = USB_START_CHECK;
@@ -4726,7 +4758,8 @@ static const char *printer_change_blocked(void) {
     if (app_update_active() || connections_busy()) return "Application update is running; printer changes are paused";
     if (drying_active()) return "Stop bed heating and wait for confirmation before another operation";
     if (nx_active()) return "A nozzle expansion calibration is running; use the emergency stop to interrupt it";
-    if (usb_start_active()) return "A USB file is still being copied for a print start";
+    if (usb_start_active())
+        return usb_start.internal ? "A print start is still being prepared" : "A USB file is still being copied for a print start";
     return NULL;
 }
 #include "experiments.h"
@@ -4997,9 +5030,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         queue_item *waiting=queue_find(queue.active_id);
         if(plates_background_active())plates_fail(fd,409,"Plate verification is still running");
         else if(waiting&&!strcmp(waiting->state,"starting"))plates_fail(fd,409,"A queued copy is starting");
-        else if(usb_start_active())plates_fail(fd,409,"A USB file is still being copied for another start");
-        else if(gcode_request_is_usb(body,body_len))return usb_start_begin(fd,mqtt,body,body_len);
-        else gcode_start_response(fd,mqtt,body,body_len,NULL);
+        else if(usb_start_active())plates_fail(fd,409,usb_start.internal?"Another print start is still being prepared"
+                                                                        :"A USB file is still being copied for another start");
+        /* Every dialog start, from USB and from internal memory, is checked on the worker (usb_start_*). */
+        else return usb_start_begin(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/exclude-objects")==0) {
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {

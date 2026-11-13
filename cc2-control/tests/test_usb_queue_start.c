@@ -178,9 +178,10 @@ int main(void) {
     queue.count = 0; queue.active_id = 0; snprintf(queue.after, sizeof(queue.after), "wait");
     queue_item *it = usb_job(4); snprintf(it->storage, sizeof(it->storage), "internal");
     out = fopen(path, "w"); fclose(out); snprintf(it->path, sizeof(it->path), "%s", name); assert(!queue_save());
-    int held = request_start("4");
-    close(pair_[0]); /* handle_client closes a socket that no worker holds */
-    expect(held == 0 && reply(body, sizeof(body)) == 202, "an internal queued job is answered at once, as before");
+    /* An internal job is checked on the same worker (no copy) and started from the main loop. */
+    expect(request_start("4") == 1 && !strcmp(queue_find(4)->state, "pending"), "an internal queued job is checked on the worker too");
+    wait_copy(); usb_start_tick(&machine);
+    expect(reply(body, sizeof(body)) == 202 && !strcmp(queue_find(4)->state, "starting"), "and started after the check");
 
     close(gate[0]); close(gate[1]);
     if (failures) { printf("%d FAIL\n", failures); return 1; }

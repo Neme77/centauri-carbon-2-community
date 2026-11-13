@@ -177,7 +177,6 @@ int main(void) {
     assert(status == 404 && !usb_start_active());
     assert(begin(&mqtt, "usb\ncube.gcode\n\nA\nsideways\n0", response, sizeof(response), &status) < 0);
     assert(status == 400);
-    assert(gcode_request_is_usb("usb\ncube.gcode", 14) && !gcode_request_is_usb("internal\ncube.gcode", 19));
 
     /* The stick was pulled after the copy: refused like a missing file, and the copy is removed. */
     write_file("usb/gone.gcode", "G28\n");

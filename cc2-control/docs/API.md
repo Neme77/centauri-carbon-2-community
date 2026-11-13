@@ -266,6 +266,15 @@ nothing is started. Details are in `cc2-control/docs/GCODE-PROTOCOL.md`.
 
 ## USB print starts
 
+Every `POST /api/gcode-files/print`, from internal memory as well as from USB, is checked on one start
+worker: the request is answered at once only when it is refused without reading the file (invalid,
+printer not idle, MQTT not ready); otherwise the leveling and Canvas tool check runs on the worker while
+CC2 Control keeps answering other requests, and the main loop repeats every check and sends the start
+afterwards. Only one start is prepared at a time (409 `Another print start is still being prepared`).
+While a file's start is prepared, `POST /api/gcode-files/delete` refuses that name with
+`file_delete_pending_print`. An internal file that changed during the check (size, inode or modification
+time) is not started (409 `The file changed while the start was prepared`).
+
 A `POST /api/gcode-files/print` from `usb` copies the file into internal memory as
 `CC2_USB_<hash>_<name>` and prints that copy. The copy needs free space for itself, and once it
 has replaced an earlier copy of the same name the 16 MiB storage reserve that uploads keep must
@@ -909,9 +918,9 @@ unless the `auto` policy is chosen.
   tools, a camera cell, an application update, a managed connection, drying, the nozzle test); otherwise it
   answers exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx). The job is saved as
   `starting` before the request goes to the printer, so a restart in between still follows the copy. A job
-  from USB is first copied on the worker thread, as from the print dialog: CC2 Control keeps answering, the
-  reply comes after the copy (the Queue page waits up to 300 s for it), and the job stays `pending`, also in
-  `print-queue.json`, until the copy is done; a restart during the copy leaves it pending. A job removed or
+  is first checked (and a USB file copied) on the start worker, as from the print dialog: CC2 Control keeps
+  answering, the reply comes afterwards (the Queue page waits up to 300 s for it), and the job stays
+  `pending`, also in `print-queue.json`, until then; a restart meanwhile leaves it pending. A job removed or
   another queued copy started meanwhile is not started (409). An automatic start copies the same way; if it is
   then refused or cancelled, the job gets `last_result` `auto_failed`.
 - `POST /api/queue/abandon` (optionally the job id) gives up a `starting` copy the printer never ran: only

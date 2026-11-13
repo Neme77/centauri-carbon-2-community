@@ -442,14 +442,12 @@ static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item, int aut
     int length = snprintf(body, sizeof(body), "%s\n%s\n%s\n%c\n%s\n%d\n%s\n%s", item->storage, item->path, item->mapping,
                           item->side, item->leveling, item->timelapse ? 1 : 0, item->measure, item->nozzle);
     if (length <= 0 || (size_t)length >= sizeof(body)) { queue_fail(fd, 500, "Cannot build the print request"); return 500; }
-    /* A USB file is copied on the worker first, as from the print dialog; the main loop stays free. */
-    if (!strcmp(item->storage, "usb")) {
-        int status = 0;
-        if (usb_start_begin_for(fd, mqtt, body, (size_t)length, item->id, automatic, peer, &status))
-            return QUEUE_START_COPYING;
-        return status;
-    }
-    return queue_start_send(fd, mqtt, item, body, length, NULL);
+    /* The file is checked (and a USB file copied) on the worker first, as from the print dialog; the
+     * main loop stays free. queue_usb_copied sends the start afterwards. */
+    int status = 0;
+    if (usb_start_begin_for(fd, mqtt, body, (size_t)length, item->id, automatic, peer, &status))
+        return QUEUE_START_COPYING;
+    return status;
 }
 
 /* Marks the copy "starting" (saved first, so a restart right after the request still knows), sends the
@@ -804,20 +802,14 @@ static void queue_tick(mqtt_client *mqtt) {
         }
         int status = 503;
         if (mqtt->machine_status == 1 && !printer_change_blocked() && !plates_background_active()) {
-            if (!strcmp(next->storage, "usb")) {
-                /* Copied on the worker; nobody waits for the reply, so the worker gets one end of a
-                 * pair and the other end stays open until the copy is done (usb_start_tick). */
-                int pair[2];
-                int paired = socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) == 0;
-                status = paired ? queue_start_item(pair[0], mqtt, next, 1, pair[1]) : 500;
-                if (status == QUEUE_START_COPYING) return; /* the outcome comes from queue_usb_copied */
-                /* Refused before the worker took them: both ends are still ours, whatever the status. */
-                if (paired) { close(pair[0]); close(pair[1]); }
-            } else {
-                int sink = open("/dev/null", O_WRONLY);
-                status = sink >= 0 ? queue_start_item(sink, mqtt, next, 1, -1) : 500;
-                if (sink >= 0) close(sink);
-            }
+            /* Checked on the worker; nobody waits for the reply, so the worker gets one end of a pair
+             * and the other end stays open until it is done (usb_start_tick). */
+            int pair[2];
+            int paired = socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) == 0;
+            status = paired ? queue_start_item(pair[0], mqtt, next, 1, pair[1]) : 500;
+            if (status == QUEUE_START_COPYING) return; /* the outcome comes from queue_usb_copied */
+            /* Refused before the worker took them: both ends are still ours, whatever the status. */
+            if (paired) { close(pair[0]); close(pair[1]); }
         }
         if (status != 202) {
             snprintf(next->last_result, sizeof(next->last_result), "auto_failed");
