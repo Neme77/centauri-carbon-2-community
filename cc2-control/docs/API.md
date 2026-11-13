@@ -236,6 +236,17 @@ Basename and case aliases are protected on
 both media. Unknown/stale active-job evidence refuses deletion. Existing storage,
 path traversal, symlink and hard-link restrictions remain; copying is still Idle-only.
 
+A print started from USB runs from an internal `CC2_USB_<hash>_<name>` copy. After each accepted
+USB start the oldest of these copies are removed so that the newest three remain, the one just
+started always among them. Then, while all copies together exceed 1 GiB, the oldest of the rest goes
+first; the one just started counts but is never removed, so it may stay alone above the limit with
+the protected copies. A copy is removed only where `POST /api/gcode-files/delete` would
+remove it (the same guard: never the active, paused or errored job, nothing while the printer
+state is stale or unknown, an upload is running or an Orca start is pending) and only when no
+queued job names it: as its own internal file, as the copy its start was given, or as the copy a
+queued USB job imports to. Symbolic links, hard-linked files, `.part` files and other names are
+never touched.
+
 `POST /api/gcode-files/upload` never overwrites a file. When it rejects an upload after the
 headers, for example with 409 because the name exists, it first reads the rest of the
 request body, so a browser receives the error instead of a reset connection.

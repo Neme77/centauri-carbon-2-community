@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A USB print start from the print dialog reads the file once: the leveling and tool check of the dialog's own file inspection is reused, and the copy confirms it while copying. A start that does not fit the file is still refused before anything is copied. By **lpgamerzockt-ops** (#TBD).
 - A print started from USB copies its file at low priority, pauses briefly after every 64 KiB and writes its data out every 8 MiB, so the copy leaves processor time, storage and memory to the printer service; the copy takes somewhat longer. By **lpgamerzockt-ops** (#TBD).
 - A print started from USB is only sent once its internal copy is verified: the copy is refused when it would leave less than the 16 MiB storage reserve uploads keep, discarded when the USB file changed during the copy or the copy reads back different, and stopped at once by the emergency stop or a closed browser instead of finishing first. By **lpgamerzockt-ops** (#TBD).
+- USB print starts no longer fill the internal storage with old copies: after each USB start only the newest three `CC2_USB_` copies stay, and older ones go while all copies together exceed 1 GiB. A copy that is being printed, paused or named by a queued job, or any copy while the printer state is unclear, is never removed. By **lpgamerzockt-ops** (#TBD).
 
 ## [Community Firmware V4.4.4 / CC2 Control 1.2.29] - 2026-11-12
 

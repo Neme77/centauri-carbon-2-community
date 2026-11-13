@@ -636,6 +636,19 @@ static const char *queue_basename(const char *path) {
     const char *slash = strrchr(path, '/');
     return slash ? slash + 1 : path;
 }
+/* A queued job names this internal file: as its own file, as the copy its start was given, or,
+ * for a USB job, as the copy its next start imports to. The USB import cleanup leaves it alone. */
+static int queue_uses_internal_file(const char *name) {
+    char imported[PATH_MAX_LOCAL];
+    for (int i = 0; i < queue.count; i++) {
+        const queue_item *item = &queue.items[i];
+        if (!strcmp(item->storage, "internal") && !strcmp(queue_basename(item->path), name)) return 1;
+        if (item->print_name[0] && !strcmp(queue_basename(item->print_name), name)) return 1;
+        if (!strcmp(item->storage, "usb") && !gcode_usb_import_name(item->path, imported) && !strcmp(imported, name))
+            return 1;
+    }
+    return 0;
+}
 
 /* A reported file name (MQTT, or the printer service with its "local/" prefix) against the file the
  * printer was given for this copy; before a start, against the job's own file. */

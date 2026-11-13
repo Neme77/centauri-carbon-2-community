@@ -1505,6 +1505,76 @@ static int gcode_usb_import_name(const char *relative, char imported[PATH_MAX_LO
     return length < 0 || length >= PATH_MAX_LOCAL ? -1 : 0;
 }
 
+/* USB imports are kept for the touchscreen and for a restart of the same file, but not without
+ * end: after a USB start only the newest GCODE_USB_IMPORTS_KEPT stay, the one just started among
+ * them. An older copy is removed only where deleting it from the file list would be allowed
+ * (gcode_delete_guard: never the running, paused or recoverable print, nothing while the printer
+ * state is unclear or an upload or Orca start is pending) and no queued job names it. */
+#define GCODE_USB_IMPORTS_KEPT 3
+/* All USB imports together: above this the oldest go first, until the rest fits or only protected
+ * copies and the one just started are left (which may exceed it on their own). A starting value. */
+#define GCODE_USB_IMPORTS_MAX_BYTES (1024ULL * 1024 * 1024)
+static unsigned long long gcode_usb_imports_max_bytes = GCODE_USB_IMPORTS_MAX_BYTES; /* test seam */
+static int queue_uses_internal_file(const char *name); /* queue.h */
+typedef struct { char name[256]; struct timespec mtime; unsigned long long size; int gone; } gcode_usb_import_entry;
+static int gcode_usb_import_newer(const void *a, const void *b) {
+    const gcode_usb_import_entry *x = a, *y = b;
+    if (x->mtime.tv_sec != y->mtime.tv_sec) return x->mtime.tv_sec < y->mtime.tv_sec ? 1 : -1;
+    if (x->mtime.tv_nsec != y->mtime.tv_nsec) return x->mtime.tv_nsec < y->mtime.tv_nsec ? 1 : -1;
+    return strcmp(x->name, y->name);
+}
+/* Removes one older copy where the file list's delete guard allows it and no queued job names it. */
+static int gcode_usb_import_remove(const mqtt_client *mqtt, const char *name) {
+    if (gcode_delete_guard(mqtt, name) || queue_uses_internal_file(name)) return 0;
+    char path[PATH_MAX_LOCAL * 2]; struct stat info;
+    snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, name);
+    /* As a delete from the file list: the same regular, singly linked file, or nothing. */
+    if (lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 || unlink(path)) return 0;
+    fprintf(stderr, "USB import cleanup: removed %s\n", name);
+    return 1;
+}
+/* Returns the number of copies removed. */
+static int gcode_usb_prune(const mqtt_client *mqtt, const char *keep) {
+    DIR *dir = opendir(gcode_internal_root);
+    if (!dir) return 0;
+    gcode_usb_import_entry *found = NULL; size_t count = 0, cap = 0; struct dirent *entry;
+    while ((entry = readdir(dir))) {
+        size_t length = strlen(entry->d_name);
+        if (strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, strlen(GCODE_USB_IMPORT_PREFIX)) ||
+            length >= sizeof(found->name) || !is_gcode_filename(entry->d_name)) continue;
+        char path[PATH_MAX_LOCAL * 2]; struct stat info;
+        if (snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, entry->d_name) >= (int)sizeof(path) ||
+            lstat(path, &info) != 0 || !S_ISREG(info.st_mode)) continue;
+        if (count == cap) {
+            size_t next = cap ? cap * 2 : 16;
+            gcode_usb_import_entry *grown = realloc(found, next * sizeof(*found));
+            if (!grown) break;
+            found = grown; cap = next;
+        }
+        snprintf(found[count].name, sizeof(found[count].name), "%s", entry->d_name);
+        found[count].size = (unsigned long long)info.st_size; found[count].gone = 0;
+        found[count++].mtime = info.st_mtim;
+    }
+    closedir(dir);
+    if (count) qsort(found, count, sizeof(*found), gcode_usb_import_newer);
+    int kept = keep && *keep ? 1 : 0, removed = 0;
+    unsigned long long total = 0;
+    for (size_t i = 0; i < count; i++) total += found[i].size;
+    /* First the count: the newest three stay. */
+    for (size_t i = 0; i < count; i++) {
+        if (keep && !strcmp(found[i].name, keep)) continue;
+        if (kept < GCODE_USB_IMPORTS_KEPT) { kept++; continue; }
+        if (gcode_usb_import_remove(mqtt, found[i].name)) { found[i].gone = 1; total -= found[i].size; removed++; }
+    }
+    /* Then the size: oldest first while all copies together exceed the limit. */
+    for (size_t i = count; i-- > 0 && total > gcode_usb_imports_max_bytes;) {
+        if (found[i].gone || (keep && !strcmp(found[i].name, keep))) continue;
+        if (gcode_usb_import_remove(mqtt, found[i].name)) { found[i].gone = 1; total -= found[i].size; removed++; }
+    }
+    free(found);
+    return removed;
+}
+
 /* Why an import was not completed; the start answers each one with its own message. */
 enum { GCODE_IMPORT_FAILED = -1, GCODE_IMPORT_NO_SPACE = -2, GCODE_IMPORT_CHANGED = -3,
        GCODE_IMPORT_UNVERIFIED = -4, GCODE_IMPORT_CANCELLED = -5 };
@@ -2557,6 +2627,7 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
     if (started) snprintf(started, PATH_MAX_LOCAL, "%s", print_filename);
     if (accepted_len > 0 && (size_t)accepted_len < sizeof(accepted))
         respond(fd, 202, "Accepted", "application/json; charset=utf-8", accepted, (size_t)accepted_len);
+    if (strcmp(storage, "usb") == 0) (void)gcode_usb_prune(mqtt, print_filename);
     return 202;
 }
 

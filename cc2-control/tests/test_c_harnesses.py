@@ -41,6 +41,7 @@ HARNESSES = {
     "test_usb_start_checked_once.c": BACKEND,
     "test_usb_queue_start.c": BACKEND,
     "test_internal_start_background.c": BACKEND,
+    "test_usb_copy_cleanup.c": BACKEND,
     "test_external_feed.c": BACKEND,
     "test_filament_metadata.c": BACKEND,
     "test_orca_upload.c": BACKEND,
