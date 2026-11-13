@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- The spool question (“Which spool is it?”) suggests the inventory spool for a Canvas tray that names the maker’s product line: Elegoo’s Rapid PLA+ RFID spools report `RAPID PLA+`, and a spool kept as `PLA+` in a colour that reads alike is now listed and preselected instead of “No spool in the inventory has this filament”. A tray that names a line still leaves out other lines of its type, such as PLA Silk for PLA Matte. Reported and fixed by **beanbo** (#366).
+- The spool question (“Which spool is it?”) suggests the inventory spool for a Canvas tray that names the maker’s product line: Elegoo’s Rapid PLA+ RFID spools report `RAPID PLA+`, and a spool kept as `PLA+` in a colour that reads alike is now listed and preselected instead of “No spool in the inventory has this filament”. A new spool added from such a tray gets `PLA+` as its material instead of `PLA`. A tray that names a line still leaves out other lines of its type, such as PLA Silk for PLA Matte. Reported and fixed by **beanbo** (#366).
 
 ## [Community Firmware V4.4.4 / CC2 Control 1.2.29] - 2026-11-12
 

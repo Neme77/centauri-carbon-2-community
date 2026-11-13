@@ -302,7 +302,7 @@ export const matches = (s: Spool, query: string) =>
 // The product line a tray names, from its base type on, without the maker's own word before it: Elegoo's Rapid
 // PLA+ spools name "RAPID PLA+", which is the line "PLA+" of "PLA". A name in which no word starts a line of the
 // type is kept whole.
-const lineCore = (name: string, type: string) => {
+export const lineCore = (name: string, type: string) => {
   const words = name.trim().split(/\s+/)
   const at = words.findIndex((_, i) => isLineOf(words.slice(i).join(' '), type))
   return at < 0 ? name : words.slice(at).join(' ')

@@ -292,6 +292,13 @@ try {
   assert.deepEqual(await suggested(), [plus])
   assert.ok(await option(plus).getByRole('radio').isChecked())
   assert.equal(await dialog.locator('[data-testid="spool-no-suitable"]').count(), 0)
+  // A new spool from that tray keeps the line without the maker's word as its material; its name keeps the product.
+  await dialog.getByRole('radio', { name: en['spools.new_spool'] }).check()
+  assert.equal(await dialog.getByLabel(en['canvas.material'], { exact: true }).inputValue(), 'PLA+')
+  assert.equal(
+    await dialog.getByLabel(en['common.name'], { exact: true }).inputValue(),
+    `ELEGOO RAPID PLA+ ${en['spools.colour_green']}`
+  )
   // An opened plain PLA in that green suits too, but the tray's line ranks first, so the PLA+ spool stays the
   // preselected answer. A reload opens the still unanswered question again.
   const plain = (await save({ name: 'ELEGOO PLA Green', brand: 'ELEGOO', material: 'PLA', color: '#2E9E4F', remaining: 400 })).id
@@ -323,7 +330,7 @@ try {
   assert.deepEqual(posts.at(-1), ['/api/spools/enable', 'off'])
   assert.deepEqual(errors, [])
   console.log(
-    'PASS: spool tracking switch, inventory by manufacturer/kind/colour, new and copied spool, weigh-in, slot question on any page, print check, suggestions for a line with a maker prefix (RAPID PLA+ finds PLA+, PLA Matte leaves out PLA Silk)'
+    'PASS: spool tracking switch, inventory by manufacturer/kind/colour, new and copied spool, weigh-in, slot question on any page, print check, suggestions for a line with a maker prefix (RAPID PLA+ finds PLA+ and makes a new spool PLA+, PLA Matte leaves out PLA Silk)'
   )
 } finally {
   await browser?.close()
