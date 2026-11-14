@@ -26,7 +26,7 @@ inactive and restored RFID states are handled automatically.
 
 | Download | Purpose |
 | --- | --- |
-| [Universal 07 firmware with Hungarian corrections](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig) | Complete firmware: copy the unchanged .zip.sig to USB and use Offline Update. |
+| [Community Firmware 4.4.4 · Universal 07](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig) | Complete firmware: copy the unchanged .zip.sig to USB and use Offline Update. |
 | [First installation](docs/FIRST_RUN.md) · [Upgrade guide](docs/FIRMWARE_UPGRADE.md) | Short installation steps, backup advice and startup checks. |
 | [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.4) | Exact package identity, sources and validation scope. |
 
