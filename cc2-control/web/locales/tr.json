@@ -1538,6 +1538,7 @@
   "rfid.presence_hint": "Etiket okuma ve malzeme atama, fiziksel filament algılamadan ayrıdır. Canvas girişinde filament algılanana kadar yuva yarı saydam kalır; bu, RFID'nin hâlâ okuduğu anlamına gelmez. Giriş varlığını doğrulamak için nozula yükleme gerekmez.",
   "rfid.short_title": "RFID",
   "rfid.lifecycle_confirm": "Bu, Canvas RFID uygulamasını veya ana makine korumasını değiştirir. Boştaki, soğuk yazıcıyı açık ve bağlı tutun. Her tam yazıcı yeniden başlatma isteğini izleyin ve özgün yedeği saklayın. Devam edilsin mi?",
+  "rfid.lifecycle_activate_confirm": "Canvas RFID etkinleştirilsin mi?\n– CC2 Control tamamlanana kadar kilitli kalır. Yalnızca görüntüleme ve acil durdurma çalışır.\n– Bunun için iki tam yazıcı yeniden başlatması ve ikinci bir onay gerekir.\n– Canvas'a aktarımdan bir sonraki yeniden başlatmaya kadar yazıcı kullanılamaz.\n– İptal edilemez. Geri dönmek yalnızca ikinci bir aktarım ve iki yeniden başlatma daha ile mümkündür.",
   "rfid.lifecycle_recovery": "RFID kurtarma dikkat gerektiriyor. Özgün yedeği ve işlem günlüğünü saklayın; bellenim aktarımını yeniden denemeyin veya ana makine korumasını kaldırmayın.",
   "rfid.lifecycle_working": "RFID hazırlığı veya doğrulaması çalışıyor. Yazıcıyı açık ve bağlı tutun; yeniden başlatmadan önce bekleyin.",
   "rfid.lifecycle_restore_reboot": "Orijinal Canvas ürün yazılımı aktarıldı. Geri yüklemeyi doğrulamak için yazıcı boştayken tamamen yeniden başlatın.",
