@@ -1,128 +1,131 @@
 # Centauri Carbon 2 Community Firmware
 
-Firmware community, controllo locale e strumenti per costruire il firmware
-della **ELEGOO Centauri Carbon 2**, mantenuti da **Neme77**.
+Firmware e controllo locale per la **ELEGOO Centauri Carbon 2**, mantenuti da
+**Neme77** con il contributo di sviluppatori e tester.
 
-> **NOVITÀ: TPU SENZA SCOLLEGARE IL CANVAS — CC2 Control 1.2.23.** Facoltativa in **Impostazioni → Integrazioni → Integrazioni sperimentali**. Ciclo completo PLA/TPU 95A validato da **DamiBFryta**. [Download e dettagli](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.23-V4.4).
+[English](README.md) · [Discord](https://discord.gg/FGfCaFpm38) ·
+[Facebook](https://www.facebook.com/groups/1658610779139107) ·
+[Assistenza](https://github.com/Neme77/centauri-carbon-2-community/issues/new/choose)
 
-<p align="center">
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig"><img src="https://img.shields.io/badge/SCARICA-Firmware%20V4.4.2-087f8c?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il firmware completo V4.4.2"></a>
-  &nbsp;
-  <a href="https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.23-V4.4/CC2-Control-1.2.23-Multiplatform-Update.zip"><img src="https://img.shields.io/badge/SCARICA-CC2%20Control%201.2.23-2563eb?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Scarica il pacchetto multipiattaforma CC2 Control 1.2.23"></a>
-</p>
+## V4.4.4 Universal 07 · ELEGOO 02.01.01.13 · CC2 Control 1.2.29
 
-| **🖨️ Firmware completo · V4.4.2** | **🔄 CC2 Control · 1.2.23** |
+**L'installazione torna semplice: firmware sulla USB e Offline Update.**
+
+Un ampio lavoro sulle diverse diramazioni degli aggiornamenti precedenti ha
+permesso di automatizzare la migrazione dei componenti riconosciuti.
+La Universal 07 risolve i casi di incompatibilità finora identificati e
+verificati, conservando i dati personali. Include le correzioni ungheresi
+di CC2 Control provenienti dalla PR #352.
+
+**Non sono più obbligatori probe, pulizia manuale, downgrade, aggiornamenti
+intermedi del pannello o ripristino Canvas per un upgrade supportato.**
+Terminare prima eventuali operazioni Canvas in corso e i riavvii richiesti.
+Il Canvas è facoltativo; gli stati RFID riconosciuti vengono gestiti automaticamente.
+
+| Download | Contenuto |
 | --- | --- |
-| [**Scarica il firmware firmato**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.2/CC2_V4_4_2_STOCK_20261024_125406_99842c8a.zip.sig) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.2) | [**Scarica il pacchetto Windows / macOS / Linux**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.23-V4.4/CC2-Control-1.2.23-Multiplatform-Update.zip) · [Note e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.23-V4.4) |
-| Installazione completa con CC2 Control **1.2.21** e patch webcam già inclusa. Nessun riavvio aggiuntivo dopo il firmware. | Per firmware community **V4.4/V4.4.1/V4.4.2**. Include i fix di stabilità e recupero della webcam. |
+| [Firmware Universal 07 con correzioni ungheresi](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig) | File .zip.sig completo da copiare integro sulla USB. |
+| [Prima installazione](docs/FIRST_RUN.it.md) · [Guida aggiornamento](docs/FIRMWARE_UPGRADE.it.md) | Procedura, backup e verifiche dopo l'avvio. |
+| [Release e checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.4) | Identità del file, sorgenti e prove. |
 
-> **Sperimentale facoltativa · Retrazione Canvas R4:** [**Scarica il kit Windows / Linux / macOS**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Canvas-Pullback-Experimental-R4.zip). Estende il limite configurabile fino a 1000 mm sui runtime qualificati **V4.4.1/V4.4.2**, con Control **1.2.21/1.2.22**. Di **Noahwhite2014**. [Istruzioni](experimental/canvas-pullback-kit/README.it.md). Rimuovere il componente e riavviare prima degli update app/firmware.
+Usare il nuovo file **Universal 07**. Il vecchio pacchetto RC6 e il kit di
+preparazione sono storici: le loro istruzioni non si applicano alla Universal.
+La Recovery separata non è ancora pubblicata. Gli aggiornamenti del solo
+pannello rimangono distinti dal firmware completo.
 
-**Aggiorni dal pannello di CC2 Control?** [Scarica il file firmato `.cc2update`](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.23-V4.4/CC2-Control-1.2.23-V4.4.cc2update) e selezionalo in **Impostazioni → Aggiornamenti**. Aggiornamento della sola app: riavvio completo solo alla prima attivazione del fix webcam, già presente dalla 1.2.19. Il firmware completo V4.4.2 non richiede un riavvio aggiuntivo.
+## L'esperienza CC2 Control sulla nuova base
 
-[English](README.md) · [Documentazione](docs/README.md) · [Download](https://github.com/Neme77/centauri-carbon-2-community/releases) · [Immagini](docs/SCREENSHOTS.md)
+- **Display:** Home e Rete Community, palette e integrazione offset Z.
+- **Dashboard:** camera, stampa, temperature, ventole, offset Z effettivo,
+  mesh attiva e lato del piatto.
+- **Stampe:** file USB/interni, anteprime, storico, coda e percorsi G-code del
+  layer. Per accedere alla mappa estesa attuale abilitare le etichette oggetto
+  in OrcaSlicer; il parser dei percorsi non richiede quelle etichette.
+- **Calibrazione:** mesh, libreria piatti, livellamento viti e storico, PID,
+  Pressure Advance, Input Shaper, Rotation Distance e cella di carico.
+- **Materiali:** Canvas, bobina esterna/TPU, inventario, Spoolman e assegnazione
+  RFID con revisione dei dati prima della conferma.
+- **Camera e rete:** video locale e remoto, compatibilità Matrix e slicer,
+  Wi-Fi e adattatori Ethernet USB RTL8153 qualificati.
+- **Funzioni native:** Reactor, minimo EXHAUST, flap e pullback Canvas fino
+  a 1000 mm, mantenendo il valore originale finché non viene modificato.
+- **Pannello:** undici lingue, temi, backup selettivo, diagnostica, Console,
+  aggiornamenti con log e integrazioni Panda/Dragon Breath.
 
-> Progetto indipendente, non affiliato né supportato da ELEGOO.
-> È dedicato alla **Centauri Carbon 2**, non alla prima Centauri Carbon.
+Le funzioni dipendono dall'hardware e dallo stato della stampante.
+[Guida](docs/CC2_CONTROL.md) · [Immagini](docs/SCREENSHOTS.md) ·
+[Cronologia](CHANGELOG.md).
 
-## **FINALMENTE TPU SENZA SCOLLEGARE IL CANVAS**
+## Canvas RFID facoltativo
 
-La funzione si abilita in **Impostazioni → Integrazioni → Integrazioni sperimentali** e resta **sperimentale, facoltativa e inizialmente spenta**. Serve un percorso esterno diretto. **DamiBFryta ha completato il ciclo PLA → TPU e la stampa eSUN TPU 95A senza errori e senza scollegare il Canvas.** Materiali e percorsi diversi richiedono le proprie prove.
+L'attivazione si richiede da **Impostazioni → Integrazioni**, seguendo i
+riavvii e le verifiche. È disponibile anche il ripristino originale.
+Il componente assente viene installato inattivo: l'upgrade non attiva RFID.
+Il Canvas non serve per stampare con la bobina esterna.
 
-Inclusi i fix Console, fine stampa, indicazione delle sperimentali e testi ungheresi di pezso92, oltre a tutte le funzioni precedenti. Il riavvio completo serve solo alla prima attivazione del fix webcam, gia presente da 1.2.19 o firmware V4.4.2. Firmware e builder non cambiano.
+Le famiglie di tag provate non equivalgono alla compatibilità con ogni marca.
+Il progetto resta aperto a nuovi formati verificabili.
+Attribuzione dei decoder: **OpenRFID / DnG-Crafts**.
 
-[**CC2 Control 1.2.23: download and complete release notes**](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.23-V4.4).
+## Prove e limiti dichiarati
 
-## Da dove iniziare
+Le prove del maintainer e indipendenti comprendono 1.2.25, 1.2.26, 1.2.27,
+la variante privata 1.2.28 verificata e le preview .13 supportate.
+Sono stati riportati avvio, temperature, riconoscimento Canvas, dati conservati
+e controlli di stampa, camera e rete. Le letture RFID sono state provate dove
+erano disponibili tag compatibili; armare il lettore non equivale a leggere un tag.
 
-| Cosa vuoi fare | Guida |
-| --- | --- |
-| Installare il firmware community completo | [Prima installazione](docs/FIRST_RUN.it.md) |
-| Aggiornare CC2 Control già installato | [Aggiornamenti dell’app](docs/UPDATE_CC2.it.md) |
-| Collegare OrcaSlicer e sincronizzare gli slot Canvas | [Configurazione OrcaSlicer](docs/ORCASLICER.it.md) |
+La variante ungherese modifica soltanto il catalogo web: backend e migrazione
+rimangono identici alla 07. Le prove offline sono distinte da quelle fisiche;
+la revisione madrelingua dell'esatto catalogo proiettato rimane da completare.
+Non dichiariamo una percentuale statistica né compatibilità con ogni variante
+privata o registro corrotto.
 
-Scarica i file dalle [release GitHub](https://github.com/Neme77/centauri-carbon-2-community/releases)
-e segui la guida e le note corrispondenti. **Firmware completo**, **applicazione
-CC2 Control** e **builder dei sorgenti** sono download diversi: lo ZIP del
-builder non si installa sulla stampante. Verifica i checksum SHA-256 forniti.
+## Se serve aiuto, ci siamo
 
-La famiglia firmware attualmente qualificata è **V4.4/V4.4.1/V4.4.2**, sulla base
-ELEGOO **02.01.01.07**. I suoi aggiornamenti dell’app non sono intercambiabili
-con firmware originale, versioni community precedenti o build sperimentali.
+Conservare i backup verificati. Se mancano, salvare i dati dal menu del pannello
+**Backup e ripristino** prima dell'installazione. La migrazione conserva gli
+archivi dei componenti sulla stampante.
 
-Apri **`http://IP-STAMPANTE:8081`** nella rete locale. Anche in OrcaSlicer
-l’indirizzo deve terminare con **`:8081`**. Per installare gli aggiornamenti
-serve il **codice LAN** della stampante, diverso dalla password SSH; per
-cercarli non serve. L’installazione richiede sempre conferma. Gli aggiornamenti
-del componente webcam richiedono un **riavvio completo della stampante**,
-come indicato nelle rispettive note.
+[Aprire una richiesta](https://github.com/Neme77/centauri-carbon-2-community/issues/new/choose) indicando versioni iniziali,
+file utilizzato e messaggio visualizzato. Non pubblicare password, codici LAN
+o token. Conservare i registri e non ripetere installazioni per forzare un rifiuto:
+vi aiuteremo a individuare il percorso corretto.
 
-## Cosa offre CC2 Control
+Il ritorno al firmware originale è distinto da questo upgrade e richiede
+il percorso Canvas appropriato. Non promettiamo recupero senza rischi per
+qualsiasi guasto. La Recovery separata è ancora in lavorazione.
 
-- Dashboard locale, video live, temperature, ventole, velocità e flusso di stampa.
-- File interni/USB, anteprime dei modelli ed esclusione interattiva degli oggetti.
-- Stati Canvas, materiali, auto refill e sincronizzazione filamenti con OrcaSlicer.
-- Livellamento, mesh per piatti/ugelli e inventario/tracciamento bobine opzionale.
-- Backup e ripristino selettivo, diagnostica, Console protetta e update firmati.
-- Più lingue, temi e interfaccia per computer e telefono.
+## Aggiornamenti futuri e contributi
 
-Consulta la [guida dell’applicazione](docs/CC2_CONTROL.md) e la
-[galleria](docs/SCREENSHOTS.md). Le funzioni sperimentali richiedono una scelta
-esplicita e una validazione separata.
+Le funzioni compatibili del pannello continueranno con il normale updater.
+Le modifiche native con dubbi di compatibilità diventeranno una nuova base
+con migrazione documentata. Gli autori delle PR devono documentare e provare
+il proprio lavoro secondo [linee guida](CONTRIBUTING.md),
+[regole](AGENTS.md) e [test](docs/TESTING.md).
 
-## Novità di CC2 Control 1.2.22
-
-> **Piccolo errore di testo nella 1.2.22:** la pagina Aggiornamenti riporta ancora «Le funzioni sperimentali si scelgono separatamente qui sotto». Si trovano invece in **Impostazioni → Integrazioni**. Ci scusiamo per l’indicazione imprecisa: le funzioni operano regolarmente. Correggeremo il testo nel prossimo aggiornamento.
-
-- **Bobina esterna, anche per chi acquista la CC2 senza Combo:** comandi nativi **Carica / Scarica** quando Canvas è assente e modifica **Marchio → Tipo → Sottocategoria → Colore**. Canvas condivide catalogo originale e palette di 24 colori (#233). L’update non abilita la bobina esterna con Canvas collegato.
-- **Dashboard:** sfondo camera di **pezso92**, slider velocità/flow con campi numerici Applica/Ripristina, riquadri allineati e **Mantieni attiva** nell’intestazione camera (#223).
-- **Controllo:** azioni macchina compatte, Z offset sopra la regolazione stampa e calibrazioni allineate (#226).
-- **Spoolman:** sincronizzazione facoltativa di **tharje** (#208), selettore indipendente in Integrazioni che conserva configurazione e tracciamento locale (#227).
-- **Codice LAN:** salvataggio facoltativo verificato nel browser, campi mascherati precompilati e Dimentica (#225).
-- **Fine stampa:** avviso non bloccante con file/durata, Conferma e Stampa di nuovo; percentuale azzerata quando inattiva senza home (#219).
-- **Cronologia bobine:** pannello scorrevole con filtri Tutti / Solo consumi, suggerito da **DamiBFryta** (#220).
-- **Integrazioni sperimentali:** UDS, Quiet e riscaldamento piatto in Impostazioni → Integrazioni, indipendenti e con azioni allineate (#223/#232).
-- **Esperimento asciugatura:** riscaldamento temporizzato, arresto e conferma target zero (#198/#218/#230); richiesta di **romeopuch**, diagnosi di **Noahwhite2014**, documentazione di **pezso92** (#235).
-- **Aggiornamenti e pacchetti:** requisiti corretti nelle nove lingue (#222), rimosso overlay web inutilizzato (#229). Fix webcam cumulativo, preferenze, mesh e backup conservati.
-
-
-
-[![Dashboard](docs/images/cc2-control/dashboard-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/dashboard-current.png)
-
-[![Control](docs/images/cc2-control/control-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/control-current.png)
-
-### Retrazione Canvas estesa facoltativa
-
-[**Kit sperimentale separato Windows / Linux / macOS**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.22-V4.4/CC2-Canvas-Pullback-Experimental-R4.zip), di **Noahwhite2014** (#228). Qualificato solo per **V4.4.1/V4.4.2**, con Control **1.2.21/1.2.22**. Estende il limite configurabile fino a 1000 mm senza scegliere la distanza né inviare movimenti; il valore adatto dipende dal percorso. **Rimuovere e riavviare prima degli update app/firmware.** Non installato dall’updater automatico. [Istruzioni](experimental/canvas-pullback-kit/README.it.md).
-
-[![Nuovo layout Canvas](docs/images/cc2-control/canvas-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/canvas-current.png)
-
-[![Impostazioni sperimentali indipendenti](docs/images/cc2-control/experiments-current.png)](https://raw.githubusercontent.com/Neme77/centauri-carbon-2-community/main/docs/images/cc2-control/experiments-current.png)
-
-Canvas ispirato a **Surfoo**; Quiet originale di **BorjaLL**. Le sperimentali mantengono le scelte. Anteprime con dati simulati. Firmware V4.4.2 e builder includono ancora Control 1.2.21: le nuove funzioni si ottengono con questo update dell’app.
-
-[Release notes / Note complete, validation, checksums and credits](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4).
-
-## Aiuto e sviluppo
-
-[Indice delle guide](docs/README.md) · [Segnala un problema](https://github.com/Neme77/centauri-carbon-2-community/issues) · [Contribuire](CONTRIBUTING.md) · [Compilazione](docs/BUILD.md) · [Sorgenti e provenienza](docs/SOURCE.md)
-
-La cronologia delle versioni è nel [CHANGELOG](CHANGELOG.md) e nelle
-[note di rilascio](https://github.com/Neme77/centauri-carbon-2-community/releases).
-Le istruzioni dettagliate e la compatibilità sono nelle guide collegate sopra.
-
-## Community
+## Community e crediti
 
 Grazie a **Surfoo, beanbo, efiten, Skcycos, pezso92, asiersan, Noahwhite2014,
-tharje, Nick Plateringen-Paul** e a tutti i contributor, traduttori e tester.
-Un ringraziamento speciale a **[DamiBFryta](https://www.reddit.com/user/DamiBFryta/),
-il nostro beta tester definitivo**. [Crediti completi e contributi originali](docs/CONTRIBUTORS.md).
+tharje, Nick Plateringen-Paul, lpgamerzockt-ops, BorjaLL** e a tutti i contributor.
+Grazie a **DamiBFryta** per le prove TPU; **pezso92** e **beanbo** per le
+traduzioni ungheresi; **SVLoneStar**, **Natan**, **arsian** e i tester delle migrazioni.
 
-Il lavoro assistito dall’IA viene revisionato e verificato. Architettura, prove
-sulla stampante e approvazione delle release restano al maintainer e ai tester.
+Grazie ai tester della **#327**: **Eldurinn, kalross, jgj1107, matefon, SVLoneStar,
+fechy, RoisinDubh79, lpgamerzockt-ops e Noahwhite2014**.
+[Crediti completi](docs/CONTRIBUTORS.md) · [Prove upgrade](docs/UPGRADE_CREDITS.md).
+Integrazione firmware e prove estese: **Neme77**.
 
-## Licenza
+## Un caffè per il progetto
 
-Il codice del progetto è GPL-3.0-only nei limiti dei diritti dei contributor.
-Firmware vendor e componenti di terze parti mantengono le proprie condizioni.
-Vedi [LICENSE](LICENSE) e [NOTICE.md](NOTICE.md).
+Se il mio lavoro ti piace e vuoi offrirmi un caffè, il contributo facoltativo
+aiuta sviluppo, prove ed esplorazione di altre stampanti. Non è necessario
+donare per usare il progetto e non promette compatibilità con modelli non provati.
+
+[Supporta il progetto con PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=gino.nencioni%40gmail.com&item_name=CC2%20Community%20Firmware&currency_code=EUR)
+
+## Sorgenti e licenze
+
+Progetto indipendente, non affiliato a ELEGOO, dedicato alla Centauri Carbon 2.
+Codice Community e componenti vendor mantengono le rispettive licenze.
+[LICENSE](LICENSE) · [NOTICE](NOTICE.md) · [Sorgenti](docs/SOURCE.md).
