@@ -69,7 +69,9 @@ Material assignment and physical filament presence remain separate.
 
 Activation is **optional and requested from Settings → Integrations**. Follow
 the restart and validation prompts; the original Canvas firmware can be
-restored. A Centauri Carbon 2 without Canvas needs no RFID activation, and
+restored. Once confirmed, the activation cannot be cancelled: CC2 Control
+refuses printer changes until it is complete, and going back means restoring
+the original Canvas firmware (a second transfer and two more full reboots). A Centauri Carbon 2 without Canvas needs no RFID activation, and
 external-spool printing remains available.
 
 The decoder and integration are open to new layouts and implementations.
