@@ -251,10 +251,13 @@ const CanvasFirmware = () => {
           ? 'rfid.lifecycle_restore_confirm'
           : action === 'remove'
             ? 'rfid.lifecycle_remove_confirm'
-            : continueValidation
-              ? 'rfid.lifecycle_validation_confirm'
-              : 'rfid.lifecycle_confirm'
-      if (!(await ask(t(confirmation)))) return
+            : action === 'activate'
+              ? 'rfid.lifecycle_activate_confirm'
+              : continueValidation
+                ? 'rfid.lifecycle_validation_confirm'
+                : 'rfid.lifecycle_confirm'
+      // Activation blocks printer changes until it completes and cannot be cancelled: warn, and focus Cancel.
+      if (!(await ask(t(confirmation), action === 'activate'))) return
       await post('/api/rfid/lifecycle/action', action)
       await refreshRfidLifecycle()
     } catch (e) {

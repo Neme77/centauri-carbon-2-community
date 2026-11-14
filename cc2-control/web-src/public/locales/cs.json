@@ -1538,6 +1538,7 @@
   "rfid.presence_hint": "Čtení štítku a přiřazení materiálu jsou oddělené od fyzické detekce filamentu. Slot zůstává průsvitný, dokud Canvas nezjistí filament na vstupu; neznamená to, že čtení RFID stále probíhá. Pro potvrzení přítomnosti na vstupu není nutné zavádět filament až k trysce.",
   "rfid.short_title": "RFID",
   "rfid.lifecycle_confirm": "Tato operace mění RFID aplikaci Canvas nebo její ochranu na straně tiskárny. Studenou tiskárnu v klidu ponechte zapnutou a připojenou. Proveďte každý požadovaný úplný restart a uchovejte původní zálohu. Pokračovat?",
+  "rfid.lifecycle_activate_confirm": "Aktivovat RFID Canvas?\n– CC2 Control je až do dokončení zablokován. Funguje jen zobrazení a nouzové zastavení.\n– Jsou potřeba dva úplné restarty tiskárny a druhé potvrzení.\n– Od přenosu do Canvas až do dalšího restartu nelze tiskárnu používat.\n– Nelze zrušit. Návrat je možný jen druhým přenosem a dalšími dvěma restarty.",
   "rfid.lifecycle_recovery": "Obnova RFID vyžaduje pozornost. Uchovejte původní zálohu a protokol operace; neopakujte přenos firmwaru ani neodstraňujte ochranu na straně tiskárny.",
   "rfid.lifecycle_working": "Probíhá příprava nebo ověření RFID. Ponechte tiskárnu zapnutou a připojenou; s restartem počkejte.",
   "rfid.lifecycle_restore_reboot": "Přenos původního firmwaru Canvas dokončen. S tiskárnou v klidu proveďte úplný restart pro ověření obnovy.",
