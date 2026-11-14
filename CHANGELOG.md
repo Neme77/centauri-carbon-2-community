@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Installing the modified Canvas firmware (Settings → Integrations → Canvas firmware) asks with its own warning instead of the shared RFID prompt: from the confirmation until the activation is complete CC2 Control refuses printer changes, the activation needs two full reboots, a confirmation after the first one and a firmware transfer to the Canvas, and it cannot be cancelled; going back means restoring the original Canvas firmware, with a second transfer and two more full reboots. The warning has Cancel focused, so Enter no longer starts the activation. The RFID lifecycle, its actions and its guards are unchanged. Reported and implemented by **lpgamerzockt-ops** (#PR).
+- Installing the modified Canvas firmware (Settings → Integrations → Canvas firmware) asks with its own warning instead of the shared RFID prompt: from the confirmation until the activation is complete CC2 Control refuses printer changes, the activation needs two full reboots, a confirmation after the first one and a firmware transfer to the Canvas, and it cannot be cancelled; going back means restoring the original Canvas firmware, with a second transfer and two more full reboots. The warning has Cancel focused, so Enter no longer starts the activation. The RFID lifecycle, its actions and its guards are unchanged. Reported and implemented by **lpgamerzockt-ops** (#378).
 
 ### Fixed
 
