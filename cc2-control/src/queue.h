@@ -764,6 +764,32 @@ static int queue_material_verified(const queue_item *item, const mqtt_client *mq
     }
     return 1;
 }
+/* A start on the worker (print dialog or queue, USB or internal memory) chose its slot mapping before the
+ * copy. The trays as they were when the start began are kept; after the copy the trays the mapping names are
+ * compared with them (status, material, name, colour). A change refuses the start. Without a report at either
+ * time there is nothing to compare, and the start is judged as before. */
+static spool_tray usb_start_trays[4];
+static int usb_start_trays_known;
+static void usb_start_trays_note(const mqtt_client *mqtt) {
+    usb_start_trays_known = queue_mqtt_fresh(mqtt) && spools_trays(mqtt, usb_start_trays);
+}
+static int usb_start_trays_changed(const mqtt_client *mqtt, const char *body, size_t length) {
+    spool_tray now[4];
+    char storage[16], filename[PATH_MAX_LOCAL];
+    const char *mapping, *root, *media;
+    size_t mapping_len = 0, count = 0;
+    int tools[GCODE_TOOLS_MAX], slots[GCODE_TOOLS_MAX];
+    if (!usb_start_trays_known || !queue_mqtt_fresh(mqtt) || !spools_trays(mqtt, now)) return 0;
+    if (!gcode_request_file(body, length, storage, filename, &mapping, &mapping_len, &root, &media)) return 0;
+    const char *line_end = memchr(mapping, '\n', mapping_len);
+    if (!parse_slot_map(mapping, line_end ? (size_t)(line_end - mapping) : mapping_len, tools, slots, &count)) return 0;
+    for (size_t i = 0; i < count; ++i) {
+        const spool_tray *then = &usb_start_trays[slots[i]], *later = &now[slots[i]];
+        if (then->status != later->status || strcmp(then->type, later->type) || strcmp(then->name, later->name) ||
+            strcmp(then->color, later->color)) return 1;
+    }
+    return 0;
+}
 static void queue_tick(mqtt_client *mqtt) {
     if (!queue_available) return;
     if (!queue_mqtt_fresh(mqtt)) return; /* stale evidence decides nothing */

@@ -2731,6 +2731,11 @@ static int queue_usb_copied(int fd, mqtt_client *mqtt, int id, int automatic, co
                             gcode_usb_start *usb); /* queue.h */
 static void queue_usb_dropped(int id, int automatic); /* queue.h */
 
+/* Every start on the worker notes the Canvas trays when it begins and compares the trays its mapping names
+ * after the copy (queue.h): a spool changed meanwhile must not be printed with the mapping chosen before. */
+static void usb_start_trays_note(const mqtt_client *mqtt);
+static int usb_start_trays_changed(const mqtt_client *mqtt, const char *body, size_t length);
+
 /* Returns 1 when the worker took the socket, 0 when the request has been answered (`*status`). */
 static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size_t body_len,
                                int queue_id, int automatic, int peer, int *status) {
@@ -2762,6 +2767,7 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
     if ((*status = gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start)) != 0) return 0;
     memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
     usb_start_length = body_len;
+    usb_start_trays_note(mqtt);
     usb_start_cancelled = 0;
     atomic_store(&usb_start_done, 0);
     pthread_attr_t attr; pthread_t thread;
@@ -2793,6 +2799,11 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
  * an earlier import had the same name: that file is left as the synchronous start left it.
  * A client that disconnects before then, or an emergency stop, cancels the start: the browser
  * has reported a failure, so the print must not begin behind its back. */
+static int usb_start_trays_refuse(int fd) {
+    const char *error = "{\"accepted\":false,\"error\":\"The Canvas trays changed while the file was copied; start the print again\"}\n";
+    respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+    return 409;
+}
 static void usb_start_tick(mqtt_client *mqtt) {
     if (!usb_start_active()) return;
     if (!usb_start_cancelled && usb_start_client_gone(usb_start_fd)) usb_start_cancelled = 1;
@@ -2803,7 +2814,10 @@ static void usb_start_tick(mqtt_client *mqtt) {
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
     } else if (!usb_start_cancelled) {
         usb_start.stage = USB_START_PREPARED;
-        status = usb_start_queue_id
+        if (usb_start_trays_changed(mqtt, usb_start_body, usb_start_length)) {
+            status = usb_start_trays_refuse(fd);
+            if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
+        } else status = usb_start_queue_id
                      ? queue_usb_copied(fd, mqtt, usb_start_queue_id, usb_start_queue_auto, usb_start_body,
                                         usb_start_length, &usb_start)
                      : gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
