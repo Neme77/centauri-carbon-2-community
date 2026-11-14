@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'preact/hooks'
-import { ChevronDown, ChevronRight, ChevronUp, FileText, Minus, Play, Plus, SkipForward, Trash2 } from 'lucide-preact'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { ChevronDown, ChevronRight, ChevronUp, Minus, Palette, Play, Plus, SkipForward, Trash2 } from 'lucide-preact'
 import { Card, CardHead, Page } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
@@ -16,13 +16,19 @@ import { canvas, refreshCanvas } from '@/lib/canvas'
 import { nozzleName, type PlateLibrary, plates, refreshPlates } from '@/lib/plates'
 import { stateText } from '@/lib/machine'
 import { readMeshReadiness } from '@/pages/print-dialog'
+import { JobFilament, JobFilaments, missingNote } from '@/components/queue-next'
+import { JobFilamentDialog } from '@/components/queue-filament'
+import { FilePicture } from '@/components/file-picture'
 import {
   clearFinished,
   copiesLeft,
   abandonQueued,
+  type FilamentLabel,
+  filamentKnown,
   finishedJobs,
   holdQueue,
-  mappingSlots,
+  jobFilaments,
+  missingFilaments,
   openJobs,
   type Queue as QueueData,
   type QueueItem,
@@ -36,12 +42,14 @@ import {
   reorderQueued,
   setQueuePolicy,
   setQueuedCopies,
+  startBlocked,
   startQueued,
 } from '@/lib/queue'
 
 const I = { size: 16, strokeWidth: 1 }
 type Tone = 'ok' | 'warn' | 'bad' | 'info'
-type Check = { tone: Tone; text: string }
+// `filament`: the job's filament a check is about, shown after its text.
+type Check = { tone: Tone; text: string; filament?: FilamentLabel | null }
 type Filament = { tool: number; color: string; material: string }
 type MeshSides = { A: boolean | null; B: boolean | null }
 
@@ -66,14 +74,19 @@ function preflight(
       ? { tone: 'ok', text: tpl('queue.check_file_ok', { where: where(item.storage) }) }
       : { tone: 'bad', text: tpl('queue.check_file_missing', { where: where(item.storage) }) }
   )
-  const slots = mappingSlots(item.mapping)
-  if (!slots.length) checks.push({ tone: 'info', text: t('queue.check_external') })
-  for (const { tool, slot } of slots) {
-    const tray = trays.find(x => x && Number(x.tray_id) === slot)
+  const feeds = jobFilaments(item)
+  if (!feeds.length) checks.push({ tone: 'info', text: t('queue.check_external') })
+  // A filament of the job that is in no slot stops the start: said once per filament.
+  for (const f of missingFilaments(item))
+    checks.push({ tone: 'bad', text: missingNote(f), filament: filamentKnown(f) ? f : null })
+  // Every other tool prints from the slot that holds its filament now: that slot is checked against the file.
+  for (const { tool, use } of feeds) {
+    if (use === null) continue
+    const tray = trays.find(x => x && Number(x.tray_id) === use)
     const label = (tray && (tray.filament_name || tray.filament_type)) || ''
     const type = String(tray?.filament_type || tray?.filament_name || '')
     const wanted = filaments?.find(f => f.tool === tool)?.material || ''
-    const n = slot + 1
+    const n = use + 1
     if (!label) checks.push({ tone: 'warn', text: tpl('queue.check_slot_unknown', { n }) })
     else if (!wanted) checks.push({ tone: 'ok', text: tpl('queue.check_slot', { n, filament: label }) })
     else if (
@@ -121,69 +134,57 @@ const CheckList = ({ checks }: { checks: Check[] }) => (
             c.tone === 'ok' ? 'bg-green' : c.tone === 'warn' ? 'bg-amber' : c.tone === 'bad' ? 'bg-red' : 'bg-cyan'
           }`}
         />
-        <span class={c.tone === 'warn' ? 'text-amber' : c.tone === 'bad' ? 'text-red' : ''}>{c.text}</span>
+        <div class="min-w-0">
+          <span class={c.tone === 'warn' ? 'text-amber' : c.tone === 'bad' ? 'text-red' : ''}>{c.text}</span>
+          {c.filament && (
+            <>
+              {' '}
+              <JobFilament f={c.filament} />
+            </>
+          )}
+        </div>
       </li>
     ))}
   </ul>
 )
 
-// The job's print settings, as the dialog saved them.
+// The job's print settings, as the dialog saved them, and the filaments it is bound to, with the way to
+// give a tool another one.
 const Settings = ({ item, lib }: { item: QueueItem; lib: PlateLibrary | null }) => {
-  const slots = mappingSlots(item.mapping)
-  const chips: string[] = [tpl('queue.side_n', { side: item.side })]
-  chips.push(
-    slots.length ? slots.map(s => tpl('common.slot_n', { n: s.slot + 1 })).join(' · ') : t('queue.external_feed')
-  )
-  if (item.leveling !== 'saved') chips.push(t('queue.calibration'))
-  if (item.timelapse) chips.push(t('queue.timelapse'))
-  if (item.nozzle) chips.push(tpl('queue.nozzle_x', { name: nozzleName(lib, item.nozzle) || item.nozzle }))
+  const [edit, setEdit] = useState(false)
+  const more: string[] = []
+  if (item.leveling !== 'saved') more.push(t('queue.calibration'))
+  if (item.timelapse) more.push(t('queue.timelapse'))
+  if (item.nozzle) more.push(tpl('queue.nozzle_x', { name: nozzleName(lib, item.nozzle) || item.nozzle }))
   return (
-    <div class="flex flex-wrap gap-1.5">
-      {chips.map(c => (
+    <div class="flex flex-wrap items-center gap-1.5">
+      <Tag>{tpl('queue.side_n', { side: item.side })}</Tag>
+      <JobFilaments item={item} />
+      {jobFilaments(item).length > 0 && item.state !== 'done' && (
+        <Button
+          variant="ghost"
+          class="min-h-7 px-1.5"
+          aria-label={t('queue.filament_change')}
+          title={t('queue.filament_change')}
+          onClick={() => setEdit(true)}
+          data-queue-filament-edit
+        >
+          <Palette size={14} strokeWidth={1} />
+        </Button>
+      )}
+      {more.map(c => (
         <Tag key={c}>{c}</Tag>
       ))}
+      {edit && <JobFilamentDialog item={item} onClose={() => setEdit(false)} />}
     </div>
   )
 }
 
-const Thumb = ({ item }: { item: QueueItem | null }) => {
-  const [url, setUrl] = useState('')
-  const k = item ? fileKey(item) : ''
-  useEffect(() => {
-    setUrl('')
-    if (!item) return
-    let dead = false,
-      made = ''
-    ;(async () => {
-      try {
-        const r = await fetch('/api/gcode-files/thumbnail', {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'X-CC2-Request': '1' },
-          body: `${item.storage}\n${item.path}`,
-        })
-        const blob = await r.blob()
-        if (!r.ok || !blob.type.startsWith('image/')) throw Error('no thumbnail')
-        made = URL.createObjectURL(blob)
-        if (!dead) setUrl(made)
-      } catch {
-        /* the placeholder stays */
-      }
-    })()
-    return () => {
-      dead = true
-      if (made) URL.revokeObjectURL(made)
-    }
-  }, [k])
-  return (
-    <div class="grid size-28 shrink-0 place-items-center overflow-hidden rounded-lg border border-edge bg-well">
-      {url ? (
-        <img src={url} alt={t('files.g_code_model_preview')} class="size-full object-contain p-1.5" />
-      ) : (
-        <FileText size={40} strokeWidth={1} class="text-edge" />
-      )}
-    </div>
-  )
-}
+// The picture of the job's file: large on the card of the current job, small in a row of the list. A queue
+// item does not say which version of the file it means, so the picture is remembered for the job.
+const Thumb = ({ item, row }: { item: QueueItem; row?: boolean }) => (
+  <FilePicture storage={item.storage} path={item.path} tag={`job:${item.id}`} row={row} />
+)
 
 const copyText = (item: QueueItem) =>
   tpl('queue.copy_k_of_n', { k: Math.min(item.done + 1, item.copies), n: item.copies })
@@ -220,7 +221,7 @@ const Hero = ({
   const trays = canvas.use().model?.trays || []
   const [busy, setBusy] = useState(false)
   const checks = active ? [] : preflight(item, d, ok, trays, filaments, mesh, lib)
-  const canStart = !active && item.present && v.idle && ok && Boolean(d?.connected) && !q.active
+  const canStart = !active && item.present && !startBlocked(item) && v.idle && ok && Boolean(d?.connected) && !q.active
   const start = async () => {
     setBusy(true)
     await act(() => startQueued(item.id), {
@@ -423,7 +424,31 @@ const lastResult = (item: QueueItem) =>
           ? t('queue.auto_material')
           : ''
 
-const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: QueueData; lib: PlateLibrary | null }) => {
+// What the picture of a row does with the pointer while the row can be dragged to another place.
+type Grip = Record<
+  'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'onLostPointerCapture',
+  (e: PointerEvent) => void
+>
+
+// `grip`: the row can be dragged by its picture. `lifted`: it is the one being dragged (the pointer moves it,
+// not this component). `shift`: the pixels a row moves aside for the dragged one, null when nothing is dragged.
+const Row = ({
+  item,
+  index,
+  q,
+  lib,
+  grip,
+  lifted,
+  shift,
+}: {
+  item: QueueItem
+  index: number
+  q: QueueData
+  lib: PlateLibrary | null
+  grip: Grip | null
+  lifted: boolean
+  shift: number | null
+}) => {
   const jobs = openJobs(q)
   const running = item.id === q.active
   // One change at a time per row: the next click waits for the refreshed queue, so it never repeats a stale value.
@@ -446,12 +471,29 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
   return (
     <div
       data-queue-item={item.id}
-      class={`grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 border-t border-edge px-2 py-2 cc2-md:grid-cols-[28px_minmax(0,1.3fr)_170px_100px_minmax(0,1.2fr)_auto] ${
-        q.next === item.id ? 'rounded-md bg-cyan/5 outline outline-1 -outline-offset-1 outline-cyan' : ''
-      }`}
+      data-queue-drag={lifted ? 'lifted' : undefined}
+      style={!lifted && shift !== null ? { transform: `translateY(${shift}px)` } : undefined}
+      class={`grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-2 border-t border-edge px-2 py-2 cc2-md:grid-cols-[48px_minmax(0,1.3fr)_170px_100px_minmax(0,1.2fr)_auto] ${
+        lifted
+          ? 'relative z-10 rounded-md bg-panel shadow-lg outline outline-1 -outline-offset-1 outline-cyan'
+          : q.next === item.id
+            ? 'rounded-md bg-cyan/5 outline outline-1 -outline-offset-1 outline-cyan'
+            : ''
+      } ${!lifted && shift !== null ? 'transition-transform duration-150' : ''}`}
     >
-      <span class="text-muted">{index + 1}</span>
-      <div class="min-w-0">
+      <div
+        data-queue-handle={grip ? 'on' : 'off'}
+        title={grip ? t('queue.list_hint') : undefined}
+        class={`relative select-none ${grip ? `touch-none ${lifted ? 'cursor-grabbing' : 'cursor-grab'}` : ''}`}
+        {...(grip ?? {})}
+      >
+        <Thumb item={item} row />
+        <span class="absolute -left-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full border border-edge bg-panel px-1 text-xs text-muted">
+          {index + 1}
+        </span>
+      </div>
+      {/* A narrow window gives the name the whole first line; the copies and the actions share the second. */}
+      <div class="col-span-2 min-w-0 cc2-md:col-span-1">
         <div class="flex flex-wrap items-center gap-2 font-semibold [overflow-wrap:anywhere]">
           <span>{item.path}</span>
           {stateTag(item, q)}
@@ -461,7 +503,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
           {note && <span class="text-amber"> · {note}</span>}
         </div>
       </div>
-      <div class="cc2-md:order-none order-last col-span-3 cc2-md:col-span-1">
+      <div class="order-last col-span-2 cc2-md:order-none cc2-md:col-span-1">
         <div class="inline-flex h-8 items-center rounded-md border border-edge bg-field">
           <Button
             variant="ghost"
@@ -494,7 +536,7 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
       <div class="hidden cc2-md:block">
         <Settings item={item} lib={lib} />
       </div>
-      <div class="flex justify-end gap-1">
+      <div class="order-last flex justify-end gap-1 cc2-md:order-none">
         <Button
           variant="ghost"
           class="px-2"
@@ -524,6 +566,201 @@ const Row = ({ item, index, q, lib }: { item: QueueItem; index: number; q: Queue
           <Trash2 {...I} />
         </Button>
       </div>
+    </div>
+  )
+}
+
+// A drag as the list shows it: the job, where it was taken and where it would land, how much room the others
+// make for it, and whether it has been dropped and waits for the queue to come back in the new order.
+type Drag = { id: number; from: number; to: number; height: number; dropped: boolean }
+// A drag as the pointer needs it between two events; none of it is worth a render.
+type Held = {
+  pointer: number
+  handle: HTMLElement
+  row: HTMLElement
+  y: number
+  startY: number
+  scroll: number
+  tops: number[]
+  heights: number[]
+  from: number
+  to: number
+  min: number
+  roof: number
+  seen: number
+  frame: number
+  key: (e: KeyboardEvent) => void
+}
+
+// The open jobs in their order. A job is dragged by its picture: the others make room while it moves, and the
+// drop is one /api/queue/reorder, as with the arrows. The dragged row is moved directly, so the list is
+// rendered again only when its place among the others changes. A job that prints at the head stays there.
+const Jobs = ({ q, lib }: { q: QueueData; lib: PlateLibrary | null }) => {
+  const jobs = openJobs(q)
+  const order = jobs.map(job => job.id).join()
+  const min = jobs.length && jobs[0].id === q.active ? 1 : 0
+  const host = useRef<HTMLDivElement>(null)
+  const held = useRef<Held | null>(null)
+  const moved = useRef<HTMLElement | null>(null)
+  const [drag, setDrag] = useState<Drag | null>(null)
+
+  const settle = () => {
+    const row = moved.current
+    moved.current = null
+    if (row) row.style.transform = row.style.transition = ''
+    setDrag(null)
+  }
+  const release = () => {
+    const h = held.current
+    held.current = null
+    if (!h) return null
+    cancelAnimationFrame(h.frame)
+    window.removeEventListener('keydown', h.key)
+    if (h.handle.hasPointerCapture(h.pointer)) h.handle.releasePointerCapture(h.pointer)
+    return h
+  }
+  const cancel = () => {
+    if (release()) settle()
+  }
+  // The row follows the pointer between the first place it may take and the last; it would land past every
+  // row whose middle its leading edge has crossed. The rows are measured once, when the drag starts.
+  const place = () => {
+    const h = held.current
+    if (!h) return
+    const last = h.tops.length - 1
+    const dy = Math.max(
+      h.tops[h.min] - h.tops[h.from],
+      Math.min(
+        h.tops[last] + h.heights[last] - h.tops[h.from] - h.heights[h.from],
+        h.y - h.startY + window.scrollY - h.scroll
+      )
+    )
+    h.row.style.transform = `translateY(${dy}px)`
+    const top = h.tops[h.from] + dy
+    let to = h.from
+    for (let i = h.from + 1; i <= last && top + h.heights[h.from] > h.tops[i] + h.heights[i] / 2; i++) to = i
+    for (let i = h.from - 1; i >= h.min && top < h.tops[i] + h.heights[i] / 2; i--) to = i
+    if (to === h.to) return
+    h.to = to
+    setDrag(d => d && { ...d, to })
+  }
+  // Near the top bar or the bottom of the window the page scrolls under the pointer. However the page came to
+  // scroll (this, a wheel, the keyboard), the row stays under the pointer.
+  const tick = () => {
+    const h = held.current
+    if (!h) return
+    const edge = 64
+    const past =
+      h.y < h.roof + edge ? h.y - h.roof - edge : h.y > window.innerHeight - edge ? h.y - window.innerHeight + edge : 0
+    if (past) window.scrollBy({ top: Math.max(-20, Math.min(20, past / 3)), behavior: 'instant' })
+    if (window.scrollY !== h.seen) {
+      h.seen = window.scrollY
+      place()
+    }
+    h.frame = requestAnimationFrame(tick)
+  }
+  const start = (e: PointerEvent, index: number) => {
+    if (held.current || drag || (e.pointerType === 'mouse' && e.button !== 0)) return
+    const rows = [...(host.current?.querySelectorAll<HTMLElement>('[data-queue-item]') ?? [])]
+    if (rows.length !== jobs.length || index < min) return
+    const handle = e.currentTarget as HTMLElement
+    e.preventDefault()
+    handle.setPointerCapture(e.pointerId)
+    const boxes = rows.map(row => row.getBoundingClientRect())
+    const key = (k: KeyboardEvent) => {
+      if (k.key === 'Escape') cancel()
+    }
+    held.current = {
+      pointer: e.pointerId,
+      handle,
+      row: rows[index],
+      y: e.clientY,
+      startY: e.clientY,
+      scroll: window.scrollY,
+      tops: boxes.map(box => box.top),
+      heights: boxes.map(box => box.height),
+      from: index,
+      to: index,
+      min,
+      roof: document.querySelector('.cc2-topbar')?.getBoundingClientRect().bottom ?? 0,
+      seen: window.scrollY,
+      frame: requestAnimationFrame(tick),
+      key,
+    }
+    moved.current = rows[index]
+    window.addEventListener('keydown', key)
+    setDrag({ id: jobs[index].id, from: index, to: index, height: boxes[index].height, dropped: false })
+  }
+  // The row slides into its place and stays there until the queue comes back in the new order (the effect
+  // below then lets go of it), or until the change is refused and it goes back.
+  const drop = () => {
+    const h = release()
+    if (!h) return
+    if (h.to === h.from) {
+      settle()
+      return
+    }
+    let rest = 0
+    if (h.to > h.from) for (let i = h.from + 1; i <= h.to; i++) rest += h.heights[i]
+    else for (let i = h.to; i < h.from; i++) rest -= h.heights[i]
+    h.row.style.transition = 'transform 150ms'
+    h.row.style.transform = `translateY(${rest}px)`
+    setDrag(d => d && { ...d, dropped: true })
+    act(() => reorderQueued(jobs[h.from].id, q.items.indexOf(jobs[h.to]))).finally(() => {
+      if (moved.current === h.row) settle()
+    })
+  }
+  const grip = (index: number): Grip => ({
+    onPointerDown: e => start(e, index),
+    onPointerMove: e => {
+      const h = held.current
+      if (!h || e.pointerId !== h.pointer) return
+      h.y = e.clientY
+      place()
+    },
+    onPointerUp: e => {
+      if (held.current?.pointer === e.pointerId) drop()
+    },
+    onPointerCancel: e => {
+      if (held.current?.pointer === e.pointerId) cancel()
+    },
+    // The browser took the pointer away without an "up" (the window lost it): the job goes back.
+    onLostPointerCapture: e => {
+      if (held.current?.pointer === e.pointerId) cancel()
+    },
+  })
+  // The list changed (the drop arrived, a copy finished, a job was added or removed): nothing of a drag applies
+  // to the new one. Before the browser paints, so a dropped row is never seen jumping.
+  useLayoutEffect(() => {
+    release()
+    settle()
+  }, [order])
+  useEffect(() => () => void release(), [])
+  return (
+    <div ref={host} data-queue-rows class={drag ? 'select-none' : undefined}>
+      {jobs.map((item, index) => {
+        const lifted = drag?.id === item.id
+        const aside =
+          !drag || lifted
+            ? 0
+            : index > drag.from && index <= drag.to
+              ? -1
+              : index >= drag.to && index < drag.from
+                ? 1
+                : 0
+        return (
+          <Row
+            key={item.id}
+            item={item}
+            index={index}
+            q={q}
+            lib={lib}
+            grip={index >= min && jobs.length - min > 1 && !drag?.dropped ? grip(index) : null}
+            lifted={lifted}
+            shift={drag ? aside * drag.height : null}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -641,7 +878,7 @@ export const Queue = () => {
           </div>
           <Card class="mt-3.5" data-queue-list>
             <CardHead icon="queue" title="queue.list_title" end={t('queue.list_hint')} />
-            <div class="hidden cc2-md:grid cc2-md:grid-cols-[28px_minmax(0,1.3fr)_170px_100px_minmax(0,1.2fr)_auto] gap-2 px-2 pb-1.5 text-xs text-muted">
+            <div class="hidden cc2-md:grid cc2-md:grid-cols-[48px_minmax(0,1.3fr)_170px_100px_minmax(0,1.2fr)_auto] gap-2 px-2 pb-1.5 text-xs text-muted">
               <span>#</span>
               <span>{t('queue.col_file')}</span>
               <span>{t('queue.col_copies')}</span>
@@ -649,9 +886,7 @@ export const Queue = () => {
               <span>{t('queue.col_settings')}</span>
               <span class="text-right">{t('queue.col_actions')}</span>
             </div>
-            {openJobs(q).map((item, index) => (
-              <Row key={item.id} item={item} index={index} q={q} lib={lib} />
-            ))}
+            <Jobs q={q} lib={lib} />
             {!openJobs(q).length && <p class="p-3 text-muted">{t('queue.all_done')}</p>}
             {done.length > 0 && (
               <div class="mt-2.5 border-t border-edge pt-2.5">

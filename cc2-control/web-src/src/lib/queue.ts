@@ -1,13 +1,29 @@
 import { store } from './store'
 import { post, request } from './api'
+import { t } from './i18n'
 
 // The print queue: jobs prepared ahead (file, the print dialog's choices, copies). Every copy is a
 // protected print start on the backend; the browser only asks for it. See cc2-control/docs/API.md.
+// A filament as a Canvas slot labels it: the material type ("PLA"), the product line ("PLA Matte") and the
+// colour ("#RRGGBB"). A type or a name left empty is not stated.
+export type FilamentLabel = { type: string; name: string; color: string }
+// One tool of a job that prints from the Canvas. The job is bound to the filament, not to a slot: the label
+// is empty until the Canvas has labelled the slot the job was added with. `slot` is that slot (null: the job
+// was added for a filament alone, which need not be in the printer) and `use` the slot a start would take
+// now: the one that holds the filament, or null when none does (the backend then refuses the start).
+// `reason`: 'empty' or 'other' is what the slot the job was added with holds now, 'absent' that no slot
+// holds the filament, 'unknown' that the Canvas has reported no slots to look in.
+export type QueueFilament = FilamentLabel & {
+  tool: number
+  slot: number | null
+  use: number | null
+  reason?: '' | 'empty' | 'other' | 'absent' | 'unknown'
+}
 export type QueueItem = {
   id: number
   storage: 'internal' | 'usb'
   path: string
-  mapping: string // "tool:slot,..." or "" for the external feed
+  mapping: string // "tool:slot,...": the slots the job was added with
   side: 'A' | 'B'
   leveling: 'saved' | 'calibrate' | 'adaptive' | 'full'
   timelapse: boolean
@@ -21,6 +37,7 @@ export type QueueItem = {
   state: 'pending' | 'starting' | 'printing' | 'done'
   last_result: '' | 'stopped' | 'not_started' | 'auto_failed' | 'auto_material'
   present: boolean
+  filaments?: QueueFilament[] // none: the external feed
 }
 export type QueuePolicy = { after: 'wait' | 'auto'; delay: number; remove_done: boolean }
 export type Queue = {
@@ -82,6 +99,24 @@ export const mappingSlots = (mapping: string) =>
       return { tool, slot }
     })
 
+// The job's filaments with the slot a start would take for each, as the backend resolved them; a reply
+// without them means the slots the job was added with.
+export const jobFilaments = (i: QueueItem): QueueFilament[] =>
+  Array.isArray(i.filaments)
+    ? i.filaments
+    : mappingSlots(i.mapping).map(s => ({ ...s, type: '', name: '', color: '', use: s.slot }))
+export const filamentKnown = (f: FilamentLabel) => Boolean((f.type || f.name) && f.color)
+export const filamentName = (f: FilamentLabel) => f.name || f.type
+// The filaments a start has no slot for, one entry per filament (tools may share one): the job cannot start.
+export const missingFilaments = (i: QueueItem) => {
+  const seen = new Set<string>()
+  return jobFilaments(i).filter(f => {
+    const key = [f.type, f.name, f.color, f.slot, f.reason].join('|')
+    return f.use === null && !seen.has(key) && seen.add(key)
+  })
+}
+export const startBlocked = (i: QueueItem) => jobFilaments(i).some(f => f.use === null)
+
 // Copies still queued for a file: the Files page marks it.
 export const queuedCopiesFor = (q: Queue | null, storage: string, path: string) =>
   items(q)
@@ -101,8 +136,14 @@ export type QueueAdd = {
   position: 'end' | 'next'
   estimatedSeconds: number | null
   filamentGrams: number | null
+  // Tools bound to a filament by itself: `mapping` names the slots of the others.
+  filaments?: ToolFilament[]
 }
-// The same eight lines as /api/gcode-files/print, then copies, position and the slicer's estimates.
+export type ToolFilament = FilamentLabel & { tool: number }
+// One "tool<TAB>type<TAB>name<TAB>#RRGGBB" line per tool bound to a filament by itself.
+const filamentLines = (list: ToolFilament[] = []) => list.map(f => [f.tool, f.type, f.name, f.color].join('\t'))
+// The same eight lines as /api/gcode-files/print, then copies, position, the slicer's estimates and the
+// filaments of the tools that have no slot.
 export const addToQueue = (a: QueueAdd) =>
   post(
     '/api/queue/add',
@@ -119,9 +160,29 @@ export const addToQueue = (a: QueueAdd) =>
       a.position,
       a.estimatedSeconds === null ? '' : String(Math.round(a.estimatedSeconds)),
       a.filamentGrams === null ? '' : String(a.filamentGrams),
+      ...filamentLines(a.filaments),
     ].join('\n')
   )
-export const startQueued = (id?: number) => post('/api/queue/start', id ? String(id) : '')
+// Other filaments for tools of a job: `mapping` for the tools that take what a slot holds now, `filaments`
+// for the ones bound to a filament by itself. The tools named in neither keep theirs.
+export const setQueuedFilaments = (id: number, mapping: string, filaments: ToolFilament[] = []) =>
+  post('/api/queue/filament', [String(id), mapping, ...filamentLines(filaments)].join('\n'))
+// A start fed from the Canvas takes its slots from a Canvas report that the start itself asks for: the slots
+// on the page may be older than a spool just changed. Until the printer has answered, the backend says 409
+// with `checking`, and the start is asked for again, for up to CHECK_MS (one action, not a poll).
+const CHECK_MS = 12000
+export const startQueued = async (id?: number) => {
+  const until = Date.now() + CHECK_MS
+  for (;;) {
+    try {
+      return await post('/api/queue/start', id ? String(id) : '')
+    } catch (e: any) {
+      if (!(e?.status === 409 && e?.data?.checking)) throw e
+      if (Date.now() >= until) throw Error(t('queue.canvas_check_failed'))
+      await new Promise(done => setTimeout(done, 500))
+    }
+  }
+}
 export const removeQueued = (id: number) => post('/api/queue/remove', String(id))
 export const reorderQueued = (id: number, index: number) => post('/api/queue/reorder', `${id}\n${index}`)
 export const setQueuedCopies = (id: number, copies: number) => post('/api/queue/copies', `${id}\n${copies}`)

@@ -122,7 +122,50 @@ def main():
             assert head["timelapse"] is True and head["estimated_seconds"] is None and head["filament_grams"] is None
             assert tail["copies"] == 3 and tail["done"] == 0 and tail["estimated_seconds"] == 6000
             assert tail["filament_grams"] == 42.5 and tail["state"] == "pending" and tail["present"] is True
+            # Without Canvas telemetry nothing is known against a slot: the tool feeds from the slot the job was
+            # added with, and its filament is not known yet. The external feed has no tools.
+            blind = {"tool": 0, "type": "", "name": "", "color": "", "slot": 1, "use": 1, "reason": ""}
+            assert head["filaments"] == [blind] and tail["filaments"] == [], (head, tail)
             assert server.get()["next"] == 2
+
+            # A tool can be bound to a filament by itself, which need not be in the printer: the job then names
+            # no slot for it, and without a Canvas report there is nowhere to look for the filament. The stored
+            # file says so with version 2. Binding the tool to a slot again takes that slot's filament.
+            assert server.call("/api/queue/filament", "2\n\n0\tPLA\tPLA Matte\t#f72221")[0] == 200
+            head = server.get()["items"][0]
+            assert head["mapping"] == "" and head["filaments"] == [
+                {"tool": 0, "type": "PLA", "name": "PLA Matte", "color": "#F72221", "slot": None, "use": None, "reason": "unknown"}
+            ], head
+            stored = json.loads(queue_file.read_text(encoding="utf-8"))
+            assert stored["version"] == 2 and stored["items"][0]["mapping"] == "", stored
+            assert stored["items"][0]["filaments"] == [{"tool": 0, "type": "PLA", "name": "PLA Matte", "color": "#F72221"}], stored
+            status, reply = server.call("/api/queue/start", "2")
+            assert status == 409 and "has not reported its slots" in reply["error"], (status, reply)
+            for body, expected in [
+                ("2\n\n0\tPLA\tPLA Matte\tred", 400),          # not a colour
+                ("2\n\n0\t\t\t#F72221", 400),                   # no material
+                ("2\n\n0\tPLA\tPLA Matte", 400),                # a field short
+                ("2\n\n0\tPLA\tPLA Matte\t#F72221\tmore", 400),  # a field too many
+                ("2\n0:1\n0\tPLA\tPLA Matte\t#F72221", 400),     # one tool twice
+                ("2\n0:7", 400),                                # no such slot
+                ("2\n", 400),                                   # nothing to change
+                ("2\n1:0", 409),                                # the job has no tool 1
+                ("1\n0:0", 409),                                # the external feed has no tools
+                ("99\n0:0", 404),
+            ]:
+                status, reply = server.call("/api/queue/filament", body)
+                assert status == expected and reply["ok"] is False, (body, status, reply)
+            assert server.call("/api/queue/filament", "2\n0:1")[0] == 200
+            head = server.get()["items"][0]
+            assert head["mapping"] == "0:1" and head["filaments"] == [blind], head
+            assert json.loads(queue_file.read_text(encoding="utf-8"))["version"] == 1
+            # An add request states such filaments in lines after its estimates; a bad one stores nothing.
+            for extra in ["0\tPLA\tPLA Matte\t#12345", "0\tPLA\tPLA Matte\t#F72221\n0\tPLA\tPLA Silk\t#F72221"]:
+                status, reply = server.call("/api/queue/add", add_body("part.gcode") + "\n" + extra)
+                assert status == 400 and reply["ok"] is False, (extra, status, reply)
+            status, reply = server.call("/api/queue/add", add_body("part.gcode", mapping="0:1") + "\n0\tPLA\tPLA Matte\t#F72221")
+            assert status == 400 and reply["error"] == "A tool is named twice", (status, reply)
+            assert len(server.get()["items"]) == 2
 
             # Validation refuses what the print path would refuse, before anything is stored.
             for body, expected in [

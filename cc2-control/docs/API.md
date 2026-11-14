@@ -864,21 +864,47 @@ unless the `auto` policy is chosen.
   "delay","remove_done"},"active","next","items":[…]}`. Items are in queue order with `id`, `storage`, `path`,
   `mapping`, `side`, `leveling`, `timelapse`, `measure`, `nozzle`, `copies`, `done`, `estimated_seconds` and
   `filament_grams` (`null` when unknown), `added`, `state` (`pending`, `starting`, `printing` or `done`),
-  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`) and `present` (the file is in place).
+  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`), `present` (the file is in place)
+  and `filaments`: one `{"tool","type","name","color","slot","use","reason"}` per tool of a job that prints from
+  the Canvas (none for the external feed). `type`, `name` and `color` are the filament the tool is bound to, as
+  a Canvas slot labels it (empty texts while it is not known yet); `slot` is the Canvas slot the job was added
+  with, or `null` for a tool added for a filament alone; `use` is the slot a start would take now, the one that
+  holds the filament, or `null` when none does; `reason` says what was found: `""`, `"empty"` or `"other"` (the
+  slot the job was added with is empty, or holds another filament), `"absent"` (no slot holds the filament of a
+  tool added without a slot) or `"unknown"` (the Canvas has reported no slots to look in). `mapping` holds the
+  slots the job was added with (see below).
   `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing;
   `auto_in` the seconds until a pending automatic start, else `null`.
 - `POST /api/queue/add` takes the eight newline-separated fields of `/api/gcode-files/print` (storage,
   filename, Canvas mapping, plate side, leveling mode, timelapse, measurement, nozzle), then `copies` (1–99),
   `position` (`end`, or `next` to go to the head behind a running copy) and optionally the slicer's
-  `estimated_seconds` and `filament_grams`. The syntax and the file are checked now; the printer-dependent
-  checks (mapping against the file, mesh, measurement, nozzle) run at each start. 201 `{"ok":true,"id","count"}`;
-  the queue holds at most 32 jobs.
+  `estimated_seconds` and `filament_grams` (two lines, empty when unknown). Further lines bind tools to a
+  filament by itself, which need not be in the printer: `tool<TAB>type<TAB>name<TAB>#RRGGBB`, one per tool,
+  for tools the mapping does not name (`type` or `name` may be empty, not both; empty lines are skipped). A
+  tool of the mapping is bound to the filament its slot is labelled with (see below). The syntax and the file
+  are checked now; the printer-dependent checks (tools against the file, mesh, measurement, nozzle) run at each
+  start. 201 `{"ok":true,"id","count"}`; the queue holds at most 32 jobs.
 - `POST /api/queue/start` with a job id, or an empty body for `next`: refused (409) while a queued copy is
   starting or printing, when the job has no copy left, while plate verification runs, or while another
   session holds the printer (the refusals every print control shares: maintenance, the Canvas and filament
-  tools, a camera cell, an application update, a managed connection, drying, the nozzle test); otherwise it
-  answers exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx). The job is saved as
+  tools, a camera cell, an application update, a managed connection, drying, the nozzle test), or when a
+  filament of the job is in no slot (`Canvas slot N is empty and no other slot holds the same filament`,
+  `No Canvas slot holds the job's filament: <name> <colour>`, or `The Canvas has not reported its slots, so the
+  job's filament cannot be found`); otherwise it answers exactly as `/api/gcode-files/print` would (202
+  accepted, or its 4xx/5xx), with every tool mapped to the slot that holds its filament. The job is saved as
   `starting` before the request goes to the printer, so a restart in between still follows the copy.
+  A job fed from the Canvas takes its slots from a Canvas report that arrives after the start was asked for,
+  not from the one a page showed, which may be older than a spool just changed: while the printer is heard
+  from and its Canvas has reported once, the first request asks for a report (method 2005) and is answered
+  409 `{"ok":false,"error":"Reading the Canvas slots before the start","checking":true}`, and so is every
+  request for that job until the printer has answered; the request after the answer starts. A request more
+  than 10 s after the one that asked, with no answer, asks again. The UI asks again every 0.5 s for up to
+  12 s. The external feed starts at once.
+- `POST /api/queue/filament` gives tools of a job other filaments: `id`, then a mapping line and filament
+  lines as in `/api/queue/add`. A tool named in the mapping takes the filament that slot is labelled with now
+  (and that slot as the one it was added with); a tool named in a filament line takes that filament and no
+  slot. Tools the request does not name keep theirs; 409 for a tool the job does not have, 400 for a request
+  that names none or one twice. A copy that is printing is not affected.
 - `POST /api/queue/abandon` (optionally the job id) gives up a `starting` copy the printer never ran: only
   while the printer is idle with fresh telemetry (409 otherwise, or when no start is waiting); the job goes
   back to `pending` with `last_result` `not_started`.
@@ -908,12 +934,45 @@ change or a recovery keeps it running. Telemetry older than 15 s decides nothing
 and, with `remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a
 counted completion if the printer is idle and no other session holds it, else the job notes `auto_failed`.
 Right before that start the backend checks the Canvas material the Queue page would warn about: every slot
-of the job's mapping must be present in fresh telemetry and hold the file's `filament_type` (the page's rule:
+the start would use must be present in fresh telemetry and hold the file's `filament_type` (the page's rule:
 the slot's type contains the file's material, or the file's material contains the slot's first word); a
-differing, empty or unknown slot, or a file without `filament_type`, holds the copy as `auto_material` for the
-operator, who can review the warning and start it by hand. The external feed (empty mapping) has nothing to
-check. The policy is meant for a bed that clears itself and is off by default. A queue file that cannot be parsed keeps the
-queue closed (`available: false`) and is never rewritten.
+differing or unknown slot, a filament of the job that is in no slot, or a file without `filament_type`,
+holds the copy
+as `auto_material` for the operator, who can review the warning and start it by hand. The check takes only a
+Canvas report received after the counted completion and after the delay ran out: the backend asks for one
+(method 2005) at the completion and again when the delay has run out, keeps the Canvas watched while the
+delay runs, and waits up to 10 s more for the second answer; when none arrives the copy is held the same
+way. The external feed (a job without tools) has nothing to check. The policy is meant for a bed that clears
+itself and is off by default. A queue file that cannot be parsed keeps the queue closed
+(`available: false`) and is never rewritten. The file's `version` is the one a reader needs: 1, or 2 while a
+job has a tool added for a filament alone, which a reader of version 1 would take for the external feed.
+
+A job that prints from the Canvas is bound to filaments, not to slots. A filament is what a Canvas slot's
+label names: `filament_type` (the material, "PLA"), `filament_name` (the product line, "PLA Matte") and
+`filament_color`; a label without a material or without a colour names none. A tool added with a slot takes
+the filament of that slot's label in the Canvas report when the job is added (an empty slot keeps the label
+of the filament it held), or in the first report that has one; until then the tool prints with whatever its
+slot holds. A tool added with a filament line is bound to that filament from the start, in whatever slot it
+turns up. The queue knows a slot by its label only: a spool changed without changing the label is not seen.
+
+A slot holds a filament when it is not empty (`status` 1 or 2) and its label has the same colour, and the
+same type and name where the filament states them, compared without case: a filament stated without a name
+is any product line of its type, which is how exact a label or a request can be. (The printer's own auto
+refill, which acts during a print, also asks for the same type and colour.)
+
+When a copy starts, by the button or automatically, each tool is mapped to the slot that holds its filament
+in fresh Canvas telemetry: the slot the job was added with while it does, otherwise the lowest-numbered slot
+that does, so tools that print with one filament may share a slot. The job itself does not change. A filament
+that is in no slot refuses the start; the job waits until a slot holds it, or until `POST /api/queue/filament`
+gives the tool another one. An empty slot of a tool that knows no filament yet is judged by the slot's own
+label. Without fresh Canvas telemetry nothing is known against a slot: a tool added with one is sent on it,
+and a tool added for a filament alone cannot be placed.
+
+`filaments` in `GET /api/queue` reports the same decision ahead of the start, and the Queue page, the
+Dashboard card and the print-ended notice show it. The printer answers a Canvas request and may not report a
+changed spool by itself, so while a start from the Canvas is on offer (printer idle, no queued copy running)
+every `GET /api/queue` keeps the Canvas watched for 15 s, as `GET /api/canvas` does: one 2005 request per
+10 s, none during a print.
 
 ## Completed print readback
 

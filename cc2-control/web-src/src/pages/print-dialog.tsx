@@ -1,13 +1,23 @@
 import { useState } from 'preact/hooks'
 import { ListOrdered, Minus, Play, Plus } from 'lucide-preact'
 import { store } from '@/lib/store'
-import { addToQueue, refreshQueue } from '@/lib/queue'
+import { addToQueue, refreshQueue, type ToolFilament } from '@/lib/queue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import {
+  FeedChoice,
+  isSlot,
+  isStock,
+  slotColour,
+  slotEmptyNote,
+  slotLabel,
+  stockBrands,
+  stockOf,
+} from '@/components/feed-choice'
 import { Select } from '@/components/ui/field'
 import { errText, notify, post, request, toast } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
-import { canvasHex, canvasModel } from '@/lib/canvas'
+import { canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
 import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
@@ -135,20 +145,6 @@ export async function checkOrcaPendingPrint() {
   }
 }
 
-// Missing Canvas colours are unknown, not the shared helper's decorative fallback.
-const slotColour = (tray: any, index: number) => {
-  const value = tray?.filament_color
-  if (value === undefined || value === null || value === '') return null
-  if (Array.isArray(value) && value.length >= 3 && value.slice(0, 3).every(Number.isFinite))
-    return canvasHex(value, index)
-  if (typeof value === 'number' && Number.isFinite(value)) return canvasHex(value, index)
-  if (typeof value === 'string' && /^(?:#?[0-9a-f]{6}(?:[0-9a-f]{2})?|0x[0-9a-f]{6,8})$/i.test(value.trim()))
-    return canvasHex(value, index)
-  return null
-}
-
-const slotLabel = (tray: any) => (tray && (tray.filament_name || tray.filament_type)) || t('print.not_reported')
-
 export const PrintDialog = () => {
   const job = pending.use().job
   return job ? <Form job={job} /> : null
@@ -179,6 +175,8 @@ const Form = ({ job }: { job: Pending }) => {
     )
   )
   const tray = (i: number) => job.trays.find(x => x && Number(x.tray_id) === i)
+  // A queued job may wait for a filament that is in no slot: the spool inventory names the ones there are.
+  const stock = stockBrands(job.spools)
   const available = meshAvailable[side],
     unknown = available === null,
     forced = available === false,
@@ -209,7 +207,7 @@ const Form = ({ job }: { job: Pending }) => {
   // Spool tracking: the spool each tool would draw from, and whether it holds what the slicer expects.
   const supply = (tool: number) => {
     const lib = job.spools
-    const slot = useCanvas ? (map[tool] === undefined || map[tool] === '' ? -1 : Number(map[tool])) : EXTERNAL
+    const slot = useCanvas ? (isSlot(map[tool]) ? Number(map[tool]) : -1) : EXTERNAL
     if (!lib || slot < 0) return null
     const spool = findSpool(lib, lib.slots[slot]?.spool || '')
     const mm = Number(job.filaments.find(f => f.tool === tool)?.mm)
@@ -244,9 +242,21 @@ const Form = ({ job }: { job: Pending }) => {
     if (busy || meshChecking) return
     if (launch === 'now' && unknown && !calibrating)
       return setNote(tpl('bed.mesh_unavailable_error', { error: meshError || t('state.unknown') }))
-    if (useCanvas && job.tools.some(tool => !map[tool])) return setNote(t('print.choose_a_canvas_slot_for_every'))
-    const mapping = useCanvas ? job.tools.map(tool => `${tool}:${map[tool]}`).join(',') : ''
-    if (multi && !mapping) return setNote(t('print.a_multicolour_file_requires_canvas'))
+    // Every tool needs a slot; a queued job may name a filament of the inventory instead and wait for it.
+    const free: ToolFilament[] =
+      useCanvas && launch === 'queue'
+        ? job.tools.flatMap(tool => {
+            const s = stockOf(stock, map[tool])
+            return s ? [{ tool, type: s.type, name: s.name, color: s.color }] : []
+          })
+        : []
+    const slotted = job.tools.filter(tool => isSlot(map[tool]))
+    if (useCanvas && launch === 'queue' && job.tools.some(tool => isStock(map[tool]) && !stockOf(stock, map[tool])))
+      return setNote(t('queue.filament_stock_choose'))
+    if (useCanvas && slotted.length + free.length < job.tools.length)
+      return setNote(t('print.choose_a_canvas_slot_for_every'))
+    const mapping = useCanvas ? slotted.map(tool => `${tool}:${map[tool]}`).join(',') : ''
+    if (multi && !mapping && !free.length) return setNote(t('print.a_multicolour_file_requires_canvas'))
     setBusy(true)
     if (launch === 'queue') {
       // The job keeps every choice above; the slicer's estimates are optional and read once here.
@@ -272,6 +282,7 @@ const Form = ({ job }: { job: Pending }) => {
           position,
           estimatedSeconds: numberOrNull(estimate?.estimated_seconds),
           filamentGrams: numberOrNull(estimate?.filament_grams),
+          filaments: free,
         })
         const g = activeGeneration
         activeGeneration = 0
@@ -311,7 +322,7 @@ const Form = ({ job }: { job: Pending }) => {
   }
   const label = 'my-3 flex items-center gap-2 text-[13px]'
   return (
-    <Dialog onClose={close} locked={busy} width={820}>
+    <Dialog onClose={close} locked={busy} width={820} label={t('print.choose_print_spool')}>
       <form onSubmit={submit}>
         <div class="text-xs text-muted">CANVAS · {t('print.print_setup')}</div>
         <DialogTitle class="my-2">{t('print.choose_print_spool')}</DialogTitle>
@@ -322,6 +333,7 @@ const Form = ({ job }: { job: Pending }) => {
               <div class="mb-1.5 h-2 rounded" style={{ background: slotColour(tray(i), i) || 'var(--edge)' }} />
               <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
               <div>{slotLabel(tray(i))}</div>
+              {slotEmptyNote(tray(i)) && <div class="text-muted">{slotEmptyNote(tray(i))}</div>}
             </div>
           ))}
         </div>
@@ -365,44 +377,20 @@ const Form = ({ job }: { job: Pending }) => {
               )
             })()}
             <div class="mb-2 text-xs text-muted">{t('print.choose_a_spool')}</div>
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[0, 1, 2, 3].map(i => {
-                const color = slotColour(tray(i), i)
-                const selected = map[tool] === String(i)
-                return (
-                  <label
-                    key={i}
-                    class={`flex min-w-0 items-start gap-2 rounded-lg border p-2 text-xs ${selected && useCanvas ? 'border-cyan bg-cyan/10' : 'border-edge'} ${useCanvas ? 'cursor-pointer' : 'opacity-50'}`}
-                  >
-                    <input
-                      type="radio"
-                      name={`tool-${tool}-slot`}
-                      value={String(i)}
-                      checked={selected}
-                      disabled={!useCanvas || busy}
-                      onChange={e => {
-                        setMap(m => ({ ...m, [tool]: e.currentTarget.value }))
-                        setNote(t('print.choose_the_spool_and_confirm_the'))
-                      }}
-                      class="mt-0.5 shrink-0"
-                    />
-                    <span class="grid min-w-0 gap-1 [overflow-wrap:anywhere]">
-                      <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
-                      <span class="flex items-center gap-1.5">
-                        {color && (
-                          <span
-                            class="inline-block size-4 shrink-0 rounded border border-edge"
-                            style={{ background: color }}
-                          />
-                        )}
-                        <span>{slotLabel(tray(i))}</span>
-                      </span>
-                      <span class="text-muted">{color || t('print.not_reported')}</span>
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
+            <FeedChoice
+              tool={tool}
+              name={`tool-${tool}-slot`}
+              trays={job.trays}
+              value={map[tool] || ''}
+              onChange={value => {
+                setMap(m => ({ ...m, [tool]: value }))
+                setNote(t('print.choose_the_spool_and_confirm_the'))
+              }}
+              disabled={!useCanvas || busy}
+              dim={!useCanvas}
+              stock={stock}
+              stockOff={launch !== 'queue'}
+            />
             {(() => {
               const s = supply(tool)
               if (!s) return null

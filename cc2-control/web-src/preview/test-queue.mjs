@@ -22,6 +22,11 @@ try {
     assert.equal(r.headers()['x-cc2-request'], '1', 'queue changes carry the mutation marker')
     posts.push([new URL(r.url()).pathname, r.postData() || ''])
   })
+  // What the backend answered to each start: a start fed from the Canvas is first refused with `checking`.
+  const startReplies = []
+  page.on('response', async r => {
+    if (new URL(r.url()).pathname === '/api/queue/start') startReplies.push([r.status(), Boolean((await r.json().catch(() => null))?.checking)])
+  })
   await page.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
   // The file's filaments and the saved meshes come from the printer; the preview answers for it here.
   await page.route('**/api/gcode-files/inspect', r => r.fulfill({ json: { tools: [0], filaments: [{ tool: 0, color: '#1a1a1a', material: 'PLA' }], bed_temperature: 60, nozzle_diameter: 0.4 } }))
@@ -46,11 +51,14 @@ try {
   assert.equal(await page.locator('[data-queue-count]').textContent(), '4', 'the menu counts the open jobs')
   await page.locator('[data-queue-totals]').getByText('4', { exact: true }).first().waitFor()
 
-  // Start: one POST, the toast names the copy; the copy then runs until the printer reports it finished,
-  // and nothing else can start meanwhile.
+  // Start: the backend first reads the Canvas slots, so the first request is refused with `checking` and the
+  // page asks again; the toast names the copy. The copy then runs until the printer reports it finished, and
+  // nothing else can start meanwhile.
   await hero.locator('[data-queue-start]').click()
   await page.getByText('Copy 3 of 5 requested: CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode', { exact: true }).waitFor()
   assert.deepEqual(lastPost(), ['/api/queue/start', '1'])
+  assert.deepEqual(posts.filter(p => p[0] === '/api/queue/start'), [['/api/queue/start', '1'], ['/api/queue/start', '1']], 'one start, asked twice')
+  assert.deepEqual(startReplies, [[409, true], [202, false]], 'the start waited for the Canvas report it asked for')
   const active = page.locator('[data-queue-hero="active"]')
   await active.waitFor()
   assert.equal(await active.locator('[data-queue-start]').isDisabled(), true, 'no start while a copy runs')
@@ -152,8 +160,431 @@ try {
   await countdown.waitFor({ state: 'hidden' })
   assert.deepEqual(lastPost(), ['/api/queue/hold', ''])
 
+  // A job is bound to a filament, not to a slot. Added with slot 2, it takes the filament that slot is labelled
+  // with; a start goes to whichever slot holds that filament, and a job whose filament is in no slot cannot
+  // start, wherever a start is offered.
+  const send = (to, data) => page.request.post(`${origin}${to}`, { headers: { 'X-CC2-Request': '1' }, data })
+  const noSlot = 'Slot 2 is empty and no other slot holds the same filament. The job cannot start'
+  const added = await send('/api/queue/add', ['internal', 'CC2_Preview_Slot_check.gcode', '0:1', 'A', 'saved', '0', '', '', '1', 'next'].join('\n'))
+  assert.equal(added.status(), 201)
+  const slotJob = (await added.json()).id
+  await quick.getByText('CC2_Preview_Slot_check.gcode', { exact: true }).first().waitFor()
+  const quickFeed = quick.locator('[data-dashboard-queue-filaments] [data-queue-feed]')
+  await quick.locator('[data-queue-feed="ready"]').waitFor()
+  assert.equal(await quickFeed.textContent(), 'PLA · Slot 2')
+  assert.equal((await send('/__preview/canvas-tray', '1\n0')).status(), 200) // the spool of slot 2 runs out
+  await quick.locator('[data-queue-filament-notes]').getByText(noSlot, { exact: true }).waitFor()
+  assert.equal(await quickFeed.getAttribute('data-queue-feed'), 'blocked')
+  assert.equal(await quickFeed.textContent(), 'PLA · Slot 2 empty')
+  assert.equal(await quick.locator('[data-dashboard-queue-start]').isDisabled(), true, 'no quick start without the filament')
+  assert.equal((await send('/__preview/canvas-tray', '3\n1\n#42a5f5')).status(), 200) // slot 4 now holds the same filament
+  await quick.locator('[data-queue-feed="ready"]').waitFor()
+  assert.equal(await quickFeed.textContent(), 'PLA · Slot 4')
+  assert.equal(await quick.locator('[data-queue-filament-notes]').count(), 0, 'a filament found in another slot is nothing to warn about')
+  assert.equal(await quick.locator('[data-dashboard-queue-start]').isEnabled(), true, 'the quick start takes the slot that holds the filament')
+  assert.equal((await send('/__preview/canvas-tray', '3\n1\n#66bb6a')).status(), 200)
+  await page.unroute('**/api/canvas') // the page checks the slot that will feed the print against the file
+  await page.goto(`${origin}/#queue`)
+  await hero.getByText('CC2_Preview_Slot_check.gcode', { exact: true }).waitFor()
+  await hero.locator('[data-preflight] li[data-tone="bad"]').getByText(noSlot, { exact: true }).waitFor()
+  const heroFeed = hero.locator('[data-queue-feed]')
+  assert.equal(await heroFeed.getAttribute('data-queue-feed'), 'blocked')
+  assert.equal(await heroFeed.textContent(), 'PLA · Slot 2 empty')
+  assert.equal(await hero.locator('[data-queue-start]').isDisabled(), true, 'no start while the filament is in no slot')
+  assert.equal((await send('/__preview/canvas-tray', '3\n1\n#42a5f5')).status(), 200)
+  await hero.locator('[data-preflight] li[data-tone="ok"]').getByText('Slot 4: PLA — as in the file', { exact: true }).waitFor()
+  await hero.locator('[data-queue-feed="ready"]').waitFor()
+  assert.equal(await heroFeed.textContent(), 'PLA · Slot 4')
+  assert.equal(await hero.locator('[data-preflight] li[data-tone="bad"]').count(), 0)
+  // The list shows every job's filament and where it is now; the external feed has none.
+  const feedOf = name => page.locator('[data-queue-item]').filter({ hasText: name }).locator('[data-queue-feed]')
+  assert.equal(await feedOf('CC2_Preview_Slot_check.gcode').textContent(), 'PLA · Slot 4')
+  assert.equal(await feedOf('CC2_Preview_Gear_housing_PETG.gcode').getAttribute('data-queue-feed'), 'ready')
+  assert.equal(await feedOf('CC2_Preview_Gear_housing_PETG.gcode').textContent(), 'PLA · Slot 1')
+  assert.equal(await feedOf('CC2_Preview_Phone_stand.gcode').getAttribute('data-queue-feed'), 'external')
+  assert.equal(await feedOf('CC2_Preview_Phone_stand.gcode').textContent(), 'External feed')
+  await page.waitForFunction(() => !document.querySelector('[data-queue-hero="next"] [data-queue-start]')?.hasAttribute('disabled'))
+  await hero.locator('[data-queue-start]').click()
+  await page.getByText('Copy 1 of 1 requested: CC2_Preview_Slot_check.gcode', { exact: true }).waitFor()
+  assert.deepEqual(lastPost(), ['/api/queue/start', String(slotJob)])
+  // A running copy shows its filament alone: where the next start would look is not this print's matter.
+  const running = page.locator('[data-queue-hero="active"] [data-queue-feed]')
+  await running.waitFor()
+  assert.equal(await running.getAttribute('data-queue-feed'), 'running')
+  assert.equal(await running.textContent(), 'PLA')
+
+  // Another filament goes into the slot of a job. The job does not print with it: it waits for its own, in any
+  // slot, and says so wherever a start is offered. The operator can give the job the filament a slot holds now.
+  assert.equal((await complete()).status(), 200) // the copy of the slot check is counted
+  const absent = "This job's filament is in no Canvas slot. Load it into any slot and set that slot's filament, or give the job another filament. The job cannot start"
+  const fileWants = 'Slot 1: PETG now, the file wants PLA'
+  const fed = await send('/api/queue/add', ['internal', 'CC2_Preview_Filament_check.gcode', '0:0', 'A', 'saved', '0', '', '', '2', 'next'].join('\n'))
+  assert.equal(fed.status(), 201)
+  const fedJob = (await fed.json()).id
+  await hero.getByText('CC2_Preview_Filament_check.gcode', { exact: true }).waitFor()
+  await hero.locator('[data-queue-feed="ready"]').waitFor()
+  assert.equal(await heroFeed.textContent(), 'PLA · Slot 1')
+  const chipDot = await heroFeed.locator('span').boundingBox()
+  assert.ok(chipDot && Math.round(chipDot.width) === 12 && Math.round(chipDot.height) === 12, `the chip's colour dot is 12 px: ${JSON.stringify(chipDot)}`)
+  assert.equal((await send('/__preview/canvas-tray', '0\n1\n#101010\nPETG')).status(), 200) // another spool goes into slot 1
+  await hero.locator('[data-preflight] li[data-tone="bad"]').getByText(absent, { exact: true }).waitFor()
+  await hero.locator('[data-queue-feed="blocked"]').waitFor()
+  assert.equal(await heroFeed.textContent(), 'PLA · not in the printer')
+  const remembered = hero.locator('[data-preflight] [data-queue-filament]')
+  assert.equal((await remembered.textContent()).replace(/\s+/g, ' ').trim(), "This job's filament: PLA")
+  const dot = await remembered.locator('span').boundingBox()
+  assert.ok(dot && Math.round(dot.width) === 12 && Math.round(dot.height) === 12, `the colour dot is 12 px: ${JSON.stringify(dot)}`)
+  assert.equal(await hero.locator('[data-queue-start]').isDisabled(), true, 'the job does not print with another filament')
+  assert.equal(await hero.locator('[data-preflight]').getByText(fileWants, { exact: true }).count(), 0, 'slot 1 is not where this job prints from')
+  assert.equal(await feedOf('CC2_Preview_Gear_housing_PETG.gcode').getAttribute('data-queue-feed'), 'blocked') // it was added with that filament too
+  assert.equal(await feedOf('CC2_Preview_Phone_stand.gcode').textContent(), 'External feed')
+  assert.equal((await send('/__preview/canvas-tray', '2\n1\n#ef5350')).status(), 200) // slot 3 now holds the job's filament
+  await hero.locator('[data-preflight] li[data-tone="ok"]').getByText('Slot 3: PLA — as in the file', { exact: true }).waitFor()
+  await hero.locator('[data-queue-feed="ready"]').waitFor()
+  assert.equal(await heroFeed.textContent(), 'PLA · Slot 3')
+  await page.waitForFunction(() => !document.querySelector('[data-queue-hero="next"] [data-queue-start]')?.hasAttribute('disabled'))
+  await page.goto(`${origin}/#dashboard`)
+  await quick.getByText('CC2_Preview_Filament_check.gcode', { exact: true }).first().waitFor()
+  await quick.locator('[data-queue-feed="ready"]').waitFor()
+  assert.equal(await quickFeed.textContent(), 'PLA · Slot 3')
+  assert.equal((await send('/__preview/canvas-tray', '2\n1\n#fdd835')).status(), 200) // and no longer does
+  await quick.locator('[data-queue-filament-notes]').getByText(absent, { exact: true }).waitFor()
+  assert.equal(await quick.locator('[data-queue-filament-notes] li').count(), 1)
+  assert.equal(await quick.locator('[data-queue-filament-notes] [data-queue-filament]').count(), 1)
+  assert.equal(await quickFeed.textContent(), 'PLA · not in the printer')
+  assert.equal(await quick.locator('[data-dashboard-queue-start]').isDisabled(), true)
+  // The operator's way out: the job takes the filament that slot 1 holds now. Spool tracking is off, so only
+  // the slots are on offer.
+  await page.goto(`${origin}/#queue`)
+  await hero.getByText('CC2_Preview_Filament_check.gcode', { exact: true }).waitFor()
+  await hero.locator('[data-queue-filament-edit]').click()
+  const change = page.locator('[data-queue-filament-dialog]')
+  await change.getByText('Filament of the job', { exact: true }).waitFor()
+  assert.equal((await change.locator('[data-queue-filament]').textContent()).replace(/\s+/g, ' ').trim(), "This job's filament: PLA")
+  assert.equal(await change.locator('[data-feed-stock]').count(), 0)
+  assert.equal(await change.locator('[data-queue-filament-save]').isDisabled(), true, 'nothing chosen, nothing to save')
+  await change.locator('input[name="queue-tool-0"][value="0"]').check()
+  await change.locator('[data-queue-filament-save]').click()
+  await page.getByText("The job's filament is changed.", { exact: true }).waitFor()
+  assert.deepEqual(lastPost(), ['/api/queue/filament', `${fedJob}\n0:0`])
+  await change.waitFor({ state: 'hidden' })
+  await hero.locator('[data-queue-feed="ready"]').waitFor()
+  assert.equal(await heroFeed.textContent(), 'PETG · Slot 1')
+  // The file's material is still checked against the slot that will feed the print.
+  await hero.locator('[data-preflight] li[data-tone="warn"]').getByText(fileWants, { exact: true }).waitFor()
+  assert.equal(await hero.locator('[data-preflight] [data-queue-filament]').count(), 0)
+  await page.waitForFunction(() => !document.querySelector('[data-queue-hero="next"] [data-queue-start]')?.hasAttribute('disabled'))
+  await hero.locator('[data-queue-start]').click()
+  await page.getByText('Copy 1 of 2 requested: CC2_Preview_Filament_check.gcode', { exact: true }).waitFor()
+  assert.deepEqual(lastPost(), ['/api/queue/start', String(fedJob)])
+  assert.equal((await complete()).status(), 200)
+  await hero.getByText('Copy 2 of 2', { exact: true }).waitFor()
+  assert.equal(await heroFeed.textContent(), 'PETG · Slot 1')
+
+  // A job for a filament that is not in the printer: with spool tracking on, the print dialog offers the
+  // filaments of the inventory to a job that goes to the queue, and the job waits until a slot holds its own.
+  assert.equal((await send('/api/spools/enable', 'on')).status(), 200)
+  await page.goto(`${origin}/#files`)
+  // The app learns that tracking is on from its printer poll: the second reply from now means the first is in.
+  for (let i = 0; i < 2; i++) await page.waitForResponse(r => new URL(r.url()).pathname === '/api/printer')
+  const stand = page.locator('.cc2-file-row').filter({ hasText: 'CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode' })
+  await stand.getByRole('button', { name: 'Print', exact: true }).click()
+  await print.locator('[data-print-launch]').waitFor()
+  const stockRow = print.locator('[data-feed-stock="0"]')
+  const stockRadio = stockRow.locator('input[type=radio]')
+  await stockRow.waitFor()
+  assert.equal(await stockRadio.isDisabled(), true, 'a print that starts now needs a slot')
+  // Where the row sits in the dialog's content, once the dialog has risen in: the dialog scrolls by itself, and
+  // a click scrolls what it clicks into view, so the place on the screen is not the one to compare.
+  const place = () => stockRow.evaluate(async row => {
+    const dialog = row.closest('[role=dialog]')
+    await Promise.all(dialog.getAnimations({ subtree: true }).map(a => a.finished))
+    const r = row.getBoundingClientRect(), d = dialog.getBoundingClientRect()
+    return { top: Math.round(r.top - d.top + dialog.scrollTop), left: Math.round(r.left - d.left), width: Math.round(r.width), height: Math.round(r.height) }
+  })
+  const closedPlace = await place()
+  await print.locator('[data-launch="queue"]').click()
+  await page.waitForFunction(() => !document.querySelector('[data-feed-stock="0"] input[type=radio]')?.hasAttribute('disabled'))
+  assert.deepEqual(await place(), closedPlace, 'the choice does not move when the queue is chosen')
+  // The inventory opens in three steps: the brand, then one of its materials, then one of that material's
+  // colours, each with its square. Nothing is chosen until the colour is.
+  await stockRadio.check()
+  const level = name => stockRow.locator(`[data-stock-level="${name}"]`).getByRole('radio')
+  const chosen = async () => (await stockRow.locator('[data-stock-choice]').textContent()).trim()
+  assert.deepEqual(await level('brand').allTextContents(), ['ELEGOO', 'Sunlu', 'Polymaker'])
+  assert.equal(await stockRow.locator('[data-stock-level="kind"]').count(), 0, 'the materials follow the brand')
+  assert.equal(await chosen(), 'Not set')
+  await print.locator('[data-print-submit]').click()
+  await print.getByText('Choose the brand, the material and the colour of the filament.', { exact: true }).waitFor()
+  await level('brand').filter({ hasText: 'ELEGOO' }).click()
+  assert.deepEqual(await level('kind').allTextContents(), ['PETG', 'PLA'])
+  assert.equal(await stockRow.locator('[data-stock-level="colour"]').count(), 0, 'the colours follow the material')
+  await level('kind').filter({ hasText: 'PLA' }).click()
+  assert.deepEqual(await level('colour').allTextContents(), ['Red', 'Green', 'Blue'])
+  await level('kind').filter({ hasText: 'PETG' }).click()
+  assert.deepEqual(await level('colour').allTextContents(), ['Black'])
+  const black = level('colour').filter({ hasText: 'Black' })
+  const square = await black.locator('span').boundingBox()
+  assert.ok(square && Math.round(square.width) === 16 && Math.round(square.height) === 16, `the colour has its square: ${JSON.stringify(square)}`)
+  assert.equal(await black.locator('span').evaluate(e => getComputedStyle(e).backgroundColor), 'rgb(22, 25, 29)')
+  await black.click()
+  assert.equal(await black.getAttribute('aria-checked'), 'true')
+  assert.equal(await stockRadio.isChecked(), true)
+  assert.equal(await chosen(), 'ELEGOO · PETG · Black')
+  // The three steps taken are marked alike, and unlike the choices left aside (once the colours have settled).
+  await page.waitForFunction(() => {
+    const border = e => getComputedStyle(e).borderTopColor
+    const row = document.querySelector('[data-feed-stock="0"]')
+    const taken = [...row.querySelectorAll('[role=radio][aria-checked="true"]')].map(border)
+    const aside = [...row.querySelectorAll('[role=radio][aria-checked="false"]')].map(border)
+    return taken.length === 3 && new Set(taken).size === 1 && aside.length === 3 && !aside.includes(taken[0])
+  })
+  // A brand with one material takes that step at once; another brand starts the choice again.
+  await level('brand').filter({ hasText: 'Polymaker' }).click()
+  assert.deepEqual(await level('kind').allTextContents(), ['PLA'])
+  assert.deepEqual(await level('colour').allTextContents(), ['Blue'])
+  assert.equal(await chosen(), 'Not set')
+  await level('brand').filter({ hasText: 'ELEGOO' }).click()
+  await level('kind').filter({ hasText: 'PETG' }).click()
+  await black.click()
+  assert.equal(await chosen(), 'ELEGOO · PETG · Black')
+  // Such a choice is no slot: a print that starts now is not sent with it, and nothing moves meanwhile.
+  const openBox = await stockRow.boundingBox()
+  await print.locator('[data-launch="now"]').click()
+  await page.waitForFunction(() => document.querySelector('[data-feed-stock="0"] input[type=radio]')?.hasAttribute('disabled'))
+  assert.deepEqual(await stockRow.boundingBox(), openBox, 'the open choice keeps its place when the print is to start now')
+  assert.equal(await black.isDisabled(), true)
+  await print.locator('[data-print-submit]').click()
+  await print.getByText('Choose a Canvas slot for every filament.', { exact: true }).waitFor()
+  assert.equal(await print.locator('[data-print-submit]').isEnabled(), true, 'nothing was submitted')
+  await print.locator('[data-launch="queue"]').click()
+  await print.locator('[data-print-submit]').click()
+  await page.getByText('CC2_Preview_Buddha_PLA_0.2mm_25m47s.gcode added to the queue.', { exact: true }).waitFor()
+  const waitingAdd = lastPost()[1].split('\n')
+  assert.equal(lastPost()[0], '/api/queue/add')
+  assert.equal(waitingAdd[2], '', 'no slot is named for the tool')
+  assert.equal(waitingAdd[12], '0\t\tPETG\t#16191D', 'the material and the colour travel with the job')
+  await page.goto(`${origin}/#queue`)
+  const waitingFeed = page.locator('[data-queue-item]').last().locator('[data-queue-feed]')
+  await waitingFeed.waitFor()
+  assert.equal(await waitingFeed.getAttribute('data-queue-feed'), 'blocked')
+  assert.equal(await waitingFeed.textContent(), 'PETG · not in the printer')
+  assert.equal((await send('/__preview/canvas-tray', '2\n1\n#16191D\nPETG')).status(), 200) // the black PETG is loaded into slot 3
+  await page.locator('[data-queue-item]').last().locator('[data-queue-feed="ready"]').waitFor()
+  assert.equal(await waitingFeed.textContent(), 'PETG · Slot 3')
+  // A queued job can be given a filament of the inventory as well, by the same three steps: blue PLA is in
+  // slot 4 (slot 2, labelled with it, is empty). The job is saved once the choice is whole.
+  await hero.locator('[data-queue-filament-edit]').click()
+  // The slot cards tell an empty slot from a loaded one: slot 2 keeps the label of its last spool and says it
+  // is empty, the others show the colour their labels name.
+  const slotCard = i => change.locator(`[data-feed-slot="${i}"]`)
+  await change.locator('[data-feed-slot="1"][data-feed-slot-state="empty"]').waitFor()
+  assert.deepEqual(await Promise.all([0, 1, 2, 3].map(i => slotCard(i).getAttribute('data-feed-slot-state'))), ['labelled', 'empty', 'labelled', 'labelled'])
+  assert.equal(await slotCard(1).locator('[data-feed-slot-label]').textContent(), 'PLA')
+  assert.equal(await slotCard(1).locator('[data-feed-slot-note]').textContent(), 'Empty')
+  assert.equal(await slotCard(3).locator('[data-feed-slot-note]').textContent(), '#42A5F5')
+  const other = change.locator('[data-feed-stock="0"]')
+  await other.locator('input[type=radio]').check()
+  assert.equal(await change.locator('[data-queue-filament-save]').isDisabled(), true, 'the choice is not whole yet')
+  await other.locator('[data-stock-level="brand"]').getByRole('radio', { name: 'Polymaker', exact: true }).click()
+  assert.equal(await change.locator('[data-queue-filament-save]').isDisabled(), true)
+  await other.locator('[data-stock-level="colour"]').getByRole('radio', { name: 'Blue', exact: true }).click()
+  assert.equal((await other.locator('[data-stock-choice]').textContent()).trim(), 'Polymaker · PLA · Blue')
+  await change.locator('[data-queue-filament-save]').click()
+  await change.waitFor({ state: 'hidden' })
+  assert.deepEqual(lastPost(), ['/api/queue/filament', `${fedJob}\n\n0\t\tPLA\t#42A5F5`])
+  await hero.locator('[data-queue-feed="ready"]').waitFor()
+  await page.waitForFunction(() => document.querySelector('[data-queue-hero="next"] [data-queue-feed]')?.textContent === 'PLA · Slot 4')
+  // Slots without labels, as a Canvas reports them after a firmware update: the loaded one is not reported and
+  // the empty one says that it is empty, so the two can be told apart.
+  assert.equal((await send('/__preview/canvas-tray', '2\n1\n-\n-')).status(), 200)
+  assert.equal((await send('/__preview/canvas-tray', '1\n0\n-\n-')).status(), 200)
+  await hero.locator('[data-queue-filament-edit]').click()
+  await change.locator('[data-feed-slot="2"][data-feed-slot-state="unknown"]').waitFor()
+  assert.equal(await slotCard(2).locator('[data-feed-slot-label]').textContent(), 'Not reported')
+  assert.equal(await slotCard(1).getAttribute('data-feed-slot-state'), 'empty')
+  assert.equal(await slotCard(1).locator('[data-feed-slot-label]').textContent(), 'Empty')
+  assert.equal(await change.locator('[data-feed-slot-note]').count(), 2, 'a second line only for the slots with a colour')
+  await change.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await change.waitFor({ state: 'hidden' })
+  assert.equal((await send('/__preview/canvas-tray', '2\n1\n#16191D\nPETG')).status(), 200)
+  assert.equal((await send('/__preview/canvas-tray', '1\n0\n#42a5f5\nPLA')).status(), 200)
+  // On a phone the dialog keeps the backdrop's 16 px on both sides. It once took 96vw, which is more than the
+  // room between the two margins below 800 px, and ran into the right edge of the screen.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await hero.locator('[data-queue-filament-edit]').click()
+  await change.waitFor()
+  const sides = await page.getByRole('dialog').evaluate(async box => {
+    await Promise.all(box.getAnimations().map(a => a.finished))
+    const r = box.getBoundingClientRect()
+    return [Math.round(r.left), Math.round(innerWidth - r.right)]
+  })
+  assert.deepEqual(sides, [16, 16], 'the same margin on both sides of a phone screen')
+  await change.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await change.waitFor({ state: 'hidden' })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
+  // Pictures and dragging, against a queue of its own: six jobs, the first one printing, one name long enough
+  // to make its row taller than the others, one file without a picture.
+  const stock = await (await page.request.get(`${origin}/api/queue`)).json()
+  const plain = { ...stock.items[0], mapping: '', filaments: [], copies: 1, done: 0, last_result: '', present: true }
+  const names = ['Printing.gcode', 'Short.gcode', `${'A_long_name_that_wraps_'.repeat(9)}.gcode`, 'No_picture.gcode', 'Fourth.gcode', 'Fifth.gcode']
+  let own = names.map((name, i) => ({ ...plain, id: 11 + i, path: name, state: i ? 'pending' : 'printing' }))
+  let pictureRequests = 0
+  const ownQueue = async target => {
+    await target.route('**/api/queue', r => r.fulfill({ json: { ...stock, printer_idle: false, active: 11, next: own.find(j => j.state === 'pending').id, auto_in: null, items: own } }))
+    await target.route('**/api/queue/reorder', r => {
+      const [id, to] = r.request().postData().split('\n').map(Number)
+      const moving = own.find(j => j.id === id)
+      own = own.filter(j => j !== moving)
+      own.splice(to, 0, moving)
+      return r.fulfill({ json: { ok: true } })
+    })
+    await target.route('**/api/gcode-files/thumbnail', r => {
+      pictureRequests++
+      return r.request().postData().endsWith('No_picture.gcode')
+        ? r.fulfill({ status: 404, json: { error: 'No embedded thumbnail' } })
+        : r.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"><rect width="8" height="8" fill="#4caf50"/></svg>' })
+    })
+  }
+  await ownQueue(page)
+  const job = id => page.locator(`[data-queue-item="${id}"]`)
+  const box = id => job(id).boundingBox()
+  const order = () => page.locator('[data-queue-item]').evaluateAll(all => all.map(row => Number(row.dataset.queueItem)))
+  const inOrder = (target, ids) => target.waitForFunction(want => [...document.querySelectorAll('[data-queue-item]')].map(row => row.dataset.queueItem).join() === want, ids.join())
+  const shiftOf = id => job(id).evaluate(row => new DOMMatrixReadOnly(getComputedStyle(row).transform).m42)
+  await job(16).waitFor()
+  assert.deepEqual(await order(), [11, 12, 13, 14, 15, 16])
+
+  // Every job shows the picture of its file; a file that has none keeps the icon. One request per job: the
+  // card of the current job and its row share it, and a poll of the queue never repeats it.
+  await page.waitForFunction(() => document.querySelectorAll('[data-queue-rows] [data-file-picture="shown"]').length === 5)
+  assert.equal(await job(14).locator('[data-file-picture]').getAttribute('data-file-picture'), 'none')
+  assert.equal(await page.locator('[data-queue-rows] img').evaluateAll(all => all.every(i => i.complete && i.naturalWidth > 0 && i.getBoundingClientRect().width <= 48)), true)
+  assert.deepEqual(await page.locator('[data-queue-handle] span').allTextContents(), ['1', '2', '3', '4', '5', '6'], 'a picture carries the place of its job')
+  await page.locator('[data-queue-hero="active"] [data-file-picture="shown"]').waitFor()
+  await page.waitForTimeout(6500)
+  assert.equal(pictureRequests, 6)
+  assert.equal(await job(11).locator('[data-queue-handle]').getAttribute('data-queue-handle'), 'off', 'the job that prints at the head is not dragged')
+  assert.equal(await page.locator('[data-queue-handle="on"]').count(), 5)
+
+  // A job is taken by its picture. Job 15 goes up until its top edge has passed the middle of job 13's row: it
+  // would land there, and the two rows it passed move down by its height meanwhile. The drop is one request.
+  const grab = async id => {
+    const handle = job(id).locator('[data-queue-handle]')
+    await handle.evaluate(el => el.scrollIntoView({ block: 'center' }))
+    const b = await handle.boundingBox()
+    const at = [b.x + b.width / 2, b.y + b.height / 2]
+    await page.mouse.move(...at)
+    await page.mouse.down()
+    return at
+  }
+  const pull = async ([x, y], dy) => {
+    await page.mouse.move(x, y + dy / 2, { steps: 5 })
+    await page.mouse.move(x, y + dy, { steps: 5 })
+  }
+  const shifted = (id, by) => page.waitForFunction(([id, by]) => Math.abs(new DOMMatrixReadOnly(getComputedStyle(document.querySelector(`[data-queue-item="${id}"]`)).transform).m42 - by) < 0.5, [id, by])
+  let at = await grab(15)
+  const [b13, b15] = [await box(13), await box(15)]
+  await pull(at, b13.y + 4 - b15.y)
+  await page.locator('[data-queue-item="15"][data-queue-drag="lifted"]').waitFor()
+  await shifted(14, b15.height)
+  await shifted(13, b15.height)
+  assert.deepEqual([await shiftOf(12), await shiftOf(16)], [0, 0], 'only the rows it passed make room')
+  assert.ok(Math.abs((await box(15)).y - (b13.y + 4)) < 1, 'the row follows the pointer')
+  let sent = posts.length
+  await page.mouse.up()
+  await inOrder(page, [11, 12, 15, 13, 14, 16])
+  assert.deepEqual(posts.slice(sent), [['/api/queue/reorder', '15\n2']])
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-queue-item]')].every(row => !row.dataset.queueDrag && !row.style.transform && getComputedStyle(row).transform === 'none'))
+  assert.deepEqual(await page.locator('[data-queue-handle] span').allTextContents(), ['1', '2', '3', '4', '5', '6'])
+
+  // Dragged far above the list, a job stops right below the one that prints.
+  at = await grab(14)
+  await pull(at, 2 - at[1])
+  await page.waitForTimeout(250)
+  const [head, stopped] = [await box(11), await box(14)]
+  assert.ok(Math.abs(stopped.y - head.y - head.height) < 1.5, 'no job is dragged above the printing one')
+  await page.mouse.up()
+  await inOrder(page, [11, 14, 12, 15, 13, 16])
+  assert.deepEqual(lastPost(), ['/api/queue/reorder', '14\n1'])
+
+  // One place down past a taller row: nothing moves short of its middle, and past it the tall row makes room.
+  at = await grab(15)
+  const [tall, low] = [await box(13), await box(15)]
+  assert.ok(tall.height > low.height * 1.4, 'the long name makes a taller row')
+  await pull(at, tall.height / 2 - 4)
+  await page.waitForTimeout(250)
+  assert.equal(await shiftOf(13), 0)
+  await page.mouse.move(at[0], at[1] + tall.height / 2 + 4, { steps: 3 })
+  await shifted(13, -low.height)
+  await page.mouse.up()
+  await inOrder(page, [11, 14, 12, 13, 15, 16])
+  assert.deepEqual(lastPost(), ['/api/queue/reorder', '15\n4'])
+
+  // Escape gives the drag up, and a drop in the same place asks for nothing.
+  sent = posts.length
+  at = await grab(16)
+  await pull(at, -150)
+  await page.locator('[data-queue-item="16"][data-queue-drag="lifted"]').waitFor()
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => !document.querySelector('[data-queue-drag]') && !document.querySelector('[data-queue-item][style*="transform"]'))
+  await page.mouse.up()
+  at = await grab(16)
+  await pull(at, 6)
+  await page.mouse.up()
+  await page.waitForTimeout(300)
+  assert.equal(posts.length, sent)
+  assert.deepEqual(await order(), [11, 14, 12, 13, 15, 16])
+
+  // In a low window the page scrolls under a job held at its edge, and the job lands where it is dropped.
+  await page.setViewportSize({ width: 1440, height: 560 })
+  at = await grab(14)
+  const scrolled = await page.evaluate(() => window.scrollY)
+  await page.mouse.move(at[0], 556, { steps: 6 })
+  await page.waitForFunction(y => window.scrollY > y + 40, scrolled)
+  await page.waitForFunction(() => new Promise(done => { const y = window.scrollY; setTimeout(() => done(window.scrollY === y), 300) }))
+  await page.mouse.up()
+  await inOrder(page, [11, 12, 13, 15, 16, 14])
+  assert.deepEqual(lastPost(), ['/api/queue/reorder', '14\n5'])
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const lefts = await page.locator('[data-queue-handle]').evaluateAll(all => all.map(handle => Math.round(handle.getBoundingClientRect().left)))
+  assert.equal(new Set(lefts).size, 1, 'the pictures stand in one column')
+
+  // A phone: the same drag with a finger. The picture takes the touch, so the page does not scroll under it.
+  const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
+  const phoneErrors = [], phoneMoves = []
+  phone.on('pageerror', e => phoneErrors.push(e.message))
+  phone.on('request', r => r.url().endsWith('/api/queue/reorder') && phoneMoves.push(r.postData()))
+  await phone.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
+  await phone.route('**/api/gcode-files/inspect', r => r.fulfill({ json: { tools: [0], filaments: [], bed_temperature: 60, nozzle_diameter: 0.4 } }))
+  await phone.route('**/api/canvas', r => r.fulfill({ json: { available: false } }))
+  await phone.route('**/api/mesh', r => r.fulfill({ json: { result: { status: { bed_mesh: { profiles: { default: {}, default1: {} } } } } } }))
+  await ownQueue(phone)
+  await phone.goto(`${origin}/#queue`)
+  const dragged = phone.locator('[data-queue-item="14"]')
+  await dragged.waitFor()
+  await phone.waitForFunction(() => document.querySelectorAll('[data-queue-rows] [data-file-picture="shown"]').length === 5)
+  assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no sideways scroll on a phone')
+  await dragged.evaluate(row => row.scrollIntoView({ block: 'center' }))
+  const [finger, above] = [await dragged.locator('[data-queue-handle]').boundingBox(), await phone.locator('[data-queue-item="16"]').boundingBox()]
+  assert.equal(Math.round(finger.width), 48)
+  const [fx, fy] = [finger.x + finger.width / 2, finger.y + finger.height / 2]
+  const screen = await phone.context().newCDPSession(phone)
+  const touch = (type, y) => screen.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: fx, y }] })
+  const still = await phone.evaluate(() => window.scrollY)
+  await touch('touchStart', fy)
+  for (let step = 1; step <= 8; step++) await touch('touchMove', fy - ((above.height / 2 + 8) * step) / 8)
+  await phone.locator('[data-queue-item="14"][data-queue-drag="lifted"]').waitFor()
+  assert.equal(await phone.evaluate(() => window.scrollY), still)
+  await touch('touchEnd', 0)
+  await inOrder(phone, [11, 12, 13, 15, 14, 16])
+  assert.deepEqual(phoneMoves, ['14\n4'])
+  assert.deepEqual(phoneErrors, [])
+  await phone.close()
+
   assert.deepEqual(errors, [])
-  console.log('PASS: print queue page, Files chip, dialog choice, Dashboard quick start and automatic countdown')
+  console.log('PASS: print queue page, Files chip, dialog choice, Dashboard quick start, automatic countdown, jobs bound to filaments (the slot that holds one, a filament in no slot, another filament for a job, a job that waits for a filament of the inventory chosen by brand, material and colour), a picture for every job, the order changed by dragging with a mouse and with a finger')
 } finally {
   await browser?.close()
   await server.close()
