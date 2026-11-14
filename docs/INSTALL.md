@@ -6,23 +6,28 @@ Always install artifacts and follow instructions from the same GitHub release.
 
 ## Full firmware
 
-For V4.4, install the [complete signed firmware](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4/CC2_V4_4_STOCK_20261013_001035_414d6629.zip.sig). Verify SHA-256, copy the unchanged `.zip.sig` to the USB root, then use **Settings → Check for Updates → Offline Update** on the printer. Do not unpack it or use the source-builder ZIP as an update. Let installation and reboot complete, then open `http://PRINTER-IP:8081`. A factory reset is not required.
+Current release: **V4.4.4 Universal 07 + Hungarian corrections**, base
+**02.01.01.13**, Control **1.2.29**.
+Follow [FIRST_RUN](FIRST_RUN.md) ([Italiano](FIRST_RUN.it.md)) and the
+[upgrade guide](FIRMWARE_UPGRADE.md) ([Italiano](FIRMWARE_UPGRADE.it.md)).
+Use the Universal 07 file, not the historical RC6 package.
 
-The [English first-installation guide](FIRST_RUN.md) and [Italian guide](FIRST_RUN.it.md) contain the exact filename/checksum, USB steps, LAN-code setup and startup checks.
+Copy the unchanged signed file to USB and use Offline Update.
+Recognised installations migrate automatically: no routine probe, cleanup,
+downgrade, intermediate panel upgrade or Canvas restoration. Complete ongoing
+lifecycle actions and requested reboots first. Keep verified backups.
+A factory reset is not required.
 
-## CC2 Control-only updates
+## Application updates and return to stock
 
-**CC2 Control 1.2.5 is a separate updater exclusively for existing Community Firmware V4.4 installations.** Follow the [detailed update guide](UPDATE_CC2.md) ([Italiano](UPDATE_CC2.it.md)). Actual printer/daemon fingerprints are checked before modification; do not use it on V4.3 or original ELEGOO firmware. The original V4.4 firmware release retains its original assets; historical application updaters apply only to their documented bases.
+Application updaters must declare compatibility with the installed base;
+see [UPDATE_CC2](UPDATE_CC2.md) for that separate workflow.
 
-## Original firmware and downgrade restriction
-
-[Download original CC2 02.01.01.07 firmware](https://public.suchmeme.nl/cc2-02.01.01.07-1cbee81a985601d1944cea50773793ba-release-abroad.zip.sig). This is an externally hosted mirror of the official package, not an ELEGOO-hosted download. Its bytes match the exact official base pinned by the V4.4 builder.
-
-SHA-256: `278a0606a072ae432e9bf2d4f0157acba4570d1c85dbc768c359fef53ac5f406`.
-
-**ELEGOO blocks downgrades to older firmware.** This link provides the original **same-version 02.01.01.07** package; it does not enable a downgrade to 02.01.00.00 or earlier. Reinstalling the stock package is a separate operation from a factory reset, which does not replace the installed firmware.
-
-Use the same USB/offline-update procedure in the first-installation guide with the original package. File identity has been verified, and the maintainer confirmed a successful return from V4.4 to this same-version original firmware on the printer. If the printer refuses the package, stop and record its message; do not change version metadata or bypass its checks. Original firmware does not include CC2 Control or community features.
+Returning to original ELEGOO firmware is different from upgrading Community
+firmware. Restore modified Canvas through its supported workflow first and
+use the appropriate original base. A factory reset does not replace firmware
+or establish that persistent Community components were removed.
+Ask for help if the printer refuses a package rather than changing its metadata.
 
 ## SSH access reference
 
