@@ -11,38 +11,29 @@ testing from the community.
 
 ## Community Firmware 4.4.4 · ELEGOO base 02.01.01.13 · CC2 Control 1.2.29
 
-**A new base on ELEGOO 02.01.01.13, with the Community touchscreen, local web
-dashboard and native integrations brought forward together.** This release
-combines the .13 port with the recent print, calibration, camera, network and
-interface work. The release package is byte-identical to the verified,
-printer-tested RC6. It includes complete translations and restores flap,
-Rotation Distance and load-cell controls after a cancelled print returns to
-Idle. Native components remain unchanged from the previous qualified build.
+**Installation is simple again: copy the firmware to USB and run Offline Update.**
 
-**First-ever Community installation from original ELEGOO firmware? Do not run
-the probe or Prepare-Upgrade. Follow the stock-firmware offline installation
-route in the guide.** Reflashing stock on a previously modified printer does
-not make it a first installation: persistent Community files may remain.
+After extensive work on incompatibilities left by different earlier update
+branches, **Universal 07 automatically migrates the recognised installations**.
+It resolves the incompatibility cases identified and verified so far, including
+the reviewed inactive legacy variant, and retains personal data.
+The published variant also includes the Hungarian corrections from PR #352.
 
-**Upgrading from Community 4.4.3? Restore modified Canvas firmware first, save
-your backups, and complete the supplied preparation before flashing. Do not
-skip these steps.** You do not need an intermediate 1.2.27 or 1.2.28 panel
-installation. Private previews and unknown bases need a reviewed route.
+**No mandatory probe, manual cleanup, downgrade, intermediate panel update or
+Canvas restoration for a supported upgrade.** Finish an ongoing Canvas action
+and its requested reboots first. A Canvas is optional; recognised active,
+inactive and restored RFID states are handled automatically.
 
-**With modified Canvas, finish both the Canvas firmware restoration and the
-printer startup restoration, including the requested reboots, before running
-preparation. Do not flash the signed firmware file first.**
-
-| Download | What it contains |
+| Download | Purpose |
 | --- | --- |
-| [4.4.4 upgrade kit](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2-4.4.4-Upgrade-Kit.zip) | Signed complete firmware, mandatory instructions, PC backup, native-console inspection and verified quarantine tools. Start here. |
-| [Release notes and SHA-256 checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.4) | Changes, qualification scope, sources and exact download identities. |
-| [Installation guide](docs/FIRMWARE_UPGRADE.md) | Choose the correct route and follow every step in order. |
+| [Universal 07 firmware with Hungarian corrections](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig) | Complete firmware: copy the unchanged .zip.sig to USB and use Offline Update. |
+| [First installation](docs/FIRST_RUN.md) · [Upgrade guide](docs/FIRMWARE_UPGRADE.md) | Short installation steps, backup advice and startup checks. |
+| [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.4) | Exact package identity, sources and validation scope. |
 
-This is a **complete firmware upgrade**, not an application-only package for
-the old base. The existing panel updater remains a separate mechanism for
-compatible application releases. Historical downloads stay in
-[GitHub Releases](https://github.com/Neme77/centauri-carbon-2-community/releases).
+Use the **Universal 07** download above. The original RC6-based V4.4.4 file and
+its preparation kit are historical; their mandatory preparation instructions
+do not apply to this revision. The separate Recovery package is not released.
+CC2 Control application-only updates remain a different installation path.
 
 ## What is new on the .13 base
 
@@ -65,10 +56,10 @@ compatible application releases. Historical downloads stay in
 - **Readability and languages:** improved themes and eleven interface languages,
   with German, Turkish and recent Hungarian/Chinese refinements included.
 
-The upgrade preparation reads supported state instead of assuming that every
-printer with the same panel version has the same native installation. It uses
-the **native console** for installation readiness, without waiting for MQTT or
-UDS freshness. Unknown or incomplete recovery state is refused, not erased.
+Migration checks the actual installed components and lifecycle evidence rather
+than relying on a panel version label. It preserves supported states and
+archives replaced components. Unknown or inconsistent evidence is reported;
+it is not silently erased.
 
 ## Open, extensible RFID — with validation still to do
 
@@ -109,16 +100,18 @@ been physically qualified. See the [changelog](CHANGELOG.md),
 
 ## Tested work, stated limits
 
-The .13 cycle included repeated printer installations, a stock-firmware
-bootstrap, 4.4.3 preparation and migration, exact native file/module inspection,
-and an active-RFID helper upgrade on its qualified predecessor. The owner
-confirmed successful RFID reads and the core printing/network/camera workflows.
-Independent testing and issue reports also informed the recovery work.
+The upgrade programme includes maintainer and independent results from
+Control 1.2.25, 1.2.26, 1.2.27, the reviewed private 1.2.28 variant and supported
+.13 previews. These reports cover preserved settings, normal temperatures,
+Canvas recognition and the available printing, camera and network checks.
+RFID tag reads were checked where testers had compatible tags; reader arming
+alone is not a full tag-read test.
 
-The revised preparation passed **84 evidence-inspector checks** on host, ARM
-and sanitizers and **36 shell checks**, including the original ARM BusyBox.
-Offline fixtures are kept distinct from actual printer results. This does not
-claim every historical installation, tag brand or accessory was tested.
+Universal 07 adds the reviewed inactive legacy case. The Hungarian variant
+changes only the web language catalogue; backend and migration are unchanged.
+Its build and translation checks are recorded separately from physical trials.
+This does not claim every unofficial build, corrupt state or accessory is
+supported. Native-speaker review of the exact projected catalogue remains pending.
 
 ## Clearer updates from this base onward
 
@@ -135,11 +128,13 @@ that evidence; it does not replace hardware testing or author responsibility.
 
 ## Recovery and support
 
-Recovery is part of the upgrade procedure: existing Community installations
-receive a verified PC backup before files are moved into quarantine. Keep both
-until the new firmware has been checked. Return-to-stock and recovery routes
-have been tested for the documented supported states; they are not a guarantee
-against every failure or data loss on an unknown installation.
+Keep your existing verified backups; if needed, save panel data through
+Settings → Backup and restore before installation. Migration retains component
+archives on the printer. A reset or preparation script is not a routine step.
+
+**If you encounter a problem, we are available to help.** The separate Recovery
+package is still being completed; do not assume a universal reset or guaranteed
+loss-free recovery exists for every unknown state.
 
 If a check refuses the operation or the printer does not start correctly,
 stop and [open a support issue](https://github.com/Neme77/centauri-carbon-2-community/issues/new/choose).
