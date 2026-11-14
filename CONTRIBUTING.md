@@ -47,6 +47,16 @@ a routine panel update merely because it fits the same archive format.
 
 ## Tests
 
+For UI translations, edit `cc2-control/web-src/public/locales/` and rebuild the
+web assets. Translate new entries rather than copying English to satisfy key
+parity. `test_locale_shared_terms.py` rejects unchanged English text unless the
+exact key, text and language are listed with a reason in
+`cc2-control/tests/locale_shared_terms.json` (for example, product names, units
+or genuinely shared terminology). Do not add entire untranslated sentences as
+exceptions. Remove an exception when its text is translated. These checks do
+not replace native-speaker review; preserve placeholders and the meaning of
+temperature limits, warnings and confirmation steps.
+
 ```sh
 cd cc2-control
 make clean test CROSS= CC=gcc

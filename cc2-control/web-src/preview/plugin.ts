@@ -1,10 +1,16 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
 import { demoExcludeObjects, demoLayerPath } from './layer-path-demo.ts'
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Match the source literally; never evaluate its template.
 const cameraSource = "export const camera = (q = '') => `http://${location.hostname}:8080/${q}`"
+// Serve every shipped catalog; simulation-toolbar translations are only a subset.
+const supportedLanguages = new Set(
+  readdirSync(fileURLToPath(new URL('../public/locales/', import.meta.url)))
+    .filter(name => /^[a-z]{2}\.json$/.test(name))
+    .map(name => name.slice(0, -5))
+)
 const cameraSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#152336"/><path d="M110 280L320 130 530 280 320 330Z" fill="#29445c"/><path d="M280 250V180L320 155 360 180V250L320 275Z" fill="#00cfe8"/><text x="320" y="65" text-anchor="middle" fill="white" font-family="sans-serif" font-size="24">CC2 — DEMO</text></svg>`
 // Developer-only translations: never bundled into the firmware UI.
 const labels = {
@@ -810,8 +816,8 @@ export function previewPlugin(): Plugin {
           return
         }
         if (path.startsWith('/i18n/')) {
-          const lang = path.match(/^\/i18n\/(en|it|fr|zh|ru)\.json$/)?.[1]
-          if (!lang) return reply({ error: 'Unknown preview locale' }, 404)
+          const lang = path.match(/^\/i18n\/([a-z]{2})\.json$/)?.[1]
+          if (!lang || !supportedLanguages.has(lang)) return reply({ error: 'Unknown preview locale' }, 404)
           res.setHeader('Content-Type', 'application/json')
           res.end(readFileSync(fileURLToPath(new URL(`../public/locales/${lang}.json`, import.meta.url))))
           return
@@ -1205,7 +1211,7 @@ export function previewPlugin(): Plugin {
             }
             if (path === '/api/preferences' && req.method === 'PUT') {
               const value = JSON.parse(body)
-              if (value.language && !Object.keys(labels).includes(value.language))
+              if (value.language && !supportedLanguages.has(value.language))
                 return reply({ error: 'Unknown language' }, 400)
               preferences = { ...preferences, ...value }
               return reply(preferences)
