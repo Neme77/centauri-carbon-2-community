@@ -2590,9 +2590,8 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
     if (usb && usb->stage == USB_START_CHECK) {
         usb->internal = strcmp(storage, "usb") != 0;
         /* A USB start is refused here, before the stick is read, as develop refuses it; so is an internal start on
-         * a linked printer that is not idle. An internal start without a printer link keeps develop's order
-         * (request, file, then printer): the worker reads the file and the final check below answers, so a wrong
-         * mapping stays a 409 there (tests/test_gcode_files.py). */
+         * a linked printer that is not idle. An internal start without a printer link never gets here
+         * (usb_start_begin_for answers it synchronously, as develop). */
         if (!usb->internal && (!mqtt->connected || !mqtt->registered)) {
             const char *error = "{\"accepted\":false,\"error\":\"Printer MQTT is not ready\"}\n";
             respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
@@ -2896,8 +2895,16 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
         *status = 400; return 0;
     }
     /* A start that cannot go out anyway: USB_START_CHECK below refuses it before any file is read, except an
-     * internal start without a printer link, which is answered in develop's order after the file check (the
-     * file is read on the worker instead of the main loop). */
+     * internal start without a printer link. That one gets develop's synchronous checks, in develop's order (file
+     * checks first) and at once, without a worker: nothing prints without a link, and the queue records such a
+     * refusal in the same tick (tests/test_gcode_files.py, tests/test_queue_tracking.c). */
+    const char *storage_end = memchr(body, '\n', body_len);
+    size_t storage_len = storage_end ? (size_t)(storage_end - body) : body_len;
+    int internal = !(storage_len == 3 && memcmp(body, "usb", 3) == 0);
+    if (internal && (!mqtt->connected || !mqtt->registered)) {
+        *status = gcode_start_run(fd, mqtt, body, body_len, NULL, NULL);
+        return 0;
+    }
     memset(&usb_start, 0, sizeof(usb_start));
     usb_start.stage = USB_START_CHECK;
     if ((*status = gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start)) != 0) return 0;

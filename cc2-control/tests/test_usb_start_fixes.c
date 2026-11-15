@@ -261,8 +261,7 @@ int main(void) {
            "a 17 MiB read back drops the pages after 8 and 16 MiB and at the end");
 
     /* 6. An internal start a linked printer cannot take (busy) is refused before the file is read. Without a
-     * printer link it is answered as develop answers it: the request and the file first, then the printer; the
-     * file is read on the worker, so the main loop is never held up by it (develop read it there). */
+     * printer link it is answered as develop answers it, at once: the request and the file first, then the printer. */
     write_size("gcode/inside.gcode", 4 * MIB);
     file = fopen("gcode/two.gcode", "w"); assert(file); fputs("T0\nG1 X1\nT1\nG1 X2\n", file); fclose(file);
     mqtt.machine_status = 2; atomic_store(&gcode_scan_passes, 0);
