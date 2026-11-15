@@ -337,7 +337,7 @@
   "files.permanently_delete_this_g_code": "从 {where} 永久删除此 G-code？",
   "files.print": "打印",
   "files.not_printable": "无法打印",
-  "files.not_printable_2gib": "无法打印：ELEGOO 打印程序只能打开小于 2 GiB（2 147 483 648 字节）的文件。",
+  "files.not_printable_2gib": "无法打印：打印机只能打开不超过 2,147,483,647 字节（略小于 2 GiB）的文件。此文件更大。",
   "files.print_anyway": "仍要开始吗？",
   "files.protected_file_list_refreshed": "受保护文件列表已刷新。",
   "files.refresh": "刷新",

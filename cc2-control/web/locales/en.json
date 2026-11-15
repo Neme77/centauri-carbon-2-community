@@ -337,7 +337,7 @@
   "files.permanently_delete_this_g_code": "Permanently delete this G-code from {where}?",
   "files.print": "Print",
   "files.not_printable": "Not printable",
-  "files.not_printable_2gib": "Not printable: the ELEGOO printer program only opens files below 2 GiB (2 147 483 648 bytes).",
+  "files.not_printable_2gib": "Not printable: the printer only opens files up to 2,147,483,647 bytes (just under 2 GiB). This file is larger.",
   "files.print_anyway": "Start anyway?",
   "files.protected_file_list_refreshed": "Protected file list refreshed.",
   "files.refresh": "Refresh",

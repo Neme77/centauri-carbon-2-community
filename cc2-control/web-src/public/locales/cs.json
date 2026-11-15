@@ -337,7 +337,7 @@
   "files.permanently_delete_this_g_code": "Trvale smazat tento G-code z {where}?",
   "files.print": "Tisknout",
   "files.not_printable": "Nelze tisknout",
-  "files.not_printable_2gib": "Nelze tisknout: tiskový program ELEGOO otevírá jen soubory menší než 2 GiB (2 147 483 648 bajtů).",
+  "files.not_printable_2gib": "Nelze tisknout: tiskárna otevírá jen soubory do 2 147 483 647 bajtů (necelé 2 GiB). Tento soubor je větší.",
   "files.print_anyway": "Přesto spustit?",
   "files.protected_file_list_refreshed": "Chráněný seznam souborů obnoven.",
   "files.refresh": "Obnovit",
