@@ -264,6 +264,23 @@ int main(void) {
     status = finish();
     expect(status == 202 && starts_sent == sent + 1, "F a report 1 s after a fresh start: 202, no 409");
 
+    /* W: the browser leaves while the start waits for a report (after the copy, and at the start): the wait ends on
+     * the next tick, nothing is sent, the worker is free. */
+    idle(); canvas_list(RED_PLA(0, 1)); sent = starts_sent;
+    assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
+    copied(); usb_start_tick(&machine);
+    expect(!answered() && usb_start_active(), "W waits for the report after the copy");
+    close(pair_[1]); usb_start_tick(&machine);
+    expect(!usb_start_active() && starts_sent == sent, "W a browser that leaves ends the wait at once, nothing sent");
+    close(pair_[0]);
+    idle(); machine.canvas_snapshot_len = 0; sent = starts_sent;
+    assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
+    copied(); usb_start_tick(&machine);
+    expect(!answered() && usb_start_active(), "W2 waits for the first report");
+    close(pair_[1]); usb_start_tick(&machine);
+    expect(!usb_start_active() && starts_sent == sent, "W2 a browser that leaves ends the wait at the start too");
+    close(pair_[0]);
+
     /* X: emergency stop while waiting for the report: refused at once, nothing sent. */
     idle(); canvas_list(RED_PLA(0, 1)); sent = starts_sent;
     assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
