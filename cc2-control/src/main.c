@@ -1724,6 +1724,12 @@ static int usb_copy_write_out(FILE *output, FILE *input, size_t from, size_t to)
 /* Test seams: after each block written (with the bytes copied so far), and after the copy was synced. */
 static void (*usb_copy_block_hook)(size_t copied);
 static void (*usb_copy_synced_hook)(const char *path);
+/* Heartbeat of the start worker: set on every block it reads or writes and on every round of its waits, so the
+ * main loop sees a worker that stands still (a USB stick that stops answering inside fread, Fund 4). */
+static long long monotonic_ms(void);
+static atomic_llong usb_start_beat;
+static void usb_start_beat_now(void) { atomic_store(&usb_start_beat, monotonic_ms()); }
+static void usb_start_nap(long ms) { usb_start_beat_now(); nanosleep(&(struct timespec){0, ms * 1000000L}, NULL); }
 /* Test seam: called after each block of the one-pass scan (0) and of the read back (1). */
 static void (*usb_read_block_hook)(int phase);
 
@@ -1873,6 +1879,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
         hash = gcode_copy_hash(hash, (const unsigned char *)buffer, count);
         if (decided) gcode_stream_scan_feed(&scan, buffer, count);
         if (usb_copy_block_hook) usb_copy_block_hook(copied);
+        if (cancel) usb_start_beat_now();
         if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
         if (count < sizeof(buffer)) {
             if (ferror(input)) result = GCODE_IMPORT_FAILED;
@@ -1881,6 +1888,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
         if (write_out && copied - written_out >= USB_COPY_FLUSH_BYTES) {
             if (usb_copy_write_out(output, input, written_out, copied) != 0) { result = GCODE_IMPORT_FAILED; break; }
             written_out = copied;
+            if (cancel) usb_start_beat_now();
             if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
         }
     }
@@ -1901,6 +1909,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     }
     if (!result && fflush(output) != 0) result = GCODE_IMPORT_FAILED;
     if (!result && fsync(fileno(output)) != 0) result = GCODE_IMPORT_FAILED;
+    if (cancel) usb_start_beat_now();
     /* Drop the synced pages, so the read back below comes from storage where the kernel allows it. */
     if (!result) (void)posix_fadvise(fileno(output), 0, 0, POSIX_FADV_DONTNEED);
     if (!result && write_out) (void)posix_fadvise(fileno(input), 0, 0, POSIX_FADV_DONTNEED); /* the rest of the source */
@@ -1914,6 +1923,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
         else if (!check) result = GCODE_IMPORT_UNVERIFIED;
         else {
             while ((count = fread(buffer, 1, sizeof(buffer), check)) > 0) {
+                if (cancel) usb_start_beat_now();
                 if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
                 read_back += count;
                 back = gcode_copy_hash(back, (const unsigned char *)buffer, count);
@@ -1974,7 +1984,10 @@ static _Thread_local const atomic_int *gcode_scan_cancel;
 /* Test seams: full passes over a G-code file by the start checks; whether the read back dropped the copy. */
 static atomic_int gcode_scan_passes;
 
-static int gcode_scan_cancelled(void) { return gcode_scan_cancel && atomic_load(gcode_scan_cancel); }
+static int gcode_scan_cancelled(void) {
+    if (gcode_scan_cancel) usb_start_beat_now(); /* only the start worker sets gcode_scan_cancel */
+    return gcode_scan_cancel && atomic_load(gcode_scan_cancel);
+}
 static int gcode_detect_tools(const char *root, const char *relative,
                               int tools[GCODE_TOOLS_MAX], size_t *tool_count, double *lengths) {
     char path[PATH_MAX_LOCAL * 2], line[GCODE_TOOLS_LINE];
@@ -2850,7 +2863,7 @@ static void *usb_start_worker(void *unused) {
     /* The dialog's analysis of this same file still reads it: wait for it (an emergency stop or a browser that
      * leaves ends the wait), then take its decision from the cache below instead of reading the stick in parallel. */
     while (pinned >= 0 && analysis_reading_file(source) && !atomic_load(&usb_start_cancelled))
-        nanosleep(&(struct timespec){0, 20000000}, NULL);
+        usb_start_nap(20);
     gcode_scan_expect decided;
     job->from_cache = pinned >= 0 && job->source.known && analysis_cached_scan(source, &before, &decided);
     if (job->from_cache) {
@@ -2877,7 +2890,7 @@ static void *usb_start_worker(void *unused) {
          * is copied: the main loop ends the wait with the report, or without one after usb_start_canvas_wait_ms with
          * cancel reason 3, so a silent Canvas is answered after the wait, not after a whole copy. */
         while (atomic_load(&usb_start_trays_late) && !atomic_load(&usb_start_cancelled))
-            nanosleep(&(struct timespec){0, 5000000}, NULL);
+            usb_start_nap(5);
         if (atomic_load(&usb_start_cancelled)) {
             job->import_error = GCODE_IMPORT_CANCELLED; job->import_failed = 1; job->imported_ok = 0;
             goto copied;
@@ -2895,12 +2908,12 @@ static void *usb_start_worker(void *unused) {
             atomic_store(&usb_start_room, 1);
             for (int waited = 0; waited < USB_START_ROOM_WAIT_MS && atomic_load(&usb_start_room) == 1 &&
                                  !atomic_load(&usb_start_cancelled); waited += 5)
-                nanosleep(&(struct timespec){0, 5000000}, NULL);
+                usb_start_nap(5);
             /* Given up (1 -> 0): the main loop no longer makes room for this start. Taken up (3): it is removing
              * old copies right now, so the copy waits for it to finish; that takes no stick reads. */
             int asked = 1;
             if (!atomic_compare_exchange_strong(&usb_start_room, &asked, 0))
-                while (atomic_load(&usb_start_room) == 3) nanosleep(&(struct timespec){0, 5000000}, NULL);
+                while (atomic_load(&usb_start_room) == 3) usb_start_nap(5);
         }
         if (usb_start_copy_hook) usb_start_copy_hook();
         job->import_error = gcode_import_usb(job->filename, job->imported, &job->source,
@@ -2972,6 +2985,7 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
     atomic_store(&usb_start_room, 0);
     usb_start_canvas_waiting = 0;
     usb_start_cancelled = 0;
+    usb_start_beat_now();
     atomic_store(&usb_start_done, 0);
     pthread_attr_t attr; pthread_t thread;
     int failed = pthread_attr_init(&attr);
@@ -3007,6 +3021,11 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
  * asks the printer for one (canvas_refresh_due, sent by mqtt_tick) and waits up to USB_START_CANVAS_WAIT_MS
  * for a new canvas_revision, without blocking. An emergency stop or a client that leaves ends the wait. */
 #define USB_START_CANVAS_WAIT_MS 10000
+/* No progress of the start worker for this long counts as a stick that stopped answering (Fund 4). Measured on the
+ * printer: the slowest 64-KiB block of two healthy sticks took 0.21 s; the kernel gives a USB disk command 30 s
+ * (eh_timeout 10 s). 15 s is over 70 times the slowest healthy block and answers the browser before the kernel. */
+#define USB_START_STALL_MS 15000
+static long long usb_start_stall_ms = USB_START_STALL_MS; /* test seam */
 /* With #352 (fresh report asked for before a queued start): its report is the one usb_start_trays_note
  * keeps at the beginning, and this request after the copy is the second one. When the two are merged,
  * usb_start_trays_note runs after #352's report, not before it. */
@@ -3064,11 +3083,22 @@ static void usb_start_tick(mqtt_client *mqtt) {
     /* No report within the wait while the worker still waits (or scans): it stops before it copies (reason 3). */
     if (usb_start_trays_late && !usb_start_cancelled && !atomic_load(&usb_start_done) &&
         monotonic_ms() >= usb_start_trays_late_until) usb_start_cancelled = 3;
+    /* A worker without progress for usb_start_stall_ms stands in a read the stick does not answer (Fund 4): the
+     * browser is answered now (reason 4); the start stays busy until the worker comes back, then it is cleaned up
+     * without a second answer. */
+    if (!usb_start_cancelled && !atomic_load(&usb_start_done) &&
+        monotonic_ms() - atomic_load(&usb_start_beat) > usb_start_stall_ms) {
+        usb_start_cancelled = 4;
+        const char *error = "{\"accepted\":false,\"reason\":\"usb_unresponsive\",\"error\":\"The USB stick does not respond; remove it, then start the print again\"}\n";
+        respond(usb_start_fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+        shutdown(usb_start_fd, SHUT_WR);
+    }
     if (!atomic_load(&usb_start_done)) return;
     int fd = usb_start_fd, status = 409;
     if (usb_start_cancelled == 2) {
         const char *error = "{\"accepted\":false,\"error\":\"Print start cancelled by the emergency stop\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+    } else if (usb_start_cancelled == 4) { /* answered when the stick stopped responding; the queue is told below */
     } else if (usb_start_cancelled == 3) { /* the queue is told below, with the other cancels */
         const char *error = "{\"accepted\":false,\"reason\":\"canvas_unreported\",\"error\":\"The Canvas did not report its trays when the start began; check that the Canvas is connected, then start the print again\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
