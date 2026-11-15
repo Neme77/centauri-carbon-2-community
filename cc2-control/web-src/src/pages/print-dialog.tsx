@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/field'
 import { errText, notify, post, request, toast } from '@/lib/api'
+import { ask } from '@/lib/confirm'
+import { tooLargeForPrinter } from '@/lib/printer-file-limit'
 import { t, tpl } from '@/lib/i18n'
 import { canvasHex, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
@@ -81,6 +83,10 @@ export async function startFile(storage: string, path: string) {
 // The same with the file's size, so the page waits as long as the start of that file needs (start-timeout.ts).
 export async function startFileOfSize(storage: string, path: string, size: number | null) {
   if (pending.get().job || fileAnalysisPending) return
+  // From 2 GiB on the printer program cannot open the file: warn before anything is read or copied; the operator
+  // may still go on (CC2 Control does not block it).
+  if (tooLargeForPrinter(size) && !(await ask(`${t('files.not_printable_2gib')}\n\n${t('files.print_anyway')}`, true)))
+    return
   fileAnalysisPending = true
   notify(t('print.analysing_file'))
   try {

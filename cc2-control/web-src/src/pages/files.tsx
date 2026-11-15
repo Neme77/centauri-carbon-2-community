@@ -14,6 +14,8 @@ import { duration, fileSize } from '@/lib/format'
 import { compareFileDates, fileModified } from '@/lib/file-date'
 import { startFileOfSize } from '@/pages/print-dialog'
 import { QueuedChip } from '@/components/queue-next'
+import { Tag } from '@/components/ui/badge'
+import { tooLargeForPrinter } from '@/lib/printer-file-limit'
 
 type Entry = { storage: 'internal' | 'usb'; file: any }
 const key = (e: { storage: string; path?: string; file?: any }) => `${e.storage}\n${e.path ?? e.file.path}`
@@ -337,6 +339,11 @@ export const Files = () => {
                     {e.file.path}
                   </button>
                   <QueuedChip storage={e.storage} path={e.file.path} />
+                  {tooLargeForPrinter(e.file.size) && (
+                    <Tag class="border-red text-red" title={t('files.not_printable_2gib')} data-not-printable>
+                      {t('files.not_printable')}
+                    </Tag>
+                  )}
                 </div>
                 <span class="hidden cc2-md:inline">{fileSize(e.file.size)}</span>
                 <span class="hidden cc2-md:inline">
@@ -467,6 +474,11 @@ const Detail = ({
       </div>
       <div>
         <Row label="files.size" value={entry ? fileSize(entry.file.size) : '—'} />
+        {entry && tooLargeForPrinter(entry.file.size) && (
+          <div class="my-2 text-xs text-red" data-not-printable>
+            {t('files.not_printable_2gib')}
+          </div>
+        )}
         <Row
           label="files.layers"
           value={meta && ok(meta.layers) && Number(meta.layers) > 0 ? Math.round(Number(meta.layers)) : '—'}
