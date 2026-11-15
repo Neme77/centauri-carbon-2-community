@@ -2058,18 +2058,18 @@ static int gcode_read_filaments(const char *root, const char *relative,
     /* Orca/Prusa-style config comments can follow the entire print. Seek to a
      * bounded footer rather than scanning large files again. Later valid values
      * take precedence, and a partial first line is never treated as metadata. */
-    if (!failed && fseek(file, 0, SEEK_END) == 0) {
-        long size = ftell(file);
+    if (!failed && fseeko(file, 0, SEEK_END) == 0) { /* off_t: files over 2 GiB on the 32-bit printer */
+        off_t size = ftello(file);
         if (size > GCODE_FILAMENT_SCAN_BYTES) {
-            long start = size - GCODE_FILAMENT_SCAN_BYTES;
+            off_t start = size - GCODE_FILAMENT_SCAN_BYTES;
             if (start < GCODE_FILAMENT_SCAN_BYTES) start = GCODE_FILAMENT_SCAN_BYTES;
-            if (fseek(file, start - 1, SEEK_SET) != 0) failed = 1;
+            if (fseeko(file, start - 1, SEEK_SET) != 0) failed = 1;
             else {
                 int ch = fgetc(file);
                 if (ch != '\n') {
                     while ((ch = fgetc(file)) != EOF && ch != '\n') {}
                 }
-                long position = ftell(file);
+                off_t position = ftello(file);
                 if (position < 0) failed = 1;
                 else if (position < size) gcode_scan_filaments(file, (size_t)(size - position), info);
             }
@@ -2103,8 +2103,8 @@ static int gcode_read_setup(const char *root, const char *relative, double *bed,
             break;
         }
     }
-    long size = fseek(file, 0, SEEK_END) == 0 ? ftell(file) : -1;
-    if (size > 0 && fseek(file, size > 256 * 1024 ? size - 256 * 1024 : 0, SEEK_SET) == 0) {
+    off_t size = fseeko(file, 0, SEEK_END) == 0 ? ftello(file) : -1; /* files over 2 GiB on the 32-bit printer */
+    if (size > 0 && fseeko(file, size > 256 * 1024 ? size - 256 * 1024 : 0, SEEK_SET) == 0) {
         if (size > 256 * 1024 && !fgets(line, sizeof(line), file)) line[0] = 0; /* skip a partial line */
         while (fgets(line, sizeof(line), file)) {
             const char *p = line;
