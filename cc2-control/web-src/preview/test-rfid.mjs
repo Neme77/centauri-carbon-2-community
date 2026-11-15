@@ -109,7 +109,14 @@ try {
  const firmware=page.locator('[data-canvas-firmware]')
  const install=firmware.getByRole('button',{name:labels['rfid.install_canvas_firmware'],exact:true})
  await install.click()
- await page.getByRole('button',{name:'Annulla',exact:true}).last().click()
+ // Activation has its own warning: what it blocks, that it cannot be cancelled, and Cancel holds the focus.
+ const activation=page.getByRole('dialog').last()
+ await activation.waitFor()
+ assert.equal((await activation.locator('p').first().textContent()).trim(),labels['rfid.lifecycle_activate_confirm'])
+ // The dialog moves the focus after it opens: wait for it to land on Cancel (times out otherwise).
+ await page.waitForFunction(()=>document.activeElement?.closest('[role=dialog]')&&document.activeElement.textContent.trim()==='Annulla',null,{timeout:5000})
+ await page.keyboard.press('Enter')
+ await activation.waitFor({state:'detached'})
  assert.deepEqual(await page.evaluate(()=>window.__RFID_NATIVE.actions),[])
  for(const [phase,label,action,result=0] of [
   [-1,'rfid.install_canvas_firmware','activate'],
@@ -126,6 +133,12 @@ try {
     labels[result===1?'rfid.lifecycle_action_failed':'rfid.lifecycle_validation_ready'],{exact:true}).waitFor()
   const count=await page.evaluate(()=>window.__RFID_NATIVE.actions.length)
   await button.click()
+  // Each action keeps its own prompt; only the activation is a warning with Cancel focused.
+  const prompt=page.getByRole('dialog').last()
+  const confirm={activate:'rfid.lifecycle_activate_confirm',restore:'rfid.lifecycle_restore_confirm',remove:'rfid.lifecycle_remove_confirm'}[action]
+   ||(label==='rfid.lifecycle_continue_validation'?'rfid.lifecycle_validation_confirm':'rfid.lifecycle_confirm')
+  assert.equal((await prompt.locator('p').first().textContent()).trim(),labels[confirm])
+  await page.waitForFunction(name=>document.activeElement?.closest('[role=dialog]')&&document.activeElement.textContent.trim()===name,action==='activate'?'Annulla':'Conferma',{timeout:5000})
   await page.getByRole('button',{name:'Conferma',exact:true}).click()
   await page.waitForFunction(({action,count})=>window.__RFID_NATIVE.actions.length===count+1&&
    window.__RFID_NATIVE.actions.at(-1)===action,{action,count})

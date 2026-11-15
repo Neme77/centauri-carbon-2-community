@@ -1552,6 +1552,7 @@
   "rfid.presence_hint": "Tag reading and material assignment are separate from physical filament detection. The slot stays translucent until Canvas detects filament at its inlet; this does not mean RFID is still reading. No load to the nozzle is required to confirm inlet presence.",
   "rfid.short_title": "RFID",
   "rfid.lifecycle_confirm": "This changes the Canvas RFID application or its host protection. Keep the idle, cold printer powered and connected. Follow each full-printer reboot prompt and retain the original backup. Continue?",
+  "rfid.lifecycle_activate_confirm": "Activate Canvas RFID?\n– CC2 Control stays locked until it is complete. Only the display and emergency stop still work.\n– This takes two full printer reboots and a second confirmation.\n– From the transfer to the Canvas until the next reboot, the printer cannot be used.\n– It cannot be cancelled. Going back only works with a second transfer and two more reboots.",
   "rfid.lifecycle_recovery": "RFID recovery requires attention. Keep the original backup and operation log; do not retry a firmware transfer or remove the host protection.",
   "rfid.lifecycle_working": "RFID preparation or verification is running. Keep the printer powered and connected; wait before restarting.",
   "rfid.lifecycle_restore_reboot": "Original Canvas firmware transfer complete. With the printer idle, perform a full reboot to verify the restoration.",

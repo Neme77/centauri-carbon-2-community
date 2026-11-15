@@ -1546,6 +1546,7 @@
   "rfid.presence_hint": "标签读取和数据分配与耗材实际检测是分开的。在 Canvas 于进料口检测到耗材之前，该槽位保持半透明；这并不表示 RFID 仍在读取。确认进料口有耗材无需向喷嘴加载。",
   "rfid.short_title": "RFID",
   "rfid.lifecycle_confirm": "此操作会更改 Canvas RFID 应用或其主机保护。请保持打印机空闲、冷却、通电并保持连接。请按提示完成每次整机重启，并保留原始备份。是否继续？",
+  "rfid.lifecycle_activate_confirm": "要激活 Canvas RFID 吗？\n– 在完成之前，CC2 Control 将保持锁定。只有显示和紧急停止仍可使用。\n– 需要两次整机重启和第二次确认。\n– 从向 Canvas 传输开始直到下一次重启，打印机都无法使用。\n– 无法取消。只有再传输一次并再进行两次重启才能恢复。",
   "rfid.lifecycle_recovery": "RFID 恢复需要处理。请保留原始备份和操作日志；不要重试固件传输，也不要移除主机保护。",
   "rfid.lifecycle_working": "RFID 准备或校验正在进行。请保持打印机通电并保持连接；重启前请先等待。",
   "rfid.lifecycle_restore_reboot": "原始 Canvas 固件传输完成。请在打印机空闲时执行完整重启，以验证恢复结果。",

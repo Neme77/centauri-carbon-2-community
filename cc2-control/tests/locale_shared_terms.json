@@ -1,0 +1,728 @@
+{
+  "app.dashboard": {
+    "text": "Dashboard",
+    "locales": [
+      "de",
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "app.version": {
+    "text": "Version:",
+    "locales": [
+      "de",
+      "es"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "bed.bed_mesh_3d": {
+    "text": "Bed Mesh 3D",
+    "locales": [
+      "de"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "bed.max": {
+    "text": "Max",
+    "locales": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "bed.maximum": {
+    "text": "Maximum",
+    "locales": [
+      "cs",
+      "de",
+      "fr",
+      "hu"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "bed.min": {
+    "text": "Min",
+    "locales": [
+      "es",
+      "fr",
+      "it",
+      "tr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "bed.minimum": {
+    "text": "Minimum",
+    "locales": [
+      "cs",
+      "de",
+      "fr",
+      "hu",
+      "pl",
+      "tr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "bed.reference": {
+    "text": "Zero",
+    "locales": [
+      "it",
+      "pl"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "canvas.color": {
+    "text": "Color",
+    "locales": [
+      "es"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "canvas.material": {
+    "text": "Material",
+    "locales": [
+      "de",
+      "es"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "canvas.sync": {
+    "text": "Sync",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "common.canvas": {
+    "text": "Canvas",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr",
+      "zh"
+    ],
+    "reason": "Product or integration name"
+  },
+  "common.console": {
+    "text": "Console",
+    "locales": [
+      "fr",
+      "it"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "common.control": {
+    "text": "Control",
+    "locales": [
+      "es"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "common.home_x": {
+    "text": "Home X",
+    "locales": [
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "common.home_y": {
+    "text": "Home Y",
+    "locales": [
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "common.home_z": {
+    "text": "Home Z",
+    "locales": [
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "common.live": {
+    "text": "Live",
+    "locales": [
+      "de",
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "common.name": {
+    "text": "Name",
+    "locales": [
+      "de"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "common.position": {
+    "text": "Position",
+    "locales": [
+      "de",
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "common.slot_n": {
+    "text": "Slot {n}",
+    "locales": [
+      "cs",
+      "de",
+      "it",
+      "pl"
+    ],
+    "reason": "Unit, symbol or slot/tool notation shared by these locales"
+  },
+  "common.snapshot": {
+    "text": "Snapshot",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "common.camera_stop": {
+    "text": "Pause",
+    "locales": [
+      "de",
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "control.extruder": {
+    "text": "Extruder",
+    "locales": [
+      "cs",
+      "de",
+      "hu"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "control.machine": {
+    "text": "Machine",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "dashboard.online": {
+    "text": "Online",
+    "locales": [
+      "cs",
+      "de",
+      "hu",
+      "it",
+      "pl"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "dashboard.service": {
+    "text": "Service",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "dashboard.system": {
+    "text": "System",
+    "locales": [
+      "de",
+      "pl"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "files.actions": {
+    "text": "Actions",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "files.destination": {
+    "text": "Destination",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "files.filament_est": {
+    "text": "Filament (est.)",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "job.pause": {
+    "text": "Pause",
+    "locales": [
+      "de",
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "print.filament_tool_n": {
+    "text": "Filament T{n}",
+    "locales": [
+      "cs",
+      "de",
+      "fr",
+      "hu",
+      "pl",
+      "tr"
+    ],
+    "reason": "Unit, symbol or slot/tool notation shared by these locales"
+  },
+  "settings.test_orca": {
+    "text": "Test Orca",
+    "locales": [
+      "it"
+    ],
+    "reason": "Product or integration name"
+  },
+  "settings.version": {
+    "text": "Version",
+    "locales": [
+      "de",
+      "es",
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "state.idle": {
+    "text": "Idle",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "state.offline": {
+    "text": "Offline",
+    "locales": [
+      "cs",
+      "de",
+      "hu",
+      "it",
+      "pl"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "state.upgrade": {
+    "text": "Upgrade",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "tuning.flow": {
+    "text": "Flow (%)",
+    "locales": [
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "tuning.actual": {
+    "text": "Actual: {value}%",
+    "locales": [
+      "es"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "substate.homing": {
+    "text": "Homing",
+    "locales": [
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "printer.error_n": {
+    "text": "error {code}",
+    "locales": [
+      "es"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "history.time_lapse": {
+    "text": "Time-lapse",
+    "locales": [
+      "es",
+      "tr"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "printer.report_code": {
+    "text": "Code {code}",
+    "locales": [
+      "de",
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "plates.measure_option": {
+    "text": "{name} · {temp} °C",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr",
+      "zh"
+    ],
+    "reason": "Unit, symbol or slot/tool notation shared by these locales"
+  },
+  "spools.title": {
+    "text": "Spools",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "spools.note": {
+    "text": "Note",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "spools.kind_correction": {
+    "text": "Correction",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "spools.title_choose": {
+    "text": "Spool in {place}",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "spools.colour_orange": {
+    "text": "Orange",
+    "locales": [
+      "de"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "spools.colour_beige": {
+    "text": "Beige",
+    "locales": [
+      "de",
+      "es"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "control.shaper_title": {
+    "text": "Input Shaper",
+    "locales": [
+      "cs",
+      "de",
+      "fr",
+      "it",
+      "pl",
+      "tr"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "control.quick_pid_hotend": {
+    "text": "Hotend PID",
+    "locales": [
+      "tr"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "common.pagination": {
+    "text": "Pagination",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "updates.title": {
+    "text": "Updates",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "updates.idle": {
+    "text": "Idle",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "canvas.timeline_change": {
+    "text": "Slot {slot}: {from} → {to}",
+    "locales": [
+      "de",
+      "it"
+    ],
+    "reason": "Unit, symbol or slot/tool notation shared by these locales"
+  },
+  "common.pandabreath": {
+    "text": "Panda Breath",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr",
+      "zh"
+    ],
+    "reason": "Product or integration name"
+  },
+  "common.dragonbreath": {
+    "text": "Dragon Breath",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr",
+      "zh"
+    ],
+    "reason": "Product or integration name"
+  },
+  "spools.spoolman_auth_placeholder": {
+    "text": "user:pass",
+    "locales": [
+      "de"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "control.motor_mode_normal": {
+    "text": "Normal",
+    "locales": [
+      "de",
+      "es",
+      "fr",
+      "tr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "experiments.canvas_title": {
+    "text": "Canvas UDS",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr",
+      "zh"
+    ],
+    "reason": "Product or integration name"
+  },
+  "filament.type": {
+    "text": "Type",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "network.wifi": {
+    "text": "Wi-Fi",
+    "locales": [
+      "cs",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr",
+      "zh"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "network.ethernet": {
+    "text": "Ethernet",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "network.signal": {
+    "text": "Signal",
+    "locales": [
+      "de",
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "network.password": {
+    "text": "Password",
+    "locales": [
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "network.gateway": {
+    "text": "Gateway",
+    "locales": [
+      "de",
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "nozzle.start_temp": {
+    "text": "Start (°C)",
+    "locales": [
+      "de"
+    ],
+    "reason": "Unit, symbol or slot/tool notation shared by these locales"
+  },
+  "caltools.active": {
+    "text": "Active",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "cellguide.tare": {
+    "text": "Tare",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "tuning.pressure_advance": {
+    "text": "Pressure Advance (s)",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "zh"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "tuning.actual_pa": {
+    "text": "Actual: {value} s",
+    "locales": [
+      "es"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "rfid.short_title": {
+    "text": "RFID",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr",
+      "zh"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "queue.check_slot": {
+    "text": "Slot {n}: {filament}",
+    "locales": [
+      "cs",
+      "de",
+      "it",
+      "pl"
+    ],
+    "reason": "Unit, symbol or slot/tool notation shared by these locales"
+  },
+  "queue.seconds_short": {
+    "text": "s",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl"
+    ],
+    "reason": "Unit, symbol or slot/tool notation shared by these locales"
+  },
+  "queue.col_file": {
+    "text": "File",
+    "locales": [
+      "it"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "queue.col_copies": {
+    "text": "Copies",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "queue.col_actions": {
+    "text": "Actions",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "queue.timelapse": {
+    "text": "Timelapse",
+    "locales": [
+      "cs",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  },
+  "bed.tram_active": {
+    "text": "Session active",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
+  "job.bed_map_live": {
+    "text": "Live",
+    "locales": [
+      "de",
+      "fr",
+      "it",
+      "ru"
+    ],
+    "reason": "Established technical vocabulary retained by these locale catalogs"
+  }
+}
