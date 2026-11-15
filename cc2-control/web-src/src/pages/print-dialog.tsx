@@ -117,12 +117,11 @@ export async function startFileOfSize(storage: string, path: string, size: numbe
     pending.set({ job: null })
     // A start of this same file is still reading it: the printer does not analyse it in parallel.
     const reason = (e as { data?: { reason?: string } })?.data?.reason
-    notify(
+    const m =
       reason === 'start_reading'
         ? t('print.start_reading')
-        : tpl('print.cannot_prepare_print_error', { error: errText(e) }),
-      'error'
-    )
+        : tpl('print.cannot_prepare_print_error', { error: errText(e) })
+    notify(m, 'error')
   } finally {
     fileAnalysisPending = false
   }
