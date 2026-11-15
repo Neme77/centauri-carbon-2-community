@@ -154,6 +154,14 @@ int main(void) {
     status = answer(pair[1]);
     expect(status == 202 && atomic_load(&gcode_scan_passes) == 1, "mesh and tools are checked in one pass over the file");
 
+    /* 4b. Variant: without a slot mapping only the mesh check runs, one pass on any version. */
+    atomic_store(&gcode_scan_passes, 0);
+    snprintf(body, sizeof(body), "usb\ntwo.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
+    expect(status == 202 && atomic_load(&gcode_scan_passes) == 1, "variant: without a mapping the file is read once as well");
+
     /* 5. After the read back the copy's pages are dropped from the cache too. */
     usb_copy_readback_dropped = 0;
     snprintf(body, sizeof(body), "usb\nsmall.gcode\n\nA\nsaved\n0");
@@ -173,6 +181,15 @@ int main(void) {
     expect(!taken && status == 409 && atomic_load(&gcode_scan_passes) == 0,
            "a busy printer refuses an internal start without reading the file");
     mqtt.machine_status = 1;
+    /* 6b. Variant: printer link not registered: also refused before the file is read. */
+    mqtt.registered = 0; atomic_store(&gcode_scan_passes, 0);
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    taken = usb_start_begin(pair[0], &mqtt, body, strlen(body));
+    if (!taken) close(pair[0]);
+    status = answer(pair[1]);
+    expect(!taken && status == 503 && atomic_load(&gcode_scan_passes) == 0,
+           "variant: no printer link refuses an internal start without reading the file");
+    mqtt.registered = 1;
 
     /* 3. A .part left behind when CC2 Control ended during a copy: removed once it is older than the
      * time a running copy leaves between two writes; a fresh one may belong to another instance. */
