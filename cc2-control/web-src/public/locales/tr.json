@@ -398,6 +398,7 @@
   "print.print_not_started": "Baskı başlatılmadı:",
   "print.canvas_unreported": "Baskı başlatılmadı: Canvas yuvalarını bildirmedi. Canvas'ın bağlı olduğunu kontrol edin, ardından yeniden başlatın, başka makaralar seçin veya iptal edin.",
   "print.usb_unresponsive": "Baskı başlatılmadı: USB bellek yanıt vermiyor. Çıkarıp yeniden takın, ardından yeniden başlatın.",
+  "print.start_reading": "Bir baskı başlatma şu anda bu dosyayı okuyor. Bu başlatma yanıtlandığında dosyayı yeniden açın.",
   "print.start_no_answer": "{minutes} dakika içinde yanıt gelmedi, bu yüzden başlatma iptal edildi. USB belleği kontrol edip yeniden başlatın.",
   "print.print_request_submitted_waiting": "Baskı isteği gönderildi. Yazıcı durumu bekleniyor.",
   "print.print_setup": "Baskı kurulumu",

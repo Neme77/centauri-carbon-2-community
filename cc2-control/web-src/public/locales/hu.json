@@ -573,6 +573,7 @@
   "print.print_not_started": "A nyomtatás nem indult el:",
   "print.canvas_unreported": "A nyomtatás nem indult el: a Canvas nem jelentette a rekeszeit. Ellenőrizd, hogy a Canvas csatlakozik-e, majd indítsd újra, válassz másik tekercset, vagy szakítsd meg.",
   "print.usb_unresponsive": "A nyomtatás nem indult el: az USB-meghajtó nem válaszol. Húzd ki, dugd vissza, majd indítsd újra.",
+  "print.start_reading": "Egy nyomtatásindítás éppen olvassa ezt a fájlt. Nyisd meg újra, amikor az indítás befejeződött.",
   "print.start_no_answer": "{minutes} percen belül nem jött válasz, ezért az indítás megszakadt. Ellenőrizd az USB-meghajtót, majd indítsd újra.",
   "print.print_request_submitted_waiting": "Nyomtatási kérés elküldve. Várakozás a nyomtató állapotára.",
   "print.print_setup": "Nyomtatás előkészítése",
