@@ -3302,7 +3302,7 @@ static void analysis_reading_set(const char *root, const char *name) {
 static int active_analysis_pending, active_analysis_ready, active_analysis_layers;
 static unsigned active_analysis_generation;
 static long active_analysis_seconds = -1;
-static void active_gcode_scan(const char *filename,int *layers,long *seconds);
+static void active_gcode_scan(const char *filename,unsigned generation,int *layers,long *seconds);
 static int analysis_same_file(const struct stat *a,const struct stat *b) {
     return a->st_dev==b->st_dev && a->st_ino==b->st_ino && a->st_size==b->st_size &&
         a->st_mtim.tv_sec==b->st_mtim.tv_sec && a->st_mtim.tv_nsec==b->st_mtim.tv_nsec &&
@@ -3318,7 +3318,7 @@ static void *analysis_worker(void *unused) {
         pthread_mutex_unlock(&analysis_mutex);
         if(job.kind==2) {
             int layers=0;long seconds=-1;
-            active_gcode_scan(job.body,&layers,&seconds);
+            active_gcode_scan(job.body,job.generation,&layers,&seconds);
             pthread_mutex_lock(&analysis_mutex);
             if(job.generation==active_analysis_generation && !strcmp(job.body,active_analysis_filename)) {
                 active_analysis_layers=layers;active_analysis_seconds=seconds;active_analysis_ready=1;
@@ -3418,13 +3418,32 @@ static int analysis_start(int fd,int kind,const char *body,size_t length) {
  * Cache it from the active local G-code instead of leaving demo data in the UI. */
 static long active_gcode_estimated_seconds = -1;
 
-static void active_gcode_scan(const char *filename,int *layers,long *seconds) {
-    char path[PATH_MAX_LOCAL * 2], line[4096];
+/* The scan of the active print reads the whole file once. It ends early when that print is no longer the active one
+ * (finished, stopped, deleted, another print), so a stale scan never keeps a removed file open and its space taken;
+ * a job already stale does not open the file at all. A file of 2 GiB or more is not read: the printer program
+ * (32-bit stat) cannot open it, so there is no print to describe. */
+#define ACTIVE_SCAN_CHECK_BYTES (64 * 1024)
+#define ACTIVE_SCAN_FILE_MAX 2147483647LL
+static void (*active_scan_check_hook)(void); /* test seam: called at each check while reading */
+static int active_scan_current(unsigned generation) {
+    pthread_mutex_lock(&analysis_mutex); int current = generation == active_analysis_generation;
+    pthread_mutex_unlock(&analysis_mutex); return current;
+}
+static void active_gcode_scan(const char *filename,unsigned generation,int *layers,long *seconds) {
+    char path[PATH_MAX_LOCAL * 2], line[4096]; struct stat info;
     if (!gcode_resolved_path(gcode_internal_root, filename, path, sizeof(path))) return;
+    if (!active_scan_current(generation)) return;
+    if (stat(path, &info) != 0 || (long long)info.st_size > ACTIVE_SCAN_FILE_MAX) return;
     FILE *file = fopen(path, "r");
     if (!file) return;
-    int maximum_layer = -1;
+    int maximum_layer = -1; size_t unchecked = 0;
     while (fgets(line, sizeof(line), file)) {
+        unchecked += strlen(line);
+        if (unchecked >= ACTIVE_SCAN_CHECK_BYTES) {
+            unchecked = 0;
+            if (active_scan_check_hook) active_scan_check_hook();
+            if (!active_scan_current(generation)) { fclose(file); *layers = 0; *seconds = -1; return; }
+        }
         const char *comment=line;while(isspace((unsigned char)*comment))comment++;
         if(*comment!=';')continue;
         if(*seconds < 0){
