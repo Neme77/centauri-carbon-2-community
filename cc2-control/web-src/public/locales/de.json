@@ -398,6 +398,7 @@
   "print.print_not_started": "Druck nicht gestartet:",
   "print.canvas_unreported": "Druck nicht gestartet: Der Canvas hat seine Fächer nicht gemeldet. Prüfen Sie, ob der Canvas verbunden ist, und starten Sie dann erneut, wählen Sie andere Spools oder brechen Sie ab.",
   "print.usb_unresponsive": "Druck nicht gestartet: Der USB-Stick antwortet nicht. Ziehen Sie ihn ab, stecken Sie ihn wieder ein und starten Sie dann erneut.",
+  "print.file_too_large_for_printer": "Druck nicht gestartet: Der Drucker kann Dateien ab 2 GiB nicht öffnen. Teilen Sie den Druck auf oder slicen Sie ihn kleiner.",
   "print.start_reading": "Ein Druckstart liest diese Datei gerade. Öffnen Sie sie erneut, sobald dieser Start beantwortet ist.",
   "print.start_no_answer": "Keine Antwort innerhalb von {minutes} Minuten, daher wurde der Start abgebrochen. USB-Stick prüfen und erneut starten.",
   "print.print_request_submitted_waiting": "Druckanfrage übermittelt. Warten auf den Druckerstatus.",

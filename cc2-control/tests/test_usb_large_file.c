@@ -45,8 +45,31 @@ int main(void) {
     expect(gcode_import_usb("big.gcode", imported, NULL, NULL, NULL, 1, NULL, NULL) == GCODE_IMPORT_NO_SPACE,
            "its copy is checked against the free space, not refused as unreadable");
     upload_statvfs = statvfs;
+    /* The printer program checks a file with the 32-bit stat() and reports one above 2 GiB - 1 as missing, so it
+     * never prints it: the start is refused before any copy, with a reason the page explains. */
+    expect(!gcode_size_printable("usb", "big.gcode"), "a 2.5 GiB file is too large for the printer program");
+    int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    static const char body[] = "usb\nbig.gcode\n\nA\nsaved\n0\n\n";
+    static mqtt_client printer; /* not linked; the space check stays tiny, so no build ever copies 2.5 GiB here */
+    setvbuf(stdout, NULL, _IONBF, 0); upload_statvfs = tiny_statvfs;
+    int code = gcode_start_run(pair[0], &printer, body, sizeof(body) - 1, NULL, NULL);
+    upload_statvfs = statvfs;
+    char reply[1024] = {0}; shutdown(pair[0], SHUT_WR); ssize_t got = read(pair[1], reply, sizeof(reply) - 1); (void)got;
+    expect(code == 413 && strstr(reply, " 413 ") && strstr(reply, "\"reason\":\"file_too_large_for_printer\""),
+           "its start is answered 413 file_too_large_for_printer");
+    DIR *internal = opendir("gcode"); int copies = 0; struct dirent *entry;
+    while (internal && (entry = readdir(internal))) if (entry->d_name[0] != '.') copies++;
+    if (internal) closedir(internal);
+    expect(copies == 0, "nothing was copied into internal memory");
+    close(pair[0]); close(pair[1]);
     unlink("usb/big.gcode");
+    for (int k = 0; k < 2; k++) { /* the edge: 2 GiB - 1 is printable, 2 GiB is not */
+        fd = open("usb/edge.gcode", O_WRONLY | O_CREAT | O_TRUNC, 0644); assert(fd >= 0);
+        assert(!ftruncate(fd, (off_t)(2147483647LL + k))); assert(!close(fd));
+        expect(gcode_size_printable("usb", "edge.gcode") == !k, k ? "exactly 2 GiB is refused" : "2 GiB - 1 is accepted");
+    }
+    unlink("usb/edge.gcode");
     if (failures) { printf("%d FAIL\n", failures); return 1; }
-    puts("PASS USB files over 2 GiB: stat, footer and space check with large file support");
+    puts("PASS USB files over 2 GiB: stat, footer and space check with large file support; start refused before the copy");
     return 0;
 }

@@ -328,7 +328,9 @@ const Form = ({ job }: { job: Pending }) => {
           ? t('print.canvas_unreported')
           : reason === 'usb_unresponsive'
             ? t('print.usb_unresponsive')
-            : `${t('print.print_not_started')} ${errText(err)}`
+            : reason === 'file_too_large_for_printer'
+              ? t('print.file_too_large_for_printer')
+              : `${t('print.print_not_started')} ${errText(err)}`
       )
       setBusy(false)
     }

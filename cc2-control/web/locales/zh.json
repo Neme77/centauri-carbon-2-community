@@ -398,6 +398,7 @@
   "print.print_not_started": "打印未开始：",
   "print.canvas_unreported": "打印未开始：Canvas 没有报告其料槽。请检查 Canvas 是否已连接，然后重新开始、选择其他料盘或取消。",
   "print.usb_unresponsive": "打印未开始：USB 存储设备没有响应。请拔出后重新插入，然后重新开始。",
+  "print.file_too_large_for_printer": "打印未开始：打印机无法打开 2 GiB 及以上的文件。请拆分打印或切片得更小。",
   "print.start_reading": "一个打印启动正在读取此文件。请在该启动完成后重新打开。",
   "print.start_no_answer": "{minutes} 分钟内没有响应，已取消启动。请检查 USB 存储设备后重新开始。",
   "print.print_request_submitted_waiting": "打印请求已提交。正在等待打印机状态。",

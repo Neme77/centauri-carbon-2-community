@@ -76,7 +76,8 @@
     "test:runout": "node preview/test-runout-continue.mjs",
     "test:canvas-unreported": "node preview/test-canvas-unreported.mjs",
     "test:delete-retry": "node preview/test-delete-retry.mjs",
-    "test:start-reading": "node preview/test-start-reading.mjs"
+    "test:start-reading": "node preview/test-start-reading.mjs",
+    "test:file-too-large": "node preview/test-file-too-large.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

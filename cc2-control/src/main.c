@@ -639,6 +639,16 @@ static int gcode_file_is_printable(const char *root, const char *relative) {
     return 0;
 }
 
+/* The printer program (elegoo_printer, 32-bit ARM) checks a file with the 32-bit stat(), which fails with EOVERFLOW
+ * above 2 GiB - 1; it then reports the file as missing and never prints it. Such a file is refused before any copy. */
+#define PRINTER_FILE_MAX 2147483647LL
+static int gcode_size_printable(const char *root, const char *relative) {
+    char path[PATH_MAX_LOCAL * 2]; struct stat info;
+    int length = snprintf(path, sizeof(path), "%s/%s", root, relative);
+    if (length < 0 || (size_t)length >= sizeof(path) || stat(path, &info) != 0) return 1; /* other checks answer that */
+    return (long long)info.st_size <= PRINTER_FILE_MAX;
+}
+
 static int gcode_resolved_path(const char *root, const char *relative,
                                char *path, size_t capacity) {
     if (!gcode_file_is_printable(root, relative)) return 0;
@@ -2560,6 +2570,11 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
         const char *error = "{\"accepted\":false,\"error\":\"File is unavailable or unsafe\"}\n";
         respond(fd, 404, "Not Found", "application/json; charset=utf-8", error, strlen(error));
         return 404;
+    }
+    if (!gcode_size_printable(root, filename)) {
+        const char *error = "{\"accepted\":false,\"reason\":\"file_too_large_for_printer\",\"error\":\"The printer cannot open files of 2 GiB or more; split the print or slice it smaller\"}\n";
+        respond(fd, 413, "Payload Too Large", "application/json; charset=utf-8", error, strlen(error));
+        return 413;
     }
     const char *layout_line = memchr(mapping, '\n', mapping_len);
     size_t map_len = layout_line ? (size_t)(layout_line - mapping) : mapping_len;
