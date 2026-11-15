@@ -1,6 +1,7 @@
 #define main cc2_main_original
 #define mqtt_start_print mock_mqtt_start_print
 #include "../src/main.c"
+#include <sys/file.h>
 #undef main
 #undef mqtt_start_print
 #include <assert.h>
@@ -279,20 +280,37 @@ int main(void) {
     expect(status == 503, "no printer link, file in order: 503");
     mqtt.registered = 1;
 
-    /* 3. A .part left behind when CC2 Control ended during a copy: removed once it is older than the
-     * time a running copy leaves between two writes; a fresh one may belong to another instance. */
+    /* 3. A .part left behind when CC2 Control ended during a copy (procd starts it again at once, so the .part
+     * is fresh): removed whatever its age, unless a copy holds its lock (flock) - that copy may run in another
+     * instance on the same folders. Old and fresh leftovers both go; the locked one, other .part files,
+     * finished copies and links stay. */
     write_size("gcode/CC2_USB_0000000a_left.gcode.part", 4096);
     age("gcode/CC2_USB_0000000a_left.gcode.part", time(NULL) - 3600);
+    write_size("gcode/CC2_USB_0000000e_crash.gcode.part", 4096); /* just left by a crash */
     write_size("gcode/CC2_USB_0000000d_live.gcode.part", 4096);
+    int live = open("gcode/CC2_USB_0000000d_live.gcode.part", O_RDONLY);
+    assert(live >= 0 && !flock(live, LOCK_EX | LOCK_NB));
     write_size("gcode/mine.gcode.part", 4096);
     write_size("gcode/CC2_USB_0000000b_kept.gcode", 4096);
     assert(!symlink("CC2_USB_0000000b_kept.gcode", "gcode/CC2_USB_0000000c_link.gcode.part"));
-    expect(gcode_usb_part_cleanup() == 1, "one leftover .part is removed at start");
-    expect(!exists("gcode/CC2_USB_0000000a_left.gcode.part"), "the CC2_USB_ .part is gone");
-    expect(exists("gcode/CC2_USB_0000000d_live.gcode.part"), "a fresh .part, perhaps of another instance's copy, stays");
+    expect(gcode_usb_part_cleanup() == 2, "two leftover .part files are removed at start");
+    expect(!exists("gcode/CC2_USB_0000000a_left.gcode.part"), "the old CC2_USB_ .part is gone");
+    expect(!exists("gcode/CC2_USB_0000000e_crash.gcode.part"), "a fresh .part without a lock is gone too");
+    expect(exists("gcode/CC2_USB_0000000d_live.gcode.part"), "a .part a running copy holds locked stays");
     expect(exists("gcode/mine.gcode.part") && exists("gcode/CC2_USB_0000000b_kept.gcode") &&
            exists("gcode/CC2_USB_0000000c_link.gcode.part"),
            "other .part files, finished copies and links stay");
+    close(live);
+    /* 3b. Before every USB start, too: a leftover from a crash while CC2 Control kept running is removed. */
+    write_size("gcode/CC2_USB_0000000f_late.gcode.part", 4096);
+    write_size("usb/after.gcode", 4096);
+    snprintf(body, sizeof(body), "usb\nafter.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
+    expect(status == 202 && !exists("gcode/CC2_USB_0000000f_late.gcode.part") &&
+           !exists("gcode/CC2_USB_0000000d_live.gcode.part"),
+           "a USB start removes leftover .part files without a lock before it copies");
 
     if (failures) { printf("%d FAIL\n", failures); return 1; }
     puts("PASS USB start fixes: room from old copies, stop in scan and read back, leftover .part removed");
