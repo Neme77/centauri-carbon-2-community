@@ -207,6 +207,10 @@ int main(void) {
     queue.count = 0; queue.active_id = 0; idle(); canvas_list(RED_PLA(0, 1)); sent = starts_sent;
     const char *job = "usb\npart.gcode\n0:0\nA\nsaved\n0\n\n\n1";
     queue_add_response(begin(), job, strlen(job)); assert(finish() == 201);
+    queue_get_response(begin(), &machine); assert(finish() == 200);
+    char expected_size[48]; struct stat usb_info; assert(!stat(usbfile, &usb_info));
+    snprintf(expected_size, sizeof(expected_size), "\"size\":%lld", (long long)usb_info.st_size);
+    expect(strstr(reply_body, expected_size) != NULL, "Q the queue tells the page the size of the job's file");
     char id[16]; snprintf(id, sizeof(id), "%d", queue.items[0].id);
     assert(queue_start_response(begin(), &machine, id, strlen(id)) == 1);
     copied(); usb_start_tick(&machine);
