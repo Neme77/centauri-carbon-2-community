@@ -9,6 +9,7 @@
 #include <stdatomic.h>
 #include <poll.h>
 #include <stdint.h>
+#include <sys/file.h>
 #include <sys/statvfs.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -1575,11 +1576,12 @@ static int gcode_usb_prune(const mqtt_client *mqtt, const char *keep) {
     return removed;
 }
 
-/* Removes the CC2_USB_*.part files a copy leaves behind when CC2 Control ends during it (update, power
- * loss). Runs once at start; only regular, singly linked files untouched for GCODE_USB_PART_STALE_SECONDS.
- * A running copy writes every 64 KiB, so a fresh .part may belong to a copy of another instance on the same
- * folders (a test instance) and stays. A copy stuck that long fails at its rename and is never printed. */
-#define GCODE_USB_PART_STALE_SECONDS 600
+/* Removes the CC2_USB_*.part files a copy leaves behind when CC2 Control ends during it (update, crash, power
+ * loss; procd starts it again at once, so such a file is fresh). A running copy holds an flock on its .part
+ * until it is renamed or removed (gcode_import_usb), and the kernel drops that lock when the process ends,
+ * however it ends; so a .part without a lock has no copy behind it, whatever its age, and one with a lock is a
+ * running copy, also of another instance on the same folders. Only regular, singly linked files. Runs at start
+ * and before every USB copy (on the worker, before its own copy). */
 static int gcode_usb_part_cleanup(void) {
     DIR *dir = opendir(gcode_internal_root);
     if (!dir) return 0;
@@ -1588,12 +1590,19 @@ static int gcode_usb_part_cleanup(void) {
         size_t length = strlen(entry->d_name);
         if (strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, strlen(GCODE_USB_IMPORT_PREFIX)) ||
             length < 5 || strcmp(entry->d_name + length - 5, ".part")) continue;
-        char path[PATH_MAX_LOCAL * 2]; struct stat info;
+        char path[PATH_MAX_LOCAL * 2]; struct stat info, held;
         if (snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, entry->d_name) >= (int)sizeof(path) ||
-            lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 ||
-            info.st_mtime > time(NULL) - GCODE_USB_PART_STALE_SECONDS || unlink(path)) continue;
-        fprintf(stderr, "USB import cleanup: removed leftover %s\n", entry->d_name);
-        removed++;
+            lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1) continue;
+        int fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+        if (fd < 0) continue;
+        /* The same file as listed, and no copy holds it: removed while this lock keeps a new copy off it. */
+        if (!fstat(fd, &held) && held.st_dev == info.st_dev && held.st_ino == info.st_ino &&
+            !flock(fd, LOCK_EX | LOCK_NB) && !lstat(path, &info) && info.st_ino == held.st_ino &&
+            info.st_dev == held.st_dev && !unlink(path)) {
+            fprintf(stderr, "USB import cleanup: removed leftover %s\n", entry->d_name);
+            removed++;
+        }
+        close(fd);
     }
     closedir(dir);
     return removed;
@@ -1834,8 +1843,15 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     off_t replaced = lstat(destination, &earlier) == 0 && S_ISREG(earlier.st_mode) ? earlier.st_size : 0;
     if (!usb_import_has_space((uint64_t)info.st_size, (uint64_t)replaced)) { fclose(input); return GCODE_IMPORT_NO_SPACE; }
     if (cancel && atomic_load(cancel)) { fclose(input); return GCODE_IMPORT_CANCELLED; }
-    FILE *output = fopen(temporary, "wb");
-    if (!output) { fclose(input); return GCODE_IMPORT_FAILED; }
+    /* The .part is locked before it is emptied and stays locked until it is renamed or removed (part_lock
+     * keeps the lock past fclose): gcode_usb_part_cleanup leaves a locked .part alone, and a copy of the same
+     * file still running in another instance is not overwritten. */
+    int part_fd = open(temporary, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0644);
+    if (part_fd < 0) { fclose(input); return GCODE_IMPORT_FAILED; }
+    if (flock(part_fd, LOCK_EX | LOCK_NB) || ftruncate(part_fd, 0)) { close(part_fd); fclose(input); return GCODE_IMPORT_FAILED; }
+    int part_lock = dup(part_fd);
+    FILE *output = part_lock < 0 ? NULL : fdopen(part_fd, "wb");
+    if (!output) { if (part_lock >= 0) close(part_lock); close(part_fd); fclose(input); return GCODE_IMPORT_FAILED; }
     char buffer[65536]; int result = 0; size_t copied = 0, written_out = 0;
     uint64_t hash = GCODE_COPY_HASH_SEED;
     static _Thread_local gcode_stream_scan scan; /* 6 KiB of line buffers, off the worker's stack */
@@ -1909,8 +1925,10 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     }
     if (result || rename(temporary, destination) != 0) {
         unlink(temporary);
+        close(part_lock);
         return result ? result : GCODE_IMPORT_FAILED;
     }
+    close(part_lock);
     chmod(destination, 0644);
     return 0;
 }
@@ -2803,6 +2821,7 @@ static void *usb_start_worker(void *unused) {
     if (job->internal) {
         if (usb_start_copy_hook) usb_start_copy_hook(); /* test seam: the point where a copy would start */
     } else if (!refused) {
+        (void)gcode_usb_part_cleanup(); /* leftovers of a copy that ended with its process, before this one */
         /* An earlier import of the same USB file may still be in use (the touchscreen can print it). */
         char existing[PATH_MAX_LOCAL], path[PATH_MAX_LOCAL * 2]; struct stat info;
         if (gcode_usb_import_name(job->filename, existing) == 0 &&

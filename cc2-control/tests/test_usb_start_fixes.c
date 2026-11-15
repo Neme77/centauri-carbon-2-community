@@ -1,7 +1,6 @@
 #define main cc2_main_original
 #define mqtt_start_print mock_mqtt_start_print
 #include "../src/main.c"
-#include <sys/file.h>
 #undef main
 #undef mqtt_start_print
 #include <assert.h>
