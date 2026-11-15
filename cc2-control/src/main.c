@@ -1674,8 +1674,8 @@ static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_
 #define GCODE_COPY_HASH_SEED 14695981039346656037ULL
 /* A USB start copies on its worker thread at normal priority, without pauses: every USB_COPY_FLUSH_BYTES
  * it writes the copy out and drops those pages of source and copy from the cache, so the copy does not
- * pile up unwritten data in the printer's memory. This covers the copy only: the scan before it and the
- * read back after it go through the cache as any read does. Earlier versions also paused after every
+ * pile up unwritten data in the printer's memory. The read back drops its pages the same way, every
+ * USB_COPY_FLUSH_BYTES and at the end; the scan before the copy goes through the cache as any read does. Earlier versions also paused after every
  * block and lowered the worker's priority; the lowered priority also slowed the scan of internal starts,
  * and the printer's mq-deadline scheduler ignores I/O priorities. A start without the worker
  * (gcode_start_run without `usb`; the program no longer starts a USB file that way) is not written out
@@ -1684,7 +1684,7 @@ static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_
 /* For tests, about the last import: early write-outs, bytes dropped from the cache. */
 static unsigned long usb_copy_flushes;
 static size_t usb_copy_dropped_in, usb_copy_dropped_out;
-static int usb_copy_readback_dropped;
+static int usb_copy_readback_dropped; /* drops during and after the read back */
 /* Writes bytes [from, to) of the copy to storage and waits for them, then drops them and the same range
  * of the source from the cache. A failed write-out fails the copy, as the final fsync would. */
 static int usb_copy_write_out(FILE *output, FILE *input, size_t from, size_t to) {
@@ -1881,7 +1881,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     if (!result) {
         if (usb_copy_synced_hook) usb_copy_synced_hook(temporary);
         FILE *check = fopen(temporary, "rb");
-        uint64_t back = GCODE_COPY_HASH_SEED; size_t read_back = 0; size_t count;
+        uint64_t back = GCODE_COPY_HASH_SEED; size_t read_back = 0, dropped_at = 0; size_t count;
         if (cancel && atomic_load(cancel)) result = GCODE_IMPORT_CANCELLED;
         else if (!check) result = GCODE_IMPORT_UNVERIFIED;
         else {
@@ -1889,12 +1889,18 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
                 if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
                 read_back += count;
                 back = gcode_copy_hash(back, (const unsigned char *)buffer, count);
+                /* Every USB_COPY_FLUSH_BYTES the pages read back so far leave the cache again. */
+                if (write_out && read_back - dropped_at >= USB_COPY_FLUSH_BYTES) {
+                    if (posix_fadvise(fileno(check), (off_t)dropped_at, (off_t)(read_back - dropped_at),
+                                      POSIX_FADV_DONTNEED) == 0) usb_copy_readback_dropped++;
+                    dropped_at = read_back;
+                }
             }
             if (!result && (ferror(check) || read_back != copied || back != hash)) result = GCODE_IMPORT_UNVERIFIED;
         }
-        /* The read back fills the cache with the whole copy: drop it again (as the copy does every 8 MiB). */
+        /* And the rest at the end, so the read back never fills the cache with the whole copy. */
         if (check) {
-            if (write_out && posix_fadvise(fileno(check), 0, 0, POSIX_FADV_DONTNEED) == 0) usb_copy_readback_dropped = 1;
+            if (write_out && posix_fadvise(fileno(check), 0, 0, POSIX_FADV_DONTNEED) == 0) usb_copy_readback_dropped++;
             fclose(check);
         }
     }
