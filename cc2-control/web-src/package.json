@@ -75,7 +75,8 @@
     "test:control-restyle": "node preview/test-control-restyle.mjs",
     "test:runout": "node preview/test-runout-continue.mjs",
     "test:canvas-unreported": "node preview/test-canvas-unreported.mjs",
-    "test:delete-retry": "node preview/test-delete-retry.mjs"
+    "test:delete-retry": "node preview/test-delete-retry.mjs",
+    "test:start-reading": "node preview/test-start-reading.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
