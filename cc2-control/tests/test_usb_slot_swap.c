@@ -128,6 +128,12 @@ static void settle_start(void) {
     for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
     assert(atomic_load(&usb_start_done));
     usb_start_tick(&machine);
+    /* A USB start with a mapping asks for a fresh Canvas report after the copy: the printer answers with the
+     * trays as they are now (the same snapshot, counted as a new report). */
+    if (usb_start_active() && machine.canvas_refresh_due) {
+        machine.canvas_refresh_due = 0; machine.canvas_revision++;
+        usb_start_tick(&machine);
+    }
 }
 #define RED_PLA(id, status) TRAY_NAMED(id, status, "PLA", "PLA Matte", "#F72221")
 static int dialog_start(const char *body) { return usb_start_begin(begin(), &machine, body, strlen(body)); }
