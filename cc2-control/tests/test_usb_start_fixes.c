@@ -182,25 +182,40 @@ int main(void) {
     status = answer(pair[1]);
     expect(status == 202 && usb_copy_readback_dropped == 1, "the read back drops the copy from the cache");
 
-    /* 6. An internal start while the printer is busy is refused before the file is read. */
+    /* 6. An internal start the printer cannot take (busy, or no printer link) is answered as develop answers
+     * it: the request and the file are checked first, then the printer. The file is read on the worker, so the
+     * main loop is never held up by it (develop read it there). */
     write_size("gcode/inside.gcode", 4 * MIB);
-    mqtt.machine_status = 2; atomic_store(&gcode_scan_passes, 0);
+    file = fopen("gcode/two.gcode", "w"); assert(file); fputs("T0\nG1 X1\nT1\nG1 X2\n", file); fclose(file);
+    mqtt.machine_status = 2;
     snprintf(body, sizeof(body), "internal\ninside.gcode\n\nA\nsaved\n0");
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     int taken = usb_start_begin(pair[0], &mqtt, body, strlen(body));
-    if (!taken) close(pair[0]);
+    if (taken) serve(&mqtt); else close(pair[0]);
     status = answer(pair[1]);
-    expect(!taken && status == 409 && atomic_load(&gcode_scan_passes) == 0,
-           "a busy printer refuses an internal start without reading the file");
-    mqtt.machine_status = 1;
-    /* 6b. Variant: printer link not registered: also refused before the file is read. */
-    mqtt.registered = 0; atomic_store(&gcode_scan_passes, 0);
+    expect(status == 409, "a busy printer refuses an internal start");
+    /* 6b. Busy printer and a mapping that misses a tool: the file check answers first, as in develop. */
+    snprintf(body, sizeof(body), "internal\ntwo.gcode\n0:1\nA\nsaved\n0");
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     taken = usb_start_begin(pair[0], &mqtt, body, strlen(body));
-    if (!taken) close(pair[0]);
+    if (taken) serve(&mqtt); else close(pair[0]);
     status = answer(pair[1]);
-    expect(!taken && status == 503 && atomic_load(&gcode_scan_passes) == 0,
-           "variant: no printer link refuses an internal start without reading the file");
+    expect(taken && status == 409, "variant: busy printer, wrong mapping: refused by the file check on the worker");
+    mqtt.machine_status = 1;
+    /* 6c. No printer link: a wrong mapping is still answered with 409 (tests/test_gcode_files.py holds this),
+     * a correct one with 503. */
+    mqtt.registered = 0;
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    taken = usb_start_begin(pair[0], &mqtt, body, strlen(body));
+    if (taken) serve(&mqtt); else close(pair[0]);
+    status = answer(pair[1]);
+    expect(status == 409, "no printer link, wrong mapping: 409 from the file check, as in develop");
+    snprintf(body, sizeof(body), "internal\ninside.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    taken = usb_start_begin(pair[0], &mqtt, body, strlen(body));
+    if (taken) serve(&mqtt); else close(pair[0]);
+    status = answer(pair[1]);
+    expect(status == 503, "no printer link, file in order: 503");
     mqtt.registered = 1;
 
     /* 3. A .part left behind when CC2 Control ended during a copy: removed once it is older than the
