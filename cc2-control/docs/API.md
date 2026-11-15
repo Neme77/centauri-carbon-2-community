@@ -308,8 +308,9 @@ The copy runs on its worker thread at normal priority and without pauses. Every 
 copy out and drops those pages of the source and the copy from the cache, so the copy does not pile up
 unwritten data in memory; the read back drops the copy's pages the same way, every 8 MiB and at the end. A
 USB start on a printer that is not linked or not idle is refused before the stick is read (503 `Printer
-MQTT is not ready`, 409 `Starting a file requires an idle printer`); a start from internal memory keeps the
-order of the checks (request, file, then printer), and its file is read on the worker.
+MQTT is not ready`, 409 `Starting a file requires an idle printer`), and so is a start from internal memory
+on a linked printer that is not idle. Without a printer link a start from internal memory keeps the order of
+the checks (request, file, then printer), and its file is read on the worker.
 The page waits for the answer to a start at least 300 s, and for a file of known size 120 s plus 1 s
 per 2 MB (500 MB: 370 s), at most 20 minutes; it knows the size from the file list and from the queue's
 `size`. The rate is an assumption until the copy is measured on the printer. When the wait runs out the
