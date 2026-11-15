@@ -2795,6 +2795,7 @@ static int usb_start_client_gone(int fd) {
 
 
 static int analysis_cached_scan(const char *path, const struct stat *now, gcode_scan_expect *out);
+static int analysis_reading_file(const char *path); /* the dialog's analysis reads this file right now */
 static void *usb_start_worker(void *unused) {
     (void)unused;
     gcode_usb_start *job = &usb_start;
@@ -2810,6 +2811,10 @@ static void *usb_start_worker(void *unused) {
         gcode_source_stamp_of(&job->source, &before);
     /* The dialog's own inspection of this same file decides before the copy, without reading it again;
      * the copy then scans along and must agree. Otherwise the file is scanned first, as before. */
+    /* The dialog's analysis of this same file still reads it: wait for it (an emergency stop or a browser that
+     * leaves ends the wait), then take its decision from the cache below instead of reading the stick in parallel. */
+    while (pinned >= 0 && analysis_reading_file(source) && !atomic_load(&usb_start_cancelled))
+        nanosleep(&(struct timespec){0, 20000000}, NULL);
     gcode_scan_expect decided;
     job->from_cache = pinned >= 0 && job->source.known && analysis_cached_scan(source, &before, &decided);
     if (job->from_cache) {
@@ -3196,6 +3201,23 @@ static pthread_mutex_t analysis_mutex=PTHREAD_MUTEX_INITIALIZER;
 static size_t analysis_head,analysis_count;
 static int analysis_running;
 static char active_analysis_filename[PATH_MAX_LOCAL];
+/* The file the analysis worker reads right now (resolved path, under analysis_mutex), so a start of the same file
+ * waits instead of reading a USB stick from a second thread at the same time. */
+static char analysis_reading[PATH_MAX_LOCAL * 2];
+static int analysis_reading_file(const char *path) {
+    pthread_mutex_lock(&analysis_mutex);
+    int same = analysis_reading[0] && !strcmp(analysis_reading, path);
+    pthread_mutex_unlock(&analysis_mutex);
+    return same;
+}
+/* Test seam, and what the worker below does around each inspection. */
+static void analysis_reading_set(const char *root, const char *name) {
+    char path[PATH_MAX_LOCAL * 2] = "";
+    if (root && name && !gcode_resolved_path(root, name, path, sizeof(path))) path[0] = 0;
+    pthread_mutex_lock(&analysis_mutex);
+    snprintf(analysis_reading, sizeof(analysis_reading), "%s", path);
+    pthread_mutex_unlock(&analysis_mutex);
+}
 static int active_analysis_pending, active_analysis_ready, active_analysis_layers;
 static unsigned active_analysis_generation;
 static long active_analysis_seconds = -1;
@@ -3235,8 +3257,10 @@ static void *analysis_worker(void *unused) {
             /* Under the lock: a USB start reads the inspect cache from its own thread. */
             pthread_mutex_lock(&analysis_mutex);cache->valid=0;cache->length=0;pthread_mutex_unlock(&analysis_mutex);
             analysis_capture=cache;
+            if(keyed)analysis_reading_set(root,name);
             if(job.kind)gcode_metadata_response(job.fd,job.body,job.length);
             else gcode_inspect_response(job.fd,job.body,job.length);
+            if(keyed)analysis_reading_set(NULL,NULL);
             analysis_capture=NULL;
             if(keyed && cache->length && stat(path,&after)==0 && analysis_same_file(&before,&after)) {
                 pthread_mutex_lock(&analysis_mutex);
