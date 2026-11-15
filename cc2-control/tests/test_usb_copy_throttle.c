@@ -22,6 +22,8 @@ static int fake_uds(const char *q, char **r, size_t *l) {
     (void)q; static const char ok[] = "{\"id\":1001,\"result\":{}}"; *r = strdup(ok); *l = strlen(ok); return 0;
 }
 #define BLOCKS 8
+/* The write-out step as the documentation states it, not taken from the program: a changed step must fail. */
+#define EIGHT_MIB ((size_t)8 << 20)
 static char content[BLOCKS * 65536 + 777];
 static int worker_nice = -100, worker_ioprio = -1, main_ioprio = -1;
 static void sample_worker(void) {
@@ -108,7 +110,7 @@ int main(void) {
 
     /* Every 8 MiB the copy is written out and those pages of source and copy are dropped. */
     for (int round = 0; round < 2; ++round) {
-        size_t size = round ? 2 * USB_COPY_FLUSH_BYTES : 2 * USB_COPY_FLUSH_BYTES + 777;
+        size_t size = round ? 2 * EIGHT_MIB : 2 * EIGHT_MIB + 777;
         file = fopen("usb/part.gcode", "wb"); assert(file);
         for (size_t done = 0; done < size;) {
             size_t n = size - done < sizeof(content) ? size - done : sizeof(content);
@@ -123,7 +125,7 @@ int main(void) {
         expect(status == 202 && usb_copy_flushes == 2,
                round ? "a file of exactly 16 MiB is written out twice, the second time at its end"
                      : "16 MiB and a rest are written out twice, the rest by the final sync");
-        expect(usb_copy_dropped_out == 2 * USB_COPY_FLUSH_BYTES && usb_copy_dropped_in == 2 * USB_COPY_FLUSH_BYTES,
+        expect(usb_copy_dropped_out == 2 * EIGHT_MIB && usb_copy_dropped_in == 2 * EIGHT_MIB,
                "the kernel accepted the cache drop of each written-out range for the copy and the source (that pages are gone is not checked)");
         /* The copy still reads back the same bytes. */
         char copy[PATH_MAX_LOCAL + 8] = "";
