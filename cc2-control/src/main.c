@@ -2768,7 +2768,7 @@ static int usb_start_canvas_waiting;
  * and waits for it up to usb_start_canvas_wait_ms (as after the copy, see usb_start_canvas_wait); the report that
  * comes is kept as the trays at the start. Without one the start is refused, never sent unprotected. */
 static int usb_start_trays_known; /* queue.h */
-static int usb_start_trays_late;
+static atomic_int usb_start_trays_late; /* read by the worker before it copies */
 static unsigned long usb_start_trays_late_seen;
 static long long usb_start_trays_late_until;
 static long long monotonic_ms(void);
@@ -2832,6 +2832,15 @@ static void *usb_start_worker(void *unused) {
     if (job->internal) {
         if (usb_start_copy_hook) usb_start_copy_hook(); /* test seam: the point where a copy would start */
     } else if (!refused) {
+        /* A start with a mapping that began before the Canvas reported waits for that report here, before anything
+         * is copied: the main loop ends the wait with the report, or without one after usb_start_canvas_wait_ms with
+         * cancel reason 3, so a silent Canvas is answered after the wait, not after a whole copy. */
+        while (atomic_load(&usb_start_trays_late) && !atomic_load(&usb_start_cancelled))
+            nanosleep(&(struct timespec){0, 5000000}, NULL);
+        if (atomic_load(&usb_start_cancelled)) {
+            job->import_error = GCODE_IMPORT_CANCELLED; job->import_failed = 1; job->imported_ok = 0;
+            goto copied;
+        }
         (void)gcode_usb_part_cleanup(); /* leftovers of a copy that ended with its process, before this one */
         /* An earlier import of the same USB file may still be in use (the touchscreen can print it). */
         char existing[PATH_MAX_LOCAL], path[PATH_MAX_LOCAL * 2]; struct stat info;
@@ -2859,6 +2868,7 @@ static void *usb_start_worker(void *unused) {
         job->import_failed = job->import_error != 0;
         job->imported_ok = !job->import_failed;
     }
+copied:
     if (pinned >= 0) close(pinned);
     atomic_store(&usb_start_done, 1);
     return NULL;
@@ -3009,22 +3019,23 @@ static void usb_start_tick(mqtt_client *mqtt) {
         usb_start_trays_note(mqtt);
         usb_start_trays_late = !usb_start_trays_known; /* a report without the trays: keep waiting */
     }
+    /* No report within the wait while the worker still waits (or scans): it stops before it copies (reason 3). */
+    if (usb_start_trays_late && !usb_start_cancelled && !atomic_load(&usb_start_done) &&
+        monotonic_ms() >= usb_start_trays_late_until) usb_start_cancelled = 3;
     if (!atomic_load(&usb_start_done)) return;
     int fd = usb_start_fd, status = 409;
     if (usb_start_cancelled == 2) {
         const char *error = "{\"accepted\":false,\"error\":\"Print start cancelled by the emergency stop\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-    } else if (!usb_start_cancelled && usb_start_trays_late && usb_start.imported_ok) {
-        if (monotonic_ms() < usb_start_trays_late_until) return;
-        const char *error = "{\"accepted\":false,\"error\":\"The Canvas did not report its trays when the start began; check that the Canvas is connected, then start the print again\"}\n";
+    } else if (usb_start_cancelled == 3) { /* the queue is told below, with the other cancels */
+        const char *error = "{\"accepted\":false,\"reason\":\"canvas_unreported\",\"error\":\"The Canvas did not report its trays when the start began; check that the Canvas is connected, then start the print again\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
     } else if (!usb_start_cancelled) {
         int waited = usb_start_canvas_wait(mqtt);
         if (waited > 0) return;
         usb_start.stage = USB_START_PREPARED;
         if (waited < 0) {
-            const char *error = "{\"accepted\":false,\"error\":\"The Canvas did not report its trays after the copy; check that the Canvas is connected, then start the print again\"}\n";
+            const char *error = "{\"accepted\":false,\"reason\":\"canvas_unreported\",\"error\":\"The Canvas did not report its trays after the copy; check that the Canvas is connected, then start the print again\"}\n";
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
             if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
         } else if (usb_start_trays_changed(mqtt, usb_start_body, usb_start_length)) {

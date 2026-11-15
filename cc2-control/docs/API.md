@@ -330,9 +330,11 @@ report CC2 Control asks the printer for once the copy is done (method 2005); it 
 without holding up other requests, and an emergency stop or a client that leaves ends the wait. When no
 such report comes in time, the start is refused (409 `The Canvas did not report its trays after the copy;
 check that the Canvas is connected, then start the print again`). When the Canvas had not reported when a
-start with a slot mapping began, CC2 Control asks for a report at once, waits for it up to 10 s in the same way
-and keeps it as the trays at the start; without one the start is refused (409 `The Canvas did not report its
-trays when the start began; check that the Canvas is connected, then start the print again`). Without a slot
+start with a slot mapping began, CC2 Control asks for a report at once and keeps it as the trays at the start; the
+file is checked meanwhile, but nothing is copied before the report. Without one within 10 s the start is refused
+before the copy (409 `The Canvas did not report its trays when the start began; check that the Canvas is
+connected, then start the print again`). Both Canvas refusals carry `"reason":"canvas_unreported"`, so the page
+can keep the print dialog open to try again or change the mapping. Without a slot
 mapping the trays are not compared and nothing is waited for.
 
 ## Delete print-history entries

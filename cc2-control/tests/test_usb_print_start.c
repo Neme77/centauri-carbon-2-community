@@ -193,10 +193,10 @@ int main(void) {
     assert(answer(peer, response, sizeof(response)) == 202 && !strcmp(events, "1020:local:2;"));
     snprintf(copy, sizeof(copy), "gcode/%s", started_name); assert(!unlink(copy));
     /* A start with a mapping while the Canvas never reports (behaviour change against #347, where it went out at
-     * once): refused after the wait with its own message, and no copy is left. */
+     * once): refused after the wait with its own message, before anything is copied. */
     mqtt.canvas_snapshot_len = 0; usb_start_canvas_wait_ms = 50;
     peer = begin(&mqtt, "usb\ntwo.gcode\n0:1,1:3\nA\nsaved\n0", response, sizeof(response), &status);
-    assert(peer >= 0); wait_worker(); settle(&mqtt, 0);
+    assert(peer >= 0); settle(&mqtt, 0); /* the worker waits for the report before copying: only ticks end it */
     assert(answer(peer, response, sizeof(response)) == 409 && strstr(response, "did not report its trays when the start began"));
     assert(!events[0] && imports() == 0);
     usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS;
