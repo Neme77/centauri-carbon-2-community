@@ -55,6 +55,14 @@ static int answer(int peer) {
     response[used] = 0; close(peer);
     return used ? atoi(strchr(response, ' ') + 1) : -1;
 }
+/* Waits for the worker and lets the main loop serve it meanwhile (room for the copy is made there). */
+static void serve(mqtt_client *mqtt) {
+    for (int i = 0; i < 20000 && !atomic_load(&usb_start_done); ++i) {
+        usb_start_tick(mqtt);
+        nanosleep(&(struct timespec){0, 1000000}, NULL);
+    }
+    usb_start_tick(mqtt);
+}
 static int copy_started;
 static void note_copy(void) { copy_started = 1; }
 static void cancel_now(const char *path) { (void)path; usb_start_cancelled = 2; }
@@ -80,10 +88,7 @@ int main(void) {
     upload_statvfs = fake_statvfs;
     snprintf(body, sizeof(body), "usb\nnew.gcode\n\nA\nsaved\n0");
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) {
-        for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
-        usb_start_tick(&mqtt);
-    }
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
     int status = answer(pair[1]);
     expect(status == 202, "a start that only fits without the oldest copy makes room and is started");
     expect(!exists("gcode/CC2_USB_00000001_a.gcode"), "the oldest copy made the room");
@@ -93,13 +98,19 @@ int main(void) {
     write_size("usb/huge.gcode", 8 * MIB);
     snprintf(body, sizeof(body), "usb\nhuge.gcode\n\nA\nsaved\n0");
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) {
-        for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
-        usb_start_tick(&mqtt);
-    }
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
     status = answer(pair[1]);
     expect(status == 507 && exists("gcode/CC2_USB_00000002_b.gcode") && exists("gcode/CC2_USB_00000003_c.gcode"),
            "a file that cannot fit anyway is refused without removing old copies");
+    /* 1b. A start the check before the copy refuses (adaptive leveling, no adaptive mesh in the file) must not
+     * cost old copies: room is made only right before the copy. */
+    write_size("usb/flat.gcode", MIB);
+    snprintf(body, sizeof(body), "usb\nflat.gcode\n\nA\nadaptive\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
+    expect(status == 409 && exists("gcode/CC2_USB_00000002_b.gcode") && exists("gcode/CC2_USB_00000003_c.gcode"),
+           "a start refused by the check before the copy removes no old copies");
     upload_statvfs = statvfs;
 
     /* 2a. Emergency stop during the scan before the copy: the scan ends, nothing is copied. */
@@ -133,13 +144,47 @@ int main(void) {
     expect(!exists(path), "and no copy is left");
     usb_copy_synced_hook = NULL;
 
-    /* 3. A .part left behind when CC2 Control ended during a copy. */
+    /* 4. With a slot mapping and no cached inspection the checks read the file once, not once per check. */
+    file = fopen("usb/two.gcode", "w"); assert(file);
+    fputs("; filament_type = PLA;PLA\nG28\nT0\nG1 X10 Y10 E1\nT1\nG1 X20 Y20 E1\n", file); fclose(file);
+    atomic_store(&gcode_scan_passes, 0);
+    snprintf(body, sizeof(body), "usb\ntwo.gcode\n0:0,1:1\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
+    expect(status == 202 && atomic_load(&gcode_scan_passes) == 1, "mesh and tools are checked in one pass over the file");
+
+    /* 5. After the read back the copy's pages are dropped from the cache too. */
+    usb_copy_readback_dropped = 0;
+    snprintf(body, sizeof(body), "usb\nsmall.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
+    expect(status == 202 && usb_copy_readback_dropped == 1, "the read back drops the copy from the cache");
+
+    /* 6. An internal start while the printer is busy is refused before the file is read. */
+    write_size("gcode/inside.gcode", 4 * MIB);
+    mqtt.machine_status = 2; atomic_store(&gcode_scan_passes, 0);
+    snprintf(body, sizeof(body), "internal\ninside.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    int taken = usb_start_begin(pair[0], &mqtt, body, strlen(body));
+    if (!taken) close(pair[0]);
+    status = answer(pair[1]);
+    expect(!taken && status == 409 && atomic_load(&gcode_scan_passes) == 0,
+           "a busy printer refuses an internal start without reading the file");
+    mqtt.machine_status = 1;
+
+    /* 3. A .part left behind when CC2 Control ended during a copy: removed once it is older than the
+     * time a running copy leaves between two writes; a fresh one may belong to another instance. */
     write_size("gcode/CC2_USB_0000000a_left.gcode.part", 4096);
+    age("gcode/CC2_USB_0000000a_left.gcode.part", time(NULL) - 3600);
+    write_size("gcode/CC2_USB_0000000d_live.gcode.part", 4096);
     write_size("gcode/mine.gcode.part", 4096);
     write_size("gcode/CC2_USB_0000000b_kept.gcode", 4096);
     assert(!symlink("CC2_USB_0000000b_kept.gcode", "gcode/CC2_USB_0000000c_link.gcode.part"));
     expect(gcode_usb_part_cleanup() == 1, "one leftover .part is removed at start");
     expect(!exists("gcode/CC2_USB_0000000a_left.gcode.part"), "the CC2_USB_ .part is gone");
+    expect(exists("gcode/CC2_USB_0000000d_live.gcode.part"), "a fresh .part, perhaps of another instance's copy, stays");
     expect(exists("gcode/mine.gcode.part") && exists("gcode/CC2_USB_0000000b_kept.gcode") &&
            exists("gcode/CC2_USB_0000000c_link.gcode.part"),
            "other .part files, finished copies and links stay");

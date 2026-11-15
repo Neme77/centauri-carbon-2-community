@@ -1922,6 +1922,9 @@ static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOO
 /* `lengths`, when given, receives each tool's slicer filament length in mm, or -1. */
 /* Set on the start worker: a scan ends early (as failed) once the start was cancelled. */
 static _Thread_local const atomic_int *gcode_scan_cancel;
+/* Test seams: full passes over a G-code file by the start checks; whether the read back dropped the copy. */
+static atomic_int gcode_scan_passes;
+static int usb_copy_readback_dropped;
 static int gcode_scan_cancelled(void) { return gcode_scan_cancel && atomic_load(gcode_scan_cancel); }
 static int gcode_detect_tools(const char *root, const char *relative,
                               int tools[GCODE_TOOLS_MAX], size_t *tool_count, double *lengths) {
@@ -1931,6 +1934,7 @@ static int gcode_detect_tools(const char *root, const char *relative,
     if (!file) return -1;
     int present[GCODE_TOOLS_MAX] = {0};
     if (lengths) for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool) lengths[tool] = -1;
+    atomic_fetch_add(&gcode_scan_passes, 1);
     int failed = 0;
     while (fgets(line, sizeof(line), file)) {
         if (gcode_scan_cancelled()) { failed = 1; break; }
@@ -2075,6 +2079,7 @@ static int gcode_has_adaptive_mesh(const char *root, const char *relative, int *
     FILE *file = fopen(path, "r");
     if (!file) return -1;
     *adaptive = 0;
+    atomic_fetch_add(&gcode_scan_passes, 1);
     int failed = 0;
     while (fgets(line, sizeof(line), file)) {
         if (gcode_scan_cancelled()) { failed = 1; break; }
