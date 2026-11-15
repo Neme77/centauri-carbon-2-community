@@ -82,6 +82,8 @@ static void serve(mqtt_client *mqtt) {
 static int copy_started;
 static void note_copy(void) { copy_started = 1; }
 /* A stick that stops answering: the worker stands still (no heartbeat) for 1.5 s, as in a fread() the kernel holds. */
+/* A slow but healthy stick: every block takes 30 ms. */
+static void slow_block(size_t copied) { (void)copied; nanosleep(&(struct timespec){0, 30000000}, NULL); }
 static void stick_hangs(void) { nanosleep(&(struct timespec){1, 500000000}, NULL); }
 static void cancel_now(const char *path) { (void)path; usb_start_cancelled = 2; }
 /* Runs the cleanup while a copy is between its write and its read back: the copy still holds its .part. */
@@ -348,6 +350,16 @@ int main(void) {
     snprintf(path, sizeof(path), "gcode/%s", small);
     expect(!usb_start_active() && !exists(path), "when the worker comes back the start is cleaned up and no copy is left");
     usb_start_copy_hook = NULL; usb_start_stall_ms = USB_START_STALL_MS;
+
+    /* 4f. A slow but healthy stick takes longer than the limit in total, but every block comes: no false alarm. */
+    usb_start_stall_ms = 200; usb_copy_block_hook = slow_block;
+    write_size("usb/slow.gcode", MIB); /* 16 blocks of 64 KiB, 30 ms each: about 0.5 s */
+    snprintf(body, sizeof(body), "usb\nslow.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
+    expect(status == 202, "a slow stick with progress on every block is not taken for a hung one");
+    usb_copy_block_hook = NULL; usb_start_stall_ms = USB_START_STALL_MS;
 
     /* 5. After the read back the copy's pages are dropped from the cache too. */
     usb_copy_readback_dropped = 0;
