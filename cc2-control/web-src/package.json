@@ -25,6 +25,7 @@
     "test:mesh-selector": "node preview/test-mesh-selector.mjs",
     "test:plates": "node preview/test-bed-plates.mjs",
     "test:queue": "node preview/test-queue.mjs",
+    "test:start-timeout": "node preview/test-start-timeout.mjs",
     "test:spools": "node preview/test-spools.mjs && node preview/test-spool-popup.mjs",
     "test:calibration": "node preview/test-mesh-calibration.mjs",
     "test:job-objects": "node preview/test-job-objects.mjs",
