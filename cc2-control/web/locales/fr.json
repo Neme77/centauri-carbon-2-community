@@ -337,7 +337,7 @@
   "files.permanently_delete_this_g_code": "Supprimer définitivement ce G-code de {where} ?",
   "files.print": "Imprimer",
   "files.not_printable": "Non imprimable",
-  "files.not_printable_2gib": "Non imprimable : l'imprimante n'ouvre que les fichiers jusqu'à 2 147 483 647 octets (un peu moins de 2 Gio). Ce fichier est plus volumineux.",
+  "files.not_printable_2gib": "Non imprimable : l'imprimante n'ouvre que les fichiers de moins de 2 Go (2147 Mo / 2048 Mio). Ce fichier est plus volumineux.",
   "files.print_anyway": "Lancer quand même ?",
   "files.protected_file_list_refreshed": "Liste de fichiers protégée actualisée.",
   "files.refresh": "Actualiser",

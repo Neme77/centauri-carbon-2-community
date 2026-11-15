@@ -511,7 +511,7 @@
   "files.permanently_delete_this_g_code": "Végleg törlöd ezt a G-code fájlt innen: {where}?",
   "files.print": "Nyomtatás",
   "files.not_printable": "Nem nyomtatható",
-  "files.not_printable_2gib": "Nem nyomtatható: a nyomtató csak legfeljebb 2 147 483 647 bájtos fájlokat nyit meg (alig 2 GiB alatt). Ez a fájl nagyobb.",
+  "files.not_printable_2gib": "Nem nyomtatható: a nyomtató csak 2 GB alatti fájlokat nyit meg (2147 MB / 2048 MiB). Ez a fájl nagyobb.",
   "files.print_anyway": "Indítod mégis?",
   "files.protected_file_list_refreshed": "A védett fájllista frissítve.",
   "files.refresh": "Frissítés",

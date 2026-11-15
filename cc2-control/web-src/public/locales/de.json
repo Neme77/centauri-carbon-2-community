@@ -337,7 +337,7 @@
   "files.permanently_delete_this_g_code": "Diesen G-Code endgültig aus {where} löschen?",
   "files.print": "Drucken",
   "files.not_printable": "Nicht druckbar",
-  "files.not_printable_2gib": "Nicht druckbar: Der Drucker öffnet nur Dateien bis 2 147 483 647 Byte (knapp 2 GiB). Diese Datei ist größer.",
+  "files.not_printable_2gib": "Nicht druckbar: Der Drucker öffnet nur Dateien unter 2 GB (2147 MB / 2048 MiB). Diese Datei ist größer.",
   "files.print_anyway": "Trotzdem starten?",
   "files.protected_file_list_refreshed": "Geschützte Dateiliste aktualisiert.",
   "files.refresh": "Aktualisieren",

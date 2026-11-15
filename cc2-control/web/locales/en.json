@@ -337,7 +337,7 @@
   "files.permanently_delete_this_g_code": "Permanently delete this G-code from {where}?",
   "files.print": "Print",
   "files.not_printable": "Not printable",
-  "files.not_printable_2gib": "Not printable: the printer only opens files up to 2,147,483,647 bytes (just under 2 GiB). This file is larger.",
+  "files.not_printable_2gib": "Not printable: the printer only opens files under 2 GB (2147 MB / 2048 MiB). This file is larger.",
   "files.print_anyway": "Start anyway?",
   "files.protected_file_list_refreshed": "Protected file list refreshed.",
   "files.refresh": "Refresh",

@@ -337,7 +337,7 @@
   "files.permanently_delete_this_g_code": "Безвозвратно удалить этот G-code из «{where}»?",
   "files.print": "Печать",
   "files.not_printable": "Не печатается",
-  "files.not_printable_2gib": "Не печатается: принтер открывает только файлы до 2 147 483 647 байт (чуть меньше 2 ГиБ). Этот файл больше.",
+  "files.not_printable_2gib": "Не печатается: принтер открывает только файлы меньше 2 ГБ (2147 МБ / 2048 МиБ). Этот файл больше.",
   "files.print_anyway": "Всё равно запустить?",
   "files.protected_file_list_refreshed": "Список файлов обновлён.",
   "files.refresh": "Обновить",

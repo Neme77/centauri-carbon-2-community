@@ -20,7 +20,7 @@ assert.doesNotMatch(dialog + files, /file_too_large_for_printer/, 'no block: the
 for (const lang of ['en', 'de', 'fr', 'es', 'it', 'pl', 'cs', 'hu', 'tr', 'ru', 'zh']) {
   for (const dir of ['../public/locales', '../../web/locales']) {
     const s = JSON.parse(readFileSync(new URL(`${dir}/${lang}.json`, import.meta.url), 'utf8'))
-    assert.ok((s['files.not_printable_2gib'] ?? '').replace(/[\s.,\u00a0\u202f]/g, '').includes('2147483647'), `${lang}: the warning names the largest printable size`)
+    assert.ok(/\b2048\b/.test(s['files.not_printable_2gib'] ?? '') && /\b2147\b/.test(s['files.not_printable_2gib'] ?? ''), `${lang}: the warning names the limit in MB and MiB`)
     assert.ok((s['files.not_printable'] ?? '').length > 2 && (s['files.print_anyway'] ?? '').length > 2, `${lang}: tag and question`)
   }
 }

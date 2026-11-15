@@ -337,7 +337,7 @@
   "files.permanently_delete_this_g_code": "Bu G-code {where} konumundan kalıcı olarak silinsin mi?",
   "files.print": "Yazdır",
   "files.not_printable": "Basılamaz",
-  "files.not_printable_2gib": "Basılamaz: yazıcı yalnızca 2.147.483.647 bayta kadar olan dosyaları açar (2 GiB'nin hemen altı). Bu dosya daha büyük.",
+  "files.not_printable_2gib": "Basılamaz: yazıcı yalnızca 2 GB'den küçük dosyaları açar (2147 MB / 2048 MiB). Bu dosya daha büyük.",
   "files.print_anyway": "Yine de başlatılsın mı?",
   "files.protected_file_list_refreshed": "Korumalı dosya listesi yenilendi.",
   "files.refresh": "Yenile",
