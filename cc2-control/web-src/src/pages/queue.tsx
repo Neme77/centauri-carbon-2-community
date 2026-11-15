@@ -223,7 +223,7 @@ const Hero = ({
   const canStart = !active && item.present && v.idle && ok && Boolean(d?.connected) && !q.active
   const start = async () => {
     setBusy(true)
-    await act(() => startQueued(item.id), {
+    await act(() => startQueued(item.id, item.size), {
       key: 'queue.started',
       vars: { k: item.done + 1, n: item.copies, name: item.path },
     })

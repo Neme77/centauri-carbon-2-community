@@ -12,10 +12,12 @@ import { meshRoot } from '@/lib/mesh'
 import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
 import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
+import { startTimeoutMs } from '@/lib/start-timeout'
 
 type Pending = {
   storage: string
   path: string
+  size: number | null // bytes, for how long the start may take
   tools: number[]
   // mm: the slicer's filament length for the tool, when the file states it.
   filaments: { tool: number; color: string; material: string; mm?: number }[]
@@ -73,7 +75,7 @@ async function clearOrcaPending(generation: number) {
 let fileAnalysisPending = false
 
 // Opens the confirmation dialog; a print is never started without the operator confirming the mapping.
-export async function startFile(storage: string, path: string) {
+export async function startFile(storage: string, path: string, size?: number | null) {
   if (pending.get().job || fileAnalysisPending) return
   fileAnalysisPending = true
   notify(t('print.analysing_file'))
@@ -92,6 +94,7 @@ export async function startFile(storage: string, path: string) {
       job: {
         storage,
         path,
+        size: typeof size === 'number' ? size : null,
         tools,
         filaments: Array.isArray(inspection.filaments) ? inspection.filaments : [],
         meshAvailable: meshReadiness.availability,
@@ -291,7 +294,8 @@ const Form = ({ job }: { job: Pending }) => {
     try {
       const result = await post(
         '/api/gcode-files/print',
-        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}\n${measureId}\n${nozzleId}`
+        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}\n${measureId}\n${nozzleId}`,
+        startTimeoutMs(job.size)
       )
       const g = activeGeneration
       activeGeneration = 0

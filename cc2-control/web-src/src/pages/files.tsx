@@ -360,7 +360,7 @@ export const Files = () => {
                     class="px-2.5"
                     onClick={ev => {
                       ev.stopPropagation()
-                      startFile(e.storage, e.file.path)
+                      startFile(e.storage, e.file.path, e.file.size)
                     }}
                   >
                     <Play {...I} />
@@ -391,7 +391,7 @@ export const Files = () => {
             </p>
           ))}
         </Card>
-        <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path)} onDelete={remove} />
+        <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path, e.file.size)} onDelete={remove} />
       </div>
     </Page>
   )

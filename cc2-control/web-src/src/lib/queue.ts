@@ -1,5 +1,6 @@
 import { store } from './store'
 import { post, request } from './api'
+import { startTimeoutMs } from './start-timeout'
 
 // The print queue: jobs prepared ahead (file, the print dialog's choices, copies). Every copy is a
 // protected print start on the backend; the browser only asks for it. See cc2-control/docs/API.md.
@@ -21,6 +22,7 @@ export type QueueItem = {
   state: 'pending' | 'starting' | 'printing' | 'done'
   last_result: '' | 'stopped' | 'not_started' | 'auto_failed' | 'auto_material'
   present: boolean
+  size?: number | null // bytes of the job's file, null when unknown
 }
 export type QueuePolicy = { after: 'wait' | 'auto'; delay: number; remove_done: boolean }
 export type Queue = {
@@ -121,7 +123,8 @@ export const addToQueue = (a: QueueAdd) =>
       a.filamentGrams === null ? '' : String(a.filamentGrams),
     ].join('\n')
   )
-export const startQueued = (id?: number) => post('/api/queue/start', id ? String(id) : '')
+export const startQueued = (id?: number, size?: number | null) =>
+  post('/api/queue/start', id ? String(id) : '', startTimeoutMs(size))
 export const removeQueued = (id: number) => post('/api/queue/remove', String(id))
 export const reorderQueued = (id: number, index: number) => post('/api/queue/reorder', `${id}\n${index}`)
 export const setQueuedCopies = (id: number, copies: number) => post('/api/queue/copies', `${id}\n${copies}`)

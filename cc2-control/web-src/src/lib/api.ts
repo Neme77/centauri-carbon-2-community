@@ -1,25 +1,28 @@
 import { store } from './store'
 import { t, tpl } from './i18n'
 import { ask } from './confirm'
+import { startTimeoutMs } from './start-timeout'
 
-export const request = async (path: string, options: RequestInit = {}) => {
+export const request = async (path: string, options: RequestInit & { timeoutMs?: number } = {}) => {
   const controller = new AbortController()
   const timeout = window.setTimeout(
     () => controller.abort(),
-    /\/api\/gcode-files\/(metadata|inspect|layer-path)(\?|$)/.test(path)
-      ? 120000
-      : // A USB start answers only after the file has been copied to internal memory (#344), from the
-        // print dialog and from the queue alike.
-        /\/api\/(gcode-files\/print|queue\/start)$/.test(path)
-        ? 300000
-        : 8000
+    options.timeoutMs ??
+      (/\/api\/gcode-files\/(metadata|inspect|layer-path)(\?|$)/.test(path)
+        ? 120000
+        : // A USB start answers only after the file has been copied to internal memory (#344), from the
+          // print dialog and from the queue alike.
+          /\/api\/(gcode-files\/print|queue\/start)$/.test(path)
+          ? startTimeoutMs()
+          : 8000)
   )
   try {
     const headers = new Headers(options.headers)
     if (options.method && !['GET', 'HEAD'].includes(options.method.toUpperCase())) headers.set('X-CC2-Request', '1')
+    const { timeoutMs: _timeout, ...rest } = options
     const response = await fetch(path, {
       cache: 'no-store',
-      ...options,
+      ...rest,
       headers,
       signal: options.signal ?? controller.signal,
     })
@@ -33,8 +36,8 @@ export const request = async (path: string, options: RequestInit = {}) => {
     clearTimeout(timeout)
   }
 }
-export const post = (path: string, body = '') =>
-  request(path, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body })
+export const post = (path: string, body = '', timeoutMs?: number) =>
+  request(path, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body, timeoutMs })
 
 export const toast = store({ text: '', n: 0, tone: 'info' as 'info' | 'error' })
 export const notify = (text: string, tone: 'info' | 'error' = 'info') => toast.set(s => ({ text, tone, n: s.n + 1 }))

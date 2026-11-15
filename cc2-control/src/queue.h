@@ -143,6 +143,11 @@ static void queue_item_json(json_builder *b, const queue_item *item, int stored)
         json_builder_string(b, item->request_uuid);
     } else {
         json_builder_printf(b, ",\"present\":%s", queue_present(item) ? "true" : "false");
+        /* The file's size, so the page waits for a start as long as copying and checking it may take. */
+        char path[PATH_MAX_LOCAL * 2]; struct stat info;
+        if (gcode_resolved_path(queue_root(item), item->path, path, sizeof(path)) && stat(path, &info) == 0 &&
+            S_ISREG(info.st_mode)) json_builder_printf(b, ",\"size\":%lld", (long long)info.st_size);
+        else json_builder_printf(b, ",\"size\":null");
     }
     json_builder_printf(b, "}");
 }

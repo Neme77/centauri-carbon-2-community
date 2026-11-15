@@ -290,9 +290,9 @@ A `POST /api/gcode-files/print` from `usb` copies the file into internal memory 
 `CC2_USB_<hash>_<name>` and prints that copy. The copy needs free space for itself, and once it
 has replaced an earlier copy of the same name the 16 MiB storage reserve that uploads keep must
 remain (the earlier copy counts towards the reserve, not towards the room the copy is written to);
-when that room is missing, older `CC2_USB_` copies are removed first, oldest first and only those the
-cleanup after a start may remove, but only when that gives enough room; otherwise nothing is removed and
-the start is refused before anything is written
+when that room is missing, older `CC2_USB_` copies are removed right before the copy, once the checks
+before it passed, oldest first and only those the cleanup after a start may remove, but only when that
+gives enough room; otherwise nothing is removed and the start is refused before anything is written
 (`507`, `Insufficient free space for the USB copy and storage reserve`). The USB file must be the
 one that was scanned: if its size, inode or modification time differs, or fewer bytes were read
 than it holds, the copy is discarded (`507`, `The USB file changed while it was copied`). After
@@ -301,17 +301,22 @@ length); a mismatch discards it (`507`, `The internal copy of the USB file faile
 Only a verified copy is renamed from its `.part` name. An emergency stop or a client that leaves
 stops the scan before the copy after the current line, the copy and its read back after the current
 64 KiB block, and removes the `.part` file; an earlier copy with the same name is left as it was. A
-`CC2_USB_` `.part` file left behind when CC2 Control ended during a copy is removed when it starts.
+`CC2_USB_` `.part` file left behind when CC2 Control ended during a copy is removed when it starts, once it
+has not been written for 10 minutes (a fresh one may belong to a running copy of another instance).
 The copy runs on its worker thread at normal priority and without pauses. Every 8 MiB it writes the
 copy out and drops those pages of the source and the copy from the cache, so the copy does not pile up
-unwritten data in memory; the scan before and the read back after the copy are ordinary cached reads.
+unwritten data in memory; after the read back the copy is dropped from the cache as well. A start on a
+printer that is not linked or not idle is refused before any file is read (503 `Printer MQTT is not
+ready`, 409 `Starting a file requires an idle printer`).
+The page waits for the answer to a start at least 300 s, and for a file of known size 120 s plus 1 s
+per 2 MB (500 MB: 370 s); it knows the size from the file list and from the queue's `size`.
 When the print dialog inspected the same file just before (`POST /api/gcode-files/inspect`, same
 device, inode, size, modification and change time), the start takes its leveling and Canvas tool
 decision from that cached inspection instead of reading the file again, so a refused start still
 copies nothing. The copy then scans the bytes it copies with the same line logic and must reach the
 same decision; if it does not, the copy is discarded (`507`, `The USB file changed while it was
 copied`). Without such an entry (another client, a restart, another file inspected since) the file is
-scanned before the copy, as before.
+scanned before the copy, in one pass for leveling and tools when the start names Canvas trays.
 When the copy starts, CC2 Control notes the Canvas trays; after the copy it compares the trays the
 start's slot mapping names (status, type, name and colour). If one of them changed meanwhile, the copy
 is not printed (409 `The Canvas trays changed while the file was copied; start the print again`), and a
@@ -319,7 +324,7 @@ queued USB job is dropped as a refused start. For a USB file the trays after the
 report CC2 Control asks the printer for once the copy is done (method 2005); it waits up to 10 s for it
 without holding up other requests, and an emergency stop or a client that leaves ends the wait. When no
 such report comes in time, the start is refused (409 `The Canvas did not report its trays after the copy;
-start the print again`). Without a Canvas report when the start began, or without a slot mapping, the
+check that the Canvas is connected, then start the print again`). Without a Canvas report when the start began, or without a slot mapping, the
 trays are not compared and nothing is waited for.
 
 ## Delete print-history entries
@@ -922,7 +927,7 @@ unless the `auto` policy is chosen.
   "delay","remove_done"},"active","next","items":[…]}`. Items are in queue order with `id`, `storage`, `path`,
   `mapping`, `side`, `leveling`, `timelapse`, `measure`, `nozzle`, `copies`, `done`, `estimated_seconds` and
   `filament_grams` (`null` when unknown), `added`, `state` (`pending`, `starting`, `printing` or `done`),
-  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`) and `present` (the file is in place).
+  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`) `present` (the file is in place) and `size` (the file's bytes, `null` when it is not there; the page waits for a start of the job as long as copying and checking that size may take).
   `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing;
   `auto_in` the seconds until a pending automatic start, else `null`.
 - `POST /api/queue/add` takes the eight newline-separated fields of `/api/gcode-files/print` (storage,
