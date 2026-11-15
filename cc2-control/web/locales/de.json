@@ -396,6 +396,7 @@
   "print.not_reported": "Nicht gemeldet",
   "print.orcaslicer_upload_complete_choose": "OrcaSlicer-Upload abgeschlossen. Canvas-Spool wählen und bestätigen, um den Druck zu starten.",
   "print.print_not_started": "Druck nicht gestartet:",
+  "print.canvas_unreported": "Druck nicht gestartet: Der Canvas hat seine Fächer nicht gemeldet. Prüfen Sie, ob der Canvas verbunden ist, und starten Sie dann erneut, wählen Sie andere Spools oder brechen Sie ab.",
   "print.start_no_answer": "Keine Antwort innerhalb von {minutes} Minuten, daher wurde der Start abgebrochen. USB-Stick prüfen und erneut starten.",
   "print.print_request_submitted_waiting": "Druckanfrage übermittelt. Warten auf den Druckerstatus.",
   "print.print_setup": "Druckeinrichtung",

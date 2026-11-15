@@ -313,7 +313,14 @@ const Form = ({ job }: { job: Pending }) => {
         )
       )
     } catch (err) {
-      setNote(`${t('print.print_not_started')} ${errText(err)}`)
+      // The Canvas did not report its trays (before or after the copy): nothing was printed. The dialog stays open,
+      // so the operator can start again, choose other spools or cancel.
+      const reason = (err as { data?: { reason?: string } })?.data?.reason
+      setNote(
+        reason === 'canvas_unreported'
+          ? t('print.canvas_unreported')
+          : `${t('print.print_not_started')} ${errText(err)}`
+      )
       setBusy(false)
     }
   }
