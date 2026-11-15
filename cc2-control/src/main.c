@@ -2766,6 +2766,7 @@ static int usb_start_canvas_waiting;
 /* A start with a slot mapping that began before the Canvas had reported its trays: it asks for a report at once
  * and waits for it up to usb_start_canvas_wait_ms (as after the copy, see usb_start_canvas_wait); the report that
  * comes is kept as the trays at the start. Without one the start is refused, never sent unprotected. */
+static int usb_start_trays_known; /* queue.h */
 static int usb_start_trays_late;
 static unsigned long usb_start_trays_late_seen;
 static long long usb_start_trays_late_until;
