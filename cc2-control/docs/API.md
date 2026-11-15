@@ -301,13 +301,15 @@ length); a mismatch discards it (`507`, `The internal copy of the USB file faile
 Only a verified copy is renamed from its `.part` name. An emergency stop or a client that leaves
 stops the scan before the copy after the current line, the copy and its read back after the current
 64 KiB block, and removes the `.part` file; an earlier copy with the same name is left as it was. A
-`CC2_USB_` `.part` file left behind when CC2 Control ended during a copy is removed when it starts, once it
-has not been written for 10 minutes (a fresh one may belong to a running copy of another instance).
+`CC2_USB_` `.part` file left behind when CC2 Control ended during a copy is removed when it starts and before
+every USB copy: a running copy holds a lock (`flock`) on its `.part` until it is renamed or removed, and the
+lock ends with the process, so a `.part` without a lock has no copy behind it, whatever its age.
 The copy runs on its worker thread at normal priority and without pauses. Every 8 MiB it writes the
 copy out and drops those pages of the source and the copy from the cache, so the copy does not pile up
-unwritten data in memory; after the read back the copy is dropped from the cache as well. A start on a
-printer that is not linked or not idle is refused before any file is read (503 `Printer MQTT is not
-ready`, 409 `Starting a file requires an idle printer`).
+unwritten data in memory; the read back drops the copy's pages the same way, every 8 MiB and at the end. A
+USB start on a printer that is not linked or not idle is refused before the stick is read (503 `Printer
+MQTT is not ready`, 409 `Starting a file requires an idle printer`); a start from internal memory keeps the
+order of the checks (request, file, then printer), and its file is read on the worker.
 The page waits for the answer to a start at least 300 s, and for a file of known size 120 s plus 1 s
 per 2 MB (500 MB: 370 s); it knows the size from the file list and from the queue's `size`.
 When the print dialog inspected the same file just before (`POST /api/gcode-files/inspect`, same
@@ -324,8 +326,11 @@ queued USB job is dropped as a refused start. For a USB file the trays after the
 report CC2 Control asks the printer for once the copy is done (method 2005); it waits up to 10 s for it
 without holding up other requests, and an emergency stop or a client that leaves ends the wait. When no
 such report comes in time, the start is refused (409 `The Canvas did not report its trays after the copy;
-check that the Canvas is connected, then start the print again`). Without a Canvas report when the start began, or without a slot mapping, the
-trays are not compared and nothing is waited for.
+check that the Canvas is connected, then start the print again`). When the Canvas had not reported when a
+start with a slot mapping began, CC2 Control asks for a report at once, waits for it up to 10 s in the same way
+and keeps it as the trays at the start; without one the start is refused (409 `The Canvas did not report its
+trays when the start began; check that the Canvas is connected, then start the print again`). Without a slot
+mapping the trays are not compared and nothing is waited for.
 
 ## Delete print-history entries
 
