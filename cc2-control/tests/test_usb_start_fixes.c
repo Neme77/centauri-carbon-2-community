@@ -345,7 +345,8 @@ int main(void) {
     }
     serve(&mqtt);
     close(pair[1]);
-    expect(!usb_start_active() && !copy_started, "when the worker comes back the start is cleaned up, nothing printed");
+    snprintf(path, sizeof(path), "gcode/%s", small);
+    expect(!usb_start_active() && !exists(path), "when the worker comes back the start is cleaned up and no copy is left");
     usb_start_copy_hook = NULL; usb_start_stall_ms = USB_START_STALL_MS;
 
     /* 5. After the read back the copy's pages are dropped from the cache too. */
