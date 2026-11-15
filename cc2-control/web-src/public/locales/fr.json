@@ -398,7 +398,6 @@
   "print.print_not_started": "Impression non lancée :",
   "print.canvas_unreported": "Impression non lancée : le Canvas n’a pas signalé ses emplacements. Vérifiez que le Canvas est connecté, puis relancez, choisissez d’autres bobines ou annulez.",
   "print.usb_unresponsive": "Impression non lancée : la clé USB ne répond pas. Retirez-la, rebranchez-la, puis relancez.",
-  "print.file_too_large_for_printer": "Impression non lancée : l'imprimante ne peut pas ouvrir les fichiers de 2 Gio ou plus. Divisez l'impression ou tranchez-la plus petite.",
   "print.start_reading": "Un démarrage d’impression lit ce fichier en ce moment. Rouvrez-le une fois ce démarrage terminé.",
   "print.start_no_answer": "Pas de réponse en {minutes} minutes, le démarrage a donc été annulé. Vérifiez la clé USB, puis relancez.",
   "print.print_request_submitted_waiting": "Demande d'impression envoyée. En attente de l'état de l'imprimante.",

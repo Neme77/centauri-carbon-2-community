@@ -398,7 +398,6 @@
   "print.print_not_started": "Impresion no iniciada:",
   "print.canvas_unreported": "Impresion no iniciada: el Canvas no informó de sus bandejas. Compruebe que el Canvas está conectado y vuelva a iniciar, elija otras bobinas o cancele.",
   "print.usb_unresponsive": "Impresion no iniciada: la memoria USB no responde. Retírela, vuelva a conectarla y vuelva a iniciar.",
-  "print.file_too_large_for_printer": "Impresion no iniciada: la impresora no puede abrir archivos de 2 GiB o más. Divida la impresión o lamínela más pequeña.",
   "print.start_reading": "Un inicio de impresión está leyendo este archivo ahora. Vuelva a abrirlo cuando ese inicio haya respondido.",
   "print.start_no_answer": "Sin respuesta en {minutes} minutos, así que se canceló el inicio. Comprueba la memoria USB y vuelve a iniciar.",
   "print.print_request_submitted_waiting": "Solicitud de impresion enviada. Esperando el estado de la impresora.",

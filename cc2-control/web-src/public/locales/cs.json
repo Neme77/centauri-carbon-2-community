@@ -398,7 +398,6 @@
   "print.print_not_started": "Tisk nebyl spuštěn:",
   "print.canvas_unreported": "Tisk nebyl spuštěn: Canvas nenahlásil své sloty. Zkontrolujte, zda je Canvas připojen, a pak spusťte znovu, vyberte jiné cívky nebo zrušte.",
   "print.usb_unresponsive": "Tisk nebyl spuštěn: USB disk neodpovídá. Vyjměte ho, znovu připojte a spusťte znovu.",
-  "print.file_too_large_for_printer": "Tisk nebyl spuštěn: tiskárna neotevře soubory od 2 GiB výše. Rozdělte tisk nebo jej nařežte menší.",
   "print.start_reading": "Spuštění tisku právě čte tento soubor. Otevřete ho znovu, až toto spuštění odpoví.",
   "print.start_no_answer": "Žádná odpověď do {minutes} minut, proto bylo spuštění zrušeno. Zkontrolujte USB disk a spusťte znovu.",
   "print.print_request_submitted_waiting": "Požadavek na tisk odeslán. Čekání na stav tiskárny.",
