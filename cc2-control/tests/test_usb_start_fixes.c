@@ -361,6 +361,43 @@ int main(void) {
     expect(status == 202, "a slow stick with progress on every block is not taken for a hung one");
     usb_copy_block_hook = NULL; usb_start_stall_ms = USB_START_STALL_MS;
 
+    /* 4g. e3 the other way round: a start reads the file, then the dialog's analysis of the SAME file arrives (second
+     * browser, the queue, a slow network). It does not read in parallel: it is answered at once with 409, reason
+     * start_reading; another file is analysed as usual; once the start has read, the analysis is accepted again. */
+    usb_start_copy_hook = stick_hangs; /* holds the worker 1.5 s while it reads */
+    snprintf(body, sizeof(body), "usb\nsmall.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
+    {
+        int a[2]; char reply[512] = "";
+        assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, a));
+        int queued = analysis_start(a[0], 0, "usb\nsmall.gcode", strlen("usb\nsmall.gcode"));
+        if (!queued) close(a[0]);
+        ssize_t got = queued ? -1 : recv(a[1], reply, sizeof(reply) - 1, 0); if (got > 0) reply[got] = 0;
+        close(a[1]);
+        expect(!queued && strstr(reply, " 409 ") && strstr(reply, "\"reason\":\"start_reading\""),
+               "an analysis of the file a start is reading is refused at once, not read in parallel");
+        int b[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, b));
+        int other = analysis_start(b[0], 0, "usb\ntwo.gcode", strlen("usb\ntwo.gcode"));
+        expect(other, "an analysis of another file is taken as usual");
+        if (!other) close(b[0]);
+        close(b[1]);
+    }
+    serve(&mqtt);
+    status = answer(pair[1]);
+    usb_start_copy_hook = NULL;
+    {
+        int c[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, c));
+        int again = analysis_start(c[0], 0, "usb\nsmall.gcode", strlen("usb\nsmall.gcode"));
+        expect(status == 202 && again, "once the start has read the file, its analysis is taken again");
+        if (!again) close(c[0]);
+        close(c[1]);
+    }
+    for (int i = 0; i < 200; ++i) { /* let the analysis worker finish before the next case */
+        pthread_mutex_lock(&analysis_mutex); int busy = analysis_running; pthread_mutex_unlock(&analysis_mutex);
+        if (!busy) break; nanosleep(&(struct timespec){0, 10000000}, NULL);
+    }
+
     /* 5. After the read back the copy's pages are dropped from the cache too. */
     usb_copy_readback_dropped = 0;
     snprintf(body, sizeof(body), "usb\nsmall.gcode\n\nA\nsaved\n0");
