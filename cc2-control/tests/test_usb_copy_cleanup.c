@@ -40,6 +40,8 @@ static int imports(void) {
 }
 static int answer(int peer) {
     char response[1024]; size_t used = 0; ssize_t n;
+    { struct timeval rcv_limit = {30, 0}; /* never wait forever: a missing answer fails the test */
+      setsockopt(peer, SOL_SOCKET, SO_RCVTIMEO, &rcv_limit, sizeof(rcv_limit)); }
     while (used + 1 < sizeof(response) && (n = recv(peer, response + used, sizeof(response) - 1 - used, 0)) > 0) used += (size_t)n;
     response[used] = 0; close(peer);
     return used ? atoi(strchr(response, ' ') + 1) : -1;
@@ -54,7 +56,15 @@ static int start_from_usb(mqtt_client *mqtt, const char *file) {
 }
 static void copy_named(const char *usb, char name[PATH_MAX_LOCAL]) { assert(!gcode_usb_import_name(usb, name)); }
 
+/* A test that waits for something that never comes ends red with a message instead of hanging the suite. */
+static void test_too_long(int signal_number) {
+    (void)signal_number;
+    static const char text[] = "FAIL: the test ran longer than 300 s (an answer that never came?)\n";
+    if (write(2, text, sizeof(text) - 1) < 0) {}
+    _exit(1);
+}
 int main(void) {
+    signal(SIGALRM, test_too_long); alarm(300);
     char dir[] = "usb-prune-XXXXXX"; /* the harnesses share one working directory */
     assert(mkdtemp(dir) && !chdir(dir));
     assert(!mkdir("gcode", 0700) && !mkdir("usb", 0700));

@@ -50,6 +50,8 @@ static int request_start(const char *id) {
 }
 static int reply(char *body, size_t cap) {
     size_t used = 0; ssize_t n;
+    { struct timeval rcv_limit = {30, 0}; /* never wait forever: a missing answer fails the test */
+      setsockopt(pair_[1], SOL_SOCKET, SO_RCVTIMEO, &rcv_limit, sizeof(rcv_limit)); }
     while (used + 1 < cap && (n = recv(pair_[1], body + used, cap - 1 - used, 0)) > 0) used += (size_t)n;
     body[used] = 0; close(pair_[1]);
     return used ? atoi(strchr(body, ' ') + 1) : -1;
@@ -80,7 +82,15 @@ static int copies(void) {
     closedir(dir); return count;
 }
 
+/* A test that waits for something that never comes ends red with a message instead of hanging the suite. */
+static void test_too_long(int signal_number) {
+    (void)signal_number;
+    static const char text[] = "FAIL: the test ran longer than 300 s (an answer that never came?)\n";
+    if (write(2, text, sizeof(text) - 1) < 0) {}
+    _exit(1);
+}
 int main(void) {
+    signal(SIGALRM, test_too_long); alarm(300);
     char dir[] = "/tmp/cc2-queue-usb-XXXXXX";
     assert(mkdtemp(dir));
     static char file[640], internal[640], usb[640], gcode[700], autosave[640];
@@ -106,6 +116,8 @@ int main(void) {
     expect(printer_change_blocked() != NULL, "another start is blocked while the copy runs");
     char other[256]; int other_pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, other_pair));
     expect(queue_start_response(other_pair[0], &machine, "1", 1) == 0, "a second queue start is answered at once");
+    { struct timeval rcv_limit = {30, 0}; /* never wait forever: a missing answer fails the test */
+      setsockopt(other_pair[1], SOL_SOCKET, SO_RCVTIMEO, &rcv_limit, sizeof(rcv_limit)); }
     close(other_pair[0]); ssize_t got = recv(other_pair[1], other, sizeof(other) - 1, 0); close(other_pair[1]);
     other[got > 0 ? got : 0] = 0;
     expect(strstr(other, " 409 ") != NULL, "and refused with 409");

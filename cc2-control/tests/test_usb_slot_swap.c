@@ -108,6 +108,8 @@ static int begin(void) { assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair_)); re
 static int finish(void) {
     close(pair_[0]);
     size_t used = 0; ssize_t n;
+    { struct timeval rcv_limit = {30, 0}; /* never wait forever: a missing answer fails the test */
+      setsockopt(pair_[1], SOL_SOCKET, SO_RCVTIMEO, &rcv_limit, sizeof(rcv_limit)); }
     while (used + 1 < sizeof(reply_body) && (n = recv(pair_[1], reply_body + used, sizeof(reply_body) - 1 - used, 0)) > 0) used += (size_t)n;
     close(pair_[1]); reply_body[used] = 0;
     assert(used > 0);
@@ -159,7 +161,15 @@ static int imports(int remove_them) {
     closedir(dir); return count;
 }
 
+/* A test that waits for something that never comes ends red with a message instead of hanging the suite. */
+static void test_too_long(int signal_number) {
+    (void)signal_number;
+    static const char text[] = "FAIL: the test ran longer than 300 s (an answer that never came?)\n";
+    if (write(2, text, sizeof(text) - 1) < 0) {}
+    _exit(1);
+}
 int main(void) {
+    signal(SIGALRM, test_too_long); alarm(300);
     char dir[] = "/tmp/cc2-dialogswap-XXXXXX";
     assert(mkdtemp(dir));
     static char file[640], internal[640], gcode[700], autosave[640];

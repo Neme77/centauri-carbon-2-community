@@ -75,7 +75,15 @@ static void idle(void) {
     model.machine_status = 1; model.last_message = time(NULL);
 }
 
+/* A test that waits for something that never comes ends red with a message instead of hanging the suite. */
+static void test_too_long(int signal_number) {
+    (void)signal_number;
+    static const char text[] = "FAIL: the test ran longer than 300 s (an answer that never came?)\n";
+    if (write(2, text, sizeof(text) - 1) < 0) {}
+    _exit(1);
+}
 int main(void) {
+    signal(SIGALRM, test_too_long); alarm(300);
     char dir[] = "internal-start-XXXXXX"; /* the harnesses share one working directory */
     assert(mkdtemp(dir) && !chdir(dir));
     assert(!mkdir("gcode", 0700) && !mkdir("usb", 0700));

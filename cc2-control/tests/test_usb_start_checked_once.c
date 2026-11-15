@@ -27,6 +27,8 @@ static void write_bytes(const char *path, const char *bytes, size_t length) {
 }
 static int answer(int peer, char *response, size_t cap) {
     size_t used = 0; ssize_t n;
+    { struct timeval rcv_limit = {30, 0}; /* never wait forever: a missing answer fails the test */
+      setsockopt(peer, SOL_SOCKET, SO_RCVTIMEO, &rcv_limit, sizeof(rcv_limit)); }
     while (used + 1 < cap && (n = recv(peer, response + used, cap - 1 - used, 0)) > 0) used += (size_t)n;
     response[used] = 0; close(peer);
     return used ? atoi(strchr(response, ' ') + 1) : -1;
@@ -79,7 +81,15 @@ static int same_decision(const char *bytes, size_t length, size_t chunk) {
 static unsigned long seed = 12345;
 static unsigned next_random(void) { seed = seed * 6364136223846793005UL + 1442695040888963407UL; return (unsigned)(seed >> 33); }
 
+/* A test that waits for something that never comes ends red with a message instead of hanging the suite. */
+static void test_too_long(int signal_number) {
+    (void)signal_number;
+    static const char text[] = "FAIL: the test ran longer than 300 s (an answer that never came?)\n";
+    if (write(2, text, sizeof(text) - 1) < 0) {}
+    _exit(1);
+}
 int main(void) {
+    signal(SIGALRM, test_too_long); alarm(300);
     char dir[] = "usb-once-XXXXXX"; /* the harnesses share one working directory */
     assert(mkdtemp(dir) && !chdir(dir));
     assert(!mkdir("gcode", 0700) && !mkdir("usb", 0700));
