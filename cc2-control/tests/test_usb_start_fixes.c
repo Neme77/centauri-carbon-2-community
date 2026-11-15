@@ -70,6 +70,23 @@ static void serve(mqtt_client *mqtt) {
 static int copy_started;
 static void note_copy(void) { copy_started = 1; }
 static void cancel_now(const char *path) { (void)path; usb_start_cancelled = 2; }
+/* Emergency stop after the second block of the phase `stop_phase` (0 scan in one pass, 1 read back). */
+static int stop_phase = -1, stop_blocks, blocks_after_stop;
+static void stop_in_block(int phase) {
+    if (phase != stop_phase) return;
+    if (atomic_load(&usb_start_cancelled)) { blocks_after_stop++; return; }
+    if (++stop_blocks == 2) usb_start_cancelled = 2;
+}
+/* Runs one start whose emergency stop comes in the middle of `phase`; returns the answer. */
+static int stop_midway(mqtt_client *mqtt, const char *body, int phase) {
+    int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    stop_phase = phase; stop_blocks = blocks_after_stop = 0; usb_read_block_hook = stop_in_block;
+    assert(usb_start_begin(pair[0], mqtt, body, strlen(body)));
+    for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    usb_start_tick(mqtt);
+    usb_read_block_hook = NULL; stop_phase = -1;
+    return answer(pair[1]);
+}
 
 int main(void) {
     char dir[] = "usb-fixes-XXXXXX"; /* the harnesses share one working directory */
@@ -169,6 +186,27 @@ int main(void) {
     snprintf(path, sizeof(path), "gcode/%s", small);
     expect(!exists(path), "and no copy is left");
     usb_copy_synced_hook = NULL;
+
+    /* 2c. Emergency stop in the middle of the one-pass scan (USB, with a mapping): it ends after that block,
+     * and no copy begins. 2d. The same on an internal start. 2e. In the middle of the read back. */
+    file = fopen("usb/long.gcode", "w"); assert(file);
+    fputs("; filament_type = PLA;PLA\nT0\n", file);
+    for (int i = 0; i < 40000; ++i) fputs("G1 X10 Y10 E1 ; a line of moves\n", file);
+    fputs("T1\n", file); fclose(file);
+    assert(!link("usb/long.gcode", "gcode/long.gcode"));
+    usb_start_copy_hook = note_copy; copy_started = 0;
+    status = stop_midway(&mqtt, "usb\nlong.gcode\n0:1,1:2\nA\nsaved\n0", 0);
+    expect(status == 409 && !copy_started && blocks_after_stop == 0,
+           "an emergency stop in the middle of the one-pass scan ends it after that block, before any copy");
+    status = stop_midway(&mqtt, "internal\nlong.gcode\n0:1,1:2\nA\nsaved\n0", 0);
+    expect(status == 409 && blocks_after_stop == 0, "the same on an internal start");
+    usb_start_copy_hook = NULL;
+    status = stop_midway(&mqtt, "usb\nlong.gcode\n\nA\nsaved\n0", 1);
+    assert(!gcode_usb_import_name("long.gcode", small));
+    snprintf(path, sizeof(path), "gcode/%s", small);
+    expect(status == 409 && blocks_after_stop == 0 && !exists(path),
+           "an emergency stop in the middle of the read back ends it after that block and leaves no copy");
+    unlink("gcode/long.gcode");
 
     /* 4. With a slot mapping and no cached inspection the checks read the file once, not once per check. */
     file = fopen("usb/two.gcode", "w"); assert(file);
