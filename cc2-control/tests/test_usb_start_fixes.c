@@ -56,8 +56,12 @@ static int answer(int peer) {
     return used ? atoi(strchr(response, ' ') + 1) : -1;
 }
 /* Waits for the worker and lets the main loop serve it meanwhile (room for the copy is made there). */
+/* The printer's status arrives every few seconds on a live link; `status_stale` plays a link that went quiet,
+ * under which no old copy may be removed (gcode_delete_guard). */
+static int status_stale;
 static void serve(mqtt_client *mqtt) {
     for (int i = 0; i < 20000 && !atomic_load(&usb_start_done); ++i) {
+        mqtt->last_message = status_stale ? time(NULL) - 60 : time(NULL);
         usb_start_tick(mqtt);
         nanosleep(&(struct timespec){0, 1000000}, NULL);
     }
@@ -87,9 +91,17 @@ int main(void) {
     capacity = UPLOAD_STORAGE_MARGIN + 3 * MIB + MIB / 2; /* 16.5 MiB free, the start needs 17 MiB */
     upload_statvfs = fake_statvfs;
     snprintf(body, sizeof(body), "usb\nnew.gcode\n\nA\nsaved\n0");
+    /* Variant: without a fresh printer status no old copy goes, and the start is refused for lack of room. */
+    status_stale = 1; mqtt.last_message = time(NULL);
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
     int status = answer(pair[1]);
+    expect(status != 202 && exists("gcode/CC2_USB_00000001_a.gcode"),
+           "variant: a printer status that went quiet removes no old copy and refuses the start");
+    status_stale = 0; mqtt.last_message = time(NULL);
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
     expect(status == 202, "a start that only fits without the oldest copy makes room and is started");
     expect(!exists("gcode/CC2_USB_00000001_a.gcode"), "the oldest copy made the room");
     expect(exists("gcode/CC2_USB_00000002_b.gcode") && exists("gcode/CC2_USB_00000003_c.gcode"),
