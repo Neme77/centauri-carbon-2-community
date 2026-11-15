@@ -2834,6 +2834,19 @@ static int print_start_preparing(const char *file) {
 
 /* The emergency stop drops a USB start that has not been dispatched yet. */
 static void usb_start_cancel(void) { if (usb_start_active()) usb_start_cancelled = 2; }
+/* Whether a start on the worker still reads the file a request names ("storage\nname..."): the dialog's analysis of
+ * that same file is then refused at once (reason start_reading) instead of reading the stick in parallel. Main loop. */
+static int usb_start_reading_file(const char *body, size_t length) {
+    if (!usb_start_active() || atomic_load(&usb_start_done)) return 0;
+    const char *newline = memchr(body, '\n', length);
+    if (!newline) return 0;
+    size_t storage_len = (size_t)(newline - body), name_len = length - storage_len - 1;
+    const char *name = newline + 1, *end = memchr(name, '\n', name_len);
+    if (end) name_len = (size_t)(end - name);
+    int usb = storage_len == 3 && !memcmp(body, "usb", 3);
+    return usb == !usb_start.internal && name_len == strlen(usb_start.filename) &&
+           !memcmp(name, usb_start.filename, name_len);
+}
 
 /* The request was read in full, so any readable state on the socket means the peer closed it. */
 static int usb_start_client_gone(int fd) {
@@ -3376,6 +3389,10 @@ static int analysis_start(int fd,int kind,const char *body,size_t length) {
     if(length>=sizeof(analysis_queue[0].body)) {
         const char *error="{\"error\":\"File request too large\"}\n";
         respond(fd,400,"Bad Request","application/json",error,strlen(error));return 0;
+    }
+    if(usb_start_reading_file(body,length)) {
+        const char *error="{\"reason\":\"start_reading\",\"error\":\"A print start is reading this file right now; open it again once the start is answered\"}\n";
+        respond(fd,409,"Conflict","application/json",error,strlen(error));return 0;
     }
     pthread_mutex_lock(&analysis_mutex);
     if(analysis_count==ANALYSIS_QUEUE_MAX) {
