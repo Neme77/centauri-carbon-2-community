@@ -59,11 +59,21 @@ static int answer(int peer) {
 /* The printer's status arrives every few seconds on a live link; `status_stale` plays a link that went quiet,
  * under which no old copy may be removed (gcode_delete_guard). */
 static int status_stale;
+/* The printer has reported its Canvas trays (a start with a mapping is judged with them) and answers each fresh
+ * report the start asks for. serve() ticks until the start is answered, at most 20 s, so no case waits in recv(). */
+static void canvas_reports(mqtt_client *mqtt) {
+    mqtt->canvas_revision++; mqtt->canvas_discovery_complete = 1;
+    mqtt->canvas_snapshot_len = (size_t)snprintf(mqtt->canvas_snapshot, sizeof(mqtt->canvas_snapshot),
+        "{\"id\":2005,\"result\":{\"canvas_info\":{\"canvas_list\":[{\"canvas_id\":0,\"connected\":1,\"tray_list\":["
+        "{\"tray_id\":0,\"status\":1,\"filament_type\":\"PLA\"},{\"tray_id\":1,\"status\":1,\"filament_type\":\"PLA\"},"
+        "{\"tray_id\":2,\"status\":1,\"filament_type\":\"PLA\"}]}]}}}");
+}
 static void serve(mqtt_client *mqtt) {
-    for (int i = 0; i < 20000 && !atomic_load(&usb_start_done); ++i) {
+    for (int i = 0; i < 20000 && (!atomic_load(&usb_start_done) || usb_start_active()); ++i) {
         mqtt->last_message = status_stale ? time(NULL) - 60 : time(NULL);
+        if (mqtt->canvas_refresh_due) { mqtt->canvas_refresh_due = 0; canvas_reports(mqtt); }
         usb_start_tick(mqtt);
-        nanosleep(&(struct timespec){0, 1000000}, NULL);
+        if (usb_start_active()) nanosleep(&(struct timespec){0, 1000000}, NULL);
     }
     usb_start_tick(mqtt);
 }
@@ -104,6 +114,7 @@ int main(void) {
     canvas_color_table_uds = fake_uds;
     mqtt_client mqtt = {0};
     mqtt.connected = mqtt.registered = 1; mqtt.have_machine_status = 1; mqtt.machine_status = 1;
+    mqtt.last_message = time(NULL); canvas_reports(&mqtt);
     char body[256]; int pair[2];
 
     /* 1. Memory full of old copies: three old 1 MiB copies, room for the new 1 MiB file only once one goes. */
