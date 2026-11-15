@@ -395,7 +395,8 @@ int main(void) {
     }
     for (int i = 0; i < 200; ++i) { /* let the analysis worker finish before the next case */
         pthread_mutex_lock(&analysis_mutex); int busy = analysis_running; pthread_mutex_unlock(&analysis_mutex);
-        if (!busy) break; nanosleep(&(struct timespec){0, 10000000}, NULL);
+        if (!busy) break;
+        nanosleep(&(struct timespec){0, 10000000}, NULL);
     }
 
     /* 5. After the read back the copy's pages are dropped from the cache too. */
