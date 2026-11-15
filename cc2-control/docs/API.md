@@ -298,7 +298,7 @@ one that was scanned: if its size, inode or modification time differs, or fewer 
 than it holds, the copy is discarded (`507`, `The USB file changed while it was copied`). After
 `fsync` the copy is read back and compared with the bytes read from the stick (64-bit FNV-1a and
 length); a mismatch discards it (`507`, `The internal copy of the USB file failed verification`).
-Only a verified copy is renamed from its `.part` name. An emergency stop or a client that leaves
+Only a verified copy is renamed from its `.part` name, and only right before the start is sent, once the printer is confirmed idle: an earlier copy of the same name is never replaced under a print the touchscreen started meanwhile. An emergency stop or a client that leaves
 stops the scan before the copy after the current line, the copy and its read back after the current
 64 KiB block, and removes the `.part` file; an earlier copy with the same name is left as it was. A
 `CC2_USB_` `.part` file left behind when CC2 Control ended during a copy is removed when it starts and before

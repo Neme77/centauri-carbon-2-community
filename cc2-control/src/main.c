@@ -1814,7 +1814,8 @@ static int gcode_stream_scan_matches(const gcode_stream_scan *scan, const gcode_
  * failure, and an earlier import of the same name stays as it was. */
 static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
                             const gcode_source_stamp *expected, const atomic_int *cancel,
-                            size_t *copied_out, int write_out, const gcode_scan_expect *decided) {
+                            size_t *copied_out, int write_out, const gcode_scan_expect *decided,
+                            int *unpublished) {
     char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
     char temporary[PATH_MAX_LOCAL * 2];
     if (copied_out) *copied_out = 0;
@@ -1923,6 +1924,9 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
             fclose(check);
         }
     }
+    /* `unpublished`: the verified copy stays the locked .part, and the caller publishes it (usb_start_publish) only
+     * right before the start is sent, so it never replaces an earlier copy under a print started meanwhile. */
+    if (!result && unpublished) { *unpublished = part_lock; return 0; }
     if (result || rename(temporary, destination) != 0) {
         unlink(temporary);
         close(part_lock);
@@ -2476,10 +2480,32 @@ typedef struct {
     /* From the worker. */
     int scan_failed, adaptive, detect_failed, detected[GCODE_TOOLS_MAX]; size_t detected_count;
     int import_failed, imported_ok, replaced; char imported[PATH_MAX_LOCAL];
+    int unpublished; /* lock fd of the verified copy still waiting as .part to be published, or -1 */
     gcode_source_stamp source; int import_error; size_t import_copied;
     int from_cache; /* the decision came from the dialog's cached inspection of the same file */
     int internal;   /* a start from internal memory: checked on the worker, nothing to copy */
 } gcode_usb_start;
+/* Publishes the verified copy of a USB start (renames its .part over the copy's name) and drops its lock. Main loop,
+ * right before the start is sent, after the printer was confirmed idle. Without a publish the .part is removed
+ * again (usb_start_unpublish), and an earlier copy of the same name stays as it was. */
+static int usb_start_part_path(const gcode_usb_start *usb, char *final, size_t final_size, char *part, size_t part_size) {
+    return snprintf(final, final_size, "%s/%s", gcode_internal_root, usb->imported) < (int)final_size &&
+           snprintf(part, part_size, "%s/%s.part", gcode_internal_root, usb->imported) < (int)part_size;
+}
+static int usb_start_publish(gcode_usb_start *usb) {
+    if (usb->unpublished < 0) return 0;
+    char final[PATH_MAX_LOCAL * 2], part[PATH_MAX_LOCAL * 2 + 8];
+    int ok = usb_start_part_path(usb, final, sizeof(final), part, sizeof(part)) && rename(part, final) == 0;
+    if (ok) chmod(final, 0644); else unlink(part);
+    close(usb->unpublished); usb->unpublished = -1;
+    return ok ? 0 : -1;
+}
+static void usb_start_unpublish(gcode_usb_start *usb) {
+    if (usb->unpublished < 0) return;
+    char final[PATH_MAX_LOCAL * 2], part[PATH_MAX_LOCAL * 2 + 8];
+    if (usb_start_part_path(usb, final, sizeof(final), part, sizeof(part))) unlink(part);
+    close(usb->unpublished); usb->unpublished = -1;
+}
 
 /* Every tool the G-code uses must be mapped, and nothing else. */
 static int gcode_tools_conflict(const int *tools, size_t slot_count, int detect_failed,
@@ -2664,7 +2690,8 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
         if (usb) snprintf(print_filename, sizeof(print_filename), "%s", usb->imported);
         int import_error = usb ? (usb->import_failed || !usb->imported_ok
                                       ? (usb->import_error ? usb->import_error : GCODE_IMPORT_FAILED) : 0)
-                               : gcode_import_usb(filename, print_filename, NULL, NULL, NULL, 0, NULL);
+                               : gcode_import_usb(filename, print_filename, NULL, NULL, NULL, 0, NULL, NULL);
+        if (!import_error && usb && usb_start_publish(usb) != 0) import_error = GCODE_IMPORT_FAILED;
         if (import_error) {
             const char *error =
                 import_error == GCODE_IMPORT_NO_SPACE
@@ -2869,7 +2896,7 @@ static void *usb_start_worker(void *unused) {
         if (usb_start_copy_hook) usb_start_copy_hook();
         job->import_error = gcode_import_usb(job->filename, job->imported, &job->source,
                                              &usb_start_cancelled, &job->import_copied, 1,
-                                             job->from_cache ? &decided : NULL);
+                                             job->from_cache ? &decided : NULL, &job->unpublished);
         job->import_failed = job->import_error != 0;
         job->imported_ok = !job->import_failed;
     }
@@ -2921,6 +2948,7 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
         return 0;
     }
     memset(&usb_start, 0, sizeof(usb_start));
+    usb_start.unpublished = -1;
     usb_start.stage = USB_START_CHECK;
     if ((*status = gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start)) != 0) return 0;
     memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
@@ -3052,6 +3080,7 @@ static void usb_start_tick(mqtt_client *mqtt) {
                      : gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
     }
     if (usb_start_cancelled && usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
+    usb_start_unpublish(&usb_start); /* not sent: the new copy never replaces the earlier one */
     if (status != 202 && usb_start.imported_ok && !usb_start.replaced) {
         char path[PATH_MAX_LOCAL * 2];
         int length = snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, usb_start.imported);
