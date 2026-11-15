@@ -187,12 +187,29 @@ int main(void) {
     status = finish();
     expect(status == 202 && starts_sent == sent + 1 && !machine.canvas_refresh_due, "N without a mapping: no wait, the start goes out");
 
-    /* K: the Canvas had not reported when the start began: nothing to compare, no wait, as before. */
+    /* K: the Canvas had not reported when the start began (shortly after CC2 Control started): the start asks
+     * for a report at once, as after the copy, and keeps the one that comes as the trays at the start. Then the
+     * copy is judged with a fresh report as always. */
+    idle(); machine.canvas_snapshot_len = 0; sent = starts_sent; machine.canvas_refresh_due = 0;
+    assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
+    expect(machine.canvas_refresh_due == 1, "K no report when the start began: a report is asked for at once");
+    machine.canvas_refresh_due = 0; canvas_list(RED_PLA(0, 1)); usb_start_tick(&machine);
+    copied(); usb_start_tick(&machine);
+    machine.canvas_refresh_due = 0; canvas_list(GREEN_PLA(0, 1)); usb_start_tick(&machine);
+    status = finish();
+    expect(status == 409 && starts_sent == sent, "K the report from the start is compared: a swap during the copy refuses");
+    /* K2: no report at all, neither at the start nor within the wait: refused as strictly as after the copy. */
+    usb_start_canvas_wait_ms = 50;
     idle(); machine.canvas_snapshot_len = 0; sent = starts_sent; machine.canvas_refresh_due = 0;
     assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
     copied(); usb_start_tick(&machine);
+    nanosleep(&(struct timespec){0, 80000000}, NULL);
+    idle(); usb_start_tick(&machine);
     status = finish();
-    expect(status == 202 && starts_sent == sent + 1 && !machine.canvas_refresh_due, "K no Canvas report at the start: no wait, the start goes out");
+    expect(status == 409 && starts_sent == sent && strstr(reply_body, "did not report its trays when the start began"),
+           "K2 no report when the start began: refused, never started unprotected");
+    expect(!usb_start_active(), "K2 and the worker is free again");
+    usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS;
 
     /* X: emergency stop while waiting for the report: refused at once, nothing sent. */
     idle(); canvas_list(RED_PLA(0, 1)); sent = starts_sent;
