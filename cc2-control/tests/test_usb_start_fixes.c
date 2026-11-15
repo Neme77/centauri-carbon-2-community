@@ -253,6 +253,20 @@ int main(void) {
     status = answer(pair[1]);
     expect(status == 202 && atomic_load(&gcode_scan_passes) == 1, "variant: without a mapping the file is read once as well");
 
+    /* 4c. The print dialog's analysis reads the same file right now: the start waits for it and does not read the
+     * stick a second time in parallel (two threads on one USB 2.0 stick); afterwards it scans as usual. */
+    analysis_reading_set("usb/two.gcode"); atomic_store(&gcode_scan_passes, 0);
+    snprintf(body, sizeof(body), "usb\ntwo.gcode\n0:0,1:1\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
+    nanosleep(&(struct timespec){0, 200000000}, NULL);
+    expect(atomic_load(&gcode_scan_passes) == 0 && !atomic_load(&usb_start_done),
+           "a start waits while the dialog's analysis reads the same file");
+    analysis_reading_set(NULL);
+    serve(&mqtt);
+    status = answer(pair[1]);
+    expect(status == 202 && atomic_load(&gcode_scan_passes) == 1, "and checks the file once the analysis is done");
+
     /* 5. After the read back the copy's pages are dropped from the cache too. */
     usb_copy_readback_dropped = 0;
     snprintf(body, sizeof(body), "usb\nsmall.gcode\n\nA\nsaved\n0");
