@@ -5,6 +5,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+from literal_catalog import LABELS, load_catalogs
 
 HERE = Path(__file__).resolve().parent
 
@@ -26,6 +27,9 @@ def catalogs():
         assert keys is None or set(data) == keys
         keys = set(data)
         print(lang, len(data), 'catalog entries checked', flush=True)
+    for data in load_catalogs(HERE/'locales'):
+        for key in LABELS:
+            assert key in data and data[key] != key, key
 
 def main():
     parser = argparse.ArgumentParser()
@@ -43,6 +47,14 @@ def main():
         header += 'static const char *const nd_language_names[14]={' + names + '};\n'
         header += 'static const char *const nd_new_text[3][648]={' + ','.join('{' + ','.join(['"Fixture"']*648) + '}' for _ in range(3)) + '};\n'
         (work/'native_language_data.h').write_text(header)
+        # Synthetic addresses exercise pointer identity without vendor literals.
+        (work/'native_literal_data.h').write_text(
+            '#include <stdint.h>\n'
+            'static const char fixture_literal[]="Idle";\n'
+            'struct nd_literal { uintptr_t address; const char *value[3]; };\n'
+            'static const struct nd_literal nd_literals[]={'
+            '{(uintptr_t)fixture_literal,{"HU literal","CS literal","PL literal"}}};\n'
+            '#define ND_LITERAL_COUNT 1\n')
         flags = ['-O2', '-std=c11', '-Wall', '-Wextra', '-Wpedantic', '-Werror']
         targets = [('host', 'gcc', [], [])]
         if args.arm_cc:

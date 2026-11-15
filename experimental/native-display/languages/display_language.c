@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "language_core.h"
 #include "native_language_data.h"
+#include "native_literal_data.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -64,6 +65,45 @@ static obj **menu_slot(void) { return (obj **)(uintptr_t)0x25b5f4; }
 static int effective(void) {
     if (!language.loaded) nd_language_read(&language, preference);
     return nd_language_effective(&language, *native_index());
+}
+
+/* Only immutable, qualified English UI literals are translated here. A file or
+ * spool name containing the same characters has a different address and passes
+ * through unchanged. NULL retains LVGL's refresh-current-text semantics. */
+static const char *literal_text(const char *value) {
+    if (!value) return value;
+    int selected=effective();
+    if (selected<ND_NATIVE_LANGUAGES || selected>=ND_LANGUAGES) return value;
+    for (size_t i=0;i<ND_LITERAL_COUNT;i++)
+        if ((uintptr_t)value==nd_literals[i].address)
+            return nd_literals[i].value[selected-ND_NATIVE_LANGUAGES];
+    return value;
+}
+
+#ifdef ND_UI_FIXTURE
+static void original_label_text(obj *, const char *);
+static void original_label_static(obj *, const char *);
+#else
+/* These two prologues are verified by prepare_runtime.py and the constructor.
+ * r12 is caller-saved; the original stack frame and LR are preserved. */
+__attribute__((naked,noinline)) static void original_label_text(
+        obj *o __attribute__((unused)), const char *v __attribute__((unused))) {
+    __asm__ volatile("push {r4,r5,r6,lr}\nsub sp,sp,#24\n"
+                     "movw r12,#0x34dc\nmovt r12,#0x12\nbx r12\n");
+}
+__attribute__((naked,noinline)) static void original_label_static(
+        obj *o __attribute__((unused)), const char *v __attribute__((unused))) {
+    __asm__ volatile("push {r4,r5,r6,lr}\nmov r4,r0\n"
+                     "movw r12,#0x37c8\nmovt r12,#0x12\nbx r12\n");
+}
+#endif
+
+void nd_display_label_text(obj *label, const char *value) {
+    original_label_text(label,literal_text(value));
+}
+
+void nd_display_label_static(obj *label, const char *value) {
+    original_label_static(label,literal_text(value));
 }
 
 const char *nd_display_get_text(unsigned index) {

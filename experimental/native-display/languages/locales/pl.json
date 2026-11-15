@@ -496,5 +496,12 @@
  "Cloud slicing error, print cancelled": "Błąd slicingu w chmurze, drukowanie anulowane",
  "Print file download failed, print cancelled": "Pobieranie pliku do druku nie powiodło się, drukowanie anulowane",
  "The device will restart after the camera firmware update is complete.": "Urządzenie uruchomi się ponownie po zakończeniu aktualizacji firmware'u kamery.",
- "Camera firmware update is complete. The device will restart in 2 seconds.": "Aktualizacja firmware'u kamery zakończona. Urządzenie uruchomi się ponownie za 2 sekundy."
+ "Camera firmware update is complete. The device will restart in 2 seconds.": "Aktualizacja firmware'u kamery zakończona. Urządzenie uruchomi się ponownie za 2 sekundy.",
+  "Ready to create": "Gotowa do druku",
+  "Idle": "Gotowość",
+  "Nozzle": "Dysza",
+  "Build plate": "Płyta robocza",
+  "Chamber": "Komora",
+  "Canvas connected": "CANVAS połączony",
+  "OFF": "Wył."
 }
