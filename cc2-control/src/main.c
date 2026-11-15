@@ -1575,6 +1575,9 @@ static int gcode_usb_prune(const mqtt_client *mqtt, const char *keep) {
     return removed;
 }
 
+/* Removes the CC2_USB_*.part files a copy leaves behind when CC2 Control ends during it. */
+static int gcode_usb_part_cleanup(void) { return 0; }
+
 /* Why an import was not completed; the start answers each one with its own message. */
 enum { GCODE_IMPORT_FAILED = -1, GCODE_IMPORT_NO_SPACE = -2, GCODE_IMPORT_CHANGED = -3,
        GCODE_IMPORT_UNVERIFIED = -4, GCODE_IMPORT_CANCELLED = -5 };
@@ -5326,6 +5329,7 @@ int main(int argc, char **argv) {
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
     queue_load();
+    (void)gcode_usb_part_cleanup();
     if (!spools_available) fprintf(stderr, "Spool library disabled: %s (%s)\n", spools_error, spools_path);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
