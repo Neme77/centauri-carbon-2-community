@@ -195,6 +195,15 @@ int main(void) {
     if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
     status = answer(pair[1]);
     expect(status == 202 && usb_copy_readback_dropped == 1, "the read back drops the copy from the cache");
+    /* 5b. A copy over 8 MiB: its pages are dropped while it is read back, every 8 MiB, not only at the end. */
+    write_size("usb/big.gcode", 17 * MIB);
+    usb_copy_readback_dropped = 0;
+    snprintf(body, sizeof(body), "usb\nbig.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
+    expect(status == 202 && usb_copy_readback_dropped == 3,
+           "a 17 MiB read back drops the pages after 8 and 16 MiB and at the end");
 
     /* 6. An internal start the printer cannot take (busy, or no printer link) is answered as develop answers
      * it: the request and the file are checked first, then the printer. The file is read on the worker, so the
