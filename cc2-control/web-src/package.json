@@ -74,7 +74,8 @@
     "test:quick-maintenance": "node preview/test-quick-maintenance.mjs",
     "test:control-restyle": "node preview/test-control-restyle.mjs",
     "test:runout": "node preview/test-runout-continue.mjs",
-    "test:canvas-unreported": "node preview/test-canvas-unreported.mjs"
+    "test:canvas-unreported": "node preview/test-canvas-unreported.mjs",
+    "test:delete-retry": "node preview/test-delete-retry.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
