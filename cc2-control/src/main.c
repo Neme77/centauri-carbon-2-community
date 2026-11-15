@@ -941,6 +941,15 @@ static int upload_space_guard(int fd,const char *root,size_t length,unsigned cop
     const char *error="{\"error\":\"Insufficient free space for upload and storage reserve\"}\n";
     respond(fd,507,"Insufficient Storage","application/json",error,strlen(error));return 0;
 }
+/* As upload_space_guard, but an upload into internal memory full of old USB copies first lets the oldest of them
+ * make room (gcode_usb_make_room: only what may be deleted, only as many as needed, only with a fresh printer
+ * status), as a USB start does. Main loop, before the upload slot is taken (so file_delete_upload_busy is not set). */
+static void gcode_usb_make_room(const mqtt_client *mqtt, uint64_t size, const char *name);
+static int upload_space_or_room(int fd,const mqtt_client *mqtt,const char *root,size_t length,unsigned copies){
+    if(!upload_has_space(root,length,copies)&&mqtt&&!strcmp(root,gcode_internal_root))
+        gcode_usb_make_room(mqtt,(uint64_t)length*copies,"");
+    return upload_space_guard(fd,root,length,copies);
+}
 static int upload_seconds_left(const gcode_upload_job *job){
     struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
     long elapsed=now.tv_sec-job->started.tv_sec;
@@ -1135,7 +1144,7 @@ static int gcode_upload_start(int fd,const char *request,const char *query,
         const char *e="{\"error\":\"Invalid upload size (maximum 512 MiB)\"}\n";
         respond(fd,413,"Payload Too Large","application/json",e,strlen(e));return 0;
     }
-    if(!upload_space_guard(fd,root,len,1))return 0;
+    if(!upload_space_or_room(fd,mqtt,root,len,1))return 0;
     if(!upload_slot_acquire()){
         const char *e="{\"error\":\"Another upload is running\"}\n";
         respond(fd,409,"Conflict","application/json",e,strlen(e));return 0;
@@ -1446,7 +1455,7 @@ static int orca_upload_start(int fd,const char *request,size_t used,size_t heade
         const char *msg="{\"error\":\"Invalid upload length\"}\n";
         respond(fd,413,"Payload Too Large","application/json",msg,strlen(msg));return 0;
     }
-    if(!upload_space_guard(fd,gcode_internal_root,length,2))return 0;
+    if(!upload_space_or_room(fd,mqtt,gcode_internal_root,length,2))return 0;
     if(!upload_slot_acquire()){
         const char *msg="{\"error\":\"Another upload is running\"}\n";
         respond(fd,409,"Conflict","application/json",msg,strlen(msg));return 0;

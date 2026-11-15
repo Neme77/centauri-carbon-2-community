@@ -293,7 +293,9 @@ remain (the earlier copy counts towards the reserve, not towards the room the co
 when that room is missing, older `CC2_USB_` copies are removed right before the copy, once the checks
 before it passed, oldest first and only those the cleanup after a start may remove, but only when that
 gives enough room; otherwise nothing is removed and the start is refused before anything is written
-(`507`, `Insufficient free space for the USB copy and storage reserve`). The USB file must be the
+(`507`, `Insufficient free space for the USB copy and storage reserve`). An upload into internal memory
+(`POST /api/gcode-files/upload`, OrcaSlicer upload) makes room from old `CC2_USB_` copies the same way before it
+begins. The USB file must be the
 one that was scanned: if its size, inode or modification time differs, or fewer bytes were read
 than it holds, the copy is discarded (`507`, `The USB file changed while it was copied`). After
 `fsync` the copy is read back and compared with the bytes read from the stick (64-bit FNV-1a and
