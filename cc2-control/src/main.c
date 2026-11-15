@@ -1706,6 +1706,8 @@ static int usb_copy_write_out(FILE *output, FILE *input, size_t from, size_t to)
 /* Test seams: after each block written (with the bytes copied so far), and after the copy was synced. */
 static void (*usb_copy_block_hook)(size_t copied);
 static void (*usb_copy_synced_hook)(const char *path);
+/* Test seam: called after each block of the one-pass scan (0) and of the read back (1). */
+static void (*usb_read_block_hook)(int phase);
 
 /* One line of the tool scan and of the adaptive-mesh scan. The file scans below (fgets with 2048 and
  * 4096 bytes) and the scan that runs along with a USB copy cut lines the same way and call these, so
@@ -1889,6 +1891,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
                 if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
                 read_back += count;
                 back = gcode_copy_hash(back, (const unsigned char *)buffer, count);
+                if (usb_read_block_hook) usb_read_block_hook(1);
                 /* Every USB_COPY_FLUSH_BYTES the pages read back so far leave the cache again. */
                 if (write_out && read_back - dropped_at >= USB_COPY_FLUSH_BYTES) {
                     if (posix_fadvise(fileno(check), (off_t)dropped_at, (off_t)(read_back - dropped_at),
@@ -2123,6 +2126,7 @@ static int gcode_scan_both(const char *root, const char *relative, int *adaptive
     while ((count = fread(buffer, 1, sizeof(buffer), file)) > 0) {
         if (gcode_scan_cancelled()) { failed = 1; break; }
         gcode_stream_scan_feed(&scan, buffer, count);
+        if (usb_read_block_hook) usb_read_block_hook(0);
     }
     failed |= ferror(file);
     fclose(file);
