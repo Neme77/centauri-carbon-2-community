@@ -3499,6 +3499,21 @@ static int active_gcode_total_layers(const char *filename) {
     return layers;
 }
 
+/* A print of that file is running while the printer reports it printing or paused (or reports no state at all, as
+ * before). Once it reports another state (cancelled, complete, standby) or no file, the active scan ends: from the
+ * main loop after every MQTT message, so it does not wait for someone to ask /api/printer, and /api/printer starts no
+ * scan for a print that is over. */
+static int active_scan_print_running(const mqtt_client *mqtt) {
+    return mqtt->filename[0] && (!mqtt->print_state[0] || !strcmp(mqtt->print_state, "printing") ||
+                                 !strcmp(mqtt->print_state, "paused"));
+}
+static void active_scan_follow(const mqtt_client *mqtt) {
+    if (active_scan_print_running(mqtt)) return;
+    pthread_mutex_lock(&analysis_mutex);
+    if (active_analysis_filename[0]) { active_analysis_generation++; active_analysis_filename[0] = 0; active_analysis_ready = 0; }
+    pthread_mutex_unlock(&analysis_mutex);
+}
+
 #include "recovery.h"
 
 /* The page that last started live view. The UI streams the camera from one
@@ -3582,7 +3597,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_escape(uuid,sizeof(uuid),mqtt->uuid);json_escape(axes,sizeof(axes),mqtt->homed_axes);
     time_t now=time(NULL);
     long age=mqtt->last_message ? (long)(now-mqtt->last_message) : -1;
-    int file_layers=active_gcode_total_layers(mqtt->filename);
+    int file_layers=active_gcode_total_layers(active_scan_print_running(mqtt)?mqtt->filename:NULL);
     int total_layers=mqtt->have_total_layers ? mqtt->total_layers : file_layers;
     long remaining=mqtt->remaining_time;
     const char *remaining_source=remaining>0 ? "mqtt" : "unavailable";
@@ -5785,7 +5800,7 @@ int main(int argc, char **argv) {
         struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
-        if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
+        if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set)){(void)mqtt_process(&mqtt);active_scan_follow(&mqtt);}
         if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
         uds_motion_light(&telemetry,&mqtt);
         quiet_disable_tick(&console);
