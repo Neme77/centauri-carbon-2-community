@@ -123,6 +123,20 @@ int main(void) {
     status = answer(pair[1]);
     expect(status == 409 && exists("gcode/CC2_USB_00000002_b.gcode") && exists("gcode/CC2_USB_00000003_c.gcode"),
            "a start refused by the check before the copy removes no old copies");
+    /* 1c. The main loop is busy longer than the worker waits for room (USB_START_ROOM_WAIT_MS): the start is
+     * refused for lack of room, and no old copy may be removed for it afterwards. */
+    write_size("gcode/CC2_USB_00000001_a.gcode", MIB); age("gcode/CC2_USB_00000001_a.gcode", 1000);
+    write_size("usb/late.gcode", MIB);
+    snprintf(body, sizeof(body), "usb\nlate.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) {
+        nanosleep(&(struct timespec){USB_START_ROOM_WAIT_MS / 1000 + 1, 0}, NULL); /* main loop held up */
+        serve(&mqtt);
+    }
+    status = answer(pair[1]);
+    expect(status == 507 && exists("gcode/CC2_USB_00000001_a.gcode"),
+           "a main loop too late for the room refuses the start and removes no old copy afterwards");
+    unlink("gcode/CC2_USB_00000001_a.gcode");
     upload_statvfs = statvfs;
 
     /* 2a. Emergency stop during the scan before the copy: the scan ends, nothing is copied. */
