@@ -267,6 +267,38 @@ int main(void) {
     status = answer(pair[1]);
     expect(status == 202 && atomic_load(&gcode_scan_passes) == 1, "and checks the file once the analysis is done");
 
+    /* 4d. Fund 12: an earlier copy of the same USB file exists, and the touchscreen starts a print while the new copy
+     * is made. The new copy must not replace the earlier one under that print: it is published (renamed over the
+     * earlier copy) only once the printer is confirmed idle right before the start is sent; otherwise the earlier
+     * copy stays untouched and the new one is removed. */
+    {
+        char name12[PATH_MAX_LOCAL], path12[PATH_MAX_LOCAL + 16];
+        assert(!gcode_usb_import_name("same.gcode", name12));
+        snprintf(path12, sizeof(path12), "gcode/%s", name12);
+        file = fopen(path12, "w"); assert(file); fputs("; earlier copy\nG1 X1\n", file); fclose(file);
+        file = fopen("usb/same.gcode", "w"); assert(file); fputs("; new USB file\nG1 X2\nG1 X3\n", file); fclose(file);
+        snprintf(body, sizeof(body), "usb\nsame.gcode\n\nA\nsaved\n0");
+        assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+        assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
+        for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
+        mqtt.machine_status = 2; /* the touchscreen started the earlier copy meanwhile */
+        serve(&mqtt);
+        status = answer(pair[1]);
+        char held[64] = ""; file = fopen(path12, "r"); assert(file); if (!fgets(held, sizeof(held), file)) held[0] = 0; fclose(file);
+        char part12[PATH_MAX_LOCAL + 24]; snprintf(part12, sizeof(part12), "%s.part", path12);
+        expect(status == 409 && !strcmp(held, "; earlier copy\n") && !exists(part12),
+               "a print started meanwhile keeps the earlier copy untouched; the new copy is not published");
+        mqtt.machine_status = 1;
+        assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+        assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
+        serve(&mqtt);
+        status = answer(pair[1]);
+        file = fopen(path12, "r"); assert(file); if (!fgets(held, sizeof(held), file)) held[0] = 0; fclose(file);
+        expect(status == 202 && !strcmp(held, "; new USB file\n") && !exists(part12),
+               "on an idle printer the new copy replaces the earlier one when the start is sent");
+        unlink(path12);
+    }
+
     /* 5. After the read back the copy's pages are dropped from the cache too. */
     usb_copy_readback_dropped = 0;
     snprintf(body, sizeof(body), "usb\nsmall.gcode\n\nA\nsaved\n0");
