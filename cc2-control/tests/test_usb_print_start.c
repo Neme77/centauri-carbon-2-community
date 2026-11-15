@@ -80,6 +80,22 @@ static int begin(mqtt_client *mqtt, const char *body, char *response, size_t cap
     return -1;
 }
 
+/* The printer's Canvas report, one loaded tray 1 (method 2005), as a fresh report. */
+static void canvas_reports(mqtt_client *mqtt) {
+    mqtt->last_message = time(NULL); mqtt->canvas_revision++; mqtt->canvas_discovery_complete = 1;
+    mqtt->canvas_snapshot_len = (size_t)snprintf(mqtt->canvas_snapshot, sizeof(mqtt->canvas_snapshot),
+        "{\"id\":2005,\"result\":{\"canvas_info\":{\"canvas_list\":[{\"canvas_id\":0,\"connected\":1,\"tray_list\":["
+        "{\"tray_id\":1,\"status\":1,\"filament_type\":\"PLA\"},{\"tray_id\":3,\"status\":1,\"filament_type\":\"PLA\"}]}]}}}");
+}
+/* Ticks the main loop until the start is answered (at most 3 s), answering each Canvas report asked for. */
+static void settle(mqtt_client *mqtt, int reports) {
+    for (int i = 0; i < 3000 && usb_start_active(); ++i) {
+        if (reports && mqtt->canvas_refresh_due) { mqtt->canvas_refresh_due = 0; canvas_reports(mqtt); }
+        usb_start_tick(mqtt); if (usb_start_active()) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    }
+    assert(!usb_start_active());
+}
+
 static void wait_worker(void) {
     for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
     assert(atomic_load(&usb_start_done));
@@ -160,10 +176,20 @@ int main(void) {
     assert(peer >= 0); wait_worker(); usb_start_tick(&mqtt);
     assert(answer(peer, response, sizeof(response)) == 409 && strstr(response, "Canvas mapping"));
     assert(!events[0] && imports() == 0);
+    /* A start with a mapping is judged with the Canvas trays: the printer has reported them before the start. */
+    canvas_reports(&mqtt);
     peer = begin(&mqtt, "usb\ntwo.gcode\n0:1,1:3\nA\nsaved\n0", response, sizeof(response), &status);
-    assert(peer >= 0); wait_worker(); usb_start_tick(&mqtt);
+    assert(peer >= 0); wait_worker(); settle(&mqtt, 1);
     assert(answer(peer, response, sizeof(response)) == 202 && !strcmp(events, "1020:local:2;"));
     snprintf(copy, sizeof(copy), "gcode/%s", started_name); assert(!unlink(copy));
+    /* A start with a mapping while the Canvas never reports (behaviour change against #347, where it went out at
+     * once): refused after the wait with its own message, and no copy is left. */
+    mqtt.canvas_snapshot_len = 0; usb_start_canvas_wait_ms = 50;
+    peer = begin(&mqtt, "usb\ntwo.gcode\n0:1,1:3\nA\nsaved\n0", response, sizeof(response), &status);
+    assert(peer >= 0); wait_worker(); settle(&mqtt, 0);
+    assert(answer(peer, response, sizeof(response)) == 409 && strstr(response, "did not report its trays when the start began"));
+    assert(!events[0] && imports() == 0);
+    usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS;
 
     /* Refusals that need no file access are answered at once, without the worker. */
     mqtt.machine_status = 2;

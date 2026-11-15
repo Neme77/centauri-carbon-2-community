@@ -230,6 +230,30 @@ int main(void) {
     status = finish();
     expect(status == 409 && strstr(reply_body, "Canvas mapping does not match"), "P2 with the check's own message");
 
+    /* Z: no mapping (a printer without a Canvas, or the external spool) and never any Canvas report: answered on the
+     * first tick with 202, no wait, no report asked for, never a 409 for a missing report. */
+    idle(); machine.canvas_snapshot_len = 0; sent = starts_sent; machine.canvas_refresh_due = 0;
+    assert(usb_start_begin(begin(), &machine, "usb\npart.gcode\n\nA\nsaved\n0\n\n", 27) == 1);
+    expect(!machine.canvas_refresh_due, "Z no mapping: no Canvas report asked for at the start");
+    copied(); usb_start_tick(&machine);
+    expect(answered() && !machine.canvas_refresh_due, "Z no mapping, never a report: answered on the first tick");
+    status = finish();
+    expect(status == 202 && starts_sent == sent + 1, "Z no mapping, never a report: 202 at once");
+    /* F: CC2 Control just started, the start with a mapping comes before the first Canvas report, which arrives 1 s
+     * later (measured on the printer: about 1 s): the start only waits, it is not refused. */
+    idle(); machine.canvas_snapshot_len = 0; sent = starts_sent; machine.canvas_refresh_due = 0;
+    assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
+    copied(); usb_start_tick(&machine);
+    expect(!answered(), "F waits for the first report");
+    nanosleep(&(struct timespec){1, 0}, NULL);
+    machine.canvas_refresh_due = 0; canvas_list(RED_PLA(0, 1)); idle(); usb_start_tick(&machine);
+    for (int i = 0; i < 3000 && usb_start_active(); ++i) { /* the report asked for after the copy follows */
+        if (machine.canvas_refresh_due) { machine.canvas_refresh_due = 0; canvas_list(RED_PLA(0, 1)); }
+        usb_start_tick(&machine); nanosleep(&(struct timespec){0, 1000000}, NULL);
+    }
+    status = finish();
+    expect(status == 202 && starts_sent == sent + 1, "F a report 1 s after a fresh start: 202, no 409");
+
     /* X: emergency stop while waiting for the report: refused at once, nothing sent. */
     idle(); canvas_list(RED_PLA(0, 1)); sent = starts_sent;
     assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);

@@ -46,10 +46,20 @@ static void inspect(const char *file) {
 static int usb_start_file(mqtt_client *mqtt, const char *file, const char *mapping, const char *leveling,
                           char *response, size_t cap) {
     char body[256]; snprintf(body, sizeof(body), "usb\n%s\n%s\nA\n%s\n0", file, mapping, leveling);
+    /* The printer has reported its Canvas trays (a start with a mapping is judged with them) and answers each fresh
+     * report the start asks for; the main loop ticks until the start is answered, at most 3 s. */
+    mqtt->last_message = time(NULL); mqtt->canvas_revision++; mqtt->canvas_discovery_complete = 1;
+    mqtt->canvas_snapshot_len = (size_t)snprintf(mqtt->canvas_snapshot, sizeof(mqtt->canvas_snapshot),
+        "{\"id\":2005,\"result\":{\"canvas_info\":{\"canvas_list\":[{\"canvas_id\":0,\"connected\":1,\"tray_list\":["
+        "{\"tray_id\":0,\"status\":1,\"filament_type\":\"PLA\"},{\"tray_id\":1,\"status\":1,\"filament_type\":\"PLA\"}]}]}}}");
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     assert(usb_start_begin(pair[0], mqtt, body, strlen(body)));
     for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
-    usb_start_tick(mqtt);
+    for (int i = 0; i < 3000 && usb_start_active(); ++i) {
+        if (mqtt->canvas_refresh_due) { mqtt->canvas_refresh_due = 0; mqtt->canvas_revision++; mqtt->last_message = time(NULL); }
+        usb_start_tick(mqtt); if (usb_start_active()) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    }
+    assert(!usb_start_active());
     return answer(pair[1], response, cap);
 }
 
