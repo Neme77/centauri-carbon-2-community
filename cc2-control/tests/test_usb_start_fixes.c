@@ -81,6 +81,8 @@ static void serve(mqtt_client *mqtt) {
 }
 static int copy_started;
 static void note_copy(void) { copy_started = 1; }
+/* A stick that stops answering: the worker stands still (no heartbeat) for 1.5 s, as in a fread() the kernel holds. */
+static void stick_hangs(void) { nanosleep(&(struct timespec){1, 500000000}, NULL); }
 static void cancel_now(const char *path) { (void)path; usb_start_cancelled = 2; }
 /* Runs the cleanup while a copy is between its write and its read back: the copy still holds its .part. */
 static int removed_during_copy = -1, part_there_during_copy;
@@ -317,6 +319,34 @@ int main(void) {
                "on an idle printer the new copy replaces the earlier one when the start is sent");
         unlink(path12);
     }
+
+    /* 4e. Fund 4: the stick stops answering during the start. After usb_start_stall_ms without progress the browser
+     * gets an answer at once ("does not respond", reason usb_unresponsive); the start stays busy until the worker
+     * comes back (a second start is refused meanwhile), then it is cleaned up without a second answer and nothing
+     * is printed. */
+    usb_start_stall_ms = 200; usb_start_copy_hook = stick_hangs;
+    snprintf(body, sizeof(body), "usb\nsmall.gcode\n\nA\nsaved\n0");
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
+    char hang_reply[1024] = ""; ssize_t hang_got = -1;
+    for (int i = 0; i < 1000 && hang_got <= 0; ++i) {
+        mqtt.last_message = time(NULL); usb_start_tick(&mqtt);
+        hang_got = recv(pair[1], hang_reply, sizeof(hang_reply) - 1, MSG_DONTWAIT);
+        if (hang_got <= 0) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    }
+    if (hang_got > 0) hang_reply[hang_got] = 0;
+    expect(hang_got > 0 && strstr(hang_reply, " 409 ") && strstr(hang_reply, "\"reason\":\"usb_unresponsive\"") &&
+           !atomic_load(&usb_start_done), "a stick that stops answering gets an answer after the limit, while the worker still hangs");
+    {
+        int other[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, other));
+        int taken = usb_start_begin(other[0], &mqtt, body, strlen(body));
+        if (!taken) close(other[0]);
+        expect(!taken && answer(other[1]) == 409, "a second start is refused while the hung worker is still busy");
+    }
+    serve(&mqtt);
+    close(pair[1]);
+    expect(!usb_start_active() && !copy_started, "when the worker comes back the start is cleaned up, nothing printed");
+    usb_start_copy_hook = NULL; usb_start_stall_ms = USB_START_STALL_MS;
 
     /* 5. After the read back the copy's pages are dropped from the cache too. */
     usb_copy_readback_dropped = 0;
