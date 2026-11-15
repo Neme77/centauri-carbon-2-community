@@ -2810,6 +2810,7 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
             gcode_usb_make_room(mqtt, (uint64_t)info.st_size, name);
     }
     usb_start_trays_note(mqtt);
+    usb_start_canvas_waiting = 0;
     usb_start_cancelled = 0;
     atomic_store(&usb_start_done, 0);
     pthread_attr_t attr; pthread_t thread;
@@ -2841,6 +2842,44 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
  * an earlier import had the same name: that file is left as the synchronous start left it.
  * A client that disconnects before then, or an emergency stop, cancels the start: the browser
  * has reported a failure, so the print must not begin behind its back. */
+/* After the copy of a USB file (print dialog or queue) whose start names Canvas trays, and when the Canvas
+ * reported its trays when the start began, the trays are compared only with a fresh report: the main loop
+ * asks the printer for one (canvas_refresh_due, sent by mqtt_tick) and waits up to USB_START_CANVAS_WAIT_MS
+ * for a new canvas_revision, without blocking. An emergency stop or a client that leaves ends the wait. */
+#define USB_START_CANVAS_WAIT_MS 10000
+/* No fresh report within the wait: 1 refuses the start (the safe side), 0 compares with the stored report
+ * as before. The one place to change this. */
+#define USB_START_CANVAS_SILENT_REFUSES 1
+static long long usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS; /* test seam */
+static int usb_start_canvas_waiting;
+static unsigned long usb_start_canvas_seen;
+static long long usb_start_canvas_until;
+static long long monotonic_ms(void);
+static int usb_start_trays_known; /* queue.h: the trays were noted when the start began */
+static int usb_start_mapped(const char *body, size_t length) {
+    char storage[16], filename[PATH_MAX_LOCAL];
+    const char *mapping, *root, *media;
+    size_t mapping_len = 0, count = 0;
+    int tools[GCODE_TOOLS_MAX], slots[GCODE_TOOLS_MAX];
+    if (!gcode_request_file(body, length, storage, filename, &mapping, &mapping_len, &root, &media)) return 0;
+    const char *line_end = memchr(mapping, '\n', mapping_len);
+    return parse_slot_map(mapping, line_end ? (size_t)(line_end - mapping) : mapping_len, tools, slots, &count) && count > 0;
+}
+/* Returns 1 while the start still waits for the report, 0 when it may be judged, -1 when no report came. */
+static int usb_start_canvas_wait(mqtt_client *mqtt) {
+    if (usb_start.internal || !usb_start_trays_known || !usb_start_mapped(usb_start_body, usb_start_length)) return 0;
+    long long now = monotonic_ms();
+    if (!usb_start_canvas_waiting) {
+        usb_start_canvas_waiting = 1;
+        usb_start_canvas_seen = mqtt->canvas_revision;
+        usb_start_canvas_until = now + usb_start_canvas_wait_ms;
+        mqtt->canvas_refresh_due = 1;
+        return 1;
+    }
+    if (mqtt->canvas_revision != usb_start_canvas_seen) return 0;
+    if (now < usb_start_canvas_until) return 1;
+    return USB_START_CANVAS_SILENT_REFUSES ? -1 : 0;
+}
 static int usb_start_trays_refuse(int fd) {
     const char *error = "{\"accepted\":false,\"error\":\"The Canvas trays changed while the file was copied; start the print again\"}\n";
     respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
@@ -2855,8 +2894,14 @@ static void usb_start_tick(mqtt_client *mqtt) {
         const char *error = "{\"accepted\":false,\"error\":\"Print start cancelled by the emergency stop\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
     } else if (!usb_start_cancelled) {
+        int waited = usb_start_canvas_wait(mqtt);
+        if (waited > 0) return;
         usb_start.stage = USB_START_PREPARED;
-        if (usb_start_trays_changed(mqtt, usb_start_body, usb_start_length)) {
+        if (waited < 0) {
+            const char *error = "{\"accepted\":false,\"error\":\"The Canvas did not report its trays after the copy; start the print again\"}\n";
+            respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+            if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
+        } else if (usb_start_trays_changed(mqtt, usb_start_body, usb_start_length)) {
             status = usb_start_trays_refuse(fd);
             if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
         } else status = usb_start_queue_id
@@ -2870,7 +2915,7 @@ static void usb_start_tick(mqtt_client *mqtt) {
         int length = snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, usb_start.imported);
         if (length > 0 && (size_t)length < sizeof(path)) unlink(path);
     }
-    usb_start_fd = -1;
+    usb_start_fd = -1; usb_start_canvas_waiting = 0;
     close(fd);
     if (usb_start_peer >= 0) close(usb_start_peer);
     usb_start_peer = -1; usb_start_queue_id = usb_start_queue_auto = 0;

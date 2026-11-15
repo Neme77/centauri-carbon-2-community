@@ -315,8 +315,12 @@ scanned before the copy, as before.
 When the copy starts, CC2 Control notes the Canvas trays; after the copy it compares the trays the
 start's slot mapping names (status, type, name and colour). If one of them changed meanwhile, the copy
 is not printed (409 `The Canvas trays changed while the file was copied; start the print again`), and a
-queued USB job is dropped as a refused start. Without a fresh Canvas report at the start or at the end of
-the copy the trays are not compared.
+queued USB job is dropped as a refused start. For a USB file the trays after the copy come from a
+report CC2 Control asks the printer for once the copy is done (method 2005); it waits up to 10 s for it
+without holding up other requests, and an emergency stop or a client that leaves ends the wait. When no
+such report comes in time, the start is refused (409 `The Canvas did not report its trays after the copy;
+start the print again`). Without a Canvas report when the start began, or without a slot mapping, the
+trays are not compared and nothing is waited for.
 
 ## Delete print-history entries
 
