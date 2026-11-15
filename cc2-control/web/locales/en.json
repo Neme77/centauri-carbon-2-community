@@ -396,6 +396,7 @@
   "print.not_reported": "Not reported",
   "print.orcaslicer_upload_complete_choose": "OrcaSlicer upload complete. Choose the Canvas spool and confirm to start printing.",
   "print.print_not_started": "Print not started:",
+  "print.start_no_answer": "No answer within {minutes} minutes, so the start was cancelled. Check the USB stick, then start again.",
   "print.print_request_submitted_waiting": "Print request submitted. Waiting for printer status.",
   "print.print_setup": "Print setup",
   "print.filament_tool_n": "Filament T{n}",

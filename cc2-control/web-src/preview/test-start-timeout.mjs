@@ -19,7 +19,7 @@ assert.match(read('lib/queue.ts'), /startTimeoutMs\(size\)/, 'the queue start pa
 assert.match(read('pages/files.tsx'), /startFile\(e\.storage, e\.file\.path, e\.file\.size\)/, 'the file list hands the size on')
 // When the wait runs out the page says so plainly, in every language, instead of a bare abort.
 assert.match(read('lib/api.ts'), /print\.start_no_answer/, 'a start that runs out of time gets its own message')
-for (const lang of ['en', 'de', 'fr', 'es', 'pl', 'cs', 'hu', 'tr', 'ru', 'zh']) {
+for (const lang of ['en', 'de', 'fr', 'es', 'it', 'pl', 'cs', 'hu', 'tr', 'ru', 'zh']) {
   const strings = JSON.parse(readFileSync(new URL(`../../web/locales/${lang}.json`, import.meta.url), 'utf8'))
   assert.match(strings['print.start_no_answer'] ?? '', /\{minutes\}/, `${lang}: the message names the minutes`)
 }

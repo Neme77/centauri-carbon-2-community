@@ -396,6 +396,7 @@
   "print.not_reported": "Non communiqué",
   "print.orcaslicer_upload_complete_choose": "Envoi depuis OrcaSlicer terminé. Choisissez la bobine Canvas et confirmez pour lancer l'impression.",
   "print.print_not_started": "Impression non lancée :",
+  "print.start_no_answer": "Pas de réponse en {minutes} minutes, le démarrage a donc été annulé. Vérifiez la clé USB, puis relancez.",
   "print.print_request_submitted_waiting": "Demande d'impression envoyée. En attente de l'état de l'imprimante.",
   "print.print_setup": "Préparation de l'impression",
   "print.filament_tool_n": "Filament T{n}",

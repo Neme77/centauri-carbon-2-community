@@ -5,17 +5,21 @@ import { startTimeoutMs } from './start-timeout'
 
 export const request = async (path: string, options: RequestInit & { timeoutMs?: number } = {}) => {
   const controller = new AbortController()
-  const timeout = window.setTimeout(
-    () => controller.abort(),
+  const start = /\/api\/(gcode-files\/print|queue\/start)$/.test(path)
+  const waitMs =
     options.timeoutMs ??
-      (/\/api\/gcode-files\/(metadata|inspect|layer-path)(\?|$)/.test(path)
-        ? 120000
-        : // A USB start answers only after the file has been copied to internal memory (#344), from the
-          // print dialog and from the queue alike.
-          /\/api\/(gcode-files\/print|queue\/start)$/.test(path)
-          ? startTimeoutMs()
-          : 8000)
-  )
+    (/\/api\/gcode-files\/(metadata|inspect|layer-path)(\?|$)/.test(path)
+      ? 120000
+      : // A USB start answers only after the file has been copied to internal memory (#344), from the
+        // print dialog and from the queue alike.
+        start
+        ? startTimeoutMs()
+        : 8000)
+  let timedOut = false
+  const timeout = window.setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, waitMs)
   try {
     const headers = new Headers(options.headers)
     if (options.method && !['GET', 'HEAD'].includes(options.method.toUpperCase())) headers.set('X-CC2-Request', '1')
@@ -32,6 +36,10 @@ export const request = async (path: string, options: RequestInit & { timeoutMs?:
     if (!response.ok)
       throw Object.assign(Error(data?.error || data || `HTTP ${response.status}`), { status: response.status, data })
     return data
+  } catch (err) {
+    // The page gave up waiting; closing the request also cancels the start on CC2 Control.
+    if (start && timedOut) throw Error(tpl('print.start_no_answer', { minutes: String(Math.round(waitMs / 60000)) }))
+    throw err
   } finally {
     clearTimeout(timeout)
   }

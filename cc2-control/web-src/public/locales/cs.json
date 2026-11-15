@@ -396,6 +396,7 @@
   "print.not_reported": "Nehlášeno",
   "print.orcaslicer_upload_complete_choose": "Nahrávání z OrcaSlicer dokončeno. Vyberte cívku Canvas a potvrďte spuštění tisku.",
   "print.print_not_started": "Tisk nebyl spuštěn:",
+  "print.start_no_answer": "Žádná odpověď do {minutes} minut, proto bylo spuštění zrušeno. Zkontrolujte USB disk a spusťte znovu.",
   "print.print_request_submitted_waiting": "Požadavek na tisk odeslán. Čekání na stav tiskárny.",
   "print.print_setup": "Nastavení tisku",
   "print.filament_tool_n": "Filament T{n}",

@@ -311,7 +311,9 @@ USB start on a printer that is not linked or not idle is refused before the stic
 MQTT is not ready`, 409 `Starting a file requires an idle printer`); a start from internal memory keeps the
 order of the checks (request, file, then printer), and its file is read on the worker.
 The page waits for the answer to a start at least 300 s, and for a file of known size 120 s plus 1 s
-per 2 MB (500 MB: 370 s); it knows the size from the file list and from the queue's `size`.
+per 2 MB (500 MB: 370 s), at most 20 minutes; it knows the size from the file list and from the queue's
+`size`. The rate is an assumption until the copy is measured on the printer. When the wait runs out the
+page says so and closes the request, which cancels the start.
 When the print dialog inspected the same file just before (`POST /api/gcode-files/inspect`, same
 device, inode, size, modification and change time), the start takes its leveling and Canvas tool
 decision from that cached inspection instead of reading the file again, so a refused start still

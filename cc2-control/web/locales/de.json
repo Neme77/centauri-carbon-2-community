@@ -396,6 +396,7 @@
   "print.not_reported": "Nicht gemeldet",
   "print.orcaslicer_upload_complete_choose": "OrcaSlicer-Upload abgeschlossen. Canvas-Spool wählen und bestätigen, um den Druck zu starten.",
   "print.print_not_started": "Druck nicht gestartet:",
+  "print.start_no_answer": "Keine Antwort innerhalb von {minutes} Minuten, daher wurde der Start abgebrochen. USB-Stick prüfen und erneut starten.",
   "print.print_request_submitted_waiting": "Druckanfrage übermittelt. Warten auf den Druckerstatus.",
   "print.print_setup": "Druckeinrichtung",
   "print.filament_tool_n": "Filament T{n}",

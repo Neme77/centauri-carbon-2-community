@@ -396,6 +396,7 @@
   "print.not_reported": "Non comunicato",
   "print.orcaslicer_upload_complete_choose": "Caricamento da OrcaSlicer completato. Scegli la bobina Canvas e conferma per avviare la stampa.",
   "print.print_not_started": "Stampa non avviata:",
+  "print.start_no_answer": "Nessuna risposta entro {minutes} minuti, quindi l’avvio è stato annullato. Controlla la chiavetta USB, poi riavvia.",
   "print.print_request_submitted_waiting": "Richiesta di stampa inviata. In attesa dello stato della stampante.",
   "print.print_setup": "Impostazione della stampa",
   "print.filament_tool_n": "Filamento T{n}",

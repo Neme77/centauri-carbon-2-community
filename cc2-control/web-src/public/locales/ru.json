@@ -396,6 +396,7 @@
   "print.not_reported": "Нет данных",
   "print.orcaslicer_upload_complete_choose": "Загрузка из OrcaSlicer завершена. Выберите катушку Canvas и подтвердите запуск печати.",
   "print.print_not_started": "Печать не запущена:",
+  "print.start_no_answer": "Нет ответа в течение {minutes} мин, поэтому запуск отменён. Проверьте USB-накопитель и запустите снова.",
   "print.print_request_submitted_waiting": "Запрос на печать отправлен. Ожидание статуса принтера.",
   "print.print_setup": "Настройка печати",
   "print.filament_tool_n": "Филамент T{n}",
