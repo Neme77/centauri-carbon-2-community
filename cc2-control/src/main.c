@@ -1575,8 +1575,25 @@ static int gcode_usb_prune(const mqtt_client *mqtt, const char *keep) {
     return removed;
 }
 
-/* Removes the CC2_USB_*.part files a copy leaves behind when CC2 Control ends during it. */
-static int gcode_usb_part_cleanup(void) { return 0; }
+/* Removes the CC2_USB_*.part files a copy leaves behind when CC2 Control ends during it (update, power
+ * loss). Runs once at start, before any copy can run; only regular, singly linked files. */
+static int gcode_usb_part_cleanup(void) {
+    DIR *dir = opendir(gcode_internal_root);
+    if (!dir) return 0;
+    int removed = 0; struct dirent *entry;
+    while ((entry = readdir(dir))) {
+        size_t length = strlen(entry->d_name);
+        if (strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, strlen(GCODE_USB_IMPORT_PREFIX)) ||
+            length < 5 || strcmp(entry->d_name + length - 5, ".part")) continue;
+        char path[PATH_MAX_LOCAL * 2]; struct stat info;
+        if (snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, entry->d_name) >= (int)sizeof(path) ||
+            lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 || unlink(path)) continue;
+        fprintf(stderr, "USB import cleanup: removed leftover %s\n", entry->d_name);
+        removed++;
+    }
+    closedir(dir);
+    return removed;
+}
 
 /* Why an import was not completed; the start answers each one with its own message. */
 enum { GCODE_IMPORT_FAILED = -1, GCODE_IMPORT_NO_SPACE = -2, GCODE_IMPORT_CHANGED = -3,
@@ -1599,6 +1616,51 @@ static int usb_import_has_space(uint64_t size, uint64_t replaced) {
     uint64_t available = st.f_bavail > UINT64_MAX / block ? UINT64_MAX : (uint64_t)st.f_bavail * block;
     uint64_t reserve = replaced >= UPLOAD_STORAGE_MARGIN ? 0 : UPLOAD_STORAGE_MARGIN - replaced;
     return available >= size && available - size >= reserve;
+}
+/* Room for a new USB copy of `size` bytes: when it does not fit, the oldest older copies go first (as the
+ * cleanup after a start would remove them, gcode_usb_import_remove), but only when removing all of them
+ * that may go would be enough; otherwise nothing is removed and the start is refused for lack of space.
+ * `name` is the new copy's own name: an earlier copy of it is replaced, not removed. Main loop only. */
+static void gcode_usb_make_room(const mqtt_client *mqtt, uint64_t size, const char *name) {
+    char path[PATH_MAX_LOCAL * 2]; struct stat earlier;
+    snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, name);
+    uint64_t replaced = lstat(path, &earlier) == 0 && S_ISREG(earlier.st_mode) ? (uint64_t)earlier.st_size : 0;
+    if (usb_import_has_space(size, replaced)) return;
+    DIR *dir = opendir(gcode_internal_root);
+    if (!dir) return;
+    gcode_usb_import_entry *found = NULL; size_t count = 0, cap = 0; struct dirent *entry;
+    unsigned long long removable = 0;
+    while ((entry = readdir(dir))) {
+        if (strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, strlen(GCODE_USB_IMPORT_PREFIX)) ||
+            strlen(entry->d_name) >= sizeof(found->name) || !is_gcode_filename(entry->d_name) ||
+            !strcmp(entry->d_name, name)) continue;
+        struct stat info;
+        if (snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, entry->d_name) >= (int)sizeof(path) ||
+            lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 ||
+            gcode_delete_guard(mqtt, entry->d_name) || queue_uses_internal_file(entry->d_name)) continue;
+        if (count == cap) {
+            size_t next = cap ? cap * 2 : 16;
+            gcode_usb_import_entry *grown = realloc(found, next * sizeof(*found));
+            if (!grown) break;
+            found = grown; cap = next;
+        }
+        snprintf(found[count].name, sizeof(found[count].name), "%s", entry->d_name);
+        found[count].size = (unsigned long long)info.st_size; found[count].gone = 0;
+        found[count++].mtime = info.st_mtim;
+        removable += (unsigned long long)info.st_size;
+    }
+    closedir(dir);
+    struct statvfs st; uint64_t block;
+    if (!upload_statvfs(gcode_internal_root, &st) && (block = st.f_frsize ? st.f_frsize : st.f_bsize)) {
+        uint64_t available = (uint64_t)st.f_bavail * block + removable;
+        uint64_t reserve = replaced >= UPLOAD_STORAGE_MARGIN ? 0 : UPLOAD_STORAGE_MARGIN - replaced;
+        if (available >= size && available - size >= reserve) {
+            if (count) qsort(found, count, sizeof(*found), gcode_usb_import_newer);
+            for (size_t i = count; i-- > 0 && !usb_import_has_space(size, replaced);)
+                (void)gcode_usb_import_remove(mqtt, found[i].name);
+        }
+    }
+    free(found);
 }
 /* FNV-1a, 64 bit: detects a copy that reads back different from the bytes read from the stick. */
 static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_t length) {
@@ -1815,15 +1877,17 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
         if (usb_copy_synced_hook) usb_copy_synced_hook(temporary);
         FILE *check = fopen(temporary, "rb");
         uint64_t back = GCODE_COPY_HASH_SEED; size_t read_back = 0; size_t count;
-        if (!check) result = GCODE_IMPORT_UNVERIFIED;
+        if (cancel && atomic_load(cancel)) result = GCODE_IMPORT_CANCELLED;
+        else if (!check) result = GCODE_IMPORT_UNVERIFIED;
         else {
             while ((count = fread(buffer, 1, sizeof(buffer), check)) > 0) {
+                if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
                 read_back += count;
                 back = gcode_copy_hash(back, (const unsigned char *)buffer, count);
             }
-            if (ferror(check) || read_back != copied || back != hash) result = GCODE_IMPORT_UNVERIFIED;
-            fclose(check);
+            if (!result && (ferror(check) || read_back != copied || back != hash)) result = GCODE_IMPORT_UNVERIFIED;
         }
+        if (check) fclose(check);
     }
     if (result || rename(temporary, destination) != 0) {
         unlink(temporary);
@@ -1856,6 +1920,9 @@ static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOO
 }
 
 /* `lengths`, when given, receives each tool's slicer filament length in mm, or -1. */
+/* Set on the start worker: a scan ends early (as failed) once the start was cancelled. */
+static _Thread_local const atomic_int *gcode_scan_cancel;
+static int gcode_scan_cancelled(void) { return gcode_scan_cancel && atomic_load(gcode_scan_cancel); }
 static int gcode_detect_tools(const char *root, const char *relative,
                               int tools[GCODE_TOOLS_MAX], size_t *tool_count, double *lengths) {
     char path[PATH_MAX_LOCAL * 2], line[GCODE_TOOLS_LINE];
@@ -1864,8 +1931,12 @@ static int gcode_detect_tools(const char *root, const char *relative,
     if (!file) return -1;
     int present[GCODE_TOOLS_MAX] = {0};
     if (lengths) for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool) lengths[tool] = -1;
-    while (fgets(line, sizeof(line), file)) gcode_tools_line(line, present, lengths);
-    int failed = ferror(file);
+    int failed = 0;
+    while (fgets(line, sizeof(line), file)) {
+        if (gcode_scan_cancelled()) { failed = 1; break; }
+        gcode_tools_line(line, present, lengths);
+    }
+    failed |= ferror(file);
     fclose(file);
     if (failed) return -1;
     gcode_tools_list(present, tools, tool_count);
@@ -2004,13 +2075,15 @@ static int gcode_has_adaptive_mesh(const char *root, const char *relative, int *
     FILE *file = fopen(path, "r");
     if (!file) return -1;
     *adaptive = 0;
+    int failed = 0;
     while (fgets(line, sizeof(line), file)) {
+        if (gcode_scan_cancelled()) { failed = 1; break; }
         if (gcode_mesh_line(line)) {
             *adaptive = 1;
             break;
         }
     }
-    int failed = ferror(file);
+    failed |= ferror(file);
     fclose(file);
     return failed ? -1 : 0;
 }
@@ -2653,10 +2726,12 @@ static void *usb_start_worker(void *unused) {
         job->detected_count = decided.tool_count;
         memcpy(job->detected, decided.tools, decided.tool_count * sizeof(decided.tools[0]));
     } else {
+        gcode_scan_cancel = &usb_start_cancelled;
         job->scan_failed = gcode_has_adaptive_mesh(root, job->filename, &job->adaptive) != 0;
         if (!job->scan_failed && job->slot_count)
             job->detect_failed = gcode_detect_tools(root, job->filename, job->detected,
                                                     &job->detected_count, NULL) != 0;
+        gcode_scan_cancel = NULL;
     }
     /* A start the scan already refuses is answered without copying the file. */
     int refused = job->scan_failed || (strcmp(job->leveling, "adaptive") == 0 && !job->adaptive) ||
@@ -2727,6 +2802,13 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
     if ((*status = gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start)) != 0) return 0;
     memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
     usb_start_length = body_len;
+    if (!usb_start.internal) {
+        char source[PATH_MAX_LOCAL * 2], name[PATH_MAX_LOCAL]; struct stat info;
+        if (gcode_resolved_path(gcode_usb_root, usb_start.filename, source, sizeof(source)) &&
+            stat(source, &info) == 0 && S_ISREG(info.st_mode) && info.st_size >= 0 &&
+            gcode_usb_import_name(usb_start.filename, name) == 0)
+            gcode_usb_make_room(mqtt, (uint64_t)info.st_size, name);
+    }
     usb_start_trays_note(mqtt);
     usb_start_cancelled = 0;
     atomic_store(&usb_start_done, 0);
