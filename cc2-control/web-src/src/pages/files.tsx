@@ -1,3 +1,4 @@
+import { deleteRetrying } from '@/lib/delete-retry'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import { Download, FileText, Play, RefreshCw, Search, Trash2, Upload as UploadIcon } from 'lucide-preact'
@@ -168,7 +169,7 @@ export const Files = () => {
     )
       return
     try {
-      const r = await fetch('/api/gcode-files/delete', body(storage, path))
+      const r = await deleteRetrying(fetch, '/api/gcode-files/delete', body(storage, path))
       if (!r.ok) throw Error(await failure(r, true))
       if (sel && key(sel) === key(e)) setSel(null)
       notify(tpl('files.deleted_path_from_where', { path, where: where(storage) }))
@@ -199,7 +200,7 @@ export const Files = () => {
       try {
         const r =
           kind === 'delete'
-            ? await fetch('/api/gcode-files/delete', body(i.storage, i.path))
+            ? await deleteRetrying(fetch, '/api/gcode-files/delete', body(i.storage, i.path))
             : await fetch('/api/gcode-files/copy', body(i.storage, `${dest}\n${i.path}`))
         if (!r.ok) throw Error(await failure(r, kind === 'delete'))
         if (kind === 'delete') toggle(key(i), false)
