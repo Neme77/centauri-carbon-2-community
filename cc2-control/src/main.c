@@ -1576,7 +1576,10 @@ static int gcode_usb_prune(const mqtt_client *mqtt, const char *keep) {
 }
 
 /* Removes the CC2_USB_*.part files a copy leaves behind when CC2 Control ends during it (update, power
- * loss). Runs once at start, before any copy can run; only regular, singly linked files. */
+ * loss). Runs once at start; only regular, singly linked files untouched for GCODE_USB_PART_STALE_SECONDS.
+ * A running copy writes every 64 KiB, so a fresh .part may belong to a copy of another instance on the same
+ * folders (a test instance) and stays. A copy stuck that long fails at its rename and is never printed. */
+#define GCODE_USB_PART_STALE_SECONDS 600
 static int gcode_usb_part_cleanup(void) {
     DIR *dir = opendir(gcode_internal_root);
     if (!dir) return 0;
@@ -1587,7 +1590,8 @@ static int gcode_usb_part_cleanup(void) {
             length < 5 || strcmp(entry->d_name + length - 5, ".part")) continue;
         char path[PATH_MAX_LOCAL * 2]; struct stat info;
         if (snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, entry->d_name) >= (int)sizeof(path) ||
-            lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 || unlink(path)) continue;
+            lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 ||
+            info.st_mtime > time(NULL) - GCODE_USB_PART_STALE_SECONDS || unlink(path)) continue;
         fprintf(stderr, "USB import cleanup: removed leftover %s\n", entry->d_name);
         removed++;
     }
@@ -1887,7 +1891,11 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
             }
             if (!result && (ferror(check) || read_back != copied || back != hash)) result = GCODE_IMPORT_UNVERIFIED;
         }
-        if (check) fclose(check);
+        /* The read back fills the cache with the whole copy: drop it again (as the copy does every 8 MiB). */
+        if (check) {
+            if (write_out && posix_fadvise(fileno(check), 0, 0, POSIX_FADV_DONTNEED) == 0) usb_copy_readback_dropped = 1;
+            fclose(check);
+        }
     }
     if (result || rename(temporary, destination) != 0) {
         unlink(temporary);
@@ -2091,6 +2099,31 @@ static int gcode_has_adaptive_mesh(const char *root, const char *relative, int *
     failed |= ferror(file);
     fclose(file);
     return failed ? -1 : 0;
+}
+
+/* The mesh and the tool check in one pass, lines cut as the two fgets scans cut them (gcode_stream_scan).
+ * For the start worker; ends as failed on a cancel. */
+static int gcode_scan_both(const char *root, const char *relative, int *adaptive,
+                           int tools[GCODE_TOOLS_MAX], size_t *tool_count) {
+    char path[PATH_MAX_LOCAL * 2];
+    if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
+    FILE *file = fopen(path, "rb");
+    if (!file) return -1;
+    atomic_fetch_add(&gcode_scan_passes, 1);
+    static _Thread_local gcode_stream_scan scan; static _Thread_local char buffer[65536];
+    memset(&scan, 0, sizeof(scan));
+    size_t count; int failed = 0;
+    while ((count = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        if (gcode_scan_cancelled()) { failed = 1; break; }
+        gcode_stream_scan_feed(&scan, buffer, count);
+    }
+    failed |= ferror(file);
+    fclose(file);
+    if (failed) return -1;
+    gcode_stream_scan_finish(&scan);
+    *adaptive = scan.adaptive;
+    gcode_tools_list(scan.present, tools, tool_count);
+    return 0;
 }
 
 static int gcode_request_file(const char *body, size_t body_len,
@@ -2688,6 +2721,14 @@ static size_t usb_start_length;
  * the start was dispatched. The worker stops copying after the current block and leaves
  * nothing behind; the print is never sent. */
 static atomic_int usb_start_cancelled;
+/* Room for the copy, made right before it is written: the worker sets 1 with the size and name once the
+ * checks before the copy passed and the copy does not fit; the main loop (which may consult the printer
+ * state for gcode_delete_guard) removes old copies and sets 2. The worker waits for that at most
+ * USB_START_ROOM_WAIT_MS and stops waiting on a cancel; the copy then checks the room itself. */
+#define USB_START_ROOM_WAIT_MS 2000
+static atomic_int usb_start_room;
+static uint64_t usb_start_room_size;
+static char usb_start_room_name[PATH_MAX_LOCAL];
 /* Test seam: runs on the worker right before the copy. */
 static void (*usb_start_copy_hook)(void);
 
@@ -2732,10 +2773,11 @@ static void *usb_start_worker(void *unused) {
         memcpy(job->detected, decided.tools, decided.tool_count * sizeof(decided.tools[0]));
     } else {
         gcode_scan_cancel = &usb_start_cancelled;
-        job->scan_failed = gcode_has_adaptive_mesh(root, job->filename, &job->adaptive) != 0;
-        if (!job->scan_failed && job->slot_count)
-            job->detect_failed = gcode_detect_tools(root, job->filename, job->detected,
-                                                    &job->detected_count, NULL) != 0;
+        if (job->slot_count) /* both checks read the whole file: one pass */
+            job->scan_failed = job->detect_failed =
+                gcode_scan_both(root, job->filename, &job->adaptive, job->detected, &job->detected_count) != 0;
+        else /* the mesh check alone stops at the first leveling line */
+            job->scan_failed = gcode_has_adaptive_mesh(root, job->filename, &job->adaptive) != 0;
         gcode_scan_cancel = NULL;
     }
     /* A start the scan already refuses is answered without copying the file. */
@@ -2750,6 +2792,15 @@ static void *usb_start_worker(void *unused) {
         if (gcode_usb_import_name(job->filename, existing) == 0 &&
             snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, existing) < (int)sizeof(path))
             job->replaced = lstat(path, &info) == 0;
+        if (job->source.known && (uint64_t)job->source.size > 0 &&
+            !usb_import_has_space((uint64_t)job->source.size, 0) &&
+            gcode_usb_import_name(job->filename, usb_start_room_name) == 0) {
+            usb_start_room_size = (uint64_t)job->source.size;
+            atomic_store(&usb_start_room, 1);
+            for (int waited = 0; waited < USB_START_ROOM_WAIT_MS && atomic_load(&usb_start_room) == 1 &&
+                                 !atomic_load(&usb_start_cancelled); waited += 5)
+                nanosleep(&(struct timespec){0, 5000000}, NULL);
+        }
         if (usb_start_copy_hook) usb_start_copy_hook();
         job->import_error = gcode_import_usb(job->filename, job->imported, &job->source,
                                              &usb_start_cancelled, &job->import_copied, 1,
@@ -2792,29 +2843,16 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
         *status = 400; return 0;
     }
-    /* An internal file that cannot start anyway (no printer link, or the printer is not idle) gets the
-     * synchronous checks, as before this worker existed: the same refusal, in the same order (file checks
-     * first), at once and without a worker. Both conditions are refused there before anything is sent. */
-    const char *storage_end = memchr(body, '\n', body_len);
-    size_t storage_len = storage_end ? (size_t)(storage_end - body) : body_len;
-    int internal = !(storage_len == 3 && memcmp(body, "usb", 3) == 0);
-    if (internal && (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status || mqtt->machine_status != 1)) {
-        *status = gcode_start_run(fd, mqtt, body, body_len, NULL, NULL);
-        return 0;
-    }
+    /* A start that cannot go out anyway (no printer link, or the printer is not idle) is refused by
+     * USB_START_CHECK below after the request and file checks, before any file is read and without a
+     * worker; the same messages as before, for internal memory and USB alike. */
     memset(&usb_start, 0, sizeof(usb_start));
     usb_start.stage = USB_START_CHECK;
     if ((*status = gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start)) != 0) return 0;
     memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
     usb_start_length = body_len;
-    if (!usb_start.internal) {
-        char source[PATH_MAX_LOCAL * 2], name[PATH_MAX_LOCAL]; struct stat info;
-        if (gcode_resolved_path(gcode_usb_root, usb_start.filename, source, sizeof(source)) &&
-            stat(source, &info) == 0 && S_ISREG(info.st_mode) && info.st_size >= 0 &&
-            gcode_usb_import_name(usb_start.filename, name) == 0)
-            gcode_usb_make_room(mqtt, (uint64_t)info.st_size, name);
-    }
     usb_start_trays_note(mqtt);
+    atomic_store(&usb_start_room, 0);
     usb_start_canvas_waiting = 0;
     usb_start_cancelled = 0;
     atomic_store(&usb_start_done, 0);
@@ -2852,6 +2890,9 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
  * asks the printer for one (canvas_refresh_due, sent by mqtt_tick) and waits up to USB_START_CANVAS_WAIT_MS
  * for a new canvas_revision, without blocking. An emergency stop or a client that leaves ends the wait. */
 #define USB_START_CANVAS_WAIT_MS 10000
+/* With #352 (fresh report asked for before a queued start): its report is the one usb_start_trays_note
+ * keeps at the beginning, and this request after the copy is the second one. When the two are merged,
+ * usb_start_trays_note runs after #352's report, not before it. */
 /* No fresh report within the wait: 1 refuses the start (the safe side), 0 compares with the stored report
  * as before. The one place to change this. */
 #define USB_START_CANVAS_SILENT_REFUSES 1
@@ -2893,6 +2934,10 @@ static int usb_start_trays_refuse(int fd) {
 static void usb_start_tick(mqtt_client *mqtt) {
     if (!usb_start_active()) return;
     if (!usb_start_cancelled && usb_start_client_gone(usb_start_fd)) usb_start_cancelled = 1;
+    if (atomic_load(&usb_start_room) == 1) {
+        if (!usb_start_cancelled) gcode_usb_make_room(mqtt, usb_start_room_size, usb_start_room_name);
+        atomic_store(&usb_start_room, 2);
+    }
     if (!atomic_load(&usb_start_done)) return;
     int fd = usb_start_fd, status = 409;
     if (usb_start_cancelled == 2) {
@@ -2903,7 +2948,7 @@ static void usb_start_tick(mqtt_client *mqtt) {
         if (waited > 0) return;
         usb_start.stage = USB_START_PREPARED;
         if (waited < 0) {
-            const char *error = "{\"accepted\":false,\"error\":\"The Canvas did not report its trays after the copy; start the print again\"}\n";
+            const char *error = "{\"accepted\":false,\"error\":\"The Canvas did not report its trays after the copy; check that the Canvas is connected, then start the print again\"}\n";
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
             if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
         } else if (usb_start_trays_changed(mqtt, usb_start_body, usb_start_length)) {
