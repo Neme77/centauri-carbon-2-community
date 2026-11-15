@@ -75,7 +75,11 @@ async function clearOrcaPending(generation: number) {
 let fileAnalysisPending = false
 
 // Opens the confirmation dialog; a print is never started without the operator confirming the mapping.
-export async function startFile(storage: string, path: string, size?: number | null) {
+export async function startFile(storage: string, path: string) {
+  return startFileOfSize(storage, path, null)
+}
+// The same with the file's size, so the page waits as long as the start of that file needs (start-timeout.ts).
+export async function startFileOfSize(storage: string, path: string, size: number | null) {
   if (pending.get().job || fileAnalysisPending) return
   fileAnalysisPending = true
   notify(t('print.analysing_file'))

@@ -16,7 +16,7 @@ assert.equal(startTimeoutMs(Number.MAX_SAFE_INTEGER), 1200000, 'any size: at mos
 const read = file => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')
 assert.match(read('pages/print-dialog.tsx'), /startTimeoutMs\(job\.size\)/, 'the print dialog passes the file size')
 assert.match(read('lib/queue.ts'), /startTimeoutMs\(size\)/, 'the queue start passes the job size')
-assert.match(read('pages/files.tsx'), /startFile\(e\.storage, e\.file\.path, e\.file\.size\)/, 'the file list hands the size on')
+assert.match(read('pages/files.tsx'), /startFileOfSize\(e\.storage, e\.file\.path, e\.file\.size\)/, 'the file list hands the size on')
 // When the wait runs out the page says so plainly, in every language, instead of a bare abort.
 assert.match(read('lib/api.ts'), /print\.start_no_answer/, 'a start that runs out of time gets its own message')
 for (const lang of ['en', 'de', 'fr', 'es', 'it', 'pl', 'cs', 'hu', 'tr', 'ru', 'zh']) {

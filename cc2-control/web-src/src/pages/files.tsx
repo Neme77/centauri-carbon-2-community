@@ -11,7 +11,7 @@ import { errText, notify, request } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { duration, fileSize } from '@/lib/format'
 import { compareFileDates, fileModified } from '@/lib/file-date'
-import { startFile } from '@/pages/print-dialog'
+import { startFileOfSize } from '@/pages/print-dialog'
 import { QueuedChip } from '@/components/queue-next'
 
 type Entry = { storage: 'internal' | 'usb'; file: any }
@@ -360,7 +360,7 @@ export const Files = () => {
                     class="px-2.5"
                     onClick={ev => {
                       ev.stopPropagation()
-                      startFile(e.storage, e.file.path, e.file.size)
+                      startFileOfSize(e.storage, e.file.path, e.file.size)
                     }}
                   >
                     <Play {...I} />
@@ -391,7 +391,7 @@ export const Files = () => {
             </p>
           ))}
         </Card>
-        <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path, e.file.size)} onDelete={remove} />
+        <Detail entry={sel} onPrint={e => startFileOfSize(e.storage, e.file.path, e.file.size)} onDelete={remove} />
       </div>
     </Page>
   )
