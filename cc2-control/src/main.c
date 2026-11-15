@@ -2727,8 +2727,9 @@ static size_t usb_start_length;
 static atomic_int usb_start_cancelled;
 /* Room for the copy, made right before it is written: the worker sets 1 with the size and name once the
  * checks before the copy passed and the copy does not fit; the main loop (which may consult the printer
- * state for gcode_delete_guard) removes old copies and sets 2. The worker waits for that at most
- * USB_START_ROOM_WAIT_MS and stops waiting on a cancel; the copy then checks the room itself. */
+ * state for gcode_delete_guard) takes it up (3), removes old copies and sets 2. The worker waits at most
+ * USB_START_ROOM_WAIT_MS for it to be taken up and stops waiting on a cancel; then it withdraws the wish
+ * (1 -> 0), so nothing is removed for a start that went on without room; the copy checks the room itself. */
 #define USB_START_ROOM_WAIT_MS 2000
 static atomic_int usb_start_room;
 static uint64_t usb_start_room_size;
@@ -2805,6 +2806,11 @@ static void *usb_start_worker(void *unused) {
             for (int waited = 0; waited < USB_START_ROOM_WAIT_MS && atomic_load(&usb_start_room) == 1 &&
                                  !atomic_load(&usb_start_cancelled); waited += 5)
                 nanosleep(&(struct timespec){0, 5000000}, NULL);
+            /* Given up (1 -> 0): the main loop no longer makes room for this start. Taken up (3): it is removing
+             * old copies right now, so the copy waits for it to finish; that takes no stick reads. */
+            int asked = 1;
+            if (!atomic_compare_exchange_strong(&usb_start_room, &asked, 0))
+                while (atomic_load(&usb_start_room) == 3) nanosleep(&(struct timespec){0, 5000000}, NULL);
         }
         if (usb_start_copy_hook) usb_start_copy_hook();
         job->import_error = gcode_import_usb(job->filename, job->imported, &job->source,
@@ -2938,7 +2944,8 @@ static int usb_start_trays_refuse(int fd) {
 static void usb_start_tick(mqtt_client *mqtt) {
     if (!usb_start_active()) return;
     if (!usb_start_cancelled && usb_start_client_gone(usb_start_fd)) usb_start_cancelled = 1;
-    if (atomic_load(&usb_start_room) == 1) {
+    int room_asked = 1; /* 1 -> 3: taken up, unless the worker gave up waiting (1 -> 0) first */
+    if (atomic_compare_exchange_strong(&usb_start_room, &room_asked, 3)) {
         if (!usb_start_cancelled) gcode_usb_make_room(mqtt, usb_start_room_size, usb_start_room_name);
         atomic_store(&usb_start_room, 2);
     }
