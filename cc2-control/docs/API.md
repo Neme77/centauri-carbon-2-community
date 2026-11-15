@@ -290,18 +290,21 @@ A `POST /api/gcode-files/print` from `usb` copies the file into internal memory 
 `CC2_USB_<hash>_<name>` and prints that copy. The copy needs free space for itself, and once it
 has replaced an earlier copy of the same name the 16 MiB storage reserve that uploads keep must
 remain (the earlier copy counts towards the reserve, not towards the room the copy is written to);
-otherwise the start is refused before anything is written
+when that room is missing, older `CC2_USB_` copies are removed first, oldest first and only those the
+cleanup after a start may remove, but only when that gives enough room; otherwise nothing is removed and
+the start is refused before anything is written
 (`507`, `Insufficient free space for the USB copy and storage reserve`). The USB file must be the
 one that was scanned: if its size, inode or modification time differs, or fewer bytes were read
 than it holds, the copy is discarded (`507`, `The USB file changed while it was copied`). After
 `fsync` the copy is read back and compared with the bytes read from the stick (64-bit FNV-1a and
 length); a mismatch discards it (`507`, `The internal copy of the USB file failed verification`).
 Only a verified copy is renamed from its `.part` name. An emergency stop or a client that leaves
-stops the copy after the current 64 KiB block and removes the `.part` file; an earlier copy with
-the same name is left as it was.
+stops the scan before the copy after the current line, the copy and its read back after the current
+64 KiB block, and removes the `.part` file; an earlier copy with the same name is left as it was. A
+`CC2_USB_` `.part` file left behind when CC2 Control ended during a copy is removed when it starts.
 The copy runs on its worker thread at normal priority and without pauses. Every 8 MiB it writes the
-copy out and drops those pages of the source and the copy from the cache, so a large file does not fill
-the printer's memory. The synchronous import of the print queue is not written out early.
+copy out and drops those pages of the source and the copy from the cache, so the copy does not pile up
+unwritten data in memory; the scan before and the read back after the copy are ordinary cached reads.
 When the print dialog inspected the same file just before (`POST /api/gcode-files/inspect`, same
 device, inode, size, modification and change time), the start takes its leveling and Canvas tool
 decision from that cached inspection instead of reading the file again, so a refused start still

@@ -1669,13 +1669,13 @@ static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_
 }
 #define GCODE_COPY_HASH_SEED 14695981039346656037ULL
 /* A USB start copies on its worker thread at normal priority, without pauses: every USB_COPY_FLUSH_BYTES
- * it writes the copy out and drops those pages of source and copy from the cache, so a large file does
- * not fill the printer's memory with dirty and cached pages (measured in a container: 7 to 8 MB peak
- * dirty instead of 26 MB or more, at no extra time). Earlier versions also paused after every block and
- * lowered the worker's priority; on the printer that doubled the copy of 500 MB (68 s instead of 32 s),
- * and under load a start at lowered priority took 161 s instead of 19 s. The printer's mq-deadline
- * scheduler ignores I/O priorities anyway. The synchronous import of the print queue runs on the main
- * loop and is not written out early. */
+ * it writes the copy out and drops those pages of source and copy from the cache, so the copy does not
+ * pile up unwritten data in the printer's memory. This covers the copy only: the scan before it and the
+ * read back after it go through the cache as any read does. Earlier versions also paused after every
+ * block and lowered the worker's priority; the lowered priority also slowed the scan of internal starts,
+ * and the printer's mq-deadline scheduler ignores I/O priorities. A start without the worker
+ * (gcode_start_run without `usb`; the program no longer starts a USB file that way) is not written out
+ * early. */
 #define USB_COPY_FLUSH_BYTES ((size_t)8 << 20)
 /* For tests, about the last import: early write-outs, bytes dropped from the cache. */
 static unsigned long usb_copy_flushes;
@@ -1794,11 +1794,11 @@ static int gcode_stream_scan_matches(const gcode_stream_scan *scan, const gcode_
  * upload reserve, is read back from storage and compared with the bytes read from the stick, and
  * is published (renamed from .part) only when it matches. `expected`, when set, is the file as it
  * was before the scan: a different or changed file is not copied. `cancel`, when set, stops the
- * copy after the current block. Returns 0 or a GCODE_IMPORT_* reason; nothing is left behind on
+ * copy after the current block and the read back after the current block. Returns 0 or a GCODE_IMPORT_* reason; nothing is left behind on
  * failure, and an earlier import of the same name stays as it was. */
 static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
                             const gcode_source_stamp *expected, const atomic_int *cancel,
-                            size_t *copied_out, int throttle, const gcode_scan_expect *decided) {
+                            size_t *copied_out, int write_out, const gcode_scan_expect *decided) {
     char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
     char temporary[PATH_MAX_LOCAL * 2];
     if (copied_out) *copied_out = 0;
@@ -1845,7 +1845,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
             if (ferror(input)) result = GCODE_IMPORT_FAILED;
             break;
         }
-        if (throttle && copied - written_out >= USB_COPY_FLUSH_BYTES) {
+        if (write_out && copied - written_out >= USB_COPY_FLUSH_BYTES) {
             if (usb_copy_write_out(output, input, written_out, copied) != 0) { result = GCODE_IMPORT_FAILED; break; }
             written_out = copied;
             if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
@@ -1870,7 +1870,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     if (!result && fsync(fileno(output)) != 0) result = GCODE_IMPORT_FAILED;
     /* Drop the synced pages, so the read back below comes from storage where the kernel allows it. */
     if (!result) (void)posix_fadvise(fileno(output), 0, 0, POSIX_FADV_DONTNEED);
-    if (!result && throttle) (void)posix_fadvise(fileno(input), 0, 0, POSIX_FADV_DONTNEED); /* the rest of the source */
+    if (!result && write_out) (void)posix_fadvise(fileno(input), 0, 0, POSIX_FADV_DONTNEED); /* the rest of the source */
     if (fclose(output) != 0 && !result) result = GCODE_IMPORT_FAILED;
     fclose(input);
     if (!result) {

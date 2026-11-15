@@ -154,7 +154,7 @@ int main(void) {
     usb_start_tick(&mqtt);
     assert(answer(peer, response, sizeof(response)) == 507 && strstr(response, "free space"));
     assert(starts == 0 && leftovers() == 0);
-    /* The same holds for the synchronous start the print queue uses. */
+    /* The same holds for a start without the worker (the program no longer starts USB files this way). */
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     assert(gcode_start_response(pair[0], &mqtt, body, strlen(body), NULL) == 507);
     close(pair[0]);

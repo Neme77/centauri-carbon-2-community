@@ -7,7 +7,7 @@
 
 /* A USB start copies on its worker at normal priority and without pauses, and writes its data out every
  * 8 MiB, dropping those pages of source and copy; an emergency stop ends the copy after the current
- * 64 KiB block, and the synchronous queue import is not written out early. */
+ * 64 KiB block, and a start without the worker (not used for USB by the program) is not written out early. */
 static int failures;
 static void expect(int ok, const char *what) {
     printf("%s: %s\n", ok ? "PASS" : "FAIL", what);
@@ -23,7 +23,7 @@ static int fake_uds(const char *q, char **r, size_t *l) {
 }
 #define BLOCKS 8
 static char content[BLOCKS * 65536 + 777];
-static int worker_nice = -100, worker_ioprio = -1;
+static int worker_nice = -100, worker_ioprio = -1, main_ioprio = -1;
 static void sample_worker(void) {
 #if defined(__linux__) && defined(SYS_gettid)
     pid_t tid = (pid_t)syscall(SYS_gettid);
@@ -80,17 +80,20 @@ int main(void) {
     static const char body[] = "usb\npart.gcode\n\nA\nsaved\n0";
     errno = 0; int main_nice = getpriority(PRIO_PROCESS, 0);
 
-    /* The dialog start: the worker keeps the normal priority and does not pause. */
+    /* The dialog start: the worker keeps the priority of the main loop. */
+#if defined(__linux__) && defined(SYS_ioprio_get)
+    main_ioprio = (int)syscall(SYS_ioprio_get, 1, 0);
+#endif
     usb_start_copy_hook = sample_worker;
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
     for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
     usb_start_tick(&mqtt);
-    expect(answer(pair[1]) == 202 && copies() == 1, "the throttled copy is still started");
+    expect(answer(pair[1]) == 202 && copies() == 1, "the copy is started");
     usb_start_copy_hook = NULL;
     expect(worker_nice == main_nice, "the copy keeps the normal priority on its worker thread");
-    if (worker_ioprio < 0) puts("SKIP I/O class: ioprio_get unavailable here");
-    else expect(worker_ioprio != (2 << 13 | 7), "the copy is not moved to the lowest best-effort I/O level");
+    if (worker_ioprio < 0 || main_ioprio < 0) puts("SKIP I/O class: ioprio_get unavailable here");
+    else expect(worker_ioprio == main_ioprio, "the copy keeps the I/O priority of the main loop");
     errno = 0;
     expect(getpriority(PRIO_PROCESS, 0) == main_nice, "the main loop keeps its priority");
 
@@ -121,7 +124,7 @@ int main(void) {
                round ? "a file of exactly 16 MiB is written out twice, the second time at its end"
                      : "16 MiB and a rest are written out twice, the rest by the final sync");
         expect(usb_copy_dropped_out == 2 * USB_COPY_FLUSH_BYTES && usb_copy_dropped_in == 2 * USB_COPY_FLUSH_BYTES,
-               "each written-out range is dropped from the cache for the copy and for the source");
+               "the kernel accepted the cache drop of each written-out range for the copy and the source (that pages are gone is not checked)");
         /* The copy still reads back the same bytes. */
         char copy[PATH_MAX_LOCAL + 8] = "";
         DIR *dir = opendir("gcode"); assert(dir); struct dirent *entry;
@@ -141,13 +144,13 @@ int main(void) {
         expect(same && total == size, "the written-out copy is byte for byte the USB file");
     }
 
-    /* The queue's synchronous import runs on the main loop: no early write-out, no priority change. */
+    /* A start without the worker (the program no longer starts USB files this way): no early write-out. */
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-    expect(gcode_start_response(pair[0], &mqtt, body, strlen(body), NULL) == 202, "the synchronous import is started");
+    expect(gcode_start_response(pair[0], &mqtt, body, strlen(body), NULL) == 202, "the start without the worker is started");
     close(pair[0]); (void)answer(pair[1]);
     errno = 0;
     expect(usb_copy_flushes == 0 && getpriority(PRIO_PROCESS, 0) == main_nice,
-           "the synchronous import neither writes out early nor lowers the main loop");
+           "the start without the worker neither writes out early nor lowers the main loop");
 
     /* An emergency stop between two blocks ends the copy after the current block: no further block. */
     usb_copy_block_hook = note_block;
