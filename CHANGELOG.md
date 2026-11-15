@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Native touchscreen language follow-up: cover qualified English Home/System Version/control literals for Hungarian, Polish and Czech; adopt Hungarian reviewer wording for Unload, OFF and the model fan, retaining the compact Canvas hint. Coordinated by **Neme77**, with Hungarian review by **pezso92** and Polish user feedback; new label hooks still require physical validation before release (PR pending).
+- Native touchscreen language follow-up: cover qualified English Home/System Version/control literals for Hungarian, Polish and Czech; adopt Hungarian reviewer wording for Unload, OFF and the model fan, retaining the compact Canvas hint. Coordinated by **Neme77**, with Hungarian review by **pezso92** and Polish user feedback; new label hooks still require physical validation before release (#383).
 
 - Complete 698 untranslated panel entries across Czech, Polish, Hungarian, French, Spanish, Russian, Italian and Turkish, including RFID, external feed and the print queue. Preserve existing translations and technical terms; reject new English copies in locale checks and exercise all ten non-English languages in browser tests. AI-assisted translation completion coordinated by **Neme77** (#375); native-speaker wording review remains welcome.
 
