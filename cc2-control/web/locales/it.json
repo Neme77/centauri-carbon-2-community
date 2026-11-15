@@ -397,6 +397,7 @@
   "print.orcaslicer_upload_complete_choose": "Caricamento da OrcaSlicer completato. Scegli la bobina Canvas e conferma per avviare la stampa.",
   "print.print_not_started": "Stampa non avviata:",
   "print.canvas_unreported": "Stampa non avviata: il Canvas non ha segnalato i suoi slot. Verifica che il Canvas sia collegato, poi riavvia, scegli altre bobine o annulla.",
+  "print.usb_unresponsive": "Stampa non avviata: la chiavetta USB non risponde. Rimuovila, ricollegala, poi riavvia.",
   "print.start_no_answer": "Nessuna risposta entro {minutes} minuti, quindi l’avvio è stato annullato. Controlla la chiavetta USB, poi riavvia.",
   "print.print_request_submitted_waiting": "Richiesta di stampa inviata. In attesa dello stato della stampante.",
   "print.print_setup": "Impostazione della stampa",

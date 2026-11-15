@@ -397,6 +397,7 @@
   "print.orcaslicer_upload_complete_choose": "OrcaSlicer-Upload abgeschlossen. Canvas-Spool wählen und bestätigen, um den Druck zu starten.",
   "print.print_not_started": "Druck nicht gestartet:",
   "print.canvas_unreported": "Druck nicht gestartet: Der Canvas hat seine Fächer nicht gemeldet. Prüfen Sie, ob der Canvas verbunden ist, und starten Sie dann erneut, wählen Sie andere Spools oder brechen Sie ab.",
+  "print.usb_unresponsive": "Druck nicht gestartet: Der USB-Stick antwortet nicht. Ziehen Sie ihn ab, stecken Sie ihn wieder ein und starten Sie dann erneut.",
   "print.start_no_answer": "Keine Antwort innerhalb von {minutes} Minuten, daher wurde der Start abgebrochen. USB-Stick prüfen und erneut starten.",
   "print.print_request_submitted_waiting": "Druckanfrage übermittelt. Warten auf den Druckerstatus.",
   "print.print_setup": "Druckeinrichtung",

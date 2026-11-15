@@ -397,6 +397,7 @@
   "print.orcaslicer_upload_complete_choose": "Envoi depuis OrcaSlicer terminé. Choisissez la bobine Canvas et confirmez pour lancer l'impression.",
   "print.print_not_started": "Impression non lancée :",
   "print.canvas_unreported": "Impression non lancée : le Canvas n’a pas signalé ses emplacements. Vérifiez que le Canvas est connecté, puis relancez, choisissez d’autres bobines ou annulez.",
+  "print.usb_unresponsive": "Impression non lancée : la clé USB ne répond pas. Retirez-la, rebranchez-la, puis relancez.",
   "print.start_no_answer": "Pas de réponse en {minutes} minutes, le démarrage a donc été annulé. Vérifiez la clé USB, puis relancez.",
   "print.print_request_submitted_waiting": "Demande d'impression envoyée. En attente de l'état de l'imprimante.",
   "print.print_setup": "Préparation de l'impression",

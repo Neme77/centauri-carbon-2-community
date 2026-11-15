@@ -397,6 +397,7 @@
   "print.orcaslicer_upload_complete_choose": "OrcaSlicer zakończył przesyłanie. Wybierz szpulę Canvas i potwierdź, aby rozpocząć druk.",
   "print.print_not_started": "Druk nie został rozpoczęty:",
   "print.canvas_unreported": "Druk nie został rozpoczęty: Canvas nie zgłosił swoich gniazd. Sprawdź, czy Canvas jest podłączony, a następnie uruchom ponownie, wybierz inne szpule lub anuluj.",
+  "print.usb_unresponsive": "Druk nie został rozpoczęty: pamięć USB nie odpowiada. Wyjmij ją, podłącz ponownie i uruchom ponownie.",
   "print.start_no_answer": "Brak odpowiedzi w ciągu {minutes} minut, więc start został anulowany. Sprawdź pamięć USB i uruchom ponownie.",
   "print.print_request_submitted_waiting": "Wysłano żądanie druku. Oczekiwanie na stan drukarki.",
   "print.print_setup": "Ustawienia druku",

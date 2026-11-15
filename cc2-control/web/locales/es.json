@@ -397,6 +397,7 @@
   "print.orcaslicer_upload_complete_choose": "Carga de OrcaSlicer completa. Elija la bobina de Canvas y confirme para empezar a imprimir.",
   "print.print_not_started": "Impresion no iniciada:",
   "print.canvas_unreported": "Impresion no iniciada: el Canvas no informó de sus bandejas. Compruebe que el Canvas está conectado y vuelva a iniciar, elija otras bobinas o cancele.",
+  "print.usb_unresponsive": "Impresion no iniciada: la memoria USB no responde. Retírela, vuelva a conectarla y vuelva a iniciar.",
   "print.start_no_answer": "Sin respuesta en {minutes} minutos, así que se canceló el inicio. Comprueba la memoria USB y vuelve a iniciar.",
   "print.print_request_submitted_waiting": "Solicitud de impresion enviada. Esperando el estado de la impresora.",
   "print.print_setup": "Configuracion de impresion",

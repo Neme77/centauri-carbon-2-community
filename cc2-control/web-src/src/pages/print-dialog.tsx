@@ -319,7 +319,9 @@ const Form = ({ job }: { job: Pending }) => {
       setNote(
         reason === 'canvas_unreported'
           ? t('print.canvas_unreported')
-          : `${t('print.print_not_started')} ${errText(err)}`
+          : reason === 'usb_unresponsive'
+            ? t('print.usb_unresponsive')
+            : `${t('print.print_not_started')} ${errText(err)}`
       )
       setBusy(false)
     }

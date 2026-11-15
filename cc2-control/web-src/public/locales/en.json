@@ -397,6 +397,7 @@
   "print.orcaslicer_upload_complete_choose": "OrcaSlicer upload complete. Choose the Canvas spool and confirm to start printing.",
   "print.print_not_started": "Print not started:",
   "print.canvas_unreported": "Print not started: the Canvas did not report its trays. Check that the Canvas is connected, then start again, choose other spools or cancel.",
+  "print.usb_unresponsive": "Print not started: the USB stick does not respond. Remove it, plug it in again, then start again.",
   "print.start_no_answer": "No answer within {minutes} minutes, so the start was cancelled. Check the USB stick, then start again.",
   "print.print_request_submitted_waiting": "Print request submitted. Waiting for printer status.",
   "print.print_setup": "Print setup",
