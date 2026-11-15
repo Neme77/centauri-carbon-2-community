@@ -181,6 +181,25 @@ int main(void) {
     expect(status == 507 && exists("gcode/CC2_USB_00000001_a.gcode"),
            "a main loop too late for the room refuses the start and removes no old copy afterwards");
     unlink("gcode/CC2_USB_00000001_a.gcode");
+    /* 1d. An upload into a memory full of old USB copies: the oldest copies make room as for a USB start (before
+     * the upload begins, on the main loop), only as many as needed; without a fresh printer status nothing goes
+     * and the upload is refused with 507 as before. */
+    write_size("gcode/CC2_USB_00000001_a.gcode", MIB); age("gcode/CC2_USB_00000001_a.gcode", 1000);
+    {
+        struct statvfs room; assert(!fake_statvfs("gcode", &room));
+        unsigned long long missing = (unsigned long long)MIB + UPLOAD_STORAGE_MARGIN; /* what a 1 MiB upload needs */
+        expect(room.f_bavail < missing, "1d the upload does not fit without removing a copy");
+        mqtt.last_message = time(NULL) - 60;
+        assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+        expect(!upload_space_or_room(pair[0], &mqtt, gcode_internal_root, MIB, 1) && exists("gcode/CC2_USB_00000001_a.gcode"),
+               "1d without a fresh printer status no copy goes and the upload is refused");
+        close(pair[0]); close(pair[1]);
+        mqtt.last_message = time(NULL);
+        assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+        expect(upload_space_or_room(pair[0], &mqtt, gcode_internal_root, MIB, 1) && !exists("gcode/CC2_USB_00000001_a.gcode"),
+               "1d an upload into a full memory makes room from the oldest USB copy");
+        close(pair[0]); close(pair[1]);
+    }
     upload_statvfs = statvfs;
 
     /* 2a. Emergency stop during the scan before the copy: the scan ends, nothing is copied. */
