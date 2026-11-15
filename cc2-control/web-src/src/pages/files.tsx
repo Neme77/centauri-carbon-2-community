@@ -338,12 +338,14 @@ export const Files = () => {
                   >
                     {e.file.path}
                   </button>
-                  <QueuedChip storage={e.storage} path={e.file.path} />
-                  {tooLargeForPrinter(e.file.size) && (
-                    <Tag class="border-red text-red" title={t('files.not_printable_2gib')} data-not-printable>
-                      {t('files.not_printable')}
-                    </Tag>
-                  )}
+                  <span class="cc2-file-chips flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+                    <QueuedChip storage={e.storage} path={e.file.path} />
+                    {tooLargeForPrinter(e.file.size) && (
+                      <Tag class="border-red text-red" title={t('files.not_printable_2gib')} data-not-printable>
+                        {t('files.not_printable')}
+                      </Tag>
+                    )}
+                  </span>
                 </div>
                 <span class="hidden cc2-md:inline">{fileSize(e.file.size)}</span>
                 <span class="hidden cc2-md:inline">
