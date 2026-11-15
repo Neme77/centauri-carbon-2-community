@@ -2561,12 +2561,15 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
     }
     if (usb && usb->stage == USB_START_CHECK) {
         usb->internal = strcmp(storage, "usb") != 0;
-        if (!mqtt->connected || !mqtt->registered) {
+        /* A USB start is refused here, before the stick is read, as develop refuses it. An internal start keeps
+         * develop's order (request, file, then printer): the worker reads the file and the final check below
+         * answers, so a wrong mapping stays a 409 without a printer link (tests/test_gcode_files.py). */
+        if (!usb->internal && (!mqtt->connected || !mqtt->registered)) {
             const char *error = "{\"accepted\":false,\"error\":\"Printer MQTT is not ready\"}\n";
             respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
             return 503;
         }
-        if (!mqtt->have_machine_status || mqtt->machine_status != 1) {
+        if (!usb->internal && (!mqtt->have_machine_status || mqtt->machine_status != 1)) {
             const char *error = "{\"accepted\":false,\"error\":\"Starting a file requires an idle printer\"}\n";
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
             return 409;
@@ -2845,9 +2848,9 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
         *status = 400; return 0;
     }
-    /* A start that cannot go out anyway (no printer link, or the printer is not idle) is refused by
-     * USB_START_CHECK below after the request and file checks, before any file is read and without a
-     * worker; the same messages as before, for internal memory and USB alike. */
+    /* A start that cannot go out anyway (no printer link, or the printer is not idle): a USB start is refused
+     * by USB_START_CHECK below before the stick is read; an internal one is answered in develop's order after
+     * the file check, which reads the file on the worker instead of the main loop. */
     memset(&usb_start, 0, sizeof(usb_start));
     usb_start.stage = USB_START_CHECK;
     if ((*status = gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start)) != 0) return 0;
