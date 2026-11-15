@@ -313,6 +313,11 @@ copies nothing. The copy then scans the bytes it copies with the same line logic
 same decision; if it does not, the copy is discarded (`507`, `The USB file changed while it was
 copied`). Without such an entry (another client, a restart, another file inspected since) the file is
 scanned before the copy, as before.
+When the copy starts, CC2 Control notes the Canvas trays; after the copy it compares the trays the
+start's slot mapping names (status, type, name and colour). If one of them changed meanwhile, the copy
+is not printed (409 `The Canvas trays changed while the file was copied; start the print again`), and a
+queued USB job is dropped as a refused start. Without a fresh Canvas report at the start or at the end of
+the copy the trays are not compared.
 
 ## Delete print-history entries
 
