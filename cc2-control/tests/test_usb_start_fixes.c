@@ -70,6 +70,12 @@ static void serve(mqtt_client *mqtt) {
 static int copy_started;
 static void note_copy(void) { copy_started = 1; }
 static void cancel_now(const char *path) { (void)path; usb_start_cancelled = 2; }
+/* Runs the cleanup while a copy is between its write and its read back: the copy still holds its .part. */
+static int removed_during_copy = -1, part_there_during_copy;
+static void cleanup_during_copy(const char *path) {
+    removed_during_copy = gcode_usb_part_cleanup();
+    struct stat info; part_there_during_copy = lstat(path, &info) == 0;
+}
 /* Emergency stop after the second block of the phase `stop_phase` (0 scan in one pass, 1 read back). */
 static int stop_phase = -1, stop_blocks, blocks_after_stop;
 static void stop_in_block(int phase) {
@@ -310,6 +316,14 @@ int main(void) {
     expect(status == 202 && !exists("gcode/CC2_USB_0000000f_late.gcode.part") &&
            !exists("gcode/CC2_USB_0000000d_live.gcode.part"),
            "a USB start removes leftover .part files without a lock before it copies");
+    /* 3c. A running copy holds its own .part: a cleanup meanwhile (another instance starting) leaves it. */
+    usb_copy_synced_hook = cleanup_during_copy;
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    if (usb_start_begin(pair[0], &mqtt, body, strlen(body))) serve(&mqtt);
+    status = answer(pair[1]);
+    usb_copy_synced_hook = NULL;
+    expect(status == 202 && removed_during_copy == 0 && part_there_during_copy,
+           "a cleanup during a copy leaves the .part the copy holds");
 
     if (failures) { printf("%d FAIL\n", failures); return 1; }
     puts("PASS USB start fixes: room from old copies, stop in scan and read back, leftover .part removed");
