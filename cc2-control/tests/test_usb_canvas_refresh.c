@@ -211,6 +211,25 @@ int main(void) {
     expect(!usb_start_active(), "K2 and the worker is free again");
     usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS;
 
+    /* P: a start the check before the copy already refuses (a mapping that misses a tool) is answered at once with
+     * that refusal: neither the wait for a report after the copy nor the one at the start applies (nothing copied). */
+    static char twofile[700]; snprintf(twofile, sizeof(twofile), "%s/two.gcode", usb);
+    out = fopen(twofile, "w"); assert(out && fputs("T0\nG1 X1 E1\nT1\nG1 X2 E1\n", out) >= 0 && fclose(out) == 0);
+    idle(); canvas_list(RED_PLA(0, 1)); sent = starts_sent; machine.canvas_refresh_due = 0;
+    assert(usb_start_begin(begin(), &machine, "usb\ntwo.gcode\n0:1\nA\nsaved\n0\n\n", 28) == 1);
+    copied(); usb_start_tick(&machine);
+    expect(answered(), "P a start refused by the check is answered on the first tick, without waiting");
+    status = finish();
+    expect(status == 409 && starts_sent == sent && strstr(reply_body, "Canvas mapping does not match"),
+           "P with the check's own message");
+    /* P2: the same when the Canvas had not reported at the start. */
+    idle(); machine.canvas_snapshot_len = 0; sent = starts_sent; machine.canvas_refresh_due = 0;
+    assert(usb_start_begin(begin(), &machine, "usb\ntwo.gcode\n0:1\nA\nsaved\n0\n\n", 28) == 1);
+    copied(); usb_start_tick(&machine);
+    expect(answered(), "P2 without a report at the start: also answered on the first tick");
+    status = finish();
+    expect(status == 409 && strstr(reply_body, "Canvas mapping does not match"), "P2 with the check's own message");
+
     /* X: emergency stop while waiting for the report: refused at once, nothing sent. */
     idle(); canvas_list(RED_PLA(0, 1)); sent = starts_sent;
     assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
