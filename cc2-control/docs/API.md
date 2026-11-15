@@ -299,13 +299,9 @@ length); a mismatch discards it (`507`, `The internal copy of the USB file faile
 Only a verified copy is renamed from its `.part` name. An emergency stop or a client that leaves
 stops the copy after the current 64 KiB block and removes the `.part` file; an earlier copy with
 the same name is left as it was.
-The copy runs on its worker thread at low priority (nice 10, best-effort I/O class at level 7; not the
-idle class, which can starve under steady other I/O), pauses 2 ms after every full 64 KiB block and,
-every 8 MiB, writes the copy out and drops those pages of the source and the copy from the cache. This
-leaves processor time, storage and memory to the printer service and makes the copy longer (about 3 s
-for 75 MB, 10 s for 250 MB in a desktop container). The pause is slept in 0.2 ms slices, so an
-emergency stop during it ends the copy without writing another block. The synchronous import of the
-print queue is not slowed down.
+The copy runs on its worker thread at normal priority and without pauses. Every 8 MiB it writes the
+copy out and drops those pages of the source and the copy from the cache, so a large file does not fill
+the printer's memory. The synchronous import of the print queue is not written out early.
 When the print dialog inspected the same file just before (`POST /api/gcode-files/inspect`, same
 device, inode, size, modification and change time), the start takes its leveling and Canvas tool
 decision from that cached inspection instead of reading the file again, so a refused start still

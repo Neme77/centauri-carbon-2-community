@@ -5,9 +5,9 @@
 #undef mqtt_start_print
 #include <assert.h>
 
-/* A USB start copies on its worker at low priority (nice 10, best-effort I/O level 7), pauses after each
- * full block and writes its data out every 8 MiB, dropping those pages of source and copy; the main
- * loop keeps its priority, and the synchronous queue import is not slowed down. */
+/* A USB start copies on its worker at normal priority and without pauses, and writes its data out every
+ * 8 MiB, dropping those pages of source and copy; an emergency stop ends the copy after the current
+ * 64 KiB block, and the synchronous queue import is not written out early. */
 static int failures;
 static void expect(int ok, const char *what) {
     printf("%s: %s\n", ok ? "PASS" : "FAIL", what);
@@ -39,19 +39,21 @@ static int answer(int peer) {
     response[used] = 0; close(peer);
     return used ? atoi(strchr(response, ' ') + 1) : -1;
 }
-/* Cancels the running start once its first block is written, while the worker pauses after it. */
+/* Cancels the running start while its first block is being copied: the hook holds the worker in that
+ * block until the stop is set, so the stop lands between two blocks of a file of several blocks. */
 static atomic_size_t first_copied;
-static struct timespec cancel_time;
 static atomic_int blocks_after_cancel;
 static void note_block(size_t copied) {
-    size_t none = 0; atomic_compare_exchange_strong(&first_copied, &none, copied);
+    size_t none = 0;
+    if (atomic_compare_exchange_strong(&first_copied, &none, copied)) {
+        while (!usb_start_cancelled) nanosleep(&(struct timespec){0, 100000}, NULL);
+        return;
+    }
     if (usb_start_cancelled) atomic_fetch_add(&blocks_after_cancel, 1);
 }
-static void *cancel_in_pause(void *unused) {
+static void *cancel_in_copy(void *unused) {
     (void)unused;
     while (!atomic_load(&first_copied)) nanosleep(&(struct timespec){0, 100000}, NULL);
-    nanosleep(&(struct timespec){0, 20000000}, NULL); /* well inside the 2 s pause */
-    clock_gettime(CLOCK_MONOTONIC, &cancel_time);
     usb_start_cancelled = 2;
     return NULL;
 }
@@ -78,7 +80,7 @@ int main(void) {
     static const char body[] = "usb\npart.gcode\n\nA\nsaved\n0";
     errno = 0; int main_nice = getpriority(PRIO_PROCESS, 0);
 
-    /* The dialog start: worker at nice 10 and best-effort I/O level 7, one pause after each full block. */
+    /* The dialog start: the worker keeps the normal priority and does not pause. */
     usb_start_copy_hook = sample_worker;
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
@@ -86,21 +88,19 @@ int main(void) {
     usb_start_tick(&mqtt);
     expect(answer(pair[1]) == 202 && copies() == 1, "the throttled copy is still started");
     usb_start_copy_hook = NULL;
-    expect(worker_nice == USB_COPY_NICE, "the copy runs at nice 10 on its worker thread");
+    expect(worker_nice == main_nice, "the copy keeps the normal priority on its worker thread");
     if (worker_ioprio < 0) puts("SKIP I/O class: ioprio_get unavailable here");
-    else expect(worker_ioprio == (2 << 13 | 7),
-                "the copy runs in the best-effort I/O class at its lowest level 7, not idle (which can starve)");
-    expect(usb_copy_pauses == BLOCKS, "one pause after each full block that more data follows");
+    else expect(worker_ioprio != (2 << 13 | 7), "the copy is not moved to the lowest best-effort I/O level");
     errno = 0;
     expect(getpriority(PRIO_PROCESS, 0) == main_nice, "the main loop keeps its priority");
 
-    /* A file of exactly whole blocks: the last full block is followed by the end, still one pause each. */
+    /* A file of exactly whole blocks: copied whole, and only synced at the end under 8 MiB. */
     assert(!truncate("usb/part.gcode", BLOCKS * 65536));
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
     for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
     usb_start_tick(&mqtt);
-    expect(answer(pair[1]) == 202 && usb_copy_pauses == BLOCKS, "a file of whole blocks pauses once per block");
+    expect(answer(pair[1]) == 202 && copies() == 1, "a file of whole blocks is copied and started");
     expect(usb_copy_flushes == 0, "a file under 8 MiB is only synced at the end");
 
     /* Every 8 MiB the copy is written out and those pages of source and copy are dropped. */
@@ -141,40 +141,30 @@ int main(void) {
         expect(same && total == size, "the written-out copy is byte for byte the USB file");
     }
 
-    /* The queue's synchronous import runs on the main loop: no pause, no priority change. */
+    /* The queue's synchronous import runs on the main loop: no early write-out, no priority change. */
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     expect(gcode_start_response(pair[0], &mqtt, body, strlen(body), NULL) == 202, "the synchronous import is started");
     close(pair[0]); (void)answer(pair[1]);
     errno = 0;
-    expect(usb_copy_pauses == 0 && usb_copy_flushes == 0 && getpriority(PRIO_PROCESS, 0) == main_nice,
-           "the synchronous import neither pauses, writes out early nor lowers the main loop");
+    expect(usb_copy_flushes == 0 && getpriority(PRIO_PROCESS, 0) == main_nice,
+           "the synchronous import neither writes out early nor lowers the main loop");
 
-    /* An emergency stop during a pause ends the copy at once, not when the pause is over. */
-    usb_copy_pause_us = 2000000;
+    /* An emergency stop between two blocks ends the copy after the current block: no further block. */
     usb_copy_block_hook = note_block;
-    pthread_t canceller; assert(!pthread_create(&canceller, NULL, cancel_in_pause, NULL));
+    pthread_t canceller; assert(!pthread_create(&canceller, NULL, cancel_in_copy, NULL));
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
     while (!atomic_load(&usb_start_done)) nanosleep(&(struct timespec){0, 100000}, NULL);
-    struct timespec stopped; clock_gettime(CLOCK_MONOTONIC, &stopped);
     assert(!pthread_join(canceller, NULL));
-    double after = (double)(stopped.tv_sec - cancel_time.tv_sec) + (stopped.tv_nsec - cancel_time.tv_nsec) / 1e9;
     int import_error = usb_start.import_error;
     usb_start_tick(&mqtt);
-    expect(answer(pair[1]) == 409 && import_error == GCODE_IMPORT_CANCELLED && after < 0.2,
-           "an emergency stop during a 2 s pause ends the copy within 0.2 s");
-    expect(atomic_load(&blocks_after_cancel) == 0, "and the copy writes no further block after it");
-    usb_copy_block_hook = NULL; usb_copy_pause_us = USB_COPY_PAUSE_US;
-
-    /* The pause is a setting: 0 switches it off. */
-    usb_copy_pause_us = 0;
-    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-    assert(usb_start_begin(pair[0], &mqtt, body, strlen(body)));
-    for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
-    usb_start_tick(&mqtt);
-    expect(answer(pair[1]) == 202 && usb_copy_pauses == 0, "a pause of 0 copies without pausing");
+    expect(answer(pair[1]) == 409 && import_error == GCODE_IMPORT_CANCELLED,
+           "an emergency stop during the copy refuses the start");
+    expect(atomic_load(&first_copied) == 65536 && atomic_load(&blocks_after_cancel) == 0,
+           "and the copy ends after the current 64 KiB block, writing no further block");
+    usb_copy_block_hook = NULL;
 
     if (failures) { printf("%d FAIL\n", failures); return 1; }
-    puts("PASS USB copy throttle: worker at low priority with a pause per block and write-out every 8 MiB, main loop and queue import unchanged");
+    puts("PASS USB copy throttle: worker at normal priority without pauses, write-out every 8 MiB, stop after the current block, queue import unchanged");
     return 0;
 }

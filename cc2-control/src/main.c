@@ -1603,56 +1603,18 @@ static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_
     return hash;
 }
 #define GCODE_COPY_HASH_SEED 14695981039346656037ULL
-/* A USB start copies on its worker thread at low priority: nice USB_COPY_NICE and the best-effort I/O
- * class at its lowest level 7. Not the idle class: that only gets I/O while nobody else uses the disk,
- * so steady other I/O (camera, logs) could starve the copy until the start times out. It pauses
- * USB_COPY_PAUSE_US after every full block that has more data after it, and every USB_COPY_FLUSH_BYTES
- * it writes the copy out and drops those pages of source and copy from the cache, so a large file
- * does not fill the printer's memory with dirty and cached pages (measured in a container: 250 MB peak
- * dirty about 20 MB instead of 160 MB or more). These values are starting values: whether they relieve
- * the printer is only measurable on the printer. The synchronous import of the print queue runs on the
- * main loop and is not slowed down. */
-#define USB_COPY_NICE 10
-#define USB_COPY_IOPRIO (2 << 13 | 7) /* IOPRIO_CLASS_BE, level 7 */
-#define USB_COPY_PAUSE_US 2000
+/* A USB start copies on its worker thread at normal priority, without pauses: every USB_COPY_FLUSH_BYTES
+ * it writes the copy out and drops those pages of source and copy from the cache, so a large file does
+ * not fill the printer's memory with dirty and cached pages (measured in a container: 7 to 8 MB peak
+ * dirty instead of 26 MB or more, at no extra time). Earlier versions also paused after every block and
+ * lowered the worker's priority; on the printer that doubled the copy of 500 MB (68 s instead of 32 s),
+ * and under load a start at lowered priority took 161 s instead of 19 s. The printer's mq-deadline
+ * scheduler ignores I/O priorities anyway. The synchronous import of the print queue runs on the main
+ * loop and is not written out early. */
 #define USB_COPY_FLUSH_BYTES ((size_t)8 << 20)
-static long usb_copy_pause_us = USB_COPY_PAUSE_US; /* test seam */
-/* For tests, about the last import: pauses taken, early write-outs, bytes dropped from the cache. */
-static unsigned long usb_copy_pauses, usb_copy_flushes;
+/* For tests, about the last import: early write-outs, bytes dropped from the cache. */
+static unsigned long usb_copy_flushes;
 static size_t usb_copy_dropped_in, usb_copy_dropped_out;
-static void usb_copy_lower_priority(void) {
-#if defined(__linux__) && defined(SYS_gettid)
-    pid_t tid = (pid_t)syscall(SYS_gettid);
-    (void)setpriority(PRIO_PROCESS, (id_t)tid, USB_COPY_NICE);
-#ifdef SYS_ioprio_set
-    (void)syscall(SYS_ioprio_set, 1 /* IOPRIO_WHO_PROCESS */, (int)tid, USB_COPY_IOPRIO);
-#endif
-#endif
-}
-/* The pause after a block, slept in slices of USB_COPY_PAUSE_SLICE_US up to a fixed end, so the whole
- * pause stays USB_COPY_PAUSE_US and an emergency stop during it ends the copy within one slice instead of
- * after the pause. Returns 1 when the copy was cancelled before or during the pause. */
-#define USB_COPY_PAUSE_SLICE_US 200
-static int usb_copy_pause_before(const struct timespec *a, const struct timespec *b) {
-    return a->tv_sec < b->tv_sec || (a->tv_sec == b->tv_sec && a->tv_nsec < b->tv_nsec);
-}
-static int usb_copy_pause(const atomic_int *cancel) {
-    struct timespec end, now;
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    long nanoseconds = end.tv_nsec + (usb_copy_pause_us % 1000000) * 1000;
-    end.tv_sec += usb_copy_pause_us / 1000000 + nanoseconds / 1000000000;
-    end.tv_nsec = nanoseconds % 1000000000;
-    for (;;) {
-        if (cancel && atomic_load(cancel)) return 1;
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        if (!usb_copy_pause_before(&now, &end)) return 0;
-        struct timespec slice = now;
-        slice.tv_nsec += USB_COPY_PAUSE_SLICE_US * 1000L;
-        if (slice.tv_nsec >= 1000000000) { slice.tv_sec++; slice.tv_nsec -= 1000000000; }
-        if (usb_copy_pause_before(&end, &slice)) slice = end;
-        while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &slice, NULL) == EINTR) {}
-    }
-}
 /* Writes bytes [from, to) of the copy to storage and waits for them, then drops them and the same range
  * of the source from the cache. A failed write-out fails the copy, as the final fsync would. */
 static int usb_copy_write_out(FILE *output, FILE *input, size_t from, size_t to) {
@@ -1775,7 +1737,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
     char temporary[PATH_MAX_LOCAL * 2];
     if (copied_out) *copied_out = 0;
-    usb_copy_pauses = usb_copy_flushes = 0; usb_copy_dropped_in = usb_copy_dropped_out = 0;
+    usb_copy_flushes = 0; usb_copy_dropped_in = usb_copy_dropped_out = 0;
     if (!gcode_resolved_path(gcode_usb_root, relative, source, sizeof(source))) return GCODE_IMPORT_FAILED;
     if (gcode_usb_import_name(relative, imported) != 0) return GCODE_IMPORT_FAILED;
     int length = snprintf(destination, sizeof(destination), "%s/%s",
@@ -1822,10 +1784,6 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
             if (usb_copy_write_out(output, input, written_out, copied) != 0) { result = GCODE_IMPORT_FAILED; break; }
             written_out = copied;
             if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
-        }
-        if (throttle && usb_copy_pause_us > 0) {
-            usb_copy_pauses++;
-            if (usb_copy_pause(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
         }
     }
     if (copied_out) *copied_out = copied;
@@ -2673,7 +2631,6 @@ static int analysis_cached_scan(const char *path, const struct stat *now, gcode_
 static void *usb_start_worker(void *unused) {
     (void)unused;
     gcode_usb_start *job = &usb_start;
-    usb_copy_lower_priority(); /* this thread only: the main loop keeps its priority */
     /* A start from internal memory runs the same checks here, so a large file does not hold up the
      * main loop either; it has nothing to copy, and the main loop compares the file's stamp again
      * before the start is sent. */
