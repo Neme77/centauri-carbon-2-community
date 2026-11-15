@@ -117,6 +117,7 @@ int VC_ENTRY(int argc,char **argv){
     if(!strcmp(argv[1],"--verify-stock-boot"))return vc_verify(CL_VERIFY_STOCK_BOOT,CL_STOCK_ACKED,CL_STOCK_VERIFIED);
     if(!strcmp(argv[1],"--check-active"))return vc_verify(CL_VERIFY_FILTER_BOOT,CL_ACTIVE,CL_ACTIVE);
     if(!strcmp(argv[1],"--remove-host"))return vc_remove_host();
+    if(!strcmp(argv[1],"--abort-staged-host"))return vc_abort_staged_host();
     if(!strcmp(argv[1],"--verify-disabled-boot"))return vc_verify_mode(CL_VERIFY_HOST_REMOVED,CL_HOST_REMOVE_INTENT,CL_DISABLED,1);
     if(!strcmp(argv[1],"--install-filter"))return vc_transfer(1);
     if(!strcmp(argv[1],"--restore-original"))return vc_transfer(0);
