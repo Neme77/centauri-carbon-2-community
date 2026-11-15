@@ -139,6 +139,15 @@ static void test_too_long(int signal_number) {
     if (write(2, text, sizeof(text) - 1) < 0) {}
     _exit(1);
 }
+static int copies_begun; /* the worker reached the point where the copy begins */
+static void copy_begins(void) { copies_begun++; }
+/* Ticks the main loop up to `ms`, answering each report asked for when `reports` is set; until answered. */
+static void tick_for(int ms, int reports) {
+    for (int i = 0; i < ms && usb_start_active(); ++i) {
+        if (reports && machine.canvas_refresh_due) { machine.canvas_refresh_due = 0; canvas_list(RED_PLA(0, 1)); }
+        idle(); usb_start_tick(&machine); if (usb_start_active()) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    }
+}
 int main(void) {
     signal(SIGALRM, test_too_long); alarm(300);
     char dir[] = "/tmp/cc2-canvasrefresh-XXXXXX";
@@ -208,17 +217,20 @@ int main(void) {
     machine.canvas_refresh_due = 0; canvas_list(GREEN_PLA(0, 1)); usb_start_tick(&machine);
     status = finish();
     expect(status == 409 && starts_sent == sent, "K the report from the start is compared: a swap during the copy refuses");
-    /* K2: no report at all, neither at the start nor within the wait: refused as strictly as after the copy. */
-    usb_start_canvas_wait_ms = 50;
+    /* K2: no report at all: the start waits for the first report BEFORE it copies (Weg 1) and is refused when the
+     * wait ends, without copying anything: the answer comes after the wait, not after a whole copy, and names the
+     * reason, so the page can offer to try again or change the mapping. */
+    usb_start_canvas_wait_ms = 50; usb_start_copy_hook = copy_begins; copies_begun = 0;
     idle(); machine.canvas_snapshot_len = 0; sent = starts_sent; machine.canvas_refresh_due = 0;
     assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
-    copied(); usb_start_tick(&machine);
-    nanosleep(&(struct timespec){0, 80000000}, NULL);
-    idle(); usb_start_tick(&machine);
+    tick_for(2000, 0);
     status = finish();
-    expect(status == 409 && starts_sent == sent && strstr(reply_body, "did not report its trays when the start began"),
-           "K2 no report when the start began: refused, never started unprotected");
+    expect(status == 409 && starts_sent == sent && strstr(reply_body, "did not report its trays when the start began") &&
+           strstr(reply_body, "\"reason\":\"canvas_unreported\""),
+           "K2 no report when the start began: refused with its reason, never started unprotected");
+    expect(copies_begun == 0, "K2 and nothing was copied: the refusal comes before the copy");
     expect(!usb_start_active(), "K2 and the worker is free again");
+    usb_start_copy_hook = NULL;
     usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS;
 
     /* P: a start the check before the copy already refuses (a mapping that misses a tool) is answered at once with
@@ -251,18 +263,17 @@ int main(void) {
     expect(status == 202 && starts_sent == sent + 1, "Z no mapping, never a report: 202 at once");
     /* F: CC2 Control just started, the start with a mapping comes before the first Canvas report, which arrives 1 s
      * later (measured on the printer: about 1 s): the start only waits, it is not refused. */
+    usb_start_copy_hook = copy_begins; copies_begun = 0;
     idle(); machine.canvas_snapshot_len = 0; sent = starts_sent; machine.canvas_refresh_due = 0;
     assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
-    copied(); usb_start_tick(&machine);
-    expect(!answered(), "F waits for the first report");
+    tick_for(200, 0);
+    expect(!answered() && usb_start_active() && copies_begun == 0, "F waits for the first report before copying");
     nanosleep(&(struct timespec){1, 0}, NULL);
-    machine.canvas_refresh_due = 0; canvas_list(RED_PLA(0, 1)); idle(); usb_start_tick(&machine);
-    for (int i = 0; i < 3000 && usb_start_active(); ++i) { /* the report asked for after the copy follows */
-        if (machine.canvas_refresh_due) { machine.canvas_refresh_due = 0; canvas_list(RED_PLA(0, 1)); }
-        usb_start_tick(&machine); nanosleep(&(struct timespec){0, 1000000}, NULL);
-    }
+    machine.canvas_refresh_due = 0; canvas_list(RED_PLA(0, 1));
+    tick_for(5000, 1); /* the report arrives; the copy runs; the report asked for after the copy follows */
     status = finish();
-    expect(status == 202 && starts_sent == sent + 1, "F a report 1 s after a fresh start: 202, no 409");
+    expect(status == 202 && starts_sent == sent + 1 && copies_begun == 1, "F a report 1 s after a fresh start: copied, 202, no 409");
+    usb_start_copy_hook = NULL;
 
     /* W: the browser leaves while the start waits for a report (after the copy, and at the start): the wait ends on
      * the next tick, nothing is sent, the worker is free. */
@@ -273,12 +284,15 @@ int main(void) {
     close(pair_[1]); usb_start_tick(&machine);
     expect(!usb_start_active() && starts_sent == sent, "W a browser that leaves ends the wait at once, nothing sent");
     close(pair_[0]);
+    usb_start_copy_hook = copy_begins; copies_begun = 0;
     idle(); machine.canvas_snapshot_len = 0; sent = starts_sent;
     assert(usb_start_begin(begin(), &machine, USB_MAPPED, strlen(USB_MAPPED)) == 1);
-    copied(); usb_start_tick(&machine);
+    tick_for(100, 0);
     expect(!answered() && usb_start_active(), "W2 waits for the first report");
-    close(pair_[1]); usb_start_tick(&machine);
-    expect(!usb_start_active() && starts_sent == sent, "W2 a browser that leaves ends the wait at the start too");
+    close(pair_[1]); tick_for(1000, 0);
+    expect(!usb_start_active() && starts_sent == sent && copies_begun == 0,
+           "W2 a browser that leaves ends the wait at the start too, before anything is copied");
+    usb_start_copy_hook = NULL;
     close(pair_[0]);
 
     /* X: emergency stop while waiting for the report: refused at once, nothing sent. */
