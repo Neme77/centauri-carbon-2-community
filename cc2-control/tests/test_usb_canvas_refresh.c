@@ -216,7 +216,7 @@ int main(void) {
     static char twofile[700]; snprintf(twofile, sizeof(twofile), "%s/two.gcode", usb);
     out = fopen(twofile, "w"); assert(out && fputs("T0\nG1 X1 E1\nT1\nG1 X2 E1\n", out) >= 0 && fclose(out) == 0);
     idle(); canvas_list(RED_PLA(0, 1)); sent = starts_sent; machine.canvas_refresh_due = 0;
-    assert(usb_start_begin(begin(), &machine, "usb\ntwo.gcode\n0:1\nA\nsaved\n0\n\n", 28) == 1);
+    assert(usb_start_begin(begin(), &machine, "usb\ntwo.gcode\n0:1\nA\nsaved\n0\n\n", 29) == 1);
     copied(); usb_start_tick(&machine);
     expect(answered(), "P a start refused by the check is answered on the first tick, without waiting");
     status = finish();
@@ -224,7 +224,7 @@ int main(void) {
            "P with the check's own message");
     /* P2: the same when the Canvas had not reported at the start. */
     idle(); machine.canvas_snapshot_len = 0; sent = starts_sent; machine.canvas_refresh_due = 0;
-    assert(usb_start_begin(begin(), &machine, "usb\ntwo.gcode\n0:1\nA\nsaved\n0\n\n", 28) == 1);
+    assert(usb_start_begin(begin(), &machine, "usb\ntwo.gcode\n0:1\nA\nsaved\n0\n\n", 29) == 1);
     copied(); usb_start_tick(&machine);
     expect(answered(), "P2 without a report at the start: also answered on the first tick");
     status = finish();

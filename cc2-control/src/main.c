@@ -2969,7 +2969,9 @@ static int usb_start_mapped(const char *body, size_t length) {
 }
 /* Returns 1 while the start still waits for the report, 0 when it may be judged, -1 when no report came. */
 static int usb_start_canvas_wait(mqtt_client *mqtt) {
-    if (usb_start.internal || !usb_start_trays_known || !usb_start_mapped(usb_start_body, usb_start_length)) return 0;
+    /* Only a copy that is there waits: a start the check already refused is answered with that refusal at once. */
+    if (usb_start.internal || !usb_start.imported_ok || !usb_start_trays_known ||
+        !usb_start_mapped(usb_start_body, usb_start_length)) return 0;
     long long now = monotonic_ms();
     if (!usb_start_canvas_waiting) {
         usb_start_canvas_waiting = 1;
@@ -3005,7 +3007,7 @@ static void usb_start_tick(mqtt_client *mqtt) {
     if (usb_start_cancelled == 2) {
         const char *error = "{\"accepted\":false,\"error\":\"Print start cancelled by the emergency stop\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-    } else if (!usb_start_cancelled && usb_start_trays_late) {
+    } else if (!usb_start_cancelled && usb_start_trays_late && usb_start.imported_ok) {
         if (monotonic_ms() < usb_start_trays_late_until) return;
         const char *error = "{\"accepted\":false,\"error\":\"The Canvas did not report its trays when the start began; check that the Canvas is connected, then start the print again\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
