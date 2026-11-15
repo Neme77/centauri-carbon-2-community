@@ -249,25 +249,27 @@ int main(void) {
     expect(status == 202 && usb_copy_readback_dropped == 3,
            "a 17 MiB read back drops the pages after 8 and 16 MiB and at the end");
 
-    /* 6. An internal start the printer cannot take (busy, or no printer link) is answered as develop answers
-     * it: the request and the file are checked first, then the printer. The file is read on the worker, so the
-     * main loop is never held up by it (develop read it there). */
+    /* 6. An internal start a linked printer cannot take (busy) is refused before the file is read. Without a
+     * printer link it is answered as develop answers it: the request and the file first, then the printer; the
+     * file is read on the worker, so the main loop is never held up by it (develop read it there). */
     write_size("gcode/inside.gcode", 4 * MIB);
     file = fopen("gcode/two.gcode", "w"); assert(file); fputs("T0\nG1 X1\nT1\nG1 X2\n", file); fclose(file);
-    mqtt.machine_status = 2;
+    mqtt.machine_status = 2; atomic_store(&gcode_scan_passes, 0);
     snprintf(body, sizeof(body), "internal\ninside.gcode\n\nA\nsaved\n0");
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     int taken = usb_start_begin(pair[0], &mqtt, body, strlen(body));
     if (taken) serve(&mqtt); else close(pair[0]);
     status = answer(pair[1]);
-    expect(status == 409, "a busy printer refuses an internal start");
-    /* 6b. Busy printer and a mapping that misses a tool: the file check answers first, as in develop. */
+    expect(!taken && status == 409 && atomic_load(&gcode_scan_passes) == 0,
+           "a linked, busy printer refuses an internal start before the file is read");
+    /* 6b. Linked and busy, with a mapping that misses a tool: still refused before reading (no file check). */
     snprintf(body, sizeof(body), "internal\ntwo.gcode\n0:1\nA\nsaved\n0");
     assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
     taken = usb_start_begin(pair[0], &mqtt, body, strlen(body));
     if (taken) serve(&mqtt); else close(pair[0]);
     status = answer(pair[1]);
-    expect(taken && status == 409, "variant: busy printer, wrong mapping: refused by the file check on the worker");
+    expect(!taken && status == 409 && atomic_load(&gcode_scan_passes) == 0,
+           "variant: linked and busy, wrong mapping: refused before the file is read");
     mqtt.machine_status = 1;
     /* 6c. No printer link: a wrong mapping is still answered with 409 (tests/test_gcode_files.py holds this),
      * a correct one with 503. */
