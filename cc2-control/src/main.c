@@ -1684,6 +1684,7 @@ static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_
 /* For tests, about the last import: early write-outs, bytes dropped from the cache. */
 static unsigned long usb_copy_flushes;
 static size_t usb_copy_dropped_in, usb_copy_dropped_out;
+static int usb_copy_readback_dropped;
 /* Writes bytes [from, to) of the copy to storage and waits for them, then drops them and the same range
  * of the source from the cache. A failed write-out fails the copy, as the final fsync would. */
 static int usb_copy_write_out(FILE *output, FILE *input, size_t from, size_t to) {
@@ -1932,7 +1933,7 @@ static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOO
 static _Thread_local const atomic_int *gcode_scan_cancel;
 /* Test seams: full passes over a G-code file by the start checks; whether the read back dropped the copy. */
 static atomic_int gcode_scan_passes;
-static int usb_copy_readback_dropped;
+
 static int gcode_scan_cancelled(void) { return gcode_scan_cancel && atomic_load(gcode_scan_cancel); }
 static int gcode_detect_tools(const char *root, const char *relative,
                               int tools[GCODE_TOOLS_MAX], size_t *tool_count, double *lengths) {
@@ -2729,6 +2730,7 @@ static atomic_int usb_start_cancelled;
 static atomic_int usb_start_room;
 static uint64_t usb_start_room_size;
 static char usb_start_room_name[PATH_MAX_LOCAL];
+static int usb_start_canvas_waiting;
 /* Test seam: runs on the worker right before the copy. */
 static void (*usb_start_copy_hook)(void);
 
@@ -2897,7 +2899,6 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
  * as before. The one place to change this. */
 #define USB_START_CANVAS_SILENT_REFUSES 1
 static long long usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS; /* test seam */
-static int usb_start_canvas_waiting;
 static unsigned long usb_start_canvas_seen;
 static long long usb_start_canvas_until;
 static long long monotonic_ms(void);
