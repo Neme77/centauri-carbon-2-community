@@ -2763,6 +2763,15 @@ static atomic_int usb_start_room;
 static uint64_t usb_start_room_size;
 static char usb_start_room_name[PATH_MAX_LOCAL];
 static int usb_start_canvas_waiting;
+/* A start with a slot mapping that began before the Canvas had reported its trays: it asks for a report at once
+ * and waits for it up to usb_start_canvas_wait_ms (as after the copy, see usb_start_canvas_wait); the report that
+ * comes is kept as the trays at the start. Without one the start is refused, never sent unprotected. */
+static int usb_start_trays_late;
+static unsigned long usb_start_trays_late_seen;
+static long long usb_start_trays_late_until;
+static long long monotonic_ms(void);
+static long long usb_start_canvas_wait_ms;
+static int usb_start_mapped(const char *body, size_t length);
 /* Test seam: runs on the worker right before the copy. */
 static void (*usb_start_copy_hook)(void);
 
@@ -2892,6 +2901,12 @@ static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size
     memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
     usb_start_length = body_len;
     usb_start_trays_note(mqtt);
+    usb_start_trays_late = !usb_start.internal && !usb_start_trays_known && usb_start_mapped(body, body_len);
+    if (usb_start_trays_late) {
+        usb_start_trays_late_seen = mqtt->canvas_revision;
+        usb_start_trays_late_until = monotonic_ms() + usb_start_canvas_wait_ms;
+        mqtt->canvas_refresh_due = 1;
+    }
     atomic_store(&usb_start_room, 0);
     usb_start_canvas_waiting = 0;
     usb_start_cancelled = 0;
@@ -2936,10 +2951,9 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
 /* No fresh report within the wait: 1 refuses the start (the safe side), 0 compares with the stored report
  * as before. The one place to change this. */
 #define USB_START_CANVAS_SILENT_REFUSES 1
-static long long usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS; /* test seam */
+static long long usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS; /* test seam; also the wait at the start */
 static unsigned long usb_start_canvas_seen;
 static long long usb_start_canvas_until;
-static long long monotonic_ms(void);
 static int usb_start_trays_known; /* queue.h: the trays were noted when the start began */
 static int usb_start_mapped(const char *body, size_t length) {
     char storage[16], filename[PATH_MAX_LOCAL];
@@ -2978,11 +2992,21 @@ static void usb_start_tick(mqtt_client *mqtt) {
         if (!usb_start_cancelled) gcode_usb_make_room(mqtt, usb_start_room_size, usb_start_room_name);
         atomic_store(&usb_start_room, 2);
     }
+    if (usb_start_trays_late && mqtt->canvas_revision != usb_start_trays_late_seen) {
+        usb_start_trays_late_seen = mqtt->canvas_revision;
+        usb_start_trays_note(mqtt);
+        usb_start_trays_late = !usb_start_trays_known; /* a report without the trays: keep waiting */
+    }
     if (!atomic_load(&usb_start_done)) return;
     int fd = usb_start_fd, status = 409;
     if (usb_start_cancelled == 2) {
         const char *error = "{\"accepted\":false,\"error\":\"Print start cancelled by the emergency stop\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+    } else if (!usb_start_cancelled && usb_start_trays_late) {
+        if (monotonic_ms() < usb_start_trays_late_until) return;
+        const char *error = "{\"accepted\":false,\"error\":\"The Canvas did not report its trays when the start began; check that the Canvas is connected, then start the print again\"}\n";
+        respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+        if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
     } else if (!usb_start_cancelled) {
         int waited = usb_start_canvas_wait(mqtt);
         if (waited > 0) return;
@@ -3005,7 +3029,7 @@ static void usb_start_tick(mqtt_client *mqtt) {
         int length = snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, usb_start.imported);
         if (length > 0 && (size_t)length < sizeof(path)) unlink(path);
     }
-    usb_start_fd = -1; usb_start_canvas_waiting = 0;
+    usb_start_fd = -1; usb_start_canvas_waiting = 0; usb_start_trays_late = 0;
     close(fd);
     if (usb_start_peer >= 0) close(usb_start_peer);
     usb_start_peer = -1; usb_start_queue_id = usb_start_queue_auto = 0;
