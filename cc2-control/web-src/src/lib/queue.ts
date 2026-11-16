@@ -74,8 +74,8 @@ export const copiesLeft = (i: QueueItem) => Math.max(0, i.copies - i.done)
 export const openJobs = (q: Queue | null) => items(q).filter(i => i.state !== 'done')
 export const finishedJobs = (q: Queue | null) => items(q).filter(i => i.state === 'done')
 
-// Jobs and copies still to print, and their time when every job states an estimate.
-export const queueTotals = (q: Queue | null) => {
+// Replace only the running copy's full estimate with its reported remaining time.
+export const queueTotals = (q: Queue | null, current: { filename: string; remaining: number } | null = null) => {
   const jobs = openJobs(q)
   let copies = 0,
     seconds = 0,
@@ -83,8 +83,22 @@ export const queueTotals = (q: Queue | null) => {
   for (const i of jobs) {
     const left = copiesLeft(i)
     copies += left
-    if (i.estimated_seconds === null) unknown = unknown || left > 0
-    else seconds += i.estimated_seconds * left
+    const filename = current?.filename.split('/').pop()
+    const expected = i.path.split('/').pop()
+    const matches =
+      i.storage === 'usb' ? filename?.replace(/^CC2_USB_[a-f0-9]{8}_/, '') === expected : filename === expected
+    const running =
+      current !== null &&
+      Number.isFinite(current.remaining) &&
+      current.remaining >= 0 &&
+      i.id === q?.active &&
+      i.state === 'printing' &&
+      matches &&
+      left > 0
+    const pending = left - (running ? 1 : 0)
+    if (running) seconds += current.remaining
+    if (i.estimated_seconds === null) unknown = unknown || pending > 0
+    else seconds += i.estimated_seconds * pending
   }
   return { jobs: jobs.length, copies, seconds, unknown }
 }

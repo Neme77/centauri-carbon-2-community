@@ -600,8 +600,66 @@ try {
   assert.deepEqual(phoneErrors, [])
   await phone.close()
 
+  // Remaining queue time replaces exactly one running copy's estimate. Both displays share the total.
+  let timedItems = [
+    { ...plain, id: 71, path: 'Printing.gcode', state: 'printing', copies: 3, done: 1, estimated_seconds: 3600 },
+    { ...plain, id: 72, path: 'Later.gcode', state: 'pending', copies: 2, done: 0, estimated_seconds: 1800 },
+  ]
+  let timedPrinter = {
+    connected: true, last_message_age: 0,
+    machine: { status: 2, status_name: 'Printing', progress: 90 },
+    print: { filename: 'Printing.gcode', state: 'printing', duration: 3000, remaining: 600, remaining_source: 'mqtt' },
+  }
+  await page.route('**/api/queue', r => r.fulfill({ json: { ...stock, active: timedItems[0].state === 'done' ? null : 71, next: 72, auto_in: null, items: timedItems } }))
+  await page.route('**/api/printer', r => r.fulfill({ json: timedPrinter }))
+  await page.goto(origin + '/#queue')
+  const totalTime = async (expected, reload = true) => {
+    if (reload) await page.reload()
+    await page.locator('[data-queue-totals]').getByText(expected, { exact: true }).waitFor()
+    await page.getByText(`≈ ${expected} ahead`, { exact: true }).waitFor()
+  }
+  await totalTime('2h 10m') // 10 min left + a full 1 h copy + two 30 min copies
+  timedPrinter.print.remaining = 300
+  await totalTime('2h 5m', false) // printer polling updates both totals without reloading
+  timedPrinter.machine.status_name = 'Paused'
+  timedPrinter.print.state = 'paused'
+  await totalTime('2h 5m')
+  timedItems[0].estimated_seconds = null
+  await totalTime('> 1h 5m') // remaining time known, but a future copy has no estimate
+  timedItems[0].copies = 1
+  timedItems[0].done = 0
+  await totalTime('1h 5m') // an unknown full estimate does not hide a known current remainder
+  timedItems[0].estimated_seconds = 3600
+  timedPrinter.print.remaining = 0
+  timedPrinter.print.remaining_source = 'gcode'
+  await totalTime('1h 0m')
+  timedPrinter.print.remaining_source = 'unavailable'
+  await totalTime('2h 0m') // unavailable zero cannot erase a whole copy
+  timedPrinter.print.remaining = 300
+  timedPrinter.print.remaining_source = 'mqtt'
+  timedItems[0].state = 'starting'
+  await totalTime('2h 0m')
+  timedItems[0].state = 'printing'
+  timedPrinter.print.filename = 'Another.gcode'
+  await totalTime('2h 0m') // a different job's telemetry cannot shorten the queue
+  timedPrinter.print.filename = 'Printing.gcode'
+  timedPrinter.last_message_age = 60
+  await totalTime('2h 0m')
+  timedPrinter.last_message_age = 0
+  timedPrinter.connected = false
+  await totalTime('2h 0m')
+  timedPrinter.connected = true
+  timedItems[0].storage = 'usb'
+  timedItems[0].path = 'folder/Printing.gcode'
+  timedPrinter.print.filename = 'local/CC2_USB_0badf00d_Printing.gcode'
+  await totalTime('1h 5m')
+  // Completing a copy leaves the later copies' full estimates in the sum.
+  timedItems[0].state = 'done'
+  timedItems[0].done = 1
+  await totalTime('1h 0m')
+
   assert.deepEqual(errors, [])
-  console.log('PASS: print queue page, Files chip, dialog choice, Dashboard quick start, automatic countdown, jobs bound to filaments (the slot that holds one, a filament in no slot, another filament for a job, a job that waits for a filament of the inventory chosen by brand, material and colour), a picture for every job, the order changed by dragging with a mouse and with a finger')
+  console.log('PASS: print queue page, Files chip, dialog choice, Dashboard quick start, automatic countdown, jobs bound to filaments (the slot that holds one, a filament in no slot, another filament for a job, a job that waits for a filament of the inventory chosen by brand, material and colour), a picture for every job, the order changed by dragging with a mouse and with a finger, queue totals follow the running copy\'s remaining time')
 } finally {
   await browser?.close()
   await server.close()

@@ -385,8 +385,7 @@ const Policy = ({ policy }: { policy: QueuePolicy }) => {
   )
 }
 
-const Totals = ({ q }: { q: QueueData }) => {
-  const totals = queueTotals(q)
+const Totals = ({ totals }: { totals: ReturnType<typeof queueTotals> }) => {
   const cell = (label: Key, value: string | number) => (
     <div class="rounded-md border border-edge px-2.5 py-2">
       <div class="text-xs text-muted">{t(label)}</div>
@@ -792,6 +791,7 @@ export const Queue = () => {
   usePoll(refreshCanvas, 10000)
   usePoll(refreshPlates, 15000)
   const { data: q, ok } = queue.use()
+  const { data: live, ok: printerOk } = printer.use()
   const lib = plates.use().data
   const [mesh, setMesh] = useState<MeshSides | null>(null)
   const [filaments, setFilaments] = useState<Filament[] | null>(null)
@@ -835,7 +835,21 @@ export const Queue = () => {
       dead = true
     }
   }, [headKey])
-  const totals = queueTotals(q)
+  const job = view(live)
+  const remaining = live?.print?.remaining
+  const source = live?.print?.remaining_source
+  const current =
+    printerOk &&
+    live?.connected &&
+    live.last_message_age >= 0 &&
+    live.last_message_age <= 15 &&
+    job.active &&
+    typeof remaining === 'number' &&
+    (remaining > 0 || source === 'gcode' || source === 'mqtt') &&
+    source !== 'unavailable'
+      ? { filename: job.rawFilename, remaining }
+      : null
+  const totals = queueTotals(q, current)
   const tags = q?.available ? (
     <>
       <Tag>{tpl('queue.jobs_n', { n: totals.jobs })}</Tag>
@@ -872,7 +886,7 @@ export const Queue = () => {
               </Card>
             )}
             <div class="grid content-start gap-3.5">
-              <Totals q={q} />
+              <Totals totals={totals} />
               <Policy policy={q.policy} />
             </div>
           </div>
