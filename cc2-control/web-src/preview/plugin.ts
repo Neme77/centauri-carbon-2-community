@@ -350,12 +350,16 @@ export function previewPlugin(): Plugin {
     queuePolicy = { after: 'wait', delay: 60, remove_done: false }
   }
   resetQueue()
+  const isPendingFile = (job: Pick<QueueJob, 'state' | 'present'>) => job.state === 'pending' && job.present
+  const cancelEmptyDelay = () => {
+    if (queueArmedAt !== null && !queueJobs.some(isPendingFile)) queueArmedAt = null
+  }
   const queueComplete = (job: QueueJob) => {
     job.done++
     job.last_result = ''
     job.state = job.done >= job.copies ? 'done' : 'pending'
     if (job.state === 'done' && queuePolicy.remove_done) queueJobs = queueJobs.filter(j => j !== job)
-    queueArmedAt = queuePolicy.after === 'auto' ? Date.now() : null
+    queueArmedAt = queuePolicy.after === 'auto' && queueJobs.some(isPendingFile) ? Date.now() : null
     queueRevision++
   }
   // As the backend resolves a start (queue_resolve): every tool on the slot that holds its filament. The slot
@@ -389,10 +393,10 @@ export function previewPlugin(): Plugin {
     }))
     let active = items.find(j => j.state === 'printing' || j.state === 'starting')
     if (printing) {
-      if (!active) active = items.find(j => j.state === 'pending' && j.present)
+      if (!active) active = items.find(isPendingFile)
       if (active) active.state = 'printing'
     }
-    const next = items.find(j => j.state === 'pending' && j.present) // as the backend: named even while a copy runs
+    const next = items.find(isPendingFile) // as the backend: named even while a copy runs
     return {
       available: true,
       error: '',
@@ -402,7 +406,7 @@ export function previewPlugin(): Plugin {
       active: active?.id ?? null,
       next: next?.id ?? null,
       auto_in:
-        queueArmedAt !== null && !active
+        queueArmedAt !== null && next && !active
           ? Math.max(0, Math.ceil((queueArmedAt + queuePolicy.delay * 1000 - Date.now()) / 1000))
           : null,
       items,
@@ -1228,7 +1232,7 @@ export function previewPlugin(): Plugin {
               if (path === '/api/queue/start') {
                 if (scene !== 'idle')
                   return reply({ accepted: false, error: 'Starting a file requires an idle printer' }, 409)
-                const job = lines[0] ? find() : queueJobs.find(j => j.state === 'pending' && j.present)
+                const job = lines[0] ? find() : queueJobs.find(isPendingFile)
                 if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
                 if (job.state !== 'pending' || !job.present)
                   return reply({ ok: false, error: 'This job has no copy left to print' }, 409)
@@ -1291,6 +1295,7 @@ export function previewPlugin(): Plugin {
               if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
               if (path === '/api/queue/remove') {
                 queueJobs = queueJobs.filter(j => j !== job)
+                cancelEmptyDelay()
                 return reply({ ok: true })
               }
               if (path === '/api/queue/reorder') {
@@ -1318,6 +1323,7 @@ export function previewPlugin(): Plugin {
                   return reply({ ok: false, error: 'Fewer copies than already printed' }, 409)
                 job.copies = n
                 job.state = job.done >= n ? 'done' : job.state === 'done' ? 'pending' : job.state
+                cancelEmptyDelay()
                 return reply({ ok: true })
               }
               return reply({ error: 'Unknown queue operation' }, 404)

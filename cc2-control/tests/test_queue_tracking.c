@@ -412,8 +412,11 @@ int main(void) {
     queue_tick(&machine);
     assert(!strcmp(it->state, "printing"));
     printer_says(1, "complete", "", "u17"); telemetry_says("complete", "local/part.gcode");
+    machine.canvas_refresh_due = 0; machine.canvas_watch_until = 0;
     queue_tick(&machine);
     assert(it->done == 3 && !strcmp(it->state, "done") && queue.active_id == 0 && queue.count == 1);
+    assert(queue_reports("\"next\":null,\"auto_in\":null"));
+    assert(queue.complete_ms == 0 && machine.canvas_refresh_due == 0 && machine.canvas_watch_until == 0);
     /* An exclusive session (here a native calibration tool) refuses the automatic start; the refusal is recorded. */
     queue.count = 0; it = job(7, 2, 0);
     queue.complete_ms = monotonic_ms() - 11000; tools.busy = 1;
@@ -880,6 +883,39 @@ int main(void) {
     queue_start_response(begin(), &machine, "71", 2);
     assert(finish() == 202 && starts_sent == sent + 1 && machine.canvas_refresh_due == 0);
     queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
+
+    /* The last printable copy is removed. A missing file cannot arm a delay for a later addition. */
+    queue.count = 0;
+    queue_policy_response(begin(), "auto\n10\n1", 9); assert(finish() == 200);
+    it = job(72, 1, 0);
+    snprintf(job(73, 1, 0)->path, sizeof(it->path), "missing.gcode");
+    queue_copy_over(it, 1, &machine);
+    assert(queue.count == 1 && queue.items[0].id == 73 && queue.complete_ms == 0);
+    assert(queue_reports("\"next\":null,\"auto_in\":null"));
+    assert(add("internal\npart.gcode\n\nA\nsaved\n0\n\n\n2") == 201);
+    assert(queue_reports("\"next\":74,\"auto_in\":null"));
+
+    /* A real next job arms the delay. Removing it or dropping the remaining copies cancels that delay. */
+    it = queue_find(74); job(75, 1, 0);
+    queue_copy_over(it, 1, &machine);
+    assert(queue_reports("\"next\":74,\"auto_in\":10"));
+    queue_copies_response(begin(), "74\n1", 4); assert(finish() == 200);
+    assert(queue_reports("\"next\":75,\"auto_in\":10"));
+    queue_remove_response(begin(), "75", 2); assert(finish() == 200 && !queue.complete_ms);
+    it = job(76, 2, 0);
+    assert(queue_reports("\"next\":76,\"auto_in\":null"));
+    queue_copy_over(it, 1, &machine);
+    assert(queue_reports("\"next\":76,\"auto_in\":10"));
+    queue_copies_response(begin(), "76\n1", 4); assert(finish() == 200 && !queue.complete_ms);
+    assert(queue_reports("\"next\":null,\"auto_in\":null"));
+
+    /* If the only waiting file disappears during the delay, adding a different file cannot inherit it. */
+    it = job(77, 2, 0);
+    queue_copy_over(it, 1, &machine);
+    assert(queue.complete_ms && unlink(gcode) == 0);
+    assert(queue_reports("\"next\":null,\"auto_in\":null"));
+    assert(add("internal\nplain.gcode\n\nA\nsaved\n0\n\n\n1") == 201);
+    assert(queue_reports("\"next\":78,\"auto_in\":null") && queue.complete_ms == 0);
 
     unlink(gcode); unlink(plain); unlink(duo); unlink(file); unlink(autosave); rmdir(internal); rmdir(dir);
     puts("PASS copies counted only from this copy's own completion seen fresh; stops, foreign jobs, long starts, pauses, "

@@ -122,6 +122,11 @@ static queue_item *queue_next(void) {
     return NULL;
 }
 
+/* Dropping the last waiting copy also drops its delay. A job added later waits for the operator. */
+static void queue_cancel_empty_delay(void) {
+    if (queue.complete_ms && !queue_next()) queue.complete_ms = 0;
+}
+
 static void queue_remove_at(int at) {
     memmove(&queue.items[at], &queue.items[at + 1], (size_t)(queue.count - at - 1) * sizeof(queue_item));
     queue.count--;
@@ -567,7 +572,7 @@ static void queue_get_response(int fd, mqtt_client *mqtt) {
     else json_builder_printf(&b, "null");
     /* Seconds until the automatic start, while one is pending: the operator can still hold it. */
     json_builder_printf(&b, ",\"auto_in\":");
-    if (!strcmp(queue.after, "auto") && queue.complete_ms && !queue.active_id) {
+    if (next && !strcmp(queue.after, "auto") && queue.complete_ms && !queue.active_id) {
         long long left = (long long)queue.delay * 1000 - (monotonic_ms() - queue.complete_ms);
         json_builder_printf(&b, "%lld", left > 0 ? (left + 999) / 1000 : 0);
     } else json_builder_printf(&b, "null");
@@ -694,6 +699,7 @@ static void queue_add_response(int fd, const mqtt_client *mqtt, const char *body
         while (at < queue.count && queue.items[at].id == queue.active_id) at++;
     }
     queue_state saved = queue;
+    queue_cancel_empty_delay(); /* the last queued file may have gone away before this addition */
     memmove(&queue.items[at + 1], &queue.items[at], (size_t)(queue.count - at) * sizeof(queue_item));
     queue.items[at] = fresh;
     queue.count++; queue.next_id++;
@@ -856,6 +862,7 @@ static void queue_remove_response(int fd, const char *body, size_t body_len) {
     if (item->id == queue.active_id) { queue_fail(fd, 409, "A copy of this job is running"); return; }
     queue_state saved = queue;
     queue_remove_at((int)(item - queue.items));
+    queue_cancel_empty_delay();
     if (queue_save() != 0) { queue = saved; queue_fail(fd, 500, "Cannot save the print queue"); return; }
     queue_reply(fd, 200, "{\"ok\":true}\n");
 }
@@ -905,8 +912,13 @@ static void queue_copies_response(int fd, const char *body, size_t body_len) {
     queue_state saved = queue;
     item->copies = copies;
     if (item->id != queue.active_id) {
-        if (item->done >= copies) queue_finish_item(item);
-        else snprintf(item->state, sizeof(item->state), "pending");
+        if (item->done >= copies) {
+            queue_finish_item(item);
+            queue_cancel_empty_delay();
+        } else if (!strcmp(item->state, "done")) {
+            queue_cancel_empty_delay();
+            snprintf(item->state, sizeof(item->state), "pending");
+        }
     }
     if (queue_save() != 0) { queue = saved; queue_fail(fd, 500, "Cannot save the print queue"); return; }
     queue_reply(fd, 200, "{\"ok\":true}\n");
@@ -1026,21 +1038,19 @@ static void queue_copy_over(queue_item *item, int counted, mqtt_client *mqtt) {
     if (counted) {
         if (item->done < item->copies) item->done++;
         item->last_result[0] = 0;
-        queue.complete_ms = strcmp(queue.after, "auto") ? 0 : monotonic_ms();
-        if (queue.complete_ms) {
-            /* The automatic start will judge the Canvas trays: ask for them now, and take only a report that
-             * arrives after this copy. */
-            queue.complete_canvas = mqtt->canvas_revision;
-            mqtt->canvas_refresh_due = 1;
-        }
     } else {
         snprintf(item->last_result, sizeof(item->last_result), "stopped");
-        queue.complete_ms = 0;
     }
     queue_clear_run(item);
     queue.active_id = 0;
     if (item->done >= item->copies) queue_finish_item(item);
     else snprintf(item->state, sizeof(item->state), "pending");
+    queue.complete_ms = 0;
+    if (counted && !strcmp(queue.after, "auto") && queue_next()) {
+        queue.complete_ms = monotonic_ms();
+        queue.complete_canvas = mqtt->canvas_revision;
+        mqtt->canvas_refresh_due = 1;
+    }
     if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s after a copy ended\n", queue_path);
 }
 

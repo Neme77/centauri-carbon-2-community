@@ -424,9 +424,25 @@ try {
   await change.waitFor({ state: 'hidden' })
   await page.setViewportSize({ width: 1440, height: 1000 })
 
+  // Finish the only copy under auto, then add a job during what used to be the empty countdown.
+  const readQueue = async () => (await page.request.get(`${origin}/api/queue`)).json()
+  const stock = await readQueue()
+  for (const job of stock.items) assert.equal((await send('/api/queue/remove', String(job.id))).status(), 200)
+  const lastFile = 'CC2_Preview_Calibration_cube.gcode'
+  const oneCopy = ['internal', lastFile, '', 'A', 'saved', '0', '', '', '1'].join('\n')
+  assert.equal((await send('/api/queue/add', oneCopy)).status(), 201)
+  await hero.getByText(lastFile, { exact: true }).first().waitFor()
+  await hero.locator('[data-queue-start]').click()
+  await active.waitFor()
+  assert.equal((await complete()).status(), 200)
+  await page.locator('[data-queue-empty]').waitFor()
+  assert.equal((await readQueue()).auto_in, null, 'no automatic start after the last copy')
+  assert.equal((await send('/api/queue/add', oneCopy)).status(), 201)
+  await hero.getByText(lastFile, { exact: true }).first().waitFor()
+  assert.equal(await hero.locator('[data-queue-auto]').count(), 0, 'a later addition waits for its own start')
+
   // Pictures and dragging, against a queue of its own: six jobs, the first one printing, one name long enough
   // to make its row taller than the others, one file without a picture.
-  const stock = await (await page.request.get(`${origin}/api/queue`)).json()
   const plain = { ...stock.items[0], mapping: '', filaments: [], copies: 1, done: 0, last_result: '', present: true }
   const names = ['Printing.gcode', 'Short.gcode', `${'A_long_name_that_wraps_'.repeat(9)}.gcode`, 'No_picture.gcode', 'Fourth.gcode', 'Fifth.gcode']
   let own = names.map((name, i) => ({ ...plain, id: 11 + i, path: name, state: i ? 'pending' : 'printing' }))

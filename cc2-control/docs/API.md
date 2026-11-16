@@ -931,8 +931,10 @@ request, or the printer service showed the file printing (a `complete` left over
 the same file, under the same uuid, does not count). `cancelled` or `error`, another job taking over (a new
 uuid), or an idle printer without `complete` for a minute leave it uncounted (`stopped`); a pause, a filament
 change or a recovery keeps it running. Telemetry older than 15 s decides nothing. The last copy sets `done`
-and, with `remove_done`, drops the job. With the `auto` policy the next job starts `delay` seconds after a
-counted completion if the printer is idle and no other session holds it, else the job notes `auto_failed`.
+and, with `remove_done`, drops the job. The `auto` policy starts the delay only if another pending copy has
+its file present when the previous copy finishes. Removing the last waiting copy cancels its delay. A job
+added to the empty queue waits for a manual start. When the delay expires, the next job starts if the
+printer is idle and no other session holds it, else the job notes `auto_failed`.
 Right before that start the backend checks the Canvas material the Queue page would warn about: every slot
 the start would use must be present in fresh telemetry and hold the file's `filament_type` (the page's rule:
 the slot's type contains the file's material, or the file's material contains the slot's first word); a

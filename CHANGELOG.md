@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Complete 698 untranslated panel entries across Czech, Polish, Hungarian, French, Spanish, Russian, Italian and Turkish, including RFID, external feed and the print queue. Preserve existing translations and technical terms; reject new English copies in locale checks and exercise all ten non-English languages in browser tests. AI-assisted translation completion coordinated by **Neme77** (#375); native-speaker wording review remains welcome.
 
 - The spool question (“Which spool is it?”) suggests the inventory spool for a Canvas tray that names the maker’s product line: Elegoo’s Rapid PLA+ RFID spools report `RAPID PLA+`, and a spool kept as `PLA+` in a colour that reads alike is now listed and preselected instead of “No spool in the inventory has this filament”. A new spool added from such a tray gets `PLA+` as its material instead of `PLA`. A tray that names a line still leaves out other lines of its type, such as PLA Silk for PLA Matte. Reported and fixed by **beanbo** (#366).
+- The print queue starts the automatic countdown only when another copy is waiting with its file present. A job added after the queue finishes waits for a manual start. Reported by **lpgamerzockt-ops**, fixed by **beanbo** (#352).
 - On a phone, dialogs keep the same margin on both sides instead of reaching the right edge of the screen. Reported by **lpgamerzockt-ops**, fixed by **beanbo** (#352).
 
 ## [Community Firmware V4.4.4 / CC2 Control 1.2.29] - 2026-11-12
