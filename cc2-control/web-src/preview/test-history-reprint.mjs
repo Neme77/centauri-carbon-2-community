@@ -103,15 +103,21 @@ try {
   assert.deepEqual(await state(5), { enabled: true, title: 'Print', why: '', picture: 'shown' })
   assert.deepEqual(await state(6), { enabled: true, title: 'Print', why: '', picture: 'shown' })
   assert.deepEqual(pictures.sort(), ['CC2_USB_1a2b3c4d_stick.gcode', 'copied.gcode', 'unique.gcode'], 'no picture is asked for a file that may not be the job\'s')
-  // The print dialog of the Files page, for the job's own file; nothing is started.
+  // Hold passive effects to exercise the first visible frame. Focus and Escape must already work,
+  // even before the after-paint useEffect callbacks run. Closing never starts a print.
+  await page.clock.install()
+  await page.clock.pauseAt(Date.now() + 100)
   for (const [id, name] of [[1, 'unique.gcode'], [6, 'CC2_USB_1a2b3c4d_stick.gcode']]) {
     await button(id).click()
-    const dialog = page.getByRole('dialog')
+    const dialog = page.getByRole('dialog', { name: 'Choose print spool', exact: true })
     await dialog.getByRole('button', { name: 'Start print', exact: true }).waitFor()
     await dialog.getByText(name, { exact: true }).first().waitFor()
+    const focused = await dialog.evaluate(box => box.contains(document.activeElement))
     await page.keyboard.press('Escape')
-    await dialog.waitFor({ state: 'hidden' })
+    await dialog.waitFor({ state: 'hidden', timeout: 2000 })
+    assert(focused, 'focus enters the dialog before passive effects')
   }
+  await page.clock.resume()
 
   // A list cut short: a storage whose scan stopped may hold another file of a job's name. Every Print button
   // is disabled and says why, the card says it once, and no picture is shown or asked for as a job's.

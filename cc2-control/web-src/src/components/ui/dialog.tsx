@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef } from 'preact/hooks'
 
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
@@ -32,7 +32,8 @@ export const Dialog = ({
   const box = useRef<HTMLDivElement>(null),
     props = useRef({ onClose, locked })
   props.current = { onClose, locked } // read at event time so the effect below runs only on mount/unmount
-  useEffect(() => {
+  // Focus and keyboard handling must be ready in the first visible frame.
+  useLayoutEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     const items = () => [...(box.current?.querySelectorAll<HTMLElement>(FOCUSABLE) || [])]
     ;(box.current?.querySelector<HTMLElement>('[autofocus]') || items()[0])?.focus()
