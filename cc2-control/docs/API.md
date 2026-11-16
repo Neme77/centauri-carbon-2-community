@@ -306,6 +306,11 @@ stops the scan before the copy after the current line, the copy and its read bac
 `CC2_USB_` `.part` file left behind when CC2 Control ended during a copy is removed when it starts and before
 every USB copy: a running copy holds a lock (`flock`) on its `.part` until it is renamed or removed, and the
 lock ends with the process, so a `.part` without a lock has no copy behind it, whatever its age.
+A start whose worker makes no progress for 15 s (a read the stick does not answer) is answered at once
+with 409 `{"accepted":false,"reason":"usb_unresponsive","error":"The USB stick does not respond; remove
+it, then start the print again"}`. The start stays busy until the worker returns from that read; then it
+is cleaned up without a second answer. A stick that never answers again keeps further starts refused
+until CC2 Control restarts.
 The copy runs on its worker thread at normal priority and without pauses. Every 8 MiB it writes the
 copy out and drops those pages of the source and the copy from the cache, so the copy does not pile up
 unwritten data in memory; the read back drops the copy's pages the same way, every 8 MiB and at the end. A
@@ -317,6 +322,10 @@ The page waits for the answer to a start at least 300 s, and for a file of known
 per 2 MB (500 MB: 370 s), at most 20 minutes; it knows the size from the file list and from the queue's
 `size`. The rate is an assumption until the copy is measured on the printer. When the wait runs out the
 page says so and closes the request, which cancels the start.
+While a start reads a file, `POST /api/gcode-files/inspect` and `POST /api/gcode-files/metadata` for
+that same file are refused at once with 409 `{"reason":"start_reading","error":"A print start is reading
+this file right now; open it again once the start is answered"}` instead of reading it in parallel; a start
+that finds an inspection of its file still running waits for it.
 When the print dialog inspected the same file just before (`POST /api/gcode-files/inspect`, same
 device, inode, size, modification and change time), the start takes its leveling and Canvas tool
 decision from that cached inspection instead of reading the file again, so a refused start still
