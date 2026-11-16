@@ -95,10 +95,11 @@ try {
   await policy.getByRole('radio', { name: 'Start the next copy automatically', exact: false }).check()
   // The native radio checks before POST + refresh finish. Wait for the server
   // choice to reach the UI store before editing another field of that policy.
-  await page.waitForFunction(async () => {
+  await page.evaluate(async () => {
     const { queue } = await import('/src/lib/queue.ts')
-    return queue.get().data?.policy.after === 'auto'
+    window.__queueUnderTest = queue
   })
+  await page.waitForFunction(() => window.__queueUnderTest.get().data?.policy.after === 'auto')
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   assert.deepEqual(lastPost(), ['/api/queue/policy', 'auto\n60\n0'])
   await policy.getByRole('switch').click()
