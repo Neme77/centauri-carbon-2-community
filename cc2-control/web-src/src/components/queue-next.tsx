@@ -129,7 +129,7 @@ export const QueueNext = () => {
   const start = async () => {
     setBusy(true)
     try {
-      await startQueued(next.id)
+      await startQueued(next.id, next.size)
       notify(tpl('queue.started', { k: next.done + 1, n: next.copies, name: next.path }))
     } catch (e) {
       notify(tpl('queue.failed', { error: errText(e) }), 'error')
