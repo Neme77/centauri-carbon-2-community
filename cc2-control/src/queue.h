@@ -53,6 +53,7 @@ typedef struct {
     int timelapse;
     char measure[24], nozzle[24]; /* plate library ids, or empty */
     int copies, done;
+    int large_ok;               /* the operator confirmed a file of 2 GiB or more (printer_file_limit) */
     long estimated_seconds;     /* -1 unknown; the slicer's estimate, per copy */
     double filament_grams;      /* <0 unknown; per copy */
     long long added;            /* wall-clock seconds */
@@ -88,6 +89,9 @@ typedef struct {
 } queue_state;
 
 static queue_state queue;
+/* The trays queue_start_item assigned the slots from, handed to the start it begins (usb_start_begin_for). */
+static spool_tray queue_start_trays[4];
+static int queue_start_trays_known;
 static int queue_available;
 static const char *queue_error = "";
 
@@ -310,6 +314,11 @@ static void queue_item_json(json_builder *b, const queue_item *item, int stored,
     if (!stored) {
         queue_resolve(item, trays, use, why);
         json_builder_printf(b, ",\"present\":%s", queue_present(item) ? "true" : "false");
+        /* The file's size, so the page waits for a start as long as copying and checking it may take. */
+        char path[PATH_MAX_LOCAL * 2]; struct stat info;
+        if (gcode_resolved_path(queue_root(item), item->path, path, sizeof(path)) && stat(path, &info) == 0 &&
+            S_ISREG(info.st_mode)) json_builder_printf(b, ",\"size\":%lld", (long long)info.st_size);
+        else json_builder_printf(b, ",\"size\":null");
     }
     json_builder_printf(b, ",\"filaments\":[");
     for (int i = 0, listed = 0; i < item->tools; ++i) {
@@ -331,6 +340,7 @@ static void queue_item_json(json_builder *b, const queue_item *item, int stored,
         json_builder_printf(b, "}");
     }
     json_builder_printf(b, "]");
+    json_builder_printf(b, ",\"large_ok\":%s", item->large_ok ? "true" : "false");
     if (stored) {
         json_builder_printf(b, ",\"print_name\":");
         json_builder_string(b, item->print_name);
@@ -388,7 +398,7 @@ static int queue_valid_ref(const char *text) { return !*text || plate_id_valid(t
 
 static int queue_valid_result(const char *text) {
     return !*text || !strcmp(text, "stopped") || !strcmp(text, "not_started") || !strcmp(text, "auto_failed") ||
-           !strcmp(text, "auto_material");
+           !strcmp(text, "auto_material") || !strcmp(text, "not_opened");
 }
 
 static int queue_json_bool(const char *obj, const char *end, const char *key, int *out) {
@@ -481,6 +491,8 @@ static int queue_load_item(const char *obj, const char *end, void *context) {
     if (!spools_raw_member(obj, end, "print_name", item->print_name, sizeof(item->print_name)) ||
         (item->print_name[0] && (!safe_relative_path(item->print_name) || !is_gcode_filename(item->print_name)))) return 0;
     if (!queue_json_bool(obj, end, "native_seen", &item->native_seen)) return 0;
+    /* Absent in files written before it was stored: no confirmation, so such a file of 2 GiB or more never starts. */
+    if (json_member(obj, end, "large_ok") && !queue_json_bool(obj, end, "large_ok", &item->large_ok)) return 0;
     if (!spools_raw_member(obj, end, "job_uuid", item->job_uuid, sizeof(item->job_uuid)) || !queue_plain_text(item->job_uuid)) return 0;
     if (json_member(obj, end, "request_uuid")) { /* absent in files written before it was stored */
         if (!spools_raw_member(obj, end, "request_uuid", item->request_uuid, sizeof(item->request_uuid)) ||
@@ -647,13 +659,23 @@ static void queue_add_response(int fd, const mqtt_client *mqtt, const char *body
         queue_fail(fd, 400, "Invalid queue request"); return;
     }
     if (!gcode_file_is_printable(root, filename)) { queue_fail(fd, 404, "File is unavailable or unsafe"); return; }
-    char scratch[4096]; char *line[QUEUE_ADD_LINES + GCODE_TOOLS_MAX];
-    int n = queue_lines(extra, extra_len, scratch, sizeof(scratch), line, QUEUE_ADD_LINES + GCODE_TOOLS_MAX);
+    char scratch[4096]; char *line[QUEUE_ADD_LINES + GCODE_TOOLS_MAX + 1];
+    int n = queue_lines(extra, extra_len, scratch, sizeof(scratch), line, QUEUE_ADD_LINES + GCODE_TOOLS_MAX + 1);
     if (n < 0) { queue_fail(fd, 400, "Invalid queue request"); return; }
     const char *mapping = line[0] ? line[0] : "", *side = line[1] ? line[1] : "A", *leveling = line[2] && *line[2] ? line[2] : "saved";
     const char *video = line[3] && *line[3] ? line[3] : "0", *measure = line[4] ? line[4] : "", *nozzle = line[5] ? line[5] : "";
     const char *copies_text = line[6], *position = line[7] && *line[7] ? line[7] : "end";
     const char *seconds_text = line[8] ? line[8] : "", *grams_text = line[9] ? line[9] : "";
+    /* The confirmation for a file of 2 GiB or more is a line "large_ok" after the filament lines (those hold tabs):
+     * it is taken out before they are read. */
+    const char *large_text = "";
+    for (int i = QUEUE_ADD_LINES; i < n; ++i)
+        if (line[i] && !strcmp(line[i], "large_ok")) {
+            large_text = line[i];
+            memmove(&line[i], &line[i + 1], (size_t)(QUEUE_ADD_LINES + GCODE_TOOLS_MAX - i) * sizeof(line[0]));
+            n--;
+            break;
+        }
     int copies = 0;
     queue_item fresh;
     memset(&fresh, 0, sizeof(fresh));
@@ -665,6 +687,12 @@ static void queue_add_response(int fd, const mqtt_client *mqtt, const char *body
     if (!queue_valid_ref(measure) || !queue_valid_ref(nozzle)) { queue_fail(fd, 400, "Invalid build plate measurement"); return; }
     if (!queue_parse_int(copies_text, 1, QUEUE_COPIES_MAX, &copies)) { queue_fail(fd, 400, "Invalid number of copies"); return; }
     if (strcmp(position, "end") && strcmp(position, "next")) { queue_fail(fd, 400, "Invalid queue position"); return; }
+    /* A file of 2 GiB or more joins the queue only with the operator's confirmation, kept with the job and sent
+     * with every start of it; without one the queue never starts it (gcode_start_run refuses it). */
+    if (gcode_file_size(root, filename) >= printer_file_limit && !*large_text) {
+        queue_reply(fd, 409, "{\"ok\":false,\"reason\":\"file_too_large_for_printer\",\"error\":\"The printer has not opened files of 2 GiB or more; confirm to add it anyway\"}\n");
+        return;
+    }
     long estimated = -1; double grams = -1;
     if (*seconds_text) {
         char *end = NULL; long value = strtol(seconds_text, &end, 10);
@@ -685,6 +713,7 @@ static void queue_add_response(int fd, const mqtt_client *mqtt, const char *body
     snprintf(fresh.measure, sizeof(fresh.measure), "%s", measure);
     snprintf(fresh.nozzle, sizeof(fresh.nozzle), "%s", nozzle);
     fresh.copies = copies; fresh.done = 0;
+    fresh.large_ok = *large_text != 0;
     fresh.estimated_seconds = estimated; fresh.filament_grams = grams;
     fresh.added = (long long)time(NULL);
     fresh.duration_baseline = -1;
@@ -768,7 +797,12 @@ static void queue_check_ask(const queue_item *item, mqtt_client *mqtt, long long
 
 /* Starts one copy of `item` through the protected print path. Returns the HTTP status sent. The
  * running state is saved before the request goes out, so a restart right after it still knows. */
-static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item) {
+/* Returned by queue_start_item while a USB copy for the start runs on its worker: the socket is the
+ * worker's, and queue_usb_copied finishes the start from the main loop. */
+#define QUEUE_START_COPYING 1
+static int queue_start_send(int fd, mqtt_client *mqtt, queue_item *item, const char *body, int length,
+                            gcode_usb_start *usb);
+static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item, int automatic, int peer) {
     char body[PATH_MAX_LOCAL + 256], mapping[QUEUE_MAPPING_MAX], error[192];
     queue.check_id = 0; /* the report it asked for is used now */
     spool_tray trays[4];
@@ -777,9 +811,25 @@ static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item) {
         queue_fail(fd, 409, error);
         return 409;
     }
-    int length = snprintf(body, sizeof(body), "%s\n%s\n%s\n%c\n%s\n%d\n%s\n%s", item->storage, item->path, mapping,
-                          item->side, item->leveling, item->timelapse ? 1 : 0, item->measure, item->nozzle);
+    int length = snprintf(body, sizeof(body), "%s\n%s\n%s\n%c\n%s\n%d\n%s\n%s%s", item->storage, item->path, mapping,
+                          item->side, item->leveling, item->timelapse ? 1 : 0, item->measure, item->nozzle,
+                          item->large_ok ? "\nlarge_ok" : "");
     if (length <= 0 || (size_t)length >= sizeof(body)) { queue_fail(fd, 500, "Cannot build the print request"); return 500; }
+    /* The file is checked (and a USB file copied) on the worker first, as from the print dialog; the
+     * main loop stays free. queue_usb_copied sends the start afterwards. */
+    int status = 0;
+    /* The comparison value after the copy is the report these slots were assigned from, not a later reading. */
+    queue_start_trays_known = trays_known;
+    if (trays_known) memcpy(queue_start_trays, trays, sizeof(queue_start_trays));
+    if (usb_start_begin_for(fd, mqtt, body, (size_t)length, item->id, automatic, peer, &status))
+        return QUEUE_START_COPYING;
+    return status;
+}
+
+/* Marks the copy "starting" (saved first, so a restart right after the request still knows), sends the
+ * start and keeps the outcome: the file the printer was given, or the earlier state on a refusal. */
+static int queue_start_send(int fd, mqtt_client *mqtt, queue_item *item, const char *body, int length,
+                            gcode_usb_start *usb) {
     queue_state saved = queue;
     double value;
     snprintf(item->state, sizeof(item->state), "starting");
@@ -794,32 +844,57 @@ static int queue_start_item(int fd, mqtt_client *mqtt, queue_item *item) {
     queue.complete_ms = 0;
     if (queue_save() != 0) { queue = saved; queue_fail(fd, 500, "Cannot save the print queue"); return 500; }
     char started[PATH_MAX_LOCAL] = "";
-    int status = gcode_start_response(fd, mqtt, body, (size_t)length, started);
+    unsigned long watched = print_watch.sequence;
+    int status = usb ? gcode_start_run(fd, mqtt, body, (size_t)length, started, usb)
+                     : gcode_start_response(fd, mqtt, body, (size_t)length, started);
     if (status != 202) {
         queue = saved;
         if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s after a refused start\n", queue_path);
         return status;
     }
     if (started[0]) snprintf(item->print_name, sizeof(item->print_name), "%s", started);
+    if (print_watch.sequence != watched) print_watch.queue_id = item->id; /* a confirmed file of 2 GiB or more */
     if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s after a start\n", queue_path);
     return status;
 }
 
-static void queue_start_response(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
-    if (!queue_available) { queue_fail(fd, 503, queue_error[0] ? queue_error : "The print queue is unavailable"); return; }
+/* The USB copy of a queued start is complete (main loop): the job must still be there and waiting. */
+static int queue_usb_copied(int fd, mqtt_client *mqtt, int id, int automatic, const char *body, size_t length,
+                            gcode_usb_start *usb) {
+    queue_item *item = queue_find(id);
+    int status;
+    if (!item || strcmp(item->state, "pending") || queue.active_id) {
+        queue_fail(fd, 409, "The queued job changed while its USB file was copied");
+        status = 409;
+    } else status = queue_start_send(fd, mqtt, item, body, (int)length, usb);
+    if (status != 202) queue_usb_dropped(id, automatic);
+    return status;
+}
+/* A queued USB start that did not go out (refused, cancelled): an automatic one is marked as failed,
+ * so the copy waits for the button, as when the automatic start fails at once. */
+static void queue_usb_dropped(int id, int automatic) {
+    queue_item *item = automatic ? queue_find(id) : NULL;
+    if (!item || strcmp(item->state, "pending")) return;
+    snprintf(item->last_result, sizeof(item->last_result), "auto_failed");
+    if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
+}
+
+/* Returns 1 when a USB copy for the start holds the socket. */
+static int queue_start_response(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
+    if (!queue_available) { queue_fail(fd, 503, queue_error[0] ? queue_error : "The print queue is unavailable"); return 0; }
     char scratch[64]; char *line[2];
-    if (queue_lines(body, body_len, scratch, sizeof(scratch), line, 2) < 0) { queue_fail(fd, 400, "Invalid queue request"); return; }
+    if (queue_lines(body, body_len, scratch, sizeof(scratch), line, 2) < 0) { queue_fail(fd, 400, "Invalid queue request"); return 0; }
     queue_item *item = NULL;
     if (line[0] && *line[0]) {
         int id = 0;
-        if (!queue_parse_int(line[0], 1, 1000000000, &id) || !(item = queue_find(id))) { queue_fail(fd, 404, "No such queued job"); return; }
+        if (!queue_parse_int(line[0], 1, 1000000000, &id) || !(item = queue_find(id))) { queue_fail(fd, 404, "No such queued job"); return 0; }
     }
-    if (queue.active_id) { queue_fail(fd, 409, "A queued copy is already running"); return; }
-    if (!item && !(item = queue_next())) { queue_fail(fd, 409, "Nothing in the queue can start"); return; }
-    if (strcmp(item->state, "pending")) { queue_fail(fd, 409, "This job has no copy left to print"); return; }
+    if (queue.active_id) { queue_fail(fd, 409, "A queued copy is already running"); return 0; }
+    if (!item && !(item = queue_next())) { queue_fail(fd, 409, "Nothing in the queue can start"); return 0; }
+    if (strcmp(item->state, "pending")) { queue_fail(fd, 409, "This job has no copy left to print"); return 0; }
     const char *blocked = printer_change_blocked();
-    if (blocked) { queue_fail(fd, 409, blocked); return; }
-    if (plates_background_active()) { queue_fail(fd, 409, "Plate verification is still running"); return; }
+    if (blocked) { queue_fail(fd, 409, blocked); return 0; }
+    if (plates_background_active()) { queue_fail(fd, 409, "Plate verification is still running"); return 0; }
     if (queue_check_needed(item, mqtt)) {
         long long now = monotonic_ms();
         int check = queue_check_state(item, mqtt, now, now - QUEUE_CHECK_MS);
@@ -827,10 +902,10 @@ static void queue_start_response(int fd, mqtt_client *mqtt, const char *body, si
             if (check != 1) queue_check_ask(item, mqtt, now);
             /* The page asks again shortly; the start goes out once the printer has answered. */
             queue_reply(fd, 409, "{\"ok\":false,\"error\":\"Reading the Canvas slots before the start\",\"checking\":true}\n");
-            return;
+            return 0;
         }
     }
-    (void)queue_start_item(fd, mqtt, item);
+    return queue_start_item(fd, mqtt, item, 0, -1) == QUEUE_START_COPYING;
 }
 
 static void queue_start_lost(queue_item *item);
@@ -981,6 +1056,19 @@ static const char *queue_basename(const char *path) {
     const char *slash = strrchr(path, '/');
     return slash ? slash + 1 : path;
 }
+/* A queued job names this internal file: as its own file, as the copy its start was given, or,
+ * for a USB job, as the copy its next start imports to. The USB import cleanup leaves it alone. */
+static int queue_uses_internal_file(const char *name) {
+    char imported[PATH_MAX_LOCAL];
+    for (int i = 0; i < queue.count; i++) {
+        const queue_item *item = &queue.items[i];
+        if (!strcmp(item->storage, "internal") && !strcmp(queue_basename(item->path), name)) return 1;
+        if (item->print_name[0] && !strcmp(queue_basename(item->print_name), name)) return 1;
+        if (!strcmp(item->storage, "usb") && !gcode_usb_import_name(item->path, imported) && !strcmp(imported, name))
+            return 1;
+    }
+    return 0;
+}
 
 /* A reported file name (MQTT, or the printer service with its "local/" prefix) against the file the
  * printer was given for this copy; before a start, against the job's own file. */
@@ -1062,6 +1150,16 @@ static void queue_start_lost(queue_item *item) {
     if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
 }
 
+/* The printer did not open the confirmed file of 2 GiB or more this copy was started with (print_watch_tick): the
+ * copy waits again, marked "not_opened", whatever the queue's grace periods would decide later. */
+static void queue_watch_failed(int id) {
+    queue_item *item = queue_find(id);
+    if (!item || queue.active_id != id || strcmp(item->state, "starting")) return;
+    queue_start_lost(item);
+    snprintf(item->last_result, sizeof(item->last_result), "not_opened");
+    if (queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
+}
+
 static void queue_lower(char *out, size_t cap, const char *text) {
     size_t n = 0;
     for (; text[n] && n + 1 < cap; ++n) out[n] = (char)tolower((unsigned char)text[n]);
@@ -1110,6 +1208,37 @@ static void queue_learn_filaments(const mqtt_client *mqtt) {
     if (noted && queue_save() != 0) fprintf(stderr, "Print queue: cannot save %s\n", queue_path);
 }
 
+/* A start on the worker (print dialog or queue, USB or internal memory) chose its slot mapping before the
+ * copy. The trays as they were when the start began are kept; after the copy the trays the mapping names are
+ * compared with them (status, material, name, colour). A change refuses the start. Without a report at either
+ * time there is nothing to compare, and the start is judged as before. */
+static spool_tray usb_start_trays[4];
+static int usb_start_trays_known;
+static void usb_start_trays_note(const mqtt_client *mqtt, int from_queue) {
+    if (from_queue) {
+        usb_start_trays_known = queue_start_trays_known;
+        if (queue_start_trays_known) memcpy(usb_start_trays, queue_start_trays, sizeof(usb_start_trays));
+        return;
+    }
+    usb_start_trays_known = queue_mqtt_fresh(mqtt) && spools_trays(mqtt, usb_start_trays);
+}
+static int usb_start_trays_changed(const mqtt_client *mqtt, const char *body, size_t length) {
+    spool_tray now[4];
+    char storage[16], filename[PATH_MAX_LOCAL];
+    const char *mapping, *root, *media;
+    size_t mapping_len = 0, count = 0;
+    int tools[GCODE_TOOLS_MAX], slots[GCODE_TOOLS_MAX];
+    if (!usb_start_trays_known || !queue_mqtt_fresh(mqtt) || !spools_trays(mqtt, now)) return 0;
+    if (!gcode_request_file(body, length, storage, filename, &mapping, &mapping_len, &root, &media)) return 0;
+    const char *line_end = memchr(mapping, '\n', mapping_len);
+    if (!parse_slot_map(mapping, line_end ? (size_t)(line_end - mapping) : mapping_len, tools, slots, &count)) return 0;
+    for (size_t i = 0; i < count; ++i) {
+        const spool_tray *then = &usb_start_trays[slots[i]], *later = &now[slots[i]];
+        if (then->status != later->status || strcmp(then->type, later->type) || strcmp(then->name, later->name) ||
+            strcmp(then->color, later->color)) return 1;
+    }
+    return 0;
+}
 static void queue_tick(mqtt_client *mqtt) {
     if (!queue_available) return;
     if (!queue_mqtt_fresh(mqtt)) return; /* stale evidence decides nothing */
@@ -1175,9 +1304,14 @@ static void queue_tick(mqtt_client *mqtt) {
         }
         int status = 503;
         if (mqtt->machine_status == 1 && !printer_change_blocked() && !plates_background_active()) {
-            int sink = open("/dev/null", O_WRONLY);
-            status = sink >= 0 ? queue_start_item(sink, mqtt, next) : 500;
-            if (sink >= 0) close(sink);
+            /* Checked on the worker; nobody waits for the reply, so the worker gets one end of a pair
+             * and the other end stays open until it is done (usb_start_tick). */
+            int pair[2];
+            int paired = socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) == 0;
+            status = paired ? queue_start_item(pair[0], mqtt, next, 1, pair[1]) : 500;
+            if (status == QUEUE_START_COPYING) return; /* the outcome comes from queue_usb_copied */
+            /* Refused before the worker took them: both ends are still ours, whatever the status. */
+            if (paired) { close(pair[0]); close(pair[1]); }
         }
         if (status != 202) {
             snprintf(next->last_result, sizeof(next->last_result), "auto_failed");
