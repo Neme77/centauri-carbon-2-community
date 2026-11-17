@@ -224,7 +224,7 @@ const Hero = ({
   const canStart = !active && item.present && !startBlocked(item) && v.idle && ok && Boolean(d?.connected) && !q.active
   const start = async () => {
     setBusy(true)
-    await act(() => startQueued(item.id), {
+    await act(() => startQueued(item.id, item.size), {
       key: 'queue.started',
       vars: { k: item.done + 1, n: item.copies, name: item.path },
     })
@@ -421,7 +421,9 @@ const lastResult = (item: QueueItem) =>
         ? t('queue.auto_failed')
         : item.last_result === 'auto_material'
           ? t('queue.auto_material')
-          : ''
+          : item.last_result === 'not_opened'
+            ? t('queue.not_opened')
+            : ''
 
 // What the picture of a row does with the pointer while the row can be dragged to another place.
 type Grip = Record<

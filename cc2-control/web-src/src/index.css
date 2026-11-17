@@ -181,7 +181,10 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   .cc2-main { margin-left: 0; padding: 10px; }
   .cc2-main input, .cc2-main select, .cc2-main textarea { font-size: 16px; }
   .cc2-file-row { min-height: 56px; }
-  .cc2-file-identity { gap: 6px; }
+  .cc2-file-identity { gap: 6px; flex-wrap: wrap; }
+  /* Tags („In queue · n“, „Not printable“) get their own line under the name instead of running into the buttons. */
+  .cc2-file-chips { flex-basis: 100%; flex-wrap: wrap; }
+  .cc2-file-chips:empty { display: none; }
   .cc2-file-name {
     flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 12px; font-weight: 500;
