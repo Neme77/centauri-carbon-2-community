@@ -4729,7 +4729,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/queue")==0) {
         queue_get_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/add")==0) {
-        queue_add_response(fd,body,body_len);
+        queue_add_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/start")==0) {
         queue_start_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/remove")==0) {
@@ -4738,6 +4738,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         queue_reorder_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/copies")==0) {
         queue_copies_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/filament")==0) {
+        queue_filament_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/policy")==0) {
         queue_policy_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/clear-done")==0) {
