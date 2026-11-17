@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The print queue's job list shows the picture embedded in each G-code file, and a job is moved by dragging it by that picture, with a mouse or a finger; the arrows stay. Designed and implemented by **beanbo** (#352).
 - Files and History show the picture embedded in each G-code file in every row of their lists, as the print queue does, and a job in History can be printed again while its file is known for certain to be the job's (one file of that name on the printer, written no later than the job began, in a file list the printer sent whole; otherwise the row or the list says why not): the button opens the print dialog of the Files page. On a narrow screen the file name takes a line of its own in both lists. Designed and implemented by **beanbo** (#352).
 - Aurora, a light colour theme (Settings → Appearance) built so white cards stand out against a tinted blue-lavender page, with a deep indigo accent and text contrast of at least 4.5:1 on every surface. Requested and tested by **Neme77**, implemented with Claude Code (#394).
+- Klipper, a flat neutral-grey dark colour theme in the style of the common Klipper web interfaces, with the Klipper red as accent, uppercase card titles and a marker on the active menu entry; text contrast of at least 4.5:1 on every surface. Requested and tested by **Neme77**, implemented with Claude Code (#395).
 
 ### Changed
 
