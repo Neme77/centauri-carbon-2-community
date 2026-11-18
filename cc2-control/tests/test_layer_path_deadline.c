@@ -35,6 +35,8 @@ static int finish(int peer, char *reply, size_t cap) {
 int main(void) {
     char dir[] = "/tmp/layer-deadline-XXXXXX"; assert(mkdtemp(dir));
     gcode_internal_root = dir;
+    layer_path_rest_min_ms = 0; /* the pause between scans is tested in test_layer_path_load.c */
+    layer_path_rest_percent = 0;
     char path[512];
 
     /* Numbered by ;LAYER:N only and without a layer count, so a request past the last layer

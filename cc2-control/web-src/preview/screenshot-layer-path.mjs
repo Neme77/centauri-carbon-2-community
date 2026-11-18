@@ -30,12 +30,10 @@ try {
   await mkdir(out, { recursive: true })
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(`${origin}/#job`)
-  await page.getByRole('button', { name: 'Expand bed map', exact: true }).click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByRole('heading', { name: 'Bed map', exact: true }).waitFor()
-  await dialog.getByRole('button', { name: 'Layer path', exact: true }).click()
+  const map = page.getByRole('region', { name: 'Bed map', exact: true })
+  await map.getByRole('button', { name: 'Layer path', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('[data-layer-path]').length > 0)
-  const copy2 = dialog.locator('[data-bed-list-id="Copy 2"]')
+  const copy2 = map.locator('[data-bed-list-id="Copy 2"]')
   if (await copy2.count()) await copy2.click()
   await page.locator('#cc2-preview-banner').evaluate(el => {
     el.style.display = 'none'

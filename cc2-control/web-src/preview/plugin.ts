@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
-import { demoExcludeObjects, demoLayerPath } from './layer-path-demo.ts'
+import { demoExcludeObjects, demoLayerPath, demoObjectPreview } from './layer-path-demo.ts'
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Match the source literally; never evaluate its template.
 const cameraSource = "export const camera = (q = '') => `http://${location.hostname}:8080/${q}`"
@@ -1100,6 +1100,12 @@ export function previewPlugin(): Plugin {
                 return reply({ error: 'invalid layer path request' }, 400)
               if (layer > 227) return reply({ error: 'layer not found' }, 404)
               return reply(demoLayerPath(file, layer, storage))
+            }
+            case '/api/gcode-files/object-preview': {
+              const file = reqUrl.searchParams.get('file') || ''
+              const object = reqUrl.searchParams.get('object') || ''
+              const preview = demoObjectPreview(file, object, reqUrl.searchParams.get('storage') || 'internal')
+              return preview ? reply(preview) : reply({ error: 'Object not found' }, 404)
             }
             case '/api/queue':
               return reply(queueView())

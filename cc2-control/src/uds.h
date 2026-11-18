@@ -51,6 +51,8 @@ typedef struct {
  /* print_stats.state: printing, paused, complete, cancelled, error or standby. */
  char print_state[16];
  int have_print_state;
+ /* Counts the times the running print's values were dropped (uds_forget_job): a new print or another file. */
+ unsigned long job_resets;
  /* bed_mesh.profile_name: the mesh the printer applies now ("" when cleared). */
  char mesh_profile[32];
  int have_mesh_profile;

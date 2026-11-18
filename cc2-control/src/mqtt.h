@@ -51,6 +51,8 @@ typedef struct {
     char filename[256];
     char print_state[64];
     char uuid[128];
+    char last_job_uuid[128]; /* the last non-empty job uuid seen; a different one means a new print */
+    unsigned long job_starts; /* new prints told by that uuid (update_state) */
     char homed_axes[16];
     char username[64];
     char password[128];

@@ -247,6 +247,159 @@ the previous page stops on its next existing printer-state poll. Brief overlap d
 A page streaming live view stops when `camera_viewer` names another page, and offers to take the camera back. The
 camera service itself is unchanged: other clients connected directly to port 8080 are not affected.
 
+## A new print starts clean
+
+`GET /api/printer` reports `print.current_layer`, `print.duration`, `print.total_duration`, `print.remaining` and `machine.progress` of the
+running print only (for `print.remaining`, the estimate from the file stands in while the printer has not reported one, see `remaining_source`). When a new print begins they go back to 0 until the printer reports a new value, also when
+it prints the same file as before (before, the layer of the previous print was still shown right after a start).
+MQTT tells a new print by its job uuid (`print.uuid`) differing from the last non-empty one; the printer's direct
+status stream (`print.native`, UDS) tells it by `print_stats.state` going from `standby`, `complete`, `cancelled` or
+`error` to `printing`. A pause and resume, a reconnection in the middle of a print and the first value after the
+service starts do not reset anything. The direct stream's filament use is dropped the same way.
+
+## Layer path
+
+`GET /api/gcode-files/layer-path?storage=internal&file=<name>&layer=<n>` returns the thinned extrusion path of one
+layer. Answers: 200 with the path; 400 for a malformed request (`Invalid layer`, `Invalid protected G-code path`);
+404 for a file that is not there or a layer outside it; 413 when the scan reached its time or size limit
+(`Layer path scan limit reached`, answered at once for the same or a higher layer of that file for 300 s) or the
+path is too large; 503 `Layer path busy; retry shortly` while another scan runs or rests after the last one (the
+page retries it); 503 `Printer is homing or starting a print; retry shortly` during the read hold (see
+[G-code reads while the printer homes](#g-code-reads-while-the-printer-homes)); 500 for a read error.
+
+While a print runs, a request for **the file of that print** (`storage=internal` and the printer's file name) is
+refused with **409 Conflict** before any G-code is read when it cannot belong to the print:
+
+- `Layer is beyond the running print`: the layer is above the print's layer count (the count the printer reports,
+  else the one found in the G-code file; no count known, no check).
+- `The running print has not reached that layer`: the layer is above 1 and `print.current_layer` of
+  `GET /api/printer` (the direct stream's value when it has one) is still below 1. A new print resets that value,
+  so a layer left over from the print before (seen: layer 193, a 20 s scan of 78.7 MB right after a start) is not read.
+
+A print counts as running while the printer is fresh (last message within 15 s), `machine.status` is 2 and the
+state is `printing` or `paused`. Requests for any other file, for the USB storage, and every request while no
+print runs (browsing by hand) are answered as before, apart from the read hold. The 409 is not retried by the
+page, unlike the 503. The 409 refusals come before the read hold: a request they refuse is answered 409 as before.
+
+`GET /api/health` counts this work, in memory only (the counters start at 0 with the service and hold no file
+names, paths or other private data):
+
+| Member | Meaning |
+|---|---|
+| `layer_path_scans` | Scans the worker ran, including those that ended in 404 or 413. An answer from the remembered layer, or a refusal before reading, is no scan. |
+| `layer_path_rejected` | Requests refused with 409 as not fitting the running print. |
+| `layer_path_busy` | 503 `Layer path busy` answers (another scan running, the pause after the last one, or the scan worker could not be started). |
+| `layer_path_bytes_read` | Bytes the scans read from the files, counted from where each scan started (a remembered layer start is skipped, not read). |
+| `layer_path_longest_ms` | The longest scan, in milliseconds, from its start to the end of reading. |
+| `layer_path_last_ms` | The last scan, in milliseconds. |
+| `gcode_read_blocked` | Requests of the layer path, the object preview and `POST /api/gcode-files/thumbnail` answered 503 by the read hold before anything was read, and scans of the running print's file the hold kept from starting (once per withheld scan). |
+| `gcode_read_stopped` | Layer-path and object-preview scans that the read hold ended while they read (counted in `layer_path_scans` as well), and scans of the running print's file it ended. |
+
+The object preview below shares these counters: its scans count as `layer_path_scans` (with their bytes and
+times), its busy answers as `layer_path_busy` and its start-protection refusals as `layer_path_rejected`.
+
+## Object preview
+
+`GET /api/gcode-files/object-preview?storage=internal&file=<name>&object=<name>` returns the coarse 3D shape of one
+print object: the outer wall of a few of its layers. `storage` (`internal` or `usb`, default `internal`) and
+`file` are checked like the layer path's; `object` is a name from `EXCLUDE_OBJECT_DEFINE NAME=…` (OrcaSlicer,
+ElegooSlicer, PrusaSlicer). Example:
+
+```json
+{"storage":"internal","file":"part.gcode","object":"Box_id_0_copy_0","layers":89,"step":4,"z_max":25.6,
+ "bounds":[22.63,106.4,64.78,148.55],"rings":[{"z":0.2,"paths":[[33.38,144.36,32.86,144.5,…]]},…],
+ "truncated":false,"objects":["Box_id_0_copy_0","Lid_id_1_copy_0"]}
+```
+
+- The first request for a file reads it once, to the end, and collects every object; the result is kept in
+  memory. Later requests for that file (same device, inode, size and modification time), for any object, are
+  answered from memory without reading, also during the pause after a scan and during the read hold.
+- An object's moves are those between `EXCLUDE_OBJECT_START NAME=…` and `EXCLUDE_OBJECT_END`; a `START` without
+  a `DEFINE` adds the object. Only the outer wall counts: extrusions while the last `;TYPE:` comment is
+  `Outer wall` or `Overhang wall` (OrcaSlicer, ElegooSlicer), `External perimeter` or `Overhang perimeter`
+  (PrusaSlicer) or `WALL-OUTER` (Cura). A file without any `;TYPE:` comment counts every extrusion inside an
+  object. Arcs (G2/G3), relative and absolute extrusion are read as by the layer path.
+- `layers` is the number of layers in which the object has outer wall (n; layers are numbered by the layer
+  marks, without them each new height is a layer). `step` is max(3, ceil(n / 24)), rounded up to a multiple of
+  the step the scan had to keep (1, 2, 4 …: while reading at most 96 layers per object are kept, then every
+  second one goes); `rings` holds the first object layer and every `step`-th after it, at most 24. For example
+  n = 21, 65, 89, 128, 523 give steps 3, 3, 4, 6, 24 and 7, 22, 23, 22, 22 rings.
+- A ring is its layer's height `z` and its outer-wall paths as flat `[x, y, x, y, …]` lists in bed millimetres.
+  A ring holds at most 128 points over all its paths (at most 64 paths): points closer than 0.5 mm to the last
+  kept one are left out, and the distance doubles while a ring would run over; the start and the end of each
+  path stay. Points are stored in steps of 0.02 mm; numbers carry at most two decimals.
+- `z_max` is the object's highest layer and `bounds` its `[xmin, ymin, xmax, ymax]` over all its outer-wall
+  moves; both are `null` for an object without outer wall (`layers` 0, `rings` empty). `objects` lists every
+  object of the file in the order they appear. `truncated` is `true` when the file defines more than 64 objects
+  or a name longer than 127 bytes (those are left out), or when a ring had more paths than it holds or a point
+  lay outside ±655 mm.
+
+Errors, as `{"error":"…"}`:
+
+| Status | Error | When |
+|---|---|---|
+| 400 | `Invalid protected G-code path` / `Invalid object` | Malformed request, unknown parameter, unsafe path, `object` missing or empty. |
+| 404 | `G-code file unavailable` | The file is not there. |
+| 404 | `No objects in the G-code file` | The file has no `EXCLUDE_OBJECT_DEFINE` or `EXCLUDE_OBJECT_START`. |
+| 404 | `Object not found` | The file has objects, but not this one. |
+| 409 | `Object preview waits for the print start` | While a print runs, a request for **that print's file** (`storage=internal`) before the service has seen layer 1 (the layer path's `The running print has not reached that layer` rule; layer numbers play no part here). Nothing is read. |
+| 413 | `Object preview file too large` | The file is larger than 50 MiB (52428800 bytes); it is not read. |
+| 413 | `Object preview scan limit reached` | The scan took longer than 20 s. For 300 s afterwards that file (unchanged) is refused at once, for any object. |
+| 503 | `Object preview busy; retry shortly` | A layer-path or object-preview scan runs, or the pause after the last one lasts. |
+| 503 | `Printer is homing or starting a print; retry shortly` | The read hold (see below): no read begins, and a read that runs when it comes on ends with this answer and is not kept. |
+| 503 | `Out of memory` | Memory ran out; nothing is kept and the next request reads again. |
+| 500 | `Cannot read the G-code file` | A read error. |
+
+The scan runs on the layer path's single worker (a layer-path scan then answers `Layer path busy`, and the other
+way round), at its lower priority and followed by its pause. One file is kept at a time; it is dropped, and its
+memory freed, when another file is scanned, when the file changes, 30 minutes after the last request to this
+route (checked on every pass of the main loop), when a print of another file starts (a new job uuid, or the
+direct stream going from an idle state to `printing`) and when a print ends (`printing` or `paused` turning into `standby`,
+`complete`, `cancelled` or `error`). What is kept for the file of the print that starts stays: the request for
+it is still refused until layer 1 and is then answered from memory instead of a second read. A read of that file
+that is still running when the print starts is ended by the read hold and read again after layer 1.
+It holds at most 64 objects × 24 rings × 128 points.
+
+## G-code reads while the printer homes
+
+Seen on the printer on 12 and 18 November 2026 (#396): while the printer homed for a print start, a long read of a large
+G-code file on the printer's two small cores came with the MCU shutdown `Timer too close` (error 803), and the
+printer program crashed. So while the printer homes, levels, probes or starts a print, CC2 Control begins no read of
+a G-code file for the layer path, the object preview or `POST /api/gcode-files/thumbnail` (the picture a slicer
+embedded, read from up to the first 4 MiB of the file), whichever file is asked for. Those requests are answered
+**503** `{"error":"Printer is homing or starting a print; retry shortly"}`. The hold is on while
+
+- MQTT reports `machine.status` 5 (Auto leveling), 7 (Resonance test), 8 (Self check) or 10 (Manual homing);
+- a print has not reached layer 1: `machine.status` 2, state `printing` or `paused`, and `print.current_layer` of
+  `GET /api/printer` (the direct stream's value when it has one) below 1, which covers heating, homing, probing and
+  the purge of the start;
+- a console job of CC2 Control runs whose command homes or probes (a line starting with `G28`, `G29`, `G180`,
+  `PROBE`, `PROBE_…`, `BED_MESH_CALIBRATE`, `SCREWS_TILT_CALCULATE`, `Z_TILT_ADJUST`, `SHAPER_CALIBRATE` or
+  `TEST_RESONANCES`), for example the screw tramming session, because MQTT reports such a job a poll later;
+- the bed mesh calibration of CC2 Control homes or probes (not while it heats or soaks).
+
+The MQTT states count only while the printer is connected, registered and fresh (last message within 15 s, like
+the other checks): without the printer nothing is held, so files can still be browsed, and a printer that stops
+reporting releases the hold after 15 s. What is remembered is still answered (the layer path's last layer and its
+scan-limit answer, the object preview's file and its size and limit answers); the 409 refusals for the running
+print's file come first. A layer-path or object-preview scan that runs when the hold comes on ends at its next line
+(the main loop passes the hold on at least once a second) with this 503; nothing of it is kept as a result. A
+picture is read on the request thread and cannot be ended that way; its read keeps the service's priority, because
+lowering it would also slow the main loop (MQTT, the emergency stop) and going back needs privileges. The page waits
+and asks again every 3 s with the text "Waiting until the printer is ready…" (layer path, object preview); the
+picture queue rests 3 s after such an answer and then asks for the same picture again. `gcode_read_blocked` and
+`gcode_read_stopped` in `GET /api/health` count the answers.
+
+The same hold applies to the scan of **the running print's file** that finds its layer count and print time for
+`GET /api/printer` (`print.total_layers` when the printer reports none, the remaining time from the file). Seen on the
+printer on 18 November 2026: that scan of a 52 MB file (about 21 s) ran into the homing of the print start, then
+error 803; when it had ended 12 to 15 s earlier, there was none. While the hold is on, `GET /api/printer` (and the
+layer path's 409 check) start no such scan and leave nothing pending; `total_layers` is then the count the printer
+reports, or 0. The first call after the hold starts it. A scan that runs when the hold comes on ends at its next
+check (every 64 KiB) without a result and is started again after the hold. The scan runs at the layer path's lower
+priority on the analysis worker; because that worker also serves `inspect` and `metadata`, the priority is lowered
+only when it can be set back (root, or `RLIMIT_NICE` allows it) and is set back after the scan.
+
 ## G-code file list and uploads
 
 `GET /api/gcode-files` lists each storage (`internal`, `usb`) as
