@@ -1,3 +1,4 @@
+import { deleteRetrying } from '@/lib/delete-retry'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import { Download, FileText, Play, RefreshCw, Search, Trash2, Upload as UploadIcon } from 'lucide-preact'
@@ -11,10 +12,14 @@ import { errText, notify, request } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { duration, fileSize } from '@/lib/format'
 import { compareFileDates, fileModified } from '@/lib/file-date'
-import { startFile } from '@/pages/print-dialog'
+import { startFileOfSize } from '@/pages/print-dialog'
 import { QueuedChip } from '@/components/queue-next'
+import { FilePicture } from '@/components/file-picture'
+import { type FileCut, type FileEntry as Entry, fileTag, listFiles } from '@/lib/files'
+import { useFilePicture } from '@/lib/pictures'
+import { Tag } from '@/components/ui/badge'
+import { tooLargeForPrinter } from '@/lib/printer-file-limit'
 
-type Entry = { storage: 'internal' | 'usb'; file: any }
 const key = (e: { storage: string; path?: string; file?: any }) => `${e.storage}\n${e.path ?? e.file.path}`
 // Let the browser stream/save the attachment; never buffer a large G-code in a Blob.
 const download = (entry: Entry) => {
@@ -71,43 +76,16 @@ export const Files = () => {
     [loaded, setLoaded] = useState(false)
   const listing = useRef<AbortController | null>(null)
   // Warn only when traversal guards (or an older backend) leave a partial list.
-  const [cut, setCut] = useState<{ storage: string; n: number; total: number }[]>([])
+  const [cut, setCut] = useState<FileCut[]>([])
 
   const refresh = async (announce = false) => {
     listing.current?.abort()
     const controller = new AbortController()
     listing.current = controller
     try {
-      const data = await request('/api/gcode-files', { signal: controller.signal }),
-        next: Entry[] = [],
-        partial: typeof cut = []
-      for (const [storage, group] of [
-        ['internal', data.internal],
-        ['usb', data.usb],
-      ] as const) {
-        const files: any[] = [...(group?.files || [])]
-        let batch = group
-        let scanCut = Boolean(group?.scan_truncated)
-        const cursors = new Set<string>()
-        while (batch?.has_more) {
-          const cursor = batch.next
-          if (!cursor || typeof cursor.modified !== 'string' || typeof cursor.path !== 'string' || cursors.size >= 32)
-            throw Error(t('files.list_changed_retry'))
-          const encoded = new URLSearchParams({ storage, before: cursor.modified, file: cursor.path }).toString()
-          if (cursors.has(encoded)) throw Error(t('files.list_changed_retry'))
-          cursors.add(encoded)
-          batch = (await request(`/api/gcode-files/page?${encoded}`, { signal: controller.signal }))[storage]
-          if (!batch || !Array.isArray(batch.files)) throw Error(t('files.list_changed_retry'))
-          files.push(...batch.files)
-          scanCut ||= Boolean(batch.scan_truncated)
-        }
-        const unique = new Map(files.map(file => [file.path, file]))
-        for (const file of unique.values()) next.push({ storage, file })
-        if (scanCut || (group?.has_more === undefined && group?.truncated))
-          partial.push({ storage, n: unique.size, total: Math.max(Number(group.total) || 0, unique.size) })
-      }
+      const { entries: next, cut: partial, space: free } = await listFiles(controller.signal)
       if (controller.signal.aborted) return
-      setSpace({ internal: data.internal?.space, usb: data.usb?.space })
+      setSpace(free)
       setEntries(next)
       setCut(partial)
       const available = new Set(next.map(key))
@@ -168,7 +146,7 @@ export const Files = () => {
     )
       return
     try {
-      const r = await fetch('/api/gcode-files/delete', body(storage, path))
+      const r = await deleteRetrying(fetch, '/api/gcode-files/delete', body(storage, path))
       if (!r.ok) throw Error(await failure(r, true))
       if (sel && key(sel) === key(e)) setSel(null)
       notify(tpl('files.deleted_path_from_where', { path, where: where(storage) }))
@@ -199,7 +177,7 @@ export const Files = () => {
       try {
         const r =
           kind === 'delete'
-            ? await fetch('/api/gcode-files/delete', body(i.storage, i.path))
+            ? await deleteRetrying(fetch, '/api/gcode-files/delete', body(i.storage, i.path))
             : await fetch('/api/gcode-files/copy', body(i.storage, `${dest}\n${i.path}`))
         if (!r.ok) throw Error(await failure(r, kind === 'delete'))
         if (kind === 'delete') toggle(key(i), false)
@@ -220,8 +198,9 @@ export const Files = () => {
       notify(tpl(kind === 'delete' ? 'files.deleted_n_selected_files' : 'files.copied_n_selected_files', { n: done }))
   }
 
+  // The name column carries the picture as well, so it takes what the short Storage column can spare.
   const cols =
-    'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-edge px-3 py-2 cc2-md:grid-cols-[1.6fr_.55fr_.75fr_.75fr_1.25fr]'
+    'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-edge px-3 py-2 cc2-md:grid-cols-[2.05fr_.5fr_.65fr_.45fr_1.25fr]'
   return (
     <Page title="common.files" sub="files.browse_protected_g_code_storage_on">
       <div class="cc2-storage-space mb-3 grid gap-3 cc2-sm:grid-cols-2">
@@ -317,7 +296,8 @@ export const Files = () => {
                   sel && key(sel) === key(e) && 'bg-field outline outline-1 -outline-offset-1 outline-cyan'
                 )}
               >
-                <div class="cc2-file-identity flex min-w-0 items-center gap-2.5 font-semibold">
+                {/* A narrow window gives the picture and the name the first line and the actions the last. */}
+                <div class="cc2-file-identity col-span-2 flex min-w-0 items-center gap-2.5 font-semibold cc2-md:col-span-1">
                   <input
                     type="checkbox"
                     title={t('files.select_file')}
@@ -326,16 +306,26 @@ export const Files = () => {
                     onClick={ev => ev.stopPropagation()}
                     onChange={ev => toggle(key(e), ev.currentTarget.checked)}
                   />
-                  <FileText {...I} class="shrink-0" />
-                  <button
-                    type="button"
-                    class="cc2-file-name min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline"
-                    title={e.file.path}
-                    onClick={() => setSel(e)}
-                  >
-                    {e.file.path}
-                  </button>
-                  <QueuedChip storage={e.storage} path={e.file.path} />
+                  <FilePicture storage={e.storage} path={e.file.path} tag={fileTag(e.file)} row />
+                  {/* The tags (queue, not printable) sit under the name, so the name keeps the width of the column. */}
+                  <div class="grid min-w-0 flex-1 justify-items-start gap-1">
+                    <button
+                      type="button"
+                      class="cc2-file-name max-w-full min-w-0 text-left font-semibold [overflow-wrap:anywhere] hover:underline"
+                      title={e.file.path}
+                      onClick={() => setSel(e)}
+                    >
+                      {e.file.path}
+                    </button>
+                    <span class="cc2-file-chips flex flex-wrap items-center gap-1.5">
+                      <QueuedChip storage={e.storage} path={e.file.path} />
+                      {tooLargeForPrinter(e.file.size) && (
+                        <Tag class="border-red text-red" title={t('files.not_printable_2gib')} data-not-printable>
+                          {t('files.not_printable')}
+                        </Tag>
+                      )}
+                    </span>
+                  </div>
                 </div>
                 <span class="hidden cc2-md:inline">{fileSize(e.file.size)}</span>
                 <span class="hidden cc2-md:inline">
@@ -344,7 +334,7 @@ export const Files = () => {
                     : t('files.date_unavailable')}
                 </span>
                 <span class="hidden cc2-md:inline">{e.storage === 'usb' ? 'USB' : t('files.internal')}</span>
-                <div class="flex gap-1.5">
+                <div class="order-last col-span-2 flex justify-self-end gap-1.5 cc2-md:order-none cc2-md:col-span-1 cc2-md:justify-self-auto">
                   <Button
                     class="px-2.5"
                     title={t('files.download_g_code')}
@@ -360,7 +350,7 @@ export const Files = () => {
                     class="px-2.5"
                     onClick={ev => {
                       ev.stopPropagation()
-                      startFile(e.storage, e.file.path)
+                      startFileOfSize(e.storage, e.file.path, e.file.size)
                     }}
                   >
                     <Play {...I} />
@@ -391,7 +381,7 @@ export const Files = () => {
             </p>
           ))}
         </Card>
-        <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path)} onDelete={remove} />
+        <Detail entry={sel} onPrint={e => startFileOfSize(e.storage, e.file.path, e.file.size)} onDelete={remove} />
       </div>
     </Page>
   )
@@ -406,27 +396,15 @@ const Detail = ({
   onPrint: (e: Entry) => void
   onDelete: (e: Entry) => void
 }) => {
-  const [thumb, setThumb] = useState(''),
-    [meta, setMeta] = useState<any>(null)
+  const [meta, setMeta] = useState<any>(null)
   const k = entry ? `${key(entry)}\n${Number(entry.file.size || 0)}\n${Number(entry.file.modified || 0)}` : ''
+  // The same picture as in the file's row: one request serves both.
+  const thumb = useFilePicture(entry?.storage || '', entry?.file.path || '', entry ? fileTag(entry.file) : '')
   useEffect(() => {
-    setThumb('')
     setMeta(null)
     if (!entry) return
-    let dead = false,
-      url = ''
+    let dead = false
     const { storage, file } = entry
-    ;(async () => {
-      try {
-        const r = await fetch('/api/gcode-files/thumbnail', body(storage, file.path))
-        const blob = await r.blob()
-        if (!r.ok || !blob.type.startsWith('image/')) throw Error('no thumbnail')
-        url = URL.createObjectURL(blob)
-        if (!dead) setThumb(url)
-      } catch {
-        /* the placeholder stays */
-      }
-    })()
     ;(async () => {
       try {
         let m = metaCache.get(k)
@@ -441,7 +419,6 @@ const Detail = ({
     })()
     return () => {
       dead = true
-      if (url) URL.revokeObjectURL(url)
     }
   }, [k])
   const ok = (v: any) => v !== null && v !== undefined && Number.isFinite(Number(v)) && Number(v) >= 0
@@ -466,6 +443,11 @@ const Detail = ({
       </div>
       <div>
         <Row label="files.size" value={entry ? fileSize(entry.file.size) : '—'} />
+        {entry && tooLargeForPrinter(entry.file.size) && (
+          <div class="my-2 text-xs text-red" data-not-printable>
+            {t('files.not_printable_2gib')}
+          </div>
+        )}
         <Row
           label="files.layers"
           value={meta && ok(meta.layers) && Number(meta.layers) > 0 ? Math.round(Number(meta.layers)) : '—'}

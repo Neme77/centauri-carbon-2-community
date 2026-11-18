@@ -12,12 +12,22 @@ try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}})
  const origin=server.resolvedUrls.local[0]
  await page.goto(origin+'#dashboard');await page.locator('.cc2-dashboard').waitFor()
+ const heading = page.getByRole('heading', { level: 1 })
+ const checkHeading = async () => {
+  await heading.waitFor({ state: 'attached' })
+  assert.equal(await heading.count(), 1, 'each responsive layout exposes exactly one h1')
+  assert((await heading.innerText()).trim(), 'the main heading has a name')
+ }
+ await checkHeading()
  await page.getByTitle('Collapse menu',{exact:true}).click();await page.waitForTimeout(250)
  assert.equal(await page.locator('#cc2-navigation').evaluate(e=>e.getBoundingClientRect().width),62)
  const icon=page.locator('#cc2-navigation button[title="Expand menu"] svg')
  assert.equal(await icon.evaluate(e=>e.getBoundingClientRect().width),22,'expand icon must not shrink behind the retained label')
  for(const [width,height] of [[320,844],[390,844],[768,1024],[900,1100],[900,450]]){
   await page.setViewportSize({width,height});await page.reload()
+  await checkHeading()
+  assert.equal(await heading.innerText(), 'CC2 Control')
+  assert.equal(await heading.evaluate(el => getComputedStyle(el).fontSize), '14px')
   await page.locator('#cc2-menu-toggle').click();await page.waitForTimeout(250)
   const labels=await page.locator('#cc2-navigation nav a span').evaluateAll(es=>es.map(e=>getComputedStyle(e).visibility))
   assert(labels.length>=10&&labels.every(v=>v==='visible'),'saved desktop collapse must never hide mobile drawer labels')
@@ -32,5 +42,14 @@ try{
   assert(rings.every(r=>r.outer===76&&r.centre===34),'Canvas ring outer size and inner hole')
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
  }
- console.log('PASS: centred collapsed icons, visible expand icon, persisted-collapse mobile drawer labels and responsive Canvas rings')
+ const pages = await page.locator('#cc2-navigation nav a[href^="#"]').evaluateAll(links => links.map(link => link.getAttribute('href')))
+ assert(pages.length >= 10)
+ for (const width of [1440, 390]) {
+  await page.setViewportSize({ width, height: 1000 })
+  for (const hash of pages) {
+   await page.goto(origin + hash)
+   await checkHeading()
+  }
+ }
+ console.log('PASS: centred collapsed icons, visible expand icon, persisted-collapse mobile drawer labels and responsive Canvas rings and exactly one accessible h1 on every page at desktop/mobile widths')
 }finally{await browser?.close();await server.close()}

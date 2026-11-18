@@ -48,9 +48,11 @@ import {
 export const placeName = (slot: number) =>
   slot === EXTERNAL ? t('spools.external') : tpl('common.slot_n', { n: slot + 1 })
 
+// A size class from the caller replaces the default one: with two size utilities on one element their order
+// in the stylesheet would decide, not the caller.
 export const Swatch = ({ color, class: c }: { color: string; class?: string }) => (
   <span
-    class={cn('inline-block size-4 shrink-0 rounded-full border border-white/30', c)}
+    class={cn('inline-block shrink-0 rounded-full border border-white/30', !/(^|\s)size-/.test(c ?? '') && 'size-4', c)}
     style={{ background: color || 'transparent' }}
   />
 )
