@@ -496,5 +496,12 @@
  "Cloud slicing error, print cancelled": "Chyba cloudového slicování, tisk byl zrušen",
  "Print file download failed, print cancelled": "Stažení tiskového souboru se nezdařilo, tisk byl zrušen",
  "The device will restart after the camera firmware update is complete.": "Po dokončení aktualizace firmwaru kamery se zařízení restartuje.",
- "Camera firmware update is complete. The device will restart in 2 seconds.": "Aktualizace firmwaru kamery je dokončena. Zařízení se za 2 sekundy restartuje."
+ "Camera firmware update is complete. The device will restart in 2 seconds.": "Aktualizace firmwaru kamery je dokončena. Zařízení se za 2 sekundy restartuje.",
+  "Ready to create": "Připraveno k tisku",
+  "Idle": "Připraveno",
+  "Nozzle": "Tryska",
+  "Build plate": "Tisková deska",
+  "Chamber": "Komora",
+  "Canvas connected": "CANVAS připojen",
+  "OFF": "Vyp."
 }

@@ -40,6 +40,8 @@ static void pad_top(obj *p,int16_t w,uint32_t s){(void)p;(void)w;(void)s;}
 static void pad_bottom(obj *p,int16_t w,uint32_t s){(void)p;(void)w;(void)s;}
 static void text_color(obj *p,uint32_t c,uint32_t s){(void)p;(void)s;assert(c>>24==255);}
 static void text(obj *p,const char *t){struct fake *f=p;assert(f->alive);f->label=t;}
+static void original_label_text(obj *p,const char *t){text(p,t);}
+static void original_label_static(obj *p,const char *t){text(p,t);}
 static void style(obj *p,const void *s,uint32_t v){(void)p;(void)s;(void)v;}
 static void center(obj *p,int a,int16_t x,int16_t y){(void)p;(void)a;(void)x;(void)y;}
 static void *event_data(event *e){return ((struct fake *)e)->data;}
@@ -74,6 +76,14 @@ int main(void){
         f->callback(f);assert(effective()==i);assert(saved==nd_language_native(i));
         assert(!strcmp(nd_display_language_name(),nd_language_names[i]));
         for(unsigned j=0;j<648;j++)assert(nd_display_get_text(j));
+        const char *expected=i<11 ? fixture_literal : nd_literals[0].value[i-11];
+        nd_display_label_text(f,fixture_literal);assert(f->label==expected);
+        nd_display_label_static(f,fixture_literal);assert(f->label==expected);
+        char filename[]="Idle"; /* same spelling, not a qualified UI address */
+        nd_display_label_text(f,filename);assert(f->label==filename);
+        nd_display_label_static(f,filename);assert(f->label==filename);
+        nd_display_label_text(f,NULL);assert(f->label==NULL);
+        nd_display_label_static(f,NULL);assert(f->label==NULL);
     }
     assert(!strcmp(nd_display_get_text(648),""));
     assert(daemon_calls==14 && refresh_calls==28);
@@ -95,6 +105,6 @@ int main(void){
     assert(fixture_native==1 && saved==-1 && daemon_calls==0);
     assert(error_label && ((struct fake *)error_label)->label[0]);
     assert(rmdir(preference)==0);assert(chdir("/")==0);assert(rmdir(dir)==0);
-    puts("PASS actual UI callbacks: 14 languages, bounds, persistence, event rejection, recreation, allocation and save failures");
+    puts("PASS actual UI callbacks: 14 languages, literal/static labels, user text and NULL preserved, persistence, Back and failures");
     return 0;
 }
