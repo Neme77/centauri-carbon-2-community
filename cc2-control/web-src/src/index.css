@@ -176,6 +176,19 @@
 :root[data-theme="aurora"] button[aria-pressed="true"] {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 30%, transparent), 0 4px 14px -6px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
+/* Klipper: flat neutral-grey dark theme in the style of the common Klipper web interfaces, with the Klipper red as accent. Status red is kept pinker than the accent so errors never read as plain buttons; every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="klipper"] {
+  color-scheme: dark;
+  --bg: #121212; --panel: #1e1e1e; --edge: #444444; --text: #f2f2f2; --muted: #a6a6a6; --field: #2a2a2a; --ink: #140404;
+  --cyan: #ff5a54; --green: #5fd068; --amber: #ffb42e; --red: #ff7d8e; --blue: #4aa8ff;
+  --well: #0b0b0b; --well-fg: #eeeeee;
+  --radius-card: 6px;
+  --shadow-card: 0 1px 2px #0006;
+  --shadow-pop: 0 10px 30px -6px #000b, 0 2px 8px #0008;
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 45%, transparent);
+}
+:root[data-theme="klipper"] nav a.text-cyan { box-shadow: inset 3px 0 0 var(--cyan); }
+:root[data-theme="klipper"] .cc2-main section h2 { text-transform: uppercase; letter-spacing: .06em; font-size: .8125rem; }
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400-700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
