@@ -44,8 +44,7 @@ try {
   await page.goto(`${origin}/#spools`)
   await page.locator('[data-slot="2"]').getByRole('button', { name: 'Choose spool' }).click()
   await dialog.waitFor()
-  // Focus is moved by the same after-paint effect that installs Escape.
-  // Visible DOM alone does not prove that the keyboard handler is ready.
+  // Focus and Escape are installed together before the dialog is painted.
   await page.waitForFunction(() => document.querySelector('[role=dialog]')?.contains(document.activeElement))
   await page.mouse.click(2, 2)
   assert.equal(await dialog.count(), 1, 'manual spool chooser also keeps accidental outside clicks')
