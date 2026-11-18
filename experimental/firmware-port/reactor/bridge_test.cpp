@@ -153,10 +153,17 @@ int main(){
   pause_action=[](void*,double){return 1.0;};cc2_wait(out,&c,1,fallback);assert(*reinterpret_cast<int*>(out)==9&&c.waiting.empty());destroy_json(out);
  }
  assert(alive==0&&json_alive==0);
+ // Toolhead shutdown: only can_pause changes; the lookahead slot (+36) and all other bytes stay untouched.
+ {
+  alignas(16) byte toolhead[0x400];for(size_t i=0;i<sizeof(toolhead);i++)toolhead[i]=static_cast<byte>(i*7+1);
+  byte *can_pause=static_cast<byte*>(at(toolhead,0x90));*can_pause=1;
+  byte expected[sizeof(toolhead)];std::memcpy(expected,toolhead,sizeof(toolhead));expected[can_pause-toolhead]=0;
+  cc2_toolhead_shutdown(toolhead);assert(std::memcmp(expected,toolhead,sizeof(toolhead))==0);
+ }
 #ifdef CC2_NATIVE_CO
  if(!floating_cycles())return 42;
  native_cycles();
 #endif
- std::cout<<"PASS: replacement bridge callback/timer/poll/wait logic, refcounts, exception cleanup, reallocation and fd removal\n";
+ std::cout<<"PASS: replacement bridge callback/timer/poll/wait/toolhead-shutdown logic, refcounts, exception cleanup, reallocation and fd removal\n";
  std::cout<<"LIMIT: vendor entry calls mocked; original ARM function binding is separately fingerprint-audited and requires runtime testing.\n";
 }

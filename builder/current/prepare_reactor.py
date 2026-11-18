@@ -42,7 +42,7 @@ def verify_arm(path):
 def verify_bridge_exports(module):
     symbols=output([PREFIX+'-readelf','--wide','--symbols',module])
     names={line.split()[-1] for line in symbols.splitlines() if line.split()}
-    if not {'cc2_callback','cc2_timers','cc2_poll','cc2_wait'}<=names:
+    if not {'cc2_callback','cc2_timers','cc2_poll','cc2_wait','cc2_toolhead_shutdown'}<=names:
         raise RuntimeError('Missing bridge entry points')
 
 
