@@ -15,6 +15,9 @@ extern const char *nd_display_get_text(unsigned);
 extern const char *nd_display_language_name(void);
 extern void nd_display_set_native_language(unsigned);
 extern void *nd_display_language_menu(void *);
+extern void nd_display_label_text(void *, const char *);
+extern void nd_display_label_static(void *, const char *);
+_Static_assert(ND_HOOK_COUNT==6,"Unexpected display hook contract");
 
 static int exact_executable(void) {
     int fd=open("/proc/self/exe",O_RDONLY|O_CLOEXEC);
@@ -30,14 +33,15 @@ __attribute__((constructor)) static void install_language_hooks(void) {
         syslog(LOG_ERR,"cc2-native-display: unsupported executable; original GUI retained");
         return;
     }
-    const uintptr_t replacements[4]={
+    const uintptr_t replacements[ND_HOOK_COUNT]={
         (uintptr_t)nd_display_get_text,(uintptr_t)nd_display_language_name,
-        (uintptr_t)nd_display_set_native_language,(uintptr_t)nd_display_language_menu
+        (uintptr_t)nd_display_set_native_language,(uintptr_t)nd_display_language_menu,
+        (uintptr_t)nd_display_label_text,(uintptr_t)nd_display_label_static
     };
     long page_size=sysconf(_SC_PAGESIZE);
     if(page_size<=0 || ((unsigned long)page_size & ((unsigned long)page_size-1))) return;
-    uintptr_t pages[4];unsigned count=0;
-    for(unsigned i=0;i<4;i++) {
+    uintptr_t pages[ND_HOOK_COUNT];unsigned count=0;
+    for(unsigned i=0;i<ND_HOOK_COUNT;i++) {
         uintptr_t address=nd_hook_addresses[i];
         if(address%4 || replacements[i]%4 ||
            memcmp((const void *)address,nd_hook_expected[i],8)) return;
@@ -55,7 +59,7 @@ __attribute__((constructor)) static void install_language_hooks(void) {
             return;
         }
     }
-    for(unsigned i=0;i<4;i++) {
+    for(unsigned i=0;i<ND_HOOK_COUNT;i++) {
         uint32_t patch[2]={0xe51ff004u,(uint32_t)replacements[i]};
         memcpy((void *)nd_hook_addresses[i],patch,sizeof(patch));
         __builtin___clear_cache((char *)nd_hook_addresses[i],(char *)nd_hook_addresses[i]+8);
