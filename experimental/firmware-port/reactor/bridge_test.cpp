@@ -160,6 +160,45 @@ int main(){
   byte expected[sizeof(toolhead)];std::memcpy(expected,toolhead,sizeof(toolhead));expected[can_pause-toolhead]=0;
   cc2_toolhead_shutdown(toolhead);assert(std::memcmp(expected,toolhead,sizeof(toolhead))==0);
  }
+ // Toolhead shutdown against a model of the vendor look-ahead queue (read from 02.01.01.13):
+ // ToolHead +36 shared_ptr<LookAheadQueue>, queue vector<Move*>; flush() copies the queue,
+ // calls _process_moves(copy) (the reactor can run the shutdown handler there, as in drip_move),
+ // then deletes and erases its own moves; check_busy() reads queue.empty(); drip_move's
+ // end-signal catch calls LookAheadQueue::reset(). CC2_SHOW_VENDOR_SHUTDOWN swaps in the vendor
+ // handler (shared_ptr reset) to show the use-after-free under ASan.
+ {
+  struct M{static int &live(){static int n=0;return n;}M(){++live();}~M(){--live();}};
+  struct Q{std::vector<M*> q;~Q(){for(auto m:q)delete m;}};
+  const size_t la=sizeof(void*)==4?36:40;
+  alignas(16) byte th[0x400]{};
+  auto &sp=*new(at(th,la))std::shared_ptr<Q>(std::make_shared<Q>());
+  Q *const original=sp.get();
+  static void (*shutdown)(void*)=nullptr;
+#ifdef CC2_SHOW_VENDOR_SHUTDOWN
+  shutdown=[](void *t){*static_cast<byte*>(at(t,0x90))=0;static_cast<std::shared_ptr<Q>*>(at(t,sizeof(void*)==4?36:40))->reset();};
+#else
+  shutdown=&cc2_toolhead_shutdown;
+#endif
+  auto add=[&](int n){for(int i=0;i<n;i++)sp->q.push_back(new M);};
+  auto flush=[&](bool shut_inside){Q *self=sp.get();std::vector<M*> copy=self->q;if(shut_inside)shutdown(th);(void)copy;for(auto m:self->q)delete m;self->q.clear();};
+  auto check_busy=[&](){return sp->q.empty();};
+  auto drip_end=[&](){for(auto m:sp->q)delete m;sp->q.clear();};
+  // 1. shutdown while flush() is inside _process_moves: no use-after-free, no double free
+  *static_cast<byte*>(at(th,0x90))=1;add(5);flush(true);
+  assert(sp.get()==original&&*static_cast<byte*>(at(th,0x90))==0&&sp->q.empty()&&M::live()==0);
+  // 2. later check_busy() from the idle timeouts reads the kept, valid queue
+  for(int i=0;i<3;i++)assert(check_busy());
+  // 3. repeated shutdown, also with moves still queued and no flush running
+  add(4);for(int i=0;i<3;i++)shutdown(th);
+  assert(sp.get()==original&&sp->q.size()==4&&M::live()==4&&!check_busy());
+  // 4. the kept moves are consumed once by the next flush or by drip_move's end-signal reset
+  flush(false);assert(M::live()==0&&check_busy());
+  add(3);shutdown(th);drip_end();assert(M::live()==0&&check_busy());
+  // 5. no growth: many shutdown/flush rounds leave nothing behind
+  for(int r=0;r<100;r++){add(2);flush(true);shutdown(th);}
+  assert(M::live()==0&&sp->q.empty()&&sp.get()==original);
+  sp.~shared_ptr();assert(M::live()==0);
+ }
 #ifdef CC2_NATIVE_CO
  if(!floating_cycles())return 42;
  native_cycles();
