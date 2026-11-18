@@ -1302,7 +1302,7 @@ static void spools_delete_response(int fd, const char *body, size_t length) {
 }
 
 /* slot=N and spool=<id>: the spool now in that tray; an empty id empties it. */
-static void spools_assign_response(int fd, const char *body, size_t length) {
+static void spools_assign_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
     spool_form f;
     const char *id;
     int slot;
@@ -1312,6 +1312,25 @@ static void spools_assign_response(int fd, const char *body, size_t length) {
     spool_entry *sp = NULL;
     if (id[0] && !(sp = spool_find(id))) { spools_fail(fd, 404, "Unknown spool"); return; }
     if (sp && sp->archived) { spools_fail(fd, 409, "An archived spool cannot be loaded"); return; }
+    const char *native_state = uds_print_state(&telemetry);
+    int printing = (mqtt->have_machine_status && mqtt->machine_status == 2) ||
+                   (native_state && (!strcmp(native_state, "printing") || !strcmp(native_state, "paused")));
+    if (sp && printing) {
+        /* During a colour change the reports can disagree or the channel can be unassigned.
+         * Keep the feeding spool bound while its usage is still being attributed. */
+        double channel;
+        int active = uds_value(&telemetry, U_CANVAS_CHANNEL, &channel) &&
+                     channel >= 0 && channel < SPOOL_EXTERNAL && channel == floor(channel) ? (int)channel : -1;
+        int reported = mqtt->have_canvas_active_tray ? mqtt->canvas_active_tray_id : -1;
+        int last = active < 0 && spools.job.active ? spools.job.last_tray : -1;
+        for (int source = 0; source < SPOOL_EXTERNAL; ++source) {
+            if (source != slot && (source == active || source == reported || source == last) &&
+                !strcmp(spools.slots[source].spool, sp->id)) {
+                spools_fail(fd, 409, "Cannot move a Canvas spool that is feeding a print");
+                return;
+            }
+        }
+    }
     spool_store *before = spools_snapshot(fd);
     if (!before) return;
     if (sp) spools_bind(slot, sp);

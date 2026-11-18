@@ -79,13 +79,6 @@ int main(void){
  assert(!canvas_slot_policy(&m,1).load&&!canvas_slot_policy(&m,1).unload);
  assert(canvas_recovery_load_allowed(&m,1)&&!canvas_recovery_load_allowed(&m,0));
  m.machine_status=2;assert(!canvas_recovery_load_allowed(&m,1));
- feed("{\"method\":\"cc2_status\",\"params\":{\"eventtime\":5.1,\"status\":{\"print_stats\":{\"state\":\"printing\"},\"canvas_dev\":{\"active_cid\":1,\"canvas_lite\":{\"channels1\":{\"status\":2}}}}}}");
- read_canvas(&m,response,sizeof(response));
- assert(canvas_material_edit_allowed(&m,2)&&!canvas_material_edit_allowed(&m,1));
- assert(strstr(response,"\"live_material_edit\":true")&&!canvas_slot_policy(&m,2).load);
- feed("{\"method\":\"cc2_status\",\"params\":{\"eventtime\":5.2,\"status\":{\"print_stats\":{\"state\":\"paused\"}}}}");
- read_canvas(&m,response,sizeof(response));
- assert(!canvas_material_edit_allowed(&m,2)&&!strstr(response,"\"live_material_edit\":true"));
  m.machine_status=1;m.last_message-=60;assert(!canvas_recovery_load_allowed(&m,1));m.last_message=time(NULL);
  /* Disabling the experimental source restores the exact untouched MQTT cache. */
  char original_mqtt[sizeof(m.canvas_snapshot)];memcpy(original_mqtt,m.canvas_snapshot,sizeof(original_mqtt));

@@ -64,19 +64,6 @@ static inline int canvas_reported_status(const mqtt_client *m,int slot) {
  }
  return found;
 }
-/* During a print, only the metadata of a sensor-confirmed standby tray may be
- * changed. Require agreement about which tray actually feeds the head. */
-static inline int canvas_material_edit_allowed(const mqtt_client *m,int slot) {
- if(slot<0||slot>3||!m->have_machine_status)return 0;
- if(m->machine_status==1)return !m->canvas_direct_known||m->canvas_direct_idle;
- time_t now=time(NULL);
- int active=m->canvas_direct_active;
- return m->machine_status==2&&m->canvas_direct_printing&&canvas_source_valid(m)
-   &&now>=m->last_message&&now-m->last_message<=15
-   &&(m->canvas_uds_ready||(m->canvas_report_at>0&&now>=m->canvas_report_at&&now-m->canvas_report_at<=15))
-   &&m->canvas_head_loaded&&active!=slot&&canvas_reported_status(m,active)==2
-   &&canvas_reported_status(m,slot)==1;
-}
 /* Explicit native-load recovery is separate from ordinary Load/Unload.
  * A lost head/channel association is not an empty head or a completed load. */
 static inline int canvas_recovery_load_allowed(const mqtt_client *m,int slot) {

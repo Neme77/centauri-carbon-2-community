@@ -71,7 +71,6 @@ typedef struct {
     char canvas_snapshot[8192];
     size_t canvas_snapshot_len;
     unsigned long canvas_revision; /* counts captured snapshots, so readers can tell a new one */
-    time_t canvas_report_at;
     time_t last_canvas_request;
     time_t canvas_watch_until;
     time_t canvas_material_read_at;
@@ -83,7 +82,7 @@ typedef struct {
     time_t discovery_ready_at;
     int canvas_active_tray_id;
     int have_canvas_active_tray;
-    int canvas_direct_known,canvas_direct_active,canvas_head_loaded,canvas_direct_idle,canvas_direct_printing;
+    int canvas_direct_known,canvas_direct_active,canvas_head_loaded,canvas_direct_idle;
     double external_temperature;
     int external_verified; /* One native readback, scoped to the current protected request. */
     /* Publishing a request is not acceptance: the printer answers on

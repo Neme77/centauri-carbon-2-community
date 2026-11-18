@@ -522,7 +522,6 @@ void uds_motion_light(const uds_client *c,mqtt_client *v){
  double channel=-2;
  v->canvas_direct_known=uds_fresh(c)&&c->have_head_filament&&c->have_print_state
   &&uds_value(c,U_CANVAS_CHANNEL,&channel)&&channel>=-1&&channel<=3&&channel==floor(channel);
- v->canvas_direct_printing=v->canvas_direct_known&&!strcmp(c->print_state,"printing");
  if(v->canvas_direct_known){
   v->canvas_direct_active=(int)channel;v->canvas_head_loaded=c->head_filament;
   v->canvas_direct_idle=!strcmp(c->print_state,"standby")||!strcmp(c->print_state,"complete")||!strcmp(c->print_state,"cancelled");

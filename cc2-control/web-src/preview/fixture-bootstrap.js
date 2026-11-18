@@ -52,8 +52,7 @@
         const unload=fresh&&!busy&&kind==='loaded'
         const transitionReason=state.headLoaded&&state.activeTray===-1?'unassigned_head':'transition'
         const recovery_load=fresh&&!busy&&state.headLoaded&&state.activeTray===-1&&t.status===1&&state.trays.length===4&&state.trays.every(t=>t.status===0||t.status===1)
-        const live_material_edit=fresh&&state.status===2&&kind==='present'&&state.headLoaded&&state.trays[state.activeTray]?.status===2
-        return {slot:t.tray_id,state:kind,load,unload,recovery_load,live_material_edit,reason_load:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='loaded'?'already_loaded':kind==='transition'?transitionReason:load?'none':'head_occupied',reason_unload:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='transition'?transitionReason:unload?'none':'not_loaded'}
+        return {slot:t.tray_id,state:kind,load,unload,recovery_load,reason_load:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='loaded'?'already_loaded':kind==='transition'?transitionReason:load?'none':'head_occupied',reason_unload:!fresh?'unavailable':busy?'busy':kind==='empty'?'empty':kind==='transition'?transitionReason:unload?'none':'not_loaded'}
       }),telemetry:{result:{canvas_info:{canvas_list:[{canvas_id:0,connected:state.canvasConnected===false?0:1,tray_list:state.trays}]}}}})
     if (path === '/api/canvas/unload/restart' && options.method === 'POST') {
       if (String(options.body) !== 'RESTART') return reply({ ok: false, error: 'Explicit restart confirmation required' }, 400)

@@ -3922,10 +3922,9 @@ static void canvas_response(int fd, const mqtt_client *mqtt) {
       mqtt->machine_status,mqtt->canvas_uds_ready?(telemetry.canvas.auto_refill?"true":"false"):(mqtt->have_auto_refill?(mqtt->auto_refill?"true":"false"):"null"),mqtt->canvas_uds_ready?"uds":"mqtt");
     for(int i=0;i<4;i++){
       canvas_slot_view v=canvas_slot_policy(mqtt,i);
-      json_builder_printf(&b,"%s{\"slot\":%d,\"state\":\"%s\",\"load\":%s,\"unload\":%s,\"recovery_load\":%s,\"live_material_edit\":%s,\"reason_load\":\"%s\",\"reason_unload\":\"%s\"}",
+      json_builder_printf(&b,"%s{\"slot\":%d,\"state\":\"%s\",\"load\":%s,\"unload\":%s,\"recovery_load\":%s,\"reason_load\":\"%s\",\"reason_unload\":\"%s\"}",
         i?",":"",i,canvas_kind_name(v.state),v.load?"true":"false",v.unload?"true":"false",
         canvas_recovery_load_allowed(mqtt,i)?"true":"false",
-        mqtt->machine_status==2&&canvas_material_edit_allowed(mqtt,i)?"true":"false",
         canvas_reason_name(v.reason_load),canvas_reason_name(v.reason_unload));
     }
     json_builder_printf(&b,"]");
@@ -5754,7 +5753,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/delete")==0) {
         spools_delete_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/assign")==0) {
-        spools_assign_response(fd,body,body_len);
+        spools_assign_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/dismiss")==0) {
         spools_dismiss_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/adjust")==0) {

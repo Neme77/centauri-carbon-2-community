@@ -283,10 +283,10 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     }
     if(!strncmp(action,"external:",9)||!strncmp(action,"canvas:catalog:",15)){
         time_t now=time(NULL);
-        int external=!strncmp(action,"external:",9);
-        if(!m->connected||!m->registered||(external&&(!m->have_machine_status||m->machine_status!=1))||
+        if(!m->connected||!m->registered||!m->have_machine_status||m->machine_status!=1||
            m->last_message<=0||now<m->last_message||now-m->last_message>15)
-            return reject(reason,reason_cap,external?"Filament controls require fresh idle telemetry":"Canvas material editing requires fresh printer telemetry");
+            return reject(reason,reason_cap,"Filament controls require fresh idle telemetry");
+        int external=!strncmp(action,"external:",9);
         if(external&&!m->external_verified)
             return reject(reason,reason_cap,"External filament requires native confirmation that Canvas is disconnected and the printer is idle");
         if(!strcmp(action,"external:load")||!strcmp(action,"external:unload")){
@@ -303,8 +303,8 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         else parsed=sscanf(action,"canvas:catalog:%d:%d:%d:%d:%6[0-9a-fA-F]%n",&slot,&brand,&type,&item,hex,&end);
         if(parsed!=(external?4:5)||!end||action[end]||strlen(hex)!=6)
             return reject(reason,reason_cap,"Invalid filament material selection");
-        if(!external&&(!canvas_source_valid(m)||canvas_reported_status(m,slot)<0||!canvas_material_edit_allowed(m,slot)))
-            return reject(reason,reason_cap,"Canvas material editing requires a known slot while idle or a present standby slot during a print");
+        if(!external&&(!canvas_source_valid(m)||canvas_reported_status(m,slot)<0))
+            return reject(reason,reason_cap,"Canvas material editing requires a known connected slot");
         const external_material *selected=NULL;
         for(size_t i=0;i<sizeof(external_materials)/sizeof(external_materials[0]);i++){
             const external_material *candidate=&external_materials[i];
@@ -576,9 +576,9 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     int fields=sscanf(action,"canvas:material:%d:%31[^:]:%15[^:]:%d:%d%n:%47[^:]:%47[^:]%n",&slot,a,colour,&min_temp,&max_temp,&short_end,line,maker,&long_end);
     size_t action_len=strlen(action);
     if((fields==5&&short_end>=0&&(size_t)short_end==action_len)||(fields==7&&long_end>=0&&(size_t)long_end==action_len)){
+        if(printing(m))return reject(reason,reason_cap,"Canvas material editing is blocked while printing");
+        if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Canvas material editing requires the printer to be idle");
         if(slot<0||slot>3)return reject(reason,reason_cap,"Canvas slot must be 1..4");
-        if(!canvas_material_edit_allowed(m,slot))
-            return reject(reason,reason_cap,"Canvas material editing requires an idle printer or a present standby slot during a print");
         if(!valid_material_name(a))return reject(reason,reason_cap,"Material name may contain only letters, numbers, internal spaces, +, - and _");
         if(strlen(colour)!=6||strspn(colour,"0123456789abcdefABCDEF")!=6)return reject(reason,reason_cap,"Canvas colour must be six hexadecimal digits");
         if(min_temp<120||max_temp>CC2_NOZZLE_TARGET_MAX||min_temp>=max_temp)return reject(reason,reason_cap,"Invalid Canvas nozzle temperature range");

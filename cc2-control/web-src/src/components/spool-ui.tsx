@@ -7,9 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input, Select } from '@/components/ui/field'
 import { Tag } from '@/components/ui/badge'
 import { control, errText, notify } from '@/lib/api'
-import { canvas, refreshCanvas } from '@/lib/canvas'
 import { type Key, t, tpl } from '@/lib/i18n'
-import { poll } from '@/lib/poll'
 import { presets, printer, view } from '@/lib/state'
 import {
   assignSpool,
@@ -518,13 +516,7 @@ const SpoolChooser = ({
   const state = lib.slots[slot]
   const tray = slot < EXTERNAL && state.printer && state.printer.status !== 0 ? state.printer : null
   const want = prefill ? { type: prefill.material, color: prefill.color } : tray
-  const printerState = printer.use()
-  const { idle, printing } = view(printerState.data)
-  const { controls } = canvas.use()
-  const watchTray = slot < EXTERNAL && reason !== 'material' && printing
-  useEffect(() => (watchTray ? poll(refreshCanvas, 2000) : undefined), [watchTray])
-  const canEditMaterial =
-    idle || (printerState.ok && printing && controls.some(c => c.slot === slot && c.live_material_edit))
+  const idle = view(printer.use().data).idle
   // The likely answers: the tray's spool, the one it held, and spools in storage with the filament it reports.
   // Everything else is one step away, in the inventory's order.
   const options = useMemo(() => {
@@ -547,9 +539,8 @@ const SpoolChooser = ({
       'spools.current'
     )
     const last = lib.spools.find(s => s.id === state.last)
-    // The spool that was there is the likeliest answer when filament goes back in; it is preselected only
-    // when it suits what the printer now reports.
-    if (last && last.remaining > 0) add(last, 'spools.was_here')
+    // Suggest the last spool when it is available in storage.
+    if (last && last.remaining > 0 && slotOf(lib, last.id) < 0) add(last, 'spools.was_here')
     if (want)
       for (const s of lib.spools.filter(x => !x.archived && slotOf(lib, x.id) < 0 && suits(x, want)).sort(bySuit(want)))
         add(s, 'spools.same_filament')
@@ -593,9 +584,7 @@ const SpoolChooser = ({
             chosen.material.toLowerCase().startsWith(String(p.name).toLowerCase())
         )
     : null
-  const canWrite = Boolean(
-    chosen && slot < EXTERNAL && reason !== 'material' && preset && canEditMaterial && !fits(chosen, tray)
-  )
+  const canWrite = Boolean(chosen && slot < EXTERNAL && reason !== 'material' && preset && idle && !fits(chosen, tray))
   const [write, setWrite] = useState(true)
   const total = lib.spools.filter(s => !s.archived).length
   const title: Key =
