@@ -7,3 +7,9 @@ The trial requires a fresh CANVAS controller sample, the native settled feed fla
 Build and run the ARM fixture with `make all test` in this directory. The fixture enters the actual ARM hook with the native stack layout and verifies the requested motor, its arguments, refusal cases and the stock runout branch. The library activates when preloaded by the printer launcher with the exact Community Firmware 02.01.01.07 executable installed at `/opt/usr/cc2-reactor-runtime-v2/elegoo_printer`. The constructor verifies the executable and the instructions before it changes the process image in memory.
 
 The regular updater does not load this trial. Hardware qualification needs a test launch with the existing printer modules and this library, followed by a print from one CANVAS slot and insertion into a spare slot. Observe the grip, uninterrupted printing and the updated slot and spool assignment in CC2 Control. Include an idle insertion, a colour change and a runout in the qualification.
+
+## Printer test
+
+On 2026-11-18, a Centauri Carbon 2 running the pinned 02.01.01.07 base printed from slot 1 while the operator inserted PLA Silk in empty slot 4. The operator confirmed that the feeder held the filament after release. The native log recorded two short-prefeed dispatches 9.5 seconds apart during insertion. Slot 4 then stayed present with no further dispatch over the next two minutes.
+
+The running web interface opened the spool question and showed the assigned spool in slot 4 after confirmation. The print continued from slot 1, and its recorded extrusion increased while slot 4 recorded zero extrusion. This run exercised insertion into one standby slot during a single-colour print. Idle insertion, colour changes and runout remain separate hardware test cases.
