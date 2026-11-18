@@ -184,6 +184,29 @@ try {
   const bowed = page.locator('[data-level-mesh-warning]').filter({ hasText: 'The plate is bowed by' })
   await bowed.waitFor()
   assert.match((await bowed.innerText()).replace(/\u00a0/g, ' '), /limit 0\.01 mm/)
+  // Every (i) of the settings block opens its text inside the card, also in the right column (at 1440 px four columns,
+  // at 800 px two).
+  const settingsBlock = page.locator('details[data-align="settings"]')
+  await settingsBlock.locator('summary').click()
+  for (const width of [1440, 800]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await page.waitForTimeout(300)
+    const hints = settingsBlock.locator('[data-align-hint] > button')
+    for (let i = 0; i < (await hints.count()); i++) {
+      await hints.nth(i).scrollIntoViewIfNeeded()
+      await hints.nth(i).click()
+      const tip = settingsBlock.locator('[data-hint-text]')
+      await tip.waitFor()
+      const box = await tip.boundingBox()
+      const cardNow = await page.locator('#screwFocus').boundingBox()
+      assert.ok(box.x >= cardNow.x - 0.5 && box.x + box.width <= cardNow.x + cardNow.width + 0.5, `${width} px: the text of (i) ${i + 1} stays inside the card (${Math.round(box.x)}–${Math.round(box.x + box.width)} / ${Math.round(cardNow.x)}–${Math.round(cardNow.x + cardNow.width)})`)
+      await page.keyboard.press('Escape')
+      await page.mouse.move(0, 0)
+      await tip.waitFor({ state: 'detached' })
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await settingsBlock.locator('summary').click()
   await page.locator('[data-screw-shape="FR"]').waitFor()
   await page.evaluate(() => localStorage.removeItem('cc2-mesh-align'))
   await page.unroute('**/api/experiments')

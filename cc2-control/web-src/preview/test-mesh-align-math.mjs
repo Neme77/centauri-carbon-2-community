@@ -15,11 +15,6 @@ import {
   parseAlignConfig,
   QUICK_TWIST_WARN_MM,
   referenceScrew,
-  tiltsBelowTarget,
-  latestScrewProbes,
-  QUICK_PROBE_TEMP_C,
-  QUICK_REFERENCE_MAX_AGE_DAYS,
-  quickReference,
 } from '../src/lib/mesh-align.ts'
 import { SCREW_CORNERS } from '../src/lib/screws.ts'
 import { asProfileReply, bowl, dome, noiseSource, saddle, syntheticMesh, twist } from './mesh-align-synthetic.mjs'
@@ -47,8 +42,6 @@ assert.deepEqual(
   SCREW_CORNERS.map(c => ({ id: c.id, x: c.x, y: c.y }))
 )
 assert.equal(ALIGN_DEFAULTS.tilt_span_mm, 240)
-assert.equal(ALIGN_DEFAULTS.target_tilt_mm, 0.1)
-assert.equal(ALIGN_DEFAULTS.max_rounds, 4)
 assert.equal(ALIGN_DEFAULTS.shape_warn_mm, 0.3)
 assert.equal(ALIGN_DEFAULTS.row0_is_min_y, true)
 assert.equal(ALIGN_DEFAULTS.thread_pitch_mm, 0.7, 'the CC2 screw: M4, 0.7 mm per turn')
@@ -63,7 +56,6 @@ assert.equal(ALIGN_DEFAULTS.clockwise_raises_bed, true, 'measured: clockwise fro
   near(a.residual_rms, 0, 1e-9, 'plane residual rms')
   assert.equal(a.shape, 'flat')
   assert.equal(a.count, 121)
-  assert.equal(a.aligned, false)
   assert.equal(a.shape_warning, false)
   near(a.raw_range, 0.31 + 0.72, 1e-9, 'the raw range still contains the tilt')
 }
@@ -236,19 +228,11 @@ for (const [tiltX, tiltY, expected] of [
   }
 }
 
-// "Aligned" needs both tilts below the target; the shape warning is independent of it.
+// The shape warning: above its limit, also with a small tilt; a large tilt alone is no shape warning.
 {
-  const target = ALIGN_DEFAULTS.target_tilt_mm
   const done = analyseMesh(syntheticMesh({ tiltX: 0.08, tiltY: -0.09, shape: dome(0.5) }))
-  assert.equal(done.aligned, true)
-  assert.equal(done.shape_warning, true, 'the warning stays although the alignment is done')
+  assert.equal(done.shape_warning, true, 'the warning comes with a small tilt as well')
   assert.ok(done.residual_range > 0.3)
-  assert.equal(analyseMesh(syntheticMesh({ tiltX: 0.04, tiltY: 0.12 })).aligned, false, 'one tilt above the target')
-  assert.equal(analyseMesh(syntheticMesh({ tiltX: -0.13, tiltY: 0.01 })).aligned, false, 'the sign does not matter')
-  assert.equal(tiltsBelowTarget(target, 0, target), false, 'at the target is not below it')
-  assert.equal(tiltsBelowTarget(0, -target, target), false)
-  assert.equal(tiltsBelowTarget(0.0999, -0.0999, target), true)
-  assert.equal(analyseMesh(syntheticMesh({ tiltX: 0.06, tiltY: 0.06 }), config({ target_tilt_mm: 0.05 })).aligned, false)
   const smooth = analyseMesh(syntheticMesh({ tiltX: 0.9, shape: dome(0.1) }))
   assert.equal(smooth.shape_warning, false, 'a large tilt alone is no shape warning')
   assert.equal(analyseMesh(syntheticMesh({ shape: dome(0.2) }), config({ shape_warn_mm: 0.15 })).shape_warning, true)
@@ -286,6 +270,7 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
   const kept = parseAlignConfig(
     JSON.stringify({
       tilt_span_mm: 200,
+      // Stored by an earlier version: no longer settings of their own, passed over when read.
       target_tilt_mm: 0.08,
       max_rounds: 6,
       shape_warn_mm: 0.4,
@@ -298,9 +283,9 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
     })
   )
   assert.equal(kept.tilt_span_mm, 200)
-  assert.equal(kept.target_tilt_mm, 0.08)
-  assert.equal(kept.max_rounds, 6)
   assert.equal(kept.shape_warn_mm, 0.4)
+  assert.equal('target_tilt_mm' in kept || 'max_rounds' in kept, false, 'the old fields are passed over and not saved again')
+  assert.deepEqual(Object.keys(kept).sort(), Object.keys(parseAlignConfig(null)).concat('thread_pitch_user_mm').filter((k, i, a) => a.indexOf(k) === i).sort(), 'the same fields as a fresh setting')
   // The stored thread values are ignored: the CC2 screw (0.7 mm, clockwise from below raises) stays.
   assert.equal(kept.thread_pitch_mm, 0.7)
   assert.equal(kept.thread_pitch_source, ALIGN_DEFAULTS.thread_pitch_source)
@@ -313,8 +298,6 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
     JSON.stringify({ tilt_span_mm: -1, target_tilt_mm: 'x', max_rounds: 99, thread_pitch_mm: 0, clockwise_raises_bed: 'yes' })
   )
   assert.equal(bad.tilt_span_mm, 240)
-  assert.equal(bad.target_tilt_mm, 0.1)
-  assert.equal(bad.max_rounds, 4)
   assert.equal(bad.thread_pitch_mm, 0.7)
   assert.equal(bad.clockwise_raises_bed, true)
   // The pitch the user sets in the experimental settings has a field of its own: within its limits it replaces the CC2
@@ -377,7 +360,6 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
   quick.screws.forEach((screw, i) => near(screw.correction, full.screws[i].correction, 1e-9, `quick correction ${screw.id}`))
   near(quick.twist, 0, 1e-9, 'a fitting reference leaves no twist')
   assert.equal(quick.twist_warning, false)
-  assert.equal(quick.aligned, false)
 
   // Without the reference shape the same four probes would point at a tilt the plate does not have.
   const flat = syntheticMesh({ tiltX: 0, tiltY: 0 })
@@ -386,7 +368,6 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
   assert.ok(Math.abs(analyseScrewProbes(lopsidedProbes, flat).tilt_x) > 0.05)
   const own = analyseScrewProbes(lopsidedProbes, lopsided)
   near(own.tilt_x, analyseMesh(lopsided).tilt_x, 1e-9, 'own reference: tilt X')
-  assert.equal(own.aligned, analyseMesh(lopsided).aligned)
 
   // A reference of another plate shows as a twist of the four points, and is warned about.
   const other = syntheticMesh({ tiltX: 0, tiltY: 0, shape: twist(0.2) })
@@ -416,47 +397,6 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
   const small = syntheticMesh({ tiltX: 0, tiltY: 0 })
   assert.equal(analyseScrewProbes(probes, { ...small, min_x: 60 }), null)
   assert.equal(analyseScrewProbes(probes, { ...reference, points: [[0, 0]] }), null)
-}
-
-// Quick check: which full mesh may serve as the plate shape, and which four probes are used.
-{
-  const now = 2_000_000_000
-  const mesh = syntheticMesh({ tiltX: 0, tiltY: 0 })
-  const m = (id, temp, daysAgo) => ({ id, temp, measured: now - daysAgo * 86400, mesh })
-  assert.deepEqual(quickReference(null, now), { ok: false, reason: 'no_plate' })
-  assert.deepEqual(quickReference({ measures: [] }, now), { ok: false, reason: 'no_reference' })
-  // A mesh at another bed temperature is not the plate shape of the four-point measurement.
-  assert.deepEqual(quickReference({ measures: [m('hot', 80, 1)] }, now), { ok: false, reason: 'no_reference' })
-  assert.equal(QUICK_PROBE_TEMP_C, 60)
-  const fresh = quickReference({ measures: [m('older', 60, 9), m('newer', 60, 2), m('hot', 80, 0)] }, now)
-  assert.equal(fresh.ok && fresh.measure.id, 'newer')
-  assert.equal(fresh.ok && fresh.age_days, 2)
-  assert.equal(quickReference({ measures: [m('edge', 60, QUICK_REFERENCE_MAX_AGE_DAYS)] }, now).ok, true)
-  assert.deepEqual(quickReference({ measures: [m('old', 60, QUICK_REFERENCE_MAX_AGE_DAYS + 1)] }, now), {
-    ok: false,
-    reason: 'old',
-    age_days: QUICK_REFERENCE_MAX_AGE_DAYS + 1,
-  })
-
-  const all = { FL: 0.1, FR: 0.2, RR: 0.3, RL: 0.4 }
-  assert.equal(latestScrewProbes([]), null)
-  // A single-screw probe is not a four-point measurement.
-  assert.equal(latestScrewProbes([{ measurements: [{ time: 5, z: { FL: 0.1 } }] }]), null)
-  const latest = latestScrewProbes([
-    { measurements: [{ time: 10, z: all }, { time: 30, z: { RR: 0.9 } }] },
-    { measurements: [{ time: 20, z: { ...all, RR: 0.5 } }] },
-  ])
-  // Entries recorded before the bed target was stored ran at 60 °C.
-  assert.deepEqual(latest, { time: 20, z: { ...all, RR: 0.5 }, bed: 60 })
-
-  // The four probes name the bed target they were taken at; the full mesh must be of that temperature.
-  const warm = latestScrewProbes([{ measurements: [{ time: 40, z: all, bed: 70 }, { time: 35, z: all, bed: 100 }] }])
-  assert.deepEqual(warm, { time: 40, z: all, bed: 70 })
-  assert.equal(latestScrewProbes([{ measurements: [{ time: 40, z: all, bed: 400 }] }]).bed, 60, 'an impossible target is not trusted')
-  const at70 = quickReference({ measures: [m('cool', 60, 1), m('warm', 70, 3)] }, now, 70)
-  assert.equal(at70.ok && at70.measure.id, 'warm', 'at 70 °C the 70 °C mesh is the plate shape, not the newer 60 °C one')
-  assert.deepEqual(quickReference({ measures: [m('cool', 60, 1)] }, now, 70), { ok: false, reason: 'no_reference' })
-  assert.equal(quickReference({ measures: [m('cool', 60, 1)] }, now).ok, true, 'without a temperature it stays 60 °C')
 }
 
 // The saved mesh carried along to a new screw measurement (R15): the plate keeps its shape, only the tilt and twist the

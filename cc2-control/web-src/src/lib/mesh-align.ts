@@ -30,10 +30,6 @@ export type AlignConfig = {
   tilt_span_mm: number
   // Row 0 of the mesh is the smallest Y (the front of a CC2). False reads the rows back to front.
   row0_is_min_y: boolean
-  // Both tilts must be below this for "aligned" (mm over the span).
-  target_tilt_mm: number
-  // The guided loop stops after this many measurements.
-  max_rounds: number
   // A plate shape with a larger range gets a warning (mm). It never ends or blocks the alignment.
   shape_warn_mm: number
   // A plate shape with a smaller range is called nearly flat (mm).
@@ -63,8 +59,6 @@ export const ALIGN_DEFAULTS: AlignConfig = {
   ],
   tilt_span_mm: 240,
   row0_is_min_y: true,
-  target_tilt_mm: 0.1,
-  max_rounds: 4,
   shape_warn_mm: 0.3,
   flat_range_mm: 0.1,
   // The CC2's own levelling screws: M4 (ISO coarse thread, 0.7 mm per turn), turned from below with a hex key.
@@ -113,9 +107,7 @@ export type MeshAnalysis = {
   reference: AlignScrewId
   // Every screw lies inside the measured area; outside it the plane is an extrapolation.
   covers_screws: boolean
-  // Both tilts are below the configured target.
-  aligned: boolean
-  // The plate shape exceeds the warning range, whether or not the alignment is done.
+  // The plate shape exceeds the warning range.
   shape_warning: boolean
 }
 
@@ -296,10 +288,6 @@ export function referenceScrew(planeHeights: number[]): number {
   return best
 }
 
-// Done only when both tilts are below the target; a tilt at the target is not below it.
-export const tiltsBelowTarget = (tiltX: number, tiltY: number, target: number) =>
-  Math.abs(tiltX) < target && Math.abs(tiltY) < target
-
 // A correction smaller than this is shown as "nothing to do" (mm): it is below what the mesh resolves.
 export const ALIGN_NOOP_MM = 0.005
 
@@ -408,7 +396,6 @@ export function analyseMesh(grid: MeshGrid, config: AlignConfig = ALIGN_DEFAULTS
     screws,
     reference: config.screws[ref].id,
     covers_screws: config.screws.every(s => s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1),
-    aligned: tiltsBelowTarget(tiltX, tiltY, config.target_tilt_mm),
     shape_warning: residualRange > config.shape_warn_mm,
   }
 }
@@ -446,7 +433,6 @@ export type QuickAnalysis = {
   span: number
   screws: ScrewCorrection[]
   reference: AlignScrewId
-  aligned: boolean
   // The plate shape of the reference mesh at each screw, in the order of the configured screws.
   shape: number[]
   // Range of what the four probes leave once shape and tilt are gone.
@@ -485,7 +471,6 @@ export function analyseScrewProbes(
     span: config.tilt_span_mm,
     screws: screwCorrections(config, heights, ref),
     reference: config.screws[ref].id,
-    aligned: tiltsBelowTarget(tiltX, tiltY, config.target_tilt_mm),
     shape,
     twist,
     twist_warning: twist > QUICK_TWIST_WARN_MM,
@@ -544,55 +529,6 @@ export function carryMesh(
       })
     ),
   }
-}
-
-// The quick check reads a four-point measurement of the Screws tab, taken with the bed at the target
-// chosen there; the plate shape has to come from a full mesh of the same plate at that temperature.
-// Measurements recorded before the target could be chosen ran at 60 °C.
-export const QUICK_PROBE_TEMP_C = 60
-// Estimates, not measured values: how old the full mesh and the four probes may be.
-export const QUICK_REFERENCE_MAX_AGE_DAYS = 30
-export const QUICK_PROBES_STALE_MIN = 60
-
-export type QuickMeasure = { id: string; temp: number; measured: number; mesh: MeshGrid }
-export type QuickReference =
-  | { ok: true; measure: QuickMeasure; age_days: number }
-  | { ok: false; reason: 'no_plate' | 'no_reference' | 'old'; age_days?: number }
-
-// The full mesh the quick check may use: the newest one of the mounted plate at the probe temperature.
-// Anything else is refused, because a wrong plate shape cannot be told from a tilt afterwards.
-export function quickReference(
-  plate: { measures: QuickMeasure[] } | null | undefined,
-  nowS: number,
-  temp: number = QUICK_PROBE_TEMP_C
-): QuickReference {
-  if (!plate) return { ok: false, reason: 'no_plate' }
-  const fitting = plate.measures
-    .filter(m => m.temp === temp && finite(m.measured))
-    .sort((a, b) => b.measured - a.measured)[0]
-  if (!fitting) return { ok: false, reason: 'no_reference' }
-  const age = Math.max(0, Math.floor((nowS - fitting.measured) / 86400))
-  if (age > QUICK_REFERENCE_MAX_AGE_DAYS) return { ok: false, reason: 'old', age_days: age }
-  return { ok: true, measure: fitting, age_days: age }
-}
-
-// bed: the bed target the four probes were taken at (QUICK_PROBE_TEMP_C for older entries without one).
-export type QuickProbes = { time: number; z: Record<AlignScrewId, number>; bed: number }
-
-// The newest measurement of the screw history that holds all four screws.
-export function latestScrewProbes(
-  sessions: { measurements: { time: number; z: Partial<Record<AlignScrewId, number>>; bed?: number | null }[] }[]
-): QuickProbes | null {
-  let best: QuickProbes | null = null
-  for (const s of sessions)
-    for (const m of s.measurements) {
-      const { FL, FR, RR, RL } = m.z
-      if (!finite(FL) || !finite(FR) || !finite(RR) || !finite(RL)) continue
-      const bed = finite(m.bed) && m.bed >= 0 && m.bed <= 120 ? m.bed : QUICK_PROBE_TEMP_C
-      if (!best || m.time > best.time)
-        best = { time: m.time, z: { FL, FR, RR, RL } as Record<AlignScrewId, number>, bed }
-    }
-  return best
 }
 
 // A mesh of GET /api/mesh: 'active' is the mesh the printer applies now, any other name a stored profile
@@ -673,8 +609,6 @@ export function parseAlignConfig(text: string | null): AlignConfig {
     screws,
     tilt_span_mm: within(raw.tilt_span_mm, 10, 1000, d.tilt_span_mm),
     row0_is_min_y: typeof raw.row0_is_min_y === 'boolean' ? raw.row0_is_min_y : d.row0_is_min_y,
-    target_tilt_mm: within(raw.target_tilt_mm, 0.005, 2, d.target_tilt_mm),
-    max_rounds: Math.round(within(raw.max_rounds, 1, 10, d.max_rounds)),
     shape_warn_mm: within(raw.shape_warn_mm, 0.01, 5, d.shape_warn_mm),
     flat_range_mm: within(raw.flat_range_mm, 0, 5, d.flat_range_mm),
     // The CC2's own screw is the default; stored values of older versions never change these four. Only the pitch

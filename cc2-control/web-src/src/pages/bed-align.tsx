@@ -268,6 +268,7 @@ export const Tile = ({ label, value, sub, name }: { label: string; value: string
 const NumberField = ({
   label,
   hint,
+  hintRight = false,
   value,
   step,
   min,
@@ -277,6 +278,8 @@ const NumberField = ({
   label: string
   // Where the value takes effect, behind an (i) next to the name.
   hint?: string
+  // A field in the right column (of four, or of two on a narrower card): its text opens to the left, inside the card.
+  hintRight?: boolean
   value: number | null
   step: string
   min: string
@@ -289,7 +292,7 @@ const NumberField = ({
     <div class="grid content-between gap-1 text-xs">
       <span class="flex min-h-5 items-center gap-1">
         <label for={id}>{label}</label>
-        {hint && <InfoHint text={hint} subtle data-align-hint />}
+        {hint && <InfoHint text={hint} subtle align={hintRight ? 'right' : 'left'} data-align-hint />}
       </span>
       <Input
         id={id}
@@ -329,6 +332,7 @@ const Settings = ({ config }: { config: AlignConfig }) => {
         <NumberField
           label={t('bed.align_set_warn')}
           hint={t('bed.align_hint_warn')}
+          hintRight
           value={config.shape_warn_mm}
           step="0.01"
           min="0.01"
@@ -349,6 +353,7 @@ const Settings = ({ config }: { config: AlignConfig }) => {
           <NumberField
             label={t('bed.align_set_pitch')}
             hint={t('bed.align_hint_pitch')}
+            hintRight
             value={config.thread_pitch_user_mm ?? ALIGN_DEFAULTS.thread_pitch_mm}
             step="0.01"
             min={String(PITCH_MIN_MM)}

@@ -12,25 +12,21 @@ import { chromium } from 'playwright'
 import { ALIGN_DEFAULTS, analyseMesh } from '../src/lib/mesh-align.ts'
 import { dome, syntheticMesh } from './mesh-align-synthetic.mjs'
 
-// What the old page showed as verdict, shape warning, plane colour and screw corrections is still worked out by
-// the library (the guided loop and step 3 use it); the numbers are checked here without a page.
+// The shape warning, the plate shape and the screw corrections are worked out by the library (step 2 uses them); the
+// numbers are checked here without a page.
 const domed = analyseMesh(syntheticMesh({ tiltX: 0.03, tiltY: -0.02, shape: dome(0.5) }))
-assert.equal(domed.aligned, true, 'a small tilt under a dome: aligned')
 assert.equal(domed.shape_warning, true, 'a dome of 0.5 mm: shape warning')
 assert.equal(domed.shape, 'dome')
 assert.notEqual(domed.raw_range, domed.residual_range, 'the shape range is not the raw range')
 const plane = analyseMesh(syntheticMesh({ tiltX: 0.223, tiltY: -0.223 }))
 assert.ok(plane.residual_range < 0.0005, 'an exact plane has no shape')
-assert.equal(plane.aligned, false)
 const tilted = analyseMesh(syntheticMesh({ tiltX: 0, tiltY: 0.96, shape: dome(0.2) }))
 const rear = tilted.screws.find(s => s.id === 'RR').correction
 assert.ok(rear < 0 && Math.abs(rear) < Math.abs(tilted.tilt_y), 'tilt and screw correction are different numbers')
-assert.equal(tilted.aligned, false)
 const raised = analyseMesh(syntheticMesh({ tiltX: -0.6 }))
 assert.ok(raised.screws.some(s => s.correction > 0.4), 'the low side gets a positive correction')
 assert.equal(raised.screws.find(s => s.reference).correction, 0, 'the reference screw is not turned')
-// The settings change the verdict, the shape warning and the tilt span.
-assert.equal(analyseMesh(syntheticMesh({ tiltX: 0, tiltY: 0.96, shape: dome(0.2) }), { ...ALIGN_DEFAULTS, target_tilt_mm: 1 }).aligned, true)
+// The settings change the shape warning and the tilt span.
 assert.equal(analyseMesh(syntheticMesh({ shape: dome(0.2) }), { ...ALIGN_DEFAULTS, shape_warn_mm: 0.05 }).shape_warning, true)
 assert.equal(analyseMesh(syntheticMesh({ shape: dome(0.2) })).shape_warning, false)
 assert.ok(Math.abs(analyseMesh(syntheticMesh({ tiltY: 0.96 }), { ...ALIGN_DEFAULTS, tilt_span_mm: 120 }).tilt_y - analyseMesh(syntheticMesh({ tiltY: 0.96 })).tilt_y / 2) < 1e-6, 'half the span, half the tilt')
