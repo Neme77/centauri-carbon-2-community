@@ -5,6 +5,8 @@ import unittest
 from native_model import Native
 from prepare_runtime import inject_dependency, LIBRARY
 from elftools.elf.elffile import ELFFile
+from literal_catalog import LABELS, LABEL_ENTRIES, literal_rows, load_catalogs
+from native_model import HERE
 
 class Layout(unittest.TestCase):
     @classmethod
@@ -18,6 +20,20 @@ class Layout(unittest.TestCase):
             segment=next(s for s in elf.iter_segments() if s['p_type']=='PT_DYNAMIC')
             return [t.needed for t in segment.iter_tags('DT_NEEDED')]
         self.assertEqual(names(self.after),names(self.native.elf)+[LIBRARY])
+
+    def test_label_trampolines(self):
+        for address,expected in LABEL_ENTRIES.values():
+            self.assertEqual(self.native.read(address,8),expected)
+
+    def test_literal_sources_and_translations(self):
+        catalogs=load_catalogs(HERE/'locales')
+        rows=literal_rows(self.native,catalogs)
+        self.assertEqual(len({a for a,_ in rows}),len(rows))
+        for address,values in rows:
+            key=self.native.string(address)
+            self.assertIn(key,LABELS)
+            self.assertEqual(values,[c[key] for c in catalogs])
+        self.assertEqual({self.native.string(a) for a,_ in rows},set(LABELS))
 
     def test_original_loads_unchanged(self):
         old=self.native.loads
