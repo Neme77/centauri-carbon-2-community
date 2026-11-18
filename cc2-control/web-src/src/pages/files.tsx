@@ -1,3 +1,4 @@
+import { deleteRetrying } from '@/lib/delete-retry'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ask } from '@/lib/confirm'
 import { Download, FileText, Play, RefreshCw, Search, Trash2, Upload as UploadIcon } from 'lucide-preact'
@@ -11,11 +12,13 @@ import { errText, notify, request } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
 import { duration, fileSize } from '@/lib/format'
 import { compareFileDates, fileModified } from '@/lib/file-date'
-import { startFile } from '@/pages/print-dialog'
+import { startFileOfSize } from '@/pages/print-dialog'
 import { QueuedChip } from '@/components/queue-next'
 import { FilePicture } from '@/components/file-picture'
 import { type FileCut, type FileEntry as Entry, fileTag, listFiles } from '@/lib/files'
 import { useFilePicture } from '@/lib/pictures'
+import { Tag } from '@/components/ui/badge'
+import { tooLargeForPrinter } from '@/lib/printer-file-limit'
 
 const key = (e: { storage: string; path?: string; file?: any }) => `${e.storage}\n${e.path ?? e.file.path}`
 // Let the browser stream/save the attachment; never buffer a large G-code in a Blob.
@@ -143,7 +146,7 @@ export const Files = () => {
     )
       return
     try {
-      const r = await fetch('/api/gcode-files/delete', body(storage, path))
+      const r = await deleteRetrying(fetch, '/api/gcode-files/delete', body(storage, path))
       if (!r.ok) throw Error(await failure(r, true))
       if (sel && key(sel) === key(e)) setSel(null)
       notify(tpl('files.deleted_path_from_where', { path, where: where(storage) }))
@@ -174,7 +177,7 @@ export const Files = () => {
       try {
         const r =
           kind === 'delete'
-            ? await fetch('/api/gcode-files/delete', body(i.storage, i.path))
+            ? await deleteRetrying(fetch, '/api/gcode-files/delete', body(i.storage, i.path))
             : await fetch('/api/gcode-files/copy', body(i.storage, `${dest}\n${i.path}`))
         if (!r.ok) throw Error(await failure(r, kind === 'delete'))
         if (kind === 'delete') toggle(key(i), false)
@@ -304,7 +307,7 @@ export const Files = () => {
                     onChange={ev => toggle(key(e), ev.currentTarget.checked)}
                   />
                   <FilePicture storage={e.storage} path={e.file.path} tag={fileTag(e.file)} row />
-                  {/* The queue chip sits under the name, so the name keeps the width of the column. */}
+                  {/* The tags (queue, not printable) sit under the name, so the name keeps the width of the column. */}
                   <div class="grid min-w-0 flex-1 justify-items-start gap-1">
                     <button
                       type="button"
@@ -314,7 +317,14 @@ export const Files = () => {
                     >
                       {e.file.path}
                     </button>
-                    <QueuedChip storage={e.storage} path={e.file.path} />
+                    <span class="cc2-file-chips flex flex-wrap items-center gap-1.5">
+                      <QueuedChip storage={e.storage} path={e.file.path} />
+                      {tooLargeForPrinter(e.file.size) && (
+                        <Tag class="border-red text-red" title={t('files.not_printable_2gib')} data-not-printable>
+                          {t('files.not_printable')}
+                        </Tag>
+                      )}
+                    </span>
                   </div>
                 </div>
                 <span class="hidden cc2-md:inline">{fileSize(e.file.size)}</span>
@@ -340,7 +350,7 @@ export const Files = () => {
                     class="px-2.5"
                     onClick={ev => {
                       ev.stopPropagation()
-                      startFile(e.storage, e.file.path)
+                      startFileOfSize(e.storage, e.file.path, e.file.size)
                     }}
                   >
                     <Play {...I} />
@@ -371,7 +381,7 @@ export const Files = () => {
             </p>
           ))}
         </Card>
-        <Detail entry={sel} onPrint={e => startFile(e.storage, e.file.path)} onDelete={remove} />
+        <Detail entry={sel} onPrint={e => startFileOfSize(e.storage, e.file.path, e.file.size)} onDelete={remove} />
       </div>
     </Page>
   )
@@ -433,6 +443,11 @@ const Detail = ({
       </div>
       <div>
         <Row label="files.size" value={entry ? fileSize(entry.file.size) : '—'} />
+        {entry && tooLargeForPrinter(entry.file.size) && (
+          <div class="my-2 text-xs text-red" data-not-printable>
+            {t('files.not_printable_2gib')}
+          </div>
+        )}
         <Row
           label="files.layers"
           value={meta && ok(meta.layers) && Number(meta.layers) > 0 ? Math.round(Number(meta.layers)) : '—'}

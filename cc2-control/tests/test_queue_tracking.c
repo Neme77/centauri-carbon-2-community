@@ -107,13 +107,22 @@ static void copy_starts(queue_item *it, const char *uuid) {
 static int pair_[2];
 static char reply_body[16384];
 static int begin(void) { assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair_)); return pair_[0]; }
+static int worker_socket; /* the start worker took pair_[0], and usb_start_tick closed it */
 static int finish(void) {
-    close(pair_[0]);
+    if (worker_socket) worker_socket = 0; else close(pair_[0]);
     size_t used = 0; ssize_t n;
     while (used + 1 < sizeof(reply_body) && (n = recv(pair_[1], reply_body + used, sizeof(reply_body) - 1 - used, 0)) > 0) used += (size_t)n;
     close(pair_[1]); reply_body[used] = 0;
     assert(used > 0);
     return atoi(strchr(reply_body, ' ') + 1);
+}
+/* POST /api/queue/start, read with finish(). A start that goes ahead checks the file on the start worker,
+ * which takes the socket; the start goes out, and is answered, on the next tick after it. */
+static void start_request(const char *id) {
+    if (!queue_start_response(begin(), &machine, id, strlen(id))) return;
+    worker_socket = 1;
+    for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    usb_start_tick(&machine);
 }
 /* What GET /api/queue reports for one tool of a job: the filament it is bound to (empty texts: not known yet),
  * the slot the job was added with (null: added for the filament alone), the slot a start would take (null: no
@@ -149,12 +158,12 @@ static int add(const char *body) {
  * report and is answered 409 "checking"; the printer answers (here with the trays as they are) and the
  * page asks again. Returns the last status; reply_body holds the last reply. */
 static int start_job(const char *id) {
-    queue_start_response(begin(), &machine, id, strlen(id));
+    start_request(id);
     int status = finish();
     if (status == 409 && strstr(reply_body, "\"checking\":true")) {
         assert(machine.canvas_refresh_due == 1);
         machine.canvas_refresh_due = 0; machine.canvas_revision++;
-        queue_start_response(begin(), &machine, id, strlen(id));
+        start_request(id);
         status = finish();
     }
     return status;
@@ -162,11 +171,16 @@ static int start_job(const char *id) {
 /* The delay of the automatic start has run out. A start fed from the Canvas asks for a report on that tick
  * and decides on a later one, once the printer has answered (here with the trays as they are). A tick that
  * decided clears the delay, so a delay still armed means the start waits for the report it asked for. (Not
- * told by the time of the request: two requests can fall in the same millisecond.) */
+ * told by the time of the request: two requests can fall in the same millisecond.) A start that went ahead
+ * checks the file on the start worker and goes out on the next tick after it. */
 static void auto_due(void) {
     queue.complete_ms = monotonic_ms() - 11000; queue_tick(&machine);
     if (queue.complete_ms && queue.check_id) {
         machine.canvas_refresh_due = 0; machine.canvas_revision++; queue_tick(&machine);
+    }
+    if (usb_start_active()) {
+        for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
+        usb_start_tick(&machine);
     }
 }
 static int stored_has(const char *needle) {
@@ -402,6 +416,9 @@ int main(void) {
     assert(queue.complete_ms != 0 && starts_sent == 0); /* not before the delay */
     queue.complete_ms = monotonic_ms() - 11000;
     queue_tick(&machine);
+    /* The file is checked on the start worker (internal starts too); the start goes out on the next tick. */
+    for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    usb_start_tick(&machine);
     assert(starts_sent == 1 && !strcmp(start_file, "part.gcode") && !strcmp(it->state, "starting") && queue.active_id == 6);
     assert(!strcmp(it->print_name, "part.gcode") && !strcmp(it->request_uuid, "u16") && queue.complete_ms == 0 && !it->last_result[0]);
     queue_load(); it = &queue.items[0]; /* the start was saved before the request went out */
@@ -857,30 +874,30 @@ int main(void) {
     assert(add("internal\npart.gcode\n\nA\nsaved\n0\n\n\n1\nend\n\n\n0\tPLA\tPLA Matte\t#F72221") == 201);
     it = &queue.items[0]; assert(it->id == 70);
     machine.canvas_refresh_due = 0; sent = starts_sent;
-    queue_start_response(begin(), &machine, "70", 2);
+    start_request("70");
     assert(finish() == 409 && strstr(reply_body, "\"checking\":true") && machine.canvas_refresh_due == 1 && starts_sent == sent);
     assert(queue.check_id == 70);
     machine.canvas_refresh_due = 0;
-    queue_start_response(begin(), &machine, "70", 2);
+    start_request("70");
     assert(finish() == 409 && strstr(reply_body, "\"checking\":true") && machine.canvas_refresh_due == 0 && starts_sent == sent);
     /* The spool was moved to slot 4 before the answer: the start follows it. */
     canvas_list(TRAY_NAMED(0, 0, "PLA", "PLA Matte", "#F72221") "," TRAY_NAMED(3, 1, "PLA", "PLA Matte", "#F72221"));
-    queue_start_response(begin(), &machine, "70", 2);
+    start_request("70");
     assert(finish() == 202 && starts_sent == sent + 1 && start_count == 1 && start_trays[0] == 3 && queue.check_id == 0);
     queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
     /* No answer in time: the next request asks again. */
     sent = starts_sent;
-    queue_start_response(begin(), &machine, "70", 2); assert(finish() == 409 && machine.canvas_refresh_due == 1);
+    start_request("70"); assert(finish() == 409 && machine.canvas_refresh_due == 1);
     machine.canvas_refresh_due = 0; queue.check_ms -= QUEUE_CHECK_MS + 1;
-    queue_start_response(begin(), &machine, "70", 2);
+    start_request("70");
     assert(finish() == 409 && strstr(reply_body, "\"checking\":true") && machine.canvas_refresh_due == 1 && starts_sent == sent);
     /* An answer with the filament in no slot refuses the start, as before. */
     canvas_list(TRAY_NAMED(0, 1, "PETG", "PETG", "#AEADAC"));
-    queue_start_response(begin(), &machine, "70", 2);
+    start_request("70");
     assert(finish() == 409 && strstr(reply_body, "No Canvas slot holds the job's filament") && starts_sent == sent);
     /* The external feed starts at once. */
     queue.count = 0; it = job(71, 1, 0); machine.canvas_refresh_due = 0;
-    queue_start_response(begin(), &machine, "71", 2);
+    start_request("71");
     assert(finish() == 202 && starts_sent == sent + 1 && machine.canvas_refresh_due == 0);
     queue_abandon_response(begin(), &machine, "", 0); assert(finish() == 200);
 
