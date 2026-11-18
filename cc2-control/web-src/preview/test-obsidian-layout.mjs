@@ -64,7 +64,7 @@ try {
     await page.keyboard.press('Escape')
     assert.equal((await box()).overflow, false)
   }
-  for (const id of ['light', 'dark', 'obsidian']) {
+  for (const id of ['light', 'dark', 'obsidian', 'aurora', 'klipper']) {
     await page.goto(origin + '#settings/appearance')
     const saved = page.waitForResponse(r => r.url().endsWith('/api/preferences') && r.request().method() === 'PUT')
     await theme.selectOption(id)

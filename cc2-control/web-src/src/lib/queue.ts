@@ -1,6 +1,8 @@
 import { store } from './store'
 import { post, request } from './api'
 import { t } from './i18n'
+import { LARGE_OK } from './printer-file-limit'
+import { startTimeoutMs } from './start-timeout'
 
 // The print queue: jobs prepared ahead (file, the print dialog's choices, copies). Every copy is a
 // protected print start on the backend; the browser only asks for it. See cc2-control/docs/API.md.
@@ -35,9 +37,11 @@ export type QueueItem = {
   filament_grams: number | null
   added: number
   state: 'pending' | 'starting' | 'printing' | 'done'
-  last_result: '' | 'stopped' | 'not_started' | 'auto_failed' | 'auto_material'
+  last_result: '' | 'stopped' | 'not_started' | 'auto_failed' | 'auto_material' | 'not_opened'
+  large_ok?: boolean // the operator confirmed a file of 2 GiB or more
   present: boolean
   filaments?: QueueFilament[] // none: the external feed
+  size?: number | null // bytes of the job's file, null when unknown
 }
 export type QueuePolicy = { after: 'wait' | 'auto'; delay: number; remove_done: boolean }
 export type Queue = {
@@ -152,12 +156,13 @@ export type QueueAdd = {
   filamentGrams: number | null
   // Tools bound to a filament by itself: `mapping` names the slots of the others.
   filaments?: ToolFilament[]
+  largeOk?: boolean // the operator confirmed a file of 2 GiB or more
 }
 export type ToolFilament = FilamentLabel & { tool: number }
 // One "tool<TAB>type<TAB>name<TAB>#RRGGBB" line per tool bound to a filament by itself.
 const filamentLines = (list: ToolFilament[] = []) => list.map(f => [f.tool, f.type, f.name, f.color].join('\t'))
-// The same eight lines as /api/gcode-files/print, then copies, position, the slicer's estimates and the
-// filaments of the tools that have no slot.
+// The same eight lines as /api/gcode-files/print, then copies, position, the slicer's estimates, the
+// filaments of the tools that have no slot and, last, the confirmation for a file of 2 GiB or more.
 export const addToQueue = (a: QueueAdd) =>
   post(
     '/api/queue/add',
@@ -175,6 +180,7 @@ export const addToQueue = (a: QueueAdd) =>
       a.estimatedSeconds === null ? '' : String(Math.round(a.estimatedSeconds)),
       a.filamentGrams === null ? '' : String(a.filamentGrams),
       ...filamentLines(a.filaments),
+      ...(a.largeOk ? [LARGE_OK] : []),
     ].join('\n')
   )
 // Other filaments for tools of a job: `mapping` for the tools that take what a slot holds now, `filaments`
@@ -185,11 +191,11 @@ export const setQueuedFilaments = (id: number, mapping: string, filaments: ToolF
 // on the page may be older than a spool just changed. Until the printer has answered, the backend says 409
 // with `checking`, and the start is asked for again, for up to CHECK_MS (one action, not a poll).
 const CHECK_MS = 12000
-export const startQueued = async (id?: number) => {
+export const startQueued = async (id?: number, size?: number | null) => {
   const until = Date.now() + CHECK_MS
   for (;;) {
     try {
-      return await post('/api/queue/start', id ? String(id) : '')
+      return await post('/api/queue/start', id ? String(id) : '', startTimeoutMs(size))
     } catch (e: any) {
       if (!(e?.status === 409 && e?.data?.checking)) throw e
       if (Date.now() >= until) throw Error(t('queue.canvas_check_failed'))
