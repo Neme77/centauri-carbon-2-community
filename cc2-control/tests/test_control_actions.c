@@ -79,7 +79,7 @@ int main(void){
     expect(strstr(script,"M140 S60\nG180 S3\nM190 S60")!=NULL,"screw measurement heats bed and runs stock nozzle cleaning before probing");
     expect(strstr(script,"M190 S60")<strstr(script,"PROBE SAMPLES=3"),"screw measurement waits for 60 C bed before probing");
     expect(strstr(script,"M104 S0\nM140 S0")!=NULL,"screw measurement switches heaters off after probing");
-    expect(strstr(script,"G1 X30 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X230 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X230 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X30 Y225 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM104 S0\nM140 S0")!=NULL,"screw measurement uses corrected points and lifts Z before final heater shutdown");
+    expect(strstr(script,"G1 X27.9 Y25.95 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X227.15 Y25.95 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X227.15 Y225.5 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nG1 X27.9 Y225.5 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM104 S0\nM140 S0")!=NULL,"screw measurement uses corrected points and lifts Z before final heater shutdown");
     expect(strstr(script,"G28")==NULL,"screw measurement avoids final homing that clears measured values");
     expect(strstr(script,"TARGET=205.0")==NULL,"screw measurement does not restore stale pre-clean nozzle target");
     {
@@ -94,8 +94,8 @@ int main(void){
         expect(strlen(script)<CONSOLE_COMMAND_MAX,"tram start fits the console transport");
         expect(strstr(script,"M140 S60\nG28\nG180 S3\nM190 S60\nG4 P30000\nG90\n")!=NULL,"tram start homes fully, uses the stock bed prep, then settles before probing");
         expect(strstr(script,"G28 Z")==NULL,"tram start does not use Z-only homing");
-        expect(strstr(script,"G1 Z10 F600\nG1 X30 Y30 F12000")&&strstr(script,"G1 Z10 F600\nG1 X230 Y30 F12000")&&
-               strstr(script,"G1 Z10 F600\nG1 X230 Y225 F12000")&&strstr(script,"G1 Z10 F600\nG1 X30 Y225 F12000"),
+        expect(strstr(script,"G1 Z10 F600\nG1 X27.9 Y25.95 F12000")&&strstr(script,"G1 Z10 F600\nG1 X227.15 Y25.95 F12000")&&
+               strstr(script,"G1 Z10 F600\nG1 X227.15 Y225.5 F12000")&&strstr(script,"G1 Z10 F600\nG1 X27.9 Y225.5 F12000"),
                "tram start lifts Z before every XY move and probes the four fixed corners");
         {
             const char *close="RESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S60\n";
@@ -113,7 +113,7 @@ int main(void){
         expect(strlen(script)<CONSOLE_COMMAND_MAX,"tram re-probe fits the console transport");
         expect(strstr(script,"G28 Z\n")!=NULL&&strstr(script,"G28\n")==NULL,"re-probe homes Z only");
         expect(strstr(script,"G4 P30000\n")!=NULL,"re-probe waits the settle constant (G4 P in milliseconds) before probing");
-        expect(strstr(script,"G1 Z10 F600\nG1 X30 Y30 F12000\nPROBE SAMPLES=3")!=NULL,"re-probe lifts Z then moves to the FL table point");
+        expect(strstr(script,"G1 Z10 F600\nG1 X27.9 Y25.95 F12000\nPROBE SAMPLES=3")!=NULL,"re-probe lifts Z then moves to the FL table point");
         expect(strstr(script,"X230")==NULL&&strstr(script,"Y225")==NULL,"single-corner re-probe does not visit other corners");
         expect(!strstr(script,"30,30")&&!strstr(script,"FL"),"scripts do not echo user-supplied tokens");
         {
@@ -122,11 +122,11 @@ int main(void){
             expect(n>=e&&!strcmp(script+n-e,close),"re-probe restores state and switches the nozzle off after G28 Z");
         }
         expect(control_build_script("screws:tram:probe:FR:2",&mqtt,script,sizeof(script),reason,sizeof(reason)),"probe-twice FR accepted");
-        expect(strstr(script,"G1 X230 Y30 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nPROBE SAMPLES=3\nG1 Z10 F600\n")!=NULL,
+        expect(strstr(script,"G1 X227.15 Y25.95 F12000\nPROBE SAMPLES=3\nG1 Z10 F600\nPROBE SAMPLES=3\nG1 Z10\n")!=NULL,
                "probe-twice runs a second PROBE at the same corner");
         expect(control_build_script("screws:tram:check",&mqtt,script,sizeof(script),reason,sizeof(reason)),"final four-corner check accepted");
         expect(strstr(script,"G28 Z\n")!=NULL&&strstr(script,"G28\n")==NULL,"final check homes Z only");
-        expect(strstr(script,"G1 Z10 F600\nG1 X30 Y30 F12000")&&strstr(script,"G1 Z10 F600\nG1 X230 Y225 F12000"),
+        expect(strstr(script,"G1 Z10 F600\nG1 X27.9 Y25.95 F12000")&&strstr(script,"G1 Z10 F600\nG1 X227.15 Y225.5 F12000"),
                "final check lifts Z before each XY move");
         {
             const char *close="RESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S60\n";
@@ -179,7 +179,7 @@ int main(void){
             (void)control_screws_take_finished(NULL);
             expect(control_build_script("screws:measure",&mqtt,script,sizeof(script),reason,sizeof(reason)),"one-shot measurement builds");
             control_screws_note_quick(31);
-            control_screws_job job={-1,-1,-1,0};
+            control_screws_job job={-1,-1,-1,0,0,0};
             expect(!control_screws_tick(&mqtt,0,0,31,0,time(NULL))&&!control_screws_take_finished(&job),"a running one-shot measurement is not reported yet");
             (void)control_screws_tick(&mqtt,1,1,31,0,time(NULL));
             expect(control_screws_take_finished(&job)&&job.kind==CONTROL_SCREWS_JOB_QUICK&&job.corner==-1&&!job.twice&&job.started>0,
@@ -222,7 +222,7 @@ int main(void){
             mqtt.machine_status=1;
             expect(!control_screws_tick(&mqtt,1,1,21,0,TRAM_AT(3))&&control_screws_session_active(),"session idle again after its job");
             {
-                control_screws_job job={-1,-1,-1,0};
+                control_screws_job job={-1,-1,-1,0,0,0};
                 expect(control_screws_take_finished(&job)&&job.kind==CONTROL_SCREWS_JOB_START&&job.corner==-1&&!job.twice&&
                        job.started>=t0&&job.started<=time(NULL),"completed session start is reported once to the history");
                 expect(!control_screws_take_finished(&job),"a completed job is reported only once");
@@ -235,11 +235,17 @@ int main(void){
             mqtt.machine_status=1;strcpy(mqtt.homed_axes,"xyz");
             expect(!control_screws_tick(&mqtt,1,1,22,0,TRAM_AT(40))&&control_screws_session_active(),"re-probe completes");
             {
-                control_screws_job job={-1,-1,-1,0};
+                control_screws_job job={-1,-1,-1,0,0,0};
                 expect(control_screws_take_finished(&job)&&job.kind==CONTROL_SCREWS_JOB_PROBE&&job.corner==1&&!job.twice&&job.started>=t0,
                        "completed FR re-probe is reported with its corner and session");
-                expect(!strcmp(control_screws_corner_id(job.corner),"FR")&&control_screws_corner_at(229.997,30.002)==1&&
-                       control_screws_corner_at(30,225)==3&&control_screws_corner_at(100,100)==-1,"corner IDs and probe positions map to the fixed table");
+                expect(!strcmp(control_screws_corner_id(job.corner),"FR")&&control_screws_corner_at(227.102,25.902)==1&&
+                       control_screws_corner_at(27.904,225.499)==3&&control_screws_corner_at(27.904,225.501)==3&&
+                       control_screws_corner_at(100,100)==-1,"corner IDs and probe positions map to the fixed table");
+                /* The earlier measuring points (30/30, 230/30, 230/225, 30/225) lie 2 to 5 mm beside the screws: a probe
+                 * there is no corner of this table, so old and new points are never mixed. */
+                expect(control_screws_corner_at(30,30)==-1&&control_screws_corner_at(230,30)==-1&&
+                       control_screws_corner_at(230,225)==-1&&control_screws_corner_at(30,225)==-1,
+                       "the earlier measuring points are not taken for screw corners");
             }
             expect(!control_screws_heaters_off_pending(),"no heaters-off pending while the session is fine");
             expect(!control_screws_bed_renew_due(t0+40+SCREWS_BED_RENEW_S-1),"bed target not renewed before ten minutes");
