@@ -28,26 +28,30 @@ export function store<T extends object>(init: T) {
   }
 }
 
-export const ls = {
+const storageOf = (area: () => Storage) => ({
   get: (k: string) => {
     try {
-      return localStorage.getItem(k)
+      return area().getItem(k)
     } catch {
       return null
     }
   },
   set: (k: string, v: string) => {
     try {
-      localStorage.setItem(k, v)
+      area().setItem(k, v)
     } catch {
       /* private mode */
     }
   },
   del: (k: string) => {
     try {
-      localStorage.removeItem(k)
+      area().removeItem(k)
     } catch {
       /* private mode */
     }
   },
-}
+})
+// Kept in this browser.
+export const ls = storageOf(() => localStorage)
+// Kept in this browser tab only: survives a reload, not a new tab.
+export const ss = storageOf(() => sessionStorage)

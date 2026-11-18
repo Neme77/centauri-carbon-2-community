@@ -1,9 +1,9 @@
 import type { Pt } from './mesh'
 
-export type Cam = { yaw: number; pitch: number; zoom: number; scale: number }
+export type Cam = { yaw: number; pitch: number; zoom: number; scale: number; panX?: number; panY?: number }
 export const defaultCam = (): Cam => ({ yaw: -0.28, pitch: 0.68, zoom: 1, scale: 1 })
 
-const stops = [
+export const stops = [
   [24, 123, 213],
   [22, 199, 220],
   [103, 211, 176],
@@ -29,7 +29,35 @@ export const meshStats = (pts: Pt[]) => {
 // Renders the actual rectangular mesh as a 3D surface or a 2D heat map onto the canvas.
 export type Labels = { empty: string; min: string; max: string; back: string }
 
-export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '2d', cam: Cam, L: Labels) {
+// A screw as on the screw top view: a round badge (26 px, thin muted ring, dark inside) with its number.
+// `m.active`: the corner picked in the table (cyan, thicker ring). The position drawn is kept in m.sx/m.sy (CSS px), so
+// that a click on the canvas finds the mark.
+const screwMark = (c: CanvasRenderingContext2D, x: number, y: number, m: Mark) => {
+  const label = m.label
+  m.sx = x
+  m.sy = y
+  c.beginPath()
+  c.arc(x, y, 13, 0, Math.PI * 2)
+  c.fillStyle = m.active ? '#14cfe9' : '#06202fdd'
+  c.fill()
+  c.strokeStyle = m.active ? '#eef7fc' : '#94b4c4'
+  c.lineWidth = m.active ? 2.5 : 1
+  c.stroke()
+  c.lineWidth = 1
+  c.fillStyle = m.active ? '#06202f' : '#eef7fc'
+  c.textAlign = 'center'
+  c.font = '500 12px Inter, Segoe UI, sans-serif'
+  c.fillText(label, x, y + 4)
+}
+export type Mark = { x: number; y: number; label: string; active?: boolean; sx?: number; sy?: number }
+export function drawMesh(
+  canvas: HTMLCanvasElement,
+  points: Pt[],
+  mode: '3d' | '2d',
+  cam: Cam,
+  L: Labels,
+  marks: Mark[] = []
+) {
   const r = canvas.getBoundingClientRect()
   if (!r.width || !r.height) return
   const dpr = Math.min(devicePixelRatio || 1, 2)
@@ -55,9 +83,14 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
   const { min: zMin, max: zMax } = st,
     col = (z: number, a = 1) => colour(z, zMin, zMax, a)
   if (mode === '2d') {
-    const side = Math.min(w - 85, h - 70),
-      left = (w - side) / 2,
-      top = 22
+    const fit = Math.min(w - 85, h - 70),
+      side = fit * cam.zoom,
+      // The map can only be moved as far as it is larger than the view: an edge never leaves the middle.
+      limit = Math.max(0, (side - fit) / 2)
+    cam.panX = Math.max(-limit, Math.min(limit, cam.panX ?? 0))
+    cam.panY = Math.max(-limit, Math.min(limit, cam.panY ?? 0))
+    const left = (w - side) / 2 + cam.panX,
+      top = 22 + (fit - side) / 2 + cam.panY
     // Plot only the probed region on the bed, including non-square adaptive grids.
     for (const p of points) {
       const x = xs.indexOf(p.x),
@@ -74,6 +107,12 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
         ((y1 - y0) / 250) * side + 0.2
       )
     }
+    for (const m of marks) {
+      const mx = left + (m.x / 250) * side,
+        my = top + (1 - m.y / 250) * side
+      screwMark(c, mx, my, m)
+    }
+    c.font = '11px Inter, Segoe UI, sans-serif'
     c.fillStyle = '#a2c9dd'
     c.textAlign = 'center'
     c.fillText('X (mm) →', w / 2, h - 13)
@@ -174,6 +213,13 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     c.arc(q.x, q.y, 1.35, 0, Math.PI * 2)
     c.fill()
   }
+  // Optional marks (the bed screws), each at the height of the nearest mesh point.
+  for (const m of marks) {
+    const near = points.reduce((a, b) => (Math.hypot(b.x - m.x, b.y - m.y) < Math.hypot(a.x - m.x, a.y - m.y) ? b : a))
+    const q = project(m.x, m.y, near.z)
+    screwMark(c, q.x, q.y, m)
+  }
+  c.font = '11px Inter, Segoe UI, sans-serif'
   for (const [z, label, color] of [
     [zMin, L.min, '#16c9f2'],
     [zMax, L.max, '#ffcf4d'],

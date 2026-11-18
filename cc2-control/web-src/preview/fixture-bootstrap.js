@@ -156,6 +156,8 @@
       }
       return reply({ error: 'Questa anteprima permette solo di provare le ventole' }, 403)
     }
+    // The plate library of the Mesh tab (it holds the load cell block): not available here, but with its lists.
+    if (path === '/api/plates') return reply({ available: false, plates: [], nozzles: [], current: '', pending: '', nozzle: '', error: 'unavailable' })
     return reply({})
   }
   if (!location.hash) location.hash = '#control'

@@ -6,6 +6,7 @@ import {
   ALIGN_NOOP_MM,
   analyseMesh,
   analyseScrewProbes,
+  carryMesh,
   fitPlane,
   gridFromMeshReply,
   gridPoints,
@@ -25,7 +26,8 @@ import { asProfileReply, bowl, dome, noiseSource, saddle, syntheticMesh, twist }
 
 const near = (actual, expected, tolerance, message) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${message}: ${actual} is not within ${tolerance} of ${expected}`)
-const config = extra => ({ ...ALIGN_DEFAULTS, ...extra })
+// Built on the cleared thread values; the CC2 preset itself is checked against ALIGN_DEFAULTS below.
+const config = extra => ({ ...ALIGN_DEFAULTS, thread_pitch_mm: null, thread_pitch_source: '', clockwise_raises_bed: null, rotation_source: '', ...extra })
 // What is left after the plane must have no slope of its own.
 const untilted = (analysis, message) => {
   const plane = fitPlane(analysis.residual)
@@ -49,8 +51,8 @@ assert.equal(ALIGN_DEFAULTS.target_tilt_mm, 0.1)
 assert.equal(ALIGN_DEFAULTS.max_rounds, 4)
 assert.equal(ALIGN_DEFAULTS.shape_warn_mm, 0.3)
 assert.equal(ALIGN_DEFAULTS.row0_is_min_y, true)
-assert.equal(ALIGN_DEFAULTS.thread_pitch_mm, null, 'no thread pitch is assumed')
-assert.equal(ALIGN_DEFAULTS.clockwise_raises_bed, null, 'no turning direction is assumed')
+assert.equal(ALIGN_DEFAULTS.thread_pitch_mm, 0.7, 'the CC2 screw: M4, 0.7 mm per turn')
+assert.equal(ALIGN_DEFAULTS.clockwise_raises_bed, true, 'measured: clockwise from below raises the corner')
 
 // A plane alone: the tilt comes back, nothing is left over.
 {
@@ -156,7 +158,7 @@ for (const [name, shape, expected] of [
 near(analyseMesh(syntheticMesh({ tiltX: 0.24, span: 240 }), config({ tilt_span_mm: 100 })).tilt_x, 0.1, 1e-9, 'span')
 
 // Screw corrections come from the plane at the screws, not from the tilt over the span: the rear screws
-// sit 195 mm behind the front ones, so a Y tilt of t over 240 mm is t * 195 / 240 at the screws.
+// sit 199.55 mm behind the front ones, so a Y tilt of t over 240 mm is t * 199.55 / 240 at the screws.
 {
   const tiltY = 0.96
   const a = analyseMesh(syntheticMesh({ tiltY, shape: dome(0.4) }))
@@ -165,8 +167,8 @@ near(analyseMesh(syntheticMesh({ tiltX: 0.24, span: 240 }), config({ tilt_span_m
   assert.equal(a.reference, 'FL', 'all four tie on sum and maximum: the first screw is the reference')
   near(at.FL.correction, 0, 0, 'reference')
   near(at.FR.correction, 0, 1e-9, 'front right is level with front left')
-  near(at.RR.correction, (-tiltY * 195) / 240, 1e-9, 'rear right')
-  near(at.RL.correction, (-tiltY * 195) / 240, 1e-9, 'rear left')
+  near(at.RR.correction, (-tiltY * 199.55) / 240, 1e-9, 'rear right')
+  near(at.RL.correction, (-tiltY * 199.55) / 240, 1e-9, 'rear left')
   assert.ok(Math.abs(at.RL.correction) < Math.abs(a.tilt_y), 'the screw correction is smaller than the tilt')
   assert.deepEqual(
     a.screws.map(s => s.reference),
@@ -177,7 +179,7 @@ near(analyseMesh(syntheticMesh({ tiltX: 0.24, span: 240 }), config({ tilt_span_m
   const right = b.screws.find(s => s.id === 'FR'),
     left = b.screws.find(s => s.id === 'FL')
   assert.ok(right.correction - left.correction > 0, 'the lower right side is raised relative to the left')
-  near(right.correction - left.correction, (0.6 * 200) / 240, 1e-9, 'X correction over the 200 mm between the screws')
+  near(right.correction - left.correction, (0.6 * 199.25) / 240, 1e-9, 'X correction over the 199.25 mm between the screws')
 }
 
 // The reference is the screw with the smallest sum of corrections, then the smallest maximum, then the
@@ -209,7 +211,7 @@ for (const [tiltX, tiltY, expected] of [
 // Turns need a thread pitch and its source; the turning direction needs its own source.
 {
   const grid = syntheticMesh({ tiltX: 0.48 })
-  const none = analyseMesh(grid)
+  const none = analyseMesh(grid, { ...ALIGN_DEFAULTS, thread_pitch_mm: null, thread_pitch_source: '', clockwise_raises_bed: null, rotation_source: '' })
   assert.ok(none.screws.every(s => s.turns === null && s.direction === null), 'no source: millimetres only')
   const pitchOnly = analyseMesh(grid, config({ thread_pitch_mm: 0.5 }))
   assert.ok(pitchOnly.screws.every(s => s.turns === null), 'a pitch without a source gives no turns')
@@ -299,19 +301,52 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
   assert.equal(kept.target_tilt_mm, 0.08)
   assert.equal(kept.max_rounds, 6)
   assert.equal(kept.shape_warn_mm, 0.4)
+  // The stored thread values are ignored: the CC2 screw (0.7 mm, clockwise from below raises) stays.
   assert.equal(kept.thread_pitch_mm, 0.7)
-  assert.equal(kept.clockwise_raises_bed, false)
+  assert.equal(kept.thread_pitch_source, ALIGN_DEFAULTS.thread_pitch_source)
+  assert.equal(kept.clockwise_raises_bed, true)
+  assert.equal(kept.rotation_source, ALIGN_DEFAULTS.rotation_source)
   assert.equal(kept.row0_is_min_y, false)
   assert.deepEqual(kept.screws.find(s => s.id === 'RR'), { id: 'RR', x: 228, y: 226 })
-  assert.deepEqual(kept.screws.find(s => s.id === 'FL'), { id: 'FL', x: 30, y: 30 })
+  assert.deepEqual(kept.screws.find(s => s.id === 'FL'), { id: 'FL', x: 27.9, y: 25.95 })
   const bad = parseAlignConfig(
     JSON.stringify({ tilt_span_mm: -1, target_tilt_mm: 'x', max_rounds: 99, thread_pitch_mm: 0, clockwise_raises_bed: 'yes' })
   )
   assert.equal(bad.tilt_span_mm, 240)
   assert.equal(bad.target_tilt_mm, 0.1)
   assert.equal(bad.max_rounds, 4)
-  assert.equal(bad.thread_pitch_mm, null)
-  assert.equal(bad.clockwise_raises_bed, null)
+  assert.equal(bad.thread_pitch_mm, 0.7)
+  assert.equal(bad.clockwise_raises_bed, true)
+  // The pitch the user sets in the experimental settings has a field of its own: within its limits it replaces the CC2
+  // default and names its source; outside them, or absent, the default stays. The direction stays the CC2's.
+  const own = parseAlignConfig(JSON.stringify({ thread_pitch_user_mm: 0.75, thread_pitch_mm: 0.5, thread_pitch_source: 'old' }))
+  assert.equal(own.thread_pitch_mm, 0.75)
+  assert.equal(own.thread_pitch_user_mm, 0.75)
+  assert.equal(own.thread_pitch_source, 'set by the user')
+  assert.equal(own.clockwise_raises_bed, true)
+  for (const off of [0.29, 1.51, 'x', null, -1]) {
+    const c = parseAlignConfig(JSON.stringify({ thread_pitch_user_mm: off }))
+    assert.equal(c.thread_pitch_mm, 0.7, `pitch ${off} is refused`)
+    assert.equal(c.thread_pitch_user_mm, null)
+    assert.equal(c.thread_pitch_source, ALIGN_DEFAULTS.thread_pitch_source)
+  }
+  // develop stored the whole setting on every save, also its default screw positions of the time (30/30, 230/30,
+  // 230/225, 30/225). Exactly those four are read as the defaults of now, the measured screw centres; the other stored
+  // values stay. Own positions stay, also when only some of them equal an old default.
+  const oldDefaults = [
+    { id: 'FL', x: 30, y: 30 },
+    { id: 'FR', x: 230, y: 30 },
+    { id: 'RR', x: 230, y: 225 },
+    { id: 'RL', x: 30, y: 225 },
+  ]
+  const fromDevelop = parseAlignConfig(JSON.stringify({ tilt_span_mm: 200, screws: oldDefaults }))
+  assert.deepEqual(fromDevelop.screws, ALIGN_DEFAULTS.screws, 'the old default positions become the screw centres')
+  assert.equal(fromDevelop.tilt_span_mm, 200, 'the rest of the stored setting stays')
+  const partlyOwn = parseAlignConfig(JSON.stringify({ screws: oldDefaults.map(s => (s.id === 'RR' ? { ...s, x: 229 } : s)) }))
+  assert.deepEqual(partlyOwn.screws.find(s => s.id === 'RR'), { id: 'RR', x: 229, y: 225 }, 'own positions stay')
+  assert.deepEqual(partlyOwn.screws.find(s => s.id === 'FL'), { id: 'FL', x: 30, y: 30 }, 'with them the old ones of the other screws')
+  const threeOld = parseAlignConfig(JSON.stringify({ screws: oldDefaults.slice(0, 3) }))
+  assert.deepEqual(threeOld.screws.find(s => s.id === 'FL'), { id: 'FL', x: 30, y: 30 }, 'only all four together count as the old defaults')
 }
 
 // The quick mode: four probes at the screws, the plate shape taken from a reference mesh of the same plate.
@@ -373,7 +408,7 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
     near(screw.turns, fullThreaded.screws[i].turns, 1e-9, `quick turns ${screw.id}`)
     assert.equal(screw.direction, fullThreaded.screws[i].direction)
   })
-  assert.equal(quick.screws[0].turns, null)
+  assert.equal(analyseScrewProbes(probes, reference, config({})).screws[0].turns, null, 'no thread set: no turns')
 
   // Nothing is guessed: a missing probe, a screw outside the reference mesh or an unusable reference.
   assert.equal(analyseScrewProbes({ ...probes, RR: undefined }, reference), null)
@@ -411,7 +446,42 @@ assert.equal(fitPlane([{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 2,
     { measurements: [{ time: 10, z: all }, { time: 30, z: { RR: 0.9 } }] },
     { measurements: [{ time: 20, z: { ...all, RR: 0.5 } }] },
   ])
-  assert.deepEqual(latest, { time: 20, z: { ...all, RR: 0.5 } })
+  // Entries recorded before the bed target was stored ran at 60 °C.
+  assert.deepEqual(latest, { time: 20, z: { ...all, RR: 0.5 }, bed: 60 })
+
+  // The four probes name the bed target they were taken at; the full mesh must be of that temperature.
+  const warm = latestScrewProbes([{ measurements: [{ time: 40, z: all, bed: 70 }, { time: 35, z: all, bed: 100 }] }])
+  assert.deepEqual(warm, { time: 40, z: all, bed: 70 })
+  assert.equal(latestScrewProbes([{ measurements: [{ time: 40, z: all, bed: 400 }] }]).bed, 60, 'an impossible target is not trusted')
+  const at70 = quickReference({ measures: [m('cool', 60, 1), m('warm', 70, 3)] }, now, 70)
+  assert.equal(at70.ok && at70.measure.id, 'warm', 'at 70 °C the 70 °C mesh is the plate shape, not the newer 60 °C one')
+  assert.deepEqual(quickReference({ measures: [m('cool', 60, 1)] }, now, 70), { ok: false, reason: 'no_reference' })
+  assert.equal(quickReference({ measures: [m('cool', 60, 1)] }, now).ok, true, 'without a temperature it stays 60 °C')
+}
+
+// The saved mesh carried along to a new screw measurement (R15): the plate keeps its shape, only the tilt and twist the
+// screws set change. A plate measured at one tilt and probed at another must come out as the mesh of the other tilt.
+{
+  const shape = dome(0.25)
+  const saved = syntheticMesh({ base: 0.1, tiltX: 0.6, tiltY: -0.4, shape })
+  const now = syntheticMesh({ base: -0.05, tiltX: -0.08, tiltY: 0.12, shape })
+  const probes = Object.fromEntries(ALIGN_DEFAULTS.screws.map(sc => [sc.id, meshAt(now, sc.x, sc.y)]))
+  const carried = carryMesh(saved, probes)
+  assert.ok(carried, 'a carried mesh for four probes inside the mesh')
+  let worst = 0
+  carried.points.forEach((row, r) => row.forEach((z, c) => (worst = Math.max(worst, Math.abs(z - now.points[r][c])))))
+  assert.ok(worst < 0.004, `the carried mesh is the plate at its new tilt (worst ${worst})`)
+  assert.equal(carried.min_x, saved.min_x)
+  assert.equal(carried.points.length, saved.points.length)
+  // A twist the screws set (one corner lifted) is carried as well: the corner region follows that corner.
+  const lifted = { ...probes, RR: probes.RR + 0.2 }
+  const twisted = carryMesh(saved, lifted)
+  const rr = ALIGN_DEFAULTS.screws.find(sc => sc.id === 'RR'), fl = ALIGN_DEFAULTS.screws.find(sc => sc.id === 'FL')
+  near(meshAt(twisted, rr.x, rr.y) - meshAt(carried, rr.x, rr.y), 0.2, 0.002, 'the lifted corner is lifted in the carried mesh')
+  near(meshAt(twisted, fl.x, fl.y) - meshAt(carried, fl.x, fl.y), 0, 0.002, 'the opposite corner stays')
+  assert.equal(carryMesh(saved, { FL: 0, FR: 0, RR: 0 }), null, 'no carried mesh without all four probes')
+  // The saved mesh itself is not changed.
+  assert.equal(saved.points[0][0], syntheticMesh({ base: 0.1, tiltX: 0.6, tiltY: -0.4, shape }).points[0][0])
 }
 
 console.log('PASS mesh-guided screw alignment: plane fit, tilt, residual, shape, reference screw, turns and direction gating, quick mode from four probes and a reference mesh')

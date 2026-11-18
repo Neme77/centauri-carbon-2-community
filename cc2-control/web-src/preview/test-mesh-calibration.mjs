@@ -36,7 +36,7 @@ try {
     await route.fulfill({ response, json: data })
   })
   const step = (body = '') => page.evaluate(b => fetch('/__preview/calibration-step', { method: 'POST', headers: { 'X-CC2-Request': '1' }, body: b }), body)
-  const progress = page.locator('[data-calibration]')
+  const progress = page.locator('[data-calibration-bar]')
   const toast = text => page.getByText(text, { exact: true }).waitFor()
 
   await page.goto(`${origin}/#bed`)
@@ -87,7 +87,7 @@ try {
   ]
   for (const [stage, text] of stages) {
     await step()
-    await page.locator(`[data-calibration="${stage}"]`).waitFor()
+    await page.locator(`[data-calibration-bar="${stage}"]`).waitFor()
     await page.getByText(text, { exact: true }).waitFor()
     const stop = progress.getByRole('button', { name: 'Stop', exact: true })
     assert.equal(await stop.count(), ['probing', 'saving'].includes(stage) ? 0 : 1, `Stop while ${stage}`)
@@ -114,7 +114,7 @@ try {
   await progress.waitFor()
   assert.deepEqual(plateCalls, [['/api/plates/calibrate', 'A\n80\n0\ndd00000000000004\n']])
   await step()
-  await page.locator('[data-calibration="heating"]').waitFor()
+  await page.locator('[data-calibration-bar="heating"]').waitFor()
   await progress.getByRole('button', { name: 'Stop', exact: true }).click()
   await toast('The calibration was stopped and the bed heater switched off.')
   assert.equal(plateCalls.at(-1)[0], '/api/plates/calibrate/cancel')

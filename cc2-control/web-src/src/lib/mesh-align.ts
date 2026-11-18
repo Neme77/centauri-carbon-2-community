@@ -40,19 +40,26 @@ export type AlignConfig = {
   flat_range_mm: number
   // Turns are shown only when both the pitch and where it comes from are set.
   thread_pitch_mm: number | null
+  // The pitch the user has set in the experimental settings (mm per turn); null keeps the CC2 default.
+  thread_pitch_user_mm?: number | null
   thread_pitch_source: string
   // The turning direction is shown only when both the direction and where it comes from are set.
   clockwise_raises_bed: boolean | null
   rotation_source: string
 }
 
+export const CC2_SCREW_SOURCE = 'CC2 M4 screw, measured from below'
+export const USER_PITCH_SOURCE = 'set by the user'
+// Limits of the pitch a user may set (mm per turn): M3 fine to M8 coarse.
+export const PITCH_MIN_MM = 0.3
+export const PITCH_MAX_MM = 1.5
 // The CC2 standard, as defaults only. The three limits are estimates, not measured values.
 export const ALIGN_DEFAULTS: AlignConfig = {
   screws: [
-    { id: 'FL', x: 30, y: 30 },
-    { id: 'FR', x: 230, y: 30 },
-    { id: 'RR', x: 230, y: 225 },
-    { id: 'RL', x: 30, y: 225 },
+    { id: 'FL', x: 27.9, y: 25.95 },
+    { id: 'FR', x: 227.15, y: 25.95 },
+    { id: 'RR', x: 227.15, y: 225.5 },
+    { id: 'RL', x: 27.9, y: 225.5 },
   ],
   tilt_span_mm: 240,
   row0_is_min_y: true,
@@ -60,10 +67,13 @@ export const ALIGN_DEFAULTS: AlignConfig = {
   max_rounds: 4,
   shape_warn_mm: 0.3,
   flat_range_mm: 0.1,
-  thread_pitch_mm: null,
-  thread_pitch_source: '',
-  clockwise_raises_bed: null,
-  rotation_source: '',
+  // The CC2's own levelling screws: M4 (ISO coarse thread, 0.7 mm per turn), turned from below with a hex key.
+  // Measured on a printer (four quarter/half turns at front-left): seen from below onto the screw
+  // head, clockwise raises the corner. That is Klipper's CW-M4.
+  thread_pitch_mm: 0.7,
+  thread_pitch_source: CC2_SCREW_SOURCE,
+  clockwise_raises_bed: true,
+  rotation_source: CC2_SCREW_SOURCE,
 }
 
 export type AlignPoint = { x: number; y: number; z: number }
@@ -79,6 +89,8 @@ export type ScrewCorrection = AlignScrew & {
   reference: boolean
   // Null unless the thread pitch and its source are configured.
   turns: number | null
+  // The same amount as whole turns and clock-face minutes; null unless it is at least one minute and fewer than 100 turns.
+  clock: ClockTurn | null
   // Null unless the turning direction and its source are configured, or nothing has to move.
   direction: AlignDirection | null
 }
@@ -298,20 +310,66 @@ export const turnsConfigured = (config: AlignConfig) =>
 export const directionConfigured = (config: AlignConfig) =>
   typeof config.clockwise_raises_bed === 'boolean' && hasText(config.rotation_source)
 
+// Clock-face turns, the notation of Klipper's SCREWS_TILT_CALCULATE: "CW 01:20" is one full turn and 20 minutes
+// of a clock face (15 minutes is a quarter turn), clockwise. Format and rounding to whole minutes
+// follow Klipper's screws_tilt_adjust (GPLv3); this is a re-implementation, no code was copied.
+// Differences on purpose: a half minute always rounds up, an overflow of the minutes carries into the turns
+// (Klipper can print "00:60"), less than one minute is "nothing to do", and 100 turns or more are not shown.
+export type ClockTurn = { kind: 'turn'; turns: number; minutes: number }
+export type ClockResult = ClockTurn | { kind: 'none' | 'mm' | 'invalid' }
+
+// Turns that are not shown, and the half-minute guard against floating-point noise (59.4999 must not drop).
+export const CLOCK_MAX_MINUTES = 100 * 60
+const CLOCK_EPSILON = 1e-9
+
+export function clockTurn(distanceMm: number, pitchMm: number): ClockResult {
+  if (!finite(distanceMm) || !finite(pitchMm) || !(pitchMm > 0)) return { kind: 'invalid' }
+  const total = Math.floor((Math.abs(distanceMm) / pitchMm) * 60 + 0.5 + CLOCK_EPSILON)
+  if (total < 1) return { kind: 'none' }
+  if (total >= CLOCK_MAX_MINUTES) return { kind: 'mm' }
+  return { kind: 'turn', turns: Math.floor(total / 60), minutes: total % 60 }
+}
+const two = (n: number) => String(n).padStart(2, '0')
+export const clockText = (c: ClockTurn) => `${two(c.turns)}:${two(c.minutes)}`
+// "CW 01:20", or the amount alone when the direction is not known.
+export const clockLabel = (c: ClockTurn, direction: AlignDirection | null) =>
+  direction === null ? clockText(c) : `${direction === 'cw' ? 'CW' : 'CCW'} ${clockText(c)}`
+// A positive move raises the bed at this corner; clockwise_raises_bed says which way that is turned.
+export const turnDirection = (moveMm: number, clockwiseRaises: boolean): AlignDirection =>
+  moveMm > 0 === clockwiseRaises ? 'cw' : 'ccw'
+
+// Both tabs use this. moveMm is what the bed has to do at the corner, positive = raise. With a pitch set the
+// result is the clock, or nothing when the move is under one minute or over 99 turns (then only millimetres
+// are shown). Without a pitch only the direction can be shown.
+export function screwClock(
+  moveMm: number,
+  config: AlignConfig
+): { clock: ClockTurn | null; direction: AlignDirection | null } {
+  const raises = directionConfigured(config) ? config.clockwise_raises_bed : null
+  if (!turnsConfigured(config)) {
+    const moves = finite(moveMm) && Math.abs(moveMm) >= ALIGN_NOOP_MM
+    return { clock: null, direction: raises === null || !moves ? null : turnDirection(moveMm, raises) }
+  }
+  const r = clockTurn(moveMm, config.thread_pitch_mm as number)
+  if (r.kind !== 'turn') return { clock: null, direction: null }
+  return { clock: r, direction: raises === null ? null : turnDirection(moveMm, raises) }
+}
+
 // What each screw has to move so that all four reach the height of the reference screw.
 function screwCorrections(config: AlignConfig, heights: number[], ref: number): ScrewCorrection[] {
   const pitch = turnsConfigured(config) ? (config.thread_pitch_mm as number) : null
-  const clockwiseRaises = directionConfigured(config) ? config.clockwise_raises_bed : null
   return config.screws.map((s, i) => {
     const correction = i === ref ? 0 : heights[ref] - heights[i]
     const moves = Math.abs(correction) >= ALIGN_NOOP_MM
+    const shown = moves ? screwClock(correction, config) : { clock: null, direction: null }
     return {
       ...s,
       plane: heights[i],
       correction,
       reference: i === ref,
       turns: pitch === null ? null : Math.abs(correction) / pitch,
-      direction: clockwiseRaises === null || !moves ? null : correction > 0 === clockwiseRaises ? 'cw' : 'ccw',
+      clock: shown.clock,
+      direction: shown.direction,
     }
   })
 }
@@ -434,8 +492,63 @@ export function analyseScrewProbes(
   }
 }
 
-// The quick check reads a four-point measurement of the Screws tab. That measurement always runs with
-// the bed at 60 °C, so the plate shape has to come from a full mesh of the same plate at 60 °C.
+// The reference mesh carried along to where four screw probes say the plate is now: its shape (the mesh minus its
+// own plane) on the surface through the probes with the shape taken off. With the screws on a rectangle that surface
+// is bilinear between them (tilt and twist), otherwise the fitted plane. Calculated for the display, never measured.
+export function carryMesh(
+  reference: MeshGrid,
+  probes: Partial<Record<AlignScrewId, number>>,
+  config: AlignConfig = ALIGN_DEFAULTS
+): MeshGrid | null {
+  const fit = analyseScrewProbes(probes, reference, config)
+  const referencePlane = fitPlane(gridPoints(reference, config.row0_is_min_y))
+  if (!fit || !referencePlane) return null
+  const at = (id: AlignScrewId) => {
+    const i = config.screws.findIndex(s => s.id === id)
+    const z = probes[id]
+    return i < 0 || !finite(z) ? null : { ...config.screws[i], z: z - fit.shape[i] }
+  }
+  const fl = at('FL'),
+    fr = at('FR'),
+    rr = at('RR'),
+    rl = at('RL')
+  const same = (p: number, q: number) => Math.abs(p - q) < 0.01
+  const rectangle =
+    fl &&
+    fr &&
+    rr &&
+    rl &&
+    same(fl.x, rl.x) &&
+    same(fr.x, rr.x) &&
+    same(fl.y, fr.y) &&
+    same(rl.y, rr.y) &&
+    fr.x > fl.x &&
+    rl.y > fl.y
+  const rigid = (x: number, y: number) => {
+    if (!rectangle) return planeAt(fit.plane, x, y)
+    const u = (x - fl.x) / (fr.x - fl.x),
+      v = (y - fl.y) / (rl.y - fl.y)
+    return (fl.z * (1 - u) + fr.z * u) * (1 - v) + (rl.z * (1 - u) + rr.z * u) * v
+  }
+  const rows = reference.points.length
+  return {
+    ...reference,
+    points: reference.points.map((row, r) =>
+      row.map((z, c) => {
+        const x = reference.min_x + ((reference.max_x - reference.min_x) * c) / Math.max(1, row.length - 1)
+        const f = r / Math.max(1, rows - 1)
+        const y = config.row0_is_min_y
+          ? reference.min_y + (reference.max_y - reference.min_y) * f
+          : reference.max_y - (reference.max_y - reference.min_y) * f
+        return finite(z) ? z - planeAt(referencePlane, x, y) + rigid(x, y) : z
+      })
+    ),
+  }
+}
+
+// The quick check reads a four-point measurement of the Screws tab, taken with the bed at the target
+// chosen there; the plate shape has to come from a full mesh of the same plate at that temperature.
+// Measurements recorded before the target could be chosen ran at 60 °C.
 export const QUICK_PROBE_TEMP_C = 60
 // Estimates, not measured values: how old the full mesh and the four probes may be.
 export const QUICK_REFERENCE_MAX_AGE_DAYS = 30
@@ -448,10 +561,14 @@ export type QuickReference =
 
 // The full mesh the quick check may use: the newest one of the mounted plate at the probe temperature.
 // Anything else is refused, because a wrong plate shape cannot be told from a tilt afterwards.
-export function quickReference(plate: { measures: QuickMeasure[] } | null | undefined, nowS: number): QuickReference {
+export function quickReference(
+  plate: { measures: QuickMeasure[] } | null | undefined,
+  nowS: number,
+  temp: number = QUICK_PROBE_TEMP_C
+): QuickReference {
   if (!plate) return { ok: false, reason: 'no_plate' }
   const fitting = plate.measures
-    .filter(m => m.temp === QUICK_PROBE_TEMP_C && finite(m.measured))
+    .filter(m => m.temp === temp && finite(m.measured))
     .sort((a, b) => b.measured - a.measured)[0]
   if (!fitting) return { ok: false, reason: 'no_reference' }
   const age = Math.max(0, Math.floor((nowS - fitting.measured) / 86400))
@@ -459,18 +576,21 @@ export function quickReference(plate: { measures: QuickMeasure[] } | null | unde
   return { ok: true, measure: fitting, age_days: age }
 }
 
-export type QuickProbes = { time: number; z: Record<AlignScrewId, number> }
+// bed: the bed target the four probes were taken at (QUICK_PROBE_TEMP_C for older entries without one).
+export type QuickProbes = { time: number; z: Record<AlignScrewId, number>; bed: number }
 
 // The newest measurement of the screw history that holds all four screws.
 export function latestScrewProbes(
-  sessions: { measurements: { time: number; z: Partial<Record<AlignScrewId, number>> }[] }[]
+  sessions: { measurements: { time: number; z: Partial<Record<AlignScrewId, number>>; bed?: number | null }[] }[]
 ): QuickProbes | null {
   let best: QuickProbes | null = null
   for (const s of sessions)
     for (const m of s.measurements) {
       const { FL, FR, RR, RL } = m.z
       if (!finite(FL) || !finite(FR) || !finite(RR) || !finite(RL)) continue
-      if (!best || m.time > best.time) best = { time: m.time, z: { FL, FR, RR, RL } as Record<AlignScrewId, number> }
+      const bed = finite(m.bed) && m.bed >= 0 && m.bed <= 120 ? m.bed : QUICK_PROBE_TEMP_C
+      if (!best || m.time > best.time)
+        best = { time: m.time, z: { FL, FR, RR, RL } as Record<AlignScrewId, number>, bed }
     }
   return best
 }
@@ -482,6 +602,8 @@ export function gridFromMeshReply(data: any, profile = 'active'): MeshGrid | nul
   if (!root) return null
   const rect = (points: unknown, min: unknown, max: unknown): MeshGrid | null => {
     if (!Array.isArray(points) || points.length < 2 || !Array.isArray(points[0]) || points[0].length < 2) return null
+    // A Klipper mesh is a rectangle: rows of different length would be stretched across the full width.
+    if (points.some(r => Array.isArray(r) && r.length !== points[0].length)) return null
     if (!Array.isArray(min) || !Array.isArray(max) || ![min[0], min[1], max[0], max[1]].every(finite)) return null
     if (!(max[0] > min[0]) || !(max[1] > min[1])) return null
     return { points: points as number[][], min_x: min[0], max_x: max[0], min_y: min[1], max_y: max[1] }
@@ -491,6 +613,38 @@ export function gridFromMeshReply(data: any, profile = 'active'): MeshGrid | nul
     mp = p?.mesh_params
   return p && mp ? rect(p.points, [mp.min_x, mp.min_y], [mp.max_x, mp.max_y]) : null
 }
+
+// Two meshes with the same area and the same heights: a stored mesh has 6 decimals (autosave.cfg), the printer keeps the
+// unrounded values, so a difference up to half the last digit is the same mesh (as CC2 Control compares, plates.h).
+export function sameGrid(a: MeshGrid, b: MeshGrid): boolean {
+  const close = (p: unknown, q: unknown) => finite(p) && finite(q) && Math.abs(p - q) <= 5e-7 + 1e-9
+  if (!(['min_x', 'max_x', 'min_y', 'max_y'] as const).every(k => close(a[k], b[k]))) return false
+  if (a.points.length !== b.points.length) return false
+  return a.points.every(
+    (row, r) =>
+      Array.isArray(row) && row.length === b.points[r]?.length && row.every((z, c) => close(z, b.points[r][c]))
+  )
+}
+
+// Every configured screw lies inside the measured area (an adaptive mesh of a print may cover only part of the bed).
+export const gridCoversScrews = (grid: MeshGrid, config: AlignConfig = ALIGN_DEFAULTS) =>
+  config.screws.every(s => meshAt(grid, s.x, s.y, config.row0_is_min_y) !== null)
+
+// The default screw positions of the earlier version (30/30, 230/30, 230/225, 30/225), which lay 2 to 5 mm beside the
+// screw centres. It stored them with every save of the settings; a stored copy of exactly these four stands for the
+// defaults, so the measured centres apply. Positions set by the user are kept.
+const EARLIER_DEFAULT_SCREWS: Record<AlignScrewId, [number, number]> = {
+  FL: [30, 30],
+  FR: [230, 30],
+  RR: [230, 225],
+  RL: [30, 225],
+}
+const earlierDefaults = (list: unknown) =>
+  Array.isArray(list) &&
+  (Object.keys(EARLIER_DEFAULT_SCREWS) as AlignScrewId[]).every(id => {
+    const own = list.find((o: any) => o?.id === id)
+    return own?.x === EARLIER_DEFAULT_SCREWS[id][0] && own?.y === EARLIER_DEFAULT_SCREWS[id][1]
+  })
 
 // Settings kept in the browser. Anything missing or out of range falls back to the default.
 export function parseAlignConfig(text: string | null): AlignConfig {
@@ -504,11 +658,17 @@ export function parseAlignConfig(text: string | null): AlignConfig {
   if (!raw || typeof raw !== 'object') return { ...d, screws: d.screws.map(s => ({ ...s })) }
   const within = (v: unknown, min: number, max: number, fallback: number) =>
     finite(v) && v >= min && v <= max ? v : fallback
+  const stored = earlierDefaults(raw.screws) ? null : raw.screws
   const screws = d.screws.map(s => {
-    const own = Array.isArray(raw.screws) ? raw.screws.find((o: any) => o?.id === s.id) : null
+    const own = Array.isArray(stored) ? stored.find((o: any) => o?.id === s.id) : null
     return { id: s.id, x: within(own?.x, 0, 400, s.x), y: within(own?.y, 0, 400, s.y) }
   })
-  const pitch = finite(raw.thread_pitch_mm) && raw.thread_pitch_mm > 0 && raw.thread_pitch_mm <= 5
+  const userPitch =
+    finite(raw.thread_pitch_user_mm) &&
+    raw.thread_pitch_user_mm >= PITCH_MIN_MM &&
+    raw.thread_pitch_user_mm <= PITCH_MAX_MM
+      ? raw.thread_pitch_user_mm
+      : null
   return {
     screws,
     tilt_span_mm: within(raw.tilt_span_mm, 10, 1000, d.tilt_span_mm),
@@ -517,9 +677,12 @@ export function parseAlignConfig(text: string | null): AlignConfig {
     max_rounds: Math.round(within(raw.max_rounds, 1, 10, d.max_rounds)),
     shape_warn_mm: within(raw.shape_warn_mm, 0.01, 5, d.shape_warn_mm),
     flat_range_mm: within(raw.flat_range_mm, 0, 5, d.flat_range_mm),
-    thread_pitch_mm: pitch ? raw.thread_pitch_mm : null,
-    thread_pitch_source: typeof raw.thread_pitch_source === 'string' ? raw.thread_pitch_source.slice(0, 80) : '',
-    clockwise_raises_bed: typeof raw.clockwise_raises_bed === 'boolean' ? raw.clockwise_raises_bed : null,
-    rotation_source: typeof raw.rotation_source === 'string' ? raw.rotation_source.slice(0, 80) : '',
+    // The CC2's own screw is the default; stored values of older versions never change these four. Only the pitch
+    // the user sets in the experimental settings (its own field) replaces the default pitch.
+    thread_pitch_user_mm: userPitch,
+    thread_pitch_mm: userPitch ?? d.thread_pitch_mm,
+    thread_pitch_source: userPitch == null ? d.thread_pitch_source : USER_PITCH_SOURCE,
+    clockwise_raises_bed: d.clockwise_raises_bed,
+    rotation_source: d.rotation_source,
   }
 }
