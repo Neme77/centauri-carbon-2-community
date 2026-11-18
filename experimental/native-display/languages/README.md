@@ -13,6 +13,10 @@ the panel updater or enabled in the firmware builder.
   remain bounded to their existing eleven values; extra locales use the English
   native index. This does not promise translated daemon-generated errors.
 - Use a compact Hungarian Canvas hint that fits beside the illustration.
+- Translate qualified literal labels in Home, System Version and controls for
+  Hungarian, Czech and Polish, including labels outside the native text table.
+  Hungarian uses the reviewer's `Kiadás`, `Modellhűtés` and `Ki`; the Canvas hint
+  remains two short lines with `Betöltés / Kiadás` to avoid the previous overlap.
 - Distinguish X/Y Home icons and add the chamber thermometer without replacing
   the surrounding theme background.
 - Use the native `create_btn_center_img` helper and the active theme's
@@ -27,8 +31,11 @@ motion or heating commands are added. Existing button handlers retain their jobs
 
 Neme77 supplied the display catalogs, coordinated integration and tested the
 languages/graphics-only private display on a printer. Hungarian corrections were
-provided for native-speaker review with pezso92; review of this touchscreen kit is
-still pending. Czech/Polish wording review is also welcome. Implementation and
+reviewed on the experimental touchscreen kit by pezso92, who reported clear
+Canvas pages and no observed functional issue, and supplied wording/fit feedback.
+That report covers the earlier kit, not the subsequent literal-label hooks.
+Polish users also reported English labels; the new Polish/Czech additions still
+need native-speaker and physical layout review. Implementation and
 test preparation were AI-assisted under Neme77's review.
 
 Only authored source, supplied translation catalogs and SVG artwork are tracked.
@@ -62,7 +69,21 @@ python3 experimental/native-display/languages/test_runtime_layout.py
 `prepare_runtime.py` generates ignored private headers and a dependency-patched
 GUI. Native executable sections and original data/TLS remain unchanged on disk;
 the constructor verifies the full executable and hook bytes before installing
-four language hooks in memory. Unsupported inputs are refused.
+six hooks in memory. Unsupported inputs are refused. Four hooks handle language
+selection and the native text table. Two narrowly translate known immutable UI
+literal addresses at `lv_label_set_text` and `lv_label_set_text_static`, then
+resume the original functions through verified, PC-independent prologues.
+
+Why this is needed: the Community Home extension selects its own strings using
+the native language index, which remains English for additional languages. A
+catalog entry alone cannot translate those literals. Some reported System
+Version labels already have translations in the catalogs; their exact literals
+are covered too, but this revision still requires a physical retest of that page.
+`literal_catalog.py` deliberately lists only the reviewed labels. It does not
+search/replace arbitrary text: a user filename or spool name with the same
+spelling is left intact, as are NULL refresh requests and all eleven native
+languages. Generated translations have static lifetime for static-label users.
+No additional timers, threads or per-label allocations are introduced.
 
 Compile `language_core.c`, `display_language.c` and `runtime_boot.c` together as
 the ARM shared library, using the generated headers and the repository's
@@ -96,6 +117,12 @@ firmware or a ready-to-release 1.2.30 update.
   22 Bash/stock ARM BusyBox install/restore/refusal fixtures.
 - This revision: catalog key/printf contracts and six exact-image ELF layout
   checks pass locally. Host callback results are recorded by the dedicated CI.
+- Literal-label follow-up: 505-entry catalog contracts and eight private ELF/
+  literal mapping checks passed locally. CI exercises both label entry points
+  across fourteen languages on host/ARM, including equal-spelling user data and
+  NULL inputs. These synthetic tests do not execute the vendor LVGL implementation.
+  Build the actual ARM library and verify loader/trampoline operation, Home,
+  System Version, OFF, fans and Canvas text on the printer before shipping.
 - The native-themed Back replacement needs a new ARM build and physical check:
   open Language, switch Hungarian/Czech/Polish, press Back, reopen the menu,
   reboot, and repeat with each supported active theme. Check small Canvas text,
