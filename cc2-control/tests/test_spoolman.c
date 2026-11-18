@@ -134,6 +134,11 @@ static int call_handler(void (*handler)(int, const char *, size_t), const char *
 }
 static int call_config(const char *body) { return call_handler(spoolman_config_response, body); }
 
+static void save_spool_without_printer(int fd, const char *body, size_t length) {
+    static const mqtt_client mqtt = {0};
+    spools_save_response(fd, &mqtt, body, length);
+}
+
 static void test_config_endpoint(void) {
     static char path[64];
     snprintf(path, sizeof(path), "spoolman-test-cfg-%ld.json", (long)getpid());
@@ -491,7 +496,7 @@ static void test_stale_results_are_discarded(void) {
     spool_entry *sp = setup_linked(10, 500);
     virtual_now += SPOOLMAN_TICK_MS; spoolman_tick(virtual_now);
     snprintf(body, sizeof(body), "id=%s\nspoolman_id=8", sp->id);
-    assert(call_handler(spools_save_response, body) == 200);
+    assert(call_handler(save_spool_without_printer, body) == 200);
     sp = &spools.spools[0];
     assert(!strcmp(sp->spoolman_id, "8") && near(sp->spoolman_unsent, 0) && near(sp->spoolman_inflight, 0));
     wait_worker(); spoolman_tick(virtual_now + 1);
@@ -500,7 +505,7 @@ static void test_stale_results_are_discarded(void) {
     sp = setup_linked(10, 500);
     virtual_now += SPOOLMAN_TICK_MS; spoolman_tick(virtual_now);
     snprintf(body, sizeof(body), "id=%s\nspoolman_id=", sp->id);
-    assert(call_handler(spools_save_response, body) == 200);
+    assert(call_handler(save_spool_without_printer, body) == 200);
     wait_worker(); spoolman_tick(virtual_now + 1);
     assert(!spools.spools[0].spoolman_id[0] && !strcmp(spools.spools[0].material, "PLA"));
     /* 3: the server settings change meanwhile. */
@@ -520,9 +525,9 @@ static void test_one_spoolman_spool_links_once(void) {
     snprintf(second->id, sizeof(second->id), "4444444444444444");
     snprintf(second->material, sizeof(second->material), "PLA"); snprintf(second->color, sizeof(second->color), "#000000");
     second->diameter = 1.75; second->density = 1.24; second->net = 1000; second->remaining = 1000;
-    assert(call_handler(spools_save_response, "id=4444444444444444\nspoolman_id=7") == 409);   /* already linked to the first */
-    assert(call_handler(spools_save_response, "material=PLA\ncolor=#112233\nname=Copy\nspoolman_id=7") == 409);
-    assert(call_handler(spools_save_response, "id=4444444444444444\nspoolman_id=9") == 200);
+    assert(call_handler(save_spool_without_printer, "id=4444444444444444\nspoolman_id=7") == 409); /* already linked to the first */
+    assert(call_handler(save_spool_without_printer, "material=PLA\ncolor=#112233\nname=Copy\nspoolman_id=7") == 409);
+    assert(call_handler(save_spool_without_printer, "id=4444444444444444\nspoolman_id=9") == 200);
     teardown_file();
     puts("PASS: a Spoolman spool can be linked to one local spool only");
 }

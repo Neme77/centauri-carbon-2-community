@@ -5749,9 +5749,9 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/enable")==0) {
         spools_enable_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/save")==0) {
-        spools_save_response(fd,body,body_len);
+        spools_save_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/delete")==0) {
-        spools_delete_response(fd,body,body_len);
+        spools_delete_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/assign")==0) {
         spools_assign_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/dismiss")==0) {

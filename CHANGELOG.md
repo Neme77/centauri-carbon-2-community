@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Assign a newly inserted standby CANVAS spool during a print. Spool tracking refreshes the tray list on any open page and preserves the feeding spool's assignment. An experimental module for the pinned ELEGOO 02.01.01.07 base can grip filament at a spare inlet during steady printing. Reported by **Sceletor** (#234), implemented and tested by **beanbo** (#399).
+- Assign a newly inserted standby CANVAS spool during a print. Spool tracking refreshes the tray list on any open page and protects the feeding spool's assignment from manual clearing, replacement, transfer, archiving and deletion during printing or a pause. An experimental module for the pinned ELEGOO 02.01.01.07 base can grip filament at a spare inlet during steady printing. Reported by **Sceletor** (#234), implemented and tested by **beanbo** (#399).
 
 - Native touchscreen source candidate: Hungarian, Czech and Polish in a fourteen-language selector, persistent display preference, X/Y Home labels, chamber-temperature glyph and a themed Back control. Prepared and printer-tested in its earlier languages/graphics revision by **Neme77**; the new Back control and cumulative updater integration remain under qualification before release (#379).
 
