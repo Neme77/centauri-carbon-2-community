@@ -12,12 +12,15 @@ try {
         await page.addInitScript(language => localStorage.setItem('cc2-fixture-preferences',
           JSON.stringify({ language })), language)
         await page.goto(demo.url + '#control')
-        await page.locator('.cc2-header-title h1').waitFor()
+        await page.locator('.cc2-header-title h1:visible').waitFor()
         const boxes = await page.evaluate(() => {
           const rect = selector => {
-            const { top, bottom, left, right } = document.querySelector(selector).getBoundingClientRect()
+            const element = [...document.querySelectorAll(selector)].find(el => el.getClientRects().length)
+            assertVisible(element, selector)
+            const { top, bottom, left, right } = element.getBoundingClientRect()
             return { top, bottom, left, right }
           }
+          function assertVisible(element, selector) { if (!element) throw new Error(`No visible ${selector}`) }
           return { title: rect('.cc2-header-title h1'), header: rect('.cc2-topbar'),
             actions: rect('.cc2-header-actions'), width: document.documentElement.scrollWidth }
         })

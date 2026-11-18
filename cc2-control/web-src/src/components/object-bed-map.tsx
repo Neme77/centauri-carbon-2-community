@@ -493,7 +493,7 @@ export const ObjectBedMap = ({
     </div>
   )
   return onClose ? (
-    <Dialog onClose={onClose} width={1200} class="max-w-[calc(100vw-2rem)]" label={t('job.bed_map')} sheet>
+    <Dialog onClose={onClose} width={1200} label={t('job.bed_map')} sheet>
       {content}
     </Dialog>
   ) : (

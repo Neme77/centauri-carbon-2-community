@@ -25,6 +25,7 @@
     "test:mesh-selector": "node preview/test-mesh-selector.mjs",
     "test:plates": "node preview/test-bed-plates.mjs",
     "test:queue": "node preview/test-queue.mjs",
+    "test:start-timeout": "node preview/test-start-timeout.mjs",
     "test:spools": "node preview/test-spools.mjs && node preview/test-spool-popup.mjs",
     "test:calibration": "node preview/test-mesh-calibration.mjs",
     "test:job-objects": "node preview/test-job-objects.mjs",
@@ -41,6 +42,8 @@
     "test:spanish": "node preview/test-spanish.mjs",
     "test:materials": "node preview/test-material-presets.mjs",
     "test:list-pages": "node preview/test-files-history-pages.mjs",
+    "test:file-pictures": "node preview/test-file-pictures.mjs",
+    "test:history-reprint": "node preview/test-history-reprint.mjs",
     "test:file-dates": "node preview/test-file-dates.mjs",
     "test:update-notice": "node preview/test-update-notice.mjs",
     "test:updates": "node preview/test-updates.mjs",
@@ -72,7 +75,13 @@
     "test:pressure-advance": "node preview/test-pressure-advance.mjs",
     "test:quick-maintenance": "node preview/test-quick-maintenance.mjs",
     "test:control-restyle": "node preview/test-control-restyle.mjs",
-    "test:runout": "node preview/test-runout-continue.mjs"
+    "test:runout": "node preview/test-runout-continue.mjs",
+    "test:canvas-unreported": "node preview/test-canvas-unreported.mjs",
+    "test:delete-retry": "node preview/test-delete-retry.mjs",
+    "test:start-reading": "node preview/test-start-reading.mjs",
+    "test:not-printable-2gib": "node preview/test-not-printable-2gib.mjs",
+    "test:large-file-confirm": "node preview/test-large-file-confirm.mjs",
+    "test:usb-stall": "node preview/test-usb-stall.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

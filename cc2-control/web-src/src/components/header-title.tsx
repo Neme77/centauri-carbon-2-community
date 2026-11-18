@@ -33,7 +33,7 @@ export const HeaderTitle = () => (
       />
       <circle cx="16" cy="254" r="14" fill="currentColor" />
     </svg>
-    <span class="cc2-portrait-brand hidden font-bold text-cyan">CC2 Control</span>
+    <h1 class="cc2-portrait-brand hidden font-bold text-cyan">CC2 Control</h1>
     <div class="cc2-full-brand relative min-w-0 flex-1">
       <h1 class="max-w-full truncate text-2xl font-extrabold leading-tight tracking-tight text-cyan [text-shadow:0_0_14px_color-mix(in_srgb,currentColor_35%,transparent)] md:text-[28px] xl:absolute xl:bottom-[7px] xl:left-3 xl:max-w-[calc(100%-12px)] xl:text-[32px]">
         Centauri Carbon 2<span class="mx-2.5 font-light opacity-60">/</span>
