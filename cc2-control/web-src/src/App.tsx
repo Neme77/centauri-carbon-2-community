@@ -52,7 +52,6 @@ export const App = () => {
   return (
     <>
       <TitleSync />
-      <PrintCompleted />
       <ChamberReady />
       <RunoutContinue />
       <RefusalWatcher />
@@ -62,6 +61,7 @@ export const App = () => {
         tabIndex={-1}
         class={`cc2-main ml-15.5 mt-17 p-3 transition-[margin,padding,opacity] md:p-4 ${collapsed ? 'cc2-main-collapsed' : 'md:ml-52'}`}
       >
+        <PrintCompleted />
         {rfidRebootRequired(lifecycle) && (
           <p role="status" data-rfid-reboot class="mb-3 rounded-md border border-edge bg-field p-3 text-sm text-amber">
             {t(

@@ -91,12 +91,7 @@ export const PrintCompleted = () => {
     Number(data?.last_message_age) <= 15 &&
     view(data).idle
   return (
-    <Card
-      role="region"
-      aria-label={t('completed.title')}
-      data-print-completed
-      class="fixed right-3 bottom-3 z-40 w-[min(420px,calc(100vw-24px))] max-h-[65vh] overflow-auto shadow-2xl"
-    >
+    <Card role="region" aria-label={t('completed.title')} data-print-completed class="mb-3.5">
       <CardHead icon="file" title={notice.live ? 'completed.title' : 'completed.latest'} />
       <p class="break-words font-semibold">{notice.path}</p>
       <p class="mt-2 text-muted">
