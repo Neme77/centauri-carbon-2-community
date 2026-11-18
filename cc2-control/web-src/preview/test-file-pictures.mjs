@@ -1,7 +1,8 @@
 // The pictures of the Files, History and Queue lists share one bounded cache (lib/pictures.ts): browsing a
 // library larger than the cache keeps the number of live object URLs bounded, a URL is never revoked while a
 // row shows it, an evicted picture is asked for again when its row comes back, and a file replaced under its
-// name shows its new picture and frees the old one.
+// name shows its new picture and frees the old one. While the service holds G-code reads (the printer homes or
+// starts a print, 503), the queue rests at least 3 s before it asks again and asks for the same picture.
 import assert from 'node:assert/strict'
 import { createServer } from 'vite'
 import { chromium } from 'playwright'
@@ -31,8 +32,16 @@ try {
   const tasks = Array.from({ length: 40 }, (_, i) => ({ task_id: String(i + 1), task_name: files[i].path, begin_time: 1700001000 + i, end_time: 1700001100 + i, task_status: 1, time_lapse_video_status: 0 }))
   const asked = []
   const version = new Map()
+  const log = [] // every request with its time and answer
+  let held = 0 // read-hold answers still to give
   await page.route('**/api/gcode-files/thumbnail', async r => {
     const name = r.request().postData().split('\n')[1]
+    if (held > 0) {
+      held--
+      log.push({ name, at: Date.now(), status: 503 })
+      return r.fulfill({ status: 503, json: { error: 'Printer is homing or starting a print; retry shortly' } })
+    }
+    log.push({ name, at: Date.now(), status: 200 })
     asked.push(name)
     await new Promise(done => setTimeout(done, 15))
     const colour = version.get(name) ? '#e53935' : '#4caf50'
@@ -120,8 +129,29 @@ try {
   await audit('Queue')
   await page.evaluate(() => { location.hash = '#files' })
   await filesPage(1)
+  // The read hold: the first page's files are replaced, and the service answers the first two requests with 503.
+  // That picture is not remembered: after each 503 nothing is asked for at least 3 s, then the same picture again;
+  // once the hold ends, the rest follow and every row shows its picture.
+  const until = async (test, ms) => {
+    for (const end = Date.now() + ms; !test(); ) {
+      assert.ok(Date.now() < end, 'timed out')
+      await new Promise(done => setTimeout(done, 20))
+    }
+  }
+  log.length = 0
+  for (let i = 105; i < 120; i++) files[i] = { ...files[i], size: files[i].size + 1, modified: files[i].modified + 5000 }
+  held = 2
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await until(() => log.filter(e => e.status === 200).length >= 15, 20000)
+  await page.waitForFunction(() => document.querySelectorAll('.cc2-file-row [data-file-picture="shown"]').length === 15)
+  assert.deepEqual(log.slice(0, 3).map(e => e.status), [503, 503, 200], `two held answers, then the picture: ${JSON.stringify(log.slice(0, 3))}`)
+  assert.ok(log[1].name === log[0].name && log[2].name === log[0].name, 'the held picture is asked for again, not the next one')
+  const rests = [log[1].at - log[0].at, log[2].at - log[1].at]
+  assert.ok(rests.every(gap => gap >= 2950), `the queue rests at least 3 s after a 503: ${rests}`)
+  assert.equal(new Set(log.filter(e => e.status === 200).map(e => e.name)).size, 15, 'each new picture is asked for once it is answered')
+  await audit('Files after the read hold')
   assert.deepEqual(errors, [])
-  console.log(`PASS: one bounded picture cache for Files, History and Queue (${KEEP} kept beyond the shown rows): 120 files browsed with at most ${KEEP + 15} live URLs, no revoked or broken picture on screen, dropped pictures asked for again, a replaced file shows its new picture and frees the old one`)
+  console.log(`PASS: one bounded picture cache for Files, History and Queue (${KEEP} kept beyond the shown rows): 120 files browsed with at most ${KEEP + 15} live URLs, no revoked or broken picture on screen, dropped pictures asked for again, a replaced file shows its new picture and frees the old one, after a 503 the queue rests 3 s and asks for the same picture again`)
 } finally {
   await browser?.close()
   await server.close()

@@ -68,3 +68,52 @@ export function demoExcludeObjects() {
     },
   }
 }
+
+// The demo objects for the object preview: centre, footprint radii, object layers, and how the radius changes with
+// the height (0 at the bed, 1 at the top). The answer follows the service: every step-th layer, at most 24 of them.
+const demoShapes: Record<
+  string,
+  { c: [number, number]; r: [number, number]; layers: number; profile: (h: number) => number }
+> = {
+  // A seated figure: wide base, belly, shoulders, head.
+  Buddha: {
+    c: [128, 120],
+    r: [30, 24],
+    layers: 227,
+    profile: h =>
+      h < 0.62
+        ? 1 - 0.55 * h ** 1.6
+        : h < 0.7
+          ? 0.42
+          : 0.45 * Math.sqrt(Math.max(0, 1 - ((h - 0.84) / 0.16) ** 2)) + 0.02,
+  },
+  'Copy 2': { c: [70, 192], r: [20, 17], layers: 151, profile: h => 1 - 0.6 * h },
+  'Copy 3': { c: [190, 190], r: [18, 16], layers: 60, profile: () => 1 },
+  'Brim tab': { c: [190, 48], r: [16, 11], layers: 8, profile: () => 1 },
+}
+
+export function demoObjectPreview(file: string, object: string, storage = 'internal') {
+  const shape = demoShapes[object]
+  if (!shape) return null
+  const step = Math.max(3, Math.ceil(shape.layers / 24))
+  const rings = []
+  for (let layer = 0; layer < shape.layers; layer += step) {
+    const scale = Math.max(0.03, shape.profile(shape.layers > 1 ? layer / (shape.layers - 1) : 0))
+    rings.push({
+      z: round2((layer + 1) * 0.2),
+      paths: [oval(shape.c[0], shape.c[1], shape.r[0] * scale, shape.r[1] * scale, 40).flat()],
+    })
+  }
+  return {
+    storage,
+    file,
+    object,
+    layers: shape.layers,
+    step,
+    z_max: round2(shape.layers * 0.2),
+    bounds: [shape.c[0] - shape.r[0], shape.c[1] - shape.r[1], shape.c[0] + shape.r[0], shape.c[1] + shape.r[1]],
+    rings,
+    truncated: false,
+    objects: Object.keys(demoShapes),
+  }
+}

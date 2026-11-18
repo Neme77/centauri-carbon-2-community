@@ -9,6 +9,8 @@ try {
   await page.addInitScript(() => {
     if (!localStorage.getItem('cc2-fixture-preferences'))
       localStorage.setItem('cc2-fixture-preferences', '{"language":"en","theme":"dark"}')
+    // The job page shows its camera only after the Camera button; the page remembers that choice here.
+    localStorage.setItem('cc2-job-camera', '1')
   })
   const errors = []
   page.on('pageerror', e => errors.push(e.message))
