@@ -194,14 +194,13 @@ try {
     const hints = settingsBlock.locator('[data-align-hint] > button')
     for (let i = 0; i < (await hints.count()); i++) {
       await hints.nth(i).scrollIntoViewIfNeeded()
-      await hints.nth(i).click()
+      await hints.nth(i).hover()
       const tip = settingsBlock.locator('[data-hint-text]')
       await tip.waitFor()
       const box = await tip.boundingBox()
       const cardNow = await page.locator('#screwFocus').boundingBox()
       assert.ok(box.x >= cardNow.x - 0.5 && box.x + box.width <= cardNow.x + cardNow.width + 0.5, `${width} px: the text of (i) ${i + 1} stays inside the card (${Math.round(box.x)}–${Math.round(box.x + box.width)} / ${Math.round(cardNow.x)}–${Math.round(cardNow.x + cardNow.width)})`)
-      await page.keyboard.press('Escape')
-      await page.mouse.move(0, 0)
+      await page.mouse.move(5, 5)
       await tip.waitFor({ state: 'detached' })
     }
   }
