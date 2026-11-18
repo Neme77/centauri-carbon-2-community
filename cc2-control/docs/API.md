@@ -789,6 +789,11 @@ A tray report fits a spool when the colour is the same and the spool's material 
 name, or is a product line of that type: `PLA Matte`, `PLA-CF` and `PLA+` fit a tray that reports `PLA`.
 A change to a filament that still fits the bound spool asks nothing.
 
+While a visible web page is checking printer status during a print, enabled spool tracking renews the same
+Canvas watch used on the Canvas page. The printer supplies the tray data, and the existing 10-second MQTT
+refresh interval is shared across pages. The spool chooser can write the selected spool's material and
+colour back to a standby tray once the printer reports filament at its inlet.
+
 Endpoints (changes are `POST` with `key=value` lines and need `X-CC2-Request: 1`):
 
 - `GET /api/spools` returns `enabled`, every slot with its spool, the spool it held before (`last`), an open
@@ -912,6 +917,13 @@ required validation. Displaying a report does not diagnose an unreported stop.
 
 Physical validation: a simulated spaghetti-detection event displayed correctly;
 the old message did not reappear after page refresh or a printer reboot.
+
+### Canvas material editing during a print
+
+`GET /api/canvas` exposes `live_material_edit` per slot. During a print, `canvas:catalog` and
+`canvas:material` require fresh tray readback and native printing status. The selected slot must report
+filament present and a different slot must be confirmed as feeding the head. These actions write filament
+metadata. Loading to the head, unloading and reset-all require Idle.
 
 ### Reset all Canvas filament records
 

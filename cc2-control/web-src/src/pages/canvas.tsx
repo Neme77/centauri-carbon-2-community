@@ -83,6 +83,8 @@ export const Canvas = () => {
   usePoll(refreshSpools, 10000)
   const ok = Boolean(model?.connected && !externalSelected)
   const selected = controls.find(c => c.slot === slot)
+  const printing = printerState.ok && printerState.data?.connected && printerState.data.machine?.status === 2
+  const materialEditable = idle || Boolean(printing && selected?.live_material_edit)
   const recoverLoad = async () => {
     if (recoverySending.current || recoverySent || !ok || !idle || selected?.recovery_load !== true) return
     const chosen = slot
@@ -217,7 +219,13 @@ export const Canvas = () => {
       Boolean(selected?.unload && idle),
       reason(idle ? selected?.reason_unload : 'busy'),
     ],
-    [Palette, 'canvas.select_material', () => setDialog(true), idle, reason('busy')],
+    [
+      Palette,
+      'canvas.select_material',
+      () => setDialog(true),
+      materialEditable,
+      reason(printing && selected?.state === 'loaded' ? 'already_loaded' : selected?.reason_load),
+    ],
     [RefreshCw, 'canvas.sync', sync, true, ''],
   ]
   return (

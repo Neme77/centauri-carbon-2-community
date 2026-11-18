@@ -45,6 +45,24 @@ int main(void){
  m.canvas_direct_known=1;m.connected=0;assert(!canvas_slot_policy(&m,1).load);
  m.connected=1;m.registered=0;assert(!canvas_slot_policy(&m,1).load);
  m.registered=1;
+ /* Loading to the head is still refused during a print. The selected standby
+  * tray alone can write its metadata while both sources confirm the feed. */
+ m.machine_status=2;m.canvas_direct_idle=0;m.canvas_direct_printing=1;
+ m.canvas_direct_active=1;m.canvas_head_loaded=1;m.canvas_report_at=time(NULL);
+ snapshot(&m,"[{\"tray_id\":0,\"status\":0},{\"tray_id\":1,\"status\":2},{\"tray_id\":2,\"status\":1}]");
+ assert(!canvas_material_edit_allowed(&m,0)&&!canvas_material_edit_allowed(&m,1));
+ assert(canvas_material_edit_allowed(&m,2)&&!canvas_material_edit_allowed(&m,3));
+ assert(!control_build_script("canvas:load:2",&m,command,sizeof(command),reason,sizeof(reason)));
+ assert(!control_build_script("canvas:unload:1",&m,command,sizeof(command),reason,sizeof(reason)));
+ assert(!control_build_script("canvas:reset-all",&m,command,sizeof(command),reason,sizeof(reason)));
+ assert(!control_build_script("canvas:material:1:PLA:FF0000:190:230",&m,command,sizeof(command),reason,sizeof(reason)));
+ assert(control_build_script("canvas:material:2:PLA:FF0000:190:230",&m,command,sizeof(command),reason,sizeof(reason)));
+ assert(!strcmp(command,"CANVAS_SET_FILAMENT_INFO CHANNEL=2 COLOR=0xFF0000 detailed_type=\"PLA\" MANUFACTURER=\"Generic\" nozzle_max_temp=230 nozzle_min_temp=190 TYPE=\"PLA\" CODE=Generic"));
+ m.canvas_direct_printing=0;assert(!canvas_material_edit_allowed(&m,2));
+ m.canvas_direct_printing=1;m.canvas_report_at-=16;assert(!canvas_material_edit_allowed(&m,2));
+ m.canvas_report_at=time(NULL);m.canvas_direct_active=0;assert(!canvas_material_edit_allowed(&m,2));
+ m.canvas_direct_active=1;m.canvas_head_loaded=0;assert(!canvas_material_edit_allowed(&m,2));
+ m.machine_status=1;m.canvas_direct_printing=0;m.canvas_direct_idle=1;m.canvas_direct_active=-1;
  snapshot(&m,"[{\"tray_id\":1,\"status\":1},{\"tray_id\":1,\"status\":0}]");assert(canvas_slot_policy(&m,1).state==CV_UNKNOWN);
  snapshot(&m,"[{\"tray_id\":2,\"status\":1}]");assert(canvas_slot_policy(&m,1).state==CV_UNKNOWN);
  snapshot(&m,"[{\"tray_id\":1,\"status\":99}]");assert(canvas_slot_policy(&m,1).state==CV_UNKNOWN);

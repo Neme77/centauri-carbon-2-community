@@ -54,6 +54,7 @@ export type CanvasSlotControl = {
   load: boolean
   unload: boolean
   recovery_load?: boolean
+  live_material_edit?: boolean
   reason_load: string
   reason_unload: string
 }

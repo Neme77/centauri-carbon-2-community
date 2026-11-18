@@ -1,0 +1,9 @@
+# CANVAS insertion during a print
+
+The pinned printer executable records new inlet presence during a print. Its short prefeed path runs when the break counter exceeds the runout threshold. This trial adds an inlet grip for a newly inserted standby spool during steady printing. It uses the configured short distance from `pre_load_fila_dist_2`, up to 5 mm, and sends it to the inlet motor using the original asynchronous command. The existing insertion event and tray status remain the source of web readback.
+
+The trial requires a fresh CANVAS controller sample, the native settled feed flag, an active and loaded CANVAS tray, filament at the new inlet and no pending prefeed on that inlet. The native code handles idle insertion and the stock runout prefeed. The hook uses the existing feeder call site and the CANVAS controller keeps ownership of slot state.
+
+Build and run the ARM fixture with `make all test` in this directory. The fixture enters the actual ARM hook with the native stack layout and verifies the requested motor, its arguments, refusal cases and the stock runout branch. The library activates when preloaded by the printer launcher with the exact Community Firmware 02.01.01.07 executable installed at `/opt/usr/cc2-reactor-runtime-v2/elegoo_printer`. The constructor verifies the executable and the instructions before it changes the process image in memory.
+
+The regular updater does not load this trial. Hardware qualification needs a test launch with the existing printer modules and this library, followed by a print from one CANVAS slot and insertion into a spare slot. Observe the grip, uninterrupted printing and the updated slot and spool assignment in CC2 Control. Include an idle insertion, a colour change and a runout in the qualification.

@@ -116,7 +116,7 @@ void mqtt_close(mqtt_client *c) {
     c->snapshot_sent=0; c->input_len=0;c->discard_remaining=0;
     c->last_registration_request=0; c->last_snapshot_request=0;
     c->registration_attempts=0; c->snapshot_request_attempts=0;
-    c->canvas_snapshot_len=0; c->canvas_snapshot[0]='\0';
+    c->canvas_snapshot_len=0; c->canvas_snapshot[0]='\0';c->canvas_report_at=0;
     c->canvas_discovery_complete=0; c->canvas_request_attempts=0;
     c->last_canvas_request=0;
     c->last_app_ping=0;
@@ -198,7 +198,7 @@ static void recover_registration(mqtt_client *c) {
     c->last_registration_request=0;c->last_snapshot_request=0;
     c->automatic_registration_attempts=0;c->automatic_snapshot_attempts=0;
     c->automatic_canvas_attempts=0;
-    c->canvas_discovery_complete=0;c->canvas_snapshot_len=0;c->canvas_snapshot[0]='\0';
+    c->canvas_discovery_complete=0;c->canvas_snapshot_len=0;c->canvas_snapshot[0]='\0';c->canvas_report_at=0;
     c->snapshot_len=0;c->snapshot[0]='\0';
     c->have_auto_refill=0;c->auto_refill_probed=0;
     c->last_app_ping=0;c->app_ping_pending_since=0;
@@ -772,7 +772,7 @@ static void handle_publish(mqtt_client *c,unsigned char flags,const unsigned cha
         if(payload_len<sizeof(c->canvas_snapshot)){
             memcpy(c->canvas_snapshot,payload,payload_len);
             c->canvas_snapshot[payload_len]='\0';c->canvas_snapshot_len=payload_len;
-            c->canvas_discovery_complete=1;c->canvas_revision++;
+            c->canvas_discovery_complete=1;c->canvas_revision++;c->canvas_report_at=time(NULL);
         }else c->oversized_snapshots++;
     }
     update_state(c,payload,payload_len);

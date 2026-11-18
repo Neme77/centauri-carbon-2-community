@@ -72,5 +72,12 @@ int main(void){
  assert(get(&mqtt,"/server/database/item?namespace=other")==404);
  assert(get(&mqtt,"/server/database/item")==404);
  puts("PASS other database namespaces stay 404");
+ mqtt.have_machine_status=1;mqtt.machine_status=2;
+ assert(get(&mqtt,"/api/printer")==200&&mqtt.canvas_watch_until==0);
+ spools.enabled=1;mqtt.machine_status=1;
+ assert(get(&mqtt,"/api/printer")==200&&mqtt.canvas_watch_until==0);
+ mqtt.machine_status=2;
+ assert(get(&mqtt,"/api/printer")==200&&mqtt.canvas_watch_until>=time(NULL)+14);
+ puts("PASS printer status keeps the Canvas watch alive for spool tracking during a print");
  puts("PASS all Orca lane_data tests");return 0;
 }

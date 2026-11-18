@@ -17,6 +17,12 @@ const setup = `{
   if(path.includes('/api/spools/')&&options.method==='POST'){
    s.posts.push({path,body:String(options.body),marker:new Headers(options.headers).get('X-CC2-Request')});
    if(s.reject) return reply({error:'Fixture refusal'},409);
+   if(path.endsWith('/assign')) {
+    const fields=new URLSearchParams(String(options.body).trim().split('\\n').join('&'));
+    Object.assign(s.spoolLibrary.slots[Number(fields.get('slot'))],{spool:fields.get('spool'),question:''});
+    s.spoolLibrary.revision++;
+    return reply({assigned:true});
+   }
    if(path.endsWith('/save')) {
     const fields=Object.fromEntries(String(options.body).split('\\n').map(line=>{const n=line.indexOf('=');return [line.slice(0,n),line.slice(n+1)]}));
     const id='created-'+s.spoolLibrary.spools.length;
@@ -25,6 +31,16 @@ const setup = `{
     s.spoolLibrary.revision++;
     return reply({saved:true,id});
    }
+  }
+  if(path.endsWith('/api/control')&&options.method==='POST'&&s.status===2){
+   const action=String(options.body);
+   s.commands.push(action);
+   const [,slot,type,hex,name,brand]=action.match(/^canvas:material:([0-3]):([^:]+):([0-9a-f]{6}):\\d+:\\d+:([^:]+):([^:]+)$/i)||[];
+   if(!slot||Number(slot)===s.activeTray||s.trays[Number(slot)].status!==1) return reply({error:'Fixture refusal'},409);
+   const color='#'+hex.toUpperCase();
+   Object.assign(s.trays[Number(slot)],{filament_type:type,filament_name:name,filament_color:color});
+   Object.assign(s.spoolLibrary.slots[Number(slot)].printer,{type,name,brand,color});
+   return reply({accepted:true});
   }
   const response=await original(input,options);
   if(path.endsWith('/api/printer')){
@@ -114,5 +130,47 @@ try {
   assert.deepEqual(errors,[])
   await page.close()
  }
- console.log('PASS: insertion copy, separate identity/source slot, gross/tare/manual weights, validation, explicit refused-save retry, unchanged inventory editor; desktop/mobile, EN/IT, dark/light')
+ const live=await fixture(setup+`{
+  const s=window.__CC2_PREVIEW;
+  Object.assign(s,{status:2,activeTray:0,headLoaded:true});
+  s.trays[0].status=2;
+  s.trays[1].status=0;
+  s.spoolLibrary.slots[0].printer.status=2;
+  Object.assign(s.spoolLibrary.slots[1],{question:'',last:'spare'});
+  s.spoolLibrary.slots[1].printer.status=0;
+  s.spoolLibrary.spools.push({...s.spoolLibrary.spools[0],id:'spare',spoolman_id:'',name:'Green PLA',color:'#388052'});
+ }`)
+ try {
+  const page=await browser.newPage()
+  await page.addInitScript(()=>localStorage.setItem('cc2-fixture-preferences','{"language":"en"}'))
+  await page.goto(live.url+'#spools')
+  const standby=page.locator('[data-slot="1"]')
+  await standby.getByText('Empty', {exact:true}).waitFor()
+  await page.evaluate(()=>{
+   const s=window.__CC2_PREVIEW
+   s.trays[1].status=1
+   Object.assign(s.spoolLibrary.slots[1],{question:'inserted',question_since:2})
+   s.spoolLibrary.slots[1].printer.status=1
+   s.spoolLibrary.revision++
+  })
+  const dialog=page.getByRole('dialog')
+  await dialog.getByText('Green PLA',{exact:true}).click()
+  await dialog.getByRole('checkbox').waitFor()
+  assert.equal(await dialog.getByRole('checkbox').isChecked(),true)
+  await dialog.getByRole('button',{name:'Confirm',exact:true}).click()
+  await dialog.waitFor({state:'hidden'})
+  await standby.getByText('Green PLA',{exact:true}).waitFor()
+  const result=await page.evaluate(()=>{
+   const s=window.__CC2_PREVIEW
+   return {active:s.spoolLibrary.slots[0].spool,standby:s.spoolLibrary.slots[1].spool,commands:s.commands}
+  })
+  assert.equal(result.active,'source')
+  assert.equal(result.standby,'spare')
+  assert.equal(result.commands.length,1)
+  assert.match(result.commands[0],/^canvas:material:1:PLA:388052:/)
+  await page.close()
+ } finally {
+  await live.cleanup()
+ }
+ console.log('PASS: insertion copy and weighing; choosing a standby spool during a print updates its assignment and material')
 }finally{await browser.close();await demo.cleanup()}

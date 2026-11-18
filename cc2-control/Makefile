@@ -29,6 +29,8 @@ all: dist
 $(BUILD):
 	mkdir -p $(BUILD)
 
+$(TARGET): src/canvas_state.h src/canvas_json.h
+
 $(TARGET): src/rfid_app_update_boot.h src/rfid_lifecycle_http.h src/rfid_runtime.h src/maintenance_barrier.h src/cavity_floor_http.h src/cavity_floor_protocol.h src/thermal_limits.h src/load_cell_guide.h src/load_cell_guide_core.h src/calibration_tools.h src/rotation_core.h src/native_tools_transport.h src/external_feed_state.h src/external_filament.h src/bed_drying.h src/backup.h src/backup_format.h src/experiments.h src/experiments_state.h src/app_update_catalog.h src/app_updates.h src/main.c src/gcode_metadata.h src/gcode_download.h src/gcode_layer_path.h src/gcode_layer_path_http.h src/history.h src/plates.h src/spools.h src/queue.h src/canvas_unload.h src/runout.h src/sha256.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h src/network_status.c src/network_status_http.h src/connections_http.h src/status_core.h src/screw_history.h $(wildcard src/connections/*.h) VERSION FIRMWARE_VERSION | $(BUILD)
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -DCC2_NETWORK_STATUS_LIBRARY -o $@ $(LDFLAGS) -lm
 

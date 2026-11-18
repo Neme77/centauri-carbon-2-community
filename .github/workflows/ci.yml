@@ -40,6 +40,9 @@ jobs:
       - name: Pending SAVE_CONFIG conflict regression on host and ARM
         run: python3 ../experimental/pending-autosave/qualify.py
 
+      - name: CANVAS standby prefeed regression on ARM
+        run: make -C ../experimental/canvas-live-loading all test
+
       - name: Root-owned application recovery bootstrap fixtures
         run: sudo -n make test-app-update-boot
 
