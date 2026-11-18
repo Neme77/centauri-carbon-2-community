@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Make every retained spool-history record accessible with translated pagination, filter reset and bounded scrolling. Reported by **DamiBFryta**, implemented by **Neme77** with AI assistance (#391).
+- Keep the header title within its bar on Android desktop view and other touch devices with desktop-width viewports. Reported by **DamiBFryta**, implemented by **Neme77** with AI assistance (#392).
 - Display the print-completed notice above page content instead of over queue files and controls; acknowledging it still does not start a print. Reported by **DamiBFryta**, implemented by **Neme77** with AI assistance (#393).
 - Native touchscreen language follow-up: cover qualified English Home/System Version/control literals for Hungarian, Polish and Czech; adopt Hungarian reviewer wording for Unload, OFF and the model fan, retaining the compact Canvas hint. Coordinated by **Neme77**, with Hungarian review by **pezso92** and Polish user feedback; new label hooks still require physical validation before release (#383).
 
