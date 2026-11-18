@@ -8,7 +8,7 @@ export const request = async (path: string, options: RequestInit & { timeoutMs?:
   const start = /\/api\/(gcode-files\/print|queue\/start)$/.test(path)
   const waitMs =
     options.timeoutMs ??
-    (/\/api\/gcode-files\/(metadata|inspect|layer-path)(\?|$)/.test(path)
+    (/\/api\/gcode-files\/(metadata|inspect|layer-path|object-preview)(\?|$)/.test(path)
       ? 120000
       : // A USB start answers only after the file has been copied to internal memory (#344), from the
         // print dialog and from the queue alike.

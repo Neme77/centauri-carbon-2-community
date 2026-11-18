@@ -256,8 +256,10 @@ static void memory_values(long *total, long *available) {
     fclose(file);
 }
 
+static void layer_path_health_json(char *out, size_t cap);
 static void health_response(int fd, const mqtt_client *mqtt) {
-    char body[768];
+    char body[1536], layer_path[448];
+    layer_path_health_json(layer_path, sizeof(layer_path));
     char load[96] = "unknown";
     long uptime = read_first_long("/proc/uptime");
     long mem_total, mem_available;
@@ -273,10 +275,10 @@ static void health_response(int fd, const mqtt_client *mqtt) {
         "\"mode\":\"protected-control\",\"uptime_seconds\":%ld,"
         "\"mem_total_kb\":%ld,\"mem_available_kb\":%ld,"
         "\"loadavg\":\"%s\",\"mqtt_connected\":%s,\"mqtt_registered\":%s,"
-        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu,\"mqtt_oversized_replies\":%lu}\n",
+        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu,\"mqtt_oversized_replies\":%lu,%s}\n",
         uptime, mem_total, mem_available, load, mqtt->connected ? "true" : "false",
         mqtt->registered ? "true" : "false", mqtt->snapshot_len ? "true" : "false",
-        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots,mqtt->oversized_replies);
+        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots,mqtt->oversized_replies,layer_path);
     if (length < 0 || (size_t)length >= sizeof(body)) return;
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
@@ -662,6 +664,7 @@ static int gcode_storage_root(const char *storage, const char **root) {
 #include "gcode_download.h"
 #include "gcode_layer_path.h"
 #include "gcode_layer_path_http.h"
+#include "gcode_object_preview_http.h"
 
 /* Cursor pages keep the fixed 128-entry window and all traversal guards.
  * A cursor is metadata for ordering only, never an instruction to open a path.
@@ -3472,7 +3475,48 @@ static void analysis_reading_set(const char *root, const char *name) {
 static int active_analysis_pending, active_analysis_ready, active_analysis_layers;
 static unsigned active_analysis_generation;
 static long active_analysis_seconds = -1;
-static void active_gcode_scan(const char *filename,unsigned generation,int *layers,long *seconds);
+static int active_gcode_scan(const char *filename,unsigned generation,int *layers,long *seconds);
+static void gcode_read_count_stopped(void);
+/* The scan of the running print's file runs at the layer path's lower priority (LAYER_PATH_NICE, idle I/O) on this
+ * worker, which also serves inspect and metadata; those keep the priority they had. So the priority is lowered only
+ * when it can be set back (root, or RLIMIT_NICE allows it), and set back after the scan. Linux only. */
+typedef struct { int lowered, nice, io; } analysis_priority;
+static analysis_priority analysis_priority_lower(void) {
+    analysis_priority old = {0, 0, -1};
+#if defined(__linux__) && defined(SYS_gettid)
+    pid_t tid = (pid_t)syscall(SYS_gettid);
+    errno = 0;
+    int nice_now = getpriority(PRIO_PROCESS, (id_t)tid);
+    if (nice_now == -1 && errno) return old;
+    int restorable = geteuid() == 0;
+#ifdef RLIMIT_NICE
+    struct rlimit limit;
+    if (!restorable && getrlimit(RLIMIT_NICE, &limit) == 0)
+        restorable = limit.rlim_cur == RLIM_INFINITY || 20 - (long)limit.rlim_cur <= nice_now;
+#endif
+    if (!restorable || nice_now >= LAYER_PATH_NICE) return old;
+    if (setpriority(PRIO_PROCESS, (id_t)tid, LAYER_PATH_NICE) != 0) return old;
+    old.lowered = 1; old.nice = nice_now;
+#ifdef SYS_ioprio_get
+    old.io = (int)syscall(SYS_ioprio_get, 1 /* IOPRIO_WHO_PROCESS */, (int)tid);
+    if (old.io >= 0) (void)syscall(SYS_ioprio_set, 1, (int)tid, 3 << 13 /* IOPRIO_CLASS_IDLE */);
+#endif
+#endif
+    return old;
+}
+static void analysis_priority_restore(analysis_priority old) {
+#if defined(__linux__) && defined(SYS_gettid)
+    if (!old.lowered) return;
+    pid_t tid = (pid_t)syscall(SYS_gettid);
+#ifdef SYS_ioprio_set
+    if (old.io >= 0) (void)syscall(SYS_ioprio_set, 1, (int)tid, old.io);
+#endif
+    if (setpriority(PRIO_PROCESS, (id_t)tid, old.nice) != 0)
+        fprintf(stderr, "File analysis: cannot restore the worker priority\n");
+#else
+    (void)old;
+#endif
+}
 static int analysis_same_file(const struct stat *a,const struct stat *b) {
     return a->st_dev==b->st_dev && a->st_ino==b->st_ino && a->st_size==b->st_size &&
         a->st_mtim.tv_sec==b->st_mtim.tv_sec && a->st_mtim.tv_nsec==b->st_mtim.tv_nsec &&
@@ -3488,9 +3532,12 @@ static void *analysis_worker(void *unused) {
         pthread_mutex_unlock(&analysis_mutex);
         if(job.kind==2) {
             int layers=0;long seconds=-1;
-            active_gcode_scan(job.body,job.generation,&layers,&seconds);
+            analysis_priority priority=analysis_priority_lower();
+            int complete=active_gcode_scan(job.body,job.generation,&layers,&seconds);
+            analysis_priority_restore(priority);
             pthread_mutex_lock(&analysis_mutex);
-            if(job.generation==active_analysis_generation && !strcmp(job.body,active_analysis_filename)) {
+            /* Ended by the read hold: no result; the next /api/printer after the hold starts it again. */
+            if(complete && job.generation==active_analysis_generation && !strcmp(job.body,active_analysis_filename)) {
                 active_analysis_layers=layers;active_analysis_seconds=seconds;active_analysis_ready=1;
             }
             active_analysis_pending=0;
@@ -3591,7 +3638,10 @@ static long active_gcode_estimated_seconds = -1;
 /* The scan of the active print reads the whole file once. It ends early when that print is no longer the active one
  * (finished, stopped, deleted, another print), so a stale scan never keeps a removed file open and its space taken;
  * a job already stale does not open the file at all. A file of 2 GiB or more is not read: the printer program
- * (32-bit stat) cannot open it, so there is no print to describe. */
+ * (32-bit stat) cannot open it, so there is no print to describe. While the printer homes, levels, probes or starts a
+ * print (gcode_read_hold, see gcode_read_blocked) the scan ends at the next check as well, without a result: seen on
+ * the printer (18.11.2026), this scan of a 52 MB file running into the homing of a print start, then the MCU's
+ * "Timer too close" (error 803). Returns 0 only then; the scan is started again after the hold. */
 #define ACTIVE_SCAN_CHECK_BYTES (64 * 1024)
 #define ACTIVE_SCAN_FILE_MAX 2147483647LL
 static void (*active_scan_check_hook)(void); /* test seam: called at each check while reading */
@@ -3599,20 +3649,24 @@ static int active_scan_current(unsigned generation) {
     pthread_mutex_lock(&analysis_mutex); int current = generation == active_analysis_generation;
     pthread_mutex_unlock(&analysis_mutex); return current;
 }
-static void active_gcode_scan(const char *filename,unsigned generation,int *layers,long *seconds) {
+static int active_gcode_scan(const char *filename,unsigned generation,int *layers,long *seconds) {
     char path[PATH_MAX_LOCAL * 2], line[4096]; struct stat info;
-    if (!gcode_resolved_path(gcode_internal_root, filename, path, sizeof(path))) return;
-    if (!active_scan_current(generation)) return;
-    if (stat(path, &info) != 0 || (long long)info.st_size > ACTIVE_SCAN_FILE_MAX) return;
+    if (!gcode_resolved_path(gcode_internal_root, filename, path, sizeof(path))) return 1;
+    if (!active_scan_current(generation)) return 1;
+    if (atomic_load(&gcode_read_hold)) { gcode_read_count_stopped(); return 0; } /* queued before the hold came on */
+    if (stat(path, &info) != 0 || (long long)info.st_size > ACTIVE_SCAN_FILE_MAX) return 1;
     FILE *file = fopen(path, "r");
-    if (!file) return;
+    if (!file) return 1;
     int maximum_layer = -1; size_t unchecked = 0;
     while (fgets(line, sizeof(line), file)) {
         unchecked += strlen(line);
         if (unchecked >= ACTIVE_SCAN_CHECK_BYTES) {
             unchecked = 0;
             if (active_scan_check_hook) active_scan_check_hook();
-            if (!active_scan_current(generation)) { fclose(file); *layers = 0; *seconds = -1; return; }
+            if (!active_scan_current(generation)) { fclose(file); *layers = 0; *seconds = -1; return 1; }
+            if (atomic_load(&gcode_read_hold)) {
+                fclose(file); *layers = 0; *seconds = -1; gcode_read_count_stopped(); return 0;
+            }
         }
         const char *comment=line;while(isspace((unsigned char)*comment))comment++;
         if(*comment!=';')continue;
@@ -3642,10 +3696,15 @@ static void active_gcode_scan(const char *filename,unsigned generation,int *laye
     }
     fclose(file);
     if (!*layers && maximum_layer >= 0) *layers = maximum_layer + 1;
+    return 1;
 }
 
-static int active_gcode_total_layers(const char *filename) {
-    int layers=0,submit=0;active_gcode_estimated_seconds=-1;
+/* `held`: the read hold is on (gcode_read_blocked). Then a result already there is still given, but no scan is
+ * started and nothing stays pending; the first call after the hold starts it. Counted once per withheld scan. */
+static void gcode_read_count_blocked(void);
+static int active_scan_withheld; /* under analysis_mutex */
+static int active_gcode_total_layers_at(const char *filename,int held) {
+    int layers=0,submit=0,withheld=0;active_gcode_estimated_seconds=-1;
     pthread_mutex_lock(&analysis_mutex);
     if(!filename || !filename[0]) {
         if(active_analysis_filename[0])active_analysis_generation++;
@@ -3654,19 +3713,32 @@ static int active_gcode_total_layers(const char *filename) {
         if(strcmp(filename,active_analysis_filename)) {
             active_analysis_generation++;
             snprintf(active_analysis_filename,sizeof(active_analysis_filename),"%s",filename);
-            active_analysis_ready=0;
+            active_analysis_ready=0;active_scan_withheld=0;
         }
         if(active_analysis_ready) {
             layers=active_analysis_layers;active_gcode_estimated_seconds=active_analysis_seconds;
+        } else if(!active_analysis_pending && held) {
+            if(!active_scan_withheld)withheld=1;
+            active_scan_withheld=1;
         } else if(!active_analysis_pending) {
-            active_analysis_pending=1;submit=1;
+            active_analysis_pending=1;submit=1;active_scan_withheld=0;
         }
     }
     pthread_mutex_unlock(&analysis_mutex);
+    if(withheld)gcode_read_count_blocked();
     if(submit && !analysis_start(-1,2,filename,strlen(filename))) {
         pthread_mutex_lock(&analysis_mutex);active_analysis_pending=0;pthread_mutex_unlock(&analysis_mutex);
     }
     return layers;
+}
+/* The hold as the main loop last passed it on (it also covers this service's console jobs). */
+static inline int active_gcode_total_layers(const char *filename) {
+    return active_gcode_total_layers_at(filename,atomic_load(&gcode_read_hold));
+}
+static int gcode_read_blocked(const mqtt_client *mqtt,console_state *console);
+/* /api/printer and the layer path's guard: also the printer state of this very moment. */
+static int active_gcode_total_layers_now(const mqtt_client *mqtt,const char *filename) {
+    return active_gcode_total_layers_at(filename,atomic_load(&gcode_read_hold)||gcode_read_blocked(mqtt,NULL));
 }
 
 /* A print of that file is running while the printer reports it printing or paused (or reports no state at all, as
@@ -3767,7 +3839,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_escape(uuid,sizeof(uuid),mqtt->uuid);json_escape(axes,sizeof(axes),mqtt->homed_axes);
     time_t now=time(NULL);
     long age=mqtt->last_message ? (long)(now-mqtt->last_message) : -1;
-    int file_layers=active_gcode_total_layers(active_scan_print_running(mqtt)?mqtt->filename:NULL);
+    int file_layers=active_gcode_total_layers_now(mqtt,active_scan_print_running(mqtt)?mqtt->filename:NULL);
     int total_layers=mqtt->have_total_layers ? mqtt->total_layers : file_layers;
     long remaining=mqtt->remaining_time;
     const char *remaining_source=remaining>0 ? "mqtt" : "unavailable";
@@ -5420,6 +5492,156 @@ static int http_request_complete(const char *request,size_t used){
     return used>=header+length;
 }
 
+/* 1 when `file` of the internal storage is the running print's, with the layer the service has seen for it. */
+static int running_print_layer(const mqtt_client *mqtt,const char *file,int *current_layer){
+    time_t now=time(NULL);
+    int active_job=mqtt->connected&&mqtt->registered&&mqtt->last_message>0&&now-mqtt->last_message<=15&&
+        mqtt->have_machine_status&&mqtt->machine_status==2&&mqtt->filename[0]&&
+        (!strcmp(mqtt->print_state,"printing")||!strcmp(mqtt->print_state,"paused"));
+    if(!active_job)return 0;
+    const char *job=mqtt->filename;
+    if(!strncmp(job,"local/",6))job+=6;
+    if(strcmp(job,file))return 0;
+    double live;*current_layer=mqtt->current_layer;
+    if(uds_job_matches(&telemetry,mqtt->filename)&&uds_value(&telemetry,U_LAYER,&live))*current_layer=(int)live;
+    return 1;
+}
+
+/* The read hold: while the printer homes, levels, probes or starts a print, no G-code file is read for the
+ * layer path, the object preview or a picture (seen four times, last on 18.11.2026: a long read on the two
+ * small cores while the printer homed for a print start, then the MCU's "Timer too close", error 803, and the
+ * printer program crashed). One check for every file; it is on while
+ * - fresh MQTT reports machine status 5 (Auto leveling), 7 (Resonance test), 8 (Self check) or
+ *   10 (Manual homing): what the touchscreen, the printer's own calibrations and raw G28/PROBE report;
+ * - fresh MQTT reports a print (status 2, printing or paused) that has not reached layer 1: heating, homing,
+ *   probing and the purge of a print start (the layer as /api/printer shows it, which a new print resets to 0);
+ * - this service's console runs a job that homes or probes (G28, G29, G180, PROBE..., BED_MESH_CALIBRATE,
+ *   SCREWS_TILT_CALCULATE, Z_TILT_ADJUST, SHAPER_CALIBRATE, TEST_RESONANCES): the screw session, the mesh
+ *   calibration and the console's own G28; MQTT reports such a job a poll later;
+ * - this service's bed mesh calibration homes or probes.
+ * "Fresh" is the 15 s of every other check here: connected, registered, a message within 15 s. Without the
+ * printer nothing is held, so files can be browsed; MQTT that stops releases the hold after 15 s, so a stale
+ * report never holds for long. What is remembered is still answered; the running print's own 409 refusals
+ * come first. The main loop passes the result to running scans (gcode_read_hold) on every pass. */
+static int gcode_read_homing_word(const char *word,size_t n){
+    static const char *const words[]={"G28","G29","G180","PROBE","BED_MESH_CALIBRATE","SCREWS_TILT_CALCULATE",
+                                      "Z_TILT_ADJUST","SHAPER_CALIBRATE","TEST_RESONANCES"};
+    for(size_t i=0;i<sizeof(words)/sizeof(words[0]);i++){
+        size_t w=strlen(words[i]);
+        if(n==w&&!strncasecmp(word,words[i],n))return 1;
+    }
+    return n>6&&!strncasecmp(word,"PROBE_",6); /* PROBE_ACCURACY, PROBE_CALIBRATE; QUERY_PROBE does not move */
+}
+/* 1 when a line of `script` starts with a command that homes or probes. */
+static int gcode_read_homing_script(const char *script){
+    for(const char *line=script;*line;){
+        while(*line==' '||*line=='\t'||*line=='\r'||*line=='\n')line++;
+        size_t n=strcspn(line," \t\r\n");
+        if(n&&gcode_read_homing_word(line,n))return 1;
+        line+=strcspn(line,"\n");
+    }
+    return 0;
+}
+static int gcode_read_blocked(const mqtt_client *mqtt,console_state *console){
+    if(console){
+        pthread_mutex_lock(&console->lock);
+        int homing=console->busy&&gcode_read_homing_script(console->command);
+        pthread_mutex_unlock(&console->lock);
+        if(homing)return 1;
+    }
+    if(plates_cal.stage==CAL_HOMING||plates_cal.stage==CAL_PROBING)return 1;
+    time_t now=time(NULL);
+    if(!mqtt||!mqtt->connected||!mqtt->registered||!mqtt->have_machine_status||mqtt->last_message<=0||
+       now<mqtt->last_message||now-mqtt->last_message>15)return 0;
+    int status=mqtt->machine_status;
+    if(status==5||status==7||status==8||status==10)return 1;
+    if(status!=2||(strcmp(mqtt->print_state,"printing")&&strcmp(mqtt->print_state,"paused")))return 0;
+    double live;int layer=mqtt->current_layer;
+    if(uds_job_matches(&telemetry,mqtt->filename)&&uds_value(&telemetry,U_LAYER,&live))layer=(int)live;
+    return layer<1;
+}
+/* Answers a request (main thread) and tells running scans: they end at their next line once it is on. */
+static int gcode_read_hold_now(const mqtt_client *mqtt,console_state *console){
+    int held=gcode_read_blocked(mqtt,console);
+    atomic_store(&gcode_read_hold,held);
+    return held;
+}
+/* Every pass of the main loop, so a scan that began before the hold ends within about a second of it. */
+static void gcode_read_follow(const mqtt_client *mqtt,console_state *console){(void)gcode_read_hold_now(mqtt,console);}
+
+/* Refuses a layer-path request before any G-code is read when it names the file of the running print
+ * and cannot belong to that print: a layer above the print's layer count, or a layer above 1 while the
+ * service has not yet seen the print reach layer 1 (a new print can still show the layer of the one before
+ * it, seen: layer 193 right after a start, a 20 s scan of 78.7 MB). Requests for other files, and any
+ * request while no print runs (browsing by hand), pass. The reply is 409, which the page does not retry.
+ * The layer the service has seen is the one /api/printer reports, which a new print resets to 0. */
+static int layer_path_guard(int fd,const mqtt_client *mqtt,const char *query){
+    char storage[16],file[LAYER_PATH_NAME_MAX];int layer=0;
+    if(gcode_layer_path_query(query,storage,file,&layer)!=LAYER_PATH_OK||strcmp(storage,"internal"))return 0;
+    int current_layer=0;
+    if(!running_print_layer(mqtt,file,&current_layer))return 0;
+    int file_layers=active_gcode_total_layers_now(mqtt,mqtt->filename);
+    int total_layers=mqtt->have_total_layers?mqtt->total_layers:file_layers;
+    if(total_layers>0&&layer>total_layers){
+        layer_path_count_rejected();
+        layer_path_fail(fd,409,"Conflict","Layer is beyond the running print");
+        return 1;
+    }
+    if(layer>1&&current_layer<1){
+        layer_path_count_rejected();
+        layer_path_fail(fd,409,"Conflict","The running print has not reached that layer");
+        return 1;
+    }
+    return 0;
+}
+
+/* The object preview of the running print's file waits, like layer 2 and up of the layer path, until the
+ * service has seen the print reach layer 1: right after a start the printer is busiest and a full read of the
+ * file could disturb it. Counted with the layer path's refusals. Layer numbers play no part here. */
+static int object_preview_guard(int fd,const mqtt_client *mqtt,const char *query){
+    char storage[16],file[LAYER_PATH_NAME_MAX],object[OBJECT_PREVIEW_NAME_MAX];int current_layer=0;
+    if(gcode_object_preview_query(query,storage,file,object)!=OBJECT_PREVIEW_OK||strcmp(storage,"internal"))return 0;
+    if(!running_print_layer(mqtt,file,&current_layer)||current_layer>=1)return 0;
+    layer_path_count_rejected();
+    layer_path_fail(fd,409,"Conflict","Object preview waits for the print start");
+    return 1;
+}
+
+/* Drops the remembered object preview when a print of another file starts (the moments that reset the layer:
+ * a new job uuid in mqtt.c, a new print or file in uds.c) or a print ends (printing or paused turns into
+ * standby, complete, cancelled or error), and once it has not been asked for OBJECT_PREVIEW_KEEP_S. What is
+ * remembered, or being read, for the file of the print that starts stays, so that file is not read a second
+ * time after layer 1; a changed file is still read again (its stamp is compared on every request). Runs on
+ * every pass of the main loop. */
+static int object_preview_idle_state(const char *state){
+    return !strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled")||!strcmp(state,"error");
+}
+static void object_preview_print_started(const mqtt_client *mqtt,const uds_client *uds){
+    const char *job=mqtt->filename;
+    if(!strncmp(job,"local/",6))job+=6;
+    pthread_mutex_lock(&object_preview_lock);
+    int held=object_preview_cached.valid||object_preview_reading.active;
+    const char *storage=object_preview_cached.valid?object_preview_cached.storage:object_preview_reading.storage;
+    const char *file=object_preview_cached.valid?object_preview_cached.file:object_preview_reading.file;
+    int same=held&&!strcmp(storage,"internal")&&((*job&&!strcmp(job,file))||uds_job_matches(uds,file));
+    if(!same)object_preview_drop_locked();
+    pthread_mutex_unlock(&object_preview_lock);
+}
+static void object_preview_follow(const mqtt_client *mqtt,const uds_client *uds){
+    static int primed,mqtt_running,uds_running;static unsigned long mqtt_starts,uds_resets;
+    int mqtt_now=!strcmp(mqtt->print_state,"printing")||!strcmp(mqtt->print_state,"paused");
+    int uds_now=uds->have_print_state&&(!strcmp(uds->print_state,"printing")||!strcmp(uds->print_state,"paused"));
+    int ended=(mqtt_running&&object_preview_idle_state(mqtt->print_state))||
+              (uds_running&&uds->have_print_state&&object_preview_idle_state(uds->print_state));
+    int started=mqtt->job_starts!=mqtt_starts||uds->job_resets!=uds_resets;
+    if(primed&&ended)object_preview_forget();
+    else if(primed&&started)object_preview_print_started(mqtt,uds);
+    primed=1;mqtt_starts=mqtt->job_starts;uds_resets=uds->job_resets;
+    if(mqtt_now)mqtt_running=1;else if(object_preview_idle_state(mqtt->print_state))mqtt_running=0;
+    if(uds_now)uds_running=1;else if(uds->have_print_state&&object_preview_idle_state(uds->print_state))uds_running=0;
+    object_preview_expire();
+}
+
 static int handle_client(int fd,char *request,size_t used,const char *web_root,mqtt_client *mqtt,console_state *console){
     /* A full initial read may contain a valid header followed by upload bytes.
      * Reject only oversized headers, not a streaming body's first chunk. */
@@ -5645,11 +5867,19 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
         return gcode_download_start(fd,query);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/layer-path")==0) {
-        return gcode_layer_path_start(fd,query);
+        if(layer_path_guard(fd,mqtt,query))return 0;
+        return gcode_layer_path_begin(fd,query,gcode_read_hold_now(mqtt,console));
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/object-preview")==0) {
+        if(object_preview_guard(fd,mqtt,query))return 0;
+        return gcode_object_preview_begin(fd,query,gcode_read_hold_now(mqtt,console));
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
         return analysis_start(fd,0,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/thumbnail")==0) {
-        gcode_thumbnail_response(fd,body,body_len);
+        /* Up to 4 MB are read on this thread (#352): not while the printer homes, levels or starts a print. */
+        if(gcode_read_hold_now(mqtt,console)){
+            gcode_read_count_blocked();
+            layer_path_fail(fd,503,"Service Unavailable",GCODE_READ_HELD_ERROR);
+        }else gcode_thumbnail_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/metadata")==0) {
         return analysis_start(fd,1,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/delete")==0) {
@@ -6021,6 +6251,8 @@ int main(int argc, char **argv) {
         queue_tick(&mqtt);
         usb_start_tick(&mqtt);
         print_watch_tick(&mqtt);
+        object_preview_follow(&mqtt,&telemetry);
+        gcode_read_follow(&mqtt,&console);
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
         if (spools_available) spoolman_tick((long long)now.tv_sec * 1000 + now.tv_nsec / 1000000);
         for(int i=0;i<HTTP_PENDING_MAX;i++){

@@ -87,6 +87,8 @@ with tempfile.TemporaryDirectory(prefix="cc2-smoke-") as temporary:
         assert call({"Origin": "http://attacker.example"}, endpoint="/api/gcode-files/layer-path?file=part.gcode&layer=1") == 403
         assert call({}, endpoint="/api/gcode-files/layer-path?file=../part.gcode&layer=1") == 400
         assert call({}, endpoint="/api/gcode-files/layer-path?file=part.gcode&layer=0") == 400
+        assert call({"Origin": "http://attacker.example"}, endpoint="/api/gcode-files/object-preview?file=part.gcode&object=A") == 403
+        assert call({}, endpoint="/api/gcode-files/object-preview?file=../part.gcode&object=A") == 400
         with socket.create_connection(("127.0.0.1", port), timeout=3) as fragmented:
             fragmented.sendall((f"PUT /api/preferences HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\ncontent-length: {len(payload)}\r\nX-CC2-Request: 1\r\n\r\n").encode() + payload[:3])
             assert call({}) == 200
