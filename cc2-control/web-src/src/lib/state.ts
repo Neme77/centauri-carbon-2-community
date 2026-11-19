@@ -148,10 +148,27 @@ export async function refreshSetup() {
   }
 }
 
+// The console output last received, named by the generation and stored length CC2 Control reports for it.
+// Sent back as ?since=, so a poll of an unchanged console costs a few bytes instead of the whole output. The
+// start value asks "is it still empty and untouched?": answered in full otherwise, and an older CC2 Control
+// ignores the parameter and answers in full every time.
+const consoleStart = { generation: 0, length: 0, output: '' }
+let consoleSeen = consoleStart
+
 export async function refreshConsole() {
+  const seen = consoleSeen
   try {
-    const status = await request('/api/console')
-    const out = String(status.output || '')
+    const status = await request(`/api/console?since=${seen.generation}:${seen.length}`)
+    // "unchanged": the output is left out because it still is the text this request named.
+    const unchanged = status.unchanged === true
+    const out = unchanged ? seen.output : String(status.output || '')
+    if (!unchanged) {
+      const length = Number(status.output_len)
+      consoleSeen =
+        Number.isInteger(length) && length >= 0
+          ? { generation: Number(status.generation) || 0, length, output: out }
+          : consoleStart
+    }
     const command = String(status.command || '')
     const generation = Number(status.generation) || 0
     consoleStatus.set({
@@ -193,7 +210,7 @@ export async function refreshConsole() {
       consoleLog.set({ text: out || null })
     }
   } catch {
-    /* offline */
+    consoleSeen = consoleStart // offline or restarting: the next answer comes in full
   }
 }
 
