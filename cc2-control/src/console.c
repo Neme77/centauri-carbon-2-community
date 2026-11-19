@@ -3,7 +3,9 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -476,13 +478,60 @@ int console_start(console_state *state, const char *command, char *reason, size_
     return 0;
 }
 
-void console_json(console_state *state, char *out, size_t capacity) {
+/* Finds since=<generation>:<output_len> among the query parameters. Digits only, both numbers must fit;
+ * anything else (missing, empty, signs, a second colon, overflow) counts as no parameter. */
+static int console_query_since(const char *query, unsigned long *generation, size_t *length) {
+    if (!query) return 0;
+    for (const char *at = query; at; ) {
+        if (!strncmp(at, "since=", 6)) {
+            const char *p = at + 6;
+            unsigned long long values[2];
+            for (int i = 0; i < 2; i++) {
+                if (*p < '0' || *p > '9') return 0;
+                unsigned long long value = 0;
+                for (; *p >= '0' && *p <= '9'; p++) {
+                    if (value > (ULLONG_MAX - 9) / 10) return 0;
+                    value = value * 10 + (unsigned long long)(*p - '0');
+                }
+                if (i == 0 ? *p != ':' : (*p != '\0' && *p != '&')) return 0;
+                if (i == 0) p++;
+                values[i] = value;
+            }
+            if (values[0] > ULONG_MAX || values[1] > SIZE_MAX) return 0;
+            *generation = (unsigned long)values[0];
+            *length = (size_t)values[1];
+            return 1;
+        }
+        at = strchr(at, '&');
+        if (at) at++;
+    }
+    return 0;
+}
+
+void console_json_query(console_state *state, const char *query, char *out, size_t capacity) {
     char escaped[CONSOLE_OUTPUT_MAX * 2];
     char escaped_command[CONSOLE_COMMAND_MAX * 2];
+    unsigned long since_generation = 0;
+    size_t since_length = 0;
+    int since = console_query_since(query, &since_generation, &since_length);
     pthread_mutex_lock(&state->lock);
-    if (json_escape_string(escaped, sizeof(escaped), state->output) != 0) snprintf(escaped,sizeof(escaped),"Output too large");
     if (json_escape_string(escaped_command, sizeof(escaped_command), state->command) != 0) escaped_command[0]='\0';
-    snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\"}\n",
+    if (since && !state->busy && state->generation == since_generation && state->output_len == since_length) {
+        /* Within one generation the stored output only grows, so the same generation and length mean the
+         * same text. The other fields still follow the state, so a finished command is not missed. */
+        snprintf(out, capacity, "{\"busy\":false,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"unchanged\":true,\"output_len\":%zu}\n",
+            state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,state->output_len);
+        pthread_mutex_unlock(&state->lock);
+        return;
+    }
+    if (json_escape_string(escaped, sizeof(escaped), state->output) != 0) snprintf(escaped,sizeof(escaped),"Output too large");
+    if (since) snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\",\"output_len\":%zu}\n",
+        state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,escaped,state->output_len);
+    else snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\"}\n",
         state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,escaped);
     pthread_mutex_unlock(&state->lock);
+}
+
+void console_json(console_state *state, char *out, size_t capacity) {
+    console_json_query(state, NULL, out, capacity);
 }

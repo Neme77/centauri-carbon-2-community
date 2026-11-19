@@ -31,5 +31,9 @@ int console_command_allowed(console_state *state, const char *command, const mqt
 int console_start(console_state *state, const char *command, char *reason, size_t reason_cap);
 int console_emergency_stop(console_state *state, char *reason, size_t reason_cap);
 void console_json(console_state *state, char *out, size_t capacity);
+/* Same reply as console_json(). A query string with since=<generation>:<output_len> (the generation and
+ * the stored output length the caller already holds) shortens the reply to "unchanged":true without the
+ * output while no command runs and both numbers still match; any other query is answered in full. */
+void console_json_query(console_state *state, const char *query, char *out, size_t capacity);
 
 #endif
