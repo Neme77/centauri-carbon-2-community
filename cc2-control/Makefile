@@ -29,8 +29,18 @@ all: dist
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(TARGET): src/rfid_app_update_boot.h src/rfid_lifecycle_http.h src/rfid_runtime.h src/maintenance_barrier.h src/cavity_floor_http.h src/cavity_floor_protocol.h src/thermal_limits.h src/load_cell_guide.h src/load_cell_guide_core.h src/calibration_tools.h src/rotation_core.h src/native_tools_transport.h src/external_feed_state.h src/external_filament.h src/bed_drying.h src/backup.h src/backup_format.h src/experiments.h src/experiments_state.h src/app_update_catalog.h src/app_updates.h src/main.c src/gcode_metadata.h src/gcode_download.h src/gcode_layer_path.h src/gcode_layer_path_http.h src/gcode_object_preview.h src/gcode_object_preview_http.h src/history.h src/plates.h src/spools.h src/queue.h src/canvas_unload.h src/runout.h src/sha256.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h src/network_status.c src/network_status_http.h src/connections_http.h src/status_core.h src/screw_history.h $(wildcard src/connections/*.h) VERSION FIRMWARE_VERSION | $(BUILD)
-	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -DCC2_NETWORK_STATUS_LIBRARY -o $@ $(LDFLAGS) -lm
+# The backend is one link of these sources. The headers they include are not listed by hand: the compiler writes them to
+# $(BACKEND_DEPS) while the target is built (-MM: user headers only, -MP: a deleted header does not stop make) and make reads
+# that file on the next run, so a changed header always rebuilds the program. The list comes from a separate -MM run because
+# -MMD -MF over several sources keeps only the last source's headers. BACKEND_DEFS belongs to both runs.
+BACKEND_SOURCES := src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c
+BACKEND_DEFS := -DCC2_NETWORK_STATUS_LIBRARY
+BACKEND_DEPS := $(BUILD)/cc2-control.d
+
+$(TARGET): $(BACKEND_SOURCES) VERSION FIRMWARE_VERSION | $(BUILD)
+	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $(BACKEND_SOURCES) $(BACKEND_DEFS) -o $@ $(LDFLAGS) -lm
+	$(CC) $(CFLAGS) $(BACKEND_DEFS) -MM -MP -MT $@ $(BACKEND_SOURCES) > $(BACKEND_DEPS).tmp
+	mv $(BACKEND_DEPS).tmp $(BACKEND_DEPS)
 
 $(UPDATE_WORKER): updater/verify.c updater/trusted-key.h updater/trusted-base.h third-party/monocypher/monocypher.c third-party/monocypher/monocypher.h third-party/monocypher/monocypher-ed25519.c third-party/monocypher/monocypher-ed25519.h VERSION FIRMWARE_VERSION | $(BUILD)
 	$(CC) $(CFLAGS) -Ithird-party/monocypher -Iupdater -ffunction-sections -fdata-sections updater/verify.c third-party/monocypher/monocypher.c third-party/monocypher/monocypher-ed25519.c -o $@ $(LDFLAGS)
@@ -89,3 +99,5 @@ test: $(TARGET) $(UPDATE_WORKER) $(HTTPS_DOWNLOAD)
 
 clean:
 	rm -rf $(BUILD) dist
+
+-include $(BACKEND_DEPS)
