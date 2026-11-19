@@ -630,7 +630,24 @@ static void update_state(mqtt_client *c,const char *json,size_t len) {
         o=object_for(fans,fans_len,"box_fan",&fan_len);
         if(o&&number_in(o,fan_len,"speed",&v)){c->box_fan=v;c->have_box_fan=1;}
     }
-    size_t n;const char *o=object_for(json,len,"machine_status",&n);double v;
+    size_t n;const char *o;double v;
+    /* A print is new when the printer reports a job uuid other than the last one it reported, also for the
+     * same file. This runs before the values of this message are read, so values that come with the new
+     * uuid stay; the ones of the print before go. The uuid is empty between prints, so the last non-empty
+     * one is kept apart. The first uuid after a start of the service only tells which print runs, and a
+     * reconnection or a pause keeps the uuid: nothing is dropped then. */
+    o=object_for(json,len,"print_status",&n);
+    if(o){
+        char uuid[sizeof(c->last_job_uuid)];
+        if(string_in(o,n,"uuid",uuid,sizeof(uuid))&&uuid[0]){
+            if(c->last_job_uuid[0]&&strcmp(c->last_job_uuid,uuid)){
+                c->current_layer=0;c->print_duration=0;c->total_duration=0;c->remaining_time=0;c->progress=0;
+                c->job_starts++;
+            }
+            strcpy(c->last_job_uuid,uuid);
+        }
+    }
+    o=object_for(json,len,"machine_status",&n);
     if(o){if(number_in(o,n,"status",&v)){c->machine_status=(int)v;c->have_machine_status=1;}
         if(number_in(o,n,"progress",&v)){c->progress=(int)v;c->have_progress=1;}
         if(number_in(o,n,"sub_status",&v)){c->sub_status=(int)v;c->have_sub_status=1;}

@@ -16,6 +16,7 @@ required_main = (
     'strcmp(path,"/api/gcode-files")',
     'strcmp(path,"/api/gcode-files/inspect")',
     'strcmp(path,"/api/gcode-files/layer-path")',
+    'strcmp(path,"/api/gcode-files/object-preview")',
     'strcmp(path,"/api/gcode-files/print")',
     "mqtt->machine_status != 1",
     "S_ISLNK",

@@ -121,6 +121,27 @@
         paths, point_count: paths.reduce((n, p) => n + p.length, 0), truncated: false,
       })
     }
+    if (path === '/api/gcode-files/object-preview') {
+      const u = new URL(raw, location.href)
+      const object = u.searchParams.get('object') || ''
+      // Tests set window.__objectPreview to { status, error } to answer with a refusal.
+      const forced = window.__objectPreview
+      if (forced && forced.status) return reply({ error: forced.error || 'Object not found' }, forced.status)
+      window.__objectPreviewCalls = (window.__objectPreviewCalls || 0) + 1
+      const layers = 60, step = 3, rings = []
+      for (let layer = 0; layer < layers; layer += step) {
+        const ring = []
+        for (let i = 0; i <= 24; i++) {
+          const a = (i / 24) * Math.PI * 2
+          ring.push(Math.round((128 + 20 * Math.cos(a)) * 100) / 100, Math.round((120 + 16 * Math.sin(a)) * 100) / 100)
+        }
+        rings.push({ z: Math.round((layer + 1) * 20) / 100, paths: [ring] })
+      }
+      return reply({
+        storage: u.searchParams.get('storage') || 'internal', file: u.searchParams.get('file') || '', object,
+        layers, step, z_max: 12, bounds: [108, 104, 148, 136], rings, truncated: false, objects: [object],
+      })
+    }
     if (path === '/api/printer') return reply(printer())
     if (path === '/api/health') return reply({ service: 'cc2-control', version: '1.2.3', mqtt_connected: state.connected })
     if (path === '/api/setup') return reply({ required: false, configured: true, mqtt_connected: state.connected })
