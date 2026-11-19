@@ -107,6 +107,7 @@ HARNESSES = {
     "test_screw_history.c": [ROOT / "src/control.c"],
     "test_screw_ist.c": [ROOT / "src/control.c"],
     "test_screw_end_reason.c": [ROOT / "src/control.c"],
+    "test_screw_console_error.c": [ROOT / "src/control.c"],
 }
 
 with tempfile.TemporaryDirectory(prefix="cc2-c-harness-") as temporary:

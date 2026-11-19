@@ -10,8 +10,11 @@
  * every gcode/script request is answered with its result; one line can be answered with an error, and a cancel
  * can be asked for while a chosen line runs. */
 static char sent_lines[32][160];
-static int sent_count, reply_pending, reply_error;
-static const char *cancel_at, *error_at;
+static int sent_count, reply_pending, reply_error, reply_mode;
+static const char *cancel_at, *error_at, *report_at, *drop_at, *trailing_at, *extra_reply;
+static const char *quiet_report="{\"report\":{\"error_code\":0,\"error_level\":0,\"message\":\"z=0.2\"}}\003";
+static const char *resume_report="{\"report\":{\"error_code\":702,\"error_level\":3,\"message\":\"resumed\"}}\003";
+static const char *report_extra;
 static atomic_int *cancel_flag;
 static int fake_socket(int domain,int type,int protocol){(void)domain;(void)type;(void)protocol;return 42;}
 static int fake_connect(int fd,const struct sockaddr *address,socklen_t length){(void)fd;(void)address;(void)length;return 0;}
@@ -23,8 +26,10 @@ static ssize_t fake_send(int fd,const void *data,size_t length,int flags){
         size_t n=strcspn(script,"\"");
         if(n>=sizeof(sent_lines[0]))n=sizeof(sent_lines[0])-1;
         memcpy(sent_lines[sent_count],script,n);sent_lines[sent_count][n]=0;
-        reply_pending=1;
+        reply_pending=!(drop_at&&strstr(sent_lines[sent_count],drop_at)); /* a lost connection: nothing comes back */
         reply_error=error_at&&strstr(sent_lines[sent_count],error_at)!=NULL;
+        reply_mode=report_at&&strstr(sent_lines[sent_count],report_at)?1:0;
+        extra_reply=trailing_at&&strstr(sent_lines[sent_count],trailing_at)?"{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"late fault\"}}\003":report_extra;
         if(cancel_at&&strstr(sent_lines[sent_count],cancel_at))atomic_store(cancel_flag,1);
         sent_count++;
     }
@@ -33,9 +38,14 @@ static ssize_t fake_send(int fd,const void *data,size_t length,int flags){
 static int fake_poll(struct pollfd *fds,nfds_t count,int timeout){(void)fds;(void)count;(void)timeout;return 1;}
 static ssize_t fake_read(int fd,void *data,size_t length){
     (void)fd;
+    static const char *later; /* a report that arrives in a read of its own, after the result */
+    if(later){size_t m=strlen(later);assert(m<=length);memcpy(data,later,m);later=NULL;return (ssize_t)m;}
     if(!reply_pending)return 0;
     reply_pending=0;
-    const char *reply=reply_error?"{\"error\":{\"message\":\"probe failed\"},\"id\":101}\003":"{\"report\":\"z=0.1\"}\003{\"id\":101,\"result\":{}}\003";
+    const char *reply=reply_error?"{\"error\":{\"message\":\"probe failed\"},\"id\":101}\003":
+        reply_mode?"{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"Z home failed\"}}\003{\"id\":101,\"result\":{}}\003":
+        "{\"report\":\"z=0.1\"}\003{\"id\":101,\"result\":{}}\003";
+    if(!reply_error&&!reply_mode&&extra_reply)later=extra_reply;
     size_t n=strlen(reply);
     assert(n<=length);
     memcpy(data,reply,n);
@@ -69,6 +79,22 @@ static void run(const char *script,const char *tail,const char *cancel,const cha
     atomic_store(&state.cancel_requested,0);
     pthread_mutex_unlock(&state.lock);
     console_worker(&state);
+}
+/* As run(), with a fake printer that answers one line with an error report, loses the connection at one line, or
+ * adds a report to every answer. */
+static void report_job(const char *script,const char *tail,const char *report,const char *trailing,const char *drop,const char *extra){
+    sent_count=0;reply_pending=0;cancel_at=NULL;error_at=NULL;cancel_flag=&state.cancel_requested;
+    if(tail)console_arm_staged(&state,tail);
+    pthread_mutex_lock(&state.lock);
+    snprintf(state.command,sizeof(state.command),"%s",script);
+    state.output[0]=0;state.output_len=0;state.busy=1;state.completed=0;state.success=0;state.generation++;
+    state.staged=state.staged_next;state.staged_next=0;state.cancelled=0;
+    snprintf(state.cancel_tail,sizeof(state.cancel_tail),"%s",state.cancel_tail_next);
+    atomic_store(&state.cancel_requested,0);
+    pthread_mutex_unlock(&state.lock);
+    report_at=report;trailing_at=trailing;drop_at=drop;report_extra=extra;
+    console_worker(&state);
+    report_at=trailing_at=drop_at=report_extra=NULL;
 }
 int main(void){
     char json[CONSOLE_OUTPUT_MAX*2+1024];
@@ -109,12 +135,48 @@ int main(void){
     assert(!state.success&&state.cancelled);
     puts("PASS: the cancel tail runs on past an error");
 
-    /* An error result ends a staged job where a block would have been aborted: no tail, the result counts as seen. */
+    /* A printer error response is a failure of the job, not a completed measurement: success is 0, the job is
+     * finished and not cancelled, the error text stays in the output, and no motion tail is sent after it. */
     run(SCRIPT,TAIL,NULL,"PROBE");
-    assert(sent_count==4);
-    assert(state.success&&state.completed&&!state.cancelled);
+    assert(sent_count==4&&!strcmp(sent_lines[3],"PROBE SAMPLES=3")); /* the lines after the error and the tail stay unsent */
+    assert(!state.success&&state.completed&&!state.cancelled&&!state.busy);
     assert(strstr(state.output,"probe failed"));
-    puts("PASS: an error result stops a staged job without the cancel tail");
+    assert(strstr(state.output,"[CC2 Control: the printer reported an error; the job was stopped]"));
+    assert(!strstr(state.output,"cancelled")&&!strstr(state.output,"connection ended"));
+    console_json(&state,json,sizeof(json));
+    assert(strstr(json,"\"cancelled\":false"));
+    puts("PASS: a printer error response fails the staged job, keeps the error text and sends no tail");
+
+    /* The same for an error report whose request was acknowledged (a failed home or probe can be ACKed). */
+    report_job(SCRIPT,TAIL,"PROBE",NULL,NULL,NULL);
+    assert(sent_count==4&&!state.success&&state.completed&&!state.cancelled&&!state.busy);
+    assert(strstr(state.output,"Z home failed")&&strstr(state.output,"the printer reported an error"));
+    puts("PASS: an error report fails the staged job even when its request was acknowledged");
+
+    /* An error report that trails the last result in a read of its own still fails the job. */
+    report_job(SCRIPT,TAIL,NULL,"M140 S0",NULL,NULL);
+    assert(sent_count==8&&!state.success&&state.completed&&!state.cancelled);
+    assert(strstr(state.output,"late fault")&&strstr(state.output,"the printer reported an error"));
+    puts("PASS: an error report after the last result fails the job");
+
+    /* Ordinary reports (error_code 0) and a resume event (level 3) are no failure. */
+    report_job(SCRIPT,TAIL,NULL,NULL,NULL,quiet_report);
+    assert(state.success&&state.completed&&!strstr(state.output,"the printer reported an error"));
+    report_job(SCRIPT,TAIL,NULL,NULL,NULL,resume_report);
+    assert(state.success&&state.completed&&!strstr(state.output,"the printer reported an error"));
+    puts("PASS: reports with error_code 0 and a level 3 resume event do not fail the job");
+
+    /* A lost connection (no answer) stays its own case: failed, its own message, not a printer error, no tail. */
+    report_job(SCRIPT,TAIL,NULL,NULL,"PROBE",NULL);
+    assert(sent_count==4&&!state.success&&state.completed&&!state.cancelled&&!state.busy);
+    assert(strstr(state.output,"Console connection ended or command timed out"));
+    assert(!strstr(state.output,"the printer reported an error"));
+    puts("PASS: a lost connection fails the job with its own message and without a printer error");
+
+    /* A cancel keeps its own case after an error elsewhere: the tail runs and the job counts as cancelled. */
+    run(SCRIPT,TAIL,"PROBE",NULL);
+    assert(state.cancelled&&!state.success&&strstr(state.output,"[CC2 Control: cancelled]")&&!strstr(state.output,"the printer reported an error"));
+    puts("PASS: a cancel is neither a printer error nor a lost connection");
 
     /* The next job starts clean. */
     run("M105",NULL,NULL,NULL);

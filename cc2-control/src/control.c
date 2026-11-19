@@ -431,8 +431,13 @@ int control_screws_tick(const mqtt_client *m,int console_completed,int console_s
     }
     if(screws_quick.pending&&(emergency||(console_completed&&generation==screws_quick.generation))){
         screws_quick.pending=0;
+        int cancelled=screws_cancel_noted;
         screws_cancel_noted=0;
         if(!emergency&&console_success){screws_finished=screws_quick.job;screws_finished_ready=1;}
+        /* A failed measurement (a printer error or a lost console) never ran its closing M104 S0 / M140 S0, and the
+         * failed job sends no cleanup of its own: leave both heaters to the deferred shutdown, as a failed session job
+         * does. A cancelled one has been switched off by its cancel tail; an emergency stop by the firmware. */
+        else if(!emergency&&!cancelled)screws_heaters_off_pending=1;
     }
     if(!screws_session.active)return 0;
     if(emergency)return tram_end_with_heaters_off(CONTROL_SCREWS_END_EMERGENCY);

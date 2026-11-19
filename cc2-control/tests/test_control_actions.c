@@ -184,9 +184,16 @@ int main(void){
             (void)control_screws_tick(&mqtt,1,1,31,0,time(NULL));
             expect(control_screws_take_finished(&job)&&job.kind==CONTROL_SCREWS_JOB_QUICK&&job.corner==-1&&!job.twice&&job.started>0,
                    "a completed one-shot measurement is reported once as a quick job");
+            control_screws_heaters_off_sent();
             control_screws_note_quick(32);
             (void)control_screws_tick(&mqtt,1,0,32,0,time(NULL));
             expect(!control_screws_take_finished(NULL),"a failed one-shot measurement is not recorded");
+            expect(control_screws_heaters_off_pending(),"a failed one-shot measurement leaves its heaters to the deferred shutdown");
+            control_screws_heaters_off_sent();
+            control_screws_note_quick(34);control_screws_note_cancel();
+            (void)control_screws_tick(&mqtt,1,0,34,0,time(NULL));
+            expect(!control_screws_take_finished(NULL)&&!control_screws_heaters_off_pending(),"a cancelled one-shot measurement is not recorded and its cancel tail has switched the heaters off");
+            control_screws_heaters_off_sent();
             control_screws_note_quick(33);
             (void)control_screws_tick(&mqtt,0,0,33,1,time(NULL));
             (void)control_screws_tick(&mqtt,1,1,33,0,time(NULL));
