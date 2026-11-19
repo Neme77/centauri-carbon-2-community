@@ -66,9 +66,9 @@ static int call(const char *route, const char *body) {
     size_t length = body ? strlen(body) : 0;
     if (!strcmp(route, "get")) spools_get_response(pair[0], &mqtt);
     else if (!strcmp(route, "enable")) spools_enable_response(pair[0], &mqtt, body, length);
-    else if (!strcmp(route, "save")) spools_save_response(pair[0], body, length);
-    else if (!strcmp(route, "delete")) spools_delete_response(pair[0], body, length);
-    else if (!strcmp(route, "assign")) spools_assign_response(pair[0], body, length);
+    else if (!strcmp(route, "save")) spools_save_response(pair[0], &mqtt, body, length);
+    else if (!strcmp(route, "delete")) spools_delete_response(pair[0], &mqtt, body, length);
+    else if (!strcmp(route, "assign")) spools_assign_response(pair[0], &mqtt, body, length);
     else if (!strcmp(route, "dismiss")) spools_dismiss_response(pair[0], body, length);
     else if (!strcmp(route, "adjust")) spools_adjust_response(pair[0], body, length);
     else assert(!"unknown route");
@@ -378,6 +378,98 @@ static void test_questions(void) {
     puts("PASS: inserted and changed filament asks which spool, usage waits for the answer");
 }
 
+static void test_live_spool_move(void) {
+    reset();
+    const char *feeding = create("material=PLA\ncolor=#2850DF\nnet=1000");
+    const char *standby = create("material=PETG\ncolor=#FFFFFF\nnet=1000");
+    const char *inserted = create("material=PLA\ncolor=#F72221\nnet=1000");
+    assign(3, feeding);
+    assign(0, feeding);
+    assign(2, standby);
+    tray_status[3] = 0; publish_trays();
+    enable();
+
+    tray_status[0] = 2;
+    printer("printing", "live.gcode", 0);
+    service("local/live.gcode", 0, 1); channel(0); tick();
+    tray_status[3] = 1; publish_trays();
+    service("local/live.gcode", 500, 10); tick();
+    assert(spools.slots[3].question == 1 && !strcmp(spools.slots[3].last, feeding));
+    char body[96]; snprintf(body, sizeof(body), "slot=3\nspool=%s", feeding);
+    assert(call("assign", body) == 409 && strstr(body_of(), "feeding a print"));
+    assert(!strcmp(spools.slots[0].spool, feeding) && spools.slots[3].question == 1);
+    service("local/live.gcode", 900, 20); tick();
+    assert(near(spool_find(feeding)->remaining, 1000 - grams(feeding, 900)));
+
+    assign(3, inserted);
+    assign(1, standby);
+    /* Both feed candidates remain bound when the reports straddle a switch. */
+    mqtt.canvas_active_tray_id = 1;
+    assert(call("assign", body) == 409);
+    char conflict[96]; snprintf(conflict, sizeof(conflict), "slot=2\nspool=%s", standby);
+    assert(call("assign", conflict) == 409);
+    /* A lost native stream leaves only the possibly delayed MQTT channel. */
+    telemetry.ready = 0;
+    assert(call("assign", body) == 409);
+    telemetry.ready = 1;
+    mqtt.canvas_active_tray_id = -1; channel(-1);
+    assert(call("assign", body) == 409);
+
+    printer("complete", "", -1);
+    assert(call("assign", body) == 200 && !spools.slots[0].spool[0]);
+    puts("PASS: insertion can assign an available spool and keeps the feeding spool bound until Idle");
+}
+
+static void test_feeding_binding_updates(void) {
+    reset();
+    const char *standby = create("material=PLA\ncolor=#09CC3A\nnet=1000");
+    assign(1, standby);
+    enable();
+    tray_status[0] = 2; publish_trays();
+    printer("printing", "live.gcode", 0);
+    service("local/live.gcode", 0, 1); channel(0); tick();
+    assert(!spools.slots[0].spool[0]);
+    const char *feeding = create("slot=0\nmaterial=PLA\ncolor=#2850DF\nnet=1000\nspoolman_id=7");
+    service("local/live.gcode", 500, 10); tick();
+
+    const char *clear = "slot=0\nspool=";
+    char replace[96], archive[96], remove[96], confirm[96];
+    snprintf(replace, sizeof(replace), "slot=0\nspool=%s", standby);
+    snprintf(archive, sizeof(archive), "id=%s\narchived=1", feeding);
+    snprintf(remove, sizeof(remove), "id=%s", feeding);
+    snprintf(confirm, sizeof(confirm), "slot=0\nspool=%s", feeding);
+    unsigned long revision = spools_revision;
+    assert(call("assign", clear) == 409);
+    assert(call("assign", replace) == 409);
+    assert(call("save", "slot=0\nmaterial=PLA\ncolor=#123456") == 409);
+    assert(call("save", archive) == 409);
+    assert(call("delete", remove) == 409);
+    assert(spools_revision == revision && spools.count == 2 && !spool_find(feeding)->archived);
+    assert(!strcmp(spools.slots[0].spool, feeding) && !strcmp(spools.slots[1].spool, standby));
+
+    /* Both candidates remain protected during a pause with disagreeing telemetry. */
+    printer("paused", "live.gcode", 1);
+    assert(call("assign", clear) == 409);
+    assert(call("assign", "slot=1\nspool=") == 409);
+    telemetry.ready = 0;
+    assert(call("assign", replace) == 409);
+    telemetry.ready = 1;
+    mqtt.canvas_active_tray_id = -1; channel(-1);
+    assert(call("assign", clear) == 409);
+    assert(call("assign", confirm) == 200);
+
+    printer("printing", "live.gcode", 0);
+    service("local/live.gcode", 900, 20); channel(0); tick();
+    assert(near(spool_find(feeding)->remaining, 1000 - grams(feeding, 900)));
+    assert(near(spool_find(feeding)->spoolman_unsent, grams(feeding, 900)));
+    assert(near(spool_find(standby)->remaining, 1000));
+
+    printer("complete", "", -1); channel(-1);
+    assert(call("assign", replace) == 200 && !strcmp(spools.slots[0].spool, standby));
+    assert(call("assign", clear) == 200 && !spools.slots[0].spool[0]);
+    puts("PASS: the feeding assignment and its usage survive conflicting edits until Idle");
+}
+
 static void test_runout(void) {
     reset();
     const char *a = create("material=PLA\ncolor=#2850DF\nnet=1000\nremaining=40");
@@ -402,14 +494,15 @@ static void test_runout(void) {
      * new one is asked about although the tray reports the same filament. */
     tray_status[0] = 1; publish_trays(); tick();
     assert(spools.slots[0].question == 1 && !strcmp(spools.slots[0].last, a));
-    assign(0, b);
+    const char *replacement = create("material=PLA\ncolor=#2850DF\nnet=1000");
+    assign(0, replacement);
     tray_status[0] = 2; publish_trays();
     printer("printing", "long.gcode", 0); service("local/long.gcode", 9600, 960); tick();
     tray_status[0] = 0; publish_trays(); tick();
-    assert(spools.slots[0].runout_ms && !strcmp(spools.slots[0].spool, b));
+    assert(spools.slots[0].runout_ms && !strcmp(spools.slots[0].spool, replacement));
     advance(5000); tray_status[0] = 1; publish_trays(); tick();
-    assert(near(spool_find(b)->remaining, 0) && !spools.slots[0].spool[0] && spools.slots[0].question == 1 &&
-           !strcmp(spools.slots[0].last, b) && spools.log[spools.log_count - 1].kind == 'r');
+    assert(near(spool_find(replacement)->remaining, 0) && !spools.slots[0].spool[0] && spools.slots[0].question == 1 &&
+           !strcmp(spools.slots[0].last, replacement) && spools.log[spools.log_count - 1].kind == 'r');
     b = create("material=PLA\ncolor=#09CC3A\nnet=1000");
     assign(1, b);
     printer("printing", "long.gcode", 1);
@@ -483,6 +576,8 @@ int main(void) {
     test_service_channel();
     test_restart_and_reprint();
     test_questions();
+    test_live_spool_move();
+    test_feeding_binding_updates();
     test_runout();
     test_external_and_removal();
     test_damaged_file();

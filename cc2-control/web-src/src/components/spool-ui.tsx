@@ -539,9 +539,8 @@ const SpoolChooser = ({
       'spools.current'
     )
     const last = lib.spools.find(s => s.id === state.last)
-    // The spool that was there is the likeliest answer when filament goes back in; it is preselected only
-    // when it suits what the printer now reports.
-    if (last && last.remaining > 0) add(last, 'spools.was_here')
+    // Suggest the last spool when it is available in storage.
+    if (last && last.remaining > 0 && slotOf(lib, last.id) < 0) add(last, 'spools.was_here')
     if (want)
       for (const s of lib.spools.filter(x => !x.archived && slotOf(lib, x.id) < 0 && suits(x, want)).sort(bySuit(want)))
         add(s, 'spools.same_filament')
