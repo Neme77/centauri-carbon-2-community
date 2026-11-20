@@ -1664,6 +1664,7 @@
   "bed.screw_measured_title": "Misurato",
   "bed.screw_measured_note": "Sempre rispetto a davanti a sinistra",
   "bed.screw_running_note": "È in corso una misurazione. I valori sotto sono dell’ultima misurazione.",
+  "bed.screw_tool_play_note": "Lo strumento a scatti può avere un po’ di gioco quando lo si appoggia su una vite, quindi il primo scatto può essere impreciso. Dopo ogni giro misura di nuovo tutti e quattro gli angoli.",
   "bed.screw_col_z": "Altezza Z (assoluta)",
   "bed.screw_col_offset": "Scostamento da davanti a sinistra",
   "bed.screw_col_status": "Stato",

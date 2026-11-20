@@ -1664,6 +1664,7 @@
   "bed.screw_measured_title": "Measured",
   "bed.screw_measured_note": "Always relative to front left",
   "bed.screw_running_note": "A measurement is running. The values below are from the last measurement.",
+  "bed.screw_tool_play_note": "The click tool can have a little play when it is put on a screw, so the first click may be inexact. Measure all four corners again after each round.",
   "bed.screw_col_z": "Z height (absolute)",
   "bed.screw_col_offset": "Deviation from front left",
   "bed.screw_col_status": "Status",
