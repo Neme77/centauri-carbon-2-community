@@ -107,8 +107,13 @@ test: $(TARGET) $(UPDATE_WORKER) $(HTTPS_DOWNLOAD)
 clean:
 	rm -rf $(BUILD) dist
 
-# Not read when `clean` is among the goals (`make clean test`): the list would be made first and then deleted by clean,
-# and the build after clean makes it again through its own rule.
+# The list is read only by goals that build the backend (and by a plain `make`). Not when `clean` is among the goals
+# (`make clean test`: the list would be made first and then deleted by clean; the build after clean makes it again through
+# its own rule), and not for goals that build nothing: the CI runs `sudo make test-app-update-boot`, and reading the list
+# there would make a root-owned build/ that the next `make clean` of the normal user cannot remove.
+BACKEND_GOALS := all dist test $(TARGET)
 ifeq ($(filter clean,$(MAKECMDGOALS)),)
+ifneq ($(if $(MAKECMDGOALS),$(filter $(BACKEND_GOALS),$(MAKECMDGOALS)),all),)
 -include $(BACKEND_DEPS)
+endif
 endif

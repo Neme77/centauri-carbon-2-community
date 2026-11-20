@@ -241,5 +241,15 @@ def main():
         assert calls(work) == [], f"unchanged build after clean and build did work: {calls(work)}"
         print("PASS: make clean and a build in one invocation builds again")
 
+        # 11. Goals that build nothing (the root-run `make test-app-update-boot` of the CI) make no header list and no build/:
+        #     a root-owned build/ would stop the next `make clean` of the normal user.
+        work = fresh(base)
+        (work / "tests").mkdir()
+        (work / "tests/test_rfid_app_boot.py").write_text("print('stand-in')\n")
+        make(work, "test-app-update-boot")
+        assert calls(work) == [], f"a goal without a build ran the compiler: {calls(work)}"
+        assert not (work / "build").exists(), "a goal without a build created build/"
+        print("PASS: goals that build nothing make no header list and no build/")
+
 if __name__ == "__main__":
     sys.exit(main())
