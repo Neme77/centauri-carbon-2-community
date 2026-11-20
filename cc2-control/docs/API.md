@@ -1135,8 +1135,9 @@ for any spool you link to it: CC2 Control periodically reports the grams this pr
 into the local entry — the same way a refill or an edit made in Spoolman's own web UI would otherwise never
 reach the printer.
 
-- `POST /api/spoolman` (`url`, `basic_auth`) configures it. `url` must be `http://host[:port][/base]` —
-  there is no TLS stack linked into this binary, so `https://` is refused. An empty `url` turns sync off.
+- `POST /api/spoolman` (`url`, `basic_auth`) configures it. `url` must be `http://IPv4[:port][/base]` —
+  there is no TLS stack linked into this binary, so `https://` is refused, and a host name is refused too
+  (the printer connects to an address and never resolves a name). An empty `url` turns sync off.
   `basic_auth` is `user:pass` for a reverse proxy some self-hosters put in front of Spoolman; Spoolman
   itself needs no key. `GET /api/spools` reports `spoolman_url` and `spoolman_has_auth` (never the secret
   itself).
@@ -1161,11 +1162,28 @@ reach the printer.
 - A pull sets the remaining weight to Spoolman's figure minus what Spoolman has not been told about yet
   (`unsent` + `inflight`), so usage charged while a request was in flight is kept.
 - Replies are read whole or rejected: headers and `Content-Length` or chunked framing are checked, a reply that
-  is cut short is an unknown outcome, and a reply larger than its buffer (8 KiB for one spool, 128 KiB for the
-  spool list) is refused, never truncated. Numbers and texts from Spoolman pass the same bounded parsers as
+  is cut short is an unknown outcome, and a reply larger than its buffer (8 KiB for one spool, 64 KiB for one
+  page of the spool list) is refused, never truncated. A request has 15 seconds in all and a sync cycle 90;
+  usage the cycle did not reach stays queued and the next cycle starts there. Numbers and texts from Spoolman pass the same bounded parsers as
   local data; a value that fails is ignored.
   A filament `color_hex` of six (`RRGGBB`) or eight (`RRGGBBAA`) hex digits is taken as `#RRGGBB`; the transparency is
-  dropped; any other length, or a character that is not a hex digit, leaves the colour out.
+  dropped; any other length, or a character that is not a hex digit, leaves the colour out. Without a `color_hex`,
+  the first colour of `multi_color_hexes` is used. Texts may carry JSON escapes (`\u00fc`, surrogate pairs) and are
+  read as UTF-8; one that is not storable (quotes, backslashes, control characters, too long) is left out.
+- Auto-import: each cycle also reads Spoolman's spool list in pages (`GET /api/v1/spool?sort=id:asc&limit=20&offset=N`,
+  at most 64 requests; a page that does not fit is halved, a spool that cannot be read is skipped and counted) and
+  creates a local spool, once, for every non-archived Spoolman spool without a link, up to the room left in the
+  library. It takes the filament's name, material, colour, the maker (`filament.vendor.name`) as the brand, the
+  weight and the tare (`spool_weight` of the spool, the filament, or the maker). A linked spool is refreshed from the same
+  list when it is in it. Spoolman is the source of truth for a linked spool: its name, material, colour, brand and
+  remaining weight overwrite local edits at the next sync. A Spoolman spool with no start weight is not imported;
+  a linked one keeps its weight and still takes the other fields.
+- `GET /api/spoolman` reports the last cycle: `{enabled, configured, last_sync, result, http, unsent_spools,
+  unsent_grams, inflight_spools, list:{pages, read, new, unreadable, no_weight, library_full, too_large,
+  no_material}, archived_linked, linked_no_weight, orphaned:[ids], orphaned_count}`. `result` is `ok`, `unreachable`,
+  `unauthorized` (401), `forbidden` (403), `not_found`, `server_error`, `refused`, `bad_reply`, `too_large`, `timeout`,
+  `bad_url`, or `never` before the first cycle. A linked spool Spoolman answers 404 for is listed in `orphaned`; its usage waits. A log line
+  is written only when the result or the orphaned set changes.
 
 ## Bounded asynchronous G-code analysis
 
