@@ -208,10 +208,16 @@ try {
   await page.waitForTimeout(600)
   assert.deepEqual(await log(), ['25:200', '24:200'], 'rapid stepping 20 -> 25 scans 25 and then its previous layer only')
 
+  // Browsing by hand: the nozzle is not drawn (it would move over the layer being studied); Live draws it again.
+  assert.equal(await dialog.locator('[data-layer-nozzle]').count(), 0, 'no nozzle while browsing by hand')
+  assert.equal(await dialog.locator('.cc2-layer-nozzle-swatch').count(), 0, 'its legend entry is hidden as well')
+
   // Back to Live: layer 20 is cached, so nothing is scanned.
   await clearLog()
   await dialog.getByRole('button', { name: 'Live', exact: true }).click()
   await waitLayer(20)
+  assert.equal(await dialog.locator('[data-layer-nozzle]').count(), 1, 'Live draws the nozzle')
+  assert.equal(await dialog.locator('.cc2-layer-nozzle-swatch').count(), 1, 'and its legend entry')
   await page.waitForTimeout(800)
   assert.deepEqual(await log(), [], 'switching back to Live uses the cached layer')
 

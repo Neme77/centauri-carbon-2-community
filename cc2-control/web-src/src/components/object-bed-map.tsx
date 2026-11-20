@@ -748,7 +748,7 @@ export const ObjectBedMap = ({
                     {t('job.bed_map_layer_legend')}
                   </span>
                 )}
-                {layerTab && (
+                {layerTab && liveFollow && (
                   <span class="flex items-center gap-1.5">
                     <i class="cc2-layer-nozzle-swatch" />
                     {t('job.bed_map_nozzle')}
@@ -849,7 +849,7 @@ export const ObjectBedMap = ({
                     </button>
                   )
                 })}
-                {layerTab && !unavailable && nozzleOnBed && nozzle && (
+                {layerTab && liveFollow && !unavailable && nozzleOnBed && nozzle && (
                   <span
                     role="img"
                     data-layer-nozzle
