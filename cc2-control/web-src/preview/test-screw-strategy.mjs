@@ -421,15 +421,15 @@ try {
     assert.equal(await note.count(), 0, 'no play note on the clock face')
     await page.close()
   }
-  // "With mesh" and the choice of the basis cannot be changed while a screw measurement runs; between the measurements of a
-  // session and outside a session they are free.
+  // "With mesh" and the choice of the basis cannot be changed while a session is active or a screw measurement runs; outside
+  // a session and without a measurement they are free.
   {
     const { page, card, state } = await open()
     const tick = page.locator('[data-level-mesh-toggle] input')
     const base = page.locator('[data-level-base]')
     await card.locator('[data-screw-measured-block]').waitFor({ timeout: 10000 })
-    assert.equal(await tick.isDisabled(), false, 'the tick is free between the measurements of a session')
-    assert.equal(await base.isDisabled(), false, 'the choice of the basis is free between the measurements of a session')
+    assert.equal(await tick.isDisabled(), true, 'the tick is locked in an active session, also between the measurements')
+    assert.equal(await base.isDisabled(), true, 'the choice of the basis is locked in an active session')
     const idle = state.preview.console
     state.preview.console = { ...idle, busy: true, completed: false, success: false, generation: idle.generation + 1 }
     await card.locator('[data-screw-running-note]').waitFor({ timeout: 10000 })
@@ -437,7 +437,7 @@ try {
     assert.equal(await base.isDisabled(), true, 'the choice of the basis is locked while a measurement runs')
     state.preview.console = { ...idle, generation: idle.generation + 2 }
     await page.waitForFunction(() => !document.querySelector('[data-screw-running-note]'), null, { timeout: 10000 })
-    assert.equal(await tick.isDisabled(), false, 'the tick is free again after the measurement')
+    assert.equal(await tick.isDisabled(), true, 'the tick stays locked after the measurement while the session lasts')
     await page.close()
     const free = await open({ session: false })
     const tick2 = free.page.locator('[data-level-mesh-toggle] input')

@@ -246,7 +246,8 @@ try {
   assert.ok(await quickMode.isDisabled(), 'the quick mode is locked during a session')
   assert.equal(await quickMode.getAttribute('aria-pressed'), 'false')
   assert.equal(await card.locator('[data-level-start-mode-button="session"]').getAttribute('aria-pressed'), 'true')
-  assert.ok(await card.locator('[data-level-mesh-toggle] input').isEnabled(), 'the tick stays selectable')
+  // The basis of a session is fixed when it starts: the tick "With mesh" cannot be set or cleared during a session (owner's decision 20 Nov).
+  assert.ok(await card.locator('[data-level-mesh-toggle] input').isDisabled(), 'the tick is locked during a session')
   assert.equal(await quick.count(), 0, 'no quick start button during a session')
   assert.ok(await start.isDisabled(), 'no second session start during a session')
   // A locked main action looks locked: the dark greyed-out face, not the accent colour.

@@ -1185,8 +1185,9 @@ const Levelling = () => {
     }
     return out
   })()
-  // While a screw measurement runs the basis cannot be changed: "With mesh" and the choice of the basis wait until it has ended.
-  const basisFrozen = screwBusy
+  // The basis of a session is fixed when it starts, and a running measurement (quick or in a session) keeps its basis:
+  // "With mesh" and the choice of the basis wait until the session or the measurement has ended.
+  const basisFrozen = printerSession || screwBusy
   // An old mesh, or one without a date, can still be used: the note under the options says so and recommends a new mesh.
   const savedMeshAged = Boolean(basis.found && basis.age?.state !== 'ok')
   // With the tick but no mesh chosen (or none there yet) "Measure a new mesh" is the only start. The printer's active
@@ -1539,6 +1540,7 @@ const Levelling = () => {
                 class="size-4 shrink-0 accent-cyan"
                 checked={meshTicked}
                 disabled={chainOn || basisFrozen}
+                title={printerSession ? t('bed.tram_one_shot_busy') : undefined}
                 aria-label={t('bed.lvl_mesh_toggle')}
                 onChange={e => setLevelMesh(e.currentTarget.checked)}
               />
