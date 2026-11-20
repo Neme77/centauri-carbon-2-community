@@ -145,8 +145,8 @@ try {
   assert.equal(await card.locator('[data-level-step="3"]').count(), 0, 'there are two steps: step 3 is dissolved into step 2')
   const styleOf = loc => loc.evaluate(e => { const c = getComputedStyle(e); return [c.paddingLeft, c.paddingTop, c.paddingRight, c.paddingBottom].join(' ') })
   assert.equal(await styleOf(sec1.locator('> div').first()), await styleOf(sec2.locator('> button')), 'step 1 has the same head padding as step 2')
-  const badge1 = await box(sec1.locator('b').first())
-  const badge2 = await box(sec2.locator('> button b'))
+  const badge1 = await box(sec1.locator('[data-num-mark]').first())
+  const badge2 = await box(sec2.locator('> button [data-num-mark]'))
   assert.equal(Math.round(badge1.x - s1.x), Math.round(badge2.x - s2.x), 'the same inner spacing at the left')
   const modeBox = await box(sec1.locator('[data-level-start-mode]'))
   const selectBox = await box(sec1.locator('[data-level-base]'))
@@ -167,7 +167,7 @@ try {
   // The place on the page, not in the window: the click on the help may scroll the page.
   const pageTop = loc => loc.evaluate(e => Math.round(e.getBoundingClientRect().top + scrollY))
   const picTop = await pageTop(picture)
-  const tableBox = await box(sec2.locator('table'))
+  const tableBox = await box(sec2.locator('[data-screw-proposal-block] table'))
   assert.ok(lists.x >= pic.x + pic.width, 'the lists are in the right column')
   const help3 = card.locator('details[data-screw-help]')
   const helpBox = await box(help3)
@@ -195,17 +195,20 @@ try {
   const helpClosed = await box(sec2.locator('details[data-screw-help]'))
   assert.ok(Math.abs(newMesh.y - helpClosed.y) < 12, 'help and new mesh are on one row')
   assert.ok(newMesh.x > helpClosed.x, 'arrangement A: the help left, the button right')
-  // Opening the help moves the button nowhere.
+  // Opening the help moves the button nowhere (measured on the page, not in the window: the click may scroll the summary into view).
+  const onPage = loc => loc.evaluate(e => ({ x: Math.round(e.getBoundingClientRect().left + scrollX), y: Math.round(e.getBoundingClientRect().top + scrollY) }))
+  const newMeshPage = await onPage(sec2.locator('[data-level-new-mesh-open]'))
   await sec2.locator('details[data-screw-help] summary').click()
-  const newMeshOpen = await box(sec2.locator('[data-level-new-mesh-open]'))
-  assert.ok(Math.abs(newMeshOpen.x - newMesh.x) < 2 && Math.abs(newMeshOpen.y - newMesh.y) < 2, 'the button stays in place when the help opens')
+  const newMeshOpen = await onPage(sec2.locator('[data-level-new-mesh-open]'))
+  assert.ok(Math.abs(newMeshOpen.x - newMeshPage.x) < 2 && Math.abs(newMeshOpen.y - newMeshPage.y) < 2, 'the button stays in place when the help opens')
   {
     // Opened, the help text takes the full width under the row; the summary keeps its own place too.
+    const newMeshView = await box(sec2.locator('[data-level-new-mesh-open]'))
     const body = await box(sec2.locator('[data-screw-help-body]'))
     const summaryOpen = await box(sec2.locator('details[data-screw-help]'))
     assert.ok(Math.abs(summaryOpen.x - helpClosed.x) < 2 && Math.abs(summaryOpen.width - helpClosed.width) < 2, 'the help title keeps its place and width')
-    assert.ok(body.y >= newMeshOpen.y + newMeshOpen.height - 1, 'the help text stands below the row')
-    assert.ok(body.x + body.width >= newMeshOpen.x + newMeshOpen.width - 2, 'the help text reaches under the button: full width')
+    assert.ok(body.y >= newMeshView.y + newMeshView.height - 1, 'the help text stands below the row')
+    assert.ok(body.x + body.width >= newMeshView.x + newMeshView.width - 2, 'the help text reaches under the button: full width')
   }
   await sec2.locator('details[data-screw-help] summary').click()
 

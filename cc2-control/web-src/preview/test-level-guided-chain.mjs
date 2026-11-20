@@ -312,7 +312,7 @@ try {
   await page.evaluate(() => (location.hash = '#bed/align'))
   await stale.waitFor({ timeout: 15000 })
   // The column "Plate shape" (only with a mesh as the basis) explains itself with an (i), by keyboard as well.
-  const shapeHint = card.locator('thead [data-hint="shape"] button')
+  const shapeHint = card.locator('[data-screw-measured-block] [data-hint="shape"] button')
   await shapeHint.waitFor({ timeout: 10000 })
   await shapeHint.focus()
   await page.keyboard.press('Enter')
@@ -369,6 +369,10 @@ try {
   })
   for (const o of offsets) assert.ok(Math.abs(o.dx) <= 2 && Math.abs(o.dy) <= 2, `mark ${o.id} at its screw (${o.dx.toFixed(1)}, ${o.dy.toFixed(1)} px)`)
   assert.deepEqual(offsets.map(o => o.n), ['1', '2', '3', '4'], 'FL 1, FR 2, RR 3, RL 4')
+  // The marks of the map are exact circles too (width == height, 0.5 px).
+  const mapMarks = await svg.evaluate(el => [...el.querySelectorAll('[data-screw-pick-map] circle')].map(c => { const r = c.getBoundingClientRect(); return [r.width, r.height] }))
+  assert.equal(mapMarks.length, 4)
+  for (const [w, h] of mapMarks) assert.ok(Math.abs(w - h) <= 0.5, `map mark is round (${w.toFixed(2)} x ${h.toFixed(2)} px)`)
   const at = Object.fromEntries(offsets.map(o => [o.id, o]))
   assert.ok(at.FL.sy > at.RL.sy && at.FR.sy > at.RR.sy, 'front edge at the bottom')
   assert.ok(at.FL.sx < at.FR.sx && at.RL.sx < at.RR.sx, 'left on the left')
@@ -467,7 +471,7 @@ try {
   assert.equal(await stale.count(), 0, 'the warning is gone')
   assert.equal(await page.locator('[data-level-base]').inputValue(), `measure:${finalMeasure.id}`, 'the final mesh is the basis')
   assert.equal(await page.locator('[data-level-base] option[value="work"]').count(), 0, 'the temporary mesh is gone')
-  assert.match(await card.locator('[data-screw-zheight="FR"]').innerText(), /^Z height: /, 'the table stays filled, evaluated with the final mesh')
+  assert.match((await card.locator('[data-screw-zheight="FR"]').innerText()).replace(/\u00a0/g, ' '), /^[−-]?\d+(\.\d+)? (µm|mm)$/, 'the table stays filled, evaluated with the final mesh')
   assert.equal(actions.length, 2, 'no screw measurement after the final mesh')
   history = null
   assert.deepEqual(errors, [])

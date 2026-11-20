@@ -154,7 +154,30 @@ const fromNm = (n: number) => n / 1e6
 // Whole micrometres, halves away from zero (Math.round would send -0.5 to 0 and -1.5 to -1).
 const wholeUm = (mm: number) => Math.floor(Math.abs(nm(mm)) / 1000 + 0.5)
 
-export function screwPlan(values: Record<string, number>) {
+// The strategy of the adjustment plan. "standard": front left is the fixed measurement reference and stays where it is.
+// "optimized": front left is turned as well, which can shrink the largest turn. It is only ever chosen by the operator
+// (pages/bed, lib/screw-strategy); nothing in here switches between them.
+export type ScrewStrategy = 'standard' | 'optimized'
+export const parseScrewStrategy = (v: unknown): ScrewStrategy => (v === 'optimized' ? 'optimized' : 'standard')
+
+// What was measured, always against front left (millimetres, whole nanometres): front left itself is 0.
+export const measuredOffsets = (values: Record<string, number>) =>
+  SCREW_KEYS.map(k => fromNm(nm(values[k] - values[SCREW_KEYS[0]])))
+
+// What the plan says about one corner, from its plan value d (mm, positive = lower this corner, negative = raise it): within
+// the 20 µm limit of the turn instruction "ok", otherwise "lower" or "raise". The colour of that verdict is one table, used by
+// the status column of "Measured" and by the direction column of the suggestion, so the two can never differ.
+export const SCREW_OK_LIMIT_MM = 0.02
+export type ScrewVerdict = 'ok' | 'raise' | 'lower'
+export const screwVerdict = (d: number): ScrewVerdict =>
+  Math.abs(d) <= SCREW_OK_LIMIT_MM ? 'ok' : d > 0 ? 'lower' : 'raise'
+export const SCREW_VERDICT_TONE: Record<ScrewVerdict, string> = {
+  ok: 'text-green',
+  raise: 'text-red',
+  lower: 'text-cyan',
+}
+
+export function screwPlan(values: Record<string, number>, strategy: ScrewStrategy = 'standard') {
   const ref = values[SCREW_KEYS[0]],
     standard = SCREW_KEYS.map(k => fromNm(nm(values[k] - ref))),
     other = standard.slice(1)
@@ -164,10 +187,20 @@ export function screwPlan(values: Record<string, number>) {
   // `common`; front-left itself therefore moves by -common (same legend: positive = lower this corner).
   const optimized = [-common, ...other.map(v => fromNm(nm(v - common)))]
   const peak = (l: number[]) => Math.max(...l.map(Math.abs))
-  const useOptimized = sameSign && nm(Math.abs(common)) <= 500000 && nm(peak(standard)) - nm(peak(optimized)) > 5000
+  // The optimized plan can be used at all: the three others are off the same way by more than 20 um, and front left would
+  // move by no more than 0.5 mm.
+  const applicable = sameSign && nm(Math.abs(common)) <= 500000
+  // The optimized plan is worth offering: it also lowers the largest turn by more than 5 um. Only a suggestion.
+  const canOptimize = applicable && nm(peak(standard)) - nm(peak(optimized)) > 5000
+  // The plan that is shown follows the operator's choice and nothing else.
+  const useOptimized = strategy === 'optimized' && applicable
   return {
     shown: useOptimized ? optimized : standard,
+    standard,
+    optimized,
+    strategy,
     useOptimized,
+    canOptimize,
     common,
     before: wholeUm(peak(standard)),
     best: wholeUm(peak(optimized)),

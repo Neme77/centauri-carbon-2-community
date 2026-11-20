@@ -751,5 +751,12 @@
       "fr"
     ],
     "reason": "Same spelling in these languages"
+  },
+  "bed.screw_col_status": {
+    "text": "Status",
+    "locales": [
+      "de"
+    ],
+    "reason": "Same spelling in these languages"
   }
 }

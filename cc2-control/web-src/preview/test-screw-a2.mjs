@@ -24,8 +24,10 @@ assert.equal(parseHeightUnit('nm'), 'um')
 const plain = { '27.9,25.95': -0.7, '227.15,25.95': -0.62, '227.15,225.5': -0.8, '27.9,225.5': -0.75 }
 assert.equal(screwTarget(plain, screwPlan(plain)), -0.7)
 const lowAll = { '27.9,25.95': -0.7, '227.15,25.95': -0.8, '227.15,225.5': -0.85, '27.9,225.5': -0.9 }
-assert.ok(screwPlan(lowAll).useOptimized)
-assert.ok(Math.abs(screwTarget(lowAll, screwPlan(lowAll)) - -0.8) < 1e-9, 'the combined plan aims at front left + common')
+assert.ok(screwPlan(lowAll).canOptimize)
+assert.equal(screwPlan(lowAll).useOptimized, false, 'offered, not used until chosen')
+assert.equal(screwTarget(lowAll, screwPlan(lowAll)), -0.7, 'standard aims at front left')
+assert.ok(Math.abs(screwTarget(lowAll, screwPlan(lowAll, 'optimized')) - -0.8) < 1e-9, 'the combined plan aims at front left + common')
 
 const lines = heights =>
   Object.entries(heights)
@@ -101,25 +103,25 @@ try {
     'Auto, micrometres, degrees by default'
   )
   await card.locator('[data-screw-from-below]').getByText('Turns seen from below onto the screw.', { exact: true }).waitFor()
-  const heads = (await card.locator('[data-level-step="2"] thead th').allInnerTexts()).map(x => x.trim())
-  assert.deepEqual(heads, ['Position', 'Measured', 'Adjustment', 'Difference'])
-  // The last column: the exact deviation of each corner in the chosen height unit, also where the adjustment says "Within tolerance";
-  // front left (the reference) has none.
-  assert.equal(await text(card.locator('[data-screw-diff="FL"]')), '', 'the reference has no difference')
-  for (const id of ['FR', 'RR', 'RL']) assert.match(await text(card.locator(`[data-screw-diff="${id}"]`)), /^[+−-]?\d+ µm$/, `${id}: the difference in µm`)
+  const heads = (await card.locator('[data-screw-proposal-block] thead th').allInnerTexts()).map(x => x.trim())
+  assert.deepEqual(heads, ['Position', 'Target', 'Direction & amount', 'Turn aid'], 'the table is the suggestion; what was measured stands in its own table above')
+  // The Difference column is gone (the amount stands in "Direction & amount"); the target column names what each row aims at.
+  assert.equal(await card.locator('[data-screw-diff]').count(), 0, 'no Difference column any more')
+  assert.equal(await text(cell('FL', 'goal')), 'Leave unchanged')
+  for (const id of ['FR', 'RR', 'RL']) assert.equal(await text(cell(id, 'goal')), 'Bring to the height of front left', `${id}: target`)
   // Measured and target are written relative to the front-left screw (the picture does the same): −700 µm absolute is 0.
   assert.equal(await text(cell('FL', 'measured')), 'Reference')
   assert.equal(await card.locator('[data-screw-measured="FR"], [data-screw-measured="RR"], [data-screw-measured="RL"]').count(), 0, 'only front left has a first line (Reference); the others show no difference')
   // Front left also shows what was really measured (absolute, in the chosen unit), marked as the reference.
-  assert.equal(await text(card.locator('[data-screw-zheight="FL"]')), 'Z height: −700 µm')
-  assert.equal(await text(card.locator('[data-screw-zheight="FR"]')), 'Z height: −620 µm', 'the other corners show their own measured height')
-  assert.equal(await text(card.locator('[data-screw-zheight="RR"]')), 'Z height: −800 µm')
+  assert.equal(await text(card.locator('[data-screw-zheight="FL"]')), '−700 µm')
+  assert.equal(await text(card.locator('[data-screw-zheight="FR"]')), '−620 µm', 'the other corners show their own measured height')
+  assert.equal(await text(card.locator('[data-screw-zheight="RR"]')), '−800 µm')
   assert.equal(await card.locator('[data-screw-target]').count(), 0, 'there is no Target column any more')
   // Line 1 of the adjustment: direction and amount as a height; line 2: the symbol shows the direction of the turn.
   assert.equal(await text(cell('FR', 'amount')), '80 µm')
   assert.equal(await text(cell('FR', 'adjust').locator('[data-screw-direction]')), 'Lower 80 µm')
-  assert.equal(await cell('FR', 'adjust').locator('[data-screw-rotation]').getAttribute('data-screw-rotation'), 'ccw', 'lowering turns counter-clockwise from below')
-  assert.equal(await cell('RR', 'adjust').locator('[data-screw-rotation]').getAttribute('data-screw-rotation'), 'cw', 'raising turns clockwise from below')
+  assert.equal(await cell('FR', 'turn-cell').locator('[data-screw-rotation]').getAttribute('data-screw-rotation'), 'ccw', 'lowering turns counter-clockwise from below')
+  assert.equal(await cell('RR', 'turn-cell').locator('[data-screw-rotation]').getAttribute('data-screw-rotation'), 'cw', 'raising turns clockwise from below')
   assert.equal(await text(cell('RR', 'amount')), '100 µm')
   // Auto (default): what can really be turned, as the reading aid: whole clicks, quarters first, the rest in µm.
   // FR is 80 µm high: lower it, 80 / (0.7 mm per turn) = 41.1°, whole clicks 8 = 40°, the rest is named.
@@ -130,7 +132,7 @@ try {
   assert.equal(await text(cell('RR', 'aid')), '50° · remaining +3 µm')
   assert.equal(await cell('RR', 'adjust').locator('[data-screw-direction]').getAttribute('data-screw-direction'), 'raise')
   assert.equal(await text(cell('RL', 'aid')), '25° · remaining +1 µm')
-  assert.equal(await text(cell('FL', 'adjust')), '', 'the reference row has nothing to adjust: the cell stays empty (no dash, no text)')
+  assert.equal(await text(cell('FL', 'adjust')), 'No turn', 'the reference row is left as it is: direction cell "No turn" (no dash), target cell "Leave unchanged"')
   assert.equal(await cell('FL', 'aid').count(), 0)
   assert.equal(await row('Front left').getByText('Leave the screw').count(), 0)
   await page.screenshot({ path: path.join(shots, 'screw-a2-um-1440.png'), fullPage: true })
@@ -145,7 +147,7 @@ try {
   assert.equal(await text(cell('RL', 'exact')), '25.7°')
   assert.equal(await cell('FR', 'aid').count(), 0, 'Exact shows no reading aid')
   assert.equal(await cell('FL', 'exact').count(), 0)
-  assert.equal(await cell('RR', 'adjust').locator('[data-screw-rotation]').getAttribute('data-screw-rotation'), 'cw', 'the turn symbol stays in Exact')
+  assert.equal(await cell('RR', 'turn-cell').locator('[data-screw-rotation]').getAttribute('data-screw-rotation'), 'cw', 'the turn symbol stays in Exact')
   await turnUnit.selectOption('clicks')
   assert.equal(await text(cell('FR', 'exact')), '8.2 clicks')
   await turnUnit.selectOption('fractions')
@@ -174,8 +176,8 @@ try {
   // Millimetres: every height changes unit, nothing else; the choices survive a reload.
   await card.locator('[data-screw-unit] select').selectOption('mm')
   assert.equal(await text(cell('FL', 'measured')), 'Reference')
-  assert.equal(await text(card.locator('[data-screw-zheight="FL"]')), 'Z height: −0.700 mm')
-  assert.equal(await text(card.locator('[data-screw-zheight="FR"]')), 'Z height: −0.620 mm')
+  assert.equal(await text(card.locator('[data-screw-zheight="FL"]')), '−0.700 mm')
+  assert.equal(await text(card.locator('[data-screw-zheight="FR"]')), '−0.620 mm')
   assert.equal(await text(cell('FR', 'amount')), '0.080 mm')
   assert.equal(await text(cell('FR', 'aid')), '40° · remaining −0.002 mm')
   await card.getByText('+0.080 mm').first().waitFor() // the picture follows the unit
@@ -215,7 +217,7 @@ try {
   assert.equal(await card.locator('[data-screw-carrier-tilt]').count(), 0, 'no carrier note for a small difference')
   assert.equal(await cell('FR', 'aid').count() + (await cell('FR', 'exact').count()), 0, 'inside the tolerance there is nothing to turn')
   await card.locator('[data-screw-unit] select').selectOption('um')
-  assert.equal(await text(card.locator('[data-screw-zheight="FL"]')), 'Z height: −700 µm', 'the unit follows the choice')
+  assert.equal(await text(card.locator('[data-screw-zheight="FL"]')), '−700 µm', 'the unit follows the choice')
   // The clock in hours for a very small turn: no "from 12 to 12:00"; against the clock the hand runs backwards
   // (FR 3 µm higher: lower, ↺, 1.5° rounds to no quarter hour; RR 10 µm higher: 5.1° = one quarter hour back).
   consoleJob = job(65, { '27.9,25.95': -0.7, '227.15,25.95': -0.697, '227.15,225.5': -0.69, '27.9,225.5': -0.7 })
@@ -310,17 +312,28 @@ try {
   // The combined plan: the target is front left plus the common shift, front left moves too; every turned corner,
   // front left included, shows its turn.
   consoleJob = job(62, lowAll)
+  // Standard stays until the operator chooses: front left has nothing to adjust, the optimized plan is only offered.
+  await card.locator('[data-screw-optimize-suggest]').waitFor({ timeout: 8000 })
+  assert.equal(await text(cell('FL', 'adjust')), 'No turn', 'standard: front left is not adjusted by itself, it is left as it is')
+  assert.equal(await text(cell('FL', 'goal')), 'Leave unchanged')
+  await card.locator('[data-screw-optimize-choose]').click()
   await cell('FL', 'amount').waitFor({ timeout: 8000 })
   // Front left itself is turned as well: its line 1 names direction and amount (the common shift), the others follow.
   assert.equal(await text(cell('FL', 'adjust').locator('[data-screw-direction]')), 'Lower 100 µm')
   assert.equal(await card.locator('[data-screw-carrier-tilt]').count(), 0, 'the carrier note is gone again')
-  assert.equal(await cell('FL', 'adjust').locator('[data-screw-rotation]').getAttribute('data-screw-rotation'), 'ccw', 'front left is lowered: turned counter-clockwise')
+  assert.equal(await cell('FL', 'turn-cell').locator('[data-screw-rotation]').getAttribute('data-screw-rotation'), 'ccw', 'front left is lowered: turned counter-clockwise')
   assert.ok((await card.locator('[data-screw-rotation]').count()) >= 1, 'the combined plan shows turn symbols')
   assert.equal(await text(cell('FL', 'measured')), 'Reference')
   assert.equal(await cell('FL', 'adjust').locator('[data-screw-direction]').getAttribute('data-screw-direction'), 'lower')
   assert.equal(await text(cell('FL', 'amount')), '100 µm')
+  // The targets of the combined plan: front left moves toward the three others, they follow the moved front left.
+  assert.equal(await text(cell('FL', 'goal')), 'Move toward the other three corners')
+  for (const id of ['FR', 'RR', 'RL']) assert.equal(await text(cell(id, 'goal')), 'Bring to the height of front left (after its move)', `${id}: target in the combined plan`)
 
   await page.screenshot({ path: path.join(shots, 'screw-a2-combined-1440.png'), fullPage: true })
+  // The way back to the standard plan is an explicit button; the rest of this test runs on the standard plan.
+  await card.locator('[data-screw-strategy-back]').click()
+  await card.locator('[data-screw-strategy="standard"]').waitFor()
 
   // 390 px, the largest texts (large deviation, Fine mode, Fractions): no horizontal overflow, no cut-off cell.
   consoleJob = job(64, { '27.9,25.95': -0.868, '227.15,25.95': -2.155, '227.15,225.5': -0.14, '27.9,225.5': -0.5 })
@@ -333,14 +346,16 @@ try {
   await card.locator('[data-screw-turn-unit] select').selectOption('fractions')
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'no overflow at 390 px')
   const cutCells = () =>
-    card.locator('[data-level-step="2"] table').evaluate(t => {
-      const box = t.getBoundingClientRect()
-      return [...t.querySelectorAll('th,td')].filter(c => c.scrollWidth > c.clientWidth + 1 || c.getBoundingClientRect().right > box.right + 1).length
-    })
+    card.locator('[data-level-step="2"] table').evaluateAll(tables =>
+      tables.reduce((n, t) => {
+        const box = t.getBoundingClientRect()
+        return n + [...t.querySelectorAll('th,td')].filter(c => c.scrollWidth > c.clientWidth + 1 || c.getBoundingClientRect().right > box.right + 1).length
+      }, 0)
+    )
   assert.equal(await cutCells(), 0, 'no table cell is cut off at 390 px (micrometres)')
   await card.locator('[data-screw-unit] select').selectOption('mm')
   assert.equal(await text(cell('FL', 'measured')), 'Reference')
-  assert.equal(await text(card.locator('[data-screw-zheight="FR"]')), 'Z height: −2.155 mm')
+  assert.equal(await text(card.locator('[data-screw-zheight="FR"]')), '−2.155 mm')
   assert.equal(await cutCells(), 0, 'no table cell is cut off at 390 px (millimetres)')
   const wrapped = await card.locator('[data-screw-measured],[data-screw-target]').evaluateAll(es => es.filter(e => e.getBoundingClientRect().height > 20).length)
   assert.equal(wrapped, 0, 'a height with its unit stays on one line')

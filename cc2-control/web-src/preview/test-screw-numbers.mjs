@@ -28,13 +28,14 @@ section(1, () => {
   }
 })
 section(2, () => {
-  // 2. The combined plan needs MORE than 20 um at every other corner and a gain of MORE than 5 um. Exact ties do not switch it on.
+  // 2. The optimized plan is offered (canOptimize; it is only used after the operator's choice) when MORE than 20 um at every other corner and a gain of MORE than 5 um. Exact ties do not offer it.
   for (let base = -2000; base <= 2000; base++) {
     for (const s of [1, -1]) {
-      assert.equal(plan(base, [20 * s, 40 * s, 20 * s]).useOptimized, false, `${base}: exactly 20 um`)
-      assert.equal(plan(base, [21 * s, 26 * s, 21 * s]).useOptimized, false, `${base}: gain exactly 5 um`)
-      assert.equal(plan(base, [21 * s, 27 * s, 21 * s]).useOptimized, true, `${base}: gain 6 um`)
-      assert.equal(plan(base, [21 * s, 30 * s, 25 * s]).useOptimized, true, `${base}: 21 um and more`)
+      assert.equal(plan(base, [20 * s, 40 * s, 20 * s]).canOptimize, false, `${base}: exactly 20 um`)
+      assert.equal(plan(base, [21 * s, 26 * s, 21 * s]).canOptimize, false, `${base}: gain exactly 5 um`)
+      assert.equal(plan(base, [21 * s, 27 * s, 21 * s]).canOptimize, true, `${base}: gain 6 um`)
+      assert.equal(plan(base, [21 * s, 30 * s, 25 * s]).canOptimize, true, `${base}: 21 um and more`)
+      assert.equal(plan(base, [21 * s, 30 * s, 25 * s]).useOptimized, false, `${base}: offered, never used by itself`)
     }
   }
 })

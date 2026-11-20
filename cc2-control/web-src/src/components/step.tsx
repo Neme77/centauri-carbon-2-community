@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { ChevronDown } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { levelOpen } from '@/lib/level-state'
+import { NumMark } from '@/components/num-mark'
 
 // One numbered step of the Bed alignment tab. The head always shows the step's state, folded or not.
 export const Step = ({
@@ -32,9 +33,7 @@ export const Step = ({
         aria-controls={body}
         onClick={() => levelOpen.set({ [`step${n}`]: !open })}
       >
-        <b class="order-1 grid size-6.5 shrink-0 place-items-center rounded-full border border-muted text-xs font-medium">
-          {n}
-        </b>
+        <NumMark n={n} class="order-1" />
         <span class="order-2 min-w-0 flex-1">
           <strong class="block text-base font-semibold">{title}</strong>
           {summary && (

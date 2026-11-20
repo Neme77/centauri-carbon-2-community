@@ -47,6 +47,7 @@ import {
   workMeasure,
 } from '@/lib/plates'
 import { presets, printer } from '@/lib/state'
+import { NumMark } from '@/components/num-mark'
 import { useAlignConfig } from '@/pages/bed-align'
 
 // Step 1 of the Bed alignment tab: basis and measurement. With "With mesh" ticked the basis is a saved mesh of a build
@@ -334,7 +335,7 @@ export const BasisStep = ({
     <section class="mt-3.5 rounded-lg border border-edge" data-level-step="1">
       {/* Variant: same head and inner spacing as steps 2 and 3. */}
       <div class="flex min-h-12 items-center gap-x-3 px-3 py-2">
-        <b class="grid size-6.5 shrink-0 place-items-center rounded-full border border-muted text-xs font-medium">1</b>
+        <NumMark n={1} />
         <h3 class="min-w-0 flex-1 text-base font-semibold">{t('bed.lvl_s1')}</h3>
       </div>
       <div class="px-3 pb-3">

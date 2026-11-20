@@ -2,18 +2,23 @@ import { CalibrationTools } from './calibration-tools'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ask, type ConfirmText } from '@/lib/confirm'
 import {
-  ArrowBigDown,
   ArrowBigRight,
   ArrowBigUp,
+  ArrowDown,
   ArrowLeftRight,
+  ArrowUp,
   Box,
+  ChartColumn,
+  Check,
   Grid2x2,
   Grid3x3,
   Layers,
+  Lightbulb,
   RotateCcw,
   RotateCw,
   Sigma,
   TriangleAlert,
+  Wrench,
 } from 'lucide-preact'
 import { InfoHint } from '@/components/info-hint'
 import { ScrewHistoryTable } from '@/components/screw-history-table'
@@ -59,8 +64,11 @@ import {
   SCREW_SESSION_TIMEOUT_MIN,
   SCREW_SETTLE_S,
   referenceMove,
+  measuredOffsets,
   screwHistoryCsv,
   screwPlan,
+  screwVerdict,
+  SCREW_VERDICT_TONE,
   screwsTurnedSince,
   screwValues,
   stripSoak,
@@ -69,6 +77,7 @@ import {
   withSoak,
 } from '@/lib/screws'
 import { screwSoakOf } from '@/lib/screw-soak'
+import { chooseOptimized, keepStandard, returnToStandard, screwStrategy } from '@/lib/screw-strategy'
 import { refreshScrewHistory, screwHistory } from '@/lib/screw-history'
 import { usePoll } from '@/lib/poll'
 import { ls, store } from '@/lib/store'
@@ -109,6 +118,8 @@ import {
 import { NozzleSelect, Plates } from '@/pages/bed-plates'
 import { NozzleExpansion } from '@/pages/nozzle-expansion'
 import { type TempRow, TempValues } from '@/components/temp-values'
+import { StatusMark } from '@/components/screw-verdict'
+import { NumMark } from '@/components/num-mark'
 import { Step } from '@/components/step'
 import { BasisStep, useBasis } from '@/pages/bed-basis'
 import { AlignSettingsBlock, mm, SHAPE, ShapeMap, signedMm, Tile, tiltWords, useAlignConfig } from '@/pages/bed-align'
@@ -1029,10 +1040,24 @@ const Levelling = () => {
   const nextView = () => setAlignView(v => (v === 'screws' ? '3d' : v === '3d' ? '2d' : v === '2d' ? 'map' : 'screws'))
   const planValues =
     values && meshFit ? Object.fromEntries(SCREW_KEYS.map((k, i) => [k, values[k] - meshFit.shape[i]])) : values
-  const plan = planValues ? screwPlan(planValues) : null
+  // The strategy is the operator's choice (lib/screw-strategy): standard keeps front left as the fixed reference, the
+  // optimized plan turns the front-left screw as well. Nothing here switches between them by itself.
+  const strategyState = screwStrategy.use()
+  const strategy = strategyState.strategy
+  const planFull = planValues ? screwPlan(planValues, strategy) : null
+  // Front left has moved since the last full measurement (a single measurement of that corner): with the optimized plan
+  // every other corner's offset is stale, so no new plan is shown until all four corners are measured again.
+  const running = history.supported ? history.sessions.find(s => s.kind !== 'quick' && s.ended == null) : undefined
+  const moved = running ? referenceMove(running) : null
+  const since = moved?.sinceFullUm
+  const fourNeeded = strategy === 'optimized' && since != null && Math.abs(since) > 5
+  const plan = fourNeeded ? null : planFull
+  // With the optimized plan the front-left screw is turned next: the next measurement is a full four-corner one, and
+  // single corners wait until all four are measured again (no half measurement against a moved reference).
+  const fourStart = fourNeeded || Boolean(plan?.useOptimized && Math.abs(plan.shown[0]) > 0.02)
   // The change of each corner's offset to front left that the shown turns lead to (µm), 0 where no turn was given.
-  const givenTurns = plan
-    ? plan.shown.map((v, i) => (i > 0 && Math.abs(v) * 1000 > TURN_LIMIT_UM ? (v - plan.shown[0]) * 1000 : 0))
+  const givenTurns = planFull
+    ? planFull.shown.map((v, i) => (i > 0 && Math.abs(v) * 1000 > TURN_LIMIT_UM ? (v - planFull.shown[0]) * 1000 : 0))
     : []
   // Values of a quick measurement without a session: its corners can be measured again, quickly, one at a time.
   const quickMode = !printerSession && !sessionReady && oneShot != null
@@ -1051,6 +1076,9 @@ const Levelling = () => {
     values && SCREW_KEYS.every(k => Number.isFinite(values[k]))
       ? SCREW_KEYS.map(k => Math.round((values[k] - values[SCREW_KEYS[0]]) * 1000))
       : null
+  // What was measured against front left, in millimetres: shown on its own, whichever strategy the plan follows.
+  const offsets =
+    values && SCREW_KEYS.every(k => Number.isFinite(values[k])) ? measuredOffsets(values) : SCREW_KEYS.map(() => 0)
   const measureSign =
     cornerDiffs && values ? `${cornerDiffs.join(',')}|${Math.round(values[SCREW_KEYS[0]] * 1000)}` : ''
   const lastDiffs = useRef<{ sign: string; diffs: number[]; turns: number[] } | null>(null)
@@ -1195,7 +1223,7 @@ const Levelling = () => {
     ? 'bed.tram_probing'
     : printerSession
       ? 'bed.tram_active'
-      : plan
+      : planFull
         ? 'bed.measured_results'
         : 'bed.no_measurement'
   const jobSeconds = Math.max(0, Math.round((clockNow - job.at) / 1000))
@@ -1339,8 +1367,6 @@ const Levelling = () => {
     RR: 'bed.corner_rear_right',
     RL: 'bed.corner_rear_left',
   }
-  const running = history.supported ? history.sessions.find(s => s.kind !== 'quick' && s.ended == null) : undefined
-  const moved = running ? referenceMove(running) : null
   // How a corner of the shown values was measured. In a session: its newest measurement that has the corner (the saved trail, so
   // also after a reload); otherwise the console output of the measurement. null when it is not known.
   const readsOfConsole = useMemo(() => cornerReads(shotText), [shotText])
@@ -1354,7 +1380,6 @@ const Levelling = () => {
     }
     return readsOfConsole[key] ?? null
   }
-  const since = moved?.sinceFullUm
   // Every deviation shown with the table follows the chosen height unit (µm or mm, the same decimals as the heights).
   const amount = since == null ? '' : heightLabel(since / 1000, unit, true, lang)
   const earlier = history.sessions.filter(s => s.kind !== 'quick' && s.ended != null)
@@ -1426,11 +1451,13 @@ const Levelling = () => {
       !workDone(library, workRef) &&
       screwsTurnedSince(history.sessions, workRef.measured)
   )
-  const step3 = plan
-    ? turnCount
-      ? tpl('bed.lvl_sum_turn', { n: turnCount })
-      : t('bed.lvl_sum_ok')
-    : t('bed.no_measurement')
+  const step3 = fourNeeded
+    ? t('bed.screw_four_needed_title')
+    : plan
+      ? turnCount
+        ? tpl('bed.lvl_sum_turn', { n: turnCount })
+        : t('bed.lvl_sum_ok')
+      : t('bed.no_measurement')
   // With a mesh (quick or in a session): every corner is within the tolerance, so the page asks whether the final mesh is
   // to be measured now. The question stays as long as the latest measurement is within the tolerance and no mesh runs,
   // also after another page or a reload. It is not asked once the basis is a mesh measured after the newest screw
@@ -1724,19 +1751,13 @@ const Levelling = () => {
                         )}
                         style={{ background: tint }}
                       >
-                        <button
-                          type="button"
-                          class={cn(
-                            'grid size-8 cursor-pointer place-items-center rounded-full border font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan',
-                            pickedCorner === c.id ? 'border-cyan bg-cyan text-ink' : 'border-muted'
-                          )}
-                          aria-pressed={pickedCorner === c.id}
+                        <NumMark
+                          n={c.n}
+                          picked={pickedCorner === c.id}
                           aria-label={`${c.n} · ${t(cornerName[c.id])}`}
                           data-screw-pick-mark={c.id}
                           onClick={() => pickCorner(c.id)}
-                        >
-                          {c.n}
-                        </button>
+                        />
                         <span class="px-1 text-center leading-tight">{t(cornerName[c.id])}</span>
                         <small class="text-xs text-muted">
                           X{c.x} Y{c.y}
@@ -1744,7 +1765,8 @@ const Levelling = () => {
                         {plan && <span class="font-bold">{heightLabel(v, unit, true, lang)}</span>}
                         <Button
                           class="min-h-11 px-3 text-xs"
-                          disabled={quickMode && c.id !== 'FL' ? locked || blocked : !xyReady || locked}
+                          disabled={(quickMode && c.id !== 'FL' ? locked || blocked : !xyReady || locked) || fourStart}
+                          title={fourStart ? t('bed.screw_single_locked') : undefined}
                           aria-label={tpl('bed.tram_probe_corner', { corner: t(cornerName[c.id]) })}
                           data-screw-quick-corner={quickMode && c.id !== 'FL' ? c.id : undefined}
                           onClick={() =>
@@ -1804,7 +1826,7 @@ const Levelling = () => {
                       void run(probeTwice ? 'screws:tram:check:2' : 'screws:tram:check', t('bed.tram_check_confirm'))
                     }
                   >
-                    {t('bed.tram_check')}
+                    {t(fourStart ? 'bed.screw_four_start' : 'bed.tram_check')}
                   </Button>
                 </div>
               )}
@@ -1872,6 +1894,48 @@ const Levelling = () => {
               <p class="mb-2 text-xs text-muted" data-screw-from-below>
                 {t('bed.turn_from_below')}
               </p>
+              {planFull && strategy === 'optimized' && (
+                <div class="mb-2 flex flex-wrap items-center gap-2" data-screw-strategy-row>
+                  <Button class="min-h-11 px-3 text-xs" data-screw-strategy-back onClick={returnToStandard}>
+                    {t('bed.screw_opt_back')}
+                  </Button>
+                </div>
+              )}
+              {plan && strategy === 'standard' && plan.canOptimize && !strategyState.kept && (
+                <div
+                  class="mb-2 grid gap-2 rounded-md border border-amber bg-amber/10 p-2.5 text-xs"
+                  role="status"
+                  data-screw-optimize-suggest
+                >
+                  <p class="flex items-center gap-1.5 text-sm font-semibold text-amber">
+                    <Icon n="light" class="size-4.5 shrink-0" />
+                    {t('bed.screw_opt_title')}
+                  </p>
+                  <p class="text-fg">
+                    {tpl('bed.optimized_reference_adjustment', {
+                      word: t(plan.optimized[0] > 0 ? 'bed.lower_2' : 'bed.raise_2'),
+                      amount: Math.abs(Math.round(plan.optimized[0] * 1000)),
+                      before: plan.before,
+                      best: plan.best,
+                    })}
+                  </p>
+                  <p class="text-muted">{t('bed.screw_opt_note')}</p>
+                  <div class="flex flex-wrap gap-2">
+                    <Button
+                      variant="primary"
+                      class="min-h-11 px-3 text-xs"
+                      data-screw-optimize-choose
+                      onClick={chooseOptimized}
+                    >
+                      <Icon n="bolt" class="size-4 shrink-0" />
+                      {t('bed.screw_opt_choose')}
+                    </Button>
+                    <Button class="min-h-11 px-3 text-xs" data-screw-optimize-keep onClick={keepStandard}>
+                      {t('bed.screw_opt_keep')}
+                    </Button>
+                  </div>
+                </div>
+              )}
               {plan?.useOptimized && (
                 <div class="mb-2" data-screw-combined-note>
                   <Notice icon="info">
@@ -1884,6 +1948,157 @@ const Levelling = () => {
                   </Notice>
                 </div>
               )}
+              {fourNeeded && (
+                <div
+                  class="mb-2 grid gap-1 rounded-md border border-amber bg-amber/10 p-2.5 text-xs"
+                  role="status"
+                  data-screw-four-needed
+                >
+                  <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                    <p class="flex items-center gap-1.5 text-sm font-semibold text-amber">
+                      <Icon n="info" class="size-4.5 shrink-0" />
+                      {t('bed.screw_four_needed_title')}
+                    </p>
+                    {/* The suggestion block (with its strategy label) is hidden now: the label stands here, next to the way back. */}
+                    <Tag tone="warning" data-screw-strategy="optimized">
+                      <Icon n="bolt" class="size-3.5 shrink-0" />
+                      {t('bed.screw_strategy_optimized')}
+                    </Tag>
+                  </div>
+                  <p class="text-fg">{tpl('bed.screw_four_needed_text', { amount })}</p>
+                </div>
+              )}
+              <section
+                class={cn('mb-2 rounded-lg border border-edge bg-field/40 p-2.5', fourNeeded && 'opacity-60')}
+                data-screw-measured-block
+              >
+                <div class="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                  <h4 class="flex items-center gap-1.5 text-sm font-semibold">
+                    <ChartColumn size={16} strokeWidth={1.75} aria-hidden="true" class="shrink-0" />
+                    {t('bed.screw_measured_title')}
+                    {meshFit && <InfoHint text={t('bed.lvl_shape_info')} data-hint="shape" subtle />}
+                  </h4>
+                  <p class="text-xs text-muted" data-screw-block-note>
+                    {t('bed.screw_measured_note')}
+                  </p>
+                </div>
+                <div class="overflow-x-auto rounded-md border border-edge bg-panel">
+                  <table class="w-full border-collapse text-xs max-sm:block" data-screw-measured-table>
+                    <thead class="max-sm:hidden">
+                      <tr class="text-left text-xs text-muted">
+                        <th class="w-[26%] p-2 font-normal">{t('common.position')}</th>
+                        <th class="p-2 font-normal">{t('bed.screw_col_z')}</th>
+                        <th class="p-2 font-normal">{t('bed.screw_col_offset')}</th>
+                        <th class="w-[22%] p-2 font-normal">{t('bed.screw_col_status')}</th>
+                      </tr>
+                    </thead>
+                    <tbody class="max-sm:block">
+                      {rows.map(c => {
+                        const known = Boolean(values && Number.isFinite(values[c.key]))
+                        const read = cornerRead(c.id, c.key)
+                        // "Deviation" (with a small (i) naming the single probes) only when the probes of this corner in this
+                        // measurement spread by more than PROBE_SPREAD_LIMIT_UM; no comparison with an earlier measurement, and
+                        // without single probes nothing.
+                        const spread = read?.probes && read.probes.length > 1 ? probeSpreadUm(read.probes) : 0
+                        const deviation =
+                          read?.probes && spread > PROBE_SPREAD_LIMIT_UM
+                            ? tpl('bed.lvl_dev_probes', {
+                                values: read.probes.map(v => heightLabel(v, unit, false, lang)).join(' · '),
+                                span: heightLabel(spread / 1000, unit, false, lang),
+                              })
+                            : ''
+                        const picked = pickedCorner === c.id
+                        return (
+                          <tr
+                            key={c.id}
+                            class={cn(
+                              'cursor-pointer border-t border-edge max-sm:grid max-sm:min-h-11 max-sm:grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] max-sm:gap-x-2 max-sm:px-2 max-sm:py-1.5',
+                              // Only the reference row carries a quiet tint, and only once something was measured; what is
+                              // framed is what the operator clicked.
+                              c.i === 0 && known && 'bg-cyan/10',
+                              picked && 'outline-2 -outline-offset-2 outline-cyan'
+                            )}
+                            data-screw-measured-row={c.id}
+                            data-picked={picked ? '' : undefined}
+                            onClick={e => {
+                              if (!(e.target as Element).closest('button,a,input,select,summary,[role="button"]'))
+                                pickCorner(c.id)
+                            }}
+                          >
+                            <td class="p-2 align-middle font-semibold break-words max-sm:col-span-full max-sm:p-0">
+                              <span class="inline-flex items-center gap-2">
+                                <NumMark n={c.n} picked={picked} />
+                                {t(cornerName[c.id])}
+                              </span>
+                            </td>
+                            <td class="p-2 align-middle whitespace-nowrap max-sm:col-span-1 max-sm:p-0 max-sm:pt-1 max-sm:whitespace-normal">
+                              <span class="hidden text-muted max-sm:block">{t('bed.screw_col_z')}</span>
+                              <span class="whitespace-nowrap" data-screw-zheight={c.id}>
+                                {known && values ? heightLabel(values[c.key], unit, false, lang) : '—'}
+                              </span>
+                            </td>
+                            <td class="p-2 align-middle max-sm:col-span-1 max-sm:p-0 max-sm:pt-1">
+                              <span class="hidden text-muted max-sm:block">{t('bed.screw_col_offset')}</span>
+                              <strong class="font-semibold whitespace-nowrap" data-screw-offset={c.id}>
+                                {known && values ? heightLabel(offsets[c.i], unit, true, lang) : '—'}
+                              </strong>
+                              {/* The measured fact against front left (negative = lies lower), independent of the plan. */}
+                              {known && Math.round(Math.abs(offsets[c.i]) * 1000) !== 0 && (
+                                <>
+                                  {' '}
+                                  <span class="text-muted" data-screw-lies={offsets[c.i] < 0 ? 'low' : 'high'}>
+                                    ({t(offsets[c.i] < 0 ? 'bed.screw_lies_low' : 'bed.screw_lies_high')})
+                                  </span>
+                                </>
+                              )}
+                              {meshFit && (
+                                <small class="block text-xs text-muted">
+                                  {t('bed.lvl_col_shape')}:{' '}
+                                  <span class="whitespace-nowrap" data-screw-shape={c.id}>
+                                    {heightLabel(meshFit.shape[c.i] - meshFit.shape[0], unit, true, lang)}
+                                  </span>
+                                </small>
+                              )}
+                            </td>
+                            <td class="p-2 align-middle max-sm:col-span-full max-sm:p-0 max-sm:pt-1">
+                              <span class="hidden text-muted max-sm:block">{t('bed.screw_col_status')}</span>
+                              {c.i === 0 && known && (
+                                <span
+                                  class="inline-block rounded-md bg-cyan px-1.5 font-semibold leading-4 text-ink sm:whitespace-nowrap"
+                                  data-screw-measured={c.id}
+                                >
+                                  {t('bed.lvl_ref_abs')}
+                                </span>
+                              )}
+                              {/* The status is the verdict of the plan for this corner, the same one the suggestion shows, in the
+                                  same colour: no badge, no frame, only the symbol and the word. */}
+                              {c.i !== 0 && known && plan && (
+                                <StatusMark verdict={screwVerdict(plan.shown[c.i])} corner={c.id} />
+                              )}
+                              {deviation && (
+                                <span class="flex items-center gap-0.5 text-muted" data-screw-deviation={c.id}>
+                                  {t('bed.lvl_deviation')}
+                                  <InfoHint subtle text={deviation} data-hint={`deviation-${c.id}`} />
+                                </span>
+                              )}
+                              {!(c.i === 0 && known) && !(known && plan) && !deviation && (
+                                <span class="text-muted">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Only with the optimized plan, once, under the table: the status follows that plan, which also moves front left. */}
+                {strategy === 'optimized' && plan && (
+                  <p class="mt-2 flex items-start gap-1.5 text-xs text-muted" data-screw-plan-note>
+                    <Icon n="info" class="mt-px size-3.5 shrink-0" />
+                    <span>{t('bed.screw_status_plan_note')}</span>
+                  </p>
+                )}
+              </section>
               {meshFit && meshAnalysis && (
                 <div class="mb-2 grid grid-cols-1 gap-2 cc2-sm:grid-cols-2" data-level-mesh-tiles>
                   <Tile
@@ -1900,226 +2115,235 @@ const Levelling = () => {
                   />
                 </div>
               )}
-              <div class="overflow-x-auto rounded-md border border-edge">
-                <table class="w-full border-collapse text-xs max-sm:block">
-                  <thead class="max-sm:hidden">
-                    <tr class="text-left text-xs text-muted">
-                      <th class="w-[18%] p-2 font-normal">{t('common.position')}</th>
-                      <th class="w-[23%] p-2 font-normal">{t('bed.tram_col_measured')}</th>
-                      {meshFit && (
-                        <th class="w-[16%] p-2 font-normal">
-                          <span class="inline-flex items-center gap-1">
-                            {t('bed.lvl_col_shape')}
-                            <InfoHint text={t('bed.lvl_shape_info')} data-hint="shape" subtle />
-                          </span>
-                        </th>
-                      )}
-                      <th class="p-2 font-normal">{t('bed.adjustment')}</th>
-                      <th class="w-[14%] p-2 font-normal">{t('bed.lvl_col_diff')}</th>
-                    </tr>
-                  </thead>
-                  <tbody class="max-sm:block">
-                    {rows.map(c => {
-                      const d = plan?.shown[c.i] ?? 0,
-                        within = Math.abs(d) <= 0.02
-                      // How this corner was measured: once or twice, and its single probes when they were written down.
-                      const read = cornerRead(c.id, c.key)
-                      // "Deviation" (with a small (i) naming the single probes) only when the probes of this corner in this
-                      // measurement spread by more than PROBE_SPREAD_LIMIT_UM; no comparison with an earlier measurement, and
-                      // without single probes nothing.
-                      const spread = read?.probes && read.probes.length > 1 ? probeSpreadUm(read.probes) : 0
-                      const deviation =
-                        read?.probes && spread > PROBE_SPREAD_LIMIT_UM
-                          ? tpl('bed.lvl_dev_probes', {
-                              values: read.probes.map(v => heightLabel(v, unit, false, lang)).join(' · '),
-                              span: heightLabel(spread / 1000, unit, false, lang),
-                            })
-                          : ''
-                      // "±x" behind the difference when it lies within x of the limit of the turn instruction (20 µm).
-                      const limitUm = Math.round(Math.abs(d) * 1000)
-                      const tolerance = read ? (read.twice ? TOLERANCE_UM.twice : TOLERANCE_UM.once) : null
-                      const nearLimit =
-                        c.i !== 0 && plan && tolerance != null && Math.abs(limitUm - TURN_LIMIT_UM) <= tolerance
-                      return (
-                        <tr
-                          key={c.id}
-                          class={cn(
-                            'cursor-pointer border-t border-edge max-sm:grid max-sm:grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] max-sm:gap-x-2 max-sm:px-2 max-sm:py-1.5',
-                            plan?.useOptimized && c.i === 0 && 'bg-amber/10',
-                            pickedCorner === c.id && 'outline-2 -outline-offset-2 outline-cyan'
-                          )}
-                          data-screw-row={c.id}
-                          data-picked={pickedCorner === c.id ? '' : undefined}
-                          // A click on the row picks its corner (display only); buttons and hints in it keep their own action.
-                          onClick={e => {
-                            if (!(e.target as Element).closest('button,a,input,select,summary,[role="button"]'))
-                              pickCorner(c.id)
-                          }}
-                        >
-                          <td class="p-2 align-top font-semibold break-words max-sm:col-span-full max-sm:p-0">
-                            <span class="inline-flex items-center gap-2">
-                              <button
-                                type="button"
+              {!fourNeeded && (
+                <>
+                  <section class="rounded-lg border border-edge bg-field/40 p-2.5" data-screw-proposal-block>
+                    <div class="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                      <h4 class="flex items-center gap-1.5 text-sm font-semibold">
+                        <Wrench size={16} strokeWidth={1.75} aria-hidden="true" class="shrink-0" />
+                        {t('bed.screw_proposal_title')}
+                      </h4>
+                      {/* The note and the strategy label share the right side of the head; on a phone the label stands under the note. */}
+                      <div
+                        class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 max-sm:basis-full max-sm:flex-col max-sm:items-start"
+                        data-screw-proposal-aside
+                      >
+                        <p class="text-xs text-muted" data-screw-block-note>
+                          {t('bed.screw_proposal_note')}
+                        </p>
+                        {planFull && (
+                          <Tag tone={strategy === 'optimized' ? 'warning' : 'info'} data-screw-strategy={strategy}>
+                            <Icon n={strategy === 'optimized' ? 'bolt' : 'target'} class="size-3.5 shrink-0" />
+                            {t(
+                              strategy === 'optimized' ? 'bed.screw_strategy_optimized' : 'bed.screw_strategy_standard'
+                            )}
+                          </Tag>
+                        )}
+                      </div>
+                    </div>
+                    <div class="overflow-x-auto rounded-md border border-edge bg-panel">
+                      <table class="w-full border-collapse text-xs max-sm:block" data-screw-proposal-table>
+                        <thead class="max-sm:hidden">
+                          <tr class="text-left text-xs text-muted">
+                            <th class="w-[22%] p-2 font-normal">{t('common.position')}</th>
+                            <th class="p-2 font-normal">{t('bed.screw_col_target')}</th>
+                            <th class="p-2 font-normal">{t('bed.screw_col_direction')}</th>
+                            <th class="w-[16%] p-2 font-normal">{t('bed.screw_col_turn')}</th>
+                          </tr>
+                        </thead>
+                        <tbody class="max-sm:block">
+                          {rows.map(c => {
+                            const d = plan?.shown[c.i] ?? 0,
+                              verdict = screwVerdict(d),
+                              within = verdict === 'ok'
+                            const read = cornerRead(c.id, c.key)
+                            // "±x" behind the direction when the amount lies within x of the limit of the turn instruction (20 µm).
+                            const limitUm = Math.round(Math.abs(d) * 1000)
+                            const tolerance = read ? (read.twice ? TOLERANCE_UM.twice : TOLERANCE_UM.once) : null
+                            const nearLimit =
+                              c.i !== 0 && plan && tolerance != null && Math.abs(limitUm - TURN_LIMIT_UM) <= tolerance
+                            const leave = c.i === 0 && !plan?.useOptimized
+                            // The turn the row asks for: none for the reference that stays, none within the tolerance.
+                            const turning = Boolean(plan) && !leave && !within
+                            const target = !plan
+                              ? null
+                              : leave
+                                ? 'bed.screw_leave_unchanged'
+                                : plan.useOptimized
+                                  ? c.i === 0
+                                    ? 'bed.screw_target_fl_moved'
+                                    : 'bed.screw_target_front_left_moved'
+                                  : 'bed.screw_target_front_left'
+                            // The first line of every cell sits on the middle of the 28 px number mark of its row (8 px padding + 14 px = 22 px),
+                            // so a dash stands exactly where the name stands.
+                            const cell = 'p-2 pt-3.5 align-top break-words max-sm:col-span-full max-sm:p-0 max-sm:pt-1'
+                            return (
+                              <tr
+                                key={c.id}
                                 class={cn(
-                                  'grid size-6.5 shrink-0 cursor-pointer place-items-center rounded-full border text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan',
-                                  pickedCorner === c.id ? 'border-cyan bg-cyan text-ink' : 'border-muted'
+                                  'cursor-pointer border-t border-edge max-sm:grid max-sm:min-h-11 max-sm:grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] max-sm:gap-x-2 max-sm:px-2 max-sm:py-1.5',
+                                  plan?.useOptimized && c.i === 0 && 'bg-amber/10',
+                                  pickedCorner === c.id && 'outline-2 -outline-offset-2 outline-cyan'
                                 )}
-                                aria-pressed={pickedCorner === c.id}
-                                aria-label={`${c.n} · ${t(cornerName[c.id])}`}
-                                data-screw-pick-row={c.id}
-                                onClick={() => pickCorner(c.id)}
+                                data-screw-row={c.id}
+                                data-picked={pickedCorner === c.id ? '' : undefined}
+                                // A click on the row picks its corner (display only); buttons and hints in it keep their own action.
+                                onClick={e => {
+                                  if (!(e.target as Element).closest('button,a,input,select,summary,[role="button"]'))
+                                    pickCorner(c.id)
+                                }}
                               >
-                                {c.n}
-                              </button>
-                              {t(cornerName[c.id])}
-                            </span>
-                          </td>
-                          <td
-                            class="p-2 align-top break-words max-sm:p-0 max-sm:pt-1"
-                            data-label={t('bed.tram_col_measured')}
-                          >
-                            <span class="hidden text-muted max-sm:block">{t('bed.tram_col_measured')}</span>
-                            {c.i === 0 && values && Number.isFinite(values[c.key]) && (
-                              <span class="whitespace-nowrap" data-screw-measured={c.id}>
-                                {t('bed.lvl_ref_abs')}
-                              </span>
-                            )}
-                            {values && Number.isFinite(values[c.key]) ? (
-                              <small
-                                class={cn('block text-xs break-words text-muted', c.i === 0 && 'mt-0.5')}
-                                data-screw-zheight={c.id}
-                              >
-                                {tpl('bed.lvl_z_height', { value: heightLabel(values[c.key], unit, false, lang) })}
-                              </small>
-                            ) : (
-                              '—'
-                            )}
-                            {deviation && (
-                              <span
-                                class="mt-0.5 flex items-center gap-0.5 text-xs text-muted"
-                                data-screw-deviation={c.id}
-                              >
-                                {t('bed.lvl_deviation')}
-                                <InfoHint subtle text={deviation} data-hint={`deviation-${c.id}`} />
-                              </span>
-                            )}
-                          </td>
-                          {meshFit && (
-                            <td class="p-2 align-top max-sm:p-0 max-sm:pt-1">
-                              <span class="hidden text-muted max-sm:block">{t('bed.lvl_col_shape')}</span>
-                              <span class="whitespace-nowrap" data-screw-shape={c.id}>
-                                {heightLabel(meshFit.shape[c.i] - meshFit.shape[0], unit, true, lang)}
-                              </span>
-                            </td>
-                          )}
-                          <td
-                            class="p-2 align-top break-words max-sm:col-span-full max-sm:p-0 max-sm:pt-1"
-                            data-screw-adjust={c.id}
-                          >
-                            {c.i === 0 && !plan?.useOptimized ? null : !plan ? (
-                              '—'
-                            ) : within ? (
-                              <>
-                                <span class="break-words" data-screw-ok>
-                                  {t('bed.lvl_in_order')}
-                                </span>
-                                {/* The user decides: within the tolerance the small adjustment that is still possible stays visible. */}
-                                {limitUm >= 1 && (
-                                  <small class="mt-0.5 block text-xs break-words text-muted" data-screw-possible={c.id}>
-                                    {tpl('bed.lvl_possible', {
-                                      word: t(d > 0 ? 'bed.turn_lower' : 'bed.turn_raise'),
-                                      amount: heightLabel(Math.abs(d), unit, false, lang),
-                                    })}
-                                    {' · '}
-                                    <span title={t(d > 0 ? 'bed.turn_ccw' : 'bed.turn_cw')}>
-                                      {d > 0 ? '↺' : '↻'} {turnExactText(turnPlan(-d * 1000, pitchUm))}
-                                    </span>
-                                  </small>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                <span
-                                  class={cn('flex items-center gap-1', d > 0 ? 'text-cyan' : 'text-red')}
-                                  data-screw-direction={d > 0 ? 'lower' : 'raise'}
-                                >
-                                  {d > 0 ? (
-                                    <ArrowBigDown size={14} strokeWidth={1} class="shrink-0" />
-                                  ) : (
-                                    <ArrowBigUp size={14} strokeWidth={1} class="shrink-0" />
-                                  )}
-                                  <span>
-                                    {t(d > 0 ? 'bed.turn_lower' : 'bed.turn_raise')}{' '}
-                                    <span data-screw-amount={c.id}>{heightLabel(Math.abs(d), unit, false, lang)}</span>
+                                <td class="p-2 align-top font-semibold break-words max-sm:col-span-full max-sm:p-0">
+                                  <span class="inline-flex items-center gap-2">
+                                    <NumMark
+                                      n={c.n}
+                                      picked={pickedCorner === c.id}
+                                      aria-label={`${c.n} · ${t(cornerName[c.id])}`}
+                                      data-screw-pick-row={c.id}
+                                      onClick={() => pickCorner(c.id)}
+                                    />
+                                    {t(cornerName[c.id])}
                                   </span>
-                                </span>
-                                {turnShown && (
-                                  <small class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs break-words text-muted">
-                                    {d > 0 ? (
-                                      <RotateCcw
-                                        size={13}
-                                        strokeWidth={1.75}
-                                        class="shrink-0"
-                                        aria-label={t('bed.turn_ccw')}
-                                        role="img"
-                                        data-screw-rotation="ccw"
-                                      />
-                                    ) : (
-                                      <RotateCw
-                                        size={13}
-                                        strokeWidth={1.75}
-                                        class="shrink-0"
-                                        aria-label={t('bed.turn_cw')}
-                                        role="img"
-                                        data-screw-rotation="cw"
-                                      />
-                                    )}
-                                    {turn.mode === 'exact' ? (
-                                      <span data-screw-exact={c.id}>{turnExactText(turnPlan(-d * 1000, pitchUm))}</span>
-                                    ) : (
-                                      <span data-screw-aid={c.id}>{turnAid(turnPlan(-d * 1000, pitchUm))}</span>
-                                    )}
-                                  </small>
-                                )}
-                              </>
-                            )}
-                            {/* A turn was given here, and the next measurement shows that the corner hardly moved. */}
-                            {stuck.includes(c.i) && (
-                              <span
-                                class="mt-1 flex items-start gap-1 rounded-md border border-amber bg-amber/10 px-1.5 py-1 text-xs font-semibold break-words text-amber"
-                                role="status"
-                                data-screw-stuck={c.id}
-                              >
-                                <TriangleAlert size={14} strokeWidth={1.75} class="mt-px shrink-0" />
-                                <span>{t('bed.lvl_stuck')}</span>
-                              </span>
-                            )}
-                          </td>
-                          <td
-                            class="p-2 align-top whitespace-nowrap max-sm:col-span-full max-sm:p-0 max-sm:pt-1"
-                            data-screw-diff={c.id}
-                          >
-                            <span class="hidden text-muted max-sm:block">{t('bed.lvl_col_diff')}</span>
-                            {c.i === 0 || !plan ? null : heightLabel(d, unit, true, lang)}
-                            {nearLimit && tolerance != null && (
-                              <small class="ml-1 text-xs font-normal text-muted" data-screw-tolerance={c.id}>
-                                ±{heightLabel(tolerance / 1000, unit, false, lang)}
-                              </small>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                                </td>
+                                <td class={cell} data-screw-goal={c.id}>
+                                  <span class="hidden text-muted max-sm:block">{t('bed.screw_col_target')}</span>
+                                  {target ? t(target) : '—'}
+                                </td>
+                                <td class={cell} data-screw-adjust={c.id}>
+                                  <span class="hidden text-muted max-sm:block">{t('bed.screw_col_direction')}</span>
+                                  {!plan ? (
+                                    '—'
+                                  ) : leave ? (
+                                    <span class="break-words text-muted italic" data-screw-leave>
+                                      {t('bed.screw_no_turn')}
+                                    </span>
+                                  ) : within ? (
+                                    <>
+                                      <span
+                                        class={cn('flex items-center gap-1 font-semibold', SCREW_VERDICT_TONE.ok)}
+                                        data-screw-ok
+                                      >
+                                        <Check size={14} strokeWidth={2} aria-hidden="true" class="shrink-0" />
+                                        <span>{t('bed.lvl_in_order')}</span>
+                                      </span>
+                                      {/* The user decides: within the tolerance the small adjustment that is still possible stays visible. */}
+                                      {limitUm >= 1 ? (
+                                        <small
+                                          class="mt-0.5 block text-xs break-words text-muted"
+                                          data-screw-possible={c.id}
+                                        >
+                                          {tpl('bed.lvl_possible', {
+                                            word: t(d > 0 ? 'bed.turn_lower' : 'bed.turn_raise'),
+                                            amount: heightLabel(Math.abs(d), unit, false, lang),
+                                          })}
+                                          {' · '}
+                                          <span title={t(d > 0 ? 'bed.turn_ccw' : 'bed.turn_cw')}>
+                                            {d > 0 ? '↺' : '↻'} {turnExactText(turnPlan(-d * 1000, pitchUm))}
+                                          </span>
+                                        </small>
+                                      ) : (
+                                        <small
+                                          class="mt-0.5 block text-xs break-words text-muted"
+                                          data-screw-no-turn-needed
+                                        >
+                                          {t('bed.screw_no_turn_needed')}
+                                        </small>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span
+                                      class={cn('flex items-center gap-1 font-semibold', SCREW_VERDICT_TONE[verdict])}
+                                      data-screw-direction={verdict === 'lower' ? 'lower' : 'raise'}
+                                    >
+                                      {verdict === 'lower' ? (
+                                        <ArrowDown size={14} strokeWidth={2} aria-hidden="true" class="shrink-0" />
+                                      ) : (
+                                        <ArrowUp size={14} strokeWidth={2} aria-hidden="true" class="shrink-0" />
+                                      )}
+                                      <span>
+                                        {t(verdict === 'lower' ? 'bed.turn_lower' : 'bed.turn_raise')}{' '}
+                                        <span data-screw-amount={c.id}>
+                                          {heightLabel(Math.abs(d), unit, false, lang)}
+                                        </span>
+                                      </span>
+                                    </span>
+                                  )}
+                                  {nearLimit && tolerance != null && (
+                                    <small
+                                      class="mt-0.5 block text-xs font-normal text-muted"
+                                      data-screw-tolerance={c.id}
+                                    >
+                                      ±{heightLabel(tolerance / 1000, unit, false, lang)}
+                                    </small>
+                                  )}
+                                  {/* A turn was given here, and the next measurement shows that the corner hardly moved. */}
+                                  {stuck.includes(c.i) && (
+                                    <span
+                                      class="mt-1 flex items-start gap-1 rounded-md border border-amber bg-amber/10 px-1.5 py-1 text-xs font-semibold break-words text-amber"
+                                      role="status"
+                                      data-screw-stuck={c.id}
+                                    >
+                                      <TriangleAlert size={14} strokeWidth={1.75} class="mt-px shrink-0" />
+                                      <span>{t('bed.lvl_stuck')}</span>
+                                    </span>
+                                  )}
+                                </td>
+                                <td class={cn(cell, 'text-muted')} data-screw-turn-cell={c.id}>
+                                  <span class="hidden text-muted max-sm:block">{t('bed.screw_col_turn')}</span>
+                                  {turning && turnShown ? (
+                                    <span class="flex flex-wrap items-center gap-x-1.5 text-fg">
+                                      {d > 0 ? (
+                                        <RotateCcw
+                                          size={13}
+                                          strokeWidth={1.75}
+                                          class="shrink-0"
+                                          aria-label={t('bed.turn_ccw')}
+                                          role="img"
+                                          data-screw-rotation="ccw"
+                                        />
+                                      ) : (
+                                        <RotateCw
+                                          size={13}
+                                          strokeWidth={1.75}
+                                          class="shrink-0"
+                                          aria-label={t('bed.turn_cw')}
+                                          role="img"
+                                          data-screw-rotation="cw"
+                                        />
+                                      )}
+                                      {turn.mode === 'exact' ? (
+                                        <span data-screw-exact={c.id}>
+                                          {turnExactText(turnPlan(-d * 1000, pitchUm))}
+                                        </span>
+                                      ) : (
+                                        <span data-screw-aid={c.id}>{turnAid(turnPlan(-d * 1000, pitchUm))}</span>
+                                      )}
+                                    </span>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                  {/* A short reason for the two separate blocks. */}
+                  <p class="mt-2 flex items-start gap-1.5 text-xs text-muted" data-screw-blocks-note>
+                    <Lightbulb size={14} strokeWidth={1.75} aria-hidden="true" class="mt-px shrink-0" />
+                    <span>{t('bed.screw_blocks_note')}</span>
+                  </p>
+                </>
+              )}
               {quickMode && !homedXY && (
                 <p class="mt-2 text-xs text-muted" data-screw-quick-corner-hint>
                   {t('bed.lvl_corner_full_hint')}
                 </p>
               )}
               {/* After turning: measure again where the evaluation stands (a session has its own buttons in the table). */}
-              {plan && !printerSession && (
+              {planFull && !printerSession && (
                 <Button
                   variant="primary"
                   class="mt-2 min-h-11 px-4"
@@ -2128,7 +2352,7 @@ const Levelling = () => {
                   onClick={measureScrews}
                 >
                   <Icon n="target" class="size-5" />
-                  {t('bed.lvl_measure_again')}
+                  {t(fourStart ? 'bed.screw_four_start' : 'bed.lvl_measure_again')}
                 </Button>
               )}
               {/* The help and "Create new mesh" share one row. Opened, the title is the tab of one frame whose text takes the
@@ -2239,11 +2463,9 @@ const Levelling = () => {
         {since != null && Math.abs(since) <= 5 && (
           <p class="mt-3.5 text-xs text-muted">{tpl('bed.tram_reference_stable', { amount })}</p>
         )}
-        {since != null && Math.abs(since) > 5 && (
+        {since != null && Math.abs(since) > 5 && !fourNeeded && (
           <Notice icon="info">
-            <span>
-              {tpl(plan?.useOptimized ? 'bed.tram_reference_expected' : 'bed.tram_reference_stale', { amount })}
-            </span>
+            <span>{tpl('bed.tram_reference_stale', { amount })}</span>
           </Notice>
         )}
       </Step>

@@ -145,7 +145,7 @@ try {
   assert.equal(await page.locator('[data-screw-target]').count(), 0, 'there is no Target column any more')
   // Front left shows the real height as the reference; what is left to turn is measured minus plate shape.
   const zh = async id => (await page.locator(`[data-screw-zheight="${id}"]`).innerText()).replace(/\u00a0/g, ' ')
-  const zText = id => `Z height: ${um(z[id]) < 0 ? '−' : ''}${Math.abs(um(z[id]))} µm`
+  const zText = id => `${um(z[id]) < 0 ? '−' : ''}${Math.abs(um(z[id]))} µm`
   assert.equal(await zh('FL'), zText('FL'), 'the measured raw value, also with the mesh')
   assert.equal(await zh('FR'), zText('FR'))
   for (const id of ['FR', 'RR', 'RL']) {

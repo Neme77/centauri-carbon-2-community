@@ -91,7 +91,7 @@ try {
   assert.equal(await four.locator('[data-screw-exact]').count(), 0, 'no measurement yet: no turns')
   probeZ = [1.8, 1.85, 1.77, 1.81]
   // The table shows every height as measured (Z height); the turn column holds the difference: FR is 50 µm high.
-  await four.locator('[data-screw-zheight="FR"]').getByText('Z height: 1850 µm').waitFor({ timeout: 8000 })
+  await four.locator('[data-screw-zheight="FR"]').getByText('1850 µm').waitFor({ timeout: 8000 })
   // FR is 50 µm high: lower it, 0.05 mm / 0.7 mm per turn = 25.7 degrees (0.1 degree is about 0.2 µm).
   await four.locator('[data-screw-exact="FR"]').getByText('25.7°', { exact: true }).waitFor()
   // RR is 30 µm low: raise it, 15.4 degrees.
@@ -132,6 +132,11 @@ try {
   // The combined plan (front left moves too) shows its turn amounts as well, the front-left screw included, and its note
   // stands above the table.
   probeZ = [1.8, 1.74, 1.72, 1.7]
+  // Only after the operator's choice: the plan stays standard (front left is the reference) and the optimized one is offered.
+  await four.locator('[data-screw-optimize-suggest]').waitFor({ timeout: 8000 })
+  assert.equal(await four.locator('[data-screw-combined-note]').count(), 0, 'nothing switches to the combined plan by itself')
+  assert.equal(await four.locator('[data-screw-exact="FL"]').count(), 0, 'standard: the reference corner is not turned')
+  await four.locator('[data-screw-optimize-choose]').click()
   await four.locator('[data-screw-combined-note]').waitFor({ timeout: 8000 })
   await four.locator('[data-screw-exact="FL"]').waitFor()
   {
@@ -139,6 +144,8 @@ try {
     const table = await four.locator('table').first().boundingBox()
     assert.ok(note.y + note.height <= table.y + 1, 'the note of the combined plan stands above the table')
   }
+  await four.locator('[data-screw-strategy-back]').click()
+  await four.locator('[data-screw-strategy="standard"]').waitFor()
   // Old stored thread settings (other pitch, direction, cleared values) do not change the CC2 screw.
   for (const stale of [
     { thread_pitch_mm: 0.5, thread_pitch_source: 'old', clockwise_raises_bed: false, rotation_source: 'Elegoo wiki', thread_preset: 'CCW-M3' },
@@ -149,7 +156,7 @@ try {
     await page.reload()
     await four.waitFor()
     await unfold()
-    await four.locator('[data-screw-zheight="FR"]').getByText('Z height: 1850 µm').waitFor({ timeout: 8000 })
+    await four.locator('[data-screw-zheight="FR"]').getByText('1850 µm').waitFor({ timeout: 8000 })
     await four.locator('[data-screw-exact="FR"]').getByText('25.7°', { exact: true }).waitFor()
     assert.equal(await four.locator('[data-screw-combined-note]').count(), 0)
   }

@@ -47,7 +47,11 @@ const checked = referenceMove(
 )
 assert.equal(checked.sinceFullUm, null, 'a full check clears the stale notice')
 assert.equal(checked.change, '0 → −21 µm')
-const optimized = screwPlan({ '27.9,25.95': 1.8, '227.15,25.95': 1.74, '227.15,225.5': 1.72, '27.9,225.5': 1.7 })
+const lowFl = { '27.9,25.95': 1.8, '227.15,25.95': 1.74, '227.15,225.5': 1.72, '27.9,225.5': 1.7 }
+assert.equal(screwPlan(lowFl).canOptimize, true, 'the optimized plan is offered')
+assert.equal(screwPlan(lowFl).useOptimized, false, 'but not used until it is chosen')
+assert.deepEqual(screwPlan(lowFl).shown.map(v => Math.round(v * 1000)), [0, -60, -80, -100], 'standard: front left stays the reference')
+const optimized = screwPlan(lowFl, 'optimized')
 assert.equal(optimized.useOptimized, true)
 assert.deepEqual(
   optimized.shown.map(v => Math.round(v * 1000)),
@@ -62,7 +66,7 @@ assert.deepEqual(
 // Seen on a printer (#365 draft): front-left lowest, the plan must say raise it.
 {
   const z = { '27.9,25.95': -0.843, '227.15,25.95': -0.627, '227.15,225.5': -0.757, '27.9,225.5': -0.746 }
-  const p = screwPlan(z)
+  const p = screwPlan(z, 'optimized')
   const v = Object.values(z)
   const after = v.map((x, i) => x - p.shown[i])
   const spread = l => Math.max(...l) - Math.min(...l)
@@ -75,6 +79,7 @@ assert.equal(offsetChain(optimizedTrail.RR), '−80 µm')
 assert.equal(offsetChain(optimizedTrail.RL), '−100 µm')
 const mixed = screwPlan({ '27.9,25.95': 1.8, '227.15,25.95': 1.85, '227.15,225.5': 1.77, '27.9,225.5': 1.81 })
 assert.equal(mixed.useOptimized, false)
+assert.equal(mixed.canOptimize, false)
 assert.equal(Math.round(mixed.shown[0] * 1000), 0)
 const csvSessions = [
   {
@@ -524,25 +529,36 @@ try {
   )
   const frontLeft = row('Front left')
   const frontRight = row('Front right')
-  await frontLeft.locator('[data-screw-amount="FL"]').getByText('60 µm', { exact: true }).waitFor() /* front-left is the highest corner: lower it */
+  // Standard stays: front left is the fixed reference and has nothing to adjust. The optimized plan (front left is the highest
+  // corner: lower it) is only offered, in its own note with a button, and nothing switches to it by itself.
+  const offer = card.locator('[data-screw-optimize-suggest]')
+  await offer.waitFor()
+  await offer.getByText(/Also lower the front-left screw by 60/).waitFor()
+  assert.equal((await frontLeft.locator('[data-screw-adjust="FL"]').innerText()).trim(), 'No turn', 'standard: front left is left as it is')
+  assert.equal((await frontLeft.locator('[data-screw-goal="FL"]').innerText()).trim(), 'Leave unchanged')
+  assert.equal(await card.locator('[data-screw-combined-note]').count(), 0, 'no combined note before the choice')
+  await offer.getByRole('button', { name: 'Choose optimized correction', exact: true }).click()
+  await frontLeft.locator('[data-screw-amount="FL"]').getByText('60 µm', { exact: true }).waitFor()
   await frontLeft.locator('[data-screw-direction="lower"]').getByText('lower', { exact: false }).waitFor()
   await card.getByText(/Also lower the front-left screw by 60/).waitFor()
+  assert.equal(await offer.count(), 0, 'the offer is gone once the plan is chosen')
   assert.equal(await frontLeft.getByText('Leave the screw', { exact: true }).count(), 0)
   await card.getByText('recommended turns').waitFor()
   // Measured shows the height as measured (never the difference: the Adjustment column holds that).
-  await frontRight.getByText('Z height: 1740 µm').waitFor()
-  await row('Back right').getByText('Z height: 1720 µm').waitFor()
-  await row('Back left').getByText('Z height: 1700 µm').waitFor()
+  await card.locator('[data-screw-zheight="FR"]').getByText('1740 µm').waitFor()
+  await card.locator('[data-screw-zheight="RR"]').getByText('1720 µm').waitFor()
+  await card.locator('[data-screw-zheight="RL"]').getByText('1700 µm').waitFor()
   assert.equal(await card.getByText(/vs front left/).count(), 0, 'Measured shows no difference to front left')
   assert.match(await frontRight.innerText(), /Within tolerance/, 'front right is within the tolerance of the combined plan')
   await show(
     { '27.9,25.95': 1.8, '227.15,25.95': 1.85, '227.15,225.5': 1.77, '27.9,225.5': 1.81 },
     [{ time: 10, kind: 'start', corner: null, twice: false, z: { FL: 1.8, FR: 1.85, RR: 1.77, RL: 1.81 } }]
   )
-  await frontRight.getByText('Z height: 1850 µm').waitFor()
-  assert.equal((await frontLeft.locator('[data-screw-adjust="FL"]').innerText()).trim(), '', 'front left as the reference: the Adjustment cell is empty')
-  await row('Back right').getByText('Z height: 1770 µm').waitFor()
-  await row('Back left').getByText('Z height: 1810 µm').waitFor()
+  await card.locator('[data-screw-zheight="FR"]').getByText('1850 µm').waitFor()
+  assert.equal((await frontLeft.locator('[data-screw-adjust="FL"]').innerText()).trim(), 'No turn', 'front left as the reference: no turn')
+  assert.equal((await frontLeft.locator('[data-screw-goal="FL"]').innerText()).trim(), 'Leave unchanged', 'front left as the reference: left unchanged')
+  await card.locator('[data-screw-zheight="RR"]').getByText('1770 µm').waitFor()
+  await card.locator('[data-screw-zheight="RL"]').getByText('1810 µm').waitFor()
   await show(
     { '27.9,25.95': 1.802, '227.15,25.95': 1.85, '227.15,225.5': 1.82, '27.9,225.5': 1.79 },
     [
@@ -564,7 +580,9 @@ try {
       { time: 11, kind: 'probe', corner: 'FL', twice: false, z: { FL: 1.812 } },
     ]
   )
-  await card.getByText('next step of the optimised plan').waitFor()
+  // The optimized plan is chosen and front left moved: no new plan before all four corners are measured again.
+  await card.locator('[data-screw-four-needed]').getByText('Four-corner measurement needed', { exact: true }).waitFor()
+  assert.equal(await card.locator('[data-screw-proposal-block]').count(), 0, 'no adjustment plan before the four-corner measurement')
   assert.equal(await card.locator('[data-screw-deviation]').count(), 0, 'a moved reference is no deviation of a corner')
   const startAll = { time: 10, kind: 'start', corner: null, twice: false, z: { FL: 1.8, FR: 1.74, RR: 1.72, RL: 1.7 } }
   const heights = { '27.9,25.95': 1.8, '227.15,25.95': 1.74, '227.15,225.5': 1.72, '27.9,225.5': 1.7 }
@@ -590,7 +608,7 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-screw-deviation]') === null)
   // Two results of a corner (2× 3): one value, the average of both (1746 µm).
   await show(heights, [startAll], `${'// probe at 227.150,25.950 is z=1.752\n'.repeat(3)}// Result is z=1.752\n`)
-  await card.locator('[data-screw-zheight="FR"]').getByText('Z height: 1746 µm').waitFor()
+  await card.locator('[data-screw-zheight="FR"]').getByText('1746 µm').waitFor()
   // "±x" behind the difference when it lies within x of the 20 µm limit of the turn instruction: x = 5 µm once, 3 µm with 2× 3.
   const tolerance = corner => card.locator(`[data-screw-tolerance="${corner}"]`)
   const near = (fr, twice) => show({ ...heights, '227.15,25.95': fr }, [{ ...startAll, twice, z: { ...startAll.z, FR: fr }, ...(twice ? { z2: { FR: fr } } : {}) }])

@@ -194,9 +194,18 @@ try {
     for (const [i, id] of IDS.entries()) {
       assert.ok(Math.abs(um(await card.locator(`[data-screw-shape="${id}"]`).innerText()) - Math.round((fit.shape[i] - fit.shape[0]) * 1000)) <= 1, `${what}: plate shape ${id}`)
       if (i) {
-        const raw = await card.locator(`[data-screw-diff="${id}"]`).innerText()
-        const got = um(raw)
-        assert.ok(Math.abs(got - plan.shown[i] * 1000) <= 1.5, `${what}: difference ${id} with the plate shape (${JSON.stringify(raw)} / ${(plan.shown[i] * 1000).toFixed(1)})`)
+        // The plan value of the corner stands in its direction cell (amount, or "Still possible" within the tolerance); the sign
+        // is the direction: positive = lower, negative = raise. The status in the measured table says the same thing.
+        const amount = card.locator(`[data-screw-amount="${id}"]`)
+        const raw = (await amount.count()) ? await amount.innerText() : await card.locator(`[data-screw-possible="${id}"]`).innerText()
+        const got = (await amount.count()) ? um(raw) : um(raw.match(/(\d+(?:[.,]\d+)?)\s*µm/)?.[1] ?? '0')
+        assert.ok(Math.abs(got - Math.abs(plan.shown[i]) * 1000) <= 1.5, `${what}: plan amount ${id} with the plate shape (${JSON.stringify(raw)} / ${(plan.shown[i] * 1000).toFixed(1)})`)
+        const kind = await card.locator(`[data-screw-verdict="${id}"]`).getAttribute('data-screw-verdict-kind')
+        assert.equal(kind, Math.abs(plan.shown[i]) <= 0.02 ? 'ok' : plan.shown[i] > 0 ? 'lower' : 'raise', `${what}: status ${id} follows the plan`)
+        // The colour of the status is the colour of the direction in the suggestion, with the plate shape too.
+        const dirEl = card.locator(`[data-screw-row="${id}"]`).locator(kind === 'ok' ? '[data-screw-ok]' : '[data-screw-direction]')
+        const colour = loc => loc.evaluate(e => getComputedStyle(e).color)
+        assert.equal(await colour(card.locator(`[data-screw-verdict="${id}"]`)), await colour(dirEl), `${what}: status colour of ${id} is the colour of its direction`)
       }
     }
     return z
