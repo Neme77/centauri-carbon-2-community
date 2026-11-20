@@ -29,6 +29,7 @@ HARNESSES = {
     "test_recovery_download.c": BACKEND,
     "test_emergency_latch.c": [],
     "test_console_staged.c": [],
+    "test_console_real_frames.c": [],
     "test_emergency_stop_direct.c": [ROOT / "src/console.c"],
     "test_emergency_stop_edges.c": [ROOT / "src/console.c"],
     "test_emergency_stop_deadline.c": [ROOT / "src/console.c"],
