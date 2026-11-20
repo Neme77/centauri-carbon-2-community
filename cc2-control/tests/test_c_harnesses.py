@@ -21,6 +21,9 @@ HARNESSES = {
     "test_app_update_guards.c": BACKEND,
     "test_gcode_metadata.c": [],
     "test_gcode_layer_path.c": [],
+    "test_gcode_layer_index.c": [],
+    "test_gcode_layer_index_store.c": [],
+    "test_layer_store_entries.c": BACKEND,
     "test_object_query.c": BACKEND,
     "test_exclude_objects.c": BACKEND,
     # test_file_ops.c and test_orca_upload.c include src/main.c themselves.

@@ -87,10 +87,13 @@ static void layer_path_health_json(char *out, size_t cap) {
     int n = snprintf(out, cap,
         "\"layer_path_scans\":%lu,\"layer_path_rejected\":%lu,\"layer_path_busy\":%lu,"
         "\"layer_path_bytes_read\":%llu,\"layer_path_longest_ms\":%ld,\"layer_path_last_ms\":%ld,"
-        "\"gcode_read_blocked\":%lu,\"gcode_read_stopped\":%lu",
+        "\"gcode_read_blocked\":%lu,\"gcode_read_stopped\":%lu,"
+        "\"layer_map_hits\":%lu,\"layer_map_fallbacks\":%lu,\"layer_map_built\":%lu,\"layer_map_failed\":%lu",
         layer_path_stats.scans, layer_path_stats.rejected, layer_path_stats.busy,
         layer_path_stats.bytes_read, layer_path_stats.longest_ms, layer_path_stats.last_ms,
-        layer_path_stats.read_blocked, layer_path_stats.read_stopped);
+        layer_path_stats.read_blocked, layer_path_stats.read_stopped,
+        atomic_load(&layer_store_stat_hits), atomic_load(&layer_store_stat_fallbacks),
+        atomic_load(&layer_store_stat_built), atomic_load(&layer_store_stat_failed));
     pthread_mutex_unlock(&layer_path_cache_lock);
     if (n < 0 || (size_t)n >= cap) out[0] = 0;
 }
@@ -99,6 +102,7 @@ static void (*layer_path_scan_hook)(void);
 typedef struct {
     int client, source, layer;
     char storage[16], file[PATH_MAX_LOCAL];
+    char path[PATH_MAX_LOCAL * 2]; /* root/file: the key of the file's layer map */
     struct stat stamp;
 } layer_path_job;
 
@@ -179,29 +183,52 @@ static void *layer_path_worker(void *opaque) {
     struct timespec started;
     clock_gettime(CLOCK_MONOTONIC, &started);
     if (layer_path_scan_hook) layer_path_scan_hook();
-    layer_path_mark *found = malloc(sizeof(*found) * LAYER_PATH_INDEX_MAX);
+    /* With a current layer map the layer is read directly from its start; without one (or for
+     * a file the map cannot serve) the file is read from the start as before, and a missing or
+     * stale map is queued so the next request can jump. */
+    int rc = LAYER_INDEX_NONE;
+    layer_index index;
+    if (layer_store_load(job->path, file, &index) == 0) {
+        rc = gcode_layer_path_parse_indexed(file, &index, job->layer, points, LAYER_PATH_COLLECT_MAX,
+                                            starts, LAYER_PATH_PATHS_MAX, &info, &started,
+                                            LAYER_PATH_TIME_MS, LAYER_INDEX_LAYER_BYTES_MAX);
+        layer_index_free(&index);
+        atomic_fetch_add(rc == LAYER_INDEX_NONE ? &layer_store_stat_fallbacks : &layer_store_stat_hits, 1);
+    } else if (!strcmp(job->storage, "internal")) {
+        /* Only files in the printer's own storage get a map: a background read of a USB stick could hang on a
+         * removed stick, and a USB print runs from its internal copy anyway. */
+        layer_store_note_request(job->path);
+        atomic_fetch_add(&layer_store_stat_fallbacks, 1);
+    } else {
+        atomic_fetch_add(&layer_store_stat_fallbacks, 1);
+    }
+    layer_path_mark *found = NULL;
     int found_count = 0;
     layer_path_mark resume;
     int have_resume = 0;
-    pthread_mutex_lock(&layer_path_cache_lock);
-    int indexed = layer_path_index.valid && !strcmp(layer_path_index.storage, job->storage) &&
-                  !strcmp(layer_path_index.file, job->file) &&
-                  layer_path_same_file(&job->stamp, &layer_path_index.stamp);
-    if (!indexed) {
-        layer_path_index.valid = 1;
-        layer_path_index.count = 0;
-        snprintf(layer_path_index.storage, sizeof(layer_path_index.storage), "%s", job->storage);
-        snprintf(layer_path_index.file, sizeof(layer_path_index.file), "%s", job->file);
-        layer_path_index.stamp = job->stamp;
-    } else if (layer_path_mark_pick(layer_path_index.marks, layer_path_index.count, job->layer - 1, &resume))
-        have_resume = 1;
-    pthread_mutex_unlock(&layer_path_cache_lock);
-    int rc = gcode_layer_path_parse_at(file, job->layer, points, LAYER_PATH_COLLECT_MAX,
+    if (rc == LAYER_INDEX_NONE) {
+        found = malloc(sizeof(*found) * LAYER_PATH_INDEX_MAX);
+        pthread_mutex_lock(&layer_path_cache_lock);
+        int indexed = layer_path_index.valid && !strcmp(layer_path_index.storage, job->storage) &&
+                      !strcmp(layer_path_index.file, job->file) &&
+                      layer_path_same_file(&job->stamp, &layer_path_index.stamp);
+        if (!indexed) {
+            layer_path_index.valid = 1;
+            layer_path_index.count = 0;
+            snprintf(layer_path_index.storage, sizeof(layer_path_index.storage), "%s", job->storage);
+            snprintf(layer_path_index.file, sizeof(layer_path_index.file), "%s", job->file);
+            layer_path_index.stamp = job->stamp;
+        } else if (layer_path_mark_pick(layer_path_index.marks, layer_path_index.count, job->layer - 1, &resume))
+            have_resume = 1;
+        pthread_mutex_unlock(&layer_path_cache_lock);
+        rewind(file);
+        rc = gcode_layer_path_parse_at(file, job->layer, points, LAYER_PATH_COLLECT_MAX,
                                        starts, LAYER_PATH_PATHS_MAX, &info, &started,
                                        LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
                                        have_resume ? &resume : NULL,
                                        found, found ? &found_count : NULL,
                                        found ? LAYER_PATH_INDEX_MAX : 0);
+    }
     {
         /* The parser resumes at the saved mark only when it lies within the byte budget (as it checks itself). */
         long long from = have_resume && resume.offset >= 0 &&
@@ -355,6 +382,7 @@ static int gcode_layer_path_begin(int fd, const char *query, int held) {
         job->stamp = st;
         snprintf(job->storage, sizeof(job->storage), "%s", storage);
         snprintf(job->file, sizeof(job->file), "%s", file);
+        snprintf(job->path, sizeof(job->path), "%s/%s", root, file);
         if (!pthread_attr_init(&attr)) {
             initialized = 1;
             if (!pthread_attr_setstacksize(&attr, 128 * 1024) &&

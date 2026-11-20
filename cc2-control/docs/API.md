@@ -294,9 +294,17 @@ names, paths or other private data):
 | `layer_path_last_ms` | The last scan, in milliseconds. |
 | `gcode_read_blocked` | Requests of the layer path, the object preview and `POST /api/gcode-files/thumbnail` answered 503 by the read hold before anything was read, and scans of the running print's file the hold kept from starting (once per withheld scan). |
 | `gcode_read_stopped` | Layer-path and object-preview scans that the read hold ended while they read (counted in `layer_path_scans` as well), and scans of the running print's file it ended. |
+| `layer_map_hits` | Layer scans answered through the file's layer map (see *Layer index storage*). |
+| `layer_map_fallbacks` | Layer scans that read the file from its start: no current map yet, a map the index cannot serve, or a USB file. `layer_map_hits` + `layer_map_fallbacks` = the scans that read a file for one layer. |
+| `layer_map_built` | Maps the background builder wrote since the start. |
+| `layer_map_failed` | Map builds that failed (for example on full storage). |
 
 The object preview below shares these counters: its scans count as `layer_path_scans` (with their bytes and
 times), its busy answers as `layer_path_busy` and its start-protection refusals as `layer_path_rejected`.
+
+## Layer index storage
+
+At startup, CC2 Control accepts `--layer-index-dir <path>` to store per-file layer maps (built in the background while the printer is idle) outside the G-code folders. The default is a `layer-index` directory next to CC2 Control's preferences. A map is keyed to the G-code file by size, change time, inode and the content of its first and last 64 KiB, holds at most 8192 layers, and is removed when the G-code file is deleted through CC2 Control; the 64 newest maps are kept, older ones (for example of files removed on the printer's screen) are dropped after the next map is saved. A build that fails (for example on full storage) is not started again by a layer request for ten minutes; an upload, copy or import of the file tries at once. A minute after the start, at the first idle time, the 32 newest files of the internal storage are queued for their maps (the first open of a file would otherwise pay the full scan). A file without a current map is read with the full scan as before; the layer-path reply does not change.
 
 ## Object preview
 

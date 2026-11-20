@@ -147,6 +147,18 @@ int main(void) {
     STATS(5, 0, 2);
     layer_path_rest_min_ms = 0; sleep_ms(450);
 
+    /* Layer maps: every scan so far found no map and read from the start (fallbacks); none was answered through a map. */
+    read_health(&m);
+    assert(field("layer_map_hits") == 0 && field("layer_map_fallbacks") == field("layer_path_scans") &&
+           field("layer_map_built") == 0 && field("layer_map_failed") == 0);
+    char maps[600]; snprintf(maps, sizeof(maps), "%s/maps", dir);
+    assert(!mkdir(maps, 0700)); layer_store_dir = maps;
+    {   char mp[1200]; FILE *src = fopen(path, "rb"); assert(src);
+        layer_index built_index; assert(layer_index_build(src, &built_index, 0, NULL, NULL) == LAYER_PATH_OK); fclose(src);
+        assert(layer_store_index_path(path, mp, sizeof(mp)) == 0 && layer_index_save(mp, &built_index) == 0);
+        layer_index_free(&built_index); }
+    long long scans_before_map = field("layer_path_scans"), fallbacks_before = field("layer_map_fallbacks");
+
     /* Refused as not fitting the running print: counted, not a scan, no bytes. */
     bytes = field("layer_path_bytes_read");
     m.machine_status = 2; m.last_message = time(NULL);
@@ -161,9 +173,13 @@ int main(void) {
     m.current_layer = 4;
     assert(get(&m, "/api/gcode-files/layer-path?storage=internal&file=print.gcode&layer=11") == 200);
     STATS(6, 2, 2);
+    /* That scan went through the map: a hit; the fallbacks stay as they were and every scan is one or the other. */
+    assert(field("layer_map_hits") == 1 && field("layer_map_fallbacks") == fallbacks_before &&
+           field("layer_path_scans") == scans_before_map + 1);
 
     close(gate[0]); close(gate[1]);
-    unlink(path); rmdir(dir);
-    puts("PASS layer path stats: scans, rejected, busy, bytes read, longest and last scan appear in /api/health");
+    { char mp[1200]; if (layer_store_index_path(path, mp, sizeof(mp)) == 0) unlink(mp); }
+    rmdir(maps); unlink(path); rmdir(dir);
+    puts("PASS layer path stats: scans, rejected, busy, bytes read, longest and last scan, and the layer map hits and fallbacks appear in /api/health");
     return 0;
 }
