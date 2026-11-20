@@ -589,15 +589,36 @@ const saveText = (name: string, text: string, type: string) => {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+const SCREW_FOLLOW_MS = 10000 // how long the screw view keeps polling closely after a command ended
+
 const Screws = () => {
   const measuring = useRef(false)
   const [pending, setPending] = useState(false)
   const [probeTwice, setProbeTwice] = useState(true)
-  usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
-  usePoll(refreshScrewHistory, 2500) // the saved session trail arrives after each completed measurement
   const session = screwSession.use()
   const history = screwHistory.use()
   const busy = consoleStatus.use().busy
+  // The result arrives in the console output and the saved trail follows a second after it. Look closely while a
+  // command runs and for a short while after it (also after an action sent from this page); otherwise only
+  // someone else starting a measurement changes anything, so a slow look is enough.
+  const [afterRun, setAfterRun] = useState(false)
+  const followTimer = useRef(0)
+  const wasBusy = useRef(false)
+  const follow = () => {
+    window.clearTimeout(followTimer.current)
+    setAfterRun(true)
+    followTimer.current = window.setTimeout(() => setAfterRun(false), SCREW_FOLLOW_MS)
+  }
+  useEffect(() => () => window.clearTimeout(followTimer.current), [])
+  useEffect(() => {
+    if (busy) wasBusy.current = true
+    else if (wasBusy.current) {
+      wasBusy.current = false
+      follow()
+    }
+  }, [busy])
+  usePoll(refreshConsole, busy || afterRun ? 2500 : 20000)
+  usePoll(refreshScrewHistory, afterRun && !busy ? 2500 : 20000)
   const tram = printer.use().data?.screws_session
   const printerSession = Boolean(tram?.active)
   const xyReady = Boolean(tram?.active && tram?.xy_homed)
@@ -628,6 +649,7 @@ const Screws = () => {
         screwSession.set({ heights: {}, previous: {}, pair: {}, appliedGeneration: 0, minGeneration: nextGen })
       } else screwSession.set({ minGeneration: nextGen })
       if (await control(action)) {
+        follow()
         await Promise.all([refreshPrinter(), refreshConsole(), refreshScrewHistory()])
         openPage('bed', 'screws')
         return true

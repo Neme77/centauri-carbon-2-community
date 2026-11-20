@@ -688,6 +688,26 @@ session's. A heater action queued between two measurements takes the heaters ove
 and the bed target the session still owed are dropped, and the session itself stays. Requires printer
 validation.
 
+## Console output
+
+`GET /api/console` returns the state of the last console command of CC2 Control:
+`busy`, `completed`, `success`, `generation`, `command` and `output` (up to 256 KiB, JSON-escaped).
+`generation` rises with every command and every clear. Within one generation the stored output only grows.
+
+`GET /api/console?since=<generation>:<output_len>` lets a client that polls leave out the output it
+already holds. Both numbers are plain decimal digits: the `generation` and the `output_len` of the reply it
+holds. When no command runs, the generation equals `generation` and the stored output is exactly
+`output_len` bytes long, the reply has no `output` and carries `"unchanged":true`; every other field is the
+same as in a full reply. A reply to a request with a valid `since` carries `output_len` (bytes of the stored
+output, not of the JSON text, which leaves out control characters) in both forms. While a command runs, after
+a new command or a clear, and whenever the length differs, the reply is complete, so a client always
+sees growing output. A missing or malformed `since` (not `<digits>:<digits>`, a sign, an overflow, an empty
+value) is ignored: the reply is identical to a request without it and never an error. Older clients that
+send no `since` are unaffected. A client that stores the last `output` together with its `output_len`
+can show the stored text again whenever `unchanged` is true; the Console page and the screw view of the web
+interface do. An older CC2 Control ignores the parameter and always replies in full, so a client must not
+rely on `unchanged`.
+
 ## Heater PID calibration
 
 `GET /api/pid` returns the selected heater, busy/ready/failed flags and the last
