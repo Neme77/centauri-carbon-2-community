@@ -59,9 +59,7 @@ The **Device** tab then shows CC2 Control (the live camera view is not shown her
 
 ![The ElegooSlicer Device tab showing the CC2 Control dashboard](images/elegooslicer-device-tab.png)
 
-**Upload and Print** opens the Canvas spool confirmation in CC2 Control; the print only starts after you confirm it there (shown in a German CC2 Control):
-
-![CC2 Control's Canvas spool confirmation for a print sent from ElegooSlicer](images/elegooslicer-spool-confirmation.png)
+**Upload and Print** opens the Canvas spool confirmation in CC2 Control; the print only starts after you confirm it there.
 
 ## Important: the profile falls back to the default
 

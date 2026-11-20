@@ -59,9 +59,7 @@ La scheda **Dispositivo** mostra poi CC2 Control (la vista della telecamera dal 
 
 ![La scheda Dispositivo di ElegooSlicer con la dashboard di CC2 Control](images/elegooslicer-device-tab.png)
 
-**Carica e stampa** apre in CC2 Control la conferma della bobina Canvas; la stampa parte solo dopo la conferma lì (mostrata in un CC2 Control in tedesco):
-
-![La conferma della bobina Canvas di CC2 Control per una stampa inviata da ElegooSlicer](images/elegooslicer-spool-confirmation.png)
+**Carica e stampa** apre in CC2 Control la conferma della bobina Canvas; la stampa parte solo dopo la conferma lì.
 
 ## Importante: il profilo torna a quello predefinito
 
