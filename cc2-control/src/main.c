@@ -4670,7 +4670,7 @@ static const char *pending_autosave_guard(void) {
 }
 
 /* The start page revalidates instead of using no-store: the browser asks on
-   every visit, the ETag (file size + modification time) tells it whether its
+   every visit, the ETag (file size + modification and change time) tells it whether its
    copy is still the installed one, and a match is answered with a bodyless 304
    before the file is read. Only "/" and "/index.html" use this; every other
    answer keeps the no-store header in respond(). */
@@ -4703,13 +4703,16 @@ static void respond_revalidate(int fd, int status, const char *status_text,
         (void)send_all(fd, body, body_len);
 }
 
-/* Strong validator from size and modification time (with nanoseconds), in
-   quotes: "<size>-<seconds>.<nanoseconds>" in hex. */
+/* Strong validator from the file's size, modification time and change time (both
+   with nanoseconds), in quotes: "<size>-<mtime s>.<mtime ns>-<ctime s>.<ctime ns>" in hex.
+   The modification time can be put back by a copy that keeps times, tar or touch -r, so a
+   page with the same size and a restored time would keep the old tag; the change time moves
+   with every write and cannot be set from outside. */
 static int index_etag(const struct stat *info, char *out, size_t cap) {
-    long nanoseconds = info->st_mtim.tv_nsec;
-    int length = snprintf(out, cap, "\"%llx-%llx.%lx\"",
-        (unsigned long long)info->st_size, (unsigned long long)info->st_mtime,
-        (unsigned long)nanoseconds);
+    int length = snprintf(out, cap, "\"%llx-%llx.%lx-%llx.%lx\"",
+        (unsigned long long)info->st_size,
+        (unsigned long long)info->st_mtim.tv_sec, (unsigned long)info->st_mtim.tv_nsec,
+        (unsigned long long)info->st_ctim.tv_sec, (unsigned long)info->st_ctim.tv_nsec);
     return length > 0 && (size_t)length < cap;
 }
 
@@ -4744,15 +4747,25 @@ static void serve_index(int fd, const char *web_root, const char *request) {
         respond(fd, 500, "Internal Server Error", "text/plain; charset=utf-8", body, strlen(body));
         return;
     }
-    if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
-    long size = ftell(file);
-    if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
-    /* ETag from the opened file; without stat data the page is still served,
-       with the old no-store answer and no validator. */
+    /* The ETag and the length to read come from one fstat of the opened file. The file is
+       measured again after reading: if it changed meanwhile (an update writes it in place),
+       the tag would not describe the body, so no page is sent, the answer is a 503 and the browser's next request
+       gets the finished page. Best effort: file times move in clock ticks of a few milliseconds,
+       so a same-size write inside the same tick is not seen.
+       Without stat data the page is still served, with the old no-store answer and no validator. */
     struct stat info;
     char etag[64];
     int tagged = fstat(fileno(file), &info) == 0 && S_ISREG(info.st_mode) &&
                  index_etag(&info, etag, sizeof(etag));
+    long size;
+    if (tagged) {
+        if (info.st_size < 0 || info.st_size > 1024 * 1024) { fclose(file); return; }
+        size = (long)info.st_size;
+    } else {
+        if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
+        size = ftell(file);
+        if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
+    }
     if (tagged) {
         char sent[512]; /* A longer value is not ours; it is ignored and the page is sent. */
         if (http_header(request, "If-None-Match", sent, sizeof(sent)) == 1 &&
@@ -4766,12 +4779,19 @@ static void serve_index(int fd, const char *web_root, const char *request) {
     char *body = malloc((size_t)size);
     if (!body) { fclose(file); return; }
     size_t read_len = fread(body, 1, (size_t)size, file);
+    struct stat after;
+    char etag_after[64];
+    int unchanged = !tagged || (fstat(fileno(file), &after) == 0 && index_etag(&after, etag_after, sizeof(etag_after)) &&
+                                strcmp(etag, etag_after) == 0);
     fclose(file);
-    if (read_len == (size_t)size) {
+    if (read_len == (size_t)size && unchanged) {
         if (tagged)
             respond_revalidate(fd, 200, "OK", body, read_len, etag);
         else
             respond(fd, 200, "OK", "text/html; charset=utf-8", body, read_len);
+    } else {
+        const char *error = "{\"error\":\"Start page is being replaced\"}\n";
+        respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
     }
     free(body);
 }

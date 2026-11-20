@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The start page revalidates with an ETag; every other answer stays no-store.
 
-GET / and GET /index.html answer 200 with an ETag taken from the file's size
-and modification time plus `Cache-Control: no-cache`, and answer a matching
+GET / and GET /index.html answer 200 with an ETag taken from the file's size,
+modification time and change time plus `Cache-Control: no-cache`, and answer a matching
 If-None-Match with a bodyless 304 before the file is read. API answers and
 /i18n/* keep `Cache-Control: no-store`.
 """
@@ -13,6 +13,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -154,6 +155,85 @@ with tempfile.TemporaryDirectory(prefix="cc2-etag-") as temporary:
         os.utime(index, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
         status, headers, _ = fetch(port, "/", [("If-None-Match", etag_time)])
         assert status == 200 and headers.get("etag") != etag_time, "a 1 ms change must change the ETag"
+
+        # Same size, other content, modification time put back (a copy that keeps times, tar, touch -r): the change time
+        # of the file cannot be set from outside, so the tag still changes and the old one gets the new page.
+        index.write_text("<!doctype html><html><body>third, size 1</body></html>\n", encoding="ascii")
+        status, headers, data = fetch(port)
+        etag_third = headers.get("etag")
+        assert status == 200 and b"size 1" in data and etag_third, f"setup for the restored time returned {status}"
+        stat = index.stat()
+        time.sleep(0.1)  # the change time moves in clock ticks of a few milliseconds
+        index.write_text("<!doctype html><html><body>third, size 2</body></html>\n", encoding="ascii")
+        os.utime(index, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        assert index.stat().st_mtime_ns == stat.st_mtime_ns and index.stat().st_size == stat.st_size
+        status, headers, data = fetch(port, "/", [("If-None-Match", etag_third)])
+        assert status == 200 and b"size 2" in data, f"same size and restored mtime returned {status}: the old page would stay in the browser"
+        assert headers.get("etag") != etag_third, "ETag unchanged although the content changed and the mtime was restored"
+        etag_third = headers.get("etag")
+        status, _, data = fetch(port, "/", [("If-None-Match", etag_third)])
+        assert status == 304 and data == b"", "unchanged file must answer 304 again after the restored time"
+
+        # The page is rewritten in place while it is requested: whatever is sent, the tag and the body come from one
+        # state of the file (the size in the tag is the size of the body; a same-size write inside one clock tick of the file times is not seen). Statistical: the window is a few microseconds,
+        # so this runs many requests against a writer. A page that changed or was shorter than measured is answered with a 503 and
+        # a JSON error, never with a silent close and never with a tag.
+        size_a, size_b = 300000, 450000
+        index.write_bytes(b"a" * size_a)
+        stop = threading.Event()
+
+        def rewrite():
+            # Bursts of rewriting, then a quiet pause: a slow runner (ThreadSanitizer, an emulator) can finish reads in the pauses.
+            with open(index, "r+b", buffering=0) as handle:
+                while not stop.is_set():
+                    burst_end = time.monotonic() + 0.04
+                    while time.monotonic() < burst_end and not stop.is_set():
+                        handle.seek(0)
+                        handle.write(b"b" * size_b)
+                        handle.truncate(size_a)
+                        handle.seek(0)
+                        handle.write(b"a" * size_a)
+                    time.sleep(0.06)
+
+        mismatches = []
+        completed = [0]
+        replaced = [0]
+
+        def request_loop(seconds):
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                try:
+                    status, headers, data = fetch(port)
+                except (OSError, http.client.HTTPException):
+                    mismatches.append("closed without an answer")
+                    continue
+                if status == 503:
+                    replaced[0] += 1
+                    if data != b'{"error":"Start page is being replaced"}\n' or "etag" in headers or headers.get("cache-control") != "no-store":
+                        mismatches.append(f"503 answer {headers} {data[:60]!r}")
+                    continue
+                if status != 200:
+                    mismatches.append(f"status {status}")
+                    continue
+                completed[0] += 1
+                tag = headers.get("etag", "")
+                if not tag.startswith('"') or int(tag[1:].split("-")[0], 16) != len(data):
+                    mismatches.append(f"ETag {tag} but body of {len(data)} bytes")
+
+        writer = threading.Thread(target=rewrite)
+        clients = [threading.Thread(target=request_loop, args=(3,)) for _ in range(4)]
+        writer.start()
+        for client in clients:
+            client.start()
+        for client in clients:
+            client.join()
+        stop.set()
+        writer.join()
+        assert process.poll() is None, "server died while the page was rewritten"
+        assert not mismatches, f"wrong answers in {len(mismatches)} of {completed[0] + replaced[0] + len(mismatches)} requests ({replaced[0]} were 503): {mismatches[:3]}"
+        assert completed[0] > 0, "no request completed while the page was rewritten"
+        print(f"info: {completed[0]} pages and {replaced[0]} 503 answers while the page was rewritten")
+        index.write_text("<!doctype html><html><body>after the rewrite</body></html>\n", encoding="ascii")
 
         # Everything else keeps no-store and carries no ETag.
         for path in ("/api/version", "/api/health", "/i18n/en.json", "/definitely-not-a-route"):
