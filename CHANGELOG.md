@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Layer path on the bed map: the nozzle marker and its legend entry are shown only in Live mode. When you step through layers by hand the marker no longer moves over the layer you are looking at; Live draws it again. By hand every layer is also drawn whole: the path is no longer split at the nozzle and the direction arrow no longer moves with it, while Live is unchanged. By **lpgamerzockt-ops** (#410).
+
 - The start page is no longer sent in full on every visit: CC2 Control sends an `ETag` (the SHA-256 of the page, so it follows the content and not the file's size or times) with `Cache-Control: no-cache`, the browser still asks on every visit, and a matching `If-None-Match` is answered with an empty `304`. A page that is being replaced while it is read is answered with a `503` and a JSON error. This relaxes `no-store` for `/` and `/index.html` only; API answers and `/i18n/*` keep it. Implemented by **lpgamerzockt-ops** (#406).
 - Print queue jobs are bound to filaments, not to Canvas slots: each tool keeps the material and colour it was added with and prints from whichever slot holds that filament when a copy starts, so a job can be queued before its spool is loaded (in the print dialog from the spool inventory, through the API with any material and colour) and waits until a slot holds it. The job list shows each tool's filament and slot, its palette button gives a job other filaments, and every start, by the button or automatic, takes the slots from a Canvas report it asks for itself, so a spool changed just before it is followed. Designed and implemented by **beanbo** (#352).
 
