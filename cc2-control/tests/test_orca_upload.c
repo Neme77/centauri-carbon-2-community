@@ -21,6 +21,11 @@ static int upload(mqtt_client *mqtt,const char *name,const char *file,int do_pri
   else close(pair[0]);
   close(pair[1]);return status;
 }
+static int layer_queued(const char *file){
+  pthread_mutex_lock(&layer_store_lock);int found=0;
+  for(int i=0;i<layer_store_count;i++)if(!strcmp(layer_store_queue[i],file))found=1;
+  pthread_mutex_unlock(&layer_store_lock);return found;
+}
 int main(void){
  char path[]="/tmp/cc2-orca-upload-XXXXXX";assert(mkdtemp(path));gcode_internal_root=path;
  mqtt_client mqtt;memset(&mqtt,0,sizeof(mqtt));mqtt.connected=mqtt.registered=mqtt.have_machine_status=1;
@@ -28,11 +33,13 @@ int main(void){
  assert(upload(&mqtt,"cube.gcode","G28\nG1 X10\n",0,0)==201);
  char file[1024];snprintf(file,sizeof(file),"%s/cube.gcode",path);
  FILE *f=fopen(file,"rb");assert(f);char buf[128]={0};size_t n=fread(buf,1,sizeof(buf),f);fclose(f);assert(n==11&&!memcmp(buf,"G28\nG1 X10\n",11));
+ assert(layer_queued(file)); /* the Orca upload queues the saved file for its layer map */
  puts("PASS multipart file saved with exact contents and multiple fields");
  assert(upload(&mqtt,"cube.gcode","NEW\n",0,0)==201);
  f=fopen(file,"rb");assert(f);n=fread(buf,1,sizeof(buf),f);fclose(f);assert(n==11&&!memcmp(buf,"G28\nG1 X10\n",11));
  snprintf(file,sizeof(file),"%s/cube (1).gcode",path);
  f=fopen(file,"rb");assert(f);n=fread(buf,1,sizeof(buf),f);fclose(f);assert(n==4&&!memcmp(buf,"NEW\n",4));
+ assert(layer_queued(file)); /* the copy under its new name is queued, not the name that was taken */
  puts("PASS a taken name is saved as a copy and the original is untouched");
  {char name[PATH_MAX_LOCAL];
   assert(orca_copy_name(name,"Part.GCODE",12)&&!strcmp(name,"Part (12).GCODE"));

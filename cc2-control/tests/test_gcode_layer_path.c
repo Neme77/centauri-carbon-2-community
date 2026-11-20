@@ -66,6 +66,7 @@ static void expect_ok(int rc, const layer_path_info *info, int min_points) {
 }
 
 int main(void) {
+    (void)gcode_layer_path_parse; /* used by test_gcode_layer_index.c; kept in the header for the index */
     char dir[] = "/tmp/cc2-layer-XXXXXX";
     assert(mkdtemp(dir));
     layer_point pts[LAYER_PATH_COLLECT_MAX];

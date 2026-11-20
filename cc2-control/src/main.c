@@ -663,6 +663,7 @@ static int gcode_storage_root(const char *storage, const char **root) {
 
 #include "gcode_download.h"
 #include "gcode_layer_path.h"
+#include "gcode_layer_index_store.h"
 #include "gcode_layer_path_http.h"
 #include "gcode_object_preview_http.h"
 
@@ -843,6 +844,7 @@ static void gcode_delete_response(int fd,const char *request,const mqtt_client *
        unlink(path)!=0){
         gcode_delete_error(fd,409,"Conflict","file_delete_failed");return;
     }
+    layer_store_forget(path);
     const char *ok="{\"deleted\":true}\n";
     respond(fd,200,"OK","application/json",ok,strlen(ok));
 }
@@ -879,6 +881,7 @@ static void gcode_copy_response(int fd,const mqtt_client *mqtt,const char *body,
     if(fclose(out)!=0)failed=1;
     fclose(in);
     if(failed||rename(temporary,destination)!=0){unlink(temporary);goto copy_failed;}
+    layer_store_note(destination);
     {const char *ok="{\"copied\":true}\n";respond(fd,201,"Created","application/json",ok,strlen(ok));return;}
 invalid:{const char *e="{\"error\":\"Invalid copy request or unavailable storage\"}\n";respond(fd,400,"Bad Request","application/json",e,strlen(e));return;}
 missing:{const char *e="{\"error\":\"Source G-code file not found or unsafe\"}\n";respond(fd,404,"Not Found","application/json",e,strlen(e));return;}
@@ -1109,6 +1112,7 @@ static void *gcode_upload_worker(void *arg){
         error="Cannot publish uploaded file";goto done;
     }
     temporary[0]=0;
+    layer_store_note(destination);
     code=201;status="Created";
 done:
     if(output>=0)close(output);
@@ -1391,6 +1395,7 @@ static void *orca_upload_worker(void *arg){
     close(reserve);reserve=-1;
     if(rename(temporary,destination)!=0){unlink(destination);status=507;status_text="Insufficient Storage";error="Cannot publish file";goto fail;}
     temporary[0]=0;
+    layer_store_note(destination);
     unsigned long pending_generation=0;
     if(print_requested){
         pthread_mutex_lock(&orca_pending_mutex);
@@ -1543,6 +1548,7 @@ static int gcode_usb_import_remove(const mqtt_client *mqtt, const char *name) {
     snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, name);
     /* As a delete from the file list: the same regular, singly linked file, or nothing. */
     if (lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 || unlink(path)) return 0;
+    layer_store_forget(path); /* the copy's layer map goes with it */
     fprintf(stderr, "USB import cleanup: removed %s\n", name);
     return 1;
 }
@@ -1964,6 +1970,7 @@ static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
     }
     close(part_lock);
     chmod(destination, 0644);
+    layer_store_note(destination);
     return 0;
 }
 
@@ -3290,7 +3297,7 @@ static void usb_start_tick(mqtt_client *mqtt) {
     if (status != 202 && usb_start.imported_ok && !usb_start.replaced) {
         char path[PATH_MAX_LOCAL * 2];
         int length = snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, usb_start.imported);
-        if (length > 0 && (size_t)length < sizeof(path)) unlink(path);
+        if (length > 0 && (size_t)length < sizeof(path) && !unlink(path)) layer_store_forget(path);
     }
     usb_start_fd = -1; usb_start_canvas_waiting = 0; usb_start_trays_late = 0;
     close(fd);
@@ -6102,6 +6109,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--update-ca") == 0 && i + 1 < argc) app_update_ca = argv[++i];
         else if (strcmp(argv[i], "--update-runner") == 0 && i + 1 < argc) app_update_runner = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
+        else if (strcmp(argv[i], "--layer-index-dir") == 0 && i + 1 < argc) layer_store_dir = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
         else if (strcmp(argv[i], "--screws-history") == 0 && i + 1 < argc) screws_history_path = argv[++i];
         else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
@@ -6178,6 +6186,18 @@ int main(int argc, char **argv) {
     printf("CC2 Control " CC2_CONTROL_VERSION " + Panda bridge listening on 0.0.0.0:%d (Panda port %d)\n", port, panda_port);
     fflush(stdout);
 
+    /* Layer maps live next to CC2 Control's other data (the folder of --preferences) unless
+     * --layer-index-dir names another one; never next to the G-code. */
+    static char layer_store_dir_buffer[PATH_MAX_LOCAL * 2];
+    if (!strcmp(layer_store_dir, "./layer-index")) {
+        const char *slash = strrchr(ui_preferences_path, '/');
+        if (slash && snprintf(layer_store_dir_buffer, sizeof(layer_store_dir_buffer), "%.*s/layer-index",
+                              (int)(slash - ui_preferences_path), ui_preferences_path) < (int)sizeof(layer_store_dir_buffer))
+            layer_store_dir = layer_store_dir_buffer;
+    }
+    static int layer_prewarm_done; static time_t layer_started_at; layer_started_at = time(NULL);
+    if (layer_store_start() != 0) fprintf(stderr, "Layer maps disabled: cannot start the background builder\n");
+
     http_pending *pending=calloc(HTTP_PENDING_MAX,sizeof(*pending));
     if(!pending){perror("HTTP receive pool");panda_stop(&panda);close(server);mqtt_close(&mqtt);console_destroy(&console);return 1;}
     for(int i=0;i<HTTP_PENDING_MAX;i++)pending[i].fd=-1;
@@ -6253,6 +6273,11 @@ int main(int argc, char **argv) {
         print_watch_tick(&mqtt);
         object_preview_follow(&mqtt,&telemetry);
         gcode_read_follow(&mqtt,&console);
+        layer_store_set_idle(gcode_idle_for_mutation(&mqtt) && !atomic_load(&gcode_read_hold) && !usb_start_active());
+        if (!layer_prewarm_done && atomic_load(&layer_store_idle) && time(NULL) - layer_started_at >= 60) {
+            layer_prewarm_done = 1; /* once, a minute after the start and at the first idle time */
+            (void)layer_store_prewarm(gcode_internal_root, LAYER_STORE_PREWARM_MAX);
+        }
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
         if (spools_available) spoolman_tick((long long)now.tv_sec * 1000 + now.tv_nsec / 1000000);
         for(int i=0;i<HTTP_PENDING_MAX;i++){
