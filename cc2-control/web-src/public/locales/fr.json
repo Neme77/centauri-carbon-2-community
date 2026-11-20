@@ -1664,6 +1664,7 @@
   "bed.screw_measured_title": "Mesuré",
   "bed.screw_measured_note": "Toujours par rapport à l'avant gauche",
   "bed.screw_running_note": "Une mesure est en cours. Les valeurs ci-dessous datent de la dernière mesure.",
+  "bed.screw_tool_play_note": "L’outil à clics peut avoir un peu de jeu quand on le pose sur une vis, le premier clic peut donc être inexact. Mesurez à nouveau les quatre coins après chaque tour.",
   "bed.screw_col_z": "Hauteur Z (absolue)",
   "bed.screw_col_offset": "Écart par rapport à l'avant gauche",
   "bed.screw_col_status": "État",

@@ -1664,6 +1664,7 @@
   "bed.screw_measured_title": "Zmierzono",
   "bed.screw_measured_note": "Zawsze względem przodu lewego",
   "bed.screw_running_note": "Trwa pomiar. Poniższe wartości pochodzą z ostatniego pomiaru.",
+  "bed.screw_tool_play_note": "Narzędzie z kliknięciami może mieć lekki luz po nałożeniu na śrubę, więc pierwsze kliknięcie może być niedokładne. Po każdej rundzie zmierz ponownie wszystkie cztery narożniki.",
   "bed.screw_col_z": "Wysokość Z (bezwzględna)",
   "bed.screw_col_offset": "Odchylenie od przodu lewego",
   "bed.screw_col_status": "Stan",

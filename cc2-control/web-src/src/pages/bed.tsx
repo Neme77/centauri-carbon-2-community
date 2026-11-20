@@ -2360,6 +2360,13 @@ const Levelling = () => {
                       </table>
                     </div>
                   </section>
+                  {/* The click tool can have play when it is put on a screw: said under the turns in clicks. */}
+                  {turn.unit === 'clicks' && (
+                    <p class="mt-2 flex items-start gap-1.5 text-xs text-muted" data-screw-play-note>
+                      <Wrench size={14} strokeWidth={1.75} aria-hidden="true" class="mt-px shrink-0" />
+                      <span>{t('bed.screw_tool_play_note')}</span>
+                    </p>
+                  )}
                   {/* A short reason for the two separate blocks. */}
                   <p class="mt-2 flex items-start gap-1.5 text-xs text-muted" data-screw-blocks-note>
                     <Lightbulb size={14} strokeWidth={1.75} aria-hidden="true" class="mt-px shrink-0" />

@@ -1664,6 +1664,7 @@
   "bed.screw_measured_title": "Medido",
   "bed.screw_measured_note": "Siempre respecto a delante izquierda",
   "bed.screw_running_note": "Hay una medición en curso. Los valores de abajo son de la última medición.",
+  "bed.screw_tool_play_note": "La herramienta de clics puede tener algo de holgura al colocarla en un tornillo, así que el primer clic puede ser inexacto. Mide de nuevo las cuatro esquinas después de cada ronda.",
   "bed.screw_col_z": "Altura Z (absoluta)",
   "bed.screw_col_offset": "Desviación respecto a delante izquierda",
   "bed.screw_col_status": "Estado",

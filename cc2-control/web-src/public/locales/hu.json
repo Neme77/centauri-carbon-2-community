@@ -1664,6 +1664,7 @@
   "bed.screw_measured_title": "Mért",
   "bed.screw_measured_note": "Mindig az elöl balhoz viszonyítva",
   "bed.screw_running_note": "Mérés folyik. Az alábbi értékek az előző mérésből származnak.",
+  "bed.screw_tool_play_note": "A kattintós szerszámnak a csavarra helyezéskor lehet egy kis holtjátéka, ezért az első kattintás pontatlan lehet. Minden kör után mérd meg újra mind a négy sarkot.",
   "bed.screw_col_z": "Z-magasság (abszolút)",
   "bed.screw_col_offset": "Eltérés az elöl baltól",
   "bed.screw_col_status": "Állapot",
