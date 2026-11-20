@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Layer path on the bed map: the nozzle marker and its legend entry are shown only in Live mode. When you step through layers by hand the marker no longer moves over the layer you are looking at; Live draws it again. By **lpgamerzockt-ops** (#410).
+- Layer path on the bed map: the nozzle marker and its legend entry are shown only in Live mode. When you step through layers by hand the marker no longer moves over the layer you are looking at; Live draws it again. By hand every layer is also drawn whole: the path is no longer split at the nozzle and the direction arrow no longer moves with it, while Live is unchanged. By **lpgamerzockt-ops** (#410).
 
 - Print queue jobs are bound to filaments, not to Canvas slots: each tool keeps the material and colour it was added with and prints from whichever slot holds that filament when a copy starts, so a job can be queued before its spool is loaded (in the print dialog from the spool inventory, through the API with any material and colour) and waits until a slot holds it. The job list shows each tool's filament and slot, its palette button gives a job other filaments, and every start, by the button or automatic, takes the slots from a Canvas report it asks for itself, so a spool changed just before it is followed. Designed and implemented by **beanbo** (#352).
 
