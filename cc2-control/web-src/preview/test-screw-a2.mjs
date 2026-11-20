@@ -309,6 +309,27 @@ try {
   consoleJob = job(72, { '27.9,25.95': -1.0, '227.15,25.95': -1.06, '227.15,225.5': 0.1, '27.9,225.5': 0.2 })
   await card.locator('[data-screw-cancelled]').waitFor({ state: 'detached', timeout: 20000 })
 
+  // A printer error ends the measurement (finished, not successful, not cancelled): the page says so and points to the
+  // Console page. The message of the printer stays there; the page shows no result of the failed measurement.
+  // A lost connection (or any other end without a result that is no printer error) shows no such note.
+  consoleJob = { ...job(72, {}), success: false, cancelled: false, output: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nConsole connection ended or command timed out\n' }
+  await page.waitForTimeout(3500)
+  assert.equal(await card.locator('[data-screw-failed]').count(), 0, 'a lost connection is no printer error: no note about one')
+  consoleJob = { ...job(73, {}), success: false, cancelled: false, output: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n!! Error: probe failed\n[CC2 Control: the printer reported an error; the job was stopped]\n' }
+  const failed = card.locator('[data-screw-failed]')
+  await failed
+    .getByText('The printer reported an error and the measurement was stopped. Details are on the Console page.')
+    .waitFor({ timeout: 8000 })
+  assert.equal(await card.locator('[data-screw-cancelled]').count(), 0, 'an error is no cancel: one note only')
+  // A new result (or a new run) takes the note away again.
+  consoleJob = job(74, { '27.9,25.95': -1.0, '227.15,25.95': -1.06, '227.15,225.5': 0.1, '27.9,225.5': 0.2 })
+  await failed.waitFor({ state: 'detached', timeout: 20000 })
+  // An error of a command that is no screw measurement does not show the note.
+  consoleJob = { busy: false, completed: true, success: false, generation: 75, command: 'G28\n', output: 'Error\n', cancelled: false }
+  await page.waitForTimeout(3500)
+  assert.equal(await failed.count(), 0, 'only a failed screw measurement shows the note')
+  consoleJob = job(76, { '27.9,25.95': -1.0, '227.15,25.95': -1.06, '227.15,225.5': 0.1, '27.9,225.5': 0.2 })
+
   // The combined plan: the target is front left plus the common shift, front left moves too; every turned corner,
   // front left included, shows its turn.
   consoleJob = job(62, lowAll)

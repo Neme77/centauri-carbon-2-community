@@ -773,7 +773,9 @@ longer exist, and the endpoint list of `GET /api/v1/system/info` no longer has `
 A running screw measurement (`screws:measure`, `screws:measure:corner:<ID>`, the `screws:tram:` jobs except the end)
 is sent to the printer line by line and can be cancelled: `POST /api/control` with `screws:cancel` answers `202`
 while one runs or a hold time counts (which then ends, see "Hold time" above) and `409` otherwise. The job stops after the line that is running (a line that waits, such as the bed
-wait or the nozzle cleaning, ends first), lifts the nozzle (`G1 Z10`), restores the saved gcode state and sets
+wait or the nozzle cleaning, ends first), lifts the nozzle (`G1 Z10`) only when X, Y and Z are homed (the printer
+reports them when the job starts, and the job's own `G28` and `G180 S3` count once completed; without them, or after an error report, the lift is
+left out, because the printer service accepted it with unhomed axes), restores the saved gcode state and sets
 `M104 S0`. A quick measurement and the start of a session then switch the bed off as well (`M140 S0`) and a cancelled
 session start ends the session (`end_reason` `user`); a later measurement of a session sets the bed to the session's
 target again and keeps the session. A cancelled job is not recorded in the history. `GET /api/console` reports

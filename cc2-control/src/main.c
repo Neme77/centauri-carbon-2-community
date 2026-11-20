@@ -5432,7 +5432,7 @@ static int screws_soak_start(const mqtt_client *mqtt, console_state *console, ch
     control_screws_after_mesh(-1);
     if (!control_check_script(screws_soak.action, mqtt, script, sizeof(script), reason, cap)) return -1;
     const char *tail = control_screws_cancel_tail(screws_soak.action);
-    if (tail) console_arm_staged(console, tail);
+    if (tail) console_arm_staged(console, tail, control_axes_homed(mqtt));
     if (console_start(console, script, reason, cap) != 0) return 1;
     if (!control_build_script(screws_soak.action, mqtt, built, sizeof(built), reason, cap) || strcmp(built, script)) {
         /* Not reached: the same check in the same tick. Stop the queued job rather than run it without its state. */
@@ -5705,7 +5705,7 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         if(n<0||(size_t)n>=sizeof(next)){built=0;snprintf(reason,sizeof(reason),"Source script exceeds capacity");}
         else memcpy(script,next,(size_t)n+1);
     }
-    if(built&&control_screws_cancel_tail(action))console_arm_staged(console,control_screws_cancel_tail(action));
+    if(built&&control_screws_cancel_tail(action))console_arm_staged(console,control_screws_cancel_tail(action),control_axes_homed(mqtt));
     if(!built||console_start(console,script,reason,sizeof(reason))!=0){
         /* Only a start this call built: a start refused because a session is running must not end that session. */
         if(built&&control_screws_is_start(action))control_screws_invalidate_for(CONTROL_SCREWS_END_CONSOLE);

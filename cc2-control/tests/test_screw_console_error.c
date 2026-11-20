@@ -32,16 +32,27 @@ static ssize_t fake_send(int fd,const void *data,size_t length,int flags){
     return (ssize_t)length;
 }
 static int fake_poll(struct pollfd *fds,nfds_t count,int timeout){(void)fds;(void)count;(void)timeout;return 1;}
-enum { REPLY_OK, REPLY_ERROR, REPLY_REPORT };
+enum { REPLY_OK, REPLY_ERROR, REPLY_REPORT, REPLY_SPLIT };
 static int fail_mode; /* what the line named by fail_at is answered with */
+static const char SPLIT_REPORT[]="{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"probe failed\"}}\003";
+static size_t split_pos; /* REPLY_SPLIT: the result and the first split_pos bytes of the report; the rest comes in the next read */
+static const char *later;
 static ssize_t fake_read(int fd,void *data,size_t length){
     (void)fd;
+    if(later){size_t m=strlen(later);assert(m<=length);memcpy(data,later,m);later=NULL;return (ssize_t)m;}
     if(!reply_pending)return 0;
     reply_pending=0;
     const char *reply="{\"report\":\"// probe at 27.900,25.950 is z=1\"}\003{\"id\":101,\"result\":{}}\003";
     if(fail_at&&sent_count>0&&strstr(sent_lines[sent_count-1],fail_at)){
         if(fail_mode==REPLY_ERROR)reply="{\"error\":{\"message\":\"probe failed\"},\"id\":101}\003";
         if(fail_mode==REPLY_REPORT)reply="{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"probe failed\"}}\003{\"id\":101,\"result\":{}}\003";
+        if(fail_mode==REPLY_SPLIT){
+            static char part[512];
+            static const char ack[]="{\"id\":101,\"result\":{}}\003";
+            memcpy(part,ack,sizeof(ack)-1);memcpy(part+sizeof(ack)-1,SPLIT_REPORT,split_pos);part[sizeof(ack)-1+split_pos]=0;
+            if(split_pos<strlen(SPLIT_REPORT))later=SPLIT_REPORT+split_pos;
+            reply=part;
+        }
     }
     size_t n=strlen(reply);
     assert(n<=length);
@@ -70,12 +81,12 @@ static unsigned long generation;
 /* What console_start does before it starts the worker thread; the worker runs here in the test's own thread. */
 static void run_job(const char *script,const char *tail){
     sent_count=0;reply_pending=0;cancel_flag=&state.cancel_requested;
-    if(tail)console_arm_staged(&state,tail);
+    if(tail)console_arm_staged(&state,tail,control_axes_homed(&m));
     pthread_mutex_lock(&state.lock);
     snprintf(state.command,sizeof(state.command),"%s",script);
     state.output[0]=0;state.output_len=0;state.busy=1;state.completed=0;state.success=0;state.generation++;
     generation=state.generation;
-    state.staged=state.staged_next;state.staged_next=0;state.cancelled=0;
+    state.staged=state.staged_next;state.staged_next=0;state.cancelled=0;state.staged_homed=state.staged_homed_next;state.staged_homed_next=0;
     snprintf(state.cancel_tail,sizeof(state.cancel_tail),"%s",state.cancel_tail_next);
     atomic_store(&state.cancel_requested,0);
     pthread_mutex_unlock(&state.lock);
@@ -154,6 +165,29 @@ int main(void){
     expect(control_screws_heaters_off_pending(),"its heaters are left to the deferred shutdown (the closing M104 S0 / M140 S0 never ran)");
     expect(stopped_at_probe(),"no cleanup motion is sent after the printer error");
 
+    /* The error report is torn across two reads behind the acknowledgement of the probe (also inside "error_code"): the
+     * measurement fails just the same, is not recorded, leaves the heaters to the deferred shutdown and sends no tail. */
+    static const size_t splits[]={5,15,25,40,sizeof(SPLIT_REPORT)-2};
+    for(size_t k=0;k<sizeof(splits)/sizeof(splits[0]);k++){
+        char what[160];
+        printer_idle(t0);control_screws_heaters_off_sent();control_screws_reset();(void)control_screws_take_finished(NULL);
+        expect(control_build_script("screws:measure",&m,script,sizeof(script),reason,sizeof(reason)),"a one-shot measurement builds for a torn report");
+        control_screws_note_action("screws:measure");
+        fail_at="PROBE";fail_mode=REPLY_SPLIT;split_pos=splits[k];later=NULL;
+        { const char *tail=control_screws_cancel_tail("screws:measure");run_job(script,tail);control_screws_note_quick(generation); }
+        fail_at=NULL;later=NULL;
+        snprintf(what,sizeof(what),"a report torn after %zu bytes fails the one-shot job and keeps its text",splits[k]);
+        expect(!state.success&&state.completed&&!state.cancelled&&strstr(state.output,"\"message\":\"probe failed\"")&&
+               strstr(state.output,"the printer reported an error"),what);
+        (void)tick(t0+1);
+        expect(!control_screws_take_finished(NULL)&&!control_screws_measuring()&&control_screws_heaters_off_pending(),
+               "a torn error report is not recorded and leaves the heaters to the deferred shutdown");
+        /* The rest of the frame is waited for before the line behind the probe goes out: the probe is the last line sent. */
+        expect(stopped_at_probe()&&sent_count==8,
+               "after the torn report no further line (no move behind the failed probe) and no tail is sent");
+    }
+    control_screws_heaters_off_sent();
+
     /* a one-shot measurement that completes is recorded and needs no shutdown */
     printer_idle(t0);control_screws_heaters_off_sent();(void)control_screws_take_finished(NULL);
     expect(control_build_script("screws:measure",&m,script,sizeof(script),reason,sizeof(reason)),"a one-shot measurement builds again");
@@ -176,6 +210,34 @@ int main(void){
            "a cancelled one-shot measurement is cancelled, not a printer error");
     expect(sent_has("G1 Z10")&&sent_has("RESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE")&&sent_has("M140 S0"),"the cancel tail still runs");
     expect(!control_screws_take_finished(NULL)&&!control_screws_heaters_off_pending(),"a cancelled one-shot measurement is not recorded and needs no deferred shutdown");
+
+    /* ---- cancel before the axes are homed: the lift of the tail is left out, the heaters and the restore are not ----
+     * Measured on a printer on 20.11.: with unhomed axes the printer service accepted G1 Z10 F600 on the staged path (reported
+     * z 0.187 to 10.0, no error), so the guard of the console did not hold there. */
+    {
+        static const char *const what[3]={"unhomed","position not known","homed"};
+        static const char *const actions[2]={"screws:measure","screws:tram:start"};
+        for(int a=0;a<2;a++)for(int k=0;k<3;k++){
+            char label[200];
+            printer_idle(t0);control_screws_heaters_off_sent();control_screws_reset();(void)control_screws_take_finished(NULL);
+            if(k==0)m.homed_axes[0]=0;
+            if(k==1)m.have_position=0;
+            expect(control_build_script(actions[a],&m,script,sizeof(script),reason,sizeof(reason)),"a measurement builds for the cancel before homing");
+            control_screws_note_action(actions[a]);
+            cancel_at="M140 S60"; /* the line before the first homing line of the script */
+            { const char *tail=control_screws_cancel_tail(actions[a]);run_job(script,tail);if(a==0)control_screws_note_quick(generation);else control_screws_note_job(generation); }
+            cancel_at=NULL;
+            control_screws_note_cancel();
+            (void)tick(t0+6);
+            snprintf(label,sizeof(label),"%s, %s: cancelled before the first homing line",actions[a],what[k]);
+            expect(!state.success&&state.cancelled&&!sent_has("G28")&&!sent_has("G180"),label);
+            snprintf(label,sizeof(label),"%s, %s: the lift %s sent",actions[a],what[k],k==2?"is":"is not");
+            expect(sent_has("G1 Z10")==(k==2),label);
+            snprintf(label,sizeof(label),"%s, %s: G90, the restore and both heaters go out",actions[a],what[k]);
+            expect(sent_has("G90")&&sent_has("RESTORE_GCODE_STATE")&&sent_has("M104 S0")&&sent_has("M140 S0"),label);
+        }
+    }
+    printer_idle(t0);control_screws_heaters_off_sent();control_screws_reset();(void)control_screws_take_finished(NULL);
 
     /* ---- lost connection: its own case ---- */
     printer_idle(t0);control_screws_heaters_off_sent();(void)control_screws_take_finished(NULL);

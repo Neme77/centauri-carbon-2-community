@@ -98,7 +98,9 @@ static void finish(console_state *state, int success, const char *message) {
 /* Append what was read to the visible output (a frame end becomes a line end) and collect the current frame, so the
  * result of the line just sent is recognised: 1 result, 0 error result, -1 none yet. An error report (non-zero
  * error_code; level 3 is a resume event, not a fault) is noted in `seen->fault` even when the request itself was
- * acknowledged: a failed home or probe can be answered with a plain result. */
+ * acknowledged: a failed home or probe can be answered with a plain result. The frame being collected belongs to the
+ * connection, not to a line: a read can end in the middle of a report that follows an acknowledgement, and the rest of
+ * it arrives in the next read, while the next line is waited for or in the final read (staged_drain). */
 typedef struct { char frame[1024]; size_t used; } staged_frame;
 typedef struct { int saturated; int fault; } staged_seen;
 static int staged_error_report(const char *frame) {
@@ -132,14 +134,30 @@ static int staged_feed(console_state *state, staged_frame *f, const char *buffer
     if (start < got) seen->saturated |= append_output(state, buffer + start, got - start);
     return result;
 }
+/* The result of a line came in a read that ended inside the next frame (a report that follows the acknowledgement): wait
+ * until that frame is whole before the next line is sent, so that an error report in it stops the job before more is
+ * sent. The rest of a frame that has begun is on its way; a quiet connection (750 ms) or the deadline ends the wait, and
+ * the frame stays in `frame` for the next read. */
+static void staged_complete_frame(console_state *state, int fd, time_t deadline, staged_frame *frame, staged_seen *seen) {
+    while (frame->used && time(NULL) < deadline) {
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int ready = poll(&pfd, 1, 750);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready <= 0) return;
+        char buffer[4096];
+        ssize_t got = read(fd, buffer, sizeof(buffer));
+        if (got <= 0) return;
+        staged_feed(state, frame, buffer, (size_t)got, seen);
+    }
+}
 /* Send one line and wait for its result: 1 done, 0 the printer answered with an error, -1 connection lost or time over. */
-static int staged_line(console_state *state, int fd, const char *line, time_t deadline, staged_seen *seen) {
+static int staged_line(console_state *state, int fd, const char *line, time_t deadline, staged_frame *frame,
+                       staged_seen *seen) {
     char escaped[CONSOLE_COMMAND_MAX * 2], request[CONSOLE_COMMAND_MAX * 2 + 128];
     if (json_escape_string(escaped, sizeof(escaped), line) != 0) return -1;
     int length = snprintf(request, sizeof(request),
         "{\"id\":101,\"method\":\"gcode/script\",\"params\":{\"script\":\"%s\"}}\003", escaped);
     if (length <= 0 || (size_t)length >= sizeof(request) || send_all_fd(fd, request, (size_t)length) != 0) return -1;
-    staged_frame frame = {{0}, 0};
     while (time(NULL) < deadline) {
         struct pollfd pfd = {fd, POLLIN, 0};
         int ready = poll(&pfd, 1, 2000);
@@ -148,14 +166,16 @@ static int staged_line(console_state *state, int fd, const char *line, time_t de
         char buffer[4096];
         ssize_t got = read(fd, buffer, sizeof(buffer));
         if (got <= 0) return -1;
-        int result = staged_feed(state, &frame, buffer, (size_t)got, seen);
-        if (result >= 0) return result;
+        int result = staged_feed(state, frame, buffer, (size_t)got, seen);
+        if (result >= 0) {
+            staged_complete_frame(state, fd, deadline, frame, seen);
+            return result;
+        }
     }
     return -1;
 }
 /* The reports that trail the last result: read until the socket has been quiet for 750 ms. */
-static void staged_drain(console_state *state, int fd, time_t deadline, staged_seen *seen) {
-    staged_frame frame = {{0}, 0};
+static void staged_drain(console_state *state, int fd, time_t deadline, staged_frame *frame, staged_seen *seen) {
     while (time(NULL) < deadline) {
         struct pollfd pfd = {fd, POLLIN, 0};
         int ready = poll(&pfd, 1, 750);
@@ -164,13 +184,26 @@ static void staged_drain(console_state *state, int fd, time_t deadline, staged_s
         char buffer[4096];
         ssize_t got = read(fd, buffer, sizeof(buffer));
         if (got <= 0) return;
-        staged_feed(state, &frame, buffer, (size_t)got, seen);
+        staged_feed(state, frame, buffer, (size_t)got, seen);
     }
 }
 /* Run `script` line by line: 1 done, 0 a printer error (the rest is not sent), 2 cancelled, -1 connection lost or time
  * over. The cancel tail (`tail`) is not stopped by a cancel and runs on past an error. */
+/* A completed line that homes axes makes them known as homed for the rest of the job: G28 (all axes, or the named
+ * ones) and G180 S3 (the nozzle cleaning homes first). */
+static void staged_note_homing(const char *line, unsigned *homed) {
+    if (!strncmp(line, "G180", 4)) { *homed |= CONSOLE_AXES_ALL; return; }
+    if (strncmp(line, "G28", 3) || (line[3] && line[3] != ' ')) return;
+    unsigned bits = 0;
+    for (const char *p = line + 3; *p; ++p) {
+        if (*p == 'X' || *p == 'x') bits |= CONSOLE_AXES_X;
+        else if (*p == 'Y' || *p == 'y') bits |= CONSOLE_AXES_Y;
+        else if (*p == 'Z' || *p == 'z') bits |= CONSOLE_AXES_Z;
+    }
+    *homed |= bits ? bits : CONSOLE_AXES_ALL;
+}
 static int staged_lines(console_state *state, int fd, const char *script, time_t deadline, int tail, int *sent,
-                        staged_seen *seen) {
+                        staged_frame *frame, staged_seen *seen, unsigned *homed) {
     const char *at = script;
     while (*at) {
         const char *end = strchr(at, '\n');
@@ -180,10 +213,18 @@ static int staged_lines(console_state *state, int fd, const char *script, time_t
         memcpy(line, at, n); line[n] = '\0';
         at += n + (end ? 1 : 0);
         if (!n) continue;
+        const char *text = line;
+        if (tail && !strncmp(line, CONSOLE_TAIL_IF_HOMED, 3)) {
+            /* a move that needs referenced axes: not sent while they are not, nor after the printer reported an error (a
+             * homing line can be acknowledged and its failure reported a read later) */
+            if (*homed != CONSOLE_AXES_ALL || seen->fault) continue;
+            text = line + 3;
+        }
         if (!tail && atomic_load(&state->cancel_requested)) return 2;
-        int result = staged_line(state, fd, line, deadline, seen);
+        int result = staged_line(state, fd, text, deadline, frame, seen);
         if (sent) (*sent)++;
         if (result < 0) return -1;
+        if (result == 1) staged_note_homing(text, homed);
         if (!tail && (result == 0 || seen->fault)) return 0;
     }
     return 1;
@@ -192,6 +233,7 @@ static void staged_run(console_state *state, int fd, const char *command) {
     char tail[CONSOLE_CANCEL_TAIL_MAX];
     pthread_mutex_lock(&state->lock);
     snprintf(tail, sizeof(tail), "%s", state->cancel_tail);
+    unsigned homed = state->staged_homed;
     pthread_mutex_unlock(&state->lock);
     append_output(state, "> ", 2);
     append_output(state, command, strlen(command));
@@ -199,12 +241,13 @@ static void staged_run(console_state *state, int fd, const char *command) {
     time_t deadline = time(NULL) + 900;
     int sent = 0;
     staged_seen seen = {0, 0};
-    int result = staged_lines(state, fd, command, deadline, 0, &sent, &seen);
+    staged_frame frame = {{0}, 0};
+    int result = staged_lines(state, fd, command, deadline, 0, &sent, &frame, &seen, &homed);
     if (result == 2) {
         append_output(state, "[CC2 Control: cancelled]\n", 25);
         /* Nothing sent yet: nothing to undo. */
-        if (sent) result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &seen) < 0 ? -1 : 2;
-        if (result == 2) staged_drain(state, fd, time(NULL) + 10, &seen);
+        if (sent) result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &frame, &seen, &homed) < 0 ? -1 : 2;
+        if (result == 2) staged_drain(state, fd, time(NULL) + 10, &frame, &seen);
         close(fd);
         pthread_mutex_lock(&state->lock);
         state->cancelled = 1;
@@ -218,7 +261,7 @@ static void staged_run(console_state *state, int fd, const char *command) {
      * motion tail follows (whether the axes are homed and the printer allows a move is not known here; the heaters are
      * switched off by the caller's deferred shutdown, control_screws_tick). Reports that trail the last result are read first,
      * so a late error text is kept too. */
-    staged_drain(state, fd, deadline, &seen);
+    staged_drain(state, fd, deadline, &frame, &seen);
     close(fd);
     if (result == 0 || seen.fault) { finish(state, 0, "[CC2 Control: the printer reported an error; the job was stopped]\n"); return; }
     finish(state, 1, NULL);
@@ -599,10 +642,11 @@ failed:
 int console_start(console_state *state, const char *command, char *reason, size_t reason_cap) {
     pthread_t thread;
     pthread_mutex_lock(&state->lock);
-    if (state->busy) { state->staged_next=0; pthread_mutex_unlock(&state->lock); snprintf(reason,reason_cap,"Another command is running"); return -1; }
+    if (state->busy) { state->staged_next=0; state->staged_homed_next=0; pthread_mutex_unlock(&state->lock); snprintf(reason,reason_cap,"Another command is running"); return -1; }
     snprintf(state->command, sizeof(state->command), "%s", command);
     state->output[0]='\0'; state->output_len=0; state->busy=1; state->completed=0; state->success=0; state->generation++;
     state->staged=state->staged_next; state->staged_next=0; state->cancelled=0;
+    state->staged_homed=state->staged_homed_next; state->staged_homed_next=0;
     snprintf(state->cancel_tail, sizeof(state->cancel_tail), "%s", state->cancel_tail_next);
     atomic_store(&state->cancel_requested, 0);
     pthread_mutex_unlock(&state->lock);
@@ -613,9 +657,10 @@ int console_start(console_state *state, const char *command, char *reason, size_
     return 0;
 }
 
-void console_arm_staged(console_state *state, const char *cancel_tail) {
+void console_arm_staged(console_state *state, const char *cancel_tail, unsigned homed) {
     pthread_mutex_lock(&state->lock);
     state->staged_next = 1;
+    state->staged_homed_next = homed & CONSOLE_AXES_ALL;
     snprintf(state->cancel_tail_next, sizeof(state->cancel_tail_next), "%s", cancel_tail ? cancel_tail : "");
     pthread_mutex_unlock(&state->lock);
 }

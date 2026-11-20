@@ -93,6 +93,9 @@ export const consoleStatus = store({
   cancellable: false,
   cancelling: false,
   cancelled: false,
+  // The job ended because the printer reported an error (not a cancel and not a lost connection): the program says so in the
+  // output of the job (console.c staged_run).
+  printerError: false,
 })
 export const screwSession = store({
   heights: {} as Record<string, number>,
@@ -168,6 +171,11 @@ export async function refreshConsole() {
       cancellable: Boolean(status.cancellable),
       cancelling: Boolean(status.cancelling),
       cancelled: Boolean(status.cancelled),
+      printerError:
+        Boolean(status.completed) &&
+        !status.success &&
+        !status.cancelled &&
+        out.includes('the printer reported an error'),
     })
     const measured = command.includes('SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE')
     const tram = command.includes('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM')

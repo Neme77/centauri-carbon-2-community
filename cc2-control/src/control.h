@@ -96,6 +96,8 @@ int control_screws_measuring(void);
 /* R11: what a cancelled measurement job runs instead of its remaining lines (NULL: the action is not such a job),
  * and the note that the user asked for the cancel. */
 const char *control_screws_cancel_tail(const char *action);
+/* The axes the mqtt client reports as homed (CONSOLE_AXES_* bits), 0 when the position is not known. */
+unsigned control_axes_homed(const mqtt_client *m);
 void control_screws_note_cancel(void);
 /* The queued console job is the one-shot screws:measure. */
 void control_screws_note_quick(unsigned long generation);

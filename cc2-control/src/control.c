@@ -106,21 +106,33 @@ void control_screws_note_quick(unsigned long generation){
     screws_quick.job=(control_screws_job){CONTROL_SCREWS_JOB_QUICK,screws_quick_corner,screws_quick_twice,time(NULL),1,screws_quick_bed};
     screws_job_direct=screws_built_direct;
 }
+/* The axes the printer reports as homed right now, as the bits of CONSOLE_AXES_*; none when the position is not known
+ * (no report yet): not known counts as not homed. */
+unsigned control_axes_homed(const mqtt_client *m){
+    unsigned axes=0;
+    if(!m||!m->have_position)return 0;
+    if(strchr(m->homed_axes,'x'))axes|=CONSOLE_AXES_X;
+    if(strchr(m->homed_axes,'y'))axes|=CONSOLE_AXES_Y;
+    if(strchr(m->homed_axes,'z'))axes|=CONSOLE_AXES_Z;
+    return axes;
+}
 /* A measurement job is sent line by line and may be cancelled (R11): what runs then instead of the lines not yet
- * sent. The nozzle is lifted and the saved state restored. A quick measurement and the start of a session switch both
+ * sent. The nozzle is lifted (only when all axes are homed: the line is marked CONSOLE_TAIL_IF_HOMED, measured on a
+ * printer on 20.11.: with unhomed axes the printer service accepted G1 Z10 F600 on the staged path, reported z 0.187
+ * to 10.0, no error) and the saved state restored; the heater lines and the restore always go out. A quick measurement and the start of a session switch both
  * heaters off; a later measurement of a session closes as it always does (nozzle off, bed at the session's target),
  * because the session goes on. Called after the script was built, so the session is the one the job belongs to. */
 const char *control_screws_cancel_tail(const char *action){
     static char kept[CONSOLE_CANCEL_TAIL_MAX];
     if(!action||!strcmp(action,"screws:tram:end"))return NULL;
     if(control_screws_is_quick(action))
-        return "G90\nG1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM104 S0\nM140 S0";
+        return "G90\n" CONSOLE_TAIL_IF_HOMED "G1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM104 S0\nM140 S0";
     if(!control_screws_is_tram(action))return NULL;
     if(screws_session.active&&screws_session.start_done){
-        snprintf(kept,sizeof(kept),"G90\nG1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S%d",screws_session.bed);
+        snprintf(kept,sizeof(kept),"G90\n" CONSOLE_TAIL_IF_HOMED "G1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S%d",screws_session.bed);
         return kept;
     }
-    return "G90\nG1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S0";
+    return "G90\n" CONSOLE_TAIL_IF_HOMED "G1 Z10 F600\nRESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM\nM104 S0\nM140 S0";
 }
 /* The user cancelled the running job. A session whose start was cancelled ends by the user, not by a console error;
  * a later measurement that was cancelled leaves the session as it was, without a result. */

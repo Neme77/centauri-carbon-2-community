@@ -1690,6 +1690,12 @@ const Levelling = () => {
             </Notice>
           </div>
         )}
+        {/* A printer error ends the measurement without a result and without a cancel: the page says so (the message of the printer is on the Console page). */}
+        {!busy && consoleState.printerError && SCREW_JOB.test(consoleState.command) && (
+          <div class="mt-3.5" data-screw-failed>
+            <Warn>{t('bed.measure_failed')}</Warn>
+          </div>
+        )}
       </BasisStep>
       <Step n={2} title={t('bed.lvl_s3')} summary={step3}>
         <div class="grid gap-3 cc2-sm:grid-cols-[.9fr_1.1fr]">
@@ -2201,6 +2207,13 @@ const Levelling = () => {
                               strategy === 'optimized' ? 'bed.screw_strategy_optimized' : 'bed.screw_strategy_standard'
                             )}
                           </Tag>
+                        )}
+                        {/* Optimized is chosen but this measurement does not allow that plan (lib/screws useOptimized): the label stays,
+                            nothing switches back, and a line says why the table shows the standard plan. */}
+                        {planFull && strategy === 'optimized' && !planFull.useOptimized && (
+                          <p class="basis-full text-right text-xs text-muted max-sm:text-left" data-screw-strategy-note>
+                            {t('bed.screw_strategy_not_applicable')}
+                          </p>
                         )}
                       </div>
                     </div>

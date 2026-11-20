@@ -206,6 +206,7 @@ try {
     assert.equal(await text(strategy), 'Strategy: Optimized (includes the front-left screw)')
     assert.equal(await stored(page), 'optimized', 'the choice is kept in the browser tab')
     assert.equal(await offer.count(), 0)
+    assert.equal(await card.locator('[data-screw-strategy-note]').count(), 0, 'the optimized plan applies here: no note under the label')
     await card.locator('[data-screw-combined-note]').waitFor()
     assert.equal(await text(card.locator('[data-screw-amount="FL"]')), '60 µm')
     assert.equal(await card.locator('[data-screw-direction="lower"]').count() >= 1, true)
@@ -238,6 +239,8 @@ try {
     assert.equal(await card.locator('[data-screw-strategy-back]').count(), 1)
     assert.equal(await text(card.locator('[data-screw-adjust="FL"]')), 'No turn', 'nothing to turn at front left in this measurement')
     assert.equal(await text(card.locator('[data-screw-goal="FL"]')), 'Leave unchanged')
+    // The label still says Optimized (nothing switches back), and a line under it explains that this measurement does not allow that plan.
+    assert.equal(await text(card.locator('[data-screw-proposal-block] [data-screw-strategy-note]')), 'Not applicable to this measurement: the table below shows the standard plan.')
     assert.equal(await text(mainButton), 'Measure again', 'front left is not turned now: the usual button')
     await page.reload()
     await card.waitFor()
