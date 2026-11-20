@@ -100,7 +100,7 @@ try {
   assert.equal(await four.locator('[data-screw-exact="RL"]').count(), 0, 'RL is within the 20 µm tolerance')
   await four.locator('[data-screw-possible="RL"]').getByText('Still possible:', { exact: false }).waitFor()
   await four.locator('details[data-screw-help] summary').click() // the legend sits in the folded help
-  await four.locator('[data-screw-turn-legend]').getByText('One click on the screw tool = 5°, 72 clicks make one turn.').waitFor()
+  await four.locator('[data-screw-turn-legend]').getByText('One click on the Click Tool = 5°, 72 clicks make one turn.').waitFor()
   for (const mode of ['auto', 'exact']) await four.locator(`[data-screw-help-mode="${mode}"]`).waitFor()
   // The mode names are set in bold, their description names no clicks: it holds for every turn unit.
   assert.equal(await four.locator('[data-screw-help-mode="auto"] strong').innerText(), 'Auto')

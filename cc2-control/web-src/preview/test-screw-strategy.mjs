@@ -403,7 +403,7 @@ try {
     assert.equal(await opacity('[data-screw-measured-block]'), '1', 'normal again after the measurement')
     await page.close()
   }
-  // The click tool can have play when it is put on a screw: its display of the turns says so, the other units do not.
+  // The Click Tool can have play when it is put on a screw: its display of the turns says so, the other units do not.
   {
     const { page, card } = await open()
     const note = card.locator('[data-screw-play-note]')
@@ -413,7 +413,7 @@ try {
     await page.reload()
     await card.locator('[data-screw-proposal-block]').waitFor({ timeout: 10000 })
     await note.waitFor({ timeout: 10000 })
-    assert.equal(await text(note), 'The click tool can have a little play when it is put on a screw, so the first click may be inexact. Measure all four corners again after each round.')
+    assert.equal(await text(note), 'The Click Tool can have a little play when it is put on a screw, so the first click may be inexact. Measure all four corners again after each round.')
     assert.equal(await card.locator('[data-screw-turn-cell="FR"] [data-screw-rotation]').count(), 1, 'the turns are shown in clicks')
     await page.evaluate(() => localStorage.setItem('cc2-screw-turn-unit', 'clock'))
     await page.reload()
