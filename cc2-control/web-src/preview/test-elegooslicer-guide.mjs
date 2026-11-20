@@ -14,14 +14,18 @@ try {
   await server.listen()
   const localUrl = `${server.resolvedUrls.local[0]}#settings/integrations`
   const remoteUrl = localUrl.replace('127.0.0.1', 'printer.test')
+  // A page opened through an IPv6 address: the browser keeps the brackets in location.hostname, so the example stays a valid host:port.
+  const ipv6Url = localUrl.replace('127.0.0.1', '[fd00::1]')
   browser = await chromium.launch({ headless: true, args: ['--host-resolver-rules=MAP printer.test 127.0.0.1'], ...(process.env.CC2_BROWSER_PATH ? { executablePath: process.env.CC2_BROWSER_PATH, args: ['--no-sandbox', '--host-resolver-rules=MAP printer.test 127.0.0.1'] } : {}) })
   // A page opened through a local address shows a typical printer address and says so; a real address is used as it is.
-  for (const [code, url, host, local] of [['en', localUrl, '192.168.1.50', true], ['de', localUrl, '192.168.1.50', true], ['en', remoteUrl, 'printer.test', false]]) {
+  for (const [code, url, host, local] of [['en', localUrl, '192.168.1.50', true], ['de', localUrl, '192.168.1.50', true], ['en', remoteUrl, 'printer.test', false], ['en', ipv6Url, '[fd00::1]', false]]) {
     const text = await locale(code)
     const label = `${code}/${local ? 'local' : 'address'}`
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, permissions: ['clipboard-read', 'clipboard-write'] })
     const page = await context.newPage()
     page.on('pageerror', e => errors.push(e.message))
+    // The IPv6 address does not exist here: its requests are answered by the local server.
+    await context.route(u => u.href.includes('[fd00::1]'), async route => route.fulfill({ response: await route.fetch({ url: route.request().url().replace('[fd00::1]', '127.0.0.1') }) }))
     await page.route('**/api/preferences', r => r.fulfill({ json: { language: code, theme: 'dark' } }))
     await page.goto(url)
     const toggle = page.locator('[data-elegooslicer-toggle]')
