@@ -3,6 +3,7 @@
 
 The Makefile is copied next to a stand-in compiler, so no real build runs: the stand-in writes the output file for a
 compile and a rule for the header list, and can be told to fail while it writes that list. Each check counts the compiles.
+The stand-in writes the empty rule per header only when it is given -MP, like the real compiler.
 """
 import os
 import shutil
@@ -21,9 +22,10 @@ HEADERS = ["src/spoolman.h", "src/nozzle_expansion.h"]
 FAKE_CC = """#!/bin/sh
 # Stand-in for gcc: argument -MM writes the dependency rule, anything else is a compile that writes the -o file.
 cd "$FAKE_DIR" || exit 2
-dep=0; out=""; targets=""; prev=""
+dep=0; mp=0; out=""; targets=""; prev=""
 for a in "$@"; do
   [ "$a" = "-MM" ] && dep=1
+  [ "$a" = "-MP" ] && mp=1
   [ "$prev" = "-o" ] && out=$a
   [ "$prev" = "-MT" ] && targets="$targets $a"
   prev=$a
@@ -32,7 +34,8 @@ if [ $dep = 1 ]; then
   echo dep >> calls.log
   [ -e FAIL_DEP ] && { echo "forced dependency failure" >&2; exit 1; }
   echo "${targets# }: $(cat headers.txt)"
-  for h in $(cat headers.txt); do echo "$h:"; done
+  # Like the real compiler, an empty rule per header only with -MP.
+  if [ $mp = 1 ]; then for h in $(cat headers.txt); do echo "$h:"; done; fi
 else
   echo compile >> calls.log
   # Like the real linker, the stand-in does not create the output directory.
@@ -250,6 +253,22 @@ def main():
         assert calls(work) == [], f"a goal without a build ran the compiler: {calls(work)}"
         assert not (work / "build").exists(), "a goal without a build created build/"
         print("PASS: goals that build nothing make no header list and no build/")
+
+        # 12. A header is deleted and no source includes it any more (-MP): the old list still names it, and that must not
+        #     stop make. The program is built again and the list is made anew without the deleted header.
+        work = fresh(base)
+        make(work)
+        assert HEADERS[1] in (work / "build/cc2-control.d").read_text(), "the list does not name the header yet"
+        (work / HEADERS[1]).unlink()
+        (work / "headers.txt").write_text(HEADERS[0] + "\n")
+        reset_calls(work)
+        make(work)
+        assert count(work, "compile") == 1, f"a deleted header did not rebuild once: {calls(work)}"
+        assert HEADERS[1] not in (work / "build/cc2-control.d").read_text(), "the list still names the deleted header"
+        reset_calls(work)
+        make(work)
+        assert calls(work) == [], f"unchanged build after the header was deleted did work: {calls(work)}"
+        print("PASS: a deleted header that no source includes any more does not stop make; it rebuilds once")
 
 if __name__ == "__main__":
     sys.exit(main())
