@@ -50,7 +50,7 @@ static pthread_cond_t layer_store_cond = PTHREAD_COND_INITIALIZER;
 static char layer_store_queue[LAYER_STORE_QUEUE_MAX][LAYER_STORE_PATH_MAX];
 static int layer_store_count;
 static int layer_store_started;
-/* Test hook: "built", "skipped", "paused", "failed", "dropped" with the G-code path. */
+/* Test hook: "built", "skipped", "paused", "failed", "dropped", "too_large" with the G-code path. */
 static void (*layer_store_event)(const char *event, const char *path);
 
 static void layer_store_emit(const char *event, const char *path) {
@@ -102,11 +102,18 @@ static int layer_store_note_locked(const char *gcode_path) {
     return 0;
 }
 
+/* A file of 2 GiB or more gets no map (layer_index_file_max): it is not queued, so the builder never opens it. */
+static int layer_store_too_large(const char *gcode_path) {
+    struct stat st;
+    return stat(gcode_path, &st) == 0 && (long long)st.st_size > layer_index_file_max;
+}
+
 /* Queue a G-code file for its map: an upload, copy or import (a new file, so an earlier failure no longer counts).
- * Returns 0, or -1 when the path is too long or the queue is full (the map is then built on first use instead).
- * A path already queued stays once. */
+ * Returns 0, or -1 when the path is too long or the queue is full (the map is then built on first use instead),
+ * or -3 when the file is 2 GiB or more (it never gets a map). A path already queued stays once. */
 static int layer_store_note(const char *gcode_path) {
     if (!gcode_path || strlen(gcode_path) >= LAYER_STORE_PATH_MAX) return -1;
+    if (layer_store_too_large(gcode_path)) return -3;
     pthread_mutex_lock(&layer_store_lock);
     layer_store_failed_clear_locked(gcode_path);
     int rc = layer_store_note_locked(gcode_path);
@@ -115,9 +122,10 @@ static int layer_store_note(const char *gcode_path) {
 }
 
 /* Queue a file because a layer request found no current map. -2: its last build failed less than
- * layer_store_retry_s ago, so it is not started again by every request. */
+ * layer_store_retry_s ago, so it is not started again by every request. -3: 2 GiB or more, no map ever. */
 static int layer_store_note_request(const char *gcode_path) {
     if (!gcode_path || strlen(gcode_path) >= LAYER_STORE_PATH_MAX) return -1;
+    if (layer_store_too_large(gcode_path)) return -3;
     pthread_mutex_lock(&layer_store_lock);
     int rc = layer_store_failed_recently_locked(gcode_path) ? -2 : layer_store_note_locked(gcode_path);
     pthread_mutex_unlock(&layer_store_lock);
@@ -228,6 +236,11 @@ static int layer_store_build_one(const char *gcode_path) {
     }
     int rc = layer_index_build(file, &index, LAYER_STORE_BUILD_MS, layer_store_keep_going, NULL);
     fclose(file);
+    if (rc == LAYER_INDEX_NONE) { /* 2 GiB or more (it grew since it was queued): no map, no failure, no retry */
+        unlink(path);
+        layer_store_emit("too_large", gcode_path);
+        return 0;
+    }
     if (rc == LAYER_PATH_LIMIT &&
         (!atomic_load(&layer_store_idle) || atomic_load(&layer_store_stop) ||
          atomic_load_explicit(&gcode_read_hold, memory_order_relaxed)))

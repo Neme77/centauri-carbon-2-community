@@ -77,7 +77,9 @@ int main(void) {
 
     /* Copy and USB import need a separately mounted folder as the USB root. */
     struct stat shm_stat, dev_stat;
+    int copy_import_ran = 0;
     if (stat("/dev/shm", &shm_stat) == 0 && stat("/dev", &dev_stat) == 0 && shm_stat.st_dev != dev_stat.st_dev) {
+        copy_import_ran = 1;
         char usb_dir[] = "/dev/shm/cc2-layer-usb-XXXXXX";
         expect(mkdtemp(usb_dir) != NULL, "create USB-style folder");
         gcode_usb_root = usb_dir;
@@ -102,7 +104,7 @@ int main(void) {
         expect(gcode_usb_import_remove(&mqtt, imported) == 1, "cleanup removes the internal USB copy");
         expect(access(import_path, F_OK) != 0 && access(import_map, F_OK) != 0, "the cleanup takes the map with the copy");
         unlink(src); unlink(copied); unlink(import_path); rmdir(usb_dir);
-    } else puts("SKIP copy/import: /dev/shm not separately mounted");
+    } else fputs("SKIP copy and USB import checks: /dev/shm is not a separate mount here, run this test where it is (Linux, CI)\n", stderr);
 
     /* The main loop's idle test is what gates the builder. */
     layer_store_set_idle(gcode_idle_for_mutation(&mqtt));
@@ -115,6 +117,7 @@ int main(void) {
     expect(atomic_load(&layer_store_idle) == 0, "stale telemetry counts as not idle");
 
     rmdir(maps); rmdir(root);
-    puts("PASS layer maps are queued by upload, copy and USB import, removed on delete, and gated by idle");
+    if (!copy_import_ran) puts("PASS (PARTLY, copy and USB import SKIPPED) layer maps are queued by upload, removed on delete, and gated by idle");
+    else puts("PASS layer maps are queued by upload, copy and USB import, removed on delete, and gated by idle");
     return 0;
 }

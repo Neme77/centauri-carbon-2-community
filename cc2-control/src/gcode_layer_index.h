@@ -10,10 +10,15 @@
  * The index is built when no print is running and stored as a small file next to the other
  * CC2 Control data, never next to the G-code. It is tied to the file by size, modification
  * and change time, inode and a SHA-256 of the first and last 64 KiB; any difference makes
- * it stale and it is rebuilt.
+ * it stale and it is rebuilt. The stored file carries its own SHA-256 over everything it holds
+ * (version, record sizes, key, counts, entries): a map that was damaged, written by another
+ * version or with another record layout is refused and rebuilt, never read.
  *
  * Files the index cannot serve exactly fall back to the full scan: no layer markers at all,
- * or ;LAYER:N numbering that returns to a layer after another one (some Cura files). */
+ * or ;LAYER:N numbering that returns to a layer after another one (some Cura files).
+ * Files of 2 GiB or more get no index at all and behave as before the index existed: the printer program
+ * cannot open them for a print (32-bit stat, see PRINTER_FILE_LIMIT and ACTIVE_SCAN_FILE_MAX in main.c), and
+ * the 32-bit printer's long offsets of the scan (ftell, fseek) would wrap from 2 GiB on. */
 #ifndef CC2_GCODE_LAYER_INDEX_H
 #define CC2_GCODE_LAYER_INDEX_H
 #include "gcode_layer_path.h"
@@ -25,7 +30,7 @@
 #include <unistd.h>
 
 #define LAYER_INDEX_MAGIC "CC2LIDX1"
-#define LAYER_INDEX_VERSION 1
+#define LAYER_INDEX_VERSION 2 /* 2: record sizes and a SHA-256 of the contents in the file (1 had neither) */
 /* 256 mm bed at 0.05 mm layers ≈ 5120; headroom for tall slices and comment markers. */
 #define LAYER_INDEX_LAYERS_MAX 8192
 #define LAYER_INDEX_EDGE_BYTES (64 * 1024)
@@ -36,6 +41,11 @@
 #endif
 
 enum { LAYER_INDEX_NONE = 10 }; /* no usable index for this file: use the full scan */
+
+/* The largest file that gets an index (the same limit as ACTIVE_SCAN_FILE_MAX in main.c: 2 GiB minus one byte).
+ * A variable only so that a test can look at the boundary without a file of that size. */
+#define LAYER_INDEX_FILE_MAX_DEFAULT 2147483647LL
+static long long layer_index_file_max = LAYER_INDEX_FILE_MAX_DEFAULT;
 
 /* The parser state at the start of a layer, without the point buffers. */
 typedef struct {
@@ -172,6 +182,7 @@ static int layer_index_key_of(FILE *file, layer_index_key *key) {
     memset(key, 0, sizeof(*key));
     if (fstat(fileno(file), &st) != 0) return -1;
     key->size = st.st_size; key->ino = (int64_t)st.st_ino;
+    if ((long long)st.st_size > layer_index_file_max) return -1; /* the edge reads below use long offsets */
 #ifdef __APPLE__
     key->mtime_s = st.st_mtimespec.tv_sec; key->mtime_ns = st.st_mtimespec.tv_nsec;
     key->ctime_s = st.st_ctimespec.tv_sec; key->ctime_ns = st.st_ctimespec.tv_nsec;
@@ -189,11 +200,15 @@ static int layer_index_key_same(const layer_index_key *a, const layer_index_key 
 }
 
 /* One full pass over file. time_ms 0 = no deadline. keep_going (optional) is asked every
- * 64 KiB; returning 0 stops the pass with LAYER_PATH_LIMIT and no index. */
+ * 64 KiB; returning 0 stops the pass with LAYER_PATH_LIMIT and no index. A file above
+ * layer_index_file_max is not read at all: LAYER_INDEX_NONE. */
 static int layer_index_build(FILE *file, layer_index *index, long time_ms,
                              int (*keep_going)(void *), void *keep_ctx) {
     memset(index, 0, sizeof(*index));
     if (!file) return LAYER_PATH_IO;
+    struct stat size_check;
+    if (fstat(fileno(file), &size_check) != 0) return LAYER_PATH_IO;
+    if ((long long)size_check.st_size > layer_index_file_max) return LAYER_INDEX_NONE; /* 2 GiB or more: no index */
     if (layer_index_key_of(file, &index->key) != 0) return LAYER_PATH_IO;
     layer_point dummy[2]; int dummy_start[1];
     layer_path_state s;
@@ -230,6 +245,20 @@ static const layer_index_entry *layer_index_find(const layer_index *index, int l
         if (v < layer0) lo = mid + 1; else hi = mid - 1;
     }
     return NULL;
+}
+
+/* True when gcode_layer_path_parse_indexed answers this layer itself (a layer, or "outside the file"),
+ * false when it would send the caller to the full scan (LAYER_INDEX_NONE). Kept next to it. */
+static int layer_index_can_serve(const layer_index *index, int layer_1based) {
+    if (!index || layer_1based < 1 || layer_1based > 1000000) return 1; /* refused before any read */
+    if (!index->seen_marker || index->repeats) return 0;
+    int target0 = layer_1based - 1;
+    return target0 >= index->total || layer_index_find(index, target0) != NULL || target0 > index->max_layer;
+}
+
+/* True when every layer number is answered by the index itself (no gap in the numbering, nothing sent to the full scan). */
+static int layer_index_serves_all(const layer_index *index) {
+    return index && index->seen_marker && !index->repeats && index->count == index->max_layer + 1;
 }
 
 /* Read one layer through the index. LAYER_INDEX_NONE: the caller uses gcode_layer_path_parse. */
@@ -274,6 +303,23 @@ static int layer_index_path(const char *dir, const char *gcode_path, char *out, 
     return n > 0 && (size_t)n < cap ? 0 : -1;
 }
 
+/* SHA-256 over what the stored file holds besides the digest itself: the magic, the version, the record
+ * sizes, the key, the five counts (total, max_layer, seen_marker, repeats, count) and the entries. */
+static int layer_index_digest(int32_t version, const int32_t sizes[2], const layer_index_key *key,
+                              const int32_t head[5], const layer_index_entry *entries, int count,
+                              unsigned char out[32]) {
+    sha256_state h; sha256_init(&h);
+    sha256_update(&h, (const unsigned char *)LAYER_INDEX_MAGIC, 8);
+    sha256_update(&h, (const unsigned char *)&version, sizeof(version));
+    sha256_update(&h, (const unsigned char *)sizes, 2 * sizeof(int32_t));
+    sha256_update(&h, (const unsigned char *)key, sizeof(*key));
+    sha256_update(&h, (const unsigned char *)head, 5 * sizeof(int32_t));
+    if (count > 0) sha256_update(&h, (const unsigned char *)entries, sizeof(*entries) * (size_t)count);
+    char hex[65]; sha256_hex(&h, hex);
+    for (int i = 0; i < 32; i++) { unsigned v; if (sscanf(hex + 2 * i, "%2x", &v) != 1) return -1; out[i] = (unsigned char)v; }
+    return 0;
+}
+
 static int layer_index_save(const char *path, const layer_index *index) {
     char temporary[1024];
     int n = snprintf(temporary, sizeof(temporary), "%s.part", path);
@@ -281,10 +327,16 @@ static int layer_index_save(const char *path, const layer_index *index) {
     FILE *out = fopen(temporary, "wb");
     if (!out) return -1;
     int32_t version = LAYER_INDEX_VERSION;
-    int failed = fwrite(LAYER_INDEX_MAGIC, 1, 8, out) != 8 ||
+    int32_t sizes[2] = { (int32_t)sizeof(layer_index_entry), (int32_t)sizeof(layer_index_key) };
+    int32_t head[5] = { index->total, index->max_layer, index->seen_marker, index->repeats, index->count };
+    unsigned char digest[32];
+    int failed = layer_index_digest(version, sizes, &index->key, head, index->entries, index->count, digest) != 0 ||
+        fwrite(LAYER_INDEX_MAGIC, 1, 8, out) != 8 ||
         fwrite(&version, sizeof(version), 1, out) != 1 ||
+        fwrite(sizes, sizeof(int32_t), 2, out) != 2 ||
         fwrite(&index->key, sizeof(index->key), 1, out) != 1 ||
-        fwrite(&index->total, sizeof(int32_t), 5, out) != 5 ||
+        fwrite(head, sizeof(int32_t), 5, out) != 5 ||
+        fwrite(digest, 1, sizeof(digest), out) != sizeof(digest) ||
         (index->count && fwrite(index->entries, sizeof(*index->entries), (size_t)index->count, out) != (size_t)index->count);
     if (!failed && fflush(out) != 0) failed = 1;
     if (!failed && fsync(fileno(out)) != 0) failed = 1;
@@ -297,11 +349,16 @@ static int layer_index_load(const char *path, layer_index *index) {
     memset(index, 0, sizeof(*index));
     FILE *in = fopen(path, "rb");
     if (!in) return -1;
-    char magic[8]; int32_t version = 0, head[5];
+    char magic[8]; int32_t version = 0, sizes[2], head[5];
+    unsigned char stored[32];
+    /* A version or a record size that is not this build's is refused before anything else is read. */
     int ok = fread(magic, 1, 8, in) == 8 && !memcmp(magic, LAYER_INDEX_MAGIC, 8) &&
         fread(&version, sizeof(version), 1, in) == 1 && version == LAYER_INDEX_VERSION &&
+        fread(sizes, sizeof(int32_t), 2, in) == 2 &&
+        sizes[0] == (int32_t)sizeof(layer_index_entry) && sizes[1] == (int32_t)sizeof(layer_index_key) &&
         fread(&index->key, sizeof(index->key), 1, in) == 1 &&
-        fread(head, sizeof(int32_t), 5, in) == 5;
+        fread(head, sizeof(int32_t), 5, in) == 5 &&
+        fread(stored, 1, sizeof(stored), in) == sizeof(stored);
     if (ok) {
         index->total = head[0]; index->max_layer = head[1]; index->seen_marker = head[2];
         index->repeats = head[3]; index->count = head[4];
@@ -311,6 +368,11 @@ static int layer_index_load(const char *path, layer_index *index) {
         index->entries = malloc(sizeof(*index->entries) * (size_t)index->count);
         ok = index->entries && fread(index->entries, sizeof(*index->entries), (size_t)index->count, in) == (size_t)index->count;
         for (int i = 1; ok && i < index->count; i++) ok = index->entries[i - 1].layer < index->entries[i].layer;
+    }
+    if (ok) {
+        unsigned char now[32];
+        ok = layer_index_digest(version, sizes, &index->key, head, index->entries, index->count, now) == 0 &&
+            !memcmp(now, stored, sizeof(now));
     }
     if (ok) { char extra; ok = fread(&extra, 1, 1, in) == 0; } /* nothing after the entries */
     fclose(in);

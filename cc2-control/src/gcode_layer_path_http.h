@@ -37,10 +37,14 @@ static struct {
  * at least as much, so those requests are refused at once instead of scanning again: while
  * a large file prints, every new layer would otherwise burn the whole budget. Guarded by
  * layer_path_cache_lock; a changed file (size, time, inode) is scanned afresh, and so is
- * any layer once LAYER_PATH_LIMIT_HOLD_S have passed, in case the printer was only busy. */
+ * any layer once LAYER_PATH_LIMIT_HOLD_S have passed, in case the printer was only busy.
+ * This holds for a scan that read the file from its start. A layer read through the file's layer
+ * map costs the same whatever its number, so a limit hit there (only_layer) refuses just that layer,
+ * and a layer map that is current for the file and serves the layer ends the refusal
+ * (layer_path_map_serves): the map answers in milliseconds what the scan could not. */
 #define LAYER_PATH_LIMIT_HOLD_S 300
 static struct {
-    int valid, layer;
+    int valid, layer, only_layer, map_useless; /* map_useless: a current map was found that serves no layer of this file */
     char storage[16], file[PATH_MAX_LOCAL];
     struct stat stamp;
     struct timespec at;
@@ -155,6 +159,25 @@ static void layer_path_fail(int fd, int code, const char *status, const char *er
         respond(fd, code, status, "application/json; charset=utf-8", body, (size_t)n);
 }
 
+/* The remembered limit of this file (see layer_path_limited) must not refuse a layer that a current layer map serves.
+ * Reads the map like the worker does (and the first and last 64 KiB of the file for its key). */
+enum { LAYER_MAP_NO = 0, LAYER_MAP_THIS_LAYER, LAYER_MAP_ALL_LAYERS, LAYER_MAP_USELESS };
+static int layer_path_map_serves(const char *path, int source, int layer) {
+    int copy = dup(source);
+    FILE *file = copy >= 0 ? fdopen(copy, "r") : NULL;
+    if (!file) { if (copy >= 0) close(copy); return LAYER_MAP_NO; }
+    layer_index index;
+    int verdict = LAYER_MAP_NO;
+    if (layer_store_load(path, file, &index) == 0) {
+        if (!index.seen_marker || index.repeats) verdict = LAYER_MAP_USELESS; /* every layer goes to the full scan */
+        else if (layer_index_serves_all(&index)) verdict = LAYER_MAP_ALL_LAYERS;
+        else if (layer_index_can_serve(&index, layer)) verdict = LAYER_MAP_THIS_LAYER;
+        layer_index_free(&index);
+    }
+    fclose(file);
+    return verdict;
+}
+
 static void *layer_path_worker(void *opaque) {
     layer_path_job *job = opaque;
     layer_path_lower_priority();
@@ -187,12 +210,14 @@ static void *layer_path_worker(void *opaque) {
      * a file the map cannot serve) the file is read from the start as before, and a missing or
      * stale map is queued so the next request can jump. */
     int rc = LAYER_INDEX_NONE;
+    int mapped = 0; /* the layer was read through the map, not from the start of the file */
     layer_index index;
     if (layer_store_load(job->path, file, &index) == 0) {
         rc = gcode_layer_path_parse_indexed(file, &index, job->layer, points, LAYER_PATH_COLLECT_MAX,
                                             starts, LAYER_PATH_PATHS_MAX, &info, &started,
                                             LAYER_PATH_TIME_MS, LAYER_INDEX_LAYER_BYTES_MAX);
         layer_index_free(&index);
+        mapped = rc != LAYER_INDEX_NONE;
         atomic_fetch_add(rc == LAYER_INDEX_NONE ? &layer_store_stat_fallbacks : &layer_store_stat_hits, 1);
     } else if (!strcmp(job->storage, "internal")) {
         /* Only files in the printer's own storage get a map: a background read of a USB stick could hang on a
@@ -272,9 +297,15 @@ static void *layer_path_worker(void *opaque) {
         int same = layer_path_limited.valid && !strcmp(layer_path_limited.storage, job->storage) &&
                    !strcmp(layer_path_limited.file, job->file) &&
                    layer_path_same_file(&job->stamp, &layer_path_limited.stamp);
-        if (!same || job->layer < layer_path_limited.layer) {
+        /* A scan from the start of the file is the genuine overload: it replaces a single-layer limit and lowers
+         * an earlier one. A limit from a map read never replaces one from a scan, and stays on its one layer. */
+        int replace = !same || (mapped ? layer_path_limited.only_layer
+                                       : layer_path_limited.only_layer || job->layer < layer_path_limited.layer);
+        if (replace) {
             layer_path_limited.valid = 1;
             layer_path_limited.layer = job->layer;
+            layer_path_limited.only_layer = mapped;
+            layer_path_limited.map_useless = 0;
             snprintf(layer_path_limited.storage, sizeof(layer_path_limited.storage), "%s", job->storage);
             snprintf(layer_path_limited.file, sizeof(layer_path_limited.file), "%s", job->file);
             layer_path_limited.stamp = job->stamp;
@@ -348,11 +379,41 @@ static int gcode_layer_path_begin(int fd, const char *query, int held) {
     clock_gettime(CLOCK_MONOTONIC, &limit_now);
     if (layer_path_limited.valid && limit_now.tv_sec - layer_path_limited.at.tv_sec >= LAYER_PATH_LIMIT_HOLD_S)
         layer_path_limited.valid = 0;
-    int limited = layer_path_limited.valid && layer >= layer_path_limited.layer &&
+    int limited = layer_path_limited.valid &&
+                  (layer_path_limited.only_layer ? layer == layer_path_limited.layer : layer >= layer_path_limited.layer) &&
                   !strcmp(layer_path_limited.storage, storage) && !strcmp(layer_path_limited.file, file) &&
                   layer_path_same_file(&st, &layer_path_limited.stamp);
+    int scan_limit = limited && !layer_path_limited.only_layer && !layer_path_limited.map_useless;
+    struct timespec limit_at = layer_path_limited.at;
     int resting = layer_path_ms_between(&limit_now, &layer_path_rest_until) > 0;
     pthread_mutex_unlock(&layer_path_cache_lock);
+    if (scan_limit) {
+        /* The limit came from a scan from the start of the file; a current layer map answers without one. */
+        char map_file[PATH_MAX_LOCAL * 2], map_path[PATH_MAX_LOCAL * 2 + 128];
+        if (snprintf(map_file, sizeof(map_file), "%s/%s", root, file) < (int)sizeof(map_file)) {
+            if (held) {
+                /* No G-code read while the printer homes or starts a print (gcode_read_hold): only look whether a
+                 * map file exists; the held answer below (503, the page asks again) then replaces the 413. */
+                if (layer_store_index_path(map_file, map_path, sizeof(map_path)) == 0 && access(map_path, F_OK) == 0)
+                    limited = 0;
+            } else {
+                int verdict = layer_path_map_serves(map_file, source, layer);
+                if (verdict != LAYER_MAP_NO) {
+                    pthread_mutex_lock(&layer_path_cache_lock);
+                    /* Only the limit that was seen above: a newer one (another scan) is left alone. */
+                    if (layer_path_limited.valid && !layer_path_limited.only_layer &&
+                        layer_path_limited.at.tv_sec == limit_at.tv_sec && layer_path_limited.at.tv_nsec == limit_at.tv_nsec &&
+                        !strcmp(layer_path_limited.storage, storage) && !strcmp(layer_path_limited.file, file) &&
+                        layer_path_same_file(&st, &layer_path_limited.stamp)) {
+                        if (verdict == LAYER_MAP_ALL_LAYERS) layer_path_limited.valid = 0; /* the map serves every layer */
+                        else if (verdict == LAYER_MAP_USELESS) layer_path_limited.map_useless = 1; /* do not read it again */
+                    }
+                    pthread_mutex_unlock(&layer_path_cache_lock);
+                    if (verdict != LAYER_MAP_USELESS) limited = 0; /* served by the map, even if the limit stays for other layers */
+                }
+            }
+        }
+    }
     if (limited) {
         close(source);
         layer_path_fail(fd, 413, "Payload Too Large", "Layer path scan limit reached");

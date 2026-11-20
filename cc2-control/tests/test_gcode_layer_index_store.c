@@ -79,7 +79,7 @@ int main(void) {
     (void)layer_path_mark_pick;
     (void)gcode_layer_path_parse_at;
     (void)sha256_fd; (void)gcode_layer_path_query; (void)gcode_layer_path_json;
-    (void)gcode_layer_path_parse_indexed; (void)gcode_layer_path_parse;
+    (void)gcode_layer_path_parse_indexed; (void)gcode_layer_path_parse; (void)layer_index_can_serve; (void)layer_index_serves_all;
     (void)layer_store_stat_hits; (void)layer_store_stat_fallbacks; /* counted by the HTTP side, see test_layer_path_stats.c */
     char base[] = "/tmp/cc2-layer-store-XXXXXX";
     assert(mkdtemp(base));
@@ -126,6 +126,32 @@ int main(void) {
     assert(layer_store_load(small, f, &index) == 0 && index.total == 60);
     layer_index_free(&index); fclose(f);
 
+    /* A map in the first stored format (no checksum) is not current: it is rebuilt, neither skipped nor read. */
+    {
+        char v1[700], map[2048];
+        snprintf(v1, sizeof(v1), "%s/v1.gcode", gdir);
+        write_layers(v1, 30, 10);
+        layer_index old_index; FILE *vf = fopen(v1, "rb"); assert(vf);
+        assert(layer_index_build(vf, &old_index, 0, NULL, NULL) == LAYER_PATH_OK); fclose(vf);
+        assert(layer_store_index_path(v1, map, sizeof(map)) == 0);
+        FILE *mf = fopen(map, "wb"); assert(mf);
+        int32_t version = 1;
+        assert(fwrite("CC2LIDX1", 1, 8, mf) == 8 && fwrite(&version, sizeof(version), 1, mf) == 1 &&
+               fwrite(&old_index.key, sizeof(old_index.key), 1, mf) == 1 && fwrite(&old_index.total, sizeof(int32_t), 5, mf) == 5 &&
+               fwrite(old_index.entries, sizeof(*old_index.entries), (size_t)old_index.count, mf) == (size_t)old_index.count);
+        assert(!fclose(mf));
+        layer_index_free(&old_index);
+        int skipped_before = counter(&skipped), built_now = counter(&built);
+        vf = fopen(v1, "rb"); assert(vf);
+        assert(layer_store_load(v1, vf, &index) == 1); /* refused: counts as no current map */
+        fclose(vf);
+        assert(layer_store_note(v1) == 0 && wait_for(&built, built_now + 1, 5000));
+        assert(counter(&skipped) == skipped_before);
+        vf = fopen(v1, "rb"); assert(vf);
+        assert(layer_store_load(v1, vf, &index) == 0 && index.count == 30);
+        layer_index_free(&index); fclose(vf);
+    }
+
     /* gcode_read_hold with mutation-idle still true (main.c can set idle before hold is applied):
      * the builder must not finish a map while the hold is on. */
     char hold_file[700];
@@ -133,6 +159,7 @@ int main(void) {
     write_layers(hold_file, 200, 2000);
     int built_before = counter(&built);
     int paused_before = counter(&paused);
+    assert(queued() == 0);
     atomic_store(&gcode_read_hold, 1);
     layer_store_set_idle(1);
     assert(layer_store_note(hold_file) == 0);
@@ -142,10 +169,11 @@ int main(void) {
                 built_before, counter(&built), map_exists(hold_file));
         exit(1);
     }
+    /* The worker does not even start a pass while the hold is on: nothing paused, the file waits in the queue. */
+    assert(counter(&paused) == paused_before && queued() == 1);
     atomic_store(&gcode_read_hold, 0);
     assert(wait_for(&built, built_before + 1, 15000));
     assert(map_exists(hold_file));
-    assert(counter(&paused) >= paused_before); /* may have paused while hold was on */
 
     /* A print starts during a build: the pass stops, nothing is written, it resumes later. */
     layer_store_pause_us = 200; /* slow the pass down so it can be caught in the middle */
