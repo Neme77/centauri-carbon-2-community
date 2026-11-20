@@ -1663,6 +1663,7 @@
   "bed.screw_opt_back": "Zurück zum Standard",
   "bed.screw_measured_title": "Gemessen",
   "bed.screw_measured_note": "Immer bezogen auf vorne links",
+  "bed.screw_running_note": "Eine Messung läuft. Die Werte unten stammen von der letzten Messung.",
   "bed.screw_col_z": "Z-Höhe (absolut)",
   "bed.screw_col_offset": "Abweichung zu vorne links",
   "bed.screw_col_status": "Status",

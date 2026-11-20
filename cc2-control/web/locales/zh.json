@@ -1663,6 +1663,7 @@
   "bed.screw_opt_back": "返回标准",
   "bed.screw_measured_title": "实测",
   "bed.screw_measured_note": "始终相对于前左",
+  "bed.screw_running_note": "正在测量。下方的数值来自上一次测量。",
   "bed.screw_col_z": "Z 高度（绝对值）",
   "bed.screw_col_offset": "相对前左的偏差",
   "bed.screw_col_status": "状态",
