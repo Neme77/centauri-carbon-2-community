@@ -22,6 +22,11 @@ static void setup(console_state *state, int busy, unsigned long generation, cons
     state->output_len = strlen(output);
 }
 
+/* The query a client sends: the generation and the stored length it holds, and the instance the last reply named. */
+static void held(const console_state *state, unsigned long generation, size_t length, char *query, size_t capacity) {
+    snprintf(query, capacity, "since=%lu:%zu:%s", generation, length, state->instance);
+}
+
 static void test_without_parameter_is_unchanged_from_before(void) {
     console_state state;
     char *body = malloc(BODY_MAX), *old = malloc(BODY_MAX);
@@ -40,8 +45,11 @@ static void test_same_state_answers_without_output(void) {
     console_state state;
     char *body = malloc(BODY_MAX);
     setup(&state, 0, 7, "M105", "ok T:21\n");
-    reply(&state, "since=7:8", body);
-    assert(!strcmp(body, "{\"busy\":false,\"completed\":true,\"success\":true,\"generation\":7,\"command\":\"M105\",\"unchanged\":true,\"output_len\":8}\n"));
+    char query[96], expected[256];
+    held(&state, 7, 8, query, sizeof(query));
+    reply(&state, query, body);
+    snprintf(expected, sizeof(expected), "{\"busy\":false,\"completed\":true,\"success\":true,\"generation\":7,\"command\":\"M105\",\"unchanged\":true,\"output_len\":8,\"instance\":\"%s\"}\n", state.instance);
+    assert(!strcmp(body, expected));
     assert(!strstr(body, "\"output\":"));
     console_destroy(&state);
     free(body);
@@ -51,9 +59,12 @@ static void test_new_output_sends_everything(void) {
     console_state state;
     char *body = malloc(BODY_MAX);
     setup(&state, 0, 7, "M105", "ok T:21\nok T:22\n");
-    reply(&state, "since=7:8", body);
+    char query[96], expected[256];
+    held(&state, 7, 8, query, sizeof(query));
+    reply(&state, query, body);
     assert(!strstr(body, "unchanged"));
-    assert(!strcmp(body, "{\"busy\":false,\"completed\":true,\"success\":true,\"generation\":7,\"command\":\"M105\",\"output\":\"ok T:21\\nok T:22\\n\",\"output_len\":16}\n"));
+    snprintf(expected, sizeof(expected), "{\"busy\":false,\"completed\":true,\"success\":true,\"generation\":7,\"command\":\"M105\",\"output\":\"ok T:21\\nok T:22\\n\",\"output_len\":16,\"instance\":\"%s\"}\n", state.instance);
+    assert(!strcmp(body, expected));
     console_destroy(&state);
     free(body);
 }
@@ -62,7 +73,9 @@ static void test_running_command_always_sends_output(void) {
     console_state state;
     char *body = malloc(BODY_MAX);
     setup(&state, 1, 7, "G28", "homing\n");
-    reply(&state, "since=7:7", body);
+    char query[96];
+    held(&state, 7, 7, query, sizeof(query));
+    reply(&state, query, body);
     assert(strstr(body, "\"busy\":true"));
     assert(strstr(body, "\"output\":\"homing\\n\""));
     assert(!strstr(body, "unchanged"));
@@ -74,7 +87,9 @@ static void test_new_generation_with_same_length_sends_output(void) {
     console_state state;
     char *body = malloc(BODY_MAX);
     setup(&state, 0, 8, "M114", "abcdefgh");
-    reply(&state, "since=7:8", body);
+    char query[96];
+    held(&state, 7, 8, query, sizeof(query));
+    reply(&state, query, body);
     assert(!strstr(body, "unchanged"));
     assert(strstr(body, "\"output\":\"abcdefgh\""));
     assert(strstr(body, "\"generation\":8"));
@@ -87,12 +102,61 @@ static void test_clear_is_a_new_generation(void) {
     char *body = malloc(BODY_MAX);
     setup(&state, 0, 7, "M105", "ok T:21\n");
     assert(console_clear(&state) == 0);
-    reply(&state, "since=7:8", body);
+    char query[96];
+    held(&state, 7, 8, query, sizeof(query));
+    reply(&state, query, body);
     assert(!strstr(body, "unchanged"));
     assert(strstr(body, "\"output\":\"\""));
-    reply(&state, "since=8:0", body);
+    held(&state, 8, 0, query, sizeof(query));
+    reply(&state, query, body);
     assert(strstr(body, "\"unchanged\":true"));
     console_destroy(&state);
+    free(body);
+}
+
+static void test_instance_names_a_start_of_the_service(void) {
+    console_state a, b;
+    console_init(&a, "/tmp/not-used");
+    console_init(&b, "/tmp/not-used");
+    assert(strlen(a.instance) == 16 && strlen(b.instance) == 16);
+    for (int i = 0; i < 16; i++) {
+        assert((a.instance[i] >= '0' && a.instance[i] <= '9') || (a.instance[i] >= 'a' && a.instance[i] <= 'f'));
+    }
+    assert(strcmp(a.instance, b.instance) != 0); /* two starts of the service differ */
+    console_destroy(&a);
+    console_destroy(&b);
+}
+
+static void test_missing_or_other_instance_gets_the_full_reply(void) {
+    /* A client that holds generation 7 and length 8 of one instance asks again after the service restarted: the new
+     * instance has reached the same two numbers with other text, and must answer in full. */
+    console_state before, after;
+    char *body = malloc(BODY_MAX);
+    char query[96];
+    setup(&before, 0, 7, "M105", "ok T:21\n");
+    setup(&after, 0, 7, "M105", "ok T:99\n");
+    assert(before.output_len == after.output_len && strcmp(before.instance, after.instance) != 0);
+    held(&before, 7, before.output_len, query, sizeof(query));
+    reply(&before, query, body);
+    assert(strstr(body, "\"unchanged\":true"));
+    reply(&after, query, body);
+    assert(!strstr(body, "unchanged"));
+    assert(strstr(body, "\"output\":\"ok T:99\\n\"") && strstr(body, "\"output_len\":8"));
+    char named[64];
+    snprintf(named, sizeof(named), "\"instance\":\"%s\"", after.instance);
+    assert(strstr(body, named)); /* the client learns the new instance from the full reply */
+    /* A client that names no instance (an older web interface) gets the full reply as well, with the instance in it. */
+    reply(&after, "since=7:8", body);
+    assert(!strstr(body, "unchanged") && strstr(body, "\"output\":\"ok T:99\\n\"") && strstr(body, named));
+    /* A request without since carries neither output_len nor instance, as before. */
+    reply(&after, NULL, body);
+    assert(!strstr(body, "instance") && !strstr(body, "output_len"));
+    /* The same instance and the same numbers: still unchanged. */
+    held(&after, 7, after.output_len, query, sizeof(query));
+    reply(&after, query, body);
+    assert(strstr(body, "\"unchanged\":true") && strstr(body, named));
+    console_destroy(&before);
+    console_destroy(&after);
     free(body);
 }
 
@@ -102,6 +166,9 @@ static void test_broken_parameter_behaves_like_none(void) {
         "since=7:8x", "since=x7:8", "since=7 :8", "since=+7:8", "since=0x7:8", "since=7;8", "since=7,8",
         "since=99999999999999999999999999:8", "since=7:99999999999999999999999999",
         "since=&since=7:8", "nosince=7:8", "Since=7:8", "other=1", "&", "=", "since%3D7:8",
+        /* the instance must be exactly 16 lowercase hex digits and the last part */
+        "since=7:8:", "since=7:8:0123456789abcde", "since=7:8:0123456789abcdef0", "since=7:8:0123456789ABCDEF",
+        "since=7:8:0123456789abcdeg", "since=7:8:0123456789abcdef:1", "since=7:8:0123456789abcdef ",
     };
     console_state state;
     char *body = malloc(BODY_MAX), *old = malloc(BODY_MAX);
@@ -122,11 +189,16 @@ static void test_parameter_among_others(void) {
     console_state state;
     char *body = malloc(BODY_MAX);
     setup(&state, 0, 7, "M105", "ok T:21\n");
-    reply(&state, "x=1&since=7:8", body);
+    char held_query[96], query[160];
+    held(&state, 7, 8, held_query, sizeof(held_query));
+    snprintf(query, sizeof(query), "x=1&%s", held_query);
+    reply(&state, query, body);
     assert(strstr(body, "\"unchanged\":true"));
-    reply(&state, "since=7:8&x=1", body);
+    snprintf(query, sizeof(query), "%s&x=1", held_query);
+    reply(&state, query, body);
     assert(strstr(body, "\"unchanged\":true"));
-    reply(&state, "x=1&since=7:8&y=2", body);
+    snprintf(query, sizeof(query), "x=1&%s&y=2", held_query);
+    reply(&state, query, body);
     assert(strstr(body, "\"unchanged\":true"));
     console_destroy(&state);
     free(body);
@@ -139,10 +211,13 @@ static void test_length_counts_stored_bytes_not_json(void) {
     setup(&state, 0, 3, "M105", "a\x1b[0mb\n\"q\"\\");
     size_t stored = state.output_len;
     assert(stored == 11);
-    reply(&state, "since=3:11", body);
+    char query[96];
+    held(&state, 3, 11, query, sizeof(query));
+    reply(&state, query, body);
     assert(strstr(body, "\"unchanged\":true"));
     assert(strstr(body, "\"output_len\":11"));
-    reply(&state, "since=3:10", body);
+    held(&state, 3, 10, query, sizeof(query));
+    reply(&state, query, body);
     assert(strstr(body, "\"output\":"));
     assert(strstr(body, "\"output_len\":11"));
     console_destroy(&state);
@@ -153,10 +228,13 @@ static void test_command_is_escaped_in_both_replies(void) {
     console_state state;
     char *body = malloc(BODY_MAX);
     setup(&state, 0, 2, "M118 \"hi\"\\", "x");
-    reply(&state, "since=2:1", body);
+    char query[96];
+    held(&state, 2, 1, query, sizeof(query));
+    reply(&state, query, body);
     assert(strstr(body, "\"command\":\"M118 \\\"hi\\\"\\\\\""));
     assert(strstr(body, "\"unchanged\":true"));
-    reply(&state, "since=2:0", body);
+    held(&state, 2, 0, query, sizeof(query));
+    reply(&state, query, body);
     assert(strstr(body, "\"command\":\"M118 \\\"hi\\\"\\\\\""));
     console_destroy(&state);
     free(body);
@@ -176,12 +254,16 @@ static void test_output_limit(void) {
         assert(before < BODY_MAX);
         reply(&state, NULL, body);
         assert(strlen(body) == before);
-        reply(&state, "since=9:262143", body);
+        char query[96];
+        held(&state, 9, 262143, query, sizeof(query));
+        reply(&state, query, body);
         assert(strlen(body) < 200 && strstr(body, "\"unchanged\":true") && strstr(body, "\"output_len\":262143"));
-        reply(&state, "since=9:262142", body);
+        held(&state, 9, 262142, query, sizeof(query));
+        reply(&state, query, body);
         assert(strlen(body) > CONSOLE_OUTPUT_MAX && strstr(body, "\"output_len\":262143"));
         assert(strlen(body) < BODY_MAX);
-        reply(&state, "since=9:262144", body);
+        held(&state, 9, 262144, query, sizeof(query));
+        reply(&state, query, body);
         assert(!strstr(body, "unchanged"));
         console_destroy(&state);
     }
@@ -206,8 +288,8 @@ static void test_reply_is_a_consistent_snapshot_while_output_grows(void) {
     char *body = malloc(BODY_MAX);
     unsigned long last_len = 0;
     for (int i = 0; i < 400; i++) {
-        char query[64];
-        snprintf(query, sizeof(query), "since=4:%lu", last_len);
+        char query[96];
+        held(&state, 4, last_len, query, sizeof(query));
         reply(&state, query, body);
         const char *field = strstr(body, "\"output_len\":");
         assert(field);
@@ -225,8 +307,8 @@ static void test_reply_is_a_consistent_snapshot_while_output_grows(void) {
     state.busy = 0;
     state.completed = 1;
     state.success = 1;
-    char query[64];
-    snprintf(query, sizeof(query), "since=4:%zu", state.output_len);
+    char query[96];
+    held(&state, 4, state.output_len, query, sizeof(query));
     reply(&state, query, body);
     assert(strstr(body, "\"unchanged\":true"));
     console_destroy(&state);
@@ -239,6 +321,8 @@ int main(void) {
     test_new_output_sends_everything();
     test_running_command_always_sends_output();
     test_new_generation_with_same_length_sends_output();
+    test_instance_names_a_start_of_the_service();
+    test_missing_or_other_instance_gets_the_full_reply();
     test_clear_is_a_new_generation();
     test_broken_parameter_behaves_like_none();
     test_parameter_among_others();

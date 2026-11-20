@@ -148,25 +148,50 @@ export async function refreshSetup() {
   }
 }
 
-// The console output last received, named by the generation and stored length CC2 Control reports for it.
-// Sent back as ?since=, so a poll of an unchanged console costs a few bytes instead of the whole output. The
-// start value asks "is it still empty and untouched?": answered in full otherwise, and an older CC2 Control
-// ignores the parameter and answers in full every time.
-const consoleStart = { generation: 0, length: 0, output: '' }
+// The console output last received, named by the instance of CC2 Control, the generation and the stored length it
+// reports for it. Sent back as ?since=<generation>:<length>:<instance>, so a poll of an unchanged console costs a few
+// bytes instead of the whole output. The generation and the length start again with every start of CC2 Control, so only
+// the same instance can vouch that the same two numbers mean the same text: a different or missing instance is answered
+// in full. The start value asks "is it still empty and untouched?" without an instance, which is answered in full
+// as well, and an older CC2 Control ignores the parameter and answers in full every time.
+type ConsoleSeen = { generation: number; length: number; output: string; instance: string }
+const consoleStart: ConsoleSeen = { generation: 0, length: 0, output: '', instance: '' }
 let consoleSeen = consoleStart
+// The instance the last reply named. Kept when the cache is dropped (a failed request): CC2 Control restarting while the
+// connection is down is told by the next reply as well.
+let consoleInstance = ''
+
+// CC2 Control restarted: what was derived from the console output of the earlier instance (the screw result and the
+// heights of a session) belongs to a console that is gone, and its generation counter starts again.
+const forgetDerivedConsole = () => {
+  screwText.set({ text: '', minGeneration: 0 })
+  screwSession.set({ heights: {}, previous: {}, pair: {}, appliedGeneration: 0, minGeneration: 0 })
+}
 
 export async function refreshConsole() {
   const seen = consoleSeen
   try {
-    const status = await request(`/api/console?since=${seen.generation}:${seen.length}`)
-    // "unchanged": the output is left out because it still is the text this request named.
+    const status = await request(
+      `/api/console?since=${seen.generation}:${seen.length}${seen.instance ? `:${seen.instance}` : ''}`
+    )
+    const instance = /^[0-9a-f]{16}$/.test(String(status.instance)) ? String(status.instance) : ''
+    if (instance) {
+      if (consoleInstance && instance !== consoleInstance) forgetDerivedConsole()
+      consoleInstance = instance
+    }
+    // "unchanged": the output is left out because it still is the text this request named. Only the instance that was
+    // asked about can say so; any other answer of that kind cannot be shown and is not used (the next one is complete).
     const unchanged = status.unchanged === true
+    if (unchanged && (!seen.instance || instance !== seen.instance)) {
+      consoleSeen = consoleStart
+      return
+    }
     const out = unchanged ? seen.output : String(status.output || '')
     if (!unchanged) {
       const length = Number(status.output_len)
       consoleSeen =
-        Number.isInteger(length) && length >= 0
-          ? { generation: Number(status.generation) || 0, length, output: out }
+        Number.isInteger(length) && length >= 0 && instance
+          ? { generation: Number(status.generation) || 0, length, output: out, instance }
           : consoleStart
     }
     const command = String(status.command || '')

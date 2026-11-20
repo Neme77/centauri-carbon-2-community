@@ -4,7 +4,7 @@ import path from 'node:path'
 import { createServer } from 'vite'
 import { chromium } from 'playwright'
 
-// GET /api/console?since=<generation>:<length> (CC2 Control answers "unchanged":true without the output while
+// GET /api/console?since=<generation>:<length>:<instance> (CC2 Control answers "unchanged":true without the output while
 // nothing new is there) and the slower look of the screw view while nothing runs.
 const root = fileURLToPath(new URL('..', import.meta.url))
 process.env.CC2_BACKEND = 'http://127.0.0.1:1'
@@ -25,17 +25,25 @@ const wait = async (check, what, ms = 8000) => {
   }
   assert.fail(`timed out: ${what}`)
 }
-const measureOutput = Object.entries({ '30,30': 1.8, '230,30': 1.74, '230,225': 1.72, '30,225': 1.7 })
-  .map(([key, z]) => {
-    const [x, y] = key.split(',')
-    return `${`// probe at ${x}.000,${y}.000 is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
-  })
-  .join('')
+const measureOutputOf = heights =>
+  Object.entries(heights)
+    .map(([key, z]) => {
+      const [x, y] = key.split(',')
+      return `${`// probe at ${x}.000,${y}.000 is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
+    })
+    .join('')
+const measureOutput = measureOutputOf({ '30,30': 1.8, '230,30': 1.74, '230,225': 1.72, '30,225': 1.7 })
+// The same text length with other numbers: the console of a CC2 Control that started again and measured differently.
+const measureOutputRestarted = measureOutputOf({ '30,30': 1.7, '230,30': 1.74, '230,225': 1.72, '30,225': 1.8 })
 
-// A stand-in for CC2 Control's console: the since rule of console_json_query, or an older one that ignores it.
+// A stand-in for CC2 Control's console: the since rule of console_json_query ('new'), one that knows the parameter but
+// not the instance ('noinstance': the first build of it) or an older one that ignores it ('old').
+const INSTANCE_A = '00000000000000a1'
+const INSTANCE_B = '00000000000000b2'
 const makeConsole = (mode = 'new') => {
   const model = {
     mode,
+    instance: INSTANCE_A,
     fail: false,
     busy: false,
     completed: true,
@@ -52,7 +60,8 @@ const makeConsole = (mode = 'new') => {
       return route.abort()
     }
     const since = new URL(route.request().url()).searchParams.get('since')
-    const match = /^(\d+):(\d+)$/.exec(since || '')
+    const match =
+      model.mode === 'noinstance' ? /^(\d+):(\d+)$/.exec(since || '') : /^(\d+):(\d+)(?::([0-9a-f]{16}))?$/.exec(since || '')
     const length = Buffer.byteLength(model.output)
     const head = {
       busy: model.busy,
@@ -61,15 +70,21 @@ const makeConsole = (mode = 'new') => {
       generation: model.generation,
       command: model.command,
     }
+    const named = model.mode === 'new' && match ? { output_len: length, instance: model.instance } : {}
     const same =
-      model.mode === 'new' &&
+      model.mode !== 'old' &&
       match &&
       !model.busy &&
       Number(match[1]) === model.generation &&
-      Number(match[2]) === length
+      Number(match[2]) === length &&
+      (model.mode === 'noinstance' || match[3] === model.instance)
     const body = same
-      ? { ...head, unchanged: true, output_len: length }
-      : { ...head, output: model.output, ...(model.mode === 'new' && match ? { output_len: length } : {}) }
+      ? { ...head, unchanged: true, output_len: length, ...(model.mode === 'new' ? { instance: model.instance } : {}) }
+      : {
+          ...head,
+          output: model.output,
+          ...(model.mode === 'new' ? named : model.mode === 'noinstance' && match ? { output_len: length } : {}),
+        }
     model.log.push({ since, unchanged: Boolean(same), busy: model.busy })
     return route.fulfill({ json: body })
   }
@@ -108,13 +123,13 @@ try {
     await page.goto(`${origin}#console`)
     const log = page.locator('pre').filter({ hasText: 'ready' })
     await log.first().waitFor({ timeout: 10000 })
-    assert.equal(model.log[0].since, '0:0', 'the first request asks for nothing it cannot know')
+    assert.equal(model.log[0].since, '0:0', 'the first request asks for nothing it cannot know and names no instance')
     assert.equal(model.log[0].unchanged, false, 'the first answer is in full')
     await wait(() => model.log.filter(l => l.unchanged).length >= 2, 'two unchanged answers', 12000)
     assert.ok(await log.first().isVisible(), 'an unchanged answer does not blank the text')
     assert.match(await log.first().innerText(), /ready/)
     const quiet = model.log.filter(l => l.unchanged)
-    assert.ok(quiet.every(l => l.since === '5:6'), `later requests name the text they hold: ${JSON.stringify(quiet)}`)
+    assert.ok(quiet.every(l => l.since === `5:6:${INSTANCE_A}`), `later requests name the text they hold and its instance: ${JSON.stringify(quiet)}`)
 
     // A running command always answers in full and the page shows the output as it grows.
     model.busy = true
@@ -164,6 +179,105 @@ try {
     model.generation = 6
     model.output = 'second\n'
     await page.locator('pre').filter({ hasText: 'second' }).first().waitFor({ timeout: 6000 })
+    await page.close()
+  }
+
+  // 2b — a backend that knows the parameter but names no instance (the first build of it) is never trusted for "unchanged",
+  // and a backend that answers "unchanged" to the empty start value has nothing to show: the page works and asks in full.
+  {
+    const model = makeConsole('noinstance')
+    model.generation = 0
+    model.output = ''
+    model.command = ''
+    const page = await open()
+    await page.route(consolePattern, model.handle)
+    await page.goto(`${origin}#console`)
+    await wait(() => model.log.length >= 2, 'two polls of a backend without instance', 8000)
+    model.generation = 3
+    model.output = 'hello\n'
+    await page.locator('pre').filter({ hasText: 'hello' }).first().waitFor({ timeout: 8000 })
+    await wait(() => model.log.length >= 5, 'more polls', 12000)
+    assert.ok(model.log.slice(-3).every(l => l.since === '0:0' && !l.unchanged), JSON.stringify(model.log.slice(-3)))
+    assert.match(await page.locator('pre').filter({ hasText: 'hello' }).first().innerText(), /hello/)
+    await page.close()
+  }
+
+  // 2c — CC2 Control restarts between two polls without any request failing. The new instance reaches the same
+  // generation and the same output length with another text: the open page must show the new text (and recompute what it
+  // derives from it), not keep the old one because the two numbers match.
+  {
+    const model = makeConsole()
+    const page = await open()
+    await page.route(consolePattern, model.handle)
+    await page.goto(`${origin}#console`)
+    const log = page.locator('pre').filter({ hasText: 'ready' })
+    await log.first().waitFor({ timeout: 10000 })
+    await wait(() => model.log.filter(l => l.unchanged).length >= 2, 'two unchanged answers', 12000)
+    model.instance = INSTANCE_B
+    model.output = 'rdy!!\n' // 6 bytes like 'ready\n', the same generation 5
+    await page.locator('pre').filter({ hasText: 'rdy!!' }).first().waitFor({ timeout: 8000 })
+    assert.equal(model.log.filter(l => l.failed).length, 0, 'no request failed on the way')
+    const askedOldInstance = model.log.filter(l => l.since === `5:6:${INSTANCE_A}`)
+    assert.ok(!askedOldInstance.at(-1).unchanged, 'the request that named the old instance was answered in full')
+    await wait(() => model.log.slice(-4).some(l => l.since === `5:6:${INSTANCE_B}` && l.unchanged), 'unchanged within the new instance', 12000)
+    assert.match(await page.locator('pre').filter({ hasText: 'rdy!!' }).first().innerText(), /rdy!!/)
+    await page.close()
+  }
+
+  // 2d — the same on the screw view, with the counters of the page itself: after a measurement started from this page it
+  // ignores results of older generations. Then the service goes away for a moment and starts again with a lower generation
+  // counter and other numbers: its result must come through, so what the page kept of the old console is forgotten, also
+  // when a request failed on the way.
+  {
+    const model = makeConsole()
+    model.generation = 9
+    model.command = 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n'
+    model.output = measureOutput
+    const controls = []
+    const page = await open()
+    await page.route(consolePattern, model.handle)
+    await page.route('**/api/screws/history', route => (route.request().method() === 'GET' ? route.fulfill({ json: { sessions: [] } }) : route.fallback()))
+    await page.route('**/api/control', route => {
+      const action = route.request().postData()
+      controls.push(action)
+      if (action === 'screws:measure') {
+        model.busy = true
+        model.completed = false
+        model.success = false
+        model.generation += 1 // 10: the page now ignores results before it
+        model.output = ''
+      }
+      return route.fulfill({ status: 202, json: { accepted: true } })
+    })
+    await page.goto(`${origin}#bed/screws`)
+    const card = page.locator('#screwFocus')
+    await card.getByText('Measured results', { exact: true }).waitFor({ timeout: 10000 })
+    const nudge = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // look now, not in 20 s
+    await card.getByRole('button', { name: 'Measure the four screws', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
+    await wait(() => controls.includes('screws:measure'), 'the measurement is sent', 8000)
+    model.busy = false
+    model.completed = true
+    model.success = true
+    model.output = measureOutput
+    await card.getByText('Measured results', { exact: true }).waitFor({ timeout: 10000 })
+    assert.equal(Buffer.byteLength(measureOutput), Buffer.byteLength(measureOutputRestarted))
+    const before = await card.innerText()
+    // The link is down for one request, then the service is a new instance: generation 3 is lower than the 10 the page waits for.
+    model.fail = true
+    await nudge()
+    await wait(() => model.log.some(l => l.failed), 'a failed request', 6000)
+    model.fail = false
+    model.instance = INSTANCE_B
+    model.generation = 3
+    model.output = measureOutputRestarted
+    let after = before
+    for (let i = 0; i < 25 && after === before; i++) {
+      await nudge()
+      await sleep(400)
+      after = await card.innerText()
+    }
+    assert.notEqual(after, before, 'the values of the restarted console are on the page, not the old ones')
     await page.close()
   }
 
@@ -270,7 +384,7 @@ try {
     await page.close()
   }
   assert.deepEqual(errors, [])
-  console.log('PASS console poll: since/unchanged, text kept, older server, screw view idle cadence and result within 3 s')
+  console.log('PASS console poll: since/unchanged, text kept, older server and a backend without instance, restart of the service, screw view idle cadence and result within 3 s')
 } finally {
   await browser?.close()
   await server.close()
