@@ -47,6 +47,10 @@ Resta come prima: stato della stampante e sincronizzazione del filamento nello s
 
 ## Cosa si vede
 
+Il menu Aiuto dello slicer ha la voce **Show Configuration Folder** (passo 3); il campo stampante in alto a sinistra mostra la copia del tuo profilo:
+
+![Il menu Aiuto di ElegooSlicer con Show Configuration Folder e il profilo CC2 Control nel campo stampante](images/elegooslicer-help-menu.png)
+
 Con il profilo scelto, **Stampa** apre questa finestra (mostrata in un ElegooSlicer in tedesco); il campo stampante in alto a sinistra mostra il profilo:
 
 ![ElegooSlicer con il profilo CC2 Control: la finestra «Invia G-code all'host di stampa» con Carica e Carica e stampa](images/elegooslicer-print-dialog.png)

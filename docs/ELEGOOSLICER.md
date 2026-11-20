@@ -47,6 +47,10 @@ What stays as before: printer status and filament sync inside the slicer keep us
 
 ## What you see
 
+The slicer's Help menu has the entry **Show Configuration Folder** (step 3); the printer field at the top left shows the copy of your profile:
+
+![The ElegooSlicer Help menu with Show Configuration Folder and the CC2 Control profile in the printer field](images/elegooslicer-help-menu.png)
+
 With the profile chosen, **Print** opens this dialog (shown in a German ElegooSlicer); the printer field at the top left shows the profile:
 
 ![ElegooSlicer with the CC2 Control profile: the dialog "Send G-code to the printer host" with Upload and Upload and Print](images/elegooslicer-print-dialog.png)
