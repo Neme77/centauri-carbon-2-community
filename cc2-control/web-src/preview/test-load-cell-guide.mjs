@@ -20,6 +20,7 @@ try{
  const page=await browser.newPage({viewport:{width:1440,height:1200}}),errors=[]
  page.on('pageerror',e=>errors.push(e.message))
  await page.goto(demo.url+'#bed/cell')
+ await page.locator('[data-bed-cell] > summary').click() // the load cell block of the Mesh card is folded
  const card=page.locator('.cc2-native-tools'),guide=card.locator('.cc2-cell-guide')
  const button=name=>card.getByRole('button',{name,exact:true})
  const actions=()=>page.evaluate(()=>window.__ACTIONS)
@@ -45,7 +46,7 @@ try{
   await page.waitForFunction(before=>window.__ACTIONS.length>before,before)
  }
  await finish(0)
- assert.equal(await page.getByRole('tab',{name:'Load cell',exact:true}).getAttribute('aria-selected'),'true')
+ assert.equal(await page.getByRole('tab',{name:'Mesh & Saved Profiles',exact:true}).getAttribute('aria-selected'),'true','the load cell block lives in the Mesh tab')
  await click('Guided calibration',true);assert.equal((await actions()).at(-1),'cell:start');await finish(1)
  assert.equal(await button('Apply calibration').count(),0,'no acceptance without tare and measurement')
  assert.equal(await button('Read load cell').isDisabled(),true)
@@ -64,7 +65,7 @@ try{
  assert.ok(!(await actions()).includes('cell:measure:500'))
  const beforeNavigation=(await actions()).length
  await page.evaluate(()=>location.hash='files');await card.waitFor({state:'detached'})
- await page.evaluate(()=>location.hash='bed/cell');await guide.waitFor()
+ await page.evaluate(()=>location.hash='bed/cell');await page.locator('[data-bed-cell] > summary').click() // the load cell block of the Mesh card is folded;await guide.waitFor()
  await page.waitForFunction(()=>document.querySelector('.cc2-cell-guide input').value==='99.99')
  assert.equal((await actions()).length,beforeNavigation,'returning to a pending guide must restore the actual measured mass without sending a command')
  assert.match(await guide.textContent(),/25\.125 \/ —/,'a broken native TARE report must not become a numeric reference')

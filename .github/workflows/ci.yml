@@ -212,6 +212,9 @@ jobs:
       - name: Mesh-guided screw alignment (plane fit and display)
         run: npm run test:mesh-align
 
+      - name: Bed alignment (screw measurements, turn display, layout, session and calibration bars)
+        run: npm run test:bed-alignment
+
       - name: Library mesh selection and guarded activation
         run: npm run test:mesh-selector
         env:

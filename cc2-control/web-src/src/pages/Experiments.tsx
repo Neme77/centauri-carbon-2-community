@@ -217,7 +217,7 @@ export const Experiments = () => {
               {t(data?.mesh_align_settings ? 'experiments.disable' : 'experiments.enable')}
             </Button>
             {data?.mesh_align_settings && (
-              <Button onClick={() => openPage('bed', 'align')}>{t('bed.align_tab')}</Button>
+              <Button onClick={() => openPage('bed', 'align')}>{t('bed.level_tab')}</Button>
             )}
           </div>
         </div>

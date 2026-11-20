@@ -580,34 +580,123 @@ Manual temperature targets were validated during an active print on a physical C
 
 ## Interactive screw tramming
 
-`POST /api/control` accepts `screws:tram:start`, `screws:tram:probe:<FL|FR|RR|RL>[:2]`,
-`screws:tram:check[:2]` and `screws:tram:end`. Coordinates are taken from a fixed
-corner table; unknown IDs are refused. Start homes all axes (`G28`) and uses the
-same bed prep as `screws:measure`. Re-probe and the four-corner check home Z only
+`POST /api/control` accepts `screws:tram:start[:<C>[:2]]` (a trailing `:2` after an explicit target probes every corner twice:
+`2× 3 probes`; the page shows one value per corner, the average of both results, the history keeps both), `screws:tram:probe:<FL|FR|RR|RL>[:2]`,
+`screws:tram:check[:2]` and `screws:tram:end`. `<C>` is the bed target, a whole number of degrees from
+0 to 110 (the touchscreen's bed limit) written with digits only; without it the target is 60 °C, and any other value is refused. Coordinates are taken from a fixed
+corner table, the centres of the four bed screws (FL X27.9 Y25.95, FR X227.15 Y25.95, RR X227.15 Y225.5,
+RL X27.9 Y225.5, laid out as one rectangle); unknown IDs are refused. Start homes all axes (`G28`) and uses the
+same bed prep as `screws:measure` (right after a bed mesh it homes only Z, see "Directly after a bed mesh" below). Re-probe and the four-corner check home Z only
 (`G28 Z`), and only while a session is active with X and Y homed. Every session
 measurement, the start included, then waits 30 s (`G4 P30000`; the firmware's `G4`
 ignores `S`) before its first probe. Each start/re-probe/check script restores `CC2_SCREW_TRAM` gcode state,
-switches the nozzle off (`M104 S0`) and keeps the bed at 60 °C. `GET /api/printer`
-reports `screws_session.active` and `screws_session.xy_homed`. While the session's own
+switches the nozzle off (`M104 S0`) and keeps the bed at the session's target (`M140 S<C>`). `GET /api/printer`
+reports `screws_session.active`, `screws_session.xy_homed` and `screws_session.bed` (the bed target in
+whole °C the running session measures at, `null` without a session). While the session's own
 job runs, and for 15 s after it completed, the printer may report Manual homing or
 Auto leveling instead of Idle; the session accepts those two states only then. The
-session is cleared on disconnect, console error, timeout, emergency stop, any other
-machine state, `screws:measure` or end. The firmware switches an idle bed off 15 minutes
-after the last command, so between jobs the session sends `M140 S60` again every ten
+session is cleared on disconnect, console error, timeout (10 minutes without a session action), emergency stop, print start,
+lost X/Y homing, `heaters:off`/`system:heaters_off`, a bed mesh calibration started between two measurements, any other
+machine state or end. A running session is never replaced: `screws:tram:start` is refused with 409 while a session is
+active (`A screw session is already running: end it first`), and so is every `screws:measure` form (`A screw session is
+running: measure and re-probe there, or end it first`; the one-corner form says `re-probe the corner there`).
+The firmware switches an idle bed off 15 minutes
+after the last command, so between jobs the session sends `M140 S<C>` again every ten
 minutes (retried after 30 s if not delivered), only while the printer is idle and
-telemetry still shows the 60 °C target. End switches both heaters off. After any other
+telemetry still shows the session's target. The restart marker holds that target, so a bed a
+killed process left at it is switched off by the next one; an empty marker from an earlier
+version stands for 60 °C. End switches both heaters off. After any other
 invalidation `TURN_OFF_HEATERS` stays pending and is retried until it is delivered
 while the printer is idle and the console free; a print start or a queued heater
-action (temperature, preset, preheat, PID, heaters off, a new tram start) cancels it.
-`screws:measure` is unchanged.
+action (temperature, preset, preheat, PID, heaters off, a new tram start, a hold time) cancels it.
+A bed hotter than the target by more than 2.5 K (the printer's own report, for a target of 5 °C or more) is cooled first,
+before the nozzle is cleaned (`G180 S3`): the script waits with `M190 S<C-2.5>` and then sets `M140 S<C>`. A bed up to
+2.5 K above the target starts as it is. The printer's `M190`
+releases once the bed is within 5 K of its target and no longer changing fast (the firmware's PID settle window), so a
+plain `M190 S<C>` would release a cooling bed up to 5 K early, and the wait above releases it at `<C>` + 2.5 K; after
+such a wait the quick measurements hold 15 s (`G4 P15000`) at the target. This
+applies to the session start and to every quick measurement. The session's idle limit (10 minutes) counts only while no
+job runs and starts again when a job ends. The one-shot `screws:measure[:<C>]` heats and waits for the bed at `<C>` (60 °C without it) and
+switches both heaters off afterwards. A trailing `:2` after an explicit target (`screws:measure:<C>:2`,
+`screws:measure:corner:<FL|FR|RR|RL>:<C>:2`) probes every point of the measurement twice (`2× 3 probes`,
+as `check:2` and `probe:<ID>:2`); a lone `:2` is the target 2 °C. The one-corner form
+`screws:measure:corner:<ID>[:<C>[:2]]` measures front left (the reference) and that corner; when X and Y
+are still homed it homes only Z (`G28 Z`), waits for the bed (`M190`) and for 30 s (`G4 P30000`) and does not
+run the nozzle cleaning (`G180 S3`) again, otherwise it prepares as the four-corner measurement does.
+
+The nozzle reaches its probing temperature through the measurement's own preparation: `G180 S3` (the firmware's
+cleaning, which homes and ends at 140 °C), `G28` and `G28 Z` (the firmware's homing heats the nozzle to 140 °C).
+While the printer stands idle the firmware switches the nozzle off after 300 s and the bed 600 s later; the measurements
+heat both again themselves.
+
+**Hold time.** `screws:soak:<M>:<measurement>` holds the bed at the measurement's target for `<M>` minutes before
+`<measurement>` starts. `<M>` is 0 to 60, one or two digits (the soak limit of `/api/plates/calibrate`);
+`<measurement>` is `screws:measure[:<C>[:2]]`, `screws:measure:corner:<ID>[:<C>[:2]]` or `screws:tram:start[:<C>[:2]]`.
+With `0` it runs exactly as without the prefix: the same script and the same answer. Other minutes answer 400
+(`Screw hold time must be a whole number of minutes from 0 to 60, followed by the measurement`), and so does any other
+action after the prefix, the session's `screws:tram:probe` and `screws:tram:check` included (`A hold time is only
+available for screws:measure and screws:tram:start`); a measurement longer than 95 characters after the prefix answers
+400 (`Invalid action`). Every check of the measurement runs when the hold time is accepted, with the same 409 as without
+it (printing, not idle, a running session, a malformed target, a busy console, and the refusals of every printer change
+while maintenance, an RFID lifecycle or scan, a firmware calibration tool, the load-cell session, an application update
+or network change, bed heating or the nozzle expansion calibration runs), and again when the hold time ends. After an
+emergency stop, until CC2 Control restarts, a hold time answers 409 (`An emergency stop was sent: restart the printer
+before a hold time`) and nothing is sent. CC2 Control then sets the bed target through the console (`M140 S<C>`; the answer is
+`{"accepted":true}`), waits until telemetry reads the bed at the target (at most 1 K below it and, for a target of 5 °C
+or more, at most 2.5 K above it, so a hotter bed cools first), and counts the hold time down with the console free (no
+`G4`). It sends `M140 S<C>` again every ten minutes while fresh MQTT reports Idle and fresh telemetry shows its target
+(the firmware's idle bed shutdown; a failed send is retried after 30 s). At the end it waits for a console command typed
+meanwhile, then up to a minute for MQTT Idle within 15 s and the bed at its target, runs the checks again and starts the
+measurement with its unchanged script, cancellable as usual. It never touches the nozzle. The job needs no open page;
+a restart of CC2 Control ends it, and the bed then stays at its target until the firmware switches it off 15 minutes
+after the last command, as after a calibration that a restart ended.
+
+`screws:cancel` ends the hold time at once (`202`). A print start, an emergency stop, `heaters:off`,
+`system:heaters_off`, `system:all_off`, another accepted screw action (`screws:tram:end`), a bed mesh calibration,
+another machine state than Idle or a bed target set elsewhere end it as well. The bed is switched off (`M140 S0`) when
+the job is cancelled or fails itself (the bed does not reach the target within 30 minutes, its `M140` fails, the evidence
+at the end stays missing for a minute, the checks at the start refuse the measurement, the console stays busy for a
+minute after the end), and only while fresh MQTT reports Idle and fresh telemetry shows the job's target; a job cancelled
+before its own `M140` reached telemetry switches the bed off once telemetry shows it, within 15 s. While it runs, every
+`screws:measure…` and `screws:tram:start…`, with or without a hold time, answers 409 (`A screw measurement is waiting for
+its bed hold time: cancel it first`), and so does `POST /api/plates/calibrate` (`A screw measurement is waiting for its
+bed hold time`). The starts of those sessions answer the same 409 (`A screw measurement is waiting for its bed hold
+time: cancel it first`): `POST /api/nozzle-expansion/start`, `/api/bed-drying/start`, `/api/bed-drying/preheat`,
+`/api/calibration-tools/action`, `/api/app-update/upload`, `/api/app-update/download`, `/api/app-update/install`,
+`/api/network/action`, `/api/network/scan`, `/api/rfid/action` and `/api/rfid/lifecycle/action`. A session that
+CC2 Control does not start itself (maintenance by the installer) is found by the checks when the hold time ends. A
+session start that the console refuses at the end is tried again without starting a session, so no `end_reason` is
+recorded for it. `GET /api/printer` reports `screws_soak`: while it runs
+`{"active":true,"stage":"heating"|"soaking","bed":<C>,"remaining":<s>,"total":<s>,"action":"quick"|"corner"|"session"}`
+(`remaining` equals `total` while the bed heats), otherwise `{"active":false,"result":<r>,"reason":<text>}` for the last
+job since the start of CC2 Control: `result` `""` (none yet), `started`, `cancelled`, `ended` (stopped by one of the
+events above) or `failed`; `reason` says why it ended or failed (for example `A print started`, `The bed target was
+changed` or the 409 text of the check that refused the start) and is empty otherwise.
+
+**Directly after a bed mesh.** A four-corner `screws:measure[:<C>[:2]]` or a `screws:tram:start[:<C>[:2]]` that follows
+a bed mesh calibration of CC2 Control directly leaves out the nozzle cleaning (`G180 S3`) and, for the session, the full
+`G28`. It prepares as the one-corner form with homed axes does: `M140 S<C>`, `M190 S<C>`, `G28 Z`, `G4 P30000`, then the
+corners (with a hotter bed the cooling wait comes first, as everywhere). Directly means: the calibration's probing
+succeeded (`result` `done`, `saved` or `work`), it ended at most 180 s ago, no other console job has run since, X, Y and
+Z are homed and the measurement's bed target is the calibration's temperature. Otherwise the measurement prepares as
+described above. A hold time given with it is left out, because the bed was just held for the mesh. The answer is then
+`{"accepted":true,"after_mesh":true}`, and `GET /api/printer` reports `screws_after_mesh` `true` while that measurement
+is queued or runs (`false` otherwise). The one-corner form keeps its own short way. While a bed mesh calibration runs
+(any stage until it has ended), every `screws:measure…` and `screws:tram:start…` answers 409 (`A bed mesh calibration is
+running`).
+
+CC2 Control does not clear the X/Y homing a session depends on: `system:motors_off` is refused while a
+session is active (409, `Motors off is blocked during a screw tramming session; end the session first`),
+and the automatic stepper release after 10 idle minutes with both heater targets at 0 (`M84`) waits
+until the session has ended and then starts its full wait again.
 
 ### Screw tramming history
 
 Every successfully completed session job (start, re-probe, check) is recorded with
 the raw `Result is z=` value of each probed corner, taken from that job's console
 output. A completed one-shot `screws:measure` is recorded as its own closed entry with
-`"kind":"quick"`: it has no session and no 30 s settle, so its values are kept apart from
-session values. The newest 20 sessions (64 measurements each) and, separately, the newest
+`"kind":"quick"`: it has no session, and the 30 s settle only where it homes Z alone (one corner with X and Y
+still homed, or directly after a bed mesh), so its values are kept apart from session values. The newest 20 sessions (64 measurements each) and, separately, the newest
 10 quick entries are kept in `screw-history.txt` next to the UI preferences
 (`--screws-history FILE` overrides it), written atomically after each change, so they
 survive a reload, the end of the session and a restart. A session left open by a restart
@@ -615,78 +704,81 @@ is closed at its last measurement. A failed job and a re-probe without a result 
 corner are not recorded.
 
 `GET /api/screws/history` returns the newest entry first and its measurements
-oldest first. Each entry has `kind` `session` or `quick`. Times are Unix seconds (UTC);
+oldest first. Each entry has `kind` `session` or `quick`, and `end_reason`: why a closed session
+ended — `user` (end), `emergency_stop`, `disconnected`, `print_started`, `telemetry_stale` (no
+printer report for 15 s), `console_error` (a job failed or could not be queued), `machine_state`
+(another or no machine state), `timeout` (10 minutes without an action), `xy_homing_lost` (X/Y homing
+cleared outside CC2 Control, for example on the touchscreen, by another client or by the firmware),
+`quick_measurement`, `heaters_off`, `new_session`, `mesh_calibration` (a bed mesh calibration was started between two
+measurements of the session) or `restart` (CC2 Control restarted with the
+session open) — and `null` while it is open, for quick entries and for sessions recorded before
+the reason was stored. It is an optional fourth field of the session line in `screw-history.txt` (`-` when there is no reason but a fifth
+field follows); the fifth field `c` marks a session probed at the screw centres. `points` is `screws` for such a session
+and `old` for one recorded at the earlier points (30/30, 230/30, 230/225, 30/225), whose heights are not comparable with
+the new ones. Times are Unix seconds (UTC);
 `ended` is `null` while a session runs; measurement `kind` is `start`, `probe`, `check`
-or (in a quick entry) `quick`; `corner` is set only for `probe`; `z` holds the corners the job measured (a re-probe
+or (in a quick entry) `quick`; `bed` is the bed target in °C the job measured at (absent for
+entries recorded before it was stored); `ist` holds the actual temperatures in °C at the last probe of the job (`bed`,
+`nozzle`, `chamber`, only the sensors that gave a value; absent for earlier entries); `corner` is set for `probe` and for
+the one-corner quick measurement; `z` holds the corners the job measured (a re-probe
 only its own corner), in mm; `z2` is present only for `twice` and holds the second
-result of each corner. Offsets against the front-left screw are computed by the client.
+result of each corner; `probes` (after `bed` and `ist`) holds the single probes (`probe at X,Y is z=…`) of the corners that have them,
+up to six per corner (2× 3), kept only when the average of a `PROBE`'s probes is its `Result` within 1 µm. Offsets against the
+front-left screw are computed by the client. A cancelled job and a job that failed are not recorded.
 
 ```json
 {"sessions":[
   {"kind":"quick","started":1762801500,"ended":1762801680,"measurements":[
     {"time":1762801680,"kind":"quick","corner":null,"twice":false,
-     "z":{"FL":-0.682100,"FR":-0.676000,"RR":-0.870400,"RL":-0.751000}}]},
+     "z":{"FL":-0.682100,"FR":-0.676000,"RR":-0.870400,"RL":-0.751000},"bed":60,
+     "ist":{"bed":60.4,"nozzle":28.1}}],"end_reason":null,"points":"screws"},
   {"kind":"session","started":1762800000,"ended":1762801200,"measurements":[
     {"time":1762800300,"kind":"start","corner":null,"twice":false,
-     "z":{"FL":-0.681800,"FR":-0.675800,"RR":-0.869800,"RL":-0.750800}},
+     "z":{"FL":-0.681800,"FR":-0.675800,"RR":-0.869800,"RL":-0.750800},"bed":60},
     {"time":1762800420,"kind":"probe","corner":"RR","twice":true,
-     "z":{"RR":-0.700100},"z2":{"RR":-0.699400}}]}]}
+     "z":{"RR":-0.700100},"z2":{"RR":-0.699400},"bed":60}],"end_reason":"user","points":"screws"}]}
 ```
 
 `POST /api/screws/history/clear` deletes the whole history and returns `{"ok":true}`
 (`500` with `{"ok":false,"error":...}` when the file cannot be written). Both routes use
 the same authentication and browser guard as the other `/api` routes.
 
-## Mesh-guided screw alignment
+## Bed alignment with a mesh
 
-The Mesh alignment tab of Bed Levelling fits a plane through a whole bed mesh and tells what each screw has to do
-(see `docs/CC2_CONTROL.md`); that analysis runs in the browser on `GET /api/mesh` and the plate library.
-The guided loop around it is a session on CC2 Control. Each round is the calibration job of
-`/api/plates/calibrate` without a plate: `G28` when the printer is not homed, `M140`, the wait until
-telemetry reads the temperature, the soak, then `BED_MESH_CALIBRATE PROFILE=<slot> BED_TEMP=<t>`. No
-shorter probing command is known for this firmware (a reduced `PROBE_COUNT` is untested), so every round
-measures the full mesh, and the mesh of the last round is the one saved at the end.
+With "With mesh" ticked, the Bed alignment tab evaluates the four screw points with the plate shape of a saved mesh of
+the plate library, of the temporary mesh or of the printer's active mesh (`GET /api/mesh`, read when the tab opens and
+whenever the printer's phase changes, not during a screw session), entirely in the page; it needs no endpoint of its own.
+After a screw measurement the active mesh is empty (`profile_name` "", `probed_matrix` [], `mesh_min`/`mesh_max` 0, measured on a
+CC2: the firmware's nozzle cleaning unloads it) while `profiles` still hold the stored meshes; the tab therefore evaluates
+with a copy taken in the browser when the measurement starts. "Measure a new mesh"
+starts `POST /api/plates/calibrate` with the plate chosen in its question, the hold time of step 1 as the soak and the
+line `work`, so the mesh becomes only the plate's temporary mesh (`calibration.work_mesh`, see below) and the library
+stays as it was. Once it is measured, the page itself starts the way of measuring chosen in step 1 through
+`/api/control`, without a hold time: the four-corner measurement (`screws:measure[:<C>[:2]]`) or the start of a screw
+session (`screws:tram:start[:<C>[:2]]`), which then follows the mesh directly (see "Directly after a bed mesh" above).
+That follow-up runs in the frame of the page, on every page of CC2 Control and after a reload, but it needs the
+browser tab to stay open; while the printer answers busy it tries again every 5 s for up to 5 minutes, and otherwise
+it leaves a note with a start button. After turning, only the screws are measured again, evaluated with the temporary
+mesh, and the final mesh (a plain calibration with the plate, which replaces its stored measurement and ends an open
+session) is measured only when the user asks for it, which the page offers once every corner of the latest
+measurement is within the tolerance (±20 µm). Until then the page says that the mesh is temporary; once a later screw
+measurement differs from the first four-corner measurement after the temporary mesh (the offset of a corner
+to front left changed by at least 25 µm, however large it was before; without turning it changes by about ±6 µm, and
+by up to about 20 µm while the bed soaks), it warns that the stored mesh no longer
+fits the bed. The page remembers the temporary mesh it saw in the browser, so that warning stays after a restart of
+CC2 Control. The guided loop of the earlier version, a session with a full mesh per round,
+is removed: `/api/screws/align`, `/api/screws/align/measure`, `/api/screws/align/save` and `/api/screws/align/end` no
+longer exist, and the endpoint list of `GET /api/v1/system/info` no longer has `screws_align`.
 
-Every change is a `POST` with a text body, one field per line. Without a confirmation a request sends
-nothing and answers `200` with `{"confirm_required":true,"commands":[...],"token":"<8 hex digits>"}`: the
-G-code it would send, in order, and a token over that list. Repeated with a final line `CONFIRM:<token>` it
-acts. If the list is no longer the one the token was issued for (the printer lost its homing, another
-measurement took the slot), the request answers `409` and nothing is sent; ask again and confirm the new
-list. A request that is refused answers `4xx` with `{"ok":false,"error":...}` and has queued nothing, so
-it can be repeated.
-
-- `GET /api/screws/align` returns `active`, the completed `round` and the allowed `rounds`, `measuring`
-  (the session's calibration runs), `measured` (the side slot holds the session's last mesh), `side`,
-  `temp`, `soak` (minutes), `nozzle`, `idle_left` (seconds until an idle session ends), `ended` (how the
-  last session ended: `ended`, `saved`, `failed`, `cancelled`, `timeout`, `print` or `estop`),
-  `heaters_off_pending` and `calibration` (`stage`, soak seconds `remaining`, `bed`, `result`, `error`,
-  `detail` of the calibration job, as in `GET /api/plates`).
-- `POST /api/screws/align/measure` (`A|B`, temperature, soak minutes 0-60, nozzle or an empty line,
-  rounds 1-10) starts a session with its first measurement, or runs the next measurement of the running
-  session, whose settings it must repeat. It needs what `/api/plates/calibrate` needs, no screw-tramming
-  session and no emergency stop, and is refused once the session has used its rounds. `202` with
-  `{"started":true,"round","rounds"}`. After a completed measurement the session switches the nozzle
-  off (`M104 S0`, listed) and renews the bed target every ten minutes while telemetry still shows the
-  session's own target, like the screw-tramming session; a target someone else set, or a bed that is
-  off, is left alone.
-- `POST /api/screws/align/save` (plate) makes the mesh of the last completed measurement the plate's
-  measurement at the session's temperature and nozzle, exactly as `/api/plates/measure` does
-  (`BED_MESH_PROFILE LOAD=<slot>` and `SAVE=cc2_<id>`, `SET_GCODE_OFFSET Z=`), and ends the session.
-  When it fails the session stays, so it can be repeated.
-- `POST /api/screws/align/end` ends the session. A measurement that has not begun probing is stopped
-  like `/api/plates/calibrate/cancel`; once probing has begun the request is refused (emergency stop).
-  Without a session it answers `200` and sends nothing.
-
-While a session is active, `/api/plates/calibrate` and the `screws:` actions of `/api/control` answer
-`409`. The session owns the heaters from its first measurement. When it ends by `end`, `save`, a failed
-or cancelled measurement, an emergency stop, or because nothing was requested for 20 minutes after the
-last measurement (the page was closed), the deferred `TURN_OFF_HEATERS` of the screw-tramming session is
-requested: it is retried until it is delivered while the printer is idle and the console free, and is
-dropped when a print starts or a heater action or a new calibration takes the heaters over. It is not
-requested when a print started (`print`) or when telemetry shows a bed target that is neither off nor the
-session's. A heater action queued between two measurements takes the heaters over as well: the nozzle-off
-and the bed target the session still owed are dropped, and the session itself stays. Requires printer
-validation.
+A running screw measurement (`screws:measure`, `screws:measure:corner:<ID>`, the `screws:tram:` jobs except the end)
+is sent to the printer line by line and can be cancelled: `POST /api/control` with `screws:cancel` answers `202`
+while one runs or a hold time counts (which then ends, see "Hold time" above) and `409` otherwise. The job stops after the line that is running (a line that waits, such as the bed
+wait or the nozzle cleaning, ends first), lifts the nozzle (`G1 Z10`), restores the saved gcode state and sets
+`M104 S0`. A quick measurement and the start of a session then switch the bed off as well (`M140 S0`) and a cancelled
+session start ends the session (`end_reason` `user`); a later measurement of a session sets the bed to the session's
+target again and keeps the session. A cancelled job is not recorded in the history. `GET /api/console` reports
+`cancellable` (a cancellable job runs), `cancelling` (a cancel is requested) and `cancelled` (the last job ended by a
+cancel). Requires printer validation.
 
 ## Heater PID calibration
 
@@ -827,28 +919,52 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   its measurement at that temperature (replacing one with the same temperature and nozzle), the one it
   mounts with, and the plate is mounted in place. `/api/plates/recapture` (id) does the same for the mounted
   plate with the temperature and nozzle of its current measurement. `/api/plates/measure/delete` (id) removes
-  a measurement and its printer profile; a plate keeps at least one. `/api/plates/measure/edit` (id,
+  a measurement and its printer profile; a plate keeps at least one. `/api/plates/measures/clear` (plate id)
+  is a function of its own that deletes every measurement of the plate and their printer profiles on purpose: the
+  plate stays as a profile without a mesh (`{"cleared":n}`) and cannot be mounted until it is calibrated again. It
+  answers 400 for an invalid id, 404 for an unknown plate and 409 for the mounted plate, one waiting for the
+  printer restart and one that is being calibrated. `/api/plates/measure/edit` (id,
   temperature, nozzle) corrects what a measurement records, e.g. the nozzle of one made before nozzles were
   listed; two measurements of a plate cannot share temperature and nozzle. `/api/plates/keep` (`A|B`) stores
   the printer profile of the measurement the side slot holds.
-- `/api/plates/calibrate` (`A|B`, temperature, soak minutes 0–60, nozzle, plate; the last two may be empty)
-  runs a bed mesh calibration on CC2 Control, so no page has to stay open: it keeps the slot's measurement as
+- `/api/plates/calibrate` (`A|B`, temperature, soak minutes 0–60, nozzle, plate; the last two may be empty;
+  an optional sixth line `work`, only together with a plate, any other sixth line is 400) runs a bed mesh calibration on CC2 Control, so no page has to stay open. An open screw-tramming session does not
+  block it between its measurements: the session ends (`end_reason` `mesh_calibration`, its heaters are not switched
+  off, the calibration takes the bed over) and the calibration starts; while a measurement of the session runs the
+  answer is 409 (`A screw session measurement is running`), and while a hold time before a screw measurement runs it
+  is 409 as well (`A screw measurement is waiting for its bed hold time`). While the calibration runs, `/api/control`
+  refuses every screw measurement (409, `A bed mesh calibration is running`); a four-corner measurement or a session
+  start right after it, at its temperature, follows it directly (see "Directly after a bed mesh"). The state reports `elapsed`, the seconds since the
+  current stage began, so a page opened later can count the probing up. It keeps the slot's measurement as
   a profile, homes the printer when needed (`G28`), heats the bed (`M140`), waits until telemetry reads the
   temperature, holds it for the soak time (the firmware's own calibration probes as soon as the sensor
   reads the target, while the plate still expands), then sends `BED_MESH_CALIBRATE PROFILE=<slot>
   BED_TEMP=<t>` through the console. The firmware switches an idle printer's bed off 15 minutes after the
   last command, so while it heats and soaks the run sends `M140` again every ten minutes, and only while
   the bed still holds the target the run set. With a plate, the result becomes its measurement as with
-  `/api/plates/measure`. `GET /api/plates` reports it as `calibration` (`stage` `homing`, `heating`,
+  `/api/plates/measure`. With `work` it becomes only the plate's temporary mesh: CC2 Control keeps the slot
+  mesh in memory (`result` `work`) and leaves the library as it was: the library file, the mounted plate, the
+  measurement it mounts with, its Z offset and the printer profiles stay as they are. The side slot of the printer,
+  in its mesh file and in its memory, holds the temporary mesh afterwards, as after every calibration, so the plate's
+  stored measurement is no longer in the printer (`in_printer` of the plate is `false`); the slot's measurement keeps
+  its profile as for every calibration, so a print started from the print dialog loads its stored measurement from
+  that profile. The temporary mesh is never offered to a print, the mesh matching or the blends. It stays while
+  a new calibration heats, soaks and probes, also when that run is cancelled or fails before its probing has ended,
+  and is gone once a calibration has finished its probing (the slot then holds another mesh; a new `work` run then
+  keeps its own), after a restart of CC2 Control, or after a measurement of the same plate stored in the library;
+  `work_mesh` is `null` while its plate is not in the library. `GET /api/plates` reports it as `calibration` (`stage` `homing`, `heating`,
   `soaking`, `probing`, `saving` or `off`, the soak seconds `remaining`, the bed temperature `bed`, and
-  `result` `done`, `saved`, `failed` or `cancelled` with `error` `homing`, `heating`, `busy`, `telemetry`,
-  `probing` or `saving`). At the end of the soak the probing starts only when MQTT has reported Idle within
+  `result` `done`, `saved`, `work`, `failed` or `cancelled` with `error` `homing`, `heating`, `busy`, `telemetry`,
+  `probing` or `saving`; `work` whether the run keeps only a temporary mesh, and `work_mesh`, `null` or
+  `{"plate","temp","nozzle","measured","mesh"}` while its plate is in the library). At the end of the soak the probing starts only when MQTT has reported Idle within
   15 s and fresh telemetry reads the bed at its target; otherwise it waits up to a minute and then stops.
   `/api/plates/calibrate/cancel` stops it until the probing starts. A run that is cancelled or fails switches
   the bed heater off only while fresh MQTT reports Idle and fresh telemetry shows the target the run set;
   otherwise, such as for a print another client started meanwhile, it leaves the heater as it is. Print
   starts and plate changes are refused while it runs; a print started meanwhile, or a changed bed target,
-  ends it.
+  ends it. After the probing, reading the slot mesh (its file and the printer memory) is tried again for up to 60 s, at
+  most every 2 s, while it cannot be read yet or memory and file still differ; the mesh is kept only when both
+  agree, and any other error while saving ends the run at once (`error` `saving`).
 - `/api/plates/mount` (id, optionally a measurement id) mounts a plate whose measurement is already in its
   slot and applies its Z offset with `SET_GCODE_OFFSET Z=` (no movement). Any other answers 409 with
   `"reboot_required": true`; adding a line `REBOOT` writes the slot (the previous file becomes `autosave_backup.cfg`, a copy
@@ -1281,4 +1397,4 @@ this notice does not acknowledge or operate the physical display.
 
 Nozzle expansion: `POST /api/experiments` accepts `nozzle-expansion:on` / `nozzle-expansion:off` with the existing LAN authorization and idle/cold checks. The choice defaults to off and migrates schema-1/2 settings without enabling it. `GET /api/nozzle-expansion` adds `enabled`; start/factory require the enabled, valid experiment. Recovery and an already-required restart do not require opting in.
 
-Mesh alignment settings: `POST /api/experiments` accepts `mesh-align-settings:on` / `mesh-align-settings:off` with the same LAN authorization and idle/cold checks, and `GET /api/experiments` reports `mesh_align_settings`. It defaults to off. It only shows the settings block of Bed Levelling → Mesh alignment (tilt span, limits, screw positions, thread pitch and turning direction, saved in the browser); without it the page uses the CC2 defaults. It sends nothing to the printer. The stored choices use schema 4; a schema-3 file keeps its choices with this one off.
+Screw pitch and alignment settings: `POST /api/experiments` accepts `mesh-align-settings:on` / `mesh-align-settings:off` with the same LAN authorization and idle/cold checks, and `GET /api/experiments` reports `mesh_align_settings`. It defaults to off. It only shows the settings block of the same name on Bed Levelling → Bed alignment (tilt span, the shape-warning and nearly-flat limits, screw positions, row order of the mesh and the screw pitch, 0.3 to 1.5 mm per turn, saved in the browser); without it the page uses the CC2 defaults, among them the CC2's own M4 screw (0.7 mm per turn, clockwise seen from below raises the corner). It sends nothing to the printer. The stored choices use schema 4; a schema-3 file keeps its choices with this one off.

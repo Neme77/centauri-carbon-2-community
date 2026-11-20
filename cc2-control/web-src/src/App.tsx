@@ -7,6 +7,8 @@ import { i18n, t } from '@/lib/i18n'
 import { menu, nav, printer } from '@/lib/state'
 import { PrinterReport, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SessionBar } from '@/components/session-bar'
+import { MeshStatus } from '@/components/guided-chain'
 import { CameraWindow, PersistentCamera } from '@/components/shared'
 import { SpoolWatcher } from '@/components/spool-ui'
 import { SetupDialog } from '@/pages/setup'
@@ -74,6 +76,8 @@ export const App = () => {
           </p>
         )}
         <div class={`cc2-page-content @container/page ${stale ? 'opacity-50' : ''}`}>
+          <MeshStatus />
+          <SessionBar />
           <PrinterReport />
           <Page />
         </div>

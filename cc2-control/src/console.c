@@ -95,6 +95,135 @@ static void finish(console_state *state, int success, const char *message) {
     pthread_mutex_unlock(&state->lock);
 }
 
+/* Append what was read to the visible output (a frame end becomes a line end) and collect the current frame, so the
+ * result of the line just sent is recognised: 1 result, 0 error result, -1 none yet. An error report (non-zero
+ * error_code; level 3 is a resume event, not a fault) is noted in `seen->fault` even when the request itself was
+ * acknowledged: a failed home or probe can be answered with a plain result. */
+typedef struct { char frame[1024]; size_t used; } staged_frame;
+typedef struct { int saturated; int fault; } staged_seen;
+static int staged_error_report(const char *frame) {
+    const char *report = strstr(frame, "\"report\"");
+    const char *key = report ? strstr(report, "\"error_code\":") : NULL;
+    if (!key) return 0;
+    char *end = NULL;
+    double code = strtod(key + 13, &end);
+    if (end == key + 13 || code == 0) return 0;
+    const char *level_key = strstr(report, "\"error_level\":");
+    double level = 0;
+    if (level_key) { char *level_end = NULL; double v = strtod(level_key + 14, &level_end); if (level_end != level_key + 14) level = v; }
+    return code == 704 || level <= 2;
+}
+static int staged_feed(console_state *state, staged_frame *f, const char *buffer, size_t got, staged_seen *seen) {
+    int result = -1;
+    size_t start = 0;
+    for (size_t i = 0; i < got; ++i) {
+        if ((unsigned char)buffer[i] != 0x03) {
+            if (f->used + 1 < sizeof(f->frame)) f->frame[f->used++] = buffer[i];
+            continue;
+        }
+        if (i > start) seen->saturated |= append_output(state, buffer + start, i - start);
+        seen->saturated |= append_output(state, "\n", 1);
+        start = i + 1;
+        f->frame[f->used] = '\0';
+        if (staged_error_report(f->frame)) seen->fault = 1;
+        if (result < 0 && strstr(f->frame, "\"id\":101")) result = strstr(f->frame, "\"error\"") ? 0 : 1;
+        f->used = 0;
+    }
+    if (start < got) seen->saturated |= append_output(state, buffer + start, got - start);
+    return result;
+}
+/* Send one line and wait for its result: 1 done, 0 the printer answered with an error, -1 connection lost or time over. */
+static int staged_line(console_state *state, int fd, const char *line, time_t deadline, staged_seen *seen) {
+    char escaped[CONSOLE_COMMAND_MAX * 2], request[CONSOLE_COMMAND_MAX * 2 + 128];
+    if (json_escape_string(escaped, sizeof(escaped), line) != 0) return -1;
+    int length = snprintf(request, sizeof(request),
+        "{\"id\":101,\"method\":\"gcode/script\",\"params\":{\"script\":\"%s\"}}\003", escaped);
+    if (length <= 0 || (size_t)length >= sizeof(request) || send_all_fd(fd, request, (size_t)length) != 0) return -1;
+    staged_frame frame = {{0}, 0};
+    while (time(NULL) < deadline) {
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int ready = poll(&pfd, 1, 2000);
+        if (ready < 0) { if (errno == EINTR) continue; return -1; }
+        if (ready == 0) continue;
+        char buffer[4096];
+        ssize_t got = read(fd, buffer, sizeof(buffer));
+        if (got <= 0) return -1;
+        int result = staged_feed(state, &frame, buffer, (size_t)got, seen);
+        if (result >= 0) return result;
+    }
+    return -1;
+}
+/* The reports that trail the last result: read until the socket has been quiet for 750 ms. */
+static void staged_drain(console_state *state, int fd, time_t deadline, staged_seen *seen) {
+    staged_frame frame = {{0}, 0};
+    while (time(NULL) < deadline) {
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int ready = poll(&pfd, 1, 750);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready <= 0) return;
+        char buffer[4096];
+        ssize_t got = read(fd, buffer, sizeof(buffer));
+        if (got <= 0) return;
+        staged_feed(state, &frame, buffer, (size_t)got, seen);
+    }
+}
+/* Run `script` line by line: 1 done, 0 a printer error (the rest is not sent), 2 cancelled, -1 connection lost or time
+ * over. The cancel tail (`tail`) is not stopped by a cancel and runs on past an error. */
+static int staged_lines(console_state *state, int fd, const char *script, time_t deadline, int tail, int *sent,
+                        staged_seen *seen) {
+    const char *at = script;
+    while (*at) {
+        const char *end = strchr(at, '\n');
+        size_t n = end ? (size_t)(end - at) : strlen(at);
+        char line[CONSOLE_COMMAND_MAX];
+        if (n >= sizeof(line)) return -1;
+        memcpy(line, at, n); line[n] = '\0';
+        at += n + (end ? 1 : 0);
+        if (!n) continue;
+        if (!tail && atomic_load(&state->cancel_requested)) return 2;
+        int result = staged_line(state, fd, line, deadline, seen);
+        if (sent) (*sent)++;
+        if (result < 0) return -1;
+        if (!tail && (result == 0 || seen->fault)) return 0;
+    }
+    return 1;
+}
+static void staged_run(console_state *state, int fd, const char *command) {
+    char tail[CONSOLE_CANCEL_TAIL_MAX];
+    pthread_mutex_lock(&state->lock);
+    snprintf(tail, sizeof(tail), "%s", state->cancel_tail);
+    pthread_mutex_unlock(&state->lock);
+    append_output(state, "> ", 2);
+    append_output(state, command, strlen(command));
+    append_output(state, "\n", 1);
+    time_t deadline = time(NULL) + 900;
+    int sent = 0;
+    staged_seen seen = {0, 0};
+    int result = staged_lines(state, fd, command, deadline, 0, &sent, &seen);
+    if (result == 2) {
+        append_output(state, "[CC2 Control: cancelled]\n", 25);
+        /* Nothing sent yet: nothing to undo. */
+        if (sent) result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &seen) < 0 ? -1 : 2;
+        if (result == 2) staged_drain(state, fd, time(NULL) + 10, &seen);
+        close(fd);
+        pthread_mutex_lock(&state->lock);
+        state->cancelled = 1;
+        pthread_mutex_unlock(&state->lock);
+        finish(state, 0, result < 0 ? "Console connection ended or command timed out\n" : NULL);
+        return;
+    }
+    if (result < 0) { close(fd); finish(state, 0, "Console connection ended or command timed out\n"); return; }
+    /* A printer error (an error response, or an error report even next to an acknowledged request) is a failure, not
+     * a measurement that completed: the error text is already in the output, the lines after it are not sent and no
+     * motion tail follows (whether the axes are homed and the printer allows a move is not known here; the heaters are
+     * switched off by the caller's deferred shutdown, control_screws_tick). Reports that trail the last result are read first,
+     * so a late error text is kept too. */
+    staged_drain(state, fd, deadline, &seen);
+    close(fd);
+    if (result == 0 || seen.fault) { finish(state, 0, "[CC2 Control: the printer reported an error; the job was stopped]\n"); return; }
+    finish(state, 1, NULL);
+}
+
 static void *console_worker(void *opaque) {
     console_state *state = opaque;
     char command[CONSOLE_COMMAND_MAX], escaped[CONSOLE_COMMAND_MAX * 2];
@@ -125,6 +254,10 @@ static void *console_worker(void *opaque) {
     if (send_all_fd(fd, subscribe, sizeof(subscribe) - 1) != 0) {
         close(fd); finish(state, 0, "Cannot subscribe to console reports\n"); return NULL;
     }
+    pthread_mutex_lock(&state->lock);
+    int staged = state->staged;
+    pthread_mutex_unlock(&state->lock);
+    if (staged) { staged_run(state, fd, command); return NULL; }
     int length = snprintf(request, sizeof(request),
         "{\"id\":101,\"method\":\"gcode/script\",\"params\":{\"script\":\"%s\"}}\003", escaped);
     if (length <= 0 || (size_t)length >= sizeof(request) ||
@@ -183,6 +316,7 @@ static void *console_worker(void *opaque) {
 void console_init(console_state *state, const char *socket_path) {
     memset(state, 0, sizeof(*state));
     atomic_init(&state->emergency_sent, 0);
+    atomic_init(&state->cancel_requested, 0);
     pthread_mutex_init(&state->lock, NULL);
     snprintf(state->socket_path, sizeof(state->socket_path), "%s", socket_path);
 }
@@ -465,9 +599,12 @@ failed:
 int console_start(console_state *state, const char *command, char *reason, size_t reason_cap) {
     pthread_t thread;
     pthread_mutex_lock(&state->lock);
-    if (state->busy) { pthread_mutex_unlock(&state->lock); snprintf(reason,reason_cap,"Another command is running"); return -1; }
+    if (state->busy) { state->staged_next=0; pthread_mutex_unlock(&state->lock); snprintf(reason,reason_cap,"Another command is running"); return -1; }
     snprintf(state->command, sizeof(state->command), "%s", command);
     state->output[0]='\0'; state->output_len=0; state->busy=1; state->completed=0; state->success=0; state->generation++;
+    state->staged=state->staged_next; state->staged_next=0; state->cancelled=0;
+    snprintf(state->cancel_tail, sizeof(state->cancel_tail), "%s", state->cancel_tail_next);
+    atomic_store(&state->cancel_requested, 0);
     pthread_mutex_unlock(&state->lock);
     if (pthread_create(&thread, NULL, console_worker, state) != 0) {
         finish(state, 0, "Cannot start console worker\n"); return -1;
@@ -476,13 +613,37 @@ int console_start(console_state *state, const char *command, char *reason, size_
     return 0;
 }
 
+void console_arm_staged(console_state *state, const char *cancel_tail) {
+    pthread_mutex_lock(&state->lock);
+    state->staged_next = 1;
+    snprintf(state->cancel_tail_next, sizeof(state->cancel_tail_next), "%s", cancel_tail ? cancel_tail : "");
+    pthread_mutex_unlock(&state->lock);
+}
+
+int console_cancel(console_state *state) {
+    pthread_mutex_lock(&state->lock);
+    int running = state->busy && state->staged;
+    if (running) atomic_store(&state->cancel_requested, 1);
+    pthread_mutex_unlock(&state->lock);
+    return running ? 0 : -1;
+}
+
+int console_cancelled(console_state *state, unsigned long generation) {
+    pthread_mutex_lock(&state->lock);
+    int cancelled = state->cancelled && state->generation == generation;
+    pthread_mutex_unlock(&state->lock);
+    return cancelled;
+}
+
 void console_json(console_state *state, char *out, size_t capacity) {
     char escaped[CONSOLE_OUTPUT_MAX * 2];
     char escaped_command[CONSOLE_COMMAND_MAX * 2];
     pthread_mutex_lock(&state->lock);
     if (json_escape_string(escaped, sizeof(escaped), state->output) != 0) snprintf(escaped,sizeof(escaped),"Output too large");
     if (json_escape_string(escaped_command, sizeof(escaped_command), state->command) != 0) escaped_command[0]='\0';
-    snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\"}\n",
-        state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,escaped);
+    snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"cancellable\":%s,\"cancelling\":%s,\"cancelled\":%s,\"command\":\"%s\",\"output\":\"%s\"}\n",
+        state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,
+        state->busy&&state->staged?"true":"false",state->busy&&atomic_load(&state->cancel_requested)?"true":"false",
+        state->cancelled?"true":"false",escaped_command,escaped);
     pthread_mutex_unlock(&state->lock);
 }
