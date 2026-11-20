@@ -277,11 +277,14 @@ const SoakField = ({ locked }: { locked?: boolean }) => {
 export const BasisStep = ({
   basis,
   locked,
+  frozen,
   head,
   children,
 }: {
   basis: Basis
   locked?: boolean
+  // A session is active or a screw measurement runs: the basis cannot be changed.
+  frozen?: boolean
   // The way of measuring and "With mesh", above the choice of the basis.
   head?: ComponentChildren
   children?: ComponentChildren
@@ -371,7 +374,7 @@ export const BasisStep = ({
         ) : null}
         <label class="grid gap-1 text-xs text-muted">
           {t(basis.meshOn ? 'bed.lvl_base_choice' : 'bed.lvl_temp_choice')}
-          <Select value={value} onChange={e => onChoose(e.currentTarget.value)} data-level-base>
+          <Select value={value} disabled={frozen} onChange={e => onChoose(e.currentTarget.value)} data-level-base>
             {/* Also while the printer has not answered yet, so a kept choice of it shows as chosen. */}
             {(basis.active || onActive) && <option value="active">{t('plates.mesh_active')}</option>}
             {basis.meshOn && work && (
@@ -397,6 +400,7 @@ export const BasisStep = ({
             {t('bed.lvl_temp_choice')}
             <Select
               value={choiceValue(basis.tempChoice)}
+              disabled={frozen}
               onChange={e => onChooseTemp(e.currentTarget.value)}
               data-level-active-temp
             >
@@ -416,6 +420,7 @@ export const BasisStep = ({
                 max={BASIS_MAX_TEMP_C}
                 step="1"
                 value={basis.tempText}
+                disabled={frozen}
                 aria-invalid={basis.temp == null}
                 onInput={e =>
                   setLevelBase(

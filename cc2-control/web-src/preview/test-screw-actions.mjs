@@ -82,7 +82,7 @@ try {
   await quick.getByText('No wait, heaters off afterwards').waitFor()
   assert.equal(await quick.getByText(/no own homing/i).count(), 0, 'the quick measurement does home (G180 S3 runs G28)')
   await mode('session')
-  await start.getByText('30 s wait per screw, off after 10 min idle').waitFor()
+  await start.getByText('30 s wait before each measurement, off after 10 min idle').waitFor()
   assert.equal(await start.getByText(/Bed 60 °C/).count(), 0, 'the start button does not repeat the temperature')
   await mode('quick')
 

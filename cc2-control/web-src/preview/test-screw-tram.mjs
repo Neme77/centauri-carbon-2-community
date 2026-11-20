@@ -248,7 +248,7 @@ try {
   assert.equal(await check.count(), 0, 'no check button before a session')
   assert.equal(await end.count(), 0, 'no session bar before a session')
   assert.ok(await fl.isDisabled(), 'corner re-probe is disabled before a session')
-  await card.getByText('30 s wait per screw, off after 10 min idle').waitFor()
+  await card.getByText('30 s wait before each measurement, off after 10 min idle').waitFor()
   assert.equal(await card.getByText('Each re-probe waits').count(), 0)
   await card.getByRole('checkbox', { name: '2× 3 probes', exact: true }).waitFor()
   assert.match(await card.locator('[data-hint="probe-twice"] button').getAttribute('aria-label'), /the value is the average/, 'the explanation sits in the (i) next to the choice')
@@ -661,7 +661,7 @@ try {
   await mode('session')
   await start.waitFor()
   assert.equal(await card.locator('#screw-history').count(), 0, 'a missing history endpoint hides the trail')
-  assert.equal(await card.getByText('30 s wait per screw, off after 10 min idle').count(), 1)
+  assert.equal(await card.getByText('30 s wait before each measurement, off after 10 min idle').count(), 1)
   assert.deepEqual(errors, [])
   console.log('PASS screw-tram session, copy, history trail, export, clear, 404, and layout')
 } finally {

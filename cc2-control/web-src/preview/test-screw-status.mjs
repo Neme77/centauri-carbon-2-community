@@ -238,6 +238,7 @@ try {
     await card.locator('[data-screw-verdict="RL"]').waitFor()
     const note = card.locator('[data-screw-plan-note]')
     assert.equal(await note.count(), 0, '(a) no note with the standard plan')
+    assert.equal(await card.locator('[data-screw-mesh-note]').count(), 0, '(a) no mesh line without a mesh')
     await card.locator('[data-screw-optimize-choose]').click()
     await page.waitForFunction(() => document.querySelector('[data-screw-strategy]')?.getAttribute('data-screw-strategy') === 'optimized')
     assert.equal(await note.count(), 1, '(a) exactly one note with the optimized plan')

@@ -1173,6 +1173,20 @@ const Levelling = () => {
   const screwBusy = busy && SCREW_JOB.test(consoleState.command) && !calRunning
   // The values of the last measurement stay in step 2 while the next one (or a mesh calibration) runs: dimmed, with a note.
   const lastValuesStale = screwBusy || calRunning
+  // Single corners measured again since the last four-corner measurement: the other values are older, so the page cannot
+  // check whether all four still fit together.
+  const singleCorners = (() => {
+    const list = running?.measurements ?? []
+    const out: ScrewId[] = []
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i]
+      if (m.kind !== 'probe' || !m.corner) break
+      if (!out.includes(m.corner as ScrewId)) out.unshift(m.corner as ScrewId)
+    }
+    return out
+  })()
+  // While a screw measurement runs the basis cannot be changed: "With mesh" and the choice of the basis wait until it has ended.
+  const basisFrozen = screwBusy
   // An old mesh, or one without a date, can still be used: the note under the options says so and recommends a new mesh.
   const savedMeshAged = Boolean(basis.found && basis.age?.state !== 'ok')
   // With the tick but no mesh chosen (or none there yet) "Measure a new mesh" is the only start. The printer's active
@@ -1492,6 +1506,7 @@ const Levelling = () => {
       <BasisStep
         basis={basis}
         locked={locked}
+        frozen={basisFrozen}
         head={
           // The way of measuring (quick or with a session) and "With mesh" right beside it, then the probes.
           <div class="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1" data-level-start-head>
@@ -1523,7 +1538,7 @@ const Levelling = () => {
                 type="checkbox"
                 class="size-4 shrink-0 accent-cyan"
                 checked={meshTicked}
-                disabled={chainOn}
+                disabled={chainOn || basisFrozen}
                 aria-label={t('bed.lvl_mesh_toggle')}
                 onChange={e => setLevelMesh(e.currentTarget.checked)}
               />
@@ -1900,6 +1915,15 @@ const Levelling = () => {
               <p class="mb-2 text-xs text-muted" data-screw-from-below>
                 {t('bed.turn_from_below')}
               </p>
+              {planFull && !lastValuesStale && !fourNeeded && singleCorners.length > 0 && (
+                <div class="mb-2" data-screw-single-note>
+                  <Notice icon="info">
+                    {tpl('bed.screw_single_only_note', {
+                      corners: singleCorners.map(id => t(cornerName[id])).join(', '),
+                    })}
+                  </Notice>
+                </div>
+              )}
               {planFull && lastValuesStale && (
                 <div class="mb-2" data-screw-running-note>
                   <Notice icon="info">{t('bed.screw_running_note')}</Notice>
@@ -2123,6 +2147,13 @@ const Levelling = () => {
                   <p class="mt-2 flex items-start gap-1.5 text-xs text-muted" data-screw-plan-note>
                     <Icon n="info" class="mt-px size-3.5 shrink-0" />
                     <span>{t('bed.screw_status_plan_note')}</span>
+                  </p>
+                )}
+                {/* With a mesh and the standard plan: the status is the plan after the plate shape, not the raw deviation. */}
+                {strategy === 'standard' && plan && meshFit && (
+                  <p class="mt-2 flex items-start gap-1.5 text-xs text-muted" data-screw-mesh-note>
+                    <Icon n="info" class="mt-px size-3.5 shrink-0" />
+                    <span>{t('bed.screw_status_mesh_note')}</span>
                   </p>
                 )}
               </section>

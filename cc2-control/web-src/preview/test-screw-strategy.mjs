@@ -46,7 +46,7 @@ try {
   const fulfill = body => ({ contentType: 'application/json', body: JSON.stringify(body) })
 
   // A page with a running screw session whose measurements the test sets (`show`).
-  const open = async ({ viewport = { width: 1440, height: 1000 }, storage = true, empty = false } = {}) => {
+  const open = async ({ viewport = { width: 1440, height: 1000 }, storage = true, empty = false, session = true } = {}) => {
     const page = await browser.newPage({ viewport })
     page.on('pageerror', e => errors.push(e.message))
     page.on('request', r => {
@@ -71,7 +71,7 @@ try {
     await page.route('**/api/console', route => (state.preview?.console && route.request().method() === 'GET' ? route.fulfill(fulfill(state.preview.console)) : route.fallback()))
     await page.route('**/api/printer', async route => {
       const data = await (await route.fetch()).json()
-      data.screws_session = { active: true, xy_homed: true }
+      data.screws_session = { active: session, xy_homed: session }
       return route.fulfill({ json: data })
     })
     await page.route('**/api/screws/history', route => (state.preview?.history && route.request().method() === 'GET' ? route.fulfill(fulfill({ sessions: state.preview.history })) : route.fallback()))
@@ -413,12 +413,52 @@ try {
     await page.reload()
     await card.locator('[data-screw-proposal-block]').waitFor({ timeout: 10000 })
     await note.waitFor({ timeout: 10000 })
-    assert.equal(await text(note), 'The Click Tool can have a little play when it is put on a screw, so the first click may be inexact. Measure all four corners again after each round.')
+    assert.equal(await text(note), 'The Click Tool still has some play and is being improved. Measure all four corners again after each round.')
     assert.equal(await card.locator('[data-screw-turn-cell="FR"] [data-screw-rotation]').count(), 1, 'the turns are shown in clicks')
     await page.evaluate(() => localStorage.setItem('cc2-screw-turn-unit', 'clock'))
     await page.reload()
     await card.locator('[data-screw-proposal-block]').waitFor({ timeout: 10000 })
     assert.equal(await note.count(), 0, 'no play note on the clock face')
+    await page.close()
+  }
+  // "With mesh" and the choice of the basis cannot be changed while a screw measurement runs; between the measurements of a
+  // session and outside a session they are free.
+  {
+    const { page, card, state } = await open()
+    const tick = page.locator('[data-level-mesh-toggle] input')
+    const base = page.locator('[data-level-base]')
+    await card.locator('[data-screw-measured-block]').waitFor({ timeout: 10000 })
+    assert.equal(await tick.isDisabled(), false, 'the tick is free between the measurements of a session')
+    assert.equal(await base.isDisabled(), false, 'the choice of the basis is free between the measurements of a session')
+    const idle = state.preview.console
+    state.preview.console = { ...idle, busy: true, completed: false, success: false, generation: idle.generation + 1 }
+    await card.locator('[data-screw-running-note]').waitFor({ timeout: 10000 })
+    assert.equal(await tick.isDisabled(), true, 'the tick is locked while a measurement runs')
+    assert.equal(await base.isDisabled(), true, 'the choice of the basis is locked while a measurement runs')
+    state.preview.console = { ...idle, generation: idle.generation + 2 }
+    await page.waitForFunction(() => !document.querySelector('[data-screw-running-note]'), null, { timeout: 10000 })
+    assert.equal(await tick.isDisabled(), false, 'the tick is free again after the measurement')
+    await page.close()
+    const free = await open({ session: false })
+    const tick2 = free.page.locator('[data-level-mesh-toggle] input')
+    await tick2.waitFor({ timeout: 10000 })
+    assert.equal(await tick2.isDisabled(), false, 'the tick is free outside a session')
+    await free.page.close()
+  }
+  // After single corners were measured again the page says that it cannot check whether all four values still fit together.
+  {
+    const { page, card, state } = await open()
+    const note = card.locator('[data-screw-single-note]')
+    const z = [1.8, 1.74, 1.72, 1.7]
+    await card.locator('[data-screw-measured-block]').waitFor({ timeout: 10000 })
+    assert.equal(await note.count(), 0, 'no note after the four-corner measurement')
+    state.show(z, [start(z, 10), { time: 12, kind: 'probe', corner: 'RL', twice: false, z: { RL: 1.69 } }])
+    await note.waitFor({ timeout: 10000 })
+    assert.equal(await text(note), 'Only single corners were measured again (Back left), so the page cannot check whether all four values still fit together. Measure all four corners to be sure.')
+    state.show(z, [start(z, 10), { time: 12, kind: 'probe', corner: 'RL', twice: false, z: { RL: 1.69 } }, { time: 14, kind: 'probe', corner: 'RR', twice: false, z: { RR: 1.71 } }])
+    await page.waitForFunction(() => document.querySelector('[data-screw-single-note]')?.textContent?.includes('Back right'), null, { timeout: 10000 })
+    state.show(z, [start(z, 10), { time: 12, kind: 'probe', corner: 'RL', twice: false, z: { RL: 1.69 } }, { time: 16, kind: 'check', corner: null, twice: false, z: { FL: z[0], FR: z[1], RR: z[2], RL: z[3] } }])
+    await page.waitForFunction(() => !document.querySelector('[data-screw-single-note]'), null, { timeout: 10000 })
     await page.close()
   }
   assert.deepEqual(errors, [])

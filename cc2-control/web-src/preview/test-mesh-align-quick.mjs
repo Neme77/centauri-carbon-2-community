@@ -148,6 +148,9 @@ try {
   const zText = id => `${um(z[id]) < 0 ? '−' : ''}${Math.abs(um(z[id]))} µm`
   assert.equal(await zh('FL'), zText('FL'), 'the measured raw value, also with the mesh')
   assert.equal(await zh('FR'), zText('FR'))
+  // With a mesh the status is the plan after the plate shape: a small line under the table says so (standard plan).
+  assert.equal(await page.locator('[data-screw-mesh-note]').count(), 1, 'one line explains the status with a mesh')
+  assert.equal((await page.locator('[data-screw-mesh-note]').innerText()).trim(), 'The status follows the plan: the measured deviation minus the plate shape of the mesh.')
   for (const id of ['FR', 'RR', 'RL']) {
     const left = rel(ids, i => z[ids[i]])[id] - rel(ids, i => expected.shape[i])[id]
     if (Math.abs(left) > 22) {
