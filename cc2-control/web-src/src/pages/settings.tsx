@@ -44,6 +44,7 @@ import { Updates } from './Updates'
 import { Backup } from './Backup'
 import { Experiments } from './Experiments'
 import { Network } from './Network'
+import { ElegooSlicerGuide } from './elegooslicer-guide'
 
 const TABS = [
   [Link, 'network.connections'],
@@ -372,6 +373,7 @@ const Integrations = () => {
           {t('settings.test_orca')}
         </Button>
       </div>
+      <ElegooSlicerGuide row={row} />
       <div class={row}>
         <b>{tpl('settings.pandabreath_page', dbName)}</b>
         <span class="text-muted">{tpl('settings.pandabreath_page_description', dbName)}</span>

@@ -24,7 +24,7 @@ IP di esempio: `192.168.1.50`. Sostituirlo con l'indirizzo reale della propria s
 
 Salvare, premere **Test** e aprire la scheda **Device / Dispositivo**. Deve comparire CC2 Control con le stesse informazioni visibili nel browser.
 
-**Usare 8081 per upload, pagina Device e sync Canvas.** La porta **7125** è il ponte separato di sola lettura per Panda Breath: non fornisce i dati dei filamenti Canvas né l'upload G-code. La connessione nativa ELEGOO Link è un percorso diverso da quello descritto qui.
+**Usare 8081 per upload, pagina Device e sync Canvas.** La porta **7125** è il ponte separato di sola lettura per Panda Breath: non fornisce i dati dei filamenti Canvas né l'upload G-code. La connessione nativa ELEGOO Link è un percorso diverso da quello descritto qui. Per chi usa ElegooSlicer: vedere la guida sperimentale [ElegooSlicer](ELEGOOSLICER.it.md).
 
 ## 2. Sincronizzare i filamenti Canvas
 
