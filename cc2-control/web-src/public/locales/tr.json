@@ -1663,6 +1663,7 @@
   "bed.screw_opt_back": "Standarda dön",
   "bed.screw_measured_title": "Ölçülen",
   "bed.screw_measured_note": "Her zaman ön sola göre",
+  "bed.screw_running_note": "Bir ölçüm sürüyor. Aşağıdaki değerler son ölçümden.",
   "bed.screw_col_z": "Z yüksekliği (mutlak)",
   "bed.screw_col_offset": "Ön sola göre sapma",
   "bed.screw_col_status": "Durum",

@@ -1663,6 +1663,7 @@
   "bed.screw_opt_back": "Torna allo standard",
   "bed.screw_measured_title": "Misurato",
   "bed.screw_measured_note": "Sempre rispetto a davanti a sinistra",
+  "bed.screw_running_note": "È in corso una misurazione. I valori sotto sono dell’ultima misurazione.",
   "bed.screw_col_z": "Altezza Z (assoluta)",
   "bed.screw_col_offset": "Scostamento da davanti a sinistra",
   "bed.screw_col_status": "Stato",

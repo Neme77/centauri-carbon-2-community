@@ -181,6 +181,18 @@ try {
     await card.locator('[data-screw-zheight="FR"]').getByText('1730 µm').waitFor({ timeout: 8000 })
     assert.equal(await offer.count(), 0, 'a declined offer is not repeated')
     assert.equal(await strategy.getAttribute('data-screw-strategy'), 'standard')
+    // The way back stays: a small button of its own, only while the optimized plan brings something, and it does the same
+    // as the offer; "Back to standard" then declines again.
+    const again = card.locator('[data-screw-optimize-again]')
+    assert.equal(await again.count(), 1, 'after "Stay with standard" the optimized plan can still be chosen')
+    assert.equal(await text(again), 'Choose optimized correction')
+    await again.click()
+    await page.waitForFunction(() => document.querySelector('[data-screw-strategy]')?.getAttribute('data-screw-strategy') === 'optimized')
+    assert.equal(await again.count(), 0, 'the button is gone while the optimized plan is chosen')
+    await card.locator('[data-screw-strategy-back]').click()
+    await page.waitForFunction(() => document.querySelector('[data-screw-strategy]')?.getAttribute('data-screw-strategy') === 'standard')
+    assert.equal(await offer.count(), 0, 'the offer itself stays declined')
+    assert.equal(await again.count(), 1, 'and the small button is back')
     state.show([1.8, 1.74, 1.72, 1.7], [start([1.8, 1.74, 1.72, 1.7], 16)])
     await card.locator('[data-screw-zheight="FR"]').getByText('1740 µm').waitFor({ timeout: 8000 })
 
@@ -372,8 +384,27 @@ try {
     void label2
     await page.close()
   }
+  // While a screw measurement runs the values of the last one are dimmed and say so; they are normal again afterwards.
+  {
+    const { page, card, state } = await open()
+    const note = card.locator('[data-screw-running-note]')
+    const opacity = sel => card.locator(sel).evaluate(e => getComputedStyle(e).opacity)
+    await card.locator('[data-screw-measured-block]').waitFor({ timeout: 10000 })
+    assert.equal(await note.count(), 0, 'no note while nothing runs')
+    assert.equal(await opacity('[data-screw-measured-block]'), '1')
+    const idle = state.preview.console
+    state.preview.console = { ...idle, busy: true, completed: false, success: false, generation: idle.generation + 1 }
+    await note.waitFor({ timeout: 10000 })
+    assert.equal(await text(note), 'A measurement is running. The values below are from the last measurement.')
+    for (const sel of ['[data-screw-measured-block]', '[data-screw-proposal-block]']) assert.equal(await opacity(sel), '0.6', `${sel} is dimmed while it runs`)
+    assert.equal(await card.locator('[data-screw-measured-row]').count(), 4, 'the last values stay in the table')
+    state.preview.console = { ...idle, generation: idle.generation + 2 }
+    await page.waitForFunction(() => !document.querySelector('[data-screw-running-note]'), null, { timeout: 10000 })
+    assert.equal(await opacity('[data-screw-measured-block]'), '1', 'normal again after the measurement')
+    await page.close()
+  }
   assert.deepEqual(errors, [])
-  console.log('PASS screw strategy: standard by default, offer with a button, explicit and stable choice, measured apart, four-corner rule, themes')
+  console.log('PASS screw strategy: standard by default, offer with a button, explicit and stable choice, measured apart, four-corner rule, themes, running note')
 } finally {
   await browser?.close()
   await server.close()

@@ -1171,6 +1171,8 @@ const Levelling = () => {
   // The console works on a screw measurement (not on the steps of a mesh calibration, which have their own bar): only
   // then the tab says that a measurement runs.
   const screwBusy = busy && SCREW_JOB.test(consoleState.command) && !calRunning
+  // The values of the last measurement stay in step 2 while the next one (or a mesh calibration) runs: dimmed, with a note.
+  const lastValuesStale = screwBusy || calRunning
   // An old mesh, or one without a date, can still be used: the note under the options says so and recommends a new mesh.
   const savedMeshAged = Boolean(basis.found && basis.age?.state !== 'ok')
   // With the tick but no mesh chosen (or none there yet) "Measure a new mesh" is the only start. The printer's active
@@ -1762,7 +1764,11 @@ const Levelling = () => {
                         <small class="text-xs text-muted">
                           X{c.x} Y{c.y}
                         </small>
-                        {plan && <span class="font-bold">{heightLabel(v, unit, true, lang)}</span>}
+                        {plan && (
+                          <span class={cn('font-bold', lastValuesStale && 'opacity-60')}>
+                            {heightLabel(v, unit, true, lang)}
+                          </span>
+                        )}
                         <Button
                           class="min-h-11 px-3 text-xs"
                           disabled={(quickMode && c.id !== 'FL' ? locked || blocked : !xyReady || locked) || fourStart}
@@ -1894,6 +1900,11 @@ const Levelling = () => {
               <p class="mb-2 text-xs text-muted" data-screw-from-below>
                 {t('bed.turn_from_below')}
               </p>
+              {planFull && lastValuesStale && (
+                <div class="mb-2" data-screw-running-note>
+                  <Notice icon="info">{t('bed.screw_running_note')}</Notice>
+                </div>
+              )}
               {planFull && strategy === 'optimized' && (
                 <div class="mb-2 flex flex-wrap items-center gap-2" data-screw-strategy-row>
                   <Button class="min-h-11 px-3 text-xs" data-screw-strategy-back onClick={returnToStandard}>
@@ -1901,9 +1912,22 @@ const Levelling = () => {
                   </Button>
                 </div>
               )}
+              {/* The offer above is made once. After "Stay with standard" the way to the optimized plan stays as a small
+                  button, as long as that plan brings something (the same condition as the offer). */}
+              {plan && strategy === 'standard' && plan.canOptimize && strategyState.kept && (
+                <div class="mb-2 flex flex-wrap items-center gap-2">
+                  <Button class="min-h-11 px-3 text-xs" data-screw-optimize-again onClick={chooseOptimized}>
+                    <Icon n="bolt" class="size-4 shrink-0" />
+                    {t('bed.screw_opt_choose')}
+                  </Button>
+                </div>
+              )}
               {plan && strategy === 'standard' && plan.canOptimize && !strategyState.kept && (
                 <div
-                  class="mb-2 grid gap-2 rounded-md border border-amber bg-amber/10 p-2.5 text-xs"
+                  class={cn(
+                    'mb-2 grid gap-2 rounded-md border border-amber bg-amber/10 p-2.5 text-xs',
+                    lastValuesStale && 'opacity-60'
+                  )}
                   role="status"
                   data-screw-optimize-suggest
                 >
@@ -1969,7 +1993,10 @@ const Levelling = () => {
                 </div>
               )}
               <section
-                class={cn('mb-2 rounded-lg border border-edge bg-field/40 p-2.5', fourNeeded && 'opacity-60')}
+                class={cn(
+                  'mb-2 rounded-lg border border-edge bg-field/40 p-2.5',
+                  (fourNeeded || lastValuesStale) && 'opacity-60'
+                )}
                 data-screw-measured-block
               >
                 <div class="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
@@ -2117,7 +2144,10 @@ const Levelling = () => {
               )}
               {!fourNeeded && (
                 <>
-                  <section class="rounded-lg border border-edge bg-field/40 p-2.5" data-screw-proposal-block>
+                  <section
+                    class={cn('rounded-lg border border-edge bg-field/40 p-2.5', lastValuesStale && 'opacity-60')}
+                    data-screw-proposal-block
+                  >
                     <div class="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       <h4 class="flex items-center gap-1.5 text-sm font-semibold">
                         <Wrench size={16} strokeWidth={1.75} aria-hidden="true" class="shrink-0" />

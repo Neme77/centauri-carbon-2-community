@@ -1663,6 +1663,7 @@
   "bed.screw_opt_back": "Zpět ke standardu",
   "bed.screw_measured_title": "Změřeno",
   "bed.screw_measured_note": "Vždy vztaženo k bodu vpředu vlevo",
+  "bed.screw_running_note": "Probíhá měření. Hodnoty níže pocházejí z posledního měření.",
   "bed.screw_col_z": "Výška Z (absolutní)",
   "bed.screw_col_offset": "Odchylka od bodu vpředu vlevo",
   "bed.screw_col_status": "Stav",
