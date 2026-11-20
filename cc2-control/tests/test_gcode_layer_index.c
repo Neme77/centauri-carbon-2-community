@@ -91,6 +91,29 @@ static void write_version_1(const char *path, const layer_index *ix) {
     assert(!fclose(f));
 }
 
+/* A map in the second stored format (version 2: the same layout, but a 32-byte SHA-256 where version 3 has the 4-byte
+ * CRC-32). It is the layout of the map in the first public version of the layer map. */
+static void write_version_2(const char *path, const layer_index *ix) {
+    FILE *f = fopen(path, "wb"); assert(f);
+    int32_t version = 2, sizes[2] = { (int32_t)sizeof(layer_index_entry), (int32_t)sizeof(layer_index_key) };
+    int32_t head[5] = { ix->total, ix->max_layer, ix->seen_marker, ix->repeats, ix->count };
+    sha256_state h; sha256_init(&h);
+    sha256_update(&h, (const unsigned char *)"CC2LIDX1", 8);
+    sha256_update(&h, (const unsigned char *)&version, sizeof(version));
+    sha256_update(&h, (const unsigned char *)sizes, sizeof(sizes));
+    sha256_update(&h, (const unsigned char *)&ix->key, sizeof(ix->key));
+    sha256_update(&h, (const unsigned char *)head, sizeof(head));
+    sha256_update(&h, (const unsigned char *)ix->entries, sizeof(*ix->entries) * (size_t)ix->count);
+    char hex[65]; sha256_hex(&h, hex);
+    unsigned char digest[32];
+    for (int i = 0; i < 32; i++) { unsigned v; assert(sscanf(hex + 2 * i, "%2x", &v) == 1); digest[i] = (unsigned char)v; }
+    assert(fwrite("CC2LIDX1", 1, 8, f) == 8 && fwrite(&version, sizeof(version), 1, f) == 1 &&
+           fwrite(sizes, sizeof(int32_t), 2, f) == 2 && fwrite(&ix->key, sizeof(ix->key), 1, f) == 1 &&
+           fwrite(head, sizeof(int32_t), 5, f) == 5 && fwrite(digest, 1, sizeof(digest), f) == sizeof(digest) &&
+           fwrite(ix->entries, sizeof(*ix->entries), (size_t)ix->count, f) == (size_t)ix->count);
+    assert(!fclose(f));
+}
+
 int main(int argc, char **argv) {
     (void)layer_path_mark_pick;
     (void)gcode_layer_path_parse_at;
@@ -160,6 +183,68 @@ int main(int argc, char **argv) {
                                           &info, &start, 1000, 0) == LAYER_INDEX_NONE);
     layer_index_free(&index); fclose(f);
 
+    /* The line at a stored offset must be a layer marker. A map whose offset points elsewhere is not used even though its
+     * checksum is right (it is written by layer_index_save after the change, so the CRC-32 fits): the layer comes back as
+     * LAYER_INDEX_BAD, the caller reads from the start, and that gives the layer the intact map gave. */
+    {
+        const char *text = ";LAYER_CHANGE\n;Z:0.2\n;LAYER:0\nG1 X1 Y1 E1\nG1 X2 Y2 E2\n"
+                           ";LAYER_CHANGE\n;Z:0.4\n;LAYER:1\nG1 X3 Y3 E3\nG1 X4 Y4 E4\n"
+                           ";LAYER_CHANGE\n;Z:0.6\n;LAYER:2\nG1 X5 Y5 E5\n";
+        f = gcode(dir, "plausible.gcode", text);
+        layer_index good, bent, loaded2;
+        assert(layer_index_build(f, &good, 0, NULL, NULL) == LAYER_PATH_OK && good.count == 3 && good.total == 3);
+        char mp[600]; snprintf(mp, sizeof(mp), "%s/plausible.idx", dir);
+        const long marker = (long)good.entries[1].offset;
+        assert(!strncmp(text + marker, ";LAYER_CHANGE", 13));
+        layer_path_info want, got;
+        assert(jump(f, &good, 2, &want) == LAYER_PATH_OK && want.point_count >= 1);
+        layer_point want_points[LAYER_PATH_COLLECT_MAX]; int want_count = want.point_count;
+        memcpy(want_points, pts_b, sizeof(layer_point) * (size_t)want_count);
+        /* Offsets that are not the start of a marker line: one byte in, the middle of the marker, the newline before it,
+         * the line after it (a comment that is no marker), a G-code line, beyond the end of the file, below zero, and
+         * exactly at the end. */
+        long bad[] = { marker + 1, marker + 6, marker - 1, (long)(strstr(text + marker, ";Z:") - text),
+                       (long)(strstr(text + marker, "G1 X3") - text), (long)strlen(text) + 10,
+                       -5L, (long)strlen(text) };
+        for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+            bent = good;
+            bent.entries = malloc(sizeof(*bent.entries) * (size_t)good.count); assert(bent.entries);
+            memcpy(bent.entries, good.entries, sizeof(*bent.entries) * (size_t)good.count);
+            bent.entries[1].offset = bad[i];
+            assert(layer_index_save(mp, &bent) == 0 && layer_index_load(mp, &loaded2) == 0); /* the checksum is right */
+            assert(loaded2.entries[1].offset == bad[i]);
+            if (gcode_layer_path_parse_indexed(f, &loaded2, 2, pts_b, LAYER_PATH_COLLECT_MAX, starts_b,
+                                               LAYER_PATH_PATHS_MAX, &got, &start, 1000, 0) != LAYER_INDEX_BAD) {
+                fprintf(stderr, "offset %ld (marker at %ld) was used\n", bad[i], marker);
+                assert(0);
+            }
+            /* The other layers of the same map still come through it, and the full scan gives what the intact map gave. */
+            assert(jump(f, &loaded2, 1, &got) == LAYER_PATH_OK && jump(f, &loaded2, 3, &got) == LAYER_PATH_OK);
+            assert(full(f, 2, &got) == LAYER_PATH_OK && got.point_count == want_count &&
+                   !memcmp(pts_a, want_points, sizeof(layer_point) * (size_t)want_count));
+            layer_index_free(&loaded2); free(bent.entries);
+        }
+        /* The intact map is used (the check does not refuse a right offset), also from the same map file. */
+        assert(layer_index_save(mp, &good) == 0 && layer_index_load(mp, &loaded2) == 0 &&
+               jump(f, &loaded2, 2, &got) == LAYER_PATH_OK && got.point_count == want_count &&
+               !memcmp(pts_b, want_points, sizeof(layer_point) * (size_t)want_count));
+        layer_index_free(&loaded2); layer_index_free(&good); fclose(f); unlink(mp);
+        /* A file numbered by ";LAYER:N" (Cura): the marker at the offset must also be the entry's own layer. The marker of
+         * another layer is a marker line, but not this layer's. */
+        const char *cura = ";LAYER:0\nG1 X1 Y1 E1\nG1 X2 Y2 E2\n;LAYER:1\nG1 X3 Y3 E3\nG1 X4 Y4 E4\n;LAYER:2\nG1 X5 Y5 E5\n";
+        f = gcode(dir, "plausible-cura.gcode", cura);
+        assert(layer_index_build(f, &good, 0, NULL, NULL) == LAYER_PATH_OK && good.count == 3 && !good.entries[0].change_mode);
+        assert(jump(f, &good, 2, &want) == LAYER_PATH_OK);
+        bent = good; bent.entries = malloc(sizeof(*bent.entries) * (size_t)good.count); assert(bent.entries);
+        memcpy(bent.entries, good.entries, sizeof(*bent.entries) * (size_t)good.count);
+        bent.entries[1].offset = good.entries[2].offset; /* layer 2's marker where layer 1's should be */
+        assert(layer_index_save(mp, &bent) == 0 && layer_index_load(mp, &loaded2) == 0);
+        assert(gcode_layer_path_parse_indexed(f, &loaded2, 2, pts_b, LAYER_PATH_COLLECT_MAX, starts_b, LAYER_PATH_PATHS_MAX,
+                                              &got, &start, 1000, 0) == LAYER_INDEX_BAD);
+        assert(jump(f, &loaded2, 3, &got) == LAYER_PATH_OK); /* its own marker is accepted */
+        layer_index_free(&loaded2); free(bent.entries); layer_index_free(&good); fclose(f); unlink(mp);
+    }
+
     /* A layer above its own byte budget is refused; the worker can take the next request. */
     f = gcode(dir, "budget.gcode", ";LAYER_CHANGE\nG1 X1 Y1 E1\nG1 X2 Y2 E2\nG1 X3 Y3 E3\n;LAYER_CHANGE\nG1 X4 Y4 E4\n");
     assert(layer_index_build(f, &index, 0, NULL, NULL) == LAYER_PATH_OK);
@@ -199,13 +284,13 @@ int main(int argc, char **argv) {
     assert(loaded.count == index.count && loaded.total == index.total &&
            !memcmp(loaded.entries, index.entries, sizeof(*index.entries) * (size_t)index.count));
     layer_index_free(&loaded);
-    /* The stored map is checked against its own SHA-256: one flipped bit anywhere in it (version, key, counts,
+    /* The stored map is checked against its own CRC-32: one flipped bit anywhere in it (version, key, counts,
      * the checksum, the middle of an entry) is refused, never read as a layer that is slightly wrong. */
     {
         assert(index.count == 2);
         long key_at = 8 + 4 + 2 * 4, head_at = key_at + (long)sizeof(layer_index_key);
-        long entries_at = head_at + 5 * 4 + 32, stride = (long)sizeof(layer_index_entry);
-        long where[] = { 10, key_at + 3, head_at, head_at + 4 * 4, head_at + 5 * 4 + 7,
+        long entries_at = head_at + 5 * 4 + 4, stride = (long)sizeof(layer_index_entry);
+        long where[] = { 10, key_at + 3, head_at, head_at + 4 * 4, head_at + 5 * 4 + 2,
                          entries_at + stride, entries_at + stride + 40, entries_at + 2 * stride - 5 };
         for (size_t i = 0; i < sizeof(where) / sizeof(where[0]); i++) {
             flip_bit(path, where[i]);
@@ -218,9 +303,31 @@ int main(int argc, char **argv) {
             assert(layer_index_load(path, &loaded) == 0 && loaded.count == 2);
             layer_index_free(&loaded);
         }
+        /* And every bit of the whole file, one at a time (a CRC-32 finds every single flipped bit). */
+        long file_size = entries_at + 2 * stride;
+        for (long byte = 0; byte < file_size; byte++)
+            for (int bit = 0; bit < 8; bit++) {
+                FILE *g = fopen(path, "r+b"); assert(g);
+                int c; assert(!fseek(g, byte, SEEK_SET) && (c = fgetc(g)) != EOF);
+                assert(!fseek(g, byte, SEEK_SET) && fputc(c ^ (1 << bit), g) != EOF && !fclose(g));
+                if (layer_index_load(path, &loaded) == 0) {
+                    fprintf(stderr, "bit %d of byte %ld of the stored map: a damaged map was read\n", bit, byte);
+                    layer_index_free(&loaded);
+                    assert(0);
+                }
+                g = fopen(path, "r+b"); assert(g);
+                assert(!fseek(g, byte, SEEK_SET) && fputc(c, g) != EOF && !fclose(g));
+            }
+        assert(layer_index_load(path, &loaded) == 0 && loaded.count == 2);
+        layer_index_free(&loaded);
     }
     /* A map written by the first version (no checksum) is refused and counts as stale, so it is rebuilt. */
     write_version_1(path, &index);
+    assert(layer_index_load(path, &loaded) != 0 && layer_index_load_valid(path, f, &loaded) == 1);
+    assert(layer_index_save(path, &index) == 0 && layer_index_load_valid(path, f, &loaded) == 0);
+    layer_index_free(&loaded);
+    /* A map of version 2 (SHA-256 instead of the CRC-32, otherwise the same bytes) is refused too, and rebuilt. */
+    write_version_2(path, &index);
     assert(layer_index_load(path, &loaded) != 0 && layer_index_load_valid(path, f, &loaded) == 1);
     assert(layer_index_save(path, &index) == 0 && layer_index_load_valid(path, f, &loaded) == 0);
     layer_index_free(&loaded);
@@ -231,11 +338,10 @@ int main(int argc, char **argv) {
         int32_t version = other ? LAYER_INDEX_VERSION + 1 : LAYER_INDEX_VERSION;
         int32_t sizes[2] = { (int32_t)sizeof(layer_index_entry) + (other ? 0 : 8), (int32_t)sizeof(layer_index_key) };
         int32_t head[5] = { index.total, index.max_layer, index.seen_marker, index.repeats, index.count };
-        unsigned char digest[32];
-        assert(layer_index_digest(version, sizes, &index.key, head, index.entries, index.count, digest) == 0);
+        uint32_t digest = layer_index_digest(version, sizes, &index.key, head, index.entries, index.count);
         assert(fwrite("CC2LIDX1", 1, 8, g) == 8 && fwrite(&version, sizeof(version), 1, g) == 1 &&
                fwrite(sizes, sizeof(int32_t), 2, g) == 2 && fwrite(&index.key, sizeof(index.key), 1, g) == 1 &&
-               fwrite(head, sizeof(int32_t), 5, g) == 5 && fwrite(digest, 1, sizeof(digest), g) == sizeof(digest) &&
+               fwrite(head, sizeof(int32_t), 5, g) == 5 && fwrite(&digest, sizeof(digest), 1, g) == 1 &&
                fwrite(index.entries, sizeof(*index.entries), (size_t)index.count, g) == (size_t)index.count);
         assert(!fclose(g));
         assert(layer_index_load(path, &loaded) != 0);
@@ -301,6 +407,7 @@ int main(int argc, char **argv) {
     }
     puts("PASS: layer index equals the full scan for every layer (ElegooSlicer, Cura, relative/absolute, arcs, "
          "long lines, CRLF), refuses files without markers or with repeated layers, per-layer budget, "
-         "storage round trip, stale and damaged index files, a checksum over the stored map, old versions and other record sizes refused");
+         "storage round trip, stale and damaged index files, a checksum over the stored map, old versions and other record sizes refused, "
+         "an offset that is no marker line is not used");
     return 0;
 }

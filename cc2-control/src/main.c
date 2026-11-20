@@ -258,7 +258,7 @@ static void memory_values(long *total, long *available) {
 
 static void layer_path_health_json(char *out, size_t cap);
 static void health_response(int fd, const mqtt_client *mqtt) {
-    char body[1536], layer_path[448];
+    char body[1536], layer_path[512];
     layer_path_health_json(layer_path, sizeof(layer_path));
     char load[96] = "unknown";
     long uptime = read_first_long("/proc/uptime");

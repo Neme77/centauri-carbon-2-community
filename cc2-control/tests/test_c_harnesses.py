@@ -23,6 +23,7 @@ HARNESSES = {
     "test_gcode_layer_path.c": [],
     "test_gcode_layer_index.c": [],
     "test_gcode_layer_index_store.c": [],
+    "test_crc32.c": BACKEND,
     "test_layer_index_size_limit.c": [],
     "test_layer_store_entries.c": BACKEND,
     "test_object_query.c": BACKEND,

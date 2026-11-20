@@ -92,12 +92,13 @@ static void layer_path_health_json(char *out, size_t cap) {
         "\"layer_path_scans\":%lu,\"layer_path_rejected\":%lu,\"layer_path_busy\":%lu,"
         "\"layer_path_bytes_read\":%llu,\"layer_path_longest_ms\":%ld,\"layer_path_last_ms\":%ld,"
         "\"gcode_read_blocked\":%lu,\"gcode_read_stopped\":%lu,"
-        "\"layer_map_hits\":%lu,\"layer_map_fallbacks\":%lu,\"layer_map_built\":%lu,\"layer_map_failed\":%lu",
+        "\"layer_map_hits\":%lu,\"layer_map_fallbacks\":%lu,\"layer_map_built\":%lu,\"layer_map_failed\":%lu,"
+        "\"layer_map_bad\":%lu",
         layer_path_stats.scans, layer_path_stats.rejected, layer_path_stats.busy,
         layer_path_stats.bytes_read, layer_path_stats.longest_ms, layer_path_stats.last_ms,
         layer_path_stats.read_blocked, layer_path_stats.read_stopped,
         atomic_load(&layer_store_stat_hits), atomic_load(&layer_store_stat_fallbacks),
-        atomic_load(&layer_store_stat_built), atomic_load(&layer_store_stat_failed));
+        atomic_load(&layer_store_stat_built), atomic_load(&layer_store_stat_failed), atomic_load(&layer_store_stat_bad));
     pthread_mutex_unlock(&layer_path_cache_lock);
     if (n < 0 || (size_t)n >= cap) out[0] = 0;
 }
@@ -172,6 +173,17 @@ static int layer_path_map_serves(const char *path, int source, int layer) {
         if (!index.seen_marker || index.repeats) verdict = LAYER_MAP_USELESS; /* every layer goes to the full scan */
         else if (layer_index_serves_all(&index)) verdict = LAYER_MAP_ALL_LAYERS;
         else if (layer_index_can_serve(&index, layer)) verdict = LAYER_MAP_THIS_LAYER;
+        /* A map that cannot be read at this layer's stored offset serves nothing for it: the refusal stays, as without a map
+         * (the worker would turn to the full scan and run into the limit again, on every request). */
+        if (verdict == LAYER_MAP_THIS_LAYER || verdict == LAYER_MAP_ALL_LAYERS) {
+            const layer_index_entry *entry = layer_index_find(&index, layer - 1);
+            if (entry && !layer_index_entry_plausible(file, &index, entry)) verdict = LAYER_MAP_NO;
+        }
+        /* "Serves every layer" ends the whole refusal, so the map's last entry (the first to be off when a map is shifted
+         * from some line on) must be readable too; otherwise it serves this layer only and the refusal stays. */
+        if (verdict == LAYER_MAP_ALL_LAYERS && index.count > 0 &&
+            !layer_index_entry_plausible(file, &index, &index.entries[index.count - 1]))
+            verdict = LAYER_MAP_THIS_LAYER;
         layer_index_free(&index);
     }
     fclose(file);
@@ -211,12 +223,21 @@ static void *layer_path_worker(void *opaque) {
      * stale map is queued so the next request can jump. */
     int rc = LAYER_INDEX_NONE;
     int mapped = 0; /* the layer was read through the map, not from the start of the file */
+    long long map_from = -1; /* where that read began: the map's offset of the layer (-1: no read through the map) */
     layer_index index;
     if (layer_store_load(job->path, file, &index) == 0) {
+        const layer_index_entry *at_layer = layer_index_find(&index, job->layer - 1);
+        layer_index_key identity = index.key;
         rc = gcode_layer_path_parse_indexed(file, &index, job->layer, points, LAYER_PATH_COLLECT_MAX,
                                             starts, LAYER_PATH_PATHS_MAX, &info, &started,
                                             LAYER_PATH_TIME_MS, LAYER_INDEX_LAYER_BYTES_MAX);
+        if (at_layer && rc != LAYER_INDEX_NONE && rc != LAYER_INDEX_BAD) map_from = at_layer->offset;
         layer_index_free(&index);
+        if (rc == LAYER_INDEX_BAD) {
+            /* A current map with a wrong offset: read from the start now, and have the map made again (once). */
+            layer_store_distrust(job->path, &identity);
+            rc = LAYER_INDEX_NONE;
+        }
         mapped = rc != LAYER_INDEX_NONE;
         atomic_fetch_add(rc == LAYER_INDEX_NONE ? &layer_store_stat_fallbacks : &layer_store_stat_hits, 1);
     } else if (!strcmp(job->storage, "internal")) {
@@ -259,6 +280,9 @@ static void *layer_path_worker(void *opaque) {
         long long from = have_resume && resume.offset >= 0 &&
                          (unsigned long long)resume.offset <= (unsigned long long)LAYER_PATH_BYTES_MAX ? resume.offset : 0;
         long long at = (long long)ftello(file);
+        /* A read through the map began at its offset of the layer; one that answered without reading ("outside the file")
+         * read nothing, and the file position is wherever the key left it. */
+        if (mapped) { if (map_from >= 0) from = map_from; else at = from; }
         struct timespec read_end;
         clock_gettime(CLOCK_MONOTONIC, &read_end);
         long took = layer_path_ms_between(&started, &read_end);

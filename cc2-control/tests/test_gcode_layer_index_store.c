@@ -79,6 +79,7 @@ int main(void) {
     (void)layer_path_mark_pick;
     (void)gcode_layer_path_parse_at;
     (void)sha256_fd; (void)gcode_layer_path_query; (void)gcode_layer_path_json;
+    (void)layer_store_distrust;
     (void)gcode_layer_path_parse_indexed; (void)gcode_layer_path_parse; (void)layer_index_can_serve; (void)layer_index_serves_all;
     (void)layer_store_stat_hits; (void)layer_store_stat_fallbacks; /* counted by the HTTP side, see test_layer_path_stats.c */
     char base[] = "/tmp/cc2-layer-store-XXXXXX";

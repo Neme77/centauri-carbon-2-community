@@ -33,7 +33,7 @@ static int map_exists(const char *gcode) {
 }
 
 int main(void) {
-    (void)layer_path_mark_pick; (void)gcode_layer_path_parse_at; (void)sha256_fd; (void)gcode_layer_path_query;
+    (void)layer_path_mark_pick; (void)gcode_layer_path_parse_at; (void)sha256_fd; (void)gcode_layer_path_query; (void)layer_store_distrust;
     (void)gcode_layer_path_json; (void)gcode_layer_path_parse_indexed; (void)gcode_layer_path_parse;
     (void)layer_index_can_serve; (void)layer_index_serves_all; (void)layer_store_stat_hits; (void)layer_store_stat_fallbacks;
     (void)layer_store_forget; (void)layer_store_load; (void)layer_store_start;

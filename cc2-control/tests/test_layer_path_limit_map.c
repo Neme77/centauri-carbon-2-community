@@ -82,6 +82,32 @@ static void write_big(const char *path, int layers, int repeat_at_end, int skip_
     assert(!fclose(f));
 }
 
+/* A map whose entries for the layer indexes `layer0` and `layer1` (-1: none) point `delta` bytes away from their marker line;
+ * its checksum is right. */
+static void save_bent_map2(const char *path, int layer0, int layer1, long delta) {
+    char map[1200]; FILE *src = fopen(path, "rb"); assert(src);
+    layer_index built; assert(layer_index_build(src, &built, 0, NULL, NULL) == LAYER_PATH_OK); fclose(src);
+    int found = 0;
+    for (int i = 0; i < built.count; i++)
+        if (built.entries[i].layer == layer0 || built.entries[i].layer == layer1) { built.entries[i].offset += delta; found++; }
+    assert(found >= 1 && layer_store_index_path(path, map, sizeof(map)) == 0 && layer_index_save(map, &built) == 0);
+    layer_index_free(&built);
+}
+static void save_bent_map(const char *path, int layer0, long delta) { save_bent_map2(path, layer0, -1, delta); }
+
+static int map_exists(const char *path) {
+    char map[1200]; return layer_store_index_path(path, map, sizeof(map)) == 0 && access(map, F_OK) == 0;
+}
+static int queued(const char *path) {
+    pthread_mutex_lock(&layer_store_lock);
+    int found = 0; for (int i = 0; i < layer_store_count; i++) if (!strcmp(layer_store_queue[i], path)) found = 1;
+    pthread_mutex_unlock(&layer_store_lock);
+    return found;
+}
+static void unqueue(const char *path) {
+    pthread_mutex_lock(&layer_store_lock); layer_store_dequeue_locked(path); pthread_mutex_unlock(&layer_store_lock);
+}
+
 static void save_map(const char *path) {
     char map[1200]; FILE *src = fopen(path, "rb"); assert(src);
     layer_index built; assert(layer_index_build(src, &built, 0, NULL, NULL) == LAYER_PATH_OK); fclose(src);
@@ -175,6 +201,63 @@ int main(void) {
     assert(limit_valid());
     assert(get("gap.gcode", 25, reply, sizeof(reply)) == 413); /* layer number 25 (index 24) is not in the file */
     assert(get("gap.gcode", 26, reply, sizeof(reply)) == 200);
+
+    /* A map that is current and serves every layer, but whose offset for one layer points into a line: for that layer it
+     * serves nothing, so the refusal of the scan limit stays (it does not fall into a new full scan on every request);
+     * the other layers still come through the map. */
+    {
+        char bent[600]; snprintf(bent, sizeof(bent), "%s/bent.gcode", dir);
+        write_big(bent, 60, 0, -1);
+        assert(get_held("bent.gcode", 30, reply, sizeof(reply)) == 413);
+        save_bent_map(bent, 29, 3); /* layer number 30 */
+        pthread_mutex_lock(&layer_path_cache_lock); unsigned long scans = layer_path_stats.scans; pthread_mutex_unlock(&layer_path_cache_lock);
+        for (int again = 0; again < 3; again++) {
+            assert(get("bent.gcode", 30, reply, sizeof(reply)) == 413 && strstr(reply, "Layer path scan limit reached"));
+            assert(limit_valid());
+        }
+        pthread_mutex_lock(&layer_path_cache_lock); assert(layer_path_stats.scans == scans); pthread_mutex_unlock(&layer_path_cache_lock);
+        assert(get("bent.gcode", 31, reply, sizeof(reply)) == 200 && strstr(reply, "\"layer\":31")); /* the rest is served */
+        drop_map(bent); unlink(bent);
+        /* A map that is off only at its last layer does not end the whole refusal ("serves every layer" is not true of it):
+         * a layer it can read is served, the refusal stays for the others. */
+        char bent2[600]; snprintf(bent2, sizeof(bent2), "%s/bent2.gcode", dir);
+        write_big(bent2, 60, 0, -1);
+        assert(get_held("bent2.gcode", 30, reply, sizeof(reply)) == 413);
+        save_bent_map(bent2, 59, 3); /* layer number 60 */
+        assert(get("bent2.gcode", 31, reply, sizeof(reply)) == 200 && strstr(reply, "\"layer\":31"));
+        assert(limit_valid());
+        assert(get("bent2.gcode", 60, reply, sizeof(reply)) == 413 && strstr(reply, "Layer path scan limit reached"));
+        assert(get("bent2.gcode", 32, reply, sizeof(reply)) == 200);
+        drop_map(bent2); unlink(bent2);
+    }
+
+    /* A map with a wrong offset is dropped and queued for a new one, once for the same file; the refusal of the scan limit
+     * stays in both cases (the map never serves a layer whose offset it cannot read). Layer 40 holds the refusal, layer 20 is
+     * an earlier layer that the worker reads, with a wrong offset for both. */
+    {
+        char bent3[600]; snprintf(bent3, sizeof(bent3), "%s/bent3.gcode", dir);
+        write_big(bent3, 60, 0, -1);
+        assert(get_held("bent3.gcode", 40, reply, sizeof(reply)) == 413);
+        save_bent_map2(bent3, 19, 39, 3); unqueue(bent3);
+        assert(get("bent3.gcode", 40, reply, sizeof(reply)) == 413 && limit_valid()); /* the map is not asked */
+        unsigned long bad0 = atomic_load(&layer_store_stat_bad);
+        assert(get("bent3.gcode", 20, reply, sizeof(reply)) == 200); /* read from the start, the map is dropped */
+        assert(atomic_load(&layer_store_stat_bad) == bad0 + 1 && !map_exists(bent3));
+        assert(queued(bent3));
+        assert(get("bent3.gcode", 40, reply, sizeof(reply)) == 413 && limit_valid()); /* no map: the refusal stays */
+        atomic_store(&layer_store_idle, 1);
+        assert(layer_store_build_one(bent3) == 0 && map_exists(bent3)); /* the builder makes it again */
+        atomic_store(&layer_store_idle, 0);
+        unqueue(bent3);
+        unsigned long hits0 = atomic_load(&layer_store_stat_hits);
+        assert(get("bent3.gcode", 21, reply, sizeof(reply)) == 200 && atomic_load(&layer_store_stat_hits) == hits0 + 1);
+        /* The same file, wrong again: not dropped again, not queued again; the refusal stays. */
+        save_bent_map2(bent3, 19, 39, 3);
+        assert(get("bent3.gcode", 20, reply, sizeof(reply)) == 200);
+        assert(atomic_load(&layer_store_stat_bad) == bad0 + 2 && map_exists(bent3) && !queued(bent3));
+        assert(get("bent3.gcode", 40, reply, sizeof(reply)) == 413 && limit_valid());
+        drop_map(bent3); unlink(bent3);
+    }
 
     close(gate[0]); close(gate[1]);
     drop_map(big); drop_map(other); drop_map(repeat); drop_map(gap);

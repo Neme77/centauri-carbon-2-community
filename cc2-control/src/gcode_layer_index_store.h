@@ -36,6 +36,8 @@ static int layer_store_max_maps = LAYER_STORE_MAPS_MAX;
  * map (hits) and requests that read the file from its start although it was asked for (fallbacks: no current map, or one the
  * index cannot serve). */
 static atomic_ulong layer_store_stat_built, layer_store_stat_failed, layer_store_stat_hits, layer_store_stat_fallbacks;
+/* Requests that found a current map whose stored offset for the layer was no marker line (layer_map_bad). */
+static atomic_ulong layer_store_stat_bad;
 /* After a start the newest files already on the printer get their maps in the idle time; a file only gets one when somebody opens it
  * otherwise, and that first open pays the full scan. */
 #define LAYER_STORE_PREWARM_MAX 32
@@ -150,6 +152,34 @@ static void layer_store_forget(const char *gcode_path) {
     layer_store_failed_clear_locked(gcode_path);
     pthread_mutex_unlock(&layer_store_lock);
     if (layer_store_index_path(gcode_path, path, sizeof(path)) == 0) unlink(path);
+}
+
+/* A current map whose offset for a layer is no marker line (layer_index_entry_plausible) is counted (layer_map_bad) and dropped and its file queued
+ * for a new map, but only once for each identity of the file (its key: size, times, inode, edges) and each start of the
+ * program: a builder that writes the same wrong offsets again must not be asked in a loop; the requests then read from the
+ * start of the file as without a map, and layer_map_bad shows it. Returns 1 when the map was dropped and the file queued
+ * (or the queue was full: the next request without a map queues it), 0 when this identity was dropped before, -1 for a
+ * path that is too long. The last LAYER_STORE_BAD_MAX identities are remembered. */
+#define LAYER_STORE_BAD_MAX 16
+static struct { char path[LAYER_STORE_PATH_MAX]; layer_index_key key; } layer_store_bad[LAYER_STORE_BAD_MAX];
+static int layer_store_bad_next;
+static int layer_store_distrust(const char *gcode_path, const layer_index_key *key) {
+    atomic_fetch_add(&layer_store_stat_bad, 1);
+    if (!gcode_path || strlen(gcode_path) >= LAYER_STORE_PATH_MAX) return -1;
+    pthread_mutex_lock(&layer_store_lock);
+    for (int i = 0; i < LAYER_STORE_BAD_MAX; i++)
+        if (layer_store_bad[i].path[0] && !strcmp(layer_store_bad[i].path, gcode_path) &&
+            layer_index_key_same(&layer_store_bad[i].key, key)) {
+            pthread_mutex_unlock(&layer_store_lock);
+            return 0;
+        }
+    int slot = layer_store_bad_next++ % LAYER_STORE_BAD_MAX; /* the oldest entry makes room */
+    snprintf(layer_store_bad[slot].path, LAYER_STORE_PATH_MAX, "%s", gcode_path);
+    layer_store_bad[slot].key = *key;
+    pthread_mutex_unlock(&layer_store_lock);
+    layer_store_forget(gcode_path);
+    layer_store_note_request(gcode_path);
+    return 1;
 }
 
 /* A stored map that still matches the open file: 0 and *out filled, otherwise 1. */
