@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """The start page revalidates with an ETag; every other answer stays no-store.
 
-GET / and GET /index.html answer 200 with an ETag taken from the file's size,
-modification time and change time plus `Cache-Control: no-cache`, and answer a matching
-If-None-Match with a bodyless 304 before the file is read. API answers and
+GET / and GET /index.html answer 200 with an ETag that is the SHA-256 of the page plus
+`Cache-Control: no-cache`, and answer a matching If-None-Match with a bodyless 304. API answers and
 /i18n/* keep `Cache-Control: no-store`.
 """
+import hashlib
 import http.client
 import os
 import shlex
@@ -141,23 +141,19 @@ with tempfile.TemporaryDirectory(prefix="cc2-etag-") as temporary:
         assert status == 200 and b"second" in data, f"changed size returned {status}"
         etag_size = headers.get("etag")
         assert etag_size and etag_size != etag, "ETag unchanged after the size changed"
-        # Same size, other modification time: still a new ETag.
+        # The tag belongs to the content: the same page with other file times keeps its tag and still gets 304.
         stat = index.stat()
         os.utime(index, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
         status, headers, data = fetch(port, "/", [("If-None-Match", etag_size)])
-        assert status == 200, f"changed mtime returned {status}"
-        etag_time = headers.get("etag")
-        assert etag_time and etag_time not in (etag, etag_size), "ETag unchanged after the mtime changed"
-        status, _, data = fetch(port, "/", [("If-None-Match", etag_time)])
-        assert status == 304 and data == b"", "unchanged file must answer 304 again"
-        # Sub-second change only: the nanoseconds are part of the tag.
-        stat = index.stat()
+        assert status == 304 and data == b"" and headers.get("etag") == etag_size, f"same content, other mtime returned {status}"
         os.utime(index, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
-        status, headers, _ = fetch(port, "/", [("If-None-Match", etag_time)])
-        assert status == 200 and headers.get("etag") != etag_time, "a 1 ms change must change the ETag"
+        status, headers, _ = fetch(port, "/")
+        assert status == 200 and headers.get("etag") == etag_size, "a change of the file time alone must not change the ETag"
+        assert etag_size == '"' + hashlib.sha256(index.read_bytes()).hexdigest() + '"', "ETag is not the SHA-256 of the page"
 
-        # Same size, other content, modification time put back (a copy that keeps times, tar, touch -r): the change time
-        # of the file cannot be set from outside, so the tag still changes and the old one gets the new page.
+        # Same size, other content, modification time put back (a copy that keeps times, tar, touch -r): the tag follows
+        # the content, so the old tag gets the new page. (A switch of releases that also gives equal change time and inode
+        # is tested in test_index_validator.c, where the file metadata can be forced.)
         index.write_text("<!doctype html><html><body>third, size 1</body></html>\n", encoding="ascii")
         status, headers, data = fetch(port)
         etag_third = headers.get("etag")
@@ -174,8 +170,8 @@ with tempfile.TemporaryDirectory(prefix="cc2-etag-") as temporary:
         status, _, data = fetch(port, "/", [("If-None-Match", etag_third)])
         assert status == 304 and data == b"", "unchanged file must answer 304 again after the restored time"
 
-        # The page is rewritten in place while it is requested: whatever is sent, the tag and the body come from one
-        # state of the file (the size in the tag is the size of the body; a same-size write inside one clock tick of the file times is not seen). Statistical: the window is a few microseconds,
+        # The page is rewritten in place while it is requested: whatever is sent, the tag is the SHA-256 of the
+        # body that was sent (a tag never describes other bytes). Statistical: the window is a few microseconds,
         # so this runs many requests against a writer. A page that changed or was shorter than measured is answered with a 503 and
         # a JSON error, never with a silent close and never with a tag.
         size_a, size_b = 300000, 450000
@@ -217,8 +213,8 @@ with tempfile.TemporaryDirectory(prefix="cc2-etag-") as temporary:
                     continue
                 completed[0] += 1
                 tag = headers.get("etag", "")
-                if not tag.startswith('"') or int(tag[1:].split("-")[0], 16) != len(data):
-                    mismatches.append(f"ETag {tag} but body of {len(data)} bytes")
+                if tag != '"' + hashlib.sha256(data).hexdigest() + '"':
+                    mismatches.append(f"ETag {tag} is not the SHA-256 of the {len(data)} bytes sent")
 
         writer = threading.Thread(target=rewrite)
         clients = [threading.Thread(target=request_loop, args=(3,)) for _ in range(4)]
