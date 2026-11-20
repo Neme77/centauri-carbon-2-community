@@ -51,15 +51,15 @@ Il menu Aiuto dello slicer ha la voce **Show Configuration Folder** (passo 3); i
 
 ![Il menu Aiuto di ElegooSlicer con Show Configuration Folder e il profilo CC2 Control nel campo stampante](images/elegooslicer-help-menu.png)
 
-Con il profilo scelto, **Stampa** apre questa finestra (mostrata in un ElegooSlicer in tedesco); il campo stampante in alto a sinistra mostra il profilo:
+Con il profilo scelto, **Stampa** apre questa finestra:
 
-![ElegooSlicer con il profilo CC2 Control: la finestra «Invia G-code all'host di stampa» con Carica e Carica e stampa](images/elegooslicer-print-dialog.png)
+![La finestra di ElegooSlicer «Send G-code to printer host» con Carica e Carica e stampa](images/elegooslicer-print-dialog.png)
 
-La scheda **Dispositivo** mostra poi CC2 Control:
+La scheda **Dispositivo** mostra poi CC2 Control (la vista della telecamera dal vivo qui non è mostrata):
 
 ![La scheda Dispositivo di ElegooSlicer con la dashboard di CC2 Control](images/elegooslicer-device-tab.png)
 
-**Carica e stampa** apre in CC2 Control la conferma della bobina Canvas; la stampa parte solo dopo la conferma lì:
+**Carica e stampa** apre in CC2 Control la conferma della bobina Canvas; la stampa parte solo dopo la conferma lì (mostrata in un CC2 Control in tedesco):
 
 ![La conferma della bobina Canvas di CC2 Control per una stampa inviata da ElegooSlicer](images/elegooslicer-spool-confirmation.png)
 

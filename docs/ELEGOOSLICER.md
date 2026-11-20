@@ -51,15 +51,15 @@ The slicer's Help menu has the entry **Show Configuration Folder** (step 3); the
 
 ![The ElegooSlicer Help menu with Show Configuration Folder and the CC2 Control profile in the printer field](images/elegooslicer-help-menu.png)
 
-With the profile chosen, **Print** opens this dialog (shown in a German ElegooSlicer); the printer field at the top left shows the profile:
+With the profile chosen, **Print** opens this dialog:
 
-![ElegooSlicer with the CC2 Control profile: the dialog "Send G-code to the printer host" with Upload and Upload and Print](images/elegooslicer-print-dialog.png)
+![The ElegooSlicer dialog "Send G-code to printer host" with Upload and Upload and Print](images/elegooslicer-print-dialog.png)
 
-The **Device** tab then shows CC2 Control:
+The **Device** tab then shows CC2 Control (the live camera view is not shown here):
 
 ![The ElegooSlicer Device tab showing the CC2 Control dashboard](images/elegooslicer-device-tab.png)
 
-**Upload and Print** opens the Canvas spool confirmation in CC2 Control; the print only starts after you confirm it there:
+**Upload and Print** opens the Canvas spool confirmation in CC2 Control; the print only starts after you confirm it there (shown in a German CC2 Control):
 
 ![CC2 Control's Canvas spool confirmation for a print sent from ElegooSlicer](images/elegooslicer-spool-confirmation.png)
 
