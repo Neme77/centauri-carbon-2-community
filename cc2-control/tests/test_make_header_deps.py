@@ -35,7 +35,9 @@ if [ $dep = 1 ]; then
   for h in $(cat headers.txt); do echo "$h:"; done
 else
   echo compile >> calls.log
-  mkdir -p "$(dirname "$out")" && echo built > "$out"
+  # Like the real linker, the stand-in does not create the output directory.
+  [ -d "$(dirname "$out")" ] || { echo "cannot open output file $out: No such file or directory" >&2; exit 1; }
+  echo built > "$out"
 fi
 """
 
@@ -226,6 +228,18 @@ def main():
         assert calls(work) == [], f"make clean ran the compiler: {calls(work)}"
         print("PASS: make clean runs no compiler")
 
+
+        # 10. `make clean test` is one invocation in the CI: the build directory must exist again for the build after clean.
+        work = fresh(base)
+        make(work)
+        reset_calls(work)
+        make(work, "clean", "build/cc2-control")
+        assert (work / "build/cc2-control").is_file() and (work / "build/cc2-control.d").is_file(), "clean and build in one run left no build"
+        assert count(work, "compile") == 1, calls(work)
+        reset_calls(work)
+        make(work)
+        assert calls(work) == [], f"unchanged build after clean and build did work: {calls(work)}"
+        print("PASS: make clean and a build in one invocation builds again")
 
 if __name__ == "__main__":
     sys.exit(main())

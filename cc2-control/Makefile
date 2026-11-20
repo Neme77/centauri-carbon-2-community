@@ -107,7 +107,8 @@ test: $(TARGET) $(UPDATE_WORKER) $(HTTPS_DOWNLOAD)
 clean:
 	rm -rf $(BUILD) dist
 
-# `make clean` needs no header list.
-ifneq ($(MAKECMDGOALS),clean)
+# Not read when `clean` is among the goals (`make clean test`): the list would be made first and then deleted by clean,
+# and the build after clean makes it again through its own rule.
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
 -include $(BACKEND_DEPS)
 endif
