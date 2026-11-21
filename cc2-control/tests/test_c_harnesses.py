@@ -23,7 +23,7 @@ HARNESSES = {
     "test_gcode_layer_path.c": [],
     "test_object_query.c": BACKEND,
     "test_exclude_objects.c": BACKEND,
-    # test_file_ops.c and test_orca_upload.c include src/main.c themselves.
+    # test_file_ops.c, test_orca_upload.c and test_index_validator.c include src/main.c themselves.
     "test_file_ops.c": BACKEND,
     "test_file_analysis.c": BACKEND,
     "test_recovery_download.c": BACKEND,
@@ -53,6 +53,7 @@ HARNESSES = {
     "test_external_feed.c": BACKEND,
     "test_filament_metadata.c": BACKEND,
     "test_orca_upload.c": BACKEND,
+    "test_index_validator.c": BACKEND,
     "test_mqtt_workload.c": [],
     "test_mqtt_registration.c": [],
     "test_canvas_discovery.c": [],
