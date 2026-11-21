@@ -109,6 +109,8 @@ static void rfid_native_action_response(int fd,console_state *console,const char
         action=rn_automatic(mode,mode.phase==1?rn_strict_mapped():0);
     }
     if(length==7&&!memcmp(body,"restore",7)&&mode.phase==5)action="--restore-original";
+    /* Cancel a staged activation (phase 1 only). */
+    if(length==6&&!memcmp(body,"cancel",6)&&mode.phase==1)action="--abort-staged-host";
     if(length==6&&!memcmp(body,"remove",6)&&(mode.phase==8||mode.phase==9))action="--remove-host";
     if(mode.mode!=1||!action||!rn_restore_available(console)||!rn_start(action)){
         plates_fail(fd,409,"RFID lifecycle action requires its qualified component and an idle/cold printer; preserve the lifecycle journal and backup");return;

@@ -152,6 +152,26 @@ static int vc_remove_host(void){
          "HOST RESTORED: exact original eight startup files; complete idle reboot required. All legacy backups and the stock image remain preserved.");
     return 0;
 }
+static int vc_abort_staged_host(void){
+    /* Explicit user action, never automatic. */
+    struct maintenance_barrier barrier=MAINTENANCE_BARRIER_INIT;
+    if(!maintenance_barrier_acquire(&barrier)){fprintf(stderr,"STOP: installer_or_maintenance_busy\n");return 1;}
+    struct cl_store store;struct cl_record record={0};char boot[37]={0};pid_t app=0,last_app=0;
+    int okay=cl_store_open(&store,SC_BASE)&&cl_store_read(&store,&record)&&vc_profile_bound(&record)&&cl_profile(&store,&record)&&
+        record.phase==CL_HOST_STAGED&&vc_backup(&store)&&vc_boot(boot)&&
+        sc_hash(SC_PREFIX "/opt/bin/run_printer.sh",SC_RUN_SHA)&&
+        sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&app)&&sc_fresh()&&
+        sc_one_process("cc2-control",SC_APP_PATH,SC_APP_SHA,&last_app)&&app==last_app&&!sc_cancelled;
+    if(okay){
+        struct cl_facts facts={.profile=1,.backup=1,.barrier=1,.idle=1,.cold=1};
+        okay=cl_advance(&store,CL_ABORT_HOST_STAGED,&facts,boot);
+    }
+    cl_store_close(&store);
+    if(!maintenance_barrier_release(&barrier))okay=0;
+    if(!okay){fprintf(stderr,"STOP: staged_host_abort_refused; retain lifecycle journal and original backup\n");return 1;}
+    puts("STAGED ACTIVATION CANCELLED: lifecycle journal set to host-removal intent; the existing removal and verification steps follow. Original backup retained.");
+    return 0;
+}
 static int vc_advance(void){
     struct vc_summary summary;
     if(!vc_summary_read(&summary)){fprintf(stderr,"STOP: lifecycle_status_unavailable\n");return 1;}

@@ -29,6 +29,13 @@ static void policy_tests(void) {
     step(&p,CL_ACK_STOCK,&f);assert(!cl_transition(p,CL_REMOVE_HOST,&f,&next));
     step(&p,CL_VERIFY_STOCK_BOOT,&f);step(&p,CL_REMOVE_HOST,&f);
     step(&p,CL_VERIFY_HOST_REMOVED,&f);assert(p==CL_DISABLED);
+    /* Cancel a staged activation: only from HOST_STAGED, idle and cold, then the normal removal tail. */
+    p=CL_HOST_STAGED;step(&p,CL_ABORT_HOST_STAGED,&f);assert(p==CL_HOST_REMOVE_INTENT);
+    assert(cl_boot_action(p,1,1,1,1)==CL_BOOT_STOCK);
+    step(&p,CL_VERIFY_HOST_REMOVED,&f);assert(p==CL_DISABLED);
+    for(unsigned q=0;q<CL_PHASE_COUNT;q++)if(q!=CL_HOST_STAGED)assert(!cl_transition(q,CL_ABORT_HOST_STAGED,&f,&next));
+    f.idle=0;assert(!cl_transition(CL_HOST_STAGED,CL_ABORT_HOST_STAGED,&f,&next));f.idle=1;
+    f.cold=0;assert(!cl_transition(CL_HOST_STAGED,CL_ABORT_HOST_STAGED,&f,&next));f.cold=1;
     assert(cl_update_allowed(p,0,0));
     p=CL_FILTER_INTENT;step(&p,CL_ACK_STOCK,&f);assert(p==CL_STOCK_ACKED);
     for(unsigned phase=0;phase<CL_PHASE_COUNT+2;phase++) {
@@ -39,13 +46,13 @@ static void policy_tests(void) {
         for(unsigned mask=0;mask<2048;mask++) {
             struct cl_facts g={mask&1,mask&2,mask&4,mask&8,mask&16,mask&32,
                                mask&64,mask&128,mask&256,mask&512,mask&1024};
-            for(unsigned event=0;event<=CL_VERIFY_HOST_REMOVED;event++) {
+            for(unsigned event=0;event<=CL_ABORT_HOST_STAGED;event++) {
                 unsigned out=999;
                 int okay=cl_transition(phase,(enum cl_event)event,&g,&out);
                 if(!okay) {assert(out==999);continue;}
                 assert(cl_valid(out) && g.profile && g.backup && g.barrier);
                 if(out==CL_FILTER_INTENT) assert(phase==CL_HOST_READY && g.guard && cl_idle(&g));
-                if(out==CL_HOST_REMOVE_INTENT) assert(phase==CL_STOCK_VERIFIED && cl_idle(&g));
+                if(out==CL_HOST_REMOVE_INTENT) assert((phase==CL_STOCK_VERIFIED || (phase==CL_HOST_STAGED && event==CL_ABORT_HOST_STAGED)) && cl_idle(&g));
                 if(out==CL_FILTER_ACKED || out==CL_STOCK_ACKED) assert(g.complete_ack);
                 if(out==CL_HOST_READY || out==CL_ACTIVE || out==CL_STOCK_VERIFIED)
                     assert(g.new_boot && g.guard && g.canvas && cl_idle(&g));
