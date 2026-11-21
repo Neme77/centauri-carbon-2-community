@@ -647,6 +647,25 @@ static void layer_path_init(layer_path_state *s) {
     s->max_layer = -1;
 }
 
+/* The number of bytes the last fgets took from the file. strlen would stop at a NUL byte inside the line, so the
+ * stored positions fell behind the real file. A line that ends in '\n' holds no NUL before it (fgets stops at the first
+ * '\n', strlen at the first NUL), so strlen is exact there: that is every line of an ordinary file, and it costs nothing
+ * extra. Only a line with a NUL, a full buffer without a line end, or the last line without one asks the stream where
+ * it is (one ftello); tell is that position before the read and is moved forward, or is -1 when the stream cannot say. */
+static size_t layer_path_line_bytes(FILE *file, const char *line, long long *tell) {
+    size_t n = strlen(line);
+    if (n > 0 && line[n - 1] == '\n') {
+        if (*tell >= 0) *tell += (long long)n;
+        return n;
+    }
+    if (*tell < 0) return n;
+    off_t now = ftello(file);
+    if (now < 0 || (long long)now < *tell + (long long)n) { *tell = -1; return n; }
+    size_t read = (size_t)((long long)now - *tell);
+    *tell = (long long)now;
+    return read;
+}
+
 /* The line loop of one scan. jump: the scan started at the requested layer's own marker
  * (index) and ends at the first marker that leaves that layer. */
 static int layer_path_run(FILE *file, layer_path_state *s, int target0,
@@ -656,9 +675,10 @@ static int layer_path_run(FILE *file, layer_path_state *s, int target0,
     size_t bytes = 0;
     long base = hook ? ftell(file) : 0;
     if (hook && base < 0) return LAYER_PATH_IO;
+    long long tell = (long long)ftello(file);
     size_t next_check = 64 * 1024;
     while (fgets(line, sizeof(line), file)) {
-        size_t n = strlen(line);
+        size_t n = layer_path_line_bytes(file, line, &tell);
         long offset = base + (long)bytes;
         bytes += n;
         if (hook && hook->keep_going && bytes >= next_check) {
@@ -834,9 +854,10 @@ static int gcode_layer_path_parse_at(FILE *file, int layer_1based,
     char line[LAYER_PATH_LINE_MAX];
     size_t bytes = from ? (size_t)from->offset : 0;
     long long pos = from ? from->offset : 0;
+    long long tell = (long long)ftello(file);
     int skipped = 0; /* a move was left out, so the motion state no longer fits a layer start */
     while (fgets(line, sizeof(line), file)) {
-        size_t n = strlen(line);
+        size_t n = layer_path_line_bytes(file, line, &tell);
         long long line_at = pos;
         pos += (long long)n;
         bytes += n;

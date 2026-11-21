@@ -297,6 +297,35 @@ int main(void) {
             if (layer == 2) assert(before > 0);
         }
         fclose(f);
+        /* NUL bytes: the stored place of a layer start is its real place in the file (the number of bytes read, not the
+         * length of the shortened line), also behind a NUL line longer than the 4096-byte read buffer, and a read that
+         * resumes at it gives what a read from the start gives. */
+        for (int variant = 0; variant < 3; variant++) {
+            static char text[12000];
+            char path[512];
+            size_t len = 0, at[2];
+            len += (size_t)snprintf(text, sizeof(text), "; total layer number: 2\nG90\nM83\n");
+            if (variant == 0) { memcpy(text + len, "; a\0b\0\0\n", 8); len += 8; }
+            if (variant == 1) { memset(text + len, 0, 130); text[len + 129] = '\n'; len += 130; }
+            if (variant == 2) { memset(text + len, 'c', 5000); text[len + 4000] = 0; text[len + 4999] = '\n'; len += 5000; }
+            at[0] = len;
+            len += (size_t)snprintf(text + len, sizeof(text) - len, ";LAYER_CHANGE\n;Z:0.2\nG1 Z0.2\nG1 X10 Y10 E0.5\nG1 X30 Y10 E0.5\n");
+            memcpy(text + len, "G1 X1\0\0 Y1\n", 11); len += 11;
+            at[1] = len;
+            len += (size_t)snprintf(text + len, sizeof(text) - len, ";LAYER_CHANGE\n;Z:0.4\nG1 Z0.4\nG1 X30 Y20 E0.4\nG1 X10 Y20 E0.4\n");
+            char name[32]; snprintf(name, sizeof(name), "nul%d.gcode", variant);
+            snprintf(path, sizeof(path), "%s/%s", dir, name);
+            FILE *w = fopen(path, "wb"); assert(w && fwrite(text, 1, len, w) == len && !fclose(w));
+            f = fopen(path, "rb"); assert(f);
+            assert(scan_build_marks(f, 1, marks, &mark_count) == LAYER_PATH_OK);
+            assert(mark_count == 2 && marks[0].offset == (long long)at[0] && marks[1].offset == (long long)at[1]);
+            for (int layer = 1; layer <= 2; layer++) {
+                layer_path_mark resume;
+                assert(layer_path_mark_pick(marks, mark_count, layer - 1, &resume) && resume.offset == (long long)at[layer - 1]);
+                assert_json_matches_index(f, "internal", name, layer, marks, &mark_count, cold, sizeof(cold), indexed, sizeof(indexed));
+            }
+            fclose(f); unlink(path);
+        }
 
         char text[96 * 1024];
         size_t used = (size_t)snprintf(text, sizeof(text), "; total layer number: 40\nG90\nM82\n");

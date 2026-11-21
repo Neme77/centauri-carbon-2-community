@@ -114,6 +114,150 @@ static void write_version_2(const char *path, const layer_index *ix) {
     assert(!fclose(f));
 }
 
+/* NUL bytes in a G-code file. A line is read with fgets, so the line the parser sees ends at the first NUL (a marker
+ * that holds a NUL is not recognized, the rest of such a line is not parsed). The stored positions, however, must be the
+ * real file positions: the number of bytes read, never the length of that shortened string. */
+#define NUL_BLOCK_MAX 160
+static size_t nul_block(char *out, int layer) { /* every block has the same length, layers 1..4 */
+    return (size_t)snprintf(out, NUL_BLOCK_MAX, ";LAYER_CHANGE\n;Z:0.%d\nG1 Z0.%d F600\nG1 X20 Y%d E%d.500 F1800\n"
+                            "G1 X30 Y%d E%d.000 F1800\n", layer * 2, layer * 2, 20 + layer, layer, 20 + layer, layer);
+}
+
+static size_t nul_text(char *out, const char *head) {
+    size_t n = strlen(head);
+    memcpy(out, head, n);
+    for (int layer = 1; layer <= 4; layer++) n += nul_block(out + n, layer);
+    return n;
+}
+
+/* Inserts count bytes at the start of the nth (0-based) occurrence of needle. */
+static size_t nul_insert(char *buf, size_t len, const char *needle, int nth, const char *bytes, size_t count) {
+    size_t m = strlen(needle), at = 0;
+    for (int seen = -1; ; at++) {
+        assert(at + m <= len);
+        if (!memcmp(buf + at, needle, m) && ++seen == nth) break;
+    }
+    memmove(buf + at + count, buf + at, len - at);
+    memcpy(buf + at, bytes, count);
+    return len + count;
+}
+
+static void nul_check(const char *dir, const char *name, const char *data, size_t len, int markers_expected) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir, name);
+    FILE *w = fopen(path, "wb"); assert(w && fwrite(data, 1, len, w) == len && !fclose(w));
+    FILE *f = fopen(path, "rb"); assert(f);
+    /* The true place of every marker line the parser can see: the text before the first NUL starts with the marker. */
+    long expect[16]; int n = 0;
+    for (size_t at = 0; at < len;) {
+        const char *nl = memchr(data + at, '\n', len - at);
+        size_t end = nl ? (size_t)(nl - data) + 1 : len;
+        if (!strncmp(data + at, ";LAYER_CHANGE", 13) && memchr(data + at, 0, 13) == NULL) { assert(n < 16); expect[n++] = (long)at; }
+        at = end;
+    }
+    assert(n == markers_expected);
+    layer_index index;
+    assert(layer_index_build(f, &index, 0, NULL, NULL) == LAYER_PATH_OK && index.seen_marker);
+    if (index.count != n) { fprintf(stderr, "%s: map has %d layers, %d markers\n", name, index.count, n); assert(0); }
+    for (int i = 0; i < n; i++)
+        if (index.entries[i].offset != expect[i]) {
+            fprintf(stderr, "%s: layer %d starts at byte %ld in the file, the map says %lld\n", name, i, expect[i],
+                    (long long)index.entries[i].offset);
+            assert(0);
+        }
+    /* The read through the map gives what the full scan gives, and the map is used (no fallback to the full scan). */
+    for (int layer = 1; layer <= index.total; layer++) {
+        layer_path_info a, b;
+        int ra = full(f, layer, &a), rb = jump(f, &index, layer, &b);
+        assert(rb != LAYER_INDEX_BAD && ra == rb);
+        assert(a.point_count == b.point_count && a.path_count == b.path_count && same_z(a.z, b.z) &&
+               !memcmp(pts_a, pts_b, sizeof(layer_point) * (size_t)a.point_count));
+    }
+    /* The marks that parse_at stores for a resumed read hold the true place too, and a read that resumes at one gives
+     * what a read from the start of the file gives. */
+    layer_path_mark marks[LAYER_PATH_INDEX_MAX]; int mark_count = 0;
+    layer_path_info info; struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); rewind(f);
+    int rc = gcode_layer_path_parse_at(f, index.total + 1, pts_b, LAYER_PATH_COLLECT_MAX, starts_b, LAYER_PATH_PATHS_MAX, &info,
+                                       &t, 0x7fffffffL, 0, NULL, marks, &mark_count, LAYER_PATH_INDEX_MAX);
+    assert(rc == LAYER_PATH_OK || rc == LAYER_PATH_OUTSIDE); /* a layer past the last one reads the whole file */
+    assert(mark_count == n);
+    for (int i = 0; i < mark_count; i++) assert(marks[i].layer == i && marks[i].offset == expect[i]);
+    for (int layer = 1; layer <= index.total; layer++) {
+        layer_path_info a, b; layer_path_mark resume;
+        assert(full(f, layer, &a) == LAYER_PATH_OK);
+        assert(layer_path_mark_pick(marks, mark_count, layer - 1, &resume));
+        rewind(f); clock_gettime(CLOCK_MONOTONIC, &t);
+        assert(gcode_layer_path_parse_at(f, layer, pts_b, LAYER_PATH_COLLECT_MAX, starts_b, LAYER_PATH_PATHS_MAX, &b, &t,
+                                         0x7fffffffL, 0, &resume, NULL, NULL, 0) == LAYER_PATH_OK);
+        assert(a.point_count == b.point_count && a.path_count == b.path_count && same_z(a.z, b.z) &&
+               !memcmp(pts_a, pts_b, sizeof(layer_point) * (size_t)a.point_count));
+    }
+    layer_index_free(&index); fclose(f); unlink(path);
+}
+
+static void nul_cases(const char *dir) {
+    static char buf[16384];
+    const char *head = "; header\n; total layer number: 4\nG90\nM82\nG28\n";
+    size_t len;
+    /* N1: NUL in comments (header, and the ;Z: line of layer 2). */
+    len = nul_text(buf, head);
+    len = nul_insert(buf, len, "er\n", 0, "\0\0\0", 3);
+    len = nul_insert(buf, len, "\nG1 Z0.4", 0, " \0 note", 7);
+    nul_check(dir, "n1.gcode", buf, len, 4);
+    /* N2: NUL in command lines (the word before it is parsed, the rest of the line is not). */
+    len = nul_text(buf, head);
+    len = nul_insert(buf, len, " Y21 E1.500", 0, "\0", 1);
+    len = nul_insert(buf, len, " Y22 E2.500", 0, "\0", 1);
+    nul_check(dir, "n2.gcode", buf, len, 4);
+    /* N3: the first two marker lines begin with a NUL: they are not markers, the other two are. */
+    len = nul_text(buf, head);
+    len = nul_insert(buf, len, ";LAYER_CHANGE", 0, "\0", 1);
+    len = nul_insert(buf, len, ";LAYER_CHANGE", 1, "\0", 1);
+    nul_check(dir, "n3.gcode", buf, len, 2);
+    /* N4: a NUL inside the marker word of the first marker. */
+    len = nul_text(buf, head);
+    len = nul_insert(buf, len, "_CHANGE", 0, "\0", 1);
+    nul_check(dir, "n4.gcode", buf, len, 3);
+    /* N5: a NUL behind the marker (the marker still counts). */
+    len = nul_text(buf, head);
+    len = nul_insert(buf, len, "\n;Z:0.2", 0, "\0junk", 5);
+    len = nul_insert(buf, len, "\n;Z:0.4", 0, "\0junk", 5);
+    nul_check(dir, "n5.gcode", buf, len, 4);
+    /* N6: a line that is only NUL bytes. */
+    len = nul_text(buf, head);
+    len = nul_insert(buf, len, ";Z:0.2", 0, "\0\0\0\n", 4);
+    nul_check(dir, "n6.gcode", buf, len, 4);
+    /* N7: 3000 NUL bytes in the header, before the first marker. */
+    {
+        char nuls[3000]; memset(nuls, 0, sizeof(nuls));
+        len = nul_text(buf, head);
+        len = nul_insert(buf, len, "er\n", 0, nuls, sizeof(nuls));
+        nul_check(dir, "n7.gcode", buf, len, 4);
+    }
+    /* N10: the blocks are all as long as the line of NUL bytes before them; counting it as empty put every stored
+     * place exactly one block too early, on the marker of the layer before, which looks right. */
+    {
+        char block[NUL_BLOCK_MAX]; size_t b = nul_block(block, 1);
+        char line[NUL_BLOCK_MAX]; memset(line, 'x', b); line[0] = 0; line[b - 1] = '\n';
+        len = (size_t)snprintf(buf, sizeof(buf), "; header\n");
+        memcpy(buf + len, line, b); len += b;
+        len += nul_text(buf + len, "; total layer number: 4\nG90\nM82\nG28\n");
+        nul_check(dir, "n10.gcode", buf, len, 4);
+    }
+    /* A line of NUL bytes across the end of the 4096-byte read buffer, with and without a line end after it. */
+    for (int tail = 0; tail < 2; tail++)
+        for (int at = 4090; at <= 4100; at++) {
+            len = (size_t)snprintf(buf, sizeof(buf), "; total layer number: 4\n");
+            memset(buf + len, 'c', (size_t)at - len); len = (size_t)at;
+            buf[len++] = 0; buf[len++] = 0; buf[len++] = ';'; buf[len++] = '\n';
+            len += nul_text(buf + len, "G90\n");
+            if (tail) { /* the file ends in the middle of a NUL line */
+                memcpy(buf + len, "G1 X1\0\0", 7); len += 7;
+            }
+            nul_check(dir, "edge.gcode", buf, len, 4);
+        }
+}
+
 int main(int argc, char **argv) {
     (void)layer_path_mark_pick;
     (void)gcode_layer_path_parse_at;
@@ -167,6 +311,8 @@ int main(int argc, char **argv) {
         assert(compare_all("long", f, &layers, &totals) == 0 && layers == 2);
         fclose(f);
     }
+
+    nul_cases(dir);
 
     /* Files the index cannot serve exactly: they report LAYER_INDEX_NONE. */
     layer_index index; layer_path_info info; struct timespec start; clock_gettime(CLOCK_MONOTONIC, &start);
