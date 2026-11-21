@@ -63,8 +63,9 @@ component into system directories. Keep SSH access and rollback backups.
 The current firmware builder applies `patch_thumbnail.py` after the reviewed
 Community display patch. `thumbnail.c` reads the declared Base64 length and
 closing marker. It accepts up to 1 MiB of encoded PNG data and dimensions up to
-1024×1024. Incomplete blocks use the native missing-thumbnail path. Larger PNGs
-are scaled to fit the native preview area.
+1024×1024. Incomplete blocks use the native missing-thumbnail path. Large PNGs
+are scaled to fit the native preview area. The file list and print history keep
+their existing positions for the smaller previews.
 
 `thumbnail07.json` contains only authored ARM code and its build pins. To
 regenerate it with the ARM GCC 15.2.0 toolchain, supply the pinned .07 GUI
@@ -73,6 +74,11 @@ produced by the Community display patch:
 ```sh
 python3 patch_thumbnail.py /private/community-gui /private/thumbnail07.json --build-plan
 ```
+
+On the target CC2 running the .07 base, a 512×512 preview spanning 333 lines
+was visible in the file list, print history and file details after restart.
+All three caches matched the embedded PNG by SHA-256. The test used the
+existing G-code with the printer idle.
 
 ## Validation and limits
 

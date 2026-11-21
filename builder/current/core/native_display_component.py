@@ -18,7 +18,7 @@ import zlib
 
 SOURCE = Path(__file__).resolve().parents[3] / 'experimental/native-display'
 DISPLAY_GUI_SHA256 = 'db09fa37d378df259427aaac392a341282e08ceb26cd87603542c0dcbcbb91d1'
-GUI_SHA256 = 'b172f13f623a133e544b868c2fce8f3c411e6ef2d0da1e7010b3d96f4584a46f'
+GUI_SHA256 = '543eb90a19083009ab0704dc70321e66c243aa662976ffdb33be34556080982f'
 # Verified against the exact official RootFS. These illustrations are NOT
 # replaced by the presentation package; installation and final audits require
 # their continued presence and exact identity.

@@ -16,7 +16,7 @@ LVGL_FIXTURE = r"""
 #include <stdint.h>
 #include <stdlib.h>
 
-struct image { int16_t width, height; uint16_t zoom; uint8_t mode; };
+struct image { int16_t width, height; uint16_t zoom; uint8_t mode; int16_t pivot_x, pivot_y; };
 int16_t lv_obj_get_self_width(struct image *img) {
     return img->mode ? img->width * img->zoom / 256 : img->width;
 }
@@ -26,9 +26,15 @@ int16_t lv_obj_get_self_height(struct image *img) {
 uint16_t lv_img_get_zoom(struct image *img) { return img->zoom; }
 void lv_img_set_zoom(struct image *img, uint16_t zoom) { img->zoom = zoom; }
 void lv_img_set_size_mode(struct image *img, uint8_t mode) { img->mode = mode; }
+void lv_img_set_pivot(struct image *img, int16_t x, int16_t y) {
+    img->pivot_x = x;
+    img->pivot_y = y;
+}
 void lv_img_set_src(struct image *img, const int16_t *dimensions) {
     img->width = dimensions[0];
     img->height = dimensions[1];
+    img->pivot_x = img->width / 2;
+    img->pivot_y = img->height / 2;
 }
 void dispose_thumbnail(char *data) { free(data); }
 """
@@ -53,7 +59,14 @@ def gcode(size, encoded):
 
 class Image(ctypes.Structure):
     _fields_ = [("width", ctypes.c_int16), ("height", ctypes.c_int16),
-                ("zoom", ctypes.c_uint16), ("mode", ctypes.c_uint8)]
+                ("zoom", ctypes.c_uint16), ("mode", ctypes.c_uint8),
+                ("pivot_x", ctypes.c_int16), ("pivot_y", ctypes.c_int16)]
+
+    def bounds(self, x, y):
+        if not self.mode:
+            x += self.pivot_x + (-self.pivot_x * self.zoom) // 256
+            y += self.pivot_y + (-self.pivot_y * self.zoom) // 256
+        return (x, y, x + (self.width * self.zoom) // 256, y + (self.height * self.zoom) // 256)
 
 
 class ThumbnailTests(unittest.TestCase):
@@ -124,12 +137,22 @@ class ThumbnailTests(unittest.TestCase):
         dimensions = ctypes.c_int16 * 2
         self.lib.cc2_set_thumbnail_src(ctypes.byref(image), dimensions(512, 384))
         self.assertEqual((image.zoom, image.mode), (72, 1))
-        image.zoom = 128  # The native file-list view sets its nominal zoom before loading.
+        image.zoom = 100  # The native file-list view sets its nominal zoom before loading.
         self.lib.cc2_set_thumbnail_src(ctypes.byref(image), dimensions(144, 144))
-        self.assertEqual((image.zoom, image.mode), (128, 0))
-        history = Image(512, 384, 256, 0)
+        self.assertEqual((image.zoom, image.mode, image.pivot_x, image.pivot_y), (100, 0, 72, 72))
+
+    def test_scales_a_large_file_list_thumbnail_inside_its_tile(self):
+        image = Image(0, 0, 100, 0)
+        dimensions = ctypes.c_int16 * 2
+        self.lib.cc2_set_thumbnail_src(ctypes.byref(image), dimensions(512, 512))
+        self.assertEqual((image.zoom, image.mode), (28, 0))
+        self.assertEqual(image.bounds(-23, -40), (21, 4, 77, 60))
+
+    def test_centers_a_large_history_thumbnail_inside_its_row(self):
+        history = Image(512, 384, 256, 0, 256, 192)
         self.lib.cc2_set_thumbnail_zoom(ctypes.byref(history), 80)
-        self.assertEqual((history.zoom, history.mode), (22, 1))
+        self.assertEqual((history.zoom, history.mode), (22, 0))
+        self.assertEqual(history.bounds(-50, -50), (0, 5, 44, 38))
 
 
 if __name__ == "__main__":

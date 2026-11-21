@@ -448,7 +448,7 @@ REACTOR_HELPER_SHA256='6f503bf0aa116c5478f38b3805fb9a148206e277b9ba07f82f894f676
 CAMERA_HELPER_SHA256='4b79c897a5f83910681a5eaac10c4c58296939bdc7bee6683c604df70b154c40'
 INTEGRATION_HELPERS = {
  'connections_component.py': 'a92320c1f86be88e71c741c23111f31991603868f1cf3bb453c22cd3ae7bdcfa',
- 'native_display_component.py': 'a78d80021b11aac880f15db1ba0f7a25f7baad3334492054c8ac8c1016aaaaf2',
+ 'native_display_component.py': '2c9a271b02af60bcb0751f192db5607c950649bf7bac7e948c39ebca5acb1647',
  'resource_update.py': '672f1b369e31723a52f79e24e55e58c31ff3185ec763c14394d78c65ddd789e1',
 }
 INTEGRATION_INPUTS = {
@@ -465,9 +465,9 @@ INTEGRATION_INPUTS = {
  'experimental/native-display/LICENSE-LUCIDE.txt': '6fc5b7332939dd5c61af3a5f97450f7bc05d4a396dd0bc21ac341716b3b05096',
  'builder/current/components/connections/firmware-seed.sh': 'fe9f93e04145fdfb9b656a8316d36eb38102cfcf0dfb51c18d6136c4515e38b0',
  'builder/current/components/connections/firmware.init': '0023ae212221603e3012b5afa67ef3a07598c36d756dfb32a7a95ef73579d168',
- 'experimental/native-display/patch_thumbnail.py': '3cc188d8192082e2e7cbc58ac80eb206b3fecc7588100149ebbc139e8b213aa2',
- 'experimental/native-display/thumbnail.c': 'f53a86c007d817ae35a1870154ce676c89424b9844ec9811a54b4783f68ad211',
- 'experimental/native-display/thumbnail07.json': '18b2866c5f87bae5a32b66c444cc8de301cb28de8b3f3392cee86c45a51ddf76',
+ 'experimental/native-display/patch_thumbnail.py': 'cb2764c1c5a574497bae73749dcc9ce310d1720c7af0f63a469fed917f4af46e',
+ 'experimental/native-display/thumbnail.c': 'f82d820535c491e84a31ae9a7610890f92bb3de616d13d5d6b1dbac5b5e4dc9b',
+ 'experimental/native-display/thumbnail07.json': 'd6a283a6231be38c345a77a3eb3acc51d80eee86d36246c267418eb16457aea2',
 }
 
 

@@ -25,6 +25,7 @@ HOOKS = {
     0x50680: (0xEB03455E, 0xEB000000, "cc2_set_thumbnail_zoom"),
     0x50764: (0xEB034117, 0xEB000000, "cc2_set_thumbnail_src"),
     0x50AD8: (0xEB03403A, 0xEB000000, "cc2_set_thumbnail_src"),
+    0x51D78: (0xEB033B92, 0xEB000000, "cc2_set_thumbnail_src"),  # Cached image on the file-list tile.
 }
 ENTRIES = {name for _, _, name in HOOKS.values()}
 
@@ -44,6 +45,7 @@ IMPORTS = {
     "lv_obj_get_self_width": 0xF69F0,
     "lv_obj_get_self_height": 0xF6A24,
     "lv_img_set_src": 0x120BC8,
+    "lv_img_set_pivot": 0x121AA4,
     "lv_img_set_zoom": 0x121C00,
     "lv_img_set_size_mode": 0x121D90,
     "lv_img_get_zoom": 0x121DD8,

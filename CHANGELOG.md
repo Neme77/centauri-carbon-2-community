@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- The native touchscreen on the ELEGOO 02.01.01.07 base reads complete G-code thumbnails beyond 300 lines and fits large previews into their display area. Reported and fixed by **beanbo** (PR pending).
+- The native touchscreen on the ELEGOO 02.01.01.07 base reads complete G-code thumbnails beyond 300 lines and fits large previews on the print screen, file list and print history. Reported and fixed by **beanbo** (PR pending).
 
 - Make every retained spool-history record accessible with translated pagination, filter reset and bounded scrolling. Reported by **DamiBFryta**, implemented by **Neme77** with AI assistance (#391).
 - Keep the header title within its bar on Android desktop view and other touch devices with desktop-width viewports. Reported by **DamiBFryta**, implemented by **Neme77** with AI assistance (#392).

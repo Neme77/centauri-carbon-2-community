@@ -12,6 +12,7 @@ enum {
     MAX_BLOCK_BYTES = 2 * MAX_ENCODED,
     MAX_DIMENSION = 1024,
     PREVIEW_SIZE = 144,
+    ZOOM_ONE = 256,
     IMG_SIZE_MODE_VIRTUAL = 0,
     IMG_SIZE_MODE_REAL = 1
 };
@@ -114,17 +115,33 @@ extern int16_t lv_obj_get_self_height(void *image);
 extern uint16_t lv_img_get_zoom(void *image);
 extern void lv_img_set_zoom(void *image, uint16_t zoom);
 extern void lv_img_set_size_mode(void *image, uint8_t mode);
+extern void lv_img_set_pivot(void *image, int16_t x, int16_t y);
 extern void lv_img_set_src(void *image, const void *src);
+
+static int16_t thumbnail_pivot(int16_t dimension, unsigned zoom)
+{
+    unsigned visible = (unsigned)dimension * zoom / ZOOM_ONE;
+    unsigned margin = (PREVIEW_SIZE - visible) / 2;
+    unsigned delta = ZOOM_ONE - zoom;
+    /* With a virtual image, zooming moves its first pixel by pivot * delta / 256. */
+    return (int16_t)((margin * ZOOM_ONE + delta - 1) / delta);
+}
 
 void cc2_set_thumbnail_zoom(void *image, uint16_t zoom)
 {
     int16_t width = lv_obj_get_self_width(image);
     int16_t height = lv_obj_get_self_height(image);
     int16_t side = width > height ? width : height;
-    if (side > PREVIEW_SIZE) {
+    if (width > 0 && height > 0 && side > PREVIEW_SIZE) {
         unsigned fit = (unsigned)zoom * PREVIEW_SIZE / (unsigned)side;
-        lv_img_set_size_mode(image, IMG_SIZE_MODE_REAL);
-        zoom = fit ? (uint16_t)fit : 1;
+        if (!fit) fit = 1;
+        if (zoom < ZOOM_ONE) {
+            /* Lists place images with offsets calculated for a virtual 144 px square. */
+            lv_img_set_pivot(image, thumbnail_pivot(width, fit), thumbnail_pivot(height, fit));
+        } else {
+            lv_img_set_size_mode(image, IMG_SIZE_MODE_REAL);
+        }
+        zoom = (uint16_t)fit;
     }
     lv_img_set_zoom(image, zoom);
 }
