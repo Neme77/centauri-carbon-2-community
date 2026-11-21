@@ -17,7 +17,8 @@ import tempfile
 import zlib
 
 SOURCE = Path(__file__).resolve().parents[3] / 'experimental/native-display'
-GUI_SHA256 = 'db09fa37d378df259427aaac392a341282e08ceb26cd87603542c0dcbcbb91d1'
+DISPLAY_GUI_SHA256 = 'db09fa37d378df259427aaac392a341282e08ceb26cd87603542c0dcbcbb91d1'
+GUI_SHA256 = 'b172f13f623a133e544b868c2fce8f3c411e6ef2d0da1e7010b3d96f4584a46f'
 # Verified against the exact official RootFS. These illustrations are NOT
 # replaced by the presentation package; installation and final audits require
 # their continued presence and exact identity.
@@ -67,7 +68,7 @@ def pins():
                         or (path.parts[0] == 'images' and path.suffix == '.png'))):
             raise RuntimeError('Invalid native display resource pin')
         result[name] = (before, after)
-    if result.get('gui/ec-eeb001-gui', ('', ''))[1] != GUI_SHA256:
+    if result.get('gui/ec-eeb001-gui', ('', ''))[1] != DISPLAY_GUI_SHA256:
         raise RuntimeError('Native display output identity changed')
     for name, digest in PRESERVED.items():
         if name in result:
@@ -93,6 +94,8 @@ def target(root, name):
 def audit(root):
     root = Path(root)
     for name, (_before, after) in pins().items():
+        if name == 'gui/ec-eeb001-gui':
+            after = GUI_SHA256
         if not output_matches(name, target(root, name).read_bytes(), after):
             raise RuntimeError('Native display firmware audit failed: ' + name)
 
@@ -184,6 +187,13 @@ def install(root):
                 changes[entry.name] = data
         if set(changes) != set(expected) - set(PRESERVED):
             raise RuntimeError('Incomplete generated native display component')
+        gui = 'gui/ec-eeb001-gui'
+        spec = importlib.util.spec_from_file_location('patch_thumbnail', SOURCE / 'patch_thumbnail.py')
+        thumbnail = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(thumbnail)
+        changes[gui] = thumbnail.apply(changes[gui])
+        if sha(changes[gui]) != GUI_SHA256:
+            raise RuntimeError('Unexpected native display with thumbnail patch')
         for name, data in changes.items():
             path = target(root, name)
             path.write_bytes(data)

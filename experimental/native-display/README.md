@@ -58,6 +58,22 @@ of the idle printer is required to load the new display.
 Use the cumulative installer after qualification; do not manually extract this
 component into system directories. Keep SSH access and rollback backups.
 
+### G-code thumbnails on firmware base 02.01.01.07
+
+The current firmware builder applies `patch_thumbnail.py` after the reviewed
+Community display patch. `thumbnail.c` reads the declared Base64 length and
+closing marker. It accepts up to 1 MiB of encoded PNG data and dimensions up to
+1024×1024. Incomplete blocks use the native missing-thumbnail path. Larger PNGs
+are scaled to fit the native preview area.
+
+`thumbnail07.json` contains only authored ARM code and its build pins. To
+regenerate it with the ARM GCC 15.2.0 toolchain, supply the pinned .07 GUI
+produced by the Community display patch:
+
+```sh
+python3 patch_thumbnail.py /private/community-gui /private/thumbnail07.json --build-plan
+```
+
 ## Validation and limits
 
 ```sh
