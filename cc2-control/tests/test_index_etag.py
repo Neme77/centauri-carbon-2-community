@@ -184,6 +184,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-etag-") as temporary:
                 while not stop.is_set():
                     burst_end = time.monotonic() + 0.04
                     while time.monotonic() < burst_end and not stop.is_set():
+                        handle.truncate(0)  # like `cat page > index.html`: the file is empty for a moment
                         handle.seek(0)
                         handle.write(b"b" * size_b)
                         handle.truncate(size_a)
@@ -194,6 +195,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-etag-") as temporary:
         mismatches = []
         completed = [0]
         replaced = [0]
+        shortened = [0]  # 200 answers that are neither of the two pages: a cut-off copy, see the note below
 
         def request_loop(seconds):
             end = time.monotonic() + seconds
@@ -212,6 +214,11 @@ with tempfile.TemporaryDirectory(prefix="cc2-etag-") as temporary:
                     mismatches.append(f"status {status}")
                     continue
                 completed[0] += 1
+                if not data:
+                    mismatches.append("200 with an empty body: an empty start page is never a finished page")
+                    continue
+                if len(data) not in (size_a, size_b):
+                    shortened[0] += 1  # best effort, not asserted: see the note on the 503 check in serve_index()
                 tag = headers.get("etag", "")
                 if tag != '"' + hashlib.sha256(data).hexdigest() + '"':
                     mismatches.append(f"ETag {tag} is not the SHA-256 of the {len(data)} bytes sent")
@@ -228,7 +235,18 @@ with tempfile.TemporaryDirectory(prefix="cc2-etag-") as temporary:
         assert process.poll() is None, "server died while the page was rewritten"
         assert not mismatches, f"wrong answers in {len(mismatches)} of {completed[0] + replaced[0] + len(mismatches)} requests ({replaced[0]} were 503): {mismatches[:3]}"
         assert completed[0] > 0, "no request completed while the page was rewritten"
-        print(f"info: {completed[0]} pages and {replaced[0]} 503 answers while the page was rewritten")
+        print(f"info: {completed[0]} pages ({shortened[0]} of them cut off) and {replaced[0]} 503 answers while the page was rewritten")
+        # A page that is empty at the moment it is read (truncated, the new content not written yet) is a page that is being
+        # replaced too: 503 with the JSON error, no tag, never a 200 with an empty body (a browser would show a white page
+        # and keep it until the next visit).
+        index.write_bytes(b"")
+        for headers_in in ([], [("If-None-Match", "*")]):
+            status, headers, data = fetch(port, "/", headers_in)
+            assert status == 503, f"empty start page returned {status} (headers {headers_in})"
+            assert data == b'{"error":"Start page is being replaced"}\n', f"empty start page body {data[:60]!r}"
+            assert "etag" not in headers and headers.get("cache-control") == "no-store", f"empty start page headers {headers}"
+        status, _, data = fetch(port, "/index.html")
+        assert status == 503 and data == b'{"error":"Start page is being replaced"}\n', f"/index.html empty returned {status}"
         index.write_text("<!doctype html><html><body>after the rewrite</body></html>\n", encoding="ascii")
 
         # Everything else keeps no-store and carries no ETag.

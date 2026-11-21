@@ -100,6 +100,22 @@ int main(void) {
     assert(star.status == 304);
     puts("PASS * still matches");
 
+    /* A page that is empty when it is read (an update truncates it before it writes the new content) is being replaced:
+       503 with the JSON error and no validator, never a 200 with an empty body and the validator of the empty page. */
+    char empty_path[300]; snprintf(empty_path, sizeof(empty_path), "%s/index.html", root);
+    FILE *emptied = fopen(empty_path, "wb"); assert(emptied); assert(fclose(emptied) == 0);
+    answer empty = fetch(root, NULL);
+    assert(empty.status == 503 && empty.etag[0] == 0);
+    assert(empty.body_len == strlen("{\"error\":\"Start page is being replaced\"}\n") &&
+           !memcmp(empty.body, "{\"error\":\"Start page is being replaced\"}\n", empty.body_len));
+    answer empty_star = fetch(root, "*");
+    assert(empty_star.status == 503 && empty_star.etag[0] == 0);
+    puts("PASS an empty page is answered with 503 and the JSON error, with or without If-None-Match");
+    install_page(root, 'D');                                   /* the finished page is served again */
+    answer finished = fetch(root, NULL);
+    assert(finished.status == 200 && is_page(&finished, 'D'));
+    puts("PASS the finished page is served again after the empty moment");
+
     collide_metadata = 0;
     char path[300]; snprintf(path, sizeof(path), "%s/index.html", root); unlink(path); rmdir(root);
     return 0;

@@ -4751,7 +4751,12 @@ static void serve_index(int fd, const char *web_root, const char *request) {
        again after reading: if it changed meanwhile (an update writes it in place) or was shorter than measured, the
        answer is a 503 and the next request gets the finished page. Best effort: file times move in clock ticks of a
        few milliseconds, so a same-size write inside one tick is not seen by this check (the tag below still
-       describes the bytes that are sent). Without stat data the length comes from the end of the file. */
+       describes the bytes that are sent). Without stat data the length comes from the end of the file.
+       A page of length 0 is a page that is being replaced too (a copy truncates it before it writes the new content,
+       measured on the printer: 59 of 93 answers had an empty body), so it gets the same 503; an empty start page is
+       never a finished page and a browser would keep the white page until the next visit. A copy that is cut off
+       somewhere in the middle cannot be told from a short page by its size and times when no write happens between the
+       two measurements (3 of 93 in the same run); that case stays best effort. */
     struct stat info, after;
     int measured = fstat(fileno(file), &info) == 0 && S_ISREG(info.st_mode);
     long size;
@@ -4763,6 +4768,12 @@ static void serve_index(int fd, const char *web_root, const char *request) {
         size = ftell(file);
         if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
         rewind(file);
+    }
+    if (size == 0) {
+        fclose(file);
+        const char *error = "{\"error\":\"Start page is being replaced\"}\n";
+        respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
+        return;
     }
     char *body = malloc((size_t)size);
     if (!body) { fclose(file); return; }
