@@ -5200,7 +5200,7 @@ static void console_monitor_response(int fd) {
  respond(fd,200,"OK","application/json; charset=utf-8",body,used);free(body);
 }
 
-static void console_status_response(int fd, console_state *console) {
+static void console_status_response(int fd, console_state *console, const char *query) {
     size_t capacity = CONSOLE_OUTPUT_MAX * 2 + 1024;
     char *body = malloc(capacity);
     if (!body) {
@@ -5208,7 +5208,7 @@ static void console_status_response(int fd, console_state *console) {
         respond(fd,500,"Internal Server Error","text/plain; charset=utf-8",error,strlen(error));
         return;
     }
-    console_json(console, body, capacity);
+    console_json_query(console, query, body, capacity);
     respond(fd,200,"OK","application/json; charset=utf-8",body,strlen(body));
     free(body);
 }
@@ -6100,7 +6100,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/monitor")==0) {
         console_monitor_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/console")==0) {
-        console_status_response(fd,console);
+        console_status_response(fd,console,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/clear")==0) {
         console_clear_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/command")==0) {

@@ -3,7 +3,9 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -180,11 +182,30 @@ static void *console_worker(void *opaque) {
     return NULL;
 }
 
+/* A name for this start of the service: the generation counter and the output length restart with the process, so two
+ * instances can show the same two numbers for different text. 64 random bits from the system, and where there is no
+ * random source the clocks and the process id (differ between two starts, too). */
+static void console_make_instance(console_state *state) {
+    unsigned long long value = 0;
+    FILE *random = fopen("/dev/urandom", "rb");
+    if (!random || fread(&value, sizeof(value), 1, random) != 1) {
+        struct timespec now, ticks;
+        clock_gettime(CLOCK_REALTIME, &now);
+        clock_gettime(CLOCK_MONOTONIC, &ticks);
+        value = ((unsigned long long)now.tv_sec << 32) ^ (unsigned long long)now.tv_nsec ^
+                ((unsigned long long)ticks.tv_nsec << 20) ^ ((unsigned long long)getpid() << 48) ^
+                (unsigned long long)(uintptr_t)state;
+    }
+    if (random) fclose(random);
+    snprintf(state->instance, sizeof(state->instance), "%016llx", value);
+}
+
 void console_init(console_state *state, const char *socket_path) {
     memset(state, 0, sizeof(*state));
     atomic_init(&state->emergency_sent, 0);
     pthread_mutex_init(&state->lock, NULL);
     snprintf(state->socket_path, sizeof(state->socket_path), "%s", socket_path);
+    console_make_instance(state);
 }
 
 void console_destroy(console_state *state) { pthread_mutex_destroy(&state->lock); }
@@ -476,13 +497,76 @@ int console_start(console_state *state, const char *command, char *reason, size_
     return 0;
 }
 
-void console_json(console_state *state, char *out, size_t capacity) {
+/* Finds since=<generation>:<output_len> or since=<generation>:<output_len>:<instance> among the query parameters. Digits
+ * only for the numbers, both must fit; the instance is exactly 16 lowercase hex digits. Anything else (missing, empty,
+ * signs, a third number that is no instance, overflow) counts as no parameter. `instance` is left empty when the caller
+ * names none: it then holds no cache that could be trusted, and the reply is complete. */
+static int console_query_since(const char *query, unsigned long *generation, size_t *length, char instance[17]) {
+    instance[0] = '\0';
+    if (!query) return 0;
+    for (const char *at = query; at; ) {
+        if (!strncmp(at, "since=", 6)) {
+            const char *p = at + 6;
+            unsigned long long values[2];
+            for (int i = 0; i < 2; i++) {
+                if (*p < '0' || *p > '9') return 0;
+                unsigned long long value = 0;
+                for (; *p >= '0' && *p <= '9'; p++) {
+                    if (value > (ULLONG_MAX - 9) / 10) return 0;
+                    value = value * 10 + (unsigned long long)(*p - '0');
+                }
+                if (i == 0 && *p != ':') return 0;
+                if (i == 0) p++;
+                values[i] = value;
+            }
+            if (*p == ':') {
+                p++;
+                size_t n = 0;
+                while ((p[n] >= '0' && p[n] <= '9') || (p[n] >= 'a' && p[n] <= 'f')) n++;
+                if (n != 16 || (p[n] != '\0' && p[n] != '&')) return 0;
+                memcpy(instance, p, 16);
+                instance[16] = '\0';
+                p += n;
+            }
+            if (*p != '\0' && *p != '&') return 0;
+            if (values[0] > ULONG_MAX || values[1] > SIZE_MAX) return 0;
+            *generation = (unsigned long)values[0];
+            *length = (size_t)values[1];
+            return 1;
+        }
+        at = strchr(at, '&');
+        if (at) at++;
+    }
+    return 0;
+}
+
+void console_json_query(console_state *state, const char *query, char *out, size_t capacity) {
     char escaped[CONSOLE_OUTPUT_MAX * 2];
     char escaped_command[CONSOLE_COMMAND_MAX * 2];
+    unsigned long since_generation = 0;
+    size_t since_length = 0;
+    char since_instance[17];
+    int since = console_query_since(query, &since_generation, &since_length, since_instance);
     pthread_mutex_lock(&state->lock);
-    if (json_escape_string(escaped, sizeof(escaped), state->output) != 0) snprintf(escaped,sizeof(escaped),"Output too large");
     if (json_escape_string(escaped_command, sizeof(escaped_command), state->command) != 0) escaped_command[0]='\0';
-    snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\"}\n",
+    if (since && !state->busy && state->generation == since_generation && state->output_len == since_length &&
+        !strcmp(since_instance, state->instance)) {
+        /* Within one instance of the service and one generation the stored output only grows, so the same instance,
+         * generation and length mean the same text. The other fields still follow the state, so a finished command
+         * is not missed. */
+        snprintf(out, capacity, "{\"busy\":false,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"unchanged\":true,\"output_len\":%zu,\"instance\":\"%s\"}\n",
+            state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,state->output_len,state->instance);
+        pthread_mutex_unlock(&state->lock);
+        return;
+    }
+    if (json_escape_string(escaped, sizeof(escaped), state->output) != 0) snprintf(escaped,sizeof(escaped),"Output too large");
+    if (since) snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\",\"output_len\":%zu,\"instance\":\"%s\"}\n",
+        state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,escaped,state->output_len,state->instance);
+    else snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\"}\n",
         state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,escaped);
     pthread_mutex_unlock(&state->lock);
+}
+
+void console_json(console_state *state, char *out, size_t capacity) {
+    console_json_query(state, NULL, out, capacity);
 }
