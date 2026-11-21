@@ -281,6 +281,43 @@ try {
     await page.close()
   }
 
+  // 2e — the same without any failing request and without a lower generation (the case 2c shows on the console page): a
+  // screw session was measured with the TRAM commands, the service starts again, reaches the same generation and the same
+  // output length and measured other heights. The page has applied that generation already, so it only takes the new
+  // heights when the change of instance made it forget what it derived from the old console.
+  {
+    const model = makeConsole()
+    model.generation = 9
+    model.command = 'SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM_MEASURE\n'
+    model.output = measureOutput
+    const page = await open()
+    await page.route(consolePattern, model.handle)
+    await page.route('**/api/screws/history', route => (route.request().method() === 'GET' ? route.fulfill({ json: { sessions: [] } }) : route.fallback()))
+    await page.goto(`${origin}#bed/screws`)
+    const card = page.locator('#screwFocus')
+    await card.getByText('Measured results', { exact: true }).waitFor({ timeout: 10000 })
+    const nudge = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // look now, not in 20 s
+    await wait(async () => {
+      await nudge()
+      await sleep(200)
+      return model.log.filter(l => l.unchanged).length >= 2
+    }, 'two unchanged answers on the screw view', 12000)
+    assert.equal(Buffer.byteLength(measureOutput), Buffer.byteLength(measureOutputRestarted))
+    const before = await card.innerText()
+    model.instance = INSTANCE_B
+    model.output = measureOutputRestarted // the same generation 9 and the same length, other heights
+    let after = before
+    for (let i = 0; i < 25 && after === before; i++) {
+      await nudge()
+      await sleep(400)
+      after = await card.innerText()
+    }
+    assert.equal(model.log.filter(l => l.failed).length, 0, 'no request failed on the way')
+    assert.ok(model.log.some(l => l.since === `9:${Buffer.byteLength(measureOutput)}:${INSTANCE_A}` && !l.unchanged), 'the request naming the old instance was answered in full')
+    assert.notEqual(after, before, 'the heights of the restarted console are on the page, not those of the old one')
+    await page.close()
+  }
+
   // 3 — the screw view: a slow look while nothing runs, a close one while a measurement runs and just after.
   {
     const model = makeConsole()
