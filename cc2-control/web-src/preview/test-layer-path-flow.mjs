@@ -208,10 +208,16 @@ try {
   await page.waitForTimeout(600)
   assert.deepEqual(await log(), ['25:200', '24:200'], 'rapid stepping 20 -> 25 scans 25 and then its previous layer only')
 
+  // Browsing by hand: the nozzle is not drawn (it would move over the layer being studied); Live draws it again.
+  assert.equal(await dialog.locator('[data-layer-nozzle]').count(), 0, 'no nozzle while browsing by hand')
+  assert.equal(await dialog.locator('.cc2-layer-nozzle-swatch').count(), 0, 'its legend entry is hidden as well')
+
   // Back to Live: layer 20 is cached, so nothing is scanned.
   await clearLog()
   await dialog.getByRole('button', { name: 'Live', exact: true }).click()
   await waitLayer(20)
+  assert.equal(await dialog.locator('[data-layer-nozzle]').count(), 1, 'Live draws the nozzle')
+  assert.equal(await dialog.locator('.cc2-layer-nozzle-swatch').count(), 1, 'and its legend entry')
   await page.waitForTimeout(800)
   assert.deepEqual(await log(), [], 'switching back to Live uses the cached layer')
 
@@ -226,6 +232,75 @@ try {
   )
   await page.waitForTimeout(800)
   assert.deepEqual(await log(), [], 'nozzle moves without another layer request')
+
+  // The split of the path at the nozzle and the direction arrow belong to Live only. The snapshot
+  // lists every drawn path of the layer: kind, points and whether it carries the direction arrow.
+  const pathSnapshot = () =>
+    page.evaluate(() =>
+      JSON.stringify(
+        Array.from(document.querySelectorAll('[data-layer-path]')).map(el => [
+          el.getAttribute('data-layer-path'),
+          el.getAttribute('points'),
+          el.getAttribute('marker-end') || '',
+        ])
+      )
+    )
+  const kinds = snap => JSON.parse(snap).map(p => p[0])
+  const pathChanged = before => page.waitForFunction(b => {
+    const now = JSON.stringify(
+      Array.from(document.querySelectorAll('[data-layer-path]')).map(el => [
+        el.getAttribute('data-layer-path'),
+        el.getAttribute('points'),
+        el.getAttribute('marker-end') || '',
+      ])
+    )
+    return now !== b
+  }, before)
+  const settlePolls = async () => {
+    const seen = await page.evaluate(() => window.__CC2_PREVIEW.printerPolls)
+    await page.waitForFunction(n => window.__CC2_PREVIEW.printerPolls >= n + 2, seen)
+    await page.waitForTimeout(300)
+  }
+  // Live: the layer is cut at the nozzle, so both parts exist and the cut follows the nozzle.
+  await set({ nozzleX: 60 })
+  await settlePolls()
+  const liveNear = await pathSnapshot()
+  assert.ok(kinds(liveNear).includes('printed') && kinds(liveNear).includes('remain'), 'Live splits the layer at the nozzle')
+  await set({ nozzleX: 180 })
+  await pathChanged(liveNear)
+  const liveFar = await pathSnapshot()
+  assert.notEqual(liveFar, liveNear, 'Live: the cut and the direction arrow follow the nozzle')
+
+  // By hand on the layer being printed (20): one calm path, nothing follows the nozzle.
+  await dialog.getByRole('button', { name: 'Previous layer' }).click()
+  await waitLayer(19)
+  await next.click()
+  await waitLayer(20)
+  await settlePolls()
+  assert.equal(await dialog.locator('[data-layer-nozzle]').count(), 0, 'no nozzle by hand')
+  await set({ nozzleX: 60 })
+  await settlePolls()
+  const handNear = await pathSnapshot()
+  assert.ok(!kinds(handNear).includes('remain'), 'by hand the printed layer is not cut at the nozzle')
+  const layerEnd = `200,${256 - (20 + (20 % 50))}`
+  const drawn = JSON.parse(handNear).filter(p => p[0] !== 'prev') // the faint previous layer is not part of it
+  assert.ok(drawn.length > 0 && drawn.every(p => p[0] === 'printed'), 'by hand the whole layer is one kind of path')
+  assert.equal(drawn.filter(p => p[2]).length, 1, 'one direction arrow, at the end of the layer')
+  assert.ok(drawn.find(p => p[2])[1].split(' ').includes(layerEnd), 'the arrow sits at the end of the whole layer')
+  await set({ nozzleX: 180 })
+  await settlePolls()
+  assert.equal(await pathSnapshot(), handNear, 'moving the nozzle changes nothing on the layer by hand')
+  await set({ nozzleX: 90 })
+  await settlePolls()
+  assert.equal(await pathSnapshot(), handNear, 'and nothing again when it moves back')
+
+  // Back to Live: the cut returns and follows the nozzle again.
+  await dialog.getByRole('button', { name: 'Live', exact: true }).click()
+  await waitLayer(20)
+  await settlePolls()
+  const liveAgain = await pathSnapshot()
+  assert.ok(kinds(liveAgain).includes('remain'), 'Live cuts the layer at the nozzle again')
+  assert.notEqual(liveAgain, handNear)
 
   // The Objects tab names only the layer being printed, not the one viewed in Layer path.
   await dialog.getByRole('button', { name: 'Previous layer' }).click()

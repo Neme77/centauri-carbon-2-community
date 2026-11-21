@@ -585,13 +585,9 @@ export const ObjectBedMap = ({
     setManualLayer(next)
   }
 
-  const splitMode = liveFollow
-    ? 'split'
-    : printerLayer > 0 && viewLayer < printerLayer
-      ? 'printed'
-      : printerLayer > 0 && viewLayer > printerLayer
-        ? 'remaining'
-        : 'split'
+  // Only Live cuts the layer at the nozzle. By hand every layer is drawn whole, so nothing moves
+  // while it is studied: layers after the printer's are still to print, all others are drawn as printed.
+  const splitMode = liveFollow ? 'split' : printerLayer > 0 && viewLayer > printerLayer ? 'remaining' : 'printed'
   // The path of an excluded object is not printed: draw it pale instead of as part of the path.
   const excludedShapes = o.entries
     .filter(e => e.polygon && o.excluded.includes(e.id))
@@ -748,7 +744,7 @@ export const ObjectBedMap = ({
                     {t('job.bed_map_layer_legend')}
                   </span>
                 )}
-                {layerTab && (
+                {layerTab && liveFollow && (
                   <span class="flex items-center gap-1.5">
                     <i class="cc2-layer-nozzle-swatch" />
                     {t('job.bed_map_nozzle')}
@@ -849,7 +845,7 @@ export const ObjectBedMap = ({
                     </button>
                   )
                 })}
-                {layerTab && !unavailable && nozzleOnBed && nozzle && (
+                {layerTab && liveFollow && !unavailable && nozzleOnBed && nozzle && (
                   <span
                     role="img"
                     data-layer-nozzle
