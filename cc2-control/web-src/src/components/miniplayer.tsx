@@ -1,6 +1,6 @@
 import { GripVertical, Minus, Pause, Play, Plus, X } from 'lucide-preact'
 import type { VNode } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Dot } from '@/components/ui/badge'
 import { CameraStream, type StreamControl } from '@/components/shared'
 import { i18n, t, tpl } from '@/lib/i18n'
@@ -345,6 +345,34 @@ export const MiniPlayer = () => {
   // Closing on purpose (the X button or Escape): the focus goes back to the camera card's Mini player button when the page
   // has one, instead of falling to the page's start. Closing because another viewer took the camera leaves the focus alone.
   const region = useRef<HTMLElement>(null)
+  // The emergency stop and (on a phone) the menu button are always above the mini player: the window is drawn with a hole
+  // where it covers them, so they stay visible and can be pressed. The header is its own layer under the window, so a hole
+  // is the way to put them on top.
+  useLayoutEffect(() => {
+    const element = region.current
+    if (!element) return
+    const box = element.getBoundingClientRect()
+    const holes = ['.cc2-emergency-stop', '#cc2-menu-toggle']
+      .map(selector => document.querySelector(selector)?.getBoundingClientRect())
+      .filter(
+        (r): r is DOMRect =>
+          Boolean(r) &&
+          (r as DOMRect).width > 0 &&
+          (r as DOMRect).height > 0 &&
+          (r as DOMRect).left < box.right &&
+          (r as DOMRect).right > box.left &&
+          (r as DOMRect).top < box.bottom &&
+          (r as DOMRect).bottom > box.top
+      )
+    if (holes.length === 0) {
+      element.style.clipPath = ''
+      return
+    }
+    let d = `M0 0H${box.width}V${box.height}H0Z`
+    for (const r of holes)
+      d += `M${r.left - box.left - 2} ${r.top - box.top - 2}h${r.width + 4}v${r.height + 4}h-${r.width + 4}Z`
+    element.style.clipPath = `path(evenodd, '${d}')`
+  })
   const closeByUser = () => {
     const hadFocus = region.current?.contains(document.activeElement)
     closeMiniplayer()

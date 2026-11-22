@@ -429,12 +429,13 @@ try {
   }
   // Pushes the window against walls with the grip's arrow keys; the size handle then drags in both diagonal directions
   // (the window grows towards the free side, the anchor is the opposite side) until it has become larger.
-  const enlargeAt = async (label, p, keys, count, dir) => {
+  const enlargeAt = async (label, p, keys, count, dir, after = []) => {
     const r = regionOf(p)
     const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
     await slider.focus(); await p.keyboard.press('Home')
     await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
     for (const key of keys) for (let i = 0; i < count; i++) await p.keyboard.press(`Shift+${key}`)
+    for (const key of after) for (let i = 0; i < 6; i++) await p.keyboard.press(`Shift+${key}`)
     const walls = await wallsOf(p)
     const start = await rect(r)
     insideScreen(start, walls, `${label} before`)
@@ -454,16 +455,16 @@ try {
     near(biggest.width, 640, 1, `${label}: End reaches the maximum`)
     insideScreen(biggest, walls, `${label} at the maximum`)
   }
-  for (const [label, keys, count, dir] of [
+  for (const [label, keys, count, dir, after] of [
     ['L14a default place', [], 0, [-1, -1]],
-    ['L14b top edge', ['ArrowUp'], 40, [-1, -1]],
+    ['L14b top edge', ['ArrowUp'], 40, [-1, -1], ['ArrowLeft']], // along the top edge, but not under the emergency stop
     ['L14c left edge', ['ArrowLeft'], 40, [-1, -1]],
     ['L14d top left corner', ['ArrowUp', 'ArrowLeft'], 40, [1, 1]],
   ]) {
     await soft(`${label}: the window can be enlarged and stays on screen`, async () => {
       const p = await fresh()
       await openMini(p)
-      await enlargeAt(label, p, keys, count, dir)
+      await enlargeAt(label, p, keys, count, dir, after)
       await keepClosed(p)
     })
   }
@@ -479,11 +480,12 @@ try {
     await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
     for (let i = 0; i < 20; i++) await p.keyboard.press('Shift+ArrowUp')
     for (let i = 0; i < 20; i++) await p.keyboard.press('Shift+ArrowLeft')
+    await p.keyboard.press('Shift+ArrowDown') // the menu button is on top of the very corner
     const cdp = await phoneCtx.newCDPSession(p)
     const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((q, id) => ({ x: q[0], y: q[1], id })) })
     const walls = await wallsOf(p)
     const corner = await rect(r)
-    assert.ok(corner.x <= walls.left + 40 && corner.y <= walls.top + 40, `the window sits at the top left (${corner.x}, ${corner.y})`)
+    assert.ok(corner.x <= walls.left + 40 && corner.y <= walls.top + 80, `the window sits at the top left (${corner.x}, ${corner.y})`)
     const h = await rect(slider)
     let grown = corner
     for (const sign of [-1, 1]) {
@@ -537,6 +539,7 @@ try {
   await soft('L21 growing down and right stops at the screen edge (corner of a low window)', async () => {
     const lowCtx = await newContext({ width: 1280, height: 330 })
     const p = await fresh(null, lowCtx)
+    await p.addStyleTag({ content: '#cc2-menu-toggle{display:none!important}' }) // a short landscape window shows the menu button in the corner
     await openMini(p)
     const r = regionOf(p)
     const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
@@ -614,6 +617,64 @@ try {
     await r.getByRole('button', { name: 'Reset zoom', exact: true }).click()
     const back = await xs()
     for (let i = 0; i < first.length; i++) near(back[i], first[i], 0.5, `button ${i} stays put after the reset`)
+    await keepClosed(p)
+  })
+
+  const stopsOf = p => { const hits = []; p.on('request', q => { if (q.method() === 'POST' && q.url().endsWith('/api/control') && (q.postData() || '').includes('system:emergency_stop')) hits.push(Date.now()) }); return hits }
+  await soft('L26 the emergency stop is always on top: a mini player dragged over it does not block holding it', async () => {
+    const p = await fresh()
+    const stops = stopsOf(p)
+    await openMini(p)
+    const r = regionOf(p)
+    const stop = await rect(p.locator('.cc2-emergency-stop'))
+    // Drag the window so that its bar lies right over the button.
+    const gap = await barGap(r)
+    const win = await rect(r)
+    await dragFrom(p, gap, [stop.x + stop.width / 2 - gap[0] + 30, stop.y + stop.height / 2 - gap[1] + 10], 8)
+    const now = await rect(r)
+    assert.ok(now.x < stop.x + stop.width && now.x + now.width > stop.x && now.y < stop.y + stop.height, `the window overlaps the button (${JSON.stringify(now)} / ${JSON.stringify(stop)})`)
+    const topmost = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('.cc2-emergency-stop')), [stop.x + stop.width / 2, stop.y + stop.height / 2])
+    assert.equal(topmost, true, 'the emergency stop is the topmost element where they overlap')
+    await p.mouse.move(stop.x + stop.width / 2, stop.y + stop.height / 2)
+    await p.mouse.down(); await observe(1300); await p.mouse.up()
+    await wait(() => stops.length >= 1, 'holding the button asks for the emergency stop')
+    // The window is still there and can be moved away again (its bar is not blocked as a whole).
+    assert.equal(await r.count(), 1, 'the mini player stays open')
+    await keepClosed(p)
+  })
+
+  await soft('L27 phone: the menu button stays reachable under a mini player dragged over it', async () => {
+    const phoneCtx = await newContext({ width: 393, height: 780 }, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 })
+    const p = await fresh(null, phoneCtx)
+    await p.addStyleTag({ content: '#cc2-preview-banner{display:none!important}' })
+    await openMini(p)
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    await slider.focus(); for (let i = 0; i < 5; i++) await p.keyboard.press('ArrowRight')
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+    for (const k of ['Shift+ArrowUp', 'Shift+ArrowLeft']) for (let i = 0; i < 20; i++) await p.keyboard.press(k)
+    const toggle = await rect(p.locator('#cc2-menu-toggle'))
+    const win = await rect(r)
+    assert.ok(win.x < toggle.x + toggle.width && win.y < toggle.y + toggle.height, 'the window lies over the menu button')
+    const topmost = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('#cc2-menu-toggle')), [toggle.x + toggle.width / 2, toggle.y + toggle.height / 2])
+    assert.equal(topmost, true, 'the menu button is the topmost element')
+    await p.locator('#cc2-menu-toggle').tap()
+    await p.locator('.cc2-sidebar-open').waitFor({ timeout: 3000 })
+    await p.close(); await phoneCtx.close()
+    await wait(() => clients === 0, 'closed')
+  })
+
+  await soft('L28 keyboard: holding Enter on the emergency stop works with a mini player over it', async () => {
+    const p = await fresh()
+    const stops = stopsOf(p)
+    await openMini(p)
+    const r = regionOf(p)
+    const stop = await rect(p.locator('.cc2-emergency-stop'))
+    const gap = await barGap(r)
+    await dragFrom(p, gap, [stop.x + stop.width / 2 - gap[0], stop.y + stop.height / 2 - gap[1] + 10], 8)
+    await p.locator('.cc2-emergency-stop').focus()
+    await p.keyboard.down('Enter'); await observe(1300); await p.keyboard.up('Enter')
+    await wait(() => stops.length >= 1, 'holding Enter asks for the emergency stop')
     await keepClosed(p)
   })
 
