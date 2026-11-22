@@ -3,13 +3,13 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
 const server = await createServer({ root: new URL('..', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'), mode: 'demo', server: { host: '127.0.0.1', port: 0 } })
-let browser
+let browser, page
 let idle = true, present = false, fail = false
 const actions = [], errors = []
 try {
  await server.listen()
  browser = await chromium.launch({headless:true,...(process.env.CC2_BROWSER_PATH?{executablePath:process.env.CC2_BROWSER_PATH}:{})})
- const page = await browser.newPage({viewport:{width:1440,height:1000}})
+ page = await browser.newPage({viewport:{width:1440,height:1000}})
  page.on('pageerror',e=>errors.push(e.message))
  await page.route('**/api/preferences',r=>r.fulfill({json:{language:'en',theme:'dark'}}))
  await page.route('**/api/printer',async r=>{const response=await r.fetch();const d=await response.json();d.connected=true;d.machine.status=idle?1:2;d.machine.status_name=idle?'Idle':'Printing';d.print.enabled=!idle;d.print.state=idle?'':'printing';return r.fulfill({json:d})})
@@ -68,6 +68,14 @@ try {
  await form.getByRole('button',{name:'Save',exact:true}).click()
  await page.getByRole('button',{name:'Confirm',exact:true}).click()
  assert.equal(actions.at(-1),'canvas:catalog:0:1:1:1:2850DF')
- assert.deepEqual(errors,[])
- console.log('PASS: native material fields, dependent choices, palette, confirmed external commands, busy/lost/Canvas guards, desktop/mobile')
-} finally { await browser?.close();await server.close() }
+} finally {
+ try {
+  // Polls can leave route.fetch() callbacks in flight after the last assertion.
+  // Drain them while the page is alive; do not suppress callback errors.
+  await page?.unrouteAll({behavior:'wait'})
+ } finally {
+  try { await browser?.close() } finally { await server.close() }
+ }
+}
+assert.deepEqual(errors,[])
+console.log('PASS: native material fields, dependent choices, palette, confirmed external commands, busy/lost/Canvas guards, desktop/mobile; pending routes drained before browser close')
