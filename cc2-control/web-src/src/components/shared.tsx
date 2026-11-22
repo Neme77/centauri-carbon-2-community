@@ -692,6 +692,7 @@ export const CameraStream = ({
           </Button>
           <Button
             class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
+            variant={miniOpen ? 'active' : 'default'}
             data-miniplayer-open
             aria-pressed={miniOpen}
             onClick={() => {

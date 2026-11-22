@@ -375,6 +375,7 @@ try {
     await regionOf(p).waitFor()
     await wait(() => clients === 1, 'opened')
     assert.equal(await button.getAttribute('aria-pressed'), 'true')
+    assert.match(await button.getAttribute('class'), /text-cyan/, 'the pressed button also looks pressed in every theme')
     await button.click()
     await wait(() => regionOf(p).count().then(n => n === 0), 'the second press closes the window')
     await wait(() => clients === 0, 'no stream any more')
@@ -555,6 +556,8 @@ try {
     await wait(() => clients === 0, 'closed')
   })
 
+  // Known limit: if an idle tab also answered, it would end the wait only a few milliseconds before the holder lets go, a race
+  // that cannot be forced in a test; the logic is held by L16 (nobody answers: the wait lasts) and this scenario guards the result.
   await soft('L19 an idle third tab does not end the wait: the old viewer has let go before the new one starts', async () => {
     const a = await fresh()
     await openMini(a)
