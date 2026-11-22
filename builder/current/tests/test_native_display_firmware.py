@@ -1,5 +1,6 @@
 from pathlib import Path
 import importlib.util
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -12,7 +13,9 @@ class NativeFirmwareDisplayTests(unittest.TestCase):
     def test_complete_reviewed_resource_set(self):
         entries=display.pins()
         self.assertGreater(len(entries), 400)
-        self.assertEqual(entries['gui/ec-eeb001-gui'][1], display.GUI_SHA256)
+        self.assertEqual(entries['gui/ec-eeb001-gui'][1], display.DISPLAY_GUI_SHA256)
+        thumbnail_plan = json.loads((display.SOURCE / 'thumbnail07.json').read_bytes())
+        self.assertEqual(thumbnail_plan['output_sha256'], display.GUI_SHA256)
         self.assertIn('images/home_menu_illustration_printer_light_off.png', entries)
         self.assertIn('images/home_menu_illustration_printer_light_on.png', entries)
 

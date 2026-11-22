@@ -22,6 +22,10 @@ pinned={
     'patches/http-upload/http_upload_v1.json':b.HTTP_UPLOAD_MANIFEST_SHA256,
     'keys/cc2_stock_public.pem':b.PUBLIC_HASHES['stock'],
     'dualtrust/cc2_community_release_public.pem':b.PUBLIC_HASHES['community'],
+    'core/reactor_component.py':b.REACTOR_HELPER_SHA256,
+    'core/camera_component.py':b.CAMERA_HELPER_SHA256,
+    **{'core/'+name: value for name, value in b.INTEGRATION_HELPERS.items()},
+    **{'../../'+name: value for name, value in b.INTEGRATION_INPUTS.items()},
 }
 for relative,expected in pinned.items():
     actual=hashlib.sha256((BASE/relative).read_bytes()).hexdigest()
