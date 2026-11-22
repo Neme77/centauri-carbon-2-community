@@ -53,7 +53,7 @@ try {
   const again = card.locator('[data-screw-check]')
   await again.waitFor()
   await page.waitForFunction(() => document.querySelector('[data-screw-check]')?.className.includes('bg-cyan'), null, { timeout: 15000 }) // a measurement was made: highlighted
-  await page.route('**/api/console', route => (route.request().method() === 'GET' ? route.fulfill({ json: { busy: false, completed: false, success: false, generation: 1, command: '', output: '' } }) : route.fallback()))
+  await page.route(/\/api\/console(\?.*)?$/, route => (route.request().method() === 'GET' ? route.fulfill({ json: { busy: false, completed: false, success: false, generation: 1, command: '', output: '' } }) : route.fallback()))
   await page.route('**/api/screws/history', route => (route.request().method() === 'GET' ? route.fulfill({ json: { sessions: [] } }) : route.fallback()))
   await page.reload()
   await again.waitFor()
@@ -61,18 +61,18 @@ try {
   assert.equal(await again.innerText(), 'Measure again')
   const widthOfText = (await again.boundingBox()).width
   assert.ok(widthOfText < 220, 'only as wide as its text')
-  await page.unroute('**/api/console')
+  await page.unroute(/\/api\/console(\?.*)?$/)
   await page.unroute('**/api/screws/history')
   await page.reload()
   await again.waitFor()
   await page.waitForFunction(() => document.querySelector('[data-screw-check]')?.className.includes('bg-cyan'), null, { timeout: 15000 })
   // While a measurement runs the end button is greyed out (the same condition as the other screw buttons).
-  await page.route('**/api/console', route => (route.request().method() === 'GET' ? route.fulfill({ json: { busy: true, completed: false, success: false, generation: 900, command: '', output: '' } }) : route.fallback()))
+  await page.route(/\/api\/console(\?.*)?$/, route => (route.request().method() === 'GET' ? route.fulfill({ json: { busy: true, completed: false, success: false, generation: 900, command: '', output: '' } }) : route.fallback()))
   await page.waitForFunction(() => document.querySelector('[data-session-bar-end]')?.disabled === true, null, { timeout: 15000 })
   // While a measurement runs the idle limit stands still: no countdown, the bar says so; after it the countdown is back.
   await bar.locator('[data-session-bar-paused]').getByText('the time limit stands still while a measurement runs').waitFor()
   assert.equal(await bar.getByText(/ends in about \d+ min/).count(), 0, 'no countdown during a measurement')
-  await page.unroute('**/api/console')
+  await page.unroute(/\/api\/console(\?.*)?$/)
   await page.waitForFunction(() => document.querySelector('[data-session-bar-end]')?.disabled === false, null, { timeout: 15000 })
   // 150 % text at 320 px: no sideways scrolling.
   await page.setViewportSize({ width: 320, height: 700 })

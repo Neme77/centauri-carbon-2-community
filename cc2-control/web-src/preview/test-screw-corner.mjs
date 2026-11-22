@@ -56,7 +56,7 @@ try {
   const initialJob = consoleJob
   const posted = []
   let next = null
-  await page.route('**/api/console', route => (route.request().method() === 'GET' ? route.fulfill({ json: consoleJob }) : route.fallback()))
+  await page.route(/\/api\/console(\?.*)?$/, route => (route.request().method() === 'GET' ? route.fulfill({ json: consoleJob }) : route.fallback()))
   await page.route('**/api/control', route => {
     if (route.request().method() !== 'POST') return route.fallback()
     const body = route.request().postData()
@@ -164,6 +164,8 @@ try {
       ? route.fulfill({ json: { sessions: [{ kind: 'quick', started: 100, ended: 160, measurements: [{ time: 160, kind: 'quick', corner: 'FR', twice: false, z: { FL: -0.7, FR: -0.55 }, bed: 60 }] }] } })
       : route.fallback()
   )
+  // The page looks at the saved trail every 20 s while nothing runs: look now.
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
   await card.locator('#screw-history summary').first().click()
   const entry = card.locator('[data-screw-kind="quick"]')
   await entry.locator('[data-col="kind"]').getByText('Corner', { exact: true }).waitFor({ timeout: 8000 })

@@ -44,7 +44,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const origin = server.resolvedUrls.local[0].replace(/\/$/, '')
   let lang = 'de'
-  await page.route('**/api/console', route => (route.request().method() === 'GET' ? route.fulfill({ json: job }) : route.fallback()))
+  await page.route(/\/api\/console(\?.*)?$/, route => (route.request().method() === 'GET' ? route.fulfill({ json: job }) : route.fallback()))
   await page.route('**/api/preferences', route =>
     route.request().method() === 'GET' ? route.fulfill({ json: { language: lang, theme: 'dark' } }) : route.fulfill({ json: {} })
   )

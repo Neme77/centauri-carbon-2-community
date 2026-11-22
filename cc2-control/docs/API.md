@@ -782,6 +782,30 @@ target again and keeps the session. A cancelled job is not recorded in the histo
 `cancellable` (a cancellable job runs), `cancelling` (a cancel is requested) and `cancelled` (the last job ended by a
 cancel). Requires printer validation.
 
+## Console output
+
+`GET /api/console` returns the state of the last console command of CC2 Control:
+`busy`, `completed`, `success`, `generation`, `command` and `output` (up to 256 KiB, JSON-escaped).
+`generation` rises with every command and every clear. Within one generation the stored output only grows.
+
+`GET /api/console?since=<generation>:<output_len>:<instance>` lets a client that polls leave out the output it
+already holds. The `generation` and the `output_len` of the reply it holds are plain decimal digits; `instance`
+is the 16 lowercase hex digits that the same reply named (`instance`), one value for every start of CC2 Control:
+the generation counter and the stored output start again with the service, so a restarted service can reach the
+same two numbers with other text, and only the same instance vouches for the text. When no command runs, the
+instance and the generation are the same and the stored output is exactly `output_len` bytes long, the reply
+has no `output` and carries `"unchanged":true`; every other field is the same as in a full reply. A reply to a
+request with a valid `since` carries `output_len` (bytes of the stored output, not of the JSON text, which leaves
+out control characters) and `instance` in both forms. While a command runs, after a new command or a clear,
+whenever the length differs and whenever the instance is missing or another one (the older form
+`since=<generation>:<output_len>` and a service that started again), the reply is complete, so a client always
+sees growing output. A missing or malformed `since` (not `<digits>:<digits>` or `<digits>:<digits>:<16 hex digits>`,
+a sign, an overflow, an empty value) is ignored: the reply is identical to a request without it and never an
+error. Older clients that send no `since` are unaffected. A client that stores the last `output` together with
+its `output_len` and `instance` can show the stored text again whenever `unchanged` is true and the `instance`
+is the one it sent; the Console page and the screw view of the web interface do. An older CC2 Control ignores
+the parameter and always replies in full (without `instance`), so a client must not rely on `unchanged`.
+
 ## Heater PID calibration
 
 `GET /api/pid` returns the selected heater, busy/ready/failed flags and the last

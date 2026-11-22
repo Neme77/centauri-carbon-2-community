@@ -65,7 +65,7 @@ try {
       })
       .join('')}`
   let job = null
-  await page.route('**/api/console', route =>
+  await page.route(/\/api\/console(\?.*)?$/, route =>
     route.request().method() === 'GET' && job
       ? route.fulfill({ json: { busy: false, completed: true, success: true, generation: 80, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S60\n', output: job } })
       : route.fallback()

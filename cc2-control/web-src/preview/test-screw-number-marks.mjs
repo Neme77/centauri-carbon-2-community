@@ -55,7 +55,7 @@ try {
       console: { busy: false, completed: true, success: true, generation: 101, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n', output: tramOutput(heightsOf(z)) },
       history: [{ started: 10, ended: null, measurements: [{ time: 10, kind: 'start', corner: null, twice: false, z: { FL: z[0], FR: z[1], RR: z[2], RL: z[3] } }] }],
     }
-    await page.route('**/api/console', route => (route.request().method() === 'GET' ? route.fulfill(fulfill(preview.console)) : route.fallback()))
+    await page.route(/\/api\/console(\?.*)?$/, route => (route.request().method() === 'GET' ? route.fulfill(fulfill(preview.console)) : route.fallback()))
     await page.route('**/api/printer', async route => {
       const data = await (await route.fetch()).json()
       data.screws_session = { active: true, xy_homed: true }

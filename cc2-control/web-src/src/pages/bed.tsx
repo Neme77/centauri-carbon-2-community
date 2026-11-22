@@ -849,6 +849,8 @@ setScrewStarter((action, quiet) => sendScrewAction(action, null, quiet))
 const screwQuick = store<{ base: Record<string, number> | null; corner: ScrewId | null }>({ base: null, corner: null })
 // A job that never showed as busy (the printer service answered at once) is forgotten after this long.
 const SCREW_JOB_FORGET_MS = 15_000
+// How long the screw view keeps polling closely after a command ended or an action was sent from this page.
+const SCREW_FOLLOW_MS = 10000
 
 // The unit the corner heights are shown in; micrometres unless the operator chose millimetres (kept in this browser).
 const SCREW_UNIT_KEY = 'cc2-screw-height-unit'
@@ -953,8 +955,6 @@ const Levelling = () => {
     const base = corner ? `screws:measure:corner:${corner}` : 'screws:measure'
     return probeTwice ? `${base}:${bed}:2` : withBed(base)
   }
-  usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
-  usePoll(refreshScrewHistory, 2500) // the saved session trail arrives after each completed measurement
   const session = screwSession.use()
   const history = screwHistory.use()
   const consoleState = consoleStatus.use()
@@ -979,6 +979,29 @@ const Levelling = () => {
     else if (!busy && !soaking && performance.now() - job.at > SCREW_JOB_FORGET_MS)
       screwJob.set({ kind: null, corner: null })
   }, [busy, job.kind, job.sawBusy, clockNow, soaking])
+  // The result arrives in the console output and the saved trail follows a second after it. Look closely while a
+  // command runs, while a job this page started is on its way (also during a hold time) and for a short while after a
+  // command ended or an action was sent from this page; otherwise only someone else starting a measurement changes
+  // anything, so a slow look is enough.
+  const [afterRun, setAfterRun] = useState(false)
+  const followTimer = useRef(0)
+  const wasBusy = useRef(false)
+  const follow = () => {
+    window.clearTimeout(followTimer.current)
+    setAfterRun(true)
+    followTimer.current = window.setTimeout(() => setAfterRun(false), SCREW_FOLLOW_MS)
+  }
+  useEffect(() => () => window.clearTimeout(followTimer.current), [])
+  useEffect(() => {
+    if (busy) wasBusy.current = true
+    else if (wasBusy.current) {
+      wasBusy.current = false
+      follow()
+    }
+  }, [busy])
+  const closeLook = busy || afterRun || soaking || Boolean(job.kind)
+  usePoll(refreshConsole, closeLook ? 2500 : 20000)
+  usePoll(refreshScrewHistory, afterRun && !busy ? 2500 : 20000)
   const tram = printerData?.screws_session
   const printerSession = Boolean(tram?.active)
   const xyReady = Boolean(tram?.active && tram?.xy_homed)
@@ -1276,6 +1299,7 @@ const Levelling = () => {
       // from now (lib/level-state takeActiveCopy) and evaluates with that.
       if (basis.meshOn && basis.choice.kind === 'active') takeActiveCopy()
       if (!(await sendScrewAction(action, values, false))) return false
+      follow()
       openPage('bed', 'align')
       return true
     } catch (e) {

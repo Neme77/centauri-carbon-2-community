@@ -59,7 +59,7 @@ try {
     [[27.9, 25.95], [227.15, 25.95], [227.15, 225.5], [27.9, 225.5]]
       .flatMap(([x, y], i) => [1, 2, 3].map(() => `probe at ${Number(x).toFixed(3)},${Number(y).toFixed(3)} is z=${z[i].toFixed(3)}`))
       .join('\n')
-  await page.route('**/api/console', route => {
+  await page.route(/\/api\/console(\?.*)?$/, route => {
     if (!probeZ || route.request().method() !== 'GET') return route.fallback()
     return route.fulfill({
       json: {
@@ -90,6 +90,7 @@ try {
   await unfold()
   assert.equal(await four.locator('[data-screw-exact]').count(), 0, 'no measurement yet: no turns')
   probeZ = [1.8, 1.85, 1.77, 1.81]
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   // The table shows every height as measured (Z height); the turn column holds the difference: FR is 50 µm high.
   await four.locator('[data-screw-zheight="FR"]').getByText('1850 µm').waitFor({ timeout: 8000 })
   // FR is 50 µm high: lower it, 0.05 mm / 0.7 mm per turn = 25.7 degrees (0.1 degree is about 0.2 µm).
@@ -132,6 +133,7 @@ try {
   // The combined plan (front left moves too) shows its turn amounts as well, the front-left screw included, and its note
   // stands above the table.
   probeZ = [1.8, 1.74, 1.72, 1.7]
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   // Only after the operator's choice: the plan stays standard (front left is the reference) and the optimized one is offered.
   await four.locator('[data-screw-optimize-suggest]').waitFor({ timeout: 8000 })
   assert.equal(await four.locator('[data-screw-combined-note]').count(), 0, 'nothing switches to the combined plan by itself')
@@ -152,6 +154,7 @@ try {
     { thread_pitch_mm: null, thread_pitch_source: '', clockwise_raises_bed: null, rotation_source: '', thread_preset: null },
   ]) {
     probeZ = [1.8, 1.85, 1.77, 1.81]
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
     await page.evaluate(v => localStorage.setItem('cc2-mesh-align', JSON.stringify(v)), stale)
     await page.reload()
     await four.waitFor()

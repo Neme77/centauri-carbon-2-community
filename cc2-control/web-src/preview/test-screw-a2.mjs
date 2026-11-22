@@ -73,7 +73,7 @@ try {
   page.on('pageerror', e => errors.push(e.message))
   const origin = server.resolvedUrls.local[0].replace(/\/$/, '')
   let consoleJob = job(60, plain)
-  await page.route('**/api/console', route =>
+  await page.route(/\/api\/console(\?.*)?$/, route =>
     route.request().method() === 'GET' ? route.fulfill({ json: consoleJob }) : route.fallback()
   )
   await page.goto(origin)
@@ -211,6 +211,7 @@ try {
 
   // Close enough: the text names the tolerance in the unit.
   consoleJob = job(61, { '27.9,25.95': -0.7, '227.15,25.95': -0.69, '227.15,225.5': -0.71, '27.9,225.5': -0.8 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await cell('FR', 'adjust').locator('[data-screw-ok]').getByText('Within tolerance', { exact: true }).waitFor({ timeout: 8000 })
   // Within the tolerance the small adjustment that is still possible stays visible: the user decides.
   assert.match(await text(card.locator('[data-screw-possible="FR"]')), /^Still possible: Lower \S+ (mm|µm) · ↺ /)
@@ -221,6 +222,7 @@ try {
   // The clock in hours for a very small turn: no "from 12 to 12:00"; against the clock the hand runs backwards
   // (FR 3 µm higher: lower, ↺, 1.5° rounds to no quarter hour; RR 10 µm higher: 5.1° = one quarter hour back).
   consoleJob = job(65, { '27.9,25.95': -0.7, '227.15,25.95': -0.697, '227.15,225.5': -0.69, '27.9,225.5': -0.7 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await card.locator('[data-screw-possible="FR"]').getByText('Lower 3 µm', { exact: false }).waitFor({ timeout: 8000 })
   await turnUnit.selectOption('clockhours')
   assert.match(await text(card.locator('[data-screw-possible="FR"]')), /↺ less than a quarter hour on the clock$/)
@@ -232,6 +234,7 @@ try {
 
   // A large deviation (over half a turn): Auto says coarse first, then measure, then readjust; Exact gives the whole value.
   consoleJob = job(63, { '27.9,25.95': -0.868, '227.15,25.95': -2.155, '227.15,225.5': -0.14, '27.9,225.5': -0.5 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await cell('FR', 'aid').getByText('first 630° · measure · then readjust').waitFor({ timeout: 8000 })
   assert.equal(await cell('FR', 'adjust').locator('[data-screw-direction]').getAttribute('data-screw-direction'), 'raise')
   assert.equal(await text(cell('RR', 'aid')), 'first 360° · measure · then readjust')
@@ -251,6 +254,7 @@ try {
 
   // Back and front more than 1 mm apart: a note points at the bed carrier on its Z axes.
   consoleJob = job(70, { '27.9,25.95': -1.0, '227.15,25.95': -1.06, '227.15,225.5': 0.1, '27.9,225.5': 0.2 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await card.locator('[data-screw-carrier-tilt]').getByText('Z axes', { exact: false }).waitFor({ timeout: 8000 })
   assert.match(await text(card.locator('[data-screw-carrier-tilt]')), /differ by 1[12]\d\d µm \(back higher\)/)
 
@@ -258,17 +262,21 @@ try {
   // call to turn harder, no second note below the table). Once it has moved the note is gone.
   const far = fr => ({ '27.9,25.95': -0.7, '227.15,25.95': fr, '227.15,225.5': -0.7, '27.9,225.5': -0.7 })
   consoleJob = job(80, far(-1.2))
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await cell('FR', 'amount').getByText('500 µm').waitFor({ timeout: 8000 })
   assert.equal(await card.locator('[data-screw-stuck]').count(), 0, 'one measurement alone says nothing')
   consoleJob = job(81, far(-1.19))
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await card.locator('[data-screw-row="FR"] [data-screw-stuck="FR"]').getByText('This corner has hardly moved. Check whether the sleeve turns with the screw.', { exact: true }).waitFor({ timeout: 8000 })
   assert.equal(await card.locator('[data-screw-stuck]').count(), 1, 'only at that corner')
   consoleJob = job(82, far(-0.75))
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await card.locator('[data-screw-stuck]').waitFor({ state: 'detached', timeout: 8000 })
 
   // A running quick measurement shows the accent-coloured line in the field at the top of the app, as a mesh calibration
   // does; it goes when the measurement is done.
   consoleJob = { busy: true, completed: false, success: false, generation: 71, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S60\n', output: '' }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.locator('[data-screw-measure-bar]').getByText('Screw measurement running', { exact: false }).waitFor({ timeout: 10000 })
   assert.match(await page.locator('[data-mesh-status]').getAttribute('class'), /border-cyan/, 'the field has the accent colour of the mesh field')
   assert.doesNotMatch(await page.locator('[data-mesh-status]').getAttribute('class'), /amber/, 'not the orange of the session')
@@ -278,6 +286,7 @@ try {
   assert.equal(await page.locator('[data-screw-cancel]').count(), 0, 'no cancel button for a job that cannot be cancelled')
   const running = { busy: true, completed: false, success: false, generation: 73, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S60\n', output: '' }
   consoleJob = { ...running, cancellable: true, cancelling: false, cancelled: false }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   const cancel = page.locator('[data-screw-measure-bar] [data-screw-cancel]')
   await cancel.waitFor({ timeout: 10000 })
   assert.equal((await cancel.innerText()).trim(), 'Cancel measurement')
@@ -295,27 +304,33 @@ try {
   assert.equal(cancelPosts, 1, 'one click sends screws:cancel once')
   assert.equal(await cancel.isDisabled(), true, 'the button is locked while the cancel is pending')
   consoleJob = { ...running, busy: false, completed: true, cancellable: false, cancelling: false, cancelled: true, output: '[CC2 Control: cancelled]\n' }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.locator('[data-screw-measure-bar]').waitFor({ state: 'detached', timeout: 20000 })
   await card.locator('[data-screw-cancelled]').getByText('Measurement cancelled: nozzle lifted, heaters off. Nothing was saved.').waitFor({ timeout: 8000 })
   await page.unroute('**/api/control')
   // A measurement of a session shows the same bar with the cancel button (the session's script has its own name).
   consoleJob = { busy: true, completed: false, success: false, generation: 74, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', output: '', cancellable: true, cancelling: false, cancelled: false }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.locator('[data-screw-measure-bar]').getByText('Screw measurement running', { exact: false }).waitFor({ timeout: 10000 })
   await page.locator('[data-screw-measure-bar] [data-screw-cancel]').waitFor()
   assert.equal(await page.locator('[data-screw-cancel]').count(), 1, 'one cancel button, in the bar')
   // The end of a session (heaters off) is no measurement: no bar.
   consoleJob = { busy: true, completed: false, success: false, generation: 75, command: 'M104 S0\nM140 S0', output: '' }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.locator('[data-screw-measure-bar]').waitFor({ state: 'detached', timeout: 20000 })
   consoleJob = job(72, { '27.9,25.95': -1.0, '227.15,25.95': -1.06, '227.15,225.5': 0.1, '27.9,225.5': 0.2 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await card.locator('[data-screw-cancelled]').waitFor({ state: 'detached', timeout: 20000 })
 
   // A printer error ends the measurement (finished, not successful, not cancelled): the page says so and points to the
   // Console page. The message of the printer stays there; the page shows no result of the failed measurement.
   // A lost connection (or any other end without a result that is no printer error) shows no such note.
   consoleJob = { ...job(72, {}), success: false, cancelled: false, output: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nConsole connection ended or command timed out\n' }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.waitForTimeout(3500)
   assert.equal(await card.locator('[data-screw-failed]').count(), 0, 'a lost connection is no printer error: no note about one')
   consoleJob = { ...job(73, {}), success: false, cancelled: false, output: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n!! Error: probe failed\n[CC2 Control: the printer reported an error; the job was stopped]\n' }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   const failed = card.locator('[data-screw-failed]')
   await failed
     .getByText('The printer reported an error and the measurement was stopped. Details are on the Console page.')
@@ -323,16 +338,20 @@ try {
   assert.equal(await card.locator('[data-screw-cancelled]').count(), 0, 'an error is no cancel: one note only')
   // A new result (or a new run) takes the note away again.
   consoleJob = job(74, { '27.9,25.95': -1.0, '227.15,25.95': -1.06, '227.15,225.5': 0.1, '27.9,225.5': 0.2 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await failed.waitFor({ state: 'detached', timeout: 20000 })
   // An error of a command that is no screw measurement does not show the note.
   consoleJob = { busy: false, completed: true, success: false, generation: 75, command: 'G28\n', output: 'Error\n', cancelled: false }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.waitForTimeout(3500)
   assert.equal(await failed.count(), 0, 'only a failed screw measurement shows the note')
   consoleJob = job(76, { '27.9,25.95': -1.0, '227.15,25.95': -1.06, '227.15,225.5': 0.1, '27.9,225.5': 0.2 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
 
   // The combined plan: the target is front left plus the common shift, front left moves too; every turned corner,
   // front left included, shows its turn.
   consoleJob = job(62, lowAll)
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   // Standard stays until the operator chooses: front left has nothing to adjust, the optimized plan is only offered.
   await card.locator('[data-screw-optimize-suggest]').waitFor({ timeout: 8000 })
   assert.equal(await text(cell('FL', 'adjust')), 'No turn', 'standard: front left is not adjusted by itself, it is left as it is')
@@ -358,6 +377,7 @@ try {
 
   // 390 px, the largest texts (large deviation, Fine mode, Fractions): no horizontal overflow, no cut-off cell.
   consoleJob = job(64, { '27.9,25.95': -0.868, '227.15,25.95': -2.155, '227.15,225.5': -0.14, '27.9,225.5': -0.5 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.setViewportSize({ width: 390, height: 844 })
   await page.reload() // a phone loads the page at its width: the side menu starts closed
   await card.waitFor()

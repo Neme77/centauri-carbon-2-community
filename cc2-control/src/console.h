@@ -32,6 +32,7 @@ typedef struct {
     char cancel_tail[CONSOLE_CANCEL_TAIL_MAX];
     unsigned staged_homed_next; /* the axes known as homed when the job is armed (CONSOLE_AXES_*) */
     unsigned staged_homed;      /* the same for the running or last staged job */
+    char instance[17]; /* 16 lowercase hex digits, new at every start of the service: names this console's counters */
 } console_state;
 
 void console_init(console_state *state, const char *socket_path);
@@ -59,5 +60,12 @@ int console_cancel(console_state *state);
 int console_cancelled(console_state *state, unsigned long generation);
 int console_emergency_stop(console_state *state, char *reason, size_t reason_cap);
 void console_json(console_state *state, char *out, size_t capacity);
+/* Same reply as console_json(). A query string with since=<generation>:<output_len>:<instance> (the generation,
+ * the stored output length and the instance the caller already holds, the instance as the reply gave it) shortens
+ * the reply to "unchanged":true without the output while no command runs and all three still match. The generation
+ * restarts with the service, so without the instance a restart could meet the same two numbers for other text: a
+ * missing or different instance is answered in full, as is any other query. A reply to a valid since carries
+ * output_len and instance. */
+void console_json_query(console_state *state, const char *query, char *out, size_t capacity);
 
 #endif

@@ -64,7 +64,7 @@ try {
   let consoleJob = { busy: false, completed: false, success: false, generation: 60, command: '', output: '' }
   // The console as the printer reports it: busy with the steps of a running mesh calibration (the preview's own answer),
   // otherwise the screw measurement of this test.
-  await page.route('**/api/console', async route => {
+  await page.route(/\/api\/console(\?.*)?$/, async route => {
     if (route.request().method() !== 'GET') return route.fallback()
     const live = await (await route.fetch()).json()
     if (live.busy && !consoleJob.busy && !/CC2_SCREW/.test(live.command))

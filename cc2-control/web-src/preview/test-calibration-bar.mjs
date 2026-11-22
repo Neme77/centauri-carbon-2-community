@@ -139,7 +139,7 @@ try {
     data.screws_session = { active: sessionOpen, xy_homed: true, bed: 60 }
     await route.fulfill({ response, json: data })
   })
-  await page.route('**/api/console', route => (route.request().method() === 'GET' ? route.fulfill({ json: { busy: consoleBusy, completed: !consoleBusy, success: true, generation: 700, command: '', output: '' } }) : route.fallback()))
+  await page.route(/\/api\/console(\?.*)?$/, route => (route.request().method() === 'GET' ? route.fulfill({ json: { busy: consoleBusy, completed: !consoleBusy, success: true, generation: 700, command: '', output: '' } }) : route.fallback()))
   await page.route('**/api/plates/calibrate', route => (route.request().method() === 'POST' ? route.fulfill({ status: 202, json: { accepted: true } }) : route.fallback()))
   await leave()
   await page.goto(`${origin}/#bed/mesh`)
@@ -159,11 +159,11 @@ try {
   await new Promise(r => setTimeout(r, 300))
   assert.ok(posts.includes('/api/plates/calibrate'), 'the start is sent between the measurements of the session')
   await page.unroute('**/api/printer')
-  await page.unroute('**/api/console')
+  await page.unroute(/\/api\/console(\?.*)?$/)
 
   // A quick screw measurement (no session): it stands in the same field at the top of every page, blue, with its cancel
   // and the way to Bed alignment; the tab has no line of its own, and its badge is blue too.
-  await page.route('**/api/console', route => (route.request().method() === 'GET' ? route.fulfill({ json: { busy: true, cancellable: true, completed: false, success: false, generation: 800, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S60\n', output: '' } }) : route.fallback()))
+  await page.route(/\/api\/console(\?.*)?$/, route => (route.request().method() === 'GET' ? route.fulfill({ json: { busy: true, cancellable: true, completed: false, success: false, generation: 800, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S60\n', output: '' } }) : route.fallback()))
   await page.goto(`${origin}/#dashboard`)
   const measure = field.locator('[data-screw-measure-bar]')
   await measure.waitFor({ timeout: 20000 })
@@ -183,7 +183,7 @@ try {
   await badge.waitFor()
   assert.match(await badge.getAttribute('class'), /border-cyan/, 'the badge of the card is blue outside a session')
   assert.equal(await page.locator('[data-screw-measure-bar]').count(), 1, 'one line of the measurement')
-  await page.unroute('**/api/console')
+  await page.unroute(/\/api\/console(\?.*)?$/)
 
   // 390 px and 150 % text: no sideways scrolling with the bar.
   await page.setViewportSize({ width: 390, height: 844 })

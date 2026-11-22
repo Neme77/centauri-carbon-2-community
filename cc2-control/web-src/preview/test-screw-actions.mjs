@@ -260,7 +260,7 @@ try {
   // Point 4: while a measurement runs the page says what it contains.
   let busy = false
   const fulfill = body => ({ contentType: 'application/json', body: JSON.stringify(body) })
-  await page.route('**/api/console', route => {
+  await page.route(/\/api\/console(\?.*)?$/, route => {
     if (!busy || route.request().method() !== 'GET') return route.fallback()
     // A screw measurement, as the console names it (the tab shows the line only for one).
     return route.fulfill(fulfill({ busy: true, completed: false, success: false, generation: 90, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n', output: '' }))

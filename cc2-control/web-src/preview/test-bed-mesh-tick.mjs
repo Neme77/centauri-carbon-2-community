@@ -258,7 +258,7 @@ try {
     if (s) s.measurements.push(turned)
     return route.fulfill({ json })
   })
-  await page.route('**/api/console', route =>
+  await page.route(/\/api\/console(\?.*)?$/, route =>
     route.request().method() === 'GET'
       ? route.fulfill({ json: { busy: false, completed: true, success: true, generation: 500, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', output: `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n${lines(onShape)}` } })
       : route.fallback()
@@ -278,7 +278,7 @@ try {
   await unfold()
   await ask.waitFor({ timeout: 15000 })
   await page.evaluate(() => localStorage.removeItem('cc2-test-keep-base'))
-  await page.unroute('**/api/console')
+  await page.unroute(/\/api\/console(\?.*)?$/)
   await page.unroute('**/api/screws/history')
   // End the session.
   await page.waitForFunction(() => document.querySelector('[data-session-bar-end]') && !document.querySelector('[data-session-bar-end]').disabled, null, { timeout: 15000 })
@@ -422,23 +422,27 @@ try {
 
   // (9) A corner the page gave a turn for that hardly moved: the row says so, and no second note stands beside it.
   let job = null
-  await page.route('**/api/console', route =>
+  await page.route(/\/api\/console(\?.*)?$/, route =>
     route.request().method() === 'GET' && job ? route.fulfill({ json: job }) : route.fallback()
   )
   const quickJob = (generation, z) => ({ busy: false, completed: true, success: true, generation, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S60\n', output: `SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n${lines(z)}` })
   job = quickJob(900, { FL: -0.7, FR: -0.4, RR: -0.71, RL: -0.69 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await card.locator('[data-screw-direction]').first().waitFor({ timeout: 15000 })
   assert.equal(await card.locator('[data-screw-stuck]').count(), 0, 'one measurement alone says nothing')
   job = quickJob(901, { FL: -0.7, FR: -0.41, RR: -0.71, RL: -0.69 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   const stuck = card.locator('[data-screw-row="FR"] [data-screw-stuck="FR"]')
   await stuck.getByText('This corner has hardly moved. Check whether the sleeve turns with the screw.', { exact: true }).waitFor({ timeout: 10000 })
   assert.equal(await card.locator('[data-screw-stuck]').count(), 1, 'only at the corner that was to be turned')
   assert.equal(await card.getByText(/Hardly moved since the last measurement|turn harder|kräftiger/).count(), 0, 'no second note, no call to turn harder')
   job = quickJob(902, { FL: -0.7, FR: -0.6, RR: -0.71, RL: -0.69 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await stuck.waitFor({ state: 'detached', timeout: 10000 })
   // A quick measurement right after a mesh (the service measures without a second nozzle cleaning): the line at the top
   // says so.
   job = { busy: true, completed: false, success: false, generation: 903, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S60\n', output: '' }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.route('**/api/printer', async route => {
     const response = await route.fetch()
     const json = await response.json()
@@ -448,6 +452,7 @@ try {
   await page.locator('[data-screw-measure-bar] [data-screw-after-mesh]').getByText('directly after the mesh', { exact: false }).waitFor({ timeout: 10000 })
   await page.unroute('**/api/printer')
   job = quickJob(904, { FL: -0.7, FR: -0.6, RR: -0.71, RL: -0.69 })
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.locator('[data-screw-measure-bar]').waitFor({ state: 'detached', timeout: 10000 })
   // A quick measurement without the tick stays evaluated while the tick is set and a new mesh runs (the console works on
   // the calibration; only a screw measurement replaces the result).
@@ -458,13 +463,14 @@ try {
   await confirm()
   await page.locator('[data-level-chain-bar="mesh"]').waitFor({ timeout: 10000 })
   job = { busy: true, completed: false, success: false, generation: 905, command: 'BED_MESH_CALIBRATE PROFILE=default BED_TEMP=60', output: '' }
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // the page looks only every 20 s while nothing runs: look now
   await page.waitForTimeout(4000)
   assert.equal(await card.getByText('No measurement', { exact: true }).count(), 0, 'the measurement stays while the new mesh runs')
   await card.locator('[data-screw-zheight="FR"]').waitFor()
   await page.locator('[data-calibration-stop]').click()
   await page.locator('[data-level-chain-bar]').waitFor({ state: 'detached', timeout: 15000 })
   await tick(false)
-  await page.unroute('**/api/console')
+  await page.unroute(/\/api\/console(\?.*)?$/)
   console.log('PASS (9) "hardly moved" at the corner; "directly after the mesh" in the line at the top; a measurement stays while a new mesh runs')
 
   // (10) The pictures: German, dark, 1440 px.

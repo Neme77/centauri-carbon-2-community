@@ -68,7 +68,7 @@ try {
         })
       })
     const state = { preview: null }
-    await page.route('**/api/console', route => (state.preview?.console && route.request().method() === 'GET' ? route.fulfill(fulfill(state.preview.console)) : route.fallback()))
+    await page.route(/\/api\/console(\?.*)?$/, route => (state.preview?.console && route.request().method() === 'GET' ? route.fulfill(fulfill(state.preview.console)) : route.fallback()))
     await page.route('**/api/printer', async route => {
       const data = await (await route.fetch()).json()
       data.screws_session = { active: session, xy_homed: session }
@@ -82,6 +82,8 @@ try {
         console: { busy: false, completed: true, success: true, generation, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n', output: tramOutput(heightsOf(z)) },
         history: [{ started: 10, ended: null, measurements }],
       }
+      // The page looks at the console and the trail only now and then while nothing runs: look now.
+      state.page?.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))).catch(() => {})
     }
     if (empty) state.preview = { console: { busy: false, completed: true, success: true, generation: 99, command: '', output: '' }, history: [{ started: 10, ended: null, measurements: [] }] }
     else state.show([1.8, 1.74, 1.72, 1.7])
@@ -96,6 +98,7 @@ try {
       const b = page.locator(`[data-level-step="${n}"] > button`)
       if ((await b.count()) && (await b.getAttribute('aria-expanded')) !== 'true') await b.click()
     }
+    state.page = page
     return { page, card, state }
   }
   const text = async loc => (await loc.innerText()).replace(/ /g, ' ').trim()

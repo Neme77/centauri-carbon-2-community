@@ -56,9 +56,10 @@ export const MeshStatus = () => {
   useEffect(() => followLibrary(library), [library])
   // A calibration that could not be saved to its plate keeps a note at the top (below).
   useEffect(() => noteUnsavedMesh(library), [library])
-  // The console the same way: 2 s while a screw measurement runs, otherwise 15 s (the chain and the session bar ask
-  // more often while they stand; the scheduler runs one task at the fastest interval asked for).
-  useEffect(() => poll(refreshConsole, measuring ? 2000 : 15000), [measuring])
+  // The console the same way: 2 s while a screw measurement runs, otherwise 20 s (the same slow look as the screw view,
+  // so an idle page asks no more often; the chain and the session bar ask more often while they stand, and the
+  // scheduler runs one task at the fastest interval asked for).
+  useEffect(() => poll(refreshConsole, measuring ? 2000 : 20000), [measuring])
   return (
     <>
       <UnsavedMeshNote />

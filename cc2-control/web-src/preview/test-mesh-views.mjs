@@ -37,7 +37,7 @@ try {
   const out = `SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n${ALIGN_DEFAULTS.screws
     .map((sc, i) => `${`// probe at ${Number(sc.x).toFixed(3)},${Number(sc.y).toFixed(3)} is z=${(-0.7 + i * 0.02).toFixed(6)}\n`.repeat(3)}// Result is z=${(-0.7 + i * 0.02).toFixed(6)}\n`)
     .join('')}`
-  await page.route('**/api/console', route =>
+  await page.route(/\/api\/console(\?.*)?$/, route =>
     route.request().method() === 'GET'
       ? route.fulfill({ json: { busy: false, completed: true, success: true, generation: 80, command: 'SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S60\n', output: out } })
       : route.fallback()
