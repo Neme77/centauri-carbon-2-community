@@ -212,7 +212,9 @@ Special thanks to the **#327** testers and investigators: **Eldurinn**,
 installation states, trial reports and recovery confirmations made the upgrade
 work more complete. [Individual contributions and report scope](docs/UPGRADE_CREDITS.md).
 
-[RyzeHosting](https://ryzehosting.com/) — Thank you very much for supporting our project.
+[Ryzehosting](https://ryzehosting.com/) — Thank you very much for supporting our project.
+
+<a href="https://ryzehosting.com/"><img src="https://ryzehosting.com/assets/Ryzehosting_new_Logo_-_upscaled-removebg-preview%20BLACK-ChwCxitK.png" alt="Ryzehosting logo" width="200"></a>
 
 ## Buy me a coffee
 
