@@ -6,7 +6,7 @@ Settings → Integrations → **Enable Spoolman** controls the printer-wide inte
 
 When enabled, Spools shows its Spoolman server settings, and spool forms show the Spoolman link field. Turning it off hides those controls and prevents new server requests. A request already sent may finish; its accounting result is still settled, while remote imports and metadata pulls are not applied while disabled.
 
-URL, proxy credentials, spool links, pending usage and the independent local tracking setting are retained. Usage charged locally while paused stays queued; re-enabling uses the existing reconciliation rules rather than sending unknown-outcome usage twice. Removing or changing the server remains a separate action with #208's existing accounting behavior.
+URL, proxy credentials, spool links, pending usage and the independent local tracking setting are retained. Usage charged locally while paused stays queued; re-enabling uses the existing reconciliation rules rather than sending unknown-outcome usage twice. Changing the server address or the login no longer throws pending usage away: it goes on the list of usage that was not sent (see below).
 
 The flag persists across browser refreshes and application restarts. It is stored on the printer, not per browser. Exported backups never carry proxy credentials or an enabled integration; restoring a backup does not restart synchronization.
 
@@ -21,6 +21,25 @@ The flag persists across browser refreshes and application restarts. It is store
 - **Spools Spoolman has no weight for** (neither the spool nor its filament has a start weight) are not imported, and are counted in the status. A linked one keeps the weight it has here and still gets its other fields.
 - **A material Spoolman does not give** (or one longer than 32 characters) is shown as PLA on import; the status counts them as `no_material`.
 - **Time limits.** Each request has 15 seconds in all (the 5 second read timeout restarts with every byte a slow server sends), and one sync cycle has 90 seconds. Usage the cycle did not get to is kept for the next one, which starts where this one stopped.
+
+## Usage that was not sent to Spoolman
+
+Usage the sync cannot or must not send by itself is kept on a list on the Spools page, **Usage not sent to Spoolman**. Nothing on it is ever sent automatically: you decide for each entry. An entry has the spool's name, the amount in grams, the date and one of four reasons:
+
+- **Login changed**: the login to Spoolman was changed (the address is the same). The spool is the same, so the amount can be sent to it.
+- **Server changed**: the Spoolman address was changed. The spool is connected to a spool number of the old server, so you choose the matching spool on the new one.
+- **Spool not found**: Spoolman answered 404 for the linked spool in two sync cycles in a row (it may have been deleted there). Before, these grams were tried again every two minutes without end; now they wait on the list. One single 404 changes nothing: a wrong base path or a proxy that answers wrongly for a moment must not move every spool's grams onto the list, so the grams simply stay queued and the next cycle asks again.
+- **Unsure**: the amount was sent, but the answer never arrived and Spoolman's used weight cannot settle it (or a restart came in the middle of the request). Spoolman may already have counted it, so it is never sent a second time; the entry can only be removed.
+
+**Send selected** sends the chosen entries, each to the Spoolman spool chosen next to it (the choice shows name, material and the weight Spoolman shows for the spool), with the same `/use` request and the same check of the used weight as the sync. It is locked while a chosen entry has no spool. A sent entry leaves the list; one that could not be sent stays; one whose answer is lost and cannot be settled becomes *unsure*. **Don't send** (not for *unsure* entries) asks first and then removes the entry; nothing is sent, Spoolman keeps showing the amount as still on the spool and the spool on the printer keeps its lighter weight. **Remove from list** is the same for *unsure* entries.
+
+A change of the address that only writes the same server differently (a slash at the end, the default port written out) is not a change of server: nothing moves and nothing is marked. Another host, port or path is.
+
+After a change of the address, a line at the top of the list names the spools that are still connected to the old server. Two buttons decide what happens to them. **Keep connections** is for the same Spoolman under a new address: the spools keep their numbers. **Remove old connections** unlinks them (the spools stay); anything they still had pending goes on the list. Spoolman's own spools that are not connected are then added to this printer as new spools at the next sync, so a spool can appear twice; delete the extra ones. **Until one of the two is chosen, the sync takes nothing over from Spoolman into those spools** (no name, colour, brand or weight), because the Spoolman spool with that number may be another one on the new server. Usage that is measured meanwhile is still sent to the spool with that number, and Spoolman's other spools are still imported. When the list is opened for the first time after a change of address or login, the page says so once. Turning the sync off (an empty address) is your own decision and puts nothing on the list. At most 32 entries are kept; amounts for the same spool and reason are added to one entry, and a change of the address is refused with a message while the list is full, so such a change cannot push amounts out unnoticed.
+
+Things that are not covered by the list. An amount whose answer was lost and cannot be settled while the list is full is forgotten as before (only the list being full makes that happen). Emptying the address discards the amounts still queued, as before (it is your own decision). Restoring a backup empties the list, and so does going back to a firmware that does not know it (its next save of the spool library leaves it out), so send or remove the entries first. **Send selected** is refused with “Spoolman sync is busy: try again in a moment” while a sync cycle is running, which can take up to 90 seconds; nothing is lost, press it again.
+
+The list is saved with the spool library on the printer. It is not part of an exported backup (like the other sync accounting), and restoring a backup leaves it empty. `GET /api/spools` carries it as `spoolman_held` and `spoolman_stale_links`; the requests are `POST /api/spoolman/held/send`, `/api/spoolman/held/discard`, `/api/spoolman/unlink-old` and `/api/spoolman/keep-old` (see `cc2-control/docs/API.md`). The list of Spoolman's spools in the choice next to each entry is read in the same pages as the sync; if Spoolman has more than 200 spools, the page says that only the first 200 are listed.
 
 ## Status
 

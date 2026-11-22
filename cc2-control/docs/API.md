@@ -1144,8 +1144,12 @@ reach the printer.
 - Link a spool to Spoolman's own numeric spool id with `/api/spools/save` `spoolman_id` (digits only; a
   Spoolman spool can be linked to one local spool only, otherwise `409`; changing or emptying the id discards
   anything still queued or in flight for the old link, and replies to requests started under the old link are
-  ignored). Changing the server URL or login does the same for every spool. Exported backups leave out the
-  proxy login and the sync accounting, and a restore leaves sync off until it is configured again.
+  ignored). Changing the server URL or login ends requests still running for the old one; what was queued or in flight
+  for every spool is moved to the list of unsent usage (below) instead of being thrown away, and a change of URL
+  marks the still linked spools as connected to the old server (`spoolman_stale_links`); the URL is compared as host, port
+  and base path, so a trailing slash or the default port written out is not a change. Emptying the URL (sync off)
+  puts nothing on the list, and a full list refuses the change with `409`. Exported backups leave out the
+  proxy login, the sync accounting and that list, and a restore leaves sync off until it is configured again.
 - Sync runs on the same cadence as the local library's own periodic save (at most once every two minutes),
   in a background thread — never on the request-handling thread, so a slow or unreachable Spoolman cannot
   stall the printer connection.
@@ -1157,8 +1161,9 @@ reach the printer.
   in `unsent` for the next cycle. A request that may have been applied (the connection dropped after the request
   went out, a 5xx, a truncated or unreadable reply) is **not** retried: the next read of `used_weight` settles
   it — it grew by the grams, so it was applied; it did not, so the grams return to `unsent`; it changed in some
-  other way or the baseline is gone (a restart in the middle of a request), so the grams are dropped rather than
-  risk charging them twice, and the pull brings the spool to Spoolman's own figure.
+  other way or the baseline is gone (a restart in the middle of a request), so the grams are never sent again (rather
+  than risk charging them twice); they go on the list of unsent usage as `unsure`, and the pull brings the spool to
+  Spoolman's own figure.
 - A pull sets the remaining weight to Spoolman's figure minus what Spoolman has not been told about yet
   (`unsent` + `inflight`), so usage charged while a request was in flight is kept.
 - Replies are read whole or rejected: headers and `Content-Length` or chunked framing are checked, a reply that
@@ -1179,11 +1184,32 @@ reach the printer.
   remaining weight overwrite local edits at the next sync. A Spoolman spool with no start weight is not imported;
   a linked one keeps its weight and still takes the other fields.
 - `GET /api/spoolman` reports the last cycle: `{enabled, configured, last_sync, result, http, unsent_spools,
-  unsent_grams, inflight_spools, list:{pages, read, new, unreadable, no_weight, library_full, too_large,
+  unsent_grams, inflight_spools, held_entries, held_grams, list:{pages, read, new, unreadable, no_weight, library_full, too_large,
   no_material}, archived_linked, linked_no_weight, orphaned:[ids], orphaned_count}`. `result` is `ok`, `unreachable`,
   `unauthorized` (401), `forbidden` (403), `not_found`, `server_error`, `refused`, `bad_reply`, `too_large`, `timeout`,
-  `bad_url`, or `never` before the first cycle. A linked spool Spoolman answers 404 for is listed in `orphaned`; its usage waits. A log line
+  `bad_url`, or `never` before the first cycle. A linked spool Spoolman answers 404 for is listed in `orphaned`; only when it answers 404 in two cycles in a row does its usage go on the list of unsent usage (`held_entries`, `held_grams`); one 404 leaves it queued. A log line
   is written only when the result or the orphaned set changes.
+- The list of unsent usage (see docs/SPOOLMAN.md). `GET /api/spools` carries it: `spoolman_held` is a list of
+  `{id, spool, name, grams, time, reason, spoolman_id, sending}` (`reason` is `login_changed`, `server_changed`,
+  `not_found` or `unsure`; `spool` and `name` are the spool on this printer, `spoolman_id` the Spoolman spool it was meant
+  for; `sending` while a request for it is out), and `spoolman_stale_links` is the number of spools still linked to
+  numbers of the old server after a change of the address. At most 32 entries; amounts for the same spool, link and
+  reason are added to one. Nothing on the list is sent by itself.
+  - `POST /api/spoolman/held/send`: one line `<entry id>=<Spoolman spool id>` for each chosen entry. `202` once the
+    request has started (the result shows in `spoolman_held`: a sent entry is gone, one that could not be sent stays,
+    one whose answer is lost and not settled by the used weight becomes `unsure`, one whose spool Spoolman does not
+    have becomes `not_found`). `400` without a spool id, `404` for an unknown entry, `409` for an `unsure` entry or one
+    being sent, while the sync is off, or while another Spoolman request is running (a sync cycle can take up to 90 s; try again).
+  - `POST /api/spoolman/held/discard` (`id`) takes one entry off the list and sends nothing (`404`, or `409` while it is being sent).
+  - `POST /api/spoolman/unlink-old` unlinks every spool after a change of the address (the spools stay; their pending
+    grams go on the list). `409` when there are no old connections or the list is full.
+  - `POST /api/spoolman/keep-old` says the address change was the same server: the spools keep their links and
+    `spoolman_stale_links` goes back to 0. `409` when there are no old connections. While `spoolman_stale_links` is set, what
+    a sync reads from Spoolman is not applied to the linked spools (name, material, colour, brand, weight); sending
+    usage and importing new spools go on.
+  - `GET /api/spoolman/catalog` (the choice next to each entry) is read in the same sorted pages as the sync, at most 200 spools;
+    `truncated` is `true` when Spoolman has more.
+  - The list is saved with the spool library, is not part of a backup, and a spool library file from before it has none of its keys.
 
 ## Bounded asynchronous G-code analysis
 
