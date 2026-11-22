@@ -4676,7 +4676,72 @@ static const char *pending_autosave_guard(void) {
     return NULL;
 }
 
-static void serve_index(int fd, const char *web_root) {
+/* The start page revalidates instead of using no-store: the browser asks on
+   every visit, the ETag (SHA-256 of the page) tells it whether its copy is still
+   the installed one, and a match is answered with a bodyless 304. Only "/" and
+   "/index.html" use this; every other answer keeps the no-store header in respond(). */
+static void respond_revalidate(int fd, int status, const char *status_text,
+                               const char *body, size_t body_len, const char *etag) {
+    char header[512];
+    int header_len;
+    if (status == 304)
+        header_len = snprintf(header, sizeof(header),
+            "HTTP/1.1 %d %s\r\n"
+            "ETag: %s\r\n"
+            "Cache-Control: no-cache\r\n"
+            "X-Content-Type-Options: nosniff\r\n"
+            "X-Frame-Options: DENY\r\n"
+            "Connection: close\r\n\r\n",
+            status, status_text, etag);
+    else
+        header_len = snprintf(header, sizeof(header),
+            "HTTP/1.1 %d %s\r\n"
+            "Content-Type: text/html; charset=utf-8\r\n"
+            "Content-Length: %lu\r\n"
+            "ETag: %s\r\n"
+            "Cache-Control: no-cache\r\n"
+            "X-Content-Type-Options: nosniff\r\n"
+            "X-Frame-Options: DENY\r\n"
+            "Connection: close\r\n\r\n",
+            status, status_text, (unsigned long)body_len, etag);
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header)) return;
+    if (send_all(fd, header, (size_t)header_len) == 0 && status != 304)
+        (void)send_all(fd, body, body_len);
+}
+
+/* Strong validator from the content: the SHA-256 of the page, in quotes. It is made from the very bytes that are
+   sent, so it cannot describe another page than the body, and two different pages never share it, whatever their
+   size, modification time, change time, inode or device are (a switch between installed releases or firmware
+   images can give different pages the same file metadata). */
+static int index_etag(const unsigned char *page, size_t length, char *out, size_t cap) {
+    char digest[65];
+    sha256_state state;
+    sha256_init(&state);
+    sha256_update(&state, page, length);
+    sha256_hex(&state, digest);
+    int written = snprintf(out, cap, "\"%s\"", digest);
+    return written > 0 && (size_t)written < cap;
+}
+
+/* Does the If-None-Match value (comma-separated entity tags, "*", weak "W/"
+   prefix compared weakly) match this ETag? */
+static int if_none_match_matches(const char *value, const char *etag) {
+    size_t etag_len = strlen(etag);
+    const char *p = value;
+    while (*p) {
+        while (*p == ' ' || *p == '\t' || *p == ',') p++;
+        const char *start = p;
+        while (*p && *p != ',') p++;
+        const char *end = p;
+        while (end > start && (end[-1] == ' ' || end[-1] == '\t')) end--;
+        if (end - start == 1 && *start == '*') return 1;
+        if (end - start > 2 && start[0] == 'W' && start[1] == '/') start += 2;
+        if ((size_t)(end - start) == etag_len && memcmp(start, etag, etag_len) == 0) return 1;
+    }
+    return 0;
+}
+
+static void serve_index(int fd, const char *web_root, const char *request) {
     char path[PATH_MAX_LOCAL];
     if (snprintf(path, sizeof(path), "%s/index.html", web_root) >= (int)sizeof(path)) {
         const char *body = "Web root path is too long\n";
@@ -4689,16 +4754,53 @@ static void serve_index(int fd, const char *web_root) {
         respond(fd, 500, "Internal Server Error", "text/plain; charset=utf-8", body, strlen(body));
         return;
     }
-    if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
-    long size = ftell(file);
-    if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
-    rewind(file);
+    /* The length comes from one fstat of the opened file and exactly that many bytes are read. The file is measured
+       again after reading: if it changed meanwhile (an update writes it in place) or was shorter than measured, the
+       answer is a 503 and the next request gets the finished page. Best effort: file times move in clock ticks of a
+       few milliseconds, so a same-size write inside one tick is not seen by this check (the tag below still
+       describes the bytes that are sent). Without stat data the length comes from the end of the file.
+       A page of length 0 is a page that is being replaced too (a copy truncates it before it writes the new content,
+       measured on the printer: 59 of 93 answers had an empty body), so it gets the same 503; an empty start page is
+       never a finished page and a browser would keep the white page until the next visit. A copy that is cut off
+       somewhere in the middle cannot be told from a short page by its size and times when no write happens between the
+       two measurements (3 of 93 in the same run); that case stays best effort. */
+    struct stat info, after;
+    int measured = fstat(fileno(file), &info) == 0 && S_ISREG(info.st_mode);
+    long size;
+    if (measured) {
+        if (info.st_size < 0 || info.st_size > 1024 * 1024) { fclose(file); return; }
+        size = (long)info.st_size;
+    } else {
+        if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
+        size = ftell(file);
+        if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
+        rewind(file);
+    }
+    if (size == 0) {
+        fclose(file);
+        const char *error = "{\"error\":\"Start page is being replaced\"}\n";
+        respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
     char *body = malloc((size_t)size);
     if (!body) { fclose(file); return; }
     size_t read_len = fread(body, 1, (size_t)size, file);
+    int unchanged = !measured || (fstat(fileno(file), &after) == 0 && after.st_size == info.st_size &&
+                                  after.st_mtim.tv_sec == info.st_mtim.tv_sec && after.st_mtim.tv_nsec == info.st_mtim.tv_nsec &&
+                                  after.st_ctim.tv_sec == info.st_ctim.tv_sec && after.st_ctim.tv_nsec == info.st_ctim.tv_nsec);
     fclose(file);
-    if (read_len == (size_t)size)
-        respond(fd, 200, "OK", "text/html; charset=utf-8", body, read_len);
+    char etag[80];
+    if (read_len != (size_t)size || !unchanged || !index_etag((const unsigned char *)body, read_len, etag, sizeof(etag))) {
+        const char *error = "{\"error\":\"Start page is being replaced\"}\n";
+        respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
+        free(body);
+        return;
+    }
+    char sent[512]; /* A longer value is not ours; it is ignored and the page is sent. */
+    if (http_header(request, "If-None-Match", sent, sizeof(sent)) == 1 && if_none_match_matches(sent, etag))
+        respond_revalidate(fd, 304, "Not Modified", NULL, 0, etag);
+    else
+        respond_revalidate(fd, 200, "OK", body, read_len, etag);
     free(body);
 }
 
@@ -5105,7 +5207,7 @@ static void console_monitor_response(int fd) {
  respond(fd,200,"OK","application/json; charset=utf-8",body,used);free(body);
 }
 
-static void console_status_response(int fd, console_state *console) {
+static void console_status_response(int fd, console_state *console, const char *query) {
     size_t capacity = CONSOLE_OUTPUT_MAX * 2 + 1024;
     char *body = malloc(capacity);
     if (!body) {
@@ -5113,7 +5215,7 @@ static void console_status_response(int fd, console_state *console) {
         respond(fd,500,"Internal Server Error","text/plain; charset=utf-8",error,strlen(error));
         return;
     }
-    console_json(console, body, capacity);
+    console_json_query(console, query, body, capacity);
     respond(fd,200,"OK","application/json; charset=utf-8",body,strlen(body));
     free(body);
 }
@@ -5781,7 +5883,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/upload")==0) {
         return header_end ? gcode_upload_start(fd,request,query,used,(size_t)(body-request),mqtt):0;
     } else if (strcmp(method,"GET")==0 && (strcmp(path,"/")==0 || strcmp(path,"/index.html")==0)) {
-        serve_index(fd, web_root);
+        serve_index(fd, web_root, request);
     } else if (strcmp(method,"GET")==0 && strncmp(path,"/i18n/",6)==0) {
         serve_locale(fd, web_root, path);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/orca/pending-print")==0) {
@@ -6005,7 +6107,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/monitor")==0) {
         console_monitor_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/console")==0) {
-        console_status_response(fd,console);
+        console_status_response(fd,console,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/clear")==0) {
         console_clear_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/command")==0) {

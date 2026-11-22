@@ -238,7 +238,7 @@ try {
   await header.getByText('Idle', { exact: true }).waitFor()
   let preview = null
   const fulfill = (body) => ({ contentType: 'application/json', body: JSON.stringify(body) })
-  await page.route('**/api/console', route => {
+  await page.route(/\/api\/console(\?.*)?$/, route => {
     if (!preview?.console || route.request().method() !== 'GET') return route.fallback()
     return route.fulfill(fulfill(preview.console))
   })

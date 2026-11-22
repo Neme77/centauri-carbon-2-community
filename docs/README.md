@@ -9,6 +9,7 @@
 | First installation, network access, LAN code, SSH and return to stock | [First setup](FIRST_RUN.md) | [Prima installazione](FIRST_RUN.it.md) |
 | CC2 Control application updates and required restarts | [Update guide](UPDATE_CC2.md) | [Guida aggiornamenti](UPDATE_CC2.it.md) |
 | OrcaSlicer connection, upload and Canvas sync | [OrcaSlicer](ORCASLICER.md) | [OrcaSlicer](ORCASLICER.it.md) |
+| ElegooSlicer: CC2 Control in the Device tab (experimental) | [ElegooSlicer](ELEGOOSLICER.md) | [ElegooSlicer](ELEGOOSLICER.it.md) |
 
 Read the compatibility requirements and release notes for the package you are
 installing. Full firmware, application updaters and source builders serve

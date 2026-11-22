@@ -24,7 +24,7 @@ Example printer address: `192.168.1.50`. Replace it with your printer's actual I
 
 Save the connection, select **Test**, and open the **Device** tab. You should see CC2 Control with the same printer information as in a browser.
 
-**Use port 8081 for upload, Device UI and Canvas sync.** Port **7125** is the separate read-only Panda Breath compatibility bridge; it does not serve Canvas filament data or G-code uploads. The native ELEGOO Link connection is a different route and is not the configuration described here.
+**Use port 8081 for upload, Device UI and Canvas sync.** Port **7125** is the separate read-only Panda Breath compatibility bridge; it does not serve Canvas filament data or G-code uploads. The native ELEGOO Link connection is a different route and is not the configuration described here. ElegooSlicer users: see the experimental [ElegooSlicer guide](ELEGOOSLICER.md).
 
 ## 2. Synchronize the Canvas filaments
 
