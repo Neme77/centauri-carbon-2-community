@@ -102,7 +102,7 @@ static void finish(console_state *state, int success, const char *message) {
  * connection, not to a line: a read can end in the middle of a report that follows an acknowledgement, and the rest of
  * it arrives in the next read, while the next line is waited for or in the final read (staged_drain). */
 typedef struct { char frame[1024]; size_t used; } staged_frame;
-typedef struct { int saturated; int fault; } staged_seen;
+typedef struct { int saturated; int fault; int lost; } staged_seen;
 static int staged_error_report(const char *frame) {
     const char *report = strstr(frame, "\"report\"");
     const char *key = report ? strstr(report, "\"error_code\":") : NULL;
@@ -134,10 +134,19 @@ static int staged_feed(console_state *state, staged_frame *f, const char *buffer
     if (start < got) seen->saturated |= append_output(state, buffer + start, got - start);
     return result;
 }
+/* A frame that never ended (the connection closed, went quiet or ran out of time inside it) is kept as received in the
+ * output: it is the only text of that report. Returns 1 when there was one. */
+static int staged_flush_open(console_state *state, staged_frame *frame) {
+    if (!frame->used) return 0;
+    append_output(state, frame->frame, frame->used);
+    append_output(state, "\n", 1);
+    frame->used = 0;
+    return 1;
+}
 /* The result of a line came in a read that ended inside the next frame (a report that follows the acknowledgement): wait
  * until that frame is whole before the next line is sent, so that an error report in it stops the job before more is
  * sent. The rest of a frame that has begun is on its way; a quiet connection (750 ms) or the deadline ends the wait, and
- * the frame stays in `frame` for the next read. */
+ * the frame stays in `frame` for the next read. A read error is noted in `seen->lost`. */
 static void staged_complete_frame(console_state *state, int fd, time_t deadline, staged_frame *frame, staged_seen *seen) {
     while (frame->used && time(NULL) < deadline) {
         struct pollfd pfd = {fd, POLLIN, 0};
@@ -146,6 +155,7 @@ static void staged_complete_frame(console_state *state, int fd, time_t deadline,
         if (ready <= 0) return;
         char buffer[4096];
         ssize_t got = read(fd, buffer, sizeof(buffer));
+        if (got < 0) seen->lost = 1;
         if (got <= 0) return;
         staged_feed(state, frame, buffer, (size_t)got, seen);
     }
@@ -169,6 +179,7 @@ static int staged_line(console_state *state, int fd, const char *line, time_t de
         int result = staged_feed(state, frame, buffer, (size_t)got, seen);
         if (result >= 0) {
             staged_complete_frame(state, fd, deadline, frame, seen);
+            if (seen->lost || frame->used) return -1;
             return result;
         }
     }
@@ -183,6 +194,7 @@ static void staged_drain(console_state *state, int fd, time_t deadline, staged_f
         if (ready <= 0) return;
         char buffer[4096];
         ssize_t got = read(fd, buffer, sizeof(buffer));
+        if (got < 0) seen->lost = 1;
         if (got <= 0) return;
         staged_feed(state, frame, buffer, (size_t)got, seen);
     }
@@ -240,7 +252,7 @@ static void staged_run(console_state *state, int fd, const char *command) {
     append_output(state, "\n", 1);
     time_t deadline = time(NULL) + 900;
     int sent = 0;
-    staged_seen seen = {0, 0};
+    staged_seen seen = {0, 0, 0};
     staged_frame frame = {{0}, 0};
     int result = staged_lines(state, fd, command, deadline, 0, &sent, &frame, &seen, &homed);
     if (result == 2) {
@@ -248,6 +260,7 @@ static void staged_run(console_state *state, int fd, const char *command) {
         /* Nothing sent yet: nothing to undo. */
         if (sent) result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &frame, &seen, &homed) < 0 ? -1 : 2;
         if (result == 2) staged_drain(state, fd, time(NULL) + 10, &frame, &seen);
+        if (staged_flush_open(state, &frame) || seen.lost) result = -1;
         close(fd);
         pthread_mutex_lock(&state->lock);
         state->cancelled = 1;
@@ -255,7 +268,12 @@ static void staged_run(console_state *state, int fd, const char *command) {
         finish(state, 0, result < 0 ? "Console connection ended or command timed out\n" : NULL);
         return;
     }
-    if (result < 0) { close(fd); finish(state, 0, "Console connection ended or command timed out\n"); return; }
+    if (result < 0) {
+        staged_flush_open(state, &frame);
+        close(fd);
+        finish(state, 0, "Console connection ended or command timed out\n");
+        return;
+    }
     /* A printer error (an error response, or an error report even next to an acknowledged request) is a failure, not
      * a measurement that completed: the error text is already in the output, the lines after it are not sent and no
      * motion tail follows (whether the axes are homed and the printer allows a move is not known here; the heaters are
@@ -263,6 +281,10 @@ static void staged_run(console_state *state, int fd, const char *command) {
      * so a late error text is kept too. */
     staged_drain(state, fd, deadline, &frame, &seen);
     close(fd);
+    if (staged_flush_open(state, &frame) || seen.lost) {
+        finish(state, 0, "Console connection ended or command timed out\n");
+        return;
+    }
     if (result == 0 || seen.fault) { finish(state, 0, "[CC2 Control: the printer reported an error; the job was stopped]\n"); return; }
     finish(state, 1, NULL);
 }

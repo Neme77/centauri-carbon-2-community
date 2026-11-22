@@ -6,6 +6,7 @@
 #include <stdatomic.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 /* R11: a staged console job is sent line by line and can be cancelled between two lines. The printer is faked:
  * every gcode/script request is answered with its result; one line can be answered with an error, and a cancel
  * can be asked for while a chosen line runs. */
@@ -19,6 +20,10 @@ static const char *report_extra;
  * split_pos bytes of split_report; the rest comes in the next read. */
 static const char *split_at, *split_report;
 static size_t split_pos;
+/* What follows the cut report: 0 the rest comes in the next read; 1 the connection closes (EOF); 2 the connection goes
+ * quiet (no more data, no EOF); 3 the wait runs out (the clock moves past the deadline); 4 a read error. */
+static int split_wait;
+static time_t clock_jump;
 static atomic_int *cancel_flag;
 static int fake_socket(int domain,int type,int protocol){(void)domain;(void)type;(void)protocol;return 42;}
 static int fake_connect(int fd,const struct sockaddr *address,socklen_t length){(void)fd;(void)address;(void)length;return 0;}
@@ -39,12 +44,15 @@ static ssize_t fake_send(int fd,const void *data,size_t length,int flags){
     }
     return (ssize_t)length;
 }
-static int fake_poll(struct pollfd *fds,nfds_t count,int timeout){(void)fds;(void)count;(void)timeout;return 1;}
 static const char *later; /* a report that arrives in a read of its own, after the result */
+static int fake_poll(struct pollfd *fds,nfds_t count,int timeout){(void)fds;(void)count;(void)timeout;return !(split_wait==2&&!reply_pending&&!later);}
 static ssize_t fake_read(int fd,void *data,size_t length){
     (void)fd;
     if(later){size_t m=strlen(later);assert(m<=length);memcpy(data,later,m);later=NULL;return (ssize_t)m;}
-    if(!reply_pending)return 0;
+    if(!reply_pending){
+        if(split_wait==4){errno=EIO;return -1;}
+        return 0;
+    }
     reply_pending=0;
     static char part[512];
     if(reply_mode==2){
@@ -52,7 +60,8 @@ static ssize_t fake_read(int fd,void *data,size_t length){
         size_t k=strlen(split_report);
         assert(split_pos<=k&&sizeof(ack)-1+split_pos<sizeof(part));
         memcpy(part,ack,sizeof(ack)-1);memcpy(part+sizeof(ack)-1,split_report,split_pos);part[sizeof(ack)-1+split_pos]=0;
-        if(split_pos<k)later=split_report+split_pos;
+        if(split_pos<k&&split_wait==0)later=split_report+split_pos;
+        if(split_wait==3)clock_jump=1000;
     }
     const char *reply=reply_mode==2?part:reply_error?"{\"error\":{\"message\":\"probe failed\"},\"id\":101}\003":
         reply_mode?"{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"Z home failed\"}}\003{\"id\":101,\"result\":{}}\003":
@@ -64,13 +73,16 @@ static ssize_t fake_read(int fd,void *data,size_t length){
     return (ssize_t)n;
 }
 static int fake_close(int fd){(void)fd;return 0;}
+static time_t fake_time(time_t *t){return time(t)+clock_jump;}
 #define socket fake_socket
 #define connect fake_connect
 #define send fake_send
 #define poll fake_poll
 #define read fake_read
 #define close fake_close
+#define time fake_time
 #include "../src/console.c"
+#undef time
 #undef close
 #undef read
 #undef poll
@@ -125,6 +137,12 @@ static void split_job(const char *script,const char *tail,const char *line,size_
     split_at=line;split_report=SPLIT_REPORT;split_pos=pos;
     console_worker(&state);
     split_at=split_report=NULL;split_pos=0;later=NULL;
+}
+/* As split_job, with the report cut at `pos` and the rest of the connection as `wait` says (see split_wait). */
+static void cut_job(const char *script,const char *tail,const char *line,size_t pos,int wait){
+    split_wait=wait;
+    split_job(script,tail,line,pos);
+    split_wait=0;clock_jump=0;
 }
 static int sent_line(const char *what){for(int i=0;i<sent_count;i++)if(!strcmp(sent_lines[i],what))return 1;return 0;}
 int main(void){
@@ -254,6 +272,36 @@ int main(void){
         assert(strstr(state.output,SPLIT_TEXT)&&strstr(state.output,"the printer reported an error"));
     }
     puts("PASS: an error report torn across two reads is kept between two lines and into the final read, at every split position");
+
+    /* Neme77 (21.11., dbc05899): an acknowledged line, then the start of an error report that never ends. The connection
+     * closes (EOF), goes quiet, the wait runs out or a read fails: that is a transport failure, not a success and not a
+     * printer error. The job fails with the received text kept, sends nothing after the line (no tail), and an EOF
+     * or read error after a complete report stays as it was. Every cut position inside the report is tried, also
+     * inside "error_code". */
+    {
+        static const int waits[]={1,2,3,4};
+        static const char *wait_names[]={"EOF","quiet","wait ran out","read error"};
+        for(size_t w=0;w<sizeof(waits)/sizeof(waits[0]);w++){
+            for(size_t pos=1;pos<split_len;pos++){
+                char prefix[sizeof(SPLIT_TEXT)];
+                memcpy(prefix,SPLIT_TEXT,pos);prefix[pos]=0;
+                cut_job(SCRIPT,TAIL,"PROBE",pos,waits[w]);
+                if(sent_count!=4||sent_line("G1 X2 Y2")||sent_line("RESTORE_GCODE_STATE NAME=T")||sent_line("G90")||sent_line("M104 S0")){
+                    fprintf(stderr,"%s at %zu, PROBE: sent %d lines, expected 4 and no tail\n",wait_names[w],pos,sent_count);abort();
+                }
+                if(state.success||!state.completed||state.cancelled||state.busy){fprintf(stderr,"%s at %zu: job not failed\n",wait_names[w],pos);abort();}
+                if(!strstr(state.output,prefix)||!strstr(state.output,"Console connection ended or command timed out")||strstr(state.output,"the printer reported an error")){
+                    fprintf(stderr,"%s at %zu: output lacks the received text or the transport message\n",wait_names[w],pos);abort();
+                }
+                cut_job(SCRIPT,TAIL,"M140 S0",pos,waits[w]);
+                if(sent_count!=8||sent_line("G90")||state.success||!state.completed||state.cancelled||state.busy||
+                   !strstr(state.output,prefix)||!strstr(state.output,"Console connection ended or command timed out")){
+                    fprintf(stderr,"%s at %zu, last line: sent %d, success %d\n",wait_names[w],pos,sent_count,state.success);abort();
+                }
+            }
+        }
+    }
+    puts("PASS: an acknowledged line with an unfinished report fails the job on EOF, quiet, an expired wait and a read error, with the received text kept");
 
     /* Ordinary reports (error_code 0) and a resume event (level 3) are no failure. */
     report_job(SCRIPT,TAIL,NULL,NULL,NULL,quiet_report);
