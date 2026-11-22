@@ -241,10 +241,12 @@ const viewerId = () =>
 //    stream that sees a fresh foreign entry asks over a BroadcastChannel and waits (at most one second) until the
 //    old tab says it has let go. Without either (blocked storage, no channel) it simply starts, as before.
 // Another device shares nothing but the printer's claim: there the old viewer still stops on its next poll.
-type Holder = { stop: (why: Key) => void }
+type Holder = { stop: (why: Key) => void; held: () => boolean }
 const holders = new Set<Holder>()
 const LIVE_KEY = 'cc2-camera-live'
-const LIVE_FRESH_MS = 3000
+// A hidden tab's timers can be slowed to once a minute, so its heartbeat may be that old and the tab still holds the camera.
+// A stale entry nobody answers for only costs the next start at most RELEASE_WAIT_MS.
+const LIVE_FRESH_MS = 75000
 const LIVE_BEAT_MS = 1000
 const RELEASE_WAIT_MS = 1000
 let cameraChannel: BroadcastChannel | null | undefined
@@ -255,8 +257,15 @@ const channel = () => {
       cameraChannel?.addEventListener('message', event => {
         const message = event.data
         if (message?.type !== 'release' || typeof message.id !== 'string') return
-        for (const holder of holders) holder.stop('common.camera_taken_over')
-        cameraChannel?.postMessage({ type: 'released', for: message.id })
+        // Only a viewer that has the camera lets go, and only that tab answers (an idle tab must not end the wait before the
+        // holder has let go); a viewer that is itself still starting is not touched.
+        let released = false
+        for (const holder of holders)
+          if (holder.held()) {
+            holder.stop('common.camera_taken_over')
+            released = true
+          }
+        if (released) cameraChannel?.postMessage({ type: 'released', for: message.id })
       })
     } catch {
       cameraChannel = null
@@ -411,7 +420,7 @@ export const CameraStream = ({
   const tries = useRef(0)
   const viewer = useRef('')
   if (!viewer.current) viewer.current = viewerId()
-  const holder = useRef<Holder>({ stop: () => {} })
+  const holder = useRef<Holder>({ stop: () => {}, held: () => false })
   const beat = useRef<number | undefined>(undefined)
   const claimed = useRef(0) // when the backend confirmed this page's claim; 0 while it has none
   const starts = useRef(0)
@@ -450,6 +459,7 @@ export const CameraStream = ({
     stop(why)
     onTakenOver?.()
   }
+  holder.current.held = () => live.current && claimed.current > 0
   useEffect(() => {
     const entry = holder.current
     holders.add(entry)

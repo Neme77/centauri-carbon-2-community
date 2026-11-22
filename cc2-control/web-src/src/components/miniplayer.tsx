@@ -26,6 +26,7 @@ const RAIL = 62
 const RAIL_WIDE = 208
 const KEY_STEP = 16
 const KEY_STEP_BIG = 64
+const MIN_ROOM = 96 // less room than this towards the top or left, and the size handle grows the window the other way
 const between = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
 
 const viewportSize = () => ({ w: document.documentElement.clientWidth, h: document.documentElement.clientHeight })
@@ -85,24 +86,53 @@ export const MiniPlayer = () => {
     const tp = between(nextTop, b.top, Math.max(b.top, now.h - miniHeight(nextWidth) - MINI_MARGIN))
     miniplayer.set({ x: l / now.w, y: tp / now.h })
   }
-  // The size handle is the top left corner, so the corner opposite to it (bottom right) stays where it is. The pointer
-  // also stops at what fits between that corner, the header and the side menu (`fit`); the keys have no such limit and
-  // move the window in instead, so they always reach the largest size.
-  const resize = (nextWidth: number, anchor: { right: number; bottom: number }, fit = false) => {
+  // The size handle is the top left corner, so by default the corner opposite to it (bottom right) stays where it is.
+  // Where there is no room towards the top or the left (the window sits against the header or the side menu), that side
+  // gives way to the other one: the window then keeps its top or left edge and grows down or to the right, so it can be
+  // enlarged everywhere and never leaves the visible area. Each direction is decided once, when a drag starts.
+  // The pointer also stops at what fits (`fit`); the keys have no such limit and move the window in instead, so they
+  // always reach the largest size.
+  type Anchor = { right: number; bottom: number; left: number; top: number; fromRight: boolean; fromBottom: boolean }
+  const resize = (nextWidth: number, anchor: Anchor, fit = false) => {
     const now = viewportSize()
     let w = clampMiniWidth(nextWidth, now.w)
     if (fit) {
       const b = area(now.w, menu.get().collapsed)
-      const room = Math.min(anchor.right - b.left, ((anchor.bottom - b.top - MINI_BAR) * 16) / 9)
+      const across = anchor.fromRight ? anchor.right - b.left : now.w - MINI_MARGIN - anchor.left
+      const down = anchor.fromBottom ? anchor.bottom - b.top : now.h - MINI_MARGIN - anchor.top
+      const room = Math.min(across, ((down - MINI_BAR) * 16) / 9)
       w = Math.max(miniWidthLimits(now.w).min, Math.min(w, Math.floor(room)))
     }
-    place(anchor.right - w, anchor.bottom - miniHeight(w), w)
+    place(
+      anchor.fromRight ? anchor.right - w : anchor.left,
+      anchor.fromBottom ? anchor.bottom - miniHeight(w) : anchor.top,
+      w
+    )
     miniplayer.set({ w })
   }
-  const currentAnchor = () => ({
-    right: geometry.current.left + geometry.current.width,
-    bottom: geometry.current.top + miniHeight(geometry.current.width),
-  })
+  const currentAnchor = (): Anchor => {
+    const g = geometry.current
+    const now = viewportSize()
+    const b = area(now.w, menu.get().collapsed)
+    const right = g.left + g.width
+    const bottom = g.top + miniHeight(g.width)
+    // Room left for growing, towards the top left (the default) and towards the bottom right.
+    const toTopLeft = [right - b.left - g.width, ((bottom - b.top - MINI_BAR) * 16) / 9 - g.width]
+    const toBottomRight = [
+      now.w - MINI_MARGIN - g.left - g.width,
+      ((now.h - MINI_MARGIN - g.top - MINI_BAR) * 16) / 9 - g.width,
+    ]
+    return {
+      right,
+      bottom,
+      left: g.left,
+      top: g.top,
+      fromRight: toTopLeft[0] >= MIN_ROOM || toTopLeft[0] >= toBottomRight[0],
+      fromBottom: toTopLeft[1] >= MIN_ROOM || toTopLeft[1] >= toBottomRight[1],
+    }
+  }
+  // The keys always grow towards the top left first (the window moves in when that side is full).
+  const keyAnchor = (): Anchor => ({ ...currentAnchor(), fromRight: true, fromBottom: true })
 
   // Position: the whole bar and the frame strips at the edges (a press that starts on another button or on the size
   // handle is theirs), and the grip button for the keys.
@@ -143,11 +173,9 @@ export const MiniPlayer = () => {
     saveMiniplayer()
   }
 
-  // Size: the corner at the top left. Moving it up or to the left makes the window larger. The width follows the longer
-  // of the horizontal and the vertical move, the shape stays 16:9.
-  const stretch = useRef<{ id: number; x: number; y: number; width: number; right: number; bottom: number } | null>(
-    null
-  )
+  // Size: the corner at the top left. Moving it up or to the left makes the window larger (the other way round where
+  // that side is full, see above). The width follows the longer of the horizontal and the vertical move, the shape stays 16:9.
+  const stretch = useRef<({ id: number; x: number; y: number; width: number } & Anchor) | null>(null)
   const cornerDown = (e: PointerEvent) => {
     if (e.button !== 0) return
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -156,8 +184,8 @@ export const MiniPlayer = () => {
   const cornerMove = (e: PointerEvent) => {
     const s = stretch.current
     if (!s || s.id !== e.pointerId) return
-    const dx = s.x - e.clientX
-    const dy = ((s.y - e.clientY) * 16) / 9
+    const dx = s.fromRight ? s.x - e.clientX : e.clientX - s.x
+    const dy = ((s.fromBottom ? s.y - e.clientY : e.clientY - s.y) * 16) / 9
     resize(s.width + (Math.abs(dx) >= Math.abs(dy) ? dx : dy), s, true)
   }
   const cornerUp = (e: PointerEvent) => {
@@ -180,7 +208,7 @@ export const MiniPlayer = () => {
               : null
     if (next === null) return
     e.preventDefault()
-    resize(next, currentAnchor())
+    resize(next, keyAnchor())
     saveMiniplayer()
   }
 

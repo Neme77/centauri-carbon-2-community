@@ -5,7 +5,7 @@ import { ls, store } from './store'
 // it is open is not, because the camera must never start by itself after a reload.
 const KEY = 'cc2-miniplayer'
 
-export const MINI_BAR = 44 // height of the control bar under the 16:9 picture
+export const MINI_BAR = 44 // height of the control bar above the 16:9 picture
 export const MINI_MARGIN = 8 // distance to the edges of the window
 export const MINI_DEFAULT_WIDTH = 360
 export const MINI_DEFAULT_WIDTH_PHONE = 260

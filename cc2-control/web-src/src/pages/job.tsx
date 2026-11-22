@@ -223,7 +223,6 @@ export const Job = () => {
                     <Button
                       class="absolute top-2 right-2 z-20 bg-field/90 px-3 text-xs"
                       style={{ minHeight: 44, minWidth: 44 }}
-                      aria-pressed={false}
                       onClick={() => {
                         // Hand the picture over: this page's stream ends, then the mini player starts.
                         rememberCameraOpen(false)

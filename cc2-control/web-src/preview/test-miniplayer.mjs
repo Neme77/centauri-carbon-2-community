@@ -114,6 +114,9 @@ try {
     p.on('pageerror', e => errors.push(e.message))
     if (setup) await p.addInitScript(setup)
     await p.goto(`${origin}/#dashboard`)
+    // A page starts from the defaults, not from the size and place an earlier check left in this browser.
+    await p.evaluate(() => { localStorage.removeItem('cc2-miniplayer') })
+    await p.reload()
     return p
   }
   const regionOf = p => p.getByRole('region', { name: 'Mini player live camera', exact: true })
@@ -238,11 +241,14 @@ try {
           }
           if (bar.scrollWidth > bar.clientWidth + 0.5) out.push('the bar overflows')
           const closeIn = closeBar.top >= br.top - 0.5 && closeBar.bottom <= br.bottom + 0.5
-          return { out, closeIn, winWidth: win.width, closeInside: closeBar.right <= win.right + 0.5 && closeBar.left >= win.left - 0.5 }
+          const nameEl = document.querySelector('.cc2-mini-name')
+          const nameShown = Boolean(nameEl && nameEl.getClientRects().length)
+          return { out, nameShown, closeIn, winWidth: win.width, closeInside: closeBar.right <= win.right + 0.5 && closeBar.left >= win.left - 0.5 }
         })
         assert.deepEqual(bad.out, [], `width ${width}`)
         assert.equal(bad.closeIn, width >= 198, `width ${width}: the close button ${bad.closeIn ? 'is' : 'is not'} in the bar`)
         assert.equal(bad.closeInside, true, `width ${width}: the close button stays inside the window`)
+        assert.equal(bad.nameShown, width >= 340, `width ${width}: the name ${bad.nameShown ? 'is' : 'is not'} shown (from 340 px)`)
       }
     }
     const p = await fresh()
@@ -285,6 +291,7 @@ try {
     const hand = p.locator('.cc2-job-camera').getByRole('button', { name: 'Mini player', exact: true })
     await hand.waitFor({ state: 'visible', timeout: 3000 })
     const hb = await rect(hand)
+    assert.equal(await hand.getAttribute('aria-pressed'), null, 'the hand-over button is an action, not a toggle: no pressed state')
     assert.ok(hb.width >= 43 && hb.height >= 43, `button at least 44 x 44 (${hb.width} x ${hb.height})`)
     resetPeak()
     await hand.click()
@@ -401,6 +408,168 @@ try {
     assert.ok(overlapMs <= 3000, `overlap ${overlapMs} ms stays below 3 s`)
     await a.close(); await keepClosed(b); await other.close()
   })
+  // 3. Phase 3: enlarging everywhere, and the gaps found by the second review.
+  const wallsOf = async p => p.evaluate(() => ({
+    left: document.querySelector('.cc2-sidebar')?.getBoundingClientRect().right ?? 0,
+    top: document.querySelector('.cc2-topbar')?.getBoundingClientRect().bottom ?? 0,
+    w: document.documentElement.clientWidth,
+    h: document.documentElement.clientHeight,
+  }))
+  const insideScreen = (b, walls, label) => {
+    assert.ok(b.x >= walls.left - 1, `${label}: left edge ${b.x} is right of the side menu (${walls.left})`)
+    assert.ok(b.y >= walls.top - 1, `${label}: top edge ${b.y} is below the header (${walls.top})`)
+    assert.ok(b.x + b.width <= walls.w + 1, `${label}: right edge ${b.x + b.width} within ${walls.w}`)
+    assert.ok(b.y + b.height <= walls.h + 1, `${label}: bottom edge ${b.y + b.height} within ${walls.h}`)
+  }
+  // Pushes the window against walls with the grip's arrow keys; the size handle then drags in both diagonal directions
+  // (the window grows towards the free side, the anchor is the opposite side) until it has become larger.
+  const enlargeAt = async (label, p, keys, count, viewport) => {
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    await slider.focus(); await p.keyboard.press('Home')
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+    for (const key of keys) for (let i = 0; i < count; i++) await p.keyboard.press(`Shift+${key}`)
+    const walls = await wallsOf(p)
+    const start = await rect(r)
+    insideScreen(start, walls, `${label} before`)
+    let grown = start
+    for (const sign of [-1, 1]) {
+      if (grown.width >= start.width + 80) break
+      const h = await rect(slider)
+      await dragFrom(p, [h.x + 6, h.y + 6], [sign * 150, sign * 84])
+      grown = await rect(r)
+      insideScreen(grown, walls, `${label} after the drag`)
+    }
+    assert.ok(grown.width >= start.width + 80, `${label}: the window can be enlarged by dragging (${start.width} -> ${grown.width})`)
+    near(grown.height, Math.round(grown.width * 9 / 16) + 44, 2, `${label}: still 16:9`)
+    await slider.focus(); await p.keyboard.press('End')
+    const biggest = await rect(r)
+    near(biggest.width, 640, 1, `${label}: End reaches the maximum`)
+    insideScreen(biggest, walls, `${label} at the maximum`)
+  }
+  for (const [label, keys, count] of [
+    ['L14a default place', [], 0],
+    ['L14b top edge', ['ArrowUp'], 40],
+    ['L14c left edge', ['ArrowLeft'], 40],
+    ['L14d top left corner', ['ArrowUp', 'ArrowLeft'], 40],
+  ]) {
+    await soft(`${label}: the window can be enlarged and stays on screen`, async () => {
+      const p = await fresh()
+      await openMini(p)
+      await enlargeAt(label, p, keys, count)
+      await keepClosed(p)
+    })
+  }
+  await soft('L14e phone, top left corner: the window can be enlarged with a finger and stays on screen', async () => {
+    const phoneCtx = await newContext({ width: 393, height: 780 }, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 })
+    const p = await fresh(null, phoneCtx)
+    await p.addStyleTag({ content: '#cc2-preview-banner{display:none!important}' })
+    await openMini(p)
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    await slider.focus(); await p.keyboard.press('Home')
+    for (let i = 0; i < 5; i++) await p.keyboard.press('ArrowRight') // 240 px: wide enough for the grip button
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+    for (let i = 0; i < 20; i++) await p.keyboard.press('Shift+ArrowUp')
+    for (let i = 0; i < 20; i++) await p.keyboard.press('Shift+ArrowLeft')
+    const cdp = await phoneCtx.newCDPSession(p)
+    const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((q, id) => ({ x: q[0], y: q[1], id })) })
+    const walls = await wallsOf(p)
+    const corner = await rect(r)
+    assert.ok(corner.x <= walls.left + 40 && corner.y <= walls.top + 40, `the window sits at the top left (${corner.x}, ${corner.y})`)
+    const h = await rect(slider)
+    let grown = corner
+    for (const sign of [-1, 1]) {
+      if (grown.width >= corner.width + 40) break
+      await touch('touchStart', [[h.x + 6, h.y + 6]])
+      for (let i = 1; i <= 6; i++) await touch('touchMove', [[h.x + 6 + sign * 12 * i, h.y + 6 + sign * 12 * i]])
+      await touch('touchEnd', [])
+      grown = await rect(r)
+      insideScreen(grown, walls, 'phone after the finger drag')
+    }
+    assert.ok(grown.width >= corner.width + 40, `phone: enlarged by a finger at the top left (${corner.width} -> ${grown.width})`)
+    await p.close(); await phoneCtx.close()
+    await wait(() => clients === 0, 'closed')
+  })
+
+  await soft('L15 the pointer stops at the wall and keeps the right edge (size drag against the side menu)', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    await slider.focus(); await p.keyboard.press('Home')
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+    for (let i = 0; i < 40; i++) await p.keyboard.press('Shift+ArrowLeft')
+    for (let i = 0; i < 11; i++) await p.keyboard.press('ArrowRight') // 176 px away from the wall
+    const walls = await wallsOf(p)
+    const start = await rect(r)
+    const h = await rect(slider)
+    await dragFrom(p, [h.x + 6, h.y + 6], [-320, 0])
+    const after = await rect(r)
+    assert.ok(after.x >= walls.left - 1, `the window did not cross the side menu (${after.x} < ${walls.left})`)
+    near(after.x + after.width, start.x + start.width, 2, 'the right edge stayed where it was')
+    assert.ok(after.width > start.width + 100, `it did grow up to the wall (${start.width} -> ${after.width})`)
+    await keepClosed(p)
+  })
+
+  await soft('L16 only the answer meant for this tab ends the wait; a stale entry still makes a start wait (a ghost holder)', async () => {
+    const a = await fresh()
+    const b = await fresh()
+    // A ghost holder: a 30 s old entry that nobody answers for (a background tab whose timer was throttled).
+    await b.evaluate(() => localStorage.setItem('cc2-camera-live', JSON.stringify({ id: 'ghost-holder-id', at: Date.now() - 30000 })))
+    const started = Date.now()
+    const noise = setInterval(() => { a.evaluate(() => new BroadcastChannel('cc2-camera').postMessage({ type: 'released', for: 'somebody-else' })).catch(() => {}) }, 80)
+    await b.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await wait(() => clients === 1, 'b streams after the wait')
+    const waited = Date.now() - started
+    clearInterval(noise)
+    assert.ok(waited >= 850, `the start waited for the ghost (about 1 s), not ended by a foreign answer: ${waited} ms`)
+    assert.ok(waited < 3500, `the wait is bounded: ${waited} ms`)
+    await a.close(); await keepClosed(b)
+  })
+
+  await soft('L17 stopping removes the live entry and its heartbeat', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const entry = () => p.evaluate(() => localStorage.getItem('cc2-camera-live'))
+    await wait(async () => Boolean(await entry()), 'the running stream writes its entry')
+    await regionOf(p).getByRole('button', { name: 'Pause', exact: true }).click()
+    await wait(() => clients === 0, 'paused')
+    await observe(300)
+    assert.equal(await entry(), null, 'the entry is gone after Pause')
+    await observe(1500)
+    assert.equal(await entry(), null, 'and the heartbeat does not write it again')
+    await keepClosed(p)
+  })
+
+  await soft('L18 a tab that is still waiting to start is not stopped by another tab that starts (stale holder nobody answers for)', async () => {
+    const b = await fresh(), c = await fresh()
+    await b.evaluate(() => localStorage.setItem('cc2-camera-live', JSON.stringify({ id: 'ghost-holder-id', at: Date.now() })))
+    await b.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await observe(300)
+    await c.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await b.locator('.cc2-camera-card img').waitFor({ state: 'attached', timeout: 4000 }) // b still gets its turn
+    await wait(async () => clients >= 1, 'a tab streams')
+    await wait(() => clients === 1, 'only one stream is left (the older claim stops on its next poll)')
+    await b.close(); await c.close()
+    await wait(() => clients === 0, 'closed')
+  })
+
+  await soft('L19 an idle third tab does not end the wait: the old viewer has let go before the new one starts', async () => {
+    const a = await fresh()
+    await openMini(a)
+    await wait(() => clients === 1, 'mini streams')
+    const idle = await fresh()
+    const b = await fresh()
+    resetPeak()
+    await b.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await b.locator('.cc2-camera-card img').waitFor({ state: 'visible' })
+    await wait(() => regionOf(a).count().then(n => n === 0), 'the mini player closed')
+    await observe(500)
+    assert.equal(peak, 1, `never two streams at once (peak ${peak})`); assert.equal(overlapMs, 0, `no overlap (${overlapMs} ms)`)
+    await a.close(); await idle.close(); await keepClosed(b)
+  })
+
   await lc.close()
   requests = 0 // the numbered steps below count requests from here
 
