@@ -685,6 +685,53 @@ try {
     await keepClosed(p)
   })
 
+  const lockedAt = async (label, size, pointerTargets, insideRequired = true) => {
+    const phoneCtx = await newContext(size, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 })
+    const p = await fresh(null, phoneCtx)
+    await p.addStyleTag({ content: '#cc2-preview-banner{display:none!important}' })
+    await openMini(p)
+    const r = regionOf(p)
+    const stop = await rect(p.locator('.cc2-emergency-stop'))
+    const toggle = await rect(p.locator('#cc2-menu-toggle'))
+    const check = async what => {
+      const w = await rect(r)
+      assert.equal(overlap(w, stop), false, `${label} ${what}: out of the emergency stop (${JSON.stringify(w)} / ${JSON.stringify(stop)})`)
+      assert.equal(overlap(w, toggle), false, `${label} ${what}: out of the menu button (${JSON.stringify(w)})`)
+      if (insideRequired) assert.ok(w.x >= -1 && w.y >= -1 && w.x + w.width <= size.width + 1 && w.y + w.height <= size.height + 1, `${label} ${what}: inside the screen (${JSON.stringify(w)})`)
+    }
+    await check('at the start')
+    for (const target of pointerTargets) {
+      const gap = await barGap(r)
+      await dragFrom(p, gap, [target[0] - gap[0], target[1] - gap[1]], 10)
+      await check(`dragged to ${target}`)
+    }
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus().catch(() => {})
+    for (const keys of [['Shift+ArrowUp'], ['Shift+ArrowLeft'], ['Shift+ArrowUp', 'Shift+ArrowLeft'], ['Shift+ArrowUp', 'Shift+ArrowRight']]) {
+      for (let i = 0; i < 12; i++) for (const k of keys) await p.keyboard.press(k)
+      await check(`keys ${keys}`)
+    }
+    await p.close(); await phoneCtx.close()
+    await wait(() => clients === 0, 'closed')
+  }
+  await soft('L30 phone 393 x 780: dragging up, left and diagonally never covers the emergency stop or the menu button', async () => {
+    await lockedAt('393x780', { width: 393, height: 780 }, [[5, 5], [101, 5], [197, 5], [5, 300], [300, 5]])
+  })
+  await soft('L31 phone 412 x 915 (and a low 393 x 420): the locked buttons stay free', async () => {
+    await lockedAt('412x915', { width: 412, height: 915 }, [[5, 5], [101, 5], [197, 5], [5, 300]])
+    await lockedAt('393x420', { width: 393, height: 420 }, [[5, 5], [197, 5]])
+  })
+  await soft('L32 a very low phone window (393 x 300): the lock wins, the window gets smaller or moves', async () => {
+    await lockedAt('393x300', { width: 393, height: 300 }, [[5, 5], [197, 5], [100, 100]])
+  })
+  await soft('L33 an extremely low window (393 x 230: too low for the default size, 393 x 170: too low for any size): the lock still wins', async () => {
+    await lockedAt('393x230', { width: 393, height: 230 }, [[5, 5], [197, 5], [100, 100]])
+    await lockedAt('393x170', { width: 393, height: 170 }, [[5, 5], [197, 5], [100, 100]], false)
+  })
+  await soft('L34 narrow phones (320 x 400, 360 x 260): both locked buttons stay free', async () => {
+    await lockedAt('320x400', { width: 320, height: 400 }, [[5, 5], [150, 5], [5, 200]])
+    await lockedAt('360x260', { width: 360, height: 260 }, [[5, 5], [150, 5], [200, 100]])
+  })
+
   await soft('L15 the pointer stops at the wall and keeps the right edge (size drag against the side menu)', async () => {
     const p = await fresh()
     await openMini(p)

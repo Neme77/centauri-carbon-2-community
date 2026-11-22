@@ -42,36 +42,56 @@ const area = () => ({ left: MINI_MARGIN, top: MINI_MARGIN })
 // shortest one that stays in the browser window is taken.
 const KEEP_OUT = ['.cc2-emergency-stop', '#cc2-menu-toggle']
 const KEEP_OUT_GAP = 4
+type Box = { left: number; right: number; top: number; bottom: number }
+const lockedAreas = (): Box[] =>
+  KEEP_OUT.flatMap(selector => {
+    const r = document.querySelector(selector)?.getBoundingClientRect()
+    if (!r || r.width === 0 || r.height === 0) return []
+    return [
+      {
+        left: r.left - KEEP_OUT_GAP,
+        right: r.right + KEEP_OUT_GAP,
+        top: r.top - KEEP_OUT_GAP,
+        bottom: r.bottom + KEEP_OUT_GAP,
+      },
+    ]
+  })
+const hits = (l: number, t: number, w: number, h: number, a: Box) =>
+  l < a.right && l + w > a.left && t < a.bottom && t + h > a.top
+// All locked areas are solved together: the candidates are the wanted place and every place that touches the edge of one
+// of the areas (left of it, right of it, above it, below it), in every combination; the nearest one that hits none of them
+// and stays in the browser window wins. `ok` is false when there is none (a very low window); then the nearest place that
+// hits none of them wins even if it is partly outside, because the lock comes first.
 const keepOut = (left: number, top: number, width: number, height: number) => {
+  const areas = lockedAreas()
+  if (areas.length === 0 || !areas.some(a => hits(left, top, width, height, a))) return { l: left, t: top, ok: true }
   const now = viewportSize()
   const b = area()
   const maxLeft = Math.max(b.left, now.w - width - MINI_MARGIN)
   const maxTop = Math.max(b.top, now.h - height - MINI_MARGIN)
-  let l = left
-  let t = top
-  for (const selector of KEEP_OUT) {
-    const r = document.querySelector(selector)?.getBoundingClientRect()
-    if (!r || r.width === 0 || r.height === 0) continue
-    const edge = {
-      left: r.left - KEEP_OUT_GAP,
-      right: r.right + KEEP_OUT_GAP,
-      top: r.top - KEEP_OUT_GAP,
-      bottom: r.bottom + KEEP_OUT_GAP,
-    }
-    if (!(l < edge.right && l + width > edge.left && t < edge.bottom && t + height > edge.top)) continue
-    const ways = [
-      { l: edge.left - width, t },
-      { l: edge.right, t },
-      { l, t: edge.top - height },
-      { l, t: edge.bottom },
-    ].filter(c => c.l >= b.left && c.l <= maxLeft && c.t >= b.top && c.t <= maxTop)
-    const best = ways.sort((p, q) => Math.abs(p.l - l) + Math.abs(p.t - t) - (Math.abs(q.l - l) + Math.abs(q.t - t)))[0]
-    if (best) {
-      l = best.l
-      t = best.t
-    } else t = Math.min(maxTop, edge.bottom)
+  const ls = [left, ...areas.flatMap(a => [a.left - width, a.right])]
+  const ts = [top, ...areas.flatMap(a => [a.top - height, a.bottom])]
+  const all = ls.flatMap(l => ts.map(t => ({ l, t }))).filter(c => !areas.some(a => hits(c.l, c.t, width, height, a)))
+  const near = (list: { l: number; t: number }[]) =>
+    list.sort((p, q) => Math.abs(p.l - left) + Math.abs(p.t - top) - (Math.abs(q.l - left) + Math.abs(q.t - top)))[0]
+  const inside = near(all.filter(c => c.l >= b.left && c.l <= maxLeft && c.t >= b.top && c.t <= maxTop))
+  if (inside) return { ...inside, ok: true }
+  const any = near(all)
+  return any ? { ...any, ok: false } : { l: left, t: top, ok: false }
+}
+// The lowest bottom edge of the locked areas: a window that is not too tall always fits below it.
+const lockedBottom = () => Math.max(0, ...lockedAreas().map(a => a.bottom))
+// Place and width together: where no place is free, the window gets smaller (never below the smallest size) so that it
+// fits below the locked areas.
+const lockedPlace = (left: number, top: number, width: number) => {
+  let w = width
+  let spot = keepOut(left, top, w, miniHeight(w))
+  if (!spot.ok) {
+    const now = viewportSize()
+    w = fitHeight(w, now.w, now.h, lockedBottom())
+    spot = keepOut(left, top, w, miniHeight(w))
   }
-  return { l, t }
+  return { ...spot, w }
 }
 
 type Pointer = { x: number; y: number }
@@ -95,19 +115,18 @@ export const MiniPlayer = () => {
   }, [])
 
   const bounds = area()
-  const width = fitHeight(
+  const widthWanted = fitHeight(
     clampMiniWidth(state.w ?? miniDefaultWidth(viewport.w), viewport.w),
     viewport.w,
     viewport.h,
     bounds.top
   )
-  const height = miniHeight(width)
-  const frameHeight = Math.round((width * 9) / 16)
-  const maxLeft = Math.max(bounds.left, viewport.w - width - MINI_MARGIN)
-  const maxTop = Math.max(bounds.top, viewport.h - height - MINI_MARGIN)
+  const maxLeft = Math.max(bounds.left, viewport.w - widthWanted - MINI_MARGIN)
+  const maxTop = Math.max(bounds.top, viewport.h - miniHeight(widthWanted) - MINI_MARGIN)
   const wantedLeft = between(state.x === null ? maxLeft - MINI_MARGIN : state.x * viewport.w, bounds.left, maxLeft)
   const wantedTop = between(state.y === null ? maxTop - MINI_MARGIN : state.y * viewport.h, bounds.top, maxTop)
-  const { l: left, t: top } = keepOut(wantedLeft, wantedTop, width, height)
+  const { l: left, t: top, w: width } = lockedPlace(wantedLeft, wantedTop, widthWanted)
+  const frameHeight = Math.round((width * 9) / 16)
   const zoom = clampZoom(state.zoom)
   const panX = clampPan(state.panX, width, zoom)
   const panY = clampPan(state.panY, frameHeight, zoom)
@@ -122,8 +141,9 @@ export const MiniPlayer = () => {
     const b = area()
     const l = between(nextLeft, b.left, Math.max(b.left, now.w - nextWidth - MINI_MARGIN))
     const tp = between(nextTop, b.top, Math.max(b.top, now.h - miniHeight(nextWidth) - MINI_MARGIN))
-    const free = keepOut(l, tp, nextWidth, miniHeight(nextWidth))
+    const free = lockedPlace(l, tp, nextWidth)
     miniplayer.set({ x: free.l / now.w, y: free.t / now.h })
+    return free.w
   }
   // The size handle is the top left corner, so by default the corner opposite to it (bottom right) stays where it is.
   // Where there is no room towards the top or the left (the window sits against the edge of the browser window), that side
@@ -145,12 +165,12 @@ export const MiniPlayer = () => {
       const room = Math.min(across, ((down - MINI_BAR) * 16) / 9)
       w = Math.max(miniWidthLimits(now.w).min, Math.min(w, Math.floor(room)))
     }
-    place(
+    const placed = place(
       anchor.fromRight ? anchor.right - w : anchor.left,
       anchor.fromBottom ? anchor.bottom - miniHeight(w) : anchor.top,
       w
     )
-    miniplayer.set({ w })
+    miniplayer.set({ w: placed })
   }
   const currentAnchor = (): Anchor => {
     const g = geometry.current
