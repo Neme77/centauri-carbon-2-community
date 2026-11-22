@@ -104,6 +104,14 @@ try {
 
   // 0. Layout and hand-over checks. Each one runs alone in its own page and reports "ok" or "RED" at once, so a missing
   // change shows up as its own line (the numbered steps below stop at their first failure).
+  // An empty spot of the bar (between pause and the zoom buttons), where a press moves the window.
+  const barGap = async r => {
+    const pause = await r.getByRole('button', { name: 'Pause', exact: true }).boundingBox()
+    const zoomOut = await r.getByRole('button', { name: /^Zoom out/ }).boundingBox()
+    const x = (pause.x + pause.width + zoomOut.x) / 2
+    assert.ok(zoomOut.x - (pause.x + pause.width) > 8, 'the bar has an empty spot to press')
+    return [x, pause.y + pause.height / 2]
+  }
   const softFailures = []
   const soft = async (name, fn) => {
     try { await fn(); console.log(`  ok   ${name}`) } catch (e) { softFailures.push(name); console.log(`  RED  ${name}: ${String(e.message).split('\n')[0].slice(0, 200)}`) }
@@ -180,8 +188,8 @@ try {
     await openMini(p)
     const r = regionOf(p)
     let before = await rect(r)
-    const name = await rect(r.locator('.cc2-mini-name'))
-    await dragFrom(p, [name.x + name.width / 2, name.y + name.height / 2], [-200, -100])
+    const gap = await barGap(r)
+    await dragFrom(p, gap, [-200, -100])
     let after = await rect(r)
     near(after.x, before.x - 200, 3, 'drag on the bar moves left'); near(after.y, before.y - 100, 3, 'drag on the bar moves up')
     before = after
@@ -210,8 +218,8 @@ try {
     await dragFrom(p, [frame.x + frame.width / 2, frame.y + frame.height / 2], [30, 20])
     near((await scale()).x, 30, 2, 'the picture panned'); near((await rect(r)).x, win.x, 1, 'the window stayed')
     const panned = await scale()
-    const name = await rect(r.locator('.cc2-mini-name'))
-    await dragFrom(p, [name.x + name.width / 2, name.y + name.height / 2], [-90, -40])
+    const gap = await barGap(r)
+    await dragFrom(p, gap, [-90, -40])
     near((await rect(r)).x, win.x - 90, 3, 'the bar moved the window'); near((await scale()).x, panned.x, 0.5, 'the picture did not pan')
     await keepClosed(p)
   })
@@ -241,14 +249,11 @@ try {
           }
           if (bar.scrollWidth > bar.clientWidth + 0.5) out.push('the bar overflows')
           const closeIn = closeBar.top >= br.top - 0.5 && closeBar.bottom <= br.bottom + 0.5
-          const nameEl = document.querySelector('.cc2-mini-name')
-          const nameShown = Boolean(nameEl && nameEl.getClientRects().length)
-          return { out, nameShown, closeIn, winWidth: win.width, closeInside: closeBar.right <= win.right + 0.5 && closeBar.left >= win.left - 0.5 }
+          return { out, closeIn, winWidth: win.width, closeInside: closeBar.right <= win.right + 0.5 && closeBar.left >= win.left - 0.5 }
         })
         assert.deepEqual(bad.out, [], `width ${width}`)
         assert.equal(bad.closeIn, width >= 198, `width ${width}: the close button ${bad.closeIn ? 'is' : 'is not'} in the bar`)
         assert.equal(bad.closeInside, true, `width ${width}: the close button stays inside the window`)
-        assert.equal(bad.nameShown, width >= 340, `width ${width}: the name ${bad.nameShown ? 'is' : 'is not'} shown (from 340 px)`)
       }
     }
     const p = await fresh()
@@ -411,14 +416,14 @@ try {
   })
   // 3. Phase 3: enlarging everywhere, and the gaps found by the second review.
   const wallsOf = async p => p.evaluate(() => ({
-    left: document.querySelector('.cc2-sidebar')?.getBoundingClientRect().right ?? 0,
-    top: document.querySelector('.cc2-topbar')?.getBoundingClientRect().bottom ?? 0,
+    left: 8, // the whole browser window is free, with a margin of 8 px
+    top: 8,
     w: document.documentElement.clientWidth,
     h: document.documentElement.clientHeight,
   }))
   const insideScreen = (b, walls, label) => {
-    assert.ok(b.x >= walls.left - 1, `${label}: left edge ${b.x} is right of the side menu (${walls.left})`)
-    assert.ok(b.y >= walls.top - 1, `${label}: top edge ${b.y} is below the header (${walls.top})`)
+    assert.ok(b.x >= walls.left - 1, `${label}: left edge ${b.x} is inside the window (${walls.left})`)
+    assert.ok(b.y >= walls.top - 1, `${label}: top edge ${b.y} is inside the window (${walls.top})`)
     assert.ok(b.x + b.width <= walls.w + 1, `${label}: right edge ${b.x + b.width} within ${walls.w}`)
     assert.ok(b.y + b.height <= walls.h + 1, `${label}: bottom edge ${b.y + b.height} within ${walls.h}`)
   }
@@ -566,6 +571,52 @@ try {
     await keepClosed(p)
   })
 
+  await soft('L23 the whole browser window is free: over the side menu and the header, on top of them', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const gap = await barGap(r)
+    await dragFrom(p, gap, [-2000, -2000], 8)
+    const b = await rect(r)
+    near(b.x, 8, 1, 'left edge of the browser window'); near(b.y, 8, 1, 'top edge of the browser window')
+    const top = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('.cc2-miniplayer')), [b.x + 120, b.y + 22])
+    assert.equal(top, true, 'the mini player is drawn above the header and the side menu')
+    // The remembered place survives a reload and the window stays reachable.
+    await p.reload(); await openMini(p)
+    near((await rect(r)).x, 8, 1, 'remembered over the menu')
+    const z = await p.evaluate(() => Number(getComputedStyle(document.querySelector('.cc2-miniplayer')).zIndex))
+    assert.ok(z > 30 && z < 40, `above the header (30) and the menu (20), below notices (40) and dialogs (50): ${z}`)
+    await p.getByRole('button', { name: 'Close mini player', exact: true }).click()
+    await keepClosed(p)
+  })
+
+  await soft('L24 the bar carries no text label: the name is only for screen readers', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    assert.equal(await r.locator('.cc2-mini-name').count(), 0, 'no name element')
+    assert.equal(await r.locator('.cc2-mini-bar').getByText('Live camera', { exact: true }).count(), 0, 'no visible text in the bar')
+    assert.equal(await r.getAttribute('aria-label'), 'Mini player live camera', 'the region keeps its name')
+    await keepClosed(p)
+  })
+
+  await soft('L25 the zoom buttons stay where they are at every zoom (no jumping readout)', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const xs = async () => (await Promise.all([r.getByRole('button', { name: /^Zoom out/ }), r.getByRole('button', { name: /^Zoom in/ }), r.getByRole('button', { name: 'Close mini player', exact: true })].map(l => l.boundingBox()))).map(b => b.x)
+    const first = await xs()
+    for (const times of [1, 1]) {
+      await r.getByRole('button', { name: /^Zoom in/ }).click()
+      const now = await xs()
+      for (let i = 0; i < first.length; i++) near(now[i], first[i], 0.5, `button ${i} stays put at zoom step ${times}`)
+    }
+    await r.getByRole('button', { name: 'Reset zoom', exact: true }).click()
+    const back = await xs()
+    for (let i = 0; i < first.length; i++) near(back[i], first[i], 0.5, `button ${i} stays put after the reset`)
+    await keepClosed(p)
+  })
+
   await soft('L15 the pointer stops at the wall and keeps the right edge (size drag against the side menu)', async () => {
     const p = await fresh()
     await openMini(p)
@@ -574,13 +625,13 @@ try {
     await slider.focus(); await p.keyboard.press('Home')
     await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
     for (let i = 0; i < 40; i++) await p.keyboard.press('Shift+ArrowLeft')
-    for (let i = 0; i < 11; i++) await p.keyboard.press('ArrowRight') // 176 px away from the wall
+    for (let i = 0; i < 7; i++) await p.keyboard.press('ArrowRight') // 112 px away from the wall
     const walls = await wallsOf(p)
     const start = await rect(r)
     const h = await rect(slider)
-    await dragFrom(p, [h.x + 6, h.y + 6], [-320, 0])
+    await dragFrom(p, [h.x + 6, h.y + 6], [-125, 0])
     const after = await rect(r)
-    assert.ok(after.x >= walls.left - 1, `the window did not cross the side menu (${after.x} < ${walls.left})`)
+    assert.ok(after.x >= walls.left - 1, `the window did not leave the browser window (${after.x} < ${walls.left})`)
     near(after.x + after.width, start.x + start.width, 2, 'the right edge stayed where it was')
     assert.ok(after.width > start.width + 100, `it did grow up to the wall (${start.width} -> ${after.width})`)
     await keepClosed(p)
@@ -754,10 +805,8 @@ try {
   for (let i = 0; i < 40; i++) await page.keyboard.press('Shift+ArrowLeft')
   for (let i = 0; i < 40; i++) await page.keyboard.press('Shift+ArrowUp')
   b = await box()
-  const sidebar = await page.locator('.cc2-sidebar').boundingBox()
-  const topbar = await page.locator('.cc2-topbar').boundingBox()
-  assert.ok(b.x >= sidebar.x + sidebar.width, 'it stops right of the side menu, so the grip stays reachable')
-  assert.ok(b.y >= topbar.y + topbar.height, 'it stops below the header')
+  near(b.x, 8, 1, 'it reaches the left edge of the browser window (over the side menu), with its margin')
+  near(b.y, 8, 1, 'it reaches the top edge (over the header)')
   assert.equal(clients, 1, 'moving is not a second stream')
   assert.equal(requests, unchanged, 'moving must not reconnect')
 
@@ -1145,6 +1194,16 @@ try {
     return Boolean(hit && !hit.closest('.cc2-miniplayer'))
   })
   assert.equal(covered, true, 'the open menu is above the mini player')
+  // Where the menu panel itself overlaps the mini player, the menu is on top too (not only its dimmed backdrop).
+  await phone.waitForFunction(() => document.querySelector('.cc2-sidebar').getBoundingClientRect().right > 200) // the drawer has slid in
+  const underMenu = await phone.evaluate(() => {
+    const r = document.querySelector('.cc2-miniplayer').getBoundingClientRect()
+    const m = document.querySelector('.cc2-sidebar').getBoundingClientRect()
+    const x = Math.max(r.left, 0) + 10
+    if (x >= m.right - 4) return 'no overlap to test'
+    return Boolean(document.elementFromPoint(x, r.top + 8)?.closest('.cc2-sidebar'))
+  })
+  assert.equal(underMenu, true, `the menu panel is drawn above the mini player (${underMenu})`)
   await phoneContext.close()
 
   assert.deepEqual(softFailures, [], 'layout and hand-over checks failed')

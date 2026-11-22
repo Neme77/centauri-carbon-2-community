@@ -18,12 +18,7 @@ import {
   miniplayer,
   saveMiniplayer,
 } from '@/lib/miniplayer'
-import { menu } from '@/lib/state'
 
-// The side menu is a rail of 62 px (208 px when expanded on a wide window) next to the page; on a phone it is a drawer
-// that lies above the mini player, so it takes no room.
-const RAIL = 62
-const RAIL_WIDE = 208
 const KEY_STEP = 16
 const KEY_STEP_BIG = 64
 const MIN_ROOM = 96 // less room than this towards the top or left, and the size handle grows the window the other way
@@ -39,15 +34,9 @@ const fitHeight = (width: number, viewportWidth: number, viewportHeight: number,
     Math.min(width, Math.floor(((viewportHeight - top - MINI_MARGIN - MINI_BAR) * 16) / 9))
   )
 
-// The area the window may occupy: right of the side rail and below the header, with a small margin.
-const area = (width: number, collapsed: boolean) => {
-  const header = document.querySelector('.cc2-topbar')?.getBoundingClientRect().bottom ?? 0
-  const rail = document.querySelector<HTMLElement>('.cc2-sidebar')
-  const railShown =
-    rail && getComputedStyle(rail).visibility !== 'hidden' && !rail.classList.contains('cc2-sidebar-open')
-  const left = railShown ? (collapsed || width < 768 ? RAIL : RAIL_WIDE) : 0
-  return { left: left + MINI_MARGIN, top: Math.round(header) + MINI_MARGIN }
-}
+// The area the window may occupy: the whole browser window with a small margin. It is drawn above the header and the side
+// menu (a phone's menu drawer, dialogs and notices stay above it), so it can be put anywhere, like a picture-in-picture.
+const area = () => ({ left: MINI_MARGIN, top: MINI_MARGIN })
 
 type Pointer = { x: number; y: number }
 type Gesture =
@@ -61,7 +50,6 @@ const zoomText = (zoom: number) =>
 // not a second stream: it claims the camera like any viewer, so another viewer starting its picture closes it.
 export const MiniPlayer = () => {
   const state = miniplayer.use()
-  const { collapsed } = menu.use()
   i18n.use()
   const [viewport, setViewport] = useState(viewportSize)
   useEffect(() => {
@@ -70,7 +58,7 @@ export const MiniPlayer = () => {
     return () => removeEventListener('resize', resized)
   }, [])
 
-  const bounds = area(viewport.w, collapsed)
+  const bounds = area()
   const width = fitHeight(
     clampMiniWidth(state.w ?? miniDefaultWidth(viewport.w), viewport.w),
     viewport.w,
@@ -94,13 +82,13 @@ export const MiniPlayer = () => {
 
   const place = (nextLeft: number, nextTop: number, nextWidth = geometry.current.width) => {
     const now = viewportSize()
-    const b = area(now.w, menu.get().collapsed)
+    const b = area()
     const l = between(nextLeft, b.left, Math.max(b.left, now.w - nextWidth - MINI_MARGIN))
     const tp = between(nextTop, b.top, Math.max(b.top, now.h - miniHeight(nextWidth) - MINI_MARGIN))
     miniplayer.set({ x: l / now.w, y: tp / now.h })
   }
   // The size handle is the top left corner, so by default the corner opposite to it (bottom right) stays where it is.
-  // Where there is no room towards the top or the left (the window sits against the header or the side menu), that side
+  // Where there is no room towards the top or the left (the window sits against the edge of the browser window), that side
   // gives way to the other one: the window then keeps its top or left edge and grows down or to the right, so it can be
   // enlarged everywhere and never leaves the visible area. Each direction is decided once, when a drag starts.
   // The pointer also stops at what fits (`fit`); the keys have no such limit and move the window in instead, so they
@@ -108,11 +96,11 @@ export const MiniPlayer = () => {
   type Anchor = { right: number; bottom: number; left: number; top: number; fromRight: boolean; fromBottom: boolean }
   const resize = (nextWidth: number, anchor: Anchor, fit = false) => {
     const now = viewportSize()
-    const b = area(now.w, menu.get().collapsed)
+    const b = area()
     // Never taller than the screen shows (a low window), also for the keys.
     let w = fitHeight(clampMiniWidth(nextWidth, now.w), now.w, now.h, b.top)
     if (fit) {
-      // The side that grows towards the top or the left stops at the header or the side menu; the other side is already
+      // The side that grows towards the top or the left stops at the edge of the browser window; the other side is already
       // limited by the width limits and the height above.
       const across = anchor.fromRight ? anchor.right - b.left : Number.POSITIVE_INFINITY
       const down = anchor.fromBottom ? anchor.bottom - b.top : Number.POSITIVE_INFINITY
@@ -129,7 +117,7 @@ export const MiniPlayer = () => {
   const currentAnchor = (): Anchor => {
     const g = geometry.current
     const now = viewportSize()
-    const b = area(now.w, menu.get().collapsed)
+    const b = area()
     const right = g.left + g.width
     const bottom = g.top + miniHeight(g.width)
     // Room left for growing, towards the top left (the default) and towards the bottom right.
@@ -427,7 +415,6 @@ export const MiniPlayer = () => {
         >
           <span>{control.on ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}</span>
         </button>
-        <span class="cc2-mini-name">{t('common.live_camera')}</span>
         <span class="cc2-mini-zoombar">
           <button
             type="button"
@@ -452,17 +439,19 @@ export const MiniPlayer = () => {
           >
             <Plus size={16} aria-hidden="true" />
           </button>
-          {zoom > 1 && (
-            <button
-              type="button"
-              class="cc2-mini-zoombutton cc2-mini-reset"
-              aria-label={t('common.miniplayer_zoom_reset')}
-              title={`${t('common.miniplayer_zoom_reset')} (0)`}
-              onClick={resetZoom}
-            >
-              1×
-            </button>
-          )}
+          <span class="cc2-mini-reset-slot">
+            {zoom > 1 && (
+              <button
+                type="button"
+                class="cc2-mini-zoombutton cc2-mini-reset"
+                aria-label={t('common.miniplayer_zoom_reset')}
+                title={`${t('common.miniplayer_zoom_reset')} (0)`}
+                onClick={resetZoom}
+              >
+                1×
+              </button>
+            )}
+          </span>
         </span>
         <button
           type="button"

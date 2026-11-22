@@ -282,10 +282,11 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
     overflow-y: auto; transition: transform 150ms ease;
   }
   .cc2-sidebar-open { transform: translateX(0); visibility: visible; }
+  .cc2-sidebar.cc2-sidebar { z-index: 37; } /* the phone's drawer lies above the mini player (35) */
   .cc2-sidebar nav a { justify-content: flex-start; padding-inline: 16px; }
   .cc2-sidebar nav a span { display: inline; visibility: visible; }
   .cc2-menu-backdrop {
-    display: block; position: fixed; inset: 68px 0 0; z-index: 19;
+    display: block; position: fixed; inset: 68px 0 0; z-index: 36;
     background: #0008;
   }
   .cc2-topbar > div:last-child { min-width: 0; gap: 4px; }
@@ -880,10 +881,11 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
 
 .cc2-main section section { box-shadow: none; }
 
-/* Mini player: the live camera in a small window above every page. Below the header (30) and the side menu (20),
-   so a phone's drawer (19 backdrop, 20 menu) covers it; above the page. */
+/* Mini player: the live camera in a small window above every page, the header (30) and the side menu (20), so it can be
+   put anywhere in the browser window. Notices (40), dialogs (50) and toasts (70) stay above it, and on a phone the menu
+   drawer (backdrop 36, menu 37) too. */
 .cc2-miniplayer {
-  position: fixed; z-index: 18; display: flex; flex-direction: column; overflow: hidden;
+  position: fixed; z-index: 35; display: flex; flex-direction: column; overflow: hidden;
   container: cc2-mini / inline-size;
   border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow-pop);
 }
@@ -920,18 +922,17 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
 }
 .cc2-mini-close > span { width: 28px; height: 28px; }
 .cc2-mini-play > span { width: 32px; height: 32px; border-color: var(--cyan); background: var(--cyan); color: var(--ink); }
-.cc2-mini-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
 .cc2-mini-zoombar { display: flex; flex: none; align-items: center; margin-left: auto; }
 .cc2-mini-zoombutton {
   position: relative; min-width: 32px; height: 32px; padding-inline: 4px; display: grid; place-items: center;
   border: 1px solid var(--edge); border-radius: 6px; background: var(--field); color: var(--text); font-size: 12px;
 }
 .cc2-mini-zoombutton[aria-disabled="true"] { opacity: .35; cursor: default !important; }
-.cc2-mini-zoomlabel { min-width: 34px; text-align: center; font-size: 12px; color: var(--text); }
+.cc2-mini-zoomlabel { width: 36px; text-align: center; font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; }
 /* The drawn button is 32 px; its invisible hit area is 44 x 44 px for a finger. Where the bar has no room for more
    than 32 px side by side (below 278 px) the hit area is 44 px high and as wide as the button. */
 .cc2-mini-zoombutton::before { content: ""; position: absolute; inset: -6px; }
-.cc2-mini-reset { margin-left: 12px; }
+.cc2-mini-reset-slot { display: inline-flex; width: 44px; justify-content: flex-end; } /* always there, so the buttons never move when the reset button appears */
 .cc2-mini-edge { position: absolute; z-index: 2; cursor: grab; touch-action: none; user-select: none; }
 .cc2-mini-edge:active { cursor: grabbing; }
 .cc2-mini-edge-l, .cc2-mini-edge-r { top: 45px; bottom: 0; width: 6px; }
@@ -940,7 +941,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
 .cc2-mini-edge-b { left: 0; right: 0; bottom: 0; height: 6px; }
 /* Widths below are the inner width of the window (window width - 2 px border). Bar budget: size, grip, pause and close
    are 44 px each, zoom - + 64 px (+ 34 px readout, + 44 px reset). */
-@container cc2-mini (max-width: 337px) { .cc2-mini-name, .cc2-mini-reset { display: none; } }
+@container cc2-mini (max-width: 337px) { .cc2-mini-reset-slot { display: none; } }
 @container cc2-mini (max-width: 277px) { .cc2-mini-zoomlabel { display: none; } .cc2-mini-grip { width: 40px; } .cc2-mini-zoombutton::before { inset: -6px 0; } }
 @container cc2-mini (max-width: 237px) { .cc2-mini-grip { display: none; } }
 /* The smallest phone windows (below 198 px): no room for the close button in the bar, it sits on the picture. */
