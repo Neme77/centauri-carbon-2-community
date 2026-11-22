@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `GET /api/health` counts the layer-path work in memory: scans, requests refused as not fitting the running print, "busy" answers, bytes read, the longest and last scan in milliseconds, and the requests and scans the read hold stopped, so the load of a live layer view can be seen and compared. Designed and implemented by **lpgamerzockt-ops** (#398).
 - Dune, a warm light colour theme (Settings → Appearance): sand-coloured page, cream-white cards with a firm warm edge and a deep teal accent, so white surfaces stand out without the cold blue of the other light themes; text contrast of at least 4.5:1 on every surface. Requested and tested by **Neme77**, implemented with Claude Code (#413).
 - Swamp, a dark colour theme in sickly, rotten greens (Settings → Appearance): near-black moss page, olive panels and a mouldy olive-lime accent, with a cooler emerald kept for the "ok" status so it never reads as the accent; text contrast of at least 4.5:1 on every surface. Requested and tested by **Neme77**, implemented with Claude Code (#413).
+- KlipperScreen, a classic dark colour theme (Settings → Appearance) in the spirit of KlipperScreen's material look: flat Material grey, large rounded buttons, menu entries and cards, no shadows and a different colour for each menu icon; the palette is an approximation, text contrast is at least 4.5:1 on every surface. Requested and tested by **Neme77**, implemented with Claude Code (#420).
 
 ### Changed
 
