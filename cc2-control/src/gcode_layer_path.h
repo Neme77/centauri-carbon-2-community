@@ -628,6 +628,188 @@ static int layer_path_mark_pick(const layer_path_mark *marks, int count, int tar
     return 1;
 }
 
+/* Called around every layer marker line; the layer index (gcode_layer_index.h) uses it to
+ * record where each layer starts and the parser state at that point. */
+typedef struct {
+    void (*before)(void *ctx, const layer_path_state *s, long offset);
+    void (*after)(void *ctx, const layer_path_state *s);
+    /* Optional: asked about every 64 KiB; 0 stops the pass (LAYER_PATH_LIMIT). A background
+     * builder uses it to yield the CPU and to stop when a print starts. */
+    int (*keep_going)(void *ctx);
+    void *ctx;
+} layer_path_marker_hook;
+
+static void layer_path_init(layer_path_state *s) {
+    memset(s, 0, sizeof(*s));
+    s->abs_xy = 1;
+    s->abs_e = 1;
+    s->current = -1;
+    s->max_layer = -1;
+}
+
+/* The number of bytes the last fgets took from the file. strlen would stop at a NUL byte inside the line, so the
+ * stored positions fell behind the real file. A line that ends in '\n' holds no NUL before it (fgets stops at the first
+ * '\n', strlen at the first NUL), so strlen is exact there: that is every line of an ordinary file, and it costs nothing
+ * extra. Only a line with a NUL, a full buffer without a line end, or the last line without one asks the stream where
+ * it is (one ftello); tell is that position before the read and is moved forward, or is -1 when the stream cannot say. */
+static size_t layer_path_line_bytes(FILE *file, const char *line, long long *tell) {
+    size_t n = strlen(line);
+    if (n > 0 && line[n - 1] == '\n') {
+        if (*tell >= 0) *tell += (long long)n;
+        return n;
+    }
+    if (*tell < 0) return n;
+    off_t now = ftello(file);
+    if (now < 0 || (long long)now < *tell + (long long)n) { *tell = -1; return n; }
+    size_t read = (size_t)((long long)now - *tell);
+    *tell = (long long)now;
+    return read;
+}
+
+/* The line loop of one scan. jump: the scan started at the requested layer's own marker
+ * (index) and ends at the first marker that leaves that layer. */
+static int layer_path_run(FILE *file, layer_path_state *s, int target0,
+                          const struct timespec *start, long time_ms, size_t bytes_max,
+                          int jump, const layer_path_marker_hook *hook) {
+    char line[LAYER_PATH_LINE_MAX];
+    size_t bytes = 0;
+    long base = hook ? ftell(file) : 0;
+    if (hook && base < 0) return LAYER_PATH_IO;
+    long long tell = (long long)ftello(file);
+    size_t next_check = 64 * 1024;
+    while (fgets(line, sizeof(line), file)) {
+        size_t n = layer_path_line_bytes(file, line, &tell);
+        long offset = base + (long)bytes;
+        bytes += n;
+        if (hook && hook->keep_going && bytes >= next_check) {
+            next_check = bytes + 64 * 1024;
+            if (!hook->keep_going(hook->ctx)) return LAYER_PATH_LIMIT;
+        }
+        if (bytes_max && bytes > bytes_max) {
+            if (s->seen_marker && s->current > target0) break;
+            if (!s->seen_marker && s->count > 0 && target0 == 0) break;
+            return LAYER_PATH_LIMIT;
+        }
+        if (layer_path_deadline(start, time_ms)) {
+            if (!hook && ((s->seen_marker && s->max_layer >= target0) || (!s->seen_marker && s->count > 0 && target0 == 0)))
+                break;
+            return LAYER_PATH_LIMIT;
+        }
+        if (!hook && atomic_load_explicit(&gcode_read_hold, memory_order_relaxed)) return LAYER_PATH_HELD;
+        int numbered = 0, kind = layer_path_marker(line, &numbered);
+        if (kind) {
+            int was = s->seen_marker && s->current == target0;
+            if (hook && hook->before) hook->before(hook->ctx, s, offset);
+            layer_path_apply_marker(s, kind, numbered, target0);
+            if (hook && hook->after) hook->after(hook->ctx, s);
+            if (jump && was && s->current != target0) break;
+            continue;
+        }
+        const char *comment = line;
+        while (isspace((unsigned char)*comment)) comment++;
+        if (*comment == ';') {
+            const char *zc = comment + 1;
+            while (*zc == ' ' || *zc == '\t') zc++;
+            if (zc[0] == 'Z' && zc[1] == ':') {
+                if (s->seen_marker && layer_path_want(s, target0)) {
+                    char *zend = NULL;
+                    double zv = strtod(zc + 2, &zend);
+                    if (zend != zc + 2 && isfinite(zv) && zv >= 0 && zv < 10000) {
+                        s->layer_z = zv;
+                        s->have_layer_z = 1;
+                        s->z_comment = 1;
+                    }
+                }
+                continue;
+            }
+            static const char *markers[] = {
+                "total layer number", "total_layer_count", "total layers count",
+                "total layers", "layer_count:"
+            };
+            for (size_t i = 0; i < sizeof(markers) / sizeof(markers[0]); i++) {
+                int value = layer_path_positive_after(line, markers[i]);
+                if (value > s->total_hint) s->total_hint = value;
+            }
+            continue;
+        }
+        if (!hook && s->seen_marker && s->current > target0 && s->total_hint) {
+            if (s->change_mode) break;
+            continue;
+        }
+        layer_path_word_line(s, line, target0);
+    }
+    if (ferror(file)) return LAYER_PATH_IO;
+    return LAYER_PATH_OK;
+}
+
+static int layer_path_finish(layer_path_state *s, int target0, int total, int max_layer, layer_path_info *info) {
+    layer_path_close(s);
+    info->total_layers = total;
+    if (target0 >= total || (s->seen_marker && max_layer < target0 && s->current != target0 && s->count == 0))
+        return LAYER_PATH_OUTSIDE;
+    if (!s->seen_marker && target0 != 0) return LAYER_PATH_OUTSIDE;
+    double eps = LAYER_PATH_DP_EPS;
+    while (s->count > LAYER_PATH_POINTS_MAX && eps <= 8.0) {
+        layer_path_simplify(s->pts, &s->count, s->starts, s->paths, s->keep, s->stack, s->stack_cap, eps);
+        s->truncated = 1;
+        eps *= 2;
+    }
+    if (s->count > LAYER_PATH_POINTS_MAX) {
+        layer_path_simplify(s->pts, &s->count, s->starts, s->paths, s->keep, s->stack, s->stack_cap, 8.0);
+        s->truncated = 1;
+        if (s->count > LAYER_PATH_POINTS_MAX) {
+            s->count = LAYER_PATH_POINTS_MAX;
+            while (s->paths > 0 && s->starts[s->paths - 1] >= s->count) s->paths--;
+        }
+    }
+    info->point_count = s->count;
+    info->path_count = s->paths;
+    info->truncated = s->truncated;
+    if (s->have_layer_z && isfinite(s->layer_z)) info->z = s->layer_z;
+    else if (s->have_z && isfinite(s->z) && layer_path_want(s, target0)) info->z = s->z;
+    return LAYER_PATH_OK;
+}
+
+static int layer_path_buffers(layer_path_state *s, layer_point *points, int points_cap, int *path_start, int paths_cap) {
+    unsigned char *keep = calloc((size_t)points_cap, 1);
+    int *stack = malloc(sizeof(int) * (size_t)points_cap);
+    if (!keep || !stack) { free(keep); free(stack); return LAYER_PATH_IO; }
+    s->pts = points;
+    s->starts = path_start;
+    s->keep = keep;
+    s->stack = stack;
+    s->stack_cap = points_cap;
+    s->cap = points_cap < LAYER_PATH_COLLECT_MAX ? points_cap : LAYER_PATH_COLLECT_MAX;
+    s->path_cap = paths_cap < LAYER_PATH_PATHS_MAX ? paths_cap : LAYER_PATH_PATHS_MAX;
+    return LAYER_PATH_OK;
+}
+
+static inline int gcode_layer_path_parse(FILE *file, int layer_1based,
+                                  layer_point *points, int points_cap,
+                                  int *path_start, int paths_cap,
+                                  layer_path_info *info,
+                                  const struct timespec *start, long time_ms, size_t bytes_max) {
+    memset(info, 0, sizeof(*info));
+    info->layer = layer_1based;
+    info->z = NAN;
+    if (!file || !points || !path_start || !info) return LAYER_PATH_IO;
+    if (layer_1based < 1 || layer_1based > 1000000) return LAYER_PATH_OUTSIDE;
+    if (points_cap < 2 || paths_cap < 1) return LAYER_PATH_IO;
+    layer_path_state s;
+    layer_path_init(&s);
+    if (layer_path_buffers(&s, points, points_cap, path_start, paths_cap) != LAYER_PATH_OK) return LAYER_PATH_IO;
+    int target0 = layer_1based - 1;
+    int rc = layer_path_run(file, &s, target0, start, time_ms, bytes_max, 0, NULL);
+    if (rc == LAYER_PATH_OK) {
+        int total = s.total_hint;
+        if (!total && s.max_layer >= 0) total = s.max_layer + 1;
+        if (!s.seen_marker) total = 1;
+        rc = layer_path_finish(&s, target0, total, s.max_layer, info);
+    }
+    free(s.keep); free(s.stack);
+    return rc;
+}
+
 /* resume NULL reads from the start, exactly as before. marks may be NULL.
  * A resume seeks to the marker and replays it with the saved motion state, so
  * the points match a scan that started at the first byte. */
@@ -672,9 +854,10 @@ static int gcode_layer_path_parse_at(FILE *file, int layer_1based,
     char line[LAYER_PATH_LINE_MAX];
     size_t bytes = from ? (size_t)from->offset : 0;
     long long pos = from ? from->offset : 0;
+    long long tell = (long long)ftello(file);
     int skipped = 0; /* a move was left out, so the motion state no longer fits a layer start */
     while (fgets(line, sizeof(line), file)) {
-        size_t n = strlen(line);
+        size_t n = layer_path_line_bytes(file, line, &tell);
         long long line_at = pos;
         pos += (long long)n;
         bytes += n;

@@ -262,7 +262,7 @@ service starts do not reset anything. The direct stream's filament use is droppe
 `GET /api/gcode-files/layer-path?storage=internal&file=<name>&layer=<n>` returns the thinned extrusion path of one
 layer. Answers: 200 with the path; 400 for a malformed request (`Invalid layer`, `Invalid protected G-code path`);
 404 for a file that is not there or a layer outside it; 413 when the scan reached its time or size limit
-(`Layer path scan limit reached`, answered at once for the same or a higher layer of that file for 300 s) or the
+(`Layer path scan limit reached`; after a scan from the start of the file the same or a higher layer of that file is refused at once for 300 s, unless a current layer map serves it, and a limit hit while reading through the map refuses only that layer for 300 s) or the
 path is too large; 503 `Layer path busy; retry shortly` while another scan runs or rests after the last one (the
 page retries it); 503 `Printer is homing or starting a print; retry shortly` during the read hold (see
 [G-code reads while the printer homes](#g-code-reads-while-the-printer-homes)); 500 for a read error.
@@ -289,14 +289,23 @@ names, paths or other private data):
 | `layer_path_scans` | Scans the worker ran, including those that ended in 404 or 413. An answer from the remembered layer, or a refusal before reading, is no scan. |
 | `layer_path_rejected` | Requests refused with 409 as not fitting the running print. |
 | `layer_path_busy` | 503 `Layer path busy` answers (another scan running, the pause after the last one, or the scan worker could not be started). |
-| `layer_path_bytes_read` | Bytes the scans read from the files, counted from where each scan started (a remembered layer start is skipped, not read). |
+| `layer_path_bytes_read` | Bytes the scans read from the files, counted from where each scan started (a remembered layer start, or the offset of the layer in its layer map, is skipped, not read). |
 | `layer_path_longest_ms` | The longest scan, in milliseconds, from its start to the end of reading. |
 | `layer_path_last_ms` | The last scan, in milliseconds. |
 | `gcode_read_blocked` | Requests of the layer path, the object preview and `POST /api/gcode-files/thumbnail` answered 503 by the read hold before anything was read, and scans of the running print's file the hold kept from starting (once per withheld scan). |
 | `gcode_read_stopped` | Layer-path and object-preview scans that the read hold ended while they read (counted in `layer_path_scans` as well), and scans of the running print's file it ended. |
+| `layer_map_hits` | Layer scans answered through the file's layer map (see *Layer index storage*). |
+| `layer_map_fallbacks` | Layer scans that read the file from its start: no current map yet, a map the index cannot serve, or a USB file. `layer_map_hits` + `layer_map_fallbacks` = the scans that read a file for one layer. |
+| `layer_map_built` | Maps the background builder wrote since the start. |
+| `layer_map_failed` | Map builds that failed (for example on full storage). |
+| `layer_map_bad` | Requests that found a current map whose stored offset for the layer was no layer marker; they were answered by the full scan. |
 
 The object preview below shares these counters: its scans count as `layer_path_scans` (with their bytes and
 times), its busy answers as `layer_path_busy` and its start-protection refusals as `layer_path_rejected`.
+
+## Layer index storage
+
+At startup, CC2 Control accepts `--layer-index-dir <path>` to store per-file layer maps (built in the background while the printer is idle) outside the G-code folders. The default is a `layer-index` directory next to CC2 Control's preferences. A map is keyed to the G-code file by size, change time, inode and the content of its first and last 64 KiB, holds at most 8192 layers, and is removed when the G-code file is deleted through CC2 Control; the 64 newest maps are kept, older ones (for example of files removed on the printer's screen) are dropped after the next map is saved. A build that fails (for example on full storage) is not started again by a layer request for ten minutes; an upload, copy or import of the file tries at once. A minute after the start, at the first idle time, the 32 newest files of the internal storage are queued for their maps (the first open of a file would otherwise pay the full scan). The map file carries a CRC-32 of its contents and the sizes of its records; a damaged map, one of an older version or one written by other code counts as stale and is rebuilt. Before a layer is read through the map, the line at the stored offset must be a layer marker; if it is not, that request reads the file from the start (counted as a fallback and in `layer_map_bad`), and the first time for a file the map is deleted and the file queued for a new one (not again for the same file until the program restarts, the last 16 files being remembered, so a map that is built wrong again cannot cause a loop). A file of 2 GiB or more (see *Files of 2 GiB or more*) gets no map. A file without a current map is read with the full scan as before; the layer-path reply does not change.
 
 ## Object preview
 
