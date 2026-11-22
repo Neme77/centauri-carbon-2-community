@@ -38,6 +38,7 @@ static void idle_at(int line) {
 }
 #define idle() idle_at(__LINE__)
 static int wait_idle = 1; /* 0 while a scan is held on purpose */
+static char last_reply[LAYER_PATH_JSON_MAX + 1024]; /* the whole reply of the last get() */
 /* One request to the service's own handler, like the guard test. */
 static int get(mqtt_client *m, const char *query) {
     int pair[2], listener = socket(AF_INET, SOCK_STREAM, 0); assert(listener >= 0);
@@ -50,12 +51,11 @@ static int get(mqtt_client *m, const char *query) {
     char request[600];
     int n = snprintf(request, sizeof(request), "GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", query);
     if (!handle_client(pair[0], request, (size_t)n, "./web", m, NULL)) close(pair[0]);
-    static char reply[LAYER_PATH_JSON_MAX + 1024];
     size_t used = 0; ssize_t got;
-    while ((got = recv(pair[1], reply + used, sizeof(reply) - 1 - used, 0)) > 0) used += (size_t)got;
-    reply[used] = 0; close(pair[1]);
+    while ((got = recv(pair[1], last_reply + used, sizeof(last_reply) - 1 - used, 0)) > 0) used += (size_t)got;
+    last_reply[used] = 0; close(pair[1]);
     if (wait_idle) idle();
-    return atoi(strchr(reply, ' ') + 1);
+    return atoi(strchr(last_reply, ' ') + 1);
 }
 static char health[4096];
 static void read_health(mqtt_client *m) {
@@ -147,6 +147,18 @@ int main(void) {
     STATS(5, 0, 2);
     layer_path_rest_min_ms = 0; sleep_ms(450);
 
+    /* Layer maps: every scan so far found no map and read from the start (fallbacks); none was answered through a map. */
+    read_health(&m);
+    assert(field("layer_map_hits") == 0 && field("layer_map_fallbacks") == field("layer_path_scans") &&
+           field("layer_map_built") == 0 && field("layer_map_failed") == 0);
+    char maps[600]; snprintf(maps, sizeof(maps), "%s/maps", dir);
+    assert(!mkdir(maps, 0700)); layer_store_dir = maps;
+    {   char mp[1200]; FILE *src = fopen(path, "rb"); assert(src);
+        layer_index built_index; assert(layer_index_build(src, &built_index, 0, NULL, NULL) == LAYER_PATH_OK); fclose(src);
+        assert(layer_store_index_path(path, mp, sizeof(mp)) == 0 && layer_index_save(mp, &built_index) == 0);
+        layer_index_free(&built_index); }
+    long long scans_before_map = field("layer_path_scans"), fallbacks_before = field("layer_map_fallbacks");
+
     /* Refused as not fitting the running print: counted, not a scan, no bytes. */
     bytes = field("layer_path_bytes_read");
     m.machine_status = 2; m.last_message = time(NULL);
@@ -161,9 +173,77 @@ int main(void) {
     m.current_layer = 4;
     assert(get(&m, "/api/gcode-files/layer-path?storage=internal&file=print.gcode&layer=11") == 200);
     STATS(6, 2, 2);
+    /* That scan went through the map: a hit; the fallbacks stay as they were and every scan is one or the other. */
+    assert(field("layer_map_hits") == 1 && field("layer_map_fallbacks") == fallbacks_before &&
+           field("layer_path_scans") == scans_before_map + 1);
+
+    /* Through the map only the layer is read: bytes_read grows by the layer's own size (and the next marker line that ends it),
+     * not by the position in the file. A layer beyond the end is answered by the map without reading: no bytes at all. */
+    m.machine_status = 1; m.print_state[0] = 0; m.last_message = time(NULL);
+    char mp[1200]; static char good_reply[sizeof(last_reply)];
+    assert(layer_store_index_path(path, mp, sizeof(mp)) == 0);
+    long long o14, o15;
+    { layer_index ix; FILE *src = fopen(path, "rb"); assert(src);
+      assert(layer_index_build(src, &ix, 0, NULL, NULL) == LAYER_PATH_OK); fclose(src);
+      assert(ix.count > 15 && ix.entries[14].layer == 14 && ix.entries[15].layer == 15);
+      o14 = ix.entries[14].offset; o15 = ix.entries[15].offset; layer_index_free(&ix); }
+    {
+        read_health(&m);
+        long long hits = field("layer_map_hits"), fallbacks = field("layer_map_fallbacks"), b0 = field("layer_path_bytes_read");
+        assert(get(&m, "/api/gcode-files/layer-path?storage=internal&file=print.gcode&layer=15") == 200);
+        memcpy(good_reply, last_reply, sizeof(good_reply));
+        read_health(&m);
+        assert(field("layer_map_hits") == hits + 1 && field("layer_map_fallbacks") == fallbacks && field("layer_map_bad") == 0);
+        long long grew = field("layer_path_bytes_read") - b0, own = o15 - o14;
+        if (grew < own || grew > own + 64) { fprintf(stderr, "bytes read grew by %lld for a layer of %lld bytes\n", grew, own); return 1; }
+        b0 = field("layer_path_bytes_read");
+        assert(get(&m, "/api/gcode-files/layer-path?storage=internal&file=print.gcode&layer=21") == 404); /* outside the file */
+        read_health(&m);
+        assert(field("layer_path_bytes_read") == b0 && field("layer_map_hits") == hits + 2);
+    }
+
+    /* A map whose offset for one layer points into the middle of a line (its checksum is right, it is saved after the
+     * change): that layer is read from the start, counted as a fallback and answered exactly as through the intact map.
+     * The map is dropped and its file queued for a new one, but only once for the same file: a builder that makes the same
+     * wrong map again is not asked in a loop (layer_map_bad keeps counting). */
+    {
+#define BEND() do { layer_index ix; FILE *src = fopen(path, "rb"); assert(src); \
+        assert(layer_index_build(src, &ix, 0, NULL, NULL) == LAYER_PATH_OK); fclose(src); \
+        int found = 0; for (int i = 0; i < ix.count; i++) if (ix.entries[i].layer == 14) { ix.entries[i].offset += 3; found = 1; } \
+        assert(found && layer_index_save(mp, &ix) == 0); layer_index_free(&ix); } while (0)
+        assert(get(&m, "/api/gcode-files/layer-path?storage=internal&file=print.gcode&layer=16") == 200); /* leaves the memory */
+        pthread_mutex_lock(&layer_store_lock); layer_store_dequeue_locked(path); pthread_mutex_unlock(&layer_store_lock);
+        BEND();
+        read_health(&m);
+        long long hits = field("layer_map_hits"), fallbacks = field("layer_map_fallbacks");
+        assert(get(&m, "/api/gcode-files/layer-path?storage=internal&file=print.gcode&layer=15") == 200);
+        assert(!strcmp(last_reply, good_reply)); /* the same answer */
+        read_health(&m);
+        assert(field("layer_map_hits") == hits && field("layer_map_fallbacks") == fallbacks + 1 && field("layer_map_bad") == 1);
+        /* First time for this file: the map is gone and the file is queued for a new one. */
+        assert(access(mp, F_OK) != 0);
+        { int found = 0; for (int i = 0; i < layer_store_count; i++) if (!strcmp(layer_store_queue[i], path)) found = 1; assert(found); }
+        /* The builder makes it again: it serves again. */
+        atomic_store(&layer_store_idle, 1);
+        assert(layer_store_build_one(path) == 0 && access(mp, F_OK) == 0);
+        atomic_store(&layer_store_idle, 0);
+        pthread_mutex_lock(&layer_store_lock); layer_store_dequeue_locked(path); pthread_mutex_unlock(&layer_store_lock);
+        assert(get(&m, "/api/gcode-files/layer-path?storage=internal&file=print.gcode&layer=17") == 200);
+        read_health(&m);
+        assert(field("layer_map_hits") == hits + 1 && field("layer_map_bad") == 1);
+        /* The same file, wrong again: not dropped again, not queued again, still answered by the full scan. */
+        BEND();
+        assert(get(&m, "/api/gcode-files/layer-path?storage=internal&file=print.gcode&layer=15") == 200);
+        assert(!strcmp(last_reply, good_reply));
+        read_health(&m);
+        assert(field("layer_map_bad") == 2 && field("layer_map_fallbacks") == fallbacks + 2 && field("layer_map_hits") == hits + 1);
+        assert(access(mp, F_OK) == 0);
+        { int found = 0; for (int i = 0; i < layer_store_count; i++) if (!strcmp(layer_store_queue[i], path)) found = 1; assert(!found); }
+    }
 
     close(gate[0]); close(gate[1]);
-    unlink(path); rmdir(dir);
-    puts("PASS layer path stats: scans, rejected, busy, bytes read, longest and last scan appear in /api/health");
+    unlink(mp);
+    rmdir(maps); unlink(path); rmdir(dir);
+    puts("PASS layer path stats: scans, rejected, busy, bytes read, longest and last scan, and the layer map hits and fallbacks appear in /api/health; bytes read through a map are the layer's own; a map offset that is no marker line is a fallback with the same answer, dropped and queued once");
     return 0;
 }
