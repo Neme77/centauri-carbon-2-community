@@ -1,4 +1,4 @@
-import type { ComponentChildren } from 'preact'
+import type { ComponentChildren, VNode } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { createPortal } from 'preact/compat'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,7 @@ import { cameraPreferences, setPersistentCamera, type Key, t } from '@/lib/i18n'
 import { errText, notify, post, tpl } from '@/lib/api'
 import { poll, usePoll } from '@/lib/poll'
 import { store } from '@/lib/store'
+import { miniplayer, openMiniplayer } from '@/lib/miniplayer'
 import { camera, printer, refreshPrinter } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/field'
@@ -307,18 +308,27 @@ const CameraPreference = () => {
   )
 }
 
-const CameraStream = ({
+// What a surrounding layout (the mini player) needs to draw its own controls around the bare picture.
+export type StreamControl = { on: boolean; ready: boolean; failed: boolean; gaveUp: boolean; toggle: () => void }
+
+// `onTakenOver`: the bare picture of the mini player closes itself when another viewer takes the camera, instead
+// of showing "Watch here"; `layout` places the picture and its controls.
+export const CameraStream = ({
   tall,
   standalone,
   preferences,
   dock,
   bare,
+  onTakenOver,
+  layout,
 }: {
   tall?: boolean
   standalone?: boolean
   preferences?: boolean
   dock?: HTMLElement | null
   bare?: boolean
+  onTakenOver?: () => void
+  layout?: (frame: VNode, control: StreamControl) => ComponentChildren
 }) => {
   const persistent = cameraPreferences.use().persistent
   const keepAlive = useRef(persistent)
@@ -342,6 +352,9 @@ const CameraStream = ({
   const pausedHidden = useRef(false)
   const { data, at } = printer.use()
   const owner = data?.camera_viewer
+  // The hint that the mini player has the picture is only true while it is open.
+  const miniOpen = miniplayer.use().open
+  const shownNote = note === 'common.camera_in_miniplayer' && !miniOpen ? '' : note
   const clearRetry = () => {
     if (retry.current !== undefined) clearTimeout(retry.current)
     retry.current = undefined
@@ -422,14 +435,18 @@ const CameraStream = ({
   // Another page claimed the camera after this one: hand the stream over. Replies to requests sent before
   // this page's claim was confirmed still show the previous viewer, so they are ignored.
   useEffect(() => {
-    if (live.current && claimed.current && at >= claimed.current && owner && owner !== viewer.current)
+    if (live.current && claimed.current && at >= claimed.current && owner && owner !== viewer.current) {
       stop('common.camera_taken_over')
+      onTakenOver?.()
+    }
   }, [owner, at])
-  // Keep ownership checks alive while the persistent stream is backgrounded.
+  // Keep ownership checks alive while the persistent stream is backgrounded, and while the mini player streams
+  // on a page that does not poll the printer fast enough to notice a takeover.
   // Join the shared poller only while streaming; no extra camera session.
+  const watchesOwner = persistent || Boolean(onTakenOver)
   useEffect(() => {
-    if (persistent && on) return poll(refreshPrinter, 1500, { hidden: true })
-  }, [persistent, on])
+    if (watchesOwner && on) return poll(refreshPrinter, 1500, { hidden: true })
+  }, [watchesOwner, on])
   useEffect(() => {
     const hidden = () => {
       if (document.hidden && live.current && !keepAlive.current) {
@@ -472,7 +489,7 @@ const CameraStream = ({
       {!ready && <div class="cc2-camera-grid" aria-hidden="true" />}
       {!ready && (
         <div class="cc2-camera-idle-controls absolute inset-x-0 z-10 max-w-full px-4 py-3 text-center text-muted">
-          {(on || note) && (
+          {(on || shownNote) && (
             <p class="text-xs">
               {on
                 ? t(
@@ -482,10 +499,10 @@ const CameraStream = ({
                         ? 'common.camera_unavailable'
                         : 'common.waiting_for_camera_stream'
                   )
-                : note && t(note)}
+                : shownNote && t(shownNote)}
             </p>
           )}
-          {!on && (!bare || (note && note !== 'common.camera_paused_hidden')) && (
+          {!on && (!bare || (shownNote && shownNote !== 'common.camera_paused_hidden')) && (
             <Button class="mt-2 text-xs" onClick={start}>
               {t(note === 'common.camera_taken_over' ? 'common.camera_watch_here' : 'common.camera_start')}
             </Button>
@@ -517,7 +534,8 @@ const CameraStream = ({
       )}
     </div>
   )
-  if (bare) return frame
+  if (bare)
+    return layout ? layout(frame, { on, ready, failed, gaveUp, toggle: () => (on ? stop() : void start()) }) : frame
   return (
     <Card class="cc2-camera-card flex flex-col">
       <CardHead
@@ -549,7 +567,7 @@ const CameraStream = ({
       />
       {frame}
       {!standalone && (
-        <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-2">
+        <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-3">
           <Button
             class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
             onClick={() => {
@@ -560,6 +578,17 @@ const CameraStream = ({
           >
             <Icon n="open" class="size-4" />
             {t('common.open_in_new_window')}
+          </Button>
+          <Button
+            class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
+            onClick={() => {
+              // The mini player takes the camera over from this card, which then simply waits.
+              if (live.current) stop('common.camera_in_miniplayer')
+              openMiniplayer()
+            }}
+          >
+            <Icon n="pip" class="size-4" />
+            {t('common.miniplayer_open')}
           </Button>
           <Button
             class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"

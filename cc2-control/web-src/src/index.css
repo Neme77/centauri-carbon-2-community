@@ -879,3 +879,52 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
 }
 
 .cc2-main section section { box-shadow: none; }
+
+/* Mini player: the live camera in a small window above every page. Below the header (30) and the side menu (20),
+   so a phone's drawer (19 backdrop, 20 menu) covers it; above the page. */
+.cc2-miniplayer {
+  position: fixed; z-index: 18; display: flex; flex-direction: column; overflow: hidden;
+  container: cc2-mini / inline-size;
+  border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow-pop);
+}
+.cc2-mini-video { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #000; touch-action: none; user-select: none; }
+.cc2-mini-video .cc2-camera-frame { border: 0; border-radius: 0; }
+.cc2-mini-video .cc2-camera-frame img { transform: translate(var(--mtx, 0px), var(--mty, 0px)) scale(var(--mz, 1)); }
+.cc2-miniplayer :focus-visible { outline-offset: -3px; }
+.cc2-mini-badge {
+  position: absolute; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px;
+  font-size: 11px; line-height: 1.4; pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--text);
+}
+.cc2-mini-live { left: 8px; top: 8px; color: var(--green); }
+.cc2-mini-zoom { left: 8px; bottom: 8px; }
+/* Every control is at least 44 x 44 px for a finger; the drawn shape inside is smaller. */
+.cc2-mini-close { position: absolute; right: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer; }
+.cc2-mini-close > span, .cc2-mini-play > span {
+  display: grid; place-items: center; border-radius: 9999px; border: 1px solid var(--edge); color: var(--text);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+.cc2-mini-close > span { width: 28px; height: 28px; }
+.cc2-mini-size {
+  position: absolute; right: 0; bottom: 0; width: 44px; height: 44px; cursor: nwse-resize; touch-action: none; color: var(--text);
+}
+.cc2-mini-size svg {
+  position: absolute; right: 0; bottom: 0; width: 26px; height: 26px; padding: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+  background: color-mix(in srgb, var(--bg) 80%, transparent); border-top-left-radius: 8px;
+}
+.cc2-mini-bar { display: flex; align-items: center; height: 44px; padding-right: 4px; background: var(--panel); border-top: 1px solid var(--edge); }
+.cc2-mini-grip { width: 44px; height: 44px; flex: none; display: grid; place-items: center; color: var(--muted); cursor: grab; touch-action: none; }
+.cc2-mini-grip:active { cursor: grabbing; }
+.cc2-mini-play { width: 44px; height: 44px; flex: none; display: grid; place-items: center; cursor: pointer; }
+.cc2-mini-play > span { width: 32px; height: 32px; border-color: var(--cyan); background: var(--cyan); color: var(--ink); }
+.cc2-mini-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
+.cc2-mini-zoombar { display: flex; flex: none; align-items: center; margin-left: auto; }
+.cc2-mini-zoombutton {
+  min-width: 32px; height: 32px; padding-inline: 4px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--edge); border-radius: 6px; background: var(--field); color: var(--text); font-size: 12px;
+}
+.cc2-mini-zoombutton[aria-disabled="true"] { opacity: .35; cursor: default; }
+.cc2-mini-zoomlabel { min-width: 34px; text-align: center; font-size: 12px; color: var(--text); }
+.cc2-mini-reset { margin-left: 4px; }
+@container cc2-mini (max-width: 279px) { .cc2-mini-name, .cc2-mini-reset { display: none; } }
+@container cc2-mini (max-width: 199px) { .cc2-mini-zoomlabel { display: none; } }
