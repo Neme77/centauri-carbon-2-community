@@ -179,7 +179,7 @@ static int staged_line(console_state *state, int fd, const char *line, time_t de
         int result = staged_feed(state, frame, buffer, (size_t)got, seen);
         if (result >= 0) {
             staged_complete_frame(state, fd, deadline, frame, seen);
-            if (seen->lost || frame->used) return -1;
+            if (result == 1 && (seen->lost || frame->used)) return -1;
             return result;
         }
     }
@@ -271,7 +271,9 @@ static void staged_run(console_state *state, int fd, const char *command) {
     if (result < 0) {
         staged_flush_open(state, &frame);
         close(fd);
-        finish(state, 0, "Console connection ended or command timed out\n");
+        /* a report read whole before the cut stays a printer error */
+        if (seen.fault) finish(state, 0, "[CC2 Control: the printer reported an error; the job was stopped]\n");
+        else finish(state, 0, "Console connection ended or command timed out\n");
         return;
     }
     /* A printer error (an error response, or an error report even next to an acknowledged request) is a failure, not
@@ -281,11 +283,9 @@ static void staged_run(console_state *state, int fd, const char *command) {
      * so a late error text is kept too. */
     staged_drain(state, fd, deadline, &frame, &seen);
     close(fd);
-    if (staged_flush_open(state, &frame) || seen.lost) {
-        finish(state, 0, "Console connection ended or command timed out\n");
-        return;
-    }
+    int open_frame = staged_flush_open(state, &frame);
     if (result == 0 || seen.fault) { finish(state, 0, "[CC2 Control: the printer reported an error; the job was stopped]\n"); return; }
+    if (open_frame || seen.lost) { finish(state, 0, "Console connection ended or command timed out\n"); return; }
     finish(state, 1, NULL);
 }
 

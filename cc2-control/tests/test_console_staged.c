@@ -23,6 +23,7 @@ static size_t split_pos;
 /* What follows the cut report: 0 the rest comes in the next read; 1 the connection closes (EOF); 2 the connection goes
  * quiet (no more data, no EOF); 3 the wait runs out (the clock moves past the deadline); 4 a read error. */
 static int split_wait;
+static const char *junk,*junk_at,*cur_junk; /* junk goes with the line named by junk_at: the start of a frame that never ends, after what the fake printer sends */
 static time_t clock_jump;
 static atomic_int *cancel_flag;
 static int fake_socket(int domain,int type,int protocol){(void)domain;(void)type;(void)protocol;return 42;}
@@ -39,6 +40,7 @@ static ssize_t fake_send(int fd,const void *data,size_t length,int flags){
         reply_error=error_at&&strstr(sent_lines[sent_count],error_at)!=NULL;
         reply_mode=report_at&&strstr(sent_lines[sent_count],report_at)?1:(split_at&&strstr(sent_lines[sent_count],split_at)?2:0);
         extra_reply=trailing_at&&strstr(sent_lines[sent_count],trailing_at)?"{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"late fault\"}}\003":report_extra;
+        cur_junk=junk&&strstr(sent_lines[sent_count],junk_at)?junk:NULL;
         if(cancel_at&&strstr(sent_lines[sent_count],cancel_at))atomic_store(cancel_flag,1);
         sent_count++;
     }
@@ -48,7 +50,7 @@ static const char *later; /* a report that arrives in a read of its own, after t
 static int fake_poll(struct pollfd *fds,nfds_t count,int timeout){(void)fds;(void)count;(void)timeout;return !(split_wait==2&&!reply_pending&&!later);}
 static ssize_t fake_read(int fd,void *data,size_t length){
     (void)fd;
-    if(later){size_t m=strlen(later);assert(m<=length);memcpy(data,later,m);later=NULL;return (ssize_t)m;}
+    if(later){size_t m=strlen(later),j=cur_junk?strlen(cur_junk):0;assert(m+j<=length);memcpy(data,later,m);if(j)memcpy((char*)data+m,cur_junk,j);later=NULL;cur_junk=NULL;return (ssize_t)(m+j);}
     if(!reply_pending){
         if(split_wait==4){errno=EIO;return -1;}
         return 0;
@@ -67,10 +69,11 @@ static ssize_t fake_read(int fd,void *data,size_t length){
         reply_mode?"{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"Z home failed\"}}\003{\"id\":101,\"result\":{}}\003":
         "{\"report\":\"z=0.1\"}\003{\"id\":101,\"result\":{}}\003";
     if(!reply_error&&!reply_mode&&extra_reply)later=extra_reply;
-    size_t n=strlen(reply);
-    assert(n<=length);
+    size_t n=strlen(reply),j=cur_junk&&!later?strlen(cur_junk):0;
+    assert(n+j<=length);
     memcpy(data,reply,n);
-    return (ssize_t)n;
+    if(j){memcpy((char*)data+n,cur_junk,j);cur_junk=NULL;}
+    return (ssize_t)(n+j);
 }
 static int fake_close(int fd){(void)fd;return 0;}
 static time_t fake_time(time_t *t){return time(t)+clock_jump;}
@@ -302,6 +305,28 @@ int main(void){
         }
     }
     puts("PASS: an acknowledged line with an unfinished report fails the job on EOF, quiet, an expired wait and a read error, with the received text kept");
+
+    /* Neme77's review, the other way round: a printer error read whole stays a printer error when a later frame is cut off
+     * and the connection ends; the cut text is kept. Without a printer error it stays a transport failure (above). */
+    {
+        static const char CUT[]="{\"report\":{\"error_code\":7";
+        static const char *msg_printer="the printer reported an error",*msg_lost="Console connection ended or command timed out";
+        /* (a) a whole error report with the acknowledgement, then a cut frame, then EOF; between two lines and after the last */
+        junk_at="PROBE";junk=CUT;report_job(SCRIPT,TAIL,"PROBE",NULL,NULL,NULL);junk=NULL;
+        assert(sent_count==4&&!state.success&&state.completed&&!state.cancelled&&!state.busy);
+        assert(strstr(state.output,"Z home failed")&&strstr(state.output,CUT)&&strstr(state.output,msg_printer)&&!strstr(state.output,msg_lost));
+        junk_at="M140 S0";junk=CUT;report_job(SCRIPT,TAIL,NULL,"M140 S0",NULL,NULL);junk=NULL;
+        assert(sent_count==8&&!state.success&&state.completed&&!state.cancelled);
+        assert(strstr(state.output,"late fault")&&strstr(state.output,CUT)&&strstr(state.output,msg_printer)&&!strstr(state.output,msg_lost));
+        /* (b) an error response to a line, then a cut frame */
+        junk_at="PROBE";junk=CUT;run(SCRIPT,TAIL,NULL,"PROBE");junk=NULL;
+        assert(sent_count==4&&!state.success&&state.completed&&!state.cancelled);
+        assert(strstr(state.output,"probe failed")&&strstr(state.output,CUT)&&strstr(state.output,msg_printer)&&!strstr(state.output,msg_lost));
+        /* (c) no printer error: a cut frame after an acknowledgement is a transport failure */
+        junk_at="PROBE";junk=CUT;report_job(SCRIPT,TAIL,NULL,NULL,NULL,NULL);junk=NULL;
+        assert(!state.success&&state.completed&&strstr(state.output,msg_lost)&&!strstr(state.output,msg_printer));
+    }
+    puts("PASS: a printer error read whole stays a printer error when a later frame is cut off; the cut text is kept");
 
     /* Ordinary reports (error_code 0) and a resume event (level 3) are no failure. */
     report_job(SCRIPT,TAIL,NULL,NULL,NULL,quiet_report);
