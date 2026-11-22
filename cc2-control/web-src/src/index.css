@@ -235,6 +235,31 @@
 :root[data-theme="swamp"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 12%, var(--panel)); }
 :root[data-theme="swamp"] .cc2-dashboard .text-2xl:not(h2),
 :root[data-theme="swamp"] .cc2-job-stats strong { color: var(--amber); }
+/* KlipperScreen: a classic dark theme in the spirit of KlipperScreen's material-dark/"colourized" look: flat Material grey, large rounded buttons and cards, no shadows, and a different colour for each menu icon. The palette is an approximation, not KlipperScreen's exact CSS. Every text token is >= 4.5:1 on bg, panel and field; menu icons are >= 3:1. */
+:root[data-theme="klipperscreen"] {
+  color-scheme: dark;
+  --bg: #1e1e1e; --panel: #2b2b2b; --edge: #474747; --text: #f2f2f2; --muted: #b8b8b8; --field: #353535; --ink: #101820;
+  --cyan: #4da3ff; --green: #6fd183; --amber: #ffb84d; --red: #ff7b7b; --blue: #4dd0e1;
+  --well: #121212; --well-fg: #f2f2f2;
+  --radius-card: 18px;
+  --shadow-card: none;
+  --shadow-pop: 0 10px 30px -6px #000b, 0 2px 8px #0008;
+  --shadow-glow: none;
+}
+:root[data-theme="klipperscreen"] button.rounded-lg { border-radius: 14px; min-height: 2.5rem; }
+:root[data-theme="klipperscreen"] nav a { border-radius: 14px; }
+:root[data-theme="klipperscreen"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 16%, var(--panel)); }
+:root[data-theme="klipperscreen"] nav a[href="#dashboard"] svg { color: #4da3ff; }
+:root[data-theme="klipperscreen"] nav a[href="#control"] svg { color: #ffb74d; }
+:root[data-theme="klipperscreen"] nav a[href="#job"] svg { color: #81c784; }
+:root[data-theme="klipperscreen"] nav a[href="#files"] svg { color: #ba68c8; }
+:root[data-theme="klipperscreen"] nav a[href="#queue"] svg { color: #4dd0e1; }
+:root[data-theme="klipperscreen"] nav a[href="#history"] svg { color: #f06292; }
+:root[data-theme="klipperscreen"] nav a[href="#bed"] svg { color: #aed581; }
+:root[data-theme="klipperscreen"] nav a[href="#canvas"] svg { color: #ff8a65; }
+:root[data-theme="klipperscreen"] nav a[href="#spools"] svg { color: #9fa8da; }
+:root[data-theme="klipperscreen"] nav a[href="#console"] svg { color: #b0bec5; }
+:root[data-theme="klipperscreen"] nav a[href="#settings"] svg { color: #ffd54f; }
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400-700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
