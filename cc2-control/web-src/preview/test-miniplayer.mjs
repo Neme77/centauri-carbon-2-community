@@ -251,10 +251,12 @@ try {
           }
           if (bar.scrollWidth > bar.clientWidth + 0.5) out.push('the bar overflows')
           const closeIn = closeBar.top >= br.top - 0.5 && closeBar.bottom <= br.bottom + 0.5
-          return { out, closeIn, winWidth: win.width, closeInside: closeBar.right <= win.right + 0.5 && closeBar.left >= win.left - 0.5 }
+          const bar0 = bar.getBoundingClientRect()
+          return { out, closeIn, closeRight: closeBar.right, barRight: bar0.right, winWidth: win.width, closeInside: closeBar.right <= win.right + 0.5 && closeBar.left >= win.left - 0.5 }
         })
         assert.deepEqual(bad.out, [], `width ${width}`)
         assert.equal(bad.closeIn, width >= 198, `width ${width}: the close button ${bad.closeIn ? 'is' : 'is not'} in the bar`)
+        if (bad.closeIn) near(bad.closeRight, bad.barRight, 1, `width ${width}: the close button sits at the right end of the bar`)
         assert.equal(bad.closeInside, true, `width ${width}: the close button stays inside the window`)
       }
     }
@@ -833,6 +835,80 @@ try {
     await observe(800)
     assert.ok(most <= 1, `at most one picture at a time (${most})`)
     assert.equal(peak, 1, `never two streams at once (peak ${peak})`)
+    await keepClosed(p)
+  })
+
+  await soft('L38 real pointer: leaving the browser window with the button pressed and letting go outside does not leave the picture, window or size handle dragging', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const scale = () => p.evaluate(() => { const m = new DOMMatrix(getComputedStyle(document.querySelector('.cc2-miniplayer img')).transform); return { x: m.e, y: m.f } })
+    await r.getByRole('button', { name: /^Zoom in/ }).click(); await r.getByRole('button', { name: /^Zoom in/ }).click()
+    const frame = await rect(r.locator('.cc2-camera-frame'))
+    const c = [frame.x + frame.width / 2, frame.y + frame.height / 2]
+    // Picture: press inside, leave the window (outside the viewport), release outside, come back without a button.
+    await p.mouse.move(c[0], c[1]); await p.mouse.down()
+    await p.mouse.move(c[0] - 20, c[1] - 10, { steps: 2 })
+    await p.mouse.move(-60, c[1], { steps: 6 })
+    await p.mouse.up()
+    const settled = await scale()
+    await p.mouse.move(c[0] + 40, c[1] + 30, { steps: 6 }); await p.mouse.move(c[0] - 30, c[1] + 10, { steps: 4 })
+    const back = await scale()
+    near(back.x, settled.x, 0.5, 'the picture stays where it was let go (x)'); near(back.y, settled.y, 0.5, 'the picture stays where it was let go (y)')
+    // Window and size handle: the same.
+    const gap = await barGap(r)
+    await p.mouse.move(gap[0], gap[1]); await p.mouse.down(); await p.mouse.move(gap[0] - 30, gap[1] - 20, { steps: 3 }); await p.mouse.move(-60, 5, { steps: 6 }); await p.mouse.up()
+    const w1 = await rect(r)
+    await p.mouse.move(gap[0] + 100, gap[1] + 80, { steps: 5 })
+    near((await rect(r)).x, w1.x, 1, 'the window stays where it was let go')
+    const h = await rect(r.getByRole('slider', { name: 'Mini player size', exact: true }))
+    await p.mouse.move(h.x + 6, h.y + 6); await p.mouse.down(); await p.mouse.move(h.x - 20, h.y - 10, { steps: 3 }); await p.mouse.move(-60, 5, { steps: 6 }); await p.mouse.up()
+    const w2 = await rect(r)
+    await p.mouse.move(300, 300, { steps: 5 })
+    near((await rect(r)).width, w2.width, 1, 'the size stays where it was let go')
+    await keepClosed(p)
+  })
+
+  await soft('L39 a lost pointer capture ends the drag (the browser took the capture away while the button is still down)', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const scale = () => p.evaluate(() => { const m = new DOMMatrix(getComputedStyle(document.querySelector('.cc2-miniplayer img')).transform); return { x: m.e, y: m.f } })
+    await r.getByRole('button', { name: /^Zoom in/ }).click(); await r.getByRole('button', { name: /^Zoom in/ }).click()
+    const frame = await rect(r.locator('.cc2-camera-frame'))
+    const c = [frame.x + frame.width / 2, frame.y + frame.height / 2]
+    await p.mouse.move(c[0], c[1]); await p.mouse.down(); await p.mouse.move(c[0] + 10, c[1] + 5, { steps: 2 })
+    await p.evaluate(() => document.querySelector('.cc2-mini-video').dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1, pointerType: 'mouse', bubbles: true })))
+    const at = await scale()
+    await p.mouse.move(c[0] + 60, c[1] + 40, { steps: 3 })
+    near((await scale()).x, at.x, 0.5, 'picture: no more panning after the capture is lost')
+    await p.mouse.up()
+    const gap = await barGap(r)
+    await p.mouse.move(gap[0], gap[1]); await p.mouse.down(); await p.mouse.move(gap[0] - 20, gap[1] - 10, { steps: 2 })
+    await p.evaluate(() => document.querySelector('.cc2-mini-bar').dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1, pointerType: 'mouse', bubbles: true })))
+    const w = await rect(r)
+    await p.mouse.move(gap[0] - 150, gap[1] - 90, { steps: 3 })
+    near((await rect(r)).x, w.x, 1, 'window: no more moving after the capture is lost')
+    await p.mouse.up()
+    const h = await rect(r.getByRole('slider', { name: 'Mini player size', exact: true }))
+    await p.mouse.move(h.x + 6, h.y + 6); await p.mouse.down(); await p.mouse.move(h.x - 10, h.y - 6, { steps: 2 })
+    await p.evaluate(() => document.querySelector('.cc2-mini-size').dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1, pointerType: 'mouse', bubbles: true })))
+    const sz = await rect(r)
+    await p.mouse.move(h.x - 120, h.y - 80, { steps: 3 })
+    near((await rect(r)).width, sz.width, 1, 'size handle: no more resizing after the capture is lost')
+    await p.mouse.up()
+    await keepClosed(p)
+  })
+
+  await soft('L40 letting go of the stream also removes the source attribute, so the old picture keeps no address', async () => {
+    const p = await fresh()
+    await openMini(p)
+    await wait(() => clients === 1, 'streams')
+    await p.evaluate(() => { window.__old = document.querySelector('.cc2-miniplayer img') })
+    await regionOf(p).getByRole('button', { name: 'Pause', exact: true }).click()
+    await wait(() => clients === 0, 'paused')
+    const kept = await p.evaluate(() => window.__old.getAttribute('src'))
+    assert.equal(kept, null, `the released picture has no source any more (${kept})`)
     await keepClosed(p)
   })
 
