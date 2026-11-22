@@ -453,7 +453,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Z offset requires an idle or printing printer");
         if(!m->have_position||strchr(m->homed_axes,'z')==NULL)
             return reject(reason,reason_cap,"Z axis must be homed before live offset adjustment");
-        if(fabs(value)<0.0005||fabs(value)>0.5001)
+        if(!isfinite(value)||fabs(value)<0.0005||fabs(value)>0.5001)
             return reject(reason,reason_cap,"Session Z offset undo exceeds the protected range");
         snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1 MOVE_SPEED=5",value);
         return 1;
@@ -463,7 +463,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Z offset requires an idle or printing printer");
         if(!m->have_position||strchr(m->homed_axes,'z')==NULL)
             return reject(reason,reason_cap,"Z axis must be homed before live offset adjustment");
-        if(fabs(value)<0.0005||fabs(value)>0.0501)
+        if(!isfinite(value)||fabs(value)<0.0005||fabs(value)>0.0501)
             return reject(reason,reason_cap,"Each Z offset adjustment must be 0.01 or 0.05 mm");
         snprintf(script,cap,"SET_GCODE_OFFSET Z_ADJUST=%+.3f MOVE=1 MOVE_SPEED=5",value);
         return 1;
@@ -477,7 +477,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(!strchr(m->homed_axes,(char)(axis+32)))return reject(reason,reason_cap,"Axis must be homed first");
         double current=axis=='X'?m->x:(axis=='Y'?m->y:m->z),target=current+value;
         double max=axis=='Y'?266.0:256.0,min=axis=='Z'?-2.0:0.0;
-        if(fabs(value)<0.001||fabs(value)>(axis=='Z'?10.0:50.0)||target<min||target>max)
+        if(!isfinite(value)||fabs(value)<0.001||fabs(value)>(axis=='Z'?10.0:50.0)||target<min||target>max)
             return reject(reason,reason_cap,"Movement exceeds the protected range");
         snprintf(script,cap,"SAVE_GCODE_STATE NAME=CC2_CONTROL_MOVE\nG91\nG0 %c%.3f F%d\nRESTORE_GCODE_STATE NAME=CC2_CONTROL_MOVE",axis,value,axis=='Z'?600:6000);
         return 1;
@@ -504,7 +504,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     }
     if(sscanf(action,"%31[^:]:%31[^:]:%lf",kind,a,&value)==3&&strcmp(kind,"heater")==0){
         if(strcmp(a,"extruder")==0){if(!isfinite(value)||value<0||value>CC2_NOZZLE_TARGET_MAX)return reject(reason,reason_cap,"Nozzle target must be 0..350 C");}
-        else if(strcmp(a,"heater_bed")==0){if(value<0||value>120)return reject(reason,reason_cap,"Bed target must be 0..120 C");}
+        else if(strcmp(a,"heater_bed")==0){if(!isfinite(value)||value<0||value>120)return reject(reason,reason_cap,"Bed target must be 0..120 C");}
         else return reject(reason,reason_cap,"Unknown heater");
         snprintf(script,cap,"SET_HEATER_TEMPERATURE HEATER=%s TARGET=%.1f",a,value);return 1;
     }
@@ -517,7 +517,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         snprintf(script,cap,"TURN_OFF_HEATERS");return 1;
     }
     if(sscanf(action,"fan:%31[^:]:%lf",a,&value)==2){
-        if(value<0||value>100)return reject(reason,reason_cap,"Fan value must be 0..100 percent");
+        if(!isfinite(value)||value<0||value>100)return reject(reason,reason_cap,"Fan value must be 0..100 percent");
         int pwm=(int)lround(value*2.55);
         if(strcmp(a,"part")==0)snprintf(script,cap,"M106 S%d",pwm);
         else if(strcmp(a,"aux")==0)snprintf(script,cap,"M106 P2 S%d",pwm);
@@ -606,7 +606,7 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(printing(m))return reject(reason,reason_cap,"Manual extrusion is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Manual extrusion requires the printer to be idle");
         if(!m->have_extruder_temp||m->extruder_temp<170.0)return reject(reason,reason_cap,"Nozzle must be at least 170 C");
-        if(fabs(value)<0.1||fabs(value)>25.0)return reject(reason,reason_cap,"Extrusion must be between -25 and 25 mm");
+        if(!isfinite(value)||fabs(value)<0.1||fabs(value)>25.0)return reject(reason,reason_cap,"Extrusion must be between -25 and 25 mm");
         snprintf(script,cap,"SAVE_GCODE_STATE NAME=CC2_CONTROL_EXTRUDE\nM83\nG1 E%.2f F%d\nRESTORE_GCODE_STATE NAME=CC2_CONTROL_EXTRUDE",value,value<0?600:300);
         return 1;
     }
