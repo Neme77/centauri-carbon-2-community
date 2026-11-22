@@ -27,7 +27,7 @@ typedef struct {
     int staged_next; /* armed for the next console_start */
     int staged;      /* the running or last job was staged */
     int cancelled;   /* the last job ended by a cancel */
-    int cancel_tail_failed; /* ... and its cancel tail did not run to its end (the heaters may still be on) */
+    int cancel_tail_failed; /* ... and its cancel tail did not run to its end or a heater line of it was refused (the heaters may still be on) */
     atomic_int cancel_requested;
     char cancel_tail_next[CONSOLE_CANCEL_TAIL_MAX];
     char cancel_tail[CONSOLE_CANCEL_TAIL_MAX];
@@ -36,6 +36,9 @@ typedef struct {
     char instance[17]; /* 16 lowercase hex digits, new at every start of the service: names this console's counters */
 } console_state;
 
+/* What the main loop reads of the last job in one go (under the lock). */
+typedef struct { int busy, completed, success, cancelled, cancel_tail_failed; unsigned long generation; } console_snapshot;
+void console_take_snapshot(console_state *state, console_snapshot *snapshot);
 void console_init(console_state *state, const char *socket_path);
 void console_destroy(console_state *state);
 int console_clear(console_state *state);

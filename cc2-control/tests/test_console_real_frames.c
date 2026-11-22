@@ -112,7 +112,7 @@ int main(void){
         const char wire[]=ACK "\003" REPORT "\003" ERRFRAME "\003";
         const size_t ack_end=sizeof(ACK),report_end=ack_end+sizeof(REPORT),total=sizeof(wire)-1;
         for(int bytewise=0;bytewise<2;bytewise++){
-            staged_frame frame={{0},0};staged_seen seen={0,0,0};
+            staged_frame frame={{0},0};staged_seen seen={0,0,0,0};
             sent_count=0;console_init(&state,"/test");
             int result=-1;
             for(size_t i=0;i<total;i+=(bytewise?1:total)){

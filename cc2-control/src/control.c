@@ -138,7 +138,14 @@ const char *control_screws_cancel_tail(const char *action){
  * a later measurement that was cancelled leaves the session as it was, without a result. */
 static int screws_cancel_noted;
 void control_screws_note_cancel(void){screws_cancel_noted=1;}
-void control_screws_note_tail_failed(void){screws_cancel_noted=0;}
+/* What the console says about the job that has ended (main.c, every tick). The user's cancel was noted when it was asked for;
+ * it counts only when the job really ended by that cancel (`cancelled`) and its cancel tail ran to its end with its heater
+ * lines accepted (`!tail_failed`). A job that failed in the same moment (an error answer, an error report, the end of the
+ * connection) ran no cancel tail, and a refused or cut tail did not switch the heaters off: neither is a clean cancel, the
+ * deferred shutdown stays pending and a session does not go on. */
+void control_screws_note_console_end(int completed,int cancelled,int tail_failed){
+    if(completed&&(!cancelled||tail_failed))screws_cancel_noted=0;
+}
 int control_screws_measuring(void){return screws_session.job_pending||screws_quick.pending;}
 int control_screws_take_finished(control_screws_job *job){
     if(!screws_finished_ready)return 0;

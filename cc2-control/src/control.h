@@ -101,7 +101,7 @@ unsigned control_axes_homed(const mqtt_client *m);
 void control_screws_note_cancel(void);
 /* The cancelled job's cancel tail did not run to its end (the connection ended inside it): the heaters may still be on, so the
  * cancel does not count as having switched them off (call before control_screws_tick for the completed job). */
-void control_screws_note_tail_failed(void);
+void control_screws_note_console_end(int completed,int cancelled,int tail_failed);
 /* The queued console job is the one-shot screws:measure. */
 void control_screws_note_quick(unsigned long generation);
 #define CONTROL_SCREW_CORNERS 4

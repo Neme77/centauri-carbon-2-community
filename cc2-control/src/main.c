@@ -6684,14 +6684,12 @@ int main(int argc, char **argv) {
         idle_motors_tick(&mqtt,&console);
         motor_mode_tick(&mqtt,&console);
         {
-            int completed=0,success=0,busy=0,tail_failed=0;unsigned long generation=0;int emergency;
-            pthread_mutex_lock(&console.lock);
-            completed=console.completed;success=console.success;busy=console.busy;
-            tail_failed=console.cancel_tail_failed;
-            generation=console.generation;
-            pthread_mutex_unlock(&console.lock);
-            /* a cancel whose tail was cut short never switched the heaters off: it is not taken for one (control.c) */
-            if(completed&&tail_failed)control_screws_note_tail_failed();
+            console_snapshot snap;
+            console_take_snapshot(&console,&snap);
+            int completed=snap.completed,success=snap.success,busy=snap.busy,emergency;unsigned long generation=snap.generation;
+            /* a cancel that met a failing line, or whose tail was cut short or refused at a heater line, never switched the
+             * heaters off: it is not taken for a clean cancel (control.c) */
+            control_screws_note_console_end(snap.completed,snap.cancelled,snap.cancel_tail_failed);
             emergency=atomic_load(&console.emergency_sent);
             time_t tram_now=time(NULL);
             pthread_mutex_lock(&console.lock);

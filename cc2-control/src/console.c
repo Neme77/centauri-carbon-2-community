@@ -105,7 +105,9 @@ static void finish(console_state *state, int success, const char *message) {
  * connection, not to a line: a read can end in the middle of a report that follows an acknowledgement, and the rest of
  * it arrives in the next read, while the next line is waited for or in the final read (staged_drain). */
 typedef struct { char frame[1024]; size_t used; } staged_frame;
-typedef struct { int saturated; int fault; int lost; } staged_seen;
+/* `faults` counts the error reports (`fault` only says that there was one): the cancel tail asks whether a new one came while
+ * one of its heater lines was waited for. */
+typedef struct { int saturated; int fault; int lost; int faults; } staged_seen;
 static int staged_error_report(const char *frame) {
     const char *report = strstr(frame, "\"report\"");
     const char *key = report ? strstr(report, "\"error_code\":") : NULL;
@@ -130,7 +132,7 @@ static int staged_feed(console_state *state, staged_frame *f, const char *buffer
         seen->saturated |= append_output(state, "\n", 1);
         start = i + 1;
         f->frame[f->used] = '\0';
-        if (staged_error_report(f->frame)) seen->fault = 1;
+        if (staged_error_report(f->frame)) { seen->fault = 1; seen->faults++; }
         if (result < 0 && strstr(f->frame, "\"id\":101")) result = strstr(f->frame, "\"error\"") ? 0 : 1;
         f->used = 0;
     }
@@ -206,7 +208,17 @@ static void staged_drain(console_state *state, int fd, time_t deadline, staged_f
     }
 }
 /* Run `script` line by line: 1 done, 0 a printer error (the rest is not sent), 2 cancelled, -1 connection lost or time
- * over. The cancel tail (`tail`) is not stopped by a cancel and runs on past an error. */
+ * over. The cancel tail (`tail`) is not stopped by a cancel and runs on past an error; but an error of one of its heater
+ * lines (an error response, or a new error report with its acknowledgement) is not lost: `*heater_failed` is set, because
+ * that line has not switched its heater off or to its target (the caller must not take the heaters for switched off).
+ * `*heater_faults` is the count of error reports after the last heater line that was answered: a report that comes later
+ * (staged_run reads what trails the tail) belongs to it. */
+static int staged_heater_line(const char *line) {
+    static const char *const heaters[] = {"M104", "M109", "M140", "M190"};
+    for (size_t i = 0; i < sizeof(heaters) / sizeof(heaters[0]); ++i)
+        if (!strncmp(line, heaters[i], 4) && (line[4] == '\0' || line[4] == ' ')) return 1;
+    return 0;
+}
 /* A completed line that homes axes makes them known as homed for the rest of the job: G28 (all axes, or the named
  * ones) and G180 S3 (the nozzle cleaning homes first). */
 static void staged_note_homing(const char *line, unsigned *homed) {
@@ -221,7 +233,7 @@ static void staged_note_homing(const char *line, unsigned *homed) {
     *homed |= bits ? bits : CONSOLE_AXES_ALL;
 }
 static int staged_lines(console_state *state, int fd, const char *script, time_t deadline, int tail, int *sent,
-                        staged_frame *frame, staged_seen *seen, unsigned *homed) {
+                        staged_frame *frame, staged_seen *seen, unsigned *homed, int *heater_failed, int *heater_faults) {
     const char *at = script;
     while (*at) {
         const char *end = strchr(at, '\n');
@@ -239,9 +251,14 @@ static int staged_lines(console_state *state, int fd, const char *script, time_t
             text = line + 3;
         }
         if (!tail && atomic_load(&state->cancel_requested)) return 2;
+        int faults_before = seen->faults;
         int result = staged_line(state, fd, text, deadline, frame, seen);
         if (sent) (*sent)++;
         if (result < 0) return -1;
+        if (tail && heater_failed && staged_heater_line(text)) {
+            if (result == 0 || seen->faults != faults_before) *heater_failed = 1;
+            if (heater_faults) *heater_faults = seen->faults;
+        }
         if (result == 1) staged_note_homing(text, homed);
         if (!tail && (result == 0 || seen->fault)) return 0;
     }
@@ -259,24 +276,28 @@ static void staged_run(console_state *state, int fd, const char *command) {
     append_output(state, "\n", 1);
     time_t deadline = time(NULL) + 900;
     int sent = 0;
-    staged_seen seen = {0, 0, 0};
+    staged_seen seen = {0, 0, 0, 0};
     staged_frame frame = {{0}, 0};
-    int result = staged_lines(state, fd, command, deadline, 0, &sent, &frame, &seen, &homed);
+    int result = staged_lines(state, fd, command, deadline, 0, &sent, &frame, &seen, &homed, NULL, NULL);
     if (result == 2) {
         append_output(state, "[CC2 Control: cancelled]\n", 25);
         /* Nothing sent yet: nothing to undo. A tail the connection cut short never reached its heater lines: the job is
          * marked (cancel_tail_failed), so that the heaters are not taken for switched off (control_screws_tick). A tail that
-         * was acknowledged to its last line has switched them off, whatever the final read meets. */
-        int tail_cut = 0;
-        if (sent) { result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &frame, &seen, &homed) < 0 ? -1 : 2; tail_cut = result < 0; }
+         * was acknowledged to its last line has switched them off, whatever the final read meets. A heater line of the tail
+         * that the printer refused has not switched them off either: the rest of the tail still goes out, the job is marked. */
+        int tail_cut = 0, heater_failed = 0, heater_faults = -1;
+        if (sent) { result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &frame, &seen, &homed, &heater_failed, &heater_faults) < 0 ? -1 : 2; tail_cut = result < 0; }
         if (result == 2) staged_drain(state, fd, time(NULL) + 10, &frame, &seen);
+        /* an error report that trails the tail, after its last heater line was acknowledged, belongs to that line */
+        if (result == 2 && heater_faults >= 0 && seen.faults != heater_faults) heater_failed = 1;
         if (staged_flush_open(state, &frame) || seen.lost) result = -1;
         close(fd);
         pthread_mutex_lock(&state->lock);
         state->cancelled = 1;
-        state->cancel_tail_failed = tail_cut;
+        state->cancel_tail_failed = tail_cut || heater_failed;
         pthread_mutex_unlock(&state->lock);
-        finish(state, 0, result < 0 ? "Console connection ended or command timed out\n" : NULL);
+        finish(state, 0, result < 0 ? "Console connection ended or command timed out\n" :
+                         heater_failed ? "[CC2 Control: a heater line of the cancel tail was refused; the heaters are not taken for switched off]\n" : NULL);
         return;
     }
     if (result < 0) {
@@ -735,6 +756,17 @@ int console_cancel(console_state *state) {
     if (running) atomic_store(&state->cancel_requested, 1);
     pthread_mutex_unlock(&state->lock);
     return running ? 0 : -1;
+}
+
+void console_take_snapshot(console_state *state, console_snapshot *snapshot) {
+    pthread_mutex_lock(&state->lock);
+    snapshot->busy = state->busy;
+    snapshot->completed = state->completed;
+    snapshot->success = state->success;
+    snapshot->cancelled = state->cancelled;
+    snapshot->cancel_tail_failed = state->cancel_tail_failed;
+    snapshot->generation = state->generation;
+    pthread_mutex_unlock(&state->lock);
 }
 
 int console_cancelled(console_state *state, unsigned long generation) {

@@ -12,7 +12,7 @@
  * can be asked for while a chosen line runs. */
 static char sent_lines[32][160];
 static int sent_count, reply_pending, reply_error, reply_mode;
-static const char *cancel_at, *error_at, *report_at, *drop_at, *trailing_at, *extra_reply;
+static const char *cancel_at, *error_at, *report_at, *drop_at, *trailing_at, *extra_reply, *jump_at;
 static const char *quiet_report="{\"report\":{\"error_code\":0,\"error_level\":0,\"message\":\"z=0.2\"}}\003";
 static const char *resume_report="{\"report\":{\"error_code\":702,\"error_level\":3,\"message\":\"resumed\"}}\003";
 static const char *report_extra;
@@ -50,6 +50,7 @@ static ssize_t fake_send(int fd,const void *data,size_t length,int flags){
         extra_reply=trailing_at&&strstr(sent_lines[sent_count],trailing_at)?"{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"late fault\"}}\003":report_extra;
         cur_junk=junk&&strstr(sent_lines[sent_count],junk_at)?junk:NULL;
         if(cancel_at&&strstr(sent_lines[sent_count],cancel_at))atomic_store(cancel_flag,1);
+        if(jump_at&&strstr(sent_lines[sent_count],jump_at))clock_jump=1000; /* the clock runs past the deadline while this line is waited for */
         sent_count++;
     }
     return (ssize_t)length;
@@ -393,6 +394,79 @@ int main(void){
         assert(!state.cancelled&&!state.cancel_tail_failed);
     }
     puts("PASS: a cancel whose tail is cut is marked cancel_tail_failed; a complete tail is not");
+
+    /* Neme77 on #403 (22.11.): a heater line of the cancel tail that the printer REFUSES (a complete error response, the
+     * connection stays healthy) is no switched-off heater. The tail goes on with its remaining lines, but the job is marked
+     * (cancel_tail_failed), so that the caller (control_screws_tick) leaves the shutdown pending. Only the heater lines of
+     * the tail count: the lift, G90 and the state restore do not switch a heater. */
+    {
+        static const char msg_heater[]="a heater line of the cancel tail was refused";
+        /* (f) M104 S0 refused: M140 S0 still goes out, the job is cancelled and marked */
+        run(SCRIPT,TAIL,"PROBE","M104 S0");
+        assert(sent_count==9&&sent_line("M104 S0")&&sent_line("M140 S0"));
+        assert(!state.success&&state.completed&&!state.busy&&state.cancelled&&state.cancel_tail_failed);
+        assert(strstr(state.output,"[CC2 Control: cancelled]")&&strstr(state.output,msg_heater));
+        /* (g) M140 S0 refused (the last line of the tail) */
+        run(SCRIPT,TAIL,"PROBE","M140 S0");
+        assert(sent_count==9&&sent_line("M104 S0"));
+        assert(!state.success&&state.cancelled&&state.cancel_tail_failed&&strstr(state.output,msg_heater));
+        /* (g2) the bed line of a session tail (M140 S60: the bed stays at the session's target) refused */
+        {
+            static const char STAIL[]="G90\n" CONSOLE_TAIL_IF_HOMED "G1 Z10 F600\nRESTORE_GCODE_STATE NAME=T\nM104 S0\nM140 S60";
+            static const char SSCRIPT[]="SAVE_GCODE_STATE NAME=T\nG1 X1 Y1\nPROBE SAMPLES=3\nG1 X2 Y2\nPROBE SAMPLES=3\nRESTORE_GCODE_STATE NAME=T";
+            run(SSCRIPT,STAIL,"PROBE","M140 S60");
+            assert(sent_line("M104 S0")&&sent_count==3+5&&state.cancelled&&state.cancel_tail_failed);
+        }
+        /* (h) an error REPORT next to the acknowledgement of a heater line counts the same */
+        report_at="M104 S0";run(SCRIPT,TAIL,"PROBE",NULL);report_at=NULL;
+        assert(sent_count==9&&sent_line("M140 S0")&&state.cancelled&&!state.success&&state.cancel_tail_failed&&strstr(state.output,msg_heater));
+        report_at="M140 S0";run(SCRIPT,TAIL,"PROBE",NULL);report_at=NULL;
+        assert(sent_count==9&&state.cancelled&&state.cancel_tail_failed);
+        /* (i) a refused line that is no heater line (the lift, the state restore, G90) is no failed shutdown: the heaters went off */
+        run(SCRIPT,TAIL,"PROBE","G1 Z10");
+        assert(sent_count==9&&state.cancelled&&!state.cancel_tail_failed&&!strstr(state.output,msg_heater));
+        run(SCRIPT,TAIL,"PROBE","RESTORE_GCODE_STATE NAME=T");
+        assert(sent_count==9&&state.cancelled&&!state.cancel_tail_failed);
+        run(SCRIPT,TAIL,"PROBE","G90");
+        assert(sent_count==9&&state.cancelled&&!state.cancel_tail_failed);
+        report_at="RESTORE_GCODE_STATE NAME=T";run(SCRIPT,TAIL,"PROBE",NULL);report_at=NULL;
+        assert(sent_count==9&&state.cancelled&&!state.cancel_tail_failed);
+        /* (j) the whole tail acknowledged: unchanged, no mark, no message */
+        run(SCRIPT,TAIL,"PROBE",NULL);
+        assert(state.cancelled&&!state.cancel_tail_failed&&!strstr(state.output,msg_heater)&&sent_line("M104 S0")&&sent_line("M140 S0"));
+        /* (k) a second cancel request while the tail runs changes nothing: the whole tail goes out and nothing is marked
+         * ("G" is in the first line of the job, in G90 and in the state restore) */
+        run(SCRIPT,TAIL,"G",NULL);
+        assert(sent_count==1+5&&sent_line("G90")&&sent_line("M104 S0")&&sent_line("M140 S0")&&state.cancelled&&!state.cancel_tail_failed);
+        /* (l) a heater line that gets no answer before the deadline (no EOF, quiet connection): the connection counts as cut */
+        drop_at="M104 S0";jump_at="M104 S0";split_wait=2;
+        run(SCRIPT,TAIL,"PROBE",NULL);
+        drop_at=NULL;jump_at=NULL;split_wait=0;clock_jump=0;
+        assert(sent_line("M104 S0")&&!sent_line("M140 S0")&&state.cancelled&&!state.success&&state.cancel_tail_failed&&strstr(state.output,"Console connection ended or command timed out"));
+        /* (m) the next job does not inherit the mark */
+        run(SCRIPT,TAIL,NULL,NULL);
+        assert(state.success&&!state.cancelled&&!state.cancel_tail_failed);
+        /* (n) an error report that comes in a read of its own AFTER the last heater line was acknowledged (it trails the tail)
+         * belongs to the heater lines: marked. The same after M104 S0 (the window of the line) is marked as well. */
+        split_cancel="PROBE";sep_reads=1;
+        cut_job(SCRIPT,TAIL,"M140 S0",sizeof(SPLIT_REPORT)-1,1);
+        sep_reads=0;split_cancel=NULL;
+        assert(sent_line("M104 S0")&&sent_line("M140 S0")&&state.cancelled&&!state.success&&state.cancel_tail_failed&&strstr(state.output,msg_heater));
+        split_cancel="PROBE";sep_reads=1;
+        cut_job(SCRIPT,TAIL,"M104 S0",sizeof(SPLIT_REPORT)-1,1);
+        sep_reads=0;split_cancel=NULL;
+        assert(state.cancelled&&state.cancel_tail_failed);
+        /* (o) a late report of the cancelled probe itself (it comes before the heater lines of the tail) does not mark */
+        split_cancel="PROBE";sep_reads=1;
+        cut_job(SCRIPT,TAIL,"PROBE",sizeof(SPLIT_REPORT)-1,1);
+        sep_reads=0;split_cancel=NULL;
+        assert(sent_line("M104 S0")&&sent_line("M140 S0")&&state.cancelled&&!state.cancel_tail_failed&&!strstr(state.output,msg_heater));
+        /* (p) a cancel that meets a failing line: the job fails, is not cancelled and sends no tail (main.c must not count the
+         * user's cancel then, see test_screw_console_error) */
+        run(SCRIPT,TAIL,"PROBE","PROBE");
+        assert(sent_count==4&&!state.success&&state.completed&&!state.cancelled&&!state.cancel_tail_failed&&!sent_line("M104 S0"));
+    }
+    puts("PASS: a cancel tail whose heater line was refused is marked cancel_tail_failed; the other tail lines never mark it");
 
     /* Neme77's review, the other way round: a printer error read whole stays a printer error when a later frame is cut off
      * and the connection ends; the cut text is kept. Without a printer error it stays a transport failure (above). */
