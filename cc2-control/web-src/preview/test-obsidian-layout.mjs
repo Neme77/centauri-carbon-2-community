@@ -17,7 +17,7 @@ try {
   const theme = page.locator('select').filter({ has: page.locator('option[value="obsidian"]') })
   await theme.waitFor()
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-  assert.deepEqual(await theme.locator('option').evaluateAll(options => options.map(option => option.value)), ['dark', 'light', 'dracula', 'nord', 'monokai', 'solarized-light', 'obsidian', 'aurora', 'klipper', 'dune'])
+  assert.deepEqual(await theme.locator('option').evaluateAll(options => options.map(option => option.value)), ['dark', 'light', 'dracula', 'nord', 'monokai', 'solarized-light', 'obsidian', 'aurora', 'klipper', 'dune', 'swamp'])
   const saved = page.waitForResponse(r => r.url().endsWith('/api/preferences') && r.request().method() === 'PUT')
   await theme.selectOption('obsidian')
   assert.equal((await saved).ok(), true)
