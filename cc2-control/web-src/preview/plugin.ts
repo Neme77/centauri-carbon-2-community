@@ -95,7 +95,13 @@ export function previewPlugin(): Plugin {
   let speed = 100
   let flow = 100
   let tramSession = false
-  let tramHeights: Record<string, number> = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+  let tramBed = 60 // the bed target of the running screw session, as the backend reports it
+  let tramHeights: Record<string, number> = {
+    '27.9,25.95': 1.8,
+    '227.15,25.95': 1.85,
+    '227.15,225.5': 1.82,
+    '27.9,225.5': 1.79,
+  }
   type TramMeasure = {
     time: number
     kind: 'start' | 'probe' | 'check' | 'quick'
@@ -106,6 +112,7 @@ export function previewPlugin(): Plugin {
   }
   type TramSession = {
     kind?: 'session' | 'quick'
+    points?: 'screws' | 'old'
     started: number
     ended: number | null
     measurements: TramMeasure[]
@@ -113,6 +120,7 @@ export function previewPlugin(): Plugin {
   const seedScrewHistory = (): TramSession[] => [
     {
       kind: 'quick',
+      points: 'screws',
       started: 1762801500,
       ended: 1762801680,
       measurements: [
@@ -149,10 +157,10 @@ export function previewPlugin(): Plugin {
   let screwSessions: TramSession[] = seedScrewHistory()
   const screwNow = () => Math.floor(Date.now() / 1000)
   const heightsZ = () => ({
-    FL: +tramHeights['30,30'].toFixed(4),
-    FR: +tramHeights['230,30'].toFixed(4),
-    RR: +tramHeights['230,225'].toFixed(4),
-    RL: +tramHeights['30,225'].toFixed(4),
+    FL: +tramHeights['27.9,25.95'].toFixed(4),
+    FR: +tramHeights['227.15,25.95'].toFixed(4),
+    RR: +tramHeights['227.15,225.5'].toFixed(4),
+    RL: +tramHeights['27.9,225.5'].toFixed(4),
   })
   const closeOpenScrew = () => {
     for (const s of screwSessions) if (s.kind !== 'quick' && s.ended == null) s.ended = screwNow()
@@ -181,14 +189,14 @@ export function previewPlugin(): Plugin {
   }
   const tramCorner = (id: string) =>
     ({
-      FL: { key: '30,30', x: 30, y: 30 },
-      FR: { key: '230,30', x: 230, y: 30 },
-      RR: { key: '230,225', x: 230, y: 225 },
-      RL: { key: '30,225', x: 30, y: 225 },
+      FL: { key: '27.9,25.95', x: 27.9, y: 25.95 },
+      FR: { key: '227.15,25.95', x: 227.15, y: 25.95 },
+      RR: { key: '227.15,225.5', x: 227.15, y: 225.5 },
+      RL: { key: '27.9,225.5', x: 27.9, y: 225.5 },
     })[id]
   const probeLines = (key: string, z: number) => {
     const [x, y] = key.split(',')
-    return `${`// probe at ${x}.000,${y}.000 is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
+    return `${`// probe at ${Number(x).toFixed(3)},${Number(y).toFixed(3)} is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
   }
   const tramOutput = (keys: string[]) =>
     `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n${keys.map(k => probeLines(k, tramHeights[k])).join('')}`
@@ -201,6 +209,31 @@ export function previewPlugin(): Plugin {
       command,
       output: tramOutput(keys),
     }
+  }
+  // The hold time before a screw measurement or a session start ("screws:soak:<0-60>:<action>"), as the printer service
+  // runs it: the bed heats ('heating', about SOAK_HEAT_MS here, or one POST /__preview/screws-soak-step), is held
+  // ('soaking', counted down by the clock; the step ends it at once) and then the action behind the prefix runs. Stopped
+  // with screws:cancel; GET /api/printer reports it as screws_soak.
+  const SOAK_HEAT_MS = 8000
+  type ScrewSoakJob = {
+    stage: 'heating' | 'soaking'
+    target: number
+    total: number
+    since: number
+    action: 'quick' | 'corner' | 'session'
+    inner: string
+  }
+  let screwSoak: ScrewSoakJob | null = null
+  // How the last hold ended ('' | 'started' | 'cancelled' | 'ended' | 'failed'), and its reason.
+  let soakResult = ''
+  let soakReason = ''
+  // A screw start without a hold time right after a mesh measures without a second nozzle cleaning (screws_after_mesh).
+  let meshEndedAt = 0
+  let afterMesh = false
+  const AFTER_MESH_MS = 120_000
+  const soakBedOf = (action: string) => {
+    const m = /:(\d+)(?::2)?$/.exec(action)
+    return m ? Number(m[1]) : 60
   }
   let preferences: Record<string, unknown> = { language: 'en', theme: 'dark' }
   let cameraViewer: string | null = null
@@ -464,50 +497,15 @@ export function previewPlugin(): Plugin {
     result: '',
     error: '',
     detail: '',
+    // "Measure a new mesh" (Bed alignment): the run keeps its result only as the plate's working mesh, in memory.
+    work: false,
+    work_mesh: null as null | { plate: string; temp: number; nozzle: string; measured: number; tilt: number },
   })
   let calibration = idleCalibration()
+  // When a simulated measurement is saved: a fixed time, so the tests see the same value every run; a demo started with
+  // CC2_DEMO_FRESH_MESH=1 stamps it with the current time, so the new mesh counts as fresh on the alignment page.
+  const savedStamp = () => (process.env.CC2_DEMO_FRESH_MESH ? Math.floor(Date.now() / 1000) : 1790990000)
   let nextTilt = 6
-  // Mesh-guided screw alignment session (/api/screws/align): its rounds are the simulated calibration above.
-  const idleAlign = () => ({
-    active: false,
-    round: 0,
-    rounds: 0,
-    measuring: false,
-    measured: false,
-    side: 'A' as 'A' | 'B',
-    temp: 0,
-    soak: 0,
-    nozzle: '',
-    ended: '',
-    heatersOff: false,
-  })
-  let alignSession = idleAlign()
-  const alignEnd = (ended: string, heatersOff: boolean) => {
-    alignSession = { ...alignSession, active: false, measuring: false, measured: false, ended, heatersOff }
-  }
-  // What the main loop does: a finished calibration completes the round or ends the session.
-  const alignState = () => {
-    const a = alignSession
-    if (a.active && scene !== 'idle') alignEnd('print', false)
-    else if (a.active && a.measuring && calibration.stage === 'off') {
-      if (calibration.result === 'done') alignSession = { ...a, measuring: false, measured: true, round: a.round + 1 }
-      else alignEnd(calibration.result === 'cancelled' ? 'cancelled' : 'failed', true)
-    }
-    const { heatersOff, ...rest } = alignSession
-    return {
-      ...rest,
-      idle_left: rest.active && !rest.measuring ? 1200 : 0,
-      heaters_off_pending: heatersOff,
-      calibration: {
-        stage: calibration.stage,
-        remaining: calibration.remaining,
-        bed: calibration.bed,
-        result: calibration.result,
-        error: calibration.error,
-        detail: calibration.detail,
-      },
-    }
-  }
   const newId = () => Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
   const resetPlates = () => {
     plates = [
@@ -572,7 +570,6 @@ export function previewPlugin(): Plugin {
     plateCurrent = 'a1b2c3d4e5f60718'
     plateResult = ''
     calibration = idleCalibration()
-    alignSession = idleAlign()
   }
   resetPlates()
   const plateMeasures = (p: PreviewPlate) =>
@@ -603,7 +600,13 @@ export function previewPlugin(): Plugin {
             }
           : { state: 'off', temps: [] },
       },
-      calibration,
+      calibration: {
+        ...calibration,
+        work_mesh:
+          calibration.work_mesh && plates.some(p => p.id === calibration.work_mesh?.plate)
+            ? (({ tilt, ...w }) => ({ ...w, mesh: plateMesh(tilt) }))(calibration.work_mesh)
+            : null,
+      },
       slots: { A: plateSlots.A ? 'mesh' : 'empty', B: plateSlots.B ? 'mesh' : 'empty' },
       nozzles,
       plates: plates.map(p => ({
@@ -751,7 +754,8 @@ export function previewPlugin(): Plugin {
     deleted = new Set()
     cameraViewer = null
     tramSession = false
-    tramHeights = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+    screwSoak = null
+    tramHeights = { '27.9,25.95': 1.8, '227.15,25.95': 1.85, '227.15,225.5': 1.82, '27.9,225.5': 1.79 }
     screwSessions = seedScrewHistory()
     consoleJob = {
       busy: false,
@@ -807,14 +811,98 @@ export function previewPlugin(): Plugin {
       job('preview-3', 'Preview_USB.gcode', 1790722800, 12, 2, 0, ''),
       job('preview-4', 'CC2_Preview_Vase_PETG.gcode', 1790636400, 211, 1, 3, 'picture/CC2_Preview_Vase_PETG'),
     ].filter(task => !deleted.has(task.task_id))
+  // A session start, as screws:tram:start[:<C>[:2]] runs it (also behind a hold time).
+  const startTram = (action: string) => {
+    tramSession = true
+    tramBed = Number(action.split(':')[3] ?? 60)
+    closeOpenScrew()
+    screwSessions.unshift({
+      kind: 'session',
+      points: 'screws',
+      started: screwNow(),
+      ended: null,
+      measurements: [{ time: screwNow(), kind: 'start', corner: null, twice: false, z: heightsZ() }],
+    })
+    trimScrewHistory()
+    finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28\n', [
+      '27.9,25.95',
+      '227.15,25.95',
+      '227.15,225.5',
+      '27.9,225.5',
+    ])
+  }
+  // A quick measurement behind a hold time (the preview simulates screws:measure only there): all four corners, or one
+  // corner and front left as the reference, as the console reports them; the history keeps it as a quick measurement.
+  const measureQuick = (action: string) => {
+    const corner = /^screws:measure:corner:(FL|FR|RR|RL)/.exec(action)?.[1]
+    const ids = corner ? [...new Set([corner, 'FL'])] : ['FL', 'FR', 'RR', 'RL']
+    const keys = ids.map(id => tramCorner(id)?.key ?? '')
+    const z = Object.fromEntries(ids.map((id, i) => [id, +tramHeights[keys[i]].toFixed(4)]))
+    screwSessions.unshift({
+      kind: 'quick',
+      points: 'screws',
+      started: screwNow(),
+      ended: screwNow(),
+      measurements: [{ time: screwNow(), kind: 'quick', corner: corner ?? null, twice: action.endsWith(':2'), z }],
+    })
+    trimScrewHistory()
+    consoleJob = {
+      busy: false,
+      completed: true,
+      success: true,
+      generation: consoleJob.generation + 1,
+      command: `SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S${soakBedOf(action)}\n`,
+      output: `SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n${keys.map(k => probeLines(k, tramHeights[k])).join('')}`,
+    }
+  }
+  // Moves the hold time on by the clock: the heating ends after SOAK_HEAT_MS, the hold after its minutes; then the action.
+  const soakLeft = (j: ScrewSoakJob) =>
+    j.stage === 'soaking' ? Math.max(0, j.total - Math.floor((Date.now() - j.since) / 1000)) : j.total
+  const soakNext = () => {
+    const j = screwSoak
+    if (!j) return
+    if (j.stage === 'heating') screwSoak = { ...j, stage: 'soaking', since: Date.now() }
+    else {
+      screwSoak = null
+      soakResult = 'started'
+      soakReason = ''
+      afterMesh = false
+      if (j.action === 'session') startTram(j.inner)
+      else measureQuick(j.inner)
+    }
+  }
+  const soakTick = () => {
+    const j = screwSoak
+    if (!j) return
+    if (j.stage === 'heating' && Date.now() - j.since >= SOAK_HEAT_MS) soakNext()
+    else if (j.stage === 'soaking' && soakLeft(j) <= 0) soakNext()
+  }
+  const soakReport = () => {
+    soakTick()
+    const j = screwSoak
+    if (!j) return { active: false, result: soakResult, reason: soakReason }
+    // `bed` is the target, as the service reports it; the measured bed is heater_bed (soakLive).
+    return { active: true, stage: j.stage, bed: j.target, remaining: soakLeft(j), total: j.total, action: j.action }
+  }
+  const soakLive = (j: ScrewSoakJob) =>
+    j.stage === 'heating'
+      ? +(27 + (j.target - 27) * Math.min(1, (Date.now() - j.since) / SOAK_HEAT_MS)).toFixed(1)
+      : j.target
   const printer = () => {
     const active = scene === 'printing' || scene === 'paused'
+    soakTick()
+    const soakBed = screwSoak ? soakLive(screwSoak) : null
     return {
       connected: scene !== 'disconnected',
       messages: 100,
       last_message_age: scene === 'disconnected' ? 60 : 0,
       extruder: { temperature: active ? 210.2 : 28, target: active ? 210 : 0 },
-      heater_bed: { temperature: active ? 60.1 : 27, target: active ? 60 : 0 },
+      heater_bed:
+        tramSession && scene === 'idle'
+          ? { temperature: tramBed - 1.25, target: tramBed }
+          : soakBed !== null && screwSoak
+            ? { temperature: soakBed, target: screwSoak.target }
+            : { temperature: active ? 60.1 : 27, target: active ? 60 : 0 },
       chamber: { temperature: 29 },
       fans: {
         controller: active ? 255 : 0,
@@ -849,7 +937,10 @@ export function previewPlugin(): Plugin {
       screws_session: {
         active: tramSession && scene === 'idle',
         xy_homed: tramSession && scene === 'idle',
+        bed: tramSession && scene === 'idle' ? tramBed : null,
       },
+      screws_soak: soakReport(),
+      screws_after_mesh: afterMesh,
       spools: {
         enabled: spoolsOn,
         revision: spoolRevision,
@@ -953,6 +1044,19 @@ export function previewPlugin(): Plugin {
             case '/api/orca/pending-print':
               return reply({ pending: false })
             case '/api/console':
+              // A running mesh calibration sends its steps through the console, as on the printer: busy meanwhile.
+              if (calibration.stage !== 'off' && !consoleJob.busy)
+                return reply({
+                  ...consoleJob,
+                  busy: true,
+                  completed: false,
+                  command:
+                    calibration.stage === 'homing'
+                      ? 'G28'
+                      : calibration.stage === 'probing'
+                        ? `BED_MESH_CALIBRATE PROFILE=${calibration.side === 'B' ? 'default1' : 'default'} BED_TEMP=${calibration.temp}`
+                        : `M140 S${calibration.temp}`,
+                })
               return reply({ ...consoleJob })
             case '/api/screws/history':
               return reply({ sessions: screwSessions })
@@ -1005,8 +1109,6 @@ export function previewPlugin(): Plugin {
             }
             case '/api/queue':
               return reply(queueView())
-            case '/api/screws/align':
-              return reply(alignState())
             case '/api/plates':
               return reply(plateLibrary())
             case '/api/spools':
@@ -1135,9 +1237,7 @@ export function previewPlugin(): Plugin {
           '/api/plates/calibrate',
           '/api/plates/calibrate/cancel',
           '/__preview/calibration-step',
-          '/api/screws/align/measure',
-          '/api/screws/align/save',
-          '/api/screws/align/end',
+          '/__preview/screws-soak-step',
           '/api/spoolman',
           '/api/spools/enable',
           '/api/spools/save',
@@ -1353,11 +1453,8 @@ export function previewPlugin(): Plugin {
             if (path === '/__preview/scenario' && req.method === 'POST') {
               const value = JSON.parse(body).scene
               if (!scenarios.includes(value)) return reply({ error: 'Unknown scenario' }, 400)
-              // A print that starts under a running alignment session ends it; the reset forgets the rest.
-              const aligning = alignSession.active && value !== 'idle'
               scene = value
               reset()
-              if (aligning) alignSession = { ...idleAlign(), ended: 'print' }
               return reply({ scene })
             }
             if (path === '/api/preferences' && req.method === 'PUT') {
@@ -1415,19 +1512,54 @@ export function previewPlugin(): Plugin {
               videos[task.task_id] = 2
               return reply({ accepted: true, method: 1051, simulated: true }, 202)
             }
+            if (path === '/__preview/screws-soak-step' && req.method === 'POST') {
+              if (!screwSoak) return reply({ error: 'No hold time is running' }, 409)
+              // "fail": the hold ends as the service reports a failure, with its reason.
+              if (body.trim() === 'fail') {
+                soakReason = `The bed did not reach ${screwSoak.target} °C`
+                soakResult = 'failed'
+                screwSoak = null
+                return reply({ ok: true, soak: soakReport() })
+              }
+              soakNext()
+              return reply({ ok: true, soak: soakReport() })
+            }
             if (path === '/__preview/calibration-step' && req.method === 'POST') {
               const c = calibration
               if (body.trim() === 'fail' && c.stage !== 'off')
-                calibration = { ...c, stage: 'off', result: 'failed', error: c.stage }
+                calibration = {
+                  ...c,
+                  stage: 'off',
+                  result: 'failed',
+                  error: c.stage,
+                  // The reason the program gives when the mesh could not be stored in the plate.
+                  detail: c.stage === 'saving' ? 'Cannot save the plate library' : '',
+                }
               else if (c.stage === 'homing') calibration = { ...c, stage: 'heating', bed: 25 }
               else if (c.stage === 'heating') calibration = { ...c, stage: 'soaking', bed: c.temp, remaining: c.soak }
               else if (c.stage === 'soaking') calibration = { ...c, stage: 'probing', remaining: 0 }
               else if (c.stage === 'probing') {
                 plateSlots[c.side] = nextTilt++ // the printer saved a new side mesh
-                calibration = c.plate ? { ...c, stage: 'saving' } : { ...c, stage: 'off', result: 'done', bed: 25 }
+                // The printer holds the new mesh now: a working mesh of a run before is gone (as in CC2 Control).
+                calibration = c.plate
+                  ? { ...c, stage: 'saving', work_mesh: null }
+                  : { ...c, stage: 'off', result: 'done', bed: 25, work_mesh: null }
               } else if (c.stage === 'saving') {
                 const plate = plates.find(p => p.id === c.plate)
                 if (!plate) return reply({ error: 'Unknown plate' }, 404)
+                // A working mesh: nothing of the library changes, the mesh stays in the calibration state only.
+                if (c.work) {
+                  const work = {
+                    plate: plate.id,
+                    temp: c.temp,
+                    nozzle: c.nozzle,
+                    measured: savedStamp() - 60,
+                    tilt: plateSlots[plate.side],
+                  }
+                  calibration = { ...c, stage: 'off', result: 'work', work_mesh: work, bed: 25 }
+                  meshEndedAt = Date.now()
+                  return reply(calibration)
+                }
                 let m = measures.find(x => x.plate === plate.id && x.temp === c.temp && x.nozzle === c.nozzle)
                 if (!m) {
                   m = {
@@ -1441,148 +1573,13 @@ export function previewPlugin(): Plugin {
                   }
                   measures.push(m)
                 }
-                Object.assign(m, { tilt: plateSlots[plate.side], measured: 1790990000, profile: true })
+                Object.assign(m, { tilt: plateSlots[plate.side], measured: savedStamp(), profile: true })
                 plate.measure = m.id
                 plateCurrent = plate.id
                 calibration = { ...c, stage: 'off', result: 'saved', measure: m.id, bed: 25 }
+                meshEndedAt = Date.now()
               }
               return reply(calibration)
-            }
-            if (path.startsWith('/api/screws/align/') && req.method === 'POST') {
-              const lines = body.replace(/\n+$/, '').split('\n')
-              // Like the backend: the confirmation carries the token of the list it was shown.
-              const last = lines[lines.length - 1] ?? ''
-              const given = /^CONFIRM:[0-9a-f]{8}$/.test(last) ? last.slice(8) : null
-              if (given !== null) lines.pop()
-              const tokenOf = (commands: string[]) => {
-                let h = 0x811c9dc5
-                for (const c of `${commands.join('\0')}\0`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0
-                return h.toString(16).padStart(8, '0')
-              }
-              // Returns the reply to send instead of acting: the list (no confirmation) or a refusal.
-              const gate = (commands: string[], extra: Record<string, unknown>) =>
-                given === null
-                  ? reply({ confirm_required: true, commands, token: tokenOf(commands), ...extra })
-                  : given !== tokenOf(commands)
-                    ? reply({ ok: false, error: 'The commands have changed; review them again' }, 409)
-                    : null
-              const session = alignState()
-              const slot = (side: string) => (side === 'B' ? 'default1' : 'default')
-              if (path === '/api/screws/align/measure') {
-                const [side, temp, soak, nozzle = '', rounds] = lines as ['A' | 'B', string, string, string, string]
-                if (!['A', 'B'].includes(side) || !(Number(rounds) >= 1 && Number(rounds) <= 10))
-                  return reply({ ok: false, error: 'Invalid alignment measurement' }, 400)
-                if (scene !== 'idle') return reply({ ok: false, error: 'The printer must be idle' }, 409)
-                if (tramSession) return reply({ ok: false, error: 'End the screw-tramming session first' }, 409)
-                if (session.active && session.measuring)
-                  return reply({ ok: false, error: 'The measurement of this session is still running' }, 409)
-                if (
-                  session.active &&
-                  (side !== session.side || Number(temp) !== session.temp || Number(soak) !== session.soak)
-                )
-                  return reply(
-                    { ok: false, error: 'The running alignment session uses other settings; end it first' },
-                    409
-                  )
-                if (session.active && session.round >= session.rounds)
-                  return reply(
-                    {
-                      ok: false,
-                      error: 'The session has used all its measurements; save the mesh or end the session',
-                    },
-                    409
-                  )
-                if (calibration.stage !== 'off')
-                  return reply({ ok: false, error: 'A bed mesh calibration is already running' }, 409)
-                const stop = gate(
-                  [
-                    `M140 S${Number(temp)}`,
-                    `BED_MESH_CALIBRATE PROFILE=${slot(side)} BED_TEMP=${Number(temp)}`,
-                    'M104 S0',
-                  ],
-                  {
-                    round: session.active ? session.round + 1 : 1,
-                    rounds: session.active ? session.rounds : Number(rounds),
-                    soak: Number(soak),
-                  }
-                )
-                if (stop !== null) return stop
-                if (!session.active)
-                  alignSession = {
-                    ...idleAlign(),
-                    active: true,
-                    rounds: Number(rounds),
-                    side,
-                    temp: Number(temp),
-                    soak: Number(soak),
-                    nozzle,
-                  }
-                alignSession = { ...alignSession, measuring: true, measured: false, ended: '', heatersOff: false }
-                calibration = {
-                  ...idleCalibration(),
-                  stage: 'heating',
-                  side,
-                  temp: Number(temp),
-                  soak: Number(soak) * 60,
-                  nozzle,
-                }
-                return reply({ started: true, round: alignSession.round + 1, rounds: alignSession.rounds }, 202)
-              }
-              if (path === '/api/screws/align/save') {
-                const plate = plates.find(p => p.id === lines[0])
-                if (!session.active) return reply({ ok: false, error: 'No alignment session is active' }, 409)
-                if (session.measuring || !session.measured)
-                  return reply({ ok: false, error: 'The session has no completed measurement to save' }, 409)
-                if (!plate) return reply({ ok: false, error: 'Unknown plate' }, 404)
-                if (plate.side !== session.side)
-                  return reply({ ok: false, error: 'The plate is on the other side' }, 409)
-                let m = measures.find(
-                  x => x.plate === plate.id && x.temp === session.temp && x.nozzle === session.nozzle
-                )
-                const stop = gate(
-                  [
-                    `BED_MESH_PROFILE LOAD=${slot(session.side)}`,
-                    `BED_MESH_PROFILE SAVE=cc2_${m ? m.id : '<id>'}`,
-                    `SET_GCODE_OFFSET Z=${plate.z_offset.toFixed(3)}`,
-                    'TURN_OFF_HEATERS',
-                  ],
-                  { replaces: Boolean(m), temp: session.temp }
-                )
-                if (stop !== null) return stop
-                if (!m) {
-                  m = {
-                    id: newId(),
-                    plate: plate.id,
-                    temp: session.temp,
-                    nozzle: session.nozzle,
-                    measured: 0,
-                    tilt: 0,
-                    profile: true,
-                  }
-                  measures.push(m)
-                }
-                Object.assign(m, { tilt: plateSlots[plate.side], measured: 1790990000, profile: true })
-                plate.measure = m.id
-                plateCurrent = plate.id
-                alignEnd('saved', true)
-                return reply({ saved: true, measure: m.id, profile: true, applied: true })
-              }
-              if (path === '/api/screws/align/end') {
-                if (!session.active) return reply({ ended: true, active: false })
-                if (session.measuring && ['probing', 'saving'].includes(calibration.stage))
-                  return reply(
-                    { ok: false, error: 'The probing has started; use the emergency stop to interrupt it' },
-                    409
-                  )
-                const stop = gate([...(session.measuring ? ['M140 S0'] : []), 'TURN_OFF_HEATERS'], {
-                  measuring: session.measuring,
-                })
-                if (stop !== null) return stop
-                if (session.measuring) calibration = { ...calibration, stage: 'off', result: 'cancelled' }
-                alignEnd('ended', true)
-                return reply({ ended: true, active: false })
-              }
-              return reply({ ok: false, error: 'Unknown alignment request' }, 404)
             }
             if (path.startsWith('/api/plates/') && req.method === 'POST') {
               const lines = body.replace(/\n+$/, '').split('\n')
@@ -1621,26 +1618,32 @@ export function previewPlugin(): Plugin {
                 return reply({ mounted: false })
               }
               if (path === '/api/plates/calibrate') {
-                if (alignState().active)
-                  return reply({ ok: false, error: 'End the mesh-guided alignment session first' }, 409)
                 if (calibration.stage !== 'off')
                   return reply({ ok: false, error: 'A bed mesh calibration is already running' }, 409)
-                const [side, temp, soak, nozzle = '', plateId = ''] = lines as [
+                if (screwSoak)
+                  return reply({ ok: false, error: 'A screw measurement is waiting for its bed hold time' }, 409)
+                const [side, temp, soak, nozzle = '', plateId = '', work = ''] = lines as [
                   'A' | 'B',
                   string,
                   string,
                   string?,
                   string?,
+                  string?,
                 ]
+                if (lines.length > 6 || (lines.length === 6 && (work !== 'work' || !plateId)))
+                  return reply({ ok: false, error: 'Invalid calibration' }, 400)
                 keep(side)
+                // The working mesh of a run before stays until this run has finished its probing.
                 calibration = {
                   ...idleCalibration(),
+                  work_mesh: calibration.work_mesh,
                   stage: 'homing',
                   side,
                   temp: Number(temp),
                   soak: Number(soak) * 60,
                   nozzle,
                   plate: plateId,
+                  work: work === 'work',
                 }
                 return reply({ started: true }, 202)
               }
@@ -1760,6 +1763,7 @@ export function previewPlugin(): Plugin {
                 plate.measure = m.id
                 plateCurrent = plate.id
                 plateResult = 'mounted'
+                if (calibration.work_mesh?.plate === plate.id) calibration = { ...calibration, work_mesh: null }
                 return reply({ saved: true, measure: m.id, profile: true, applied: true })
               }
               const reboot = lines.includes('REBOOT')
@@ -1880,6 +1884,64 @@ export function previewPlugin(): Plugin {
             }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()
+              // The hold time in front of a screw measurement or a session start, as the printer service takes it.
+              const soak = action.match(/^screws:soak:(\d+):(.*)$/)
+              if (soak) {
+                const minutes = Number(soak[1])
+                const inner = soak[2]
+                const kind = inner.startsWith('screws:tram:start')
+                  ? 'session'
+                  : inner.startsWith('screws:measure:corner:')
+                    ? 'corner'
+                    : inner.startsWith('screws:measure')
+                      ? 'quick'
+                      : null
+                if (!kind)
+                  return reply(
+                    {
+                      accepted: false,
+                      error: 'A hold time is only available for screws:measure and screws:tram:start',
+                    },
+                    400
+                  )
+                if (minutes > 60)
+                  return reply(
+                    {
+                      accepted: false,
+                      error:
+                        'Screw hold time must be a whole number of minutes from 0 to 60, followed by the measurement',
+                    },
+                    400
+                  )
+                if (screwSoak)
+                  return reply(
+                    { accepted: false, error: 'A screw measurement is waiting for its bed hold time: cancel it first' },
+                    409
+                  )
+                if (calibration.stage !== 'off')
+                  return reply({ accepted: false, error: 'A bed mesh calibration is running' }, 409)
+                if (scene !== 'idle' || consoleJob.busy)
+                  return reply({ accepted: false, error: 'Screw measurement requires the printer to be idle' }, 409)
+                if (tramSession) return reply({ accepted: false, error: 'Screw tramming session is active' }, 409)
+                screwSoak = {
+                  stage: 'heating',
+                  target: soakBedOf(inner),
+                  total: minutes * 60,
+                  since: Date.now(),
+                  action: kind,
+                  inner,
+                }
+                soakResult = ''
+                soakReason = ''
+                if (!minutes) soakNext() // 0 minutes: no hold after the heating
+                return reply({ accepted: true, simulated: true }, 202)
+              }
+              if (action === 'screws:cancel' && screwSoak) {
+                screwSoak = null
+                soakResult = 'cancelled'
+                soakReason = ''
+                return reply({ accepted: true, simulated: true }, 202)
+              }
               const tuning = action.match(/^tune:(speed|flow):(\d+)$/)
               if (tuning && ['printing', 'paused'].includes(scene)) {
                 const n = Number(tuning[2])
@@ -1894,18 +1956,21 @@ export function previewPlugin(): Plugin {
               else if (action === 'print:resume' && scene === 'paused') scene = 'printing'
               else if (action === 'print:cancel' && ['printing', 'paused'].includes(scene)) scene = 'idle'
               else if (action.startsWith('screws:tram:') && scene === 'idle') {
-                if (action === 'screws:tram:start') {
-                  tramSession = true
-                  closeOpenScrew()
-                  screwSessions.unshift({
-                    kind: 'session',
-                    started: screwNow(),
-                    ended: null,
-                    measurements: [{ time: screwNow(), kind: 'start', corner: null, twice: false, z: heightsZ() }],
-                  })
-                  trimScrewHistory()
-                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28\n', ['30,30', '230,30', '230,225', '30,225'])
-                  return reply({ accepted: true, simulated: true })
+                if (action === 'screws:tram:start' || action.startsWith('screws:tram:start:')) {
+                  if (screwSoak)
+                    return reply(
+                      {
+                        accepted: false,
+                        error: 'A screw measurement is waiting for its bed hold time: cancel it first',
+                      },
+                      409
+                    )
+                  if (calibration.stage !== 'off')
+                    return reply({ accepted: false, error: 'A bed mesh calibration is running' }, 409)
+                  // Right after a mesh the service measures without a second nozzle cleaning and says so.
+                  afterMesh = Date.now() - meshEndedAt < AFTER_MESH_MS
+                  startTram(action)
+                  return reply({ accepted: true, simulated: true, ...(afterMesh ? { after_mesh: true } : {}) })
                 }
                 if (!tramSession) return reply({ error: 'Screw tramming session is not active' }, 409)
                 const probe = action.match(/^screws:tram:probe:(FL|FR|RR|RL)(:2)?$/)
@@ -1947,7 +2012,12 @@ export function previewPlugin(): Plugin {
                       z,
                       ...(twice ? { z2: z } : {}),
                     })
-                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', ['30,30', '230,30', '230,225', '30,225'])
+                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', [
+                    '27.9,25.95',
+                    '227.15,25.95',
+                    '227.15,225.5',
+                    '27.9,225.5',
+                  ])
                   return reply({ accepted: true, simulated: true })
                 }
                 if (action === 'screws:tram:end') {

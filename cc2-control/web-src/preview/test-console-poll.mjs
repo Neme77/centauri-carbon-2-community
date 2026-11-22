@@ -29,12 +29,12 @@ const measureOutputOf = heights =>
   Object.entries(heights)
     .map(([key, z]) => {
       const [x, y] = key.split(',')
-      return `${`// probe at ${x}.000,${y}.000 is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
+      return `${`// probe at ${Number(x).toFixed(3)},${Number(y).toFixed(3)} is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
     })
     .join('')
-const measureOutput = measureOutputOf({ '30,30': 1.8, '230,30': 1.74, '230,225': 1.72, '30,225': 1.7 })
-// The same text length with other numbers: the console of a CC2 Control that started again and measured differently.
-const measureOutputRestarted = measureOutputOf({ '30,30': 1.7, '230,30': 1.74, '230,225': 1.72, '30,225': 1.8 })
+const measureOutput = measureOutputOf({ '27.9,25.95': 1.8, '227.15,25.95': 1.74, '227.15,225.5': 1.72, '27.9,225.5': 1.7 })
+// (the screw centres the page measures at) The same text length with other numbers: the console of a CC2 Control that started again and measured differently.
+const measureOutputRestarted = measureOutputOf({ '27.9,25.95': 1.7, '227.15,25.95': 1.74, '227.15,225.5': 1.72, '27.9,225.5': 1.8 })
 
 // A stand-in for CC2 Control's console: the since rule of console_json_query ('new'), one that knows the parameter but
 // not the instance ('noinstance': the first build of it) or an older one that ignores it ('old').
@@ -112,6 +112,12 @@ try {
   const open = async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
     page.on('pageerror', e => errors.push(e.message))
+    // The alignment page measures with a basis: a typed bed temperature of 60 °C (what the page itself keeps).
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('cc2-level-base', JSON.stringify({ choice: 'custom', temp: '60' }))
+      } catch {}
+    })
     return page
   }
 
@@ -240,7 +246,7 @@ try {
     await page.route('**/api/control', route => {
       const action = route.request().postData()
       controls.push(action)
-      if (action === 'screws:measure') {
+      if (action?.includes('screws:measure')) {
         model.busy = true
         model.completed = false
         model.success = false
@@ -253,9 +259,9 @@ try {
     const card = page.locator('#screwFocus')
     await card.getByText('Measured results', { exact: true }).waitFor({ timeout: 10000 })
     const nudge = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) // look now, not in 20 s
-    await card.getByRole('button', { name: 'Measure the four screws', exact: true }).click()
+    await card.locator('[data-level-start-button="quick"]').click()
     await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
-    await wait(() => controls.includes('screws:measure'), 'the measurement is sent', 8000)
+    await wait(() => controls.some(a => a?.includes('screws:measure')), 'the measurement is sent', 8000)
     model.busy = false
     model.completed = true
     model.success = true
@@ -342,7 +348,7 @@ try {
     await page.route('**/api/control', route => {
       const action = route.request().postData()
       requests.control.push(action)
-      if (action === 'screws:measure') {
+      if (action?.includes('screws:measure')) {
         model.busy = true
         model.completed = false
         model.success = false
@@ -375,12 +381,13 @@ try {
       const gaps = inside.slice(1).map((s, i) => s - inside[i])
       assert.ok(gaps.every(g => g >= 79), `${name}: requests are at least 20 s apart: ${gaps}`) // 80 steps of 250 ms
     }
-    assert.equal(await card.getByText('No measurement', { exact: true }).count(), 1, 'nothing measured yet')
+    // The status tag and the summary of step 3 both say it.
+    assert.ok((await card.getByText('No measurement', { exact: true }).count()) >= 1, 'nothing measured yet')
 
     // Start a measurement: the page looks closely while it runs.
-    await card.getByRole('button', { name: 'Measure the four screws', exact: true }).click()
+    await card.locator('[data-level-start-button="quick"]').click()
     await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
-    await wait(() => requests.control.includes('screws:measure'), 'the measurement is sent', 8000)
+    await wait(() => requests.control.some(a => a?.includes('screws:measure')), 'the measurement is sent', 8000)
     const busyStart = step
     const consoleBefore = requests.console.length
     await tick(1000)

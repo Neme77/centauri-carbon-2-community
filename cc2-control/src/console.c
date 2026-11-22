@@ -98,6 +98,229 @@ static void finish(console_state *state, int success, const char *message) {
     pthread_mutex_unlock(&state->lock);
 }
 
+/* Append what was read to the visible output (a frame end becomes a line end) and collect the current frame, so the
+ * result of the line just sent is recognised: 1 result, 0 error result, -1 none yet. An error report (non-zero
+ * error_code; level 3 is a resume event, not a fault) is noted in `seen->fault` even when the request itself was
+ * acknowledged: a failed home or probe can be answered with a plain result. The frame being collected belongs to the
+ * connection, not to a line: a read can end in the middle of a report that follows an acknowledgement, and the rest of
+ * it arrives in the next read, while the next line is waited for or in the final read (staged_drain). */
+typedef struct { char frame[1024]; size_t used; } staged_frame;
+/* `faults` counts the error reports (`fault` only says that there was one): the cancel tail asks whether a new one came while
+ * one of its heater lines was waited for. */
+typedef struct { int saturated; int fault; int lost; int faults; } staged_seen;
+static int staged_error_report(const char *frame) {
+    const char *report = strstr(frame, "\"report\"");
+    const char *key = report ? strstr(report, "\"error_code\":") : NULL;
+    if (!key) return 0;
+    char *end = NULL;
+    double code = strtod(key + 13, &end);
+    if (end == key + 13 || code == 0) return 0;
+    const char *level_key = strstr(report, "\"error_level\":");
+    double level = 0;
+    if (level_key) { char *level_end = NULL; double v = strtod(level_key + 14, &level_end); if (level_end != level_key + 14) level = v; }
+    return code == 704 || level <= 2;
+}
+static int staged_feed(console_state *state, staged_frame *f, const char *buffer, size_t got, staged_seen *seen) {
+    int result = -1;
+    size_t start = 0;
+    for (size_t i = 0; i < got; ++i) {
+        if ((unsigned char)buffer[i] != 0x03) {
+            if (f->used + 1 < sizeof(f->frame)) f->frame[f->used++] = buffer[i];
+            continue;
+        }
+        if (i > start) seen->saturated |= append_output(state, buffer + start, i - start);
+        seen->saturated |= append_output(state, "\n", 1);
+        start = i + 1;
+        f->frame[f->used] = '\0';
+        if (staged_error_report(f->frame)) { seen->fault = 1; seen->faults++; }
+        if (result < 0 && strstr(f->frame, "\"id\":101")) result = strstr(f->frame, "\"error\"") ? 0 : 1;
+        f->used = 0;
+    }
+    if (start < got) seen->saturated |= append_output(state, buffer + start, got - start);
+    return result;
+}
+/* A frame that never ended (the connection closed, went quiet or ran out of time inside it): its text is in the output
+ * already, as received (staged_feed appends every read at once), so only the line end is added, and what follows begins
+ * on a line of its own. Returns 1 when there was one. */
+static int staged_flush_open(console_state *state, staged_frame *frame) {
+    if (!frame->used) return 0;
+    append_output(state, "\n", 1);
+    frame->used = 0;
+    return 1;
+}
+/* The result of a line came in a read that ended inside the next frame (a report that follows the acknowledgement): wait
+ * until that frame is whole before the next line is sent, so that an error report in it stops the job before more is
+ * sent. The rest of a frame that has begun is on its way; a quiet connection (750 ms) or the deadline ends the wait, and
+ * the frame stays in `frame` for the next read. A read error is noted in `seen->lost`. */
+static void staged_complete_frame(console_state *state, int fd, time_t deadline, staged_frame *frame, staged_seen *seen) {
+    while (frame->used && time(NULL) < deadline) {
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int ready = poll(&pfd, 1, 750);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready <= 0) return;
+        char buffer[4096];
+        ssize_t got = read(fd, buffer, sizeof(buffer));
+        if (got < 0) seen->lost = 1;
+        if (got <= 0) return;
+        staged_feed(state, frame, buffer, (size_t)got, seen);
+    }
+}
+/* Send one line and wait for its result: 1 done, 0 the printer answered with an error, -1 connection lost or time over. */
+static int staged_line(console_state *state, int fd, const char *line, time_t deadline, staged_frame *frame,
+                       staged_seen *seen) {
+    char escaped[CONSOLE_COMMAND_MAX * 2], request[CONSOLE_COMMAND_MAX * 2 + 128];
+    if (json_escape_string(escaped, sizeof(escaped), line) != 0) return -1;
+    int length = snprintf(request, sizeof(request),
+        "{\"id\":101,\"method\":\"gcode/script\",\"params\":{\"script\":\"%s\"}}\003", escaped);
+    if (length <= 0 || (size_t)length >= sizeof(request) || send_all_fd(fd, request, (size_t)length) != 0) return -1;
+    while (time(NULL) < deadline) {
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int ready = poll(&pfd, 1, 2000);
+        if (ready < 0) { if (errno == EINTR) continue; return -1; }
+        if (ready == 0) continue;
+        char buffer[4096];
+        ssize_t got = read(fd, buffer, sizeof(buffer));
+        if (got <= 0) return -1;
+        int result = staged_feed(state, frame, buffer, (size_t)got, seen);
+        if (result >= 0) {
+            staged_complete_frame(state, fd, deadline, frame, seen);
+            if (result == 1 && (seen->lost || frame->used)) return -1;
+            return result;
+        }
+    }
+    return -1;
+}
+/* The reports that trail the last result: read until the socket has been quiet for 750 ms. How the job ends is settled by
+ * what is left, not here (staged_run): a frame begun and never finished is a failure (the connection closed, went quiet
+ * or the deadline came inside it); a read error is a lost connection (`seen->lost`) even with no frame begun; a clean
+ * EOF or a quiet socket with nothing begun after the complete last result is the end of the job, a success. */
+static void staged_drain(console_state *state, int fd, time_t deadline, staged_frame *frame, staged_seen *seen) {
+    while (time(NULL) < deadline) {
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int ready = poll(&pfd, 1, 750);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready <= 0) return;
+        char buffer[4096];
+        ssize_t got = read(fd, buffer, sizeof(buffer));
+        if (got < 0) seen->lost = 1;
+        if (got <= 0) return;
+        staged_feed(state, frame, buffer, (size_t)got, seen);
+    }
+}
+/* Run `script` line by line: 1 done, 0 a printer error (the rest is not sent), 2 cancelled, -1 connection lost or time
+ * over. The cancel tail (`tail`) is not stopped by a cancel and runs on past an error; but an error of one of its heater
+ * lines (an error response, or a new error report with its acknowledgement) is not lost: `*heater_failed` is set, because
+ * that line has not switched its heater off or to its target (the caller must not take the heaters for switched off).
+ * `*heater_faults` is the count of error reports after the last heater line that was answered: a report that comes later
+ * (staged_run reads what trails the tail) belongs to it. */
+static int staged_heater_line(const char *line) {
+    static const char *const heaters[] = {"M104", "M109", "M140", "M190"};
+    for (size_t i = 0; i < sizeof(heaters) / sizeof(heaters[0]); ++i)
+        if (!strncmp(line, heaters[i], 4) && (line[4] == '\0' || line[4] == ' ')) return 1;
+    return 0;
+}
+/* A completed line that homes axes makes them known as homed for the rest of the job: G28 (all axes, or the named
+ * ones) and G180 S3 (the nozzle cleaning homes first). */
+static void staged_note_homing(const char *line, unsigned *homed) {
+    if (!strncmp(line, "G180", 4)) { *homed |= CONSOLE_AXES_ALL; return; }
+    if (strncmp(line, "G28", 3) || (line[3] && line[3] != ' ')) return;
+    unsigned bits = 0;
+    for (const char *p = line + 3; *p; ++p) {
+        if (*p == 'X' || *p == 'x') bits |= CONSOLE_AXES_X;
+        else if (*p == 'Y' || *p == 'y') bits |= CONSOLE_AXES_Y;
+        else if (*p == 'Z' || *p == 'z') bits |= CONSOLE_AXES_Z;
+    }
+    *homed |= bits ? bits : CONSOLE_AXES_ALL;
+}
+static int staged_lines(console_state *state, int fd, const char *script, time_t deadline, int tail, int *sent,
+                        staged_frame *frame, staged_seen *seen, unsigned *homed, int *heater_failed, int *heater_faults) {
+    const char *at = script;
+    while (*at) {
+        const char *end = strchr(at, '\n');
+        size_t n = end ? (size_t)(end - at) : strlen(at);
+        char line[CONSOLE_COMMAND_MAX];
+        if (n >= sizeof(line)) return -1;
+        memcpy(line, at, n); line[n] = '\0';
+        at += n + (end ? 1 : 0);
+        if (!n) continue;
+        const char *text = line;
+        if (tail && !strncmp(line, CONSOLE_TAIL_IF_HOMED, 3)) {
+            /* a move that needs referenced axes: not sent while they are not, nor after the printer reported an error (a
+             * homing line can be acknowledged and its failure reported a read later) */
+            if (*homed != CONSOLE_AXES_ALL || seen->fault) continue;
+            text = line + 3;
+        }
+        if (!tail && atomic_load(&state->cancel_requested)) return 2;
+        int faults_before = seen->faults;
+        int result = staged_line(state, fd, text, deadline, frame, seen);
+        if (sent) (*sent)++;
+        if (result < 0) return -1;
+        if (tail && heater_failed && staged_heater_line(text)) {
+            if (result == 0 || seen->faults != faults_before) *heater_failed = 1;
+            if (heater_faults) *heater_faults = seen->faults;
+        }
+        if (result == 1) staged_note_homing(text, homed);
+        if (!tail && (result == 0 || seen->fault)) return 0;
+    }
+    return 1;
+}
+static void staged_run(console_state *state, int fd, const char *command) {
+    char tail[CONSOLE_CANCEL_TAIL_MAX];
+    pthread_mutex_lock(&state->lock);
+    snprintf(tail, sizeof(tail), "%s", state->cancel_tail);
+    unsigned homed = state->staged_homed;
+    state->cancel_tail_failed = 0;
+    pthread_mutex_unlock(&state->lock);
+    append_output(state, "> ", 2);
+    append_output(state, command, strlen(command));
+    append_output(state, "\n", 1);
+    time_t deadline = time(NULL) + 900;
+    int sent = 0;
+    staged_seen seen = {0, 0, 0, 0};
+    staged_frame frame = {{0}, 0};
+    int result = staged_lines(state, fd, command, deadline, 0, &sent, &frame, &seen, &homed, NULL, NULL);
+    if (result == 2) {
+        append_output(state, "[CC2 Control: cancelled]\n", 25);
+        /* Nothing sent yet: nothing to undo. A tail the connection cut short never reached its heater lines: the job is
+         * marked (cancel_tail_failed), so that the heaters are not taken for switched off (control_screws_tick). A tail that
+         * was acknowledged to its last line has switched them off, whatever the final read meets. A heater line of the tail
+         * that the printer refused has not switched them off either: the rest of the tail still goes out, the job is marked. */
+        int tail_cut = 0, heater_failed = 0, heater_faults = -1;
+        if (sent) { result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &frame, &seen, &homed, &heater_failed, &heater_faults) < 0 ? -1 : 2; tail_cut = result < 0; }
+        if (result == 2) staged_drain(state, fd, time(NULL) + 10, &frame, &seen);
+        /* an error report that trails the tail, after its last heater line was acknowledged, belongs to that line */
+        if (result == 2 && heater_faults >= 0 && seen.faults != heater_faults) heater_failed = 1;
+        if (staged_flush_open(state, &frame) || seen.lost) result = -1;
+        close(fd);
+        pthread_mutex_lock(&state->lock);
+        state->cancelled = 1;
+        state->cancel_tail_failed = tail_cut || heater_failed;
+        pthread_mutex_unlock(&state->lock);
+        finish(state, 0, result < 0 ? "Console connection ended or command timed out\n" :
+                         heater_failed ? "[CC2 Control: a heater line of the cancel tail was refused; the heaters are not taken for switched off]\n" : NULL);
+        return;
+    }
+    if (result < 0) {
+        staged_flush_open(state, &frame);
+        close(fd);
+        /* a report read whole before the cut stays a printer error */
+        if (seen.fault) finish(state, 0, "[CC2 Control: the printer reported an error; the job was stopped]\n");
+        else finish(state, 0, "Console connection ended or command timed out\n");
+        return;
+    }
+    /* A printer error (an error response, or an error report even next to an acknowledged request) is a failure, not
+     * a measurement that completed: the error text is already in the output, the lines after it are not sent and no
+     * motion tail follows (whether the axes are homed and the printer allows a move is not known here; the heaters are
+     * switched off by the caller's deferred shutdown, control_screws_tick). Reports that trail the last result are read first,
+     * so a late error text is kept too. */
+    staged_drain(state, fd, deadline, &frame, &seen);
+    close(fd);
+    int open_frame = staged_flush_open(state, &frame);
+    if (result == 0 || seen.fault) { finish(state, 0, "[CC2 Control: the printer reported an error; the job was stopped]\n"); return; }
+    if (open_frame || seen.lost) { finish(state, 0, "Console connection ended or command timed out\n"); return; }
+    finish(state, 1, NULL);
+}
+
 static void *console_worker(void *opaque) {
     console_state *state = opaque;
     char command[CONSOLE_COMMAND_MAX], escaped[CONSOLE_COMMAND_MAX * 2];
@@ -128,6 +351,10 @@ static void *console_worker(void *opaque) {
     if (send_all_fd(fd, subscribe, sizeof(subscribe) - 1) != 0) {
         close(fd); finish(state, 0, "Cannot subscribe to console reports\n"); return NULL;
     }
+    pthread_mutex_lock(&state->lock);
+    int staged = state->staged;
+    pthread_mutex_unlock(&state->lock);
+    if (staged) { staged_run(state, fd, command); return NULL; }
     int length = snprintf(request, sizeof(request),
         "{\"id\":101,\"method\":\"gcode/script\",\"params\":{\"script\":\"%s\"}}\003", escaped);
     if (length <= 0 || (size_t)length >= sizeof(request) ||
@@ -204,6 +431,7 @@ static void console_make_instance(console_state *state) {
 void console_init(console_state *state, const char *socket_path) {
     memset(state, 0, sizeof(*state));
     atomic_init(&state->emergency_sent, 0);
+    atomic_init(&state->cancel_requested, 0);
     pthread_mutex_init(&state->lock, NULL);
     snprintf(state->socket_path, sizeof(state->socket_path), "%s", socket_path);
     console_make_instance(state);
@@ -499,15 +727,53 @@ failed:
 int console_start(console_state *state, const char *command, char *reason, size_t reason_cap) {
     pthread_t thread;
     pthread_mutex_lock(&state->lock);
-    if (state->busy) { pthread_mutex_unlock(&state->lock); snprintf(reason,reason_cap,"Another command is running"); return -1; }
+    if (state->busy) { state->staged_next=0; state->staged_homed_next=0; pthread_mutex_unlock(&state->lock); snprintf(reason,reason_cap,"Another command is running"); return -1; }
     snprintf(state->command, sizeof(state->command), "%s", command);
     state->output[0]='\0'; state->output_len=0; state->busy=1; state->completed=0; state->success=0; state->generation++;
+    state->staged=state->staged_next; state->staged_next=0; state->cancelled=0; state->cancel_tail_failed=0;
+    state->staged_homed=state->staged_homed_next; state->staged_homed_next=0;
+    snprintf(state->cancel_tail, sizeof(state->cancel_tail), "%s", state->cancel_tail_next);
+    atomic_store(&state->cancel_requested, 0);
     pthread_mutex_unlock(&state->lock);
     if (pthread_create(&thread, NULL, console_worker, state) != 0) {
         finish(state, 0, "Cannot start console worker\n"); return -1;
     }
     pthread_detach(thread);
     return 0;
+}
+
+void console_arm_staged(console_state *state, const char *cancel_tail, unsigned homed) {
+    pthread_mutex_lock(&state->lock);
+    state->staged_next = 1;
+    state->staged_homed_next = homed & CONSOLE_AXES_ALL;
+    snprintf(state->cancel_tail_next, sizeof(state->cancel_tail_next), "%s", cancel_tail ? cancel_tail : "");
+    pthread_mutex_unlock(&state->lock);
+}
+
+int console_cancel(console_state *state) {
+    pthread_mutex_lock(&state->lock);
+    int running = state->busy && state->staged;
+    if (running) atomic_store(&state->cancel_requested, 1);
+    pthread_mutex_unlock(&state->lock);
+    return running ? 0 : -1;
+}
+
+void console_take_snapshot(console_state *state, console_snapshot *snapshot) {
+    pthread_mutex_lock(&state->lock);
+    snapshot->busy = state->busy;
+    snapshot->completed = state->completed;
+    snapshot->success = state->success;
+    snapshot->cancelled = state->cancelled;
+    snapshot->cancel_tail_failed = state->cancel_tail_failed;
+    snapshot->generation = state->generation;
+    pthread_mutex_unlock(&state->lock);
+}
+
+int console_cancelled(console_state *state, unsigned long generation) {
+    pthread_mutex_lock(&state->lock);
+    int cancelled = state->cancelled && state->generation == generation;
+    pthread_mutex_unlock(&state->lock);
+    return cancelled;
 }
 
 /* Finds since=<generation>:<output_len> or since=<generation>:<output_len>:<instance> among the query parameters. Digits
@@ -566,17 +832,23 @@ void console_json_query(console_state *state, const char *query, char *out, size
         !strcmp(since_instance, state->instance)) {
         /* Within one instance of the service and one generation the stored output only grows, so the same instance,
          * generation and length mean the same text. The other fields still follow the state, so a finished command
-         * is not missed. */
-        snprintf(out, capacity, "{\"busy\":false,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"unchanged\":true,\"output_len\":%zu,\"instance\":\"%s\"}\n",
-            state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,state->output_len,state->instance);
+         * is not missed; the cancel state is carried in this short reply as well (nothing runs, so cancellable and
+         * cancelling are false). */
+        snprintf(out, capacity, "{\"busy\":false,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"cancellable\":false,\"cancelling\":false,\"cancelled\":%s,\"command\":\"%s\",\"unchanged\":true,\"output_len\":%zu,\"instance\":\"%s\"}\n",
+            state->completed?"true":"false",state->success?"true":"false",state->generation,state->cancelled?"true":"false",
+            escaped_command,state->output_len,state->instance);
         pthread_mutex_unlock(&state->lock);
         return;
     }
     if (json_escape_string(escaped, sizeof(escaped), state->output) != 0) snprintf(escaped,sizeof(escaped),"Output too large");
-    if (since) snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\",\"output_len\":%zu,\"instance\":\"%s\"}\n",
-        state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,escaped,state->output_len,state->instance);
-    else snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"command\":\"%s\",\"output\":\"%s\"}\n",
-        state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,escaped_command,escaped);
+    if (since) snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"cancellable\":%s,\"cancelling\":%s,\"cancelled\":%s,\"command\":\"%s\",\"output\":\"%s\",\"output_len\":%zu,\"instance\":\"%s\"}\n",
+        state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,
+        state->busy&&state->staged?"true":"false",state->busy&&atomic_load(&state->cancel_requested)?"true":"false",state->cancelled?"true":"false",
+        escaped_command,escaped,state->output_len,state->instance);
+    else snprintf(out, capacity, "{\"busy\":%s,\"completed\":%s,\"success\":%s,\"generation\":%lu,\"cancellable\":%s,\"cancelling\":%s,\"cancelled\":%s,\"command\":\"%s\",\"output\":\"%s\"}\n",
+        state->busy?"true":"false",state->completed?"true":"false",state->success?"true":"false",state->generation,
+        state->busy&&state->staged?"true":"false",state->busy&&atomic_load(&state->cancel_requested)?"true":"false",state->cancelled?"true":"false",
+        escaped_command,escaped);
     pthread_mutex_unlock(&state->lock);
 }
 

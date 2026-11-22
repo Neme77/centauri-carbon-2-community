@@ -7,10 +7,15 @@ const button = cva(
     variants: {
       variant: {
         default: 'border-edge bg-field hover:enabled:border-cyan hover:enabled:bg-field/70',
-        primary: 'border-cyan bg-cyan text-ink font-semibold shadow-glow hover:enabled:brightness-110',
+        // A main action that is locked looks locked: the dark, greyed-out face, not the accent colour at half strength.
+        primary:
+          'border-cyan bg-cyan text-ink font-semibold shadow-glow hover:enabled:brightness-110 disabled:border-edge disabled:bg-field disabled:text-muted disabled:opacity-70 disabled:shadow-none',
         danger: 'border-red/70 text-red bg-red/10 hover:enabled:bg-red/20',
         active: 'border-cyan text-cyan bg-cyan/10',
         ghost: 'border-transparent hover:enabled:bg-field',
+        // The way back from a status field at the top of the app, in the field's own colour.
+        accent: 'border-cyan text-cyan bg-cyan/10 hover:enabled:bg-cyan/20',
+        warning: 'border-amber text-amber bg-amber/10 hover:enabled:bg-amber/20',
       },
       wide: { true: 'w-full' },
     },
