@@ -424,7 +424,7 @@ try {
   }
   // Pushes the window against walls with the grip's arrow keys; the size handle then drags in both diagonal directions
   // (the window grows towards the free side, the anchor is the opposite side) until it has become larger.
-  const enlargeAt = async (label, p, keys, count, viewport) => {
+  const enlargeAt = async (label, p, keys, count, dir) => {
     const r = regionOf(p)
     const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
     await slider.focus(); await p.keyboard.press('Home')
@@ -433,14 +433,15 @@ try {
     const walls = await wallsOf(p)
     const start = await rect(r)
     insideScreen(start, walls, `${label} before`)
-    let grown = start
-    for (const sign of [-1, 1]) {
-      if (grown.width >= start.width + 80) break
-      const h = await rect(slider)
-      await dragFrom(p, [h.x + 6, h.y + 6], [sign * 150, sign * 84])
-      grown = await rect(r)
-      insideScreen(grown, walls, `${label} after the drag`)
-    }
+    // One natural direction per case (up and left where there is room there, down and right in the corner), and the
+    // handle follows the pointer along every axis that grows towards the pointer.
+    const h = await rect(slider)
+    const by = [dir[0] * 150, dir[1] * 84]
+    await dragFrom(p, [h.x + 6, h.y + 6], by)
+    const grown = await rect(r)
+    insideScreen(grown, walls, `${label} after the drag`)
+    if (dir[0] < 0 && start.x > walls.left + 100) near(grown.x, start.x - (grown.width - start.width), 2, `${label}: the right edge stays`)
+    if (dir[0] < 0 && keys.length === 1 && keys[0] === 'ArrowUp') near((await rect(slider)).x + 6, h.x + 6 + by[0], 3, `${label}: the handle follows the pointer`)
     assert.ok(grown.width >= start.width + 80, `${label}: the window can be enlarged by dragging (${start.width} -> ${grown.width})`)
     near(grown.height, Math.round(grown.width * 9 / 16) + 44, 2, `${label}: still 16:9`)
     await slider.focus(); await p.keyboard.press('End')
@@ -448,16 +449,16 @@ try {
     near(biggest.width, 640, 1, `${label}: End reaches the maximum`)
     insideScreen(biggest, walls, `${label} at the maximum`)
   }
-  for (const [label, keys, count] of [
-    ['L14a default place', [], 0],
-    ['L14b top edge', ['ArrowUp'], 40],
-    ['L14c left edge', ['ArrowLeft'], 40],
-    ['L14d top left corner', ['ArrowUp', 'ArrowLeft'], 40],
+  for (const [label, keys, count, dir] of [
+    ['L14a default place', [], 0, [-1, -1]],
+    ['L14b top edge', ['ArrowUp'], 40, [-1, -1]],
+    ['L14c left edge', ['ArrowLeft'], 40, [-1, -1]],
+    ['L14d top left corner', ['ArrowUp', 'ArrowLeft'], 40, [1, 1]],
   ]) {
     await soft(`${label}: the window can be enlarged and stays on screen`, async () => {
       const p = await fresh()
       await openMini(p)
-      await enlargeAt(label, p, keys, count)
+      await enlargeAt(label, p, keys, count, dir)
       await keepClosed(p)
     })
   }
@@ -491,6 +492,78 @@ try {
     assert.ok(grown.width >= corner.width + 40, `phone: enlarged by a finger at the top left (${corner.width} -> ${grown.width})`)
     await p.close(); await phoneCtx.close()
     await wait(() => clients === 0, 'closed')
+  })
+
+  await soft('L14f top edge: dragging the other way (down and right) does not make the window larger and does not run away', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    await slider.focus(); await p.keyboard.press('Home')
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+    for (let i = 0; i < 40; i++) await p.keyboard.press('Shift+ArrowUp')
+    const start = await rect(r)
+    const h = await rect(slider)
+    await dragFrom(p, [h.x + 6, h.y + 6], [100, 100])
+    const after = await rect(r)
+    near(after.width, start.width, 1, 'size unchanged')
+    near(after.x, start.x, 1, 'the window did not move')
+    await keepClosed(p)
+  })
+
+  await soft('L20 a low window: the largest size (key End) still fits on screen', async () => {
+    const lowCtx = await newContext({ width: 1280, height: 400 })
+    const p = await fresh(null, lowCtx)
+    await openMini(p)
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    await slider.focus(); await p.keyboard.press('End')
+    const walls = await wallsOf(p)
+    const b = await rect(r)
+    insideScreen(b, walls, 'End in a 400 px high window')
+    near(b.height, Math.round(b.width * 9 / 16) + 44, 2, 'still 16:9')
+    await p.reload() // a remembered size in a low window is cut as well
+    await openMini(p)
+    insideScreen(await rect(r), walls, 'after a reload')
+    await p.close(); await lowCtx.close()
+    await wait(() => clients === 0, 'closed')
+  })
+
+  await soft('L21 growing down and right stops at the screen edge (corner of a low window)', async () => {
+    const lowCtx = await newContext({ width: 1280, height: 330 })
+    const p = await fresh(null, lowCtx)
+    await openMini(p)
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    await slider.focus(); await p.keyboard.press('Home')
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+    for (const k of ['Shift+ArrowUp', 'Shift+ArrowLeft']) for (let i = 0; i < 40; i++) await p.keyboard.press(k)
+    const walls = await wallsOf(p)
+    const start = await rect(r)
+    const h = await rect(slider)
+    await dragFrom(p, [h.x + 6, h.y + 6], [500, 280], 8)
+    const after = await rect(r)
+    assert.ok(after.width > start.width + 20, `it grew (${start.width} -> ${after.width})`)
+    insideScreen(after, walls, 'after growing down and right')
+    near(after.x, start.x, 1, 'the left edge stayed'); near(after.y, start.y, 1, 'the top edge stayed')
+    await p.close(); await lowCtx.close()
+    await wait(() => clients === 0, 'closed')
+  })
+
+  await soft('L22 the keys grow towards the top left first: the window moves in from the left wall', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    await slider.focus(); await p.keyboard.press('Home')
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+    for (let i = 0; i < 40; i++) await p.keyboard.press('Shift+ArrowLeft')
+    for (let i = 0; i < 3; i++) await p.keyboard.press('ArrowRight') // 48 px away from the wall
+    const start = await rect(r)
+    await slider.focus(); await p.keyboard.press('End')
+    const after = await rect(r)
+    assert.ok(after.x < start.x - 1, `the window moved in towards the wall (${start.x} -> ${after.x})`)
+    await keepClosed(p)
   })
 
   await soft('L15 the pointer stops at the wall and keeps the right edge (size drag against the side menu)', async () => {

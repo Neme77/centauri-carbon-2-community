@@ -31,6 +31,14 @@ const between = (value: number, low: number, high: number) => Math.min(high, Mat
 
 const viewportSize = () => ({ w: document.documentElement.clientWidth, h: document.documentElement.clientHeight })
 
+// The window may not be taller than what is left below the header: the width is cut to fit (16:9 plus the bar), but never
+// below the smallest size.
+const fitHeight = (width: number, viewportWidth: number, viewportHeight: number, top: number) =>
+  Math.max(
+    miniWidthLimits(viewportWidth).min,
+    Math.min(width, Math.floor(((viewportHeight - top - MINI_MARGIN - MINI_BAR) * 16) / 9))
+  )
+
 // The area the window may occupy: right of the side rail and below the header, with a small margin.
 const area = (width: number, collapsed: boolean) => {
   const header = document.querySelector('.cc2-topbar')?.getBoundingClientRect().bottom ?? 0
@@ -62,10 +70,15 @@ export const MiniPlayer = () => {
     return () => removeEventListener('resize', resized)
   }, [])
 
-  const width = clampMiniWidth(state.w ?? miniDefaultWidth(viewport.w), viewport.w)
+  const bounds = area(viewport.w, collapsed)
+  const width = fitHeight(
+    clampMiniWidth(state.w ?? miniDefaultWidth(viewport.w), viewport.w),
+    viewport.w,
+    viewport.h,
+    bounds.top
+  )
   const height = miniHeight(width)
   const frameHeight = Math.round((width * 9) / 16)
-  const bounds = area(viewport.w, collapsed)
   const maxLeft = Math.max(bounds.left, viewport.w - width - MINI_MARGIN)
   const maxTop = Math.max(bounds.top, viewport.h - height - MINI_MARGIN)
   const left = between(state.x === null ? maxLeft - MINI_MARGIN : state.x * viewport.w, bounds.left, maxLeft)
@@ -95,11 +108,14 @@ export const MiniPlayer = () => {
   type Anchor = { right: number; bottom: number; left: number; top: number; fromRight: boolean; fromBottom: boolean }
   const resize = (nextWidth: number, anchor: Anchor, fit = false) => {
     const now = viewportSize()
-    let w = clampMiniWidth(nextWidth, now.w)
+    const b = area(now.w, menu.get().collapsed)
+    // Never taller than the screen shows (a low window), also for the keys.
+    let w = fitHeight(clampMiniWidth(nextWidth, now.w), now.w, now.h, b.top)
     if (fit) {
-      const b = area(now.w, menu.get().collapsed)
-      const across = anchor.fromRight ? anchor.right - b.left : now.w - MINI_MARGIN - anchor.left
-      const down = anchor.fromBottom ? anchor.bottom - b.top : now.h - MINI_MARGIN - anchor.top
+      // The side that grows towards the top or the left stops at the header or the side menu; the other side is already
+      // limited by the width limits and the height above.
+      const across = anchor.fromRight ? anchor.right - b.left : Number.POSITIVE_INFINITY
+      const down = anchor.fromBottom ? anchor.bottom - b.top : Number.POSITIVE_INFINITY
       const room = Math.min(across, ((down - MINI_BAR) * 16) / 9)
       w = Math.max(miniWidthLimits(now.w).min, Math.min(w, Math.floor(room)))
     }
@@ -184,9 +200,14 @@ export const MiniPlayer = () => {
   const cornerMove = (e: PointerEvent) => {
     const s = stretch.current
     if (!s || s.id !== e.pointerId) return
-    const dx = s.fromRight ? s.x - e.clientX : e.clientX - s.x
-    const dy = ((s.fromBottom ? s.y - e.clientY : e.clientY - s.y) * 16) / 9
-    resize(s.width + (Math.abs(dx) >= Math.abs(dy) ? dx : dy), s, true)
+    // The growth is the pointer's move along the axes where the handle follows it (towards the top or the left); where
+    // both of those sides are full, along both axes the other way. The larger growth wins, so a move in a free direction
+    // always grows and never shrinks the window, and the handle stays under the pointer.
+    const growth = []
+    if (s.fromRight) growth.push(s.x - e.clientX)
+    if (s.fromBottom) growth.push(((s.y - e.clientY) * 16) / 9)
+    if (growth.length === 0) growth.push(e.clientX - s.x, ((e.clientY - s.y) * 16) / 9)
+    resize(s.width + Math.max(...growth), s, true)
   }
   const cornerUp = (e: PointerEvent) => {
     if (stretch.current?.id !== e.pointerId) return
