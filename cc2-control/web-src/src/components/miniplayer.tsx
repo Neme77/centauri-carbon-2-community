@@ -5,6 +5,7 @@ import { Dot } from '@/components/ui/badge'
 import { CameraStream, type StreamControl } from '@/components/shared'
 import { i18n, t, tpl } from '@/lib/i18n'
 import {
+  MINI_BAR,
   MINI_MARGIN,
   MINI_ZOOM_STEPS,
   clampMiniWidth,
@@ -84,17 +85,31 @@ export const MiniPlayer = () => {
     const tp = between(nextTop, b.top, Math.max(b.top, now.h - miniHeight(nextWidth) - MINI_MARGIN))
     miniplayer.set({ x: l / now.w, y: tp / now.h })
   }
-  const resize = (nextWidth: number) => {
+  // The size handle is the top left corner, so the corner opposite to it (bottom right) stays where it is. The pointer
+  // also stops at what fits between that corner, the header and the side menu (`fit`); the keys have no such limit and
+  // move the window in instead, so they always reach the largest size.
+  const resize = (nextWidth: number, anchor: { right: number; bottom: number }, fit = false) => {
     const now = viewportSize()
-    const w = clampMiniWidth(nextWidth, now.w)
-    place(geometry.current.left, geometry.current.top, w) // a larger window moves in, so it never leaves the screen
+    let w = clampMiniWidth(nextWidth, now.w)
+    if (fit) {
+      const b = area(now.w, menu.get().collapsed)
+      const room = Math.min(anchor.right - b.left, ((anchor.bottom - b.top - MINI_BAR) * 16) / 9)
+      w = Math.max(miniWidthLimits(now.w).min, Math.min(w, Math.floor(room)))
+    }
+    place(anchor.right - w, anchor.bottom - miniHeight(w), w)
     miniplayer.set({ w })
   }
+  const currentAnchor = () => ({
+    right: geometry.current.left + geometry.current.width,
+    bottom: geometry.current.top + miniHeight(geometry.current.width),
+  })
 
-  // Position: the grip.
+  // Position: the whole bar and the frame strips at the edges (a press that starts on another button or on the size
+  // handle is theirs), and the grip button for the keys.
   const drag = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null)
   const gripDown = (e: PointerEvent) => {
     if (e.button !== 0) return
+    if ((e.target as Element).closest('button:not(.cc2-mini-grip), [role="slider"]')) return
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     drag.current = {
       id: e.pointerId,
@@ -128,19 +143,22 @@ export const MiniPlayer = () => {
     saveMiniplayer()
   }
 
-  // Size: the corner. The width follows the longer of the horizontal and the vertical move, the shape stays 16:9.
-  const stretch = useRef<{ id: number; x: number; y: number; width: number } | null>(null)
+  // Size: the corner at the top left. Moving it up or to the left makes the window larger. The width follows the longer
+  // of the horizontal and the vertical move, the shape stays 16:9.
+  const stretch = useRef<{ id: number; x: number; y: number; width: number; right: number; bottom: number } | null>(
+    null
+  )
   const cornerDown = (e: PointerEvent) => {
     if (e.button !== 0) return
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    stretch.current = { id: e.pointerId, x: e.clientX, y: e.clientY, width: geometry.current.width }
+    stretch.current = { id: e.pointerId, x: e.clientX, y: e.clientY, width: geometry.current.width, ...currentAnchor() }
   }
   const cornerMove = (e: PointerEvent) => {
     const s = stretch.current
     if (!s || s.id !== e.pointerId) return
-    const dx = e.clientX - s.x
-    const dy = ((e.clientY - s.y) * 16) / 9
-    resize(s.width + (Math.abs(dx) >= Math.abs(dy) ? dx : dy))
+    const dx = s.x - e.clientX
+    const dy = ((s.y - e.clientY) * 16) / 9
+    resize(s.width + (Math.abs(dx) >= Math.abs(dy) ? dx : dy), s, true)
   }
   const cornerUp = (e: PointerEvent) => {
     if (stretch.current?.id !== e.pointerId) return
@@ -162,7 +180,7 @@ export const MiniPlayer = () => {
               : null
     if (next === null) return
     e.preventDefault()
-    resize(next)
+    resize(next, currentAnchor())
     saveMiniplayer()
   }
 
@@ -316,48 +334,12 @@ export const MiniPlayer = () => {
   const layout = (frame: VNode, control: StreamControl) => (
     <>
       <div
-        ref={view}
-        role="application"
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: the picture takes the zoom keys (+ - 0, arrows) while it has the focus
-        tabIndex={0}
-        aria-label={tpl('common.miniplayer_view', { zoom: zoomText(zoom) })}
-        class="cc2-mini-video"
-        style={{ '--mz': zoom, '--mtx': `${panX}px`, '--mty': `${panY}px` }}
-        onPointerDown={viewDown}
-        onPointerMove={viewMove}
-        onPointerUp={viewUp}
-        onPointerCancel={viewUp}
-        onDragStart={e => e.preventDefault()} // dragging the picture pans it; the browser must not start dragging the image
-        onKeyDown={viewKey}
-        onDblClick={e => {
-          if (!(e.target as Element).closest('button, [role="slider"]')) resetZoom()
-        }}
+        class="cc2-mini-bar"
+        onPointerDown={gripDown}
+        onPointerMove={gripMove}
+        onPointerUp={gripUp}
+        onPointerCancel={gripUp}
       >
-        {frame}
-        <span class="sr-only" role="status">
-          {announcement(control)}
-        </span>
-        {control.ready && (
-          <span class="cc2-mini-badge cc2-mini-live">
-            <Dot /> {t('common.live')}
-          </span>
-        )}
-        {zoom > 1 && (
-          <span class="cc2-mini-badge cc2-mini-zoom" data-zoom>
-            {zoomText(zoom)}
-          </span>
-        )}
-        <button
-          type="button"
-          class="cc2-mini-close"
-          aria-label={t('common.miniplayer_close')}
-          title={t('common.miniplayer_close')}
-          onClick={closeByUser}
-        >
-          <span>
-            <X size={14} aria-hidden="true" />
-          </span>
-        </button>
         <div
           role="slider"
           tabIndex={0}
@@ -373,22 +355,16 @@ export const MiniPlayer = () => {
           onPointerCancel={cornerUp}
           onKeyDown={cornerKey}
         >
-          <svg viewBox="0 0 26 26" aria-hidden="true">
-            <path d="M22 8 8 22M22 15 15 22" />
+          <svg viewBox="0 0 22 22" aria-hidden="true">
+            <path d="M4 18 18 4M4 11 11 4" />
           </svg>
         </div>
-      </div>
-      <div class="cc2-mini-bar">
         <button
           type="button"
           class="cc2-mini-grip"
           aria-label={t('common.miniplayer_move')}
           title={t('common.miniplayer_move')}
           aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown"
-          onPointerDown={gripDown}
-          onPointerMove={gripMove}
-          onPointerUp={gripUp}
-          onPointerCancel={gripUp}
           onKeyDown={gripKey}
         >
           <GripVertical size={18} aria-hidden="true" />
@@ -439,7 +415,63 @@ export const MiniPlayer = () => {
             </button>
           )}
         </span>
+        <button
+          type="button"
+          class="cc2-mini-close"
+          aria-label={t('common.miniplayer_close')}
+          title={t('common.miniplayer_close')}
+          onClick={closeByUser}
+        >
+          <span>
+            <X size={14} aria-hidden="true" />
+          </span>
+        </button>
       </div>
+      <div
+        ref={view}
+        role="application"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: the picture takes the zoom keys (+ - 0, arrows) while it has the focus
+        tabIndex={0}
+        aria-label={tpl('common.miniplayer_view', { zoom: zoomText(zoom) })}
+        class="cc2-mini-video"
+        style={{ '--mz': zoom, '--mtx': `${panX}px`, '--mty': `${panY}px` }}
+        onPointerDown={viewDown}
+        onPointerMove={viewMove}
+        onPointerUp={viewUp}
+        onPointerCancel={viewUp}
+        onDragStart={e => e.preventDefault()} // dragging the picture pans it; the browser must not start dragging the image
+        onKeyDown={viewKey}
+        onDblClick={e => {
+          if (!(e.target as Element).closest('button, [role="slider"]')) resetZoom()
+        }}
+      >
+        {frame}
+        <span class="sr-only" role="status">
+          {announcement(control)}
+        </span>
+        {control.ready && (
+          <span class="cc2-mini-badge cc2-mini-live">
+            <Dot /> {t('common.live')}
+          </span>
+        )}
+        {zoom > 1 && (
+          <span class="cc2-mini-badge cc2-mini-zoom" data-zoom>
+            {zoomText(zoom)}
+          </span>
+        )}
+      </div>
+      {/* The frame: strips at the left, right and bottom edge that move the window like the bar does. */}
+      {(['l', 'r', 'b'] as const).map(edge => (
+        <span
+          key={edge}
+          aria-hidden="true"
+          class={`cc2-mini-edge cc2-mini-edge-${edge}`}
+          onPointerDown={gripDown}
+          onPointerMove={gripMove}
+          onPointerUp={gripUp}
+          onPointerCancel={gripUp}
+        />
+      ))}
     </>
   )
 

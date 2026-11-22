@@ -14,15 +14,19 @@ process.env.CC2_BACKEND = 'http://127.0.0.1:1'
 const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), mode: 'demo', server: { port: 0, host: '127.0.0.1' } })
 const jpeg = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDm6KKK+xPhD//Z', 'base64')
 let clients = 0, requests = 0, reject = false
+let peak = 0, overlapSince = 0, overlapMs = 0 // most streams open at once, and for how long there were two or more
+const resetPeak = () => { peak = clients; overlapMs = 0; overlapSince = clients > 1 ? Date.now() : 0 }
 const stream = httpServer((req, res) => {
   requests++
   if (reject) { res.writeHead(503); res.end(); return }
   clients++
+  peak = Math.max(peak, clients)
+  if (clients === 2) overlapSince = Date.now()
   res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-store' })
   const frame = () => { res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`); res.write(jpeg); res.write('\r\n') }
   frame()
   const timer = setInterval(frame, 100)
-  res.on('close', () => { clearInterval(timer); clients-- })
+  res.on('close', () => { clearInterval(timer); if (clients === 2 && overlapSince) overlapMs += Date.now() - overlapSince; clients-- })
 })
 let browser
 const wait = async (predicate, label) => {
@@ -98,6 +102,308 @@ try {
   })
   const draws = () => page.evaluate(() => ({ ...window.__draws }))
 
+  // 0. Layout and hand-over checks. Each one runs alone in its own page and reports "ok" or "RED" at once, so a missing
+  // change shows up as its own line (the numbered steps below stop at their first failure).
+  const softFailures = []
+  const soft = async (name, fn) => {
+    try { await fn(); console.log(`  ok   ${name}`) } catch (e) { softFailures.push(name); console.log(`  RED  ${name}: ${String(e.message).split('\n')[0].slice(0, 200)}`) }
+  }
+  const lc = await newContext({ width: 1440, height: 1000 })
+  const fresh = async (setup, ctx = lc) => {
+    const p = await ctx.newPage()
+    p.on('pageerror', e => errors.push(e.message))
+    if (setup) await p.addInitScript(setup)
+    await p.goto(`${origin}/#dashboard`)
+    return p
+  }
+  const regionOf = p => p.getByRole('region', { name: 'Mini player live camera', exact: true })
+  const openMini = async p => {
+    await p.getByRole('button', { name: 'Mini player', exact: true }).first().click()
+    await regionOf(p).waitFor()
+    await regionOf(p).locator('img').waitFor({ state: 'visible' })
+  }
+  const rect = async locator => locator.boundingBox()
+  const inside = (inner, outer, tolerance = 1) =>
+    inner.x >= outer.x - tolerance && inner.y >= outer.y - tolerance && inner.x + inner.width <= outer.x + outer.width + tolerance && inner.y + inner.height <= outer.y + outer.height + tolerance
+  const dragFrom = async (p, from, by, steps = 5) => {
+    await p.mouse.move(from[0], from[1])
+    await p.mouse.down()
+    await p.mouse.move(from[0] + by[0], from[1] + by[1], { steps })
+    await p.mouse.up()
+  }
+  const keepClosed = async p => { await p.close(); await wait(() => clients === 0, 'a closed page ends its stream') }
+
+  await soft('L1 the bar is on top, the size handle sits in the top left corner, every control is in the bar', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const win = await rect(r), bar = await rect(r.locator('.cc2-mini-bar')), frame = await rect(r.locator('.cc2-camera-frame'))
+    assert.ok(bar.y < frame.y, `bar (${bar.y}) must lie above the picture (${frame.y})`)
+    near(bar.y, win.y + 1, 2, 'the bar starts at the top of the window')
+    const handle = await rect(r.getByRole('slider', { name: 'Mini player size', exact: true }))
+    near(handle.x, win.x + 1, 2, 'size handle at the left edge'); near(handle.y, win.y + 1, 2, 'size handle at the top edge')
+    near(handle.width, 44, 1, 'size handle 44 px'); near(handle.height, 44, 1, 'size handle 44 px')
+    for (const [name, target] of [['Close', r.getByRole('button', { name: 'Close mini player', exact: true })], ['Pause', r.getByRole('button', { name: 'Pause', exact: true })], ['Zoom in', r.getByRole('button', { name: /^Zoom in/ })], ['Zoom out', r.getByRole('button', { name: /^Zoom out/ })], ['Grip', r.getByRole('button', { name: 'Move mini player', exact: true })]]) {
+      assert.ok(inside(await rect(target), bar), `${name} must be inside the bar`)
+    }
+    await keepClosed(p)
+  })
+
+  await soft('L2 resizing anchors the bottom right corner (mouse and keys)', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+    const start = await rect(r)
+    const h = await rect(slider)
+    await dragFrom(p, [h.x + 6, h.y + 6], [-120, -68])
+    const grown = await rect(r)
+    assert.ok(grown.width > start.width + 80, `dragging towards the top left grows it (${start.width} -> ${grown.width})`)
+    near(grown.x + grown.width, start.x + start.width, 2, 'right edge stays'); near(grown.y + grown.height, start.y + start.height, 2, 'bottom edge stays')
+    const h2 = await rect(slider)
+    await dragFrom(p, [h2.x + 6, h2.y + 6], [90, 51])
+    const shrunk = await rect(r)
+    assert.ok(shrunk.width < grown.width - 60, 'dragging towards the bottom right shrinks it')
+    near(shrunk.x + shrunk.width, start.x + start.width, 2, 'right edge stays when shrinking')
+    await slider.focus()
+    await p.keyboard.press('End')
+    const max = await rect(r)
+    near(max.width, 640, 1, 'End: maximum'); near(max.x + max.width, start.x + start.width, 2, 'End keeps the right edge'); near(max.y + max.height, start.y + start.height, 2, 'End keeps the bottom edge')
+    await keepClosed(p)
+  })
+
+  await soft('L3 the whole bar and the frame strips move the window; buttons do not', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    let before = await rect(r)
+    const name = await rect(r.locator('.cc2-mini-name'))
+    await dragFrom(p, [name.x + name.width / 2, name.y + name.height / 2], [-200, -100])
+    let after = await rect(r)
+    near(after.x, before.x - 200, 3, 'drag on the bar moves left'); near(after.y, before.y - 100, 3, 'drag on the bar moves up')
+    before = after
+    const pause = await rect(r.getByRole('button', { name: 'Pause', exact: true }))
+    await dragFrom(p, [pause.x + pause.width / 2, pause.y + pause.height / 2], [-120, -60])
+    after = await rect(r)
+    near(after.x, before.x, 1, 'a drag that starts on Pause does not move the window'); near(after.y, before.y, 1, 'a drag that starts on Pause does not move the window')
+    await wait(() => clients === 0 || clients === 1, 'settled')
+    for (const edge of ['l', 'r', 'b']) {
+      before = await rect(r)
+      const strip = await rect(r.locator(`.cc2-mini-edge-${edge}`))
+      await dragFrom(p, [strip.x + strip.width / 2, strip.y + strip.height / 2], [-40, 30])
+      after = await rect(r)
+      near(after.x, before.x - 40, 3, `drag on the ${edge} frame strip moves left`); near(after.y, before.y + 30, 3, `drag on the ${edge} frame strip moves down`)
+    }
+    await keepClosed(p)
+  })
+
+  await soft('L4 zoomed: dragging in the picture pans the picture, dragging the bar moves the window', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const scale = () => p.evaluate(() => { const m = new DOMMatrix(getComputedStyle(document.querySelector('.cc2-miniplayer img')).transform); return { s: m.a, x: m.e, y: m.f } })
+    await r.getByRole('button', { name: /^Zoom in/ }).click(); await r.getByRole('button', { name: /^Zoom in/ }).click()
+    const win = await rect(r), frame = await rect(r.locator('.cc2-camera-frame'))
+    await dragFrom(p, [frame.x + frame.width / 2, frame.y + frame.height / 2], [30, 20])
+    near((await scale()).x, 30, 2, 'the picture panned'); near((await rect(r)).x, win.x, 1, 'the window stayed')
+    const panned = await scale()
+    const name = await rect(r.locator('.cc2-mini-name'))
+    await dragFrom(p, [name.x + name.width / 2, name.y + name.height / 2], [-90, -40])
+    near((await rect(r)).x, win.x - 90, 3, 'the bar moved the window'); near((await scale()).x, panned.x, 0.5, 'the picture did not pan')
+    await keepClosed(p)
+  })
+
+  await soft('L5 the bar fits at every width; the close button is in the bar from 198 px, on the picture below', async () => {
+    const check = async (p, widths, keys) => {
+      const r = regionOf(p)
+      const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+      await slider.focus(); await p.keyboard.press('Home')
+      let width = Number(await slider.getAttribute('aria-valuenow'))
+      for (const target of widths) {
+        while (width < target) { await p.keyboard.press('ArrowRight'); width = Number(await slider.getAttribute('aria-valuenow')) }
+        const bad = await p.evaluate(() => {
+          const bar = document.querySelector('.cc2-mini-bar'), br = bar.getBoundingClientRect()
+          const win = document.querySelector('.cc2-miniplayer').getBoundingClientRect()
+          const items = [...bar.querySelectorAll('button, [role="slider"]')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')
+          const out = []
+          const rects = items.map(e => [e.getAttribute('aria-label') || e.className, e.getBoundingClientRect()])
+          const closeBar = document.querySelector('.cc2-mini-close').getBoundingClientRect()
+          for (const [n, q] of rects) {
+            if (n === 'Close mini player') continue
+            if (q.left < br.left - 0.5 || q.right > br.right + 0.5 || q.top < br.top - 0.5 || q.bottom > br.bottom + 0.5) out.push(`${n} outside the bar`)
+          }
+          for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+            const a = rects[i][1], b = rects[j][1]
+            if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) out.push(`${rects[i][0]} overlaps ${rects[j][0]}`)
+          }
+          if (bar.scrollWidth > bar.clientWidth + 0.5) out.push('the bar overflows')
+          const closeIn = closeBar.top >= br.top - 0.5 && closeBar.bottom <= br.bottom + 0.5
+          return { out, closeIn, winWidth: win.width, closeInside: closeBar.right <= win.right + 0.5 && closeBar.left >= win.left - 0.5 }
+        })
+        assert.deepEqual(bad.out, [], `width ${width}`)
+        assert.equal(bad.closeIn, width >= 198, `width ${width}: the close button ${bad.closeIn ? 'is' : 'is not'} in the bar`)
+        assert.equal(bad.closeInside, true, `width ${width}: the close button stays inside the window`)
+      }
+    }
+    const p = await fresh()
+    await openMini(p)
+    await check(p, [240, 256, 272, 288, 304, 336, 352, 640])
+    await keepClosed(p)
+    const phoneCtx = await newContext({ width: 393, height: 780 }, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 })
+    const pp = await fresh(null, phoneCtx)
+    await openMini(pp)
+    await check(pp, [160, 176, 192, 208, 224, 240, 256])
+    await pp.close(); await phoneCtx.close()
+    await wait(() => clients === 0, 'closed')
+  })
+
+  await soft('L6 the keyboard order follows the picture: size, grip, pause, zoom, close, image', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    await r.getByRole('slider', { name: 'Mini player size', exact: true }).focus()
+    const seen = []
+    for (let i = 0; i < 6; i++) {
+      seen.push(await p.evaluate(() => document.activeElement?.getAttribute('aria-label') || ''))
+      await p.keyboard.press('Tab')
+    }
+    const labels = seen.map(x => (/^Zoom out/.test(x) ? 'Zoom out' : /^Zoom in/.test(x) ? 'Zoom in' : /^Image section/.test(x) ? 'Image' : x))
+    assert.deepEqual(labels, ['Mini player size', 'Move mini player', 'Pause', 'Zoom out', 'Zoom in', 'Close mini player'])
+    assert.match(await p.evaluate(() => document.activeElement?.getAttribute('aria-label') || ''), /^Image section/, 'the picture comes after the bar')
+    await keepClosed(p)
+  })
+
+  await soft('L7 the job page offers Mini player while its camera is on, and hands the picture over', async () => {
+    const p = await fresh()
+    await p.goto(`${origin}/#job`)
+    const cam = p.getByRole('button', { name: 'Camera', exact: true })
+    await cam.waitFor()
+    assert.equal(await p.locator('.cc2-job-camera').count(), 0, 'no picture, no button before the camera is on')
+    await cam.click()
+    await p.locator('.cc2-job-camera img').waitFor({ state: 'visible' })
+    await wait(() => clients === 1, 'job camera streams')
+    const hand = p.locator('.cc2-job-camera').getByRole('button', { name: 'Mini player', exact: true })
+    await hand.waitFor({ state: 'visible', timeout: 3000 })
+    const hb = await rect(hand)
+    assert.ok(hb.width >= 43 && hb.height >= 43, `button at least 44 x 44 (${hb.width} x ${hb.height})`)
+    resetPeak()
+    await hand.click()
+    await regionOf(p).waitFor()
+    await wait(() => clients === 1, 'one stream after the hand-over')
+    assert.equal(await p.locator('.cc2-job-camera').count(), 0, 'the page picture is gone')
+    assert.equal(await cam.getAttribute('aria-pressed'), 'false', 'the Camera button is off')
+    await observe(500)
+    assert.equal(peak, 1, 'never two streams at once'); assert.equal(overlapMs, 0, 'no overlap')
+    await keepClosed(p)
+  })
+
+  await soft('L8 entering the job page with a remembered camera does not take the camera from an open mini player', async () => {
+    const p = await fresh()
+    await p.evaluate(() => localStorage.setItem('cc2-job-camera', '1'))
+    await openMini(p)
+    await wait(() => clients === 1, 'mini streams')
+    resetPeak()
+    const before = requests
+    await p.locator('.cc2-sidebar').getByRole('link', { name: 'Job', exact: true }).click()
+    await p.waitForFunction(() => location.hash === '#job')
+    await observe(2600)
+    assert.equal(await regionOf(p).count(), 1, 'the mini player stays open')
+    assert.equal(clients, 1, 'one stream'); assert.equal(requests, before, 'the page requested nothing'); assert.equal(peak, 1)
+    assert.equal(await p.locator('.cc2-job-camera').count(), 0, 'the job page did not start its picture')
+    assert.equal(await p.getByRole('button', { name: 'Camera', exact: true }).getAttribute('aria-pressed'), 'false')
+    await p.getByRole('button', { name: 'Camera', exact: true }).click() // a deliberate action: the page takes over
+    await wait(() => regionOf(p).count().then(n => n === 0), 'the deliberate Camera button closes the mini player')
+    await p.locator('.cc2-job-camera img').waitFor({ state: 'visible' })
+    await wait(() => clients === 1, 'the job page streams')
+    await keepClosed(p)
+  })
+
+  await soft('L9 same tab: starting a card or a page picture closes the mini player first (no overlap)', async () => {
+    const p = await fresh()
+    await openMini(p)
+    await wait(() => clients === 1, 'mini streams')
+    resetPeak()
+    await p.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await p.locator('.cc2-camera-card img').waitFor({ state: 'visible' })
+    await wait(() => clients === 1, 'the card streams')
+    await wait(() => regionOf(p).count().then(n => n === 0), 'the mini player closed')
+    await observe(600)
+    assert.equal(peak, 1, `never two streams at once (peak ${peak})`); assert.equal(overlapMs, 0, `no overlap (${overlapMs} ms)`)
+    await keepClosed(p)
+  })
+
+  await soft('L10 same browser, other tab: the old viewer ends before the new one starts', async () => {
+    const a = await fresh()
+    await openMini(a)
+    await wait(() => clients === 1, 'mini streams')
+    const b = await fresh()
+    resetPeak()
+    await b.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await b.locator('.cc2-camera-card img').waitFor({ state: 'visible' })
+    await wait(() => regionOf(a).count().then(n => n === 0), 'the mini player in the other tab closed')
+    await wait(() => clients === 1, 'one stream')
+    await observe(600)
+    assert.equal(peak, 1, `never two streams at once (peak ${peak})`); assert.equal(overlapMs, 0, `no overlap (${overlapMs} ms)`)
+    await a.close(); await keepClosed(b)
+  })
+
+  await soft('L11 without BroadcastChannel the hand-over still works in the same tab and nothing throws', async () => {
+    const p = await fresh(() => { Object.defineProperty(window, 'BroadcastChannel', { value: undefined, configurable: true }) })
+    await openMini(p)
+    await wait(() => clients === 1, 'mini streams')
+    resetPeak()
+    await p.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await p.locator('.cc2-camera-card img').waitFor({ state: 'visible' })
+    await wait(() => regionOf(p).count().then(n => n === 0), 'the mini player closed')
+    await observe(400)
+    assert.equal(peak, 1, `never two streams at once (peak ${peak})`)
+    await keepClosed(p)
+  })
+
+  await soft('L12 the Mini player button is a toggle: second press closes it and ends the stream', async () => {
+    const p = await fresh()
+    const button = p.getByRole('button', { name: 'Mini player', exact: true })
+    assert.equal(await button.getAttribute('aria-pressed'), 'false')
+    await button.click()
+    await regionOf(p).waitFor()
+    await wait(() => clients === 1, 'opened')
+    assert.equal(await button.getAttribute('aria-pressed'), 'true')
+    await button.click()
+    await wait(() => regionOf(p).count().then(n => n === 0), 'the second press closes the window')
+    await wait(() => clients === 0, 'no stream any more')
+    assert.equal(await button.getAttribute('aria-pressed'), 'false')
+    assert.equal(await p.evaluate(() => document.activeElement?.hasAttribute('data-miniplayer-open')), true, 'the focus stays on the button')
+    await p.getByRole('button', { name: 'Start live view', exact: true }).waitFor({ state: 'visible' })
+    await observe(2200)
+    assert.equal(clients, 0, 'nothing starts by itself afterwards')
+    // The card was streaming: open, close again: the card does not start again.
+    await p.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await p.locator('.cc2-camera-card img').waitFor({ state: 'visible' })
+    await button.click(); await regionOf(p).waitFor(); await wait(() => clients === 1, 'mini has the picture')
+    await button.click()
+    await wait(() => clients === 0, 'closed again, the card does not take the picture back')
+    await p.getByRole('button', { name: 'Start live view', exact: true }).waitFor({ state: 'visible' })
+    await keepClosed(p)
+  })
+
+  await soft('L13 another device (no shared storage): the overlap is bounded by one poll interval (documents the limit, also green before the change)', async () => {
+    const other = await newContext({ width: 1440, height: 1000 })
+    const a = await fresh()
+    await openMini(a)
+    await wait(() => clients === 1, 'mini streams')
+    const b = await fresh(null, other)
+    resetPeak()
+    await b.getByRole('button', { name: 'Start live view', exact: true }).click()
+    await b.locator('.cc2-camera-card img').waitFor({ state: 'visible' })
+    await wait(() => regionOf(a).count().then(n => n === 0), 'the mini player closed after the next poll')
+    await wait(() => clients === 1, 'one stream')
+    console.log(`       measured: overlap ${overlapMs} ms, at most ${peak} streams (other device)`)
+    assert.ok(overlapMs <= 3000, `overlap ${overlapMs} ms stays below 3 s`)
+    await a.close(); await keepClosed(b); await other.close()
+  })
+  await lc.close()
+  requests = 0 // the numbered steps below count requests from here
+
   // 1. The dashboard offers the mini player next to the two existing buttons; nothing streams yet.
   const open = page.getByRole('button', { name: 'Mini player', exact: true })
   await open.waitFor()
@@ -161,17 +467,20 @@ try {
   await page.keyboard.press('ArrowRight')
   b = await box(); near(b.width, 640, 1, 'never above 640 px')
   assert.ok(b.x >= 0 && b.x + b.width <= 1440 && b.y >= 0 && b.y + b.height <= 1000, 'the grown window stays on screen')
-  // Dragging the corner with the mouse.
+  // Dragging the corner (top left) with the mouse: the bottom right corner of the window stays where it is.
   await page.keyboard.press('Home')
   const corner = await size.boundingBox()
-  const cx = corner.x + corner.width - 6, cy = corner.y + corner.height - 6
+  const cx = corner.x + 6, cy = corner.y + 6
+  const anchor = await box()
   await page.mouse.move(cx, cy)
   await page.mouse.down()
-  await page.mouse.move(cx - 60, cy - 60, { steps: 4 })
-  await page.mouse.move(cx + 100, cy + 20, { steps: 4 })
+  await page.mouse.move(cx + 60, cy + 60, { steps: 4 })
+  await page.mouse.move(cx - 100, cy - 20, { steps: 4 })
   await page.mouse.up()
   const dragged = await box()
   assert.ok(dragged.width > 300 && dragged.width < 400, `the corner drag changes the width (got ${dragged.width})`)
+  near(dragged.x + dragged.width, anchor.x + anchor.width, 2, 'the corner drag keeps the right edge')
+  near(dragged.y + dragged.height, anchor.y + anchor.height, 2, 'the corner drag keeps the bottom edge')
   near(dragged.height, Math.round(dragged.width * 9 / 16) + 44, 2, 'a dragged size keeps 16:9')
   assert.equal(clients, 1, 'resizing is not a second stream')
   assert.equal(requests, unchanged, 'resizing must not reconnect')
@@ -355,7 +664,7 @@ try {
   const gripNow = await grip.boundingBox()
   await drawn('moving', () => drag([gripNow.x + gripNow.width / 2, gripNow.y + gripNow.height / 2], [-3, -2]), steps / 2)
   const cornerNow = await size.boundingBox()
-  await drawn('resizing', () => drag([cornerNow.x + cornerNow.width - 6, cornerNow.y + cornerNow.height - 6], [-1, -1]), steps / 2)
+  await drawn('resizing', () => drag([cornerNow.x + 6, cornerNow.y + 6], [-1, -1]), steps / 2)
   await zoomOut.click() // 1.5x -> 1x
 
   // 9. A hidden tab pauses the stream like the camera card does, and showing it again resumes it.
@@ -512,6 +821,7 @@ try {
   const phone = await phoneContext.newPage()
   phone.on('pageerror', e => errors.push(e.message))
   await phone.goto(`${origin}/#dashboard`)
+  await phone.addStyleTag({ content: '#cc2-preview-banner{display:none!important}' }) // the demo's own bar lies over the bottom of a phone screen; it is not part of the product
   await phone.getByRole('button', { name: 'Mini player', exact: true }).click()
   const pRegion = phone.getByRole('region', { name: 'Mini player live camera', exact: true })
   await pRegion.waitFor()
@@ -527,6 +837,13 @@ try {
   await phone.keyboard.press('Home')
   pb = await pRegion.boundingBox()
   near(pb.width, 160, 1, 'phone minimum')
+  // At the minimum there is no room for the grip (the whole bar moves the window) and the close button sits on the picture.
+  assert.equal(await pRegion.getByRole('button', { name: 'Move mini player', exact: true }).isVisible(), false, 'phone minimum: no grip button, the bar itself moves the window')
+  for (const [targetName, target] of [['size', pSize], ['close', pRegion.getByRole('button', { name: 'Close mini player', exact: true })], ['pause', pRegion.getByRole('button', { name: 'Pause', exact: true })]]) {
+    const hit = await hitArea(target)
+    assert.ok(hit.w >= 43 && hit.h >= 43, `phone minimum: ${targetName} touch target ${hit.w} x ${hit.h} must be at least 44 x 44`)
+  }
+  await phone.keyboard.press('End') // room for the grip again
   // Targets for fingers are at least 44 x 44 px.
   for (const target of [pRegion.getByRole('button', { name: 'Move mini player', exact: true }), pSize, pRegion.getByRole('button', { name: 'Close mini player', exact: true }), pRegion.getByRole('button', { name: 'Pause', exact: true })]) {
     const hit = await target.evaluate(el => {
@@ -539,10 +856,12 @@ try {
     assert.ok(hit.w >= 44 && hit.h >= 44, `touch target ${JSON.stringify(hit)} must be at least 44 x 44`)
   }
   // At the smallest width (160 px) the bar has room for 32 px per zoom button side by side: full height, narrower.
+  await phone.keyboard.press('Home')
   for (const name of [/^Zoom in/, /^Zoom out/]) {
     const hit = await hitArea(pRegion.getByRole('button', { name }))
     assert.ok(hit.h >= 43 && hit.w >= 31, `phone minimum: a zoom button reacts on ${hit.w} x ${hit.h} px`)
   }
+  await phone.keyboard.press('End')
   // Move with a finger on the grip.
   const cdp = await phoneContext.newCDPSession(phone)
   const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((p, id) => ({ x: p[0], y: p[1], id })) })
@@ -583,6 +902,7 @@ try {
   assert.equal(covered, true, 'the open menu is above the mini player')
   await phoneContext.close()
 
+  assert.deepEqual(softFailures, [], 'layout and hand-over checks failed')
   assert.deepEqual(errors, [])
   console.log('PASS: mini player opens one stream, stays across pages, resizes 240-640 px (160-369 on a phone) in 16:9, moves with mouse, keys and finger, remembers size and position, zooms 1-2x with buttons, keys, wheel, drag and two fingers, pauses in a hidden tab, closes alone when another viewer takes the camera')
 } finally {
