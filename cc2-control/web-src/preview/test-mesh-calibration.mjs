@@ -187,7 +187,7 @@ try {
   await confirming.click()
   for (const stage of ['heating', 'soaking', 'probing', 'saving']) {
     await step()
-    await page.locator(`[data-calibration="${stage}"]`).waitFor()
+    await page.locator(`[data-calibration-bar="${stage}"]`).waitFor()
   }
   await page.evaluate(() => { location.hash = '#bed/plates' })
   saved = finished()
@@ -212,7 +212,7 @@ try {
   await early
   for (const stage of ['heating', 'soaking', 'probing', 'saving']) {
     await step()
-    await page.locator(`[data-calibration="${stage}"]`).waitFor()
+    await page.locator(`[data-calibration-bar="${stage}"]`).waitFor()
   }
   saved = finished()
   await step()
@@ -225,12 +225,12 @@ try {
   await profile.selectOption('active')
   await run.click()
   await confirming.click()
-  await page.locator('[data-calibration="homing"]').waitFor()
+  await page.locator('[data-calibration-bar="homing"]').waitFor()
   await profile.selectOption('measure:aa00000000000060')
   await profile.selectOption('active')
   for (const stage of ['heating', 'soaking', 'probing', 'saving']) {
     await step()
-    await page.locator(`[data-calibration="${stage}"]`).waitFor()
+    await page.locator(`[data-calibration-bar="${stage}"]`).waitFor()
   }
   saved = finished()
   await step()
@@ -281,10 +281,10 @@ try {
     })
     location.hash = '#bed'
   })
-  await page.locator('[data-calibration="homing"]').waitFor()
+  await page.locator('[data-calibration-bar="homing"]').waitFor()
   for (const stage of ['heating', 'soaking', 'probing', 'saving']) {
     await step()
-    await page.locator(`[data-calibration="${stage}"]`).waitFor()
+    await page.locator(`[data-calibration-bar="${stage}"]`).waitFor()
   }
   saved = finished()
   await step()
@@ -317,14 +317,14 @@ try {
   if (!heldBoth) throw new Error(`held ${delayed.length} plate reads before the run`)
   await run.click()
   await confirming.click()
-  await page.locator('[data-calibration="homing"]').waitFor()
+  await page.locator('[data-calibration-bar="homing"]').waitFor()
   for (const route of delayed) await route.fulfill({ status: 200, contentType: 'application/json', body: previous })
   await page.waitForTimeout(300)
-  await page.locator('[data-calibration="homing"]').waitFor()
+  await page.locator('[data-calibration-bar="homing"]').waitFor()
   assert.equal(await profile.inputValue(), 'active', 'two late saves do not open the previous mesh')
   for (const stage of ['heating', 'soaking', 'probing', 'saving']) {
     await step()
-    await page.locator(`[data-calibration="${stage}"]`).waitFor()
+    await page.locator(`[data-calibration-bar="${stage}"]`).waitFor()
   }
   saved = finished()
   await step()
@@ -413,6 +413,7 @@ try {
   await page.route('**/api/plates', async route => {
     if (route.request().method() !== 'GET') return route.fallback()
     if (plateMode === 'hold') return void queued.push(route)
+    if (plateMode === 'offline') return route.abort()
     if (plateMode === 'foreign')
       return route.fulfill({ status: 200, contentType: 'application/json', body: earlierSave })
     return route.fallback()
@@ -467,11 +468,11 @@ try {
   })
   await temperature.fill('80')
 
-  // The server can start the run even if the browser loses its acknowledgement. The run ID also
-  // arrives in the saved result, so missing every active stage must not lose the comparison.
+  // Lose the start acknowledgement and library reads, then retry while the first run is still active.
+  // The server rejects the retry and the first run's saved result is the first state the page sees.
   await profile.selectOption('active')
   await temperature.fill('60')
-  plateMode = 'hold'
+  plateMode = 'offline'
   await page.route('**/api/plates/calibrate', async route => {
     const accepted = await route.fetch()
     assert.equal(accepted.status(), 202)
@@ -483,6 +484,15 @@ try {
   const lost = await lostStart
   const runId = lost.headers()['x-cc2-calibration-run']
   assert.match(runId, /^[0-9a-f]{16}$/)
+  await run.click()
+  const retryResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/api/plates/calibrate')
+  await confirming.click()
+  const retry = await retryResponse
+  assert.equal(retry.status(), 409, 'the printer rejects a second start while the first run is active')
+  assert.notEqual(retry.request().headers()['x-cc2-calibration-run'], runId)
+  await toast('Rejected: A bed mesh calibration is already running')
+  assert.equal(await progress.count(), 0, 'no active stage reached the browser')
+  assert.equal(await profile.inputValue(), 'active')
   await page.evaluate(() => { location.hash = '#dashboard' })
   await profile.waitFor({ state: 'detached' })
   for (let i = 0; i < 5; i++) await step()
@@ -493,7 +503,7 @@ try {
   for (const route of queued.splice(0)) await route.fallback()
   await page.evaluate(() => { location.hash = '#bed' })
   await page.locator('[data-mesh-diff="on"]').waitFor()
-  assert.equal(await profile.inputValue(), 'measure:aa00000000000060', 'a lost start response still opens its own result')
+  assert.equal(await profile.inputValue(), 'measure:aa00000000000060', 'a rejected retry preserves the first run’s comparison')
   await temperature.fill('80')
 
   // Homed, no plate, no soak: the confirmation says less; stopping while heating switches the bed off.
@@ -522,10 +532,10 @@ try {
   const finishUnsaved = async () => {
     await run.click()
     await confirming.click()
-    await page.locator('[data-calibration="homing"]').waitFor()
+    await page.locator('[data-calibration-bar="homing"]').waitFor()
     for (const stage of ['heating', 'soaking', 'probing']) {
       await step()
-      await page.locator(`[data-calibration="${stage}"]`).waitFor()
+      await page.locator(`[data-calibration-bar="${stage}"]`).waitFor()
     }
     await step()
     await progress.waitFor({ state: 'detached' })
@@ -539,10 +549,10 @@ try {
   }
   await run.click()
   await confirming.click()
-  await page.locator('[data-calibration="homing"]').waitFor()
+  await page.locator('[data-calibration-bar="homing"]').waitFor()
   for (const stage of ['heating', 'soaking', 'probing']) {
     await step()
-    await page.locator(`[data-calibration="${stage}"]`).waitFor()
+    await page.locator(`[data-calibration-bar="${stage}"]`).waitFor()
   }
   page.on('request', countPlates)
   await step()
