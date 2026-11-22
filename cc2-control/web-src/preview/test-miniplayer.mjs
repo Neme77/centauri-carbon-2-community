@@ -107,7 +107,9 @@ try {
   // An empty spot of the bar (between pause and the zoom buttons), where a press moves the window.
   const barGap = async r => {
     const pause = await r.getByRole('button', { name: 'Pause', exact: true }).boundingBox()
-    const zoomOut = await r.getByRole('button', { name: /^Zoom out/ }).boundingBox()
+    const zoomLocator = r.getByRole('button', { name: /^Zoom out/ })
+    if (!(await zoomLocator.isVisible())) return [pause.x + pause.width + 10, pause.y + pause.height / 2] // small window: the zoom buttons give way
+    const zoomOut = await zoomLocator.boundingBox()
     const x = (pause.x + pause.width + zoomOut.x) / 2
     assert.ok(zoomOut.x - (pause.x + pause.width) > 8, 'the bar has an empty spot to press')
     return [x, pause.y + pause.height / 2]
@@ -732,6 +734,108 @@ try {
     await lockedAt('360x260', { width: 360, height: 260 }, [[5, 5], [150, 5], [200, 100]])
   })
 
+  await soft('L35 a release that the page never saw: a move without a pressed button ends the drag (picture, window, size handle)', async () => {
+    const p = await fresh()
+    await openMini(p)
+    const r = regionOf(p)
+    const scale = () => p.evaluate(() => { const m = new DOMMatrix(getComputedStyle(document.querySelector('.cc2-miniplayer img')).transform); return { x: m.e, y: m.f } })
+    // A move that reports no pressed button (the browser lost the release: outside the window, another app, focus change).
+    const strayMove = (selector, x, y) => p.evaluate(([sel, cx, cy]) => document.querySelector(sel).dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, pointerType: 'mouse', buttons: 0, clientX: cx, clientY: cy, bubbles: true })), [selector, x, y])
+    await r.getByRole('button', { name: /^Zoom in/ }).click(); await r.getByRole('button', { name: /^Zoom in/ }).click()
+    const frame = await rect(r.locator('.cc2-camera-frame'))
+    const c = [frame.x + frame.width / 2, frame.y + frame.height / 2]
+    await p.mouse.move(c[0], c[1]); await p.mouse.down(); await p.mouse.move(c[0] + 10, c[1] + 10, { steps: 2 })
+    const during = await scale()
+    await strayMove('.cc2-mini-video', c[0] + 120, c[1] + 80)
+    near((await scale()).x, during.x, 0.5, 'picture: a move without a pressed button does not pan'); 
+    await p.mouse.up()
+    const gap = await barGap(r)
+    await p.mouse.move(gap[0], gap[1]); await p.mouse.down(); await p.mouse.move(gap[0] - 20, gap[1] - 10, { steps: 2 })
+    const w1 = await rect(r)
+    await strayMove('.cc2-mini-bar', gap[0] - 200, gap[1] - 100)
+    near((await rect(r)).x, w1.x, 1, 'window: a move without a pressed button does not move it')
+    await p.mouse.up()
+    const h = await rect(r.getByRole('slider', { name: 'Mini player size', exact: true }))
+    await p.mouse.move(h.x + 6, h.y + 6); await p.mouse.down(); await p.mouse.move(h.x - 10, h.y - 10, { steps: 2 })
+    const w2 = await rect(r)
+    await strayMove('.cc2-mini-size', h.x - 200, h.y - 120)
+    near((await rect(r)).width, w2.width, 1, 'size handle: a move without a pressed button does not resize')
+    await p.mouse.up()
+    await keepClosed(p)
+  })
+
+  await soft('L36 the move surface always stays: at the smallest sizes (desktop 240, phone 160-240, 320 and 393 px wide) the grip is there and moves the window', async () => {
+    const check = async (label, size, ctxOpts, widths) => {
+      const ctx = await newContext(size, ctxOpts)
+      const p = await fresh(null, ctx)
+      await p.addStyleTag({ content: '#cc2-preview-banner{display:none!important}' })
+      await openMini(p)
+      const r = regionOf(p)
+      const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
+      await slider.focus(); await p.keyboard.press('Home')
+      let width = Number(await slider.getAttribute('aria-valuenow'))
+      for (const target of widths) {
+        while (width < target) { await p.keyboard.press('ArrowRight'); width = Number(await slider.getAttribute('aria-valuenow')) }
+        const grip = r.getByRole('button', { name: 'Move mini player', exact: true })
+        assert.equal(await grip.isVisible(), true, `${label} ${width} px: the grip is visible`)
+        const g = await rect(grip)
+        assert.ok(g.width >= 39 && g.height >= 43, `${label} ${width} px: the grip is big enough to grab (${g.width} x ${g.height})`)
+        const before = await rect(r)
+        await dragFrom(p, [g.x + g.width / 2, g.y + g.height / 2], [-40, -60], 5)
+        const after = await rect(r)
+        assert.ok(Math.abs(after.x - before.x) > 20 || Math.abs(after.y - before.y) > 20, `${label} ${width} px: dragging the grip moves the window`)
+        await slider.focus()
+      }
+      await p.close(); await ctx.close()
+      await wait(() => clients === 0, 'closed')
+    }
+    await check('desktop', { width: 1440, height: 1000 }, {}, [240])
+    await check('phone 393', { width: 393, height: 780 }, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 }, [160, 176, 192, 208, 224, 240])
+    await check('phone 320', { width: 320, height: 640 }, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 }, [160, 192, 224, 240])
+  })
+
+  await soft('L37 letting go of the stream is asked for explicitly (empty picture first) on pause, close, hidden tab and page leave; never more than one picture per view', async () => {
+    const p = await fresh(() => {
+      window.__imgSrc = []
+      const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src')
+      Object.defineProperty(HTMLImageElement.prototype, 'src', { ...d, set(v) { window.__imgSrc.push(String(v).slice(0, 11)); d.set.call(this, v) } })
+    })
+    const blanks = () => p.evaluate(() => window.__imgSrc.filter(v => v.startsWith('data:image')).length)
+    const reset = () => p.evaluate(() => { window.__imgSrc = [] })
+    const pictures = () => p.evaluate(() => document.querySelectorAll('.cc2-camera-frame img').length)
+    await openMini(p)
+    await wait(() => clients === 1, 'streams')
+    await reset()
+    await regionOf(p).getByRole('button', { name: 'Pause', exact: true }).click()
+    await wait(() => clients === 0, 'paused')
+    assert.ok(await blanks() >= 1, 'pause: the old picture is replaced by an empty one before it goes')
+    await regionOf(p).getByRole('button', { name: 'Start live view', exact: true }).click()
+    await wait(() => clients === 1, 'plays again')
+    await reset()
+    await p.evaluate(() => window.dispatchEvent(new Event('pagehide')))
+    await wait(() => clients === 0, 'page leave ends it')
+    assert.ok(await blanks() >= 1, 'page leave: asked explicitly')
+    await regionOf(p).getByRole('button', { name: 'Start live view', exact: true }).click()
+    await wait(() => clients === 1, 'plays again')
+    await reset()
+    await regionOf(p).getByRole('button', { name: 'Close mini player', exact: true }).click()
+    await wait(() => clients === 0, 'closed')
+    assert.ok(await blanks() >= 1, 'close: asked explicitly')
+    // Quick switching between the card, the mini player and pause: one stream at most, one picture per view at most.
+    let most = 0
+    resetPeak()
+    for (let i = 0; i < 6; i++) {
+      await p.getByRole('button', { name: 'Mini player', exact: true }).click()
+      most = Math.max(most, await pictures())
+      await p.getByRole('button', { name: 'Start live view', exact: true }).click({ timeout: 1500 }).catch(() => {})
+      most = Math.max(most, await pictures())
+    }
+    await observe(800)
+    assert.ok(most <= 1, `at most one picture at a time (${most})`)
+    assert.equal(peak, 1, `never two streams at once (peak ${peak})`)
+    await keepClosed(p)
+  })
+
   await soft('L15 the pointer stops at the wall and keeps the right edge (size drag against the side menu)', async () => {
     const p = await fresh()
     await openMini(p)
@@ -1246,8 +1350,8 @@ try {
   await phone.keyboard.press('Home')
   pb = await pRegion.boundingBox()
   near(pb.width, 160, 1, 'phone minimum')
-  // At the minimum there is no room for the grip (the whole bar moves the window) and the close button sits on the picture.
-  assert.equal(await pRegion.getByRole('button', { name: 'Move mini player', exact: true }).isVisible(), false, 'phone minimum: no grip button, the bar itself moves the window')
+  // At the minimum the grip stays (the window must always be movable) and the zoom buttons give way (two fingers and a double tap zoom); the close button sits on the picture.
+  assert.equal(await pRegion.getByRole('button', { name: 'Move mini player', exact: true }).isVisible(), true, 'phone minimum: the grip button stays')
   for (const [targetName, target] of [['size', pSize], ['close', pRegion.getByRole('button', { name: 'Close mini player', exact: true })], ['pause', pRegion.getByRole('button', { name: 'Pause', exact: true })]]) {
     const hit = await hitArea(target)
     assert.ok(hit.w >= 43 && hit.h >= 43, `phone minimum: ${targetName} touch target ${hit.w} x ${hit.h} must be at least 44 x 44`)
@@ -1266,10 +1370,7 @@ try {
   }
   // At the smallest width (160 px) the bar has room for 32 px per zoom button side by side: full height, narrower.
   await phone.keyboard.press('Home')
-  for (const name of [/^Zoom in/, /^Zoom out/]) {
-    const hit = await hitArea(pRegion.getByRole('button', { name }))
-    assert.ok(hit.h >= 43 && hit.w >= 31, `phone minimum: a zoom button reacts on ${hit.w} x ${hit.h} px`)
-  }
+  assert.equal(await pRegion.getByRole('button', { name: /^Zoom in/ }).isVisible(), false, 'phone minimum: the zoom buttons give way to the grip')
   await phone.keyboard.press('End')
   // Move with a finger on the grip.
   const cdp = await phoneContext.newCDPSession(phone)

@@ -231,6 +231,7 @@ export const Muted = ({ children, class: c }: { children: ComponentChildren; cla
 // Live view runs on one CC2 Control page at a time: starting it claims the camera, and a page that sees
 // another viewer in /api/printer stops its own stream and offers to take it back, instead of retrying.
 const CAMERA_RETRY_MS = [2500, 5000, 10000, 20000, 30000]
+const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
 const viewerId = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')
 
@@ -434,9 +435,15 @@ export const CameraStream = ({
     if (retry.current !== undefined) clearTimeout(retry.current)
     retry.current = undefined
   }
+  // Letting go of a stream must end the request, not only hide it: removing the attribute is enough in Chromium, but a
+  // phone's browser and the WebKit view of ElegooSlicer can keep the old multipart connection open (the camera service
+  // allows only four), so the picture is first replaced by an empty one, which makes the browser drop the request.
   const release = () => {
     activeSrc.current = ''
-    img.current?.removeAttribute('src')
+    const element = img.current
+    if (!element) return
+    element.src = BLANK_IMAGE
+    element.removeAttribute('src')
   }
   const stop = (why: Key | '' = '') => {
     clearInterval(beat.current)

@@ -943,6 +943,6 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
    are 44 px each, zoom - + 64 px (+ 34 px readout, + 44 px reset). */
 @container cc2-mini (max-width: 337px) { .cc2-mini-reset-slot { display: none; } }
 @container cc2-mini (max-width: 277px) { .cc2-mini-zoomlabel { display: none; } .cc2-mini-grip { width: 40px; } .cc2-mini-zoombutton::before { inset: -6px 0; } }
-@container cc2-mini (max-width: 237px) { .cc2-mini-grip { display: none; } }
+@container cc2-mini (max-width: 237px) { .cc2-mini-zoombar { display: none; } }
 /* The smallest phone windows (below 198 px): no room for the close button in the bar, it sits on the picture. */
 @container cc2-mini (max-width: 195px) { .cc2-mini-close { position: absolute; z-index: 3; right: 0; top: 44px; } }

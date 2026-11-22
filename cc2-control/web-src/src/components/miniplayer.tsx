@@ -37,6 +37,10 @@ const fitHeight = (width: number, viewportWidth: number, viewportHeight: number,
 // menu (a phone's menu drawer, dialogs and notices stay above it), so it can be put anywhere, like a picture-in-picture.
 const area = () => ({ left: MINI_MARGIN, top: MINI_MARGIN })
 
+// A mouse move that reports no pressed button: the release happened where the page could not see it (outside the browser
+// window, in another app, a focus change). Such a move ends a drag instead of following the pointer.
+const buttonLost = (e: PointerEvent) => e.pointerType === 'mouse' && e.buttons === 0
+
 // The emergency stop (and on a phone the menu button) in the header is a locked area: the window may be put anywhere else,
 // but it slides around these buttons instead of covering them. Of the four ways out (left, right, above, below) the
 // shortest one that stays in the browser window is taken.
@@ -213,6 +217,7 @@ export const MiniPlayer = () => {
   }
   const gripMove = (e: PointerEvent) => {
     const d = drag.current
+    if (d && d.id === e.pointerId && buttonLost(e)) return gripUp(e)
     if (d && d.id === e.pointerId) place(d.left + e.clientX - d.x, d.top + e.clientY - d.y)
   }
   const gripUp = (e: PointerEvent) => {
@@ -244,6 +249,7 @@ export const MiniPlayer = () => {
   const cornerMove = (e: PointerEvent) => {
     const s = stretch.current
     if (!s || s.id !== e.pointerId) return
+    if (buttonLost(e)) return cornerUp(e)
     // The growth is the pointer's move along the axes where the handle follows it (towards the top or the left); where
     // both of those sides are full, along both axes the other way. The larger growth wins, so a move in a free direction
     // always grows and never shrinks the window, and the handle stays under the pointer.
@@ -334,6 +340,7 @@ export const MiniPlayer = () => {
   }
   const viewMove = (e: PointerEvent) => {
     if (!pointers.current.has(e.pointerId)) return
+    if (buttonLost(e)) return viewUp(e)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     const g = gesture.current
     const list = [...pointers.current.values()]
@@ -425,6 +432,7 @@ export const MiniPlayer = () => {
         onPointerMove={gripMove}
         onPointerUp={gripUp}
         onPointerCancel={gripUp}
+        onLostPointerCapture={gripUp}
       >
         <div
           role="slider"
@@ -439,6 +447,7 @@ export const MiniPlayer = () => {
           onPointerMove={cornerMove}
           onPointerUp={cornerUp}
           onPointerCancel={cornerUp}
+          onLostPointerCapture={cornerUp}
           onKeyDown={cornerKey}
         >
           <svg viewBox="0 0 22 22" aria-hidden="true">
@@ -526,6 +535,7 @@ export const MiniPlayer = () => {
         onPointerMove={viewMove}
         onPointerUp={viewUp}
         onPointerCancel={viewUp}
+        onLostPointerCapture={viewUp}
         onDragStart={e => e.preventDefault()} // dragging the picture pans it; the browser must not start dragging the image
         onKeyDown={viewKey}
         onDblClick={e => {
@@ -557,6 +567,7 @@ export const MiniPlayer = () => {
           onPointerMove={gripMove}
           onPointerUp={gripUp}
           onPointerCancel={gripUp}
+          onLostPointerCapture={gripUp}
         />
       ))}
     </>
