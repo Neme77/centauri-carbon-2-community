@@ -20,7 +20,8 @@ import {
   findMeasure,
   type Measure,
   measurePlate,
-  meshProfile,
+  chooseMeshProfile,
+  measuredAt,
   meshRange,
   mountPlate,
   type Nozzle,
@@ -45,7 +46,7 @@ import { openPage, printer, view, zoffset } from '@/lib/state'
 
 const savedOn = (s: number) =>
   s > 0
-    ? new Date(s * 1000).toLocaleString(undefined, {
+    ? measuredAt(s).toLocaleString(undefined, {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -281,7 +282,7 @@ const MeasureRow = ({
         <Button
           class="min-h-7 px-2 text-xs"
           onClick={() => {
-            meshProfile.set({ profile: `measure:${m.id}` })
+            chooseMeshProfile(`measure:${m.id}`)
             openPage('bed')
           }}
         >

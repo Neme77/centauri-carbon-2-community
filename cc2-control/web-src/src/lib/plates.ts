@@ -25,6 +25,8 @@ export type Measure = {
   slot: boolean
   profile: boolean
   mesh: PlateMesh
+  // Present after a later calibration replaced this measurement. `mesh` there is the one it replaced.
+  prior?: { measured: number; mesh: PlateMesh }
 }
 export type Plate = {
   id: string
@@ -52,6 +54,7 @@ export type MeshMatch = { enabled: boolean; result: string; blend_temp?: number;
 // A bed mesh calibration CC2 Control runs: homing, heating, holding the bed at the temperature, probing and
 // saving to a plate. `remaining` counts the soak in seconds; `bed` is the bed temperature now.
 export type Calibration = {
+  run?: string
   stage: 'off' | 'homing' | 'heating' | 'soaking' | 'probing' | 'saving'
   side: 'A' | 'B'
   temp: number
@@ -74,6 +77,8 @@ export type Calibration = {
   // keeps it), after a restart of CC2 Control, a measurement of the same plate stored in the library, or while its
   // plate is not in the library.
   work_mesh?: WorkMesh | null
+  // This run stored a new previous mesh. An unchanged recapture leaves an older comparison alone.
+  replaced?: boolean
 }
 export type WorkMesh = { plate: string; temp: number; nozzle: string; measured: number; mesh: PlateMesh }
 export type PlateLibrary = {
@@ -101,18 +106,37 @@ export type PlateLibrary = {
 // action finished before it (lib/guided-chain).
 export const plates = store({ data: null as PlateLibrary | null, ok: true, rebooting: false, at: 0, sent: 0 })
 
+// Opening Mesh reads the library twice. A reply is stale once a later read has been sent, even
+// while that later read is still waiting. Waiting until it settled let an older saved mesh in
+// ahead of HTTP 503, and the page treated that mesh as the run it had just started.
+let platesIssued = 0
+
 export async function refreshPlates() {
+  const issued = ++platesIssued
   const sent = Date.now()
   try {
     const data: PlateLibrary = await request('/api/plates')
+    if (issued !== platesIssued) return
     plates.set({ data, ok: true, rebooting: plates.get().rebooting && Boolean(data.pending), at: Date.now(), sent })
   } catch {
+    if (issued !== platesIssued) return
     plates.set({ ok: false })
   }
 }
 
 // The Mesh tab can show a measurement instead of a printer profile: `measure:<id>`.
-export const meshProfile = store({ profile: 'active' })
+export const meshProfile = store({ profile: 'active', diff: false })
+// Counts a person's profile changes. A calibration may open its result only when this is still the value it
+// started with: returning to the same profile later is still a choice.
+let meshChoice = 0
+export const meshChoiceGen = () => meshChoice
+export const chooseMeshProfile = (profile: string) => {
+  meshChoice++
+  meshProfile.set({ profile, diff: false })
+}
+// A stored stamp is Unix seconds. Older files also hold Unix milliseconds; 1e11 s is year 5138, so anything
+// larger is already milliseconds and must not be scaled again.
+export const measuredAt = (stamp: number) => new Date(stamp > 1e11 ? stamp : stamp * 1000)
 // Keep the form across tabs/pages; a running job remains authoritative.
 export const calibrationForm = store({
   side: '',
@@ -226,8 +250,23 @@ export const editMeasure = (id: string, temp: number, nozzle: string) =>
   post('/api/plates/measure/edit', `${id}\n${temp}\n${nozzle}`)
 // Runs on the printer without the page: `plate` (or '') receives the result; with `work` it becomes only the plate's
 // working measurement (needs a plate), the stored measurement stays.
-export const calibrate = (side: 'A' | 'B', temp: number, soak: number, nozzle: string, plate: string, work = false) =>
-  post('/api/plates/calibrate', `${side}\n${temp}\n${soak}\n${nozzle}\n${plate}${work ? '\nwork' : ''}`)
+export const calibrate = (
+  side: 'A' | 'B',
+  temp: number,
+  soak: number,
+  nozzle: string,
+  plate: string,
+  work = false,
+  run?: string
+) =>
+  request('/api/plates/calibrate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/plain;charset=UTF-8',
+      ...(run ? { 'X-CC2-Calibration-Run': run } : {}),
+    },
+    body: `${side}\n${temp}\n${soak}\n${nozzle}\n${plate}${work ? '\nwork' : ''}`,
+  })
 export const stopCalibration = () => post('/api/plates/calibrate/cancel')
 export const saveNozzle = (id: string, name: string, diameter: number, z: number) =>
   post('/api/plates/nozzle', `${id}\n${name}\n${diameter.toFixed(2)}\n${z.toFixed(3)}`)

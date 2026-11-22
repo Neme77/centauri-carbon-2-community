@@ -624,6 +624,42 @@ static void test_measures(void) {
     snprintf(body, sizeof(body), "%s\n80\n%s", carbon, brass);
     assert(call(MEASURE, &mqtt, body) == 200 && plate_measure_count(carbon) == 2 && !strcmp(plates.plates[0].measure, m80));
     assert(plate_mesh_equal(&measure_find(m80)->mesh, &at60, 1)); /* the same temperature and nozzle are replaced */
+    {
+        /* The mesh that was replaced stays with the measurement, reloads, and is left in place when the
+         * next capture is the same mesh. */
+        const plate_measure *replaced = measure_find(m80);
+        long long kept = replaced->prior_measured;
+        assert(replaced->has_prior && plate_mesh_equal(&replaced->prior, &at80, 1) && kept > 0 && kept <= replaced->measured);
+        assert(call(MEASURE, &mqtt, body) == 200);
+        replaced = measure_find(m80);
+        assert(replaced->has_prior && plate_mesh_equal(&replaced->prior, &at80, 1) && replaced->prior_measured == kept);
+        assert(plate_mesh_equal(&replaced->mesh, &at60, 1));
+        plates_load();
+        replaced = measure_find(m80);
+        assert(replaced && replaced->has_prior && plate_mesh_equal(&replaced->prior, &at80, 1) &&
+               plate_mesh_equal(&replaced->mesh, &at60, 1));
+        assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"prior\":{\"measured\":"));
+        /* Interpolation is not a new shape: the comparison with the mesh this one replaced stays.
+         * The slot is rewritten in place so the profiles already stored in the file remain. */
+        plate_mesh interpolated = at60; interpolated.tension = 0.5;
+        size_t slot_length, slot_new; char *slot_file = slurp(printer_autosave_path, &slot_length);
+        char *slot_updated = autosave_with_mesh(slot_file, slot_length, "default", &interpolated, &slot_new);
+        assert(slot_updated);
+        FILE *slot_out = fopen(printer_autosave_path, "wb"); fwrite(slot_updated, 1, slot_new, slot_out); fclose(slot_out);
+        free(slot_file); free(slot_updated);
+        memory_a = interpolated;
+        assert(call(MEASURE, &mqtt, body) == 200);
+        replaced = measure_find(m80);
+        assert(replaced->has_prior && plate_mesh_equal(&replaced->prior, &at80, 1) &&
+               plate_close(replaced->mesh.tension, 0.5) && plate_mesh_shape_equal(&replaced->mesh, &at60));
+        slot_file = slurp(printer_autosave_path, &slot_length);
+        slot_updated = autosave_with_mesh(slot_file, slot_length, "default", &at60, &slot_new);
+        assert(slot_updated);
+        slot_out = fopen(printer_autosave_path, "wb"); fwrite(slot_updated, 1, slot_new, slot_out); fclose(slot_out);
+        free(slot_file); free(slot_updated);
+        memory_a = at60;
+        assert(call(MEASURE, &mqtt, body) == 200);
+    }
     {   /* restore the 80 degree mesh and add 100 */
         size_t file_length, new_length; char *file = slurp(printer_autosave_path, &file_length);
         char *updated = autosave_with_mesh(file, file_length, "default", &at80, &new_length); assert(updated);
@@ -901,14 +937,17 @@ static int fake_console(console_state *c, const char *command) {
     pthread_mutex_unlock(&c->lock);
     return 0;
 }
-static int calibrate(const mqtt_client *mqtt, const char *body) {
+static int calibrate_request(const mqtt_client *mqtt, const char *body, const char *request) {
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-    plates_calibrate_response(pair[0], mqtt, &console, body, strlen(body));
+    plates_calibrate_response(pair[0], mqtt, &console, body, strlen(body), request);
     close(pair[0]);
     size_t used = 0; ssize_t n;
     while ((n = recv(pair[1], response + used, sizeof(response) - 1 - used, 0)) > 0) used += (size_t)n;
     response[used] = 0; close(pair[1]);
     return status_of(response);
+}
+static int calibrate(const mqtt_client *mqtt, const char *body) {
+    return calibrate_request(mqtt, body, NULL);
 }
 /* What the firmware's calibration does to the file: only the slot changes. */
 static void set_slot_a(const plate_mesh *m) {
@@ -954,7 +993,11 @@ static void test_calibration_job(void) {
     snprintf(mqtt.homed_axes, sizeof(mqtt.homed_axes), "%s", "");
     profile_log[0] = console_log[0] = 0;
     snprintf(body, sizeof(body), "A\n70\n10\n%s\n%s", nozzle, plate);
-    assert(calibrate(&mqtt, body) == 202 && plates_cal.stage == CAL_HOMING && !strcmp(console_log, "G28"));
+    const char *run_request = "POST /api/plates/calibrate HTTP/1.1\r\nX-CC2-Calibration-Run: 7d00000000000070\r\n\r\n";
+    assert(calibrate_request(&mqtt, body, "POST /api/plates/calibrate HTTP/1.1\r\nX-CC2-Calibration-Run: invalid\r\n\r\n") == 400);
+    assert(!plates_cal.stage && !console_log[0]);
+    assert(calibrate_request(&mqtt, body, run_request) == 202 && plates_cal.stage == CAL_HOMING && !strcmp(console_log, "G28"));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"run\":\"7d00000000000070\""));
     assert(plates_has_profile(measure_find(first))); /* the slot's measurement kept a profile first */
     assert(calibrate(&mqtt, body) == 409 && strstr(response, "already running"));
     char late[24];
@@ -995,7 +1038,8 @@ static void test_calibration_job(void) {
     const plate_measure *m = measure_find(plates_cal.measure);
     assert(m && m->temp == 70 && !strcmp(m->nozzle, nozzle) && plate_mesh_equal(&m->mesh, &at70, 1));
     assert(!strcmp(plates.current, plate) && !strcmp(plates.plates[0].measure, m->id) && plates_has_profile(m));
-    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"stage\":\"off\"") && strstr(response, "\"result\":\"saved\""));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"stage\":\"off\"") &&
+           strstr(response, "\"result\":\"saved\"") && strstr(response, "\"run\":\"7d00000000000070\""));
     assert(!plates_print_prepare(&mqtt, 'A', 1, first, "", late) && !strcmp(late, first));
     /* Any other error while saving ends the run at once, here a plate library that is not available (also a 503). */
     telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
@@ -1013,6 +1057,7 @@ static void test_calibration_job(void) {
     /* Without a plate the result only stays in the printer; no soak probes at once. */
     console_log[0] = 0;
     assert(calibrate(&mqtt, "A\n60\n0") == 202 && !strcmp(console_log, "M140 S60"));
+    assert(plate_id_valid(plates_cal.run) && strcmp(plates_cal.run, "7d00000000000070"));
     plates_calibration_tick(&mqtt, &console); bed(60, 60); plates_calibration_tick(&mqtt, &console);
     plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_PROBING);
     plates_calibration_tick(&mqtt, &console); assert(!plates_cal.stage && !strcmp(plates_cal.result, "done"));
@@ -1300,7 +1345,7 @@ static void test_empty_plate(void) {
     /* Attach the first real measurement to the previously empty profile. */
     memory_b = grid(0.3); memory_has_b = 1; write_autosave(&a, &memory_b);
     int status, profile, applied; plate_measure *measure = NULL;
-    assert(!plates_take_measure(&mqtt, id, 30, "", 0, &status, &measure, &profile, &applied));
+    assert(!plates_take_measure(&mqtt, id, 30, "", 0, &status, &measure, &profile, &applied, NULL));
     assert(measure && measure->temp == 30 && plates_consistent());
     new_process(); assert(plates_available && plate_base(&plates.plates[0]) && plates.measure_count == 1);
     unlink(plates_path);
@@ -1608,6 +1653,65 @@ static void test_match_setting(void) {
     printf("PASS: match setting stored in the plate library at --plates, independent of the working directory\n");
 }
 
+static void test_prior_parse(void) {
+    const char *mesh =
+        "\"mesh\":{\"x_count\":3,\"y_count\":3,\"min_x\":0,\"max_x\":10,\"min_y\":0,\"max_y\":10,"
+        "\"mesh_x_pps\":2,\"mesh_y_pps\":2,\"algo\":\"bicubic\",\"tension\":0.2,\"offset\":0,"
+        "\"points\":[[0.1,0.1,0.1],[0.1,0.1,0.1],[0.1,0.1,0.1]]}";
+    char text[2400];
+    plate_measure parsed;
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":10,%s}",
+             mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && !parsed.has_prior);
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":10,%s,"
+             "\"prior\":{\"measured\":9,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && parsed.has_prior && parsed.prior_measured == 9);
+    /* A millisecond stamp already loads as measured. Copying it into prior must not make the library unloadable. */
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":1700000000000,%s,"
+             "\"prior\":{\"measured\":1700000000000,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && parsed.has_prior &&
+           parsed.measured == 1700000000000LL && parsed.prior_measured == 1700000000000LL);
+    /* Above 2^53 a double rounds. Both ends of the signed 64-bit range must come back unchanged. */
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":9007199254740993,%s,"
+             "\"prior\":{\"measured\":9223372036854775807,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) &&
+           parsed.measured == 9007199254740993LL && parsed.prior_measured == 9223372036854775807LL);
+    /* A resave from another JSON tool may write a whole second as 1700000000.0 or 1.7e9. */
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":1700000000.0,%s,"
+             "\"prior\":{\"measured\":1.7e9,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && parsed.has_prior &&
+           parsed.measured == 1700000000LL && parsed.prior_measured == 1700000000LL);
+    /* Leading zeros in the significand do not make a whole second wider than 64 bits. */
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":0.0000000000017e21,%s,"
+             "\"prior\":{\"measured\":0.0000000000017e21,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && parsed.has_prior &&
+           parsed.measured == 1700000000LL && parsed.prior_measured == 1700000000LL);
+    char bad_huge[1400], bad_junk[1400], bad_dot[1400], bad_frac[1400], bad_exp[1400];
+    snprintf(bad_huge, sizeof(bad_huge), "\"prior\":{\"measured\":9223372036854775808,%s}", mesh);
+    snprintf(bad_junk, sizeof(bad_junk), "\"prior\":{\"measured\":9bad,%s}", mesh);
+    snprintf(bad_dot, sizeof(bad_dot), "\"prior\":{\"measured\":9.,%s}", mesh);
+    snprintf(bad_frac, sizeof(bad_frac), "\"prior\":{\"measured\":1700000000.00000001,%s}", mesh);
+    snprintf(bad_exp, sizeof(bad_exp), "\"prior\":{\"measured\":1e20,%s}", mesh);
+    const char *bad[] = {"\"prior\":null", "\"prior\":[]", bad_huge, bad_junk, bad_dot, bad_frac, bad_exp};
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); ++i) {
+        snprintf(text, sizeof(text),
+                 "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":10,%s,%s}",
+                 mesh, bad[i]);
+        assert(!plates_parse_measure(text, text + strlen(text), &parsed));
+    }
+}
+
 int main(void) {
     char directory[] = "/tmp/cc2-plates-XXXXXX";
     assert(mkdtemp(directory));
@@ -1621,6 +1725,7 @@ int main(void) {
     plates_uds = fake_uds;
     uds_init(&telemetry);
     if (getenv("CC2_TEST_ACTIVE_ONLY")) { test_active_mount(); return 0; }
+    test_prior_parse();
     test_names_and_numbers();
     test_autosave();
     test_store();

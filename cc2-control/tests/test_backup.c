@@ -87,6 +87,10 @@ static void seed(void) {
     m->mesh.tension=.2;
     snprintf(m->mesh.algo,sizeof(m->mesh.algo),"bicubic");
     for(int i=0;i<9;i++)m->mesh.points[i]=.001*i;
+    m->has_prior=1;
+    m->prior_measured=1600000000;
+    m->prior=m->mesh;
+    m->prior.points[0]=.5;
     snprintf(plates.current,sizeof(plates.current),"%s",p->id);
     snprintf(plates.nozzle,sizeof(plates.nozzle),"%s",n->id);
     plates.match=1;
@@ -255,6 +259,20 @@ int main(void) {
     assert(data&&bk_parse(backup,length,data));
     assert(data->sections==15&&data->plate_data.count==2&&data->plate_data.measure_count==1);
     assert(data->plate_data.match&&strstr(backup,"\"match_temperature\":true"));       /* the #296 setting travels with the plates */
+    assert(data->plate_data.measures[0].has_prior&&data->plate_data.measures[0].prior_measured==1600000000&&
+           data->plate_data.measures[0].prior.points[0]==.5);                         /* a kept previous mesh round-trips */
+    {
+        const char *mesh="{\"x_count\":3,\"y_count\":3,\"min_x\":0,\"max_x\":10,\"min_y\":0,\"max_y\":10,\"mesh_x_pps\":2,\"mesh_y_pps\":2,\"algo\":\"bicubic\",\"tension\":0.2,\"offset\":0,\"points\":[[0.1,0.1,0.1],[0.1,0.1,0.1],[0.1,0.1,0.1]]}";
+        char text[1600];
+        snprintf(text,sizeof(text),
+            "{\"version\":2,\"current\":\"3333333333333333\",\"pending\":\"\",\"nozzle\":\"2222222222222222\","
+            "\"nozzles\":[{\"id\":\"2222222222222222\",\"name\":\"Brass\",\"diameter\":0.40,\"z_offset\":0}],"
+            "\"plates\":[{\"id\":\"3333333333333333\",\"name\":\"PEI\",\"side\":\"A\",\"z_offset\":0,\"measure\":\"4444444444444444\"}],"
+            "\"uncalibrated\":[],\"measures\":[{\"id\":\"4444444444444444\",\"plate\":\"3333333333333333\",\"temp\":60,"
+            "\"nozzle\":\"2222222222222222\",\"measured\":10,\"mesh\":%s,\"prior\":null}]}",mesh);
+        plate_store rejected;
+        assert(!bk_plates(text,text+strlen(text),&rejected));
+    }
     {
         const char *plates_text="{\"version\":2,\"current\":\"\",\"pending\":\"\",\"nozzle\":\"\",\"nozzles\":[],\"plates\":[],\"uncalibrated\":[],\"measures\":[]";
         char probe[256]; plate_store *store=calloc(1,sizeof(*store)); assert(store);

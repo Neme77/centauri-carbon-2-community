@@ -221,6 +221,11 @@ static int bk_plate_taken(const plate_store *s, const char *id) {
     for (int i = 0; i < s->nozzle_count; i++) if (!strcmp(s->nozzles[i].id, id)) return 1;
     return 0;
 }
+static int bk_mesh(const char *mesh, const char *end) {
+    return mesh && bk_keys(mesh, end, ",x_count,y_count,min_x,max_x,min_y,max_y,mesh_x_pps,mesh_y_pps,algo,tension,offset,points,") &&
+        bk_int(mesh, end, "x_count", 3, PLATE_GRID_MAX, NULL) && bk_int(mesh, end, "y_count", 3, PLATE_GRID_MAX, NULL) &&
+        bk_int(mesh, end, "mesh_x_pps", 0, 10, NULL) && bk_int(mesh, end, "mesh_y_pps", 0, 10, NULL);
+}
 typedef struct { plate_store *store;
     int kind;
 } bk_plate_context;
@@ -245,14 +250,20 @@ static int bk_plate_item(const char *o, const char *end, void *opaque) {
         s->count++;
         return 1;
     }
-    if (s->measure_count >= PLATE_MEASURES_MAX || !bk_keys(o,end,",id,plate,temp,nozzle,measured,mesh,")) return 0;
-    double measured;
-    if (!plates_member_double(o,end,"measured",&measured) || measured<0 || measured>1e11 || floor(measured)!=measured ||
+    if (s->measure_count >= PLATE_MEASURES_MAX || !bk_keys(o,end,",id,plate,temp,nozzle,measured,mesh,prior,")) return 0;
+    long long measured;
+    if (!plates_member_time(o,end,"measured",&measured) || measured < 0 ||
         !bk_int(o,end,"temp",PLATE_TEMP_MIN,PLATE_TEMP_MAX,NULL)) return 0;
-    const char *me,*mesh=json_member_object(o,end,"mesh",'{',&me);
-    if (!mesh || !bk_keys(mesh,me,",x_count,y_count,min_x,max_x,min_y,max_y,mesh_x_pps,mesh_y_pps,algo,tension,offset,points,") ||
-        !bk_int(mesh,me,"x_count",3,PLATE_GRID_MAX,NULL) || !bk_int(mesh,me,"y_count",3,PLATE_GRID_MAX,NULL) ||
-        !bk_int(mesh,me,"mesh_x_pps",0,10,NULL) || !bk_int(mesh,me,"mesh_y_pps",0,10,NULL)) return 0;
+    const char *me = NULL, *mesh=json_member_object(o,end,"mesh",'{',&me);
+    if (!bk_mesh(mesh,me)) return 0;
+    const char *prior_raw=json_member(o,end,"prior");
+    if (prior_raw) {
+        const char *pe = NULL, *prior=json_member_object(o,end,"prior",'{',&pe);
+        const char *pme = NULL, *pm; long long when;
+        if (!prior || !bk_keys(prior,pe,",measured,mesh,") ||
+            !plates_member_time(prior,pe,"measured",&when) || when < 0 ||
+            !(pm=json_member_object(prior,pe,"mesh",'{',&pme)) || !bk_mesh(pm,pme)) return 0;
+    }
     plate_measure *m=&s->measures[s->measure_count];
     if (!plates_parse_measure(o,end,m) || bk_plate_taken(s,m->id)) return 0;
     s->measure_count++;

@@ -962,6 +962,9 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   temperature, nozzle) corrects what a measurement records, e.g. the nozzle of one made before nozzles were
   listed; two measurements of a plate cannot share temperature and nozzle. `/api/plates/keep` (`A|B`) stores
   the printer profile of the measurement the side slot holds.
+  When the replacement changes the probe grid or heights, the measurement keeps its previous
+  `{measured, mesh}` in the optional `prior` field. An identical recapture keeps the existing
+  prior and its timestamp. The measurement's `mesh` remains the one used by the printer.
 - `/api/plates/calibrate` (`A|B`, temperature, soak minutes 0–60, nozzle, plate; the last two may be empty;
   an optional sixth line `work`, only together with a plate, any other sixth line is 400) runs a bed mesh calibration on CC2 Control, so no page has to stay open. An open screw-tramming session does not
   block it between its measurements: the session ends (`end_reason` `mesh_calibration`, its heaters are not switched
@@ -991,7 +994,11 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   `soaking`, `probing`, `saving` or `off`, the soak seconds `remaining`, the bed temperature `bed`, and
   `result` `done`, `saved`, `work`, `failed` or `cancelled` with `error` `homing`, `heating`, `busy`, `telemetry`,
   `probing` or `saving`; `work` whether the run keeps only a temporary mesh, and `work_mesh`, `null` or
-  `{"plate","temp","nozzle","measured","mesh"}` while its plate is in the library). At the end of the soak the probing starts only when MQTT has reported Idle within
+  `{"plate","temp","nozzle","measured","mesh"}` while its plate is in the library). `calibration.replaced` is true when this run saves a new prior.
+  A caller can supply a unique `X-CC2-Calibration-Run` with 16 lowercase hex digits.
+  The accepted run keeps that value in `calibration.run` through completion, so a client can recognize
+  its result even if it loses the start response. The app assigns an ID to runs started without the
+  header. At the end of the soak the probing starts only when MQTT has reported Idle within
   15 s and fresh telemetry reads the bed at its target; otherwise it waits up to a minute and then stops.
   `/api/plates/calibrate/cancel` stops it until the probing starts. A run that is cancelled or fails switches
   the bed heater off only while fresh MQTT reports Idle and fresh telemetry shows the target the run set;
