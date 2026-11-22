@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <math.h>
 #include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -466,21 +467,29 @@ static int is_kinematic_bypass(const char *word) {
     return 0;
 }
 
+/* Returns 1 when the axis word is present exactly once with a finite number,
+ * 0 when it is absent, -1 for a missing or non-finite number and -2 when the
+ * word is repeated: only one of the values would be range-checked here, so a
+ * repeated word could carry a value that is never checked. */
 static int parse_axis_value(const char *command, char axis, double *value) {
     const char *p = command;
+    int found = 0;
     while (*p && !isspace((unsigned char)*p)) p++; /* skip G0/G1 token */
     while (*p) {
         if (*p == ';') break;
         if (toupper((unsigned char)*p) == axis) {
             char *end = NULL;
             double v = strtod(p + 1, &end);
-            if (end == p + 1) return -1;
+            if (end == p + 1 || !isfinite(v)) return -1;
+            if (found) return -2;
             *value = v;
-            return 1;
+            found = 1;
+            p = end;
+            continue;
         }
         p++;
     }
-    return 0;
+    return found;
 }
 
 static int direct_move_safe(console_state *state, const char *command, const mqtt_client *mqtt,
@@ -507,6 +516,10 @@ static int direct_move_safe(console_state *state, const char *command, const mqt
     for (size_t i = 0; i < 3; ++i) {
         double requested = 0.0;
         int found = parse_axis_value(command, axes[i], &requested);
+        if (found == -2) {
+            snprintf(reason, reason_cap, "Repeated %c coordinate", axes[i]);
+            return 0;
+        }
         if (found < 0) {
             snprintf(reason, reason_cap, "Invalid %c coordinate", axes[i]);
             return 0;
