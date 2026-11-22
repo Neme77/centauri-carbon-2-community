@@ -7,7 +7,8 @@ import { chromium } from 'playwright'
 
 // The mini player: one floating camera view that stays open across pages, can be moved and resized (16:9,
 // 240-640 px, at most half the window), zooms digitally up to 2x, and closes by itself when another viewer
-// takes the camera. It must never open a second stream. The camera service is a local MJPEG server.
+// takes the camera (also when it was paused in a hidden tab). It must never open a second stream, and moving or zooming
+// it must not draw the whole app again. The camera service is a local MJPEG server.
 const root = fileURLToPath(new URL('..', import.meta.url))
 process.env.CC2_BACKEND = 'http://127.0.0.1:1'
 const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), mode: 'demo', server: { port: 0, host: '127.0.0.1' } })
@@ -28,6 +29,8 @@ const wait = async (predicate, label) => {
   for (let i = 0; i < 100; i++) { if (await predicate()) return; await new Promise(r => setTimeout(r, 50)) }
   throw new Error(label)
 }
+// A fixed pause is only for "nothing may happen" checks (a reconnect, a stolen camera): there is nothing to wait for.
+const observe = ms => new Promise(r => setTimeout(r, ms))
 const near = (actual, expected, tolerance, label) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`)
 try {
@@ -36,11 +39,11 @@ try {
   const origin = server.resolvedUrls.local[0].replace(/\/$/, '')
   browser = await chromium.launch({ headless: true, ...(process.env.CC2_BROWSER_PATH ? { executablePath: process.env.CC2_BROWSER_PATH, args: ['--no-sandbox'] } : {}) })
   const errors = []
-  let printerReads = 0
+  const printerReadTimes = []
   const preferences = { language: 'en', theme: 'dark', camera_persistent: false }
   const newContext = async (viewport, extra = {}) => {
     const context = await browser.newContext({ viewport, ...extra })
-    await context.route('**/api/printer', async r => { printerReads++; await r.continue() })
+    await context.route('**/api/printer', async r => { printerReadTimes.push(Date.now()); await r.continue() })
     await context.route('**/api/preferences', async r => {
       if (r.request().method() === 'PUT') Object.assign(preferences, r.request().postDataJSON())
       await r.fulfill({ json: r.request().method() === 'PUT' ? { saved: true } : preferences })
@@ -62,6 +65,38 @@ try {
     const m = new DOMMatrix(getComputedStyle(img).transform)
     return { scale: m.a, x: m.e, y: m.f }
   })
+
+  // The size of the area around a control's centre that really reaches it (what a finger can hit), by hit testing.
+  const hitArea = locator => locator.evaluate(el => {
+    const r = el.getBoundingClientRect()
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2
+    const reach = (dx, dy) => {
+      let n = 0
+      while (n < 40) {
+        const hit = document.elementFromPoint(cx + dx * (n + 1), cy + dy * (n + 1))
+        if (!hit || !(hit === el || el.contains(hit))) break
+        n++
+      }
+      return n + 1
+    }
+    return { w: reach(-1, 0) + reach(1, 0), h: reach(0, -1) + reach(0, 1) }
+  })
+  // Counts how often the app and the camera card are drawn, by hooking Preact's render callback (same module instance).
+  // A reload starts the counting over, so it is installed right before it is needed.
+  const countDraws = () => page.evaluate(async () => {
+    const url = performance.getEntriesByType('resource').map(e => e.name).find(n => /\/deps\/preact\.js/.test(n))
+    const { options } = await import(url)
+    window.__draws = { app: 0, card: 0, mini: 0 }
+    const before = options.diffed
+    options.diffed = vnode => {
+      const name = typeof vnode.type === 'function' ? vnode.type.name : ''
+      if (name === 'App') window.__draws.app++
+      else if (name === 'MiniPlayer') window.__draws.mini++
+      else if (name === 'CameraStream' && !vnode.props.layout) window.__draws.card++
+      before?.(vnode)
+    }
+  })
+  const draws = () => page.evaluate(() => ({ ...window.__draws }))
 
   // 1. The dashboard offers the mini player next to the two existing buttons; nothing streams yet.
   const open = page.getByRole('button', { name: 'Mini player', exact: true })
@@ -89,7 +124,8 @@ try {
   const unchanged = requests
   for (const section of ['Control', 'Job', 'Files', 'Settings', 'Dashboard']) {
     await link(section).click()
-    await page.waitForTimeout(300)
+    await page.waitForFunction(hash => location.hash === hash, '#' + section.toLowerCase())
+    await observe(300)
     assert.equal(await region.count(), 1, section + ': the mini player stays open')
     assert.equal(clients, 1, section + ': one stream')
     assert.equal(requests, unchanged, section + ': navigation must not reconnect')
@@ -100,7 +136,9 @@ try {
   const jobCamera = page.getByRole('button', { name: 'Camera', exact: true })
   assert.equal(await jobCamera.isEnabled(), true, 'the Camera button stays usable while the mini player is open')
   await link('Dashboard').click()
-  await page.waitForTimeout(400) // a route change moves the focus to <main>: let it settle before focusing a control
+  await page.waitForFunction(() => location.hash === '#dashboard')
+  await open.waitFor()
+  await observe(400) // a route change moves the focus to <main>: let it settle before focusing a control
 
   // 4. Size: the corner is a slider, 240 px to 640 px (half of 1440 would be 720), always 16:9.
   const size = region.getByRole('slider', { name: 'Mini player size', exact: true })
@@ -175,7 +213,8 @@ try {
   assert.equal('open' in saved, false, 'the open state is not stored')
   const before = await box()
   await page.reload()
-  await page.waitForTimeout(500)
+  await open.waitFor()
+  await observe(500)
   assert.equal(await region.count(), 0, 'a reload does not reopen the mini player')
   assert.equal(clients, 0, 'a reload does not start the camera')
   await open.click()
@@ -226,6 +265,11 @@ try {
   near((await zoomOf()).scale, 2, 0.01, 'never above 2x')
   const view = region.getByRole('application', { name: /^Image section, zoom 2\.0×$/ })
   await view.waitFor()
+  // The zoom buttons look small (32 px) but react to a finger like every other control: 44 x 44 px.
+  for (const [name, target] of [['zoom in', zoomIn], ['zoom out', zoomOut], ['reset zoom', reset]]) {
+    const hit = await hitArea(target)
+    assert.ok(hit.w >= 43 && hit.h >= 43, `${name}: the area that reacts is ${hit.w} x ${hit.h} px, at least 44 x 44 expected`)
+  }
   // Dragging the picture pans it, bounded by the frame.
   const frame = await region.locator('.cc2-camera-frame').boundingBox()
   await page.mouse.move(frame.x + frame.width / 2, frame.y + frame.height / 2)
@@ -269,6 +313,15 @@ try {
   near((await zoomOf()).scale, 2, 0.01, 'wheel stops at 2x')
   await page.mouse.wheel(0, 8000)
   near((await zoomOf()).scale, 1, 0.01, 'wheel stops at 1x')
+  // The wheel zooms around the pointer: the spot under it stays under it (here 60 px right of and 30 px below the centre).
+  await page.mouse.move(frame.x + frame.width / 2 + 60, frame.y + frame.height / 2 + 30)
+  await page.mouse.wheel(0, -300)
+  zoom = await zoomOf()
+  assert.ok(zoom.scale > 1.3 && zoom.scale < 2, `wheel zoom is partial (got ${zoom.scale})`)
+  near(zoom.x, 60 * (1 - zoom.scale), 2, 'wheel zoom keeps the spot under the pointer (x)')
+  near(zoom.y, 30 * (1 - zoom.scale), 2, 'wheel zoom keeps the spot under the pointer (y)')
+  await page.mouse.wheel(0, 8000)
+  near((await zoomOf()).scale, 1, 0.01, 'back to 1x')
   assert.equal(requests, requestsBeforeZoom, 'zooming must not touch the camera')
   assert.equal(clients, 1, 'zooming keeps one stream')
   // Zoom survives a resize, and is reset when the window is closed.
@@ -276,6 +329,34 @@ try {
   await size.focus()
   await page.keyboard.press('ArrowRight')
   near((await zoomOf()).scale, 1.5, 0.01, 'zoom stays when the size changes')
+
+  // 8b. Moving, resizing and panning draw only the mini player, not the whole app (60 pointer steps each; before the
+  // geometry had a store of its own, every step drew the app and the camera card once more).
+  await countDraws()
+  const steps = 60
+  const drag = async (from, step) => {
+    await page.mouse.move(from[0], from[1])
+    await page.mouse.down()
+    for (let i = 1; i <= steps; i++) await page.mouse.move(from[0] + step[0] * i, from[1] + step[1] * i)
+    await page.mouse.up()
+  }
+  const drawn = async (label, action, expectedMini) => {
+    const first = await draws()
+    await action()
+    const last = await draws()
+    const app = last.app - first.app, card = last.card - first.card, mini = last.mini - first.mini
+    // The printer poll (every 1.5 s) draws the app now and then on its own: a few draws are normal, not one per step.
+    assert.ok(app <= 4, `${label}: the app was drawn ${app} times for ${steps} steps`)
+    assert.ok(card <= 4, `${label}: the camera card was drawn ${card} times for ${steps} steps`)
+    assert.ok(mini >= expectedMini, `${label}: the mini player itself must follow the pointer (${mini} draws)`)
+  }
+  const frameBox = await region.locator('.cc2-camera-frame').boundingBox()
+  await drawn('panning', () => drag([frameBox.x + frameBox.width / 2, frameBox.y + frameBox.height / 2], [1, 0.5]), steps / 2)
+  const gripNow = await grip.boundingBox()
+  await drawn('moving', () => drag([gripNow.x + gripNow.width / 2, gripNow.y + gripNow.height / 2], [-3, -2]), steps / 2)
+  const cornerNow = await size.boundingBox()
+  await drawn('resizing', () => drag([cornerNow.x + cornerNow.width - 6, cornerNow.y + cornerNow.height - 6], [-1, -1]), steps / 2)
+  await zoomOut.click() // 1.5x -> 1x
 
   // 9. A hidden tab pauses the stream like the camera card does, and showing it again resumes it.
   await page.evaluate(() => {
@@ -290,17 +371,54 @@ try {
   })
   await wait(() => clients === 1, 'showing the tab resumes the stream')
 
-  // 10. The printer state is checked while it streams, so a takeover is noticed (shared poller, 1.5 s).
-  const reads = printerReads
-  await page.waitForTimeout(3300)
-  assert.ok(printerReads - reads >= 2, `ownership is checked while the mini player streams (${printerReads - reads} reads in 3.3 s)`)
+  // 9b. A tab that comes back must not take the camera from somebody who started it meanwhile: the mini player checks
+  // the owner first and closes without a notice, and the other viewer keeps its stream.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await wait(() => clients === 0, 'the hidden tab pauses the mini player again')
+  const rival = await context.newPage()
+  rival.on('pageerror', e => errors.push(e.message))
+  await rival.goto(`${origin}/#dashboard`)
+  await rival.getByRole('button', { name: 'Start live view', exact: true }).click()
+  await rival.locator('.cc2-camera-frame img').waitFor({ state: 'visible' })
+  await wait(() => clients === 1, 'the other viewer streams while the mini player is paused')
+  await page.evaluate(() => {
+    delete document.hidden
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await wait(() => region.count().then(n => n === 0), 'a tab shown again closes the mini player when another viewer has the camera')
+  await observe(2000)
+  assert.equal(clients, 1, 'the mini player did not take the camera back; only the other viewer streams')
+  assert.equal(await rival.locator('.cc2-camera-frame img').count(), 1, 'the other viewer keeps its picture')
+  assert.equal(await page.getByText('Live view is open in another window or on another device', { exact: true }).count(), 0, 'closing quietly shows no hint')
+  await rival.close()
+  await wait(() => clients === 0, 'the other viewer is gone')
+  await open.click()
+  await region.waitFor()
+  await wait(() => clients === 1, 'reopened after the other viewer')
+
+  // 10. The printer state is read every 1.5 s while the mini player streams, also on a page that reads it only every
+  // 3 s (Settings), so a takeover is noticed quickly. Measured as the longest gap between two reads over 7 s.
+  await link('Settings').click()
+  await page.waitForFunction(() => location.hash === '#settings')
+  await observe(500) // let the route change and its own requests settle
+  const from = Date.now()
+  await observe(7000)
+  const until = Date.now()
+  const times = [from, ...printerReadTimes.filter(t => t >= from && t <= until), until]
+  const longest = Math.max(...times.slice(1).map((t, i) => t - times[i]))
+  assert.ok(longest < 2300, `the printer state is read every 1.5 s while the mini player streams (longest gap ${longest} ms; ${times.length - 2} reads in 7 s)`)
+  await link('Dashboard').click()
+  await page.waitForFunction(() => location.hash === '#dashboard')
 
   // 11. Another viewer closes ONLY the mini player: the Camera button on the Job page, the Camera card and the camera window.
   await link('Job').click()
   await jobCamera.click()
   await wait(() => region.count().then(n => n === 0), 'the Camera button closes the mini player')
   await wait(() => clients === 1, 'only the job page streams')
-  await page.waitForTimeout(2500)
+  await observe(2500)
   assert.equal(clients, 1, 'the job camera keeps running, nothing reconnects')
   assert.equal(await page.getByText('Live view is open in another window or on another device', { exact: true }).count(), 0, 'closing for another viewer shows no hint')
   assert.equal(await page.locator('.cc2-job-camera img').count(), 1, 'the job page picture is still there')
@@ -321,7 +439,7 @@ try {
   await other.locator('.cc2-camera-frame img').waitFor({ state: 'visible' })
   await wait(() => region.count().then(n => n === 0), 'another browser page closes the mini player')
   await wait(() => clients === 1, 'only the other page streams')
-  await page.waitForTimeout(2500)
+  await observe(2500)
   assert.equal(clients, 1, 'a closed mini player does not come back and steal the camera')
   // The separate camera window is the same: opening the mini player takes the camera from it, which then offers Watch here.
   await open.click()
@@ -330,10 +448,46 @@ try {
   await wait(() => clients === 1, 'the mini player took the camera over')
   await other.close()
 
-  // 12. Close: the stream ends, the window goes, and the card is usable again.
+  // 12. Close: the stream ends, the window goes, and the card is usable again. The focus goes back to the card's
+  // Mini player button (it would fall to the start of the page otherwise).
   await region.getByRole('button', { name: 'Close mini player', exact: true }).click()
   await wait(() => region.count().then(n => n === 0), 'close removes the window')
   await wait(() => clients === 0, 'close ends the stream')
+  assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-miniplayer-open')), true, 'after closing, the focus is on the Mini player button of the card')
+  // Escape closes it from inside the window only, and gives the focus back the same way.
+  await open.click()
+  await region.waitFor()
+  await wait(() => clients === 1, 'opened for the Escape check')
+  await open.focus()
+  await page.keyboard.press('Escape')
+  await observe(300)
+  assert.equal(await region.count(), 1, 'Escape outside the window does not close it')
+  await region.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+  await page.keyboard.press('Escape')
+  await wait(() => region.count().then(n => n === 0), 'Escape inside the window closes it')
+  await wait(() => clients === 0, 'Escape ends the stream')
+  assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-miniplayer-open')), true, 'after Escape, the focus is on the Mini player button of the card')
+  assert.equal(await region.count(), 0)
+
+  // 12b. The card was streaming when the mini player opens: the card stops, shows where its picture went, and there is
+  // still exactly one stream; nothing offers "Watch here". Closing the mini player removes the hint.
+  const inMini = page.getByText('Live view is open in the mini player', { exact: true })
+  await page.getByRole('button', { name: 'Start live view', exact: true }).click()
+  await page.locator('.cc2-camera-card img').waitFor({ state: 'visible' })
+  await wait(() => clients === 1, 'the card streams')
+  assert.equal(await inMini.count(), 0, 'no hint while the card has the picture itself')
+  await open.click()
+  await region.waitFor()
+  await inMini.waitFor()
+  await wait(() => clients === 1 && requests > 0, 'one stream after the move')
+  await observe(800)
+  assert.equal(clients, 1, 'the card and the mini player never stream at once')
+  assert.equal(await page.locator('.cc2-camera-card img').count(), 0, 'the card has given its picture up')
+  assert.equal(await page.getByRole('button', { name: 'Watch here', exact: true }).count(), 0, 'the card does not offer Watch here for its own mini player')
+  await region.getByRole('button', { name: 'Close mini player', exact: true }).click()
+  await wait(() => clients === 0, 'closing the mini player ends the stream')
+  await wait(() => inMini.count().then(n => n === 0), 'the hint goes with the mini player')
+  await page.getByRole('button', { name: 'Start live view', exact: true }).waitFor({ state: 'visible' })
 
   // 13. A failing camera keeps the window open with the usual retry hint.
   reject = true
@@ -341,16 +495,19 @@ try {
   await region.waitFor()
   await region.getByRole('button', { name: 'Retry now', exact: true }).waitFor()
   assert.equal(await region.count(), 1, 'a failing camera does not close the window')
+  // Screen readers are told: a live region of the window carries the state while there is no picture.
+  assert.match(await region.getByRole('status').textContent(), /Camera stream unavailable|Retrying|gave up|Waiting for camera stream/i, 'the state is announced')
   reject = false
   await region.getByRole('button', { name: 'Retry now', exact: true }).click()
   await wait(() => clients === 1, 'retry recovers')
+  await wait(async () => (await region.getByRole('status').textContent()) === '', 'the announcement is empty while the picture is there')
+  assert.ok(await region.getByRole('button', { name: 'Move mini player', exact: true }).getAttribute('aria-keyshortcuts'), 'the grip names its arrow keys')
   await region.getByRole('button', { name: 'Close mini player', exact: true }).click()
   await wait(() => clients === 0, 'closed')
 
-  // 14. The side menu is not covered: with the drawer open on a phone the mini player is underneath it.
   await page.close()
 
-  // 15. Phone: limits are 160 px to the window width minus 24 px; the grip and the corner work with touch.
+  // 14. Phone: limits are 160 px to the window width minus 24 px; the grip and the corner work with touch.
   const phoneContext = await newContext({ width: 393, height: 780 }, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 })
   const phone = await phoneContext.newPage()
   phone.on('pageerror', e => errors.push(e.message))
@@ -381,6 +538,11 @@ try {
     })
     assert.ok(hit.w >= 44 && hit.h >= 44, `touch target ${JSON.stringify(hit)} must be at least 44 x 44`)
   }
+  // At the smallest width (160 px) the bar has room for 32 px per zoom button side by side: full height, narrower.
+  for (const name of [/^Zoom in/, /^Zoom out/]) {
+    const hit = await hitArea(pRegion.getByRole('button', { name }))
+    assert.ok(hit.h >= 43 && hit.w >= 31, `phone minimum: a zoom button reacts on ${hit.w} x ${hit.h} px`)
+  }
   // Move with a finger on the grip.
   const cdp = await phoneContext.newCDPSession(phone)
   const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((p, id) => ({ x: p[0], y: p[1], id })) })
@@ -406,12 +568,11 @@ try {
   const pinched = await pinchZoom()
   assert.ok(pinched > 1.3 && pinched <= 2.001, `two fingers zoom in (got ${pinched})`)
   await touch('touchStart', [c]); await touch('touchEnd', [])
-  await phone.waitForTimeout(80)
+  await observe(80)
   await touch('touchStart', [c]); await touch('touchEnd', [])
-  await phone.waitForTimeout(200)
-  near(await pinchZoom(), 1, 0.01, 'double tap resets the zoom')
+  await wait(async () => Math.abs((await pinchZoom()) - 1) < 0.01, 'a double tap resets the zoom')
   assert.equal(clients, 1, 'phone: gestures keep one stream')
-  // The side drawer covers the mini player instead of the other way round.
+  // 15. The side drawer covers the mini player instead of the other way round (a phone's menu is above the mini player).
   await phone.locator('#cc2-menu-toggle').click()
   await phone.locator('.cc2-sidebar-open').waitFor()
   const covered = await phone.evaluate(() => {

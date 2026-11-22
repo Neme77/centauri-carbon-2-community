@@ -10,7 +10,7 @@ export const MINI_MARGIN = 8 // distance to the edges of the window
 export const MINI_DEFAULT_WIDTH = 360
 export const MINI_DEFAULT_WIDTH_PHONE = 260
 export const MINI_ZOOM_STEPS = [1, 1.5, 2]
-export const MINI_ZOOM_MAX = 2 // the stream is 640x360, so 2x still shows 320x180 real pixels
+export const MINI_ZOOM_MAX = 2 // digital zoom only magnifies the camera service's stream, so more than 2x would just look blurry
 
 // Desktop: 240 px up to 640 px, at most half the window. Phone (narrow window): 160 px up to the window width minus 24 px,
 // because half of a phone screen is smaller than the desktop minimum.
@@ -53,10 +53,14 @@ const readSaved = (): { w: number | null; x: number | null; y: number | null } =
   }
 }
 
+// Whether the window is open is a store of its own: it changes rarely, and the App and the camera card read it.
+// The geometry below changes with every pointer step of a drag or a zoom, so only the window itself may read it
+// (a shared store would re-render the whole app for every step).
+export const miniplayerOpen = store({ open: false })
+
 // `w` is the width in px (null: the default for this screen); `x` and `y` are the window's left and top edge as a
 // share of the window size (null: bottom right), so the place still fits after a rotation or a resize.
 export const miniplayer = store({
-  open: false,
   ...readSaved(),
   zoom: 1,
   panX: 0,
@@ -68,7 +72,10 @@ export const saveMiniplayer = () => {
   ls.set(KEY, JSON.stringify({ w, x, y }))
 }
 
-export const openMiniplayer = () => miniplayer.set({ open: true })
+export const openMiniplayer = () => miniplayerOpen.set({ open: true })
 
 // A closed mini player starts again at 1x, showing the whole picture.
-export const closeMiniplayer = () => miniplayer.set({ open: false, zoom: 1, panX: 0, panY: 0 })
+export const closeMiniplayer = () => {
+  miniplayer.set({ zoom: 1, panX: 0, panY: 0 })
+  miniplayerOpen.set({ open: false })
+}

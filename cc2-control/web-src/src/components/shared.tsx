@@ -9,7 +9,7 @@ import { cameraPreferences, setPersistentCamera, type Key, t } from '@/lib/i18n'
 import { errText, notify, post, tpl } from '@/lib/api'
 import { poll, usePoll } from '@/lib/poll'
 import { store } from '@/lib/store'
-import { miniplayer, openMiniplayer } from '@/lib/miniplayer'
+import { miniplayerOpen, openMiniplayer } from '@/lib/miniplayer'
 import { camera, printer, refreshPrinter } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/field'
@@ -353,7 +353,7 @@ export const CameraStream = ({
   const { data, at } = printer.use()
   const owner = data?.camera_viewer
   // The hint that the mini player has the picture is only true while it is open.
-  const miniOpen = miniplayer.use().open
+  const miniOpen = miniplayerOpen.use().open
   const shownNote = note === 'common.camera_in_miniplayer' && !miniOpen ? '' : note
   const clearRetry = () => {
     if (retry.current !== undefined) clearTimeout(retry.current)
@@ -418,6 +418,14 @@ export const CameraStream = ({
     // Not when paused, hidden or unmounted while claiming, or when a newer start took over.
     if (live.current && attempt === starts.current) connect()
   }
+  // The mini player was paused in a hidden tab, where it could not see another viewer take the camera. Looking at the
+  // newest state first, it closes quietly if somebody else has the camera now, instead of taking it back from them.
+  const resumeUnlessTaken = async () => {
+    await refreshPrinter()
+    const now = printer.get().data?.camera_viewer
+    if (now && now !== viewer.current) onTakenOver?.()
+    else await start()
+  }
   const current = (element: HTMLImageElement) =>
     live.current && element === img.current && element.getAttribute('src') === activeSrc.current
   const lost = (element: HTMLImageElement) => {
@@ -455,7 +463,7 @@ export const CameraStream = ({
       } else if (!document.hidden && bare && pausedHidden.current) {
         // The bare picture was opened by its own button: it comes back by itself when the page is shown again.
         pausedHidden.current = false
-        void start()
+        void (onTakenOver ? resumeUnlessTaken() : start())
       }
     }
     const leaving = () => {
@@ -581,6 +589,7 @@ export const CameraStream = ({
           </Button>
           <Button
             class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
+            data-miniplayer-open
             onClick={() => {
               // The mini player takes the camera over from this card, which then simply waits.
               if (live.current) stop('common.camera_in_miniplayer')

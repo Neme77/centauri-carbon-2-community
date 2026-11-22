@@ -285,7 +285,33 @@ export const MiniPlayer = () => {
     }
     element.addEventListener('wheel', wheel, { passive: false })
     return () => element.removeEventListener('wheel', wheel)
-  })
+  }, []) // the handler only reads refs and the store, so it is attached once and not on every pointer step
+
+  // Closing on purpose (the X button or Escape): the focus goes back to the camera card's Mini player button when the page
+  // has one, instead of falling to the page's start. Closing because another viewer took the camera leaves the focus alone.
+  const region = useRef<HTMLElement>(null)
+  const closeByUser = () => {
+    const hadFocus = region.current?.contains(document.activeElement)
+    closeMiniplayer()
+    if (hadFocus) document.querySelector<HTMLElement>('[data-miniplayer-open]')?.focus()
+  }
+  const regionKey = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return
+    e.preventDefault()
+    closeByUser()
+  }
+
+  // Said aloud by screen readers while the picture is not there yet (the visible hint inside the picture is not announced).
+  const announcement = (control: StreamControl) =>
+    !control.on || control.ready
+      ? ''
+      : t(
+          control.gaveUp
+            ? 'common.camera_gave_up'
+            : control.failed
+              ? 'common.camera_unavailable'
+              : 'common.waiting_for_camera_stream'
+        )
 
   const layout = (frame: VNode, control: StreamControl) => (
     <>
@@ -308,6 +334,9 @@ export const MiniPlayer = () => {
         }}
       >
         {frame}
+        <span class="sr-only" role="status">
+          {announcement(control)}
+        </span>
         {control.ready && (
           <span class="cc2-mini-badge cc2-mini-live">
             <Dot /> {t('common.live')}
@@ -323,7 +352,7 @@ export const MiniPlayer = () => {
           class="cc2-mini-close"
           aria-label={t('common.miniplayer_close')}
           title={t('common.miniplayer_close')}
-          onClick={closeMiniplayer}
+          onClick={closeByUser}
         >
           <span>
             <X size={14} aria-hidden="true" />
@@ -355,6 +384,7 @@ export const MiniPlayer = () => {
           class="cc2-mini-grip"
           aria-label={t('common.miniplayer_move')}
           title={t('common.miniplayer_move')}
+          aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown"
           onPointerDown={gripDown}
           onPointerMove={gripMove}
           onPointerUp={gripUp}
@@ -415,8 +445,10 @@ export const MiniPlayer = () => {
 
   return (
     <section
+      ref={region}
       aria-label={t('common.miniplayer_region')}
       class="cc2-miniplayer"
+      onKeyDown={regionKey}
       style={{ left: `${left}px`, top: `${top}px`, width: `${width}px` }}
     >
       <CameraStream standalone bare onTakenOver={closeMiniplayer} layout={layout} />
