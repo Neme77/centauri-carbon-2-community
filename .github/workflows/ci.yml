@@ -215,6 +215,9 @@ jobs:
       - name: Mesh-guided screw alignment (plane fit and display)
         run: npm run test:mesh-align
 
+      - name: Console poll (unchanged answers) and screw view cadence
+        run: npm run test:console-poll
+
       - name: Library mesh selection and guarded activation
         run: npm run test:mesh-selector
         env:
