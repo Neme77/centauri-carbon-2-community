@@ -189,6 +189,52 @@
 }
 :root[data-theme="klipper"] nav a.text-cyan { box-shadow: inset 3px 0 0 var(--cyan); }
 :root[data-theme="klipper"] .cc2-main section h2 { text-transform: uppercase; letter-spacing: .06em; font-size: .8125rem; }
+/* Dune: a warm light theme. Sand-coloured page, cream-white cards with a firm warm edge and a deep teal accent, so white surfaces stand out without the cold blue of the other light themes. Every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="dune"] {
+  color-scheme: light;
+  --bg: #ebe0cf; --panel: #fffdf8; --edge: #bfae92; --text: #2a2118; --muted: #5e5039; --field: #f6efe2; --ink: #ffffff;
+  --cyan: #0a6b6b; --green: #2a6b1f; --amber: #7a4a00; --red: #a8262b; --blue: #1f5fa8;
+  --well: #2a2118; --well-fg: #fbf3e4;
+  --shadow-card: 0 1px 0 #fff inset, 0 1px 2px rgb(74 52 20 / .12), 0 12px 26px -14px rgb(122 74 0 / .45);
+  --shadow-pop: 0 14px 40px -8px rgb(74 52 20 / .34), 0 2px 8px rgb(74 52 20 / .14);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent), 0 2px 12px -2px color-mix(in srgb, var(--cyan) 34%, transparent);
+}
+:root[data-theme="dune"] body {
+  background:
+    radial-gradient(ellipse 55% 45% at 96% -8%, color-mix(in srgb, #ffc46b 46%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 40% at -4% 100%, color-mix(in srgb, #7fc9bd 30%, transparent), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  background-size: 100% max(100vh, 100%);
+}
+:root[data-theme="dune"] section.bg-panel { border-bottom: 2px solid color-mix(in srgb, var(--cyan) 45%, var(--edge)); }
+:root[data-theme="dune"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 11%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 35%, transparent); }
+/* Swamp: a dark theme in sickly, rotten greens. Near-black moss page, olive panels and a mouldy olive-lime accent; the "ok" status green is a cooler emerald so it never reads as the accent. Every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="swamp"] {
+  color-scheme: dark;
+  --bg: #10130b; --panel: #1a1f12; --edge: #46513a; --text: #eef0df; --muted: #aab38f; --field: #242b19; --ink: #10130b;
+  --cyan: #a9b83c; --green: #4fd18b; --amber: #e6a83c; --red: #ff8272; --blue: #74b4d6;
+  --well: #0a0c06; --well-fg: #eef0df;
+  --shadow-card: 0 0 0 1px color-mix(in srgb, #a9b83c 10%, transparent), 0 10px 26px -14px #000d;
+  --shadow-pop: 0 14px 40px -8px #000d, 0 0 0 1px color-mix(in srgb, #a9b83c 24%, transparent);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 50%, transparent), 0 0 16px -4px color-mix(in srgb, var(--cyan) 45%, transparent);
+}
+:root[data-theme="swamp"] body {
+  background:
+    radial-gradient(ellipse 60% 42% at 4% -6%, color-mix(in srgb, #8a9a2a 26%, transparent), transparent 70%),
+    radial-gradient(ellipse 55% 40% at 100% 100%, color-mix(in srgb, #6b5a1e 30%, transparent), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  background-size: 100% max(100vh, 100%);
+}
+:root[data-theme="swamp"] section.bg-panel { border-left: 2px solid color-mix(in srgb, var(--cyan) 38%, var(--edge)); }
+:root[data-theme="swamp"] nav a.text-cyan,
+:root[data-theme="swamp"] button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--cyan) 12%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+:root[data-theme="swamp"] .cc2-dashboard .text-2xl:not(h2),
+:root[data-theme="swamp"] .cc2-job-stats strong { color: var(--amber); }
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400-700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
@@ -666,12 +712,12 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 60%, #315061), color-mix(in srgb, var(--bg) 55%, #132a36));
 }
 .cc2-camera-idle-controls { bottom: 2px; }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused {
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused {
   background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 58%), linear-gradient(145deg, #e9f1f4, #dce8ed);
 }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-grid { opacity: .12; }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-grid { opacity: .12; }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
 
 /* Fit the slider into the existing heading space instead of adding another card row. */
 .cc2-tuning-field > .cc2-tuning-heading {
