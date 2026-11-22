@@ -10,7 +10,51 @@ static void expect(int condition,const char *label){
     printf("PASS: %s\n",label);
 }
 
+/* Non-finite numbers (nan, inf, an overflow such as 1e999) must be refused on
+ * every action that sends a number to the printer. Comparisons with NaN are
+ * always false, so a range check alone lets it through. */
+static void test_non_finite_numbers_refused(void){
+    mqtt_client m; char script[700],reason[256];
+    memset(&m,0,sizeof(m));
+    m.have_machine_status=1; m.machine_status=1;
+    m.connected=m.registered=1; m.last_message=time(NULL);
+    m.have_position=1; m.x=m.y=m.z=10.0; strcpy(m.homed_axes,"xyz");
+    m.have_extruder_temp=1; m.extruder_temp=200.0;
+    const char *refused[]={
+        "move:X:nan","move:X:-nan","move:Y:nan","move:Z:nan","move:x:nan",
+        "move:X:inf","move:X:-inf","move:Z:Infinity","move:X:1e999","move:X:-1e999","move:X:nan(abc)",
+        "extrude:nan","extrude:-nan","extrude:inf","extrude:-inf","extrude:1e999","extrude:-1e999",
+        "heater:heater_bed:nan","heater:heater_bed:-nan","heater:heater_bed:inf","heater:heater_bed:-inf","heater:heater_bed:1e999",
+        "heater:extruder:nan","heater:extruder:inf",
+        "fan:part:nan","fan:aux:nan","fan:box:nan","fan:part:inf","fan:part:-inf","fan:part:1e999",
+        "zoffset:adjust:nan","zoffset:adjust:inf","zoffset:undo:nan","zoffset:undo:-inf"
+    };
+    for(size_t i=0;i<sizeof(refused)/sizeof(refused[0]);i++){
+        strcpy(script,"unset");reason[0]=0;
+        if(control_build_script(refused[i],&m,script,sizeof(script),reason,sizeof(reason))){
+            fprintf(stderr,"FAIL: \"%s\" must be refused, built script \"%s\"\n",refused[i],script);exit(1);
+        }
+        expect(reason[0]!=0,refused[i]);
+    }
+    struct {const char *action,*script;} accepted[]={
+        {"move:X:5","SAVE_GCODE_STATE NAME=CC2_CONTROL_MOVE\nG91\nG0 X5.000 F6000\nRESTORE_GCODE_STATE NAME=CC2_CONTROL_MOVE"},
+        {"move:Z:-1.5","SAVE_GCODE_STATE NAME=CC2_CONTROL_MOVE\nG91\nG0 Z-1.500 F600\nRESTORE_GCODE_STATE NAME=CC2_CONTROL_MOVE"},
+        {"extrude:5","SAVE_GCODE_STATE NAME=CC2_CONTROL_EXTRUDE\nM83\nG1 E5.00 F300\nRESTORE_GCODE_STATE NAME=CC2_CONTROL_EXTRUDE"},
+        {"extrude:-5","SAVE_GCODE_STATE NAME=CC2_CONTROL_EXTRUDE\nM83\nG1 E-5.00 F600\nRESTORE_GCODE_STATE NAME=CC2_CONTROL_EXTRUDE"},
+        {"heater:heater_bed:60","SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60.0"},
+        {"heater:heater_bed:0","SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0.0"},
+        {"fan:part:50","M106 S127"},{"fan:aux:100","M106 P2 S255"},{"fan:box:0","SET_CAVITY_FAN SPEED=0"}
+    };
+    for(size_t i=0;i<sizeof(accepted)/sizeof(accepted[0]);i++){
+        script[0]=0;
+        expect(control_build_script(accepted[i].action,&m,script,sizeof(script),reason,sizeof(reason))&&!strcmp(script,accepted[i].script),accepted[i].action);
+    }
+    /* the finite zoffset values stay valid (idle, Z homed) */
+    expect(control_build_script("zoffset:adjust:0.01",&m,script,sizeof(script),reason,sizeof(reason)),"zoffset:adjust:0.01 stays accepted");
+}
+
 int main(void){
+    test_non_finite_numbers_refused();
     mqtt_client mqtt; char script[700],reason[256];
     memset(&mqtt,0,sizeof(mqtt));
     mqtt.have_machine_status=1; mqtt.machine_status=1;
