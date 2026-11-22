@@ -176,6 +176,9 @@ jobs:
           npm run test:rotation-restore
           npm run test:motor-mode
 
+      - name: ElegooSlicer guide in the Integrations settings
+        run: npm run test:elegooslicer-guide
+
       - name: Canvas states and explicit recovery loading
         run: npm run test:canvas-states && npm run test:canvas-layout && npm run test:canvas-reset
 
