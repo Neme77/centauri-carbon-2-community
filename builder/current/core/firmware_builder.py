@@ -79,8 +79,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_COMMIT='2b5fe8a9ff80d385c74467155100aca1e5e3f57d'
-CC2_CONTROL_SOURCE_SHA256='5f54a5524a0512db50df8b56318ae4c3ed5b3f4b28bfe37012b5bd6b7ebebf50'
+CC2_CONTROL_SOURCE_COMMIT='89981429a432b00a5f5b0fef2e07005a880ab521'
+CC2_CONTROL_SOURCE_SHA256='b5e409d87f00fdc56dce17dfb26681f533c802d9a5d684970be192f596ccf02e'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 CC2_UPDATE_FILES=('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
 # Translation files are optional and open-ended (one per language), unlike the
@@ -444,10 +444,31 @@ def install_release_printer(printer,reference):
  reqhash(printer,manifest['input_sha256'],'HTTP intermediate')
  Path(printer).write_bytes(validate_release_printer(Path(reference).read_bytes()))
 
-REACTOR_HELPER_SHA256='d9af4d96820846d0fab1f6dfe5ef91c10221cbf6196653eba84446c69af9912a'
-CAMERA_HELPER_SHA256='74b8865cdb1fe12df4bcc54670a5b85bab7333ddbcf3959b47cc460cf0809d61'
-INTEGRATION_HELPERS={'connections_component.py': 'c4d6794f747be1f9ae8b956dc12184db460e3a173f1f11d531a95383ef991249', 'native_display_component.py': '2e60032509fc1ed125ce40fc0524d148895d149f990fb7115a9c41a16cf04e6c', 'resource_update.py': '840c449879aaf008e41bdf5544df822c021f855f9fddc116b1792021ffaef749'}
-INTEGRATION_INPUTS={'experimental/native-display/package.py': 'b75ee7d630ed35379dab70e2d8dc1b95ef67826b44a0d97327bae0a0d0465a79', 'experimental/native-display/patch.py': '1438fdd85310f5965f9562abdfdcac1a13e87c7b413755fa350b9795ba292b2c', 'experimental/native-display/patch-plan.json': '561acf7938fb7993ab91e6d6449faf33fde098882c269929a11b089b28fc7d09', 'experimental/native-display/baseline-pins.txt': 'c2f1356d42e695bcfc953e69e37560d7a6c6a976c70815cebe3422951dd246c6', 'experimental/native-display/png_palette.py': 'cdbf580042498acdf5a29e63978ad798639fad424c291a4fff03a36799e21882', 'experimental/native-display/recolor-plan.json': '0a8fe579afee1321a5d75bba743bb9ebf765beb2bdf0b26cbbdf14218f188616', 'experimental/native-display/elf_layout.py': 'c61b033a988e16c190303415544162721caa5a62c35a435487d8091d93098d28', 'experimental/native-display/assets/manifest.json': 'cb71218bdf34a87b3e55911b3eb8846e9d3a612b7d98eb77c6eea98d5a3fe435', 'experimental/native-display/manage.sh': '081f50e94bfe8ff5aff8894364f7bfb81d03ba6041fd4d85441db60d113ee0d0', 'experimental/native-display/thermal.awk': '1cb4534a5c6b447cfd8dd963c125614115effeb4d469b61e0eb0f50469f2d749', 'experimental/native-display/LICENSE-LUCIDE.txt': 'b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57', 'builder/current/components/connections/firmware-seed.sh': 'fe9f93e04145fdfb9b656a8316d36eb38102cfcf0dfb51c18d6136c4515e38b0', 'builder/current/components/connections/firmware.init': '0023ae212221603e3012b5afa67ef3a07598c36d756dfb32a7a95ef73579d168'}
+REACTOR_HELPER_SHA256='6f503bf0aa116c5478f38b3805fb9a148206e277b9ba07f82f894f676d6b7399'
+CAMERA_HELPER_SHA256='4b79c897a5f83910681a5eaac10c4c58296939bdc7bee6683c604df70b154c40'
+INTEGRATION_HELPERS = {
+ 'connections_component.py': 'a92320c1f86be88e71c741c23111f31991603868f1cf3bb453c22cd3ae7bdcfa',
+ 'native_display_component.py': '2c9a271b02af60bcb0751f192db5607c950649bf7bac7e948c39ebca5acb1647',
+ 'resource_update.py': '672f1b369e31723a52f79e24e55e58c31ff3185ec763c14394d78c65ddd789e1',
+}
+INTEGRATION_INPUTS = {
+ 'experimental/native-display/package.py': 'b75ee7d630ed35379dab70e2d8dc1b95ef67826b44a0d97327bae0a0d0465a79',
+ 'experimental/native-display/patch.py': '678b7ab79ce4c068128e2784c09bf6bda044e13be930486da70b10dcce5ac919',
+ 'experimental/native-display/patch-plan.json': 'ade9b489f067dc3e1eaab3cbff99144a27304975087b077d3e0d9748d55e7ab5',
+ 'experimental/native-display/baseline-pins.txt': 'e1a46291a7c34c75d9019369921a495038c9f8cb04a04243662d5464f69b088f',
+ 'experimental/native-display/png_palette.py': '9cbe383c4f751bd94f01e32205e90f46835e2ed50427901e3cce2ae3e0c9a161',
+ 'experimental/native-display/recolor-plan.json': 'fa1d698f33efab313c56dc835734c129e3711e165d7fbccb18e8b8f3307b492c',
+ 'experimental/native-display/elf_layout.py': '9d1c016043f5a29133b7285c128d986e1c933281b89818df0b93c6b883dc3a82',
+ 'experimental/native-display/assets/manifest.json': '1d5cd2cda513a7e726fb821c3a165c1443875fa769c029e600bd195a8a25a8e7',
+ 'experimental/native-display/manage.sh': '081f50e94bfe8ff5aff8894364f7bfb81d03ba6041fd4d85441db60d113ee0d0',
+ 'experimental/native-display/thermal.awk': '1cb4534a5c6b447cfd8dd963c125614115effeb4d469b61e0eb0f50469f2d749',
+ 'experimental/native-display/LICENSE-LUCIDE.txt': '6fc5b7332939dd5c61af3a5f97450f7bc05d4a396dd0bc21ac341716b3b05096',
+ 'builder/current/components/connections/firmware-seed.sh': 'fe9f93e04145fdfb9b656a8316d36eb38102cfcf0dfb51c18d6136c4515e38b0',
+ 'builder/current/components/connections/firmware.init': '0023ae212221603e3012b5afa67ef3a07598c36d756dfb32a7a95ef73579d168',
+ 'experimental/native-display/patch_thumbnail.py': 'cb2764c1c5a574497bae73749dcc9ce310d1720c7af0f63a469fed917f4af46e',
+ 'experimental/native-display/thumbnail.c': 'f82d820535c491e84a31ae9a7610890f92bb3de616d13d5d6b1dbac5b5e4dc9b',
+ 'experimental/native-display/thumbnail07.json': 'd6a283a6231be38c345a77a3eb3acc51d80eee86d36246c267418eb16457aea2',
+}
 
 
 def firmware_release_version():
