@@ -38,7 +38,7 @@ export const ConfirmDialog = () => {
           {t('common.cancel')}
         </Button>
         <Button variant={req.danger ? 'danger' : 'primary'} onClick={() => close(true)} autofocus={!req.danger}>
-          {t('common.confirm')}
+          {req.confirmText ?? t('common.confirm')}
         </Button>
       </div>
     </Dialog>

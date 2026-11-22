@@ -8,6 +8,7 @@ import { Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Notice, Warn } from '@/components/shared'
+import { SpoolmanHeld } from '@/components/spoolman-held'
 import { draftFields, draftFrom, draftProblem, placeName, SpoolEditor, SpoolMeter, Swatch } from '@/components/spool-ui'
 import { errText, notify } from '@/lib/api'
 import { ask } from '@/lib/confirm'
@@ -864,6 +865,7 @@ export const Spools = () => {
         <div class="grid gap-3.5">
           <Tracking lib={lib} busy={busy} act={act} />
           {lib.spoolman_enabled && <SpoolmanCard lib={lib} busy={busy} act={act} />}
+          {lib.spoolman_enabled && <SpoolmanHeld lib={lib} busy={busy} act={act} />}
           {lib.enabled && <InPrinter lib={lib} busy={busy} act={act} />}
           <Inventory lib={lib} busy={busy} act={act} />
           <RecentHistory lib={lib} />

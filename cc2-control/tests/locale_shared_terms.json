@@ -499,6 +499,13 @@
     ],
     "reason": "Established technical vocabulary retained by these locale catalogs"
   },
+  "spools.held_col_date": {
+    "text": "Date",
+    "locales": [
+      "fr"
+    ],
+    "reason": "Same spelling in these languages"
+  },
   "control.motor_mode_normal": {
     "text": "Normal",
     "locales": [
