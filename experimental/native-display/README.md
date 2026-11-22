@@ -75,3 +75,47 @@ The preceding full-display preview was accepted on the owner's CC2, including
 LAN display information. The latest cyan/inline-LAN refinement passed its private
 offline installer gates; physical acceptance of the cumulative candidate remains
 pending. Do not infer complete hardware certification from these checks.
+
+## Large G-code previews on base .13 (offline review)
+
+The original bounded thumbnail reader and sizing correction were authored by
+@beanbo in [PR #411](https://github.com/Neme77/centauri-carbon-2-community/pull/411),
+commit `883f96bd978d74dcb3a11a89ecc20262de57d5a2`. The original C source,
+.07 patcher and .07 payload plan are retained here unchanged. Their presence
+does not enable the correction in the firmware builder.
+
+`patch_thumbnail13.py` adapts those authored routines to the exact reviewed
+multilingual GUI on ELEGOO `02.01.01.13` (input SHA-256
+`9a31c54518a290d99340e02c89b2b21e103a0fb7085003cbd9498322f8de5799`).
+This is the previously tested language/back-button GUI, not the stock .13
+executable and not every Community GUI. Other binaries are refused.
+
+The .13 libc imports were resolved from ELF dynamic symbols and the LVGL
+addresses from native function symbols. The seven hooks verify their original
+instructions and native call targets. The payload uses a verified zero-filled
+RX gap; the patcher checks the resulting branch ranges and permits changes only
+to those hooks, the payload span and RX sizes. Existing language code and
+resources remain byte-identical.
+
+Build/review commands (private inputs and outputs):
+```sh
+python3 experimental/native-display/patch_thumbnail13.py /private/multilingual-gui \
+  /private/thumbnail13.json --build-plan --cross /path/to/arm-toolchain-prefix-
+python3 experimental/native-display/patch_thumbnail13.py /private/multilingual-gui \
+  /private/gui-with-thumbnail-fix
+python3 -m unittest discover -s builder/current/tests -p 'test_native_thumbnail*.py'
+```
+
+The committed .13 plan was built with ARM GCC 6.5.0 and produces SHA-256
+`607dce1bae40f19a82f2318a71f769cf2394e2fc45d84090dcd308a0bc686c9e`.
+A different compiler may produce a different plan; that requires a separate
+source/output review rather than silently replacing the committed identity.
+
+Private .13 review passed the six authored host test methods, ten parser cases
+compiled for ARM and run through qemu-arm, and ARM sizing fixtures. The exact
+input, native call targets and unchanged language bytes were checked.
+The geometry fixtures simulate LVGL; they do not execute the vendor GUI/LVGL
+implementation. This is not a .13 hardware test. File-list, file details,
+history, the language menu and back navigation still need physical acceptance
+on .13 before release integration. No installer or signed firmware is supplied,
+and RFID, printer services and boot configuration are outside this change.
