@@ -1,6 +1,6 @@
 import { GripVertical, Minus, Pause, Play, Plus, X } from 'lucide-preact'
 import type { VNode } from 'preact'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { Dot } from '@/components/ui/badge'
 import { CameraStream, type StreamControl } from '@/components/shared'
 import { i18n, t, tpl } from '@/lib/i18n'
@@ -16,7 +16,6 @@ import {
   miniHeight,
   miniWidthLimits,
   miniplayer,
-  saveMiniplayer,
 } from '@/lib/miniplayer'
 
 const KEY_STEP = 16
@@ -37,6 +36,43 @@ const fitHeight = (width: number, viewportWidth: number, viewportHeight: number,
 // The area the window may occupy: the whole browser window with a small margin. It is drawn above the header and the side
 // menu (a phone's menu drawer, dialogs and notices stay above it), so it can be put anywhere, like a picture-in-picture.
 const area = () => ({ left: MINI_MARGIN, top: MINI_MARGIN })
+
+// The emergency stop (and on a phone the menu button) in the header is a locked area: the window may be put anywhere else,
+// but it slides around these buttons instead of covering them. Of the four ways out (left, right, above, below) the
+// shortest one that stays in the browser window is taken.
+const KEEP_OUT = ['.cc2-emergency-stop', '#cc2-menu-toggle']
+const KEEP_OUT_GAP = 4
+const keepOut = (left: number, top: number, width: number, height: number) => {
+  const now = viewportSize()
+  const b = area()
+  const maxLeft = Math.max(b.left, now.w - width - MINI_MARGIN)
+  const maxTop = Math.max(b.top, now.h - height - MINI_MARGIN)
+  let l = left
+  let t = top
+  for (const selector of KEEP_OUT) {
+    const r = document.querySelector(selector)?.getBoundingClientRect()
+    if (!r || r.width === 0 || r.height === 0) continue
+    const edge = {
+      left: r.left - KEEP_OUT_GAP,
+      right: r.right + KEEP_OUT_GAP,
+      top: r.top - KEEP_OUT_GAP,
+      bottom: r.bottom + KEEP_OUT_GAP,
+    }
+    if (!(l < edge.right && l + width > edge.left && t < edge.bottom && t + height > edge.top)) continue
+    const ways = [
+      { l: edge.left - width, t },
+      { l: edge.right, t },
+      { l, t: edge.top - height },
+      { l, t: edge.bottom },
+    ].filter(c => c.l >= b.left && c.l <= maxLeft && c.t >= b.top && c.t <= maxTop)
+    const best = ways.sort((p, q) => Math.abs(p.l - l) + Math.abs(p.t - t) - (Math.abs(q.l - l) + Math.abs(q.t - t)))[0]
+    if (best) {
+      l = best.l
+      t = best.t
+    } else t = Math.min(maxTop, edge.bottom)
+  }
+  return { l, t }
+}
 
 type Pointer = { x: number; y: number }
 type Gesture =
@@ -69,8 +105,9 @@ export const MiniPlayer = () => {
   const frameHeight = Math.round((width * 9) / 16)
   const maxLeft = Math.max(bounds.left, viewport.w - width - MINI_MARGIN)
   const maxTop = Math.max(bounds.top, viewport.h - height - MINI_MARGIN)
-  const left = between(state.x === null ? maxLeft - MINI_MARGIN : state.x * viewport.w, bounds.left, maxLeft)
-  const top = between(state.y === null ? maxTop - MINI_MARGIN : state.y * viewport.h, bounds.top, maxTop)
+  const wantedLeft = between(state.x === null ? maxLeft - MINI_MARGIN : state.x * viewport.w, bounds.left, maxLeft)
+  const wantedTop = between(state.y === null ? maxTop - MINI_MARGIN : state.y * viewport.h, bounds.top, maxTop)
+  const { l: left, t: top } = keepOut(wantedLeft, wantedTop, width, height)
   const zoom = clampZoom(state.zoom)
   const panX = clampPan(state.panX, width, zoom)
   const panY = clampPan(state.panY, frameHeight, zoom)
@@ -85,7 +122,8 @@ export const MiniPlayer = () => {
     const b = area()
     const l = between(nextLeft, b.left, Math.max(b.left, now.w - nextWidth - MINI_MARGIN))
     const tp = between(nextTop, b.top, Math.max(b.top, now.h - miniHeight(nextWidth) - MINI_MARGIN))
-    miniplayer.set({ x: l / now.w, y: tp / now.h })
+    const free = keepOut(l, tp, nextWidth, miniHeight(nextWidth))
+    miniplayer.set({ x: free.l / now.w, y: free.t / now.h })
   }
   // The size handle is the top left corner, so by default the corner opposite to it (bottom right) stays where it is.
   // Where there is no room towards the top or the left (the window sits against the edge of the browser window), that side
@@ -160,7 +198,6 @@ export const MiniPlayer = () => {
   const gripUp = (e: PointerEvent) => {
     if (drag.current?.id !== e.pointerId) return
     drag.current = null
-    saveMiniplayer()
   }
   const gripKey = (e: KeyboardEvent) => {
     const step = e.shiftKey ? KEY_STEP_BIG : KEY_STEP
@@ -174,7 +211,6 @@ export const MiniPlayer = () => {
     if (!by) return
     e.preventDefault()
     place(geometry.current.left + by[0], geometry.current.top + by[1])
-    saveMiniplayer()
   }
 
   // Size: the corner at the top left. Moving it up or to the left makes the window larger (the other way round where
@@ -200,7 +236,6 @@ export const MiniPlayer = () => {
   const cornerUp = (e: PointerEvent) => {
     if (stretch.current?.id !== e.pointerId) return
     stretch.current = null
-    saveMiniplayer()
   }
   const cornerKey = (e: KeyboardEvent) => {
     const step = e.shiftKey ? KEY_STEP_BIG : KEY_STEP
@@ -218,7 +253,6 @@ export const MiniPlayer = () => {
     if (next === null) return
     e.preventDefault()
     resize(next, keyAnchor())
-    saveMiniplayer()
   }
 
   // Zoom: digital, in the browser. The picture the camera sends is only magnified; the camera service sees nothing.
@@ -342,46 +376,13 @@ export const MiniPlayer = () => {
     return () => element.removeEventListener('wheel', wheel)
   }, []) // the handler only reads refs and the store, so it is attached once and not on every pointer step
 
-  // Closing on purpose (the X button or Escape): the focus goes back to the camera card's Mini player button when the page
+  // Closing on purpose (the X button): the focus goes back to the camera card's Mini player button when the page
   // has one, instead of falling to the page's start. Closing because another viewer took the camera leaves the focus alone.
   const region = useRef<HTMLElement>(null)
-  // The emergency stop and (on a phone) the menu button are always above the mini player: the window is drawn with a hole
-  // where it covers them, so they stay visible and can be pressed. The header is its own layer under the window, so a hole
-  // is the way to put them on top.
-  useLayoutEffect(() => {
-    const element = region.current
-    if (!element) return
-    const box = element.getBoundingClientRect()
-    const holes = ['.cc2-emergency-stop', '#cc2-menu-toggle']
-      .map(selector => document.querySelector(selector)?.getBoundingClientRect())
-      .filter(
-        (r): r is DOMRect =>
-          Boolean(r) &&
-          (r as DOMRect).width > 0 &&
-          (r as DOMRect).height > 0 &&
-          (r as DOMRect).left < box.right &&
-          (r as DOMRect).right > box.left &&
-          (r as DOMRect).top < box.bottom &&
-          (r as DOMRect).bottom > box.top
-      )
-    if (holes.length === 0) {
-      element.style.clipPath = ''
-      return
-    }
-    let d = `M0 0H${box.width}V${box.height}H0Z`
-    for (const r of holes)
-      d += `M${r.left - box.left - 2} ${r.top - box.top - 2}h${r.width + 4}v${r.height + 4}h-${r.width + 4}Z`
-    element.style.clipPath = `path(evenodd, '${d}')`
-  })
   const closeByUser = () => {
     const hadFocus = region.current?.contains(document.activeElement)
     closeMiniplayer()
     if (hadFocus) document.querySelector<HTMLElement>('[data-miniplayer-open]')?.focus()
-  }
-  const regionKey = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape' || e.defaultPrevented) return
-    e.preventDefault()
-    closeByUser()
   }
 
   // Said aloud by screen readers while the picture is not there yet (the visible hint inside the picture is not announced).
@@ -546,7 +547,6 @@ export const MiniPlayer = () => {
       ref={region}
       aria-label={t('common.miniplayer_region')}
       class="cc2-miniplayer"
-      onKeyDown={regionKey}
       style={{ left: `${left}px`, top: `${top}px`, width: `${width}px` }}
     >
       <CameraStream standalone bare onTakenOver={closeMiniplayer} layout={layout} />

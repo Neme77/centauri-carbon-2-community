@@ -1,6 +1,6 @@
-import { ls, store } from './store'
+import { store } from './store'
 
-// The mini player: the live camera in a small window that floats over every page. Its size and position are
+// The mini player: the live camera in a small window that floats over every page. Its size is
 // remembered per browser (they depend on the screen, so they are not part of the printer's preferences); whether
 // it is open is not, because the camera must never start by itself after a reload.
 const KEY = 'cc2-miniplayer'
@@ -38,20 +38,12 @@ export const clampPan = (offset: number, size: number, zoom: number) => {
   return Math.min(limit, Math.max(-limit, offset))
 }
 
-const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
-
-const readSaved = (): { w: number | null; x: number | null; y: number | null } => {
-  try {
-    const saved = JSON.parse(ls.get(KEY) || 'null')
-    return {
-      w: finite(saved?.w) ? saved.w : null,
-      x: finite(saved?.x) ? saved.x : null,
-      y: finite(saved?.y) ? saved.y : null,
-    }
-  } catch {
-    return { w: null, x: null, y: null }
-  }
-}
+// Nothing about the window is remembered: closing it (X, the button in the card, another viewer taking the camera) and
+// reloading the page both end with the standard size at the bottom right on the next opening. A value an earlier version
+// stored in this browser is removed once, when the page starts.
+try {
+  localStorage.removeItem(KEY)
+} catch {}
 
 // Whether the window is open is a store of its own: it changes rarely, and the App and the camera card read it.
 // The geometry below changes with every pointer step of a drag or a zoom, so only the window itself may read it
@@ -59,23 +51,20 @@ const readSaved = (): { w: number | null; x: number | null; y: number | null } =
 export const miniplayerOpen = store({ open: false })
 
 // `w` is the width in px (null: the default for this screen); `x` and `y` are the window's left and top edge as a
-// share of the window size (null: bottom right), so the place still fits after a rotation or a resize.
+// share of the window size while it is open (null: bottom right), so the place still fits after a rotation or a resize.
 export const miniplayer = store({
-  ...readSaved(),
+  w: null as number | null,
+  x: null as number | null,
+  y: null as number | null,
   zoom: 1,
   panX: 0,
   panY: 0,
 })
 
-export const saveMiniplayer = () => {
-  const { w, x, y } = miniplayer.get()
-  ls.set(KEY, JSON.stringify({ w, x, y }))
-}
-
 export const openMiniplayer = () => miniplayerOpen.set({ open: true })
 
-// A closed mini player starts again at 1x, showing the whole picture.
+// A closed mini player starts again at the standard size, at the bottom right, at 1x showing the whole picture.
 export const closeMiniplayer = () => {
-  miniplayer.set({ zoom: 1, panX: 0, panY: 0 })
+  miniplayer.set({ w: null, x: null, y: null, zoom: 1, panX: 0, panY: 0 })
   miniplayerOpen.set({ open: false })
 }

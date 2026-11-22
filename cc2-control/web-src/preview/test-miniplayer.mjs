@@ -485,7 +485,7 @@ try {
     const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((q, id) => ({ x: q[0], y: q[1], id })) })
     const walls = await wallsOf(p)
     const corner = await rect(r)
-    assert.ok(corner.x <= walls.left + 40 && corner.y <= walls.top + 80, `the window sits at the top left (${corner.x}, ${corner.y})`)
+    assert.ok(corner.x <= walls.left + 80 && corner.y <= walls.top + 140, `the window sits at the top left (${corner.x}, ${corner.y})`)
     const h = await rect(slider)
     let grown = corner
     for (const sign of [-1, 1]) {
@@ -539,7 +539,7 @@ try {
   await soft('L21 growing down and right stops at the screen edge (corner of a low window)', async () => {
     const lowCtx = await newContext({ width: 1280, height: 330 })
     const p = await fresh(null, lowCtx)
-    await p.addStyleTag({ content: '#cc2-menu-toggle{display:none!important}' }) // a short landscape window shows the menu button in the corner
+    await p.addStyleTag({ content: '#cc2-menu-toggle,.cc2-emergency-stop{display:none!important}' }) // the locked header buttons are not the subject here
     await openMini(p)
     const r = regionOf(p)
     const slider = r.getByRole('slider', { name: 'Mini player size', exact: true })
@@ -584,9 +584,16 @@ try {
     near(b.x, 8, 1, 'left edge of the browser window'); near(b.y, 8, 1, 'top edge of the browser window')
     const top = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('.cc2-miniplayer')), [b.x + 120, b.y + 22])
     assert.equal(top, true, 'the mini player is drawn above the header and the side menu')
-    // The remembered place survives a reload and the window stays reachable.
+    // The place is not remembered: after a reload, and after closing and opening, it is at the bottom right again.
     await p.reload(); await openMini(p)
-    near((await rect(r)).x, 8, 1, 'remembered over the menu')
+    const again = await rect(r)
+    near(again.x + again.width, 1440 - 16, 2, 'reload: right'); near(again.y + again.height, 1000 - 16, 2, 'reload: bottom')
+    await dragFrom(p, await barGap(r), [-300, -300], 6)
+    await r.getByRole('slider', { name: 'Mini player size', exact: true }).focus(); await p.keyboard.press('End')
+    await r.getByRole('button', { name: 'Close mini player', exact: true }).click()
+    await p.getByRole('button', { name: 'Mini player', exact: true }).click(); await r.waitFor()
+    const reopened = await rect(r)
+    near(reopened.width, 360, 1, 'close and open: the standard size again'); near(reopened.x + reopened.width, 1440 - 16, 2, 'close and open: right'); near(reopened.y + reopened.height, 1000 - 16, 2, 'close and open: bottom')
     const z = await p.evaluate(() => Number(getComputedStyle(document.querySelector('.cc2-miniplayer')).zIndex))
     assert.ok(z > 30 && z < 40, `above the header (30) and the menu (20), below notices (40) and dialogs (50): ${z}`)
     await p.getByRole('button', { name: 'Close mini player', exact: true }).click()
@@ -621,29 +628,27 @@ try {
   })
 
   const stopsOf = p => { const hits = []; p.on('request', q => { if (q.method() === 'POST' && q.url().endsWith('/api/control') && (q.postData() || '').includes('system:emergency_stop')) hits.push(Date.now()) }); return hits }
-  await soft('L26 the emergency stop is always on top: a mini player dragged over it does not block holding it', async () => {
+  const overlap = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+  await soft('L26 the emergency stop area is locked: a mini player dragged over it stays out of it, and the button works', async () => {
     const p = await fresh()
     const stops = stopsOf(p)
     await openMini(p)
     const r = regionOf(p)
     const stop = await rect(p.locator('.cc2-emergency-stop'))
-    // Drag the window so that its bar lies right over the button.
-    const gap = await barGap(r)
-    const win = await rect(r)
-    await dragFrom(p, gap, [stop.x + stop.width / 2 - gap[0] + 30, stop.y + stop.height / 2 - gap[1] + 10], 8)
-    const now = await rect(r)
-    assert.ok(now.x < stop.x + stop.width && now.x + now.width > stop.x && now.y < stop.y + stop.height, `the window overlaps the button (${JSON.stringify(now)} / ${JSON.stringify(stop)})`)
-    const topmost = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('.cc2-emergency-stop')), [stop.x + stop.width / 2, stop.y + stop.height / 2])
-    assert.equal(topmost, true, 'the emergency stop is the topmost element where they overlap')
+    for (const by of [[0, 0], [30, 10], [-80, 0], [0, 60]]) {
+      const gap = await barGap(r)
+      await dragFrom(p, gap, [stop.x + stop.width / 2 - gap[0] + by[0], stop.y + stop.height / 2 - gap[1] + by[1]], 8)
+      const now = await rect(r)
+      assert.equal(overlap(now, stop), false, `the window stays out of the emergency stop (${JSON.stringify(now)} / ${JSON.stringify(stop)})`)
+      assert.ok(now.x >= 7 && now.y >= 7 && now.x + now.width <= 1441 && now.y + now.height <= 1001, 'and stays in the browser window')
+    }
     await p.mouse.move(stop.x + stop.width / 2, stop.y + stop.height / 2)
     await p.mouse.down(); await observe(1300); await p.mouse.up()
     await wait(() => stops.length >= 1, 'holding the button asks for the emergency stop')
-    // The window is still there and can be moved away again (its bar is not blocked as a whole).
-    assert.equal(await r.count(), 1, 'the mini player stays open')
     await keepClosed(p)
   })
 
-  await soft('L27 phone: the menu button stays reachable under a mini player dragged over it', async () => {
+  await soft('L27 phone: the menu button area is locked too, and the button works', async () => {
     const phoneCtx = await newContext({ width: 393, height: 780 }, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 })
     const p = await fresh(null, phoneCtx)
     await p.addStyleTag({ content: '#cc2-preview-banner{display:none!important}' })
@@ -654,24 +659,26 @@ try {
     await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
     for (const k of ['Shift+ArrowUp', 'Shift+ArrowLeft']) for (let i = 0; i < 20; i++) await p.keyboard.press(k)
     const toggle = await rect(p.locator('#cc2-menu-toggle'))
+    const stop = await rect(p.locator('.cc2-emergency-stop'))
     const win = await rect(r)
-    assert.ok(win.x < toggle.x + toggle.width && win.y < toggle.y + toggle.height, 'the window lies over the menu button')
-    const topmost = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('#cc2-menu-toggle')), [toggle.x + toggle.width / 2, toggle.y + toggle.height / 2])
-    assert.equal(topmost, true, 'the menu button is the topmost element')
+    assert.equal(overlap(win, toggle), false, `the window stays out of the menu button (${JSON.stringify(win)})`)
+    assert.equal(overlap(win, stop), false, 'and out of the emergency stop')
     await p.locator('#cc2-menu-toggle').tap()
     await p.locator('.cc2-sidebar-open').waitFor({ timeout: 3000 })
     await p.close(); await phoneCtx.close()
     await wait(() => clients === 0, 'closed')
   })
 
-  await soft('L28 keyboard: holding Enter on the emergency stop works with a mini player over it', async () => {
+  await soft('L28 keyboard: the arrow keys do not move the window into the emergency stop; holding Enter on it works', async () => {
     const p = await fresh()
     const stops = stopsOf(p)
     await openMini(p)
     const r = regionOf(p)
     const stop = await rect(p.locator('.cc2-emergency-stop'))
-    const gap = await barGap(r)
-    await dragFrom(p, gap, [stop.x + stop.width / 2 - gap[0], stop.y + stop.height / 2 - gap[1] + 10], 8)
+    await r.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+    for (let i = 0; i < 40; i++) await p.keyboard.press('Shift+ArrowUp')
+    for (let i = 0; i < 6; i++) await p.keyboard.press('Shift+ArrowLeft')
+    for (let i = 0; i < 12; i++) { await p.keyboard.press('ArrowRight'); assert.equal(overlap(await rect(r), stop), false, `step ${i}: out of the emergency stop`) }
     await p.locator('.cc2-emergency-stop').focus()
     await p.keyboard.down('Enter'); await observe(1300); await p.keyboard.up('Enter')
     await wait(() => stops.length >= 1, 'holding Enter asks for the emergency stop')
@@ -871,34 +878,31 @@ try {
   assert.equal(clients, 1, 'moving is not a second stream')
   assert.equal(requests, unchanged, 'moving must not reconnect')
 
-  // 6. Size and position are remembered in this browser; the open state is not (the camera never starts by itself).
-  const saved = await stored()
-  assert.ok(saved && typeof saved.w === 'number' && typeof saved.x === 'number' && typeof saved.y === 'number', 'size and position are stored')
-  assert.equal('open' in saved, false, 'the open state is not stored')
-  const before = await box()
+  // 6. Nothing is remembered: closing the window by hand (X) or reloading the page ends with the standard size at the
+  // bottom right on the next opening; the open state is not stored either (the camera never starts by itself).
+  assert.equal(await stored(), null, 'nothing about the window is stored')
+  const moved6 = await box()
+  assert.ok(moved6.x + moved6.width < 1440 - 100 || moved6.y + moved6.height < 1000 - 100 || moved6.width !== 360, 'the window was changed before closing')
+  await region.getByRole('button', { name: 'Close mini player', exact: true }).click()
+  await wait(() => region.count().then(n => n === 0), 'closed by hand')
+  await open.click()
+  await region.waitFor()
+  await wait(() => clients === 1, 'reopened')
+  let again = await box()
+  near(again.width, 360, 1, 'reopened at the standard size'); near(again.x + again.width, 1440 - 16, 2, 'reopened at the right'); near(again.y + again.height, 1000 - 16, 2, 'reopened at the bottom')
+  // A value an earlier version stored is ignored and removed when the page starts.
+  await page.evaluate(() => localStorage.setItem('cc2-miniplayer', JSON.stringify({ w: 5000, x: 0.1, y: 0.1 })))
   await page.reload()
   await open.waitFor()
   await observe(500)
   assert.equal(await region.count(), 0, 'a reload does not reopen the mini player')
   assert.equal(clients, 0, 'a reload does not start the camera')
+  assert.equal(await stored(), null, 'an old stored value is removed')
   await open.click()
   await region.waitFor()
-  await wait(() => clients === 1, 'reopened')
-  const after = await box()
-  near(after.x, before.x, 2, 'remembered x'); near(after.y, before.y, 2, 'remembered y'); near(after.width, before.width, 1, 'remembered width')
-  // A stored width beyond today's limits is brought back into them.
-  await page.evaluate(() => localStorage.setItem('cc2-miniplayer', JSON.stringify({ w: 5000, x: 9, y: 9 })))
-  await page.reload()
-  await open.click()
-  await region.waitFor()
+  await wait(() => clients === 1, 'opened after the reload')
   b = await box()
-  near(b.width, 640, 1, 'a stored width is limited'); assert.ok(b.x + b.width <= 1440 && b.y + b.height <= 1000, 'a stored position is brought on screen')
-  await page.evaluate(() => localStorage.setItem('cc2-miniplayer', '{broken'))
-  await page.reload()
-  await open.click()
-  await region.waitFor()
-  near((await box()).width, 360, 1, 'unreadable storage falls back to the default')
-  await wait(() => clients === 1, 'one stream after the reloads')
+  near(b.width, 360, 1, 'an old stored size is ignored'); near(b.x + b.width, 1440 - 16, 2, 'an old stored place is ignored (right)'); near(b.y + b.height, 1000 - 16, 2, 'an old stored place is ignored (bottom)')
   // The demo's own "simulation" bar lies along the bottom edge and would catch clicks: move the window up.
   await region.getByRole('button', { name: 'Move mini player', exact: true }).focus()
   for (let i = 0; i < 4; i++) await page.keyboard.press('Shift+ArrowUp')
@@ -1118,20 +1122,23 @@ try {
   await wait(() => region.count().then(n => n === 0), 'close removes the window')
   await wait(() => clients === 0, 'close ends the stream')
   assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-miniplayer-open')), true, 'after closing, the focus is on the Mini player button of the card')
-  // Escape closes it from inside the window only, and gives the focus back the same way.
+  // Escape does NOT close it (X and the button in the card do); a window that closes by a key is easy to lose by accident.
   await open.click()
   await region.waitFor()
   await wait(() => clients === 1, 'opened for the Escape check')
+  await region.getByRole('button', { name: 'Move mini player', exact: true }).focus()
+  await page.keyboard.press('Escape')
+  await observe(400)
+  assert.equal(await region.count(), 1, 'Escape inside the window does not close it')
+  assert.equal(clients, 1, 'and does not stop the stream')
   await open.focus()
   await page.keyboard.press('Escape')
   await observe(300)
-  assert.equal(await region.count(), 1, 'Escape outside the window does not close it')
-  await region.getByRole('button', { name: 'Move mini player', exact: true }).focus()
-  await page.keyboard.press('Escape')
-  await wait(() => region.count().then(n => n === 0), 'Escape inside the window closes it')
-  await wait(() => clients === 0, 'Escape ends the stream')
-  assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-miniplayer-open')), true, 'after Escape, the focus is on the Mini player button of the card')
-  assert.equal(await region.count(), 0)
+  assert.equal(await region.count(), 1, 'Escape outside the window does not close it either')
+  await region.getByRole('button', { name: 'Close mini player', exact: true }).click()
+  await wait(() => region.count().then(n => n === 0), 'X closes it')
+  await wait(() => clients === 0, 'X ends the stream')
+  assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-miniplayer-open')), true, 'after X, the focus is on the Mini player button of the card')
 
   // 12b. The card was streaming when the mini player opens: the card stops, shows where its picture went, and there is
   // still exactly one stream; nothing offers "Watch here". Closing the mini player removes the hint.
@@ -1269,7 +1276,7 @@ try {
 
   assert.deepEqual(softFailures, [], 'layout and hand-over checks failed')
   assert.deepEqual(errors, [])
-  console.log('PASS: mini player opens one stream, stays across pages, resizes 240-640 px (160-369 on a phone) in 16:9, moves with mouse, keys and finger, remembers size and position, zooms 1-2x with buttons, keys, wheel, drag and two fingers, pauses in a hidden tab, closes alone when another viewer takes the camera')
+  console.log('PASS: mini player opens one stream, stays across pages, resizes 240-640 px (160-369 on a phone) in 16:9, moves with mouse, keys and finger, starts at the standard size at the bottom right every time, keeps out of the emergency stop, zooms 1-2x with buttons, keys, wheel, drag and two fingers, pauses in a hidden tab, closes alone when another viewer takes the camera')
 } finally {
   await browser?.close()
   await server.close()
