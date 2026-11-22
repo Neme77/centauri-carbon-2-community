@@ -36,6 +36,7 @@ enum { REPLY_OK, REPLY_ERROR, REPLY_REPORT, REPLY_SPLIT };
 static int fail_mode; /* what the line named by fail_at is answered with */
 static const char SPLIT_REPORT[]="{\"report\":{\"error_code\":704,\"error_level\":1,\"message\":\"probe failed\"}}\003";
 static size_t split_pos; /* REPLY_SPLIT: the result and the first split_pos bytes of the report; the rest comes in the next read */
+static int split_eof;    /* REPLY_SPLIT: the rest never comes: the connection closes (EOF) behind the beginning of the report */
 static const char *later;
 static ssize_t fake_read(int fd,void *data,size_t length){
     (void)fd;
@@ -50,7 +51,7 @@ static ssize_t fake_read(int fd,void *data,size_t length){
             static char part[512];
             static const char ack[]="{\"id\":101,\"result\":{}}\003";
             memcpy(part,ack,sizeof(ack)-1);memcpy(part+sizeof(ack)-1,SPLIT_REPORT,split_pos);part[sizeof(ack)-1+split_pos]=0;
-            if(split_pos<strlen(SPLIT_REPORT))later=SPLIT_REPORT+split_pos;
+            if(split_pos<strlen(SPLIT_REPORT)&&!split_eof)later=SPLIT_REPORT+split_pos;
             reply=part;
         }
     }
@@ -94,8 +95,10 @@ static void run_job(const char *script,const char *tail){
 }
 /* One main-loop tick on what the console reports now. */
 static int tick(time_t now){
-    int completed,success;
-    pthread_mutex_lock(&state.lock);completed=state.completed;success=state.success;pthread_mutex_unlock(&state.lock);
+    int completed,success,tail_failed;
+    pthread_mutex_lock(&state.lock);completed=state.completed;success=state.success;tail_failed=state.cancel_tail_failed;pthread_mutex_unlock(&state.lock);
+    /* as the main loop does it (main.c): a cancel whose cancel tail did not run to its end is no cancel for the heaters */
+    if(completed&&tail_failed)control_screws_note_tail_failed();
     return control_screws_tick(&m,completed,success,generation,0,now);
 }
 static void printer_idle(time_t now){
@@ -106,8 +109,25 @@ static int sent_has(const char *what){for(int i=0;i<sent_count;i++)if(strstr(sen
 /* The job stopped at the line the printer failed: nothing after it was sent, neither the rest of the script nor a tail. */
 static int stopped_at_probe(void){return sent_count>0&&strstr(sent_lines[sent_count-1],"PROBE")&&!sent_has("RESTORE_GCODE_STATE")&&!sent_has("M104 S0");}
 
+/* The main loop hands the console's state to control_screws_tick() in main.c, and tick() above repeats those lines: this reads
+ * main.c itself, so that the line that passes cancel_tail_failed on cannot be dropped without this test noticing. */
+static int main_passes_the_cut_tail_on(void){
+    char path[512];
+    const char *slash=strrchr(__FILE__,'/');
+    snprintf(path,sizeof(path),"%.*s../src/main.c",slash?(int)(slash-__FILE__+1):0,__FILE__);
+    FILE *f=fopen(path,"rb");
+    if(!f)return 0;
+    static char text[1<<23];
+    size_t n=fread(text,1,sizeof(text)-1,f);fclose(f);text[n]=0;
+    const char *at=strstr(text,"tail_failed=console.cancel_tail_failed;");
+    const char *call=strstr(text,"if(completed&&tail_failed)control_screws_note_tail_failed();");
+    const char *tick=strstr(text,"(void)control_screws_tick(&mqtt,completed,success,generation,emergency,tram_now);");
+    return at&&call&&tick&&at<call&&call<tick;
+}
+
 int main(void){
     char script[4096],reason[256];
+    expect(main_passes_the_cut_tail_on(),"main.c passes a cut cancel tail to the control before control_screws_tick");
     time_t t0=time(NULL);
     console_init(&state,"/test");
 
@@ -187,6 +207,110 @@ int main(void){
                "after the torn report no further line (no move behind the failed probe) and no tail is sent");
     }
     control_screws_heaters_off_sent();
+
+    /* The connection ends (EOF) right behind the acknowledgement of a line and the beginning of an error report (Neme77, #403): a
+     * failed job, not a measurement. Nothing is recorded or put into the history (control_screws_take_finished), the
+     * heaters are left to the deferred shutdown, a session ends as a console error, and no further line and no tail is
+     * sent. Once behind the probe (the next line would follow) and once behind the closing M140 S0 (the final read). */
+    {
+        static const struct { const char *at; const char *what; size_t pos; } eof_cases[]={
+            {"PROBE","behind the first probe",25},{"PROBE","behind the first probe, cut inside error_code",15},{"M140 S0","behind the closing M140 S0",25},
+        };
+        for(size_t k=0;k<sizeof(eof_cases)/sizeof(eof_cases[0]);k++){
+            char what[200];
+            printer_idle(t0);control_screws_heaters_off_sent();control_screws_reset();(void)control_screws_take_finished(NULL);
+            expect(control_build_script("screws:measure",&m,script,sizeof(script),reason,sizeof(reason)),"a one-shot measurement builds for an unfinished report");
+            control_screws_note_action("screws:measure");
+            fail_at=eof_cases[k].at;fail_mode=REPLY_SPLIT;split_pos=eof_cases[k].pos;split_eof=1;later=NULL;
+            { const char *tail=control_screws_cancel_tail("screws:measure");run_job(script,tail);control_screws_note_quick(generation); }
+            fail_at=NULL;split_eof=0;later=NULL;
+            snprintf(what,sizeof(what),"one-shot, EOF %s: the job fails with the transport message, not cancelled, not a printer error",eof_cases[k].what);
+            expect(!state.success&&state.completed&&!state.cancelled&&strstr(state.output,"Console connection ended or command timed out")&&
+                   !strstr(state.output,"the printer reported an error"),what);
+            (void)tick(t0+1);
+            snprintf(what,sizeof(what),"one-shot, EOF %s: no history entry, nothing pending, the heaters are left to the deferred shutdown",eof_cases[k].what);
+            expect(!control_screws_take_finished(NULL)&&!control_screws_measuring()&&control_screws_heaters_off_pending(),what);
+            snprintf(what,sizeof(what),"one-shot, EOF %s: no tail is sent, and nothing after the probe",eof_cases[k].what);
+            expect((eof_cases[k].at[0]=='M'?strstr(sent_lines[sent_count-1],"M140 S0")!=NULL:stopped_at_probe()),what);
+        }
+        control_screws_heaters_off_sent();
+        /* a session measurement: the session ends, console error, heaters switched off */
+        printer_idle(t0);control_screws_heaters_off_sent();control_screws_reset();(void)control_screws_take_finished(NULL);
+        expect(control_build_script("screws:tram:start",&m,script,sizeof(script),reason,sizeof(reason)),"session start builds for an unfinished report");
+        control_screws_note_action("screws:tram:start");
+        { const char *tail=control_screws_cancel_tail("screws:tram:start");run_job(script,tail);control_screws_note_job(generation); }
+        expect(state.success&&tick(t0)==0&&control_screws_session_active()&&control_screws_take_finished(NULL),"the start completes and opens the session");
+        control_screws_heaters_off_sent();
+        expect(control_build_script("screws:tram:probe:FR",&m,script,sizeof(script),reason,sizeof(reason)),"a session measurement builds for an unfinished report");
+        control_screws_note_action("screws:tram:probe:FR");
+        fail_at="PROBE";fail_mode=REPLY_SPLIT;split_pos=25;split_eof=1;later=NULL;
+        { const char *tail=control_screws_cancel_tail("screws:tram:probe:FR");run_job(script,tail);control_screws_note_job(generation); }
+        fail_at=NULL;split_eof=0;later=NULL;
+        expect(!state.success&&state.completed&&!state.cancelled&&strstr(state.output,"Console connection ended or command timed out"),
+               "session measurement, EOF behind the probe: the job fails with the transport message");
+        expect(tick(t0+5)&&!control_screws_session_active()&&control_screws_end_reason()==CONTROL_SCREWS_END_CONSOLE&&
+               control_screws_heaters_off_pending()&&!control_screws_take_finished(NULL)&&!control_screws_measuring(),
+               "session measurement, EOF behind the probe: the session ends as a console error, heaters off, nothing recorded");
+        expect(stopped_at_probe(),"session measurement: no further line and no tail is sent");
+        control_screws_heaters_off_sent();
+    }
+
+    /* A cancel whose cancel tail is cut (the connection ends behind the acknowledgement of its state restore and the beginning
+     * of a report): the tail never reached M104 S0 / M140 S0, so the cancel does not count as having switched the heaters
+     * off: the deferred shutdown stays pending, and a session whose measurement was cancelled ends instead of going on. */
+    {
+        printer_idle(t0);control_screws_heaters_off_sent();control_screws_reset();(void)control_screws_take_finished(NULL);
+        expect(control_build_script("screws:measure",&m,script,sizeof(script),reason,sizeof(reason)),"a one-shot measurement builds for a cut cancel tail");
+        control_screws_note_action("screws:measure");
+        cancel_at="PROBE";fail_at="RESTORE_GCODE_STATE";fail_mode=REPLY_SPLIT;split_pos=25;split_eof=1;later=NULL;
+        { const char *tail=control_screws_cancel_tail("screws:measure");run_job(script,tail);control_screws_note_quick(generation); }
+        cancel_at=NULL;fail_at=NULL;split_eof=0;later=NULL;
+        control_screws_note_cancel();
+        expect(!state.success&&state.cancelled&&state.cancel_tail_failed&&strstr(state.output,"[CC2 Control: cancelled]")&&
+               strstr(state.output,"Console connection ended or command timed out"),"the cancel tail was cut: the job is cancelled and marked");
+        expect(sent_has("RESTORE_GCODE_STATE")&&!sent_has("M104 S0")&&!sent_has("M140 S0"),"the tail was cut at its state restore: its heater lines were never sent");
+        (void)tick(t0+3);
+        expect(!control_screws_take_finished(NULL)&&!control_screws_measuring()&&control_screws_heaters_off_pending(),
+               "a cancelled one-shot measurement whose tail was cut is not recorded and leaves the heaters to the deferred shutdown");
+        control_screws_heaters_off_sent();
+
+        /* the session's later measurement, cancelled with a cut tail: the session ends (console error), heaters off */
+        printer_idle(t0);control_screws_heaters_off_sent();control_screws_reset();(void)control_screws_take_finished(NULL);
+        expect(control_build_script("screws:tram:start",&m,script,sizeof(script),reason,sizeof(reason)),"session start builds for a cut cancel tail");
+        control_screws_note_action("screws:tram:start");
+        { const char *tail=control_screws_cancel_tail("screws:tram:start");run_job(script,tail);control_screws_note_job(generation); }
+        expect(state.success&&tick(t0)==0&&control_screws_session_active()&&control_screws_take_finished(NULL),"the start completes and opens the session");
+        control_screws_heaters_off_sent();
+        expect(control_build_script("screws:tram:probe:FR",&m,script,sizeof(script),reason,sizeof(reason)),"a session measurement builds for a cut cancel tail");
+        control_screws_note_action("screws:tram:probe:FR");
+        cancel_at="PROBE";fail_at="RESTORE_GCODE_STATE";fail_mode=REPLY_SPLIT;split_pos=25;split_eof=1;later=NULL;
+        { const char *tail=control_screws_cancel_tail("screws:tram:probe:FR");run_job(script,tail);control_screws_note_job(generation); }
+        cancel_at=NULL;fail_at=NULL;split_eof=0;later=NULL;
+        control_screws_note_cancel();
+        expect(state.cancelled&&state.cancel_tail_failed&&!sent_has("M104 S0"),"the cancel tail of the session measurement was cut");
+        expect(tick(t0+5)&&!control_screws_session_active()&&control_screws_end_reason()==CONTROL_SCREWS_END_CONSOLE&&
+               control_screws_heaters_off_pending()&&!control_screws_take_finished(NULL),
+               "a session measurement cancelled with a cut tail ends the session as a console error with the heaters switched off");
+        control_screws_heaters_off_sent();
+
+        /* the same cancel with the tail whole: the session goes on, no shutdown pending (unchanged) */
+        printer_idle(t0);control_screws_heaters_off_sent();control_screws_reset();(void)control_screws_take_finished(NULL);
+        control_screws_note_action("screws:tram:start");
+        expect(control_build_script("screws:tram:start",&m,script,sizeof(script),reason,sizeof(reason)),"session start builds again");
+        { const char *tail=control_screws_cancel_tail("screws:tram:start");run_job(script,tail);control_screws_note_job(generation); }
+        expect(state.success&&tick(t0)==0&&control_screws_session_active()&&control_screws_take_finished(NULL),"the start completes and opens the session again");
+        control_screws_heaters_off_sent();
+        expect(control_build_script("screws:tram:probe:FR",&m,script,sizeof(script),reason,sizeof(reason)),"a session measurement builds for a whole cancel tail");
+        control_screws_note_action("screws:tram:probe:FR");
+        cancel_at="PROBE";
+        { const char *tail=control_screws_cancel_tail("screws:tram:probe:FR");run_job(script,tail);control_screws_note_job(generation); }
+        cancel_at=NULL;
+        control_screws_note_cancel();
+        expect(state.cancelled&&!state.cancel_tail_failed&&sent_has("M104 S0")&&sent_has("M140 S"),"the cancel tail ran whole");
+        expect(tick(t0+5)==0&&control_screws_session_active()&&!control_screws_heaters_off_pending(),
+               "a cancelled session measurement with a whole tail leaves the session as it was");
+        control_screws_reset();control_screws_heaters_off_sent();(void)control_screws_take_finished(NULL);
+    }
 
     /* a one-shot measurement that completes is recorded and needs no shutdown */
     printer_idle(t0);control_screws_heaters_off_sent();(void)control_screws_take_finished(NULL);

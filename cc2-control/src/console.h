@@ -27,6 +27,7 @@ typedef struct {
     int staged_next; /* armed for the next console_start */
     int staged;      /* the running or last job was staged */
     int cancelled;   /* the last job ended by a cancel */
+    int cancel_tail_failed; /* ... and its cancel tail did not run to its end (the heaters may still be on) */
     atomic_int cancel_requested;
     char cancel_tail_next[CONSOLE_CANCEL_TAIL_MAX];
     char cancel_tail[CONSOLE_CANCEL_TAIL_MAX];

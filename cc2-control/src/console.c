@@ -136,11 +136,11 @@ static int staged_feed(console_state *state, staged_frame *f, const char *buffer
     if (start < got) seen->saturated |= append_output(state, buffer + start, got - start);
     return result;
 }
-/* A frame that never ended (the connection closed, went quiet or ran out of time inside it) is kept as received in the
- * output: it is the only text of that report. Returns 1 when there was one. */
+/* A frame that never ended (the connection closed, went quiet or ran out of time inside it): its text is in the output
+ * already, as received (staged_feed appends every read at once), so only the line end is added, and what follows begins
+ * on a line of its own. Returns 1 when there was one. */
 static int staged_flush_open(console_state *state, staged_frame *frame) {
     if (!frame->used) return 0;
-    append_output(state, frame->frame, frame->used);
     append_output(state, "\n", 1);
     frame->used = 0;
     return 1;
@@ -187,7 +187,10 @@ static int staged_line(console_state *state, int fd, const char *line, time_t de
     }
     return -1;
 }
-/* The reports that trail the last result: read until the socket has been quiet for 750 ms. */
+/* The reports that trail the last result: read until the socket has been quiet for 750 ms. How the job ends is settled by
+ * what is left, not here (staged_run): a frame begun and never finished is a failure (the connection closed, went quiet
+ * or the deadline came inside it); a read error is a lost connection (`seen->lost`) even with no frame begun; a clean
+ * EOF or a quiet socket with nothing begun after the complete last result is the end of the job, a success. */
 static void staged_drain(console_state *state, int fd, time_t deadline, staged_frame *frame, staged_seen *seen) {
     while (time(NULL) < deadline) {
         struct pollfd pfd = {fd, POLLIN, 0};
@@ -248,6 +251,7 @@ static void staged_run(console_state *state, int fd, const char *command) {
     pthread_mutex_lock(&state->lock);
     snprintf(tail, sizeof(tail), "%s", state->cancel_tail);
     unsigned homed = state->staged_homed;
+    state->cancel_tail_failed = 0;
     pthread_mutex_unlock(&state->lock);
     append_output(state, "> ", 2);
     append_output(state, command, strlen(command));
@@ -259,13 +263,17 @@ static void staged_run(console_state *state, int fd, const char *command) {
     int result = staged_lines(state, fd, command, deadline, 0, &sent, &frame, &seen, &homed);
     if (result == 2) {
         append_output(state, "[CC2 Control: cancelled]\n", 25);
-        /* Nothing sent yet: nothing to undo. */
-        if (sent) result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &frame, &seen, &homed) < 0 ? -1 : 2;
+        /* Nothing sent yet: nothing to undo. A tail the connection cut short never reached its heater lines: the job is
+         * marked (cancel_tail_failed), so that the heaters are not taken for switched off (control_screws_tick). A tail that
+         * was acknowledged to its last line has switched them off, whatever the final read meets. */
+        int tail_cut = 0;
+        if (sent) { result = staged_lines(state, fd, tail, time(NULL) + 120, 1, NULL, &frame, &seen, &homed) < 0 ? -1 : 2; tail_cut = result < 0; }
         if (result == 2) staged_drain(state, fd, time(NULL) + 10, &frame, &seen);
         if (staged_flush_open(state, &frame) || seen.lost) result = -1;
         close(fd);
         pthread_mutex_lock(&state->lock);
         state->cancelled = 1;
+        state->cancel_tail_failed = tail_cut;
         pthread_mutex_unlock(&state->lock);
         finish(state, 0, result < 0 ? "Console connection ended or command timed out\n" : NULL);
         return;
@@ -688,7 +696,7 @@ int console_start(console_state *state, const char *command, char *reason, size_
     if (state->busy) { state->staged_next=0; state->staged_homed_next=0; pthread_mutex_unlock(&state->lock); snprintf(reason,reason_cap,"Another command is running"); return -1; }
     snprintf(state->command, sizeof(state->command), "%s", command);
     state->output[0]='\0'; state->output_len=0; state->busy=1; state->completed=0; state->success=0; state->generation++;
-    state->staged=state->staged_next; state->staged_next=0; state->cancelled=0;
+    state->staged=state->staged_next; state->staged_next=0; state->cancelled=0; state->cancel_tail_failed=0;
     state->staged_homed=state->staged_homed_next; state->staged_homed_next=0;
     snprintf(state->cancel_tail, sizeof(state->cancel_tail), "%s", state->cancel_tail_next);
     atomic_store(&state->cancel_requested, 0);

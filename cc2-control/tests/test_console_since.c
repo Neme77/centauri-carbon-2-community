@@ -271,6 +271,53 @@ static void test_output_limit(void) {
     free(body);
 }
 
+/* #408 keeps its instance check next to the cancel fields of the staged job (#403): both the short reply and the full
+ * reply to a valid since carry cancellable, cancelling and cancelled together with output_len and instance, and the
+ * short reply is given only to the same instance, generation and length. */
+static void test_cancel_fields_beside_the_instance_check(void) {
+    console_state state;
+    char *body = malloc(BODY_MAX);
+    char query[96], expected[320], instance[48];
+    /* a job that ended by a cancel: the short reply says so */
+    setup(&state, 0, 5, "G1 X1", "ok\n");
+    state.staged = 1;
+    state.cancelled = 1;
+    state.success = 0;
+    snprintf(instance, sizeof(instance), "\"instance\":\"%s\"", state.instance);
+    held(&state, 5, 3, query, sizeof(query));
+    reply(&state, query, body);
+    snprintf(expected, sizeof(expected), "{\"busy\":false,\"completed\":true,\"success\":false,\"generation\":5,\"cancellable\":false,\"cancelling\":false,\"cancelled\":true,\"command\":\"G1 X1\",\"unchanged\":true,\"output_len\":3,\"instance\":\"%s\"}\n", state.instance);
+    assert(!strcmp(body, expected));
+    /* the same state from another instance, or from none: the full reply, with the cancel fields and the instance */
+    held(&state, 5, 2, query, sizeof(query));
+    reply(&state, query, body);
+    assert(!strstr(body, "unchanged") && strstr(body, "\"cancellable\":false,\"cancelling\":false,\"cancelled\":true") &&
+           strstr(body, "\"output\":\"ok\\n\"") && strstr(body, "\"output_len\":3") && strstr(body, instance));
+    reply(&state, "since=5:3:0123456789abcdef", body);
+    assert(!strstr(body, "unchanged") && strstr(body, "\"cancelled\":true") && strstr(body, instance));
+    reply(&state, "since=5:3", body);
+    assert(!strstr(body, "unchanged") && strstr(body, "\"cancelled\":true") && strstr(body, instance));
+    /* a staged job that runs: always the full reply to since, cancellable, then cancelling once a cancel was asked for */
+    state.busy = 1; state.completed = 0; state.cancelled = 0;
+    held(&state, 5, 3, query, sizeof(query));
+    reply(&state, query, body);
+    assert(!strstr(body, "unchanged") && strstr(body, "\"busy\":true") &&
+           strstr(body, "\"cancellable\":true,\"cancelling\":false,\"cancelled\":false") &&
+           strstr(body, "\"output_len\":3") && strstr(body, instance));
+    atomic_store(&state.cancel_requested, 1);
+    reply(&state, query, body);
+    assert(!strstr(body, "unchanged") && strstr(body, "\"cancellable\":true,\"cancelling\":true,\"cancelled\":false") &&
+           strstr(body, instance));
+    atomic_store(&state.cancel_requested, 0);
+    /* the cancelled job, unchanged since the client's last reply: the short reply again, as soon as nothing runs */
+    state.busy = 0; state.completed = 1; state.cancelled = 1;
+    held(&state, 5, 3, query, sizeof(query));
+    reply(&state, query, body);
+    assert(strstr(body, "\"unchanged\":true") && strstr(body, "\"cancelled\":true") && strstr(body, instance));
+    console_destroy(&state);
+    free(body);
+}
+
 typedef struct { console_state *state; int rounds; } writer_args;
 
 static void *writer(void *opaque) {
@@ -329,6 +376,7 @@ int main(void) {
     test_length_counts_stored_bytes_not_json();
     test_command_is_escaped_in_both_replies();
     test_output_limit();
+    test_cancel_fields_beside_the_instance_check();
     test_reply_is_a_consistent_snapshot_while_output_grows();
     puts("PASS console since parameter");
     return 0;
