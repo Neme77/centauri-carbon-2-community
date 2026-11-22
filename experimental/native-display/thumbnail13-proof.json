@@ -1,0 +1,126 @@
+{
+  "upstream_author": "beanbo",
+  "upstream_pr": 411,
+  "upstream_commit": "883f96bd978d74dcb3a11a89ecc20262de57d5a2",
+  "input_sha256": "9a31c54518a290d99340e02c89b2b21e103a0fb7085003cbd9498322f8de5799",
+  "output_sha256": "607dce1bae40f19a82f2318a71f769cf2394e2fc45d84090dcd308a0bc686c9e",
+  "source_sha256": "f82d820535c491e84a31ae9a7610890f92bb3de616d13d5d6b1dbac5b5e4dc9b",
+  "imports": {
+    "free": {
+      "old": 76040,
+      "new": 76040,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "fopen": {
+      "old": 76676,
+      "new": 76676,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "__isoc99_sscanf": {
+      "old": 76916,
+      "new": 76916,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "fgets": {
+      "old": 77492,
+      "new": 77492,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "memcpy": {
+      "old": 77552,
+      "new": 77552,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "malloc": {
+      "old": 77600,
+      "new": 77600,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "strlen": {
+      "old": 77612,
+      "new": 77612,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "fclose": {
+      "old": 77696,
+      "new": 77696,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "strcmp": {
+      "old": 77828,
+      "new": 77828,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "memcmp": {
+      "old": 77960,
+      "new": 77960,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "strchr": {
+      "old": 78128,
+      "new": 78128,
+      "proof": "ELF dynamic symbol",
+      "unchanged_in_languages": true
+    },
+    "lv_obj_get_self_width": {
+      "old": 1010160,
+      "new": 1011660,
+      "proof": "ELF native function symbol",
+      "unchanged_in_languages": true
+    },
+    "lv_obj_get_self_height": {
+      "old": 1010212,
+      "new": 1011712,
+      "proof": "ELF native function symbol",
+      "unchanged_in_languages": true
+    },
+    "lv_img_set_src": {
+      "old": 1182664,
+      "new": 1184168,
+      "proof": "ELF native function symbol",
+      "unchanged_in_languages": true
+    },
+    "lv_img_set_pivot": {
+      "old": 1186468,
+      "new": 1187972,
+      "proof": "ELF native function symbol",
+      "unchanged_in_languages": true
+    },
+    "lv_img_set_zoom": {
+      "old": 1186816,
+      "new": 1188320,
+      "proof": "ELF native function symbol",
+      "unchanged_in_languages": true
+    },
+    "lv_img_set_size_mode": {
+      "old": 1187216,
+      "new": 1188720,
+      "proof": "ELF native function symbol",
+      "unchanged_in_languages": true
+    },
+    "lv_img_get_zoom": {
+      "old": 1187288,
+      "new": 1188792,
+      "proof": "ELF native function symbol",
+      "unchanged_in_languages": true
+    }
+  },
+  "validation": {
+    "host_test_methods": 6,
+    "arm_parser_cases": 10,
+    "arm_geometry_fixture": true,
+    "native_lvgl_execution": false,
+    "physical_display_test": false,
+    "installer_produced": false
+  }
+}
