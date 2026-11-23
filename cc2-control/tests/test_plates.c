@@ -1053,6 +1053,7 @@ static void test_calibration_job(void) {
     plates_calibration_tick(&mqtt, &console); plates_available = 1; plates_error = loaded;
     assert(!plates_cal.stage && !strcmp(plates_cal.result, "failed") && !strcmp(plates_cal.error, "saving"));
     assert(!strcmp(plates_cal.detail, "Plate library not loaded") && plate_measure_count(plate) == 2);
+    assert(!plates_cal.replaced && !m->has_prior && plate_mesh_equal(&m->mesh, &at70, 1));
 
     /* Without a plate the result only stays in the printer; no soak probes at once. */
     console_log[0] = 0;
@@ -1182,6 +1183,7 @@ static void test_calibration_work(void) {
     assert(call(MOUNT, &mqtt, plate) == 200 && !strcmp(plates.current, plate)); /* the plate of the print is the mounted one */
     snprintf(current, sizeof(current), "%s", plates.current);
     assert(plates_has_profile(measure_find(first)));
+    const long long first_at = measure_find(first)->measured;
 
     /* `work` needs a plate; any other sixth line is refused. */
     assert(calibrate(&mqtt, "A\n60\n0\n\n\nwork") == 400);
@@ -1192,7 +1194,7 @@ static void test_calibration_work(void) {
     snprintf(body, sizeof(body), "A\n60\n0\n\n%s\nwork", plate);
     profile_log[0] = 0;
     run_calibration(&mqtt, body, 60, &work);
-    assert(!strcmp(plates_cal.result, "work") && plates_cal.work_ready && !plates_cal.error[0]);
+    assert(!strcmp(plates_cal.result, "work") && plates_cal.work_ready && !plates_cal.error[0] && !plates_cal.replaced);
     assert(!strcmp(plates_cal.measured.plate, plate) && plates_cal.measured.temp == 60 && plates_cal.measured.measured > 0 &&
            plate_mesh_equal(&plates_cal.measured.mesh, &work, 1));
     /* Nothing of the library changed: the file, the mounted plate, the measurement it mounts with and its mesh. */
@@ -1201,6 +1203,7 @@ static void test_calibration_work(void) {
     free(after);
     assert(!strcmp(plates.current, current) && !strcmp(plates.plates[0].measure, first) && plate_measure_count(plate) == 1);
     assert(plate_mesh_equal(&measure_find(first)->mesh, &at60, 1));
+    assert(!measure_find(first)->has_prior && measure_find(first)->measured == first_at);
     assert(!strstr(profile_log, "SAVE=")); /* no printer profile for it; the stored one already had its own */
     /* The page reads it back after a reload; it is no measurement of the plate. */
     assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"result\":\"work\"") && strstr(response, "\"work\":true,\"work_mesh\":{\"plate\":\""));
@@ -1226,8 +1229,9 @@ static void test_calibration_work(void) {
     assert(calibrate(&mqtt, body) == 202 && plates_cal.work_ready && !plates_cal.work);
     assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work\":false,\"work_mesh\":{\"plate\":\""));
     cancel_calibration(&mqtt);
-    assert(!plates_cal.stage && !strcmp(plates_cal.result, "cancelled") && plates_cal.work_ready);
+    assert(!plates_cal.stage && !strcmp(plates_cal.result, "cancelled") && plates_cal.work_ready && !plates_cal.replaced);
     assert(plate_mesh_equal(&plates_cal.measured.mesh, &work, 1));
+    assert(plate_mesh_equal(&measure_find(first)->mesh, &at60, 1) && !measure_find(first)->has_prior);
     assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work_mesh\":{\"plate\":\""));
     /* Started again: the working measurement stays while the bed heats, is gone once the probing has ended (the printer
      * holds the new mesh then), and the result replaces the plate's measurement at 60 C. */
@@ -1239,8 +1243,11 @@ static void test_calibration_work(void) {
     plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING && !plates_cal.work_ready);
     assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work\":false,\"work_mesh\":null"));
     plates_calibration_tick(&mqtt, &console); assert(!plates_cal.stage);
-    assert(!strcmp(plates_cal.result, "saved") && !strcmp(plates_cal.measure, first));
-    assert(plate_measure_count(plate) == 1 && plate_mesh_equal(&measure_find(first)->mesh, &final_mesh, 1));
+    assert(!strcmp(plates_cal.result, "saved") && !strcmp(plates_cal.measure, first) && plates_cal.replaced);
+    const plate_measure *final = measure_find(first);
+    assert(plate_measure_count(plate) == 1 && plate_mesh_equal(&final->mesh, &final_mesh, 1));
+    assert(final->has_prior && final->prior_measured == first_at && plate_mesh_equal(&final->prior, &at60, 1));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"replaced\":true") && strstr(response, "\"prior\":{"));
     assert(!strcmp(plates.current, plate) && !strcmp(plates.plates[0].measure, first) && plates_has_profile(measure_find(first)));
 
     /* A measurement of the same plate stored in the library ends a working measurement too. */
@@ -1276,7 +1283,10 @@ static void test_calibration_work(void) {
     plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING); /* tried again for a minute */
     plates_cal.since -= 61000; plates_cal.retry_at = 0; plates_calibration_tick(&mqtt, &console);
     assert(!plates_cal.stage && !strcmp(plates_cal.result, "failed") && !strcmp(plates_cal.error, "saving") && !plates_cal.work_ready);
-    assert(!strcmp(plates_cal.detail, "Cannot read the printer mesh"));
+    assert(!strcmp(plates_cal.detail, "Cannot read the printer mesh") && !plates_cal.replaced);
+    final = measure_find(first);
+    assert(plate_mesh_equal(&final->mesh, &final_mesh, 1));
+    assert(final->has_prior && final->prior_measured == first_at && plate_mesh_equal(&final->prior, &at60, 1));
     uds_down = 0;
     assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work_mesh\":null"));
 
