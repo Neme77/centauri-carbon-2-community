@@ -1740,7 +1740,7 @@ static void test_a_404_counts_only_while_the_list_answers(void) {
     spool_entry *sp = setup_linked(5, 500);
     for (int i = 0; i < 4; ++i) cycle();
     get_status();
-    status_has("\"orphaned_count\":0");
+    status_has("\"orphaned_count\":0"); status_has("\"result\":\"not_found\"");      /* the error is shown, nothing is moved */
     assert(sp->spoolman_miss == 0 && spools.held_count == 0 && near(sp->spoolman_unsent, 5) && fake.use_count == 0);
     /* The list answers now, only this spool is missing: that counts, two cycles in a row. */
     fake.answer_all = 0; fake.missing_id = 7;
