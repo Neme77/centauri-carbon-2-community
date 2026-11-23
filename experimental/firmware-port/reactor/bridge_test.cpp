@@ -197,6 +197,29 @@ int main(){
   // 5. no growth: many shutdown/flush rounds leave nothing behind
   for(int r=0;r<100;r++){add(2);flush(true);shutdown(th);}
   assert(M::live()==0&&sp->q.empty()&&sp.get()==original);
+  // 6. Partial flush with a remainder (flush(true) keeps the tail): shutdown inside the flush and a move added
+  //    meanwhile; the real flush deletes and erases only its first flush_count moves, so the rest stays queued.
+  auto flush_part=[&](size_t count,bool shut_inside,int added_inside){Q *self=sp.get();std::vector<M*> copy(self->q.begin(),self->q.begin()+count);if(shut_inside)shutdown(th);for(int i=0;i<added_inside;i++)self->q.push_back(new M);(void)copy;for(auto it=self->q.begin();it!=self->q.begin()+count;++it)delete *it;self->q.erase(self->q.begin(),self->q.begin()+count);};
+  add(6);flush_part(4,true,1);
+  assert(sp.get()==original&&sp->q.size()==3&&M::live()==3&&!check_busy());
+  shutdown(th);assert(sp.get()==original&&sp->q.size()==3&&M::live()==3);
+  flush_part(3,false,0);assert(M::live()==0&&check_busy());
+  add(5);flush_part(2,true,0);drip_end();assert(M::live()==0&&check_busy()&&sp.get()==original);
+  // 7. MODEL of the bed idle-timeout handler after the shutdown (KNOWN, NOT fixed by this change):
+  //    the handler first asks check_busy() (now valid), then runs "M140 S0", which throws a CommandError
+  //    in the shutdown state; the bridge only notes the exception and rethrows it (the vendor program
+  //    has no catch above the coroutine). This asserts the current behaviour so that it is not mistaken
+  //    for a fix: the exception still leaves cc2_timers(). Whether it ends the process is not shown here.
+  {
+   struct CommandErrorModel:std::runtime_error{using std::runtime_error::runtime_error;};
+   Owner o;next_timer(o.data)=0;int checks=0;bool thrown=false;auto t=new Timer();Shared st=own(t,[t]{delete t;});t->wake=0;
+   t->fn=[&](double){++checks;if(!check_busy())return 1.0;throw CommandErrorModel("M140 S0 in shutdown");};
+   o.refs(16).push_back(st);
+   shutdown(th);
+   try{cc2_timers(o.data,1,false);}catch(const CommandErrorModel&){thrown=true;}
+   assert(checks==1&&thrown&&sp.get()==original&&check_busy());
+  }
+  assert(alive==0);
   sp.~shared_ptr();assert(M::live()==0);
  }
 #ifdef CC2_NATIVE_CO
