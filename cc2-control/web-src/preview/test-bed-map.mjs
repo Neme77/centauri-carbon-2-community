@@ -120,7 +120,7 @@ try {
   const visibility=hidden=>page.evaluate(hidden=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});document.dispatchEvent(new Event('visibilitychange'))},hidden)
   await page.waitForFunction(()=>window.__claims===3)
   await visibility(true);await camera.getByText('Live view paused while this browser tab was hidden').waitFor()
-  assert.equal(await camera.locator('button').count(),0,'a hidden page leaves a quiet note and no start button')
+  assert.equal(await camera.locator('button').filter({hasNotText:'Mini player'}).count(),0,'a hidden page leaves a quiet note and no start button (the Mini player hand-over button is not a start button)')
   await visibility(false);await page.waitForFunction(()=>window.__claims===4)
   await camera.getByText('Live view paused while this browser tab was hidden').waitFor({state:'detached'})
   assert.equal(await camera.getByRole('button',{name:'Start live view'}).count(),0,'the stream restarts by itself, without a start button')
