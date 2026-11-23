@@ -331,7 +331,6 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"history\":\"/api/history\","
             "\"plates\":\"/api/plates\","
             "\"screws_history\":\"/api/screws/history\","
-            "\"screws_align\":\"/api/screws/align\","
             "\"spools\":\"/api/spools\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
@@ -3805,6 +3804,8 @@ static void printer_report_json(char *out,size_t size,unsigned long sequence,int
         (long)identity.tv_sec,identity.tv_nsec,sequence,sequence,code,level,message,age<0?0:age);
 }
 
+/* GET /api/printer: the hold time before a screw measurement (screws_soak below). */
+static void screws_soak_json(char *out, size_t cap);
 static void printer_response(int fd, const mqtt_client *mqtt) {
     /* Render from the two caches without copying MQTT transport/history buffers. */
     double live;
@@ -3836,6 +3837,10 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     if(uds_value(&telemetry,U_BG,&live))json_number(bg,sizeof(bg),1,live);
     else json_number(bg,sizeof(bg),mqtt->have_bed_target,mqtt->bed_target);
     json_number(ct,sizeof(ct),mqtt->have_chamber_temp,mqtt->chamber_temp);
+    char screws_bed[16]="null"; /* the bed target of a running screw session, whole degrees */
+    if(control_screws_session_active())snprintf(screws_bed,sizeof(screws_bed),"%d",control_screws_bed());
+    char screws_soak_state[320];
+    screws_soak_json(screws_soak_state,sizeof(screws_soak_state));
     if(uds_value(&telemetry,U_CF,&live))json_number(cf,sizeof(cf),1,live*255);
     else json_number(cf,sizeof(cf),mqtt->have_controller_fan,mqtt->controller_fan);
     if(uds_value(&telemetry,U_HF,&live))json_number(hf,sizeof(hf),1,live*255);
@@ -3911,7 +3916,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"spools\":%s,\"printer_report\":%s,\"printer_alert\":%s,\"printer_error\":%s,\"print_watch\":%s,\"usb_stall\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s}}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_alert\":%s,\"printer_error\":%s,\"print_watch\":%s,\"usb_stall\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s,\"bed\":%s},\"screws_soak\":%s,\"screws_after_mesh\":%s}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
@@ -3919,7 +3924,8 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,printer_alert,
         printer_error,watch_state,stall_state,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status,
         control_screws_session_active()?"true":"false",
-        control_screws_xy_homed(mqtt)?"true":"false");
+        control_screws_xy_homed(mqtt)?"true":"false",screws_bed,screws_soak_state,
+        control_screws_after_mesh_running()?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -4525,6 +4531,8 @@ static int rotation_pending(void);
 static int rotation_pending_intact(void);
 static int cell_active(void);
 static const char *pending_autosave_guard(void);
+/* A hold time before a screw measurement is running (screws:soak, see screws_soak below). */
+static int screws_soak_active(void);
 
 #include "plates.h"
 #include "screw_history.h"
@@ -4550,6 +4558,32 @@ static int screws_history_store(void) {
     if (screw_history_save(&screws_history, screws_history_path)) return 1;
     fprintf(stderr, "Screw history could not be saved: %s\n", screws_history_path);
     return 0;
+}
+
+/* The actual temperatures of the measurement that runs: the main loop reads them whenever the console output
+ * shows a new "Result is z=", so the last stand is the one at the last probe (within one loop cycle, about 1 s).
+ * A sensor without a current value is left out; nothing is invented. gen ties the sample to one console job. */
+static struct { unsigned long gen; int results; screw_ist ist; } screws_sample;
+static void screws_read_ist(const mqtt_client *m, screw_ist *out) {
+    double live;
+    memset(out, 0, sizeof(*out));
+    if (uds_value(&telemetry, U_BT, &live)) { out->v[0] = live; out->have |= 1u; }
+    else if (m->have_bed_temp) { out->v[0] = m->bed_temp; out->have |= 1u; }
+    if (uds_value(&telemetry, U_ET, &live)) { out->v[1] = live; out->have |= 2u; }
+    else if (m->have_extruder_temp) { out->v[1] = m->extruder_temp; out->have |= 2u; }
+    if (m->have_chamber_temp) { out->v[2] = m->chamber_temp; out->have |= 4u; }
+}
+static void screws_sample_tick(const mqtt_client *m, unsigned long generation, const char *output, size_t length) {
+    if (!control_screws_measuring()) return;
+    if (screws_sample.gen != generation) {
+        memset(&screws_sample, 0, sizeof(screws_sample));
+        screws_sample.gen = generation;
+    }
+    int results = screw_history_count_results(output, length);
+    if (results > screws_sample.results) {
+        screws_sample.results = results;
+        screws_read_ist(m, &screws_sample.ist);
+    }
 }
 
 static void screws_history_get_response(int fd) {
@@ -4578,6 +4612,8 @@ static void screws_history_clear_response(int fd) {
 /* The exclusive sessions during which the request dispatcher refuses every printer change; the print
  * queue asks before an automatic start. Defined once the sessions themselves are. */
 static const char *printer_change_blocked(void);
+/* The same refusals for one request, as the dispatcher answers them (handle_client). */
+static const char *printer_change_refusal(const char *method, const char *path, const char *body, size_t body_len, int *plates_form);
 #include "queue.h"
 #include "spoolman.h"
 #include "sha256.h"
@@ -5300,24 +5336,25 @@ static void pid_status_response(int fd,console_state *console) {
     respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
-#include "mesh_align.h"
 
 /* A session, and a shutdown that is still pending, live only in this process. The marker
  * file tells the next process that one was left behind when this one was killed or
- * replaced: without it the bed would stay at the session's 60 C with nobody to switch it
- * off. It is kept in /tmp, which a reboot clears together with the heater targets. */
+ * replaced: without it the bed would stay at the session's target with nobody to switch it
+ * off. It is kept in /tmp, which a reboot clears together with the heater targets. It holds
+ * that bed target in degrees; an empty marker (from an earlier version) stands for 60 C. */
 static char screws_marker_default_path[64];
 static const char *screws_marker_path = NULL;
 static int screws_marker_present = -1; /* -1: not looked at yet */
-static int screws_marker_bed;          /* the bed target written to the marker */
+static int screws_marker_bed = -1;     /* the bed target written to the marker, -1: none */
 static int screws_resumed;             /* the pending shutdown comes from the marker */
-static int screws_resumed_bed = 60;    /* the bed target the earlier process left */
+static int screws_resumed_bed = CONTROL_SCREWS_BED_DEFAULT; /* the bed target the earlier process left */
 
 static void screws_marker_sync(void){
-    int want=control_screws_session_active()||control_screws_heaters_off_pending()||align_active();
-    /* The tramming session heats the bed to 60 C, the alignment session to its own setting. A
-     * shutdown that is only pending keeps the target of the session that asked for it. */
-    int bed=align_active()?align.temp:control_screws_session_active()?60:screws_marker_bed?screws_marker_bed:screws_resumed_bed;
+    int want=control_screws_session_active()||control_screws_heaters_off_pending();
+    /* The tramming session heats the bed to its chosen target. A shutdown that is only pending keeps the
+     * target of the session that asked for it. */
+    int bed=control_screws_session_active()?control_screws_bed():
+            screws_marker_bed>=0?screws_marker_bed:screws_resumed_bed;
     if(!screws_marker_path||(want==screws_marker_present&&(!want||bed==screws_marker_bed)))return;
     if(want){
         char text[16];int n=snprintf(text,sizeof(text),"%d\n",bed);
@@ -5329,7 +5366,7 @@ static void screws_marker_sync(void){
         screws_marker_bed=bed;
     }else{
         if(unlink(screws_marker_path)!=0&&errno!=ENOENT)return;
-        screws_marker_bed=0;
+        screws_marker_bed=-1;
     }
     screws_marker_present=want;
 }
@@ -5342,18 +5379,19 @@ static void screws_marker_restore(int port){
     struct stat info;
     screws_marker_present=lstat(screws_marker_path,&info)==0;
     if(!screws_marker_present||!S_ISREG(info.st_mode)||info.st_uid!=geteuid())return;
-    /* The marker holds the bed target of the session it stood for; an empty one is the
-     * tramming session's 60 C. */
+    /* The marker holds the bed target of the session it stood for (0..110 C); an empty one,
+     * from an earlier version, is the tramming session's 60 C. */
     char text[16]={0};int fd=open(screws_marker_path,O_RDONLY|O_NOFOLLOW|O_CLOEXEC);
     if(fd>=0){ssize_t n=read(fd,text,sizeof(text)-1);(void)n;close(fd);}
-    int bed=atoi(text);
-    screws_resumed_bed=bed>=30&&bed<=120?bed:60;
+    char *end=NULL;long bed=strtol(text,&end,10);
+    screws_resumed_bed=end!=text&&(*end==0||*end=='\n')&&bed>=0&&bed<=CONTROL_SCREWS_BED_MAX?(int)bed
+                                                                                          :CONTROL_SCREWS_BED_DEFAULT;
     screws_marker_bed=screws_resumed_bed;
     control_screws_restore_pending();
     screws_resumed=1;
 }
 
-/* The session left the bed at 60 C, or an explicit end has not been confirmed:
+/* The session left the bed at its target, or an explicit end has not been confirmed:
  * retry the shutdown on every tick until it is delivered while the printer is
  * idle and the console free. A shutdown inherited from an earlier process is sent
  * only while telemetry still shows the session's bed target: a bed that is off
@@ -5369,6 +5407,241 @@ static void screws_heaters_off_tick(const mqtt_client *mqtt,int busy,int (*send)
     if(send("TURN_OFF_HEATERS")==0){control_screws_heaters_off_sent();screws_resumed=0;}
 }
 
+/* Keep the session's bed at its target, but only while telemetry still shows that target:
+ * a target someone else set is left alone. */
+static void screws_bed_renew_tick(const mqtt_client *mqtt,int busy,time_t now,int (*send)(const char *script),
+                                  int have_bed_target,double bed_target){
+    if(!control_screws_bed_renew_due(now)||busy||!mqtt->have_machine_status||mqtt->machine_status!=1)return;
+    if(!have_bed_target||fabs(bed_target-control_screws_bed())>0.5)return;
+    char renew[24];snprintf(renew,sizeof(renew),"M140 S%d",control_screws_bed());
+    control_screws_bed_renewed(now,send(renew)==0);
+}
+
+/* A screw measurement may follow a bed mesh directly (control_screws_after_mesh): the bed target of a calibration whose
+ * probing succeeded (result done, saved or work) when it ended at most SCREWS_AFTER_MESH_MS ago and no other console job
+ * has run since (the console's last job is still its BED_MESH_CALIBRATE), else -1. X, Y and Z homed and the same bed
+ * target are checked when the script is built. */
+#define SCREWS_AFTER_MESH_MS 180000
+static int screws_after_mesh_bed(console_state *console) {
+    if (plates_cal.stage || !plates_cal.ended_at) return -1;
+    long long now = monotonic_ms();
+    if (now < plates_cal.ended_at || now - plates_cal.ended_at > SCREWS_AFTER_MESH_MS) return -1;
+    pthread_mutex_lock(&console->lock);
+    int same = !console->busy && console->generation == plates_cal.generation;
+    pthread_mutex_unlock(&console->lock);
+    return same ? plates_cal.temp : -1;
+}
+
+/* What POST /api/control notes once a screw job is queued. The console's job number is read only for a screw job (as
+ * before the hold time): other actions, and callers without a console, never touch it. */
+static void screws_note_queued(console_state *console, const char *action) {
+    control_screws_note_action(action);
+    if (!console || (!control_screws_is_quick(action) && !control_screws_is_tram(action))) return;
+    pthread_mutex_lock(&console->lock); unsigned long generation = console->generation; pthread_mutex_unlock(&console->lock);
+    if (control_screws_is_quick(action)) control_screws_note_quick(generation);
+    if (control_screws_is_tram(action) && strcmp(action, "screws:tram:end")) control_screws_note_job(generation);
+    if (!strcmp(action, "screws:tram:end")) control_screws_note_end(generation);
+}
+
+/* A hold time before a screw measurement: POST /api/control screws:soak:<minutes>:<measurement>. Built like the soak of
+ * the bed mesh calibration (plates_cal in plates.h): M140 through the console, then the job waits until telemetry reads
+ * the bed at its target, holds it for the minutes given and only then starts the measurement unchanged, the way
+ * /api/control starts it. The console stays free meanwhile (no G4). While the job owns the bed it repeats the target
+ * every ten minutes (the firmware's idle bed shutdown, see plates_cal_keep_bed). It never touches the nozzle: the
+ * measurement's own G180 S3 or G28 heats it to the probing temperature. Every check of the measurement runs when the
+ * hold time is accepted and again when it ends. The job lives only in this process: a restart of CC2 Control ends it
+ * and leaves the bed at its target, which the firmware switches off 15 minutes after the last command, as after a
+ * calibration that a restart ended. */
+enum { SOAK_IDLE, SOAK_HEATING, SOAK_SOAKING };
+#define SCREWS_SOAK_HEAT_MS (30 * 60000)
+static struct {
+    int stage, bed, seconds, m140_done;
+    char action[96];          /* the measurement it starts, without the prefix */
+    unsigned long generation; /* the console job of its M140 */
+    long long since, done_at, soak_until, held, renew_at; /* stage start, M140 seen done, end of the hold, ... */
+    const char *result;       /* "", "started", "cancelled", "ended" or "failed" */
+    char reason[160];
+} screws_soak = {.result = ""};
+/* The bed of a job that ended before its own M140 reached telemetry: switched off once it shows, for a few seconds. */
+static struct { int bed; long long until; } screws_soak_off;
+/* Tests count the repeated targets and the switch-offs instead. */
+static int (*screws_soak_send)(const char *script) = send_local_gcode_script;
+
+static int screws_soak_active(void) { return screws_soak.stage != SOAK_IDLE; }
+
+/* The bed heater is the job's while fresh MQTT reports Idle and fresh telemetry shows its target (as plates_cal_owns_bed). */
+static int screws_soak_owns_bed(const mqtt_client *mqtt, int bed) {
+    time_t now = time(NULL); double target;
+    return mqtt->connected && mqtt->registered && mqtt->have_machine_status && mqtt->machine_status == 1 &&
+           mqtt->last_message > 0 && now >= mqtt->last_message && now - mqtt->last_message <= 15 &&
+           uds_value(&telemetry, U_BG, &target) && fabs(target - bed) <= 0.5;
+}
+/* At the target: at most 1 K below it (as the calibration) and, for a target of 5 C or more, at most 2.5 K above it; a
+ * hotter bed is still cooling down (the measurements' own cooling limit, SCREWS_COOL_LIMIT_K in control.c). */
+static int screws_soak_at_bed(double bed, int target) {
+    return bed >= target - 1.0 && (target < 5 || bed <= target + 2.5);
+}
+
+static void screws_soak_end(const mqtt_client *mqtt, const char *result, const char *reason, int bed_off) {
+    if (!screws_soak.stage) return;
+    if (bed_off) {
+        if (screws_soak_owns_bed(mqtt, screws_soak.bed)) (void)screws_soak_send("M140 S0");
+        else if (screws_soak.stage == SOAK_HEATING && monotonic_ms() - screws_soak.since <= 10000) {
+            screws_soak_off.bed = screws_soak.bed; screws_soak_off.until = screws_soak.since + 15000;
+        }
+    }
+    fprintf(stderr, "Screw hold time at %d C before %s: %s %s\n", screws_soak.bed, screws_soak.action, result, reason);
+    screws_soak.stage = SOAK_IDLE; screws_soak.result = result;
+    snprintf(screws_soak.reason, sizeof(screws_soak.reason), "%s", reason);
+}
+
+static void screws_soak_keep_bed(const mqtt_client *mqtt, long long now) {
+    if (now < screws_soak.renew_at || !screws_soak_owns_bed(mqtt, screws_soak.bed)) return;
+    char command[24]; snprintf(command, sizeof(command), "M140 S%d", screws_soak.bed);
+    screws_soak.renew_at = now + (screws_soak_send(command) == 0 ? PLATE_BED_RENEW_MS : 30000);
+}
+
+/* NULL when the measurement may start: fresh MQTT reports Idle and fresh telemetry reads the bed at its target. */
+static const char *screws_soak_hold(const mqtt_client *mqtt, int have_bed, double bed, double target) {
+    time_t now = time(NULL);
+    if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status || mqtt->last_message <= 0 ||
+        now < mqtt->last_message || now - mqtt->last_message > 15) return "Printer status is stale";
+    if (mqtt->machine_status != 1) return "The printer is not idle";
+    if (!have_bed) return "Bed telemetry is unavailable";
+    if (fabs(target - screws_soak.bed) > 0.5 || !screws_soak_at_bed(bed, screws_soak.bed)) return "The bed is not at the temperature";
+    return NULL;
+}
+
+/* The checks POST /api/control makes before it queues `action` (a screws:measure... or screws:tram:start...
+ * measurement), without queueing it: first those of the dispatcher (printer_change_refusal, as for that request), then
+ * those of control_response. With `after_mesh` the direct variant may apply (*direct tells whether it does). */
+static int screws_measure_check(const mqtt_client *mqtt, console_state *console, const char *action, int after_mesh,
+                                char *reason, size_t cap, int *direct) {
+    if (direct) *direct = 0;
+    int plates_form;
+    const char *blocked = printer_change_refusal("POST", "/api/control", action, strlen(action), &plates_form);
+    if (blocked) { snprintf(reason, cap, "%s", blocked); return 0; }
+    if (plates_background_active()) { snprintf(reason, cap, "Plate verification is still running"); return 0; }
+    if (plates_cal.stage) { snprintf(reason, cap, "A bed mesh calibration is running"); return 0; }
+    char script[700];
+    control_screws_after_mesh(after_mesh ? screws_after_mesh_bed(console) : -1);
+    int ok = control_check_script(action, mqtt, script, sizeof(script), reason, cap);
+    if (direct) *direct = ok && control_screws_built_direct();
+    control_screws_after_mesh(-1);
+    return ok;
+}
+
+/* Starts the measurement after the hold time as /api/control would: 0 queued, 1 the console was busy (tried again), -1
+ * not built. Never the direct variant: the job's own M140 ran after the mesh. The script is checked and queued first
+ * and only then built with its effects (control_check_script builds the same script without them): a console that
+ * refuses the start, tried again on every tick, leaves no session behind and no end reason, as no session ran. The
+ * cancel tail is the same before and after the build (a session start's job is not yet done). */
+static int screws_soak_start(const mqtt_client *mqtt, console_state *console, char *reason, size_t cap) {
+    char script[700], built[700];
+    control_screws_after_mesh(-1);
+    if (!control_check_script(screws_soak.action, mqtt, script, sizeof(script), reason, cap)) return -1;
+    const char *tail = control_screws_cancel_tail(screws_soak.action);
+    if (tail) console_arm_staged(console, tail, control_axes_homed(mqtt));
+    if (console_start(console, script, reason, cap) != 0) return 1;
+    if (!control_build_script(screws_soak.action, mqtt, built, sizeof(built), reason, cap) || strcmp(built, script)) {
+        /* Not reached: the same check in the same tick. Stop the queued job rather than run it without its state. */
+        if (control_screws_is_start(screws_soak.action)) control_screws_invalidate();
+        (void)console_cancel(console);
+        snprintf(reason, cap, "The measurement could not be started");
+        return -1;
+    }
+    screws_note_queued(console, screws_soak.action);
+    return 0;
+}
+
+static void screws_soak_tick(const mqtt_client *mqtt, console_state *console, int emergency) {
+    long long now = monotonic_ms();
+    pthread_mutex_lock(&console->lock);
+    int busy = console->busy, completed = console->completed, success = console->success;
+    unsigned long generation = console->generation;
+    pthread_mutex_unlock(&console->lock);
+    if (screws_soak_off.until) {
+        if (now > screws_soak_off.until || emergency) screws_soak_off.until = 0;
+        else if (!busy && screws_soak_owns_bed(mqtt, screws_soak_off.bed) && screws_soak_send("M140 S0") == 0)
+            screws_soak_off.until = 0;
+    }
+    if (!screws_soak.stage) return;
+    if (emergency) { screws_soak_end(mqtt, "ended", "Emergency stop", 0); return; }
+    if (plates_cal.stage) { screws_soak_end(mqtt, "ended", "A bed mesh calibration was started", 0); return; }
+    if (mqtt->have_machine_status && mqtt->machine_status == 2) { screws_soak_end(mqtt, "ended", "A print started", 0); return; }
+    if (!screws_soak.m140_done) {
+        /* A later console job means that the job's M140 has ended. */
+        if (generation != screws_soak.generation || (!busy && completed)) {
+            if (generation == screws_soak.generation && !success) {
+                screws_soak_end(mqtt, "failed", "The bed target could not be set", 1); return;
+            }
+            screws_soak.m140_done = 1; screws_soak.done_at = now;
+        } else {
+            if (now - screws_soak.since > 60000) screws_soak_end(mqtt, "failed", "The bed target could not be set", 1);
+            return;
+        }
+    }
+    if (mqtt->have_machine_status && mqtt->machine_status != 1) { screws_soak_end(mqtt, "ended", "The printer is not idle", 0); return; }
+    double bed = 0, target = 0;
+    int have_bed = uds_value(&telemetry, U_BT, &bed) && uds_value(&telemetry, U_BG, &target);
+    if (screws_soak.stage == SOAK_HEATING) {
+        if (have_bed && fabs(target - screws_soak.bed) > 0.5 && now - screws_soak.done_at > 10000) {
+            screws_soak_end(mqtt, "ended", "The bed target was changed", 0); return;
+        }
+        if (have_bed && fabs(target - screws_soak.bed) <= 0.5 && screws_soak_at_bed(bed, screws_soak.bed)) {
+            screws_soak.stage = SOAK_SOAKING; screws_soak.since = now;
+            screws_soak.soak_until = now + (long long)screws_soak.seconds * 1000;
+            return;
+        }
+        screws_soak_keep_bed(mqtt, now);
+        if (now - screws_soak.since > SCREWS_SOAK_HEAT_MS)
+            screws_soak_end(mqtt, "failed", "The bed did not reach the temperature", 1);
+        return;
+    }
+    if (have_bed && fabs(target - screws_soak.bed) > 0.5) { screws_soak_end(mqtt, "ended", "The bed target was changed", 0); return; }
+    if (!busy) screws_soak_keep_bed(mqtt, now);
+    if (now < screws_soak.soak_until || busy) return; /* a command typed meanwhile finishes first */
+    /* Waits up to a minute for fresh evidence, then stops. */
+    const char *hold = screws_soak_hold(mqtt, have_bed, bed, target);
+    if (hold) {
+        if (!screws_soak.held) screws_soak.held = now;
+        if (now - screws_soak.held > 60000) screws_soak_end(mqtt, "failed", hold, 1);
+        return;
+    }
+    screws_soak.held = 0;
+    char reason[256];
+    if (!screws_measure_check(mqtt, console, screws_soak.action, 0, reason, sizeof(reason), NULL)) {
+        screws_soak_end(mqtt, "failed", reason, 1); return;
+    }
+    int started = screws_soak_start(mqtt, console, reason, sizeof(reason));
+    if (started < 0 || (started > 0 && now - screws_soak.soak_until > 60000)) { screws_soak_end(mqtt, "failed", reason, 1); return; }
+    if (started == 0) screws_soak_end(mqtt, "started", "", 0);
+}
+
+static void screws_soak_json(char *out, size_t cap) {
+    if (!screws_soak.stage) {
+        char escaped[200]; json_escape(escaped, sizeof(escaped), screws_soak.reason);
+        snprintf(out, cap, "{\"active\":false,\"result\":\"%s\",\"reason\":\"%s\"}", screws_soak.result, escaped);
+        return;
+    }
+    long long left = screws_soak.stage == SOAK_SOAKING ? (screws_soak.soak_until - monotonic_ms() + 999) / 1000 : screws_soak.seconds;
+    const char *kind = control_screws_action_kind(screws_soak.action);
+    snprintf(out, cap, "{\"active\":true,\"stage\":\"%s\",\"bed\":%d,\"remaining\":%lld,\"total\":%d,\"action\":\"%s\"}",
+             screws_soak.stage == SOAK_SOAKING ? "soaking" : "heating", screws_soak.bed, left > 0 ? left : 0,
+             screws_soak.seconds, kind ? kind : "quick");
+}
+
+/* A screws:measure... or screws:tram:start... action, with or without a valid form. */
+static int screws_measure_action(const char *action) {
+    size_t n = !strncmp(action, "screws:measure", 14) ? 14 : !strncmp(action, "screws:tram:start", 17) ? 17 : 0;
+    return n && (!action[n] || action[n] == ':');
+}
+static void control_reject(int fd, int status, const char *reason) {
+    char escaped[300], response[420]; json_escape(escaped, sizeof(escaped), reason);
+    int n = snprintf(response, sizeof(response), "{\"accepted\":false,\"error\":\"%s\"}\n", escaped);
+    respond(fd, status, status == 400 ? "Bad Request" : "Conflict", "application/json; charset=utf-8", response, (size_t)n);
+}
+
 static void control_response(int fd,console_state *console,mqtt_client *mqtt,const char *body,size_t body_len){
     char action[160],script[700],reason[256];
     while(body_len&&isspace((unsigned char)*body)){body++;body_len--;}
@@ -5379,7 +5652,8 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     memcpy(action,body,body_len);action[body_len]='\0';
     if(!strcmp(action,"system:emergency_stop")){
-        control_screws_invalidate();
+        control_screws_invalidate_for(CONTROL_SCREWS_END_EMERGENCY);
+        screws_soak_end(mqtt,"ended","Emergency stop",0);
         usb_start_cancel();
         /* Straight to the firmware's emergency_stop endpoint; the queued M112 below is only the fallback. */
         char stop_reason[160];
@@ -5389,13 +5663,65 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         }
         fprintf(stderr,"Emergency stop endpoint failed (%s); sending M112\n",stop_reason);
     }
+    /* R11: stop the running screw measurement after its current line; the console job itself lifts the nozzle and
+     * switches the heaters off. Not a queued script, so it works while the console is busy. */
+    if(!strcmp(action,"screws:cancel")){
+        /* A hold time before a measurement ends at once; the bed goes off while the job owns it. */
+        if(screws_soak.stage){
+            screws_soak_end(mqtt,"cancelled","",1);
+            const char *ok="{\"accepted\":true}\n";
+            respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));return;
+        }
+        if(console_cancel(console)!=0){
+            const char *error="{\"accepted\":false,\"error\":\"No screw measurement is running\"}\n";
+            respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+        }
+        control_screws_note_cancel();
+        const char *ok="{\"accepted\":true}\n";
+        respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));return;
+    }
     if(!strcmp(action,"motors:quiet") && !experiments.quiet_motors){
         const char *error="{\"accepted\":false,\"error\":\"Enable the experimental Quiet controls first\"}\n";
         respond(fd,409,"Conflict","application/json",error,strlen(error));return;
     }
     if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
-    /* The four-point measurements home, probe and set heater targets of their own. */
-    if(align_active() && !strncmp(action,"screws:",7)){plates_fail(fd,409,"End the mesh-guided alignment session first");return;}
+    /* A hold time before a screw measurement (screws:soak:<minutes>:<measurement>, see screws_soak above). With 0 minutes
+     * the measurement runs exactly as without the prefix. */
+    char soak_inner[96];int soak_minutes=0;
+    int soak=control_screws_soak_parse(action,&soak_minutes,soak_inner,sizeof(soak_inner),reason,sizeof(reason));
+    if(soak<0){control_reject(fd,400,reason);return;}
+    if(soak&&!soak_minutes){memmove(action,soak_inner,strlen(soak_inner)+1);soak=0;}
+    if(screws_measure_action(soak?soak_inner:action)){
+        if(screws_soak.stage){control_reject(fd,409,"A screw measurement is waiting for its bed hold time: cancel it first");return;}
+        /* The calibration would only wait for the console while the measurement heats and probes. */
+        if(plates_cal.stage){control_reject(fd,409,"A bed mesh calibration is running");return;}
+    }
+    if(soak){
+        int direct=0;
+        if(!screws_measure_check(mqtt,console,soak_inner,1,reason,sizeof(reason),&direct)){control_reject(fd,409,reason);return;}
+        /* Right after a bed mesh the bed was just held at this target: the hold time is left out. */
+        if(direct)memmove(action,soak_inner,strlen(soak_inner)+1);
+        else{
+            /* The job ends on the next tick after an emergency stop (the latch stays until CC2 Control restarts), and
+             * then without switching its bed off: refused before its M140 is sent. */
+            if(atomic_load(&console->emergency_sent)){
+                control_reject(fd,409,"An emergency stop was sent: restart the printer before a hold time");return;
+            }
+            char command[24];snprintf(command,sizeof(command),"M140 S%d",control_screws_action_bed(soak_inner));
+            if(console_start(console,command,reason,sizeof(reason))!=0){control_reject(fd,409,reason);return;}
+            pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+            memset(&screws_soak,0,sizeof(screws_soak));
+            screws_soak.stage=SOAK_HEATING;screws_soak.bed=control_screws_action_bed(soak_inner);
+            screws_soak.seconds=soak_minutes*60;screws_soak.generation=generation;screws_soak.result="";
+            snprintf(screws_soak.action,sizeof(screws_soak.action),"%s",soak_inner);
+            screws_soak.since=monotonic_ms();screws_soak.renew_at=screws_soak.since+PLATE_BED_RENEW_MS; /* the M140 */
+            screws_soak_off.until=0;
+            /* The job owns the bed now: a shutdown left pending by an ended session must not undo it. */
+            control_screws_note_action(action);
+            const char *ok="{\"accepted\":true}\n";
+            respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));return;
+        }
+    }
     if(!strncmp(action,"grille:",7)){
         const char *native=uds_print_state(&telemetry);double nozzle,bed;
         /* No raw servo/PWM commands: native grille policy also owns the exhaust fan.
@@ -5477,7 +5803,10 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         }
         free(reply);
     }
+    control_screws_after_mesh(screws_measure_action(action)?screws_after_mesh_bed(console):-1);
     int built=control_build_script(action,mqtt,script,sizeof(script),reason,sizeof(reason));
+    int after_mesh=built&&control_screws_built_direct();
+    control_screws_after_mesh(-1);
     mqtt->external_verified=0;
     if(built&&external_feed_enabled&&!external_source_selected&&
        (!strncmp(action,"canvas:load:",12)||!strncmp(action,"canvas:recover-load:",20)||!strncmp(action,"canvas:unload:",14))){
@@ -5485,32 +5814,28 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         if(n<0||(size_t)n>=sizeof(next)){built=0;snprintf(reason,sizeof(reason),"Source script exceeds capacity");}
         else memcpy(script,next,(size_t)n+1);
     }
+    if(built&&control_screws_cancel_tail(action))console_arm_staged(console,control_screws_cancel_tail(action),control_axes_homed(mqtt));
     if(!built||console_start(console,script,reason,sizeof(reason))!=0){
-        if(control_screws_is_tram(action)&&!strcmp(action,"screws:tram:start"))control_screws_invalidate();
+        /* Only a start this call built: a start refused because a session is running must not end that session. */
+        if(built&&control_screws_is_start(action))control_screws_invalidate_for(CONTROL_SCREWS_END_CONSOLE);
         char escaped[300],response[420];json_escape(escaped,sizeof(escaped),reason);
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
-    control_screws_note_action(action);
-    align_note_action(action);
-    if(!strcmp(action,"screws:measure")){
-        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
-        control_screws_note_quick(generation);
-    }
-    if(control_screws_is_tram(action)&&strcmp(action,"screws:tram:end")){
-        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
-        control_screws_note_job(generation);
-    }
-    if(!strcmp(action,"screws:tram:end")){
-        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
-        control_screws_note_end(generation);
-    }
+    screws_note_queued(console,action);
+    /* Another screw action (the measurements are refused meanwhile) or switched-off heaters end a hold time; the
+     * action itself sets the heaters. */
+    if(!strncmp(action,"screws:",7))screws_soak_end(mqtt,"ended","Another screw action was started",0);
+    if(!strcmp(action,"heaters:off")||!strcmp(action,"system:heaters_off")||!strcmp(action,"system:all_off"))
+        screws_soak_end(mqtt,"ended","The heaters were switched off",0);
+    if(control_heater_action(action))screws_soak_off.until=0;
     if(!strcmp(action,"motors:quiet")||!strcmp(action,"motors:normal")){
         motor_mode_requested=action[7]=='q'?"quiet":"normal";motor_mode_connection=telemetry.connections;
     }
     if(!strncmp(action,"canvas:material:",16)||!strncmp(action,"canvas:catalog:",15)||!strcmp(action,"canvas:reset-all")){mqtt->canvas_material_read_at=time(NULL)+1;mqtt->canvas_watch_until=time(NULL)+15;}
     if(z_action){z_offset_reference=z_reference;z_offset_session=1;z_offset_expected=z_next;z_offset_pending=1;z_offset_timed_out=0;clock_gettime(CLOCK_MONOTONIC,&z_offset_started);}
-    const char *ok="{\"accepted\":true}\n";
+    /* after_mesh: the measurement follows the bed mesh directly (no nozzle cleaning, no full G28, no hold time). */
+    const char *ok=after_mesh?"{\"accepted\":true,\"after_mesh\":true}\n":"{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }
 
@@ -5522,15 +5847,20 @@ static int installer_native_observation(int canvas_only,int canvas_transfer);
 /* Release the steppers the firmware leaves energised once the printer has
  * stood idle with its heaters off; see control_idle_motors_due(). */
 static control_idle_motors idle_motors;
-static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
-    if(maintenance_barrier_active()||rn_blocks())return;
+static control_idle_sample idle_motors_sample(const mqtt_client *mqtt,console_state *console){
     control_idle_sample s={0};
     s.valid=gcode_idle_for_mutation(mqtt)&&mqtt->have_position&&
         uds_value(&telemetry,U_CF,&s.board_fan)&&uds_value(&telemetry,U_EG,&s.nozzle_target)&&
         uds_value(&telemetry,U_BG,&s.bed_target)&&uds_value(&telemetry,U_LIVE_SPEED,&s.velocity);
     s.machine_status=mqtt->machine_status;s.print_state=mqtt->print_state;
     s.x=mqtt->x;s.y=mqtt->y;s.z=mqtt->z;
+    s.session=control_screws_session_active();
     pthread_mutex_lock(&console->lock);s.console_busy=console->busy;pthread_mutex_unlock(&console->lock);
+    return s;
+}
+static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
+    if(maintenance_barrier_active()||rn_blocks())return;
+    control_idle_sample s=idle_motors_sample(mqtt,console);
     if(control_idle_motors_due(&idle_motors,&s,recovery_clock())&&send_local_gcode_script("M84")!=0)
         idle_motors.holding=0; /* Not delivered: wait a full period before trying again. */
 }
@@ -5559,16 +5889,68 @@ static int installer_native_status(int canvas_only);
 #include "bed_drying.h"
 #include "nozzle_expansion.h"
 
-/* Mirrors the POST refusals of handle_client below for a start that no request carries. */
+/* The POST paths that start one of the sessions printer_change_refusal pauses printer changes for (or a firmware tool
+ * or a network change). While a hold time before a screw measurement runs they are refused: its bed is held and the
+ * measurement starts on its own when it ends. */
+static int screws_soak_blocks_path(const char *path) {
+    static const char *const starts[] = {
+        "/api/nozzle-expansion/start", "/api/bed-drying/start", "/api/bed-drying/preheat", "/api/calibration-tools/action",
+        "/api/app-update/upload", "/api/app-update/download", "/api/app-update/install", "/api/network/action",
+        "/api/network/scan", "/api/rfid/action", "/api/rfid/lifecycle/action"};
+    for (size_t i = 0; i < sizeof(starts) / sizeof(starts[0]); i++) if (!strcmp(path, starts[i])) return 1;
+    return 0;
+}
+
+/* The refusals of every printer change while another session owns the printer, in the order and with the exceptions
+ * handle_client answers them: maintenance, RFID lifecycle and scan, the firmware calibration tools, the load-cell
+ * session, a pending rotation distance change (plate settings), an application update or network change, bed heating and
+ * the nozzle expansion calibration; then the starts refused during a screw hold time. GET, HEAD and the emergency stop
+ * always pass. NULL when the request may go on, else the 409 text; *plates_form tells the reply (plates_fail, otherwise
+ * app_update_fail). A start that no request carries asks as the request that would have started it (the measurement
+ * after a hold time: POST /api/control). */
+static const char *printer_change_refusal(const char *method, const char *path, const char *body, size_t body_len, int *plates_form) {
+    int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
+        body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
+    int console_m112 = !strcmp(path, "/api/console/command") && body_len == 4 && !memcmp(body, "M112", 4);
+    int console_emergency = !strcmp(method, "POST") && console_m112;
+    int owned_rfid_cancel = rfid.child && !strcmp(method, "POST") && !strcmp(path, "/api/rfid/action") && body_len == 6 &&
+        !memcmp(body, "cancel", 6);
+    int change = strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency;
+    *plates_form = 0;
+    if (maintenance_request_blocked(method, emergency, console_emergency) && !owned_rfid_cancel)
+        return "Installation or native maintenance is running; printer changes are paused";
+    if (rn_blocks() && change && !console_emergency && strcmp(path, "/api/rfid/lifecycle/action") && !owned_rfid_cancel)
+        return "RFID activation or recovery is incomplete; finish the lifecycle before changing the printer";
+    *plates_form = 1;
+    if (rfid.child && change && !console_emergency && strcmp(path, "/api/rfid/action"))
+        return "Cancel the RFID scan before changing printer settings";
+    if (tools.busy && change && !console_emergency) return "A native calibration tool is still running";
+    if (cell_active() && change && !console_emergency && strcmp(path, "/api/calibration-tools/action"))
+        return "Finish the load-cell calibration session first";
+    if (rotation_pending() && !strcmp(method, "POST") && !strncmp(path, "/api/plates/", 12))
+        return "A rotation distance change needs a restart before changing plate settings";
+    *plates_form = 0;
+    if (change && (app_update_active() || (connections_busy() && strcmp(path, "/api/network/action"))))
+        return "Application update is running; printer changes are paused";
+    /* A drying session owns the bed until zero readback and timeout restoration.
+     * M112 stays available; external display/slicer actions are observed by tick. */
+    if (drying_active() && change && strcmp(path, "/api/bed-drying/stop") && !console_m112)
+        return "Stop bed heating and wait for confirmation before another operation";
+    /* The calibration heats the nozzle and moves the printhead until it has switched the nozzle off. */
+    if (nx_active() && change && !console_m112)
+        return "A nozzle expansion calibration is running; use the emergency stop to interrupt it";
+    *plates_form = 1;
+    if (screws_soak_active() && !strcmp(method, "POST") && screws_soak_blocks_path(path))
+        return "A screw measurement is waiting for its bed hold time: cancel it first";
+    *plates_form = 0;
+    return NULL;
+}
+
+/* The refusals of handle_client for a start that no request carries, and a print start being prepared. */
 static const char *printer_change_blocked(void) {
-    if (maintenance_barrier_active()) return "Installation or native maintenance is running; printer changes are paused";
-    if (rn_blocks()) return "RFID activation or recovery is incomplete; finish the lifecycle before changing the printer";
-    if (rfid.child) return "Cancel the RFID scan before changing printer settings";
-    if (tools.busy) return "A native calibration tool is still running";
-    if (cell_active()) return "Finish the load-cell calibration session first";
-    if (app_update_active() || connections_busy()) return "Application update is running; printer changes are paused";
-    if (drying_active()) return "Stop bed heating and wait for confirmation before another operation";
-    if (nx_active()) return "A nozzle expansion calibration is running; use the emergency stop to interrupt it";
+    int plates_form;
+    const char *blocked = printer_change_refusal("POST", "", "", 0, &plates_form);
+    if (blocked) return blocked;
     if (usb_start_active())
         return usb_start.internal ? "A print start is still being prepared" : "A USB file is still being copied for a print start";
     return NULL;
@@ -5774,44 +6156,13 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     if(!header_end){header_end=strstr(request,"\n\n");separator=2;}
     const char *body=header_end?header_end+separator:request+used;
     size_t body_len=header_end&&used>=(size_t)(body-request)?used-(size_t)(body-request):0;
-    int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
-        body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
-    int console_emergency=!strcmp(method,"POST")&&!strcmp(path,"/api/console/command")&&body_len==4&&!memcmp(body,"M112",4);
-    int owned_rfid_cancel=rfid.child&&!strcmp(method,"POST")&&!strcmp(path,"/api/rfid/action")&&body_len==6&&!memcmp(body,"cancel",6);
-    if(maintenance_request_blocked(method,emergency,console_emergency)&&!owned_rfid_cancel){
-        app_update_fail(fd,409,"Installation or native maintenance is running; printer changes are paused");return 0;
-    }
-    if(rn_blocks()&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&
-       strcmp(path,"/api/rfid/lifecycle/action")&&!owned_rfid_cancel){
-        app_update_fail(fd,409,"RFID activation or recovery is incomplete; finish the lifecycle before changing the printer");return 0;
-    }
-    if(rfid.child&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&strcmp(path,"/api/rfid/action")){
-        plates_fail(fd,409,"Cancel the RFID scan before changing printer settings");return 0;
-    }
-    if(tools.busy&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency){
-        plates_fail(fd,409,"A native calibration tool is still running");return 0;
-    }
-    if(cell_active()&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&strcmp(path,"/api/calibration-tools/action")){
-        plates_fail(fd,409,"Finish the load-cell calibration session first");return 0;
-    }
-    if(rotation_pending()&&!strcmp(method,"POST")&&!strncmp(path,"/api/plates/",12)){
-        plates_fail(fd,409,"A rotation distance change needs a restart before changing plate settings");return 0;
-    }
-    if (strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency && (app_update_active() || (connections_busy() && strcmp(path,"/api/network/action")))) {
-        app_update_fail(fd, 409, "Application update is running; printer changes are paused");
+    /* Every printer change is refused while another session owns the printer; the measurement after a screw hold time
+     * asks the same function (screws_measure_check). */
+    int plates_form;
+    const char *change_refused=printer_change_refusal(method,path,body,body_len,&plates_form);
+    if(change_refused){
+        if(plates_form)plates_fail(fd,409,change_refused);else app_update_fail(fd,409,change_refused);
         return 0;
-    }
-    /* A drying session owns the bed until zero readback and timeout restoration.
-     * M112 stays available; external display/slicer actions are observed by tick. */
-    if(drying_active() && strcmp(method,"GET") && strcmp(method,"HEAD") && !emergency &&
-       strcmp(path,"/api/bed-drying/stop") &&
-       !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
-        app_update_fail(fd,409,"Stop bed heating and wait for confirmation before another operation");return 0;
-    }
-    /* The calibration heats the nozzle and moves the printhead until it has switched the nozzle off. */
-    if(nx_active() && strcmp(method,"GET") && strcmp(method,"HEAD") && !emergency &&
-       !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
-        app_update_fail(fd,409,"A nozzle expansion calibration is running; use the emergency stop to interrupt it");return 0;
     }
     if(!strcmp(method,"GET")&&!strcmp(path,"/api/rfid/lifecycle")) {
         rfid_native_status_response(fd);
@@ -6027,20 +6378,14 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         plates_measure_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/edit")==0) {
         plates_measure_edit_response(fd,body,body_len);
-    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/screws/align")==0) {
-        align_get_response(fd);
-    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/measure")==0) {
-        align_measure_response(fd,mqtt,console,body,body_len);
-    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/save")==0) {
-        align_save_response(fd,mqtt,body,body_len);
-    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/screws/align/end")==0) {
-        align_end_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate")==0) {
-        align_plates_calibrate_response(fd,mqtt,console,body,body_len);
+        plates_calibrate_response(fd,mqtt,console,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate/cancel")==0) {
         plates_calibrate_cancel_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/delete")==0) {
         plates_measure_delete_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measures/clear")==0) {
+        plates_measures_clear_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/keep")==0) {
         plates_keep_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/nozzle")==0) {
@@ -6339,13 +6684,17 @@ int main(int argc, char **argv) {
         idle_motors_tick(&mqtt,&console);
         motor_mode_tick(&mqtt,&console);
         {
-            int completed=0,success=0,busy=0;unsigned long generation=0;int emergency;
-            pthread_mutex_lock(&console.lock);
-            completed=console.completed;success=console.success;busy=console.busy;
-            generation=console.generation;
-            pthread_mutex_unlock(&console.lock);
+            console_snapshot snap;
+            console_take_snapshot(&console,&snap);
+            int completed=snap.completed,success=snap.success,busy=snap.busy,emergency;unsigned long generation=snap.generation;
+            /* a cancel that met a failing line, or whose tail was cut short or refused at a heater line, never switched the
+             * heaters off: it is not taken for a clean cancel (control.c) */
+            control_screws_note_console_end(snap.completed,snap.cancelled,snap.cancel_tail_failed);
             emergency=atomic_load(&console.emergency_sent);
             time_t tram_now=time(NULL);
+            pthread_mutex_lock(&console.lock);
+            screws_sample_tick(&mqtt,generation,console.output,console.output_len);
+            pthread_mutex_unlock(&console.lock);
             (void)control_screws_tick(&mqtt,completed,success,generation,emergency,tram_now);
             /* Record the measured corners of a session job that just completed (#329). The
              * console output still belongs to that job: nothing new starts within this tick. */
@@ -6353,21 +6702,22 @@ int main(int argc, char **argv) {
             if(control_screws_take_finished(&tram_job)){
                 int recorded;
                 pthread_mutex_lock(&console.lock);
-                recorded=screw_history_record(&screws_history,&tram_job,console.output,console.output_len,tram_now);
+                const screw_ist *sample=screws_sample.gen==generation&&screws_sample.ist.have?&screws_sample.ist:NULL;
+                recorded=screw_history_record_ist(&screws_history,&tram_job,console.output,console.output_len,tram_now,sample);
                 pthread_mutex_unlock(&console.lock);
+                memset(&screws_sample,0,sizeof(screws_sample));
                 if(recorded)(void)screws_history_store();
             }
-            if(screw_history_tick(&screws_history,control_screws_session_active(),tram_now))(void)screws_history_store();
-            /* Keep the session's bed at 60 C, but only while telemetry still shows that
-             * target: a target someone else set is left alone. */
+            if(screw_history_tick(&screws_history,control_screws_session_active(),tram_now,control_screws_end_reason()))
+                (void)screws_history_store();
             double tram_bed=0;
-            if(control_screws_bed_renew_due(tram_now)&&!busy&&mqtt.have_machine_status&&mqtt.machine_status==1&&
-               uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
-                control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
-            align_tick(&mqtt,emergency,tram_now);
+            int have_tram_bed=uds_value(&telemetry,U_BG,&tram_bed);
+            screws_bed_renew_tick(&mqtt,busy,tram_now,send_local_gcode_script,have_tram_bed,tram_bed);
             int have_bed_target=uds_value(&telemetry,U_BG,&tram_bed);
             screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script,have_bed_target,tram_bed);
             screws_marker_sync();
+            /* Last: a measurement it starts must not clear the console output of a job recorded above. */
+            screws_soak_tick(&mqtt,&console,emergency);
         }
         spools_tick(&mqtt);
         queue_tick(&mqtt);

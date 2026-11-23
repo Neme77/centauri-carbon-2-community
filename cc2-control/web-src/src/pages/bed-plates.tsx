@@ -1,4 +1,6 @@
-import { useRef, useState } from 'preact/hooks'
+import { InfoHint } from '@/components/info-hint'
+import type { ComponentChildren } from 'preact'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
@@ -9,6 +11,7 @@ import { ask } from '@/lib/confirm'
 import { t, tpl } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
 import {
+  clearMeasures,
   deleteMeasure,
   deleteNozzle,
   editMeasure,
@@ -124,6 +127,75 @@ export const NozzleSelect = ({
   </Select>
 )
 
+// A small "⋯" menu for the less frequent actions of a row or card; closes after a choice.
+const More = ({ children }: { children: ComponentChildren }) => {
+  const box = useRef<HTMLDetailsElement>(null)
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null)
+  // The panel is placed on the screen (fixed), so a scrolling list around the "⋯" does not cut it off.
+  const place = () => {
+    const r = box.current?.querySelector('summary')?.getBoundingClientRect()
+    if (!box.current?.open || !r) return setPos(null)
+    // Opens upwards when there is no room for it under the button (it would otherwise leave the screen).
+    const right = window.innerWidth - r.right
+    setPos(
+      window.innerHeight - r.bottom < 170
+        ? { bottom: window.innerHeight - r.top + 4, right }
+        : { top: r.bottom + 4, right }
+    )
+  }
+  useEffect(() => {
+    if (!pos) return
+    const close = (e: Event) => {
+      if (!box.current?.contains(e.target as Node)) box.current?.removeAttribute('open')
+    }
+    const shut = () => box.current?.removeAttribute('open')
+    document.addEventListener('pointerdown', close)
+    window.addEventListener('scroll', shut, true)
+    return () => {
+      document.removeEventListener('pointerdown', close)
+      window.removeEventListener('scroll', shut, true)
+    }
+  }, [pos])
+  return (
+    <details ref={box} class="relative" data-more onToggle={place}>
+      <summary
+        class="grid min-h-7 cursor-pointer place-items-center rounded-md border border-edge px-2 text-sm select-none [&::-webkit-details-marker]:hidden"
+        aria-label={t('plates.more_actions')}
+        title={t('plates.more_actions')}
+      >
+        ⋯
+      </summary>
+      {pos && (
+        <div
+          class="fixed z-50 grid min-w-44 gap-1 rounded-md border border-edge bg-panel p-1.5 shadow-lg [&_button]:w-full [&_button]:justify-start"
+          style={{
+            top: pos.top == null ? undefined : `${pos.top}px`,
+            bottom: pos.bottom == null ? undefined : `${pos.bottom}px`,
+            right: `${pos.right}px`,
+          }}
+          role="menu"
+          tabindex={-1}
+          onClick={() => box.current?.removeAttribute('open')}
+          onKeyDown={e => {
+            if (e.key === 'Escape') box.current?.removeAttribute('open')
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </details>
+  )
+}
+
+// Below a list that holds more than fits: how many entries there are and that the list scrolls.
+const MoreBelow = ({ count, shown }: { count: number; shown: number }) =>
+  count > shown ? (
+    <p class="mt-1 flex items-center justify-center gap-1 text-xs text-cyan" data-more-below>
+      <span aria-hidden="true">↓</span>
+      {tpl('plates.more_below', { n: count })}
+    </p>
+  ) : null
+
 const MeasureRow = ({
   p,
   m,
@@ -205,7 +277,7 @@ const MeasureRow = ({
       ) : (
         <Tag tone="warning">{t('plates.library_only')}</Tag>
       )}
-      <span class="ml-auto flex flex-wrap gap-1.5">
+      <span class="ml-auto flex items-center gap-1.5">
         <Button
           class="min-h-7 px-2 text-xs"
           onClick={() => {
@@ -215,32 +287,34 @@ const MeasureRow = ({
         >
           {t('plates.view_mesh')}
         </Button>
-        <Button
-          class="min-h-7 px-2 text-xs"
-          disabled={locked}
-          onClick={() => {
-            setTemp(String(m.temp))
-            setNozzle(m.nozzle)
-            setEditing(true)
-          }}
-        >
-          {t('plates.edit_measure')}
-        </Button>
-        {!m.slot && (
+        <More>
           <Button
-            class="min-h-7 px-2 text-xs"
-            disabled={locked || !idle}
-            title={idleOnly}
-            onClick={() => act(() => mount(p, m))}
+            class="min-h-8 px-2 text-xs"
+            disabled={locked}
+            onClick={() => {
+              setTemp(String(m.temp))
+              setNozzle(m.nozzle)
+              setEditing(true)
+            }}
           >
-            {t('plates.write_to_slot')}
+            {t('plates.edit_measure')}
           </Button>
-        )}
-        {p.measures.length > 1 && (
-          <Button variant="danger" class="min-h-7 px-2 text-xs" disabled={locked} onClick={remove}>
-            {t('common.delete')}
-          </Button>
-        )}
+          {!m.slot && (
+            <Button
+              class="min-h-8 px-2 text-xs"
+              disabled={locked || !idle}
+              title={idleOnly}
+              onClick={() => act(() => mount(p, m))}
+            >
+              {t('plates.write_to_slot')}
+            </Button>
+          )}
+          {p.measures.length > 1 && (
+            <Button variant="danger" class="min-h-8 px-2 text-xs" disabled={locked} onClick={remove}>
+              {t('common.delete')}
+            </Button>
+          )}
+        </More>
       </span>
     </div>
   )
@@ -277,6 +351,13 @@ const PlateCard = ({
       setEditing(false)
       notify(t('plates.updated_toast'))
     })
+  // Empties the plate on purpose (a function of its own; deleting one measurement still keeps the last one).
+  const clearAll = () =>
+    act(async () => {
+      if (!(await ask(tpl('plates.measures_clear_confirm', { n: p.measures.length, name: p.name }), true))) return
+      await clearMeasures(p.id)
+      notify(t('plates.measures_cleared_toast'))
+    })
   const remove = () =>
     act(async () => {
       if (!(await ask(tpl('plates.delete_confirm', { name: p.name }), true))) return
@@ -284,7 +365,7 @@ const PlateCard = ({
       notify(t('plates.deleted_toast'))
     })
   return (
-    <div class="rounded-lg border border-edge bg-field/40 p-3" data-plate={p.id}>
+    <div class="flex flex-col rounded-lg border border-edge bg-field/40 p-3" data-plate={p.id}>
       <div class="flex flex-wrap items-center gap-2">
         <strong class="mr-auto min-w-0 text-sm [overflow-wrap:anywhere]">{p.name}</strong>
         <Tag>{tpl('plates.side_n', { side: p.side })}</Tag>
@@ -294,12 +375,17 @@ const PlateCard = ({
       <div class="mt-2 text-xs text-muted">
         {t('plates.z_offset')}: <b class="text-fg">{zText(p.z_offset)} mm</b>
       </div>
-      <fieldset class="mt-2 grid min-w-0 gap-1.5" aria-label={t('plates.measures')}>
+      <fieldset
+        class="mt-2 grid max-h-[13rem] min-w-0 gap-1.5 overflow-y-auto pr-1 [scrollbar-width:thin]"
+        aria-label={t('plates.measures')}
+        data-measure-list
+      >
         {!p.measures.length && <Notice>{t('plates.not_calibrated')}</Notice>}
         {p.measures.map(m => (
           <MeasureRow key={m.id} p={p} m={m} lib={lib} idle={idle} locked={locked} act={act} />
         ))}
       </fieldset>
+      <MoreBelow count={p.measures.length} shown={2} />
       {mounted && !p.in_printer && !lib.pending && (
         <Warn>
           {tpl('plates.mesh_differs', { side: p.side })}
@@ -364,7 +450,7 @@ const PlateCard = ({
           )}
         </div>
       ) : (
-        <div class="mt-3 flex flex-wrap gap-2">
+        <div class="mt-auto flex flex-wrap items-center gap-2 pt-3">
           {!mounted && (
             <Button
               variant="primary"
@@ -391,20 +477,36 @@ const PlateCard = ({
           >
             {t('plates.calibrate_plate')}
           </Button>
-          <Button
-            class="text-xs"
-            disabled={locked}
-            onClick={() => {
-              setName(p.name)
-              setZ(p.z_offset.toFixed(3))
-              setEditing(true)
-            }}
-          >
-            {t('plates.edit')}
-          </Button>
-          <Button variant="danger" class="text-xs" disabled={locked} onClick={remove}>
-            {t('common.delete')}
-          </Button>
+          <span class="ml-auto">
+            <More>
+              <Button
+                class="min-h-8 px-2 text-xs"
+                disabled={locked}
+                onClick={() => {
+                  setName(p.name)
+                  setZ(p.z_offset.toFixed(3))
+                  setEditing(true)
+                }}
+              >
+                {t('plates.edit')}
+              </Button>
+              {p.measures.length > 0 && (
+                <Button
+                  variant="danger"
+                  class="min-h-8 px-2 text-xs"
+                  disabled={locked || mounted}
+                  title={mounted ? t('plates.measures_clear_mounted_hint') : undefined}
+                  onClick={clearAll}
+                  data-clear-measures
+                >
+                  {t('plates.measures_clear')}
+                </Button>
+              )}
+              <Button variant="danger" class="min-h-8 px-2 text-xs" disabled={locked} onClick={remove}>
+                {t('common.delete')}
+              </Button>
+            </More>
+          </span>
         </div>
       )}
     </div>
@@ -426,6 +528,7 @@ const NozzlesCard = ({ lib, busy, act }: { lib: PlateLibrary; busy: boolean; act
         return notify(t('plates.invalid_nozzle'), 'error')
       await saveNozzle(form.id, form.name.trim(), diameter, Number(form.z))
       setForm(empty)
+      setAdding(false)
       notify(t('plates.nozzle_saved'))
     })
   const remove = (n: Nozzle) =>
@@ -435,11 +538,50 @@ const NozzlesCard = ({ lib, busy, act }: { lib: PlateLibrary; busy: boolean; act
       if (form.id === n.id) setForm(empty)
       notify(t('plates.nozzle_deleted'))
     })
+  // Delete every nozzle with one confirmation; one request per nozzle, so each keeps the checks of a single delete.
+  const removeAll = () =>
+    act(async () => {
+      if (!(await ask(tpl('plates.nozzle_delete_all_confirm', { n: lib.nozzles.length }), true))) return
+      for (const n of [...lib.nozzles]) await deleteNozzle(n.id)
+      setForm(empty)
+      setAdding(false)
+      notify(t('plates.nozzle_deleted_all'))
+    })
+  const [adding, setAdding] = useState(false)
+  const formOpen = adding || Boolean(form.id)
   return (
-    <Card>
-      <CardHead icon="target" title="plates.nozzles_title" />
-      <p class="mb-3 text-xs text-muted">{t('plates.nozzles_hint')}</p>
-      <div class="grid gap-1.5">
+    // Inside the library card, below "In the printer now": the nozzle adds its Z correction to the mounted plate.
+    <div class="mt-4" data-plates-nozzles>
+      <div class="mb-2 flex flex-wrap items-center gap-2">
+        <h3 class="text-sm font-semibold">{t('plates.nozzles_title')}</h3>
+        <InfoHint text={t('plates.nozzles_hint')} data-hint="nozzles" />
+        <Button
+          class="ml-auto min-h-8 px-3 text-xs"
+          onClick={() => {
+            if (formOpen) {
+              setAdding(false)
+              setForm(empty)
+            } else setAdding(true)
+          }}
+          data-nozzle-add
+        >
+          {t(formOpen ? 'common.cancel' : 'plates.add_nozzle_open')}
+        </Button>
+        {lib.nozzles.length > 1 && (
+          <More>
+            <Button
+              variant="danger"
+              class="min-h-8 px-2 text-xs"
+              disabled={locked}
+              onClick={removeAll}
+              data-nozzle-delete-all
+            >
+              {t('plates.nozzle_delete_all')}
+            </Button>
+          </More>
+        )}
+      </div>
+      <div class="grid max-h-[9.5rem] gap-1.5 overflow-y-auto pr-1 [scrollbar-width:thin]" data-nozzle-list>
         {lib.nozzles.map(n => {
           const installed = lib.nozzle === n.id
           return (
@@ -454,7 +596,7 @@ const NozzlesCard = ({ lib, busy, act }: { lib: PlateLibrary; busy: boolean; act
                 {t('plates.nozzle_z')}: <b class="text-fg">{zText(n.z_offset)} mm</b>
               </span>
               {installed && <Tag tone="ok">{t('plates.nozzle_installed')}</Tag>}
-              <span class="ml-auto flex flex-wrap gap-1.5">
+              <span class="ml-auto flex items-center gap-1.5">
                 <Button
                   class="min-h-7 px-2 text-xs"
                   disabled={locked}
@@ -462,66 +604,78 @@ const NozzlesCard = ({ lib, busy, act }: { lib: PlateLibrary; busy: boolean; act
                 >
                   {t(installed ? 'plates.nozzle_remove_mark' : 'plates.nozzle_install')}
                 </Button>
-                <Button class="min-h-7 px-2 text-xs" disabled={locked} onClick={() => edit(n)}>
-                  {t('plates.edit')}
-                </Button>
-                <Button variant="danger" class="min-h-7 px-2 text-xs" disabled={locked} onClick={() => remove(n)}>
-                  {t('common.delete')}
-                </Button>
+                <More>
+                  <Button class="min-h-8 px-2 text-xs" disabled={locked} onClick={() => edit(n)}>
+                    {t('plates.edit')}
+                  </Button>
+                  <Button variant="danger" class="min-h-8 px-2 text-xs" disabled={locked} onClick={() => remove(n)}>
+                    {t('common.delete')}
+                  </Button>
+                </More>
               </span>
             </div>
           )
         })}
         {!lib.nozzles.length && <Notice>{t('plates.no_nozzles')}</Notice>}
       </div>
-      <div class="mt-3 grid gap-2 cc2-sm:grid-cols-[1fr_7rem_8rem_auto]" data-nozzle-form>
-        <label class="grid gap-1 text-xs">
-          {t('common.name')}
-          <Input
-            value={form.name}
-            maxLength={64}
-            placeholder={t('plates.nozzle_name_placeholder')}
-            onInput={e => setForm({ ...form, name: e.currentTarget.value })}
-          />
-        </label>
-        <label class="grid gap-1 text-xs">
-          {t('plates.nozzle_diameter_mm')}
-          <Input
-            type="number"
-            step="0.05"
-            min="0.1"
-            max="2"
-            value={form.diameter}
-            onInput={e => setForm({ ...form, diameter: e.currentTarget.value })}
-          />
-        </label>
-        <label class="grid gap-1 text-xs">
-          {t('plates.nozzle_z_mm')}
-          <Input
-            type="number"
-            step="0.005"
-            min="-0.5"
-            max="0.5"
-            value={form.z}
-            onInput={e => setForm({ ...form, z: e.currentTarget.value })}
-          />
-        </label>
-        <div class="flex items-end gap-2">
-          <Button variant="primary" disabled={locked || !form.name.trim()} onClick={save}>
-            {t(form.id ? 'plates.save' : 'plates.add_nozzle')}
-          </Button>
-          {form.id && (
-            <Button disabled={busy} onClick={() => setForm(empty)}>
-              {t('common.cancel')}
+      <MoreBelow count={lib.nozzles.length} shown={3} />
+      {formOpen && (
+        <div class="mt-3 grid gap-2 cc2-sm:grid-cols-[1fr_7rem_8rem_auto]" data-nozzle-form>
+          <label class="grid gap-1 text-xs">
+            {t('common.name')}
+            <Input
+              value={form.name}
+              maxLength={64}
+              placeholder={t('plates.nozzle_name_placeholder')}
+              onInput={e => setForm({ ...form, name: e.currentTarget.value })}
+            />
+          </label>
+          <label class="grid gap-1 text-xs">
+            {t('plates.nozzle_diameter_mm')}
+            <Input
+              type="number"
+              step="0.05"
+              min="0.1"
+              max="2"
+              value={form.diameter}
+              onInput={e => setForm({ ...form, diameter: e.currentTarget.value })}
+            />
+          </label>
+          <label class="grid gap-1 text-xs">
+            {t('plates.nozzle_z_mm')}
+            <Input
+              type="number"
+              step="0.005"
+              min="-0.5"
+              max="0.5"
+              value={form.z}
+              onInput={e => setForm({ ...form, z: e.currentTarget.value })}
+            />
+          </label>
+          <div class="flex items-end gap-2">
+            <Button variant="primary" disabled={locked || !form.name.trim()} onClick={save}>
+              {t(form.id ? 'plates.save' : 'plates.add_nozzle')}
             </Button>
-          )}
+          </div>
         </div>
-      </div>
-    </Card>
+      )}
+    </div>
   )
 }
 
-const SaveForm = ({ lib, idle, busy, act }: { lib: PlateLibrary; idle: boolean; busy: boolean; act: Act }) => {
+const SaveForm = ({
+  lib,
+  idle,
+  busy,
+  act,
+  onSaved,
+}: {
+  lib: PlateLibrary
+  idle: boolean
+  busy: boolean
+  act: Act
+  onSaved?: () => void
+}) => {
   const [side, setSide] = useState<'A' | 'B'>('A')
   const [name, setName] = useState('')
   const [z, setZ] = useState('0.000')
@@ -541,6 +695,7 @@ const SaveForm = ({ lib, idle, busy, act }: { lib: PlateLibrary; idle: boolean; 
       setName('')
       setZ('0.000')
       notify(t(withMesh ? 'plates.saved_toast' : 'plates.created_without_mesh'))
+      onSaved?.()
     })
   return (
     <Card>
@@ -699,18 +854,20 @@ const MeshMatchSwitch = ({ lib, busy, act }: { lib: PlateLibrary; busy: boolean;
   const on = Boolean(lib.match?.enabled)
   return (
     <div class="mt-3">
-      <Button
-        wide
-        class="justify-between"
-        data-mesh-match
-        aria-pressed={on}
-        disabled={busy || !lib.available || !lib.match}
-        onClick={() => act(() => setMeshMatch(!on))}
-      >
-        {t('plates.match_temperature')}
-        <small class={on ? 'text-cyan' : 'text-muted'}>{t(on ? 'plates.match_on' : 'plates.match_off')}</small>
-      </Button>
-      <p class="mt-1.5 text-xs text-muted">{t('plates.match_note')}</p>
+      <div class="flex items-center gap-2">
+        <Button
+          wide
+          class="h-auto min-h-9 min-w-0 flex-1 justify-between py-1 text-left whitespace-normal"
+          data-mesh-match
+          aria-pressed={on}
+          disabled={busy || !lib.available || !lib.match}
+          onClick={() => act(() => setMeshMatch(!on))}
+        >
+          {t('plates.match_temperature')}
+          <small class={on ? 'text-cyan' : 'text-muted'}>{t(on ? 'plates.match_on' : 'plates.match_off')}</small>
+        </Button>
+        <InfoHint text={t('plates.match_note')} align="right" data-hint="match" />
+      </div>
       {on && <BlendStatus lib={lib} busy={busy} act={act} />}
     </div>
   )
@@ -756,6 +913,7 @@ export const Plates = () => {
   const current = lib?.pending ? undefined : lib?.plates.find(p => p.id === lib.current)
   const waiting = lib?.plates.find(p => p.id === lib.pending)
   const installed = lib?.nozzles.find(n => n.id === lib.nozzle)
+  const [adding, setAdding] = useState(false)
   return (
     <div class="grid gap-3.5">
       <Card>
@@ -774,53 +932,74 @@ export const Plates = () => {
             ) : lib.result === 'reboot_failed' ? (
               <Warn>{t('plates.reboot_failed')}</Warn>
             ) : null}
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-edge bg-field/60 px-3 py-2.5">
-              {current ? (
-                <>
-                  <span class="text-xs text-muted">{t('plates.mounted_plate')}</span>
-                  <b class="[overflow-wrap:anywhere]">{current.name}</b>
-                  <Tag>{tpl('plates.side_n', { side: current.side })}</Tag>
-                  <span class="text-xs">
-                    {t('plates.z_offset')}: <b>{zText(current.z_offset)} mm</b>
-                    {installed && lib.z_effective !== null && (
-                      <>
-                        {' '}
-                        {tpl('plates.z_with_nozzle', {
-                          name: installed.name,
-                          delta: zText(installed.z_offset),
-                          z: zText(lib.z_effective),
-                        })}
-                      </>
-                    )}
-                  </span>
-                  <small class="text-muted">{t(lib.z_applied ? 'plates.z_applied' : 'plates.z_waiting')}</small>
-                  <Button
-                    variant="ghost"
-                    class="ml-auto text-xs"
-                    disabled={busy || Boolean(lib.pending)}
-                    onClick={() => act(unmountPlate)}
-                  >
-                    {t('plates.forget_mounted')}
-                  </Button>
-                </>
-              ) : (
-                <span class="text-xs text-muted">{t('plates.no_plate_mounted')}</span>
-              )}
+            <div class="grid grid-cols-1 items-start gap-3.5 cc2-lg:grid-cols-2" data-plates-top>
+              <div class="min-w-0">
+                <h3 class="mt-1 mb-2 text-sm font-semibold" data-plates-now>
+                  {t('plates.now_title')}
+                </h3>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-edge bg-field/60 px-3 py-2.5">
+                  {current ? (
+                    <>
+                      <span class="text-xs text-muted">{t('plates.mounted_plate')}</span>
+                      <b class="[overflow-wrap:anywhere]">{current.name}</b>
+                      <Tag>{tpl('plates.side_n', { side: current.side })}</Tag>
+                      <span class="text-xs">
+                        {t('plates.z_offset')}: <b>{zText(current.z_offset)} mm</b>
+                        {installed && lib.z_effective !== null && (
+                          <>
+                            {' '}
+                            {tpl('plates.z_with_nozzle', {
+                              name: installed.name,
+                              delta: zText(installed.z_offset),
+                              z: zText(lib.z_effective),
+                            })}
+                          </>
+                        )}
+                      </span>
+                      <small class="text-muted">{t(lib.z_applied ? 'plates.z_applied' : 'plates.z_waiting')}</small>
+                      {(lib.z_effective ?? current.z_offset) !== 0 && (
+                        <InfoHint
+                          text={tpl('plates.screen_z_note', {
+                            z: zText(lib.z_effective ?? current.z_offset),
+                            live: t('common.live_z_offset'),
+                            page: t('common.control'),
+                            edit: t('plates.edit'),
+                          })}
+                          data-hint="screen-z"
+                        />
+                      )}
+                      <Button
+                        variant="ghost"
+                        class="ml-auto text-xs"
+                        disabled={busy || Boolean(lib.pending)}
+                        title={t('plates.forget_mounted_hint')}
+                        onClick={() => act(unmountPlate)}
+                      >
+                        {t('plates.forget_mounted')}
+                      </Button>
+                    </>
+                  ) : (
+                    <span class="text-xs text-muted">{t('plates.no_plate_mounted')}</span>
+                  )}
+                </div>
+                <NozzlesCard lib={lib} busy={busy} act={act} />
+              </div>
+              <div class="min-w-0 [&>[data-mesh-selector]]:mt-0 cc2-lg:mt-7">
+                <MeshSelector lib={lib} idle={v.idle && ok} busy={busy || rebooting} act={act} />
+                <MeshMatchSwitch lib={lib} busy={busy} act={act} />
+              </div>
             </div>
-            {current && (lib.z_effective ?? current.z_offset) !== 0 && (
-              <Notice>
-                {tpl('plates.screen_z_note', {
-                  z: zText(lib.z_effective ?? current.z_offset),
-                  live: t('common.live_z_offset'),
-                  page: t('common.control'),
-                  edit: t('plates.edit'),
-                })}
-              </Notice>
-            )}
-            <MeshSelector lib={lib} idle={v.idle && ok} busy={busy || rebooting} act={act} />
-            <MeshMatchSwitch lib={lib} busy={busy} act={act} />
             <PrintMeshNotice lib={lib} />
-            <div class="mt-3 grid gap-2.5 cc2-lg:grid-cols-2">
+            <div class="mt-5 mb-2 flex items-center gap-2" data-plates-mine>
+              <h3 class="mr-auto text-sm font-semibold">{t('plates.mine_title')}</h3>
+              <Button class="min-h-8 px-3 text-xs" onClick={() => setAdding(a => !a)} data-plates-add>
+                {t(adding ? 'common.cancel' : 'plates.add_plate')}
+              </Button>
+            </div>
+            {adding && (
+              <SaveForm lib={lib} idle={v.idle && ok} busy={busy} act={act} onSaved={() => setAdding(false)} />
+            )}
+            <div class="mt-3 grid auto-rows-fr gap-2.5 cc2-lg:grid-cols-2" data-plate-grid>
               {lib.plates.map(p => (
                 <PlateCard key={p.id} p={p} lib={lib} idle={v.idle && ok} busy={busy} act={act} />
               ))}
@@ -828,18 +1007,20 @@ export const Plates = () => {
             {!lib.plates.length && <Notice>{t('plates.empty')}</Notice>}
           </>
         )}
-        <Notice>
-          <span>
+        <details class="group mt-3 rounded-md border border-edge bg-field/40 text-xs" data-plates-how>
+          <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-muted select-none [&::-webkit-details-marker]:hidden">
+            <span class="text-cyan transition-transform group-open:rotate-90">›</span>
+            {t('plates.how_title')}
+          </summary>
+          <p class="border-t border-edge px-3 py-2 text-muted">
             {t('plates.how_it_works')}
             <br />
             {t('plates.temperatures_note')}
             <br />
             {t('plates.adaptive_note')}
-          </span>
-        </Notice>
+          </p>
+        </details>
       </Card>
-      {lib && <NozzlesCard lib={lib} busy={busy} act={act} />}
-      {lib && <SaveForm lib={lib} idle={v.idle && ok} busy={busy} act={act} />}
     </div>
   )
 }

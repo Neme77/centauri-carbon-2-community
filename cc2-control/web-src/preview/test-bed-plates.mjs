@@ -45,9 +45,14 @@ try {
   })
   await page.goto(`${origin}/#bed/plates`)
   await Promise.all([page.waitForEvent('load'), page.selectOption('#preview-scene', 'idle')])
-  await page.getByRole('heading', { name: 'Build Plate Library' }).waitFor()
+  await page.getByRole('heading', { name: 'Build plate and nozzle library' }).waitFor()
   const card = name => page.locator('[data-plate]').filter({ has: page.getByText(name, { exact: true }) })
   const row = (name, temp) => card(name).locator('[data-measure]').filter({ has: page.getByText(`${temp} °C`, { exact: true }) })
+  // Less frequent actions sit in the "⋯" menu of the card or of the measurement row: open it, then press the action.
+  const pick = async (scope, name) => {
+    await scope.locator('[data-more] summary').last().click()
+    await scope.getByRole('button', { name, exact: true }).last().click()
+  }
   const toast = text => page.getByText(text, { exact: true }).waitFor()
   const confirm = async text => {
     const dialog = page.getByRole('dialog')
@@ -59,7 +64,10 @@ try {
   // #296: matching the mesh to prints started elsewhere is off until chosen, then saved.
   const match = page.locator('[data-mesh-match]')
   assert.equal(await match.getAttribute('aria-pressed'), 'false')
+  // The explanation sits in the (i) next to the switch.
+  await page.locator('[data-hint="match"] button').hover()
   await page.getByText("A print started here keeps the measurement chosen in its dialog.", { exact: false }).waitFor()
+  await page.mouse.move(5, 5)
   await match.click()
   await page.waitForFunction(() => document.querySelector('[data-mesh-match]')?.getAttribute('aria-pressed') === 'true')
   assert.deepEqual(posts.at(-1), ['/api/plates/match', 'on'])
@@ -77,7 +85,7 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-mesh-match]')?.getAttribute('aria-pressed') === 'false')
   assert.deepEqual(posts.at(-1), ['/api/plates/match', 'off'])
   posts.length = 0
-  assert.ok(await page.getByRole('tab', { name: 'Build Plates' }).getAttribute('aria-selected'))
+  assert.ok(await page.getByRole('tab', { name: 'Build plates & nozzles' }).getAttribute('aria-selected'))
   await card('Textured PEI').getByText('In printer', { exact: true }).waitFor()
   assert.equal(await card('Cool Plate').getByText('In printer', { exact: true }).count(), 0)
   // Smooth PEI was calibrated at three bed temperatures; each row says where its mesh is.
@@ -95,6 +103,7 @@ try {
   await card('Textured PEI').getByText('Mounted', { exact: true }).waitFor()
   // A mounted plate with a Z offset says that the printer screen would replace it.
   const note = page.getByText('The printer screen does not know this offset', { exact: false })
+  await page.locator('[data-hint="screen-z"] button').hover()
   await note.waitFor()
   assert.match(
     await note.textContent(),
@@ -114,7 +123,7 @@ try {
   await row('Smooth PEI', 60).getByText('Stored in printer', { exact: true }).waitFor()
 
   // Edit the mounted plate: the live adjustment is added to the typed value.
-  await card('Cool Plate').getByRole('button', { name: 'Edit', exact: true }).click()
+  await pick(card('Cool Plate'), 'Edit')
   const z = card('Cool Plate').getByLabel('Z offset, mm')
   await z.fill('-0.015')
   await card('Cool Plate').getByRole('button', { name: 'Add the live adjustment (−0.020 mm)', exact: true }).click()
@@ -123,6 +132,7 @@ try {
   await toast('Plate updated.')
   assert.deepEqual(posts.at(-1), ['/api/plates/edit', '1234567890abcdef\nCool Plate\n-0.035'])
   await card('Cool Plate').getByText('−0.035 mm', { exact: true }).waitFor()
+  await page.locator('[data-hint="screen-z"] button').hover()
   await note.waitFor()
   assert.match(await note.textContent(), /replaces −0\.035 mm\./)
 
@@ -133,7 +143,12 @@ try {
   await nozzle('0.6 hardened').getByText('Installed', { exact: true }).waitFor()
   assert.deepEqual(posts.at(-1), ['/api/plates/nozzle/select', 'dd00000000000006'])
   await page.getByText('with “0.6 hardened” (+0.020 mm): −0.015 mm', { exact: false }).waitFor()
+  await page.locator('[data-hint="screen-z"] button').hover()
   await page.waitForFunction(() => /replaces −0\.015 mm\./.test(document.body.innerText))
+  await page.mouse.move(5, 5)
+  // The form for a new nozzle opens with "+ New nozzle".
+  assert.equal(await page.locator('[data-nozzle-form]').count(), 0, 'no nozzle form before the button is pressed')
+  await page.locator('[data-nozzle-add]').click()
   const nozzleForm = page.locator('[data-nozzle-form]')
   await nozzleForm.getByPlaceholder('e.g. 0.4 brass').fill('0.2 brass')
   await nozzleForm.locator('input[type=number]').nth(0).fill('0.2')
@@ -147,7 +162,7 @@ try {
   await nozzle('0.2 brass').waitFor()
 
   // A measurement that is not the side mesh is written to the slot with a restart.
-  await row('Smooth PEI', 80).getByRole('button', { name: 'Make side mesh', exact: true }).click()
+  await pick(row('Smooth PEI', 80), 'Make side mesh')
   await confirm('Write the 80 °C mesh of “Smooth PEI” to Side A and restart the printer?')
   await toast('The printer is restarting to load the plate mesh.')
   assert.deepEqual(posts.slice(-2), [
@@ -157,14 +172,16 @@ try {
   await row('Smooth PEI', 80).getByText('Side mesh', { exact: true }).waitFor()
   await card('Smooth PEI').getByText('Mounted', { exact: true }).waitFor()
   // A measurement can be deleted; the last one of a plate cannot.
-  await row('Smooth PEI', 100).getByRole('button', { name: 'Delete', exact: true }).click()
+  await pick(row('Smooth PEI', 100), 'Delete')
   await confirm('Delete the 100 °C measurement of “Smooth PEI”?')
   await toast('Measurement deleted.')
   assert.deepEqual(posts.at(-1), ['/api/plates/measure/delete', 'aa00000000000100'])
   await row('Smooth PEI', 100).waitFor({ state: 'detached' })
-  assert.equal(await row('Cool Plate', 60).getByRole('button', { name: 'Delete', exact: true }).count(), 0)
+  await row('Cool Plate', 60).locator('[data-more] summary').click()
+  assert.equal(await row('Cool Plate', 60).getByRole('button', { name: 'Delete', exact: true }).count(), 0, 'the only measurement of a plate cannot be deleted')
+  await row('Cool Plate', 60).locator('[data-more] summary').click()
   // What a measurement records can be corrected: an old one gets its nozzle and temperature.
-  await row('Cool Plate', 60).getByRole('button', { name: 'Edit measurement', exact: true }).click()
+  await pick(row('Cool Plate', 60), 'Edit measurement')
   const editRow = card('Cool Plate').locator('[data-measure]').first()
   await editRow.locator('input[type=number]').fill('65')
   await editRow.locator('select').selectOption('dd00000000000006')
@@ -174,7 +191,10 @@ try {
   await row('Cool Plate', 65).getByText('0.6 hardened', { exact: true }).waitFor()
 
   // A new plate from the Side B mesh, with its bed temperature and nozzle; a name the backend refuses never leaves the page.
-  const form = page.locator('section').filter({ has: page.getByRole('heading', { name: 'New plate profile' }) })
+  // The form for a new plate opens with "+ New plate" (the inner card, not the library card around it).
+  assert.equal(await page.getByRole('heading', { name: 'New plate profile' }).count(), 0, 'no form before the button is pressed')
+  await page.locator('[data-plates-add]').click()
+  const form = page.locator('section').filter({ has: page.getByRole('heading', { name: 'New plate profile' }) }).last()
   // Labels wrap their controls, so the names include the current values: address the controls directly.
   const side = form.locator('select').first(), name = form.locator('input:not([type=checkbox])').first()
   const [zInput, temp] = [form.locator('input[type=number]').nth(0), form.locator('input[type=number]').nth(1)]
@@ -206,8 +226,8 @@ try {
   await page.waitForFunction(() => document.querySelector('main canvas')?.__faces === 100)
   assert.ok((await profile.locator('optgroup').allTextContents()).length >= 4)
 
-  await page.getByRole('tab', { name: 'Build Plates' }).click()
-  await card('Glass').getByRole('button', { name: 'Delete', exact: true }).last().click()
+  await page.getByRole('tab', { name: 'Build plates & nozzles' }).click()
+  await pick(card('Glass'), 'Delete')
   await confirm('Delete plate “Glass”?')
   await toast('Plate deleted.')
   await card('Glass').waitFor({ state: 'detached' })
@@ -215,16 +235,20 @@ try {
   // While printing, the printer-changing actions wait for Idle.
   // The scenario change reloads the page; the old page still shows an idle printer until then.
   await Promise.all([page.waitForEvent('load'), page.selectOption('#preview-scene', 'printing')])
-  await page.getByRole('heading', { name: 'Build Plate Library' }).waitFor()
+  await page.getByRole('heading', { name: 'Build plate and nozzle library' }).waitFor()
   const mount = card('Cool Plate').getByRole('button', { name: 'Mount', exact: true }) // the scenario reset restores Smooth PEI
   for (let i = 0; i < 100 && !(await mount.isDisabled()); i++) await page.waitForTimeout(100)
   assert.ok(await mount.isDisabled())
   assert.equal(await mount.getAttribute('title'), 'Available when idle')
+  await page.locator('[data-plates-add]').click()
   assert.ok(await page.getByRole('button', { name: 'Save Plate', exact: true }).isDisabled())
 
   await page.setViewportSize({ width: 390, height: 844 })
   assert.ok(await card('Smooth PEI').isVisible())
-  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal scroll on a phone')
+  const wide = await page.evaluate(() =>
+    document.documentElement.scrollWidth <= innerWidth ? [] : [...document.querySelectorAll('main *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1 && !e.closest('[role=tablist]')).slice(0, 6).map(e => `${e.tagName}.${String(e.className).slice(0, 50)} ${Math.round(e.getBoundingClientRect().right)} ${(e.textContent || "").slice(0, 30)}`)
+  )
+  assert.deepEqual(wide, [], 'no horizontal scroll on a phone')
 
   // The print dialog: the mounted plate's measurement nearest to the file's bed temperature, the nozzle
   // matching the file's diameter, and neither when the print probes its own mesh.

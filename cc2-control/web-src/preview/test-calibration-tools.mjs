@@ -77,6 +77,7 @@ try{
  await page.waitForFunction(()=>document.querySelector('.cc2-native-tools').textContent.includes('saved value changed'))
  assert.equal(await button('Restart printer').isDisabled(),true)
  await page.goto(demo.url+'#bed/cell')
+ await page.locator('[data-bed-cell] > summary').click() // the load cell block of the Mesh card is folded
  await button('Run diagnosis').click()
  await page.waitForFunction(()=>window.__TOOL_ACTIONS.at(-1)==='cell:diagnostic')
  await page.evaluate(()=>Object.assign(window.__TOOLS,{busy:false,error:'Native tool command refused',reports:['<script>not HTML</script>']}))

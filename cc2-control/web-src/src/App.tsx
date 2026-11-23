@@ -8,6 +8,8 @@ import { menu, nav, printer } from '@/lib/state'
 import { miniplayerOpen } from '@/lib/miniplayer'
 import { PrinterReport, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SessionBar } from '@/components/session-bar'
+import { MeshStatus } from '@/components/guided-chain'
 import { CameraWindow, PersistentCamera } from '@/components/shared'
 import { MiniPlayer } from '@/components/miniplayer'
 import { SpoolWatcher } from '@/components/spool-ui'
@@ -77,6 +79,8 @@ export const App = () => {
           </p>
         )}
         <div class={`cc2-page-content @container/page ${stale ? 'opacity-50' : ''}`}>
+          <MeshStatus />
+          <SessionBar />
           <PrinterReport />
           <Page />
         </div>

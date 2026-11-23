@@ -33,6 +33,8 @@ HARNESSES = {
     "test_file_analysis.c": BACKEND,
     "test_recovery_download.c": BACKEND,
     "test_emergency_latch.c": [],
+    "test_console_staged.c": [],
+    "test_console_real_frames.c": [],
     "test_emergency_stop_direct.c": [ROOT / "src/console.c"],
     "test_emergency_stop_edges.c": [ROOT / "src/console.c"],
     "test_emergency_stop_deadline.c": [ROOT / "src/console.c"],
@@ -54,6 +56,9 @@ HARNESSES = {
     "test_usb_canvas_refresh.c": BACKEND,
     "test_usb_large_file.c": BACKEND,
     "test_active_scan_abort.c": BACKEND,
+    "test_screw_session_safety.c": BACKEND,
+    "test_screw_bed_temp.c": BACKEND,
+    "test_screw_quick_corner.c": [ROOT / "src/control.c"],
     "test_active_scan_hold.c": BACKEND,
     "test_external_feed.c": BACKEND,
     "test_filament_metadata.c": BACKEND,
@@ -96,7 +101,7 @@ HARNESSES = {
     "test_object_preview_http.c": BACKEND,
     "test_object_preview_deadline.c": BACKEND,
     "test_screw_tram_end.c": BACKEND,
-    "test_mesh_align.c": BACKEND,
+    "test_screw_soak.c": BACKEND,
     "test_z_offset_api.c": BACKEND,
     "test_plates.c": BACKEND,
     "test_plate_probe_result.c": BACKEND,
@@ -108,6 +113,9 @@ HARNESSES = {
     "test_control_actions.c": [ROOT / "src/control.c"],
     "test_nozzle_target_limits.c": [ROOT / "src/control.c"],
     "test_screw_history.c": [ROOT / "src/control.c"],
+    "test_screw_ist.c": [ROOT / "src/control.c"],
+    "test_screw_end_reason.c": [ROOT / "src/control.c"],
+    "test_screw_console_error.c": [ROOT / "src/control.c"],
 }
 
 with tempfile.TemporaryDirectory(prefix="cc2-c-harness-") as temporary:

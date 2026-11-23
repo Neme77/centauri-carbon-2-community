@@ -57,14 +57,25 @@ export type Calibration = {
   temp: number
   soak: number
   remaining: number
+  // Seconds since the stage began (probing: how long the measurement has been running), as the program counted at `plates.at`.
+  elapsed: number
   bed: number | null
   plate: string
   nozzle: string
   measure: string
-  result: '' | 'done' | 'saved' | 'failed' | 'cancelled'
+  // 'work': the mesh is only the plate's working measurement (the mesh of "Measure a new mesh" on the Bed alignment tab).
+  result: '' | 'done' | 'saved' | 'work' | 'failed' | 'cancelled'
   error: '' | 'homing' | 'heating' | 'busy' | 'telemetry' | 'probing' | 'saving'
   detail: string
+  // This run keeps its result only as a working measurement (missing on an older backend).
+  work?: boolean
+  // The last working measurement, kept in CC2 Control's memory only: never in the library, a printer profile or the
+  // choices of a print. It is gone once another calibration has finished its probing (one cancelled or failed before
+  // keeps it), after a restart of CC2 Control, a measurement of the same plate stored in the library, or while its
+  // plate is not in the library.
+  work_mesh?: WorkMesh | null
 }
+export type WorkMesh = { plate: string; temp: number; nozzle: string; measured: number; mesh: PlateMesh }
 export type PlateLibrary = {
   available: boolean
   error: string
@@ -85,12 +96,16 @@ export type PlateLibrary = {
 }
 
 // `rebooting`: a mount restarted the printer from this page; requests fail until it is back.
-export const plates = store({ data: null as PlateLibrary | null, ok: true, rebooting: false })
+// `at`: when the library was last read (ms); the header trusts the calibration state only while it is fresh.
+// `at`: when the answer came (Date.now()); `sent`: when its request was sent, so an answer is known to be newer than an
+// action finished before it (lib/guided-chain).
+export const plates = store({ data: null as PlateLibrary | null, ok: true, rebooting: false, at: 0, sent: 0 })
 
 export async function refreshPlates() {
+  const sent = Date.now()
   try {
     const data: PlateLibrary = await request('/api/plates')
-    plates.set({ data, ok: true, rebooting: plates.get().rebooting && Boolean(data.pending) })
+    plates.set({ data, ok: true, rebooting: plates.get().rebooting && Boolean(data.pending), at: Date.now(), sent })
   } catch {
     plates.set({ ok: false })
   }
@@ -116,6 +131,27 @@ export const findMeasure = (lib: PlateLibrary | null | undefined, id: string) =>
     if (measure) return { plate, measure }
   }
   return null
+}
+
+// The working measurement while its plate is in the library, as a measurement of that plate (id 'work'). It is not in
+// `plate.measures`, so no list a print chooses from offers it.
+const WORK_ID = 'work'
+export const workMeasure = (lib: PlateLibrary | null | undefined): { plate: Plate; measure: Measure } | null => {
+  const w = lib?.calibration?.work_mesh
+  const plate = w ? lib?.plates.find(p => p.id === w.plate) : undefined
+  if (!w || !plate) return null
+  return {
+    plate,
+    measure: {
+      id: WORK_ID,
+      temp: w.temp,
+      nozzle: w.nozzle,
+      measured: w.measured,
+      slot: false,
+      profile: false,
+      mesh: w.mesh,
+    },
+  }
 }
 
 export const nozzleName = (lib: PlateLibrary | null | undefined, id: string) =>
@@ -183,12 +219,15 @@ export const mountPlate = (id: string, reboot = false, measure = '') =>
 export const measurePlate = (id: string, temp: number, nozzle: string) =>
   post('/api/plates/measure', `${id}\n${temp}\n${nozzle}`)
 export const deleteMeasure = (id: string) => post('/api/plates/measure/delete', id)
+// Every measurement of a plate (the plate stays; the single delete above keeps its rule of at least one).
+export const clearMeasures = (id: string) => post('/api/plates/measures/clear', id)
 // Corrects the temperature and nozzle a measurement records.
 export const editMeasure = (id: string, temp: number, nozzle: string) =>
   post('/api/plates/measure/edit', `${id}\n${temp}\n${nozzle}`)
-// Runs on the printer without the page: `plate` (or '') receives the result.
-export const calibrate = (side: 'A' | 'B', temp: number, soak: number, nozzle: string, plate: string) =>
-  post('/api/plates/calibrate', `${side}\n${temp}\n${soak}\n${nozzle}\n${plate}`)
+// Runs on the printer without the page: `plate` (or '') receives the result; with `work` it becomes only the plate's
+// working measurement (needs a plate), the stored measurement stays.
+export const calibrate = (side: 'A' | 'B', temp: number, soak: number, nozzle: string, plate: string, work = false) =>
+  post('/api/plates/calibrate', `${side}\n${temp}\n${soak}\n${nozzle}\n${plate}${work ? '\nwork' : ''}`)
 export const stopCalibration = () => post('/api/plates/calibrate/cancel')
 export const saveNozzle = (id: string, name: string, diameter: number, z: number) =>
   post('/api/plates/nozzle', `${id}\n${name}\n${diameter.toFixed(2)}\n${z.toFixed(3)}`)

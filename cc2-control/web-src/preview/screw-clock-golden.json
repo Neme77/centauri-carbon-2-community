@@ -1,0 +1,1475 @@
+{
+ "_comment": "move_mm = z_base - z of Klipper screws_tilt_adjust (positive: raise this corner). klipper = result of the formula in klippy/extras/screws_tilt_adjust.py recomputed by hand from the source (Klipper itself was NOT executed). ours = expected output of the clock label, computed independently in Python. deviation: why ours differs on purpose.",
+ "rows": [
+  {
+   "move_mm": 0,
+   "thread": "CW-M3",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0004,
+   "thread": "CW-M3",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0009,
+   "thread": "CW-M3",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.001,
+   "thread": "CW-M3",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.005,
+   "thread": "CW-M3",
+   "klipper": "CW 00:01",
+   "ours": "CW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.0125,
+   "thread": "CW-M3",
+   "klipper": "CW 00:02",
+   "ours": "CW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.0208333333333333,
+   "thread": "CW-M3",
+   "klipper": "CW 00:02",
+   "ours": "CW 00:03",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": 0.02,
+   "thread": "CW-M3",
+   "klipper": "CW 00:02",
+   "ours": "CW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.1,
+   "thread": "CW-M3",
+   "klipper": "CW 00:12",
+   "ours": "CW 00:12",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.32,
+   "thread": "CW-M3",
+   "klipper": "CW 00:38",
+   "ours": "CW 00:38",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.325,
+   "thread": "CW-M3",
+   "klipper": "CW 00:39",
+   "ours": "CW 00:39",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.4958333333333333,
+   "thread": "CW-M3",
+   "klipper": "CW 00:59",
+   "ours": "CW 01:00",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": 0.4999,
+   "thread": "CW-M3",
+   "klipper": "CW 00:60",
+   "ours": "CW 01:00",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": 0.5,
+   "thread": "CW-M3",
+   "klipper": "CW 01:00",
+   "ours": "CW 01:00",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.6667,
+   "thread": "CW-M3",
+   "klipper": "CW 01:20",
+   "ours": "CW 01:20",
+   "deviation": null
+  },
+  {
+   "move_mm": 1.0,
+   "thread": "CW-M3",
+   "klipper": "CW 02:00",
+   "ours": "CW 02:00",
+   "deviation": null
+  },
+  {
+   "move_mm": 12.3,
+   "thread": "CW-M3",
+   "klipper": "CW 24:36",
+   "ours": "CW 24:36",
+   "deviation": null
+  },
+  {
+   "move_mm": 59.99,
+   "thread": "CW-M3",
+   "klipper": "CW 119:59",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 99.9999,
+   "thread": "CW-M3",
+   "klipper": "CW 199:60",
+   "ours": "mm",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": 100.0,
+   "thread": "CW-M3",
+   "klipper": "CW 200:00",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 1000000.0,
+   "thread": "CW-M3",
+   "klipper": "CW 2000000:00",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": -0.0004,
+   "thread": "CW-M3",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.001,
+   "thread": "CW-M3",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.005,
+   "thread": "CW-M3",
+   "klipper": "CCW 00:01",
+   "ours": "CCW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.0208333333333333,
+   "thread": "CW-M3",
+   "klipper": "CCW 00:02",
+   "ours": "CCW 00:03",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": -0.1,
+   "thread": "CW-M3",
+   "klipper": "CCW 00:12",
+   "ours": "CCW 00:12",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.32,
+   "thread": "CW-M3",
+   "klipper": "CCW 00:38",
+   "ours": "CCW 00:38",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.4958333333333333,
+   "thread": "CW-M3",
+   "klipper": "CCW 00:59",
+   "ours": "CCW 01:00",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": -0.4999,
+   "thread": "CW-M3",
+   "klipper": "CCW 00:60",
+   "ours": "CCW 01:00",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": -0.6667,
+   "thread": "CW-M3",
+   "klipper": "CCW 01:20",
+   "ours": "CCW 01:20",
+   "deviation": null
+  },
+  {
+   "move_mm": -12.3,
+   "thread": "CW-M3",
+   "klipper": "CCW 24:36",
+   "ours": "CCW 24:36",
+   "deviation": null
+  },
+  {
+   "move_mm": -99.9999,
+   "thread": "CW-M3",
+   "klipper": "CCW 199:60",
+   "ours": "mm",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": "NaN",
+   "thread": "CW-M3",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "Infinity",
+   "thread": "CW-M3",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "-Infinity",
+   "thread": "CW-M3",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": 0,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0004,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0009,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.001,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.005,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:01",
+   "ours": "CCW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.0125,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:02",
+   "ours": "CCW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.0208333333333333,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:02",
+   "ours": "CCW 00:03",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": 0.02,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:02",
+   "ours": "CCW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.1,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:12",
+   "ours": "CCW 00:12",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.32,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:38",
+   "ours": "CCW 00:38",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.325,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:39",
+   "ours": "CCW 00:39",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.4958333333333333,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:59",
+   "ours": "CCW 01:00",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": 0.4999,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:60",
+   "ours": "CCW 01:00",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": 0.5,
+   "thread": "CCW-M3",
+   "klipper": "CCW 01:00",
+   "ours": "CCW 01:00",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.6667,
+   "thread": "CCW-M3",
+   "klipper": "CCW 01:20",
+   "ours": "CCW 01:20",
+   "deviation": null
+  },
+  {
+   "move_mm": 1.0,
+   "thread": "CCW-M3",
+   "klipper": "CCW 02:00",
+   "ours": "CCW 02:00",
+   "deviation": null
+  },
+  {
+   "move_mm": 12.3,
+   "thread": "CCW-M3",
+   "klipper": "CCW 24:36",
+   "ours": "CCW 24:36",
+   "deviation": null
+  },
+  {
+   "move_mm": 59.99,
+   "thread": "CCW-M3",
+   "klipper": "CCW 119:59",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 99.9999,
+   "thread": "CCW-M3",
+   "klipper": "CCW 199:60",
+   "ours": "mm",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": 100.0,
+   "thread": "CCW-M3",
+   "klipper": "CCW 200:00",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 1000000.0,
+   "thread": "CCW-M3",
+   "klipper": "CCW 2000000:00",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": -0.0004,
+   "thread": "CCW-M3",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.001,
+   "thread": "CCW-M3",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.005,
+   "thread": "CCW-M3",
+   "klipper": "CW 00:01",
+   "ours": "CW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.0208333333333333,
+   "thread": "CCW-M3",
+   "klipper": "CW 00:02",
+   "ours": "CW 00:03",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": -0.1,
+   "thread": "CCW-M3",
+   "klipper": "CW 00:12",
+   "ours": "CW 00:12",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.32,
+   "thread": "CCW-M3",
+   "klipper": "CW 00:38",
+   "ours": "CW 00:38",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.4958333333333333,
+   "thread": "CCW-M3",
+   "klipper": "CW 00:59",
+   "ours": "CW 01:00",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": -0.4999,
+   "thread": "CCW-M3",
+   "klipper": "CW 00:60",
+   "ours": "CW 01:00",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": -0.6667,
+   "thread": "CCW-M3",
+   "klipper": "CW 01:20",
+   "ours": "CW 01:20",
+   "deviation": null
+  },
+  {
+   "move_mm": -12.3,
+   "thread": "CCW-M3",
+   "klipper": "CW 24:36",
+   "ours": "CW 24:36",
+   "deviation": null
+  },
+  {
+   "move_mm": -99.9999,
+   "thread": "CCW-M3",
+   "klipper": "CW 199:60",
+   "ours": "mm",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": "NaN",
+   "thread": "CCW-M3",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "Infinity",
+   "thread": "CCW-M3",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "-Infinity",
+   "thread": "CCW-M3",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": 0,
+   "thread": "CW-M4",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0004,
+   "thread": "CW-M4",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0009,
+   "thread": "CW-M4",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.001,
+   "thread": "CW-M4",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.005,
+   "thread": "CW-M4",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0125,
+   "thread": "CW-M4",
+   "klipper": "CW 00:01",
+   "ours": "CW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.0208333333333333,
+   "thread": "CW-M4",
+   "klipper": "CW 00:02",
+   "ours": "CW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.02,
+   "thread": "CW-M4",
+   "klipper": "CW 00:02",
+   "ours": "CW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.1,
+   "thread": "CW-M4",
+   "klipper": "CW 00:09",
+   "ours": "CW 00:09",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.32,
+   "thread": "CW-M4",
+   "klipper": "CW 00:27",
+   "ours": "CW 00:27",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.325,
+   "thread": "CW-M4",
+   "klipper": "CW 00:28",
+   "ours": "CW 00:28",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.4958333333333333,
+   "thread": "CW-M4",
+   "klipper": "CW 00:42",
+   "ours": "CW 00:43",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": 0.4999,
+   "thread": "CW-M4",
+   "klipper": "CW 00:43",
+   "ours": "CW 00:43",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.5,
+   "thread": "CW-M4",
+   "klipper": "CW 00:43",
+   "ours": "CW 00:43",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.6667,
+   "thread": "CW-M4",
+   "klipper": "CW 00:57",
+   "ours": "CW 00:57",
+   "deviation": null
+  },
+  {
+   "move_mm": 1.0,
+   "thread": "CW-M4",
+   "klipper": "CW 01:26",
+   "ours": "CW 01:26",
+   "deviation": null
+  },
+  {
+   "move_mm": 12.3,
+   "thread": "CW-M4",
+   "klipper": "CW 17:34",
+   "ours": "CW 17:34",
+   "deviation": null
+  },
+  {
+   "move_mm": 59.99,
+   "thread": "CW-M4",
+   "klipper": "CW 85:42",
+   "ours": "CW 85:42",
+   "deviation": null
+  },
+  {
+   "move_mm": 99.9999,
+   "thread": "CW-M4",
+   "klipper": "CW 142:51",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 100.0,
+   "thread": "CW-M4",
+   "klipper": "CW 142:51",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 1000000.0,
+   "thread": "CW-M4",
+   "klipper": "CW 1428571:26",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": -0.0004,
+   "thread": "CW-M4",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.001,
+   "thread": "CW-M4",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.005,
+   "thread": "CW-M4",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.0208333333333333,
+   "thread": "CW-M4",
+   "klipper": "CCW 00:02",
+   "ours": "CCW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.1,
+   "thread": "CW-M4",
+   "klipper": "CCW 00:09",
+   "ours": "CCW 00:09",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.32,
+   "thread": "CW-M4",
+   "klipper": "CCW 00:27",
+   "ours": "CCW 00:27",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.4958333333333333,
+   "thread": "CW-M4",
+   "klipper": "CCW 00:42",
+   "ours": "CCW 00:43",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": -0.4999,
+   "thread": "CW-M4",
+   "klipper": "CCW 00:43",
+   "ours": "CCW 00:43",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.6667,
+   "thread": "CW-M4",
+   "klipper": "CCW 00:57",
+   "ours": "CCW 00:57",
+   "deviation": null
+  },
+  {
+   "move_mm": -12.3,
+   "thread": "CW-M4",
+   "klipper": "CCW 17:34",
+   "ours": "CCW 17:34",
+   "deviation": null
+  },
+  {
+   "move_mm": -99.9999,
+   "thread": "CW-M4",
+   "klipper": "CCW 142:51",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": "NaN",
+   "thread": "CW-M4",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "Infinity",
+   "thread": "CW-M4",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "-Infinity",
+   "thread": "CW-M4",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": 0,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0004,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0009,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.001,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.005,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0125,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:01",
+   "ours": "CCW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.0208333333333333,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:02",
+   "ours": "CCW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.02,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:02",
+   "ours": "CCW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.1,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:09",
+   "ours": "CCW 00:09",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.32,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:27",
+   "ours": "CCW 00:27",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.325,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:28",
+   "ours": "CCW 00:28",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.4958333333333333,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:42",
+   "ours": "CCW 00:43",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": 0.4999,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:43",
+   "ours": "CCW 00:43",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.5,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:43",
+   "ours": "CCW 00:43",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.6667,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:57",
+   "ours": "CCW 00:57",
+   "deviation": null
+  },
+  {
+   "move_mm": 1.0,
+   "thread": "CCW-M4",
+   "klipper": "CCW 01:26",
+   "ours": "CCW 01:26",
+   "deviation": null
+  },
+  {
+   "move_mm": 12.3,
+   "thread": "CCW-M4",
+   "klipper": "CCW 17:34",
+   "ours": "CCW 17:34",
+   "deviation": null
+  },
+  {
+   "move_mm": 59.99,
+   "thread": "CCW-M4",
+   "klipper": "CCW 85:42",
+   "ours": "CCW 85:42",
+   "deviation": null
+  },
+  {
+   "move_mm": 99.9999,
+   "thread": "CCW-M4",
+   "klipper": "CCW 142:51",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 100.0,
+   "thread": "CCW-M4",
+   "klipper": "CCW 142:51",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 1000000.0,
+   "thread": "CCW-M4",
+   "klipper": "CCW 1428571:26",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": -0.0004,
+   "thread": "CCW-M4",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.001,
+   "thread": "CCW-M4",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.005,
+   "thread": "CCW-M4",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.0208333333333333,
+   "thread": "CCW-M4",
+   "klipper": "CW 00:02",
+   "ours": "CW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.1,
+   "thread": "CCW-M4",
+   "klipper": "CW 00:09",
+   "ours": "CW 00:09",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.32,
+   "thread": "CCW-M4",
+   "klipper": "CW 00:27",
+   "ours": "CW 00:27",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.4958333333333333,
+   "thread": "CCW-M4",
+   "klipper": "CW 00:42",
+   "ours": "CW 00:43",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": -0.4999,
+   "thread": "CCW-M4",
+   "klipper": "CW 00:43",
+   "ours": "CW 00:43",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.6667,
+   "thread": "CCW-M4",
+   "klipper": "CW 00:57",
+   "ours": "CW 00:57",
+   "deviation": null
+  },
+  {
+   "move_mm": -12.3,
+   "thread": "CCW-M4",
+   "klipper": "CW 17:34",
+   "ours": "CW 17:34",
+   "deviation": null
+  },
+  {
+   "move_mm": -99.9999,
+   "thread": "CCW-M4",
+   "klipper": "CW 142:51",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": "NaN",
+   "thread": "CCW-M4",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "Infinity",
+   "thread": "CCW-M4",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "-Infinity",
+   "thread": "CCW-M4",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": 0,
+   "thread": "CW-M5",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0004,
+   "thread": "CW-M5",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0009,
+   "thread": "CW-M5",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.001,
+   "thread": "CW-M5",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.005,
+   "thread": "CW-M5",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0125,
+   "thread": "CW-M5",
+   "klipper": "CW 00:01",
+   "ours": "CW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.0208333333333333,
+   "thread": "CW-M5",
+   "klipper": "CW 00:02",
+   "ours": "CW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.02,
+   "thread": "CW-M5",
+   "klipper": "CW 00:01",
+   "ours": "CW 00:02",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": 0.1,
+   "thread": "CW-M5",
+   "klipper": "CW 00:08",
+   "ours": "CW 00:08",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.32,
+   "thread": "CW-M5",
+   "klipper": "CW 00:24",
+   "ours": "CW 00:24",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.325,
+   "thread": "CW-M5",
+   "klipper": "CW 00:24",
+   "ours": "CW 00:24",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.4958333333333333,
+   "thread": "CW-M5",
+   "klipper": "CW 00:37",
+   "ours": "CW 00:37",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.4999,
+   "thread": "CW-M5",
+   "klipper": "CW 00:37",
+   "ours": "CW 00:37",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.5,
+   "thread": "CW-M5",
+   "klipper": "CW 00:38",
+   "ours": "CW 00:38",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.6667,
+   "thread": "CW-M5",
+   "klipper": "CW 00:50",
+   "ours": "CW 00:50",
+   "deviation": null
+  },
+  {
+   "move_mm": 1.0,
+   "thread": "CW-M5",
+   "klipper": "CW 01:15",
+   "ours": "CW 01:15",
+   "deviation": null
+  },
+  {
+   "move_mm": 12.3,
+   "thread": "CW-M5",
+   "klipper": "CW 15:22",
+   "ours": "CW 15:23",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": 59.99,
+   "thread": "CW-M5",
+   "klipper": "CW 74:59",
+   "ours": "CW 74:59",
+   "deviation": null
+  },
+  {
+   "move_mm": 99.9999,
+   "thread": "CW-M5",
+   "klipper": "CW 124:60",
+   "ours": "mm",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": 100.0,
+   "thread": "CW-M5",
+   "klipper": "CW 125:00",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 1000000.0,
+   "thread": "CW-M5",
+   "klipper": "CW 1250000:00",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": -0.0004,
+   "thread": "CW-M5",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.001,
+   "thread": "CW-M5",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.005,
+   "thread": "CW-M5",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.0208333333333333,
+   "thread": "CW-M5",
+   "klipper": "CCW 00:02",
+   "ours": "CCW 00:02",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.1,
+   "thread": "CW-M5",
+   "klipper": "CCW 00:08",
+   "ours": "CCW 00:08",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.32,
+   "thread": "CW-M5",
+   "klipper": "CCW 00:24",
+   "ours": "CCW 00:24",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.4958333333333333,
+   "thread": "CW-M5",
+   "klipper": "CCW 00:37",
+   "ours": "CCW 00:37",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.4999,
+   "thread": "CW-M5",
+   "klipper": "CCW 00:37",
+   "ours": "CCW 00:37",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.6667,
+   "thread": "CW-M5",
+   "klipper": "CCW 00:50",
+   "ours": "CCW 00:50",
+   "deviation": null
+  },
+  {
+   "move_mm": -12.3,
+   "thread": "CW-M5",
+   "klipper": "CCW 15:22",
+   "ours": "CCW 15:23",
+   "deviation": "rounding"
+  },
+  {
+   "move_mm": -99.9999,
+   "thread": "CW-M5",
+   "klipper": "CCW 124:60",
+   "ours": "mm",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": "NaN",
+   "thread": "CW-M5",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "Infinity",
+   "thread": "CW-M5",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "-Infinity",
+   "thread": "CW-M5",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": 0,
+   "thread": "CW-M6",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0004,
+   "thread": "CW-M6",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0009,
+   "thread": "CW-M6",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.001,
+   "thread": "CW-M6",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.005,
+   "thread": "CW-M6",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": 0.0125,
+   "thread": "CW-M6",
+   "klipper": "CW 00:01",
+   "ours": "CW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.0208333333333333,
+   "thread": "CW-M6",
+   "klipper": "CW 00:01",
+   "ours": "CW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.02,
+   "thread": "CW-M6",
+   "klipper": "CW 00:01",
+   "ours": "CW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.1,
+   "thread": "CW-M6",
+   "klipper": "CW 00:06",
+   "ours": "CW 00:06",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.32,
+   "thread": "CW-M6",
+   "klipper": "CW 00:19",
+   "ours": "CW 00:19",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.325,
+   "thread": "CW-M6",
+   "klipper": "CW 00:20",
+   "ours": "CW 00:20",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.4958333333333333,
+   "thread": "CW-M6",
+   "klipper": "CW 00:30",
+   "ours": "CW 00:30",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.4999,
+   "thread": "CW-M6",
+   "klipper": "CW 00:30",
+   "ours": "CW 00:30",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.5,
+   "thread": "CW-M6",
+   "klipper": "CW 00:30",
+   "ours": "CW 00:30",
+   "deviation": null
+  },
+  {
+   "move_mm": 0.6667,
+   "thread": "CW-M6",
+   "klipper": "CW 00:40",
+   "ours": "CW 00:40",
+   "deviation": null
+  },
+  {
+   "move_mm": 1.0,
+   "thread": "CW-M6",
+   "klipper": "CW 01:00",
+   "ours": "CW 01:00",
+   "deviation": null
+  },
+  {
+   "move_mm": 12.3,
+   "thread": "CW-M6",
+   "klipper": "CW 12:18",
+   "ours": "CW 12:18",
+   "deviation": null
+  },
+  {
+   "move_mm": 59.99,
+   "thread": "CW-M6",
+   "klipper": "CW 59:59",
+   "ours": "CW 59:59",
+   "deviation": null
+  },
+  {
+   "move_mm": 99.9999,
+   "thread": "CW-M6",
+   "klipper": "CW 99:60",
+   "ours": "mm",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": 100.0,
+   "thread": "CW-M6",
+   "klipper": "CW 100:00",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": 1000000.0,
+   "thread": "CW-M6",
+   "klipper": "CW 1000000:00",
+   "ours": "mm",
+   "deviation": "over-99"
+  },
+  {
+   "move_mm": -0.0004,
+   "thread": "CW-M6",
+   "klipper": "CW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.001,
+   "thread": "CW-M6",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.005,
+   "thread": "CW-M6",
+   "klipper": "CCW 00:00",
+   "ours": "none",
+   "deviation": "below-one-minute"
+  },
+  {
+   "move_mm": -0.0208333333333333,
+   "thread": "CW-M6",
+   "klipper": "CCW 00:01",
+   "ours": "CCW 00:01",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.1,
+   "thread": "CW-M6",
+   "klipper": "CCW 00:06",
+   "ours": "CCW 00:06",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.32,
+   "thread": "CW-M6",
+   "klipper": "CCW 00:19",
+   "ours": "CCW 00:19",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.4958333333333333,
+   "thread": "CW-M6",
+   "klipper": "CCW 00:30",
+   "ours": "CCW 00:30",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.4999,
+   "thread": "CW-M6",
+   "klipper": "CCW 00:30",
+   "ours": "CCW 00:30",
+   "deviation": null
+  },
+  {
+   "move_mm": -0.6667,
+   "thread": "CW-M6",
+   "klipper": "CCW 00:40",
+   "ours": "CCW 00:40",
+   "deviation": null
+  },
+  {
+   "move_mm": -12.3,
+   "thread": "CW-M6",
+   "klipper": "CCW 12:18",
+   "ours": "CCW 12:18",
+   "deviation": null
+  },
+  {
+   "move_mm": -99.9999,
+   "thread": "CW-M6",
+   "klipper": "CCW 99:60",
+   "ours": "mm",
+   "deviation": "carry"
+  },
+  {
+   "move_mm": "NaN",
+   "thread": "CW-M6",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "Infinity",
+   "thread": "CW-M6",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  },
+  {
+   "move_mm": "-Infinity",
+   "thread": "CW-M6",
+   "klipper": "error",
+   "ours": "invalid",
+   "deviation": "invalid"
+  }
+ ]
+}
