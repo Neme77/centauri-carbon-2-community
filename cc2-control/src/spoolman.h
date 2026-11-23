@@ -92,6 +92,7 @@ typedef struct {
     int have_pull;                          /* a fresh read of the Spoolman spool came back (its weight may be missing) */
     int is_new;                             /* a Spoolman spool with no local entry yet -- create one */
     int missing;                            /* Spoolman answered 404 for the spool */
+    int api_ok;                             /* ... and its list answered in this cycle, so only this spool is missing */
     int settle;                             /* the job settled an earlier request (its grams were in flight already) */
     spoolman_spool spool;                   /* the pull, or the spool to import */
 } spoolman_result;
@@ -565,7 +566,8 @@ typedef struct {
     int no_material, no_colour;     /* imported spools that took the stand-in PLA / grey because Spoolman gave none usable */
     int archived_linked;            /* linked spools Spoolman has archived since (still synced, like any other) */
     int linked_no_weight;           /* linked spools whose weight Spoolman does not know (their text still syncs) */
-    int orphans;                    /* linked spools Spoolman answered 404 for */
+    int orphans;                    /* linked spools Spoolman answered 404 for while its list answered */
+    int probe;                      /* 0 = the list was not asked yet, 1 = it answers, 2 = it does not (once per cycle) */
     char orphan_ids[SPOOLMAN_ORPHAN_MAX][SPOOLMAN_ID_MAX + 1];
 } spoolman_status_t;
 
@@ -619,6 +621,14 @@ static int spoolman_get_spool_ex(const char *host, int port, const char *base, c
 static int spoolman_get_spool(const char *host, int port, const char *base, const char *auth, const char *id,
                               spoolman_spool *out) {
     return spoolman_get_spool_ex(host, port, base, auth, id, out, NULL);
+}
+
+/* Does Spoolman's list answer at all? A 404 for one spool only says the spool is gone when it does; a wrong base path
+ * or a proxy that answers wrongly says 404 for everything. */
+static int spoolman_list_answers(const char *host, int port, const char *base, const char *auth) {
+    char reply[SPOOLMAN_BODY_MAX], path[SPOOLMAN_PATH_MAX + 64];
+    snprintf(path, sizeof(path), "%s/api/v1/spool?limit=1", base);
+    return spoolman_request(host, port, auth, "GET", path, NULL, reply, sizeof(reply)) == 200;
 }
 
 static long long spoolman_cycle_max_ms = SPOOLMAN_CYCLE_MAX_MS;
@@ -735,8 +745,12 @@ static void spoolman_run_job(const spoolman_job_batch *batch, int index, const c
     if (!have_before) {
         if (code == 404) {
             r.missing = 1;
-            if (cy->orphans < SPOOLMAN_ORPHAN_MAX) snprintf(cy->orphan_ids[cy->orphans], SPOOLMAN_ID_MAX + 1, "%s", sid);
-            cy->orphans++;
+            if (!cy->probe) cy->probe = spoolman_list_answers(host, port, base, batch->basic_auth) ? 1 : 2;
+            r.api_ok = cy->probe == 1;
+            if (r.api_ok) {
+                if (cy->orphans < SPOOLMAN_ORPHAN_MAX) snprintf(cy->orphan_ids[cy->orphans], SPOOLMAN_ID_MAX + 1, "%s", sid);
+                cy->orphans++;
+            } else spoolman_note(cy, code);
         } else if (code != 200) spoolman_note(cy, code);
     }
     const spoolman_spool *pull = have_before ? &before : NULL;
@@ -761,7 +775,7 @@ static void spoolman_run_job(const spoolman_job_batch *batch, int index, const c
             snprintf(path, sizeof(path), "%s/api/v1/spool/%s/use", base, sid);
             int status = spoolman_request(host, port, batch->basic_auth, "PUT", path, body, reply, sizeof(reply));
             if (status == 200) r.outcome = SPOOLMAN_SENT;
-            else if (status == 404) { r.outcome = SPOOLMAN_MISSING; r.missing = 1; }
+            else if (status == 404) { r.outcome = SPOOLMAN_MISSING; r.missing = 1; r.api_ok = 1; }   /* it was read a moment ago */
             else if (status == SPOOLMAN_E_NOSEND || (status >= 300 && status < 500)) r.outcome = SPOOLMAN_NOT_SENT;
             else r.outcome = SPOOLMAN_AMBIGUOUS;      /* 5xx, cut-off or unreadable reply: it may have been applied */
             if (status != 200) spoolman_note(cy, status);
@@ -781,7 +795,8 @@ static void spoolman_run_job(const spoolman_job_batch *batch, int index, const c
         if (pull->archived) cy->archived_linked++;
         if (!pull->have_remaining) cy->linked_no_weight++;
     }
-    if (r.outcome != SPOOLMAN_NONE || r.have_pull || r.missing) spoolman_stage(&r);
+    /* A spool that could not be read is reported too (nothing changes): it ends a run of 404 answers. */
+    if (r.outcome != SPOOLMAN_NONE || r.have_pull || r.missing || !have_before) spoolman_stage(&r);
 }
 
 /* Runs off the main thread. Only touches spoolman_outbox (its own mutex) and
@@ -883,7 +898,8 @@ static void spoolman_send_stage(unsigned id, unsigned epoch, int outcome) {
 static int spoolman_send_one(const char *host, int port, const char *base, const char *auth, const char *sid, double grams) {
     spoolman_spool before, after;
     int code = 0;
-    if (!spoolman_get_spool_ex(host, port, base, auth, sid, &before, &code)) return code == 404 ? SPOOLMAN_MISSING : SPOOLMAN_NOT_SENT;
+    if (!spoolman_get_spool_ex(host, port, base, auth, sid, &before, &code))
+        return code == 404 && spoolman_list_answers(host, port, base, auth) ? SPOOLMAN_MISSING : SPOOLMAN_NOT_SENT;
     if (!before.have_used) return SPOOLMAN_NOT_SENT;
     char body[64], path[SPOOLMAN_PATH_MAX + 64], reply[SPOOLMAN_BODY_MAX];
     snprintf(body, sizeof(body), "{\"use_weight\":%.3f}", grams);
@@ -1099,11 +1115,12 @@ static void spoolman_tick(long long now) {
         spool_entry *sp = spool_find(r->spool_id);
         /* Unlinked, relinked to another Spoolman spool or deleted meanwhile: this answer is for something else. */
         if (!sp || sp->spoolman_gen != r->gen || strcmp(sp->spoolman_id, r->spoolman_id)) continue;
-        /* One 404 is not believed (a wrong base path, a proxy that hiccups): only the second one in a row says the
-         * spool is gone. A reply that read the spool, or took the grams, starts the count again. */
+        /* One 404 is not believed (a proxy that hiccups): only the second one in the next sync cycle says the spool
+         * is gone. It counts only while Spoolman's list answers in that cycle: a wrong base path says 404 for every
+         * spool. Any other answer, a failure included, starts the count again. */
         int gone = 0;
-        if (r->missing) gone = ++sp->spoolman_miss >= 2;
-        else if (r->have_pull || r->outcome == SPOOLMAN_SENT || r->outcome == SPOOLMAN_APPLIED) sp->spoolman_miss = 0;
+        if (r->missing && r->api_ok) gone = ++sp->spoolman_miss >= 2;
+        else sp->spoolman_miss = 0;
         switch (r->outcome) {
         case SPOOLMAN_SENT: case SPOOLMAN_APPLIED:
             sp->spoolman_inflight = 0; sp->spoolman_base = -1; break;

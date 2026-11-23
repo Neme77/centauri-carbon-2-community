@@ -1716,6 +1716,49 @@ static void test_remove_old_connections_with_a_full_list_changes_nothing(void) {
     puts("PASS: Remove old connections with a full list is refused and changes nothing: the link, the flag and the grams stay");
 }
 
+static void test_a_404_counts_only_while_the_list_answers(void) {
+    /* A wrong base path or a proxy that says 404 to everything: the spool is not "gone", whatever the number of cycles. */
+    fake_start(100, 600); fake.answer_all = 404; fake_launch();
+    spool_entry *sp = setup_linked(5, 500);
+    for (int i = 0; i < 4; ++i) cycle();
+    get_status();
+    status_has("\"orphaned_count\":0");
+    assert(sp->spoolman_miss == 0 && spools.held_count == 0 && near(sp->spoolman_unsent, 5) && fake.use_count == 0);
+    /* The list answers now, only this spool is missing: that counts, two cycles in a row. */
+    fake.answer_all = 0; fake.missing_id = 7;
+    cycle();
+    assert(sp->spoolman_miss == 1 && spools.held_count == 0);
+    cycle();
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_NOT_FOUND && near(spools.held[0].grams, 5));
+    /* The same for "Send selected": a target that cannot be told from a wrong base path stays as it was. */
+    fake.missing_id = 0; fake.answer_all = 404;
+    spools.held[0].reason = SPOOLMAN_HELD_SERVER;
+    assert(call_held_send("1=7") == 202); finish_send();
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_SERVER && !spools.held[0].sending && fake.use_count == 0);
+    fake.answer_all = 0; fake.missing_id = 7;
+    assert(call_held_send("1=7") == 202); finish_send();
+    assert(spools.held[0].reason == SPOOLMAN_HELD_NOT_FOUND && fake.use_count == 0);          /* the list answers: it really is missing */
+    fake_finish(); teardown_file();
+    puts("PASS: 404 for a spool counts as gone only while Spoolman's list answers; a wrong base path moves no grams (sync and Send selected)");
+}
+
+static void test_a_failed_answer_between_two_404_starts_the_count_again(void) {
+    fake_start(100, 600); fake.missing_id = 7; fake_launch();
+    spool_entry *sp = setup_linked(5, 500);
+    cycle();                                                                   /* 404 */
+    assert(sp->spoolman_miss == 1);
+    fake.missing_id = 0; fake.answer_all = 503;
+    cycle();                                                                   /* 503: no answer about the spool at all */
+    assert(sp->spoolman_miss == 0);
+    fake.answer_all = 0; fake.missing_id = 7;
+    cycle();                                                                   /* 404 again: the first one of a new run, not "twice in a row" */
+    assert(sp->spoolman_miss == 1 && spools.held_count == 0 && near(sp->spoolman_unsent, 5));
+    cycle();
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_NOT_FOUND);
+    fake_finish(); teardown_file();
+    puts("PASS: an error answer between two 404 answers starts the count again");
+}
+
 static void test_a_5xx_while_sending_selected_is_settled_from_the_used_weight(void) {
     fake_start(100, 600); fake_launch();
     spool_entry *sp = setup_linked(0, 500);
@@ -1890,6 +1933,8 @@ int main(void) {
     test_usage_is_only_collected_while_old_connections_wait();
     test_a_manual_link_is_not_an_old_connection();
     test_remove_old_connections_with_a_full_list_changes_nothing();
+    test_a_404_counts_only_while_the_list_answers();
+    test_a_failed_answer_between_two_404_starts_the_count_again();
     test_a_5xx_while_sending_selected_is_settled_from_the_used_weight();
     test_a_call_is_checked_as_a_whole_and_may_carry_all_32_entries();
     test_the_same_server_written_differently_is_not_a_new_server();
