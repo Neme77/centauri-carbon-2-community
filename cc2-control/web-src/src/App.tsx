@@ -5,11 +5,13 @@ import { usePoll } from '@/lib/poll'
 import { refreshRfidLifecycle, rfidLifecycle, rfidRebootRequired } from '@/lib/rfid-lifecycle'
 import { i18n, t } from '@/lib/i18n'
 import { menu, nav, printer } from '@/lib/state'
+import { miniplayerOpen } from '@/lib/miniplayer'
 import { PrinterReport, RefusalWatcher, Sidebar, TitleSync, Toast, Topbar } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SessionBar } from '@/components/session-bar'
 import { MeshStatus } from '@/components/guided-chain'
 import { CameraWindow, PersistentCamera } from '@/components/shared'
+import { MiniPlayer } from '@/components/miniplayer'
 import { SpoolWatcher } from '@/components/spool-ui'
 import { SetupDialog } from '@/pages/setup'
 import { PrintDialog } from '@/pages/print-dialog'
@@ -47,6 +49,7 @@ export const App = () => {
   const { collapsed } = menu.use()
   const { data, ok } = printer.use()
   const { data: lifecycle } = rfidLifecycle.use()
+  const { open: miniOpen } = miniplayerOpen.use()
   usePoll(refreshRfidLifecycle, 3000)
   const stale = !ok || (data && !data.connected) // last known values stay visible, but dimmed
   const Page = pages[page]
@@ -83,6 +86,7 @@ export const App = () => {
         </div>
       </main>
       <PersistentCamera />
+      {miniOpen && <MiniPlayer />}
       <Toast />
       <SetupDialog />
       <PrintDialog />

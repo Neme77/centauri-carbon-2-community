@@ -32,7 +32,8 @@ try {
   const button = page.getByRole('button', { name: 'Lights', exact: true })
   await button.waitFor()
   const state = async (on) => {
-    await page.waitForFunction(on => document.querySelector('button[aria-pressed]')?.getAttribute('aria-pressed') === String(on), on)
+    // The Lights quick action, not any other toggle on the page (the Dashboard's Mini player button is one too).
+    await page.waitForFunction(on => [...document.querySelectorAll('button[aria-pressed]')].find(b => b.textContent.trim() === 'Lights')?.getAttribute('aria-pressed') === String(on), on)
     assert.equal(await button.getAttribute('aria-pressed'), String(on))
     assert.ok(await button.locator('svg').evaluate((icon, on) => icon.classList.contains(on ? 'text-cyan' : 'text-muted'), on))
   }

@@ -10,6 +10,7 @@ import { type Key, t, tpl } from '@/lib/i18n'
 import { control } from '@/lib/api'
 import { stateText } from '@/lib/machine'
 import { duration, num } from '@/lib/format'
+import { miniplayerOpen, openMiniplayer } from '@/lib/miniplayer'
 import { usePoll } from '@/lib/poll'
 import { printer, refreshPrinter, view } from '@/lib/state'
 import { objects, refreshObjects } from '@/lib/objects'
@@ -179,7 +180,9 @@ export const Job = () => {
   const d = printer.use().data
   const o = objects.use()
   const v = view(d)
-  const [cameraOpen, setCameraOpen] = useState(readCameraOpen)
+  // A remembered "Camera on" must not start a stream by itself while the mini player has the camera: entering the page
+  // would take it over. The Camera button stays a deliberate action; the remembered value itself is left alone.
+  const [cameraOpen, setCameraOpen] = useState(() => readCameraOpen() && !miniplayerOpen.get().open)
   const toggleCamera = () => {
     rememberCameraOpen(!cameraOpen)
     setCameraOpen(!cameraOpen)
@@ -215,8 +218,21 @@ export const Job = () => {
               onCamera={toggleCamera}
               camera={
                 cameraOpen ? (
-                  <div class="cc2-job-camera aspect-video min-w-0">
+                  <div class="cc2-job-camera relative aspect-video min-w-0">
                     <CameraCard bare />
+                    <Button
+                      class="absolute top-2 right-2 z-20 bg-field/90 px-3 text-xs"
+                      style={{ minHeight: 44, minWidth: 44 }}
+                      onClick={() => {
+                        // Hand the picture over: this page's stream ends, then the mini player starts.
+                        rememberCameraOpen(false)
+                        setCameraOpen(false)
+                        openMiniplayer()
+                      }}
+                    >
+                      <Icon n="pip" class="size-4" />
+                      {t('common.miniplayer_open')}
+                    </Button>
                   </div>
                 ) : null
               }
