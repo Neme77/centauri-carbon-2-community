@@ -472,6 +472,8 @@ export function previewPlugin(): Plugin {
     measured: number
     tilt: number
     profile: boolean
+    priorTilt?: number
+    priorMeasured?: number
   }
   type PreviewNozzle = { id: string; name: string; diameter: number; z_offset: number }
   let plates: PreviewPlate[] = []
@@ -485,6 +487,7 @@ export function previewPlugin(): Plugin {
   let plateResult = ''
   // The calibration CC2 Control runs; in the preview each POST /__preview/calibration-step moves it one stage on.
   const idleCalibration = () => ({
+    run: '',
     stage: 'off',
     side: 'A' as 'A' | 'B',
     temp: 0,
@@ -500,6 +503,7 @@ export function previewPlugin(): Plugin {
     // "Measure a new mesh" (Bed alignment): the run keeps its result only as the plate's working mesh, in memory.
     work: false,
     work_mesh: null as null | { plate: string; temp: number; nozzle: string; measured: number; tilt: number },
+    replaced: false,
   })
   let calibration = idleCalibration()
   // When a simulated measurement is saved: a fixed time, so the tests see the same value every run; a demo started with
@@ -507,6 +511,16 @@ export function previewPlugin(): Plugin {
   const savedStamp = () => (process.env.CC2_DEMO_FRESH_MESH ? Math.floor(Date.now() / 1000) : 1790990000)
   let nextTilt = 6
   const newId = () => Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  // A new mesh on a measurement that already had one keeps the old heights for the change view.
+  const rememberMesh = (m: PreviewMeasure, tilt: number, measured: number) => {
+    const replaced = Boolean(m.measured) && m.tilt !== tilt
+    if (replaced) {
+      m.priorTilt = m.tilt
+      m.priorMeasured = m.measured
+    }
+    Object.assign(m, { tilt, measured, profile: true })
+    return replaced
+  }
   const resetPlates = () => {
     plates = [
       { id: 'a1b2c3d4e5f60718', name: 'Smooth PEI', side: 'A', z_offset: -0.02, measure: 'aa00000000000060' },
@@ -612,10 +626,11 @@ export function previewPlugin(): Plugin {
       plates: plates.map(p => ({
         ...p,
         in_printer: plateSlots[p.side] === plateBase(p)?.tilt,
-        measures: plateMeasures(p).map(({ plate, tilt, ...m }) => ({
+        measures: plateMeasures(p).map(({ plate, tilt, priorTilt, priorMeasured, ...m }) => ({
           ...m,
           slot: plateSlots[p.side] === tilt,
           mesh: plateMesh(tilt),
+          ...(priorMeasured ? { prior: { measured: priorMeasured, mesh: plateMesh(priorTilt ?? tilt) } } : {}),
         })),
       })),
     }
@@ -1573,10 +1588,10 @@ export function previewPlugin(): Plugin {
                   }
                   measures.push(m)
                 }
-                Object.assign(m, { tilt: plateSlots[plate.side], measured: savedStamp(), profile: true })
+                const replaced = rememberMesh(m, plateSlots[plate.side], savedStamp())
                 plate.measure = m.id
                 plateCurrent = plate.id
-                calibration = { ...c, stage: 'off', result: 'saved', measure: m.id, bed: 25 }
+                calibration = { ...c, stage: 'off', result: 'saved', measure: m.id, bed: 25, replaced }
                 meshEndedAt = Date.now()
               }
               return reply(calibration)
@@ -1622,6 +1637,9 @@ export function previewPlugin(): Plugin {
                   return reply({ ok: false, error: 'A bed mesh calibration is already running' }, 409)
                 if (screwSoak)
                   return reply({ ok: false, error: 'A screw measurement is waiting for its bed hold time' }, 409)
+                const run = req.headers['x-cc2-calibration-run']
+                if (run !== undefined && (typeof run !== 'string' || !/^[0-9a-f]{16}$/.test(run)))
+                  return reply({ ok: false, error: 'Invalid calibration run identifier' }, 400)
                 const [side, temp, soak, nozzle = '', plateId = '', work = ''] = lines as [
                   'A' | 'B',
                   string,
@@ -1637,6 +1655,7 @@ export function previewPlugin(): Plugin {
                 calibration = {
                   ...idleCalibration(),
                   work_mesh: calibration.work_mesh,
+                  run: run ?? newId(),
                   stage: 'homing',
                   side,
                   temp: Number(temp),
@@ -1759,7 +1778,7 @@ export function previewPlugin(): Plugin {
                   m = { id: newId(), plate: plate.id, temp: Number(temp), nozzle, measured: 0, tilt: 0, profile: true }
                   measures.push(m)
                 }
-                Object.assign(m, { tilt: plateSlots[plate.side], measured: 1790950000, profile: true })
+                rememberMesh(m, plateSlots[plate.side], 1790950000)
                 plate.measure = m.id
                 plateCurrent = plate.id
                 plateResult = 'mounted'

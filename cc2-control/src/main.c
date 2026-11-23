@@ -6379,7 +6379,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/edit")==0) {
         plates_measure_edit_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate")==0) {
-        plates_calibrate_response(fd,mqtt,console,body,body_len);
+        plates_calibrate_response(fd,mqtt,console,body,body_len,request);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate/cancel")==0) {
         plates_calibrate_cancel_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/delete")==0) {

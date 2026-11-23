@@ -33,7 +33,7 @@ import { Notice, Warn } from '@/components/shared'
 import { control, errText, notify, post, request } from '@/lib/api'
 import { i18n, type Key, t, tpl } from '@/lib/i18n'
 import { signed } from '@/lib/format'
-import { matrixFromUds, meshRoot, type Pt } from '@/lib/mesh'
+import { matrixFromUds, meshDelta, meshRoot, type Pt } from '@/lib/mesh'
 import { defaultCam, drawMesh, type Mark, meshStats, stops as meshStops, type Cam } from '@/lib/meshdraw'
 import {
   cornerReads,
@@ -97,7 +97,10 @@ import {
 import {
   calibrate,
   calibrationForm,
+  chooseMeshProfile,
   findMeasure,
+  measuredAt,
+  meshChoiceGen,
   meshProfile,
   nozzleName,
   plateBase,
@@ -135,7 +138,45 @@ const profileLabel = (name: string) => {
   const known = PROFILES.find(([id]) => id === name)
   return known ? t(known[1]) : name
 }
+// Keep following the same run when its controls unmount.
+type CalibrationWatch = { run: string; choice: number }
+const calibrationStart = store({ waiting: false })
+const requestedCalibrations = new Map<string, CalibrationWatch>()
+let observedCalibration: CalibrationWatch | null = null
+let onMeshSaved: (() => void) | null = null
 type View = '3d' | '2d' | 'values'
+
+// A start acknowledgement or library reply bearing this run supersedes earlier requests.
+const acceptCalibrationWatch = (run: string) => {
+  const watch = requestedCalibrations.get(run)
+  if (!watch) return
+  for (const earlier of requestedCalibrations.keys()) {
+    if (earlier === run) break
+    requestedCalibrations.delete(earlier)
+  }
+  return watch
+}
+
+const startTrackedCalibration = async (side: 'A' | 'B', temp: number, soak: number, nozzle: string, plate: string) => {
+  const run = Array.from(crypto.getRandomValues(new Uint8Array(8)), byte => byte.toString(16).padStart(2, '0')).join('')
+  requestedCalibrations.set(run, { run, choice: meshChoiceGen() })
+  calibrationStart.set({ waiting: true })
+  try {
+    await calibrate(side, temp, soak, nozzle, plate, false, run)
+    acceptCalibrationWatch(run)
+    return true
+  } catch (e) {
+    if (requestedCalibrations.has(run) && plates.get().data?.calibration?.run !== run) {
+      const status = (e as { status?: number } | null)?.status
+      // A lost response leaves this run eligible to be recognized in a later library reply.
+      if (status !== undefined && status >= 400 && status < 500) requestedCalibrations.delete(run)
+      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+    }
+    return false
+  } finally {
+    calibrationStart.set({ waiting: false })
+  }
+}
 
 // The Mesh tab's 3D view of the chosen mesh, with the four screws marked; drag to rotate.
 const AlignMesh3d = ({
@@ -281,8 +322,8 @@ const AlignMesh3d = ({
 
 const MeshCard = () => {
   const [data, setData] = useState<any>(null)
-  const { profile } = meshProfile.use()
-  const setProfile = (value: string) => meshProfile.set({ profile: value })
+  const { profile, diff } = meshProfile.use()
+  const setProfile = (value: string) => meshProfile.set({ profile: value, diff: false })
   const library = plates.use().data
   const found = profile.startsWith('measure:') ? findMeasure(library, profile.slice(8)) : null
   // A saved measurement that is older than the newest screw measurement may show the bed as it was before the screws
@@ -307,9 +348,21 @@ const MeshCard = () => {
   const busy = useRef(false)
   const queued = useRef(false)
   const alive = useRef(true)
+  const prior = found?.measure.prior
+  const delta = useMemo(
+    () => (found?.measure.prior ? meshDelta(found.measure.mesh, found.measure.prior.mesh) : null),
+    [found]
+  )
+  const showDiff = Boolean(diff && delta)
+  const when = prior ? measuredAt(prior.measured).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''
   const points: Pt[] = useMemo(
-    () => (found ? platePoints(found.measure.mesh) : (data && matrixFromUds(data, profile)) || []),
-    [data, profile, found]
+    () =>
+      showDiff && delta
+        ? delta
+        : found
+          ? platePoints(found.measure.mesh)
+          : (data && matrixFromUds(data, profile)) || [],
+    [data, profile, found, showDiff, delta]
   )
   const shown = found
     ? tpl('plates.measure_option', { name: found.plate.name, temp: found.measure.temp })
@@ -326,12 +379,20 @@ const MeshCard = () => {
 
   const redraw = () => {
     if (canvas.current && view !== 'values')
-      drawMesh(canvas.current, points, view, cam.current, {
-        empty: unloaded ? '' : t('bed.waiting_for_live_mesh_data'),
-        min: t('bed.min'),
-        max: t('bed.max'),
-        back: t('bed.y_increases_towards_the_back'),
-      })
+      drawMesh(
+        canvas.current,
+        points,
+        view,
+        cam.current,
+        {
+          empty: unloaded ? '' : t('bed.waiting_for_live_mesh_data'),
+          min: t('bed.min'),
+          max: t('bed.max'),
+          back: t('bed.y_increases_towards_the_back'),
+        },
+        undefined,
+        showDiff
+      )
   }
   useEffect(redraw, [points, view, scale, unloaded])
   useEffect(() => {
@@ -401,7 +462,7 @@ const MeshCard = () => {
   }, [points, view])
 
   const Stat = ({ dot, label, val }: { dot: any; label: Key; val: string }) => (
-    <div class="cc2-mesh-stat rounded-lg border border-edge bg-field/60 p-2.5">
+    <div class="cc2-mesh-stat min-w-0 rounded-lg border border-edge bg-field/60 p-2.5">
       <span class="flex items-center gap-2 text-xs">
         {dot}
         {t(label)}
@@ -409,7 +470,13 @@ const MeshCard = () => {
       <strong class="mt-2 block whitespace-nowrap text-2xl font-semibold">
         {val} <small class="text-xs">mm</small>
       </strong>
-      <p class="mt-1 text-xs text-muted">{profile === 'active' ? t('bed.current_printer_mesh') : shown}</p>
+      <p class="mt-1 line-clamp-2 min-h-8 text-xs text-muted">
+        {showDiff
+          ? tpl('bed.mesh_change_since', { when })
+          : profile === 'active'
+            ? t('bed.current_printer_mesh')
+            : shown}
+      </p>
     </div>
   )
   return (
@@ -447,7 +514,7 @@ const MeshCard = () => {
         </span>
         <label class="flex items-center gap-2 text-xs">
           {t('bed.mesh_profile')}
-          <Select class="w-auto" value={profile} onChange={e => setProfile(e.currentTarget.value)}>
+          <Select class="w-auto" value={profile} onChange={e => chooseMeshProfile(e.currentTarget.value)}>
             <option value="active">
               {t('bed.active_mesh')}
               {root?.profile_name ? ` · ${profileLabel(root.profile_name)}` : ''}
@@ -468,6 +535,23 @@ const MeshCard = () => {
             ))}
           </Select>
         </label>
+        {prior && (
+          <Button
+            variant={showDiff ? 'active' : 'default'}
+            class="shrink-0 whitespace-nowrap text-xs"
+            aria-pressed={showDiff}
+            onClick={() => {
+              if (!delta) {
+                notify(t('bed.mesh_change_grid'), 'error')
+                meshProfile.set({ diff: false })
+                return
+              }
+              meshProfile.set({ diff: !showDiff })
+            }}
+          >
+            {t('bed.mesh_change')}
+          </Button>
+        )}
         <div class="flex">
           {(['3d', '2d', 'values'] as View[]).map((v, i) => (
             <Button
@@ -503,7 +587,7 @@ const MeshCard = () => {
           <Warn>{tpl('bed.mesh_before_screws', { time: new Date(lastScrewTime * 1000).toLocaleString() })}</Warn>
         </div>
       )}
-      <div class="relative overflow-hidden rounded-lg bg-well">
+      <div class="relative overflow-hidden rounded-lg bg-well" data-mesh-diff={showDiff ? 'on' : 'off'}>
         {/* No mesh loaded: the hint in the empty area of the 3D and 2D views (the canvas draws no text then). */}
         {unloaded && view !== 'values' && (
           <p
@@ -521,7 +605,9 @@ const MeshCard = () => {
               </p>
             ) : (
               <table class="w-full border-collapse">
-                <caption class="mb-2 text-left">{t('bed.live_z_heights_in_mm_y')}</caption>
+                <caption class="mb-2 text-left">
+                  {showDiff ? t('bed.mesh_change_values') : t('bed.live_z_heights_in_mm_y')}
+                </caption>
                 <thead>
                   <tr>
                     <th class="p-1 text-left font-normal">Y / X</th>
@@ -550,7 +636,7 @@ const MeshCard = () => {
         ) : (
           <canvas
             ref={canvas}
-            aria-label={t('bed.interactive_live_bed_mesh')}
+            aria-label={showDiff ? t('bed.mesh_change') : t('bed.interactive_live_bed_mesh')}
             class="block h-[430px] w-full cursor-grab touch-none active:cursor-grabbing"
             onPointerDown={e => {
               drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
@@ -573,6 +659,11 @@ const MeshCard = () => {
           />
         )}
         <div class="p-2 text-center text-xs text-well-fg/70">
+          {prior && (
+            <p class={cn('mb-1', showDiff ? '' : 'invisible')} aria-hidden={!showDiff}>
+              {t('bed.mesh_change_help')}
+            </p>
+          )}
           {t('bed.drag_to_rotate_scroll_to_zoom')}{' '}
           <button
             type="button"
@@ -588,8 +679,16 @@ const MeshCard = () => {
         </div>
       </div>
       <div class="mt-3 grid grid-cols-2 gap-2.5 cc2-md:grid-cols-4">
-        <Stat dot={<Dot c="blue" />} label="bed.minimum" val={st ? signed(st.min) : '—'} />
-        <Stat dot={<Dot c="amber" />} label="bed.maximum" val={st ? signed(st.max) : '—'} />
+        <Stat
+          dot={<Dot c={!showDiff || !st || st.min < 0 ? 'blue' : st.min > 0 ? 'amber' : 'green'} />}
+          label="bed.minimum"
+          val={st ? signed(st.min) : '—'}
+        />
+        <Stat
+          dot={<Dot c={!showDiff || !st || st.max > 0 ? 'amber' : st.max < 0 ? 'blue' : 'green'} />}
+          label="bed.maximum"
+          val={st ? signed(st.max) : '—'}
+        />
         <Stat
           dot={<ArrowLeftRight {...I} class="text-cyan" />}
           label="bed.range"
@@ -604,6 +703,7 @@ const MeshCard = () => {
 
 const MeshActions = ({ reload }: { reload: () => void }) => {
   const [starting, setStarting] = useState(false)
+  const { waiting } = calibrationStart.use()
   const library = plates.use().data
   const job = library?.calibration
   const running = Boolean(job && job.stage !== 'off')
@@ -642,34 +742,20 @@ const MeshActions = ({ reload }: { reload: () => void }) => {
       ? target
       : candidates.find(p => p.id === library?.current)?.id || ''
   const nozzleId = nozzle ?? library?.nozzle ?? ''
-  const busy = starting || running
+  const busy = starting || waiting || running
   // A screw session is open: a measurement of it that is running blocks the start (the program answers 409 as well); between
   // its measurements the session ends by itself when the calibration starts.
   const sessionOpen = Boolean(printer.use().data?.screws_session?.active)
   const sessionMeasuring = sessionOpen && consoleStatus.use().busy
   const lock = useRef(false)
-  // The end of a run seen by this page: the new mesh is read once and the outcome told.
-  const seen = useRef<string | null>(null)
   useEffect(() => {
-    if (!job) return
-    const before = seen.current
-    seen.current = job.stage
-    if (before === null || before === 'off' || job.stage !== 'off') return
-    reload()
-    const plate = library?.plates.find(p => p.id === job.plate)
-    if (job.result === 'saved') notify(tpl('bed.measure_saved', { name: plate?.name || '', temp: job.temp }))
-    else if (job.result === 'work') notify(tpl('bed.work_measured', { name: plate?.name || '', temp: job.temp }))
-    else if (job.result === 'done') notify(t('bed.cal_done'))
-    // The stop of the guided chain's mesh is told by the chain (on every page), not twice.
-    else if (job.result === 'cancelled' && !chainTellsCancel()) notify(t('bed.cal_cancelled'))
-    // A run with a plate that was measured but not saved has the note at the top (components/guided-chain), not a toast.
-    else if (job.result === 'failed' && job.error === 'saving') {
-      if (job.work) notify(tpl('bed.work_not_read', { error: job.detail }), 'error')
-      else if (!job.plate) notify(tpl('bed.measure_not_saved', { error: job.detail }), 'error')
-    } else if (job.result === 'failed') notify(t(FAILED[job.error] || 'bed.cal_failed_probing'), 'error')
-  }, [job?.stage])
+    onMeshSaved = reload
+    return () => {
+      if (onMeshSaved === reload) onMeshSaved = null
+    }
+  }, [reload])
   const start = async () => {
-    if (!side || !plateSide || lock.current || running) return
+    if (!side || !plateSide || lock.current || waiting || running) return
     if (!tempOk(temp)) return notify(t('common.invalid_bed_temperature'), 'error')
     if (!soakOk(soak)) return notify(t('bed.invalid_soak'), 'error')
     lock.current = true
@@ -686,11 +772,9 @@ const MeshActions = ({ reload }: { reload: () => void }) => {
       if (sessionOpen) lines.push(t('bed.cal_ends_session'))
       const homing = homedXYZ(printer.get().data?.motion?.homed_axes) ? '' : `\n\n${t('bed.calibration_homes_first')}`
       const question = tpl('bed.start_a_new_bed_mesh_calibration', { temp: degrees })
-      if (!(await ask(`${question}\n\n${lines.join('\n')}${homing}`))) return
-      await calibrate(plateSide, degrees, minutes, nozzleId, plate?.id || '')
+      if (!(await ask(`${question}\n\n${lines.join('\n')}${homing}`)) || calibrationStart.get().waiting) return
+      await startTrackedCalibration(plateSide, degrees, minutes, nozzleId, plate?.id || '')
       await refreshPlates()
-    } catch (e) {
-      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
     } finally {
       lock.current = false
       setStarting(false)
@@ -1364,21 +1448,24 @@ const Levelling = () => {
     measuring.current = true
     setPending(true)
     try {
-      if (!(await ask(question))) return
+      if (!(await ask(question)) || calibrationStart.get().waiting) return
+      const nozzle = library?.nozzle ?? ''
+      let accepted = true
       // "Measure a new mesh" measures only the plate's temporary mesh; the final mesh replaces the stored measurement.
-      await calibrate(target.side, bed, soakMin, library?.nozzle ?? '', target.id, thenScrews)
-      // The chain remembers what was confirmed: the way of measuring follows with this bed target and these probes,
-      // without a hold time (the bed is warm from the mesh).
-      if (thenScrews)
+      if (thenScrews) {
+        await calibrate(target.side, bed, soakMin, nozzle, target.id, true)
+        // The chain remembers what was confirmed: the way of measuring follows with this bed target and these probes,
+        // without a hold time (the bed is warm from the mesh).
         beginChain({
           plate: target.id,
           temp: bed,
           soak: soakMin,
           action: startMode === 'session' ? startAction() : measureAction(),
         })
+      } else accepted = await startTrackedCalibration(target.side, bed, soakMin, nozzle, target.id)
       await refreshPlates()
       // The final mesh: on to the Mesh tab, where it is shown afterwards (its progress stands in the field at the top).
-      if (!thenScrews) openPage('bed', 'mesh')
+      if (!thenScrews && accepted) openPage('bed', 'mesh')
     } catch (e) {
       notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
     } finally {
@@ -2617,10 +2704,58 @@ const Levelling = () => {
   )
 }
 
+// Follow runs started here even if no active stage reaches this page. For other runs, observe
+// at least one active stage before handling the result.
+const CalibrationFollow = ({ alignment }: { alignment: boolean }) => {
+  const library = plates.use().data
+  const { waiting } = calibrationStart.use()
+  const job = library?.calibration
+  // MeshStatus follows the stages across pages. Alignment has its own outcome notifications and basis selection.
+  useEffect(() => {
+    if (!job || !library) return
+    const run = job.run ?? ''
+    if (observedCalibration?.run !== run) observedCalibration = null
+    const requested = acceptCalibrationWatch(run)
+    if (!requested && waiting) return
+    if (job.stage !== 'off') {
+      if (!requested && !observedCalibration) observedCalibration = { run, choice: meshChoiceGen() }
+      return
+    }
+    const tracked = requested ?? observedCalibration
+    if (!tracked || !job.result) return
+    if (requested) requestedCalibrations.delete(run)
+    observedCalibration = null
+    onMeshSaved?.()
+    const plate = library?.plates.find(p => p.id === job.plate)
+    const untouched = meshChoiceGen() === tracked.choice
+    if (job.result === 'saved') {
+      if (!alignment) notify(tpl('bed.measure_saved', { name: plate?.name || '', temp: job.temp }))
+      const saved = job.measure ? findMeasure(library, job.measure) : null
+      if (job.replaced && saved?.measure.prior) {
+        const comparable = meshDelta(saved.measure.mesh, saved.measure.prior.mesh)
+        if (untouched) meshProfile.set({ profile: `measure:${saved.measure.id}`, diff: Boolean(comparable) })
+        if (!comparable) notify(t('bed.mesh_change_grid'), 'error')
+      }
+      return
+    }
+    if (alignment) return
+    if (job.result === 'work') notify(tpl('bed.work_measured', { name: plate?.name || '', temp: job.temp }))
+    else if (job.result === 'done') notify(t('bed.cal_done'))
+    else if (job.result === 'cancelled' && !chainTellsCancel()) notify(t('bed.cal_cancelled'))
+    else if (job.result === 'failed' && job.error === 'saving') {
+      // A failed library save with a successful probe uses the existing unsaved-mesh notice.
+      if (job.work) notify(tpl('bed.work_not_read', { error: job.detail }), 'error')
+      else if (!job.plate) notify(tpl('bed.measure_not_saved', { error: job.detail }), 'error')
+    } else if (job.result === 'failed') notify(t(FAILED[job.error] || 'bed.cal_failed_probing'), 'error')
+  }, [library, waiting, alignment])
+  return null
+}
+
 export const Bed = () => {
   const { bed } = nav.use()
   return (
     <Page title="common.bed_levelling" sub="bed.mesh_saved_profiles_and_four_screw">
+      <CalibrationFollow alignment={bed === 'align'} />
       <Tabs
         items={[
           { id: 'mesh', label: t('bed.mesh_saved_profiles'), icon: <Icon n="grid" /> },

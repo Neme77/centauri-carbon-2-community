@@ -83,7 +83,7 @@ static int act(const char *action) {
 }
 static int calibrate(const char *body) {
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-    plates_calibrate_response(pair[0], &mqtt, &state, body, strlen(body));
+    plates_calibrate_response(pair[0], &mqtt, &state, body, strlen(body), NULL);
     return read_reply(pair);
 }
 static const char *printer(void) {

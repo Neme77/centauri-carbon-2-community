@@ -18,6 +18,18 @@ const colour = (z: number, zMin: number, zMax: number, alpha = 1) => {
   return `rgba(${a.map((v, i) => Math.round(v + (b[i] - v) * f)).join(',')},${alpha})`
 }
 
+// Blue below the previous mesh, gray where it is unchanged, amber above it.
+const divergingColour = (z: number, peak: number, alpha = 1) => {
+  const n = Math.max(-1, Math.min(1, z / peak))
+  const low = [37, 99, 235],
+    mid = [186, 198, 210],
+    high = [217, 119, 6]
+  const from = n < 0 ? low : mid,
+    to = n < 0 ? mid : high,
+    f = n < 0 ? 1 + n : n
+  return `rgba(${from.map((v, i) => Math.round(v + (to[i] - v) * f)).join(',')},${alpha})`
+}
+
 export const meshStats = (pts: Pt[]) => {
   if (pts.length < 4) return null
   const zs = pts.map(p => p.z),
@@ -56,7 +68,8 @@ export function drawMesh(
   mode: '3d' | '2d',
   cam: Cam,
   L: Labels,
-  marks: Mark[] = []
+  marks: Mark[] = [],
+  diverging = false
 ) {
   const r = canvas.getBoundingClientRect()
   if (!r.width || !r.height) return
@@ -81,7 +94,8 @@ export function drawMesh(
   const ys = [...new Set(points.map(p => p.y))].sort((a, b) => a - b)
   const cells = new Map(points.map(p => [`${p.x},${p.y}`, p]))
   const { min: zMin, max: zMax } = st,
-    col = (z: number, a = 1) => colour(z, zMin, zMax, a)
+    peak = Math.max(Math.abs(zMin), Math.abs(zMax), 1e-9),
+    col = diverging ? (z: number, a = 1) => divergingColour(z, peak, a) : (z: number, a = 1) => colour(z, zMin, zMax, a)
   if (mode === '2d') {
     const fit = Math.min(w - 85, h - 70),
       side = fit * cam.zoom,
@@ -121,7 +135,8 @@ export function drawMesh(
   }
   // Frame absolute probe offsets without changing their reported Z values.
   const zCentre = (zMin + zMax) / 2,
-    zSpan = Math.max(0.42, (zMax - zMin) * 1.4),
+    // A mesh change is a fraction of a millimetre; the usual 0.42 mm floor would draw it flat.
+    zSpan = Math.max(diverging ? 0.02 : 0.42, (zMax - zMin) * 1.4),
     zGain = 0.42 / zSpan
   const { yaw, pitch, zoom, scale } = cam
   // Fit at the reference angle so dragging rotates without changing the zoom.
@@ -173,7 +188,7 @@ export function drawMesh(
     const p = project(0, 0, z)
     c.fillStyle = '#a8cbdd'
     c.textAlign = 'right'
-    c.fillText(z.toFixed(2), p.x - 8, p.y + 4)
+    c.fillText(z.toFixed(zSpan < 0.2 ? 3 : 2), p.x - 8, p.y + 4)
   }
   line(project(0, 0, floor), project(250, 0, floor), '#9fc2d4')
   line(project(250, 0, floor), project(250, 250, floor), '#9fc2d4')
@@ -220,10 +235,13 @@ export function drawMesh(
     screwMark(c, q.x, q.y, m)
   }
   c.font = '11px Inter, Segoe UI, sans-serif'
-  for (const [z, label, color] of [
+  for (const [z, label, plain] of [
     [zMin, L.min, '#16c9f2'],
     [zMax, L.max, '#ffcf4d'],
   ] as const) {
+    // A drop of the whole bed is still a drop: the higher of two negative points stays blue.
+    // On a flat mesh both values are the maximum, so the ordinary view keeps the minimum blue.
+    const color = diverging ? (z < 0 ? '#16c9f2' : z > 0 ? '#ffcf4d' : '#bac6d2') : plain
     const p = points.find(p => p.z === z)
     if (!p) continue
     const q = project(p.x, p.y, p.z)

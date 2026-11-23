@@ -14,7 +14,7 @@
     "test:backup-language": "node preview/test-backup-language.mjs",
     "test:recovery": "node preview/test-recovery-download.mjs",
     "test:upload": "node preview/test-upload-network.mjs",
-    "test:mesh": "node preview/test-adaptive-mesh.mjs && node preview/test-mesh-unloaded.mjs",
+    "test:mesh": "node preview/test-mesh-diff.mjs && node preview/test-adaptive-mesh.mjs && node preview/test-mesh-unloaded.mjs",
     "test:sidebar-canvas-polish": "node preview/test-sidebar-canvas-polish.mjs && node preview/test-android-desktop-header.mjs",
     "test:obsidian-layout": "node preview/test-obsidian-layout.mjs",
     "test:dashboard-style": "node preview/test-dashboard-style.mjs",

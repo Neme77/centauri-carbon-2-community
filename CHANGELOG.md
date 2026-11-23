@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- After a bed mesh calibration replaces a saved measurement, the previous mesh is kept. Bed Levelling opens the change (new mesh minus the previous one) in the 3D view, the heat map and the value table: blue is lower than before, amber is higher, and the range is how the plate shape changed. The same view stays available on that measurement until the next change. Designed and implemented by **beanbo** (#418).
+
 - Settings → Integrations has an experimental guide for ElegooSlicer: a copy of the CC2 printer profile with five print-host entries makes the slicer's Device tab show CC2 Control and sends Print to CC2 Control, where the Canvas spool is confirmed before the print starts. The guide shows the configuration folder, the lines to add with the address of the page, a button that copies them and the warning that the slicer falls back to the default printer profile; it is also written down in docs/ELEGOOSLICER.md. Implemented by **lpgamerzockt-ops** (#407).
 
 - Native touchscreen source candidate: Hungarian, Czech and Polish in a fourteen-language selector, persistent display preference, X/Y Home labels, chamber-temperature glyph and a themed Back control. Prepared and printer-tested in its earlier languages/graphics revision by **Neme77**; the new Back control and cumulative updater integration remain under qualification before release (#379).
