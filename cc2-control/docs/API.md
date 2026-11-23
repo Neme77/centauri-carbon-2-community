@@ -1157,6 +1157,8 @@ reach the printer.
   is cut short is an unknown outcome, and a reply larger than its buffer (8 KiB for one spool, 128 KiB for the
   spool list) is refused, never truncated. Numbers and texts from Spoolman pass the same bounded parsers as
   local data; a value that fails is ignored.
+  A filament `color_hex` of six (`RRGGBB`) or eight (`RRGGBBAA`) hex digits is taken as `#RRGGBB`; the transparency is
+  dropped; any other length, or a character that is not a hex digit, leaves the colour out.
 
 ## Bounded asynchronous G-code analysis
 

@@ -301,12 +301,14 @@ static int spoolman_parse_spool(const char *obj, const char *end, spoolman_spool
         spoolman_text(filament, fe, "material", e->material, sizeof(e->material), SPOOL_MATERIAL_MAX, 0);
         spoolman_text(filament, fe, "name", e->name, sizeof(e->name), SPOOL_TEXT_MAX, 1);
         const char *hex; int length;
-        if (json_member_raw_string(filament, fe, "color_hex", &hex, &length) && length == 6) {
+        /* RRGGBB, or RRGGBBAA with the transparency last: a spool has no transparency, so only the RGB is kept
+         * (the alpha must still be hex). Any other length is not a colour we know and is left out. */
+        if (json_member_raw_string(filament, fe, "color_hex", &hex, &length) && (length == 6 || length == 8)) {
             char color[8] = {'#'};
             int ok = 1;
-            for (int i = 0; i < 6; ++i) {
+            for (int i = 0; i < length; ++i) {
                 if (!isxdigit((unsigned char)hex[i])) ok = 0;
-                color[i + 1] = (char)toupper((unsigned char)hex[i]);
+                if (i < 6) color[i + 1] = (char)toupper((unsigned char)hex[i]);
             }
             color[7] = 0;
             if (ok) memcpy(e->color, color, sizeof(e->color));
