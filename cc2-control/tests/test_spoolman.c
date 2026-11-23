@@ -1699,6 +1699,24 @@ static void test_a_manual_link_is_not_an_old_connection(void) {
     puts("PASS: a link set by hand is never an old connection; unlinking the old ones by hand leaves nothing to decide, and a spool linked later is not counted");
 }
 
+static void test_an_address_typed_after_the_sync_was_off_asks_about_the_old_connections(void) {
+    /* With an empty address the printer cannot know which server the numbers belong to: typing one in again asks, even
+     * when it is the same server (one click on "Keep connections"). Guessing "the same" could pull another server's data. */
+    fake_start(100, 600); fake_launch();
+    setup_linked(0, 500);
+    char body[64], reply[8192];
+    snprintf(body, sizeof(body), "url=http://127.0.0.1:%d", (int)fake.port);
+    assert(call_config("url=") == 200 && spoolman_stale_count() == 0 && !spools.spoolman_url[0]);
+    assert(call_config(body) == 200 && spoolman_stale_count() == 1);
+    cycle();
+    assert(near(spools.spools[0].remaining, 500) && fake.use_count == 0);                 /* nothing is taken over meanwhile */
+    assert(call_plain(spoolman_keep_old_response, reply, sizeof(reply)) == 200 && spoolman_stale_count() == 0);
+    cycle();
+    assert(near(spools.spools[0].remaining, 600));
+    fake_finish(); teardown_file();
+    puts("PASS: an address typed in after the sync was off asks about the old connections once; Keep connections ends it");
+}
+
 static void test_remove_old_connections_with_a_full_list_changes_nothing(void) {
     fake_start(100, 600); fake_launch();
     spool_entry *sp = setup_linked(0, 500);
@@ -1932,6 +1950,7 @@ int main(void) {
     test_remove_old_connections_leaves_spools_imported_from_the_new_server();
     test_usage_is_only_collected_while_old_connections_wait();
     test_a_manual_link_is_not_an_old_connection();
+    test_an_address_typed_after_the_sync_was_off_asks_about_the_old_connections();
     test_remove_old_connections_with_a_full_list_changes_nothing();
     test_a_404_counts_only_while_the_list_answers();
     test_a_failed_answer_between_two_404_starts_the_count_again();
