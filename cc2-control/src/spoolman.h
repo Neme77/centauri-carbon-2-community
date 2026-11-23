@@ -1010,17 +1010,18 @@ static void spoolman_held_discard_response(int fd, const char *body, size_t leng
     if (spools_commit(fd, before)) spools_reply(fd, 200, "{\"ok\":true}\n");
 }
 
-/* POST /api/spoolman/unlink-old: after an address change, takes every spool off the numbers of the old server. The
- * spools stay; amounts they still had pending go on the list. */
+/* POST /api/spoolman/unlink-old: after an address change, takes the spools that were linked then off the numbers of
+ * the old server. The spools stay; amounts they still had pending go on the list. Spools imported from the new server
+ * since, and links the user set by hand, are not touched. */
 static void spoolman_unlink_old_response(int fd) {
     if (!spools_open(fd)) return;
-    if (!spools.spoolman_stale_links) { spools_fail(fd, 409, "There are no old connections"); return; }
+    if (!spoolman_stale_count()) { spools_fail(fd, 409, "There are no old connections"); return; }
     spool_store *before = spools_snapshot(fd);
     if (!before) return;
     int full = 0;
     for (int i = 0; i < spools.count; ++i) {
         spool_entry *sp = &spools.spools[i];
-        if (!sp->spoolman_id[0]) continue;
+        if (!sp->spoolman_id[0] || !sp->spoolman_stale) continue;
         if (!spoolman_hold(sp, sp->spoolman_unsent, SPOOLMAN_HELD_SERVER) ||
             !spoolman_hold(sp, sp->spoolman_inflight, SPOOLMAN_HELD_UNSURE)) full = 1;
         sp->spoolman_id[0] = 0;
@@ -1028,24 +1029,24 @@ static void spoolman_unlink_old_response(int fd) {
         sp->spoolman_base = -1;
         sp->spoolman_gen++;
         sp->spoolman_miss = 0;
+        sp->spoolman_stale = 0;
     }
     if (full) {
         spools = *before; free(before);
         spools_fail(fd, 409, "The list of unsent usage is full: review it first");
         return;
     }
-    spools.spoolman_stale_links = 0;
     if (spools_commit(fd, before)) spools_reply(fd, 200, "{\"ok\":true}\n");
 }
 
 /* POST /api/spoolman/keep-old: after an address change, the user says it is the same server: the spools keep their
- * numbers and the sync takes over what Spoolman says again. Nothing else changes. */
+ * numbers, the sync takes over what Spoolman says again and sends what was collected meanwhile. Nothing else changes. */
 static void spoolman_keep_old_response(int fd) {
     if (!spools_open(fd)) return;
-    if (!spools.spoolman_stale_links) { spools_fail(fd, 409, "There are no old connections"); return; }
+    if (!spoolman_stale_count()) { spools_fail(fd, 409, "There are no old connections"); return; }
     spool_store *before = spools_snapshot(fd);
     if (!before) return;
-    spools.spoolman_stale_links = 0;
+    for (int i = 0; i < spools.count; ++i) spools.spools[i].spoolman_stale = 0;
     if (spools_commit(fd, before)) spools_reply(fd, 200, "{\"ok\":true}\n");
 }
 
@@ -1126,9 +1127,9 @@ static void spoolman_tick(long long now) {
             sp->spoolman_base = r->base; break;
         default: break;
         }
-        /* Spools still connected to the numbers of an old server (the address changed and nobody has said yet whether
+        /* A spool still connected to the number of an old server (the address changed and nobody has said yet whether
          * it is the same server): Spoolman's spool of that number may be another one, so nothing of it is taken over. */
-        if (r->have_pull && spools.spoolman_enabled && !spools.spoolman_stale_links) {
+        if (r->have_pull && spools.spoolman_enabled && !sp->spoolman_stale) {
             const spoolman_spool *p = &r->spool;
             if (p->material[0]) snprintf(sp->material, sizeof(sp->material), "%s", p->material);
             if (p->name[0]) snprintf(sp->name, sizeof(sp->name), "%s", p->name);
@@ -1155,6 +1156,9 @@ static void spoolman_tick(long long now) {
     batch->epoch = spoolman_epoch;
     batch->free_slots = SPOOLS_MAX - spools.count;
     int moved = 0;
+    /* While old connections wait for the user's decision, nothing is sent: the Spoolman spool of a number may be
+     * another one on the new server. New usage is only collected (it stays unsent) and is dealt with after the choice. */
+    const int hold_sending = spoolman_stale_count() > 0;
     for (int i = 0; i < spools.count && batch->count < SPOOLS_MAX; ++i) {
         spool_entry *sp = &spools.spools[i];
         if (!sp->spoolman_id[0]) continue;
@@ -1165,7 +1169,7 @@ static void spoolman_tick(long long now) {
             batch->jobs[job].reconcile = 1;
             batch->jobs[job].inflight = sp->spoolman_inflight;
             batch->jobs[job].base = sp->spoolman_base;
-        } else if (sp->spoolman_unsent > 0) {
+        } else if (sp->spoolman_unsent > 0 && !hold_sending) {
             /* Written down before it is sent: if CC2 stops in the middle, the grams are in flight, not unsent,
              * and are never sent twice. */
             sp->spoolman_inflight = sp->spoolman_unsent;
@@ -1240,10 +1244,9 @@ static void spoolman_config_response(int fd, const char *body, size_t length) {
         /* A different server (or login): requests still running for the old one are discarded when they answer.
          * What was pending is not thrown away and not sent on its own: it goes on the list of unsent usage, where
          * the user decides. Turning the sync off (an empty address) is the user's own decision and clears it. */
-        int turned_off = url && !url[0], linked = 0, full = 0;
+        int turned_off = url && !url[0], full = 0;
         for (int i = 0; i < spools.count; ++i) {
             spool_entry *sp = &spools.spools[i];
-            if (sp->spoolman_id[0]) linked++;
             if (!sp->spoolman_id[0] || turned_off) continue;
             if (!spoolman_hold(sp, sp->spoolman_unsent, url_changed ? SPOOLMAN_HELD_SERVER : SPOOLMAN_HELD_LOGIN) ||
                 !spoolman_hold(sp, sp->spoolman_inflight, SPOOLMAN_HELD_UNSURE)) full = 1;
@@ -1261,8 +1264,9 @@ static void spoolman_config_response(int fd, const char *body, size_t length) {
             spools.spools[i].spoolman_unsent = spools.spools[i].spoolman_inflight = 0;
             spools.spools[i].spoolman_base = -1;
             spools.spools[i].spoolman_miss = 0;
+            /* Every spool that is linked now is linked to a number of the old server; one imported later is not. */
+            if (url_changed) spools.spools[i].spoolman_stale = !turned_off && spools.spools[i].spoolman_id[0];
         }
-        if (url_changed) spools.spoolman_stale_links = !turned_off && linked > 0;
     }
     if (spools_commit(fd, before)) {
         atomic_store(&spoolman_paused, !spools.spoolman_enabled);

@@ -59,6 +59,7 @@ typedef struct {
     double spoolman_inflight, spoolman_base;
     unsigned spoolman_gen;                         /* bumped when the Spoolman link changes; not saved */
     int spoolman_miss;                             /* sync cycles in a row in which Spoolman answered 404 for it; not saved */
+    int spoolman_stale;                            /* the address changed and this spool is still linked to a number of the old server; saved */
 } spool_entry;
 
 /* Usage that was meant for Spoolman and is NOT going to be sent by itself: the sync neither retries nor forgets it.
@@ -134,7 +135,6 @@ typedef struct {
     spoolman_held_entry held[SPOOLMAN_HELD_MAX];   /* not part of a backup: it belongs to this printer's Spoolman link */
     int held_count;
     unsigned held_last_id;
-    int spoolman_stale_links;                      /* the address changed and spools are still linked to numbers of the old server */
 } spool_store;
 
 static spool_store spools;
@@ -272,6 +272,14 @@ static spool_entry *spool_find(const char *id) {
     for (int i = 0; i < spools.count; ++i)
         if (!strcmp(spools.spools[i].id, id)) return &spools.spools[i];
     return NULL;
+}
+
+/* Spools that are still linked to a number of the old server after the address changed, and wait for the user's
+ * decision (spoolman.h: keep or remove the old connections). */
+static int spoolman_stale_count(void) {
+    int n = 0;
+    for (int i = 0; i < spools.count; ++i) if (spools.spools[i].spoolman_id[0] && spools.spools[i].spoolman_stale) n++;
+    return n;
 }
 
 /* For Spoolman auto-import (spoolman.h): is this Spoolman spool already linked to a local one? */
@@ -680,9 +688,10 @@ static void spools_entry_json(json_builder *b, const spool_entry *s, int backup)
         s->remaining, s->tare, s->low, s->price);
     json_builder_string(b, s->note);
     json_builder_printf(b, ",\"created\":%lld,\"used\":%lld,\"archived\":%s,\"spoolman_id\":\"%s\","
-                        "\"spoolman_unsent\":%.4f,\"spoolman_inflight\":%.4f,\"spoolman_base\":%.4f}", s->created, s->used,
+                        "\"spoolman_unsent\":%.4f,\"spoolman_inflight\":%.4f,\"spoolman_base\":%.4f%s}", s->created, s->used,
                         s->archived ? "true" : "false", s->spoolman_id, backup ? 0.0 : s->spoolman_unsent,
-                        backup ? 0.0 : s->spoolman_inflight, backup ? -1.0 : s->spoolman_base);
+                        backup ? 0.0 : s->spoolman_inflight, backup ? -1.0 : s->spoolman_base,
+                        !backup && s->spoolman_stale ? ",\"spoolman_stale\":true" : "");   /* only when set */
 }
 
 static void spools_tray_json(json_builder *b, const spool_tray *t) {
@@ -723,8 +732,7 @@ static char *spools_encode_ex(const spool_store *store, size_t *length, int back
     json_builder_printf(&b, ",\"spoolman_basic_auth\":");
     json_builder_string(&b, backup ? "" : store->spoolman_basic_auth);
     if (!backup) {
-        json_builder_printf(&b, ",\"spoolman_stale_links\":%s,\"spoolman_held_last_id\":%u,\"spoolman_held\":[",
-                            store->spoolman_stale_links ? "true" : "false", store->held_last_id);
+        json_builder_printf(&b, ",\"spoolman_held_last_id\":%u,\"spoolman_held\":[", store->held_last_id);
         for (int i = 0; i < store->held_count; ++i) {
             const spoolman_held_entry *h = &store->held[i];
             json_builder_printf(&b, "%s{\"id\":%u,\"spool\":\"%s\",\"name\":", i ? "," : "", h->id, h->spool);
@@ -891,6 +899,8 @@ static int spools_parse_entry(const char *obj, const char *end, spool_entry *s) 
         s->spoolman_inflight < 0 || s->spoolman_inflight > 1e6) s->spoolman_inflight = 0;
     if (!s->spoolman_inflight || !plates_member_double(obj, end, "spoolman_base", &s->spoolman_base) ||
         s->spoolman_base < 0 || s->spoolman_base > 1e9) s->spoolman_base = -1;
+    int stale = 0;
+    s->spoolman_stale = s->spoolman_id[0] && spools_bool_member(obj, end, "spoolman_stale", &stale) && stale;
     return 1;
 }
 
@@ -1060,8 +1070,6 @@ static void spools_load(void) {
                 (size_t)len2 > SPOOLMAN_AUTH_MAX) spools.spoolman_basic_auth[0] = 0;
             else { memcpy(spools.spoolman_basic_auth, text2, (size_t)len2); spools.spoolman_basic_auth[len2] = 0; }
             /* Also optional: a file from before the list of unsent amounts has none of these keys. */
-            int stale = 0;
-            if (spools_bool_member(root, root_end, "spoolman_stale_links", &stale)) spools.spoolman_stale_links = stale;
             double last = 0;
             if (plates_member_double(root, root_end, "spoolman_held_last_id", &last) && last >= 0 && last <= 4e9 && last == floor(last))
                 spools.held_last_id = (unsigned)last;
@@ -1243,10 +1251,7 @@ static void spools_get_response(int fd, const mqtt_client *mqtt) {
     json_builder_string(&b, spools.spoolman_url);
     json_builder_printf(&b, ",\"spoolman_enabled\":%s", spools.spoolman_enabled ? "true" : "false");
     json_builder_printf(&b, ",\"spoolman_has_auth\":%s", spools.spoolman_basic_auth[0] ? "true" : "false");
-    int stale_links = 0;
-    if (spools.spoolman_stale_links)
-        for (int i = 0; i < spools.count; ++i) if (spools.spools[i].spoolman_id[0]) stale_links++;
-    json_builder_printf(&b, ",\"spoolman_stale_links\":%d,\"spoolman_held\":[", stale_links);
+    json_builder_printf(&b, ",\"spoolman_stale_links\":%d,\"spoolman_held\":[", spoolman_stale_count());
     for (int i = 0; i < spools.held_count; ++i) {
         const spoolman_held_entry *h = &spools.held[i];
         static const char *reasons[] = {"", "login_changed", "server_changed", "not_found", "unsure"};
@@ -1379,6 +1384,7 @@ static void spools_save_response(int fd, const char *body, size_t length) {
             s.spoolman_base = -1;
             s.spoolman_gen++;
             s.spoolman_miss = 0;
+            s.spoolman_stale = 0;                      /* a link set by hand belongs to the server in use */
         }
     }
     int slot = -1;

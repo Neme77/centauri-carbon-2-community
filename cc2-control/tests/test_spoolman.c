@@ -1365,7 +1365,7 @@ static void test_address_or_login_change_puts_pending_usage_on_the_list(void) {
     assert(server >= 0 && near(spools.held[server].grams, 10) && !strcmp(spools.held[server].spoolman_id, "7"));
     assert(unsure >= 0 && near(spools.held[unsure].grams, 4));
     assert(near(sp->spoolman_unsent, 0) && near(sp->spoolman_inflight, 0) && !strcmp(sp->spoolman_id, "7") && !strcmp(two->spoolman_id, "8"));
-    assert(spools.spoolman_stale_links);
+    assert(spoolman_stale_count() == 2 && sp->spoolman_stale && two->spoolman_stale && !plain->spoolman_stale);
     char *text = get_spools_text();
     assert(strstr(text, "\"spoolman_stale_links\":2,\"spoolman_held\":[{\"id\":1,\"spool\":\"3333333333333333\",\"name\":\"Mine\",\"spoolman_id\":\"7\",\"grams\":10.00,\"time\":1790000000,\"reason\":\"server_changed\",\"sending\":false}"));
     assert(strstr(text, "\"reason\":\"unsure\""));
@@ -1374,7 +1374,7 @@ static void test_address_or_login_change_puts_pending_usage_on_the_list(void) {
     sp->spoolman_unsent = 3;
     assert(call_config("basic_auth=me:secret") == 200);
     assert(spools.held_count == 3 && spools.held[2].reason == SPOOLMAN_HELD_LOGIN && near(spools.held[2].grams, 3));
-    assert(spools.spoolman_stale_links);                                        /* not cleared or set by a login change */
+    assert(spoolman_stale_count() == 2);                                        /* not cleared or set by a login change */
     /* A second amount for the same spool and reason is added to its entry, not a second row. */
     sp->spoolman_unsent = 1.5;
     assert(call_config("basic_auth=other:secret") == 200);
@@ -1382,7 +1382,7 @@ static void test_address_or_login_change_puts_pending_usage_on_the_list(void) {
     /* Turning the sync off (empty address) is the user's own decision: nothing is put on the list. */
     sp->spoolman_unsent = 6;
     assert(call_config("url=") == 200);
-    assert(spools.held_count == 3 && near(sp->spoolman_unsent, 0) && !spools.spoolman_stale_links);
+    assert(spools.held_count == 3 && near(sp->spoolman_unsent, 0) && spoolman_stale_count() == 0);
     /* The list is full: the change is refused and nothing is changed or lost. */
     memset(spools.held, 0, sizeof(spools.held));
     for (int i = 0; i < SPOOLMAN_HELD_MAX; ++i) { spools.held[i].id = (unsigned)i + 1; spools.held[i].reason = SPOOLMAN_HELD_NOT_FOUND; spools.held[i].grams = 1; snprintf(spools.held[i].spool, sizeof(spools.held[i].spool), "%016d", i); }
@@ -1401,10 +1401,10 @@ static void test_list_survives_restart_and_older_files_load(void) {
     fake_start(0, 0);
     spool_entry *sp = setup_linked(0, 500);
     assert(spoolman_hold(sp, 12.5, SPOOLMAN_HELD_LOGIN) && spoolman_hold(sp, 4, SPOOLMAN_HELD_NOT_FOUND));
-    spools.spoolman_stale_links = 1;
+    sp->spoolman_stale = 1;
     assert(spools_save() == 0);
     spools_load();
-    assert(spools_available && spools.held_count == 2 && spools.spoolman_stale_links && spools.held_last_id == 2);
+    assert(spools_available && spools.held_count == 2 && spoolman_stale_count() == 1 && spools.spools[0].spoolman_stale && spools.held_last_id == 2);
     assert(spools.held[0].id == 1 && spools.held[0].reason == SPOOLMAN_HELD_LOGIN && near(spools.held[0].grams, 12.5));
     assert(!strcmp(spools.held[0].name, "Mine") && !strcmp(spools.held[0].spoolman_id, "7") && spools.held[0].time == fake_now);
     sp = &spools.spools[0];
@@ -1426,19 +1426,22 @@ static void test_list_survives_restart_and_older_files_load(void) {
     /* Neither the list nor the flag goes into an exported backup, and the backup format is unchanged. */
     char *backup[4]; size_t lengths[4];
     (void)bk_capture(backup, lengths);
-    assert(backup[3] && !strstr(backup[3], "spoolman_held") && !strstr(backup[3], "stale_links"));
+    assert(backup[3] && !strstr(backup[3], "spoolman_held") && !strstr(backup[3], "spoolman_stale"));
     for (int i = 0; i < 4; ++i) free(backup[i]);
     /* A file written before the list existed has none of its keys. */
     data = spools_encode(&spools, &length);
-    char *cut = strstr(data, ",\"spoolman_stale_links\"");
+    char *cut = strstr(data, ",\"spoolman_held_last_id\"");
     char *list_end = strstr(cut, "],\"slots\"");
     assert(cut && list_end);
     memmove(cut, list_end + 1, strlen(list_end + 1) + 1);
+    char *flag = strstr(data, ",\"spoolman_stale\":true");           /* the flag of the spool is not in such a file either */
+    assert(flag);
+    memmove(flag, flag + strlen(",\"spoolman_stale\":true"), strlen(flag + strlen(",\"spoolman_stale\":true")) + 1);
     f = fopen(spools_path, "wb"); assert(f); fputs(data, f); fclose(f); free(data);
     spools_load();
-    assert(spools_available && spools.count == 1 && spools.held_count == 0 && !spools.spoolman_stale_links && !strcmp(spools.spools[0].spoolman_id, "7"));
+    assert(spools_available && spools.count == 1 && spools.held_count == 0 && spoolman_stale_count() == 0 && !strcmp(spools.spools[0].spoolman_id, "7"));
     teardown_file();
-    puts("PASS: the list, the flag and the entry numbers survive a restart; a request that was out becomes unsure; a damaged entry is left out; backups carry none of it; older files load");
+    puts("PASS: the list, the flag of the old connections and the entry numbers survive a restart; a request that was out becomes unsure; a damaged entry is left out; backups carry none of it; older files load");
 }
 
 static void test_send_selected_sends_only_the_chosen_entries(void) {
@@ -1544,14 +1547,14 @@ static void test_remove_old_connections_unlinks_and_keeps_the_grams(void) {
     add_linked_spool("5555555555555555", "8", 0);
     add_linked_spool("6666666666666666", "", 0);
     assert(call_unlink_old() == 409);                                           /* no old connections yet */
-    assert(call_config("url=http://127.0.0.1:9") == 200 && spools.spoolman_stale_links);
+    assert(call_config("url=http://127.0.0.1:9") == 200 && spoolman_stale_count() == 2);
     sp = &spools.spools[0];
     sp->spoolman_unsent = 2.5;                                                  /* used again before the user decided */
     unsigned gen = sp->spoolman_gen;
     assert(call_unlink_old() == 200);
     assert(spools.count == 3 && !spools.spools[0].spoolman_id[0] && !spools.spools[1].spoolman_id[0] && sp->spoolman_gen == gen + 1);
     assert(near(sp->remaining, 500) && !strcmp(sp->name, "Mine"));              /* the spools stay */
-    assert(!spools.spoolman_stale_links && spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_SERVER && near(spools.held[0].grams, 2.5));
+    assert(spoolman_stale_count() == 0 && spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_SERVER && near(spools.held[0].grams, 2.5));
     assert(call_unlink_old() == 409);
     char *text = get_spools_text();
     assert(strstr(text, "\"spoolman_stale_links\":0"));
@@ -1577,31 +1580,33 @@ static void test_old_connections_stop_the_pull_until_the_user_decides(void) {
     char body[64], reply[8192];
     snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "http://127.0.0.1:9");      /* the old server */
     snprintf(body, sizeof(body), "url=http://127.0.0.1:%d", (int)fake.port);
-    assert(call_config(body) == 200 && spools.spoolman_stale_links);                      /* a new server: spool 7 is an old connection */
+    assert(call_config(body) == 200 && spoolman_stale_count() == 1);                      /* a new server: spool 7 is an old connection */
     sp = &spools.spools[0];
     cycle();
     assert(fake.get_count + fake.list_count > 0);                                          /* the sync did run and did read Spoolman ... */
     assert(near(sp->remaining, 500) && !strcmp(sp->name, "Mine") && !strcmp(sp->material, "PLA") && !strcmp(sp->color, "#FFFFFF"));   /* ... and applied nothing */
-    sp->spoolman_unsent = 2;                                                               /* sending is not the pull: this still goes out */
-    cycle();
-    assert(fake.use_count == 1 && near(sp->spoolman_unsent, 0) && near(sp->spoolman_inflight, 0));
+    sp->spoolman_unsent = 2;                                                               /* usage is only collected meanwhile: nothing goes out */
+    cycle(); cycle();
+    assert(fake.use_count == 0 && near(sp->spoolman_unsent, 2) && near(sp->spoolman_inflight, 0) && fake.used == 100);
     assert(near(sp->remaining, 500) && !strcmp(sp->name, "Mine"));
-    /* "Keep the connections": the same server under a new address; from now on the pull is applied again. */
+    /* "Keep the connections": the same server under a new address; from now on the pull is applied again and what was
+     * collected is sent. */
     assert(call_plain(spoolman_keep_old_response, reply, sizeof(reply)) == 200);
-    assert(!spools.spoolman_stale_links && !strcmp(sp->spoolman_id, "7") && spools.held_count == 0);
+    assert(spoolman_stale_count() == 0 && !strcmp(sp->spoolman_id, "7") && spools.held_count == 0);
     cycle();
+    assert(fake.use_count == 1 && near(fake.last_use, 2) && near(sp->spoolman_unsent, 0) && near(sp->spoolman_inflight, 0));
     assert(near(sp->remaining, 598) && !strcmp(sp->name, "Jet Black") && !strcmp(sp->material, "PETG"));   /* 600 less the 2 g sent above */
     assert(call_plain(spoolman_keep_old_response, reply, sizeof(reply)) == 409);          /* nothing left to decide */
     char *text = get_spools_text();
     assert(strstr(text, "\"spoolman_stale_links\":0"));
     free(text);
     spools_load();                                                                          /* the decision is saved */
-    assert(spools_available && !spools.spoolman_stale_links && !strcmp(spools.spools[0].spoolman_id, "7"));
+    assert(spools_available && spoolman_stale_count() == 0 && !strcmp(spools.spools[0].spoolman_id, "7"));
     /* "Remove the old connections" lifts it as well: the spool is no longer linked, so there is nothing to pull into. */
-    spools.spoolman_stale_links = 1;
-    assert(call_unlink_old() == 200 && !spools.spoolman_stale_links);
+    spools.spools[0].spoolman_stale = 1;
+    assert(call_unlink_old() == 200 && spoolman_stale_count() == 0);
     fake_finish(); teardown_file();
-    puts("PASS: while old connections exist nothing from Spoolman is applied to the spools (sending goes on); keeping or removing them lifts it");
+    puts("PASS: while old connections exist nothing from Spoolman is applied to those spools and no usage is sent (it is collected); keeping or removing them lifts it");
 }
 
 static int is_server_change(const char *from, const char *to) {
@@ -1611,11 +1616,87 @@ static int is_server_change(const char *from, const char *to) {
     unsigned epoch = spoolman_epoch;
     assert(call_config(body) == 200);
     assert(!strcmp(spools.spoolman_url, to));                                              /* the new text is kept either way */
-    int changed = spools.spoolman_stale_links;
+    int changed = spoolman_stale_count() > 0;
     assert(changed == (spools.held_count == 1) && changed == (spoolman_epoch == epoch + 1));
     assert(changed || near(spools.spools[0].spoolman_unsent, 2));                           /* the same server: nothing was touched */
     teardown_file();
     return changed;
+}
+
+/* ---- review of the list (23.11.): old connections, collected usage, 404 only with a living list, 5xx ---------- */
+
+static void test_remove_old_connections_leaves_spools_imported_from_the_new_server(void) {
+    /* The new server has two spools of its own (11 and 12). The old connection is spool 7 of the old address. */
+    char **items = make_items(2, 10, 11);
+    fake_start(100, 600); fake.list_items = (const char *const *)items; fake.list_n = 2; fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    char body[64], reply[8192];
+    snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "http://127.0.0.1:9");
+    snprintf(body, sizeof(body), "url=http://127.0.0.1:%d", (int)fake.port);
+    assert(call_config(body) == 200 && spoolman_stale_count() == 1);
+    cycle();                                                                   /* the sync imports the two spools of the new server */
+    assert(spools.count == 3 && !strcmp(spools.spools[1].spoolman_id, "11") && !strcmp(spools.spools[2].spoolman_id, "12"));
+    assert(spoolman_stale_count() == 1);                                       /* only the spool of the old address is an old connection */
+    char *text = get_spools_text();
+    assert(strstr(text, "\"spoolman_stale_links\":1,"));
+    free(text);
+    assert(call_unlink_old() == 200);
+    sp = &spools.spools[0];
+    assert(!sp->spoolman_id[0] && !strcmp(spools.spools[1].spoolman_id, "11") && !strcmp(spools.spools[2].spoolman_id, "12"));
+    assert(spoolman_stale_count() == 0);
+    cycle();
+    assert(spools.count == 3);                                                 /* no spool of the new server is added a second time */
+    assert(call_plain(spoolman_keep_old_response, reply, sizeof(reply)) == 409);
+    fake_finish(); teardown_file(); free_items(items, 2);
+    puts("PASS: Remove old connections lets go of the spools of the old address only; spools imported from the new server since stay linked and are not added twice");
+}
+
+static void test_usage_is_only_collected_while_old_connections_wait(void) {
+    char **items = make_items(1, 10, 11);
+    fake_start(100, 600); fake.list_items = (const char *const *)items; fake.list_n = 1; fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    char body[64];
+    snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "http://127.0.0.1:9");
+    snprintf(body, sizeof(body), "url=http://127.0.0.1:%d", (int)fake.port);
+    assert(call_config(body) == 200);
+    cycle();                                                                   /* spool 11 is imported (not an old connection) */
+    spool_entry *fresh = &spools.spools[1];
+    assert(spools.count == 2 && !strcmp(fresh->spoolman_id, "11") && !fresh->spoolman_stale);
+    sp = &spools.spools[0];
+    sp->spoolman_unsent = 2; fresh->spoolman_unsent = 3;                       /* both used before the decision */
+    cycle(); cycle();
+    assert(fake.use_count == 0 && near(sp->spoolman_unsent, 2) && near(fresh->spoolman_unsent, 3));   /* nothing is sent, nothing is lost */
+    assert(near(sp->spoolman_inflight, 0) && near(fresh->spoolman_inflight, 0) && spools.held_count == 0);
+    /* Removing the old connections: the collected grams of the old spool go on the list; the other spool sends its own. */
+    assert(call_unlink_old() == 200);
+    sp = &spools.spools[0]; fresh = &spools.spools[1];
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_SERVER && near(spools.held[0].grams, 2) && fake.use_count == 0);
+    cycle();
+    assert(fake.use_count == 1 && near(fake.last_use, 3) && near(fresh->spoolman_unsent, 0) && spools.held_count == 1);
+    fake_finish(); teardown_file(); free_items(items, 1);
+    puts("PASS: while old connections wait no usage is sent, only collected; after the choice it is sent (kept) or on the list (removed), none of it lost");
+}
+
+static void test_a_manual_link_is_not_an_old_connection(void) {
+    fake_start(100, 600); fake_launch();
+    setup_linked(0, 500);
+    char body[96];
+    snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "http://127.0.0.1:9");
+    snprintf(body, sizeof(body), "url=http://127.0.0.1:%d", (int)fake.port);
+    assert(call_config(body) == 200 && spoolman_stale_count() == 1);
+    snprintf(body, sizeof(body), "id=%s\nspoolman_id=", spools.spools[0].id);   /* the user unlinks the old spool by hand ... */
+    assert(call_handler(spools_save_response, body) == 200);
+    assert(spoolman_stale_count() == 0);                                       /* ... nothing is left to decide */
+    spool_entry *other = add_linked_spool("5555555555555555", "", 0);
+    snprintf(body, sizeof(body), "id=%s\nspoolman_id=9", other->id);           /* ... and links another spool afterwards */
+    assert(call_handler(spools_save_response, body) == 200);
+    assert(spoolman_stale_count() == 0 && !spools.spools[1].spoolman_stale);   /* that one belongs to the server in use */
+    spools.spools[0].spoolman_stale = 1;                                       /* an old connection, then relinked by hand */
+    snprintf(spools.spools[0].spoolman_id, sizeof(spools.spools[0].spoolman_id), "7");
+    snprintf(body, sizeof(body), "id=%s\nspoolman_id=8", spools.spools[0].id);
+    assert(call_handler(spools_save_response, body) == 200 && spoolman_stale_count() == 0);
+    fake_finish(); teardown_file();
+    puts("PASS: a link set by hand is never an old connection; unlinking the old ones by hand leaves nothing to decide, and a spool linked later is not counted");
 }
 
 static void test_the_same_server_written_differently_is_not_a_new_server(void) {
@@ -1747,6 +1828,9 @@ int main(void) {
     test_dont_send_and_remove_send_nothing();
     test_remove_old_connections_unlinks_and_keeps_the_grams();
     test_old_connections_stop_the_pull_until_the_user_decides();
+    test_remove_old_connections_leaves_spools_imported_from_the_new_server();
+    test_usage_is_only_collected_while_old_connections_wait();
+    test_a_manual_link_is_not_an_old_connection();
     test_the_same_server_written_differently_is_not_a_new_server();
     test_the_catalog_is_read_in_pages();
     return 0;
