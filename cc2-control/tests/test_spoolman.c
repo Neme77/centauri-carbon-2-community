@@ -163,7 +163,7 @@ static void test_config_endpoint(void) {
 typedef struct {
     _Atomic int stop, bound, port;
     _Atomic double used, remaining;  /* the spool's state on the "server" */
-    _Atomic int use_mode;            /* 0 normal, 1 apply then drop the reply, 2 drop without applying, 3 apply + 500 */
+    _Atomic int use_mode;            /* 0 normal, 1 apply then drop the reply, 2 drop without applying, 3 apply + 500, 4 500 without applying */
     _Atomic int get_mode;            /* 0 normal, 1 drop, 2 chunked, 3 fragmented, 4 truncated */
     _Atomic int gets_down;           /* every GET is dropped while set */
     _Atomic int auto_gets_down;      /* set gets_down once a /use has been seen */
@@ -302,11 +302,11 @@ static void *fake_server(void *unused) {
             const char *w = strstr(req, "use_weight");
             double grams = w ? atof(strchr(w, ':') + 1) : 0;
             fake.last_use = grams;
-            if (fake.use_mode != 2) { fake.used = fake.used + grams; fake.remaining = fake.remaining - grams; }
+            if (fake.use_mode != 2 && fake.use_mode != 4) { fake.used = fake.used + grams; fake.remaining = fake.remaining - grams; }
             snprintf(body, sizeof(body), "{\"id\":%d,\"remaining_weight\":%.3f,\"used_weight\":%.3f}", id, fake.remaining, fake.used);
             if (fake.auto_gets_down) fake.gets_down = 1;
             if (fake.use_mode == 1 || fake.use_mode == 2) { close(fd); continue; }
-            if (fake.use_mode == 3) fake_send(fd, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", 77, 0);
+            if (fake.use_mode == 3 || fake.use_mode == 4) fake_send(fd, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", 77, 0);
             else reply_body(fd, body, 0);
         } else {
             if (is_list) {
@@ -1699,6 +1699,64 @@ static void test_a_manual_link_is_not_an_old_connection(void) {
     puts("PASS: a link set by hand is never an old connection; unlinking the old ones by hand leaves nothing to decide, and a spool linked later is not counted");
 }
 
+static void test_remove_old_connections_with_a_full_list_changes_nothing(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    assert(call_config("url=http://127.0.0.1:9") == 200 && spoolman_stale_count() == 1);
+    sp = &spools.spools[0];
+    sp->spoolman_unsent = 2.5;
+    for (int i = 0; i < SPOOLMAN_HELD_MAX; ++i) { spools.held[i].id = (unsigned)i + 1; spools.held[i].reason = SPOOLMAN_HELD_NOT_FOUND; spools.held[i].grams = 1; snprintf(spools.held[i].spool, sizeof(spools.held[i].spool), "%016d", i); }
+    spools.held_count = SPOOLMAN_HELD_MAX;
+    unsigned gen = sp->spoolman_gen;
+    assert(call_unlink_old() == 409);                                          /* no room for the 2.5 g: refused as a whole */
+    assert(!strcmp(sp->spoolman_id, "7") && sp->spoolman_stale && spoolman_stale_count() == 1 && sp->spoolman_gen == gen);
+    assert(near(sp->spoolman_unsent, 2.5) && spools.held_count == SPOOLMAN_HELD_MAX);
+    for (int i = 0; i < SPOOLMAN_HELD_MAX; ++i) assert(near(spools.held[i].grams, 1) && spools.held[i].reason == SPOOLMAN_HELD_NOT_FOUND);
+    fake_finish(); teardown_file();
+    puts("PASS: Remove old connections with a full list is refused and changes nothing: the link, the flag and the grams stay");
+}
+
+static void test_a_5xx_while_sending_selected_is_settled_from_the_used_weight(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    assert(spoolman_hold(sp, 12.5, SPOOLMAN_HELD_SERVER) && spoolman_hold(sp, 4, SPOOLMAN_HELD_LOGIN));
+    /* Spoolman applied it and then said 500: the used weight grew, so it is counted: the entry goes (sending it again would count it twice). */
+    fake.use_mode = 3;
+    assert(call_held_send("1=7") == 202); finish_send();
+    assert(fake.use_count == 1 && near(fake.used, 112.5));
+    assert(spools.held_count == 1 && spools.held[0].id == 2 && spools.held[0].reason == SPOOLMAN_HELD_LOGIN);
+    /* Spoolman said 500 and did not apply it: that cannot be told from "applied later": unsure, and never sent again. */
+    fake.use_mode = 4;
+    assert(call_held_send("2=7") == 202); finish_send();
+    assert(fake.use_count == 2 && near(fake.used, 112.5));
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_UNSURE && !spools.held[0].sending);
+    fake.use_mode = 0;
+    assert(call_held_send("2=7") == 409 && fake.use_count == 2);
+    fake_finish(); teardown_file();
+    puts("PASS: a 500 on Send selected is settled from the used weight: applied -> gone from the list; not applied -> unsure, never sent twice");
+}
+
+static void test_a_call_is_checked_as_a_whole_and_may_carry_all_32_entries(void) {
+    fake_start(100, 600); fake_launch();
+    setup_linked(0, 500);
+    for (int i = 0; i < SPOOLMAN_HELD_MAX; ++i) { spools.held[i].id = (unsigned)i + 1; spools.held[i].reason = SPOOLMAN_HELD_SERVER; spools.held[i].grams = 1; snprintf(spools.held[i].spool, sizeof(spools.held[i].spool), "%016d", i); snprintf(spools.held[i].spoolman_id, sizeof(spools.held[i].spoolman_id), "7"); }
+    spools.held_count = SPOOLMAN_HELD_MAX;
+    assert(call_held_send("1=7\n1=8") == 400);                                 /* the same entry twice would be sent twice */
+    assert(call_held_send("1=7\n2=7\n1=7") == 400);
+    assert(fake.use_count == 0 && !spools.held[0].sending && !worker_running());
+    char body[512]; size_t at = 0;
+    for (int i = 1; i <= 17; ++i) at += (size_t)snprintf(body + at, sizeof(body) - at, "%d=7\n", i);    /* more than 16 in one call */
+    assert(call_held_send(body) == 202); finish_send();
+    assert(fake.use_count == 17 && spools.held_count == SPOOLMAN_HELD_MAX - 17);
+    for (int i = 0; i < spools.held_count; ++i) spools.held[i].id = (unsigned)i + 1;
+    at = 0; body[0] = 0;
+    for (int i = 1; i <= spools.held_count; ++i) at += (size_t)snprintf(body + at, sizeof(body) - at, "%d=7\n", i);
+    assert(call_held_send(body) == 202); finish_send();                        /* the rest of the 32 in one call */
+    assert(fake.use_count == 32 && spools.held_count == 0);
+    fake_finish(); teardown_file();
+    puts("PASS: the same entry twice in one call is refused as a whole; one call may carry more than 16 and up to all 32 entries");
+}
+
 static void test_the_same_server_written_differently_is_not_a_new_server(void) {
     fake_start(0, 0);
     assert(!is_server_change("http://192.0.2.5:7912", "http://192.0.2.5:7912/"));          /* a slash at the end */
@@ -1831,6 +1889,9 @@ int main(void) {
     test_remove_old_connections_leaves_spools_imported_from_the_new_server();
     test_usage_is_only_collected_while_old_connections_wait();
     test_a_manual_link_is_not_an_old_connection();
+    test_remove_old_connections_with_a_full_list_changes_nothing();
+    test_a_5xx_while_sending_selected_is_settled_from_the_used_weight();
+    test_a_call_is_checked_as_a_whole_and_may_carry_all_32_entries();
     test_the_same_server_written_differently_is_not_a_new_server();
     test_the_catalog_is_read_in_pages();
     return 0;
