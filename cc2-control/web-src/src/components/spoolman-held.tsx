@@ -82,7 +82,7 @@ export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: bool
       await sendHeld(Object.fromEntries(picks.map(e => [String(e.id), target(e)])))
       setPicked({})
       // The request runs on the printer; the list shows it as sending until Spoolman has answered.
-      for (let i = 0; i < 150; i++) {
+      for (let i = 0; i < 220; i++) {
         await sleep(700)
         await refreshSpools()
         const now = spools.get().data?.spoolman_held ?? []

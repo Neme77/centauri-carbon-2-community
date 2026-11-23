@@ -94,7 +94,7 @@ try {
     1: 'You changed the login to Spoolman. The spool is the same, so you can send this amount to it.',
     2: 'You changed the Spoolman address. This spool is connected to a spool of the old address. Choose the matching spool on the new Spoolman.',
     3: 'Spoolman does not have this spool any more. It may have been deleted there. Choose another spool, or do not send this amount.',
-    4: 'Nothing went wrong. This amount was sent before, but Spoolman’s answer never arrived. Spoolman may already have counted it. It is not sent a second time. You can only remove this entry from the list. If in doubt, check the weight of this spool in Spoolman.',
+    4: 'This amount was sent before, but Spoolman’s answer never arrived. Spoolman may already have counted it. It is not sent a second time. You can only remove this entry from the list. If in doubt, check the weight of this spool in Spoolman.',
   }
   for (const [id, text] of Object.entries(reasons)) assert.ok((await row(id).innerText()).includes(text), `reason text of entry ${id}`)
   assert.ok((await row(1).innerText()).includes('12.5 g'))
@@ -126,7 +126,7 @@ try {
   const stale = page.locator('[data-held-stale]')
   await stale.getByText('3 spools on this printer are still connected to the old Spoolman address.', { exact: true }).waitFor()
   await stale.getByText('The spools stay. Only the connection to Spoolman is removed, so no wrong spool gets an update. You can connect them again later. At the next sync, Spoolman’s spools are added here as new spools, so some spools may appear twice.', { exact: true }).waitFor()
-  await stale.getByText('Keep them if this is the same Spoolman under a new address. Until you choose, nothing from Spoolman is copied to these spools.', { exact: true }).waitFor()
+  await stale.getByText('Keep them if this is the same Spoolman under a new address. Until you choose, nothing from Spoolman is copied to these spools and no usage is sent to Spoolman. New usage is collected and handled after your choice.', { exact: true }).waitFor()
   assert.deepEqual(await stale.getByRole('button').allTextContents(), ['Keep connections', 'Remove old connections'])
 
   // 4. Send selected is locked until every chosen entry has a spool, and says why.
@@ -148,12 +148,12 @@ try {
   assert.deepEqual(writes, [['send', '1=7\n2=21']])
   assert.equal(await row(1).count() + (await row(2).count()), 0)
   assert.equal(await row(3).count(), 1)
-  await page.getByText('Sent to Spoolman.').waitFor()
+  await page.getByText('Sent to Spoolman.', { exact: true }).waitFor()
 
   // 6. Don't send: a question with its text and two buttons; Cancel changes nothing; confirming removes the entry only.
   await row(3).getByRole('button', { name: 'Don’t send', exact: true }).click()
   const ask = page.getByRole('dialog')
-  await ask.getByText('Don’t send 4.0 g? Spoolman will keep showing this amount as still on the spool. The spool on this printer keeps its lighter weight. This cannot be undone.', { exact: true }).waitFor()
+  await ask.getByText('Don’t send 4.0 g? Spoolman will keep showing this amount as still on the spool. At the next sync, the weight of the spool on this printer can go back to Spoolman’s figure. This cannot be undone.', { exact: true }).waitFor()
   assert.deepEqual(await ask.getByRole('button').allTextContents(), ['Cancel', 'Don’t send'])
   await ask.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.waitForFunction(() => !document.querySelector('[role=dialog]'))
@@ -195,7 +195,7 @@ try {
   language = 'de'
   await page.reload()
   await page.getByRole('heading', { name: 'Nicht an Spoolman gesendeter Verbrauch (4 Einträge)', exact: true }).waitFor()
-  assert.ok((await row(4).innerText()).includes('Es ist nichts schiefgegangen.'))
+  assert.ok((await row(4).innerText()).includes('Diese Menge wurde schon einmal gesendet, aber die Antwort von Spoolman kam nie an.'))
   assert.ok((await row(1).innerText()).includes(day('de', at - 2 * 86400)), 'German date')
   assert.equal(await row(2).getByRole('combobox', { name: 'Spool wählen: Silk Blue', exact: true }).count(), 1)
   assert.equal(await row(1).getByRole('button', { name: 'Nicht senden', exact: true }).count(), 1)
