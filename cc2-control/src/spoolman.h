@@ -561,7 +561,8 @@ typedef struct {
     long long time;                 /* wall clock seconds when it ended; 0 = no cycle yet */
     int reason, http;               /* SPOOLMAN_R_*: the first thing that went wrong, or OK; the HTTP status if it had one */
     int pages, read, offered;       /* list requests made, spools read, new spools handed to the library */
-    int unreadable, no_weight, library_full, too_large, no_material;   /* spools left out of the import, by reason */
+    int unreadable, no_weight, library_full, too_large;   /* spools left out of the import, by reason */
+    int no_material, no_colour;     /* imported spools that took the stand-in PLA / grey because Spoolman gave none usable */
     int archived_linked;            /* linked spools Spoolman has archived since (still synced, like any other) */
     int linked_no_weight;           /* linked spools whose weight Spoolman does not know (their text still syncs) */
     int orphans;                    /* linked spools Spoolman answered 404 for */
@@ -706,6 +707,7 @@ static int spoolman_pass_spool(const spoolman_spool *e, void *ctx) {
         spoolman_stage(&r);
         ps->staged++; cy->offered++;
         if (!e->material[0]) cy->no_material++;
+        if (!e->color[0]) cy->no_colour++;
     }
     return ps->staged >= batch->free_slots && ps->found_count == batch->known_count;
 }
@@ -1291,10 +1293,10 @@ static void spoolman_status_response(int fd) {
         "{\"enabled\":%s,\"configured\":%s,\"last_sync\":%lld,\"result\":\"%s\",\"http\":%d,"
         "\"unsent_spools\":%d,\"unsent_grams\":%.2f,\"inflight_spools\":%d,\"held_entries\":%d,\"held_grams\":%.2f,"
         "\"list\":{\"pages\":%d,\"read\":%d,\"new\":%d,\"unreadable\":%d,\"no_weight\":%d,\"library_full\":%d,"
-        "\"too_large\":%d,\"no_material\":%d},\"archived_linked\":%d,\"linked_no_weight\":%d,\"orphaned\":[",
+        "\"too_large\":%d,\"no_material\":%d,\"no_colour\":%d},\"archived_linked\":%d,\"linked_no_weight\":%d,\"orphaned\":[",
         spools.spoolman_enabled ? "true" : "false", spools.spoolman_url[0] ? "true" : "false", st.time,
         spoolman_reason_name[st.reason], st.http, unsent, grams, inflight, spools.held_count, held_grams, st.pages, st.read, st.offered,
-        st.unreadable, st.no_weight, st.library_full, st.too_large, st.no_material, st.archived_linked,
+        st.unreadable, st.no_weight, st.library_full, st.too_large, st.no_material, st.no_colour, st.archived_linked,
         st.linked_no_weight);
     for (int i = 0; i < st.orphans && i < SPOOLMAN_ORPHAN_MAX && n > 0 && (size_t)n < sizeof(text) - 64; ++i)
         n += snprintf(text + n, sizeof(text) - (size_t)n, "%s\"%s\"", i ? "," : "", st.orphan_ids[i]);

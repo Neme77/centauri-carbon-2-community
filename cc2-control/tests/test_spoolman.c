@@ -861,6 +861,30 @@ static void test_unreadable_spool_does_not_stop_the_import(void) {
     puts("PASS: elements that are not spools are skipped and counted; the spools after them are still imported");
 }
 
+static void test_the_stand_ins_of_an_import_are_counted(void) {
+    /* What Spoolman gives and the import cannot use is replaced by PLA / grey: the status says how often. */
+    const char *items[] = {
+        "{\"id\":1,\"remaining_weight\":500.0,\"used_weight\":1,\"filament\":{\"material\":\"PLA\",\"name\":\"Fine\",\"color_hex\":\"ff0000\"}}",
+        "{\"id\":2,\"remaining_weight\":500.0,\"used_weight\":1,\"filament\":{\"material\":\"PETG\",\"name\":\"No colour\"}}",
+        "{\"id\":3,\"remaining_weight\":500.0,\"used_weight\":1,\"filament\":{\"material\":\"PETG\",\"name\":\"Short\",\"color_hex\":\"f00\"}}",
+        "{\"id\":4,\"remaining_weight\":500.0,\"used_weight\":1,\"filament\":{\"material\":\"PETG\",\"name\":\"Hash\",\"color_hex\":\"#ff0000\"}}",
+        "{\"id\":5,\"remaining_weight\":500.0,\"used_weight\":1,\"filament\":{\"material\":\"\",\"name\":\"No material\",\"color_hex\":\"00ff00\"}}",
+        "{\"id\":6,\"remaining_weight\":500.0,\"used_weight\":1,\"filament\":{\"material\":\"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFG\",\"name\":\"Long\",\"color_hex\":\"0000ff\"}}",
+    };
+    fake_start(0, 0); fake.list_items = items; fake.list_n = 6; fake_launch();
+    setup_linked(0, 500);
+    spools.count = 0;
+    cycle();
+    assert(spools.count == 6);
+    spool_entry *no_colour = spool_find_by_spoolman_id("2"), *no_material = spool_find_by_spoolman_id("5"), *fine = spool_find_by_spoolman_id("1");
+    assert(no_colour && !strcmp(no_colour->color, "#808080") && !strcmp(no_colour->material, "PETG"));
+    assert(no_material && !strcmp(no_material->material, "PLA") && !strcmp(no_material->color, "#00FF00"));
+    assert(fine && !strcmp(fine->color, "#FF0000"));
+    get_status(); status_has("\"new\":6"); status_has("\"no_material\":2,\"no_colour\":3}");
+    fake_finish(); teardown_file();
+    puts("PASS: spools imported with the stand-in PLA or grey are counted in the status (no_material, no_colour)");
+}
+
 static void test_a_page_of_junk_does_not_end_the_import(void) {
     char **items = make_items(3, 50, 1);
     const char *mixed[24];
@@ -1691,6 +1715,7 @@ int main(void) {
     test_list_is_read_in_pages();
     test_page_too_big_is_halved();
     test_unreadable_spool_does_not_stop_the_import();
+    test_the_stand_ins_of_an_import_are_counted();
     test_a_page_of_junk_does_not_end_the_import();
     test_log_lines_follow_the_orphan_ids();
     test_cycle_without_time_says_so();

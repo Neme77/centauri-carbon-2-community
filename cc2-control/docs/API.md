@@ -1185,7 +1185,7 @@ reach the printer.
   a linked one keeps its weight and still takes the other fields.
 - `GET /api/spoolman` reports the last cycle: `{enabled, configured, last_sync, result, http, unsent_spools,
   unsent_grams, inflight_spools, held_entries, held_grams, list:{pages, read, new, unreadable, no_weight, library_full, too_large,
-  no_material}, archived_linked, linked_no_weight, orphaned:[ids], orphaned_count}`. `result` is `ok`, `unreachable`,
+  no_material, no_colour}, archived_linked, linked_no_weight, orphaned:[ids], orphaned_count}`. `result` is `ok`, `unreachable`,
   `unauthorized` (401), `forbidden` (403), `not_found`, `server_error`, `refused`, `bad_reply`, `too_large`, `timeout`,
   `bad_url`, or `never` before the first cycle. A linked spool Spoolman answers 404 for is listed in `orphaned`; only when it answers 404 in two cycles in a row does its usage go on the list of unsent usage (`held_entries`, `held_grams`); one 404 leaves it queued. A log line
   is written only when the result or the orphaned set changes.
