@@ -256,15 +256,25 @@ const CameraDock = ({ tall = false, preferences = false }: { tall?: boolean; pre
 }
 
 // Keep the same stream host when toggling persistence in the camera card.
+// `bare` is the picture alone (no card, head or buttons), started when it appears and ended when it goes away.
 export const CameraCard = ({
   tall,
   standalone,
   preferences,
+  bare,
 }: {
   tall?: boolean
   standalone?: boolean
   preferences?: boolean
-}) => (standalone ? <CameraStream tall={tall} standalone /> : <CameraDock tall={tall} preferences={preferences} />)
+  bare?: boolean
+}) =>
+  bare ? (
+    <CameraStream standalone bare />
+  ) : standalone ? (
+    <CameraStream tall={tall} standalone />
+  ) : (
+    <CameraDock tall={tall} preferences={preferences} />
+  )
 
 const CameraPreference = () => {
   const persistent = cameraPreferences.use().persistent
@@ -302,11 +312,13 @@ const CameraStream = ({
   standalone,
   preferences,
   dock,
+  bare,
 }: {
   tall?: boolean
   standalone?: boolean
   preferences?: boolean
   dock?: HTMLElement | null
+  bare?: boolean
 }) => {
   const persistent = cameraPreferences.use().persistent
   const keepAlive = useRef(persistent)
@@ -327,6 +339,7 @@ const CameraStream = ({
   if (!viewer.current) viewer.current = viewerId()
   const claimed = useRef(0) // when the backend confirmed this page's claim; 0 while it has none
   const starts = useRef(0)
+  const pausedHidden = useRef(false)
   const { data, at } = printer.use()
   const owner = data?.camera_viewer
   const clearRetry = () => {
@@ -365,7 +378,11 @@ const CameraStream = ({
     setSrc(next)
   }
   const start = async () => {
-    if (document.hidden && !keepAlive.current) return
+    if (document.hidden && !keepAlive.current) {
+      // The bare picture opened on a hidden page starts as soon as the page is shown.
+      if (bare) pausedHidden.current = true
+      return
+    }
     const attempt = ++starts.current
     clearRetry()
     live.current = true
@@ -415,14 +432,21 @@ const CameraStream = ({
   }, [persistent, on])
   useEffect(() => {
     const hidden = () => {
-      if (document.hidden && live.current && !keepAlive.current) stop('common.camera_paused_hidden')
+      if (document.hidden && live.current && !keepAlive.current) {
+        pausedHidden.current = true
+        stop('common.camera_paused_hidden')
+      } else if (!document.hidden && bare && pausedHidden.current) {
+        // The bare picture was opened by its own button: it comes back by itself when the page is shown again.
+        pausedHidden.current = false
+        void start()
+      }
     }
     const leaving = () => {
       if (live.current) stop('common.camera_paused_hidden')
     }
     document.addEventListener('visibilitychange', hidden)
     window.addEventListener('pagehide', leaving)
-    if (standalone) void start() // opening the camera window is the explicit start
+    if (standalone) void start() // opening the camera window (or the bare picture) is the explicit start
     return () => {
       document.removeEventListener('visibilitychange', hidden)
       window.removeEventListener('pagehide', leaving)
@@ -431,6 +455,69 @@ const CameraStream = ({
       release()
     }
   }, [])
+  const frame = (
+    <div
+      class={cn(
+        'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
+        bare
+          ? 'cc2-camera-bare size-full'
+          : standalone
+            ? 'min-h-[calc(100dvh_-_7rem)]'
+            : tall
+              ? 'min-h-80'
+              : 'aspect-video',
+        !ready && 'cc2-camera-paused'
+      )}
+    >
+      {!ready && <div class="cc2-camera-grid" aria-hidden="true" />}
+      {!ready && (
+        <div class="cc2-camera-idle-controls absolute inset-x-0 z-10 max-w-full px-4 py-3 text-center text-muted">
+          {(on || note) && (
+            <p class="text-xs">
+              {on
+                ? t(
+                    gaveUp
+                      ? 'common.camera_gave_up'
+                      : failed
+                        ? 'common.camera_unavailable'
+                        : 'common.waiting_for_camera_stream'
+                  )
+                : note && t(note)}
+            </p>
+          )}
+          {!on && (!bare || (note && note !== 'common.camera_paused_hidden')) && (
+            <Button class="mt-2 text-xs" onClick={start}>
+              {t(note === 'common.camera_taken_over' ? 'common.camera_watch_here' : 'common.camera_start')}
+            </Button>
+          )}
+          {on && failed && (
+            <Button class="mt-2 text-xs" onClick={start}>
+              {t('common.camera_retry_now')}
+            </Button>
+          )}
+        </div>
+      )}
+      {on && src && (
+        <img
+          key={src}
+          ref={img}
+          src={src}
+          alt={t('common.cc2_live_camera')}
+          class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')}
+          onLoad={event => {
+            if (!current(event.currentTarget)) return
+            clearRetry()
+            tries.current = 0
+            setReady(true)
+            setFailed(false)
+            setGaveUp(false)
+          }}
+          onError={event => lost(event.currentTarget)}
+        />
+      )}
+    </div>
+  )
+  if (bare) return frame
   return (
     <Card class="cc2-camera-card flex flex-col">
       <CardHead
@@ -460,60 +547,7 @@ const CameraStream = ({
           </span>
         }
       />
-      <div
-        class={cn(
-          'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
-          standalone ? 'min-h-[calc(100dvh_-_7rem)]' : tall ? 'min-h-80' : 'aspect-video',
-          !ready && 'cc2-camera-paused'
-        )}
-      >
-        {!ready && <div class="cc2-camera-grid" aria-hidden="true" />}
-        {!ready && (
-          <div class="cc2-camera-idle-controls absolute inset-x-0 z-10 max-w-full px-4 py-3 text-center text-muted">
-            {(on || note) && (
-              <p class="text-xs">
-                {on
-                  ? t(
-                      gaveUp
-                        ? 'common.camera_gave_up'
-                        : failed
-                          ? 'common.camera_unavailable'
-                          : 'common.waiting_for_camera_stream'
-                    )
-                  : note && t(note)}
-              </p>
-            )}
-            {!on && (
-              <Button class="mt-2 text-xs" onClick={start}>
-                {t(note === 'common.camera_taken_over' ? 'common.camera_watch_here' : 'common.camera_start')}
-              </Button>
-            )}
-            {on && failed && (
-              <Button class="mt-2 text-xs" onClick={start}>
-                {t('common.camera_retry_now')}
-              </Button>
-            )}
-          </div>
-        )}
-        {on && src && (
-          <img
-            key={src}
-            ref={img}
-            src={src}
-            alt={t('common.cc2_live_camera')}
-            class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')}
-            onLoad={event => {
-              if (!current(event.currentTarget)) return
-              clearRetry()
-              tries.current = 0
-              setReady(true)
-              setFailed(false)
-              setGaveUp(false)
-            }}
-            onError={event => lost(event.currentTarget)}
-          />
-        )}
-      </div>
+      {frame}
       {!standalone && (
         <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-2">
           <Button

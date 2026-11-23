@@ -189,6 +189,77 @@
 }
 :root[data-theme="klipper"] nav a.text-cyan { box-shadow: inset 3px 0 0 var(--cyan); }
 :root[data-theme="klipper"] .cc2-main section h2 { text-transform: uppercase; letter-spacing: .06em; font-size: .8125rem; }
+/* Dune: a warm light theme. Sand-coloured page, cream-white cards with a firm warm edge and a deep teal accent, so white surfaces stand out without the cold blue of the other light themes. Every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="dune"] {
+  color-scheme: light;
+  --bg: #ebe0cf; --panel: #fffdf8; --edge: #bfae92; --text: #2a2118; --muted: #5e5039; --field: #f6efe2; --ink: #ffffff;
+  --cyan: #0a6b6b; --green: #2a6b1f; --amber: #7a4a00; --red: #a8262b; --blue: #1f5fa8;
+  --well: #2a2118; --well-fg: #fbf3e4;
+  --shadow-card: 0 1px 0 #fff inset, 0 1px 2px rgb(74 52 20 / .12), 0 12px 26px -14px rgb(122 74 0 / .45);
+  --shadow-pop: 0 14px 40px -8px rgb(74 52 20 / .34), 0 2px 8px rgb(74 52 20 / .14);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent), 0 2px 12px -2px color-mix(in srgb, var(--cyan) 34%, transparent);
+}
+:root[data-theme="dune"] body {
+  background:
+    radial-gradient(ellipse 55% 45% at 96% -8%, color-mix(in srgb, #ffc46b 46%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 40% at -4% 100%, color-mix(in srgb, #7fc9bd 30%, transparent), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  background-size: 100% max(100vh, 100%);
+}
+:root[data-theme="dune"] section.bg-panel { border-bottom: 2px solid color-mix(in srgb, var(--cyan) 45%, var(--edge)); }
+:root[data-theme="dune"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 11%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 35%, transparent); }
+/* Swamp: a dark theme in sickly, rotten greens. Near-black moss page, olive panels and a mouldy olive-lime accent; the "ok" status green is a cooler emerald so it never reads as the accent. Every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="swamp"] {
+  color-scheme: dark;
+  --bg: #10130b; --panel: #1a1f12; --edge: #46513a; --text: #eef0df; --muted: #aab38f; --field: #242b19; --ink: #10130b;
+  --cyan: #a9b83c; --green: #4fd18b; --amber: #e6a83c; --red: #ff8272; --blue: #74b4d6;
+  --well: #0a0c06; --well-fg: #eef0df;
+  --shadow-card: 0 0 0 1px color-mix(in srgb, #a9b83c 10%, transparent), 0 10px 26px -14px #000d;
+  --shadow-pop: 0 14px 40px -8px #000d, 0 0 0 1px color-mix(in srgb, #a9b83c 24%, transparent);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 50%, transparent), 0 0 16px -4px color-mix(in srgb, var(--cyan) 45%, transparent);
+}
+:root[data-theme="swamp"] body {
+  background:
+    radial-gradient(ellipse 60% 42% at 4% -6%, color-mix(in srgb, #8a9a2a 26%, transparent), transparent 70%),
+    radial-gradient(ellipse 55% 40% at 100% 100%, color-mix(in srgb, #6b5a1e 30%, transparent), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  background-size: 100% max(100vh, 100%);
+}
+:root[data-theme="swamp"] section.bg-panel { border-left: 2px solid color-mix(in srgb, var(--cyan) 38%, var(--edge)); }
+:root[data-theme="swamp"] nav a.text-cyan,
+:root[data-theme="swamp"] button[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+:root[data-theme="swamp"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 12%, var(--panel)); }
+:root[data-theme="swamp"] .cc2-dashboard .text-2xl:not(h2),
+:root[data-theme="swamp"] .cc2-job-stats strong { color: var(--amber); }
+/* KlipperScreen: a classic dark theme in the spirit of KlipperScreen's material-dark/"colourized" look: flat Material grey, large rounded buttons and cards, no shadows, and a different colour for each menu icon. The palette is an approximation, not KlipperScreen's exact CSS. Every text token is >= 4.5:1 on bg, panel and field; menu icons are >= 3:1. */
+:root[data-theme="klipperscreen"] {
+  color-scheme: dark;
+  --bg: #1e1e1e; --panel: #2b2b2b; --edge: #474747; --text: #f2f2f2; --muted: #b8b8b8; --field: #353535; --ink: #101820;
+  --cyan: #4da3ff; --green: #6fd183; --amber: #ffb84d; --red: #ff7b7b; --blue: #4dd0e1;
+  --well: #121212; --well-fg: #f2f2f2;
+  --radius-card: 18px;
+  --shadow-card: none;
+  --shadow-pop: 0 10px 30px -6px #000b, 0 2px 8px #0008;
+  --shadow-glow: none;
+}
+:root[data-theme="klipperscreen"] button.rounded-lg { border-radius: 14px; min-height: 2.5rem; }
+:root[data-theme="klipperscreen"] nav a { border-radius: 14px; }
+:root[data-theme="klipperscreen"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 16%, var(--panel)); }
+:root[data-theme="klipperscreen"] nav a[href="#dashboard"] svg { color: #4da3ff; }
+:root[data-theme="klipperscreen"] nav a[href="#control"] svg { color: #ffb74d; }
+:root[data-theme="klipperscreen"] nav a[href="#job"] svg { color: #81c784; }
+:root[data-theme="klipperscreen"] nav a[href="#files"] svg { color: #ba68c8; }
+:root[data-theme="klipperscreen"] nav a[href="#queue"] svg { color: #4dd0e1; }
+:root[data-theme="klipperscreen"] nav a[href="#history"] svg { color: #f06292; }
+:root[data-theme="klipperscreen"] nav a[href="#bed"] svg { color: #aed581; }
+:root[data-theme="klipperscreen"] nav a[href="#canvas"] svg { color: #ff8a65; }
+:root[data-theme="klipperscreen"] nav a[href="#spools"] svg { color: #9fa8da; }
+:root[data-theme="klipperscreen"] nav a[href="#console"] svg { color: #b0bec5; }
+:root[data-theme="klipperscreen"] nav a[href="#settings"] svg { color: #ffd54f; }
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400-700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
@@ -333,10 +404,6 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 .cc2-page-content { min-width: 0; }
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
   .cc2-page-content { max-width: 1440px; margin-inline: auto; }
-  .cc2-job-primary { align-items: stretch; }
-  .cc2-job-primary .cc2-camera-frame { min-height: 0; height: 240px; }
-  .cc2-job-primary > section:last-child { gap: 0; }
-  .cc2-job-primary .cc2-job-stats { margin-bottom: 12px; }
 }
 
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
@@ -431,7 +498,8 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   opacity: .6;
 }
 
-/* A single physical bed view; all drawing stays in the browser and has no animation. */
+/* A single physical bed view; all drawing stays in the browser and stays still but for the loading dot. */
+.cc2-camera-frame.cc2-camera-bare { height: 100%; min-height: 0; }
 .cc2-object-map-frame { max-width: 480px; margin-inline: auto; }
 .cc2-object-map-plate {
   border: 1px solid var(--edge);
@@ -455,6 +523,8 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   stroke-width: 1;
   stroke-linejoin: round;
 }
+.cc2-object-map-outline-pick { pointer-events: all; cursor: pointer; }
+.cc2-object-map-outline-pick:hover { fill-opacity: .24; stroke-width: 1.6; }
 .cc2-object-map-outline[data-current="true"] { fill: var(--amber); stroke: var(--amber); stroke-width: 1.6; }
 .cc2-object-map-outline[data-selected="true"] { fill: var(--cyan); stroke: var(--cyan); fill-opacity: .25; }
 .cc2-object-map-outline[data-excluded="true"] { fill: var(--red); stroke: var(--red); fill-opacity: .05; stroke-dasharray: 3 2; }
@@ -486,29 +556,43 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 .cc2-object-map-marker[data-excluded="true"] { border-color: var(--red); color: var(--red); text-decoration: line-through; opacity: .65; }
 .cc2-object-map-marker:disabled { cursor: not-allowed; }
 .cc2-object-map-marker:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+/* On the layer path the number keeps the look it has on the Objects tab and only moves beside the object:
+   its right edge sits at the anchor, so it never covers the object's lines. */
 .cc2-object-map-marker[data-layer-badge="true"] {
   z-index: 2;
-  width: 18px;
-  height: 18px;
-  border-width: 1px;
-  border-radius: 5px;
-  font-size: 10px;
-  opacity: .55;
-  box-shadow: none;
-}
-.cc2-object-map-marker[data-layer-badge="true"][data-current="true"]:not([data-excluded]) {
-  outline-width: 1px;
-  outline-offset: 2px;
-  box-shadow: none;
+  transform: translate(-100%, 50%);
 }
 .cc2-object-map-list { max-height: 300px; }
 .cc2-object-map-expanded .cc2-object-map-frame {
   max-width: min(680px, calc(100vh - 22rem));
 }
 .cc2-object-map-expanded .cc2-object-map-plate { padding: 14px; }
+.cc2-object-map-embedded .cc2-object-map-frame { max-width: min(760px, 100%); }
 .cc2-object-map-expanded .cc2-object-map-list { max-height: min(480px, calc(100vh - 22rem)); }
-.cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline { fill-opacity: .08; }
-.cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline[data-selected="true"] { fill-opacity: .16; }
+.cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline { fill: none; stroke-width: .6; }
+/* The layer path keeps the outlines thin and unfilled so its lines stay readable; the colours are those of the
+   Objects tab: current amber, excluded red and dashed, selected cyan. */
+.cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline[data-current="true"] { stroke-width: 1.2; }
+.cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline[data-excluded="true"] { stroke-width: 1; }
+/* The layer path keeps the outlines thin; the selected object still has to stand out from the lines inside it. */
+.cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline[data-selected="true"] {
+  fill: var(--cyan);
+  fill-opacity: .1;
+  stroke-width: 1.4;
+}
+.cc2-object-preview-stage {
+  display: grid;
+  place-items: center;
+  height: clamp(150px, 26vh, 240px);
+}
+.cc2-object-preview-line {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
 @container page (min-width: 900px) {
   .cc2-object-map-expanded .cc2-object-map-layout { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
 }
@@ -520,6 +604,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
+.cc2-layer-path-skipped { stroke: var(--muted); stroke-width: 1.25px; opacity: .3; }
 .cc2-layer-path-prev { stroke: var(--muted); stroke-width: 2.5px; opacity: .28; }
 .cc2-layer-path-remain { stroke-width: 1.25px; opacity: .35; }
 .cc2-layer-path-printed { stroke-width: 2.75px; opacity: 1; }
@@ -542,17 +627,42 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   border-radius: 1px;
   background: var(--cyan);
 }
+.cc2-layer-nozzle-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cyan);
+  border: 2px solid var(--ink);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 55%, transparent);
+}
+.cc2-layer-loading-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: cc2-layer-loading-pulse 1s ease-in-out infinite;
+}
+@keyframes cc2-layer-loading-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .cc2-layer-loading-dot { animation: none; } }
 .cc2-layer-path-status {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 2;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--field) 78%, transparent);
-  color: var(--text);
-  font-size: 14px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--field) 85%, transparent);
+  color: var(--muted);
+  font-size: 12px;
   pointer-events: none;
 }
+.cc2-layer-path-stale { opacity: .35; }
+.cc2-layer-path-direction { fill: var(--cyan); opacity: .7; }
 
 /* Keep the compact query identical to COMPACT in components/layout.tsx: the sheet starts
    below the header so the emergency stop stays visible and tappable on a phone. */
@@ -627,12 +737,12 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 60%, #315061), color-mix(in srgb, var(--bg) 55%, #132a36));
 }
 .cc2-camera-idle-controls { bottom: 2px; }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused {
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused {
   background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 58%), linear-gradient(145deg, #e9f1f4, #dce8ed);
 }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-grid { opacity: .12; }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-grid { opacity: .12; }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
 
 /* Fit the slider into the existing heading space instead of adding another card row. */
 .cc2-tuning-field > .cc2-tuning-heading {

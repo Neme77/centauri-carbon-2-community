@@ -176,6 +176,9 @@ jobs:
           npm run test:rotation-restore
           npm run test:motor-mode
 
+      - name: ElegooSlicer guide in the Integrations settings
+        run: npm run test:elegooslicer-guide
+
       - name: Canvas states and explicit recovery loading
         run: npm run test:canvas-states && npm run test:canvas-layout && npm run test:canvas-reset
 
@@ -192,7 +195,7 @@ jobs:
         run: npm run test:file-library
 
       - name: Single object map, original IDs and responsive expansion
-        run: npm run test:object-layout && npm run test:bed-map && npm run test:layer-path-flow
+        run: npm run test:object-layout && npm run test:bed-map && npm run test:layer-path-flow && npm run test:object-preview
 
       - name: Sidebar geometry and accessible navigation regression
         run: node preview/test-ui-polish.mjs
@@ -211,6 +214,12 @@ jobs:
 
       - name: Mesh-guided screw alignment (plane fit and display)
         run: npm run test:mesh-align
+
+      - name: Bed alignment (screw measurements, turn display, layout, session and calibration bars)
+        run: npm run test:bed-alignment
+
+      - name: Console poll (unchanged answers) and screw view cadence
+        run: npm run test:console-poll
 
       - name: Library mesh selection and guarded activation
         run: npm run test:mesh-selector

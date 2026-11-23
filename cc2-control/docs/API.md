@@ -247,6 +247,168 @@ the previous page stops on its next existing printer-state poll. Brief overlap d
 A page streaming live view stops when `camera_viewer` names another page, and offers to take the camera back. The
 camera service itself is unchanged: other clients connected directly to port 8080 are not affected.
 
+## A new print starts clean
+
+`GET /api/printer` reports `print.current_layer`, `print.duration`, `print.total_duration`, `print.remaining` and `machine.progress` of the
+running print only (for `print.remaining`, the estimate from the file stands in while the printer has not reported one, see `remaining_source`). When a new print begins they go back to 0 until the printer reports a new value, also when
+it prints the same file as before (before, the layer of the previous print was still shown right after a start).
+MQTT tells a new print by its job uuid (`print.uuid`) differing from the last non-empty one; the printer's direct
+status stream (`print.native`, UDS) tells it by `print_stats.state` going from `standby`, `complete`, `cancelled` or
+`error` to `printing`. A pause and resume, a reconnection in the middle of a print and the first value after the
+service starts do not reset anything. The direct stream's filament use is dropped the same way.
+
+## Layer path
+
+`GET /api/gcode-files/layer-path?storage=internal&file=<name>&layer=<n>` returns the thinned extrusion path of one
+layer. Answers: 200 with the path; 400 for a malformed request (`Invalid layer`, `Invalid protected G-code path`);
+404 for a file that is not there or a layer outside it; 413 when the scan reached its time or size limit
+(`Layer path scan limit reached`; after a scan from the start of the file the same or a higher layer of that file is refused at once for 300 s, unless a current layer map serves it, and a limit hit while reading through the map refuses only that layer for 300 s) or the
+path is too large; 503 `Layer path busy; retry shortly` while another scan runs or rests after the last one (the
+page retries it); 503 `Printer is homing or starting a print; retry shortly` during the read hold (see
+[G-code reads while the printer homes](#g-code-reads-while-the-printer-homes)); 500 for a read error.
+
+While a print runs, a request for **the file of that print** (`storage=internal` and the printer's file name) is
+refused with **409 Conflict** before any G-code is read when it cannot belong to the print:
+
+- `Layer is beyond the running print`: the layer is above the print's layer count (the count the printer reports,
+  else the one found in the G-code file; no count known, no check).
+- `The running print has not reached that layer`: the layer is above 1 and `print.current_layer` of
+  `GET /api/printer` (the direct stream's value when it has one) is still below 1. A new print resets that value,
+  so a layer left over from the print before (seen: layer 193, a 20 s scan of 78.7 MB right after a start) is not read.
+
+A print counts as running while the printer is fresh (last message within 15 s), `machine.status` is 2 and the
+state is `printing` or `paused`. Requests for any other file, for the USB storage, and every request while no
+print runs (browsing by hand) are answered as before, apart from the read hold. The 409 is not retried by the
+page, unlike the 503. The 409 refusals come before the read hold: a request they refuse is answered 409 as before.
+
+`GET /api/health` counts this work, in memory only (the counters start at 0 with the service and hold no file
+names, paths or other private data):
+
+| Member | Meaning |
+|---|---|
+| `layer_path_scans` | Scans the worker ran, including those that ended in 404 or 413. An answer from the remembered layer, or a refusal before reading, is no scan. |
+| `layer_path_rejected` | Requests refused with 409 as not fitting the running print. |
+| `layer_path_busy` | 503 `Layer path busy` answers (another scan running, the pause after the last one, or the scan worker could not be started). |
+| `layer_path_bytes_read` | Bytes the scans read from the files, counted from where each scan started (a remembered layer start, or the offset of the layer in its layer map, is skipped, not read). |
+| `layer_path_longest_ms` | The longest scan, in milliseconds, from its start to the end of reading. |
+| `layer_path_last_ms` | The last scan, in milliseconds. |
+| `gcode_read_blocked` | Requests of the layer path, the object preview and `POST /api/gcode-files/thumbnail` answered 503 by the read hold before anything was read, and scans of the running print's file the hold kept from starting (once per withheld scan). |
+| `gcode_read_stopped` | Layer-path and object-preview scans that the read hold ended while they read (counted in `layer_path_scans` as well), and scans of the running print's file it ended. |
+| `layer_map_hits` | Layer scans answered through the file's layer map (see *Layer index storage*). |
+| `layer_map_fallbacks` | Layer scans that read the file from its start: no current map yet, a map the index cannot serve, or a USB file. `layer_map_hits` + `layer_map_fallbacks` = the scans that read a file for one layer. |
+| `layer_map_built` | Maps the background builder wrote since the start. |
+| `layer_map_failed` | Map builds that failed (for example on full storage). |
+| `layer_map_bad` | Requests that found a current map whose stored offset for the layer was no layer marker; they were answered by the full scan. |
+
+The object preview below shares these counters: its scans count as `layer_path_scans` (with their bytes and
+times), its busy answers as `layer_path_busy` and its start-protection refusals as `layer_path_rejected`.
+
+## Layer index storage
+
+At startup, CC2 Control accepts `--layer-index-dir <path>` to store per-file layer maps (built in the background while the printer is idle) outside the G-code folders. The default is a `layer-index` directory next to CC2 Control's preferences. A map is keyed to the G-code file by size, change time, inode and the content of its first and last 64 KiB, holds at most 8192 layers, and is removed when the G-code file is deleted through CC2 Control; the 64 newest maps are kept, older ones (for example of files removed on the printer's screen) are dropped after the next map is saved. A build that fails (for example on full storage) is not started again by a layer request for ten minutes; an upload, copy or import of the file tries at once. A minute after the start, at the first idle time, the 32 newest files of the internal storage are queued for their maps (the first open of a file would otherwise pay the full scan). The map file carries a CRC-32 of its contents and the sizes of its records; a damaged map, one of an older version or one written by other code counts as stale and is rebuilt. Before a layer is read through the map, the line at the stored offset must be a layer marker; if it is not, that request reads the file from the start (counted as a fallback and in `layer_map_bad`), and the first time for a file the map is deleted and the file queued for a new one (not again for the same file until the program restarts, the last 16 files being remembered, so a map that is built wrong again cannot cause a loop). A file of 2 GiB or more (see *Files of 2 GiB or more*) gets no map. A file without a current map is read with the full scan as before; the layer-path reply does not change.
+
+## Object preview
+
+`GET /api/gcode-files/object-preview?storage=internal&file=<name>&object=<name>` returns the coarse 3D shape of one
+print object: the outer wall of a few of its layers. `storage` (`internal` or `usb`, default `internal`) and
+`file` are checked like the layer path's; `object` is a name from `EXCLUDE_OBJECT_DEFINE NAME=…` (OrcaSlicer,
+ElegooSlicer, PrusaSlicer). Example:
+
+```json
+{"storage":"internal","file":"part.gcode","object":"Box_id_0_copy_0","layers":89,"step":4,"z_max":25.6,
+ "bounds":[22.63,106.4,64.78,148.55],"rings":[{"z":0.2,"paths":[[33.38,144.36,32.86,144.5,…]]},…],
+ "truncated":false,"objects":["Box_id_0_copy_0","Lid_id_1_copy_0"]}
+```
+
+- The first request for a file reads it once, to the end, and collects every object; the result is kept in
+  memory. Later requests for that file (same device, inode, size and modification time), for any object, are
+  answered from memory without reading, also during the pause after a scan and during the read hold.
+- An object's moves are those between `EXCLUDE_OBJECT_START NAME=…` and `EXCLUDE_OBJECT_END`; a `START` without
+  a `DEFINE` adds the object. Only the outer wall counts: extrusions while the last `;TYPE:` comment is
+  `Outer wall` or `Overhang wall` (OrcaSlicer, ElegooSlicer), `External perimeter` or `Overhang perimeter`
+  (PrusaSlicer) or `WALL-OUTER` (Cura). A file without any `;TYPE:` comment counts every extrusion inside an
+  object. Arcs (G2/G3), relative and absolute extrusion are read as by the layer path.
+- `layers` is the number of layers in which the object has outer wall (n; layers are numbered by the layer
+  marks, without them each new height is a layer). `step` is max(3, ceil(n / 24)), rounded up to a multiple of
+  the step the scan had to keep (1, 2, 4 …: while reading at most 96 layers per object are kept, then every
+  second one goes); `rings` holds the first object layer and every `step`-th after it, at most 24. For example
+  n = 21, 65, 89, 128, 523 give steps 3, 3, 4, 6, 24 and 7, 22, 23, 22, 22 rings.
+- A ring is its layer's height `z` and its outer-wall paths as flat `[x, y, x, y, …]` lists in bed millimetres.
+  A ring holds at most 128 points over all its paths (at most 64 paths): points closer than 0.5 mm to the last
+  kept one are left out, and the distance doubles while a ring would run over; the start and the end of each
+  path stay. Points are stored in steps of 0.02 mm; numbers carry at most two decimals.
+- `z_max` is the object's highest layer and `bounds` its `[xmin, ymin, xmax, ymax]` over all its outer-wall
+  moves; both are `null` for an object without outer wall (`layers` 0, `rings` empty). `objects` lists every
+  object of the file in the order they appear. `truncated` is `true` when the file defines more than 64 objects
+  or a name longer than 127 bytes (those are left out), or when a ring had more paths than it holds or a point
+  lay outside ±655 mm.
+
+Errors, as `{"error":"…"}`:
+
+| Status | Error | When |
+|---|---|---|
+| 400 | `Invalid protected G-code path` / `Invalid object` | Malformed request, unknown parameter, unsafe path, `object` missing or empty. |
+| 404 | `G-code file unavailable` | The file is not there. |
+| 404 | `No objects in the G-code file` | The file has no `EXCLUDE_OBJECT_DEFINE` or `EXCLUDE_OBJECT_START`. |
+| 404 | `Object not found` | The file has objects, but not this one. |
+| 409 | `Object preview waits for the print start` | While a print runs, a request for **that print's file** (`storage=internal`) before the service has seen layer 1 (the layer path's `The running print has not reached that layer` rule; layer numbers play no part here). Nothing is read. |
+| 413 | `Object preview file too large` | The file is larger than 50 MiB (52428800 bytes); it is not read. |
+| 413 | `Object preview scan limit reached` | The scan took longer than 20 s. For 300 s afterwards that file (unchanged) is refused at once, for any object. |
+| 503 | `Object preview busy; retry shortly` | A layer-path or object-preview scan runs, or the pause after the last one lasts. |
+| 503 | `Printer is homing or starting a print; retry shortly` | The read hold (see below): no read begins, and a read that runs when it comes on ends with this answer and is not kept. |
+| 503 | `Out of memory` | Memory ran out; nothing is kept and the next request reads again. |
+| 500 | `Cannot read the G-code file` | A read error. |
+
+The scan runs on the layer path's single worker (a layer-path scan then answers `Layer path busy`, and the other
+way round), at its lower priority and followed by its pause. One file is kept at a time; it is dropped, and its
+memory freed, when another file is scanned, when the file changes, 30 minutes after the last request to this
+route (checked on every pass of the main loop), when a print of another file starts (a new job uuid, or the
+direct stream going from an idle state to `printing`) and when a print ends (`printing` or `paused` turning into `standby`,
+`complete`, `cancelled` or `error`). What is kept for the file of the print that starts stays: the request for
+it is still refused until layer 1 and is then answered from memory instead of a second read. A read of that file
+that is still running when the print starts is ended by the read hold and read again after layer 1.
+It holds at most 64 objects × 24 rings × 128 points.
+
+## G-code reads while the printer homes
+
+Seen on the printer on 12 and 18 November 2026 (#396): while the printer homed for a print start, a long read of a large
+G-code file on the printer's two small cores came with the MCU shutdown `Timer too close` (error 803), and the
+printer program crashed. So while the printer homes, levels, probes or starts a print, CC2 Control begins no read of
+a G-code file for the layer path, the object preview or `POST /api/gcode-files/thumbnail` (the picture a slicer
+embedded, read from up to the first 4 MiB of the file), whichever file is asked for. Those requests are answered
+**503** `{"error":"Printer is homing or starting a print; retry shortly"}`. The hold is on while
+
+- MQTT reports `machine.status` 5 (Auto leveling), 7 (Resonance test), 8 (Self check) or 10 (Manual homing);
+- a print has not reached layer 1: `machine.status` 2, state `printing` or `paused`, and `print.current_layer` of
+  `GET /api/printer` (the direct stream's value when it has one) below 1, which covers heating, homing, probing and
+  the purge of the start;
+- a console job of CC2 Control runs whose command homes or probes (a line starting with `G28`, `G29`, `G180`,
+  `PROBE`, `PROBE_…`, `BED_MESH_CALIBRATE`, `SCREWS_TILT_CALCULATE`, `Z_TILT_ADJUST`, `SHAPER_CALIBRATE` or
+  `TEST_RESONANCES`), for example the screw tramming session, because MQTT reports such a job a poll later;
+- the bed mesh calibration of CC2 Control homes or probes (not while it heats or soaks).
+
+The MQTT states count only while the printer is connected, registered and fresh (last message within 15 s, like
+the other checks): without the printer nothing is held, so files can still be browsed, and a printer that stops
+reporting releases the hold after 15 s. What is remembered is still answered (the layer path's last layer and its
+scan-limit answer, the object preview's file and its size and limit answers); the 409 refusals for the running
+print's file come first. A layer-path or object-preview scan that runs when the hold comes on ends at its next line
+(the main loop passes the hold on at least once a second) with this 503; nothing of it is kept as a result. A
+picture is read on the request thread and cannot be ended that way; its read keeps the service's priority, because
+lowering it would also slow the main loop (MQTT, the emergency stop) and going back needs privileges. The page waits
+and asks again every 3 s with the text "Waiting until the printer is ready…" (layer path, object preview); the
+picture queue rests 3 s after such an answer and then asks for the same picture again. `gcode_read_blocked` and
+`gcode_read_stopped` in `GET /api/health` count the answers.
+
+The same hold applies to the scan of **the running print's file** that finds its layer count and print time for
+`GET /api/printer` (`print.total_layers` when the printer reports none, the remaining time from the file). Seen on the
+printer on 18 November 2026: that scan of a 52 MB file (about 21 s) ran into the homing of the print start, then
+error 803; when it had ended 12 to 15 s earlier, there was none. While the hold is on, `GET /api/printer` (and the
+layer path's 409 check) start no such scan and leave nothing pending; `total_layers` is then the count the printer
+reports, or 0. The first call after the hold starts it. A scan that runs when the hold comes on ends at its next
+check (every 64 KiB) without a result and is started again after the hold. The scan runs at the layer path's lower
+priority on the analysis worker; because that worker also serves `inspect` and `metadata`, the priority is lowered
+only when it can be set back (root, or `RLIMIT_NICE` allows it) and is set back after the scan.
+
 ## G-code file list and uploads
 
 `GET /api/gcode-files` lists each storage (`internal`, `usb`) as
@@ -427,34 +589,123 @@ Manual temperature targets were validated during an active print on a physical C
 
 ## Interactive screw tramming
 
-`POST /api/control` accepts `screws:tram:start`, `screws:tram:probe:<FL|FR|RR|RL>[:2]`,
-`screws:tram:check[:2]` and `screws:tram:end`. Coordinates are taken from a fixed
-corner table; unknown IDs are refused. Start homes all axes (`G28`) and uses the
-same bed prep as `screws:measure`. Re-probe and the four-corner check home Z only
+`POST /api/control` accepts `screws:tram:start[:<C>[:2]]` (a trailing `:2` after an explicit target probes every corner twice:
+`2× 3 probes`; the page shows one value per corner, the average of both results, the history keeps both), `screws:tram:probe:<FL|FR|RR|RL>[:2]`,
+`screws:tram:check[:2]` and `screws:tram:end`. `<C>` is the bed target, a whole number of degrees from
+0 to 110 (the touchscreen's bed limit) written with digits only; without it the target is 60 °C, and any other value is refused. Coordinates are taken from a fixed
+corner table, the centres of the four bed screws (FL X27.9 Y25.95, FR X227.15 Y25.95, RR X227.15 Y225.5,
+RL X27.9 Y225.5, laid out as one rectangle); unknown IDs are refused. Start homes all axes (`G28`) and uses the
+same bed prep as `screws:measure` (right after a bed mesh it homes only Z, see "Directly after a bed mesh" below). Re-probe and the four-corner check home Z only
 (`G28 Z`), and only while a session is active with X and Y homed. Every session
 measurement, the start included, then waits 30 s (`G4 P30000`; the firmware's `G4`
 ignores `S`) before its first probe. Each start/re-probe/check script restores `CC2_SCREW_TRAM` gcode state,
-switches the nozzle off (`M104 S0`) and keeps the bed at 60 °C. `GET /api/printer`
-reports `screws_session.active` and `screws_session.xy_homed`. While the session's own
+switches the nozzle off (`M104 S0`) and keeps the bed at the session's target (`M140 S<C>`). `GET /api/printer`
+reports `screws_session.active`, `screws_session.xy_homed` and `screws_session.bed` (the bed target in
+whole °C the running session measures at, `null` without a session). While the session's own
 job runs, and for 15 s after it completed, the printer may report Manual homing or
 Auto leveling instead of Idle; the session accepts those two states only then. The
-session is cleared on disconnect, console error, timeout, emergency stop, any other
-machine state, `screws:measure` or end. The firmware switches an idle bed off 15 minutes
-after the last command, so between jobs the session sends `M140 S60` again every ten
+session is cleared on disconnect, console error, timeout (10 minutes without a session action), emergency stop, print start,
+lost X/Y homing, `heaters:off`/`system:heaters_off`, a bed mesh calibration started between two measurements, any other
+machine state or end. A running session is never replaced: `screws:tram:start` is refused with 409 while a session is
+active (`A screw session is already running: end it first`), and so is every `screws:measure` form (`A screw session is
+running: measure and re-probe there, or end it first`; the one-corner form says `re-probe the corner there`).
+The firmware switches an idle bed off 15 minutes
+after the last command, so between jobs the session sends `M140 S<C>` again every ten
 minutes (retried after 30 s if not delivered), only while the printer is idle and
-telemetry still shows the 60 °C target. End switches both heaters off. After any other
+telemetry still shows the session's target. The restart marker holds that target, so a bed a
+killed process left at it is switched off by the next one; an empty marker from an earlier
+version stands for 60 °C. End switches both heaters off. After any other
 invalidation `TURN_OFF_HEATERS` stays pending and is retried until it is delivered
 while the printer is idle and the console free; a print start or a queued heater
-action (temperature, preset, preheat, PID, heaters off, a new tram start) cancels it.
-`screws:measure` is unchanged.
+action (temperature, preset, preheat, PID, heaters off, a new tram start, a hold time) cancels it.
+A bed hotter than the target by more than 2.5 K (the printer's own report, for a target of 5 °C or more) is cooled first,
+before the nozzle is cleaned (`G180 S3`): the script waits with `M190 S<C-2.5>` and then sets `M140 S<C>`. A bed up to
+2.5 K above the target starts as it is. The printer's `M190`
+releases once the bed is within 5 K of its target and no longer changing fast (the firmware's PID settle window), so a
+plain `M190 S<C>` would release a cooling bed up to 5 K early, and the wait above releases it at `<C>` + 2.5 K; after
+such a wait the quick measurements hold 15 s (`G4 P15000`) at the target. This
+applies to the session start and to every quick measurement. The session's idle limit (10 minutes) counts only while no
+job runs and starts again when a job ends. The one-shot `screws:measure[:<C>]` heats and waits for the bed at `<C>` (60 °C without it) and
+switches both heaters off afterwards. A trailing `:2` after an explicit target (`screws:measure:<C>:2`,
+`screws:measure:corner:<FL|FR|RR|RL>:<C>:2`) probes every point of the measurement twice (`2× 3 probes`,
+as `check:2` and `probe:<ID>:2`); a lone `:2` is the target 2 °C. The one-corner form
+`screws:measure:corner:<ID>[:<C>[:2]]` measures front left (the reference) and that corner; when X and Y
+are still homed it homes only Z (`G28 Z`), waits for the bed (`M190`) and for 30 s (`G4 P30000`) and does not
+run the nozzle cleaning (`G180 S3`) again, otherwise it prepares as the four-corner measurement does.
+
+The nozzle reaches its probing temperature through the measurement's own preparation: `G180 S3` (the firmware's
+cleaning, which homes and ends at 140 °C), `G28` and `G28 Z` (the firmware's homing heats the nozzle to 140 °C).
+While the printer stands idle the firmware switches the nozzle off after 300 s and the bed 600 s later; the measurements
+heat both again themselves.
+
+**Hold time.** `screws:soak:<M>:<measurement>` holds the bed at the measurement's target for `<M>` minutes before
+`<measurement>` starts. `<M>` is 0 to 60, one or two digits (the soak limit of `/api/plates/calibrate`);
+`<measurement>` is `screws:measure[:<C>[:2]]`, `screws:measure:corner:<ID>[:<C>[:2]]` or `screws:tram:start[:<C>[:2]]`.
+With `0` it runs exactly as without the prefix: the same script and the same answer. Other minutes answer 400
+(`Screw hold time must be a whole number of minutes from 0 to 60, followed by the measurement`), and so does any other
+action after the prefix, the session's `screws:tram:probe` and `screws:tram:check` included (`A hold time is only
+available for screws:measure and screws:tram:start`); a measurement longer than 95 characters after the prefix answers
+400 (`Invalid action`). Every check of the measurement runs when the hold time is accepted, with the same 409 as without
+it (printing, not idle, a running session, a malformed target, a busy console, and the refusals of every printer change
+while maintenance, an RFID lifecycle or scan, a firmware calibration tool, the load-cell session, an application update
+or network change, bed heating or the nozzle expansion calibration runs), and again when the hold time ends. After an
+emergency stop, until CC2 Control restarts, a hold time answers 409 (`An emergency stop was sent: restart the printer
+before a hold time`) and nothing is sent. CC2 Control then sets the bed target through the console (`M140 S<C>`; the answer is
+`{"accepted":true}`), waits until telemetry reads the bed at the target (at most 1 K below it and, for a target of 5 °C
+or more, at most 2.5 K above it, so a hotter bed cools first), and counts the hold time down with the console free (no
+`G4`). It sends `M140 S<C>` again every ten minutes while fresh MQTT reports Idle and fresh telemetry shows its target
+(the firmware's idle bed shutdown; a failed send is retried after 30 s). At the end it waits for a console command typed
+meanwhile, then up to a minute for MQTT Idle within 15 s and the bed at its target, runs the checks again and starts the
+measurement with its unchanged script, cancellable as usual. It never touches the nozzle. The job needs no open page;
+a restart of CC2 Control ends it, and the bed then stays at its target until the firmware switches it off 15 minutes
+after the last command, as after a calibration that a restart ended.
+
+`screws:cancel` ends the hold time at once (`202`). A print start, an emergency stop, `heaters:off`,
+`system:heaters_off`, `system:all_off`, another accepted screw action (`screws:tram:end`), a bed mesh calibration,
+another machine state than Idle or a bed target set elsewhere end it as well. The bed is switched off (`M140 S0`) when
+the job is cancelled or fails itself (the bed does not reach the target within 30 minutes, its `M140` fails, the evidence
+at the end stays missing for a minute, the checks at the start refuse the measurement, the console stays busy for a
+minute after the end), and only while fresh MQTT reports Idle and fresh telemetry shows the job's target; a job cancelled
+before its own `M140` reached telemetry switches the bed off once telemetry shows it, within 15 s. While it runs, every
+`screws:measure…` and `screws:tram:start…`, with or without a hold time, answers 409 (`A screw measurement is waiting for
+its bed hold time: cancel it first`), and so does `POST /api/plates/calibrate` (`A screw measurement is waiting for its
+bed hold time`). The starts of those sessions answer the same 409 (`A screw measurement is waiting for its bed hold
+time: cancel it first`): `POST /api/nozzle-expansion/start`, `/api/bed-drying/start`, `/api/bed-drying/preheat`,
+`/api/calibration-tools/action`, `/api/app-update/upload`, `/api/app-update/download`, `/api/app-update/install`,
+`/api/network/action`, `/api/network/scan`, `/api/rfid/action` and `/api/rfid/lifecycle/action`. A session that
+CC2 Control does not start itself (maintenance by the installer) is found by the checks when the hold time ends. A
+session start that the console refuses at the end is tried again without starting a session, so no `end_reason` is
+recorded for it. `GET /api/printer` reports `screws_soak`: while it runs
+`{"active":true,"stage":"heating"|"soaking","bed":<C>,"remaining":<s>,"total":<s>,"action":"quick"|"corner"|"session"}`
+(`remaining` equals `total` while the bed heats), otherwise `{"active":false,"result":<r>,"reason":<text>}` for the last
+job since the start of CC2 Control: `result` `""` (none yet), `started`, `cancelled`, `ended` (stopped by one of the
+events above) or `failed`; `reason` says why it ended or failed (for example `A print started`, `The bed target was
+changed` or the 409 text of the check that refused the start) and is empty otherwise.
+
+**Directly after a bed mesh.** A four-corner `screws:measure[:<C>[:2]]` or a `screws:tram:start[:<C>[:2]]` that follows
+a bed mesh calibration of CC2 Control directly leaves out the nozzle cleaning (`G180 S3`) and, for the session, the full
+`G28`. It prepares as the one-corner form with homed axes does: `M140 S<C>`, `M190 S<C>`, `G28 Z`, `G4 P30000`, then the
+corners (with a hotter bed the cooling wait comes first, as everywhere). Directly means: the calibration's probing
+succeeded (`result` `done`, `saved` or `work`), it ended at most 180 s ago, no other console job has run since, X, Y and
+Z are homed and the measurement's bed target is the calibration's temperature. Otherwise the measurement prepares as
+described above. A hold time given with it is left out, because the bed was just held for the mesh. The answer is then
+`{"accepted":true,"after_mesh":true}`, and `GET /api/printer` reports `screws_after_mesh` `true` while that measurement
+is queued or runs (`false` otherwise). The one-corner form keeps its own short way. While a bed mesh calibration runs
+(any stage until it has ended), every `screws:measure…` and `screws:tram:start…` answers 409 (`A bed mesh calibration is
+running`).
+
+CC2 Control does not clear the X/Y homing a session depends on: `system:motors_off` is refused while a
+session is active (409, `Motors off is blocked during a screw tramming session; end the session first`),
+and the automatic stepper release after 10 idle minutes with both heater targets at 0 (`M84`) waits
+until the session has ended and then starts its full wait again.
 
 ### Screw tramming history
 
 Every successfully completed session job (start, re-probe, check) is recorded with
 the raw `Result is z=` value of each probed corner, taken from that job's console
 output. A completed one-shot `screws:measure` is recorded as its own closed entry with
-`"kind":"quick"`: it has no session and no 30 s settle, so its values are kept apart from
-session values. The newest 20 sessions (64 measurements each) and, separately, the newest
+`"kind":"quick"`: it has no session, and the 30 s settle only where it homes Z alone (one corner with X and Y
+still homed, or directly after a bed mesh), so its values are kept apart from session values. The newest 20 sessions (64 measurements each) and, separately, the newest
 10 quick entries are kept in `screw-history.txt` next to the UI preferences
 (`--screws-history FILE` overrides it), written atomically after each change, so they
 survive a reload, the end of the session and a restart. A session left open by a restart
@@ -462,78 +713,107 @@ is closed at its last measurement. A failed job and a re-probe without a result 
 corner are not recorded.
 
 `GET /api/screws/history` returns the newest entry first and its measurements
-oldest first. Each entry has `kind` `session` or `quick`. Times are Unix seconds (UTC);
+oldest first. Each entry has `kind` `session` or `quick`, and `end_reason`: why a closed session
+ended — `user` (end), `emergency_stop`, `disconnected`, `print_started`, `telemetry_stale` (no
+printer report for 15 s), `console_error` (a job failed or could not be queued), `machine_state`
+(another or no machine state), `timeout` (10 minutes without an action), `xy_homing_lost` (X/Y homing
+cleared outside CC2 Control, for example on the touchscreen, by another client or by the firmware),
+`quick_measurement`, `heaters_off`, `new_session`, `mesh_calibration` (a bed mesh calibration was started between two
+measurements of the session) or `restart` (CC2 Control restarted with the
+session open) — and `null` while it is open, for quick entries and for sessions recorded before
+the reason was stored. It is an optional fourth field of the session line in `screw-history.txt` (`-` when there is no reason but a fifth
+field follows); the fifth field `c` marks a session probed at the screw centres. `points` is `screws` for such a session
+and `old` for one recorded at the earlier points (30/30, 230/30, 230/225, 30/225), whose heights are not comparable with
+the new ones. Times are Unix seconds (UTC);
 `ended` is `null` while a session runs; measurement `kind` is `start`, `probe`, `check`
-or (in a quick entry) `quick`; `corner` is set only for `probe`; `z` holds the corners the job measured (a re-probe
+or (in a quick entry) `quick`; `bed` is the bed target in °C the job measured at (absent for
+entries recorded before it was stored); `ist` holds the actual temperatures in °C at the last probe of the job (`bed`,
+`nozzle`, `chamber`, only the sensors that gave a value; absent for earlier entries); `corner` is set for `probe` and for
+the one-corner quick measurement; `z` holds the corners the job measured (a re-probe
 only its own corner), in mm; `z2` is present only for `twice` and holds the second
-result of each corner. Offsets against the front-left screw are computed by the client.
+result of each corner; `probes` (after `bed` and `ist`) holds the single probes (`probe at X,Y is z=…`) of the corners that have them,
+up to six per corner (2× 3), kept only when the average of a `PROBE`'s probes is its `Result` within 1 µm. Offsets against the
+front-left screw are computed by the client. A cancelled job and a job that failed are not recorded.
 
 ```json
 {"sessions":[
   {"kind":"quick","started":1762801500,"ended":1762801680,"measurements":[
     {"time":1762801680,"kind":"quick","corner":null,"twice":false,
-     "z":{"FL":-0.682100,"FR":-0.676000,"RR":-0.870400,"RL":-0.751000}}]},
+     "z":{"FL":-0.682100,"FR":-0.676000,"RR":-0.870400,"RL":-0.751000},"bed":60,
+     "ist":{"bed":60.4,"nozzle":28.1}}],"end_reason":null,"points":"screws"},
   {"kind":"session","started":1762800000,"ended":1762801200,"measurements":[
     {"time":1762800300,"kind":"start","corner":null,"twice":false,
-     "z":{"FL":-0.681800,"FR":-0.675800,"RR":-0.869800,"RL":-0.750800}},
+     "z":{"FL":-0.681800,"FR":-0.675800,"RR":-0.869800,"RL":-0.750800},"bed":60},
     {"time":1762800420,"kind":"probe","corner":"RR","twice":true,
-     "z":{"RR":-0.700100},"z2":{"RR":-0.699400}}]}]}
+     "z":{"RR":-0.700100},"z2":{"RR":-0.699400},"bed":60}],"end_reason":"user","points":"screws"}]}
 ```
 
 `POST /api/screws/history/clear` deletes the whole history and returns `{"ok":true}`
 (`500` with `{"ok":false,"error":...}` when the file cannot be written). Both routes use
 the same authentication and browser guard as the other `/api` routes.
 
-## Mesh-guided screw alignment
+## Bed alignment with a mesh
 
-The Mesh alignment tab of Bed Levelling fits a plane through a whole bed mesh and tells what each screw has to do
-(see `docs/CC2_CONTROL.md`); that analysis runs in the browser on `GET /api/mesh` and the plate library.
-The guided loop around it is a session on CC2 Control. Each round is the calibration job of
-`/api/plates/calibrate` without a plate: `G28` when the printer is not homed, `M140`, the wait until
-telemetry reads the temperature, the soak, then `BED_MESH_CALIBRATE PROFILE=<slot> BED_TEMP=<t>`. No
-shorter probing command is known for this firmware (a reduced `PROBE_COUNT` is untested), so every round
-measures the full mesh, and the mesh of the last round is the one saved at the end.
+With "With mesh" ticked, the Bed alignment tab evaluates the four screw points with the plate shape of a saved mesh of
+the plate library, of the temporary mesh or of the printer's active mesh (`GET /api/mesh`, read when the tab opens and
+whenever the printer's phase changes, not during a screw session), entirely in the page; it needs no endpoint of its own.
+After a screw measurement the active mesh is empty (`profile_name` "", `probed_matrix` [], `mesh_min`/`mesh_max` 0, measured on a
+CC2: the firmware's nozzle cleaning unloads it) while `profiles` still hold the stored meshes; the tab therefore evaluates
+with a copy taken in the browser when the measurement starts. "Measure a new mesh"
+starts `POST /api/plates/calibrate` with the plate chosen in its question, the hold time of step 1 as the soak and the
+line `work`, so the mesh becomes only the plate's temporary mesh (`calibration.work_mesh`, see below) and the library
+stays as it was. Once it is measured, the page itself starts the way of measuring chosen in step 1 through
+`/api/control`, without a hold time: the four-corner measurement (`screws:measure[:<C>[:2]]`) or the start of a screw
+session (`screws:tram:start[:<C>[:2]]`), which then follows the mesh directly (see "Directly after a bed mesh" above).
+That follow-up runs in the frame of the page, on every page of CC2 Control and after a reload, but it needs the
+browser tab to stay open; while the printer answers busy it tries again every 5 s for up to 5 minutes, and otherwise
+it leaves a note with a start button. After turning, only the screws are measured again, evaluated with the temporary
+mesh, and the final mesh (a plain calibration with the plate, which replaces its stored measurement and ends an open
+session) is measured only when the user asks for it, which the page offers once every corner of the latest
+measurement is within the tolerance (±20 µm). Until then the page says that the mesh is temporary; once a later screw
+measurement differs from the first four-corner measurement after the temporary mesh (the offset of a corner
+to front left changed by at least 25 µm, however large it was before; without turning it changes by about ±6 µm, and
+by up to about 20 µm while the bed soaks), it warns that the stored mesh no longer
+fits the bed. The page remembers the temporary mesh it saw in the browser, so that warning stays after a restart of
+CC2 Control. The guided loop of the earlier version, a session with a full mesh per round,
+is removed: `/api/screws/align`, `/api/screws/align/measure`, `/api/screws/align/save` and `/api/screws/align/end` no
+longer exist, and the endpoint list of `GET /api/v1/system/info` no longer has `screws_align`.
 
-Every change is a `POST` with a text body, one field per line. Without a confirmation a request sends
-nothing and answers `200` with `{"confirm_required":true,"commands":[...],"token":"<8 hex digits>"}`: the
-G-code it would send, in order, and a token over that list. Repeated with a final line `CONFIRM:<token>` it
-acts. If the list is no longer the one the token was issued for (the printer lost its homing, another
-measurement took the slot), the request answers `409` and nothing is sent; ask again and confirm the new
-list. A request that is refused answers `4xx` with `{"ok":false,"error":...}` and has queued nothing, so
-it can be repeated.
+A running screw measurement (`screws:measure`, `screws:measure:corner:<ID>`, the `screws:tram:` jobs except the end)
+is sent to the printer line by line and can be cancelled: `POST /api/control` with `screws:cancel` answers `202`
+while one runs or a hold time counts (which then ends, see "Hold time" above) and `409` otherwise. The job stops after the line that is running (a line that waits, such as the bed
+wait or the nozzle cleaning, ends first), lifts the nozzle (`G1 Z10`) only when X, Y and Z are homed (the printer
+reports them when the job starts, and the job's own `G28` and `G180 S3` count once completed; without them, or after an error report, the lift is
+left out, because the printer service accepted it with unhomed axes), restores the saved gcode state and sets
+`M104 S0`. A quick measurement and the start of a session then switch the bed off as well (`M140 S0`) and a cancelled
+session start ends the session (`end_reason` `user`); a later measurement of a session sets the bed to the session's
+target again and keeps the session. A cancelled job is not recorded in the history. `GET /api/console` reports
+`cancellable` (a cancellable job runs), `cancelling` (a cancel is requested) and `cancelled` (the last job ended by a
+cancel). Requires printer validation.
 
-- `GET /api/screws/align` returns `active`, the completed `round` and the allowed `rounds`, `measuring`
-  (the session's calibration runs), `measured` (the side slot holds the session's last mesh), `side`,
-  `temp`, `soak` (minutes), `nozzle`, `idle_left` (seconds until an idle session ends), `ended` (how the
-  last session ended: `ended`, `saved`, `failed`, `cancelled`, `timeout`, `print` or `estop`),
-  `heaters_off_pending` and `calibration` (`stage`, soak seconds `remaining`, `bed`, `result`, `error`,
-  `detail` of the calibration job, as in `GET /api/plates`).
-- `POST /api/screws/align/measure` (`A|B`, temperature, soak minutes 0-60, nozzle or an empty line,
-  rounds 1-10) starts a session with its first measurement, or runs the next measurement of the running
-  session, whose settings it must repeat. It needs what `/api/plates/calibrate` needs, no screw-tramming
-  session and no emergency stop, and is refused once the session has used its rounds. `202` with
-  `{"started":true,"round","rounds"}`. After a completed measurement the session switches the nozzle
-  off (`M104 S0`, listed) and renews the bed target every ten minutes while telemetry still shows the
-  session's own target, like the screw-tramming session; a target someone else set, or a bed that is
-  off, is left alone.
-- `POST /api/screws/align/save` (plate) makes the mesh of the last completed measurement the plate's
-  measurement at the session's temperature and nozzle, exactly as `/api/plates/measure` does
-  (`BED_MESH_PROFILE LOAD=<slot>` and `SAVE=cc2_<id>`, `SET_GCODE_OFFSET Z=`), and ends the session.
-  When it fails the session stays, so it can be repeated.
-- `POST /api/screws/align/end` ends the session. A measurement that has not begun probing is stopped
-  like `/api/plates/calibrate/cancel`; once probing has begun the request is refused (emergency stop).
-  Without a session it answers `200` and sends nothing.
+## Console output
 
-While a session is active, `/api/plates/calibrate` and the `screws:` actions of `/api/control` answer
-`409`. The session owns the heaters from its first measurement. When it ends by `end`, `save`, a failed
-or cancelled measurement, an emergency stop, or because nothing was requested for 20 minutes after the
-last measurement (the page was closed), the deferred `TURN_OFF_HEATERS` of the screw-tramming session is
-requested: it is retried until it is delivered while the printer is idle and the console free, and is
-dropped when a print starts or a heater action or a new calibration takes the heaters over. It is not
-requested when a print started (`print`) or when telemetry shows a bed target that is neither off nor the
-session's. A heater action queued between two measurements takes the heaters over as well: the nozzle-off
-and the bed target the session still owed are dropped, and the session itself stays. Requires printer
-validation.
+`GET /api/console` returns the state of the last console command of CC2 Control:
+`busy`, `completed`, `success`, `generation`, `command` and `output` (up to 256 KiB, JSON-escaped).
+`generation` rises with every command and every clear. Within one generation the stored output only grows.
+
+`GET /api/console?since=<generation>:<output_len>:<instance>` lets a client that polls leave out the output it
+already holds. The `generation` and the `output_len` of the reply it holds are plain decimal digits; `instance`
+is the 16 lowercase hex digits that the same reply named (`instance`), one value for every start of CC2 Control:
+the generation counter and the stored output start again with the service, so a restarted service can reach the
+same two numbers with other text, and only the same instance vouches for the text. When no command runs, the
+instance and the generation are the same and the stored output is exactly `output_len` bytes long, the reply
+has no `output` and carries `"unchanged":true`; every other field is the same as in a full reply. A reply to a
+request with a valid `since` carries `output_len` (bytes of the stored output, not of the JSON text, which leaves
+out control characters) and `instance` in both forms. While a command runs, after a new command or a clear,
+whenever the length differs and whenever the instance is missing or another one (the older form
+`since=<generation>:<output_len>` and a service that started again), the reply is complete, so a client always
+sees growing output. A missing or malformed `since` (not `<digits>:<digits>` or `<digits>:<digits>:<16 hex digits>`,
+a sign, an overflow, an empty value) is ignored: the reply is identical to a request without it and never an
+error. Older clients that send no `since` are unaffected. A client that stores the last `output` together with
+its `output_len` and `instance` can show the stored text again whenever `unchanged` is true and the `instance`
+is the one it sent; the Console page and the screw view of the web interface do. An older CC2 Control ignores
+the parameter and always replies in full (without `instance`), so a client must not rely on `unchanged`.
 
 ## Heater PID calibration
 
@@ -674,28 +954,52 @@ Endpoints (all changes are `POST` with a text body, one field per line, and need
   its measurement at that temperature (replacing one with the same temperature and nozzle), the one it
   mounts with, and the plate is mounted in place. `/api/plates/recapture` (id) does the same for the mounted
   plate with the temperature and nozzle of its current measurement. `/api/plates/measure/delete` (id) removes
-  a measurement and its printer profile; a plate keeps at least one. `/api/plates/measure/edit` (id,
+  a measurement and its printer profile; a plate keeps at least one. `/api/plates/measures/clear` (plate id)
+  is a function of its own that deletes every measurement of the plate and their printer profiles on purpose: the
+  plate stays as a profile without a mesh (`{"cleared":n}`) and cannot be mounted until it is calibrated again. It
+  answers 400 for an invalid id, 404 for an unknown plate and 409 for the mounted plate, one waiting for the
+  printer restart and one that is being calibrated. `/api/plates/measure/edit` (id,
   temperature, nozzle) corrects what a measurement records, e.g. the nozzle of one made before nozzles were
   listed; two measurements of a plate cannot share temperature and nozzle. `/api/plates/keep` (`A|B`) stores
   the printer profile of the measurement the side slot holds.
-- `/api/plates/calibrate` (`A|B`, temperature, soak minutes 0–60, nozzle, plate; the last two may be empty)
-  runs a bed mesh calibration on CC2 Control, so no page has to stay open: it keeps the slot's measurement as
+- `/api/plates/calibrate` (`A|B`, temperature, soak minutes 0–60, nozzle, plate; the last two may be empty;
+  an optional sixth line `work`, only together with a plate, any other sixth line is 400) runs a bed mesh calibration on CC2 Control, so no page has to stay open. An open screw-tramming session does not
+  block it between its measurements: the session ends (`end_reason` `mesh_calibration`, its heaters are not switched
+  off, the calibration takes the bed over) and the calibration starts; while a measurement of the session runs the
+  answer is 409 (`A screw session measurement is running`), and while a hold time before a screw measurement runs it
+  is 409 as well (`A screw measurement is waiting for its bed hold time`). While the calibration runs, `/api/control`
+  refuses every screw measurement (409, `A bed mesh calibration is running`); a four-corner measurement or a session
+  start right after it, at its temperature, follows it directly (see "Directly after a bed mesh"). The state reports `elapsed`, the seconds since the
+  current stage began, so a page opened later can count the probing up. It keeps the slot's measurement as
   a profile, homes the printer when needed (`G28`), heats the bed (`M140`), waits until telemetry reads the
   temperature, holds it for the soak time (the firmware's own calibration probes as soon as the sensor
   reads the target, while the plate still expands), then sends `BED_MESH_CALIBRATE PROFILE=<slot>
   BED_TEMP=<t>` through the console. The firmware switches an idle printer's bed off 15 minutes after the
   last command, so while it heats and soaks the run sends `M140` again every ten minutes, and only while
   the bed still holds the target the run set. With a plate, the result becomes its measurement as with
-  `/api/plates/measure`. `GET /api/plates` reports it as `calibration` (`stage` `homing`, `heating`,
+  `/api/plates/measure`. With `work` it becomes only the plate's temporary mesh: CC2 Control keeps the slot
+  mesh in memory (`result` `work`) and leaves the library as it was: the library file, the mounted plate, the
+  measurement it mounts with, its Z offset and the printer profiles stay as they are. The side slot of the printer,
+  in its mesh file and in its memory, holds the temporary mesh afterwards, as after every calibration, so the plate's
+  stored measurement is no longer in the printer (`in_printer` of the plate is `false`); the slot's measurement keeps
+  its profile as for every calibration, so a print started from the print dialog loads its stored measurement from
+  that profile. The temporary mesh is never offered to a print, the mesh matching or the blends. It stays while
+  a new calibration heats, soaks and probes, also when that run is cancelled or fails before its probing has ended,
+  and is gone once a calibration has finished its probing (the slot then holds another mesh; a new `work` run then
+  keeps its own), after a restart of CC2 Control, or after a measurement of the same plate stored in the library;
+  `work_mesh` is `null` while its plate is not in the library. `GET /api/plates` reports it as `calibration` (`stage` `homing`, `heating`,
   `soaking`, `probing`, `saving` or `off`, the soak seconds `remaining`, the bed temperature `bed`, and
-  `result` `done`, `saved`, `failed` or `cancelled` with `error` `homing`, `heating`, `busy`, `telemetry`,
-  `probing` or `saving`). At the end of the soak the probing starts only when MQTT has reported Idle within
+  `result` `done`, `saved`, `work`, `failed` or `cancelled` with `error` `homing`, `heating`, `busy`, `telemetry`,
+  `probing` or `saving`; `work` whether the run keeps only a temporary mesh, and `work_mesh`, `null` or
+  `{"plate","temp","nozzle","measured","mesh"}` while its plate is in the library). At the end of the soak the probing starts only when MQTT has reported Idle within
   15 s and fresh telemetry reads the bed at its target; otherwise it waits up to a minute and then stops.
   `/api/plates/calibrate/cancel` stops it until the probing starts. A run that is cancelled or fails switches
   the bed heater off only while fresh MQTT reports Idle and fresh telemetry shows the target the run set;
   otherwise, such as for a print another client started meanwhile, it leaves the heater as it is. Print
   starts and plate changes are refused while it runs; a print started meanwhile, or a changed bed target,
-  ends it.
+  ends it. After the probing, reading the slot mesh (its file and the printer memory) is tried again for up to 60 s, at
+  most every 2 s, while it cannot be read yet or memory and file still differ; the mesh is kept only when both
+  agree, and any other error while saving ends the run at once (`error` `saving`).
 - `/api/plates/mount` (id, optionally a measurement id) mounts a plate whose measurement is already in its
   slot and applies its Z offset with `SET_GCODE_OFFSET Z=` (no movement). Any other answers 409 with
   `"reboot_required": true`; adding a line `REBOOT` writes the slot (the previous file becomes `autosave_backup.cfg`, a copy
@@ -1128,4 +1432,4 @@ this notice does not acknowledge or operate the physical display.
 
 Nozzle expansion: `POST /api/experiments` accepts `nozzle-expansion:on` / `nozzle-expansion:off` with the existing LAN authorization and idle/cold checks. The choice defaults to off and migrates schema-1/2 settings without enabling it. `GET /api/nozzle-expansion` adds `enabled`; start/factory require the enabled, valid experiment. Recovery and an already-required restart do not require opting in.
 
-Mesh alignment settings: `POST /api/experiments` accepts `mesh-align-settings:on` / `mesh-align-settings:off` with the same LAN authorization and idle/cold checks, and `GET /api/experiments` reports `mesh_align_settings`. It defaults to off. It only shows the settings block of Bed Levelling → Mesh alignment (tilt span, limits, screw positions, thread pitch and turning direction, saved in the browser); without it the page uses the CC2 defaults. It sends nothing to the printer. The stored choices use schema 4; a schema-3 file keeps its choices with this one off.
+Screw pitch and alignment settings: `POST /api/experiments` accepts `mesh-align-settings:on` / `mesh-align-settings:off` with the same LAN authorization and idle/cold checks, and `GET /api/experiments` reports `mesh_align_settings`. It defaults to off. It only shows the settings block of the same name on Bed Levelling → Bed alignment (tilt span, the shape-warning and nearly-flat limits, screw positions, row order of the mesh and the screw pitch, 0.3 to 1.5 mm per turn, saved in the browser); without it the page uses the CC2 defaults, among them the CC2's own M4 screw (0.7 mm per turn, clockwise seen from below raises the corner). It sends nothing to the printer. The stored choices use schema 4; a schema-3 file keeps its choices with this one off.

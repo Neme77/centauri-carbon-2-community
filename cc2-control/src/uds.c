@@ -302,6 +302,16 @@ static void console_report(uds_client *c,const char *json,size_t length) {
  memcpy(log->lines[log->next],json,length);log->lines[log->next][length]=0;
  log->next=(log->next+1)%UDS_CONSOLE_LINES;log->sequence++;
 }
+/* What the printer reports about the running print. A new print, or another file, starts without it. */
+static void uds_forget_job(uds_client *c){
+ c->job_resets++;
+ c->present&=~((UINT32_C(1)<<U_PROGRESS)|(UINT32_C(1)<<U_LAYER)|
+     (UINT32_C(1)<<U_DURATION)|(UINT32_C(1)<<U_TOTAL_DURATION)|(UINT32_C(1)<<U_FILAMENT_USED));
+}
+/* The states Klipper keeps between two prints. Anything else, "paused" included, is not one. */
+static int uds_idle_state(const char *state){
+ return !strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled")||!strcmp(state,"error");
+}
 int uds_message(uds_client *c,const char *json,size_t length){
  const char *end=json+length,*root=json_skip_space(json,end),*ce,*se;
  c->parse_error="invalid_json";
@@ -339,8 +349,7 @@ int uds_message(uds_client *c,const char *json,size_t length){
   char filename[sizeof(c->filename)];
   int valid=filename_read(ps,pe,filename,sizeof(filename));
   if(!valid||(c->have_filename&&strcmp(filename,c->filename))){
-   c->present&=~((UINT32_C(1)<<U_PROGRESS)|(UINT32_C(1)<<U_LAYER)|
-       (UINT32_C(1)<<U_DURATION)|(UINT32_C(1)<<U_TOTAL_DURATION)|(UINT32_C(1)<<U_FILAMENT_USED));
+   uds_forget_job(c);
   }
   c->have_filename=valid;
   if(valid)strcpy(c->filename,filename);
@@ -377,6 +386,11 @@ int uds_message(uds_client *c,const char *json,size_t length){
     lamp_value>=0&&lamp_value<=1){c->light=lamp_value>0;c->have_light=1;}
  char state[sizeof(c->print_state)];
  if(ps&&(!older||!c->have_print_state)&&word_read(ps,pe,"state",state,sizeof(state))){
+  /* A print starts when an idle state turns into "printing", also with the same file name: the layer,
+   * times, progress and filament use of the print before must not be shown for it. The first state seen
+   * after a (re)connection only tells where the print is; resuming from "paused" starts nothing. The
+   * values this very message carries are read below and stay. */
+  if(c->have_print_state&&!strcmp(state,"printing")&&uds_idle_state(c->print_state))uds_forget_job(c);
   strcpy(c->print_state,state);c->have_print_state=1;
  }
  const char *be;const char *bm=json_member_object(status,se,"bed_mesh",'{',&be);

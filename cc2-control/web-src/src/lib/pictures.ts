@@ -1,15 +1,22 @@
 import { useLayoutEffect, useState } from 'preact/hooks'
+import { poll } from './poll'
 
 // The picture a slicer embedded in a G-code file, as an object URL ('' when the file has none). The printer
 // reads up to 4 MB of a file to find it, so a picture is asked for once and the requests go one at a time; one
 // that nothing shows any more when its turn comes (the list went to another page) is dropped. Only an answer is
 // remembered: a request that failed is made again when the picture is next shown.
 //
+// While the printer homes, levels, probes or starts a print the service reads no file and answers 503 (the read
+// hold, see lib/layer-path.ts). That picture stays waiting at the head of the queue, and the queue rests for at
+// least REST_MS before it asks again (through poll(), so a hidden tab does not ask), instead of asking for the
+// next picture at once.
+//
 // The answers are kept for rows that come back (another page of a list, another list), but not without bound:
 // beyond KEEP pictures that nothing shows, the least recently shown go, and their object URLs are revoked. A
 // picture of a file that has changed since (another `file:` tag for the same file) goes as soon as nothing
 // shows it. A URL is never revoked while a mounted picture uses it.
 export const KEEP = 48
+export const REST_MS = 3000
 
 type Picture = {
   storage: string
@@ -24,6 +31,17 @@ type Picture = {
 const pictures = new Map<string, Picture>()
 const waiting: string[] = []
 let loading = false
+let restUntil = 0
+let stopRest: (() => void) | null = null
+
+// Runs once at the start of the rest (poll's first run) and every REST_MS after it; the first run after the rest
+// ends it and starts the queue again.
+const resume = () => {
+  if (Date.now() < restUntil) return
+  stopRest?.()
+  stopRest = null
+  void load()
+}
 let clock = 0
 let trimming = false
 
@@ -46,8 +64,8 @@ const trim = () => {
   })
 }
 
-const load = async () => {
-  if (loading) return
+async function load() {
+  if (loading || stopRest) return
   loading = true
   for (let key = waiting.shift(); key !== undefined; key = waiting.shift()) {
     const picture = pictures.get(key)
@@ -58,6 +76,7 @@ const load = async () => {
     }
     let url = ''
     let answered = false
+    let held = false
     try {
       const r = await fetch('/api/gcode-files/thumbnail', {
         method: 'POST',
@@ -67,8 +86,16 @@ const load = async () => {
       const blob = await r.blob()
       if (r.ok && blob.type.startsWith('image/')) url = URL.createObjectURL(blob)
       answered = r.ok || r.status === 404
+      held = r.status === 503
     } catch {
       /* asked again when the picture is next shown */
+    }
+    if (held && pictures.get(key) === picture) {
+      // Not remembered: the picture waits at the head of the queue and nothing is asked for REST_MS.
+      waiting.unshift(key)
+      restUntil = Date.now() + REST_MS
+      stopRest = poll(resume, REST_MS)
+      break
     }
     if (answered && pictures.get(key) === picture) {
       picture.url = url
