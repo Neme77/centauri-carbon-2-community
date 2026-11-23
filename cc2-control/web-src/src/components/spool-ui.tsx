@@ -16,7 +16,7 @@ import {
   densityFor,
   dismissSlot,
   EXTERNAL,
-  fits,
+  needsWrite,
   g,
   isLineOf,
   isLow,
@@ -585,7 +585,19 @@ const SpoolChooser = ({
             chosen.material.toLowerCase().startsWith(String(p.name).toLowerCase())
         )
     : null
-  const canWrite = Boolean(chosen && slot < EXTERNAL && reason !== 'material' && preset && idle && !fits(chosen, tray))
+  const wantsWrite = Boolean(chosen && slot < EXTERNAL && reason !== 'material')
+  const canWrite = Boolean(wantsWrite && chosen && preset && idle && needsWrite(chosen, tray))
+  // Why nothing is written, in one sentence, instead of silence.
+  const noWrite: Key | null =
+    !wantsWrite || canWrite || !chosen
+      ? null
+      : !needsWrite(chosen, tray)
+        ? 'spools.no_write_fits'
+        : !preset
+          ? 'spools.no_write_preset'
+          : !idle
+            ? 'spools.no_write_busy'
+            : null
   const [write, setWrite] = useState(true)
   const total = lib.spools.filter(s => !s.archived).length
   const title: Key =
@@ -829,6 +841,11 @@ const SpoolChooser = ({
       {chosen && !options.some(o => o.spool.id === chosen.id) && (
         <p class="mt-3 text-[13px]" role="status">
           {tpl('spools.chosen', { name: `${spoolLabel(chosen)} · ${g(chosen.remaining)} g` })}
+        </p>
+      )}
+      {noWrite && (
+        <p class="mt-3 text-[13px] text-muted" role="status" data-no-write={noWrite}>
+          {t(noWrite)}
         </p>
       )}
       {canWrite && (

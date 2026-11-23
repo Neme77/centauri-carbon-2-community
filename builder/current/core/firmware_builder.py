@@ -79,8 +79,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_COMMIT='4c8508726fa5c70ee01305ab61ed19b1ca9ae82c'
-CC2_CONTROL_SOURCE_SHA256='a237ede7a8e0fe61cf96cd18a98e5e5261de962e03b347e98018e110f6ab5912'
+CC2_CONTROL_SOURCE_COMMIT='97cc893c33ab0417c4597c807b99182eedba6d1a'
+CC2_CONTROL_SOURCE_SHA256='d65d69d23dd79341f4ce10678d4db5b5e57c956d1b6fe888f7b762c69e25e675'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 CC2_UPDATE_FILES=('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
 # Translation files are optional and open-ended (one per language), unlike the

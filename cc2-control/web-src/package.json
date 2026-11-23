@@ -27,7 +27,7 @@
     "test:plates": "node preview/test-bed-plates.mjs",
     "test:queue": "node preview/test-queue.mjs",
     "test:start-timeout": "node preview/test-start-timeout.mjs",
-    "test:spools": "node preview/test-spools.mjs && node preview/test-spool-popup.mjs",
+    "test:spools": "node preview/test-spools.mjs && node preview/test-spool-popup.mjs && node preview/test-spool-write-reason.mjs",
     "test:calibration": "node preview/test-mesh-calibration.mjs && node preview/test-mesh-unsaved.mjs",
     "test:job-objects": "node preview/test-job-objects.mjs",
     "test:pid": "node preview/test-pid.mjs",
