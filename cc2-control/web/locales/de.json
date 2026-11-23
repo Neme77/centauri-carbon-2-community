@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Montierte Platte",
   "plates.no_plate_mounted": "Keine Platte montiert. Eine montieren, um ihr Mesh zu laden und ihren Z-Offset angewendet zu lassen.",
   "plates.forget_mounted": "Entfernen",
+  "plates.add_other_side": "Seite {side} hinzufügen",
+  "plates.other_side_added": "Seite {side} von „{name}“ hinzugefügt: jetzt kalibrieren",
   "plates.side_n": "Seite {side}",
   "plates.z_offset": "Z-Offset",
   "plates.z_applied": "angewendet",

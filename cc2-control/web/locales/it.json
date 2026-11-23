@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Piatto montato",
   "plates.no_plate_mounted": "Nessun piatto montato. Montane uno per caricarne la mesh e applicarne l’offset Z.",
   "plates.forget_mounted": "Rimuovi",
+  "plates.add_other_side": "Aggiungi lato {side}",
+  "plates.other_side_added": "Lato {side} di «{name}» aggiunto: ora calibralo",
   "plates.side_n": "Lato {side}",
   "plates.z_offset": "Offset Z",
   "plates.z_applied": "applicato",

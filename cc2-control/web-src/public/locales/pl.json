@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Zamontowana płyta",
   "plates.no_plate_mounted": "Nie zamontowano płyty. Zamontuj ją, aby wczytać siatkę i utrzymywać jej offset Z.",
   "plates.forget_mounted": "Usuń z drukarki",
+  "plates.add_other_side": "Dodaj stronę {side}",
+  "plates.other_side_added": "Dodano stronę {side} płyty „{name}”: skalibruj ją teraz",
   "plates.side_n": "Strona {side}",
   "plates.z_offset": "Offset Z",
   "plates.z_applied": "zastosowany",

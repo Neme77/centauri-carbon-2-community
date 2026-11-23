@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Nasazená deska",
   "plates.no_plate_mounted": "Žádná deska není nasazena. Nasaďte ji pro načtení sítě a zachování jejího offsetu Z.",
   "plates.forget_mounted": "Odebrat",
+  "plates.add_other_side": "Přidat stranu {side}",
+  "plates.other_side_added": "Strana {side} desky „{name}“ přidána: nyní ji zkalibrujte",
   "plates.side_n": "Strana {side}",
   "plates.z_offset": "Offset Z",
   "plates.z_applied": "použit",

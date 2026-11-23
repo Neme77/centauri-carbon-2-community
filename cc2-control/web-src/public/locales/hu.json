@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Felhelyezett tárgyasztallap",
   "plates.no_plate_mounted": "Nincs felhelyezett lap kiválasztva. Válassz ki egyet a szintezési háló betöltéséhez és a hozzá tartozó Z-eltolás alkalmazásához.",
   "plates.forget_mounted": "Eltávolítás",
+  "plates.add_other_side": "{side} oldal hozzáadása",
+  "plates.other_side_added": "A(z) „{name}” {side} oldala hozzáadva: kalibrálja most",
   "plates.side_n": "{side} oldal",
   "plates.z_offset": "Z-eltolás",
   "plates.z_applied": "alkalmazva",

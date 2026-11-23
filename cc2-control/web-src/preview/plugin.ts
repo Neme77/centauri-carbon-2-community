@@ -1701,16 +1701,16 @@ export function previewPlugin(): Plugin {
               }
               if (path === '/api/plates/create') {
                 const [side, name, z] = lines as ['A' | 'B', string, string]
-                if (plates.some(p => p.name === name))
-                  return reply({ error: 'A plate with this name already exists' }, 409)
+                if (plates.some(p => p.name === name && p.side === side))
+                  return reply({ error: 'A plate with this name already exists on this side' }, 409)
                 const id = newId()
                 plates.push({ id, name, side, z_offset: Number(z), measure: '' })
                 return reply({ saved: true, id, measure: '' }, 201)
               }
               if (path === '/api/plates/save') {
                 const [side, name, z, temp, nozzle] = lines as ['A' | 'B', string, string, string, string?]
-                if (plates.some(p => p.name === name))
-                  return reply({ ok: false, error: 'A plate with this name already exists' }, 409)
+                if (plates.some(p => p.name === name && p.side === side))
+                  return reply({ ok: false, error: 'A plate with this name already exists on this side' }, 409)
                 const id = newId(),
                   measure = newId()
                 plates.push({ id, name, side, z_offset: Number(z), measure })

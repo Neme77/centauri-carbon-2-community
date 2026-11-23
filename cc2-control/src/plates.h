@@ -924,7 +924,7 @@ static int plates_load_plate(const char *obj, const char *end, void *context) {
     plate_entry *p = &plates.plates[plates.count];
     plate_measure *legacy = &plates.measures[plates.measure_count];
     if (!plates_parse_plate(obj, end, version, p, legacy) || plates_id_taken(p->id)) return 0;
-    for (int i = 0; i < plates.count; ++i) if (!strcmp(plates.plates[i].name, p->name)) return 0;
+    for (int i = 0; i < plates.count; ++i) if (plates.plates[i].side == p->side && !strcmp(plates.plates[i].name, p->name)) return 0;
     plates.count++;
     if (version < 2) plates.measure_count++; /* its id is given once every id is known */
     return 1;
@@ -1238,9 +1238,11 @@ static int plates_open(int fd) {
     return !error;
 }
 
-static int plates_name_taken(const char *name, const plate_entry *except) {
+/* A plate is identified by its name and its side: one physical plate with two usable
+ * faces is two entries with the same name, one per side. */
+static int plates_name_taken(const char *name, char side, const plate_entry *except) {
     for (int i = 0; i < plates.count; ++i)
-        if (&plates.plates[i] != except && !strcmp(plates.plates[i].name, name)) return 1;
+        if (&plates.plates[i] != except && plates.plates[i].side == side && !strcmp(plates.plates[i].name, name)) return 1;
     return 0;
 }
 
@@ -1261,7 +1263,7 @@ static void plates_create_response(int fd, const mqtt_client *mqtt, const char *
     }
     if (!plates_open(fd)) return;
     if (plates.count >= PLATES_MAX) { plates_fail(fd, 409, "The plate library is full"); return; }
-    if (plates_name_taken(fields[1], NULL)) { plates_fail(fd, 409, "A plate with this name already exists"); return; }
+    if (plates_name_taken(fields[1], fields[0][0], NULL)) { plates_fail(fd, 409, "A plate with this name already exists on this side"); return; }
     if ((reason = plates_printer_ready(mqtt))) { plates_fail(fd, 409, reason); return; }
     plates_begin();
     plate_entry *p = &plates.plates[plates.count++];
@@ -1285,7 +1287,7 @@ static void plates_save_response(int fd, const mqtt_client *mqtt, const char *bo
     if (!plates_open(fd)) return;
     if (plates.count >= PLATES_MAX) { plates_fail(fd, 409, "The plate library is full"); return; }
     if (plates.measure_count >= PLATE_MEASURES_MAX) { plates_fail(fd, 409, "The plate library has no room for another measurement"); return; }
-    if (plates_name_taken(fields[1], NULL)) { plates_fail(fd, 409, "A plate with this name already exists"); return; }
+    if (plates_name_taken(fields[1], fields[0][0], NULL)) { plates_fail(fd, 409, "A plate with this name already exists on this side"); return; }
     if ((reason = plates_printer_ready(mqtt))) { plates_fail(fd, 409, reason); return; }
     plate_mesh mesh;
     if (!plates_capture(fd, fields[0][0], &mesh)) return;
@@ -1484,7 +1486,7 @@ static void plates_edit_response(int fd, const mqtt_client *mqtt, const char *bo
     if (!plates_open(fd)) return;
     plate_entry *p = plate_find(fields[0]);
     if (!p) { plates_fail(fd, 404, "Unknown plate"); return; }
-    if (plates_name_taken(fields[1], p)) { plates_fail(fd, 409, "A plate with this name already exists"); return; }
+    if (plates_name_taken(fields[1], p->side, p)) { plates_fail(fd, 409, "A plate with this name already exists on this side"); return; }
     plates_begin();
     snprintf(p->name, sizeof(p->name), "%s", fields[1]); p->z = z;
     if (!plates_commit(fd)) return;

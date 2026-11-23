@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Plaque montée",
   "plates.no_plate_mounted": "Aucune plaque montée. Montez-en une pour charger son maillage et appliquer son décalage Z.",
   "plates.forget_mounted": "Retirer",
+  "plates.add_other_side": "Ajouter le côté {side}",
+  "plates.other_side_added": "Côté {side} de « {name} » ajouté : calibrez-le maintenant",
   "plates.side_n": "Côté {side}",
   "plates.z_offset": "Décalage Z",
   "plates.z_applied": "appliqué",

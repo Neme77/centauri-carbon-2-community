@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Takılı plaka",
   "plates.no_plate_mounted": "Takılı plaka yok. Ağını yüklemek ve Z ofsetini uygulamak için bir plaka takın.",
   "plates.forget_mounted": "Kaldır",
+  "plates.add_other_side": "{side} Tarafını ekle",
+  "plates.other_side_added": "“{name}” için {side} tarafı eklendi: şimdi kalibre edin",
   "plates.side_n": "{side} Tarafı",
   "plates.z_offset": "Z ofseti",
   "plates.z_applied": "uygulandı",

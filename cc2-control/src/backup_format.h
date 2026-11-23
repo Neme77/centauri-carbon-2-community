@@ -241,7 +241,7 @@ static int bk_plate_item(const char *o, const char *end, void *opaque) {
         plate_measure unused;
         if (!plates_parse_plate(o,end,ctx->kind==2?3:2,p,&unused) || bk_plate_taken(s,p->id) ||
             (ctx->kind==2 && p->measure[0])) return 0;
-        for (int i=0;i<s->count;i++) if (!strcmp(s->plates[i].name,p->name)) return 0;
+        for (int i=0;i<s->count;i++) if (s->plates[i].side==p->side && !strcmp(s->plates[i].name,p->name)) return 0;
         s->count++;
         return 1;
     }

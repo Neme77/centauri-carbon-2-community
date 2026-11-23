@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Установлен",
   "plates.no_plate_mounted": "Стол не выбран. Установите стол, чтобы загрузить его сетку и применять его Z-offset.",
   "plates.forget_mounted": "Убрать",
+  "plates.add_other_side": "Добавить сторону {side}",
+  "plates.other_side_added": "Сторона {side} пластины «{name}» добавлена: откалибруйте её",
   "plates.side_n": "Сторона {side}",
   "plates.z_offset": "Z-offset",
   "plates.z_applied": "применён",

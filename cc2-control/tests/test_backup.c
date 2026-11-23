@@ -71,7 +71,7 @@ static void seed(void) {
     plate_entry *empty=&plates.plates[1];
     plates.count=2;
     snprintf(empty->id,sizeof(empty->id),"5555555555555555");
-    snprintf(empty->name,sizeof(empty->name),"Uncalibrated B");
+    snprintf(empty->name,sizeof(empty->name),"Textured PEI"); /* the same plate, its other face: exported, validated and restored with the first */
     empty->side='B';
     plate_measure *m=&plates.measures[0];
     plates.measure_count=1;

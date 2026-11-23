@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Placa montada",
   "plates.no_plate_mounted": "No hay ninguna placa montada. Monte una para cargar su malla y mantener aplicado su desplazamiento Z.",
   "plates.forget_mounted": "Quitar",
+  "plates.add_other_side": "Añadir lado {side}",
+  "plates.other_side_added": "Lado {side} de «{name}» añadido: calíbralo ahora",
   "plates.side_n": "Lado {side}",
   "plates.z_offset": "Desplazamiento Z",
   "plates.z_applied": "aplicado",

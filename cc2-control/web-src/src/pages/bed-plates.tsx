@@ -320,6 +320,19 @@ const MeasureRow = ({
   )
 }
 
+// Keeps the two faces of one plate next to each other (A before B) without reordering anything else.
+function groupSides(plates: Plate[]): Plate[] {
+  const out: Plate[] = []
+  for (const p of plates) {
+    if (out.includes(p)) continue
+    const twin = plates.find(q => q !== p && q.name === p.name && q.side !== p.side && !out.includes(q))
+    if (twin && p.side === 'B') out.push(twin, p)
+    else if (twin) out.push(p, twin)
+    else out.push(p)
+  }
+  return out
+}
+
 const PlateCard = ({
   p,
   lib,
@@ -357,6 +370,14 @@ const PlateCard = ({
       if (!(await ask(tpl('plates.measures_clear_confirm', { n: p.measures.length, name: p.name }), true))) return
       await clearMeasures(p.id)
       notify(t('plates.measures_cleared_toast'))
+    })
+  // The other face of the same physical plate: same name and Z as a starting point, calibrated on its own.
+  const other = p.side === 'B' ? 'A' : 'B'
+  const hasOther = lib.plates.some(q => q.name === p.name && q.side === other)
+  const addSide = () =>
+    act(async () => {
+      await createPlate(other, p.name, p.z_offset)
+      notify(tpl('plates.other_side_added', { name: p.name, side: other }))
     })
   const remove = () =>
     act(async () => {
@@ -477,6 +498,11 @@ const PlateCard = ({
           >
             {t('plates.calibrate_plate')}
           </Button>
+          {!hasOther && (
+            <Button class="text-xs" disabled={locked || !idle} title={idleOnly} onClick={addSide} data-add-side>
+              {tpl('plates.add_other_side', { side: other })}
+            </Button>
+          )}
           <span class="ml-auto">
             <More>
               <Button
@@ -1000,7 +1026,7 @@ export const Plates = () => {
               <SaveForm lib={lib} idle={v.idle && ok} busy={busy} act={act} onSaved={() => setAdding(false)} />
             )}
             <div class="mt-3 grid auto-rows-fr gap-2.5 cc2-lg:grid-cols-2" data-plate-grid>
-              {lib.plates.map(p => (
+              {groupSides(lib.plates).map(p => (
                 <PlateCard key={p.id} p={p} lib={lib} idle={v.idle && ok} busy={busy} act={act} />
               ))}
             </div>

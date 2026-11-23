@@ -372,7 +372,7 @@ static void test_http(void) {
     memory_a = a;
     assert(call(SAVE, &mqtt, "A\nSmooth\n-0.02") == 201 && strstr(response, "\"saved\":true") &&
            strstr(response, "\"profile\":true"));
-    assert(call(SAVE, &mqtt, "B\nSmooth\n0") == 409 && strstr(response, "already exists"));
+    assert(call(SAVE, &mqtt, "A\nSmooth\n0") == 409 && strstr(response, "already exists on this side"));
     assert(call(SAVE, &mqtt, "B\nTextured\n0.01\n70\n") == 201);
     char smooth[17], textured[17];
     snprintf(smooth, sizeof(smooth), "%s", plates.plates[0].id); snprintf(textured, sizeof(textured), "%s", plates.plates[1].id);
@@ -399,8 +399,11 @@ static void test_http(void) {
     snprintf(body, sizeof(body), "%s\nSmooth\n-0.035", smooth); ran[0] = 0;
     assert(call(EDIT, &mqtt, body) == 200 && strstr(response, "\"applied\":true") &&
            !strcmp(ran, "SET_GCODE_OFFSET Z=-0.035") && !z_offset_session);
-    snprintf(body, sizeof(body), "%s\nTextured\n0", smooth);
-    assert(call(EDIT, &mqtt, body) == 409);
+    /* The name of a plate on the other side is free; the same name on the same side is not (test_two_sides). */
+    snprintf(body, sizeof(body), "%s\nTextured\n-0.035", smooth);
+    assert(call(EDIT, &mqtt, body) == 200 && !strcmp(plate_find(smooth)->name, "Textured"));
+    snprintf(body, sizeof(body), "%s\nSmooth\n-0.035", smooth);
+    assert(call(EDIT, &mqtt, body) == 200 && !strcmp(plate_find(smooth)->name, "Smooth"));
     snprintf(body, sizeof(body), "%s\nGlass\n0.02", textured); ran[0] = 0;
     assert(call(EDIT, &mqtt, body) == 200 && strstr(response, "\"applied\":false") && !ran[0]);
     snprintf(body, sizeof(body), "%s", textured);
@@ -1275,6 +1278,34 @@ static void test_print_setup(void) {
     unlink(path); rmdir(directory);
 }
 
+/* One physical plate with two usable faces is two entries with the same name, one per side. */
+static void test_two_sides(void) {
+    mqtt_client mqtt = {0}; plate_mesh a = grid(0.6);
+    plates_cal.stage = CAL_IDLE;
+    write_autosave(&a, NULL); memory_a = a; memory_has_b = 0;
+    unlink(plates_path); new_process(); fresh(&mqtt);
+    assert(call(13, &mqtt, "A\nDual\n0.05") == 201);
+    assert(call(13, &mqtt, "B\nDual\n0.10") == 201); /* the same name on the other side */
+    assert(call(13, &mqtt, "A\nDual\n0") == 409 && strstr(response, "already exists on this side"));
+    assert(call(13, &mqtt, "B\nDual\n0") == 409 && strstr(response, "already exists on this side"));
+    assert(plates.count == 2 && plates.plates[0].side == 'A' && plates.plates[1].side == 'B' &&
+           !strcmp(plates.plates[0].name, plates.plates[1].name) && plates_consistent());
+    char id_a[17], id_b[17];
+    snprintf(id_a, sizeof(id_a), "%s", plates.plates[0].id); snprintf(id_b, sizeof(id_b), "%s", plates.plates[1].id);
+    new_process(); fresh(&mqtt); /* the saved library with two entries of one name loads again */
+    assert(plates_available && plates.count == 2 && plate_find(id_a) && plate_find(id_b));
+    assert(call(13, &mqtt, "A\nSolo\n0") == 201);
+    char solo[17], body[80]; snprintf(solo, sizeof(solo), "%s", plates.plates[2].id);
+    snprintf(body, sizeof(body), "%s\nDual\n0", solo);
+    assert(call(EDIT, &mqtt, body) == 409 && strstr(response, "already exists on this side")); /* side A has a Dual */
+    snprintf(body, sizeof(body), "%s\nSolo\n0.02", id_b);
+    assert(call(EDIT, &mqtt, body) == 200 && !strcmp(plate_find(id_b)->name, "Solo") && plate_find(id_b)->side == 'B');
+    snprintf(body, sizeof(body), "%s\nDual\n0.02", id_b);
+    assert(call(EDIT, &mqtt, body) == 200 && !strcmp(plate_find(id_b)->name, "Dual"));
+    assert(call(DELETE, &mqtt, id_a) == 200 && plate_find(id_b) && plates_consistent());
+    unlink(plates_path);
+}
+
 static void test_empty_plate(void) {
     mqtt_client mqtt = {0}; plate_mesh a = grid(0.6);
     plates_cal.stage = CAL_IDLE;
@@ -1631,6 +1662,7 @@ int main(void) {
     test_calibration_job();
     test_calibration_work();
     test_empty_plate();
+    test_two_sides();
     test_measures_clear();
     test_calibration_ends_session();
     test_print_setup();

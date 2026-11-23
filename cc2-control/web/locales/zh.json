@@ -731,6 +731,8 @@
   "plates.mounted_plate": "已装打印板",
   "plates.no_plate_mounted": "未选择打印板。装上一块以载入其网格并应用其 Z 偏移。",
   "plates.forget_mounted": "移除",
+  "plates.add_other_side": "添加 {side} 面",
+  "plates.other_side_added": "已添加“{name}”的 {side} 面：请立即校准",
   "plates.side_n": "{side} 面",
   "plates.z_offset": "Z 偏移",
   "plates.z_applied": "已应用",

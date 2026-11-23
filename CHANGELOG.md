@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Plate library: a plate with two usable faces no longer has to be re-added from scratch. The name is unique per side, so the same plate can exist as side A and side B; a new “Add side A/B” button on the plate card creates the other face with the same name and Z offset to calibrate on its own, and the two faces are kept next to each other in the list. Existing libraries need no migration. Requested and tested by **Neme77**, implemented with Claude Code.
+
 - Settings → Integrations has an experimental guide for ElegooSlicer: a copy of the CC2 printer profile with five print-host entries makes the slicer's Device tab show CC2 Control and sends Print to CC2 Control, where the Canvas spool is confirmed before the print starts. The guide shows the configuration folder, the lines to add with the address of the page, a button that copies them and the warning that the slicer falls back to the default printer profile; it is also written down in docs/ELEGOOSLICER.md. Implemented by **lpgamerzockt-ops** (#407).
 
 - Native touchscreen source candidate: Hungarian, Czech and Polish in a fourteen-language selector, persistent display preference, X/Y Home labels, chamber-temperature glyph and a themed Back control. Prepared and printer-tested in its earlier languages/graphics revision by **Neme77**; the new Back control and cumulative updater integration remain under qualification before release (#379).

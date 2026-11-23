@@ -731,6 +731,8 @@
   "plates.mounted_plate": "Mounted plate",
   "plates.no_plate_mounted": "No plate is mounted. Mount one to load its mesh and keep its Z offset applied.",
   "plates.forget_mounted": "Remove",
+  "plates.add_other_side": "Add side {side}",
+  "plates.other_side_added": "Side {side} of “{name}” added: calibrate it now",
   "plates.side_n": "Side {side}",
   "plates.z_offset": "Z offset",
   "plates.z_applied": "applied",
