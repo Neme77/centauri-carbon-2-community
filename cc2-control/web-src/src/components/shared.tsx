@@ -422,7 +422,9 @@ export const CameraStream = ({
   const viewer = useRef('')
   if (!viewer.current) viewer.current = viewerId()
   const holder = useRef<Holder>({ stop: () => {}, held: () => false })
-  const beat = useRef<number | undefined>(undefined)
+  // The heartbeat of the live entry (see above) runs on the shared scheduler, also while the tab is hidden.
+  const beat = useRef<(() => void) | undefined>(undefined)
+  const heartbeat = useRef(() => writeLive(viewer.current))
   const claimed = useRef(0) // when the backend confirmed this page's claim; 0 while it has none
   const starts = useRef(0)
   const pausedHidden = useRef(false)
@@ -446,7 +448,7 @@ export const CameraStream = ({
     element.removeAttribute('src')
   }
   const stop = (why: Key | '' = '') => {
-    clearInterval(beat.current)
+    beat.current?.()
     beat.current = undefined
     if (readLive()?.id === viewer.current) writeLive(null)
     live.current = false
@@ -513,8 +515,8 @@ export const CameraStream = ({
       if (attempt === starts.current) {
         claimed.current = performance.now()
         writeLive(viewer.current)
-        clearInterval(beat.current)
-        beat.current = window.setInterval(() => writeLive(viewer.current), LIVE_BEAT_MS)
+        beat.current?.()
+        beat.current = poll(heartbeat.current, LIVE_BEAT_MS, { hidden: true })
       }
     } catch (e) {
       if (attempt === starts.current && live.current) {
@@ -583,7 +585,8 @@ export const CameraStream = ({
     return () => {
       document.removeEventListener('visibilitychange', hidden)
       window.removeEventListener('pagehide', leaving)
-      clearInterval(beat.current)
+      beat.current?.()
+      beat.current = undefined
       if (readLive()?.id === viewer.current) writeLive(null)
       live.current = false
       clearRetry()
