@@ -153,6 +153,16 @@ export const fits = (s: Spool, tray: { type: string; name?: string; color: strin
   return material && (!tray.color || s.color.toUpperCase() === tray.color.toUpperCase())
 }
 
+// A tray that holds filament but reports neither type nor colour (the printer's exclamation mark). `fits` takes
+// "nothing reported" as a match, which is right for "does the question need asking" but not for "is it worth writing".
+export const reportsNothing = (tray: { type: string; color: string } | null) =>
+  Boolean(tray && !tray.type && !tray.color)
+
+// Whether the spool's filament should be written to the tray: it differs from what the tray reports, or the tray
+// reports nothing at all. The question whether to ask which spool it is keeps using `fits` alone.
+export const needsWrite = (s: Spool, tray: { type: string; name?: string; color: string } | null) =>
+  !fits(s, tray) || reportsNothing(tray)
+
 /* ---- the inventory hierarchy: manufacturer > kind > colour > spool ------------------------- */
 
 const norm = (s: string) => s.trim().toLocaleLowerCase().replace(/ё/g, 'е')
