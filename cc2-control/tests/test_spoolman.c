@@ -1777,6 +1777,24 @@ static void test_a_failed_answer_between_two_404_starts_the_count_again(void) {
     puts("PASS: an error answer between two 404 answers starts the count again");
 }
 
+static void test_an_error_answer_starts_the_count_again_for_a_spool_without_usage(void) {
+    /* A spool with nothing to send is only refreshed: an error answer for it must end the run of 404 answers as well. */
+    fake_start(100, 600); fake.missing_id = 7; fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    cycle();
+    assert(sp->spoolman_miss == 1);
+    fake.missing_id = 0; fake.answer_all = 503;
+    cycle();
+    assert(sp->spoolman_miss == 0);
+    fake.answer_all = 0; fake.missing_id = 7;
+    cycle();
+    assert(sp->spoolman_miss == 1);                                            /* the first of a new run, not the second */
+    cycle();
+    assert(sp->spoolman_miss == 2 && spools.held_count == 0);                  /* nothing was pending: nothing to put on the list */
+    fake_finish(); teardown_file();
+    puts("PASS: an error answer starts the count of 404 answers again for a spool that has no usage to send, too");
+}
+
 static void test_a_5xx_while_sending_selected_is_settled_from_the_used_weight(void) {
     fake_start(100, 600); fake_launch();
     spool_entry *sp = setup_linked(0, 500);
@@ -1954,6 +1972,7 @@ int main(void) {
     test_remove_old_connections_with_a_full_list_changes_nothing();
     test_a_404_counts_only_while_the_list_answers();
     test_a_failed_answer_between_two_404_starts_the_count_again();
+    test_an_error_answer_starts_the_count_again_for_a_spool_without_usage();
     test_a_5xx_while_sending_selected_is_settled_from_the_used_weight();
     test_a_call_is_checked_as_a_whole_and_may_carry_all_32_entries();
     test_the_same_server_written_differently_is_not_a_new_server();
