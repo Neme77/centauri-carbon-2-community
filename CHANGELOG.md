@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Plate library: a plate with two usable faces no longer has to be re-added from scratch. The name is unique per side, so the same plate can exist as side A and side B; a new “Add side A/B” button on the plate card creates the other face with the same name and Z offset to calibrate on its own, and the two faces are kept next to each other in the list. Existing libraries need no migration. Requested and tested by **Neme77**, implemented with Claude Code.
+- Plate library: a plate with two usable faces no longer has to be re-added from scratch. The name is unique per side, so the same plate can exist as side A and side B; a new “Add side A/B” button on the plate card creates the other face with the same name and Z offset to calibrate on its own, and the two faces are kept next to each other in the list. Existing libraries need no migration. Requested and tested by **Neme77**, implemented with Claude Code (#421).
 
 - Settings → Integrations has an experimental guide for ElegooSlicer: a copy of the CC2 printer profile with five print-host entries makes the slicer's Device tab show CC2 Control and sends Print to CC2 Control, where the Canvas spool is confirmed before the print starts. The guide shows the configuration folder, the lines to add with the address of the page, a button that copies them and the warning that the slicer falls back to the default printer profile; it is also written down in docs/ELEGOOSLICER.md. Implemented by **lpgamerzockt-ops** (#407).
 
@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `GET /api/health` counts the layer-path work in memory: scans, requests refused as not fitting the running print, "busy" answers, bytes read, the longest and last scan in milliseconds, and the requests and scans the read hold stopped, so the load of a live layer view can be seen and compared. Designed and implemented by **lpgamerzockt-ops** (#398).
 - Dune, a warm light colour theme (Settings → Appearance): sand-coloured page, cream-white cards with a firm warm edge and a deep teal accent, so white surfaces stand out without the cold blue of the other light themes; text contrast of at least 4.5:1 on every surface. Requested and tested by **Neme77**, implemented with Claude Code (#413).
 - Swamp, a dark colour theme in sickly, rotten greens (Settings → Appearance): near-black moss page, olive panels and a mouldy olive-lime accent, with a cooler emerald kept for the "ok" status so it never reads as the accent; text contrast of at least 4.5:1 on every surface. Requested and tested by **Neme77**, implemented with Claude Code (#413).
+- KlipperScreen, a classic dark colour theme (Settings → Appearance) in the spirit of KlipperScreen's material look: flat Material grey, large rounded buttons, menu entries and cards, no shadows and a different colour for each menu icon; the palette is an approximation, text contrast is at least 4.5:1 on every surface. Requested and tested by **Neme77**, implemented with Claude Code (#420).
 
 ### Changed
 
