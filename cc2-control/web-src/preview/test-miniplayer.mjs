@@ -912,6 +912,40 @@ try {
     await keepClosed(p)
   })
 
+  // A claim answer that arrives after the viewer was stopped or removed must publish nothing and start nothing.
+  const lateClaim = async (label, endIt) => {
+    const p = await fresh(() => {
+      window.__live = []
+      const set = Storage.prototype.setItem
+      Storage.prototype.setItem = function (k, v) { if (k === 'cc2-camera-live') window.__live.push(Date.now()); return set.call(this, k, v) }
+    })
+    let release
+    const held = new Promise(r => { release = r })
+    let claims = 0
+    await p.route('**/api/camera/claim', async route => { claims++; await held; await route.continue() })
+    const before = requests
+    await p.getByRole('button', { name: 'Mini player', exact: true }).first().click()
+    await regionOf(p).waitFor()
+    await wait(() => claims >= 1, 'the claim is on its way (held)')
+    await p.evaluate(() => { window.__live = [] })
+    await endIt(p)
+    release()
+    await observe(2600) // longer than two heartbeats
+    assert.equal(await p.evaluate(() => window.__live.length), 0, `${label}: no live entry is written after the viewer ended (late claim answer)`)
+    assert.equal(await p.evaluate(() => localStorage.getItem('cc2-camera-live')), null, `${label}: no live entry remains`)
+    assert.equal(clients, 0, `${label}: no stream started`)
+    assert.equal(requests, before, `${label}: the camera was never requested`)
+    await p.unroute('**/api/camera/claim')
+    await p.close()
+    await wait(() => clients === 0, 'closed')
+  }
+  await soft('L41 a claim answer that arrives after Pause publishes no live entry, starts no heartbeat and no stream', async () => {
+    await lateClaim('stop', p => regionOf(p).getByRole('button', { name: 'Pause', exact: true }).click())
+  })
+  await soft('L42 a claim answer that arrives after the viewer was removed publishes no live entry, leaves no heartbeat and starts no stream', async () => {
+    await lateClaim('unmount', p => regionOf(p).getByRole('button', { name: 'Close mini player', exact: true }).click())
+  })
+
   await soft('L15 the pointer stops at the wall and keeps the right edge (size drag against the side menu)', async () => {
     const p = await fresh()
     await openMini(p)

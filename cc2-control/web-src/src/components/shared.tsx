@@ -423,6 +423,7 @@ export const CameraStream = ({
   if (!viewer.current) viewer.current = viewerId()
   const holder = useRef<Holder>({ stop: () => {}, held: () => false })
   // The heartbeat of the live entry (see above) runs on the shared scheduler, also while the tab is hidden.
+  const unmounted = useRef(false)
   const beat = useRef<(() => void) | undefined>(undefined)
   const heartbeat = useRef(() => writeLive(viewer.current))
   const claimed = useRef(0) // when the backend confirmed this page's claim; 0 while it has none
@@ -448,6 +449,7 @@ export const CameraStream = ({
     element.removeAttribute('src')
   }
   const stop = (why: Key | '' = '') => {
+    starts.current++ // an answer still on its way to a start that is now cancelled is stale
     beat.current?.()
     beat.current = undefined
     if (readLive()?.id === viewer.current) writeLive(null)
@@ -498,6 +500,7 @@ export const CameraStream = ({
       if (bare) pausedHidden.current = true
       return
     }
+    if (unmounted.current) return // e.g. a visibility check that was still waiting when the view was removed
     const attempt = ++starts.current
     clearRetry()
     live.current = true
@@ -512,7 +515,8 @@ export const CameraStream = ({
     try {
       const claim = await post('/api/camera/claim', viewer.current)
       if (claim?.viewer !== viewer.current) throw Error(t('common.camera_gave_up'))
-      if (attempt === starts.current) {
+      // A claim answer that arrives after Stop or removal is stale: it publishes nothing and starts no heartbeat.
+      if (attempt === starts.current && live.current) {
         claimed.current = performance.now()
         writeLive(viewer.current)
         beat.current?.()
@@ -532,6 +536,7 @@ export const CameraStream = ({
   // newest state first, it closes quietly if somebody else has the camera now, instead of taking it back from them.
   const resumeUnlessTaken = async () => {
     await refreshPrinter()
+    if (unmounted.current) return // the view was removed while the printer state was read
     const now = printer.get().data?.camera_viewer
     if (now && now !== viewer.current) onTakenOver?.()
     else await start()
@@ -579,12 +584,15 @@ export const CameraStream = ({
     const leaving = () => {
       if (live.current) stop('common.camera_paused_hidden')
     }
+    unmounted.current = false
     document.addEventListener('visibilitychange', hidden)
     window.addEventListener('pagehide', leaving)
     if (standalone) void start() // opening the camera window (or the bare picture) is the explicit start
     return () => {
       document.removeEventListener('visibilitychange', hidden)
       window.removeEventListener('pagehide', leaving)
+      unmounted.current = true
+      starts.current++ // a claim answer still on its way is stale
       beat.current?.()
       beat.current = undefined
       if (readLive()?.id === viewer.current) writeLive(null)
