@@ -1194,11 +1194,18 @@ reach the printer.
   `not_found` or `unsure`; `spool` and `name` are the spool on this printer, `spoolman_id` the Spoolman spool it was meant
   for; `sending` while a request for it is out), and `spoolman_stale_links` is the number of spools still linked to
   numbers of the old server after a change of the address. At most 32 entries; amounts for the same spool, link and
-  reason are added to one. Nothing on the list is sent by itself.
-  - `POST /api/spoolman/held/send`: one line `<entry id>=<Spoolman spool id>` for each chosen entry. `202` once the
+  reason are added to one. Nothing on the list is sent by itself. `spoolman_gen` is the generation of the server
+  settings: it changes with every change of the address or the login (a restore of a backup too) and differs after every
+  start of CC2 Control, but not when the same server is written differently or the sync is switched off and on. A
+  `login_changed` entry becomes `server_changed` when the address changes later, because its number then belongs to the
+  old server.
+  - `POST /api/spoolman/held/send`: a line `gen=<spoolman_gen>` (the generation the spools were chosen under, taken from
+    the catalog the page chose from) and one line `<entry id>=<Spoolman spool id>` for each chosen entry. `202` once the
     request has started (the result shows in `spoolman_held`: a sent entry is gone, one that could not be sent stays,
     one whose answer is lost and not settled by the used weight becomes `unsure`, one whose spool Spoolman does not
-    have becomes `not_found`). `400` without a spool id, `404` for an unknown entry, `409` for an `unsure` entry or one
+    have becomes `not_found`). `400` without `gen` or with one that is not a number, or without a spool id, `409` when `gen` is not the
+    current generation (the address or login changed since the spools were chosen: nothing is sent, not to the new server
+    either; the page asks again), `400` also when one entry is named twice (`1` and `01` are the same entry), `404` for an unknown entry, `409` for an `unsure` entry or one
     being sent, while the sync is off, or while another Spoolman request is running (a sync cycle can take up to about 135 s; try again).
   - `POST /api/spoolman/held/discard` (`id`) takes one entry off the list and sends nothing (`404`, or `409` while it is being sent).
   - `POST /api/spoolman/unlink-old` unlinks the spools that were linked when the address changed (the spools stay; their pending
@@ -1208,7 +1215,10 @@ reach the printer.
     a sync reads from Spoolman is not applied to those spools (name, material, colour, brand, weight) and no usage is
     sent to Spoolman (it stays unsent and is dealt with after the choice); importing new spools goes on.
   - `GET /api/spoolman/catalog` (the choice next to each entry) is read in the same sorted pages as the sync, at most 200 spools;
-    `truncated` is `true` when Spoolman has more.
+    `truncated` is `true` when Spoolman has more. It carries `gen`, the generation of the server settings the list was read
+    under. A list read under another generation is never served: after a change of the address or login the answer has
+    the new `gen`, no spools and the error `Not fetched yet` until `POST /api/spoolman/catalog/refresh` has read the new
+    server; a read that was started for the old server and ends later is dropped and does not count as `loading`.
   - The list is saved with the spool library, is not part of a backup, and a spool library file from before it has none of its keys.
 
 ## Bounded asynchronous G-code analysis
