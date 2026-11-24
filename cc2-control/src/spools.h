@@ -1089,6 +1089,31 @@ static int spool_slot_value(const char *text) {
     return strlen(text) == 1 && text[0] >= '0' && text[0] <= '4' ? text[0] - '0' : -1;
 }
 
+/* Protect both reported feed candidates during a colour change. If the native
+ * channel is unavailable, usage can still belong to the last counted tray. */
+static unsigned spools_feeding_slots(const mqtt_client *mqtt) {
+    const char *native_state = uds_print_state(&telemetry);
+    int printing = (mqtt->have_machine_status && mqtt->machine_status == 2) ||
+                   (native_state && (!strcmp(native_state, "printing") || !strcmp(native_state, "paused")));
+    if (!printing) return 0;
+
+    double channel;
+    int active = uds_value(&telemetry, U_CANVAS_CHANNEL, &channel) &&
+                 channel >= 0 && channel < SPOOL_EXTERNAL && channel == floor(channel) ? (int)channel : -1;
+    int reported = mqtt->have_canvas_active_tray ? mqtt->canvas_active_tray_id : -1;
+    int last = active < 0 && spools.job.active ? spools.job.last_tray : -1;
+    unsigned feeding = 0;
+    for (int slot = 0; slot < SPOOL_EXTERNAL; ++slot)
+        if (slot == active || slot == reported || slot == last) feeding |= 1u << slot;
+    return feeding;
+}
+
+static int spools_is_feeding(unsigned feeding, const char *id) {
+    for (int slot = 0; slot < SPOOL_EXTERNAL; ++slot)
+        if ((feeding & (1u << slot)) && !strcmp(spools.slots[slot].spool, id)) return 1;
+    return 0;
+}
+
 /* Puts a spool into a tray. A spool sits in one place only, so it leaves any other.
  * What the tray extruded while its question was open is charged to it. */
 static void spools_bind(int index, spool_entry *sp) {
@@ -1197,7 +1222,7 @@ static void spools_enable_response(int fd, const mqtt_client *mqtt, const char *
 
 /* Creates (no id) or edits a spool from key=value lines. Its remaining weight is set only
  * when it is created: then prints change it, and /api/spools/adjust corrects it. */
-static void spools_save_response(int fd, const char *body, size_t length) {
+static void spools_save_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
     spool_form f;
     if (!spool_form_parse(body, length, &f)) { spools_fail(fd, 400, "Invalid spool"); return; }
     if (!spools_open(fd)) return;
@@ -1263,6 +1288,13 @@ static void spools_save_response(int fd, const char *body, size_t length) {
         spools_fail(fd, 400, "Invalid slot"); return;
     }
     if (!s.material[0] || !s.color[0]) { spools_fail(fd, 400, "A spool needs a material and a colour"); return; }
+    unsigned feeding = spools_feeding_slots(mqtt);
+    if (slot >= 0 && (feeding & (1u << slot)) && spools.slots[slot].spool[0]) {
+        spools_fail(fd, 409, "Cannot replace the assignment in a feeding Canvas slot"); return;
+    }
+    if (existing && s.archived && spools_is_feeding(feeding, s.id)) {
+        spools_fail(fd, 409, "Cannot archive a Canvas spool that is feeding a print"); return;
+    }
     spool_store *before = spools_snapshot(fd);
     if (!before) return;
     spool_entry *target = existing;
@@ -1281,13 +1313,16 @@ static void spools_save_response(int fd, const char *body, size_t length) {
     if (spools_commit(fd, before)) spools_reply(fd, existing ? 200 : 201, reply);
 }
 
-static void spools_delete_response(int fd, const char *body, size_t length) {
+static void spools_delete_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
     spool_form f;
     const char *id;
     if (!spool_form_parse(body, length, &f) || !(id = spool_form_get(&f, "id"))) { spools_fail(fd, 400, "Invalid spool"); return; }
     if (!spools_open(fd)) return;
     spool_entry *sp = spool_find(id);
     if (!sp) { spools_fail(fd, 404, "Unknown spool"); return; }
+    if (spools_is_feeding(spools_feeding_slots(mqtt), id)) {
+        spools_fail(fd, 409, "Cannot delete a Canvas spool that is feeding a print"); return;
+    }
     spool_store *before = spools_snapshot(fd);
     if (!before) return;
     for (int i = 0; i < SPOOL_SLOTS; ++i) {
@@ -1302,7 +1337,7 @@ static void spools_delete_response(int fd, const char *body, size_t length) {
 }
 
 /* slot=N and spool=<id>: the spool now in that tray; an empty id empties it. */
-static void spools_assign_response(int fd, const char *body, size_t length) {
+static void spools_assign_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
     spool_form f;
     const char *id;
     int slot;
@@ -1312,6 +1347,14 @@ static void spools_assign_response(int fd, const char *body, size_t length) {
     spool_entry *sp = NULL;
     if (id[0] && !(sp = spool_find(id))) { spools_fail(fd, 404, "Unknown spool"); return; }
     if (sp && sp->archived) { spools_fail(fd, 409, "An archived spool cannot be loaded"); return; }
+    unsigned feeding = spools_feeding_slots(mqtt);
+    const char *assigned = spools.slots[slot].spool;
+    if ((feeding & (1u << slot)) && (!sp || (assigned[0] && strcmp(assigned, id)))) {
+        spools_fail(fd, 409, "Cannot clear or replace the assignment in a feeding Canvas slot"); return;
+    }
+    if (sp && spools_is_feeding(feeding & ~(1u << slot), id)) {
+        spools_fail(fd, 409, "Cannot move a Canvas spool that is feeding a print"); return;
+    }
     spool_store *before = spools_snapshot(fd);
     if (!before) return;
     if (sp) spools_bind(slot, sp);

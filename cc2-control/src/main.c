@@ -6256,6 +6256,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/uds")==0) {
         uds_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/printer")==0) {
+        /* The spool watcher lives on every page. While someone is watching a
+         * print, keep its tray list current even off the Canvas page. */
+        if(spools.enabled&&mqtt->have_machine_status&&mqtt->machine_status==2)
+            mqtt->canvas_watch_until=time(NULL)+15;
         printer_response(fd, mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/camera/claim")==0) {
         camera_claim_response(fd, body, body_len);
@@ -6429,11 +6433,11 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/enable")==0) {
         spools_enable_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/save")==0) {
-        spools_save_response(fd,body,body_len);
+        spools_save_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/delete")==0) {
-        spools_delete_response(fd,body,body_len);
+        spools_delete_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/assign")==0) {
-        spools_assign_response(fd,body,body_len);
+        spools_assign_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/dismiss")==0) {
         spools_dismiss_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spools/adjust")==0) {

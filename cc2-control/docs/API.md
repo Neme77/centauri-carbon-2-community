@@ -1100,6 +1100,11 @@ A tray report fits a spool when the colour is the same and the spool's material 
 name, or is a product line of that type: `PLA Matte`, `PLA-CF` and `PLA+` fit a tray that reports `PLA`.
 A change to a filament that still fits the bound spool asks nothing.
 
+While a visible web page is checking printer status during a print, enabled spool tracking renews the same
+Canvas watch used on the Canvas page. The printer supplies the tray data, and the existing 10-second MQTT
+refresh interval is shared across pages. The spool chooser can assign a newly inserted standby spool in the
+inventory while printing. Preparing the tray's material and colour on the printer requires Idle.
+
 Endpoints (changes are `POST` with `key=value` lines and need `X-CC2-Request: 1`):
 
 - `GET /api/spools` returns `enabled`, every slot with its spool, the spool it held before (`last`), an open
@@ -1111,11 +1116,16 @@ Endpoints (changes are `POST` with `key=value` lines and need `X-CC2-Request: 1`
   `diameter`, `density`, `net`, `tare` (empty spool weight), `low` (warning level), `price`, `note`,
   `archived` (`0`/`1`). `remaining` is accepted only when creating; `slot` puts a new spool straight into a
   tray and answers its question.
-- `/api/spools/assign` (`slot`, `spool`; an empty `spool` empties the slot). A spool sits in one place, so it
-  leaves any other slot.
+- `/api/spools/assign` takes `slot` and `spool`. An empty spool ID requests clearing the slot. Each spool can be
+  assigned to one slot at a time.
 - `/api/spools/dismiss` (`slot`) answers a question with "no spool": the tray's use is not counted.
 - `/api/spools/adjust` (`id` and `remaining` or `gross`): a weigh-in. `gross` subtracts the spool's `tare`.
 - `/api/spools/delete` (`id`). Log entries keep the id.
+
+During printing or a pause, clearing a feeding Canvas slot or replacing its assigned spool returns `409`.
+Moving, archiving or deleting that spool also returns `409`. A feeding slot can receive its first assignment
+or confirm its current spool. A channel change can temporarily protect both the native and MQTT feed
+candidates. When the native channel is unavailable, the last counted Canvas channel remains protected.
 
 Texts are UTF-8 without quotes, backslashes or control characters (name, brand and note up to 96 bytes,
 material up to 32). The file is replaced atomically after each change, and while printing at most every two

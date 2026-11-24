@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Assign a newly inserted standby CANVAS spool during a print. Spool tracking refreshes the tray list on any open page and protects the feeding spool's assignment from manual clearing, replacement, transfer, archiving and deletion during printing or a pause. An experimental module for the pinned ELEGOO 02.01.01.07 base can grip filament at a spare inlet during steady printing. Reported by **Sceletor** (#234), implemented and tested by **beanbo** (#399).
+
 - After a bed mesh calibration replaces a saved measurement, the previous mesh is kept. Bed Levelling opens the change (new mesh minus the previous one) in the 3D view, the heat map and the value table: blue is lower than before, amber is higher, and the range is how the plate shape changed. The same view stays available on that measurement until the next change. Designed and implemented by **beanbo** (#418).
 
 - Settings → Integrations has an experimental guide for ElegooSlicer: a copy of the CC2 printer profile with five print-host entries makes the slicer's Device tab show CC2 Control and sends Print to CC2 Control, where the Canvas spool is confirmed before the print starts. The guide shows the configuration folder, the lines to add with the address of the page, a button that copies them and the warning that the slicer falls back to the default printer profile; it is also written down in docs/ELEGOOSLICER.md. Implemented by **lpgamerzockt-ops** (#407).

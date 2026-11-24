@@ -17,6 +17,12 @@ const setup = `{
   if(path.includes('/api/spools/')&&options.method==='POST'){
    s.posts.push({path,body:String(options.body),marker:new Headers(options.headers).get('X-CC2-Request')});
    if(s.reject) return reply({error:'Fixture refusal'},409);
+   if(path.endsWith('/assign')) {
+    const fields=new URLSearchParams(String(options.body).trim().split('\\n').join('&'));
+    Object.assign(s.spoolLibrary.slots[Number(fields.get('slot'))],{spool:fields.get('spool'),question:''});
+    s.spoolLibrary.revision++;
+    return reply({assigned:true});
+   }
    if(path.endsWith('/save')) {
     const fields=Object.fromEntries(String(options.body).split('\\n').map(line=>{const n=line.indexOf('=');return [line.slice(0,n),line.slice(n+1)]}));
     const id='created-'+s.spoolLibrary.spools.length;
@@ -114,5 +120,48 @@ try {
   assert.deepEqual(errors,[])
   await page.close()
  }
- console.log('PASS: insertion copy, separate identity/source slot, gross/tare/manual weights, validation, explicit refused-save retry, unchanged inventory editor; desktop/mobile, EN/IT, dark/light')
+ const live=await fixture(setup+`{
+  const s=window.__CC2_PREVIEW;
+  Object.assign(s,{status:2,activeTray:0,headLoaded:true});
+  s.trays[0].status=2;
+  s.trays[1].status=0;
+  s.spoolLibrary.slots[0].printer.status=2;
+  Object.assign(s.spoolLibrary.slots[1],{question:'',last:'source'});
+  s.spoolLibrary.slots[1].printer.status=0;
+  const source=s.spoolLibrary.spools[0];
+  s.spoolLibrary.spools=[source,{...source,id:'spare',spoolman_id:'',name:'Graphite PLA',color:'#101010'}];
+ }`)
+ try {
+  const page=await browser.newPage()
+  await page.addInitScript(()=>localStorage.setItem('cc2-fixture-preferences','{"language":"en"}'))
+  await page.goto(live.url+'#spools')
+  const standby=page.locator('[data-slot="1"]')
+  await standby.getByText('Empty', {exact:true}).waitFor()
+  await page.evaluate(()=>{
+   const s=window.__CC2_PREVIEW
+   s.trays[1].status=1
+   Object.assign(s.spoolLibrary.slots[1],{question:'inserted',question_since:2})
+   s.spoolLibrary.slots[1].printer.status=1
+   s.spoolLibrary.revision++
+  })
+  const dialog=page.getByRole('dialog')
+  await dialog.getByText('Graphite PLA',{exact:true}).waitFor()
+  assert.equal(await dialog.getByText('ELEGOO PLA Black',{exact:true}).count(),0)
+  assert.equal(await dialog.getByRole('radio',{name:/Graphite PLA/}).isChecked(),true)
+  assert.equal(await dialog.getByRole('checkbox').count(),0)
+  await dialog.getByRole('button',{name:'Confirm',exact:true}).click()
+  await dialog.waitFor({state:'hidden'})
+  await standby.getByText('Graphite PLA',{exact:true}).waitFor()
+  const result=await page.evaluate(()=>{
+   const s=window.__CC2_PREVIEW
+   return {active:s.spoolLibrary.slots[0].spool,standby:s.spoolLibrary.slots[1].spool,commands:s.commands}
+  })
+  assert.equal(result.active,'source')
+  assert.equal(result.standby,'spare')
+  assert.deepEqual(result.commands,[])
+  await page.close()
+ } finally {
+  await live.cleanup()
+ }
+ console.log('PASS: insertion copy and weighing; live insertion suggests a free matching spool and assigns it in the library')
 }finally{await browser.close();await demo.cleanup()}
