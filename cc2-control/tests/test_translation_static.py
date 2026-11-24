@@ -29,10 +29,11 @@ required = (
 for marker in required:
     assert marker in src, f"missing translation-wiring marker: {marker}"
 
-# Every toast goes through t()/tpl(); `m` is an already-translated message and errText() is backend text.
+# Every toast goes through t()/tpl(); `m` is an already-translated message, errText() is backend text and refusalText() is
+# the translated text of a refusal that carries a code (English backend text for any other).
 for match in re.finditer(r"\bnotify\(([^)]*)", src):
     arg = match.group(1).strip()
-    assert arg.startswith(("t(", "tpl(", "errText(")) or re.fullmatch(r"m(, 'error')?", arg), f"untranslated notify(): {match.group(0)}"
+    assert arg.startswith(("t(", "tpl(", "errText(", "refusalText(")) or re.fullmatch(r"m(, 'error')?", arg), f"untranslated notify(): {match.group(0)}"
 
 for locale, spot_checks in {
     "it": {
