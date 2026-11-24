@@ -30,7 +30,7 @@ try {
   await page.route('**/api/spools', async r => {
     const response = await r.fetch()
     const data = await response.json()
-    Object.assign(data, { spoolman_enabled: true, spoolman_url: 'http://192.0.2.5:7912', spoolman_has_auth: false, spoolman_stale_links: 0, spoolman_held: held })
+    Object.assign(data, { spoolman_enabled: true, spoolman_url: 'http://192.0.2.5:7912', spoolman_has_auth: false, spoolman_gen: 5, spoolman_stale_links: 0, spoolman_held: held })
     await r.fulfill({ json: data })
   })
   await page.route('**/api/spoolman', r => {
@@ -42,7 +42,7 @@ try {
     return r.fulfill({ status: 202, json: { ok: true } })
   })
   await page.route('**/api/spoolman/catalog', r =>
-    r.fulfill({ json: spoolman.up ? { loading: false, error: '', spools: spoolsOf } : { loading: false, error: 'unreachable', spools: [] } }))
+    r.fulfill({ json: spoolman.up ? { gen: 5, loading: false, error: '', spools: spoolsOf } : { gen: 5, loading: false, error: 'unreachable', spools: [] } }))
   await page.addInitScript(() => localStorage.setItem('cc2-spoolman-held-seen', '99'))
 
   const choice = () => page.locator('[data-held-id="1"]').getByRole('combobox')

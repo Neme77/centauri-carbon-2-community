@@ -1198,6 +1198,7 @@
   "spools.held_sending": "Odesílání…",
   "spools.held_sent_toast": "Odesláno do Spoolman.",
   "spools.held_send_failed": "Některá množství se nepodařilo odeslat. Zůstávají v seznamu.",
+  "spools.held_settings_changed": "Adresa nebo přihlášení k Spoolman se změnily, zatímco jste vybírali. Seznam byl aktualizován a nic nebylo odesláno. Vyberte cívky znovu.",
   "spools.held_catalog_failed": "Seznam cívek se ze Spoolman nepodařilo načíst.",
   "spools.held_unlinked_toast": "Stará propojení odebrána.",
   "spools.held_target_unknown": "Cívka Spoolman {id}",

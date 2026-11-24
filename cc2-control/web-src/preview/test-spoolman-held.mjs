@@ -29,7 +29,7 @@ try {
   let state = fresh()
   const writes = [], errors = []
   const catalog = {
-    loading: false, error: '',
+    gen: 5, loading: false, error: '',
     spools: [
       { id: '7', name: 'Black PLA', material: 'PLA', color: '#101010', remaining: 810.4 },
       { id: '21', name: 'Silk Blue', material: 'PLA Silk', color: '#2244CC', remaining: 640 },
@@ -45,7 +45,7 @@ try {
   await page.route('**/api/spools', async r => {
     const response = await r.fetch()
     const data = await response.json()
-    Object.assign(data, { spoolman_enabled: state.enabled, spoolman_url: 'http://192.0.2.5:7912', spoolman_has_auth: false, spoolman_stale_links: state.stale, spoolman_held: state.held })
+    Object.assign(data, { spoolman_enabled: state.enabled, spoolman_url: 'http://192.0.2.5:7912', spoolman_has_auth: false, spoolman_gen: 5, spoolman_stale_links: state.stale, spoolman_held: state.held })
     await r.fulfill({ json: data })
   })
   await page.route('**/api/spoolman/catalog/refresh', r => r.fulfill({ status: 202, json: { ok: true } }))
@@ -145,7 +145,7 @@ try {
   await page.screenshot({ path: path.join(shots, 'held-1440-selected.png') })
   await send.click()
   await page.getByRole('heading', { name: 'Usage not sent to Spoolman (2 entries)', exact: true }).waitFor()
-  assert.deepEqual(writes, [['send', '1=7\n2=21']])
+  assert.deepEqual(writes, [['send', 'gen=5\n1=7\n2=21']])
   assert.equal(await row(1).count() + (await row(2).count()), 0)
   assert.equal(await row(3).count(), 1)
   await page.getByText('Sent to Spoolman.', { exact: true }).waitFor()

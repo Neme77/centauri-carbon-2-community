@@ -1198,6 +1198,7 @@
   "spools.held_sending": "Wird gesendet …",
   "spools.held_sent_toast": "An Spoolman gesendet.",
   "spools.held_send_failed": "Einige Mengen konnten nicht gesendet werden. Sie stehen weiter in der Liste.",
+  "spools.held_settings_changed": "Die Spoolman-Adresse oder die Anmeldung hat sich geändert, während du ausgewählt hast. Die Liste wurde aktualisiert, es wurde nichts gesendet. Wähle die Spools noch einmal aus.",
   "spools.held_catalog_failed": "Die Spool-Liste konnte nicht von Spoolman gelesen werden.",
   "spools.held_unlinked_toast": "Alte Verbindungen entfernt.",
   "spools.held_target_unknown": "Spoolman-Spool {id}",

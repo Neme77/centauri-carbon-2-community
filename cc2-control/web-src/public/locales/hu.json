@@ -1198,6 +1198,7 @@
   "spools.held_sending": "Küldés…",
   "spools.held_sent_toast": "Elküldve a Spoolmannak.",
   "spools.held_send_failed": "Néhány mennyiséget nem sikerült elküldeni. Továbbra is a listán vannak.",
+  "spools.held_settings_changed": "A Spoolman címe vagy bejelentkezése megváltozott, miközben választottál. A lista frissült, semmi sem lett elküldve. Válaszd ki újra a tekercseket.",
   "spools.held_catalog_failed": "A tekercsek listáját nem sikerült beolvasni a Spoolmanból.",
   "spools.held_unlinked_toast": "Régi kapcsolatok eltávolítva.",
   "spools.held_target_unknown": "Spoolman-tekercs {id}",

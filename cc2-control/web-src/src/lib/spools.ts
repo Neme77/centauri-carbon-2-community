@@ -64,6 +64,9 @@ export type SpoolLibrary = {
   // still linked to numbers of the old server after an address change.
   spoolman_held?: HeldEntry[]
   spoolman_stale_links?: number
+  // Changes with every change of the Spoolman address or login (and after every start of the printer program): what was
+  // read from Spoolman and what was chosen from it is only valid under the generation it was read under.
+  spoolman_gen?: number
 }
 export type HeldReason = 'login_changed' | 'server_changed' | 'not_found' | 'unsure'
 export type HeldEntry = {
@@ -77,6 +80,7 @@ export type HeldEntry = {
   sending: boolean
 }
 export type SpoolmanCatalog = {
+  gen?: number // the generation of the server settings the list was read under (SpoolLibrary.spoolman_gen)
   loading: boolean
   error: string
   spools: { id: string; name: string; material: string; color: string; remaining: number }[]
@@ -399,7 +403,10 @@ export const saveSpoolmanConfig = (fields: { enabled?: boolean; url?: string; ba
   post('/api/spoolman', lines(fields))
 
 // The list of usage that was not sent to Spoolman. Nothing here runs by itself: every call is a button.
-export const sendHeld = (picks: Record<string, string>) => post('/api/spoolman/held/send', lines(picks))
+// `gen` is the generation the spools were chosen under: the printer refuses the request (409) when the address or the login
+// changed since, instead of reading the numbers against another server.
+export const sendHeld = (picks: Record<string, string>, gen: number | undefined) =>
+  post('/api/spoolman/held/send', `gen=${gen ?? ''}\n${lines(picks)}`)
 export const discardHeld = (id: number) => post('/api/spoolman/held/discard', lines({ id }))
 export const unlinkOldConnections = () => post('/api/spoolman/unlink-old')
 export const keepOldConnections = () => post('/api/spoolman/keep-old')

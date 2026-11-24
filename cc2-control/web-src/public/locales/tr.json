@@ -1198,6 +1198,7 @@
   "spools.held_sending": "Gönderiliyor…",
   "spools.held_sent_toast": "Spoolman’a gönderildi.",
   "spools.held_send_failed": "Bazı miktarlar gönderilemedi. Hâlâ listede.",
+  "spools.held_settings_changed": "Siz seçim yaparken Spoolman adresi veya girişi değişti. Liste güncellendi ve hiçbir şey gönderilmedi. Makaraları yeniden seçin.",
   "spools.held_catalog_failed": "Makara listesi Spoolman’dan okunamadı.",
   "spools.held_unlinked_toast": "Eski bağlantılar kaldırıldı.",
   "spools.held_target_unknown": "Spoolman makarası {id}",

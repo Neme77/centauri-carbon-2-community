@@ -1198,6 +1198,7 @@
   "spools.held_sending": "Sending…",
   "spools.held_sent_toast": "Sent to Spoolman.",
   "spools.held_send_failed": "Some amounts could not be sent. They are still on the list.",
+  "spools.held_settings_changed": "The Spoolman address or login changed while you were choosing. The list was updated and nothing was sent. Choose the spools again.",
   "spools.held_catalog_failed": "The spool list could not be read from Spoolman.",
   "spools.held_unlinked_toast": "Old connections removed.",
   "spools.held_target_unknown": "Spoolman spool {id}",

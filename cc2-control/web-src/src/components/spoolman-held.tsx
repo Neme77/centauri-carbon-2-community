@@ -43,9 +43,20 @@ const newestChange = (entries: HeldEntry[]) =>
   entries.reduce((n, e) => (e.reason === 'login_changed' || e.reason === 'server_changed' ? Math.max(n, e.id) : n), 0)
 const seen = () => Number(ls.get(SEEN)) || 0
 
+// The page mounts this with `key={lib.spoolman_gen}`: after a change of the Spoolman address or login it is a new
+// instance, so the catalog, the ticks and the chosen spools of the old server are gone at once, and an answer that was
+// still on its way for the old server finds nobody to fill. `gen` is constant for the life of an instance.
 export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: Act }) => {
   const entries = lib.spoolman_held ?? []
   const stale = lib.spoolman_stale_links ?? 0
+  const gen = lib.spoolman_gen
+  const alive = useRef(true)
+  useEffect(
+    () => () => {
+      alive.current = false
+    },
+    []
+  )
   const [picked, setPicked] = useState<Record<number, boolean>>({})
   const [chosen, setChosen] = useState<Record<number, string>>({})
   const [catalog, setCatalog] = useState<SpoolmanCatalog | null>(null)
@@ -59,9 +70,20 @@ export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: bool
 
   const read = async () => {
     reading.current = true
-    const got = await loadSpoolmanCatalog().catch(() => ({ loading: false, error: 'x', spools: [] }) as SpoolmanCatalog)
+    const got = await loadSpoolmanCatalog().catch(
+      () => ({ loading: false, error: 'x', spools: [], gen }) as SpoolmanCatalog
+    )
+    if (!alive.current) return
+    if (got.gen !== gen) {
+      // The printer's settings changed after this page last looked: this is another server's list. Look again; the
+      // new generation replaces this instance.
+      reading.current = false
+      void refreshSpools()
+      return
+    }
     if (got.spools.length) retries.current = 0
     else lastSync.current = (await spoolmanSyncState()).time
+    if (!alive.current) return
     reading.current = false
     setCatalog(got)
   }
@@ -107,8 +129,16 @@ export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: bool
   const send = () =>
     act(async () => {
       const ids = picks.map(e => e.id)
-      await sendHeld(Object.fromEntries(picks.map(e => [String(e.id), target(e)])))
-      setPicked({})
+      try {
+        await sendHeld(Object.fromEntries(picks.map(e => [String(e.id), target(e)])), gen)
+      } catch (e) {
+        // Refused because the address or login changed since this list was loaded: say so in the page's language.
+        await refreshSpools()
+        if (spools.get().data?.spoolman_gen === gen) throw e
+        notify(t('spools.held_settings_changed'), 'error')
+        return
+      }
+      if (alive.current) setPicked({})
       // The request runs on the printer; the list shows it as sending until Spoolman has answered.
       for (let i = 0; i < 220; i++) {
         await sleep(700)
