@@ -413,3 +413,12 @@ export async function loadSpoolmanCatalog(): Promise<SpoolmanCatalog> {
   }
   return catalog
 }
+// When the printer last read Spoolman successfully. This asks the printer, not Spoolman.
+export async function spoolmanSyncState(): Promise<{ time: number; ok: boolean }> {
+  try {
+    const s = (await request('/api/spoolman')) as { last_sync?: number; result?: string }
+    return { time: Number(s.last_sync) || 0, ok: s.result === 'ok' }
+  } catch {
+    return { time: 0, ok: false }
+  }
+}

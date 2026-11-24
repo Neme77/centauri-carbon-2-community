@@ -18,6 +18,7 @@ import {
   type SpoolLibrary,
   type SpoolmanCatalog,
   spools,
+  spoolmanSyncState,
   unlinkOldConnections,
 } from '@/lib/spools'
 
@@ -50,14 +51,41 @@ export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: bool
   const [catalog, setCatalog] = useState<SpoolmanCatalog | null>(null)
   const [noticeFor, setNoticeFor] = useState(0)
   const asked = useRef(false)
+  const reading = useRef(false)
+  const lastSync = useRef(0) // the printer's last sync when the read of the spools failed
+  const retries = useRef(0)
   const sendable = entries.filter(e => e.reason !== 'unsure')
+  const noSpools = !!catalog && !catalog.spools.length
 
-  // Spoolman's spools for the choice next to each entry: read once, when there is something to choose for.
+  const read = async () => {
+    reading.current = true
+    const got = await loadSpoolmanCatalog().catch(() => ({ loading: false, error: 'x', spools: [] }) as SpoolmanCatalog)
+    if (got.spools.length) retries.current = 0
+    else lastSync.current = (await spoolmanSyncState()).time
+    reading.current = false
+    setCatalog(got)
+  }
+  // Spoolman's spools for the choice next to each entry: read when there is something to choose for.
   useEffect(() => {
     if (!sendable.length || asked.current) return
     asked.current = true
-    loadSpoolmanCatalog().then(setCatalog, () => setCatalog({ loading: false, error: 'x', spools: [] }))
+    void read()
   }, [sendable.length])
+  // Spoolman could not be read: ask again after the printer's next good sync (never more than three times in a row),
+  // so the choice fills itself without a reload. The printer's sync is checked with every refresh of the page.
+  useEffect(() => {
+    if (!noSpools || !sendable.length || reading.current || retries.current >= 3) return
+    let live = true
+    spoolmanSyncState().then(sync => {
+      if (!live || reading.current || !sync.ok || sync.time <= lastSync.current) return
+      retries.current++
+      lastSync.current = sync.time
+      void read()
+    })
+    return () => {
+      live = false
+    }
+  }, [lib, noSpools])
   // The notice after a change: once per change, until "Review" is pressed.
   const newest = newestChange(entries)
   useEffect(() => {
@@ -248,7 +276,7 @@ export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: bool
                 </li>
               ))}
             </ul>
-            {catalog && !catalog.spools.length && sendable.length > 0 && (
+            {noSpools && sendable.length > 0 && (
               <p class="mt-2 text-xs text-muted">{t('spools.held_catalog_failed')}</p>
             )}
             {catalog?.truncated && sendable.length > 0 && (
