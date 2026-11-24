@@ -1198,6 +1198,7 @@
   "spools.held_sending": "Envoi en cours…",
   "spools.held_sent_toast": "Envoyé à Spoolman.",
   "spools.held_send_failed": "Certaines quantités n’ont pas pu être envoyées. Elles figurent toujours dans la liste.",
+  "spools.held_settings_changed": "L’adresse ou l’identifiant de Spoolman a changé pendant votre choix. La liste a été mise à jour et rien n’a été envoyé. Choisissez de nouveau les bobines.",
   "spools.held_catalog_failed": "La liste des bobines n’a pas pu être lue depuis Spoolman.",
   "spools.held_unlinked_toast": "Anciennes connexions retirées.",
   "spools.held_target_unknown": "Bobine Spoolman {id}",

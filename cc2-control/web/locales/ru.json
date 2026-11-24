@@ -1198,6 +1198,7 @@
   "spools.held_sending": "Отправка…",
   "spools.held_sent_toast": "Отправлено в Spoolman.",
   "spools.held_send_failed": "Некоторые количества не удалось отправить. Они остались в списке.",
+  "spools.held_settings_changed": "Адрес или вход в Spoolman изменились, пока вы выбирали. Список обновлён, ничего не отправлено. Выберите катушки снова.",
   "spools.held_catalog_failed": "Не удалось прочитать список катушек из Spoolman.",
   "spools.held_unlinked_toast": "Старые связи убраны.",
   "spools.held_target_unknown": "Катушка Spoolman {id}",

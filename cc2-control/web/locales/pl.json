@@ -1198,6 +1198,7 @@
   "spools.held_sending": "Wysyłanie…",
   "spools.held_sent_toast": "Wysłano do Spoolman.",
   "spools.held_send_failed": "Nie udało się wysłać niektórych ilości. Nadal są na liście.",
+  "spools.held_settings_changed": "Adres lub logowanie do Spoolman zmieniły się podczas wybierania. Lista została zaktualizowana i nic nie wysłano. Wybierz szpule ponownie.",
   "spools.held_catalog_failed": "Nie udało się odczytać listy szpul ze Spoolman.",
   "spools.held_unlinked_toast": "Stare połączenia usunięto.",
   "spools.held_target_unknown": "Szpula Spoolman {id}",

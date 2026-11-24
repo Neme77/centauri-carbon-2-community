@@ -1198,6 +1198,7 @@
   "spools.held_sending": "正在发送…",
   "spools.held_sent_toast": "已发送到 Spoolman。",
   "spools.held_send_failed": "有些用量无法发送，它们仍在列表中。",
+  "spools.held_settings_changed": "你在选择时，Spoolman 的地址或登录发生了变化。列表已更新，没有发送任何内容。请重新选择耗材卷。",
   "spools.held_catalog_failed": "无法从 Spoolman 读取耗材卷列表。",
   "spools.held_unlinked_toast": "已移除旧的关联。",
   "spools.held_target_unknown": "Spoolman 耗材卷 {id}",
