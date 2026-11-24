@@ -13,7 +13,9 @@ enum cl_phase {
 enum cl_event {
     CL_STAGE_HOST, CL_VERIFY_HOST_BOOT, CL_BEGIN_FILTER, CL_ACK_FILTER,
     CL_VERIFY_FILTER_BOOT, CL_BEGIN_STOCK, CL_ACK_STOCK,
-    CL_VERIFY_STOCK_BOOT, CL_REMOVE_HOST, CL_VERIFY_HOST_REMOVED
+    CL_VERIFY_STOCK_BOOT, CL_REMOVE_HOST, CL_VERIFY_HOST_REMOVED,
+    /* Appended: existing event values stay unchanged. */
+    CL_ABORT_HOST_STAGED
 };
 enum cl_boot { CL_BOOT_BLOCK, CL_BOOT_STOCK, CL_BOOT_GUARDED, CL_BOOT_RECOVER_STOCK };
 struct cl_facts {
@@ -82,6 +84,11 @@ static inline int cl_transition(unsigned phase, enum cl_event event,
         break;
     case CL_REMOVE_HOST:
         if (phase == CL_STOCK_VERIFIED && cl_idle(f)) result = CL_HOST_REMOVE_INTENT;
+        break;
+    case CL_ABORT_HOST_STAGED:
+        /* Only from HOST_STAGED, before the first transfer intent. The existing
+         * host-removal tail then requires a new boot before DISABLED. */
+        if (phase == CL_HOST_STAGED && cl_idle(f)) result = CL_HOST_REMOVE_INTENT;
         break;
     case CL_VERIFY_HOST_REMOVED:
         if (phase == CL_HOST_REMOVE_INTENT && f->new_boot && f->host_removed && f->canvas && cl_idle(f))
