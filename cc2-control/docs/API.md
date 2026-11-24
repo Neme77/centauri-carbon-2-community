@@ -1135,16 +1135,21 @@ for any spool you link to it: CC2 Control periodically reports the grams this pr
 into the local entry — the same way a refill or an edit made in Spoolman's own web UI would otherwise never
 reach the printer.
 
-- `POST /api/spoolman` (`url`, `basic_auth`) configures it. `url` must be `http://host[:port][/base]` —
-  there is no TLS stack linked into this binary, so `https://` is refused. An empty `url` turns sync off.
+- `POST /api/spoolman` (`url`, `basic_auth`) configures it. `url` must be `http://IPv4[:port][/base]` —
+  there is no TLS stack linked into this binary, so `https://` is refused, and a host name is refused too
+  (the printer connects to an address and never resolves a name). An empty `url` turns sync off.
   `basic_auth` is `user:pass` for a reverse proxy some self-hosters put in front of Spoolman; Spoolman
   itself needs no key. `GET /api/spools` reports `spoolman_url` and `spoolman_has_auth` (never the secret
   itself).
 - Link a spool to Spoolman's own numeric spool id with `/api/spools/save` `spoolman_id` (digits only; a
   Spoolman spool can be linked to one local spool only, otherwise `409`; changing or emptying the id discards
   anything still queued or in flight for the old link, and replies to requests started under the old link are
-  ignored). Changing the server URL or login does the same for every spool. Exported backups leave out the
-  proxy login and the sync accounting, and a restore leaves sync off until it is configured again.
+  ignored). Changing the server URL or login ends requests still running for the old one; what was queued or in flight
+  for every spool is moved to the list of unsent usage (below) instead of being thrown away, and a change of URL
+  marks the still linked spools as connected to the old server (`spoolman_stale_links`); the URL is compared as host, port
+  and base path, so a trailing slash or the default port written out is not a change. Emptying the URL (sync off)
+  puts nothing on the list, and a full list refuses the change with `409`. Exported backups leave out the
+  proxy login, the sync accounting and that list, and a restore leaves sync off until it is configured again.
 - Sync runs on the same cadence as the local library's own periodic save (at most once every two minutes),
   in a background thread — never on the request-handling thread, so a slow or unreachable Spoolman cannot
   stall the printer connection.
@@ -1156,16 +1161,65 @@ reach the printer.
   in `unsent` for the next cycle. A request that may have been applied (the connection dropped after the request
   went out, a 5xx, a truncated or unreadable reply) is **not** retried: the next read of `used_weight` settles
   it — it grew by the grams, so it was applied; it did not, so the grams return to `unsent`; it changed in some
-  other way or the baseline is gone (a restart in the middle of a request), so the grams are dropped rather than
-  risk charging them twice, and the pull brings the spool to Spoolman's own figure.
+  other way or the baseline is gone (a restart in the middle of a request), so the grams are never sent again (rather
+  than risk charging them twice); they go on the list of unsent usage as `unsure`, and the pull brings the spool to
+  Spoolman's own figure.
 - A pull sets the remaining weight to Spoolman's figure minus what Spoolman has not been told about yet
   (`unsent` + `inflight`), so usage charged while a request was in flight is kept.
 - Replies are read whole or rejected: headers and `Content-Length` or chunked framing are checked, a reply that
-  is cut short is an unknown outcome, and a reply larger than its buffer (8 KiB for one spool, 128 KiB for the
-  spool list) is refused, never truncated. Numbers and texts from Spoolman pass the same bounded parsers as
+  is cut short is an unknown outcome, and a reply larger than its buffer (8 KiB for one spool, 64 KiB for one
+  page of the spool list) is refused, never truncated. A request has 15 seconds in all; a sync cycle starts no new work after 90 seconds (a job that has begun is finished, up to
+  three requests, so a cycle lasts about 135 seconds at most); usage the cycle did not reach stays queued and the next cycle starts there. Numbers and texts from Spoolman pass the same bounded parsers as
   local data; a value that fails is ignored.
   A filament `color_hex` of six (`RRGGBB`) or eight (`RRGGBBAA`) hex digits is taken as `#RRGGBB`; the transparency is
-  dropped; any other length, or a character that is not a hex digit, leaves the colour out.
+  dropped; any other length, or a character that is not a hex digit, leaves the colour out. Without a `color_hex`,
+  the first colour of `multi_color_hexes` is used. Texts may carry JSON escapes (`\u00fc`, surrogate pairs) and are
+  read as UTF-8; one that is not storable (quotes, backslashes, control characters, too long) is left out.
+- Auto-import: each cycle also reads Spoolman's spool list in pages (`GET /api/v1/spool?sort=id:asc&limit=20&offset=N`,
+  at most 64 requests; a page that does not fit is halved, a spool that cannot be read is skipped and counted) and
+  creates a local spool, once, for every non-archived Spoolman spool without a link, up to the room left in the
+  library. It takes the filament's name, material, colour, the maker (`filament.vendor.name`) as the brand, the
+  weight and the tare (`spool_weight` of the spool, the filament, or the maker). A linked spool is refreshed from the same
+  list when it is in it. Spoolman is the source of truth for a linked spool: its name, material, colour, brand and
+  remaining weight overwrite local edits at the next sync. A Spoolman spool with no start weight is not imported;
+  a linked one keeps its weight and still takes the other fields.
+- `GET /api/spoolman` reports the last cycle: `{enabled, configured, last_sync, result, http, unsent_spools,
+  unsent_grams, inflight_spools, held_entries, held_grams, list:{pages, read, new, unreadable, no_weight, library_full, too_large,
+  no_material, no_colour}, archived_linked, linked_no_weight, orphaned:[ids], orphaned_count}`. `result` is `ok`, `unreachable`,
+  `unauthorized` (401), `forbidden` (403), `not_found`, `server_error`, `refused`, `bad_reply`, `too_large`, `timeout`,
+  `bad_url`, or `never` before the first cycle. `list.read` counts the spools the cycle looked at: it stops after the page on which the library is full and every linked spool has been seen, so with a full library it is lower than the number of spools in Spoolman, and `library_full` counts only the spools seen before it stopped. A linked spool Spoolman answers 404 for is listed in `orphaned`, but only while Spoolman's list answers in that cycle (a wrong base path says 404 for everything); only when it answers 404 in two cycles in a row does its usage go on the list of unsent usage (`held_entries`, `held_grams`); one 404, or an error answer in between, leaves it queued and starts the count again. A log line
+  is written only when the result or the orphaned set changes.
+- The list of unsent usage (see docs/SPOOLMAN.md). `GET /api/spools` carries it: `spoolman_held` is a list of
+  `{id, spool, name, grams, time, reason, spoolman_id, sending}` (`reason` is `login_changed`, `server_changed`,
+  `not_found` or `unsure`; `spool` and `name` are the spool on this printer, `spoolman_id` the Spoolman spool it was meant
+  for; `sending` while a request for it is out), and `spoolman_stale_links` is the number of spools still linked to
+  numbers of the old server after a change of the address. At most 32 entries; amounts for the same spool, link and
+  reason are added to one. Nothing on the list is sent by itself. `spoolman_gen` is the generation of the server
+  settings: it changes with every change of the address or the login (a restore of a backup too) and differs after every
+  start of CC2 Control, but not when the same server is written differently or the sync is switched off and on. A
+  `login_changed` entry becomes `server_changed` when the address changes later, because its number then belongs to the
+  old server.
+  - `POST /api/spoolman/held/send`: a line `gen=<spoolman_gen>` (the generation the spools were chosen under, taken from
+    the catalog the page chose from) and one line `<entry id>=<Spoolman spool id>` for each chosen entry. `202` once the
+    request has started (the result shows in `spoolman_held`: a sent entry is gone, one that could not be sent stays,
+    one whose answer is lost and not settled by the used weight becomes `unsure`, one whose spool Spoolman does not
+    have becomes `not_found`). `400` without `gen` or with one that is not a number, or without a spool id, `409` when `gen` is not the
+    current generation (the address or login changed since the spools were chosen: nothing is sent, not to the new server
+    either; the page asks again), `400` also when one entry is named twice (`1` and `01` are the same entry), `404` for an unknown entry, `409` for an `unsure` entry or one
+    being sent, while the sync is off, or while another Spoolman request is running (a sync cycle can take up to about 135 s; try again).
+  - `POST /api/spoolman/held/discard` (`id`) takes one entry off the list and sends nothing (`404`, or `409` while it is being sent).
+  - `POST /api/spoolman/unlink-old` unlinks the spools that were linked when the address changed (the spools stay; their pending
+    grams go on the list); spools imported from the new server since, and links set by hand, stay linked. `409` when there are no old connections or the list is full.
+  - `POST /api/spoolman/keep-old` says the address change was the same server: the spools keep their links and
+    `spoolman_stale_links` goes back to 0. `409` when there are no old connections. While `spoolman_stale_links` is set, what
+    a sync reads from Spoolman is not applied to those spools (name, material, colour, brand, weight) and no usage is
+    sent to Spoolman (it stays unsent and is dealt with after the choice); importing new spools goes on.
+  - `GET /api/spoolman/catalog` (the choice next to each entry) is read in the same sorted pages as the sync, at most 200 spools;
+    `truncated` is `true` when Spoolman has more. It carries `gen`, the generation of the server settings the list was read
+    under. A list read under another generation is never served: after a change of the address or login the answer has
+    the new `gen`, no spools and the error `Not fetched yet` until `POST /api/spoolman/catalog/refresh` has read the new
+    server; a read that was started for the old server and ends later is dropped and does not count as `loading`.
+  - The list is saved with the spool library, is not part of a backup, and a spool library file from before it has none of its keys.
 
 ## Bounded asynchronous G-code analysis
 

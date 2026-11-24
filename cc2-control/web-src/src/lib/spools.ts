@@ -60,6 +60,31 @@ export type SpoolLibrary = {
   spoolman_enabled: boolean
   spoolman_url: string
   spoolman_has_auth: boolean
+  // Usage that was not sent to Spoolman and waits for the user's decision (spoolman.h), and how many spools are
+  // still linked to numbers of the old server after an address change.
+  spoolman_held?: HeldEntry[]
+  spoolman_stale_links?: number
+  // Changes with every change of the Spoolman address or login (and after every start of the printer program): what was
+  // read from Spoolman and what was chosen from it is only valid under the generation it was read under.
+  spoolman_gen?: number
+}
+export type HeldReason = 'login_changed' | 'server_changed' | 'not_found' | 'unsure'
+export type HeldEntry = {
+  id: number
+  spool: string
+  name: string
+  spoolman_id: string
+  grams: number
+  time: number
+  reason: HeldReason
+  sending: boolean
+}
+export type SpoolmanCatalog = {
+  gen?: number // the generation of the server settings the list was read under (SpoolLibrary.spoolman_gen)
+  loading: boolean
+  error: string
+  spools: { id: string; name: string; material: string; color: string; remaining: number }[]
+  truncated?: boolean // Spoolman has more spools than the list holds
 }
 // What /api/printer carries so that every page notices an open question.
 export type SpoolSummary = { enabled: boolean; revision: number; questions: number[] } | null | undefined
@@ -376,3 +401,31 @@ export const adjustSpool = (id: string, weight: { remaining: number } | { gross:
 export const setTracking = (on: boolean) => post('/api/spools/enable', on ? 'on' : 'off')
 export const saveSpoolmanConfig = (fields: { enabled?: boolean; url?: string; basic_auth?: string }) =>
   post('/api/spoolman', lines(fields))
+
+// The list of usage that was not sent to Spoolman. Nothing here runs by itself: every call is a button.
+// `gen` is the generation the spools were chosen under: the printer refuses the request (409) when the address or the login
+// changed since, instead of reading the numbers against another server.
+export const sendHeld = (picks: Record<string, string>, gen: number | undefined) =>
+  post('/api/spoolman/held/send', `gen=${gen ?? ''}\n${lines(picks)}`)
+export const discardHeld = (id: number) => post('/api/spoolman/held/discard', lines({ id }))
+export const unlinkOldConnections = () => post('/api/spoolman/unlink-old')
+export const keepOldConnections = () => post('/api/spoolman/keep-old')
+// Spoolman's own spools, for the choice next to each entry: asks the server to read them, then waits for the answer.
+export async function loadSpoolmanCatalog(): Promise<SpoolmanCatalog> {
+  await post('/api/spoolman/catalog/refresh')
+  let catalog = (await request('/api/spoolman/catalog')) as SpoolmanCatalog
+  for (let i = 0; catalog.loading && i < 40; i++) {
+    await new Promise(done => setTimeout(done, 500))
+    catalog = (await request('/api/spoolman/catalog')) as SpoolmanCatalog
+  }
+  return catalog
+}
+// When the printer last read Spoolman successfully. This asks the printer, not Spoolman.
+export async function spoolmanSyncState(): Promise<{ time: number; ok: boolean }> {
+  try {
+    const s = (await request('/api/spoolman')) as { last_sync?: number; result?: string }
+    return { time: Number(s.last_sync) || 0, ok: s.result === 'ok' }
+  } catch {
+    return { time: 0, ok: false }
+  }
+}
