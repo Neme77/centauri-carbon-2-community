@@ -249,6 +249,9 @@ static int spoolman_request_ex(const char *host, int port, const char *basic_aut
     size_t head = 0;
     for (size_t i = 0; i + 4 <= used && i < SPOOLMAN_HEADER_MAX; ++i)
         if (!memcmp(raw + i, "\r\n\r\n", 4)) { head = i + 4; break; }
+    /* The headers are text. A NUL byte in them makes the reply malformed: strcspn() below stops at a NUL, the line
+     * would never move past it, and the walk over the lines would spin for ever. The body may hold any byte. */
+    if (head && memchr(raw, 0, head)) head = 0;
     int status = 0;
     if (head && used >= 12 && !memcmp(raw, "HTTP/1.", 7) && isdigit((unsigned char)raw[9]) &&
         isdigit((unsigned char)raw[10]) && isdigit((unsigned char)raw[11])) status = atoi(raw + 9);
