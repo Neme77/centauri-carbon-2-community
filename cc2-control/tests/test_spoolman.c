@@ -1910,6 +1910,21 @@ static void test_the_catalog_is_read_in_pages(void) {
     puts("PASS: the catalog for \"Send selected\" is read in pages like the sync (past 128 KiB), says when it is cut at its limit, and tells a refusal");
 }
 
+static void test_one_entry_named_twice_in_different_spellings_is_refused(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    assert(spoolman_hold(sp, 12.5, SPOOLMAN_HELD_SERVER) && spoolman_hold(sp, 4, SPOOLMAN_HELD_NOT_FOUND));
+    /* "1" and "01" are different texts but the same entry: it would be sent twice, to two spools. */
+    assert(call_held_send("1=7\n01=8") == 400);
+    assert(call_held_send("1=7\n001=7") == 400);
+    assert(call_held_send("2=7\n1=7\n02=7") == 400);
+    assert(!spools.held[0].sending && !spools.held[1].sending && fake.use_count == 0 && !worker_running());
+    assert(call_held_send("1=7\n2=7") == 202); finish_send();                           /* two different entries still go together */
+    assert(fake.use_count == 2 && spools.held_count == 0 && near(fake.used, 100 + 12.5 + 4));
+    fake_finish(); teardown_file();
+    puts("PASS: one entry named twice in one request (\"1\" and \"01\") is refused as a whole; nothing is sent twice");
+}
+
 static void test_an_entry_that_is_being_sent_is_not_sent_again(void) {
     fake_start(100, 600); fake_launch();
     spool_entry *sp = setup_linked(0, 500);
@@ -2145,6 +2160,7 @@ int main(void) {
     test_a_call_is_checked_as_a_whole_and_may_carry_all_32_entries();
     test_the_same_server_written_differently_is_not_a_new_server();
     test_the_catalog_is_read_in_pages();
+    test_one_entry_named_twice_in_different_spellings_is_refused();
     test_an_entry_that_is_being_sent_is_not_sent_again();
     test_a_send_result_of_an_older_server_setting_changes_nothing();
     test_the_generation_follows_the_server_settings();

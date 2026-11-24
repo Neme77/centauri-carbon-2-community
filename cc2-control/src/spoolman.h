@@ -992,6 +992,9 @@ static void spoolman_held_send_response(int fd, const char *body, size_t length)
         spoolman_held_entry *h = spoolman_held_find(f.key[i]);
         const char *target = f.value[i];
         if (!h) { free(batch); spools_fail(fd, 404, "Unknown entry"); return; }
+        /* "1" and "01" are two keys for one entry: the form only compares the texts, so the entry itself is checked. */
+        for (int k = 0; k < n; ++k)
+            if (entries[k] == h) { free(batch); spools_fail(fd, 400, "The same entry twice in one request"); return; }
         if (!target[0] || strlen(target) > SPOOLMAN_ID_MAX || !spoolman_id_ok(target)) { free(batch); spools_fail(fd, 400, "Choose a Spoolman spool"); return; }
         if (h->reason == SPOOLMAN_HELD_UNSURE) { free(batch); spools_fail(fd, 409, "This amount may already be counted in Spoolman: it is never sent again"); return; }
         if (h->sending) { free(batch); spools_fail(fd, 409, "This amount is being sent"); return; }
