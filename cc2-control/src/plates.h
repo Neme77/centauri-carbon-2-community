@@ -53,6 +53,10 @@ typedef struct {
     char nozzle[PLATE_ID_LEN + 1]; /* "" when not recorded */
     long long measured;
     plate_mesh mesh;
+    /* The mesh this measurement replaced, so a later calibration can be compared with it. */
+    int has_prior;
+    long long prior_measured;
+    plate_mesh prior;
 } plate_measure;
 
 typedef struct {
@@ -109,12 +113,22 @@ static struct {
     int stage, temp, soak; /* soak in seconds */
     char side;
     char plate[PLATE_ID_LEN + 1], nozzle[PLATE_ID_LEN + 1], measure[PLATE_ID_LEN + 1];
+    char run[PLATE_ID_LEN + 1]; /* identifies this calibration through its final result */
     long long since, soak_until, done_at; /* stage start, end of the soak, when the console command finished */
     long long held; /* since when the end of the soak waits for fresh evidence */
     long long renew_at; /* when the job next repeats its bed target */
+    long long retry_at; /* CAL_SAVING: not before this the next attempt to read and store the mesh */
     unsigned long generation; /* the console command the stage waits for */
-    const char *result; /* "", "done" (no plate), "saved", "failed" or "cancelled" */
+    long long ended_at; /* when a run whose probing succeeded ended (result done, saved or work), else 0 */
+    /* With `work` the result is only a working measurement of the plate: it stays here (`work_ready`, `measured`) and
+     * never enters the library, its printer profiles or the choices of a print. A new calibration keeps it until its
+     * probing has ended (then the printer holds another mesh; a run cancelled or failed before keeps it). It is also
+     * gone after a restart of CC2 Control or a measurement of the same plate stored in the library. */
+    int work, work_ready;
+    plate_measure measured;
+    const char *result; /* "", "done" (no plate), "saved", "work", "failed" or "cancelled" */
     const char *error;  /* what failed: "homing", "heating", "busy", "telemetry", "probing" or "saving" */
+    int replaced;       /* this run stored a new previous mesh; an unchanged recapture does not */
     char detail[160];
 } plates_cal = {.result = "", .error = ""};
 
@@ -251,6 +265,17 @@ static int plate_mesh_equal(const plate_mesh *a, const plate_mesh *b, int with_o
         strcmp(a->algo, b->algo) || !plate_close(a->min_x, b->min_x) || !plate_close(a->max_x, b->max_x) ||
         !plate_close(a->min_y, b->min_y) || !plate_close(a->max_y, b->max_y) ||
         !plate_close(a->tension, b->tension) || (with_offset && !plate_close(a->offset, b->offset))) return 0;
+    for (int i = 0; i < a->x_count * a->y_count; ++i)
+        if (!plate_close(a->points[i], b->points[i])) return 0;
+    return 1;
+}
+
+/* The probed heights and where they sit. Interpolation settings do not move those points, so a
+ * change of them alone is not a new mesh for the comparison kept below. */
+static int plate_mesh_shape_equal(const plate_mesh *a, const plate_mesh *b) {
+    if (a->x_count != b->x_count || a->y_count != b->y_count || !plate_close(a->min_x, b->min_x) ||
+        !plate_close(a->max_x, b->max_x) || !plate_close(a->min_y, b->min_y) || !plate_close(a->max_y, b->max_y))
+        return 0;
     for (int i = 0; i < a->x_count * a->y_count; ++i)
         if (!plate_close(a->points[i], b->points[i])) return 0;
     return 1;
@@ -512,8 +537,11 @@ static int plates_json_double(const char *p, const char *end, double *out, const
 }
 
 static int plates_member_double(const char *obj, const char *end, const char *key, double *out) {
-    const char *value = json_member(obj, end, key);
-    return value && plates_json_double(value, end, out, NULL);
+    const char *value = json_member(obj, end, key), *after = NULL;
+    if (!value || !plates_json_double(value, end, out, &after)) return 0;
+    /* "9bad" is not a number: the scan stops at the first non-digit, so the next character has to end the value. */
+    after = json_skip_space(after, end);
+    return after == end || *after == ',' || *after == '}' || *after == ']';
 }
 
 static int plates_member_count(const char *obj, const char *end, const char *key, int *out) {
@@ -759,6 +787,11 @@ static void plates_measure_json(json_builder *b, const plate_measure *m, int wit
     if (profile >= 0) json_builder_printf(b, "\"profile\":%s,", profile ? "true" : "false");
     json_builder_printf(b, "\"mesh\":");
     plates_mesh_json(b, &m->mesh);
+    if (m->has_prior) {
+        json_builder_printf(b, ",\"prior\":{\"measured\":%lld,\"mesh\":", m->prior_measured);
+        plates_mesh_json(b, &m->prior);
+        json_builder_printf(b, "}");
+    }
     json_builder_printf(b, "}");
 }
 
@@ -830,6 +863,70 @@ static int plates_parse_mesh(const char *obj, const char *end, plate_mesh *m) {
            plates_member_double(mesh, mesh_end, "offset", &m->offset) && plate_mesh_valid(m);
 }
 
+/* A measurement time is a non-negative decimal integer that fits in a signed 64-bit. Reading it as a
+ * double would round 2^53+1 and turn 2^63-1 into a value the next load rejects. */
+static int plates_time_ended(const char *p, const char *end) {
+    p = json_skip_space(p, end);
+    return p == end || *p == ',' || *p == '}' || *p == ']';
+}
+
+/* Digits of the significand, with the point `exp` places to the right of `int_len`. A fractional
+ * digit must be zero: strtod would round 1700000000.00000001 to the whole second. */
+static int plates_time_scale(const char *ints, int int_len, const char *frac, int frac_len, int exp, long long *out) {
+    int total = int_len + frac_len;
+    long long point = (long long)int_len + exp;
+    if (point < 0) point = 0;
+    for (long long i = point; i < total; ++i) {
+        char digit = i < int_len ? ints[i] : frac[i - int_len];
+        if (digit != '0') return 0;
+    }
+    /* Leading zeros are not width. 0.0000000000017e21 is 1700000000, and the digit loop rejects a real overflow. */
+    unsigned long long acc = 0;
+    for (long long i = 0; i < point; ++i) {
+        unsigned digit = 0;
+        if (i < total) digit = (unsigned)((i < int_len ? ints[i] : frac[i - int_len]) - '0');
+        if (acc > 922337203685477580ULL || (acc == 922337203685477580ULL && digit > 7)) return 0;
+        acc = acc * 10u + digit;
+    }
+    *out = (long long)acc;
+    return 1;
+}
+
+static int plates_member_time(const char *obj, const char *end, const char *key, long long *out) {
+    const char *p = json_member(obj, end, key);
+    if (!p) return 0;
+    p = json_skip_space(p, end);
+    const char *ints = p;
+    if (p >= end || !isdigit((unsigned char)*p)) return 0;
+    while (p < end && isdigit((unsigned char)*p)) p++;
+    int int_len = (int)(p - ints);
+    const char *frac = NULL;
+    int frac_len = 0;
+    if (p < end && *p == '.') {
+        p++;
+        frac = p;
+        if (p >= end || !isdigit((unsigned char)*p)) return 0; /* "9." is not a JSON number */
+        while (p < end && isdigit((unsigned char)*p)) p++;
+        frac_len = (int)(p - frac);
+    }
+    int exp = 0;
+    if (p < end && (*p == 'e' || *p == 'E')) {
+        int sign = 1;
+        p++;
+        if (p < end && (*p == '+' || *p == '-')) { sign = *p == '-' ? -1 : 1; p++; }
+        if (p >= end || !isdigit((unsigned char)*p)) return 0;
+        while (p < end && isdigit((unsigned char)*p)) {
+            if (exp > 100000) return 0;
+            exp = exp * 10 + (*p - '0');
+            p++;
+        }
+        exp *= sign;
+    }
+    /* "9bad" is not a number. 1700000000.0 and 1.7e9 are the same second; a nonzero fraction is not. */
+    if (!plates_time_ended(p, end)) return 0;
+    return plates_time_scale(ints, int_len, frac, frac_len, exp, out);
+}
+
 /* A plate; in a version 1 file it carries its only mesh, which becomes a measurement. */
 static int plates_parse_plate(const char *obj, const char *end, int version, plate_entry *p, plate_measure *legacy) {
     const char *text; int length;
@@ -840,23 +937,28 @@ static int plates_parse_plate(const char *obj, const char *end, int version, pla
     p->side = text[0];
     if (!plates_member_double(obj, end, "z_offset", &p->z) || fabs(p->z) > PLATE_Z_LIMIT + 1e-9) return 0;
     if (version >= 2) return plates_parse_id(obj, end, "measure", p->measure) && (version == 3 || p->measure[0]);
-    double measured;
     memset(legacy, 0, sizeof(*legacy));
-    if (!plates_member_double(obj, end, "measured", &measured) || measured < 0) return 0;
+    if (!plates_member_time(obj, end, "measured", &legacy->measured)) return 0;
     memcpy(legacy->plate, p->id, sizeof(legacy->plate));
-    legacy->temp = PLATE_TEMP_V1; legacy->measured = (long long)measured;
+    legacy->temp = PLATE_TEMP_V1;
     return plates_parse_mesh(obj, end, &legacy->mesh);
 }
 
 static int plates_parse_measure(const char *obj, const char *end, plate_measure *m) {
-    double measured;
     memset(m, 0, sizeof(*m));
     if (!plates_parse_id(obj, end, "id", m->id) || !m->id[0] || !plates_parse_id(obj, end, "plate", m->plate) ||
         !m->plate[0] || !json_member_int(obj, end, "temp", &m->temp) || m->temp < PLATE_TEMP_MIN ||
         m->temp > PLATE_TEMP_MAX || !plates_parse_id(obj, end, "nozzle", m->nozzle) ||
-        !plates_member_double(obj, end, "measured", &measured) || measured < 0) return 0;
-    m->measured = (long long)measured;
-    return plates_parse_mesh(obj, end, &m->mesh);
+        !plates_member_time(obj, end, "measured", &m->measured)) return 0;
+    if (!plates_parse_mesh(obj, end, &m->mesh)) return 0;
+    const char *prior_raw = json_member(obj, end, "prior");
+    if (!prior_raw) return 1;
+    /* Present means a real previous mesh. null, an array or a timestamp that cannot be stored is corrupt. */
+    const char *prior_end, *prior = json_member_object(obj, end, "prior", '{', &prior_end);
+    if (!prior || !plates_member_time(prior, prior_end, "measured", &m->prior_measured) ||
+        !plates_parse_mesh(prior, prior_end, &m->prior)) return 0;
+    m->has_prior = 1;
+    return 1;
 }
 
 static int plates_parse_nozzle(const char *obj, const char *end, plate_nozzle *n) {
@@ -1120,13 +1222,25 @@ static void plates_get_response(int fd) {
     static const char *stages[] = {"off", "homing", "heating", "soaking", "probing", "saving"};
     double bed = 0; int have_bed = uds_value(&telemetry, U_BT, &bed);
     long long left = plates_cal.stage == CAL_SOAKING ? (plates_cal.soak_until - monotonic_ms() + 999) / 1000 : 0;
+    /* elapsed: seconds since the stage began (also for a page opened later: the probing is counted up from its start). */
+    long long elapsed = plates_cal.stage && plates_cal.since ? (monotonic_ms() - plates_cal.since) / 1000 : 0;
     json_builder_printf(&b, ",\"calibration\":{\"stage\":\"%s\",\"side\":\"%c\",\"temp\":%d,\"soak\":%d,"
-        "\"remaining\":%lld,\"plate\":\"%s\",\"nozzle\":\"%s\",\"measure\":\"%s\",\"result\":\"%s\","
+        "\"remaining\":%lld,\"elapsed\":%lld,\"plate\":\"%s\",\"nozzle\":\"%s\",\"measure\":\"%s\",\"result\":\"%s\","
         "\"error\":\"%s\",\"detail\":", stages[plates_cal.stage], plates_cal.side ? plates_cal.side : 'A',
-        plates_cal.temp, plates_cal.soak, left > 0 ? left : 0, plates_cal.plate, plates_cal.nozzle,
+        plates_cal.temp, plates_cal.soak, left > 0 ? left : 0, elapsed > 0 ? elapsed : 0, plates_cal.plate, plates_cal.nozzle,
         plates_cal.measure, plates_cal.result, plates_cal.error);
     json_builder_string(&b, plates_cal.detail);
-    if (have_bed) json_builder_printf(&b, ",\"bed\":%.1f}", bed); else json_builder_printf(&b, ",\"bed\":null}");
+    /* The working measurement (see plates_cal.work): only while its plate is still in the library. */
+    json_builder_printf(&b, ",\"work\":%s,\"work_mesh\":", plates_cal.work ? "true" : "false");
+    const plate_measure *w = &plates_cal.measured;
+    if (plates_cal.work_ready && plate_find(w->plate)) {
+        json_builder_printf(&b, "{\"plate\":\"%s\",\"temp\":%d,\"nozzle\":\"%s\",\"measured\":%lld,\"mesh\":", w->plate,
+                            w->temp, w->nozzle, w->measured);
+        plates_mesh_json(&b, &w->mesh);
+        json_builder_printf(&b, "}");
+    } else json_builder_printf(&b, "null");
+    if (have_bed) json_builder_printf(&b, ",\"bed\":%.1f", bed); else json_builder_printf(&b, ",\"bed\":null");
+    json_builder_printf(&b, ",\"replaced\":%s,\"run\":\"%s\"}", plates_cal.replaced ? "true" : "false", plates_cal.run);
     json_builder_printf(&b, ",\"print_mesh\":{\"state\":\"%s\",\"measure\":\"%s\",\"result\":\"%s\",\"source\":\"%s\"},"
         "\"match\":{\"enabled\":%s,\"result\":\"%s\",\"blend_temp\":%d,\"blends\":{\"state\":\"%s\",\"temps\":[",
         plates_late.state == 1 ? "waiting" : plates_late.state == 2 ? "active" : "off", plates_late.measure,
@@ -1193,6 +1307,11 @@ static const char *plates_capture_mesh(char side, plate_mesh *mesh, int *status)
     if (!live || !plate_mesh_equal(&memory, mesh, 0))
         return "The printer mesh in memory differs from the saved file; restart the printer first";
     return NULL;
+}
+/* A 503 of plates_capture_mesh: the mesh file or the printer memory could not be read (not a mesh that differs). */
+static int plates_mesh_unread(const char *error, int status) {
+    return status == 503 && error &&
+           (!strcmp(error, "Cannot read the printer mesh file") || !strcmp(error, "Cannot read the printer mesh"));
 }
 static int plates_capture(int fd, char side, plate_mesh *mesh) {
     int status; const char *error = plates_capture_mesh(side, mesh, &status);
@@ -1290,7 +1409,8 @@ static void plates_save_response(int fd, const mqtt_client *mqtt, const char *bo
  * gets its printer profile and is what the plate mounts with. The plate was on the
  * bed, so it is mounted, in place. */
 static const char *plates_take_measure(const mqtt_client *mqtt, const char *id, int temp, const char *nozzle,
-                                       int mounted_only, int *status, plate_measure **out, int *profile, int *applied) {
+                                       int mounted_only, int *status, plate_measure **out, int *profile, int *applied,
+                                       int *replaced) {
     const char *reason;
     if ((reason = plates_closed(status))) return reason;
     plate_entry *p = plate_find(id);
@@ -1308,6 +1428,12 @@ static const char *plates_take_measure(const mqtt_client *mqtt, const char *id, 
     if (z_offset_pending) return "A Z offset change is still being confirmed";
     plate_mesh mesh;
     if ((reason = plates_capture_mesh(p->side, &mesh, status))) return reason;
+    /* A calibration over an existing measurement keeps that mesh, so the change can be shown afterwards.
+     * The same probed heights leave the previous one in place, even if only the interpolation changed. */
+    const int replacing = m != NULL;
+    plate_mesh previous; long long previous_measured = 0;
+    if (replacing) { previous = m->mesh; previous_measured = m->measured; }
+    if (replaced) *replaced = 0;
     plates_begin();
     if (!m) {
         m = &plates.measures[plates.measure_count++];
@@ -1317,10 +1443,16 @@ static const char *plates_take_measure(const mqtt_client *mqtt, const char *id, 
         m->temp = temp; snprintf(m->nozzle, sizeof(m->nozzle), "%s", nozzle);
     }
     m->mesh = mesh; m->measured = (long long)time(NULL);
+    if (replacing && !plate_mesh_shape_equal(&previous, &mesh)) {
+        m->prior = previous; m->prior_measured = previous_measured; m->has_prior = 1;
+        if (replaced) *replaced = 1;
+    }
     memcpy(p->measure, m->id, sizeof(p->measure));
     memcpy(plates.current, p->id, sizeof(plates.current));
     if (plates_save() != 0) { plates = plates_undo; *status = 500; return "Cannot save the plate library"; }
     plates_result = "mounted";
+    /* A stored measurement of the plate ends its working measurement. */
+    if (!strcmp(plates_cal.measured.plate, p->id)) plates_cal.work_ready = 0;
     *profile = plates_store_profile(p->side, m);
     *applied = plates_apply_z(plate_z_now(p)) == 0;
     *out = m;
@@ -1329,7 +1461,7 @@ static const char *plates_take_measure(const mqtt_client *mqtt, const char *id, 
 static void plates_measure_into(int fd, const mqtt_client *mqtt, const char *id, int temp, const char *nozzle,
                                 int mounted_only) {
     int status = 500, profile = 0, applied = 0; plate_measure *m = NULL;
-    const char *error = plates_take_measure(mqtt, id, temp, nozzle, mounted_only, &status, &m, &profile, &applied);
+    const char *error = plates_take_measure(mqtt, id, temp, nozzle, mounted_only, &status, &m, &profile, &applied, NULL);
     if (error) { plates_fail(fd, status, error); return; }
     char reply[160];
     snprintf(reply, sizeof(reply), "{\"saved\":true,\"measure\":\"%s\",\"profile\":%s,\"applied\":%s}\n",
@@ -1403,6 +1535,36 @@ static void plates_measure_delete_response(int fd, const mqtt_client *mqtt, cons
     if (!plates_commit(fd)) return;
     if (!plates_printer_ready(mqtt)) plates_drop_profile(removed);
     plates_reply(fd, 200, "{\"deleted\":true}\n");
+}
+
+/* id: every measurement of the plate leaves the library on purpose; the plate stays, as a profile without a mesh (it
+ * cannot be mounted until it is calibrated again). A function of its own: plates_measure_delete_response keeps its rule
+ * that a plate holds at least one measurement. Refused for the mounted plate, one waiting for the printer restart and
+ * one that is being calibrated, so the mesh in use and a running calibration never lose their measurement. */
+static void plates_measures_clear_response(int fd, const mqtt_client *mqtt, const char *body, size_t length) {
+    char fields[1][PLATE_NAME_MAX + 1];
+    if (plates_fields(body, length, fields, 1) != 1 || !plate_id_valid(fields[0])) { plates_fail(fd, 400, "Invalid plate"); return; }
+    if (!plates_open(fd)) return;
+    plate_entry *p = plate_find(fields[0]);
+    if (!p) { plates_fail(fd, 404, "Unknown plate"); return; }
+    if (!strcmp(plates.current, p->id) || !strcmp(plates.pending, p->id)) {
+        plates_fail(fd, 409, "Remove the plate from the printer first, then delete all its measurements"); return;
+    }
+    if (plates_cal.stage && !strcmp(plates_cal.plate, p->id)) { plates_fail(fd, 409, "A bed mesh calibration of this plate is running"); return; }
+    plates_begin();
+    char removed[PLATE_MEASURES_MAX][PLATE_ID_LEN + 1]; int dropped = 0;
+    for (int i = 0; i < plates.measure_count;) {
+        if (strcmp(plates.measures[i].plate, p->id)) { i++; continue; }
+        memcpy(removed[dropped++], plates.measures[i].id, PLATE_ID_LEN + 1);
+        memmove(&plates.measures[i], &plates.measures[i + 1], (size_t)(plates.measure_count - i - 1) * sizeof(plates.measures[0]));
+        plates.measure_count--;
+    }
+    p->measure[0] = 0;
+    if (!plates_commit(fd)) return;
+    if (!plates_printer_ready(mqtt)) for (int i = 0; i < dropped; ++i) plates_drop_profile(removed[i]);
+    char reply[48];
+    snprintf(reply, sizeof(reply), "{\"cleared\":%d}\n", dropped);
+    plates_reply(fd, 200, reply);
 }
 
 /* side: before a calibration replaces the slot, the measurement it holds gets its printer profile. */
@@ -2396,6 +2558,8 @@ static void plates_cal_end(const mqtt_client *mqtt, const char *result, const ch
     if (bed_off && plates_cal_owns_bed(mqtt)) (void)plates_bed_off();
     if (plates_cal.stage) fprintf(stderr, "Bed mesh calibration at %d C: %s %s %s\n", plates_cal.temp, result, error, detail);
     plates_cal.stage = CAL_IDLE; plates_cal.result = result; plates_cal.error = error;
+    /* A screw measurement may follow such a run directly (screws_after_mesh_bed in main.c). */
+    plates_cal.ended_at = !strcmp(result, "done") || !strcmp(result, "saved") || !strcmp(result, "work") ? monotonic_ms() : 0;
     snprintf(plates_cal.detail, sizeof(plates_cal.detail), "%s", detail);
 }
 
@@ -2414,9 +2578,10 @@ static int plates_homed(const mqtt_client *mqtt) {
     return strchr(mqtt->homed_axes, 'x') && strchr(mqtt->homed_axes, 'y') && strchr(mqtt->homed_axes, 'z');
 }
 
-/* side \n temp \n soak minutes [\n nozzle [\n plate]]: calibrate the side's mesh at `temp`.
+/* side \n temp \n soak minutes [\n nozzle [\n plate [\n work]]]: calibrate the side's mesh at `temp`.
  * CC2 Control homes the printer when needed, heats the bed, holds it for the soak time
- * and probes; with a plate the result becomes its measurement at `temp` with `nozzle`.
+ * and probes; with a plate the result becomes its measurement at `temp` with `nozzle`,
+ * with `work` only the plate's working measurement, kept in memory (plates_cal.work).
  * It needs no open page; it can be cancelled until the probing starts. */
 /* Side, temperature, soak minutes and the nozzle of a calibration request, as the first four lines. */
 static int plates_calibrate_fields(char fields[][PLATE_NAME_MAX + 1], int count, int *temp, int *soak) {
@@ -2433,6 +2598,7 @@ static const char *plates_calibrate_check(const mqtt_client *mqtt, char side, co
     *status = 409;
     if ((reason = pending_autosave_guard())) return reason;
     if (plates_cal.stage) return "A bed mesh calibration is already running";
+    if (screws_soak_active()) return "A screw measurement is waiting for its bed hold time";
     if (plate[0]) {
         if ((reason = plates_closed(status))) return reason;
         const plate_entry *p = plate_find(plate);
@@ -2448,38 +2614,56 @@ static const char *plates_calibrate_check(const mqtt_client *mqtt, char side, co
  * printer profile, then the first command (G28 when unhomed, else M140) goes to the console. NULL when
  * the job runs; nothing is queued otherwise. */
 static const char *plates_calibrate_start(const mqtt_client *mqtt, console_state *console, char side, int temp,
-                                          int soak, const char *nozzle, const char *plate) {
+                                          int soak, const char *nozzle, const char *plate, int work, const char *run) {
+    /* A screw session is no obstacle between its measurements: it ends here (reason mesh_calibration), then the mesh starts; its
+     * heaters are not switched off, the calibration takes the bed over. While a session job runs the answer is 409. */
+    if (control_screws_session_active() && control_screws_measuring()) return "A screw session measurement is running";
     /* The measurement now in the slot keeps a printer profile before the calibration replaces it. */
     if (plates_available && !plates.pending[0]) (void)plates_keep_slot(side);
+    /* The working measurement of the run before stays until this run has finished its probing (CAL_PROBING). */
+    int kept_ready = plates_cal.work_ready; plate_measure kept = plates_cal.measured;
     memset(&plates_cal, 0, sizeof(plates_cal));
-    plates_cal.side = side; plates_cal.temp = temp; plates_cal.soak = soak * 60;
-    snprintf(plates_cal.nozzle, sizeof(plates_cal.nozzle), "%s", nozzle); /* "" or a checked id */
-    snprintf(plates_cal.plate, sizeof(plates_cal.plate), "%s", plate);
+    plates_cal.work_ready = kept_ready; plates_cal.measured = kept;
+    plates_cal.side = side; plates_cal.temp = temp; plates_cal.soak = soak * 60; plates_cal.work = work;
+    /* "" or a checked id; the precision says so to the compiler, which sees the request field's full length here. */
+    snprintf(plates_cal.nozzle, sizeof(plates_cal.nozzle), "%.*s", (int)sizeof(plates_cal.nozzle) - 1, nozzle);
+    snprintf(plates_cal.plate, sizeof(plates_cal.plate), "%.*s", (int)sizeof(plates_cal.plate) - 1, plate);
     plates_cal.result = ""; plates_cal.error = "";
     char command[32];
     snprintf(command, sizeof(command), "M140 S%d", temp);
     if (plates_cal_command(console, plates_homed(mqtt) ? CAL_HEATING : CAL_HOMING,
                            plates_homed(mqtt) ? command : "G28") != 0) {
-        plates_cal.stage = CAL_IDLE;
+        plates_cal.stage = CAL_IDLE; plates_cal.work = 0;
         return "Another printer command is still running";
     }
+    if (*run) memcpy(plates_cal.run, run, sizeof(plates_cal.run));
+    else plates_new_id(plates_cal.run);
     /* The job owns the bed heater now: a shutdown left pending by an ended screw session must not undo it. */
+    control_screws_invalidate_for(CONTROL_SCREWS_END_MESH);
     control_screws_heaters_taken();
     return NULL;
 }
 
 static void plates_calibrate_response(int fd, const mqtt_client *mqtt, console_state *console, const char *body,
-                                      size_t length) {
-    char fields[5][PLATE_NAME_MAX + 1] = {{0}}; int temp, soak, status; const char *reason;
+                                      size_t length, const char *request) {
+    char fields[6][PLATE_NAME_MAX + 1] = {{0}}; int temp, soak, status; const char *reason;
+    char run[PLATE_ID_LEN + 1] = "";
+    int run_header = request ? http_header(request, "X-CC2-Calibration-Run", run, sizeof(run)) : 0;
+    if (run_header < 0 || (run_header && !plate_id_valid(run))) {
+        plates_fail(fd, 400, "Invalid calibration run identifier"); return;
+    }
     const char *pending = pending_autosave_guard();
     if (pending) { plates_fail(fd, 409, pending); return; }
-    int count = plates_fields(body, length, fields, 5);
-    if (!plates_calibrate_fields(fields, count, &temp, &soak) || (fields[4][0] && !plate_id_valid(fields[4]))) {
+    int count = plates_fields(body, length, fields, 6);
+    /* A sixth line `work`: the result is only a working measurement of the plate (see plates_cal.work). */
+    int work = count == 6 && !strcmp(fields[5], "work");
+    if (!plates_calibrate_fields(fields, count, &temp, &soak) || (fields[4][0] && !plate_id_valid(fields[4])) ||
+        (count == 6 && (!work || !fields[4][0]))) {
         plates_fail(fd, 400, "Invalid calibration"); return;
     }
     char side = fields[0][0];
     if ((reason = plates_calibrate_check(mqtt, side, fields[4], &status)) ||
-        (status = 409, reason = plates_calibrate_start(mqtt, console, side, temp, soak, fields[3], fields[4]))) {
+        (status = 409, reason = plates_calibrate_start(mqtt, console, side, temp, soak, fields[3], fields[4], work, run))) {
         plates_fail(fd, status, reason); return;
     }
     plates_reply(fd, 202, "{\"started\":true}\n");
@@ -2565,20 +2749,46 @@ static void plates_calibration_tick(const mqtt_client *mqtt, console_state *cons
         if (!ours) { plates_cal_end(mqtt,"failed","probing","Calibration command ownership was lost",0); return; }
         if (!finished) return; /* the console gives up on a command after 15 minutes */
         if (!success || !probe_complete) { plates_cal_end(mqtt, "failed", "probing", "The firmware did not confirm a completed bed mesh", 0); return; }
+        /* The printer holds the new mesh now: the working measurement of a run before is gone (a work run sets its own). */
+        plates_cal.work_ready = 0;
         if (!plates_cal.plate[0]) { plates_cal_end(mqtt, "done", "", "", 0); return; }
-        plates_cal.stage = CAL_SAVING; plates_cal.since = now;
+        plates_cal.stage = CAL_SAVING; plates_cal.since = now; plates_cal.retry_at = 0;
         return;
     case CAL_SAVING: {
         if (!ours || !finished || !success) {
             plates_cal_end(mqtt,"failed","probing","Calibration command ownership was lost before saving",0);return;
         }
-        int status = 0, profile = 0, applied = 0; plate_measure *m = NULL;
+        /* Right after the probing the printer can be busy for a moment: a mesh in memory that still differs (409) or a
+         * mesh file or printer memory that cannot be read yet (503 of plates_capture_mesh) is tried again for up to a
+         * minute, at most every 2 s (the main loop ticks up to every 100 ms, and the profile query is costly for the
+         * firmware). It is stored only when file and memory agree; any other error ends the run at once. */
+        if (now < plates_cal.retry_at) return;
+        plates_cal.retry_at = now + 2000;
+        int status = 0, profile = 0, applied = 0, replaced = 0; plate_measure *m = NULL;
+        if (plates_cal.work) {
+            /* Only kept here: the library, its printer profiles, the mounted plate and its offset stay as they are. */
+            const plate_entry *p = plate_find(plates_cal.plate);
+            const char *error = p ? plates_capture_mesh(plates_cal.side, &plates_cal.measured.mesh, &status) : "Unknown plate";
+            if (!p) status = 404;
+            if (!error) {
+                plate_measure *w = &plates_cal.measured;
+                memset(w->id, 0, sizeof(w->id));
+                memcpy(w->plate, plates_cal.plate, sizeof(w->plate)); memcpy(w->nozzle, plates_cal.nozzle, sizeof(w->nozzle));
+                w->temp = plates_cal.temp; w->measured = (long long)time(NULL);
+                plates_cal.work_ready = 1;
+                plates_cal_end(mqtt, "work", "", "", 0);
+            } else if ((status != 409 && !plates_mesh_unread(error, status)) || now - plates_cal.since > 60000)
+                plates_cal_end(mqtt, "failed", "saving", error, 0);
+            return;
+        }
         const char *error = plates_take_measure(mqtt, plates_cal.plate, plates_cal.temp, plates_cal.nozzle, 0,
-                                                &status, &m, &profile, &applied);
+                                                &status, &m, &profile, &applied, &replaced);
         if (!error) {
+            plates_cal.replaced = replaced;
             memcpy(plates_cal.measure, m->id, sizeof(plates_cal.measure));
             plates_cal_end(mqtt, "saved", "", profile ? "" : "The printer did not store the measurement profile", 0);
-        } else if (status != 409 || now - plates_cal.since > 60000) plates_cal_end(mqtt, "failed", "saving", error, 0);
+        } else if ((status != 409 && !plates_mesh_unread(error, status)) || now - plates_cal.since > 60000)
+            plates_cal_end(mqtt, "failed", "saving", error, 0);
         return;
     }
     }

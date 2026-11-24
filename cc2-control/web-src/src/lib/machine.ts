@@ -1,5 +1,6 @@
 import { type Key, t, tpl, tState } from './i18n'
-import { consoleStatus, printer } from './state'
+import { plates } from './plates'
+import { printer } from './state'
 
 // Codes and meanings below come from ELEGOO's elegoo-link SDK (Apache-2.0), CC2 LAN adapter
 // elegoo_fdm_cc2_message_adapter.cpp; see NOTICE.md. Only the numbers' meanings are used.
@@ -61,12 +62,20 @@ const SUB: Record<number, Record<number, Key[]>> = {
 export const subState = (machine: any) =>
   (SUB[Number(machine?.status)]?.[Number(machine?.sub_status)] ?? []).map(k => t(k)).join(' · ')
 
-// Firmware stays Idle during the screw-measurement dwell and while the nozzle is probing.
-// The status bar says so only while that session is active and the console command is still running.
+// The firmware says Idle during the whole screw session (the dwell, the probing and the wait for the next turn).
+// The status bar says "Levelling" instead, as long as the session is active; the details are in the session bar.
+// Likewise "Mesh calibration" while CC2 Control runs a bed mesh calibration (it also reads Idle); the library is polled by the
+// Bed levelling page only, so that state counts as long as it was read in the last 10 s.
 export function statusTitle(stateName: string) {
   const data = printer.get().data
-  const replaced = Boolean(data?.screws_session?.active && consoleStatus.get().busy && /idle/i.test(stateName))
-  return { text: replaced ? t('bed.tram_measuring') : tState(stateName), replaced }
+  const idle = /idle/i.test(stateName)
+  const library = plates.get()
+  const calibrating = Boolean(
+    idle && library.data?.calibration && library.data.calibration.stage !== 'off' && Date.now() - library.at < 10_000
+  )
+  const replaced = Boolean(data?.screws_session?.active && idle) || calibrating
+  const word = data?.screws_session?.active ? 'bed.lvl_header_word' : 'bed.cal_header_word'
+  return { text: replaced ? t(word) : tState(stateName), replaced }
 }
 
 // The machine state followed by its detail, e.g. "Printing · Heating bed".

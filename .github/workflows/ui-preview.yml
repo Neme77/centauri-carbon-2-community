@@ -54,6 +54,8 @@ jobs:
         run: npm run test:sidebar-canvas-polish
       - name: Verify camera streaming lifecycle
         run: npm run test:camera
+      - name: Verify the camera mini player (one stream, size, position, zoom, takeover)
+        run: npm run test:miniplayer
       - name: Verify Polish and Czech language selection and layouts
         run: npm run test:languages
       - name: Verify Canvas reset confirmation and empty-slot rendering

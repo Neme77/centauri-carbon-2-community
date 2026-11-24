@@ -1,9 +1,9 @@
 import type { Pt } from './mesh'
 
-export type Cam = { yaw: number; pitch: number; zoom: number; scale: number }
+export type Cam = { yaw: number; pitch: number; zoom: number; scale: number; panX?: number; panY?: number }
 export const defaultCam = (): Cam => ({ yaw: -0.28, pitch: 0.68, zoom: 1, scale: 1 })
 
-const stops = [
+export const stops = [
   [24, 123, 213],
   [22, 199, 220],
   [103, 211, 176],
@@ -18,6 +18,18 @@ const colour = (z: number, zMin: number, zMax: number, alpha = 1) => {
   return `rgba(${a.map((v, i) => Math.round(v + (b[i] - v) * f)).join(',')},${alpha})`
 }
 
+// Blue below the previous mesh, gray where it is unchanged, amber above it.
+const divergingColour = (z: number, peak: number, alpha = 1) => {
+  const n = Math.max(-1, Math.min(1, z / peak))
+  const low = [37, 99, 235],
+    mid = [186, 198, 210],
+    high = [217, 119, 6]
+  const from = n < 0 ? low : mid,
+    to = n < 0 ? mid : high,
+    f = n < 0 ? 1 + n : n
+  return `rgba(${from.map((v, i) => Math.round(v + (to[i] - v) * f)).join(',')},${alpha})`
+}
+
 export const meshStats = (pts: Pt[]) => {
   if (pts.length < 4) return null
   const zs = pts.map(p => p.z),
@@ -29,7 +41,36 @@ export const meshStats = (pts: Pt[]) => {
 // Renders the actual rectangular mesh as a 3D surface or a 2D heat map onto the canvas.
 export type Labels = { empty: string; min: string; max: string; back: string }
 
-export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '2d', cam: Cam, L: Labels) {
+// A screw as on the screw top view: a round badge (26 px, thin muted ring, dark inside) with its number.
+// `m.active`: the corner picked in the table (cyan, thicker ring). The position drawn is kept in m.sx/m.sy (CSS px), so
+// that a click on the canvas finds the mark.
+const screwMark = (c: CanvasRenderingContext2D, x: number, y: number, m: Mark) => {
+  const label = m.label
+  m.sx = x
+  m.sy = y
+  c.beginPath()
+  c.arc(x, y, 13, 0, Math.PI * 2)
+  c.fillStyle = m.active ? '#14cfe9' : '#06202fdd'
+  c.fill()
+  c.strokeStyle = m.active ? '#eef7fc' : '#94b4c4'
+  c.lineWidth = m.active ? 2.5 : 1
+  c.stroke()
+  c.lineWidth = 1
+  c.fillStyle = m.active ? '#06202f' : '#eef7fc'
+  c.textAlign = 'center'
+  c.font = '500 12px Inter, Segoe UI, sans-serif'
+  c.fillText(label, x, y + 4)
+}
+export type Mark = { x: number; y: number; label: string; active?: boolean; sx?: number; sy?: number }
+export function drawMesh(
+  canvas: HTMLCanvasElement,
+  points: Pt[],
+  mode: '3d' | '2d',
+  cam: Cam,
+  L: Labels,
+  marks: Mark[] = [],
+  diverging = false
+) {
   const r = canvas.getBoundingClientRect()
   if (!r.width || !r.height) return
   const dpr = Math.min(devicePixelRatio || 1, 2)
@@ -53,11 +94,17 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
   const ys = [...new Set(points.map(p => p.y))].sort((a, b) => a - b)
   const cells = new Map(points.map(p => [`${p.x},${p.y}`, p]))
   const { min: zMin, max: zMax } = st,
-    col = (z: number, a = 1) => colour(z, zMin, zMax, a)
+    peak = Math.max(Math.abs(zMin), Math.abs(zMax), 1e-9),
+    col = diverging ? (z: number, a = 1) => divergingColour(z, peak, a) : (z: number, a = 1) => colour(z, zMin, zMax, a)
   if (mode === '2d') {
-    const side = Math.min(w - 85, h - 70),
-      left = (w - side) / 2,
-      top = 22
+    const fit = Math.min(w - 85, h - 70),
+      side = fit * cam.zoom,
+      // The map can only be moved as far as it is larger than the view: an edge never leaves the middle.
+      limit = Math.max(0, (side - fit) / 2)
+    cam.panX = Math.max(-limit, Math.min(limit, cam.panX ?? 0))
+    cam.panY = Math.max(-limit, Math.min(limit, cam.panY ?? 0))
+    const left = (w - side) / 2 + cam.panX,
+      top = 22 + (fit - side) / 2 + cam.panY
     // Plot only the probed region on the bed, including non-square adaptive grids.
     for (const p of points) {
       const x = xs.indexOf(p.x),
@@ -74,6 +121,12 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
         ((y1 - y0) / 250) * side + 0.2
       )
     }
+    for (const m of marks) {
+      const mx = left + (m.x / 250) * side,
+        my = top + (1 - m.y / 250) * side
+      screwMark(c, mx, my, m)
+    }
+    c.font = '11px Inter, Segoe UI, sans-serif'
     c.fillStyle = '#a2c9dd'
     c.textAlign = 'center'
     c.fillText('X (mm) →', w / 2, h - 13)
@@ -82,7 +135,8 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
   }
   // Frame absolute probe offsets without changing their reported Z values.
   const zCentre = (zMin + zMax) / 2,
-    zSpan = Math.max(0.42, (zMax - zMin) * 1.4),
+    // A mesh change is a fraction of a millimetre; the usual 0.42 mm floor would draw it flat.
+    zSpan = Math.max(diverging ? 0.02 : 0.42, (zMax - zMin) * 1.4),
     zGain = 0.42 / zSpan
   const { yaw, pitch, zoom, scale } = cam
   // Fit at the reference angle so dragging rotates without changing the zoom.
@@ -134,7 +188,7 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     const p = project(0, 0, z)
     c.fillStyle = '#a8cbdd'
     c.textAlign = 'right'
-    c.fillText(z.toFixed(2), p.x - 8, p.y + 4)
+    c.fillText(z.toFixed(zSpan < 0.2 ? 3 : 2), p.x - 8, p.y + 4)
   }
   line(project(0, 0, floor), project(250, 0, floor), '#9fc2d4')
   line(project(250, 0, floor), project(250, 250, floor), '#9fc2d4')
@@ -174,10 +228,20 @@ export function drawMesh(canvas: HTMLCanvasElement, points: Pt[], mode: '3d' | '
     c.arc(q.x, q.y, 1.35, 0, Math.PI * 2)
     c.fill()
   }
-  for (const [z, label, color] of [
+  // Optional marks (the bed screws), each at the height of the nearest mesh point.
+  for (const m of marks) {
+    const near = points.reduce((a, b) => (Math.hypot(b.x - m.x, b.y - m.y) < Math.hypot(a.x - m.x, a.y - m.y) ? b : a))
+    const q = project(m.x, m.y, near.z)
+    screwMark(c, q.x, q.y, m)
+  }
+  c.font = '11px Inter, Segoe UI, sans-serif'
+  for (const [z, label, plain] of [
     [zMin, L.min, '#16c9f2'],
     [zMax, L.max, '#ffcf4d'],
   ] as const) {
+    // A drop of the whole bed is still a drop: the higher of two negative points stays blue.
+    // On a flat mesh both values are the maximum, so the ordinary view keeps the minimum blue.
+    const color = diverging ? (z < 0 ? '#16c9f2' : z > 0 ? '#ffcf4d' : '#bac6d2') : plain
     const p = points.find(p => p.z === z)
     if (!p) continue
     const q = project(p.x, p.y, p.z)

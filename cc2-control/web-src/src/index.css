@@ -189,6 +189,77 @@
 }
 :root[data-theme="klipper"] nav a.text-cyan { box-shadow: inset 3px 0 0 var(--cyan); }
 :root[data-theme="klipper"] .cc2-main section h2 { text-transform: uppercase; letter-spacing: .06em; font-size: .8125rem; }
+/* Dune: a warm light theme. Sand-coloured page, cream-white cards with a firm warm edge and a deep teal accent, so white surfaces stand out without the cold blue of the other light themes. Every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="dune"] {
+  color-scheme: light;
+  --bg: #ebe0cf; --panel: #fffdf8; --edge: #bfae92; --text: #2a2118; --muted: #5e5039; --field: #f6efe2; --ink: #ffffff;
+  --cyan: #0a6b6b; --green: #2a6b1f; --amber: #7a4a00; --red: #a8262b; --blue: #1f5fa8;
+  --well: #2a2118; --well-fg: #fbf3e4;
+  --shadow-card: 0 1px 0 #fff inset, 0 1px 2px rgb(74 52 20 / .12), 0 12px 26px -14px rgb(122 74 0 / .45);
+  --shadow-pop: 0 14px 40px -8px rgb(74 52 20 / .34), 0 2px 8px rgb(74 52 20 / .14);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent), 0 2px 12px -2px color-mix(in srgb, var(--cyan) 34%, transparent);
+}
+:root[data-theme="dune"] body {
+  background:
+    radial-gradient(ellipse 55% 45% at 96% -8%, color-mix(in srgb, #ffc46b 46%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 40% at -4% 100%, color-mix(in srgb, #7fc9bd 30%, transparent), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  background-size: 100% max(100vh, 100%);
+}
+:root[data-theme="dune"] section.bg-panel { border-bottom: 2px solid color-mix(in srgb, var(--cyan) 45%, var(--edge)); }
+:root[data-theme="dune"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 11%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 35%, transparent); }
+/* Swamp: a dark theme in sickly, rotten greens. Near-black moss page, olive panels and a mouldy olive-lime accent; the "ok" status green is a cooler emerald so it never reads as the accent. Every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="swamp"] {
+  color-scheme: dark;
+  --bg: #10130b; --panel: #1a1f12; --edge: #46513a; --text: #eef0df; --muted: #aab38f; --field: #242b19; --ink: #10130b;
+  --cyan: #a9b83c; --green: #4fd18b; --amber: #e6a83c; --red: #ff8272; --blue: #74b4d6;
+  --well: #0a0c06; --well-fg: #eef0df;
+  --shadow-card: 0 0 0 1px color-mix(in srgb, #a9b83c 10%, transparent), 0 10px 26px -14px #000d;
+  --shadow-pop: 0 14px 40px -8px #000d, 0 0 0 1px color-mix(in srgb, #a9b83c 24%, transparent);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 50%, transparent), 0 0 16px -4px color-mix(in srgb, var(--cyan) 45%, transparent);
+}
+:root[data-theme="swamp"] body {
+  background:
+    radial-gradient(ellipse 60% 42% at 4% -6%, color-mix(in srgb, #8a9a2a 26%, transparent), transparent 70%),
+    radial-gradient(ellipse 55% 40% at 100% 100%, color-mix(in srgb, #6b5a1e 30%, transparent), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  background-size: 100% max(100vh, 100%);
+}
+:root[data-theme="swamp"] section.bg-panel { border-left: 2px solid color-mix(in srgb, var(--cyan) 38%, var(--edge)); }
+:root[data-theme="swamp"] nav a.text-cyan,
+:root[data-theme="swamp"] button[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+:root[data-theme="swamp"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 12%, var(--panel)); }
+:root[data-theme="swamp"] .cc2-dashboard .text-2xl:not(h2),
+:root[data-theme="swamp"] .cc2-job-stats strong { color: var(--amber); }
+/* KlipperScreen: a classic dark theme in the spirit of KlipperScreen's material-dark/"colourized" look: flat Material grey, large rounded buttons and cards, no shadows, and a different colour for each menu icon. The palette is an approximation, not KlipperScreen's exact CSS. Every text token is >= 4.5:1 on bg, panel and field; menu icons are >= 3:1. */
+:root[data-theme="klipperscreen"] {
+  color-scheme: dark;
+  --bg: #1e1e1e; --panel: #2b2b2b; --edge: #474747; --text: #f2f2f2; --muted: #b8b8b8; --field: #353535; --ink: #101820;
+  --cyan: #4da3ff; --green: #6fd183; --amber: #ffb84d; --red: #ff7b7b; --blue: #4dd0e1;
+  --well: #121212; --well-fg: #f2f2f2;
+  --radius-card: 18px;
+  --shadow-card: none;
+  --shadow-pop: 0 10px 30px -6px #000b, 0 2px 8px #0008;
+  --shadow-glow: none;
+}
+:root[data-theme="klipperscreen"] button.rounded-lg { border-radius: 14px; min-height: 2.5rem; }
+:root[data-theme="klipperscreen"] nav a { border-radius: 14px; }
+:root[data-theme="klipperscreen"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 16%, var(--panel)); }
+:root[data-theme="klipperscreen"] nav a[href="#dashboard"] svg { color: #4da3ff; }
+:root[data-theme="klipperscreen"] nav a[href="#control"] svg { color: #ffb74d; }
+:root[data-theme="klipperscreen"] nav a[href="#job"] svg { color: #81c784; }
+:root[data-theme="klipperscreen"] nav a[href="#files"] svg { color: #ba68c8; }
+:root[data-theme="klipperscreen"] nav a[href="#queue"] svg { color: #4dd0e1; }
+:root[data-theme="klipperscreen"] nav a[href="#history"] svg { color: #f06292; }
+:root[data-theme="klipperscreen"] nav a[href="#bed"] svg { color: #aed581; }
+:root[data-theme="klipperscreen"] nav a[href="#canvas"] svg { color: #ff8a65; }
+:root[data-theme="klipperscreen"] nav a[href="#spools"] svg { color: #9fa8da; }
+:root[data-theme="klipperscreen"] nav a[href="#console"] svg { color: #b0bec5; }
+:root[data-theme="klipperscreen"] nav a[href="#settings"] svg { color: #ffd54f; }
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400-700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
@@ -236,10 +307,11 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
     overflow-y: auto; transition: transform 150ms ease;
   }
   .cc2-sidebar-open { transform: translateX(0); visibility: visible; }
+  .cc2-sidebar.cc2-sidebar { z-index: 37; } /* the phone's drawer lies above the mini player (35) */
   .cc2-sidebar nav a { justify-content: flex-start; padding-inline: 16px; }
   .cc2-sidebar nav a span { display: inline; visibility: visible; }
   .cc2-menu-backdrop {
-    display: block; position: fixed; inset: 68px 0 0; z-index: 19;
+    display: block; position: fixed; inset: 68px 0 0; z-index: 36;
     background: #0008;
   }
   .cc2-topbar > div:last-child { min-width: 0; gap: 4px; }
@@ -666,12 +738,12 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 60%, #315061), color-mix(in srgb, var(--bg) 55%, #132a36));
 }
 .cc2-camera-idle-controls { bottom: 2px; }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused {
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused {
   background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 58%), linear-gradient(145deg, #e9f1f4, #dce8ed);
 }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-grid { opacity: .12; }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
-:root:is([data-theme="light"], [data-theme="aurora"]) .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-grid { opacity: .12; }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"]) .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
 
 /* Fit the slider into the existing heading space instead of adding another card row. */
 .cc2-tuning-field > .cc2-tuning-heading {
@@ -833,3 +905,69 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
 }
 
 .cc2-main section section { box-shadow: none; }
+
+/* Mini player: the live camera in a small window above every page, the header (30) and the side menu (20), so it can be
+   put anywhere in the browser window. Notices (40), dialogs (50) and toasts (70) stay above it, and on a phone the menu
+   drawer (backdrop 36, menu 37) too. */
+.cc2-miniplayer {
+  position: fixed; z-index: 35; display: flex; flex-direction: column; overflow: hidden;
+  container: cc2-mini / inline-size;
+  border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow-pop);
+}
+.cc2-mini-video { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #000; touch-action: none; user-select: none; }
+.cc2-mini-video .cc2-camera-frame { border: 0; border-radius: 0; }
+.cc2-mini-video .cc2-camera-frame img { transform: translate(var(--mtx, 0px), var(--mty, 0px)) scale(var(--mz, 1)); }
+.cc2-miniplayer :focus-visible { outline-offset: -3px; }
+.cc2-mini-badge {
+  position: absolute; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px;
+  font-size: 11px; line-height: 1.4; pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--text);
+}
+.cc2-mini-live { left: 8px; top: 8px; color: var(--green); }
+.cc2-mini-zoom { left: 8px; bottom: 8px; }
+/* The bar is on top, 44 px high. Left to right: size handle (the top left corner), grip, pause, name, zoom, close.
+   Every control is at least 44 x 44 px for a finger; the drawn shape inside is smaller. The exception: the zoom
+   buttons are 32 px wide (their hit area is 44 px high). Pressing anywhere on the bar that is not another button moves
+   the window; so do the thin strips at the left, right and bottom edge (the frame). */
+.cc2-mini-bar {
+  display: flex; align-items: center; height: 44px; background: var(--panel); border-bottom: 1px solid var(--edge);
+  cursor: grab; touch-action: none; user-select: none;
+}
+.cc2-mini-bar:active { cursor: grabbing; }
+.cc2-mini-bar button, .cc2-mini-bar .cc2-mini-size { cursor: pointer; }
+.cc2-mini-bar .cc2-mini-grip { cursor: grab; }
+.cc2-mini-bar .cc2-mini-grip:active { cursor: grabbing; }
+.cc2-mini-size { width: 44px; height: 44px; flex: none; display: grid; place-items: center; cursor: nwse-resize !important; touch-action: none; color: var(--text); }
+.cc2-mini-size svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.cc2-mini-grip { width: 44px; height: 44px; flex: none; display: grid; place-items: center; color: var(--muted); touch-action: none; }
+.cc2-mini-close, .cc2-mini-play { width: 44px; height: 44px; flex: none; display: grid; place-items: center; }
+.cc2-mini-close > span, .cc2-mini-play > span {
+  display: grid; place-items: center; border-radius: 9999px; border: 1px solid var(--edge); color: var(--text);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+.cc2-mini-close > span { width: 28px; height: 28px; }
+.cc2-mini-play > span { width: 32px; height: 32px; border-color: var(--cyan); background: var(--cyan); color: var(--ink); }
+.cc2-mini-zoombar { display: flex; flex: none; align-items: center; margin-left: auto; }
+.cc2-mini-zoombutton {
+  position: relative; min-width: 32px; height: 32px; padding-inline: 4px; display: grid; place-items: center;
+  border: 1px solid var(--edge); border-radius: 6px; background: var(--field); color: var(--text); font-size: 12px;
+}
+.cc2-mini-zoombutton[aria-disabled="true"] { opacity: .35; cursor: default !important; }
+.cc2-mini-zoomlabel { width: 36px; text-align: center; font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; }
+/* The drawn button is 32 px; its invisible hit area is 44 x 44 px for a finger. Where the bar has no room for more
+   than 32 px side by side (below 278 px) the hit area is 44 px high and as wide as the button. */
+.cc2-mini-zoombutton::before { content: ""; position: absolute; inset: -6px; }
+.cc2-mini-reset-slot { display: inline-flex; width: 44px; justify-content: flex-end; } /* always there, so the buttons never move when the reset button appears */
+.cc2-mini-edge { position: absolute; z-index: 2; cursor: grab; touch-action: none; user-select: none; }
+.cc2-mini-edge:active { cursor: grabbing; }
+.cc2-mini-edge-l, .cc2-mini-edge-r { top: 45px; bottom: 0; width: 6px; }
+.cc2-mini-edge-l { left: 0; }
+.cc2-mini-edge-r { right: 0; }
+.cc2-mini-edge-b { left: 0; right: 0; bottom: 0; height: 6px; }
+/* Widths below are the inner width of the window (window width - 2 px border). Bar budget: size, grip, pause and close
+   are 44 px each, zoom - + 64 px (+ 34 px readout, + 44 px reset). */
+@container cc2-mini (max-width: 337px) { .cc2-mini-reset-slot { display: none; } }
+@container cc2-mini (max-width: 277px) { .cc2-mini-zoomlabel { display: none; } .cc2-mini-grip { width: 40px; } .cc2-mini-zoombutton::before { inset: -6px 0; } }
+@container cc2-mini (max-width: 237px) { .cc2-mini-zoombar { display: none; } .cc2-mini-close { margin-left: auto; } }
+/* The smallest phone windows (below 198 px): no room for the close button in the bar, it sits on the picture. */
+@container cc2-mini (max-width: 195px) { .cc2-mini-close { position: absolute; z-index: 3; right: 0; top: 44px; } }

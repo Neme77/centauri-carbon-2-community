@@ -5,6 +5,7 @@ const tone = {
   default: 'border-edge text-muted',
   warning: 'border-amber text-amber bg-amber/10',
   ok: 'border-green text-green bg-green/10',
+  info: 'border-cyan text-cyan bg-cyan/10',
 }
 export const Tag = ({
   tone: k = 'default',

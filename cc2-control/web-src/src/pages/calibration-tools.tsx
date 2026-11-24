@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-preact'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,7 +35,14 @@ const ToolProgress = ({ refresh }: { refresh: () => Promise<void> }) => {
   usePoll(refresh, 500)
   return null
 }
-export const CalibrationTools = ({ panel = 'both' }: { panel?: 'both' | 'cell' | 'rotation' }) => {
+// inline: inside another card (the Mesh card), below a divider instead of a card of its own.
+export const CalibrationTools = ({
+  panel = 'both',
+  inline = false,
+}: {
+  panel?: 'both' | 'cell' | 'rotation'
+  inline?: boolean
+}) => {
   const link = printer.use(),
     d = link.data
   const [data, setData] = useState<ToolStatus | null>(null)
@@ -119,7 +127,7 @@ export const CalibrationTools = ({ panel = 'both' }: { panel?: 'both' | 'cell' |
   const restoreTarget = data?.configured
   const content = (
     <>
-      {panel !== 'rotation' && (
+      {panel !== 'rotation' && !inline && (
         <CardHead icon="control" title={panel === 'cell' ? 'caltools.cell' : 'caltools.title'} />
       )}
       {data?.busy && <ToolProgress refresh={refresh} />}
@@ -368,6 +376,18 @@ export const CalibrationTools = ({ panel = 'both' }: { panel?: 'both' | 'cell' |
       )}
     </>
   )
+  // Inline in the Mesh card: folded by default, opened with its title row.
+  if (inline)
+    return (
+      <details class="group cc2-native-tools mb-3 rounded-lg border border-edge bg-field/40" data-bed-cell>
+        <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm font-semibold select-none [&::-webkit-details-marker]:hidden">
+          <ChevronRight size={16} class="text-cyan transition-transform group-open:rotate-90" />
+          {t('caltools.cell')}
+          <span class="text-xs font-normal text-muted">{t('caltools.cell_summary')}</span>
+        </summary>
+        <div class="border-t border-edge p-3">{content}</div>
+      </details>
+    )
   return panel === 'rotation' ? (
     <div class="cc2-native-tools cc2-rotation-tools mt-3 border-t border-edge pt-3">{content}</div>
   ) : (

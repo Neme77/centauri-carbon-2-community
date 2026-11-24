@@ -5,7 +5,7 @@
 
 /* The printer as plates.h sees it: autosave.cfg on disk, profiles in memory, G-code it ran. */
 static plate_mesh memory_a, memory_b;
-static int memory_has_b = 1, uds_down;
+static int memory_has_b = 1, uds_down, uds_queries; /* uds_queries: every round trip, also while uds_down */
 static plate_mesh active_mesh;
 static char active_profile[32]="default";
 static int refuse_mesh_load, ignore_mesh_load, corrupt_active_matrix, missing_active_matrix;
@@ -13,6 +13,7 @@ static char ran[256];            /* the last SET_GCODE_OFFSET */
 static char profile_log[1024];   /* BED_MESH_PROFILE scripts, separated by '|' */
 static char fake_print_file[64] = "local/job.gcode", fake_layer[16] = "null"; /* print_stats as the printer answers it */
 static int fake_uds(const char *query, char **reply, size_t *length) {
+    uds_queries++;
     if (uds_down) return -1;
     json_builder b = {malloc(65536), 0, 65536, 0};
     if (strstr(query, "\"print_stats\"")) {
@@ -153,6 +154,7 @@ static int call(int handler, const mqtt_client *mqtt, const char *body) {
         case 12: plates_nozzle_select_response(pair[0], mqtt, body, length); break;
         case 13: plates_create_response(pair[0], mqtt, body, length); break;
         case 14: plates_match_response(pair[0], body, length); break;
+        case 15: plates_measures_clear_response(pair[0], mqtt, body, length); break;
     }
     close(pair[0]);
     size_t used = 0; ssize_t n;
@@ -173,6 +175,7 @@ static int call(int handler, const mqtt_client *mqtt, const char *body) {
 #define NOZZLE 10
 #define NOZZLE_DELETE 11
 #define NOZZLE_SELECT 12
+#define MEASURES_CLEAR 15
 
 static void fresh(mqtt_client *mqtt) {
     mqtt->connected = mqtt->registered = 1; mqtt->have_machine_status = 1; mqtt->machine_status = 1;
@@ -621,6 +624,42 @@ static void test_measures(void) {
     snprintf(body, sizeof(body), "%s\n80\n%s", carbon, brass);
     assert(call(MEASURE, &mqtt, body) == 200 && plate_measure_count(carbon) == 2 && !strcmp(plates.plates[0].measure, m80));
     assert(plate_mesh_equal(&measure_find(m80)->mesh, &at60, 1)); /* the same temperature and nozzle are replaced */
+    {
+        /* The mesh that was replaced stays with the measurement, reloads, and is left in place when the
+         * next capture is the same mesh. */
+        const plate_measure *replaced = measure_find(m80);
+        long long kept = replaced->prior_measured;
+        assert(replaced->has_prior && plate_mesh_equal(&replaced->prior, &at80, 1) && kept > 0 && kept <= replaced->measured);
+        assert(call(MEASURE, &mqtt, body) == 200);
+        replaced = measure_find(m80);
+        assert(replaced->has_prior && plate_mesh_equal(&replaced->prior, &at80, 1) && replaced->prior_measured == kept);
+        assert(plate_mesh_equal(&replaced->mesh, &at60, 1));
+        plates_load();
+        replaced = measure_find(m80);
+        assert(replaced && replaced->has_prior && plate_mesh_equal(&replaced->prior, &at80, 1) &&
+               plate_mesh_equal(&replaced->mesh, &at60, 1));
+        assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"prior\":{\"measured\":"));
+        /* Interpolation is not a new shape: the comparison with the mesh this one replaced stays.
+         * The slot is rewritten in place so the profiles already stored in the file remain. */
+        plate_mesh interpolated = at60; interpolated.tension = 0.5;
+        size_t slot_length, slot_new; char *slot_file = slurp(printer_autosave_path, &slot_length);
+        char *slot_updated = autosave_with_mesh(slot_file, slot_length, "default", &interpolated, &slot_new);
+        assert(slot_updated);
+        FILE *slot_out = fopen(printer_autosave_path, "wb"); fwrite(slot_updated, 1, slot_new, slot_out); fclose(slot_out);
+        free(slot_file); free(slot_updated);
+        memory_a = interpolated;
+        assert(call(MEASURE, &mqtt, body) == 200);
+        replaced = measure_find(m80);
+        assert(replaced->has_prior && plate_mesh_equal(&replaced->prior, &at80, 1) &&
+               plate_close(replaced->mesh.tension, 0.5) && plate_mesh_shape_equal(&replaced->mesh, &at60));
+        slot_file = slurp(printer_autosave_path, &slot_length);
+        slot_updated = autosave_with_mesh(slot_file, slot_length, "default", &at60, &slot_new);
+        assert(slot_updated);
+        slot_out = fopen(printer_autosave_path, "wb"); fwrite(slot_updated, 1, slot_new, slot_out); fclose(slot_out);
+        free(slot_file); free(slot_updated);
+        memory_a = at60;
+        assert(call(MEASURE, &mqtt, body) == 200);
+    }
     {   /* restore the 80 degree mesh and add 100 */
         size_t file_length, new_length; char *file = slurp(printer_autosave_path, &file_length);
         char *updated = autosave_with_mesh(file, file_length, "default", &at80, &new_length); assert(updated);
@@ -898,14 +937,17 @@ static int fake_console(console_state *c, const char *command) {
     pthread_mutex_unlock(&c->lock);
     return 0;
 }
-static int calibrate(const mqtt_client *mqtt, const char *body) {
+static int calibrate_request(const mqtt_client *mqtt, const char *body, const char *request) {
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
-    plates_calibrate_response(pair[0], mqtt, &console, body, strlen(body));
+    plates_calibrate_response(pair[0], mqtt, &console, body, strlen(body), request);
     close(pair[0]);
     size_t used = 0; ssize_t n;
     while ((n = recv(pair[1], response + used, sizeof(response) - 1 - used, 0)) > 0) used += (size_t)n;
     response[used] = 0; close(pair[1]);
     return status_of(response);
+}
+static int calibrate(const mqtt_client *mqtt, const char *body) {
+    return calibrate_request(mqtt, body, NULL);
 }
 /* What the firmware's calibration does to the file: only the slot changes. */
 static void set_slot_a(const plate_mesh *m) {
@@ -951,7 +993,11 @@ static void test_calibration_job(void) {
     snprintf(mqtt.homed_axes, sizeof(mqtt.homed_axes), "%s", "");
     profile_log[0] = console_log[0] = 0;
     snprintf(body, sizeof(body), "A\n70\n10\n%s\n%s", nozzle, plate);
-    assert(calibrate(&mqtt, body) == 202 && plates_cal.stage == CAL_HOMING && !strcmp(console_log, "G28"));
+    const char *run_request = "POST /api/plates/calibrate HTTP/1.1\r\nX-CC2-Calibration-Run: 7d00000000000070\r\n\r\n";
+    assert(calibrate_request(&mqtt, body, "POST /api/plates/calibrate HTTP/1.1\r\nX-CC2-Calibration-Run: invalid\r\n\r\n") == 400);
+    assert(!plates_cal.stage && !console_log[0]);
+    assert(calibrate_request(&mqtt, body, run_request) == 202 && plates_cal.stage == CAL_HOMING && !strcmp(console_log, "G28"));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"run\":\"7d00000000000070\""));
     assert(plates_has_profile(measure_find(first))); /* the slot's measurement kept a profile first */
     assert(calibrate(&mqtt, body) == 409 && strstr(response, "already running"));
     char late[24];
@@ -978,17 +1024,41 @@ static void test_calibration_job(void) {
     /* The firmware saves the new mesh in the slot; it becomes the plate's 70 degree measurement with the nozzle. */
     set_slot_a(&at70);
     plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING);
+    /* Right after the probing the mesh file or the printer memory may not be readable yet: tried again, at most
+     * every 2 s, nothing stored meanwhile. */
+    const char *autosave = printer_autosave_path; printer_autosave_path = "/nonexistent-cc2/autosave.cfg";
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING && plate_measure_count(plate) == 1);
+    printer_autosave_path = autosave; uds_down = 1; uds_queries = 0;
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING && !uds_queries); /* the pause */
+    plates_cal.retry_at = 0; plates_calibration_tick(&mqtt, &console);
+    assert(plates_cal.stage == CAL_SAVING && uds_queries == 1 && plate_measure_count(plate) == 1);
+    uds_down = 0; plates_cal.retry_at = 0;
     plates_calibration_tick(&mqtt, &console);
     assert(!plates_cal.stage && !strcmp(plates_cal.result, "saved") && plate_measure_count(plate) == 2);
     const plate_measure *m = measure_find(plates_cal.measure);
     assert(m && m->temp == 70 && !strcmp(m->nozzle, nozzle) && plate_mesh_equal(&m->mesh, &at70, 1));
     assert(!strcmp(plates.current, plate) && !strcmp(plates.plates[0].measure, m->id) && plates_has_profile(m));
-    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"stage\":\"off\"") && strstr(response, "\"result\":\"saved\""));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"stage\":\"off\"") &&
+           strstr(response, "\"result\":\"saved\"") && strstr(response, "\"run\":\"7d00000000000070\""));
     assert(!plates_print_prepare(&mqtt, 'A', 1, first, "", late) && !strcmp(late, first));
+    /* Any other error while saving ends the run at once, here a plate library that is not available (also a 503). */
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+    snprintf(body, sizeof(body), "A\n70\n0\n%s\n%s", nozzle, plate);
+    assert(calibrate(&mqtt, body) == 202);
+    plates_calibration_tick(&mqtt, &console); bed(70, 70); plates_calibration_tick(&mqtt, &console);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_PROBING);
+    set_slot_a(&at70);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING);
+    const char *loaded = plates_error; plates_available = 0; plates_error = "Plate library not loaded";
+    plates_calibration_tick(&mqtt, &console); plates_available = 1; plates_error = loaded;
+    assert(!plates_cal.stage && !strcmp(plates_cal.result, "failed") && !strcmp(plates_cal.error, "saving"));
+    assert(!strcmp(plates_cal.detail, "Plate library not loaded") && plate_measure_count(plate) == 2);
+    assert(!plates_cal.replaced && !m->has_prior && plate_mesh_equal(&m->mesh, &at70, 1));
 
     /* Without a plate the result only stays in the printer; no soak probes at once. */
     console_log[0] = 0;
     assert(calibrate(&mqtt, "A\n60\n0") == 202 && !strcmp(console_log, "M140 S60"));
+    assert(plate_id_valid(plates_cal.run) && strcmp(plates_cal.run, "7d00000000000070"));
     plates_calibration_tick(&mqtt, &console); bed(60, 60); plates_calibration_tick(&mqtt, &console);
     plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_PROBING);
     plates_calibration_tick(&mqtt, &console); assert(!plates_cal.stage && !strcmp(plates_cal.result, "done"));
@@ -1081,6 +1151,169 @@ static void test_calibration_job(void) {
     unlink(plates_path);
 }
 
+/* The fake console refuses every command: a start that cannot send its first command. */
+static int refusing_console(console_state *c, const char *command) { (void)c; (void)command; return -1; }
+/* The rest of a started calibration on side A at `temp` without a soak: the firmware leaves `probed` in the
+ * slot. */
+static void finish_calibration(mqtt_client *mqtt, int temp, const plate_mesh *probed) {
+    plates_calibration_tick(mqtt, &console); bed(temp, temp); plates_calibration_tick(mqtt, &console);
+    plates_calibration_tick(mqtt, &console); assert(plates_cal.stage == CAL_PROBING);
+    set_slot_a(probed);
+    plates_calibration_tick(mqtt, &console); assert(plates_cal.stage == CAL_SAVING);
+    plates_calibration_tick(mqtt, &console); assert(!plates_cal.stage);
+}
+static void run_calibration(mqtt_client *mqtt, const char *body, int temp, const plate_mesh *probed) {
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG)); /* no bed reading before the start */
+    assert(calibrate(mqtt, body) == 202);
+    finish_calibration(mqtt, temp, probed);
+}
+
+/* "Guided with a new mesh": its first mesh is only a working measurement of the plate. The library, the mounted
+ * plate and the measurement it mounts with stay byte for byte; only the final mesh replaces the stored one. */
+static void test_calibration_work(void) {
+    mqtt_client mqtt = {0};
+    plate_mesh at60 = grid(0.6), work = grid(0.64), final_mesh = grid(0.66), b = grid(0.3);
+    write_autosave(&at60, &b); memory_a = at60; memory_b = b;
+    unlink(plates_path); new_process(); fresh(&mqtt);
+    snprintf(mqtt.homed_axes, sizeof(mqtt.homed_axes), "%s", "xyz");
+    plates_console = fake_console; plates_bed_off = fake_bed_off; plates_bed_target = fake_bed_target;
+    assert(call(SAVE, &mqtt, "A\nCarbon\n0.05\n60") == 201);
+    char plate[17], first[17], current[17], body[160], late[24];
+    snprintf(plate, sizeof(plate), "%s", plates.plates[0].id); snprintf(first, sizeof(first), "%s", plates.plates[0].measure);
+    assert(call(MOUNT, &mqtt, plate) == 200 && !strcmp(plates.current, plate)); /* the plate of the print is the mounted one */
+    snprintf(current, sizeof(current), "%s", plates.current);
+    assert(plates_has_profile(measure_find(first)));
+    const long long first_at = measure_find(first)->measured;
+
+    /* `work` needs a plate; any other sixth line is refused. */
+    assert(calibrate(&mqtt, "A\n60\n0\n\n\nwork") == 400);
+    snprintf(body, sizeof(body), "A\n60\n0\n\n%s\nkeep", plate); assert(calibrate(&mqtt, body) == 400);
+    assert(!plates_cal.stage);
+
+    size_t before_length, after_length; char *before = slurp(plates_path, &before_length);
+    snprintf(body, sizeof(body), "A\n60\n0\n\n%s\nwork", plate);
+    profile_log[0] = 0;
+    run_calibration(&mqtt, body, 60, &work);
+    assert(!strcmp(plates_cal.result, "work") && plates_cal.work_ready && !plates_cal.error[0] && !plates_cal.replaced);
+    assert(!strcmp(plates_cal.measured.plate, plate) && plates_cal.measured.temp == 60 && plates_cal.measured.measured > 0 &&
+           plate_mesh_equal(&plates_cal.measured.mesh, &work, 1));
+    /* Nothing of the library changed: the file, the mounted plate, the measurement it mounts with and its mesh. */
+    char *after = slurp(plates_path, &after_length);
+    assert(after_length == before_length && !memcmp(before, after, before_length));
+    free(after);
+    assert(!strcmp(plates.current, current) && !strcmp(plates.plates[0].measure, first) && plate_measure_count(plate) == 1);
+    assert(plate_mesh_equal(&measure_find(first)->mesh, &at60, 1));
+    assert(!measure_find(first)->has_prior && measure_find(first)->measured == first_at);
+    assert(!strstr(profile_log, "SAVE=")); /* no printer profile for it; the stored one already had its own */
+    /* The page reads it back after a reload; it is no measurement of the plate. */
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"result\":\"work\"") && strstr(response, "\"work\":true,\"work_mesh\":{\"plate\":\""));
+    assert(strstr(response, plate) && !strstr(response, "\"id\":\"\""));
+    /* A print with the stored measurement loads its kept profile during the print start; the nearest
+     * measurement of the plate is still the stored one. */
+    assert(!plates_print_prepare(&mqtt, 'A', 1, first, "", late) && !strcmp(late, first));
+    assert(plates_nearest(&plates.plates[0], 60) == measure_find(first));
+    /* Without that profile the print is refused as before. */
+    write_autosave(&work, &b);
+    const char *refused = plates_print_prepare(&mqtt, 'A', 1, first, "", late);
+    assert(refused && strstr(refused, "This measurement is not stored in the printer") && !late[0]);
+
+    /* A start the console refuses keeps the working measurement. */
+    plates_console = refusing_console;
+    assert(calibrate(&mqtt, body) == 409 && !plates_cal.stage && plates_cal.work_ready && !plates_cal.work);
+    plates_console = fake_console;
+
+    /* The final mesh, started and cancelled before its probing: the printer still holds the slot mesh, so the working
+     * measurement stays and GET /api/plates keeps reporting it. */
+    snprintf(body, sizeof(body), "A\n60\n0\n\n%s", plate);
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+    assert(calibrate(&mqtt, body) == 202 && plates_cal.work_ready && !plates_cal.work);
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work\":false,\"work_mesh\":{\"plate\":\""));
+    cancel_calibration(&mqtt);
+    assert(!plates_cal.stage && !strcmp(plates_cal.result, "cancelled") && plates_cal.work_ready && !plates_cal.replaced);
+    assert(plate_mesh_equal(&plates_cal.measured.mesh, &work, 1));
+    assert(plate_mesh_equal(&measure_find(first)->mesh, &at60, 1) && !measure_find(first)->has_prior);
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work_mesh\":{\"plate\":\""));
+    /* Started again: the working measurement stays while the bed heats, is gone once the probing has ended (the printer
+     * holds the new mesh then), and the result replaces the plate's measurement at 60 C. */
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+    assert(calibrate(&mqtt, body) == 202 && plates_cal.work_ready && !plates_cal.work);
+    plates_calibration_tick(&mqtt, &console); bed(60, 60); plates_calibration_tick(&mqtt, &console);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_PROBING && plates_cal.work_ready);
+    set_slot_a(&final_mesh);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING && !plates_cal.work_ready);
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work\":false,\"work_mesh\":null"));
+    plates_calibration_tick(&mqtt, &console); assert(!plates_cal.stage);
+    assert(!strcmp(plates_cal.result, "saved") && !strcmp(plates_cal.measure, first) && plates_cal.replaced);
+    const plate_measure *final = measure_find(first);
+    assert(plate_measure_count(plate) == 1 && plate_mesh_equal(&final->mesh, &final_mesh, 1));
+    assert(final->has_prior && final->prior_measured == first_at && plate_mesh_equal(&final->prior, &at60, 1));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"replaced\":true") && strstr(response, "\"prior\":{"));
+    assert(!strcmp(plates.current, plate) && !strcmp(plates.plates[0].measure, first) && plates_has_profile(measure_find(first)));
+
+    /* A measurement of the same plate stored in the library ends a working measurement too. */
+    snprintf(body, sizeof(body), "A\n70\n0\n\n%s\nwork", plate);
+    run_calibration(&mqtt, body, 70, &work);
+    assert(!strcmp(plates_cal.result, "work") && plates_cal.work_ready && plates_cal.measured.temp == 70);
+    snprintf(body, sizeof(body), "%s\n70", plate);
+    assert(call(MEASURE, &mqtt, body) == 200 && plate_measure_count(plate) == 2 && !plates_cal.work_ready);
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work_mesh\":null"));
+
+    /* A work run cancelled: no new working measurement, the one before stays as it was. */
+    snprintf(body, sizeof(body), "A\n70\n0\n\n%s\nwork", plate);
+    run_calibration(&mqtt, body, 70, &work);
+    assert(!strcmp(plates_cal.result, "work") && plates_cal.work_ready && plates_cal.measured.temp == 70);
+    long long kept_at = plates_cal.measured.measured;
+    snprintf(body, sizeof(body), "A\n60\n0\n\n%s\nwork", plate);
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+    assert(calibrate(&mqtt, body) == 202 && plates_cal.work && plates_cal.work_ready);
+    cancel_calibration(&mqtt);
+    assert(!plates_cal.stage && !strcmp(plates_cal.result, "cancelled") && plates_cal.work_ready);
+    assert(plates_cal.measured.temp == 70 && plates_cal.measured.measured == kept_at);
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work_mesh\":{\"plate\":\""));
+
+    /* A work run whose mesh cannot be read while saving: the one before is gone with the end of the probing, and no new
+     * one is kept. */
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+    assert(calibrate(&mqtt, body) == 202 && plates_cal.work_ready);
+    plates_calibration_tick(&mqtt, &console); bed(60, 60); plates_calibration_tick(&mqtt, &console);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_PROBING && plates_cal.work_ready);
+    set_slot_a(&work);
+    uds_down = 1;
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING && !plates_cal.work_ready);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING); /* tried again for a minute */
+    plates_cal.since -= 61000; plates_cal.retry_at = 0; plates_calibration_tick(&mqtt, &console);
+    assert(!plates_cal.stage && !strcmp(plates_cal.result, "failed") && !strcmp(plates_cal.error, "saving") && !plates_cal.work_ready);
+    assert(!strcmp(plates_cal.detail, "Cannot read the printer mesh") && !plates_cal.replaced);
+    final = measure_find(first);
+    assert(plate_mesh_equal(&final->mesh, &final_mesh, 1));
+    assert(final->has_prior && final->prior_measured == first_at && plate_mesh_equal(&final->prior, &at60, 1));
+    uds_down = 0;
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work_mesh\":null"));
+
+    /* The printer memory not readable on the first attempt only: the next one, 2 s later, keeps the working mesh. */
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+    assert(calibrate(&mqtt, body) == 202);
+    plates_calibration_tick(&mqtt, &console); bed(60, 60); plates_calibration_tick(&mqtt, &console);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_PROBING);
+    set_slot_a(&work);
+    plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING);
+    uds_down = 1; plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING && !plates_cal.work_ready);
+    uds_down = 0; plates_calibration_tick(&mqtt, &console); assert(plates_cal.stage == CAL_SAVING); /* not before 2 s */
+    plates_cal.retry_at = 0; plates_calibration_tick(&mqtt, &console);
+    assert(!plates_cal.stage && !strcmp(plates_cal.result, "work") && plates_cal.work_ready);
+    assert(plate_mesh_equal(&plates_cal.measured.mesh, &work, 1) && plate_measure_count(plate) == 2);
+
+    /* The plate deleted while its working measurement is kept: GET /api/plates reports none. */
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+    run_calibration(&mqtt, body, 60, &work);
+    assert(!strcmp(plates_cal.result, "work") && plates_cal.work_ready);
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work_mesh\":{\"plate\":\""));
+    assert(call(DELETE, &mqtt, plate) == 200 && !plate_find(plate));
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"work_mesh\":null"));
+    telemetry.present &= ~((UINT32_C(1) << U_BT) | (UINT32_C(1) << U_BG));
+    free(before); unlink(plates_path);
+}
+
 static void test_print_setup(void) {
     char directory[] = "/tmp/cc2-setup-XXXXXX", path[64];
     assert(mkdtemp(directory));
@@ -1122,9 +1355,95 @@ static void test_empty_plate(void) {
     /* Attach the first real measurement to the previously empty profile. */
     memory_b = grid(0.3); memory_has_b = 1; write_autosave(&a, &memory_b);
     int status, profile, applied; plate_measure *measure = NULL;
-    assert(!plates_take_measure(&mqtt, id, 30, "", 0, &status, &measure, &profile, &applied));
+    assert(!plates_take_measure(&mqtt, id, 30, "", 0, &status, &measure, &profile, &applied, NULL));
     assert(measure && measure->temp == 30 && plates_consistent());
     new_process(); assert(plates_available && plate_base(&plates.plates[0]) && plates.measure_count == 1);
+    unlink(plates_path);
+}
+
+/* "Delete all measurements" of a plate: a function of its own. The single delete keeps its rule (a plate keeps one
+ * measurement, 409); this one empties the plate on purpose, refuses a mounted or waiting plate and a running calibration of it. */
+static void test_measures_clear(void) {
+    mqtt_client mqtt = {0};
+    plate_mesh at60 = grid(0.6), at80 = grid(0.66), b = grid(0.3);
+    plates_cal.stage = CAL_IDLE;
+    write_autosave(&at60, &b); memory_a = at60; memory_b = b; memory_has_b = 1;
+    unlink(plates_path); new_process(); fresh(&mqtt);
+    assert(call(SAVE, &mqtt, "A\nSlate\n0.01\n60") == 201);
+    char slate[17], body[128], m60[17], m80[17];
+    snprintf(slate, sizeof(slate), "%s", plates.plates[0].id); snprintf(m60, sizeof(m60), "%s", plates.plates[0].measure);
+    write_autosave(&at80, &b); memory_a = at80;
+    snprintf(body, sizeof(body), "%s\n80", slate);
+    assert(call(MEASURE, &mqtt, body) == 200 && plate_measure_count(slate) == 2);
+    snprintf(m80, sizeof(m80), "%s", plates.plates[0].measure);
+    /* Bad input and unknown plates. */
+    assert(call(MEASURES_CLEAR, &mqtt, "") == 400 && call(MEASURES_CLEAR, &mqtt, "not-an-id") == 400);
+    assert(call(MEASURES_CLEAR, &mqtt, "0123456789abcdef") == 404);
+    /* A mounted plate, or one waiting for the printer restart, keeps its measurements; so does one being calibrated. */
+    snprintf(plates.current, sizeof(plates.current), "%s", slate);
+    assert(call(MEASURES_CLEAR, &mqtt, slate) == 409 && strstr(response, "Remove the plate") && plate_measure_count(slate) == 2);
+    plates.current[0] = 0; snprintf(plates.pending, sizeof(plates.pending), "%s", slate);
+    assert(call(MEASURES_CLEAR, &mqtt, slate) == 409 && plate_measure_count(slate) == 2);
+    plates.pending[0] = 0;
+    plates_cal.stage = CAL_SOAKING; snprintf(plates_cal.plate, sizeof(plates_cal.plate), "%s", slate);
+    assert(call(MEASURES_CLEAR, &mqtt, slate) == 409 && strstr(response, "calibration") && plate_measure_count(slate) == 2);
+    plates_cal.stage = CAL_IDLE; plates_cal.plate[0] = 0;
+    /* Another plate that keeps exactly one measurement: the single delete still refuses its last one. */
+    write_autosave(&at60, &b); memory_a = at60;
+    assert(call(SAVE, &mqtt, "A\nKeep\n0\n60") == 201);
+    char keep_id[17], keep_measure[17];
+    snprintf(keep_id, sizeof(keep_id), "%s", plates.plates[1].id); snprintf(keep_measure, sizeof(keep_measure), "%s", plates.plates[1].measure);
+    assert(plate_measure_count(keep_id) == 1);
+    plates.current[0] = 0;
+    assert(call(MEASURE_DELETE, &mqtt, keep_measure) == 409 && strstr(response, "at least one") && plate_measure_count(keep_id) == 1);
+    /* Clearing: every measurement of that plate goes, the other plate is untouched, the plate stays. */
+    profile_log[0] = 0;
+    assert(call(MEASURES_CLEAR, &mqtt, slate) == 200 && strstr(response, "\"cleared\":2"));
+    assert(plate_measure_count(slate) == 0 && !plate_find(slate)->measure[0] && !plate_base(plate_find(slate)));
+    assert(plate_measure_count(keep_id) == 1 && measure_find(keep_measure) && !measure_find(m60) && !measure_find(m80));
+    assert(strstr(profile_log, "REMOVE=cc2_") && plates_consistent());
+    assert(call(MEASURE_DELETE, &mqtt, m80) == 404);
+    assert(call(MEASURES_CLEAR, &mqtt, slate) == 200 && strstr(response, "\"cleared\":0"));
+    /* It survives a restart as a plate without a mesh: it cannot be mounted, the library is valid. */
+    new_process(); fresh(&mqtt);
+    assert(plates_available && plates.count == 2 && plate_measure_count(slate) == 0 && !plate_base(plate_find(slate)));
+    assert(call(MOUNT, &mqtt, slate) == 404 && !plates.current[0]);
+    assert(call(GET, &mqtt, NULL) == 200);
+    unlink(plates_path);
+}
+
+/* A bed mesh calibration started while a screw session is open: with a session measurement running it is refused (409), otherwise
+ * the session ends on its own (reason "mesh_calibration" in the history) and the calibration starts. */
+static void test_calibration_ends_session(void) {
+    mqtt_client mqtt = {0};
+    plate_mesh at60 = grid(0.6), b = grid(0.3);
+    plates_cal.stage = CAL_IDLE; control_screws_reset();
+    write_autosave(&at60, &b); memory_a = at60; memory_b = b; memory_has_b = 1;
+    unlink(plates_path); new_process(); fresh(&mqtt);
+    pthread_mutex_init(&console.lock, NULL);
+    plates_console = fake_console; plates_bed_off = fake_bed_off; plates_bed_target = fake_bed_target;
+    assert(call(SAVE, &mqtt, "A\nSlate\n0.01\n60") == 201);
+    snprintf(mqtt.homed_axes, sizeof(mqtt.homed_axes), "%s", "xyz"); mqtt.have_position = 1;
+    char script[CONSOLE_COMMAND_MAX], reason[256];
+    assert(control_build_script("screws:tram:start", &mqtt, script, sizeof(script), reason, sizeof(reason)) && control_screws_session_active());
+    control_screws_note_action("screws:tram:start"); control_screws_note_job(5);
+    /* The session's job is running: no calibration, the session stays. */
+    assert(control_screws_measuring());
+    assert(calibrate(&mqtt, "A\n70\n10") == 409 && strstr(response, "screw session measurement") && control_screws_session_active() && plates_cal.stage == CAL_IDLE);
+    /* The job is done: the next request ends the session by itself and the calibration starts. */
+    (void)control_screws_tick(&mqtt, 1, 1, 5, 0, time(NULL));
+    assert(!control_screws_measuring() && control_screws_session_active());
+    console_log[0] = 0;
+    assert(calibrate(&mqtt, "A\n70\n10") == 202 && plates_cal.stage != CAL_IDLE);
+    assert(!control_screws_session_active() && control_screws_end_reason() == CONTROL_SCREWS_END_MESH);
+    assert(!strcmp(control_screws_end_name(CONTROL_SCREWS_END_MESH), "mesh_calibration"));
+    assert(!control_screws_heaters_off_pending()); /* the calibration owns the bed heater now */
+    /* Without a session nothing changes. */
+    plates_cal.stage = CAL_IDLE; plates_cal.result = ""; new_process(); fresh(&mqtt);
+    assert(calibrate(&mqtt, "A\n70\n10") == 202 && control_screws_end_reason() == CONTROL_SCREWS_END_MESH);
+    plates_cal.stage = CAL_IDLE;
+    /* The calibration state names how long the current stage runs (in seconds), for a page that was opened later. */
+    assert(call(GET, &mqtt, NULL) == 200 && strstr(response, "\"elapsed\":"));
     unlink(plates_path);
 }
 
@@ -1344,6 +1663,65 @@ static void test_match_setting(void) {
     printf("PASS: match setting stored in the plate library at --plates, independent of the working directory\n");
 }
 
+static void test_prior_parse(void) {
+    const char *mesh =
+        "\"mesh\":{\"x_count\":3,\"y_count\":3,\"min_x\":0,\"max_x\":10,\"min_y\":0,\"max_y\":10,"
+        "\"mesh_x_pps\":2,\"mesh_y_pps\":2,\"algo\":\"bicubic\",\"tension\":0.2,\"offset\":0,"
+        "\"points\":[[0.1,0.1,0.1],[0.1,0.1,0.1],[0.1,0.1,0.1]]}";
+    char text[2400];
+    plate_measure parsed;
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":10,%s}",
+             mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && !parsed.has_prior);
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":10,%s,"
+             "\"prior\":{\"measured\":9,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && parsed.has_prior && parsed.prior_measured == 9);
+    /* A millisecond stamp already loads as measured. Copying it into prior must not make the library unloadable. */
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":1700000000000,%s,"
+             "\"prior\":{\"measured\":1700000000000,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && parsed.has_prior &&
+           parsed.measured == 1700000000000LL && parsed.prior_measured == 1700000000000LL);
+    /* Above 2^53 a double rounds. Both ends of the signed 64-bit range must come back unchanged. */
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":9007199254740993,%s,"
+             "\"prior\":{\"measured\":9223372036854775807,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) &&
+           parsed.measured == 9007199254740993LL && parsed.prior_measured == 9223372036854775807LL);
+    /* A resave from another JSON tool may write a whole second as 1700000000.0 or 1.7e9. */
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":1700000000.0,%s,"
+             "\"prior\":{\"measured\":1.7e9,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && parsed.has_prior &&
+           parsed.measured == 1700000000LL && parsed.prior_measured == 1700000000LL);
+    /* Leading zeros in the significand do not make a whole second wider than 64 bits. */
+    snprintf(text, sizeof(text),
+             "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":0.0000000000017e21,%s,"
+             "\"prior\":{\"measured\":0.0000000000017e21,%s}}",
+             mesh, mesh);
+    assert(plates_parse_measure(text, text + strlen(text), &parsed) && parsed.has_prior &&
+           parsed.measured == 1700000000LL && parsed.prior_measured == 1700000000LL);
+    char bad_huge[1400], bad_junk[1400], bad_dot[1400], bad_frac[1400], bad_exp[1400];
+    snprintf(bad_huge, sizeof(bad_huge), "\"prior\":{\"measured\":9223372036854775808,%s}", mesh);
+    snprintf(bad_junk, sizeof(bad_junk), "\"prior\":{\"measured\":9bad,%s}", mesh);
+    snprintf(bad_dot, sizeof(bad_dot), "\"prior\":{\"measured\":9.,%s}", mesh);
+    snprintf(bad_frac, sizeof(bad_frac), "\"prior\":{\"measured\":1700000000.00000001,%s}", mesh);
+    snprintf(bad_exp, sizeof(bad_exp), "\"prior\":{\"measured\":1e20,%s}", mesh);
+    const char *bad[] = {"\"prior\":null", "\"prior\":[]", bad_huge, bad_junk, bad_dot, bad_frac, bad_exp};
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); ++i) {
+        snprintf(text, sizeof(text),
+                 "{\"id\":\"0123456789abcdef\",\"plate\":\"fedcba9876543210\",\"temp\":60,\"nozzle\":\"\",\"measured\":10,%s,%s}",
+                 mesh, bad[i]);
+        assert(!plates_parse_measure(text, text + strlen(text), &parsed));
+    }
+}
+
 int main(void) {
     char directory[] = "/tmp/cc2-plates-XXXXXX";
     assert(mkdtemp(directory));
@@ -1357,6 +1735,7 @@ int main(void) {
     plates_uds = fake_uds;
     uds_init(&telemetry);
     if (getenv("CC2_TEST_ACTIVE_ONLY")) { test_active_mount(); return 0; }
+    test_prior_parse();
     test_names_and_numbers();
     test_autosave();
     test_store();
@@ -1365,7 +1744,10 @@ int main(void) {
     test_active_mount();
     test_measures();
     test_calibration_job();
+    test_calibration_work();
     test_empty_plate();
+    test_measures_clear();
+    test_calibration_ends_session();
     test_print_setup();
     test_background_transport();
     test_blends();

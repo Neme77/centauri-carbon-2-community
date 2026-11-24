@@ -2,7 +2,7 @@ import { request } from '@/lib/api'
 import { parseScrewHistory, type ScrewHistorySession } from '@/lib/screws'
 import { store } from '@/lib/store'
 
-// The screw history of CC2 Control, read by the Screws tab and by the quick check of Mesh alignment.
+// The screw history of CC2 Control, read by the Bed alignment tab and the session bar.
 export const screwHistory = store({
   supported: null as boolean | null,
   sessions: [] as ScrewHistorySession[],

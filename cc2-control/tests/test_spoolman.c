@@ -657,6 +657,24 @@ static void test_remote_values_are_validated(void) {
     puts("PASS: numbers, texts and colours from Spoolman go through the same bounded parsers as local data");
 }
 
+static void test_colour_with_alpha(void) {
+    spoolman_spool e;
+    /* Spoolman's color_hex is RRGGBB or RRGGBBAA (transparency last). The card has no transparency: keep RGB. */
+    assert(spoolman_parse_one("{\"id\":1,\"remaining_weight\":10,\"filament\":{\"material\":\"PLA\",\"color_hex\":\"1a2b3c80\"}}", &e));
+    assert(!strcmp(e.color, "#1A2B3C"));                       /* 8 characters: RGB taken, alpha dropped */
+    assert(spoolman_parse_one("{\"id\":1,\"filament\":{\"color_hex\":\"1A2B3CFF\"}}", &e) && !strcmp(e.color, "#1A2B3C"));
+    assert(spoolman_parse_one("{\"id\":1,\"filament\":{\"color_hex\":\"1a2b3c\"}}", &e) && !strcmp(e.color, "#1A2B3C"));   /* 6 as before */
+    const char *bad[] = {"", "1a2b3", "1a2b3c8", "1a2b3c801", "#1a2b3c", "#1a2b3c80", "1a2b3czz", "zz2b3c80", "1a2b3c8g", "1a2b3c 80", "1a2b3z", "1a2b3c 8", "1a2b3c8 ", "\\u0031a2b3c80"};
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); ++i) {                            /* other lengths and non-hex: rejected, no colour */
+        char json[160];
+        snprintf(json, sizeof(json), "{\"id\":1,\"filament\":{\"material\":\"PLA\",\"color_hex\":\"%s\"}}", bad[i]);
+        assert(spoolman_parse_one(json, &e) && !e.color[0] && !strcmp(e.material, "PLA"));
+    }
+    assert(spoolman_parse_one("{\"id\":1,\"filament\":{\"color_hex\":null}}", &e) && !e.color[0]);
+    assert(spoolman_parse_one("{\"id\":1,\"filament\":{\"color_hex\":12345678}}", &e) && !e.color[0]);
+    puts("PASS: Spoolman colours with transparency (8 hex) keep their RGB; other lengths and junk are rejected");
+}
+
 static void test_auto_import(void) {
     char *list = big_list(40);                       /* well over 8 KiB */
     fake_start(0, 0); fake.list_body = list; fake_launch();
@@ -671,6 +689,23 @@ static void test_auto_import(void) {
     assert(spools.count == 40);                      /* known now: no duplicates */
     fake_finish(); teardown_file(); free(list);
     puts("PASS: connecting Spoolman auto-imports every spool it doesn't know locally yet, once each");
+}
+
+static void test_auto_import_colour_with_alpha(void) {
+    static char list[] = "[{\"id\":1,\"remaining_weight\":900.5,\"filament\":{\"material\":\"PETG\",\"name\":\"Glass\",\"color_hex\":\"336699cc\"}},"
+                         "{\"id\":2,\"remaining_weight\":800,\"filament\":{\"material\":\"PLA\",\"name\":\"Plain\",\"color_hex\":\"ff8800\"}},"
+                         "{\"id\":3,\"remaining_weight\":700,\"filament\":{\"material\":\"ABS\",\"name\":\"Odd\",\"color_hex\":\"33669\"}}]";
+    fake_start(0, 0); fake.list_body = list; fake_launch();
+    setup_linked(0, 500);
+    spools.count = 0;
+    cycle();
+    spool_entry *a = spool_find_by_spoolman_id("1"), *b = spool_find_by_spoolman_id("2"), *c = spool_find_by_spoolman_id("3");
+    assert(spools.count == 3 && a && b && c);
+    assert(!strcmp(a->color, "#336699"));        /* 8 hex: the RGB is imported, not the grey fallback */
+    assert(!strcmp(b->color, "#FF8800"));        /* 6 hex: as before */
+    assert(!strcmp(c->color, "#808080"));        /* a length we do not know: still the grey fallback */
+    fake_finish(); teardown_file();
+    puts("PASS: an imported spool keeps the colour of an 8-digit Spoolman colour; unknown lengths still import as grey");
 }
 
 int main(void) {
@@ -696,6 +731,8 @@ int main(void) {
     test_backup_leaves_out_credentials();
     test_http_framing();
     test_remote_values_are_validated();
+    test_colour_with_alpha();
     test_auto_import();
+    test_auto_import_colour_with_alpha();
     return 0;
 }

@@ -70,8 +70,10 @@ try {
  await page.evaluate(()=>window.__RESTYLE.homed='xyz')
  await page.waitForFunction(()=>!document.querySelector('.cc2-shaper button').disabled)
  await page.goto(demo.url+'#bed/cell')
- await page.getByRole('tab',{name:'Load cell',exact:true}).waitFor()
- assert.equal(await page.getByRole('tab',{name:'Load cell',exact:true}).getAttribute('aria-selected'),'true')
+ // The load cell is a folded block in the Mesh card (the tab is gone); the old link lands on the Mesh tab.
+ assert.equal(await page.getByRole('tab',{name:'Load cell',exact:true}).count(),0)
+ assert.equal(await page.getByRole('tab',{name:'Mesh & Saved Profiles',exact:true}).getAttribute('aria-selected'),'true')
+ await page.locator('[data-bed-cell] > summary').click() // the load cell block of the Mesh card is folded
  assert.equal(await page.getByRole('button',{name:'Read active distance',exact:true}).count(),0)
  await page.getByRole('button',{name:'Read load cell',exact:true}).click()
  await page.getByText('// 0.2g (0.91%)',{exact:true}).waitFor()

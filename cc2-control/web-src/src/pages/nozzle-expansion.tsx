@@ -147,7 +147,7 @@ export const NozzleExpansion = () => {
   if (!state.enabled && !running && !state.pending_restart)
     return (
       <Card>
-        <CardHead icon="temp" title="nozzle.title" />
+        <CardHead icon="temp" title="nozzle.title" sub="nozzle.subtitle" />
         <p class="mb-3 text-muted">{t('nozzle.experiment_hint')}</p>
         <Button onClick={() => openSettings('integrations')}>{t('experiments.title')}</Button>
       </Card>
@@ -223,152 +223,159 @@ export const NozzleExpansion = () => {
   const fmt = (n: number, digits = 2) => n.toFixed(digits)
 
   return (
-    <div class="max-w-4xl">
-      <Card data-nozzle-expansion>
-        <CardHead icon="temp" title="nozzle.title" />
-        <p class="text-muted">{tpl('nozzle.hint', { ref: reference })}</p>
-        {!state.available ? (
-          <Warn>{t('nozzle.unavailable')}</Warn>
-        ) : (
-          active && (
-            <p class="mt-2 text-xs">
-              {tpl(
-                state.pending_restart
-                  ? state.override
-                    ? 'nozzle.next_saved'
-                    : 'nozzle.next_factory'
-                  : state.override
-                    ? 'nozzle.active_saved'
-                    : 'nozzle.active_factory',
-                {
-                  start: active.start,
-                  end: active.start + (active.values.length - 1) * active.diff,
-                  slope: fmt(slope(active)),
-                }
-              )}
-            </p>
-          )
-        )}
-        {lines.length > 0 && <Chart lines={lines} reference={reference} />}
-      </Card>
-
-      {state.available && (
-        <Card class="mt-3.5">
-          <CardHead icon="target" title="nozzle.run_title" />
-          <div class="grid gap-3 cc2-md:grid-cols-3">
-            {(
-              [
-                ['nozzle-start', 'nozzle.start_temp', start, setStart, 100, 135, 5],
-                ['nozzle-end', 'nozzle.end_temp', end, setEnd, 150, 340, 5],
-                ['nozzle-step', 'nozzle.step', step, setStep, 5, 10, 5],
-              ] as const
-            ).map(([id, label, value, set, min, max, inc]) => (
-              <label key={id} htmlFor={id}>
-                {t(label)}
-                <Input
-                  id={id}
-                  class="mt-1"
-                  type="number"
-                  min={min}
-                  max={max}
-                  step={inc}
-                  value={value}
-                  disabled={busy || running}
-                  onInput={ev => set(ev.currentTarget.value)}
-                />
-              </label>
-            ))}
-          </div>
-          <p class="mt-2 text-xs text-muted">
-            {valid
-              ? tpl('nozzle.estimate', { steps, minutes, touches: steps * state.samples, end: e })
-              : t('nozzle.invalid')}
-          </p>
-          <fieldset class="mt-3 grid gap-1.5" disabled={busy || running}>
-            {(['nozzle.check_unloaded', 'nozzle.check_clean', 'nozzle.check_plate'] as const).map((key, i) => (
-              <label key={key} class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={checks[i]}
-                  onChange={ev => setChecks(c => c.map((v, j) => (j === i ? ev.currentTarget.checked : v)))}
-                />
-                {t(key)}
-              </label>
-            ))}
-          </fieldset>
-          <div class="mt-3 grid gap-3 cc2-md:grid-cols-3">
-            <label htmlFor="nozzle-lan">
-              {t('nozzle.lan_code')}
-              <PasswordInput
-                id="nozzle-lan"
-                class="mt-1"
-                value={code}
-                autoComplete="off"
-                disabled={busy}
-                onInput={ev => setCode(ev.currentTarget.value)}
-              />
-            </label>
-          </div>
-          <div class="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              disabled={!state.enabled || busy || running || !valid || !checks.every(Boolean) || !code.trim()}
-              onClick={() => void begin()}
-            >
-              {t('nozzle.start')}
-            </Button>
-            <span role="status" aria-live="polite" class="text-xs">
-              {state.state === 'running'
-                ? tpl('nozzle.running', {
-                    step: runStep,
-                    steps: (state.end - state.start) / state.step + 1,
-                    nozzle: state.nozzle === null ? '—' : fmt(state.nozzle, 0),
-                    target: state.target === null ? '—' : fmt(state.target, 0),
-                    elapsed: duration(state.elapsed),
-                  })
-                : state.state !== 'idle'
-                  ? t(STAGES[state.state])
-                  : ''}
-            </span>
-            {refused && !running && (
-              <p role="alert" class="basis-full text-xs text-red" data-nozzle-refused>
-                {tpl('nozzle.start_refused', { error: refused })}
-              </p>
-            )}
-          </div>
-          {running && <Notice icon="info">{t('nozzle.estop_hint')}</Notice>}
-          {stale && <p class="mt-2 text-xs text-amber">{t('nozzle.stale')}</p>}
-          {!running && state.result === 'saved' && (
-            <p class="mt-2 text-cyan">
-              {tpl('nozzle.saved', { slope: fmt(state.slope_um), residual: fmt(state.residual_um, 1) })}
-              {state.detail && <span class="block text-xs text-amber">{state.detail}</span>}
-            </p>
-          )}
-          {!running && (state.result === 'rejected' || state.result === 'failed' || state.result === 'interrupted') && (
-            <p class="mt-2 break-words text-amber" role="alert">
-              {tpl(RESULTS[state.result], { detail: state.detail })}
-            </p>
-          )}
-          {state.pending_restart && (
-            <div class="mt-2 flex flex-wrap items-center gap-2">
-              <p class="text-xs text-cyan">
-                {t(
-                  state.result === 'rejected' || state.result === 'failed' || state.result === 'interrupted'
-                    ? 'nozzle.restart_discard'
-                    : 'nozzle.restart_needed'
+    // Left: the expansion and its chart; right: measuring the table (side by side from the large layout on).
+    <Card data-nozzle-expansion>
+      <div class="grid items-start gap-3.5 cc2-lg:grid-cols-2">
+        <div>
+          <CardHead icon="temp" title="nozzle.title" sub="nozzle.subtitle" />
+          <p class="text-xs text-muted">{tpl('nozzle.hint', { ref: reference })}</p>
+          {!state.available ? (
+            <Warn>{t('nozzle.unavailable')}</Warn>
+          ) : (
+            active && (
+              <p class="mt-2 text-xs">
+                {tpl(
+                  state.pending_restart
+                    ? state.override
+                      ? 'nozzle.next_saved'
+                      : 'nozzle.next_factory'
+                    : state.override
+                      ? 'nozzle.active_saved'
+                      : 'nozzle.active_factory',
+                  {
+                    start: active.start,
+                    end: active.start + (active.values.length - 1) * active.diff,
+                    slope: fmt(slope(active)),
+                  }
                 )}
               </p>
-              <Button disabled={busy || running || state.restart === 'restarting'} onClick={() => void restart()}>
-                {t('nozzle.restart')}
-              </Button>
+            )
+          )}
+          {lines.length > 0 && <Chart lines={lines} reference={reference} />}
+        </div>
+
+        {state.available && (
+          <div
+            class="border-t border-edge pt-3.5 cc2-lg:border-t-0 cc2-lg:border-l cc2-lg:pt-0 cc2-lg:pl-3.5"
+            data-nozzle-run
+          >
+            <CardHead icon="target" title="nozzle.run_title" sub="nozzle.run_subtitle" />
+            <div class="grid gap-3 cc2-md:grid-cols-3">
+              {(
+                [
+                  ['nozzle-start', 'nozzle.start_temp', start, setStart, 100, 135, 5],
+                  ['nozzle-end', 'nozzle.end_temp', end, setEnd, 150, 340, 5],
+                  ['nozzle-step', 'nozzle.step', step, setStep, 5, 10, 5],
+                ] as const
+              ).map(([id, label, value, set, min, max, inc]) => (
+                <label key={id} htmlFor={id}>
+                  {t(label)}
+                  <Input
+                    id={id}
+                    class="mt-1"
+                    type="number"
+                    min={min}
+                    max={max}
+                    step={inc}
+                    value={value}
+                    disabled={busy || running}
+                    onInput={ev => set(ev.currentTarget.value)}
+                  />
+                </label>
+              ))}
             </div>
-          )}
-          {state.override && !running && (
-            <Button class="mt-2" disabled={!state.enabled || busy || !state.editable} onClick={() => void factory()}>
-              {t('nozzle.factory')}
-            </Button>
-          )}
-        </Card>
-      )}
-    </div>
+            <p class="mt-2 text-xs text-muted">
+              {valid
+                ? tpl('nozzle.estimate', { steps, minutes, touches: steps * state.samples, end: e })
+                : t('nozzle.invalid')}
+            </p>
+            <fieldset class="mt-3 grid gap-1.5" disabled={busy || running}>
+              {(['nozzle.check_unloaded', 'nozzle.check_clean', 'nozzle.check_plate'] as const).map((key, i) => (
+                <label key={key} class="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={checks[i]}
+                    onChange={ev => setChecks(c => c.map((v, j) => (j === i ? ev.currentTarget.checked : v)))}
+                  />
+                  {t(key)}
+                </label>
+              ))}
+            </fieldset>
+            <div class="mt-3 grid gap-3 cc2-md:grid-cols-3">
+              <label htmlFor="nozzle-lan">
+                {t('nozzle.lan_code')}
+                <PasswordInput
+                  id="nozzle-lan"
+                  class="mt-1"
+                  value={code}
+                  autoComplete="off"
+                  disabled={busy}
+                  onInput={ev => setCode(ev.currentTarget.value)}
+                />
+              </label>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                disabled={!state.enabled || busy || running || !valid || !checks.every(Boolean) || !code.trim()}
+                onClick={() => void begin()}
+              >
+                {t('nozzle.start')}
+              </Button>
+              <span role="status" aria-live="polite" class="text-xs">
+                {state.state === 'running'
+                  ? tpl('nozzle.running', {
+                      step: runStep,
+                      steps: (state.end - state.start) / state.step + 1,
+                      nozzle: state.nozzle === null ? '—' : fmt(state.nozzle, 0),
+                      target: state.target === null ? '—' : fmt(state.target, 0),
+                      elapsed: duration(state.elapsed),
+                    })
+                  : state.state !== 'idle'
+                    ? t(STAGES[state.state])
+                    : ''}
+              </span>
+              {refused && !running && (
+                <p role="alert" class="basis-full text-xs text-red" data-nozzle-refused>
+                  {tpl('nozzle.start_refused', { error: refused })}
+                </p>
+              )}
+            </div>
+            {running && <Notice icon="info">{t('nozzle.estop_hint')}</Notice>}
+            {stale && <p class="mt-2 text-xs text-amber">{t('nozzle.stale')}</p>}
+            {!running && state.result === 'saved' && (
+              <p class="mt-2 text-cyan">
+                {tpl('nozzle.saved', { slope: fmt(state.slope_um), residual: fmt(state.residual_um, 1) })}
+                {state.detail && <span class="block text-xs text-amber">{state.detail}</span>}
+              </p>
+            )}
+            {!running &&
+              (state.result === 'rejected' || state.result === 'failed' || state.result === 'interrupted') && (
+                <p class="mt-2 break-words text-amber" role="alert">
+                  {tpl(RESULTS[state.result], { detail: state.detail })}
+                </p>
+              )}
+            {state.pending_restart && (
+              <div class="mt-2 flex flex-wrap items-center gap-2">
+                <p class="text-xs text-cyan">
+                  {t(
+                    state.result === 'rejected' || state.result === 'failed' || state.result === 'interrupted'
+                      ? 'nozzle.restart_discard'
+                      : 'nozzle.restart_needed'
+                  )}
+                </p>
+                <Button disabled={busy || running || state.restart === 'restarting'} onClick={() => void restart()}>
+                  {t('nozzle.restart')}
+                </Button>
+              </div>
+            )}
+            {state.override && !running && (
+              <Button class="mt-2" disabled={!state.enabled || busy || !state.editable} onClick={() => void factory()}>
+                {t('nozzle.factory')}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }

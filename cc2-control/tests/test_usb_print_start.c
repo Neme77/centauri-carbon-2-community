@@ -41,9 +41,11 @@ static int fake_uds(const char *request, char **reply, size_t *length) {
     return *reply ? 0 : -1;
 }
 
+static int mock_start_result; /* 0: the start request goes out; else it cannot be sent */
 int mock_mqtt_start_print(mqtt_client *c, const char *media, const char *filename,
                           const int *tools, const int *trays, size_t count,
                           char layout, int bedlevel_force, int timelapse) {
+    if (mock_start_result) return mock_start_result;
     (void)c; (void)tools; (void)trays; (void)layout; (void)bedlevel_force; (void)timelapse;
     char text[32]; snprintf(text, sizeof(text), "1020:%s:%zu;", media, count); strcat(events, text);
     snprintf(started_name, sizeof(started_name), "%s", filename);
@@ -126,7 +128,8 @@ int main(void) {
     char response[1024]; int status = 0;
     char dir[] = "usb-start-XXXXXX"; /* the harnesses share one working directory */
     assert(mkdtemp(dir) && !chdir(dir));
-    assert(!mkdir("gcode", 0700) && !mkdir("usb", 0700));
+    assert(!mkdir("gcode", 0700) && !mkdir("usb", 0700) && !mkdir("maps", 0700));
+    layer_store_dir = "maps";
     static char big[3 * 65536 + 123];
     for (size_t i = 0; i + 1 < sizeof(big); ++i) big[i] = (i % 61 == 60) ? '\n' : (char)('A' + i % 26);
     big[0] = ';'; big[sizeof(big) - 1] = 0;
@@ -187,6 +190,25 @@ int main(void) {
     struct stat kept; assert(!stat(kept_copy, &kept) && kept.st_size == 18);
     assert(!unlink(kept_copy) && !unlink("gcode/" GCODE_USB_IMPORT_PREFIX "kept"));
     mqtt.machine_status = 1;
+
+    /* The start request cannot be sent after the copy was published: the copy is removed again and its layer map goes
+     * with it (a map of the copy can exist by then: a layer request queued it and the builder ran in between). */
+    mock_start_result = -1;
+    peer = begin(&mqtt, "usb\nflat.gcode\n\nA\nsaved\n0", response, sizeof(response), &status);
+    assert(peer >= 0); wait_worker();
+    char failed_map[PATH_MAX_LOCAL * 3];
+    {   DIR *dir = opendir("gcode"); assert(dir); struct dirent *entry; char copy_path[PATH_MAX_LOCAL * 2] = "";
+        while ((entry = readdir(dir))) if (!strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, 8))
+            snprintf(copy_path, sizeof(copy_path), "gcode/%s", entry->d_name);
+        closedir(dir); assert(copy_path[0]);
+        size_t length = strlen(copy_path);
+        if (length > 5 && !strcmp(copy_path + length - 5, ".part")) copy_path[length - 5] = 0; /* published at the tick */
+        assert(layer_store_index_path(copy_path, failed_map, sizeof(failed_map)) == 0);
+        write_file(failed_map, "x"); }
+    usb_start_tick(&mqtt);
+    assert(answer(peer, response, sizeof(response)) == 503 && imports() == 0 && !usb_start_active());
+    assert(access(failed_map, F_OK) != 0); /* the copy and its layer map are both gone */
+    mock_start_result = 0;
 
     /* A start the scan refuses is answered without copying the file. */
     peer = begin(&mqtt, "usb\nflat.gcode\n\nA\nadaptive\n0", response, sizeof(response), &status);
