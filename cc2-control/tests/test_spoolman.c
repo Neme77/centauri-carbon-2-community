@@ -2087,6 +2087,110 @@ static void test_the_catalog_belongs_to_the_server_settings(void) {
     puts("PASS: the catalog is tied to the server settings it was read under: another login or address empties it, a read of the old server that ends late is dropped");
 }
 
+/* ---- refusals carry a stable code; status and English text stay as they were --------------------------------- */
+
+/* The last reply was refused with `status`, the English `error` text and, when `code` is set, exactly that `code`. */
+static void refused(int got, int status, const char *code, const char *error) {
+    char want[512];
+    snprintf(want, sizeof(want), "{\"ok\":false,\"error\":\"%s\"", error);
+    if (got != status || !strstr(response, want)) { fprintf(stderr, "wanted %d %s, got %d:\n%s\n", status, error, got, response); abort(); }
+    if (code) {
+        snprintf(want, sizeof(want), "\"code\":\"%s\"}", code);
+        if (!strstr(response, want)) { fprintf(stderr, "wanted %s:\n%s\n", want, response); abort(); }
+    } else if (strstr(response, "\"code\"")) { fprintf(stderr, "no code wanted:\n%s\n", response); abort(); }
+}
+
+static void test_refusals_carry_a_code(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    /* settings */
+    refused(call_config("url=https://192.0.2.9"), 400, "spoolman_bad_url", "Invalid URL: use http://IPv4-address[:port][/path] (host names are not resolved, no TLS)");
+    refused(call_config("url=spoolman:7912"), 400, "spoolman_bad_url", "Invalid URL: use http://IPv4-address[:port][/path] (host names are not resolved, no TLS)");
+    refused(call_config("enabled=2"), 400, "spoolman_bad_flag", "Invalid enabled flag");
+    /* a value over SPOOL_TEXT_MAX (96) never gets past the form, so "basic_auth is too long" (limit 127) is not reachable here */
+    char long_value[SPOOL_TEXT_MAX + 32];
+    snprintf(long_value, sizeof(long_value), "basic_auth=");
+    memset(long_value + 11, 'a', SPOOL_TEXT_MAX + 1); long_value[11 + SPOOL_TEXT_MAX + 1] = 0;
+    refused(call_config(long_value), 400, NULL, "Invalid request");
+    /* the list of unsent usage */
+    assert(spoolman_hold(sp, 12.5, SPOOLMAN_HELD_SERVER) && spoolman_hold(sp, 4, SPOOLMAN_HELD_UNSURE));
+    refused(call_held_send("1="), 400, "spoolman_pick_spool", "Choose a Spoolman spool");
+    refused(call_held_send("9=7"), 404, "spoolman_held_unknown", "Unknown entry");
+    refused(call_held_send("2=7"), 409, "spoolman_held_unsure", "This amount may already be counted in Spoolman: it is never sent again");
+    refused(call_held_send("1=7\n01=7"), 400, "spoolman_held_twice", "The same entry twice in one request");
+    refused(call_held_send(""), 400, NULL, "Invalid request");
+    char stale[64]; snprintf(stale, sizeof(stale), "gen=%u\n1=7", spoolman_generation() + 1);
+    refused(call_held_send_raw(stale), 409, "spoolman_settings_changed", "The Spoolman server or login changed since the list was loaded: choose the spools again");
+    refused(call_held_discard("id=9"), 404, "spoolman_held_unknown", "Unknown entry");
+    spools.held[0].sending = 1;
+    refused(call_held_send("1=7"), 409, "spoolman_held_sending", "This amount is being sent");
+    refused(call_held_discard("id=1"), 409, "spoolman_held_sending", "This amount is being sent");
+    spools.held[0].sending = 0;
+    pthread_mutex_lock(&spoolman_outbox_mutex); spoolman_worker_running = 1; pthread_mutex_unlock(&spoolman_outbox_mutex);
+    refused(call_held_send("1=7"), 409, "spoolman_busy", "Spoolman sync is busy: try again in a moment");
+    pthread_mutex_lock(&spoolman_outbox_mutex); spoolman_worker_running = 0; pthread_mutex_unlock(&spoolman_outbox_mutex);
+    spools.spoolman_enabled = 0;
+    refused(call_held_send("1=7"), 409, "spoolman_off", "Spoolman sync is off");
+    spools.spoolman_enabled = 1;
+    int got = call_unlink_old();
+    refused(got, 409, "spoolman_no_old", "There are no old connections");
+    /* a full list refuses a change of the address */
+    memset(spools.held, 0, sizeof(spools.held));
+    for (int i = 0; i < SPOOLMAN_HELD_MAX; ++i) { spools.held[i].id = (unsigned)i + 1; spools.held[i].reason = SPOOLMAN_HELD_NOT_FOUND; spools.held[i].grams = 1; snprintf(spools.held[i].spool, sizeof(spools.held[i].spool), "%016d", i); }
+    spools.held_count = SPOOLMAN_HELD_MAX;
+    sp->spoolman_unsent = 1;
+    refused(call_config("url=http://127.0.0.1:10"), 409, "spoolman_held_full", "The list of unsent usage is full: review it first");
+    /* the catalog */
+    static char reply[4096];
+    spools.spoolman_enabled = 0;
+    got = call_plain(spoolman_catalog_refresh_response, reply, sizeof(reply));
+    memcpy(response, reply, sizeof(response)); refused(got, 409, "spoolman_catalog_off", "Spoolman integration is disabled");
+    got = call_plain(spoolman_catalog_response, reply, sizeof(reply));
+    memcpy(response, reply, sizeof(response)); refused(got, 409, "spoolman_catalog_off", "Spoolman integration is disabled");
+    spools.spoolman_enabled = 1; spools.spoolman_url[0] = 0;
+    got = call_plain(spoolman_catalog_refresh_response, reply, sizeof(reply));
+    memcpy(response, reply, sizeof(response)); refused(got, 400, "spoolman_no_url", "Set the Spoolman server URL first");
+    /* an answer that is not a refusal has no code */
+    spools.held_count = 0; sp->spoolman_unsent = 0;
+    assert(call_config("url=http://127.0.0.1:9") == 200 && !strstr(response, "\"code\""));
+    fake_finish(); teardown_file();
+    puts("PASS: refusals of the Spoolman endpoints carry a stable code; status and English text are unchanged; general refusals have none");
+}
+
+static void test_a_new_address_or_login_is_synchronised_at_once(void) {
+    fake_start(100, 600); fake_launch();
+    setup_linked(0, 500);
+    cycle();
+    get_status(); status_has("\"result\":\"ok\"");
+    /* a changed login: the status goes back to "never" and the next tick (1 ms later) starts a sync, nothing waits two minutes */
+    assert(call_config("basic_auth=me:secret") == 200 && spoolman_last_tick_ms == -SPOOLMAN_TICK_MS);
+    get_status(); status_has("\"result\":\"never\"");
+    spoolman_tick(virtual_now + 1); wait_worker(); spoolman_tick(virtual_now + 2);
+    get_status(); status_has("\"result\":\"ok\""); status_has("\"last_sync\":");
+    assert(spoolman_last_tick_ms > 0);
+    /* a changed address as well */
+    char again[96]; snprintf(again, sizeof(again), "url=http://127.0.0.1:%d", fake.port);
+    spoolman_last_tick_ms = 777;
+    assert(call_config("url=http://127.0.0.1:9") == 200 && spoolman_last_tick_ms == -SPOOLMAN_TICK_MS);
+    spoolman_last_tick_ms = 777;
+    assert(call_config(again) == 200 && spoolman_last_tick_ms == -SPOOLMAN_TICK_MS);
+    /* the clock is the uptime: a printer that has run for only a few seconds must not wait for the two minutes either */
+    spoolman_last_tick_ms = 777;
+    assert(call_config("basic_auth=young:secret") == 200);
+    get_status(); status_has("\"result\":\"never\"");
+    spoolman_tick(5000); assert(worker_running());
+    wait_worker(); spoolman_tick(5001);
+    get_status(); status_has("\"result\":\"ok\"");
+    /* nothing changed (same address, same login): the clock is not touched; a sync that is off is not started */
+    spoolman_last_tick_ms = 777;
+    assert(call_config(again) == 200 && call_config("basic_auth=young:secret") == 200 && spoolman_last_tick_ms == 777);
+    assert(call_config("enabled=0") == 200);
+    spoolman_last_tick_ms = 777;
+    assert(call_config("basic_auth=other:secret") == 200 && spoolman_last_tick_ms == 777);
+    fake_finish(); teardown_file();
+    puts("PASS: a changed address or login starts the next sync at once; unchanged settings or a sync that is off leave the clock alone");
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IOLBF, 1024);
     spools_clock = clock_fake; spools_wall = wall_fake;
@@ -2167,5 +2271,7 @@ int main(void) {
     test_send_selected_is_refused_for_another_generation();
     test_a_login_entry_ends_when_the_server_changes();
     test_the_catalog_belongs_to_the_server_settings();
+    test_refusals_carry_a_code();
+    test_a_new_address_or_login_is_synchronised_at_once();
     return 0;
 }
