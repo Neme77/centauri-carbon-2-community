@@ -141,6 +141,18 @@ static spool_store spools;
 static int spools_available;
 /* Bumped when the Spoolman server settings change: results of a request started under an older value are dropped. */
 static unsigned spoolman_epoch;
+/* What the page ties a loaded Spoolman catalog and the spools chosen from it to (`spoolman_gen` in GET /api/spools,
+ * `gen` in the catalog, `gen` in "Send selected"). It changes with every change of the server settings, and it differs
+ * after every start of CC2 Control (the epoch alone starts at 0 again, so a page left open across a restart could meet
+ * the same number for another server). Main thread only. */
+static unsigned spoolman_gen_base;
+static unsigned spoolman_generation(void) {
+    if (!spoolman_gen_base) {
+        spoolman_gen_base = ((unsigned)time(NULL) * 2654435761u) ^ (unsigned)getpid();
+        if (!spoolman_gen_base) spoolman_gen_base = 1;
+    }
+    return spoolman_gen_base + spoolman_epoch;
+}
 static const char *spools_error = "Spool library not loaded";
 static unsigned long spools_revision = 1;  /* changes the UI must notice; live remaining excluded */
 static int spools_dirty, spools_urgent;
@@ -1125,7 +1137,7 @@ static void spools_tick(const mqtt_client *mqtt) {
 
 /* ---- HTTP ------------------------------------------------------------------------------------ */
 
-#define SPOOL_FIELDS_MAX 32   /* one "send selected" carries up to SPOOLMAN_HELD_MAX amounts */
+#define SPOOL_FIELDS_MAX (SPOOLMAN_HELD_MAX + 1)   /* one "send selected" carries up to SPOOLMAN_HELD_MAX amounts and the generation */
 typedef struct {
     int count;
     char key[SPOOL_FIELDS_MAX][16];
@@ -1251,6 +1263,7 @@ static void spools_get_response(int fd, const mqtt_client *mqtt) {
     json_builder_string(&b, spools.spoolman_url);
     json_builder_printf(&b, ",\"spoolman_enabled\":%s", spools.spoolman_enabled ? "true" : "false");
     json_builder_printf(&b, ",\"spoolman_has_auth\":%s", spools.spoolman_basic_auth[0] ? "true" : "false");
+    json_builder_printf(&b, ",\"spoolman_gen\":%u", spoolman_generation());
     json_builder_printf(&b, ",\"spoolman_stale_links\":%d,\"spoolman_held\":[", spoolman_stale_count());
     for (int i = 0; i < spools.held_count; ++i) {
         const spoolman_held_entry *h = &spools.held[i];

@@ -517,6 +517,13 @@ static int spoolman_catalog_count;
 static int spoolman_catalog_loading;
 static int spoolman_catalog_truncated;   /* Spoolman has more spools than the catalog holds */
 static char spoolman_catalog_error[128] = "Not fetched yet";
+/* The list and the error were read under one generation of the server settings (spoolman_generation()); under another
+ * one they say nothing and are not served. A read that was started under an older generation, or that was overtaken
+ * by a newer read, is dropped when it ends. All under spoolman_catalog_mutex. */
+static int spoolman_catalog_valid;       /* something was stored (the generation below is meaningful) */
+static unsigned spoolman_catalog_gen;    /* the generation the stored list belongs to */
+static unsigned spoolman_catalog_job_gen;      /* the generation the latest read runs under */
+static unsigned spoolman_catalog_serial;       /* the number of the latest read */
 
 static void spoolman_stage(const spoolman_result *r) {
     pthread_mutex_lock(&spoolman_outbox_mutex);
@@ -963,24 +970,38 @@ static spoolman_held_entry *spoolman_held_find(const char *text) {
  * request has started; the page watches GET /api/spools (`spoolman_held`) for the result. */
 static void spoolman_held_send_response(int fd, const char *body, size_t length) {
     spool_form f;
-    if (!spool_form_parse(body, length, &f) || f.count < 1) { spools_fail(fd, 400, "Invalid request"); return; }
+    if (!spool_form_parse(body, length, &f) || f.count < 2) { spools_fail(fd, 400, "Invalid request"); return; }
     if (!spools_open(fd)) return;
     if (!spools.spoolman_enabled || !spools.spoolman_url[0]) { spools_fail(fd, 409, "Spoolman sync is off"); return; }
+    /* `gen` is the generation of the server settings the spools were chosen under (the page took it from the catalog it
+     * chose from). A number of Spoolman means a spool only on the server it was read from: when the address or the login
+     * changed since, the choice is refused, never read against the new server. */
+    const char *gen = spool_form_get(&f, "gen");
+    if (!gen || !gen[0] || strlen(gen) > 10) { spools_fail(fd, 400, "Invalid request"); return; }
+    for (const char *p = gen; *p; ++p) if (!isdigit((unsigned char)*p)) { spools_fail(fd, 400, "Invalid request"); return; }
+    if (strtoul(gen, NULL, 10) != (unsigned long)spoolman_generation()) {
+        spools_fail(fd, 409, "The Spoolman server or login changed since the list was loaded: choose the spools again");
+        return;
+    }
     spoolman_send_batch *batch = calloc(1, sizeof(*batch));
     if (!batch) { spools_fail(fd, 500, "Out of memory"); return; }
     spoolman_held_entry *entries[SPOOLMAN_HELD_MAX];
+    int n = 0;
     for (int i = 0; i < f.count; ++i) {
+        if (!strcmp(f.key[i], "gen")) continue;
         spoolman_held_entry *h = spoolman_held_find(f.key[i]);
         const char *target = f.value[i];
         if (!h) { free(batch); spools_fail(fd, 404, "Unknown entry"); return; }
         if (!target[0] || strlen(target) > SPOOLMAN_ID_MAX || !spoolman_id_ok(target)) { free(batch); spools_fail(fd, 400, "Choose a Spoolman spool"); return; }
         if (h->reason == SPOOLMAN_HELD_UNSURE) { free(batch); spools_fail(fd, 409, "This amount may already be counted in Spoolman: it is never sent again"); return; }
         if (h->sending) { free(batch); spools_fail(fd, 409, "This amount is being sent"); return; }
-        entries[i] = h;
-        batch->jobs[i].id = h->id; batch->jobs[i].grams = h->grams;
-        snprintf(batch->jobs[i].spoolman_id, sizeof(batch->jobs[i].spoolman_id), "%s", target);
+        entries[n] = h;
+        batch->jobs[n].id = h->id; batch->jobs[n].grams = h->grams;
+        snprintf(batch->jobs[n].spoolman_id, sizeof(batch->jobs[n].spoolman_id), "%s", target);
+        n++;
     }
-    batch->count = f.count;
+    if (!n) { free(batch); spools_fail(fd, 400, "Invalid request"); return; }
+    batch->count = n;
     snprintf(batch->url, sizeof(batch->url), "%s", spools.spoolman_url);
     snprintf(batch->basic_auth, sizeof(batch->basic_auth), "%s", spools.spoolman_basic_auth);
     batch->epoch = spoolman_epoch;
@@ -991,7 +1012,7 @@ static void spoolman_held_send_response(int fd, const char *body, size_t length)
     spool_store *before = spools_snapshot(fd);
     if (!before) { free(batch); return; }
     /* Written down before it is sent: if CC2 Control stops in the middle, the entry comes back as "unsure". */
-    for (int i = 0; i < f.count; ++i) entries[i]->sending = 1;
+    for (int i = 0; i < n; ++i) entries[i]->sending = 1;
     if (!spools_commit(fd, before)) { free(batch); return; }
     pthread_t thread;
     pthread_mutex_lock(&spoolman_outbox_mutex);
@@ -1000,7 +1021,7 @@ static void spoolman_held_send_response(int fd, const char *body, size_t length)
     pthread_mutex_unlock(&spoolman_outbox_mutex);
     if (!started) {
         free(batch);
-        for (int i = 0; i < f.count; ++i) entries[i]->sending = 0;     /* nothing went out */
+        for (int i = 0; i < n; ++i) entries[i]->sending = 0;     /* nothing went out */
         spools_touch(1); (void)spools_save();
         spools_fail(fd, 500, "Cannot start the request");
         return;
@@ -1262,6 +1283,11 @@ static void spoolman_config_response(int fd, const char *body, size_t length) {
          * What was pending is not thrown away and not sent on its own: it goes on the list of unsent usage, where
          * the user decides. Turning the sync off (an empty address) is the user's own decision and clears it. */
         int turned_off = url && !url[0], full = 0;
+        /* An entry from an earlier change of the login says "the spool is the same". After a change of the server that
+         * is no longer true: its number is a number of the old server, so it is told like any other old number. */
+        if (url_changed)
+            for (int i = 0; i < spools.held_count; ++i)
+                if (spools.held[i].reason == SPOOLMAN_HELD_LOGIN) spools.held[i].reason = SPOOLMAN_HELD_SERVER;
         for (int i = 0; i < spools.count; ++i) {
             spool_entry *sp = &spools.spools[i];
             if (!sp->spoolman_id[0] || turned_off) continue;
@@ -1328,6 +1354,10 @@ static void spoolman_status_response(int fd) {
 /* ---- Spoolman catalog: the browser's own picker, instead of typing an id blind ------------- */
 
 typedef struct { spoolman_spool *list; int count, truncated; } spoolman_catalog_fill;
+typedef struct {
+    char url[SPOOLMAN_URL_MAX + 1], auth[SPOOLMAN_AUTH_MAX + 1];
+    unsigned gen, serial;     /* the generation of the server settings it reads under, and the number of the read */
+} spoolman_catalog_job;
 
 static int spoolman_catalog_spool(const spoolman_spool *e, void *ctx) {
     spoolman_catalog_fill *fill = ctx;
@@ -1338,9 +1368,9 @@ static int spoolman_catalog_spool(const spoolman_spool *e, void *ctx) {
 
 /* The same pages the sync reads (see spoolman_read_pages), so a large library is no problem here either. */
 static void *spoolman_catalog_worker(void *arg) {
-    char url[SPOOLMAN_URL_MAX + 1], auth[SPOOLMAN_AUTH_MAX + 1];
-    memcpy(url, arg, sizeof(url)); memcpy(auth, (char *)arg + sizeof(url), sizeof(auth));
+    spoolman_catalog_job job = *(spoolman_catalog_job *)arg;
     free(arg);
+    const char *url = job.url, *auth = job.auth;
     char host[SPOOLMAN_HOST_MAX], base[SPOOLMAN_PATH_MAX]; int port;
     const char *error = NULL;
     spoolman_catalog_fill fill = {malloc(sizeof(spoolman_spool) * SPOOLMAN_CATALOG_MAX), 0, 0};
@@ -1353,12 +1383,18 @@ static void *spoolman_catalog_worker(void *arg) {
         if (cy.reason != SPOOLMAN_R_OK) error = spoolman_reason_text(cy.reason);
     }
     pthread_mutex_lock(&spoolman_catalog_mutex);
-    if (error) snprintf(spoolman_catalog_error, sizeof(spoolman_catalog_error), "%s", error);
-    else {
-        spoolman_catalog_error[0] = 0; spoolman_catalog_count = fill.count; spoolman_catalog_truncated = fill.truncated;
-        memcpy(spoolman_catalog, fill.list, (size_t)fill.count * sizeof(fill.list[0]));
+    /* Only the latest read counts. One that was started for an earlier server (or overtaken by a newer read) ends here
+     * without touching the list or the flag; a page asking for the new server never gets the old one's spools. */
+    if (job.serial == spoolman_catalog_serial) {
+        if (!spoolman_catalog_valid || spoolman_catalog_gen != job.gen) { spoolman_catalog_count = 0; spoolman_catalog_truncated = 0; }
+        if (error) snprintf(spoolman_catalog_error, sizeof(spoolman_catalog_error), "%s", error);
+        else {
+            spoolman_catalog_error[0] = 0; spoolman_catalog_count = fill.count; spoolman_catalog_truncated = fill.truncated;
+            memcpy(spoolman_catalog, fill.list, (size_t)fill.count * sizeof(fill.list[0]));
+        }
+        spoolman_catalog_gen = job.gen; spoolman_catalog_valid = 1;
+        spoolman_catalog_loading = 0;
     }
-    spoolman_catalog_loading = 0;
     pthread_mutex_unlock(&spoolman_catalog_mutex);
     free(fill.list);
     return NULL;
@@ -1369,18 +1405,31 @@ static void spoolman_catalog_refresh_response(int fd) {
     if (!spools_open(fd)) return;
     if (!spools.spoolman_enabled) { spools_fail(fd, 409, "Spoolman integration is disabled"); return; }
     if (!spools.spoolman_url[0]) { spools_fail(fd, 400, "Set the Spoolman server URL first"); return; }
+    const unsigned gen = spoolman_generation();
     pthread_mutex_lock(&spoolman_catalog_mutex);
-    int already = spoolman_catalog_loading;
-    if (!already) spoolman_catalog_loading = 1;
+    /* A read that runs for an earlier server does not count: this one starts its own, and the old one is dropped. */
+    int already = spoolman_catalog_loading && spoolman_catalog_job_gen == gen;
+    unsigned serial = 0;
+    if (!already) { spoolman_catalog_loading = 1; spoolman_catalog_job_gen = gen; serial = ++spoolman_catalog_serial; }
     pthread_mutex_unlock(&spoolman_catalog_mutex);
     if (!already) {
-        char *arg = malloc(sizeof(spools.spoolman_url) + sizeof(spools.spoolman_basic_auth));
-        if (arg) {
-            memcpy(arg, spools.spoolman_url, sizeof(spools.spoolman_url));
-            memcpy(arg + sizeof(spools.spoolman_url), spools.spoolman_basic_auth, sizeof(spools.spoolman_basic_auth));
+        spoolman_catalog_job *job = calloc(1, sizeof(*job));
+        int started = 0;
+        if (job) {
+            memcpy(job->url, spools.spoolman_url, sizeof(job->url));
+            memcpy(job->auth, spools.spoolman_basic_auth, sizeof(job->auth));
+            job->gen = gen; job->serial = serial;
             pthread_t thread;
-            if (pthread_create(&thread, NULL, spoolman_catalog_worker, arg) == 0) pthread_detach(thread);
-            else { free(arg); pthread_mutex_lock(&spoolman_catalog_mutex); spoolman_catalog_loading = 0; pthread_mutex_unlock(&spoolman_catalog_mutex); }
+            started = pthread_create(&thread, NULL, spoolman_catalog_worker, job) == 0;
+            if (started) pthread_detach(thread);
+            else free(job);
+        }
+        if (!started) {
+            pthread_mutex_lock(&spoolman_catalog_mutex);
+            if (serial == spoolman_catalog_serial) spoolman_catalog_loading = 0;
+            pthread_mutex_unlock(&spoolman_catalog_mutex);
+            spools_fail(fd, 500, "Cannot start the request");
+            return;
         }
     }
     spools_reply(fd, 202, "{\"ok\":true}\n");
@@ -1389,15 +1438,21 @@ static void spoolman_catalog_refresh_response(int fd) {
 /* GET /api/spoolman/catalog -- the cached result of the last refresh. */
 static void spoolman_catalog_response(int fd) {
     if (!spools.spoolman_enabled) { spools_fail(fd, 409, "Spoolman integration is disabled"); return; }
+    const unsigned gen = spoolman_generation();
     pthread_mutex_lock(&spoolman_catalog_mutex);
+    /* What was read under another generation of the server settings is another server's list: it is not served. The
+     * page ties what it shows and what the user chose to `gen` and sends it back with "Send selected". */
+    const int usable = spoolman_catalog_valid && spoolman_catalog_gen == gen;
+    const int count = usable ? spoolman_catalog_count : 0;
     /* The builder does not grow: room for the worst case of every entry (a name and a material of escapes only). */
-    size_t cap = 1024 + (size_t)spoolman_catalog_count * 960;
+    size_t cap = 1024 + (size_t)count * 960;
     json_builder b = {malloc(cap), 0, cap, 0};
     if (!b.data) { pthread_mutex_unlock(&spoolman_catalog_mutex); spools_fail(fd, 500, "Out of memory"); return; }
-    json_builder_printf(&b, "{\"loading\":%s,\"error\":", spoolman_catalog_loading ? "true" : "false");
-    json_builder_string(&b, spoolman_catalog_error);
+    json_builder_printf(&b, "{\"gen\":%u,\"loading\":%s,\"error\":", gen,
+                        spoolman_catalog_loading && spoolman_catalog_job_gen == gen ? "true" : "false");
+    json_builder_string(&b, usable ? spoolman_catalog_error : "Not fetched yet");
     json_builder_printf(&b, ",\"spools\":[");
-    for (int i = 0; i < spoolman_catalog_count; ++i) {
+    for (int i = 0; i < count; ++i) {
         const spoolman_spool *e = &spoolman_catalog[i];
         json_builder_printf(&b, "%s{\"id\":\"%s\",\"name\":", i ? "," : "", e->spoolman_id);
         json_builder_string(&b, e->name);
@@ -1405,7 +1460,7 @@ static void spoolman_catalog_response(int fd) {
         json_builder_string(&b, e->material);
         json_builder_printf(&b, ",\"color\":\"%s\",\"remaining\":%.1f}", e->color, e->have_remaining ? e->remaining : 0.0);
     }
-    json_builder_printf(&b, "],\"truncated\":%s}\n", spoolman_catalog_truncated ? "true" : "false");
+    json_builder_printf(&b, "],\"truncated\":%s}\n", usable && spoolman_catalog_truncated ? "true" : "false");
     pthread_mutex_unlock(&spoolman_catalog_mutex);
     if (b.failed) spools_fail(fd, 500, "Catalog response is too large");
     else respond(fd, 200, "OK", "application/json; charset=utf-8", b.data, b.length);

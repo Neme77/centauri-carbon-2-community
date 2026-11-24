@@ -1322,7 +1322,13 @@ static int held_index(unsigned id) {
     return -1;
 }
 
-static int call_held_send(const char *body) { return call_handler(spoolman_held_send_response, body); }
+/* The page sends the generation of the server settings its choice was made under; call_held_send sends the current one. */
+static int call_held_send_raw(const char *body) { return call_handler(spoolman_held_send_response, body); }
+static int call_held_send(const char *body) {
+    char text[1024];
+    snprintf(text, sizeof(text), "gen=%u\n%s", spoolman_generation(), body);
+    return call_held_send_raw(text);
+}
 static int call_held_discard(const char *body) { return call_handler(spoolman_held_discard_response, body); }
 static int call_unlink_old(void) {
     int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
@@ -1904,6 +1910,168 @@ static void test_the_catalog_is_read_in_pages(void) {
     puts("PASS: the catalog for \"Send selected\" is read in pages like the sync (past 128 KiB), says when it is cut at its limit, and tells a refusal");
 }
 
+static void test_an_entry_that_is_being_sent_is_not_sent_again(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    assert(spoolman_hold(sp, 12.5, SPOOLMAN_HELD_SERVER));
+    assert(call_held_send("1=7") == 202);
+    wait_worker();                                              /* the request is done, its result is not taken over yet */
+    assert(!worker_running() && spools.held[0].sending && fake.use_count == 1);
+    assert(call_held_send("1=7") == 409 && strstr(response, "being sent"));      /* the entry itself says no, not the busy worker */
+    assert(fake.use_count == 1 && near(fake.used, 112.5));      /* the grams were not counted twice */
+    spoolman_tick(virtual_now + 1);
+    assert(spools.held_count == 0);
+    fake_finish(); teardown_file();
+    puts("PASS: an entry that is being sent is refused a second time (409), also when the worker is already done and its result not taken over yet");
+}
+
+static void test_a_send_result_of_an_older_server_setting_changes_nothing(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    assert(spoolman_hold(sp, 12.5, SPOOLMAN_HELD_SERVER));
+    spools.held[0].sending = 1;                                 /* as if the request were out */
+    spoolman_send_result old = {spools.held[0].id, spoolman_epoch - 1, SPOOLMAN_SENT};
+    spoolman_held_apply(&old, 1);                               /* its answer is from before the last change of the server */
+    assert(spools.held_count == 1 && spools.held[0].sending && spools.held[0].reason == SPOOLMAN_HELD_SERVER);
+    spoolman_send_result now = {spools.held[0].id, spoolman_epoch, SPOOLMAN_SENT};
+    spoolman_held_apply(&now, 1);                               /* the same answer under the current settings is taken over */
+    assert(spools.held_count == 0);
+    fake_finish(); teardown_file();
+    puts("PASS: a send result that belongs to an older server setting is not taken over; one of the current settings is");
+}
+
+/* ---- the server settings: a catalog and a choice belong to the server they were read from ---------------- */
+
+static unsigned gen_of(const char *reply) {
+    const char *p = strstr(reply, "\"gen\":");
+    assert(p);
+    return (unsigned)strtoul(p + 6, NULL, 10);
+}
+
+static void test_the_generation_follows_the_server_settings(void) {
+    setup_linked(0, 500);
+    snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "%s", "http://192.0.2.5:7912");
+    const unsigned g0 = spoolman_generation();
+    assert(g0 == spoolman_generation());                                                   /* stable while nothing changes */
+    assert(call_config("url=http://192.0.2.5:7912/") == 200 && spoolman_generation() == g0);   /* the same server, written differently */
+    assert(call_config("enabled=0") == 200 && call_config("enabled=1") == 200 && spoolman_generation() == g0);   /* the switch alone */
+    assert(call_config("basic_auth=other:secret") == 200);                                 /* another login */
+    const unsigned g1 = spoolman_generation();
+    assert(g1 != g0);
+    assert(call_config("url=http://192.0.2.6:7912") == 200);                               /* another server */
+    const unsigned g2 = spoolman_generation();
+    assert(g2 != g1 && g2 != g0);
+    char *text = get_spools_text();
+    char want[48]; snprintf(want, sizeof(want), "\"spoolman_gen\":%u,", g2);
+    assert(strstr(text, want));                                                            /* the page learns it with every look at the list */
+    free(text);
+    teardown_file();
+    puts("PASS: the generation of the server settings changes with another address or login, not with the same server written differently or the switch");
+}
+
+static void test_send_selected_is_refused_for_another_generation(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(0, 500);
+    assert(spoolman_hold(sp, 12.5, SPOOLMAN_HELD_NOT_FOUND));
+    char body[64];
+    assert(call_held_send_raw("1=7") == 400);                                             /* no generation: refused, not guessed */
+    assert(call_held_send_raw("gen=abc\n1=7") == 400 && call_held_send_raw("gen=\n1=7") == 400);
+    assert(call_held_send_raw("gen=99999999999\n1=7") == 400);
+    snprintf(body, sizeof(body), "gen=%u\n1=7", spoolman_generation() + 1);
+    assert(call_held_send_raw(body) == 409);
+    /* A choice made before the login changed is refused ... */
+    unsigned old = spoolman_generation();
+    assert(call_config("basic_auth=other:secret") == 200);
+    snprintf(body, sizeof(body), "gen=%u\n1=7", old);
+    assert(call_held_send_raw(body) == 409);
+    assert(strstr(response, "choose the spools again"));
+    assert(!spools.held[0].sending && fake.use_count == 0 && !worker_running());
+    /* ... and so is one made before the address changed: nothing goes out, not to the new server either. */
+    old = spoolman_generation();
+    snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "http://127.0.0.1:%d", (int)fake.port);
+    assert(call_config("url=http://127.0.0.1:9") == 200);
+    snprintf(body, sizeof(body), "gen=%u\n1=7", old);
+    assert(call_held_send_raw(body) == 409);
+    assert(!spools.held[0].sending && fake.use_count == 0 && fake.get_count == 0 && !worker_running());
+    /* The same request with the current generation goes through. */
+    snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "http://127.0.0.1:%d", (int)fake.port);
+    snprintf(body, sizeof(body), "gen=%u\n1=7", spoolman_generation());
+    assert(call_held_send_raw(body) == 202); finish_send();
+    assert(fake.use_count == 1 && spools.held_count == 0);
+    fake_finish(); teardown_file();
+    puts("PASS: Send selected is refused (400 without a generation, 409 for an older one) before anything is sent; the current generation goes through");
+}
+
+static void test_a_login_entry_ends_when_the_server_changes(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(3, 500);
+    assert(call_config("basic_auth=other:secret") == 200);
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_LOGIN && near(spools.held[0].grams, 3));
+    /* The same server written differently changes nothing; another login keeps the entry a login entry. */
+    char same[64]; snprintf(same, sizeof(same), "url=http://127.0.0.1:%d/", (int)fake.port);
+    assert(call_config(same) == 200 && spools.held[0].reason == SPOOLMAN_HELD_LOGIN);
+    sp->spoolman_unsent = 2;
+    assert(call_config("basic_auth=third:secret") == 200);
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_LOGIN && near(spools.held[0].grams, 5));
+    /* Another server: "the spool is the same" is no longer true, its number is the old server's. */
+    sp->spoolman_unsent = 1;
+    assert(call_config("url=http://127.0.0.1:9") == 200);
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_SERVER && near(spools.held[0].grams, 6));   /* with the usage of this change */
+    char *text = get_spools_text();
+    assert(!strstr(text, "login_changed") && count_of(text, "\"reason\":\"server_changed\"") == 1);
+    free(text);
+    spools_load();                                                                         /* saved that way */
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_SERVER && near(spools.held[0].grams, 6));
+    /* One that was already being sent stays unsure, whatever its reason was. */
+    memset(spools.held, 0, sizeof(spools.held)); spools.held_count = 0;
+    sp = &spools.spools[0];
+    assert(spoolman_hold(sp, 4, SPOOLMAN_HELD_LOGIN) && spoolman_hold(sp, 5, SPOOLMAN_HELD_NOT_FOUND));
+    assert(call_config("url=http://127.0.0.1:10") == 200);
+    assert(spools.held[0].reason == SPOOLMAN_HELD_SERVER && spools.held[1].reason == SPOOLMAN_HELD_NOT_FOUND);   /* only login entries end */
+    fake_finish(); teardown_file();
+    puts("PASS: an entry from a login change becomes a server entry when the server changes later (no \"same spool\" for a number of the old server); other reasons stay");
+}
+
+static void test_the_catalog_belongs_to_the_server_settings(void) {
+    static char reply[65536];
+    int n = 3; char **items = make_items(n, 50, 1);
+    fake_start(0, 0); fake.list_items = (const char *const *)items; fake.list_n = n; fake_launch();
+    setup_linked(0, 500);
+    assert(call_plain(spoolman_catalog_refresh_response, reply, sizeof(reply)) == 202);
+    wait_catalog();
+    assert(call_plain(spoolman_catalog_response, reply, sizeof(reply)) == 200);
+    const unsigned g1 = spoolman_generation();
+    assert(gen_of(reply) == g1 && strstr(reply, "\"error\":\"\"") && count_of(reply, "{\"id\":\"") == 3);
+    /* The login changes: what was read before is not the list of the server in use and is not served. */
+    assert(call_config("basic_auth=other:secret") == 200);
+    assert(call_plain(spoolman_catalog_response, reply, sizeof(reply)) == 200);
+    assert(gen_of(reply) == spoolman_generation() && gen_of(reply) != g1);
+    assert(count_of(reply, "{\"id\":\"") == 0 && strstr(reply, "\"error\":\"Not fetched yet\"") && strstr(reply, "\"truncated\":false"));
+    assert(call_plain(spoolman_catalog_refresh_response, reply, sizeof(reply)) == 202);
+    wait_catalog();
+    assert(call_plain(spoolman_catalog_response, reply, sizeof(reply)) == 200);
+    assert(gen_of(reply) == spoolman_generation() && count_of(reply, "{\"id\":\"") == 3);
+    /* A read that is still on its way when the server changes is dropped: it never fills the list for the new settings,
+     * and the new settings are not left waiting for it. */
+    fake.get_delay_ms = 300;
+    assert(call_plain(spoolman_catalog_refresh_response, reply, sizeof(reply)) == 202);
+    const unsigned g2 = spoolman_generation();
+    assert(call_config("url=http://127.0.0.1:9") == 200);                                  /* nothing listens there */
+    assert(call_plain(spoolman_catalog_response, reply, sizeof(reply)) == 200);
+    assert(gen_of(reply) != g2 && strstr(reply, "\"loading\":false") && count_of(reply, "{\"id\":\"") == 0);
+    assert(call_plain(spoolman_catalog_refresh_response, reply, sizeof(reply)) == 202);    /* a new read; the old one is still running */
+    wait_catalog();
+    for (int i = 0; i < 8; ++i) sleep_ms(250);                                             /* the old read ends now (sleep_ms takes less than a second) */
+    assert(call_plain(spoolman_catalog_response, reply, sizeof(reply)) == 200);
+    assert(gen_of(reply) == spoolman_generation() && count_of(reply, "{\"id\":\"") == 0);
+    assert(strstr(reply, "\"error\":\"Could not reach Spoolman\""));
+    pthread_mutex_lock(&spoolman_catalog_mutex);
+    assert(spoolman_catalog_count == 0 && spoolman_catalog_gen == spoolman_generation() && !spoolman_catalog_loading);
+    pthread_mutex_unlock(&spoolman_catalog_mutex);
+    fake_finish(); free_items(items, n); teardown_file();
+    puts("PASS: the catalog is tied to the server settings it was read under: another login or address empties it, a read of the old server that ends late is dropped");
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IOLBF, 1024);
     spools_clock = clock_fake; spools_wall = wall_fake;
@@ -1977,5 +2145,11 @@ int main(void) {
     test_a_call_is_checked_as_a_whole_and_may_carry_all_32_entries();
     test_the_same_server_written_differently_is_not_a_new_server();
     test_the_catalog_is_read_in_pages();
+    test_an_entry_that_is_being_sent_is_not_sent_again();
+    test_a_send_result_of_an_older_server_setting_changes_nothing();
+    test_the_generation_follows_the_server_settings();
+    test_send_selected_is_refused_for_another_generation();
+    test_a_login_entry_ends_when_the_server_changes();
+    test_the_catalog_belongs_to_the_server_settings();
     return 0;
 }
