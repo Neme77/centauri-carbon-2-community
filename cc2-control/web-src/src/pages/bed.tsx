@@ -746,7 +746,8 @@ const MeshActions = ({ reload }: { reload: () => void }) => {
   // A screw session is open: a measurement of it that is running blocks the start (the program answers 409 as well); between
   // its measurements the session ends by itself when the calibration starts.
   const sessionOpen = Boolean(printer.use().data?.screws_session?.active)
-  const sessionMeasuring = sessionOpen && consoleStatus.use().busy
+  const consoleBusy = consoleStatus.use().busy // a hook: called on every render, not only while a session is open
+  const sessionMeasuring = sessionOpen && consoleBusy
   const lock = useRef(false)
   useEffect(() => {
     onMeshSaved = reload
