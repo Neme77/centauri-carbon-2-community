@@ -1,4 +1,4 @@
-import type { ComponentChildren } from 'preact'
+import type { ComponentChildren, VNode } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { createPortal } from 'preact/compat'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,7 @@ import { cameraPreferences, setPersistentCamera, type Key, t } from '@/lib/i18n'
 import { errText, notify, post, tpl } from '@/lib/api'
 import { poll, usePoll } from '@/lib/poll'
 import { store } from '@/lib/store'
+import { closeMiniplayer, miniplayerOpen, openMiniplayer } from '@/lib/miniplayer'
 import { camera, printer, refreshPrinter } from '@/lib/state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/field'
@@ -230,8 +231,82 @@ export const Muted = ({ children, class: c }: { children: ComponentChildren; cla
 // Live view runs on one CC2 Control page at a time: starting it claims the camera, and a page that sees
 // another viewer in /api/printer stops its own stream and offers to take it back, instead of retrying.
 const CAMERA_RETRY_MS = [2500, 5000, 10000, 20000, 30000]
+const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
 const viewerId = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')
+
+// Hand-over between viewers of the same browser, so the old picture has ended before the new one starts (the
+// printer only learns of a new viewer by its next poll, which left two streams open for up to a poll interval).
+// 1) Same tab: every stream registers itself here; a starting stream stops the others first, synchronously.
+// 2) Other tab of the same browser: a stream writes a fresh timestamp to localStorage while it runs; a starting
+//    stream that sees a fresh foreign entry asks over a BroadcastChannel and waits (at most one second) until the
+//    old tab says it has let go. Without either (blocked storage, no channel) it simply starts, as before.
+// Another device shares nothing but the printer's claim: there the old viewer still stops on its next poll.
+type Holder = { stop: (why: Key) => void; held: () => boolean }
+const holders = new Set<Holder>()
+const LIVE_KEY = 'cc2-camera-live'
+// A hidden tab's timers can be slowed to once a minute, so its heartbeat may be that old and the tab still holds the camera.
+// A stale entry nobody answers for only costs the next start at most RELEASE_WAIT_MS.
+const LIVE_FRESH_MS = 75000
+const LIVE_BEAT_MS = 1000
+const RELEASE_WAIT_MS = 1000
+let cameraChannel: BroadcastChannel | null | undefined
+const channel = () => {
+  if (cameraChannel === undefined) {
+    try {
+      cameraChannel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('cc2-camera')
+      cameraChannel?.addEventListener('message', event => {
+        const message = event.data
+        if (message?.type !== 'release' || typeof message.id !== 'string') return
+        // Only a viewer that has the camera lets go, and only that tab answers (an idle tab must not end the wait before the
+        // holder has let go); a viewer that is itself still starting is not touched.
+        let released = false
+        for (const holder of holders)
+          if (holder.held()) {
+            holder.stop('common.camera_taken_over')
+            released = true
+          }
+        if (released) cameraChannel?.postMessage({ type: 'released', for: message.id })
+      })
+    } catch {
+      cameraChannel = null
+    }
+  }
+  return cameraChannel
+}
+const readLive = (): { id: string; at: number } | null => {
+  try {
+    const entry = JSON.parse(localStorage.getItem(LIVE_KEY) || 'null')
+    return typeof entry?.id === 'string' && typeof entry?.at === 'number' ? entry : null
+  } catch {
+    return null
+  }
+}
+const writeLive = (id: string | null) => {
+  try {
+    if (id) localStorage.setItem(LIVE_KEY, JSON.stringify({ id, at: Date.now() }))
+    else localStorage.removeItem(LIVE_KEY)
+  } catch {}
+}
+// Waits until another tab of this browser has let go of the camera (at most RELEASE_WAIT_MS); at once when none runs.
+const waitForRelease = (self: string) => {
+  const entry = readLive()
+  const port = channel()
+  if (!port || !entry || entry.id === self || Date.now() - entry.at > LIVE_FRESH_MS) return Promise.resolve()
+  return new Promise<void>(resolve => {
+    const done = () => {
+      clearTimeout(timer)
+      port.removeEventListener('message', listen)
+      resolve()
+    }
+    const listen = (event: MessageEvent) => {
+      if (event.data?.type === 'released' && event.data.for === self) done()
+    }
+    const timer = setTimeout(done, RELEASE_WAIT_MS)
+    port.addEventListener('message', listen)
+    port.postMessage({ type: 'release', id: self })
+  })
+}
 
 const cameraDock = store({ slot: null as HTMLElement | null, tall: false, preferences: false })
 let persistentHost: HTMLElement | null = null
@@ -256,15 +331,25 @@ const CameraDock = ({ tall = false, preferences = false }: { tall?: boolean; pre
 }
 
 // Keep the same stream host when toggling persistence in the camera card.
+// `bare` is the picture alone (no card, head or buttons), started when it appears and ended when it goes away.
 export const CameraCard = ({
   tall,
   standalone,
   preferences,
+  bare,
 }: {
   tall?: boolean
   standalone?: boolean
   preferences?: boolean
-}) => (standalone ? <CameraStream tall={tall} standalone /> : <CameraDock tall={tall} preferences={preferences} />)
+  bare?: boolean
+}) =>
+  bare ? (
+    <CameraStream standalone bare />
+  ) : standalone ? (
+    <CameraStream tall={tall} standalone />
+  ) : (
+    <CameraDock tall={tall} preferences={preferences} />
+  )
 
 const CameraPreference = () => {
   const persistent = cameraPreferences.use().persistent
@@ -297,16 +382,27 @@ const CameraPreference = () => {
   )
 }
 
-const CameraStream = ({
+// What a surrounding layout (the mini player) needs to draw its own controls around the bare picture.
+export type StreamControl = { on: boolean; ready: boolean; failed: boolean; gaveUp: boolean; toggle: () => void }
+
+// `onTakenOver`: the bare picture of the mini player closes itself when another viewer takes the camera, instead
+// of showing "Watch here"; `layout` places the picture and its controls.
+export const CameraStream = ({
   tall,
   standalone,
   preferences,
   dock,
+  bare,
+  onTakenOver,
+  layout,
 }: {
   tall?: boolean
   standalone?: boolean
   preferences?: boolean
   dock?: HTMLElement | null
+  bare?: boolean
+  onTakenOver?: () => void
+  layout?: (frame: VNode, control: StreamControl) => ComponentChildren
 }) => {
   const persistent = cameraPreferences.use().persistent
   const keepAlive = useRef(persistent)
@@ -325,19 +421,38 @@ const CameraStream = ({
   const tries = useRef(0)
   const viewer = useRef('')
   if (!viewer.current) viewer.current = viewerId()
+  const holder = useRef<Holder>({ stop: () => {}, held: () => false })
+  // The heartbeat of the live entry (see above) runs on the shared scheduler, also while the tab is hidden.
+  const unmounted = useRef(false)
+  const beat = useRef<(() => void) | undefined>(undefined)
+  const heartbeat = useRef(() => writeLive(viewer.current))
   const claimed = useRef(0) // when the backend confirmed this page's claim; 0 while it has none
   const starts = useRef(0)
+  const pausedHidden = useRef(false)
   const { data, at } = printer.use()
   const owner = data?.camera_viewer
+  // The hint that the mini player has the picture is only true while it is open.
+  const miniOpen = miniplayerOpen.use().open
+  const shownNote = note === 'common.camera_in_miniplayer' && !miniOpen ? '' : note
   const clearRetry = () => {
     if (retry.current !== undefined) clearTimeout(retry.current)
     retry.current = undefined
   }
+  // Letting go of a stream must end the request, not only hide it: removing the attribute is enough in Chromium, but a
+  // phone's browser and the WebKit view of ElegooSlicer can keep the old multipart connection open (the camera service
+  // allows only four), so the picture is first replaced by an empty one, which makes the browser drop the request.
   const release = () => {
     activeSrc.current = ''
-    img.current?.removeAttribute('src')
+    const element = img.current
+    if (!element) return
+    element.src = BLANK_IMAGE
+    element.removeAttribute('src')
   }
   const stop = (why: Key | '' = '') => {
+    starts.current++ // an answer still on its way to a start that is now cancelled is stale
+    beat.current?.()
+    beat.current = undefined
+    if (readLive()?.id === viewer.current) writeLive(null)
     live.current = false
     claimed.current = 0
     clearRetry()
@@ -349,6 +464,21 @@ const CameraStream = ({
     setGaveUp(false)
     setNote(why)
   }
+  // Another viewer of this browser starts: give the camera up (the mini player closes without a hint).
+  holder.current.stop = why => {
+    if (!live.current) return
+    stop(why)
+    onTakenOver?.()
+  }
+  holder.current.held = () => live.current && claimed.current > 0
+  useEffect(() => {
+    const entry = holder.current
+    holders.add(entry)
+    channel()
+    return () => {
+      holders.delete(entry)
+    }
+  }, [])
   const previousDock = useRef(dock)
   useEffect(() => {
     if (!standalone && !persistent && (!dock || previousDock.current !== dock) && live.current) stop()
@@ -365,7 +495,12 @@ const CameraStream = ({
     setSrc(next)
   }
   const start = async () => {
-    if (document.hidden && !keepAlive.current) return
+    if (document.hidden && !keepAlive.current) {
+      // The bare picture opened on a hidden page starts as soon as the page is shown.
+      if (bare) pausedHidden.current = true
+      return
+    }
+    if (unmounted.current) return // e.g. a visibility check that was still waiting when the view was removed
     const attempt = ++starts.current
     clearRetry()
     live.current = true
@@ -374,10 +509,19 @@ const CameraStream = ({
     setNote('')
     setGaveUp(false)
     setOn(true)
+    for (const other of holders) if (other !== holder.current) other.stop('common.camera_taken_over')
+    await waitForRelease(viewer.current)
+    if (attempt !== starts.current || !live.current) return // paused or stopped while waiting
     try {
       const claim = await post('/api/camera/claim', viewer.current)
       if (claim?.viewer !== viewer.current) throw Error(t('common.camera_gave_up'))
-      if (attempt === starts.current) claimed.current = performance.now()
+      // A claim answer that arrives after Stop or removal is stale: it publishes nothing and starts no heartbeat.
+      if (attempt === starts.current && live.current) {
+        claimed.current = performance.now()
+        writeLive(viewer.current)
+        beat.current?.()
+        beat.current = poll(heartbeat.current, LIVE_BEAT_MS, { hidden: true })
+      }
     } catch (e) {
       if (attempt === starts.current && live.current) {
         stop('common.camera_gave_up')
@@ -387,6 +531,15 @@ const CameraStream = ({
     }
     // Not when paused, hidden or unmounted while claiming, or when a newer start took over.
     if (live.current && attempt === starts.current) connect()
+  }
+  // The mini player was paused in a hidden tab, where it could not see another viewer take the camera. Looking at the
+  // newest state first, it closes quietly if somebody else has the camera now, instead of taking it back from them.
+  const resumeUnlessTaken = async () => {
+    await refreshPrinter()
+    if (unmounted.current) return // the view was removed while the printer state was read
+    const now = printer.get().data?.camera_viewer
+    if (now && now !== viewer.current) onTakenOver?.()
+    else await start()
   }
   const current = (element: HTMLImageElement) =>
     live.current && element === img.current && element.getAttribute('src') === activeSrc.current
@@ -405,32 +558,113 @@ const CameraStream = ({
   // Another page claimed the camera after this one: hand the stream over. Replies to requests sent before
   // this page's claim was confirmed still show the previous viewer, so they are ignored.
   useEffect(() => {
-    if (live.current && claimed.current && at >= claimed.current && owner && owner !== viewer.current)
+    if (live.current && claimed.current && at >= claimed.current && owner && owner !== viewer.current) {
       stop('common.camera_taken_over')
+      onTakenOver?.()
+    }
   }, [owner, at])
-  // Keep ownership checks alive while the persistent stream is backgrounded.
+  // Keep ownership checks alive while the persistent stream is backgrounded, and while the mini player streams
+  // on a page that does not poll the printer fast enough to notice a takeover.
   // Join the shared poller only while streaming; no extra camera session.
+  const watchesOwner = persistent || Boolean(onTakenOver)
   useEffect(() => {
-    if (persistent && on) return poll(refreshPrinter, 1500, { hidden: true })
-  }, [persistent, on])
+    if (watchesOwner && on) return poll(refreshPrinter, 1500, { hidden: true })
+  }, [watchesOwner, on])
   useEffect(() => {
     const hidden = () => {
-      if (document.hidden && live.current && !keepAlive.current) stop('common.camera_paused_hidden')
+      if (document.hidden && live.current && !keepAlive.current) {
+        pausedHidden.current = true
+        stop('common.camera_paused_hidden')
+      } else if (!document.hidden && bare && pausedHidden.current) {
+        // The bare picture was opened by its own button: it comes back by itself when the page is shown again.
+        pausedHidden.current = false
+        void (onTakenOver ? resumeUnlessTaken() : start())
+      }
     }
     const leaving = () => {
       if (live.current) stop('common.camera_paused_hidden')
     }
+    unmounted.current = false
     document.addEventListener('visibilitychange', hidden)
     window.addEventListener('pagehide', leaving)
-    if (standalone) void start() // opening the camera window is the explicit start
+    if (standalone) void start() // opening the camera window (or the bare picture) is the explicit start
     return () => {
       document.removeEventListener('visibilitychange', hidden)
       window.removeEventListener('pagehide', leaving)
+      unmounted.current = true
+      starts.current++ // a claim answer still on its way is stale
+      beat.current?.()
+      beat.current = undefined
+      if (readLive()?.id === viewer.current) writeLive(null)
       live.current = false
       clearRetry()
       release()
     }
   }, [])
+  const frame = (
+    <div
+      class={cn(
+        'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
+        bare
+          ? 'cc2-camera-bare size-full'
+          : standalone
+            ? 'min-h-[calc(100dvh_-_7rem)]'
+            : tall
+              ? 'min-h-80'
+              : 'aspect-video',
+        !ready && 'cc2-camera-paused'
+      )}
+    >
+      {!ready && <div class="cc2-camera-grid" aria-hidden="true" />}
+      {!ready && (
+        <div class="cc2-camera-idle-controls absolute inset-x-0 z-10 max-w-full px-4 py-3 text-center text-muted">
+          {(on || shownNote) && (
+            <p class="text-xs">
+              {on
+                ? t(
+                    gaveUp
+                      ? 'common.camera_gave_up'
+                      : failed
+                        ? 'common.camera_unavailable'
+                        : 'common.waiting_for_camera_stream'
+                  )
+                : shownNote && t(shownNote)}
+            </p>
+          )}
+          {!on && (!bare || (shownNote && shownNote !== 'common.camera_paused_hidden')) && (
+            <Button class="mt-2 text-xs" onClick={start}>
+              {t(note === 'common.camera_taken_over' ? 'common.camera_watch_here' : 'common.camera_start')}
+            </Button>
+          )}
+          {on && failed && (
+            <Button class="mt-2 text-xs" onClick={start}>
+              {t('common.camera_retry_now')}
+            </Button>
+          )}
+        </div>
+      )}
+      {on && src && (
+        <img
+          key={src}
+          ref={img}
+          src={src}
+          alt={t('common.cc2_live_camera')}
+          class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')}
+          onLoad={event => {
+            if (!current(event.currentTarget)) return
+            clearRetry()
+            tries.current = 0
+            setReady(true)
+            setFailed(false)
+            setGaveUp(false)
+          }}
+          onError={event => lost(event.currentTarget)}
+        />
+      )}
+    </div>
+  )
+  if (bare)
+    return layout ? layout(frame, { on, ready, failed, gaveUp, toggle: () => (on ? stop() : void start()) }) : frame
   return (
     <Card class="cc2-camera-card flex flex-col">
       <CardHead
@@ -460,62 +694,9 @@ const CameraStream = ({
           </span>
         }
       />
-      <div
-        class={cn(
-          'cc2-camera-frame relative grid place-items-center overflow-hidden rounded-md border border-edge bg-black',
-          standalone ? 'min-h-[calc(100dvh_-_7rem)]' : tall ? 'min-h-80' : 'aspect-video',
-          !ready && 'cc2-camera-paused'
-        )}
-      >
-        {!ready && <div class="cc2-camera-grid" aria-hidden="true" />}
-        {!ready && (
-          <div class="cc2-camera-idle-controls absolute inset-x-0 z-10 max-w-full px-4 py-3 text-center text-muted">
-            {(on || note) && (
-              <p class="text-xs">
-                {on
-                  ? t(
-                      gaveUp
-                        ? 'common.camera_gave_up'
-                        : failed
-                          ? 'common.camera_unavailable'
-                          : 'common.waiting_for_camera_stream'
-                    )
-                  : note && t(note)}
-              </p>
-            )}
-            {!on && (
-              <Button class="mt-2 text-xs" onClick={start}>
-                {t(note === 'common.camera_taken_over' ? 'common.camera_watch_here' : 'common.camera_start')}
-              </Button>
-            )}
-            {on && failed && (
-              <Button class="mt-2 text-xs" onClick={start}>
-                {t('common.camera_retry_now')}
-              </Button>
-            )}
-          </div>
-        )}
-        {on && src && (
-          <img
-            key={src}
-            ref={img}
-            src={src}
-            alt={t('common.cc2_live_camera')}
-            class={cn('absolute inset-0 size-full object-contain', !ready && 'invisible')}
-            onLoad={event => {
-              if (!current(event.currentTarget)) return
-              clearRetry()
-              tries.current = 0
-              setReady(true)
-              setFailed(false)
-              setGaveUp(false)
-            }}
-            onError={event => lost(event.currentTarget)}
-          />
-        )}
-      </div>
+      {frame}
       {!standalone && (
-        <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-2">
+        <div class="mt-3 grid gap-2.5 cc2-sm:grid-cols-3">
           <Button
             class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
             onClick={() => {
@@ -526,6 +707,22 @@ const CameraStream = ({
           >
             <Icon n="open" class="size-4" />
             {t('common.open_in_new_window')}
+          </Button>
+          <Button
+            class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"
+            variant={miniOpen ? 'active' : 'default'}
+            data-miniplayer-open
+            aria-pressed={miniOpen}
+            onClick={() => {
+              // A second press closes it again (its stream ends; this card stays as it is, it does not start by itself).
+              if (miniOpen) return closeMiniplayer()
+              // The mini player takes the camera over from this card, which then simply waits.
+              if (live.current) stop('common.camera_in_miniplayer')
+              openMiniplayer()
+            }}
+          >
+            <Icon n="pip" class="size-4" />
+            {t('common.miniplayer_open')}
           </Button>
           <Button
             class="h-auto min-w-0 whitespace-normal px-2 py-2 text-center text-xs cc2-sm:text-sm"

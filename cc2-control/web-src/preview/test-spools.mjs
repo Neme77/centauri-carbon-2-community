@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { createServer } from 'vite'
@@ -6,8 +7,8 @@ import { chromium } from 'playwright'
 
 // Spools against the preview backend: switching tracking on and off, the inventory grouped by
 // manufacturer, kind and colour, adding, copying and weighing a spool, the "which spool is this?"
-// question that every page opens for new filament, and the print dialog's check of the spool each
-// tool would draw from.
+// question that every page opens for new filament, the print dialog's check of the spool each tool
+// would draw from, and the spools the question suggests for an RFID spool's product line.
 const root = fileURLToPath(new URL('..', import.meta.url))
 process.env.CC2_BACKEND = 'http://127.0.0.1:1'
 const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), mode: 'demo', server: { port: 0, host: '127.0.0.1' } })
@@ -259,13 +260,77 @@ try {
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.setViewportSize({ width: 1440, height: 1000 })
 
+  // Elegoo's Rapid PLA+ RFID spools report the maker's line, "RAPID PLA+", besides the type "PLA"; the inventory
+  // keeps the line without the maker's word, "PLA+", and a colour picked by hand. The question suggests that spool
+  // and preselects it. The preview's trays report other filaments, so the reports are replaced on the way.
+  const en = JSON.parse(await readFile(path.join(root, 'public/locales/en.json'), 'utf8'))
+  const reports = {}
+  await page.route('**/api/spools', async r => {
+    const response = await r.fetch()
+    const json = await response.json()
+    for (const [n, printer] of Object.entries(reports)) json.slots[n].printer = printer
+    await r.fulfill({ response, json })
+  })
+  const save = fields =>
+    page.evaluate(
+      body => fetch('/api/spools/save', { method: 'POST', headers: { 'X-CC2-Request': '1' }, body }).then(r => r.json()),
+      Object.entries({ net: 1000, remaining: 1000, tare: 150, low: 100, diameter: 1.75, density: 1.24, ...fields })
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n')
+    )
+  const option = id => dialog.locator(`[data-option="${id}"]`)
+  const suggested = () =>
+    dialog.locator('[data-hint="spools.same_filament"]').evaluateAll(list => list.map(e => e.getAttribute('data-option')))
+  const plus = (await save({ name: 'Elegoo Rapid PLA+ Green', brand: 'Elegoo', material: 'PLA+', color: '#2E9E4F' })).id
+  reports[0] = { status: 1, type: 'PLA', name: 'RAPID PLA+', brand: 'ELEGOO', color: '#09CC3A', code: '' }
+  await insert(0)
+  dialog = page.getByRole('dialog')
+  // The red spool the slot held does not suit the green report: it is offered, not preselected.
+  await option('aa00000000000001').waitFor()
+  assert.equal(await option('aa00000000000001').getAttribute('data-hint'), 'spools.was_here')
+  assert.equal(await option('aa00000000000001').getByRole('radio').isChecked(), false)
+  assert.deepEqual(await suggested(), [plus])
+  assert.ok(await option(plus).getByRole('radio').isChecked())
+  assert.equal(await dialog.locator('[data-testid="spool-no-suitable"]').count(), 0)
+  // A new spool from that tray keeps the line without the maker's word as its material; its name keeps the product.
+  await dialog.getByRole('radio', { name: en['spools.new_spool'] }).check()
+  assert.equal(await dialog.getByLabel(en['canvas.material'], { exact: true }).inputValue(), 'PLA+')
+  assert.equal(
+    await dialog.getByLabel(en['common.name'], { exact: true }).inputValue(),
+    `ELEGOO RAPID PLA+ ${en['spools.colour_green']}`
+  )
+  // An opened plain PLA in that green suits too, but the tray's line ranks first, so the PLA+ spool stays the
+  // preselected answer. A reload opens the still unanswered question again.
+  const plain = (await save({ name: 'ELEGOO PLA Green', brand: 'ELEGOO', material: 'PLA', color: '#2E9E4F', remaining: 400 })).id
+  await page.reload()
+  dialog = page.getByRole('dialog')
+  await option(plain).waitFor()
+  assert.deepEqual(await suggested(), [plus, plain])
+  assert.ok(await option(plus).getByRole('radio').isChecked())
+  await dialog.getByRole('button', { name: en['common.confirm'], exact: true }).click()
+  await dialog.waitFor({ state: 'detached' })
+  assert.deepEqual(posts.at(-1), ['/api/spools/assign', `slot=0\nspool=${plus}`])
+  // A tray that names a product line still takes only that line or the plain type: PLA Matte, not PLA Silk.
+  const matte = (await save({ name: 'ELEGOO PLA Matte Gold', brand: 'ELEGOO', material: 'PLA Matte', color: '#C7A44A' })).id
+  const silk = (await save({ name: 'ELEGOO PLA Silk Gold', brand: 'ELEGOO', material: 'PLA Silk', color: '#C7A44A' })).id
+  reports[3] = { status: 1, type: 'PLA', name: 'PLA Matte', brand: 'ELEGOO', color: '#C7A44A', code: '' }
+  await insert(3)
+  dialog = page.getByRole('dialog')
+  await option(matte).waitFor()
+  assert.deepEqual(await suggested(), [matte])
+  assert.ok(await option(matte).getByRole('radio').isChecked())
+  assert.equal(await option(silk).count(), 0)
+  await dialog.getByRole('button', { name: en['spools.not_now'], exact: true }).click()
+  await dialog.waitFor({ state: 'detached' })
+  await page.unroute('**/api/spools')
+
   // Off again: no more questions.
   await page.getByRole('button', { name: 'Turn off spool tracking' }).click()
   await toast('Spool tracking is off.')
   assert.deepEqual(posts.at(-1), ['/api/spools/enable', 'off'])
   assert.deepEqual(errors, [])
   console.log(
-    'PASS: spool tracking switch, inventory by manufacturer/kind/colour, new and copied spool, weigh-in, slot question on any page, print check'
+    'PASS: spool tracking switch, inventory by manufacturer/kind/colour, new and copied spool, weigh-in, slot question on any page, print check, suggestions for a line with a maker prefix (RAPID PLA+ finds PLA+ and makes a new spool PLA+, PLA Matte leaves out PLA Silk)'
   )
 } finally {
   await browser?.close()

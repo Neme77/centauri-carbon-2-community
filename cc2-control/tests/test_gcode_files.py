@@ -382,8 +382,12 @@ def main():
             assert payload["paths"][0][0][0] == 10 and payload["paths"][0][0][1] == 10
             status, cached = layer_path("file=layers.gcode&layer=1")
             assert status == 200 and cached == payload
+            # A scan is followed by a rest of at least LAYER_PATH_REST_MIN_MS (250 ms); a request that
+            # needs a new scan inside it gets 503. This pause respects that rest.
+            time.sleep(0.3)
             status, payload = layer_path("storage=internal&file=layers.gcode&layer=2")
             assert status == 200 and payload["layer"] == 2 and payload["point_count"] >= 2
+            time.sleep(0.3)  # rest after the scan above
             status, payload = layer_path("file=layers.gcode&layer=9")
             assert status == 404 and payload["error"] == "Layer is outside the file"
             status, payload = layer_path("file=missing.gcode&layer=1")
@@ -392,6 +396,7 @@ def main():
             assert status == 400 and "path" in payload["error"].lower()
             status, payload = layer_path("file=layers.gcode&layer=0")
             assert status == 400 and payload["error"] == "Invalid layer"
+            time.sleep(0.3)  # rest after the scan above
             status, payload = layer_path("storage=usb&file=folder/part.GCODE&layer=1")
             assert status == 200 and payload["storage"] == "usb"
         finally:

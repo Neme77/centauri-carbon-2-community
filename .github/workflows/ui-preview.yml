@@ -40,6 +40,10 @@ jobs:
         run: npm run test:mesh
       - name: Verify paginated lists and storage display
         run: npm run test:list-pages
+      - name: Verify the bounded picture cache of Files, History and Queue
+        run: npm run test:file-pictures
+      - name: Verify that History prints again only a file known for certain
+        run: npm run test:history-reprint
       - name: Verify unavailable G-code dates and sorting without file writes
         run: npm run test:file-dates
       - name: Verify approved Dashboard controls and responsive layout
@@ -50,6 +54,8 @@ jobs:
         run: npm run test:sidebar-canvas-polish
       - name: Verify camera streaming lifecycle
         run: npm run test:camera
+      - name: Verify the camera mini player (one stream, size, position, zoom, takeover)
+        run: npm run test:miniplayer
       - name: Verify Polish and Czech language selection and layouts
         run: npm run test:languages
       - name: Verify Canvas reset confirmation and empty-slot rendering

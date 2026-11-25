@@ -19,8 +19,44 @@ static FILE *write_gcode(const char *dir, const char *name, const char *text) {
 static int parse_file(FILE *file, int layer, layer_path_info *info, layer_point *pts, int *starts) {
     struct timespec start;
     clock_gettime(CLOCK_MONOTONIC, &start);
-    return gcode_layer_path_parse(file, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
-                                  info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX);
+    return gcode_layer_path_parse_at(file, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                     info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX, NULL, NULL, NULL, 0);
+}
+
+static void assert_json_matches_index(FILE *file, const char *storage, const char *name, int layer,
+                                      layer_path_mark *marks, int *mark_count,
+                                      char *cold, size_t cold_cap, char *indexed, size_t indexed_cap) {
+    rewind(file);
+    layer_path_info info;
+    layer_point pts[LAYER_PATH_COLLECT_MAX];
+    int starts[LAYER_PATH_PATHS_MAX];
+    assert(parse_file(file, layer, &info, pts, starts) == LAYER_PATH_OK);
+    int n = gcode_layer_path_json(cold, cold_cap, storage, name, &info, pts, starts);
+    assert(n > 0);
+    rewind(file);
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    layer_path_mark resume;
+    int have_resume = layer_path_mark_pick(marks, *mark_count, layer - 1, &resume);
+    assert(gcode_layer_path_parse_at(file, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                     &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                     have_resume ? &resume : NULL, marks, mark_count,
+                                     LAYER_PATH_INDEX_MAX) == LAYER_PATH_OK);
+    int m = gcode_layer_path_json(indexed, indexed_cap, storage, name, &info, pts, starts);
+    assert(m == n && memcmp(cold, indexed, (size_t)n) == 0);
+}
+
+static int scan_build_marks(FILE *file, int layer, layer_path_mark *marks, int *mark_count) {
+    rewind(file);
+    layer_path_info info;
+    layer_point pts[LAYER_PATH_COLLECT_MAX];
+    int starts[LAYER_PATH_PATHS_MAX];
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    *mark_count = 0;
+    return gcode_layer_path_parse_at(file, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                     &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                     NULL, marks, mark_count, LAYER_PATH_INDEX_MAX);
 }
 
 static void expect_ok(int rc, const layer_path_info *info, int min_points) {
@@ -30,6 +66,7 @@ static void expect_ok(int rc, const layer_path_info *info, int min_points) {
 }
 
 int main(void) {
+    (void)gcode_layer_path_parse; /* used by test_gcode_layer_index.c; kept in the header for the index */
     char dir[] = "/tmp/cc2-layer-XXXXXX";
     assert(mkdtemp(dir));
     layer_point pts[LAYER_PATH_COLLECT_MAX];
@@ -224,6 +261,267 @@ int main(void) {
         fclose(f);
         snprintf(path, sizeof(path), "%s/early.gcode", dir); unlink(path);
         snprintf(path, sizeof(path), "%s/nocount.gcode", dir); unlink(path);
+    }
+    /* Layer index: a follow-up seek must match a from-scratch parse byte for byte,
+     * and must not reread the whole file. Tiny file, then a normal multi-layer file. */
+    {
+        char cold[8192], indexed[8192];
+        layer_path_mark marks[LAYER_PATH_INDEX_MAX];
+        int mark_count = 0;
+        f = write_gcode(dir, "index-tiny.gcode",
+            "; total layer number: 2\nG90\nM83\nG92 E0\n"
+            ";LAYER_CHANGE\n;Z:0.2\nG1 Z0.2\nG1 X10 Y10 E0.5\nG1 X30 Y10 E0.5\n"
+            ";LAYER_CHANGE\n;Z:0.4\nG1 Z0.4\nG1 X30 Y20 E0.4\nG1 X10 Y20 E0.4\n");
+        for (int layer = 1; layer <= 2; layer++) {
+            rewind(f);
+            assert(parse_file(f, layer, &info, pts, starts) == LAYER_PATH_OK);
+            int n = gcode_layer_path_json(cold, sizeof(cold), "internal", "index-tiny.gcode", &info, pts, starts);
+            assert(n > 0);
+            rewind(f);
+            struct timespec start;
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            mark_count = 0;
+            assert(gcode_layer_path_parse_at(f, 1, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                             &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                             NULL, marks, &mark_count, LAYER_PATH_INDEX_MAX) == LAYER_PATH_OK);
+            layer_path_mark resume;
+            assert(layer_path_mark_pick(marks, mark_count, layer - 1, &resume));
+            rewind(f);
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            long before = resume.offset;
+            assert(gcode_layer_path_parse_at(f, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                             &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                             &resume, marks, &mark_count, LAYER_PATH_INDEX_MAX) == LAYER_PATH_OK);
+            int m = gcode_layer_path_json(indexed, sizeof(indexed), "internal", "index-tiny.gcode", &info, pts, starts);
+            assert(m == n && memcmp(cold, indexed, (size_t)n) == 0);
+            if (layer == 2) assert(before > 0);
+        }
+        fclose(f);
+        /* NUL bytes: the stored place of a layer start is its real place in the file (the number of bytes read, not the
+         * length of the shortened line), also behind a NUL line longer than the 4096-byte read buffer, and a read that
+         * resumes at it gives what a read from the start gives. */
+        for (int variant = 0; variant < 3; variant++) {
+            static char text[12000];
+            char path[512];
+            size_t len = 0, at[2];
+            len += (size_t)snprintf(text, sizeof(text), "; total layer number: 2\nG90\nM83\n");
+            if (variant == 0) { memcpy(text + len, "; a\0b\0\0\n", 8); len += 8; }
+            if (variant == 1) { memset(text + len, 0, 130); text[len + 129] = '\n'; len += 130; }
+            if (variant == 2) { memset(text + len, 'c', 5000); text[len + 4000] = 0; text[len + 4999] = '\n'; len += 5000; }
+            at[0] = len;
+            len += (size_t)snprintf(text + len, sizeof(text) - len, ";LAYER_CHANGE\n;Z:0.2\nG1 Z0.2\nG1 X10 Y10 E0.5\nG1 X30 Y10 E0.5\n");
+            memcpy(text + len, "G1 X1\0\0 Y1\n", 11); len += 11;
+            at[1] = len;
+            len += (size_t)snprintf(text + len, sizeof(text) - len, ";LAYER_CHANGE\n;Z:0.4\nG1 Z0.4\nG1 X30 Y20 E0.4\nG1 X10 Y20 E0.4\n");
+            char name[32]; snprintf(name, sizeof(name), "nul%d.gcode", variant);
+            snprintf(path, sizeof(path), "%s/%s", dir, name);
+            FILE *w = fopen(path, "wb"); assert(w && fwrite(text, 1, len, w) == len && !fclose(w));
+            f = fopen(path, "rb"); assert(f);
+            assert(scan_build_marks(f, 1, marks, &mark_count) == LAYER_PATH_OK);
+            assert(mark_count == 2 && marks[0].offset == (long long)at[0] && marks[1].offset == (long long)at[1]);
+            for (int layer = 1; layer <= 2; layer++) {
+                layer_path_mark resume;
+                assert(layer_path_mark_pick(marks, mark_count, layer - 1, &resume) && resume.offset == (long long)at[layer - 1]);
+                assert_json_matches_index(f, "internal", name, layer, marks, &mark_count, cold, sizeof(cold), indexed, sizeof(indexed));
+            }
+            fclose(f); unlink(path);
+        }
+
+        char text[96 * 1024];
+        size_t used = (size_t)snprintf(text, sizeof(text), "; total layer number: 40\nG90\nM82\n");
+        for (int l = 0; l < 40; l++)
+            used += (size_t)snprintf(text + used, sizeof(text) - used,
+                ";LAYER_CHANGE\n;Z:%.2f\nG1 Z%.2f\nG1 X10 Y%d\nG1 X%d Y%d E%d\n",
+                0.2 * (l + 1), 0.2 * (l + 1), l, 20 + l, l, l + 1);
+        f = write_gcode(dir, "index-normal.gcode", text);
+        char *cold_json = malloc(LAYER_PATH_JSON_MAX);
+        char *index_json = malloc(LAYER_PATH_JSON_MAX);
+        assert(cold_json && index_json);
+        for (int layer = 1; layer <= 40; layer += 19) {
+            rewind(f);
+            assert(parse_file(f, layer, &info, pts, starts) == LAYER_PATH_OK);
+            long cold_end = ftell(f);
+            int n = gcode_layer_path_json(cold_json, LAYER_PATH_JSON_MAX, "internal", "index-normal.gcode", &info, pts, starts);
+            assert(n > 0 && cold_end > 0);
+            rewind(f);
+            struct timespec start;
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            mark_count = 0;
+            assert(gcode_layer_path_parse_at(f, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                             &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                             NULL, marks, &mark_count, LAYER_PATH_INDEX_MAX) == LAYER_PATH_OK);
+            int built = gcode_layer_path_json(index_json, LAYER_PATH_JSON_MAX, "internal", "index-normal.gcode", &info, pts, starts);
+            assert(built == n && memcmp(cold_json, index_json, (size_t)n) == 0);
+            layer_path_mark resume;
+            assert(layer_path_mark_pick(marks, mark_count, layer - 1, &resume));
+            rewind(f);
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            assert(gcode_layer_path_parse_at(f, layer, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                             &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                             &resume, marks, &mark_count, LAYER_PATH_INDEX_MAX) == LAYER_PATH_OK);
+            int m = gcode_layer_path_json(index_json, LAYER_PATH_JSON_MAX, "internal", "index-normal.gcode", &info, pts, starts);
+            assert(m == n && memcmp(cold_json, index_json, (size_t)n) == 0);
+            long followed = ftell(f) - (long)resume.offset;
+            if (layer > 1) assert(resume.offset > 0 && followed > 0 && followed < cold_end / 4);
+        }
+        /* The next layer after a scan starts at its own marker, not at byte 0. */
+        layer_path_mark next;
+        assert(layer_path_mark_pick(marks, mark_count, 20, &next));
+        rewind(f);
+        assert(parse_file(f, 21, &info, pts, starts) == LAYER_PATH_OK);
+        int n = gcode_layer_path_json(cold_json, LAYER_PATH_JSON_MAX, "internal", "index-normal.gcode", &info, pts, starts);
+        rewind(f);
+        struct timespec start;
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        assert(gcode_layer_path_parse_at(f, 21, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                         &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                         &next, marks, &mark_count, LAYER_PATH_INDEX_MAX) == LAYER_PATH_OK);
+        int m = gcode_layer_path_json(index_json, LAYER_PATH_JSON_MAX, "internal", "index-normal.gcode", &info, pts, starts);
+        assert(m == n && memcmp(cold_json, index_json, (size_t)n) == 0);
+        assert(next.offset > 0 && ftell(f) - (long)next.offset < (long)used / 4);
+        /* A remembered layer that cannot be used falls back to reading from the start:
+         * a stream that cannot seek (fseeko fails) and a mark with an invalid offset both
+         * give the same bytes as the scan from the start. */
+        {
+            int pipe_fd[2];
+            assert(used < 4096 && !pipe(pipe_fd));
+            assert(write(pipe_fd[1], text, used) == (ssize_t)used);
+            close(pipe_fd[1]);
+            FILE *stream = fdopen(pipe_fd[0], "r");
+            assert(stream);
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            int pipe_count = 0;
+            assert(gcode_layer_path_parse_at(stream, 21, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                             &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                             &next, marks, &pipe_count, LAYER_PATH_INDEX_MAX) == LAYER_PATH_OK);
+            m = gcode_layer_path_json(index_json, LAYER_PATH_JSON_MAX, "internal", "index-normal.gcode", &info, pts, starts);
+            assert(m == n && memcmp(cold_json, index_json, (size_t)n) == 0);
+            fclose(stream);
+
+            layer_path_mark bad = next;
+            bad.offset = -1;
+            rewind(f);
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            assert(gcode_layer_path_parse_at(f, 21, pts, LAYER_PATH_COLLECT_MAX, starts, LAYER_PATH_PATHS_MAX,
+                                             &info, &start, LAYER_PATH_TIME_MS, LAYER_PATH_BYTES_MAX,
+                                             &bad, NULL, NULL, 0) == LAYER_PATH_OK);
+            m = gcode_layer_path_json(index_json, LAYER_PATH_JSON_MAX, "internal", "index-normal.gcode", &info, pts, starts);
+            assert(m == n && memcmp(cold_json, index_json, (size_t)n) == 0);
+        }
+        free(cold_json);
+        free(index_json);
+        fclose(f);
+        snprintf(path, sizeof(path), "%s/index-tiny.gcode", dir); unlink(path);
+        snprintf(path, sizeof(path), "%s/index-normal.gcode", dir); unlink(path);
+    }
+
+    /* Old vs indexed path bytes: slicer variants, full mark table, on-mark seeks, backward layer. */
+    {
+        char *cold = malloc(LAYER_PATH_JSON_MAX);
+        char *indexed = malloc(LAYER_PATH_JSON_MAX);
+        layer_path_mark marks[LAYER_PATH_INDEX_MAX];
+        int mark_count = 0;
+        assert(cold && indexed);
+
+        /* a) ElegooSlicer: ;LAYER:0 in the start block plus ;LAYER_CHANGE / ;LAYER:N — layer 0 mark is the start block (first offset wins). */
+        f = write_gcode(dir, "idx-elegoo.gcode",
+            ";LAYER_COUNT:2\nG90\nM82\n"
+            ";LAYER:0\nG1 Z0.8\nG0 X1 Y1\n"
+            ";LAYER_CHANGE\n;Z:0.2\n;LAYER:1\nG1 Z0.2\nG0 X5 Y5\nG1 X15 Y5 E1\n"
+            ";LAYER_CHANGE\n;Z:0.4\n;LAYER:2\nG1 Z0.4\nG0 X25 Y25\nG1 X35 Y25 E2\n");
+        assert(scan_build_marks(f, 2, marks, &mark_count) == LAYER_PATH_OK);
+        assert(mark_count >= 2);
+        long layer0_off = -1, change0_off = -1;
+        for (int i = 0; i < mark_count; i++) {
+            if (marks[i].layer == 0) layer0_off = (long)marks[i].offset;
+            else if (marks[i].layer == 1 && change0_off < 0) change0_off = (long)marks[i].offset;
+        }
+        assert(layer0_off >= 0 && change0_off >= 0 && layer0_off < change0_off);
+        for (int layer = 1; layer <= 2; layer++)
+            assert_json_matches_index(f, "internal", "idx-elegoo.gcode", layer, marks, &mark_count, cold, LAYER_PATH_JSON_MAX, indexed, LAYER_PATH_JSON_MAX);
+        fclose(f);
+
+        /* b) Pure Cura: 0-based ;LAYER:N only, no ;LAYER_CHANGE. */
+        f = write_gcode(dir, "idx-cura.gcode",
+            ";LAYER:0\nG90\nM82\nG1 X0 Y0 E0.1\nG1 X10 Y0 E0.2\n"
+            ";LAYER:1\nG0 X0 Y0\nG1 X10 Y10 E0.3\n"
+            ";LAYER:2\nG1 X20 Y10 E0.4\nG1 X20 Y20 E0.5\n");
+        mark_count = 0;
+        assert(scan_build_marks(f, 3, marks, &mark_count) == LAYER_PATH_OK);
+        assert(mark_count == 3);
+        for (int layer = 1; layer <= 3; layer++)
+            assert_json_matches_index(f, "internal", "idx-cura.gcode", layer, marks, &mark_count, cold, LAYER_PATH_JSON_MAX, indexed, LAYER_PATH_JSON_MAX);
+        fclose(f);
+
+        /* c) More than LAYER_PATH_INDEX_MAX layers: table stays full; last slot tracks the highest new mark. */
+        {
+            char *text = malloc(64 * 1024);
+            assert(text);
+            size_t used = 0;
+            const int layers = LAYER_PATH_INDEX_MAX + 8;
+            for (int l = 0; l < layers; l++)
+                used += (size_t)snprintf(text + used, 64 * 1024 - used, ";LAYER:%d\nG1 X%d Y%d E0.01\n", l, l % 50, l);
+            f = write_gcode(dir, "idx-full.gcode", text);
+            free(text);
+            mark_count = 0;
+            assert(scan_build_marks(f, layers, marks, &mark_count) == LAYER_PATH_OK);
+            assert(mark_count == LAYER_PATH_INDEX_MAX);
+            assert(marks[mark_count - 1].layer == layers - 1);
+            assert_json_matches_index(f, "internal", "idx-full.gcode", layers, marks, &mark_count, cold, LAYER_PATH_JSON_MAX, indexed, LAYER_PATH_JSON_MAX);
+            assert_json_matches_index(f, "internal", "idx-full.gcode", 1, marks, &mark_count, cold, LAYER_PATH_JSON_MAX, indexed, LAYER_PATH_JSON_MAX);
+            fclose(f);
+        }
+
+        /* d) Target layer exactly on a saved mark and on the next layer after it. */
+        {
+            char text[8192];
+            size_t used = (size_t)snprintf(text, sizeof(text), "G90\nM83\n");
+            for (int l = 0; l < 12; l++)
+                used += (size_t)snprintf(text + used, sizeof(text) - used,
+                    ";LAYER_CHANGE\n;Z:%.2f\nG1 Z%.2f\nG1 X%d Y%d E%.1f\nG1 X%d Y%d E%.1f\n",
+                    0.2 * (l + 1), 0.2 * (l + 1), 10 + l, 10, (double)l, 30 + l, 10, (double)l + 0.5);
+            f = write_gcode(dir, "idx-onmark.gcode", text);
+            mark_count = 0;
+            assert(scan_build_marks(f, 12, marks, &mark_count) == LAYER_PATH_OK);
+            for (int li = 0; li < 2; li++) {
+                int layer = li == 0 ? 5 : 6;
+                layer_path_mark at, next;
+                assert(layer_path_mark_pick(marks, mark_count, layer - 1, &at));
+                assert(at.layer == layer - 1);
+                rewind(f);
+                assert_json_matches_index(f, "internal", "idx-onmark.gcode", layer, marks, &mark_count, cold, LAYER_PATH_JSON_MAX, indexed, LAYER_PATH_JSON_MAX);
+                if (layer < 12) {
+                    assert(layer_path_mark_pick(marks, mark_count, layer, &next));
+                    assert(next.layer == layer);
+                }
+            }
+            fclose(f);
+        }
+
+        /* e) Backward query: deep scan first, then an earlier layer still matches cold bytes. */
+        {
+            char *text = malloc(96 * 1024);
+            assert(text);
+            size_t used = (size_t)snprintf(text, 96 * 1024, "; total layer number: 160\nG90\nM82\n");
+            for (int l = 0; l < 160; l++)
+                used += (size_t)snprintf(text + used, 96 * 1024 - used,
+                    ";LAYER_CHANGE\n;Z:%.2f\nG1 Z%.2f\nG1 X%d Y%d E%d\n", 0.2 * (l + 1), 0.2 * (l + 1), l, l, l + 1);
+            f = write_gcode(dir, "idx-back.gcode", text);
+            free(text);
+            mark_count = 0;
+            assert(scan_build_marks(f, 150, marks, &mark_count) == LAYER_PATH_OK);
+            assert_json_matches_index(f, "internal", "idx-back.gcode", 150, marks, &mark_count, cold, LAYER_PATH_JSON_MAX, indexed, LAYER_PATH_JSON_MAX);
+            assert_json_matches_index(f, "internal", "idx-back.gcode", 20, marks, &mark_count, cold, LAYER_PATH_JSON_MAX, indexed, LAYER_PATH_JSON_MAX);
+            fclose(f);
+        }
+
+        free(cold);
+        free(indexed);
+        snprintf(path, sizeof(path), "%s/idx-elegoo.gcode", dir); unlink(path);
+        snprintf(path, sizeof(path), "%s/idx-cura.gcode", dir); unlink(path);
+        snprintf(path, sizeof(path), "%s/idx-full.gcode", dir); unlink(path);
+        snprintf(path, sizeof(path), "%s/idx-onmark.gcode", dir); unlink(path);
+        snprintf(path, sizeof(path), "%s/idx-back.gcode", dir); unlink(path);
     }
     snprintf(path, sizeof(path), "%s/layers.gcode", dir); unlink(path);
     snprintf(path, sizeof(path), "%s/orca.gcode", dir); unlink(path);

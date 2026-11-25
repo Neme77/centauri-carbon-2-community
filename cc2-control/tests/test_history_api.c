@@ -85,8 +85,19 @@ int main(void){
     m.auto_refill=0;assert(get(canvas_response,reply,sizeof(reply))==200&&strstr(reply,"\"auto_refill\":false")&&strstr(reply,"\"telemetry\":{"));
     m.have_auto_refill=0;assert(get(canvas_response,reply,sizeof(reply))==200&&strstr(reply,"\"auto_refill\":null"));
     /* /api/printer carries the latest printer refusal of our own requests. */
-    assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":null,\"camera_viewer\":null,\"motor_mode\":null,\"experiments\":{\"quiet_motors\":false,\"canvas_uds\":false,\"bed_drying\":false},\"bed_drying\":{\"enabled\":false"));
-    assert(strstr(reply,"\"screws_session\":{\"active\":false,\"xy_homed\":false}"));
+    assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":null,\"print_watch\":null,\"usb_stall\":null,\"camera_viewer\":null,\"motor_mode\":null,\"experiments\":{\"quiet_motors\":false,\"canvas_uds\":false,\"bed_drying\":false},\"bed_drying\":{\"enabled\":false"));
+    assert(strstr(reply,"\"screws_session\":{\"active\":false,\"xy_homed\":false,\"bed\":null}"));
+    /* A running screw session reports the bed target it measures at, so the page shows the session's own value. */
+    {
+        char script[4096],why[256];
+        m.have_machine_status=1;m.machine_status=1;m.last_message=time(NULL);m.have_position=1;strcpy(m.homed_axes,"xyz");
+        assert(control_build_script("screws:tram:start:70",&m,script,sizeof(script),why,sizeof(why)));
+        control_screws_note_action("screws:tram:start:70");control_screws_note_job(1);(void)control_screws_tick(&m,1,1,1,0,time(NULL));
+        assert(control_screws_session_active());
+        assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"screws_session\":{\"active\":true,\"xy_homed\":true,\"bed\":70}"));
+        assert(control_build_script("screws:tram:end",&m,script,sizeof(script),why,sizeof(why))&&!control_screws_session_active());
+        control_screws_reset();m.have_position=0;m.homed_axes[0]=0;
+    }
     m.reply_errors=3;m.reply_error_method=1020;m.reply_error_code=1026;m.reply_error_time=time(NULL);
     assert(get(printer_response,reply,sizeof(reply))==200&&strstr(reply,"\"printer_error\":{\"sequence\":3,\"method\":1020,\"code\":1026,\"age\":"));
     uds_init(&telemetry);

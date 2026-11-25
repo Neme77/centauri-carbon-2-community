@@ -3,7 +3,7 @@ CC := $(CROSS)gcc
 # CC2 Control's version lives in VERSION and the community firmware release in FIRMWARE_VERSION; nothing else writes them.
 VERSION := $(shell cat VERSION)
 FIRMWARE_VERSION := $(shell cat FIRMWARE_VERSION)
-CFLAGS := -Os -std=c11 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -DCC2_CONTROL_VERSION=\"$(VERSION)\" -DCC2_COMMUNITY_FIRMWARE_VERSION=\"$(FIRMWARE_VERSION)\" -pthread $(EXTRA_CFLAGS)
+CFLAGS := -Os -std=c11 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -D_FILE_OFFSET_BITS=64 -DCC2_CONTROL_VERSION=\"$(VERSION)\" -DCC2_COMMUNITY_FIRMWARE_VERSION=\"$(FIRMWARE_VERSION)\" -pthread $(EXTRA_CFLAGS)
 LDFLAGS := -Wl,--gc-sections -s -static -pthread
 
 # Host sanitizer builds, e.g. `make clean test CROSS= CC=gcc SANITIZE=address,undefined`
@@ -29,8 +29,25 @@ all: dist
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(TARGET): src/rfid_app_update_boot.h src/rfid_lifecycle_http.h src/rfid_runtime.h src/maintenance_barrier.h src/cavity_floor_http.h src/cavity_floor_protocol.h src/thermal_limits.h src/load_cell_guide.h src/load_cell_guide_core.h src/calibration_tools.h src/rotation_core.h src/native_tools_transport.h src/external_feed_state.h src/external_filament.h src/bed_drying.h src/backup.h src/backup_format.h src/experiments.h src/experiments_state.h src/app_update_catalog.h src/app_updates.h src/main.c src/gcode_metadata.h src/gcode_download.h src/gcode_layer_path.h src/gcode_layer_path_http.h src/history.h src/plates.h src/spools.h src/queue.h src/canvas_unload.h src/runout.h src/sha256.h src/recovery.h src/mqtt.c src/mqtt.h src/console.c src/console.h src/control.c src/control.h src/http_guard.h src/panda.c src/panda.h src/uds.c src/uds.h src/network_status.c src/network_status_http.h src/connections_http.h src/status_core.h src/screw_history.h $(wildcard src/connections/*.h) VERSION FIRMWARE_VERSION | $(BUILD)
-	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c -DCC2_NETWORK_STATUS_LIBRARY -o $@ $(LDFLAGS) -lm
+# The backend is one link of these sources. The headers they include are not listed by hand: the compiler writes them
+# to $(BACKEND_DEPS) (-MM: user headers only, -MP: a deleted header does not stop make) and make includes that file.
+# The list is made before the program is linked, and the program depends on it:
+# - a missing or older list is made first and then the program is rebuilt, so an existing binary from before this rule
+#   (no list yet) is not trusted, and a deleted list repairs itself;
+# - the list is a target of its own rule, with the headers it names as prerequisites (-MT twice), so a changed header
+#   makes the list again before the program is checked;
+# - if making the list fails, the program is not linked, and the next build tries again.
+# The list comes from a separate -MM run because -MMD -MF over several sources keeps only the last source's headers.
+# BACKEND_DEFS belongs to both runs.
+BACKEND_SOURCES := src/main.c src/mqtt.c src/console.c src/control.c src/panda.c src/uds.c src/network_status.c
+BACKEND_DEFS := -DCC2_NETWORK_STATUS_LIBRARY
+BACKEND_DEPS := $(BUILD)/cc2-control.d
+
+$(BACKEND_DEPS): $(BACKEND_SOURCES) VERSION FIRMWARE_VERSION | $(BUILD)
+	$(CC) $(CFLAGS) $(BACKEND_DEFS) -MM -MP -MT $(TARGET) -MT $@ $(BACKEND_SOURCES) > $@.tmp.$$$$ && mv $@.tmp.$$$$ $@ || { rm -f $@.tmp.$$$$; exit 1; }
+
+$(TARGET): $(BACKEND_SOURCES) VERSION FIRMWARE_VERSION $(BACKEND_DEPS) | $(BUILD)
+	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $(BACKEND_SOURCES) $(BACKEND_DEFS) -o $@ $(LDFLAGS) -lm
 
 $(UPDATE_WORKER): updater/verify.c updater/trusted-key.h updater/trusted-base.h third-party/monocypher/monocypher.c third-party/monocypher/monocypher.h third-party/monocypher/monocypher-ed25519.c third-party/monocypher/monocypher-ed25519.h VERSION FIRMWARE_VERSION | $(BUILD)
 	$(CC) $(CFLAGS) -Ithird-party/monocypher -Iupdater -ffunction-sections -fdata-sections updater/verify.c third-party/monocypher/monocypher.c third-party/monocypher/monocypher-ed25519.c -o $@ $(LDFLAGS)
@@ -89,3 +106,14 @@ test: $(TARGET) $(UPDATE_WORKER) $(HTTPS_DOWNLOAD)
 
 clean:
 	rm -rf $(BUILD) dist
+
+# The list is read only by goals that build the backend (and by a plain `make`). Not when `clean` is among the goals
+# (`make clean test`: the list would be made first and then deleted by clean; the build after clean makes it again through
+# its own rule), and not for goals that build nothing: the CI runs `sudo make test-app-update-boot`, and reading the list
+# there would make a root-owned build/ that the next `make clean` of the normal user cannot remove.
+BACKEND_GOALS := all dist test $(TARGET)
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
+ifneq ($(if $(MAKECMDGOALS),$(filter $(BACKEND_GOALS),$(MAKECMDGOALS)),all),)
+-include $(BACKEND_DEPS)
+endif
+endif

@@ -1,21 +1,37 @@
 import { useState } from 'preact/hooks'
 import { ListOrdered, Minus, Play, Plus } from 'lucide-preact'
 import { store } from '@/lib/store'
-import { addToQueue, refreshQueue } from '@/lib/queue'
+import { addToQueue, refreshQueue, type ToolFilament } from '@/lib/queue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import {
+  FeedChoice,
+  isSlot,
+  isStock,
+  slotColour,
+  slotEmptyNote,
+  slotLabel,
+  stockBrands,
+  stockOf,
+} from '@/components/feed-choice'
 import { Select } from '@/components/ui/field'
 import { errText, notify, post, request, toast } from '@/lib/api'
+import { ask } from '@/lib/confirm'
+import { largeFileWarning } from '@/lib/large-file-warning'
+import { LARGE_OK, tooLargeForPrinter } from '@/lib/printer-file-limit'
 import { t, tpl } from '@/lib/i18n'
-import { canvasHex, canvasModel } from '@/lib/canvas'
+import { canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
+import { poll } from '@/lib/poll'
 import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
 import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
+import { startTimeoutMs } from '@/lib/start-timeout'
 
 type Pending = {
   storage: string
   path: string
+  size: number | null // bytes, for how long the start may take
   tools: number[]
   // mm: the slicer's filament length for the tool, when the file states it.
   filaments: { tool: number; color: string; material: string; mm?: number }[]
@@ -29,6 +45,8 @@ type Pending = {
   plates: PlateLibrary | null
   bedTemp: number | null
   nozzleDiameter: number | null
+  // The operator confirmed a file of 2 GiB or more: its start and its queued job carry "large_ok".
+  largeOk: boolean
 }
 type MeshAvailability = { A: boolean | null; B: boolean | null }
 type MeshReadiness = { availability: MeshAvailability; error: string | null }
@@ -74,7 +92,15 @@ let fileAnalysisPending = false
 
 // Opens the confirmation dialog; a print is never started without the operator confirming the mapping.
 export async function startFile(storage: string, path: string) {
+  return startFileOfSize(storage, path, null)
+}
+// The same with the file's size, so the page waits as long as the start of that file needs (start-timeout.ts).
+export async function startFileOfSize(storage: string, path: string, size: number | null) {
   if (pending.get().job || fileAnalysisPending) return
+  // From 2 GiB on the printer program has not opened such a file: warn before anything is read or copied (with the
+  // estimated copy time and space); the operator may still go on, and the start then carries the confirmation.
+  const largeOk = tooLargeForPrinter(size)
+  if (largeOk && !(await ask(largeFileWarning(storage, size), true))) return
   fileAnalysisPending = true
   notify(t('print.analysing_file'))
   try {
@@ -92,6 +118,7 @@ export async function startFile(storage: string, path: string) {
       job: {
         storage,
         path,
+        size: typeof size === 'number' ? size : null,
         tools,
         filaments: Array.isArray(inspection.filaments) ? inspection.filaments : [],
         meshAvailable: meshReadiness.availability,
@@ -103,12 +130,19 @@ export async function startFile(storage: string, path: string) {
         plates: plateLibrary?.available ? plateLibrary : null,
         bedTemp: typeof inspection.bed_temperature === 'number' ? inspection.bed_temperature : null,
         nozzleDiameter: typeof inspection.nozzle_diameter === 'number' ? inspection.nozzle_diameter : null,
+        largeOk,
       },
     })
     toast.set(s => ({ ...s, text: '' }))
   } catch (e) {
     pending.set({ job: null })
-    notify(tpl('print.cannot_prepare_print_error', { error: errText(e) }), 'error')
+    // A start of this same file is still reading it: the printer does not analyse it in parallel.
+    const reason = (e as { data?: { reason?: string } })?.data?.reason
+    const m =
+      reason === 'start_reading'
+        ? t('print.start_reading')
+        : tpl('print.cannot_prepare_print_error', { error: errText(e) })
+    notify(m, 'error')
   } finally {
     fileAnalysisPending = false
   }
@@ -135,19 +169,31 @@ export async function checkOrcaPendingPrint() {
   }
 }
 
-// Missing Canvas colours are unknown, not the shared helper's decorative fallback.
-const slotColour = (tray: any, index: number) => {
-  const value = tray?.filament_color
-  if (value === undefined || value === null || value === '') return null
-  if (Array.isArray(value) && value.length >= 3 && value.slice(0, 3).every(Number.isFinite))
-    return canvasHex(value, index)
-  if (typeof value === 'number' && Number.isFinite(value)) return canvasHex(value, index)
-  if (typeof value === 'string' && /^(?:#?[0-9a-f]{6}(?:[0-9a-f]{2})?|0x[0-9a-f]{6,8})$/i.test(value.trim()))
-    return canvasHex(value, index)
-  return null
-}
+const reasonOf = (err: unknown) => (err as { data?: { reason?: string } })?.data?.reason
 
-const slotLabel = (tray: any) => (tray && (tray.filament_name || tray.filament_type)) || t('print.not_reported')
+// A confirmed start of a file of 2 GiB or more: CC2 Control watches whether the printer begins it (status
+// print_watch, see printer-file-limit.ts). Resolves with the outcome once it is decided; the backend decides within
+// 30 minutes at the latest, so after a little longer the page stops waiting ("unknown").
+const WATCH_WAIT_MAX_MS = 1_860_000
+const watchOutcome = (sequence: number) =>
+  new Promise<{ state: string; code: number }>(resolve => {
+    const until = Date.now() + WATCH_WAIT_MAX_MS
+    const check = () => {
+      const w = printer.get().data?.print_watch
+      const decided = w && Number(w.sequence) === sequence && w.state !== 'watching'
+      if (!decided && Date.now() < until) return
+      stop()
+      resolve(decided ? { state: String(w.state), code: Number(w.code) || 0 } : { state: 'unknown', code: 0 })
+    }
+    const stop = poll(check, 500)
+  })
+
+// A USB read that stopped answering (reason usb_unresponsive, status usb_stall): while it hangs the operator removes
+// the stick and cannot start again; once it is free again the reason it ended is shown with the advice.
+const stallNote = (s: any) =>
+  s.hanging
+    ? t(s.power_cycle ? 'print.usb_stall_power_cycle' : 'print.usb_stall_hanging')
+    : `${t('print.usb_stall_ready')} ${t(s.outcome === 'read_error' ? 'print.usb_stall_read_error' : 'print.usb_stall_slow')}`
 
 export const PrintDialog = () => {
   const job = pending.use().job
@@ -169,6 +215,19 @@ const Form = ({ job }: { job: Pending }) => {
   const [meshAvailable, setMeshAvailable] = useState(job.meshAvailable)
   const [meshError, setMeshError] = useState(job.meshError)
   const [meshChecking, setMeshChecking] = useState(false)
+  const [largeOk, setLargeOk] = useState(job.largeOk)
+  // The stall a start ran into (its sequence in the status), shown until the next start.
+  const [stall, setStall] = useState<number | null>(null)
+  const liveStall = printer.use().data?.usb_stall
+  const stalled = stall !== null && liveStall && Number(liveStall.sequence) === stall ? liveStall : null
+  const stallHangs = Boolean(stalled?.hanging)
+  // A file whose size the page did not know (the server refused it as 2 GiB or more): ask now, then try again.
+  const confirmLarge = async (err: unknown) => {
+    if (reasonOf(err) !== 'file_too_large_for_printer' || largeOk) return false
+    if (!(await ask(largeFileWarning(job.storage, job.size), true))) return false
+    setLargeOk(true)
+    return true
+  }
   const [note, setNote] = useState(
     t(
       job.connected
@@ -179,6 +238,8 @@ const Form = ({ job }: { job: Pending }) => {
     )
   )
   const tray = (i: number) => job.trays.find(x => x && Number(x.tray_id) === i)
+  // A queued job may wait for a filament that is in no slot: the spool inventory names the ones there are.
+  const stock = stockBrands(job.spools)
   const available = meshAvailable[side],
     unknown = available === null,
     forced = available === false,
@@ -209,7 +270,7 @@ const Form = ({ job }: { job: Pending }) => {
   // Spool tracking: the spool each tool would draw from, and whether it holds what the slicer expects.
   const supply = (tool: number) => {
     const lib = job.spools
-    const slot = useCanvas ? (map[tool] === undefined || map[tool] === '' ? -1 : Number(map[tool])) : EXTERNAL
+    const slot = useCanvas ? (isSlot(map[tool]) ? Number(map[tool]) : -1) : EXTERNAL
     if (!lib || slot < 0) return null
     const spool = findSpool(lib, lib.slots[slot]?.spool || '')
     const mm = Number(job.filaments.find(f => f.tool === tool)?.mm)
@@ -244,10 +305,27 @@ const Form = ({ job }: { job: Pending }) => {
     if (busy || meshChecking) return
     if (launch === 'now' && unknown && !calibrating)
       return setNote(tpl('bed.mesh_unavailable_error', { error: meshError || t('state.unknown') }))
-    if (useCanvas && job.tools.some(tool => !map[tool])) return setNote(t('print.choose_a_canvas_slot_for_every'))
-    const mapping = useCanvas ? job.tools.map(tool => `${tool}:${map[tool]}`).join(',') : ''
-    if (multi && !mapping) return setNote(t('print.a_multicolour_file_requires_canvas'))
+    // Every tool needs a slot; a queued job may name a filament of the inventory instead and wait for it.
+    const free: ToolFilament[] =
+      useCanvas && launch === 'queue'
+        ? job.tools.flatMap(tool => {
+            const s = stockOf(stock, map[tool])
+            return s ? [{ tool, type: s.type, name: s.name, color: s.color }] : []
+          })
+        : []
+    const slotted = job.tools.filter(tool => isSlot(map[tool]))
+    if (useCanvas && launch === 'queue' && job.tools.some(tool => isStock(map[tool]) && !stockOf(stock, map[tool])))
+      return setNote(t('queue.filament_stock_choose'))
+    if (useCanvas && slotted.length + free.length < job.tools.length)
+      return setNote(t('print.choose_a_canvas_slot_for_every'))
+    const mapping = useCanvas ? slotted.map(tool => `${tool}:${map[tool]}`).join(',') : ''
+    if (multi && !mapping && !free.length) return setNote(t('print.a_multicolour_file_requires_canvas'))
+    if (stallHangs) return
     setBusy(true)
+    setStall(null)
+    await send(mapping, free, largeOk)
+  }
+  const send = async (mapping: string, free: ToolFilament[], large: boolean): Promise<void> => {
     if (launch === 'queue') {
       // The job keeps every choice above; the slicer's estimates are optional and read once here.
       setNote(t('print.adding_to_queue'))
@@ -272,6 +350,8 @@ const Form = ({ job }: { job: Pending }) => {
           position,
           estimatedSeconds: numberOrNull(estimate?.estimated_seconds),
           filamentGrams: numberOrNull(estimate?.filament_grams),
+          filaments: free,
+          largeOk: large,
         })
         const g = activeGeneration
         activeGeneration = 0
@@ -280,6 +360,7 @@ const Form = ({ job }: { job: Pending }) => {
         notify(tpl('queue.added_to_queue', { name: job.path }))
         void refreshQueue()
       } catch (err) {
+        if (await confirmLarge(err)) return send(mapping, free, true)
         setNote(`${t('queue.not_added')} ${errText(err)}`)
         setBusy(false)
       }
@@ -291,8 +372,20 @@ const Form = ({ job }: { job: Pending }) => {
     try {
       const result = await post(
         '/api/gcode-files/print',
-        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}\n${measureId}\n${nozzleId}`
+        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}\n${measureId}\n${nozzleId}${large ? `\n${LARGE_OK}` : ''}`,
+        startTimeoutMs(job.size)
       )
+      // A confirmed file of 2 GiB or more: the dialog stays open until CC2 Control knows whether the printer began it.
+      if (typeof result?.watch === 'number') {
+        setNote(t('print.large_start_watching'))
+        const outcome = await watchOutcome(result.watch)
+        if (outcome.state === 'failed') {
+          setNote(t('print.large_start_failed'))
+          notify(t('print.large_start_failed'), 'error')
+          setBusy(false)
+          return
+        }
+      }
       const g = activeGeneration
       activeGeneration = 0
       pending.set({ job: null })
@@ -305,13 +398,25 @@ const Form = ({ job }: { job: Pending }) => {
         )
       )
     } catch (err) {
-      setNote(`${t('print.print_not_started')} ${errText(err)}`)
+      // The Canvas did not report its trays (before or after the copy): nothing was printed. The dialog stays open,
+      // so the operator can start again, choose other spools or cancel.
+      if (await confirmLarge(err)) return send(mapping, free, true)
+      const reason = reasonOf(err)
+      const stallSeq = Number((err as { data?: { stall?: number } })?.data?.stall)
+      if (reason === 'usb_unresponsive' && stallSeq > 0) setStall(stallSeq)
+      setNote(
+        reason === 'canvas_unreported'
+          ? t('print.canvas_unreported')
+          : reason === 'usb_unresponsive'
+            ? t(stallSeq > 0 ? 'print.usb_stall_hanging' : 'print.usb_unresponsive')
+            : `${t('print.print_not_started')} ${errText(err)}`
+      )
       setBusy(false)
     }
   }
   const label = 'my-3 flex items-center gap-2 text-[13px]'
   return (
-    <Dialog onClose={close} locked={busy} width={820}>
+    <Dialog onClose={close} locked={busy} width={820} label={t('print.choose_print_spool')}>
       <form onSubmit={submit}>
         <div class="text-xs text-muted">CANVAS · {t('print.print_setup')}</div>
         <DialogTitle class="my-2">{t('print.choose_print_spool')}</DialogTitle>
@@ -322,6 +427,7 @@ const Form = ({ job }: { job: Pending }) => {
               <div class="mb-1.5 h-2 rounded" style={{ background: slotColour(tray(i), i) || 'var(--edge)' }} />
               <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
               <div>{slotLabel(tray(i))}</div>
+              {slotEmptyNote(tray(i)) && <div class="text-muted">{slotEmptyNote(tray(i))}</div>}
             </div>
           ))}
         </div>
@@ -365,44 +471,20 @@ const Form = ({ job }: { job: Pending }) => {
               )
             })()}
             <div class="mb-2 text-xs text-muted">{t('print.choose_a_spool')}</div>
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[0, 1, 2, 3].map(i => {
-                const color = slotColour(tray(i), i)
-                const selected = map[tool] === String(i)
-                return (
-                  <label
-                    key={i}
-                    class={`flex min-w-0 items-start gap-2 rounded-lg border p-2 text-xs ${selected && useCanvas ? 'border-cyan bg-cyan/10' : 'border-edge'} ${useCanvas ? 'cursor-pointer' : 'opacity-50'}`}
-                  >
-                    <input
-                      type="radio"
-                      name={`tool-${tool}-slot`}
-                      value={String(i)}
-                      checked={selected}
-                      disabled={!useCanvas || busy}
-                      onChange={e => {
-                        setMap(m => ({ ...m, [tool]: e.currentTarget.value }))
-                        setNote(t('print.choose_the_spool_and_confirm_the'))
-                      }}
-                      class="mt-0.5 shrink-0"
-                    />
-                    <span class="grid min-w-0 gap-1 [overflow-wrap:anywhere]">
-                      <strong>{tpl('common.slot_n', { n: i + 1 })}</strong>
-                      <span class="flex items-center gap-1.5">
-                        {color && (
-                          <span
-                            class="inline-block size-4 shrink-0 rounded border border-edge"
-                            style={{ background: color }}
-                          />
-                        )}
-                        <span>{slotLabel(tray(i))}</span>
-                      </span>
-                      <span class="text-muted">{color || t('print.not_reported')}</span>
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
+            <FeedChoice
+              tool={tool}
+              name={`tool-${tool}-slot`}
+              trays={job.trays}
+              value={map[tool] || ''}
+              onChange={value => {
+                setMap(m => ({ ...m, [tool]: value }))
+                setNote(t('print.choose_the_spool_and_confirm_the'))
+              }}
+              disabled={!useCanvas || busy}
+              dim={!useCanvas}
+              stock={stock}
+              stockOff={launch !== 'queue'}
+            />
             {(() => {
               const s = supply(tool)
               if (!s) return null
@@ -623,8 +705,8 @@ const Form = ({ job }: { job: Pending }) => {
             <div class="mt-2 text-xs text-muted">{t('print.run_now_hint')}</div>
           )}
         </fieldset>
-        <div class="min-h-7 text-[13px] text-muted" role="status">
-          {note}
+        <div class="min-h-7 text-[13px] text-muted" role="status" data-print-note>
+          {stalled ? stallNote(stalled) : note}
         </div>
         <div class="mt-4 flex justify-end gap-2.5">
           <Button onClick={close} disabled={busy}>
@@ -633,7 +715,7 @@ const Form = ({ job }: { job: Pending }) => {
           <Button
             type="submit"
             variant="primary"
-            disabled={busy || meshChecking || (launch === 'now' && unknown && !calibrating)}
+            disabled={busy || meshChecking || stallHangs || (launch === 'now' && unknown && !calibrating)}
             data-print-submit
           >
             {launch === 'queue' ? tpl('print.add_to_queue_n', { n: copies }) : t('print.start_print')}

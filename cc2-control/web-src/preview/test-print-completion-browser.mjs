@@ -20,7 +20,15 @@ try{
   d.motion={...d.motion,homed_axes:'',x:52.5,y:264,z:80}
   return r.fulfill({json:d})
  })
- await page.route('**/api/gcode-files/inspect',r=>{assert.equal(r.request().postData(),'internal\npart.gcode');return r.fulfill({json:{tools:[0],filaments:[],bed_temperature:60,nozzle_diameter:0.4}})})
+ await page.route('**/api/gcode-files/inspect',r=>{
+  if(r.request().postData()!=='internal\npart.gcode') return r.continue()
+  return r.fulfill({json:{tools:[0],filaments:[],bed_temperature:60,nozzle_diameter:0.4}})
+ })
+ await page.route('**/api/queue/**',r=>{
+  if(r.request().method()!=='POST') return r.continue()
+  writes.push({path:r.request().url(),body:r.request().postData()})
+  return r.fulfill({status:409,json:{error:'No queue action expected'}})
+ })
  await page.route('**/api/control',r=>{writes.push(r.request().postData());return r.fulfill({status:409,json:{error:'No printer command expected'}})})
  await page.goto(`${server.resolvedUrls.local[0]}#job`)
  await page.getByText('part.gcode',{exact:true}).first().waitFor()
@@ -37,6 +45,17 @@ try{
  state='printing';uuid='job-3';await page.waitForTimeout(2000);cleared=true;state='complete';await notice.waitFor()
  await page.addStyleTag({content:'#cc2-preview-banner{display:none!important}'})
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))
+ await page.evaluate(()=>{location.hash='queue'})
+ await page.waitForTimeout(300)
+ for(const width of [390,980,1440]){
+  await page.setViewportSize({width,height:844})
+  assert(await page.evaluate(()=>{
+   const notice=document.querySelector('[data-print-completed]').getBoundingClientRect()
+   const content=document.querySelector('.cc2-page-content').getBoundingClientRect()
+   return notice.bottom<=content.top
+  }),'completion notice must reserve space above the queue instead of covering its files')
+ }
+ await page.setViewportSize({width:390,height:844})
  await mkdir('preview/artifacts',{recursive:true});await notice.screenshot({path:'preview/artifacts/print-completed-mobile.png'})
  await page.setViewportSize({width:1440,height:1000});await notice.screenshot({path:'preview/artifacts/print-completed-desktop.png'})
  await notice.getByRole('button',{name:'Print again',exact:true}).click()

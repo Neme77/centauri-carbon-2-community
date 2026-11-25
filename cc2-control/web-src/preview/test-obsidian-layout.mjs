@@ -17,7 +17,7 @@ try {
   const theme = page.locator('select').filter({ has: page.locator('option[value="obsidian"]') })
   await theme.waitFor()
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-  assert.deepEqual(await theme.locator('option').evaluateAll(options => options.map(option => option.value)), ['dark', 'light', 'dracula', 'nord', 'monokai', 'solarized-light', 'obsidian'])
+  assert.deepEqual(await theme.locator('option').evaluateAll(options => options.map(option => option.value)), ['dark', 'light', 'dracula', 'nord', 'monokai', 'solarized-light', 'obsidian', 'aurora', 'klipper', 'dune', 'swamp', 'klipperscreen'])
   const saved = page.waitForResponse(r => r.url().endsWith('/api/preferences') && r.request().method() === 'PUT')
   await theme.selectOption('obsidian')
   assert.equal((await saved).ok(), true)
@@ -64,7 +64,7 @@ try {
     await page.keyboard.press('Escape')
     assert.equal((await box()).overflow, false)
   }
-  for (const id of ['light', 'dark', 'obsidian']) {
+  for (const id of ['light', 'dark', 'obsidian', 'aurora']) {
     await page.goto(origin + '#settings/appearance')
     const saved = page.waitForResponse(r => r.url().endsWith('/api/preferences') && r.request().method() === 'PUT')
     await theme.selectOption(id)

@@ -1,0 +1,19 @@
+name: Native display languages
+on:
+  pull_request:
+    paths:
+      - 'experimental/native-display/languages/**'
+      - '.github/workflows/native-display-languages.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  callbacks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 experimental/native-display/languages/check.py
+      - name: Install ARM fixture tools
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf qemu-user
+      - name: Exercise language callbacks on ARM
+        run: python3 experimental/native-display/languages/check.py --arm-cc arm-linux-gnueabihf-gcc

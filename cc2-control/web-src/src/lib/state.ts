@@ -2,7 +2,7 @@ import { store, ls } from './store'
 import { request } from './api'
 import { duration, finishTime } from './format'
 import { subState } from './machine'
-import { cornerHeights, probePair, SCREW_KEYS } from './screws'
+import { cornerHeights } from './screws'
 
 export type Page =
   | 'dashboard'
@@ -32,18 +32,21 @@ const PAGES: Page[] = [
   'settings',
 ]
 
-// Routes live in the URL hash (#files, #bed/plates, #bed/screws, #bed/nozzle): the backend only serves /, so no server change is needed.
+// Routes live in the URL hash (#files, #bed/plates, #bed/align, #bed/nozzle): the backend only serves /, so no server change is needed.
 // #camera is the separate camera window opened from the camera card; it is not a menu page.
-export type BedTab = 'mesh' | 'plates' | 'screws' | 'nozzle' | 'cell'
+export type BedTab = 'mesh' | 'plates' | 'align' | 'nozzle'
 export type SettingsTab = 'connection' | 'integrations' | 'appearance' | 'about' | 'updates' | 'backup'
 const SETTINGS_TABS: SettingsTab[] = ['connection', 'integrations', 'appearance', 'about', 'updates', 'backup']
 const route = () => {
   const [p, sub] = location.hash.slice(1).split('/')
   return {
     page: (PAGES.includes(p as Page) ? p : 'dashboard') as Page,
-    bed: (p === 'bed' && (sub === 'plates' || sub === 'screws' || sub === 'nozzle' || sub === 'cell')
-      ? sub
-      : 'mesh') as BedTab,
+    // #bed/screws and #bed/align, the two tabs this one replaced, both lead to Bed alignment.
+    bed: (p === 'bed' && (sub === 'screws' || sub === 'align')
+      ? 'align'
+      : p === 'bed' && (sub === 'plates' || sub === 'nozzle')
+        ? sub
+        : 'mesh') as BedTab,
     settings: (p === 'settings' && SETTINGS_TABS.includes(sub as SettingsTab) ? sub : 'connection') as SettingsTab,
     camera: p === 'camera',
   }
@@ -86,11 +89,16 @@ export const consoleStatus = store({
   success: false,
   generation: 0,
   command: '',
+  // A screw measurement is sent line by line and can be cancelled between two lines (screws:cancel).
+  cancellable: false,
+  cancelling: false,
+  cancelled: false,
+  // The job ended because the printer reported an error (not a cancel and not a lost connection): the program says so in the
+  // output of the job (console.c staged_run).
+  printerError: false,
 })
 export const screwSession = store({
   heights: {} as Record<string, number>,
-  previous: {} as Record<string, number>,
-  pair: {} as Record<string, { first: number; second: number }>,
   appliedGeneration: 0,
   minGeneration: 0,
 })
@@ -148,10 +156,52 @@ export async function refreshSetup() {
   }
 }
 
+// The console output last received, named by the instance of CC2 Control, the generation and the stored length it
+// reports for it. Sent back as ?since=<generation>:<length>:<instance>, so a poll of an unchanged console costs a few
+// bytes instead of the whole output. The generation and the length start again with every start of CC2 Control, so only
+// the same instance can vouch that the same two numbers mean the same text: a different or missing instance is answered
+// in full. The start value asks "is it still empty and untouched?" without an instance, which is answered in full
+// as well, and an older CC2 Control ignores the parameter and answers in full every time.
+type ConsoleSeen = { generation: number; length: number; output: string; instance: string }
+const consoleStart: ConsoleSeen = { generation: 0, length: 0, output: '', instance: '' }
+let consoleSeen = consoleStart
+// The instance the last reply named. Kept when the cache is dropped (a failed request): CC2 Control restarting while the
+// connection is down is told by the next reply as well.
+let consoleInstance = ''
+
+// CC2 Control restarted: what was derived from the console output of the earlier instance (the screw result and the
+// heights of a session) belongs to a console that is gone, and its generation counter starts again.
+const forgetDerivedConsole = () => {
+  screwText.set({ text: '', minGeneration: 0 })
+  screwSession.set({ heights: {}, appliedGeneration: 0, minGeneration: 0 })
+}
+
 export async function refreshConsole() {
+  const seen = consoleSeen
   try {
-    const status = await request('/api/console')
-    const out = String(status.output || '')
+    const status = await request(
+      `/api/console?since=${seen.generation}:${seen.length}${seen.instance ? `:${seen.instance}` : ''}`
+    )
+    const instance = /^[0-9a-f]{16}$/.test(String(status.instance)) ? String(status.instance) : ''
+    if (instance) {
+      if (consoleInstance && instance !== consoleInstance) forgetDerivedConsole()
+      consoleInstance = instance
+    }
+    // "unchanged": the output is left out because it still is the text this request named. Only the instance that was
+    // asked about can say so; any other answer of that kind cannot be shown and is not used (the next one is complete).
+    const unchanged = status.unchanged === true
+    if (unchanged && (!seen.instance || instance !== seen.instance)) {
+      consoleSeen = consoleStart
+      return
+    }
+    const out = unchanged ? seen.output : String(status.output || '')
+    if (!unchanged) {
+      const length = Number(status.output_len)
+      consoleSeen =
+        Number.isInteger(length) && length >= 0 && instance
+          ? { generation: Number(status.generation) || 0, length, output: out, instance }
+          : consoleStart
+    }
     const command = String(status.command || '')
     const generation = Number(status.generation) || 0
     consoleStatus.set({
@@ -160,11 +210,21 @@ export async function refreshConsole() {
       success: Boolean(status.success),
       generation,
       command,
+      cancellable: Boolean(status.cancellable),
+      cancelling: Boolean(status.cancelling),
+      cancelled: Boolean(status.cancelled),
+      printerError:
+        Boolean(status.completed) &&
+        !status.success &&
+        !status.cancelled &&
+        out.includes('the printer reported an error'),
     })
     const measured = command.includes('SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE')
     const tram = command.includes('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM')
-    if (generation >= screwText.get().minGeneration) {
-      screwText.set({ text: measured && status.completed && status.success ? out : '' })
+    // Only a screw measurement replaces the shown result: another job of the console (the steps of a mesh calibration,
+    // a command typed in the console) leaves the last evaluation standing. A new measurement clears it when it is sent.
+    if (measured && generation >= screwText.get().minGeneration) {
+      screwText.set({ text: status.completed && status.success ? out : '' })
     }
     if (
       tram &&
@@ -175,16 +235,8 @@ export async function refreshConsole() {
     ) {
       const next = cornerHeights(out)
       const prev = { ...screwSession.get().heights }
-      const pair: Record<string, { first: number; second: number }> = { ...screwSession.get().pair }
-      for (const key of SCREW_KEYS) {
-        const twice = probePair(out, key)
-        if (twice) pair[key] = twice
-        else if (next[key] != null) delete pair[key]
-      }
       screwSession.set({
         heights: { ...prev, ...next },
-        previous: prev,
-        pair,
         appliedGeneration: generation,
         minGeneration: screwSession.get().minGeneration,
       })
@@ -193,7 +245,7 @@ export async function refreshConsole() {
       consoleLog.set({ text: out || null })
     }
   } catch {
-    /* offline */
+    consoleSeen = consoleStart // offline or restarting: the next answer comes in full
   }
 }
 

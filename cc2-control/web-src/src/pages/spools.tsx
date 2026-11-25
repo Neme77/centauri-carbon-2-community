@@ -8,6 +8,7 @@ import { Tag } from '@/components/ui/badge'
 import { Input, Select } from '@/components/ui/field'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Notice, Warn } from '@/components/shared'
+import { SpoolmanHeld } from '@/components/spoolman-held'
 import { draftFields, draftFrom, draftProblem, placeName, SpoolEditor, SpoolMeter, Swatch } from '@/components/spool-ui'
 import { errText, notify } from '@/lib/api'
 import { ask } from '@/lib/confirm'
@@ -321,11 +322,14 @@ const History = ({ lib, events, spool }: { lib: SpoolLibrary; events: SpoolEvent
     <Notice>{t('spools.no_history')}</Notice>
   )
 
-// Filter before limiting: older consumption remains reachable when recent entries are corrections.
+// Filter before paging so every retained entry remains reachable.
 const RecentHistory = ({ lib }: { lib: SpoolLibrary }) => {
   const [filter, setFilter] = useState('all')
+  const [requestedPage, setPage] = useState(0)
   const matches = filter === 'consumption' ? lib.log.filter(e => e.kind === 'print') : lib.log
-  const events = matches.slice(0, 30)
+  const pages = Math.max(1, Math.ceil(matches.length / 30))
+  const page = Math.min(requestedPage, pages - 1)
+  const events = matches.slice(page * 30, (page + 1) * 30)
   return (
     <Card data-recent-history="">
       <CardHead icon="info" title="spools.recent" />
@@ -335,7 +339,10 @@ const RecentHistory = ({ lib }: { lib: SpoolLibrary }) => {
           <Select
             aria-label={t('spools.history_filter')}
             value={filter}
-            onChange={e => setFilter(e.currentTarget.value)}
+            onChange={e => {
+              setFilter(e.currentTarget.value)
+              setPage(0)
+            }}
           >
             <option value="all">{t('spools.history_all')}</option>
             <option value="consumption">{t('spools.history_consumption')}</option>
@@ -347,7 +354,7 @@ const RecentHistory = ({ lib }: { lib: SpoolLibrary }) => {
       </div>
       {events.length ? (
         <section
-          key={filter}
+          key={`${filter}-${page}`}
           aria-label={t('spools.recent')}
           // biome-ignore lint/a11y/noNoninteractiveTabindex: The bounded scroll region must be reachable with the keyboard.
           tabIndex={0}
@@ -357,6 +364,19 @@ const RecentHistory = ({ lib }: { lib: SpoolLibrary }) => {
         </section>
       ) : (
         <Notice>{t(filter === 'consumption' ? 'spools.no_consumption' : 'spools.no_history')}</Notice>
+      )}
+      {pages > 1 && (
+        <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <Button disabled={page === 0} onClick={() => setPage(page - 1)}>
+            {t('common.previous_page')}
+          </Button>
+          <span class="text-xs text-muted" aria-live="polite">
+            {tpl('common.page_of_total', { page: page + 1, pages, total: matches.length })}
+          </span>
+          <Button disabled={page === pages - 1} onClick={() => setPage(page + 1)}>
+            {t('common.next_page')}
+          </Button>
+        </div>
       )}
     </Card>
   )
@@ -845,6 +865,7 @@ export const Spools = () => {
         <div class="grid gap-3.5">
           <Tracking lib={lib} busy={busy} act={act} />
           {lib.spoolman_enabled && <SpoolmanCard lib={lib} busy={busy} act={act} />}
+          {lib.spoolman_enabled && <SpoolmanHeld key={lib.spoolman_gen} lib={lib} busy={busy} act={act} />}
           {lib.enabled && <InPrinter lib={lib} busy={busy} act={act} />}
           <Inventory lib={lib} busy={busy} act={act} />
           <RecentHistory lib={lib} />

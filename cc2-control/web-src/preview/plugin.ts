@@ -1,10 +1,16 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
-import { demoExcludeObjects, demoLayerPath } from './layer-path-demo.ts'
+import { demoExcludeObjects, demoLayerPath, demoObjectPreview } from './layer-path-demo.ts'
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Match the source literally; never evaluate its template.
 const cameraSource = "export const camera = (q = '') => `http://${location.hostname}:8080/${q}`"
+// Serve every shipped catalog; simulation-toolbar translations are only a subset.
+const supportedLanguages = new Set(
+  readdirSync(fileURLToPath(new URL('../public/locales/', import.meta.url)))
+    .filter(name => /^[a-z]{2}\.json$/.test(name))
+    .map(name => name.slice(0, -5))
+)
 const cameraSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#152336"/><path d="M110 280L320 130 530 280 320 330Z" fill="#29445c"/><path d="M280 250V180L320 155 360 180V250L320 275Z" fill="#00cfe8"/><text x="320" y="65" text-anchor="middle" fill="white" font-family="sans-serif" font-size="24">CC2 — DEMO</text></svg>`
 // Developer-only translations: never bundled into the firmware UI.
 const labels = {
@@ -89,7 +95,13 @@ export function previewPlugin(): Plugin {
   let speed = 100
   let flow = 100
   let tramSession = false
-  let tramHeights: Record<string, number> = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+  let tramBed = 60 // the bed target of the running screw session, as the backend reports it
+  let tramHeights: Record<string, number> = {
+    '27.9,25.95': 1.8,
+    '227.15,25.95': 1.85,
+    '227.15,225.5': 1.82,
+    '27.9,225.5': 1.79,
+  }
   type TramMeasure = {
     time: number
     kind: 'start' | 'probe' | 'check' | 'quick'
@@ -100,6 +112,7 @@ export function previewPlugin(): Plugin {
   }
   type TramSession = {
     kind?: 'session' | 'quick'
+    points?: 'screws' | 'old'
     started: number
     ended: number | null
     measurements: TramMeasure[]
@@ -107,6 +120,7 @@ export function previewPlugin(): Plugin {
   const seedScrewHistory = (): TramSession[] => [
     {
       kind: 'quick',
+      points: 'screws',
       started: 1762801500,
       ended: 1762801680,
       measurements: [
@@ -143,10 +157,10 @@ export function previewPlugin(): Plugin {
   let screwSessions: TramSession[] = seedScrewHistory()
   const screwNow = () => Math.floor(Date.now() / 1000)
   const heightsZ = () => ({
-    FL: +tramHeights['30,30'].toFixed(4),
-    FR: +tramHeights['230,30'].toFixed(4),
-    RR: +tramHeights['230,225'].toFixed(4),
-    RL: +tramHeights['30,225'].toFixed(4),
+    FL: +tramHeights['27.9,25.95'].toFixed(4),
+    FR: +tramHeights['227.15,25.95'].toFixed(4),
+    RR: +tramHeights['227.15,225.5'].toFixed(4),
+    RL: +tramHeights['27.9,225.5'].toFixed(4),
   })
   const closeOpenScrew = () => {
     for (const s of screwSessions) if (s.kind !== 'quick' && s.ended == null) s.ended = screwNow()
@@ -175,14 +189,14 @@ export function previewPlugin(): Plugin {
   }
   const tramCorner = (id: string) =>
     ({
-      FL: { key: '30,30', x: 30, y: 30 },
-      FR: { key: '230,30', x: 230, y: 30 },
-      RR: { key: '230,225', x: 230, y: 225 },
-      RL: { key: '30,225', x: 30, y: 225 },
+      FL: { key: '27.9,25.95', x: 27.9, y: 25.95 },
+      FR: { key: '227.15,25.95', x: 227.15, y: 25.95 },
+      RR: { key: '227.15,225.5', x: 227.15, y: 225.5 },
+      RL: { key: '27.9,225.5', x: 27.9, y: 225.5 },
     })[id]
   const probeLines = (key: string, z: number) => {
     const [x, y] = key.split(',')
-    return `${`// probe at ${x}.000,${y}.000 is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
+    return `${`// probe at ${Number(x).toFixed(3)},${Number(y).toFixed(3)} is z=${z.toFixed(6)}\n`.repeat(3)}// Result is z=${z.toFixed(6)}\n`
   }
   const tramOutput = (keys: string[]) =>
     `SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\n${keys.map(k => probeLines(k, tramHeights[k])).join('')}`
@@ -196,6 +210,31 @@ export function previewPlugin(): Plugin {
       output: tramOutput(keys),
     }
   }
+  // The hold time before a screw measurement or a session start ("screws:soak:<0-60>:<action>"), as the printer service
+  // runs it: the bed heats ('heating', about SOAK_HEAT_MS here, or one POST /__preview/screws-soak-step), is held
+  // ('soaking', counted down by the clock; the step ends it at once) and then the action behind the prefix runs. Stopped
+  // with screws:cancel; GET /api/printer reports it as screws_soak.
+  const SOAK_HEAT_MS = 8000
+  type ScrewSoakJob = {
+    stage: 'heating' | 'soaking'
+    target: number
+    total: number
+    since: number
+    action: 'quick' | 'corner' | 'session'
+    inner: string
+  }
+  let screwSoak: ScrewSoakJob | null = null
+  // How the last hold ended ('' | 'started' | 'cancelled' | 'ended' | 'failed'), and its reason.
+  let soakResult = ''
+  let soakReason = ''
+  // A screw start without a hold time right after a mesh measures without a second nozzle cleaning (screws_after_mesh).
+  let meshEndedAt = 0
+  let afterMesh = false
+  const AFTER_MESH_MS = 120_000
+  const soakBedOf = (action: string) => {
+    const m = /:(\d+)(?::2)?$/.exec(action)
+    return m ? Number(m[1]) : 60
+  }
   let preferences: Record<string, unknown> = { language: 'en', theme: 'dark' }
   let cameraViewer: string | null = null
   let deleted = new Set<string>()
@@ -203,12 +242,76 @@ export function previewPlugin(): Plugin {
   // Canvas pull-back: the printer's configured value and the autosave.cfg override, pending until a restart.
   let unload = { configured: 85, override: null as number | null, pending: false, extended: false }
   let videos: Record<string, number> = {}
+  // Canvas trays as /api/canvas reports them. /__preview/canvas-tray empties or refills one, or changes its label.
+  const canvasTrays = ['#ef5350', '#42a5f5', '#fdd835', '#66bb6a'].map((color, tray_id) => ({
+    tray_id,
+    color,
+    filament_name: 'PLA',
+    filament_color: color,
+    remaining_percent: 75,
+    material: 'PLA',
+    status: 1,
+  }))
   // Print queue: jobs prepared ahead. The preview keeps them in memory and a start "prints" a copy at once.
+  // A job is bound to filaments, as on the backend: for every tool the filament as a Canvas slot labels it
+  // (empty until known) and the slot the job was added with (null: added for a filament alone).
+  type QueueLabel = { type: string; name: string; color: string }
+  type QueueTool = QueueLabel & { tool: number; slot: number | null }
+  const labelKnown = (f: QueueLabel) => Boolean((f.type || f.name) && f.color)
+  // The demo's trays report a filament name and a colour, no type.
+  const trayLabel = (slot: number): QueueLabel => {
+    const tray = canvasTrays[slot]
+    return { type: '', name: tray?.filament_name || '', color: (tray?.filament_color || '').toUpperCase() }
+  }
+  // As queue_filament_in: the same colour, and the type and the name the filament states.
+  const trayHolds = (slot: number, f: QueueLabel) => {
+    const label = trayLabel(slot)
+    return (
+      label.color === f.color.toUpperCase() &&
+      (!f.type || f.type.toLowerCase() === label.type.toLowerCase()) &&
+      (!f.name || f.name.toLowerCase() === label.name.toLowerCase())
+    )
+  }
+  // "tool:slot,...": tools on a chosen slot, their filament not known yet.
+  const mappingTools = (mapping: string): QueueTool[] =>
+    mapping
+      .split(',')
+      .filter(Boolean)
+      .map(pair => {
+        const [tool, slot] = pair.split(':').map(Number)
+        return { tool, slot, type: '', name: '', color: '' }
+      })
+  // "tool<TAB>type<TAB>name<TAB>#RRGGBB" lines: tools bound to a filament by itself. null: a line is not one.
+  const filamentTools = (lines: string[]): QueueTool[] | null => {
+    const out: QueueTool[] = []
+    for (const line of lines) {
+      if (!line) continue
+      const [tool, type, name, color, more] = line.split('\t')
+      if (more !== undefined || !/^\d+$/.test(tool) || !/^#[0-9a-f]{6}$/i.test(color || '') || !(type || name))
+        return null
+      out.push({ tool: Number(tool), slot: null, type, name, color: color.toUpperCase() })
+    }
+    return out
+  }
+  // A tool added with a slot takes the filament the slot is labelled with (queue_note_filaments).
+  const noteFilaments = (tools: QueueTool[]) => {
+    for (const t of tools) {
+      if (t.slot === null || labelKnown(t)) continue
+      const label = trayLabel(t.slot)
+      if (labelKnown(label)) Object.assign(t, label)
+    }
+    return tools.sort((a, b) => a.tool - b.tool)
+  }
+  const mappingText = (tools: QueueTool[]) =>
+    tools
+      .filter(t => t.slot !== null)
+      .map(t => `${t.tool}:${t.slot}`)
+      .join(',')
   type QueueJob = {
     id: number
     storage: 'internal' | 'usb'
     path: string
-    mapping: string
+    tools: QueueTool[]
     side: 'A' | 'B'
     leveling: string
     timelapse: boolean
@@ -228,17 +331,20 @@ export function previewPlugin(): Plugin {
   let queuePolicy = { after: 'wait' as 'wait' | 'auto', delay: 60, remove_done: true }
   let queueRevision = 0
   let queueArmedAt: number | null = null // when a copy completed under the auto policy
+  // The start that asked the Canvas for a report (/api/queue/start).
+  let queueCheck: { id: number; at: number } | null = null
+  // `mapping`: the slots the job is added with ("tool:slot,...", '' for the external feed), unless `tools` says more.
   const queueJob = (
     id: number,
     path: string,
     copies: number,
     done: number,
-    extra: Partial<QueueJob> = {}
+    { mapping = '0:1', ...extra }: Partial<QueueJob> & { mapping?: string } = {}
   ): QueueJob => ({
     id,
     storage: 'internal',
     path,
-    mapping: '0:1',
+    tools: noteFilaments(mappingTools(mapping)),
     side: 'A',
     leveling: 'saved',
     timelapse: false,
@@ -277,25 +383,53 @@ export function previewPlugin(): Plugin {
     queuePolicy = { after: 'wait', delay: 60, remove_done: false }
   }
   resetQueue()
+  const isPendingFile = (job: Pick<QueueJob, 'state' | 'present'>) => job.state === 'pending' && job.present
+  const cancelEmptyDelay = () => {
+    if (queueArmedAt !== null && !queueJobs.some(isPendingFile)) queueArmedAt = null
+  }
   const queueComplete = (job: QueueJob) => {
     job.done++
     job.last_result = ''
     job.state = job.done >= job.copies ? 'done' : 'pending'
     if (job.state === 'done' && queuePolicy.remove_done) queueJobs = queueJobs.filter(j => j !== job)
-    queueArmedAt = queuePolicy.after === 'auto' ? Date.now() : null
+    queueArmedAt = queuePolicy.after === 'auto' && queueJobs.some(isPendingFile) ? Date.now() : null
     queueRevision++
   }
+  // As the backend resolves a start (queue_resolve): every tool on the slot that holds its filament. The slot
+  // the job was added with while it holds that filament, otherwise the lowest tray that does; an empty tray
+  // (status 0) keeps its label and holds nothing. A tool that knows no filament yet stays on its slot, and an
+  // empty slot is then judged by its own label. `use` is null when no slot holds the filament.
+  type FeedReason = '' | 'empty' | 'other' | 'absent'
+  const queueFilaments = (job: Pick<QueueJob, 'tools'>) =>
+    job.tools.map(t => {
+      const own = t.slot === null ? null : canvasTrays[t.slot]
+      let want: QueueLabel = t
+      let use: number | null = null
+      let reason: FeedReason = ''
+      if (own && own.status !== 0 && (!labelKnown(want) || trayHolds(own.tray_id, want))) use = own.tray_id
+      else {
+        if (own && !labelKnown(want)) want = trayLabel(own.tray_id)
+        const held = labelKnown(want) ? canvasTrays.find(o => o.status !== 0 && trayHolds(o.tray_id, want)) : undefined
+        use = held ? held.tray_id : null
+        reason = own ? (own.status === 0 ? 'empty' : 'other') : use === null ? 'absent' : ''
+      }
+      return { tool: t.tool, type: t.type, name: t.name, color: t.color, slot: t.slot, use, reason }
+    })
   const queueView = () => {
     // The scene only colours the view: while the printer "prints", the running (or head) job shows as
     // printing. Stored state changes only through the queue routes and /__preview/queue-complete.
     const printing = scene === 'printing' || scene === 'paused'
-    const items = queueJobs.map(j => ({ ...j }))
+    const items = queueJobs.map(({ tools, ...job }) => ({
+      ...job,
+      mapping: mappingText(tools),
+      filaments: queueFilaments({ tools }),
+    }))
     let active = items.find(j => j.state === 'printing' || j.state === 'starting')
     if (printing) {
-      if (!active) active = items.find(j => j.state === 'pending' && j.present)
+      if (!active) active = items.find(isPendingFile)
       if (active) active.state = 'printing'
     }
-    const next = items.find(j => j.state === 'pending' && j.present) // as the backend: named even while a copy runs
+    const next = items.find(isPendingFile) // as the backend: named even while a copy runs
     return {
       available: true,
       error: '',
@@ -305,7 +439,7 @@ export function previewPlugin(): Plugin {
       active: active?.id ?? null,
       next: next?.id ?? null,
       auto_in:
-        queueArmedAt !== null && !active
+        queueArmedAt !== null && next && !active
           ? Math.max(0, Math.ceil((queueArmedAt + queuePolicy.delay * 1000 - Date.now()) / 1000))
           : null,
       items,
@@ -338,6 +472,8 @@ export function previewPlugin(): Plugin {
     measured: number
     tilt: number
     profile: boolean
+    priorTilt?: number
+    priorMeasured?: number
   }
   type PreviewNozzle = { id: string; name: string; diameter: number; z_offset: number }
   let plates: PreviewPlate[] = []
@@ -351,6 +487,7 @@ export function previewPlugin(): Plugin {
   let plateResult = ''
   // The calibration CC2 Control runs; in the preview each POST /__preview/calibration-step moves it one stage on.
   const idleCalibration = () => ({
+    run: '',
     stage: 'off',
     side: 'A' as 'A' | 'B',
     temp: 0,
@@ -363,10 +500,27 @@ export function previewPlugin(): Plugin {
     result: '',
     error: '',
     detail: '',
+    // "Measure a new mesh" (Bed alignment): the run keeps its result only as the plate's working mesh, in memory.
+    work: false,
+    work_mesh: null as null | { plate: string; temp: number; nozzle: string; measured: number; tilt: number },
+    replaced: false,
   })
   let calibration = idleCalibration()
+  // When a simulated measurement is saved: a fixed time, so the tests see the same value every run; a demo started with
+  // CC2_DEMO_FRESH_MESH=1 stamps it with the current time, so the new mesh counts as fresh on the alignment page.
+  const savedStamp = () => (process.env.CC2_DEMO_FRESH_MESH ? Math.floor(Date.now() / 1000) : 1790990000)
   let nextTilt = 6
   const newId = () => Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  // A new mesh on a measurement that already had one keeps the old heights for the change view.
+  const rememberMesh = (m: PreviewMeasure, tilt: number, measured: number) => {
+    const replaced = Boolean(m.measured) && m.tilt !== tilt
+    if (replaced) {
+      m.priorTilt = m.tilt
+      m.priorMeasured = m.measured
+    }
+    Object.assign(m, { tilt, measured, profile: true })
+    return replaced
+  }
   const resetPlates = () => {
     plates = [
       { id: 'a1b2c3d4e5f60718', name: 'Smooth PEI', side: 'A', z_offset: -0.02, measure: 'aa00000000000060' },
@@ -460,16 +614,23 @@ export function previewPlugin(): Plugin {
             }
           : { state: 'off', temps: [] },
       },
-      calibration,
+      calibration: {
+        ...calibration,
+        work_mesh:
+          calibration.work_mesh && plates.some(p => p.id === calibration.work_mesh?.plate)
+            ? (({ tilt, ...w }) => ({ ...w, mesh: plateMesh(tilt) }))(calibration.work_mesh)
+            : null,
+      },
       slots: { A: plateSlots.A ? 'mesh' : 'empty', B: plateSlots.B ? 'mesh' : 'empty' },
       nozzles,
       plates: plates.map(p => ({
         ...p,
         in_printer: plateSlots[p.side] === plateBase(p)?.tilt,
-        measures: plateMeasures(p).map(({ plate, tilt, ...m }) => ({
+        measures: plateMeasures(p).map(({ plate, tilt, priorTilt, priorMeasured, ...m }) => ({
           ...m,
           slot: plateSlots[p.side] === tilt,
           mesh: plateMesh(tilt),
+          ...(priorMeasured ? { prior: { measured: priorMeasured, mesh: plateMesh(priorTilt ?? tilt) } } : {}),
         })),
       })),
     }
@@ -608,7 +769,8 @@ export function previewPlugin(): Plugin {
     deleted = new Set()
     cameraViewer = null
     tramSession = false
-    tramHeights = { '30,30': 1.8, '230,30': 1.85, '230,225': 1.82, '30,225': 1.79 }
+    screwSoak = null
+    tramHeights = { '27.9,25.95': 1.8, '227.15,25.95': 1.85, '227.15,225.5': 1.82, '27.9,225.5': 1.79 }
     screwSessions = seedScrewHistory()
     consoleJob = {
       busy: false,
@@ -664,14 +826,98 @@ export function previewPlugin(): Plugin {
       job('preview-3', 'Preview_USB.gcode', 1790722800, 12, 2, 0, ''),
       job('preview-4', 'CC2_Preview_Vase_PETG.gcode', 1790636400, 211, 1, 3, 'picture/CC2_Preview_Vase_PETG'),
     ].filter(task => !deleted.has(task.task_id))
+  // A session start, as screws:tram:start[:<C>[:2]] runs it (also behind a hold time).
+  const startTram = (action: string) => {
+    tramSession = true
+    tramBed = Number(action.split(':')[3] ?? 60)
+    closeOpenScrew()
+    screwSessions.unshift({
+      kind: 'session',
+      points: 'screws',
+      started: screwNow(),
+      ended: null,
+      measurements: [{ time: screwNow(), kind: 'start', corner: null, twice: false, z: heightsZ() }],
+    })
+    trimScrewHistory()
+    finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28\n', [
+      '27.9,25.95',
+      '227.15,25.95',
+      '227.15,225.5',
+      '27.9,225.5',
+    ])
+  }
+  // A quick measurement behind a hold time (the preview simulates screws:measure only there): all four corners, or one
+  // corner and front left as the reference, as the console reports them; the history keeps it as a quick measurement.
+  const measureQuick = (action: string) => {
+    const corner = /^screws:measure:corner:(FL|FR|RR|RL)/.exec(action)?.[1]
+    const ids = corner ? [...new Set([corner, 'FL'])] : ['FL', 'FR', 'RR', 'RL']
+    const keys = ids.map(id => tramCorner(id)?.key ?? '')
+    const z = Object.fromEntries(ids.map((id, i) => [id, +tramHeights[keys[i]].toFixed(4)]))
+    screwSessions.unshift({
+      kind: 'quick',
+      points: 'screws',
+      started: screwNow(),
+      ended: screwNow(),
+      measurements: [{ time: screwNow(), kind: 'quick', corner: corner ?? null, twice: action.endsWith(':2'), z }],
+    })
+    trimScrewHistory()
+    consoleJob = {
+      busy: false,
+      completed: true,
+      success: true,
+      generation: consoleJob.generation + 1,
+      command: `SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\nM140 S${soakBedOf(action)}\n`,
+      output: `SAVE_GCODE_STATE NAME=CC2_SCREW_MEASURE\n${keys.map(k => probeLines(k, tramHeights[k])).join('')}`,
+    }
+  }
+  // Moves the hold time on by the clock: the heating ends after SOAK_HEAT_MS, the hold after its minutes; then the action.
+  const soakLeft = (j: ScrewSoakJob) =>
+    j.stage === 'soaking' ? Math.max(0, j.total - Math.floor((Date.now() - j.since) / 1000)) : j.total
+  const soakNext = () => {
+    const j = screwSoak
+    if (!j) return
+    if (j.stage === 'heating') screwSoak = { ...j, stage: 'soaking', since: Date.now() }
+    else {
+      screwSoak = null
+      soakResult = 'started'
+      soakReason = ''
+      afterMesh = false
+      if (j.action === 'session') startTram(j.inner)
+      else measureQuick(j.inner)
+    }
+  }
+  const soakTick = () => {
+    const j = screwSoak
+    if (!j) return
+    if (j.stage === 'heating' && Date.now() - j.since >= SOAK_HEAT_MS) soakNext()
+    else if (j.stage === 'soaking' && soakLeft(j) <= 0) soakNext()
+  }
+  const soakReport = () => {
+    soakTick()
+    const j = screwSoak
+    if (!j) return { active: false, result: soakResult, reason: soakReason }
+    // `bed` is the target, as the service reports it; the measured bed is heater_bed (soakLive).
+    return { active: true, stage: j.stage, bed: j.target, remaining: soakLeft(j), total: j.total, action: j.action }
+  }
+  const soakLive = (j: ScrewSoakJob) =>
+    j.stage === 'heating'
+      ? +(27 + (j.target - 27) * Math.min(1, (Date.now() - j.since) / SOAK_HEAT_MS)).toFixed(1)
+      : j.target
   const printer = () => {
     const active = scene === 'printing' || scene === 'paused'
+    soakTick()
+    const soakBed = screwSoak ? soakLive(screwSoak) : null
     return {
       connected: scene !== 'disconnected',
       messages: 100,
       last_message_age: scene === 'disconnected' ? 60 : 0,
       extruder: { temperature: active ? 210.2 : 28, target: active ? 210 : 0 },
-      heater_bed: { temperature: active ? 60.1 : 27, target: active ? 60 : 0 },
+      heater_bed:
+        tramSession && scene === 'idle'
+          ? { temperature: tramBed - 1.25, target: tramBed }
+          : soakBed !== null && screwSoak
+            ? { temperature: soakBed, target: screwSoak.target }
+            : { temperature: active ? 60.1 : 27, target: active ? 60 : 0 },
       chamber: { temperature: 29 },
       fans: {
         controller: active ? 255 : 0,
@@ -706,7 +952,10 @@ export function previewPlugin(): Plugin {
       screws_session: {
         active: tramSession && scene === 'idle',
         xy_homed: tramSession && scene === 'idle',
+        bed: tramSession && scene === 'idle' ? tramBed : null,
       },
+      screws_soak: soakReport(),
+      screws_after_mesh: afterMesh,
       spools: {
         enabled: spoolsOn,
         revision: spoolRevision,
@@ -768,8 +1017,8 @@ export function previewPlugin(): Plugin {
           return
         }
         if (path.startsWith('/i18n/')) {
-          const lang = path.match(/^\/i18n\/(en|it|fr|zh|ru)\.json$/)?.[1]
-          if (!lang) return reply({ error: 'Unknown preview locale' }, 404)
+          const lang = path.match(/^\/i18n\/([a-z]{2})\.json$/)?.[1]
+          if (!lang || !supportedLanguages.has(lang)) return reply({ error: 'Unknown preview locale' }, 404)
           res.setHeader('Content-Type', 'application/json')
           res.end(readFileSync(fileURLToPath(new URL(`../public/locales/${lang}.json`, import.meta.url))))
           return
@@ -810,6 +1059,19 @@ export function previewPlugin(): Plugin {
             case '/api/orca/pending-print':
               return reply({ pending: false })
             case '/api/console':
+              // A running mesh calibration sends its steps through the console, as on the printer: busy meanwhile.
+              if (calibration.stage !== 'off' && !consoleJob.busy)
+                return reply({
+                  ...consoleJob,
+                  busy: true,
+                  completed: false,
+                  command:
+                    calibration.stage === 'homing'
+                      ? 'G28'
+                      : calibration.stage === 'probing'
+                        ? `BED_MESH_CALIBRATE PROFILE=${calibration.side === 'B' ? 'default1' : 'default'} BED_TEMP=${calibration.temp}`
+                        : `M140 S${calibration.temp}`,
+                })
               return reply({ ...consoleJob })
             case '/api/screws/history':
               return reply({ sessions: screwSessions })
@@ -853,6 +1115,12 @@ export function previewPlugin(): Plugin {
                 return reply({ error: 'invalid layer path request' }, 400)
               if (layer > 227) return reply({ error: 'layer not found' }, 404)
               return reply(demoLayerPath(file, layer, storage))
+            }
+            case '/api/gcode-files/object-preview': {
+              const file = reqUrl.searchParams.get('file') || ''
+              const object = reqUrl.searchParams.get('object') || ''
+              const preview = demoObjectPreview(file, object, reqUrl.searchParams.get('storage') || 'internal')
+              return preview ? reply(preview) : reply({ error: 'Object not found' }, 404)
             }
             case '/api/queue':
               return reply(queueView())
@@ -929,15 +1197,7 @@ export function previewPlugin(): Plugin {
                     canvas_list: [
                       {
                         connected: 1,
-                        tray_list: ['#ef5350', '#42a5f5', '#fdd835', '#66bb6a'].map((color, tray_id) => ({
-                          tray_id,
-                          color,
-                          filament_name: 'PLA',
-                          filament_color: color,
-                          remaining_percent: 75,
-                          material: 'PLA',
-                          status: 1,
-                        })),
+                        tray_list: canvasTrays,
                       },
                     ],
                   },
@@ -992,6 +1252,7 @@ export function previewPlugin(): Plugin {
           '/api/plates/calibrate',
           '/api/plates/calibrate/cancel',
           '/__preview/calibration-step',
+          '/__preview/screws-soak-step',
           '/api/spoolman',
           '/api/spools/enable',
           '/api/spools/save',
@@ -1005,9 +1266,11 @@ export function previewPlugin(): Plugin {
           '/api/queue/remove',
           '/api/queue/reorder',
           '/api/queue/copies',
+          '/api/queue/filament',
           '/api/queue/policy',
           '/api/queue/clear-done',
           '/__preview/queue-complete',
+          '/__preview/canvas-tray',
           '/api/queue/hold',
           '/api/queue/abandon',
         ]
@@ -1032,6 +1295,18 @@ export function previewPlugin(): Plugin {
               queueComplete(active)
               return reply({ ok: true })
             }
+            // "tray\nstatus[\ncolour[\nname]]": a spool runs out (0) or is put back (1), with the colour and the
+            // filament name of its label; "-" leaves the label without that colour or name.
+            if (path === '/__preview/canvas-tray' && req.method === 'POST') {
+              const [id, status, colour, name] = body.replace(/\n+$/, '').split('\n')
+              const tray = canvasTrays[Number(id)]
+              if (!tray || !['0', '1', '2'].includes(status)) return reply({ ok: false, error: 'Invalid tray' }, 400)
+              tray.status = Number(status)
+              if (colour) tray.color = tray.filament_color = colour === '-' ? '' : colour
+              if (name) tray.filament_name = tray.material = name === '-' ? '' : name
+              queueRevision++
+              return reply({ ok: true })
+            }
             if (path.startsWith('/api/queue/') && req.method === 'POST') {
               const lines = body.replace(/\n+$/, '').split('\n')
               const find = () => queueJobs.find(j => j.id === Number(lines[0]))
@@ -1052,9 +1327,15 @@ export function previewPlugin(): Plugin {
                   seconds,
                   grams,
                 ] = lines
+                // The filaments of tools added without a slot follow the estimates.
+                const free = filamentTools(lines.slice(12))
+                if (!free) return reply({ ok: false, error: 'Invalid filament' }, 400)
+                const tools = [...mappingTools(mapping || ''), ...free]
+                if (new Set(tools.map(t => t.tool)).size !== tools.length)
+                  return reply({ ok: false, error: 'A tool is named twice' }, 400)
                 const job = queueJob(queueNextId++, file, Number(copies) || 1, 0, {
                   storage: storage === 'usb' ? 'usb' : 'internal',
-                  mapping: mapping || '',
+                  tools: noteFilaments(tools),
                   side: side === 'B' ? 'B' : 'A',
                   leveling: leveling || 'saved',
                   timelapse: timelapse === '1',
@@ -1072,7 +1353,7 @@ export function previewPlugin(): Plugin {
               if (path === '/api/queue/start') {
                 if (scene !== 'idle')
                   return reply({ accepted: false, error: 'Starting a file requires an idle printer' }, 409)
-                const job = lines[0] ? find() : queueJobs.find(j => j.state === 'pending' && j.present)
+                const job = lines[0] ? find() : queueJobs.find(isPendingFile)
                 if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
                 if (job.state !== 'pending' || !job.present)
                   return reply({ ok: false, error: 'This job has no copy left to print' }, 409)
@@ -1080,6 +1361,29 @@ export function previewPlugin(): Plugin {
                 // or the scene leaving printing); nothing is counted at the start.
                 if (queueJobs.some(j => j.state === 'starting' || j.state === 'printing'))
                   return reply({ ok: false, error: 'A queued copy is already running' }, 409)
+                // As on the backend, a start fed from the Canvas first asks it for a report and goes on only
+                // once it has come (here 300 ms later): until then it is refused with `checking`.
+                if (queueFilaments(job).length) {
+                  const now = Date.now()
+                  if (!queueCheck || queueCheck.id !== job.id || now - queueCheck.at > 10000)
+                    queueCheck = { id: job.id, at: now }
+                  if (now - queueCheck.at < 300)
+                    return reply({ ok: false, error: 'Reading the Canvas slots before the start', checking: true }, 409)
+                  queueCheck = null
+                }
+                // A filament of the job that is in no slot refuses the start, as on the backend.
+                const missing = queueFilaments(job).find(f => f.use === null)
+                if (missing)
+                  return reply(
+                    {
+                      ok: false,
+                      error:
+                        missing.reason === 'empty' && missing.slot !== null
+                          ? `Canvas slot ${missing.slot + 1} is empty and no other slot holds the same filament`
+                          : `No Canvas slot holds the job's filament: ${missing.name || missing.type} ${missing.color}`,
+                    },
+                    409
+                  )
                 job.state = 'starting'
                 job.last_result = ''
                 queueArmedAt = null
@@ -1112,6 +1416,7 @@ export function previewPlugin(): Plugin {
               if (!job) return reply({ ok: false, error: 'No such queued job' }, 404)
               if (path === '/api/queue/remove') {
                 queueJobs = queueJobs.filter(j => j !== job)
+                cancelEmptyDelay()
                 return reply({ ok: true })
               }
               if (path === '/api/queue/reorder') {
@@ -1120,12 +1425,26 @@ export function previewPlugin(): Plugin {
                 queueJobs.splice(to, 0, job)
                 return reply({ ok: true })
               }
+              // "id\nmapping\nfilament lines": other filaments for tools of the job, by slot or by themselves.
+              if (path === '/api/queue/filament') {
+                const free = filamentTools(lines.slice(2))
+                if (!free) return reply({ ok: false, error: 'Invalid filament' }, 400)
+                const named = [...mappingTools(lines[1] || ''), ...free]
+                if (new Set(named.map(t => t.tool)).size !== named.length)
+                  return reply({ ok: false, error: 'A tool is named twice' }, 400)
+                if (!named.length) return reply({ ok: false, error: 'No filament to change' }, 400)
+                if (named.some(t => !job.tools.some(own => own.tool === t.tool)))
+                  return reply({ ok: false, error: 'This job has no such tool' }, 409)
+                job.tools = noteFilaments(job.tools.map(own => named.find(t => t.tool === own.tool) ?? own))
+                return reply({ ok: true })
+              }
               if (path === '/api/queue/copies') {
                 const n = Number(lines[1])
                 if (!(n >= 1 && n <= 99) || n < job.done)
                   return reply({ ok: false, error: 'Fewer copies than already printed' }, 409)
                 job.copies = n
                 job.state = job.done >= n ? 'done' : job.state === 'done' ? 'pending' : job.state
+                cancelEmptyDelay()
                 return reply({ ok: true })
               }
               return reply({ error: 'Unknown queue operation' }, 404)
@@ -1155,7 +1474,7 @@ export function previewPlugin(): Plugin {
             }
             if (path === '/api/preferences' && req.method === 'PUT') {
               const value = JSON.parse(body)
-              if (value.language && !Object.keys(labels).includes(value.language))
+              if (value.language && !supportedLanguages.has(value.language))
                 return reply({ error: 'Unknown language' }, 400)
               preferences = { ...preferences, ...value }
               return reply(preferences)
@@ -1208,19 +1527,54 @@ export function previewPlugin(): Plugin {
               videos[task.task_id] = 2
               return reply({ accepted: true, method: 1051, simulated: true }, 202)
             }
+            if (path === '/__preview/screws-soak-step' && req.method === 'POST') {
+              if (!screwSoak) return reply({ error: 'No hold time is running' }, 409)
+              // "fail": the hold ends as the service reports a failure, with its reason.
+              if (body.trim() === 'fail') {
+                soakReason = `The bed did not reach ${screwSoak.target} °C`
+                soakResult = 'failed'
+                screwSoak = null
+                return reply({ ok: true, soak: soakReport() })
+              }
+              soakNext()
+              return reply({ ok: true, soak: soakReport() })
+            }
             if (path === '/__preview/calibration-step' && req.method === 'POST') {
               const c = calibration
               if (body.trim() === 'fail' && c.stage !== 'off')
-                calibration = { ...c, stage: 'off', result: 'failed', error: c.stage }
+                calibration = {
+                  ...c,
+                  stage: 'off',
+                  result: 'failed',
+                  error: c.stage,
+                  // The reason the program gives when the mesh could not be stored in the plate.
+                  detail: c.stage === 'saving' ? 'Cannot save the plate library' : '',
+                }
               else if (c.stage === 'homing') calibration = { ...c, stage: 'heating', bed: 25 }
               else if (c.stage === 'heating') calibration = { ...c, stage: 'soaking', bed: c.temp, remaining: c.soak }
               else if (c.stage === 'soaking') calibration = { ...c, stage: 'probing', remaining: 0 }
               else if (c.stage === 'probing') {
                 plateSlots[c.side] = nextTilt++ // the printer saved a new side mesh
-                calibration = c.plate ? { ...c, stage: 'saving' } : { ...c, stage: 'off', result: 'done', bed: 25 }
+                // The printer holds the new mesh now: a working mesh of a run before is gone (as in CC2 Control).
+                calibration = c.plate
+                  ? { ...c, stage: 'saving', work_mesh: null }
+                  : { ...c, stage: 'off', result: 'done', bed: 25, work_mesh: null }
               } else if (c.stage === 'saving') {
                 const plate = plates.find(p => p.id === c.plate)
                 if (!plate) return reply({ error: 'Unknown plate' }, 404)
+                // A working mesh: nothing of the library changes, the mesh stays in the calibration state only.
+                if (c.work) {
+                  const work = {
+                    plate: plate.id,
+                    temp: c.temp,
+                    nozzle: c.nozzle,
+                    measured: savedStamp() - 60,
+                    tilt: plateSlots[plate.side],
+                  }
+                  calibration = { ...c, stage: 'off', result: 'work', work_mesh: work, bed: 25 }
+                  meshEndedAt = Date.now()
+                  return reply(calibration)
+                }
                 let m = measures.find(x => x.plate === plate.id && x.temp === c.temp && x.nozzle === c.nozzle)
                 if (!m) {
                   m = {
@@ -1234,10 +1588,11 @@ export function previewPlugin(): Plugin {
                   }
                   measures.push(m)
                 }
-                Object.assign(m, { tilt: plateSlots[plate.side], measured: 1790990000, profile: true })
+                const replaced = rememberMesh(m, plateSlots[plate.side], savedStamp())
                 plate.measure = m.id
                 plateCurrent = plate.id
-                calibration = { ...c, stage: 'off', result: 'saved', measure: m.id, bed: 25 }
+                calibration = { ...c, stage: 'off', result: 'saved', measure: m.id, bed: 25, replaced }
+                meshEndedAt = Date.now()
               }
               return reply(calibration)
             }
@@ -1280,22 +1635,34 @@ export function previewPlugin(): Plugin {
               if (path === '/api/plates/calibrate') {
                 if (calibration.stage !== 'off')
                   return reply({ ok: false, error: 'A bed mesh calibration is already running' }, 409)
-                const [side, temp, soak, nozzle = '', plateId = ''] = lines as [
+                if (screwSoak)
+                  return reply({ ok: false, error: 'A screw measurement is waiting for its bed hold time' }, 409)
+                const run = req.headers['x-cc2-calibration-run']
+                if (run !== undefined && (typeof run !== 'string' || !/^[0-9a-f]{16}$/.test(run)))
+                  return reply({ ok: false, error: 'Invalid calibration run identifier' }, 400)
+                const [side, temp, soak, nozzle = '', plateId = '', work = ''] = lines as [
                   'A' | 'B',
                   string,
                   string,
                   string?,
                   string?,
+                  string?,
                 ]
+                if (lines.length > 6 || (lines.length === 6 && (work !== 'work' || !plateId)))
+                  return reply({ ok: false, error: 'Invalid calibration' }, 400)
                 keep(side)
+                // The working mesh of a run before stays until this run has finished its probing.
                 calibration = {
                   ...idleCalibration(),
+                  work_mesh: calibration.work_mesh,
+                  run: run ?? newId(),
                   stage: 'homing',
                   side,
                   temp: Number(temp),
                   soak: Number(soak) * 60,
                   nozzle,
                   plate: plateId,
+                  work: work === 'work',
                 }
                 return reply({ started: true }, 202)
               }
@@ -1411,10 +1778,11 @@ export function previewPlugin(): Plugin {
                   m = { id: newId(), plate: plate.id, temp: Number(temp), nozzle, measured: 0, tilt: 0, profile: true }
                   measures.push(m)
                 }
-                Object.assign(m, { tilt: plateSlots[plate.side], measured: 1790950000, profile: true })
+                rememberMesh(m, plateSlots[plate.side], 1790950000)
                 plate.measure = m.id
                 plateCurrent = plate.id
                 plateResult = 'mounted'
+                if (calibration.work_mesh?.plate === plate.id) calibration = { ...calibration, work_mesh: null }
                 return reply({ saved: true, measure: m.id, profile: true, applied: true })
               }
               const reboot = lines.includes('REBOOT')
@@ -1535,6 +1903,64 @@ export function previewPlugin(): Plugin {
             }
             if (path === '/api/control' && req.method === 'POST') {
               const action = body.trim()
+              // The hold time in front of a screw measurement or a session start, as the printer service takes it.
+              const soak = action.match(/^screws:soak:(\d+):(.*)$/)
+              if (soak) {
+                const minutes = Number(soak[1])
+                const inner = soak[2]
+                const kind = inner.startsWith('screws:tram:start')
+                  ? 'session'
+                  : inner.startsWith('screws:measure:corner:')
+                    ? 'corner'
+                    : inner.startsWith('screws:measure')
+                      ? 'quick'
+                      : null
+                if (!kind)
+                  return reply(
+                    {
+                      accepted: false,
+                      error: 'A hold time is only available for screws:measure and screws:tram:start',
+                    },
+                    400
+                  )
+                if (minutes > 60)
+                  return reply(
+                    {
+                      accepted: false,
+                      error:
+                        'Screw hold time must be a whole number of minutes from 0 to 60, followed by the measurement',
+                    },
+                    400
+                  )
+                if (screwSoak)
+                  return reply(
+                    { accepted: false, error: 'A screw measurement is waiting for its bed hold time: cancel it first' },
+                    409
+                  )
+                if (calibration.stage !== 'off')
+                  return reply({ accepted: false, error: 'A bed mesh calibration is running' }, 409)
+                if (scene !== 'idle' || consoleJob.busy)
+                  return reply({ accepted: false, error: 'Screw measurement requires the printer to be idle' }, 409)
+                if (tramSession) return reply({ accepted: false, error: 'Screw tramming session is active' }, 409)
+                screwSoak = {
+                  stage: 'heating',
+                  target: soakBedOf(inner),
+                  total: minutes * 60,
+                  since: Date.now(),
+                  action: kind,
+                  inner,
+                }
+                soakResult = ''
+                soakReason = ''
+                if (!minutes) soakNext() // 0 minutes: no hold after the heating
+                return reply({ accepted: true, simulated: true }, 202)
+              }
+              if (action === 'screws:cancel' && screwSoak) {
+                screwSoak = null
+                soakResult = 'cancelled'
+                soakReason = ''
+                return reply({ accepted: true, simulated: true }, 202)
+              }
               const tuning = action.match(/^tune:(speed|flow):(\d+)$/)
               if (tuning && ['printing', 'paused'].includes(scene)) {
                 const n = Number(tuning[2])
@@ -1549,18 +1975,21 @@ export function previewPlugin(): Plugin {
               else if (action === 'print:resume' && scene === 'paused') scene = 'printing'
               else if (action === 'print:cancel' && ['printing', 'paused'].includes(scene)) scene = 'idle'
               else if (action.startsWith('screws:tram:') && scene === 'idle') {
-                if (action === 'screws:tram:start') {
-                  tramSession = true
-                  closeOpenScrew()
-                  screwSessions.unshift({
-                    kind: 'session',
-                    started: screwNow(),
-                    ended: null,
-                    measurements: [{ time: screwNow(), kind: 'start', corner: null, twice: false, z: heightsZ() }],
-                  })
-                  trimScrewHistory()
-                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28\n', ['30,30', '230,30', '230,225', '30,225'])
-                  return reply({ accepted: true, simulated: true })
+                if (action === 'screws:tram:start' || action.startsWith('screws:tram:start:')) {
+                  if (screwSoak)
+                    return reply(
+                      {
+                        accepted: false,
+                        error: 'A screw measurement is waiting for its bed hold time: cancel it first',
+                      },
+                      409
+                    )
+                  if (calibration.stage !== 'off')
+                    return reply({ accepted: false, error: 'A bed mesh calibration is running' }, 409)
+                  // Right after a mesh the service measures without a second nozzle cleaning and says so.
+                  afterMesh = Date.now() - meshEndedAt < AFTER_MESH_MS
+                  startTram(action)
+                  return reply({ accepted: true, simulated: true, ...(afterMesh ? { after_mesh: true } : {}) })
                 }
                 if (!tramSession) return reply({ error: 'Screw tramming session is not active' }, 409)
                 const probe = action.match(/^screws:tram:probe:(FL|FR|RR|RL)(:2)?$/)
@@ -1602,7 +2031,12 @@ export function previewPlugin(): Plugin {
                       z,
                       ...(twice ? { z2: z } : {}),
                     })
-                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', ['30,30', '230,30', '230,225', '30,225'])
+                  finishTram('SAVE_GCODE_STATE NAME=CC2_SCREW_TRAM\nG28 Z\n', [
+                    '27.9,25.95',
+                    '227.15,25.95',
+                    '227.15,225.5',
+                    '27.9,225.5',
+                  ])
                   return reply({ accepted: true, simulated: true })
                 }
                 if (action === 'screws:tram:end') {

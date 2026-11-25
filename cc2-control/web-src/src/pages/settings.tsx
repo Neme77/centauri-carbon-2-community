@@ -44,6 +44,7 @@ import { Updates } from './Updates'
 import { Backup } from './Backup'
 import { Experiments } from './Experiments'
 import { Network } from './Network'
+import { ElegooSlicerGuide } from './elegooslicer-guide'
 
 const TABS = [
   [Link, 'network.connections'],
@@ -251,10 +252,13 @@ const CanvasFirmware = () => {
           ? 'rfid.lifecycle_restore_confirm'
           : action === 'remove'
             ? 'rfid.lifecycle_remove_confirm'
-            : continueValidation
-              ? 'rfid.lifecycle_validation_confirm'
-              : 'rfid.lifecycle_confirm'
-      if (!(await ask(t(confirmation)))) return
+            : action === 'activate'
+              ? 'rfid.lifecycle_activate_confirm'
+              : continueValidation
+                ? 'rfid.lifecycle_validation_confirm'
+                : 'rfid.lifecycle_confirm'
+      // Activation blocks printer changes until it completes and cannot be cancelled: warn, and focus Cancel.
+      if (!(await ask(t(confirmation), action === 'activate'))) return
       await post('/api/rfid/lifecycle/action', action)
       await refreshRfidLifecycle()
     } catch (e) {
@@ -369,6 +373,7 @@ const Integrations = () => {
           {t('settings.test_orca')}
         </Button>
       </div>
+      <ElegooSlicerGuide row={row} />
       <div class={row}>
         <b>{tpl('settings.pandabreath_page', dbName)}</b>
         <span class="text-muted">{tpl('settings.pandabreath_page_description', dbName)}</span>

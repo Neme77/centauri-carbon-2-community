@@ -16,11 +16,12 @@ import {
   densityFor,
   dismissSlot,
   EXTERNAL,
-  fits,
+  needsWrite,
   g,
   isLineOf,
   isLow,
   isSealed,
+  lineCore,
   MATERIALS,
   matches,
   openChooser,
@@ -47,9 +48,11 @@ import {
 export const placeName = (slot: number) =>
   slot === EXTERNAL ? t('spools.external') : tpl('common.slot_n', { n: slot + 1 })
 
+// A size class from the caller replaces the default one: with two size utilities on one element their order
+// in the stylesheet would decide, not the caller.
 export const Swatch = ({ color, class: c }: { color: string; class?: string }) => (
   <span
-    class={cn('inline-block size-4 shrink-0 rounded-full border border-white/30', c)}
+    class={cn('inline-block shrink-0 rounded-full border border-white/30', !/(^|\s)size-/.test(c ?? '') && 'size-4', c)}
     style={{ background: color || 'transparent' }}
   />
 )
@@ -117,8 +120,10 @@ export const draftFrom = (
       densityTouched: true,
     }
   // A tray reports a product line ("PLA Matte") besides its type ("PLA"): the spool keeps the line as its
-  // material, which still fits the tray. Trays report a colour value only, so the name gets a colour word.
-  const line = tray && isLineOf(tray.name, tray.type) ? tray.name : ''
+  // material, without the maker's word before it ("RAPID PLA+" gives "PLA+"), which still fits the tray.
+  // Trays report a colour value only, so the name gets a colour word.
+  const core = tray ? lineCore(tray.name, tray.type) : ''
+  const line = tray && isLineOf(core, tray.type) ? core : ''
   const material = prefill?.material || line || tray?.type || 'PLA'
   const brand = tray?.brand && !/^generic$/i.test(tray.brand) ? tray.brand : ''
   const color = (prefill?.color || tray?.color || '#2196F3').toUpperCase()
@@ -580,7 +585,19 @@ const SpoolChooser = ({
             chosen.material.toLowerCase().startsWith(String(p.name).toLowerCase())
         )
     : null
-  const canWrite = Boolean(chosen && slot < EXTERNAL && reason !== 'material' && preset && idle && !fits(chosen, tray))
+  const wantsWrite = Boolean(chosen && slot < EXTERNAL && reason !== 'material')
+  const canWrite = Boolean(wantsWrite && chosen && preset && idle && needsWrite(chosen, tray))
+  // Why nothing is written, in one sentence, instead of silence.
+  const noWrite: Key | null =
+    !wantsWrite || canWrite || !chosen
+      ? null
+      : !needsWrite(chosen, tray)
+        ? 'spools.no_write_fits'
+        : !preset
+          ? 'spools.no_write_preset'
+          : !idle
+            ? 'spools.no_write_busy'
+            : null
   const [write, setWrite] = useState(true)
   const total = lib.spools.filter(s => !s.archived).length
   const title: Key =
@@ -673,6 +690,8 @@ const SpoolChooser = ({
               'flex cursor-pointer items-start gap-3 rounded-lg border p-2.5',
               choice === s.id ? 'border-cyan bg-field' : 'border-edge'
             )}
+            data-option={s.id}
+            data-hint={hint || undefined}
           >
             <input
               type="radio"
@@ -698,7 +717,9 @@ const SpoolChooser = ({
           </label>
         ))}
         {want && !options.some(o => suits(o.spool, want)) && (
-          <p class="text-xs text-muted">{t('spools.no_suitable')}</p>
+          <p class="text-xs text-muted" data-testid="spool-no-suitable">
+            {t('spools.no_suitable')}
+          </p>
         )}
         <Button
           variant="ghost"
@@ -820,6 +841,11 @@ const SpoolChooser = ({
       {chosen && !options.some(o => o.spool.id === chosen.id) && (
         <p class="mt-3 text-[13px]" role="status">
           {tpl('spools.chosen', { name: `${spoolLabel(chosen)} · ${g(chosen.remaining)} g` })}
+        </p>
+      )}
+      {noWrite && (
+        <p class="mt-3 text-[13px] text-muted" role="status" data-no-write={noWrite}>
+          {t(noWrite)}
         </p>
       )}
       {canWrite && (

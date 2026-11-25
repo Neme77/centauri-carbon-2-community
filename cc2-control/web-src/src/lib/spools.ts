@@ -60,6 +60,31 @@ export type SpoolLibrary = {
   spoolman_enabled: boolean
   spoolman_url: string
   spoolman_has_auth: boolean
+  // Usage that was not sent to Spoolman and waits for the user's decision (spoolman.h), and how many spools are
+  // still linked to numbers of the old server after an address change.
+  spoolman_held?: HeldEntry[]
+  spoolman_stale_links?: number
+  // Changes with every change of the Spoolman address or login (and after every start of the printer program): what was
+  // read from Spoolman and what was chosen from it is only valid under the generation it was read under.
+  spoolman_gen?: number
+}
+export type HeldReason = 'login_changed' | 'server_changed' | 'not_found' | 'unsure'
+export type HeldEntry = {
+  id: number
+  spool: string
+  name: string
+  spoolman_id: string
+  grams: number
+  time: number
+  reason: HeldReason
+  sending: boolean
+}
+export type SpoolmanCatalog = {
+  gen?: number // the generation of the server settings the list was read under (SpoolLibrary.spoolman_gen)
+  loading: boolean
+  error: string
+  spools: { id: string; name: string; material: string; color: string; remaining: number }[]
+  truncated?: boolean // Spoolman has more spools than the list holds
 }
 // What /api/printer carries so that every page notices an open question.
 export type SpoolSummary = { enabled: boolean; revision: number; questions: number[] } | null | undefined
@@ -153,6 +178,16 @@ export const fits = (s: Spool, tray: { type: string; name?: string; color: strin
   return material && (!tray.color || s.color.toUpperCase() === tray.color.toUpperCase())
 }
 
+// A tray that holds filament but reports neither type nor colour (the printer's exclamation mark). `fits` takes
+// "nothing reported" as a match, which is right for "does the question need asking" but not for "is it worth writing".
+export const reportsNothing = (tray: { type: string; color: string } | null) =>
+  Boolean(tray && !tray.type && !tray.color)
+
+// Whether the spool's filament should be written to the tray: it differs from what the tray reports, or the tray
+// reports nothing at all. The question whether to ask which spool it is keeps using `fits` alone.
+export const needsWrite = (s: Spool, tray: { type: string; name?: string; color: string } | null) =>
+  !fits(s, tray) || reportsNothing(tray)
+
 /* ---- the inventory hierarchy: manufacturer > kind > colour > spool ------------------------- */
 
 const norm = (s: string) => s.trim().toLocaleLowerCase().replace(/ё/g, 'е')
@@ -210,7 +245,7 @@ const wheel = (hex: string) => {
   const { hue, light } = hsl(hex)
   return hue < 0 ? [0, 1 - light] : [1, hue + (1 - light)]
 }
-const byWheel = (a: string, b: string) => {
+export const byWheel = (a: string, b: string) => {
   const [x, y] = [wheel(a), wheel(b)]
   return x[0] - y[0] || x[1] - y[1]
 }
@@ -299,34 +334,50 @@ export function spoolHierarchy(list: Spool[]): SpoolBrand[] {
 export const matches = (s: Spool, query: string) =>
   !query.trim() || [s.name, s.brand, s.material, s.note, s.color].some(v => norm(v).includes(norm(query)))
 
+// The product line a tray names, from its base type on, without the maker's own word before it: Elegoo's Rapid
+// PLA+ spools name "RAPID PLA+", which is the line "PLA+" of "PLA". A name in which no word starts a line of the
+// type is kept whole.
+export const lineCore = (name: string, type: string) => {
+  const words = name.trim().split(/\s+/)
+  const at = words.findIndex((_, i) => isLineOf(words.slice(i).join(' '), type))
+  return at < 0 ? name : words.slice(at).join(' ')
+}
+
 // Whether a spool could be the filament a tray reports: its maker, type and colour as chosen on the printer.
-// A tray that names a product line ("PLA Matte") takes that line or the plain type; one that names only its
-// type ("PLA") takes any line of it. A named maker takes its own spools and those with no maker recorded;
-// "Generic" names none. Colours need only read alike, as a colour picked by hand rarely matches the tray's
-// value exactly.
+// A tray that names a product line ("PLA Matte") takes that line or the plain type, also the line without the
+// maker's word before it ("RAPID PLA+" takes "PLA+"); one that names only its type ("PLA") takes any line of
+// it. A named maker takes its own spools and those with no maker recorded; "Generic" names none. Colours need
+// only read alike, as a colour picked by hand rarely matches the tray's value exactly.
 export const suits = (s: Spool, tray: { type: string; name?: string; color: string; brand?: string } | null) => {
   if (!tray) return true
   const m = s.material.trim().toLowerCase(),
     type = tray.type.trim().toLowerCase(),
     line = (tray.name || '').trim().toLowerCase(),
     maker = (tray.brand || '').trim()
-  const material = !type || (line && line !== type ? m === line || m === type : isLineOf(s.material, tray.type))
+  const material =
+    !type ||
+    (line && line !== type ? m === line || m === type || m === lineCore(line, type) : isLineOf(s.material, tray.type))
   const colour =
     !tray.color || s.color.toUpperCase() === tray.color.toUpperCase() || colourWord(s.color) === colourWord(tray.color)
   const brand = !maker || /^generic$/i.test(maker) || !s.brand.trim() || norm(s.brand) === norm(maker)
   return Boolean(material && colour && brand)
 }
 
-// The likeliest answers first: the tray's very colour, its product line and brand, then opened spools,
-// the emptiest first, as they are used up before a new one is opened.
+// The likeliest answers first: the tray's very colour, its product line as named, then without the maker's
+// word, and its brand, then opened spools, the emptiest first, as they are used up before a new one is opened.
 export const bySuit = (tray: { type: string; name?: string; color: string; brand?: string }) => {
-  const rank = (s: Spool) => [
-    s.color.toUpperCase() === tray.color.toUpperCase() ? 0 : 1,
-    s.material.trim().toLowerCase() === (tray.name || tray.type).trim().toLowerCase() ? 0 : 1,
-    tray.brand && !/^generic$/i.test(tray.brand) && norm(s.brand) === norm(tray.brand) ? 0 : 1,
-    isSealed(s) ? 1 : 0,
-    s.remaining,
-  ]
+  const line = (tray.name || tray.type).trim().toLowerCase(),
+    core = lineCore(line, tray.type.trim())
+  const rank = (s: Spool) => {
+    const m = s.material.trim().toLowerCase()
+    return [
+      s.color.toUpperCase() === tray.color.toUpperCase() ? 0 : 1,
+      m === line ? 0 : m === core ? 1 : 2,
+      tray.brand && !/^generic$/i.test(tray.brand) && norm(s.brand) === norm(tray.brand) ? 0 : 1,
+      isSealed(s) ? 1 : 0,
+      s.remaining,
+    ]
+  }
   return (a: Spool, b: Spool) => {
     const [x, y] = [rank(a), rank(b)]
     return x.reduce((d, v, i) => d || v - y[i], 0)
@@ -350,3 +401,31 @@ export const adjustSpool = (id: string, weight: { remaining: number } | { gross:
 export const setTracking = (on: boolean) => post('/api/spools/enable', on ? 'on' : 'off')
 export const saveSpoolmanConfig = (fields: { enabled?: boolean; url?: string; basic_auth?: string }) =>
   post('/api/spoolman', lines(fields))
+
+// The list of usage that was not sent to Spoolman. Nothing here runs by itself: every call is a button.
+// `gen` is the generation the spools were chosen under: the printer refuses the request (409) when the address or the login
+// changed since, instead of reading the numbers against another server.
+export const sendHeld = (picks: Record<string, string>, gen: number | undefined) =>
+  post('/api/spoolman/held/send', `gen=${gen ?? ''}\n${lines(picks)}`)
+export const discardHeld = (id: number) => post('/api/spoolman/held/discard', lines({ id }))
+export const unlinkOldConnections = () => post('/api/spoolman/unlink-old')
+export const keepOldConnections = () => post('/api/spoolman/keep-old')
+// Spoolman's own spools, for the choice next to each entry: asks the server to read them, then waits for the answer.
+export async function loadSpoolmanCatalog(): Promise<SpoolmanCatalog> {
+  await post('/api/spoolman/catalog/refresh')
+  let catalog = (await request('/api/spoolman/catalog')) as SpoolmanCatalog
+  for (let i = 0; catalog.loading && i < 40; i++) {
+    await new Promise(done => setTimeout(done, 500))
+    catalog = (await request('/api/spoolman/catalog')) as SpoolmanCatalog
+  }
+  return catalog
+}
+// When the printer last read Spoolman successfully. This asks the printer, not Spoolman.
+export async function spoolmanSyncState(): Promise<{ time: number; ok: boolean }> {
+  try {
+    const s = (await request('/api/spoolman')) as { last_sync?: number; result?: string }
+    return { time: Number(s.last_sync) || 0, ok: s.result === 'ok' }
+  } catch {
+    return { time: 0, ok: false }
+  }
+}

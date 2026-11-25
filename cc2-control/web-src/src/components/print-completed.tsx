@@ -7,7 +7,8 @@ import { printer, view } from '@/lib/state'
 import { t, tpl } from '@/lib/i18n'
 import { errText, notify } from '@/lib/api'
 import { duration } from '@/lib/format'
-import { holdQueue, queue, queueNext, refreshQueue, startQueued } from '@/lib/queue'
+import { holdQueue, queue, queueNext, refreshQueue, startBlocked, startQueued } from '@/lib/queue'
+import { JobFilaments, QueueFilamentNotes } from '@/components/queue-next'
 import { usePoll } from '@/lib/poll'
 import { startFile } from '@/pages/print-dialog'
 const storageKey = 'cc2-completed-print-seen'
@@ -71,7 +72,7 @@ export const PrintCompleted = () => {
     if (!next) return
     setBusy(true)
     try {
-      await startQueued(next.id)
+      await startQueued(next.id, next.size)
       notify(tpl('queue.started', { k: next.done + 1, n: next.copies, name: next.path }))
       dismiss()
     } catch (e) {
@@ -90,12 +91,7 @@ export const PrintCompleted = () => {
     Number(data?.last_message_age) <= 15 &&
     view(data).idle
   return (
-    <Card
-      role="region"
-      aria-label={t('completed.title')}
-      data-print-completed
-      class="fixed right-3 bottom-3 z-40 w-[min(420px,calc(100vw-24px))] max-h-[65vh] overflow-auto shadow-2xl"
-    >
+    <Card role="region" aria-label={t('completed.title')} data-print-completed class="mb-3.5">
       <CardHead icon="file" title={notice.live ? 'completed.title' : 'completed.latest'} />
       <p class="break-words font-semibold">{notice.path}</p>
       <p class="mt-2 text-muted">
@@ -107,6 +103,10 @@ export const PrintCompleted = () => {
           <div class="font-semibold [overflow-wrap:anywhere]">
             {next.path} — {tpl('queue.copy_k_of_n', { k: next.done + 1, n: next.copies })}
           </div>
+          <div class="my-1.5 flex flex-wrap gap-1.5">
+            <JobFilaments item={next} />
+          </div>
+          <QueueFilamentNotes item={next} class="my-1" />
           {autoIn === null ? (
             <div class="text-xs text-muted">{t('queue.remove_part_hint')}</div>
           ) : (
@@ -124,7 +124,7 @@ export const PrintCompleted = () => {
         {next && (
           <Button
             variant="primary"
-            disabled={busy || !ready || !next.present}
+            disabled={busy || !ready || !next.present || startBlocked(next)}
             onClick={startNext}
             data-completed-queue-start
           >

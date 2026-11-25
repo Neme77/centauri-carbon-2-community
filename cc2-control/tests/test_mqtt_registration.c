@@ -38,9 +38,12 @@ int main(void){
  }
  clock_now+=10;mqtt_tick(&c);drain();assert(c.registered&&c.app_ping_pending_since==clock_now);
  c.automatic_registration_attempts=c.automatic_snapshot_attempts=c.automatic_canvas_attempts=9;
+ time_t snapshot_last=c.last_snapshot_request;
+ unsigned int snapshot_requests=c.snapshot_request_attempts;
  clock_now+=30;mqtt_tick(&c);drain();
  assert(c.connected&&!c.registered&&c.registration_recoveries==1);
- assert(!c.automatic_registration_attempts&&!c.automatic_snapshot_attempts&&!c.automatic_canvas_attempts);
+ assert(!c.automatic_registration_attempts&&c.automatic_snapshot_attempts==9&&!c.automatic_canvas_attempts);
+ assert(c.last_snapshot_request==snapshot_last&&c.snapshot_request_attempts==snapshot_requests);
  assert(!c.canvas_discovery_complete&&!c.snapshot_len&&!c.app_ping_pending_since);
  clock_now+=14;mqtt_tick(&c);drain();assert(!c.automatic_registration_attempts);
  clock_now++;mqtt_tick(&c);drain();assert(c.automatic_registration_attempts==1);
@@ -52,9 +55,14 @@ int main(void){
  assert(c.registration_recoveries==1&&c.automatic_registration_attempts==9);
  publish("elegoo/SN/test/register_response","{\"client_id\":\"test\",\"error\":\"ok\"}");
  assert(c.registered);
- mqtt_tick(&c);drain();assert(c.automatic_snapshot_attempts==1&&c.automatic_canvas_attempts==1);
+ mqtt_tick(&c);drain();assert(c.automatic_snapshot_attempts==9&&c.automatic_canvas_attempts==1);
+ assert(c.snapshot_request_attempts==snapshot_requests); /* recovery cannot rearm exhausted method-1002 budget */
  publish("elegoo/SN/test/api_response","{\"type\":\"PONG\"}");
  assert(!c.app_ping_pending_since);
+ /* An explicit Sync rearms discovery, with the ordinary settling delay. */
+ assert(!mqtt_sync_canvas(&c));drain();
+ clock_now+=14;mqtt_tick(&c);drain();assert(!c.automatic_snapshot_attempts);
+ clock_now++;mqtt_tick(&c);drain();assert(c.automatic_snapshot_attempts==1&&c.snapshot_request_attempts==snapshot_requests+1);
  mqtt_close(&c);close(peer);assert(!c.app_ping_pending_since);
  puts("PASS: own PONG, stale registration, delayed bounded recovery, foreign registration replies and recovered discovery");
  return 0;

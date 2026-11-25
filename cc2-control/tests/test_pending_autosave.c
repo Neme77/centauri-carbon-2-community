@@ -57,7 +57,7 @@ static void blocked_writes(mqtt_client *m) {
     int pair[2]; get_pair(pair);
     console_command_response(pair[0], &c, m, "save_config", 11);
     assert(finish(pair) == 409 && strstr(reply, "needs a restart") && !commands);
-    get_pair(pair); plates_calibrate_response(pair[0], m, &c, "A\n60\n0", 6);
+    get_pair(pair); plates_calibrate_response(pair[0], m, &c, "A\n60\n0", 6, NULL);
     assert(finish(pair) == 409 && strstr(reply, "needs a restart") && !commands && !plates_cal.stage);
     emergency_calls = 0;
     get_pair(pair); control_response(pair[0], &c, m, "system:emergency_stop", 21);

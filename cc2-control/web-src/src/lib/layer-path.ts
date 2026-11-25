@@ -17,6 +17,16 @@ export type LayerPath = {
 
 const cache = new Map<string, LayerPath>()
 
+/** The service's answer while the printer homes, levels, probes or starts a print: it begins no read of a
+ *  G-code file then (layer path, object preview, pictures). It can last minutes, so the page waits and asks
+ *  again every GCODE_READ_HELD_RETRY_MS. */
+export const GCODE_READ_HELD_ERROR = 'Printer is homing or starting a print; retry shortly'
+export const GCODE_READ_HELD_RETRY_MS = 3000
+export const gcodeReadHeld = (error: unknown) => {
+  const e = error as { status?: number; data?: { error?: unknown } } | null
+  return e?.status === 503 && e.data?.error === GCODE_READ_HELD_ERROR
+}
+
 export function layerPathUrl(storage: string, file: string, layer: number): string {
   const query = new URLSearchParams({ storage, file, layer: String(layer) })
   return `/api/gcode-files/layer-path?${query}`

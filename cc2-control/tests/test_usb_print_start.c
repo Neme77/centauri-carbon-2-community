@@ -14,8 +14,19 @@ int mock_console_emergency_stop(console_state *state, char *reason, size_t cap) 
 
 /* Holds the worker right before the copy until the test releases it: a slow copy on demand. */
 static int gate[2];
-static void hold_copy(void) { char byte; assert(read(gate[0], &byte, 1) == 1); }
+static atomic_int copy_held;
+static void hold_copy(void) {
+    atomic_store(&copy_held, 1);
+    char byte; assert(read(gate[0], &byte, 1) == 1);
+    atomic_store(&copy_held, 0);
+}
 static void release_copy(void) { assert(write(gate[1], "x", 1) == 1); }
+/* The worker scans the file before it reaches the copy; a cancel during the scan ends it without a copy.
+ * A test about a held copy waits until the worker really holds there. */
+static void wait_held(void) {
+    for (int i = 0; i < 5000 && !atomic_load(&copy_held); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    assert(atomic_load(&copy_held));
+}
 
 
 /* #344: a print dialog start from USB scans and copies the file on a worker thread. The socket gets
@@ -30,9 +41,11 @@ static int fake_uds(const char *request, char **reply, size_t *length) {
     return *reply ? 0 : -1;
 }
 
+static int mock_start_result; /* 0: the start request goes out; else it cannot be sent */
 int mock_mqtt_start_print(mqtt_client *c, const char *media, const char *filename,
                           const int *tools, const int *trays, size_t count,
                           char layout, int bedlevel_force, int timelapse) {
+    if (mock_start_result) return mock_start_result;
     (void)c; (void)tools; (void)trays; (void)layout; (void)bedlevel_force; (void)timelapse;
     char text[32]; snprintf(text, sizeof(text), "1020:%s:%zu;", media, count); strcat(events, text);
     snprintf(started_name, sizeof(started_name), "%s", filename);
@@ -60,6 +73,8 @@ static int imports(void) {
 
 static int answer(int peer, char *response, size_t cap) {
     size_t used = 0; ssize_t n;
+    { struct timeval rcv_limit = {30, 0}; /* never wait forever: a missing answer fails the test */
+      setsockopt(peer, SOL_SOCKET, SO_RCVTIMEO, &rcv_limit, sizeof(rcv_limit)); }
     while (used + 1 < cap && (n = recv(peer, response + used, cap - 1 - used, 0)) > 0) used += (size_t)n;
     response[used] = 0; close(peer);
     assert(used > 0);
@@ -80,16 +95,41 @@ static int begin(mqtt_client *mqtt, const char *body, char *response, size_t cap
     return -1;
 }
 
+/* The printer's Canvas report, one loaded tray 1 (method 2005), as a fresh report. */
+static void canvas_reports(mqtt_client *mqtt) {
+    mqtt->last_message = time(NULL); mqtt->canvas_revision++; mqtt->canvas_discovery_complete = 1;
+    mqtt->canvas_snapshot_len = (size_t)snprintf(mqtt->canvas_snapshot, sizeof(mqtt->canvas_snapshot),
+        "{\"id\":2005,\"result\":{\"canvas_info\":{\"canvas_list\":[{\"canvas_id\":0,\"connected\":1,\"tray_list\":["
+        "{\"tray_id\":1,\"status\":1,\"filament_type\":\"PLA\"},{\"tray_id\":3,\"status\":1,\"filament_type\":\"PLA\"}]}]}}}");
+}
+/* Ticks the main loop until the start is answered (at most 3 s), answering each Canvas report asked for. */
+static void settle(mqtt_client *mqtt, int reports) {
+    for (int i = 0; i < 3000 && usb_start_active(); ++i) {
+        if (reports && mqtt->canvas_refresh_due) { mqtt->canvas_refresh_due = 0; canvas_reports(mqtt); }
+        usb_start_tick(mqtt); if (usb_start_active()) nanosleep(&(struct timespec){0, 1000000}, NULL);
+    }
+    assert(!usb_start_active());
+}
+
 static void wait_worker(void) {
     for (int i = 0; i < 5000 && !atomic_load(&usb_start_done); ++i) nanosleep(&(struct timespec){0, 1000000}, NULL);
     assert(atomic_load(&usb_start_done));
 }
 
+/* A test that waits for something that never comes ends red with a message instead of hanging the suite. */
+static void test_too_long(int signal_number) {
+    (void)signal_number;
+    static const char text[] = "FAIL: the test ran longer than 300 s (an answer that never came?)\n";
+    if (write(2, text, sizeof(text) - 1) < 0) {}
+    _exit(1);
+}
 int main(void) {
+    signal(SIGALRM, test_too_long); alarm(300);
     char response[1024]; int status = 0;
     char dir[] = "usb-start-XXXXXX"; /* the harnesses share one working directory */
     assert(mkdtemp(dir) && !chdir(dir));
-    assert(!mkdir("gcode", 0700) && !mkdir("usb", 0700));
+    assert(!mkdir("gcode", 0700) && !mkdir("usb", 0700) && !mkdir("maps", 0700));
+    layer_store_dir = "maps";
     static char big[3 * 65536 + 123];
     for (size_t i = 0; i + 1 < sizeof(big); ++i) big[i] = (i % 61 == 60) ? '\n' : (char)('A' + i % 26);
     big[0] = ';'; big[sizeof(big) - 1] = 0;
@@ -151,6 +191,25 @@ int main(void) {
     assert(!unlink(kept_copy) && !unlink("gcode/" GCODE_USB_IMPORT_PREFIX "kept"));
     mqtt.machine_status = 1;
 
+    /* The start request cannot be sent after the copy was published: the copy is removed again and its layer map goes
+     * with it (a map of the copy can exist by then: a layer request queued it and the builder ran in between). */
+    mock_start_result = -1;
+    peer = begin(&mqtt, "usb\nflat.gcode\n\nA\nsaved\n0", response, sizeof(response), &status);
+    assert(peer >= 0); wait_worker();
+    char failed_map[PATH_MAX_LOCAL * 3];
+    {   DIR *dir = opendir("gcode"); assert(dir); struct dirent *entry; char copy_path[PATH_MAX_LOCAL * 2] = "";
+        while ((entry = readdir(dir))) if (!strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, 8))
+            snprintf(copy_path, sizeof(copy_path), "gcode/%s", entry->d_name);
+        closedir(dir); assert(copy_path[0]);
+        size_t length = strlen(copy_path);
+        if (length > 5 && !strcmp(copy_path + length - 5, ".part")) copy_path[length - 5] = 0; /* published at the tick */
+        assert(layer_store_index_path(copy_path, failed_map, sizeof(failed_map)) == 0);
+        write_file(failed_map, "x"); }
+    usb_start_tick(&mqtt);
+    assert(answer(peer, response, sizeof(response)) == 503 && imports() == 0 && !usb_start_active());
+    assert(access(failed_map, F_OK) != 0); /* the copy and its layer map are both gone */
+    mock_start_result = 0;
+
     /* A start the scan refuses is answered without copying the file. */
     peer = begin(&mqtt, "usb\nflat.gcode\n\nA\nadaptive\n0", response, sizeof(response), &status);
     assert(peer >= 0); wait_worker(); usb_start_tick(&mqtt);
@@ -160,10 +219,20 @@ int main(void) {
     assert(peer >= 0); wait_worker(); usb_start_tick(&mqtt);
     assert(answer(peer, response, sizeof(response)) == 409 && strstr(response, "Canvas mapping"));
     assert(!events[0] && imports() == 0);
+    /* A start with a mapping is judged with the Canvas trays: the printer has reported them before the start. */
+    canvas_reports(&mqtt);
     peer = begin(&mqtt, "usb\ntwo.gcode\n0:1,1:3\nA\nsaved\n0", response, sizeof(response), &status);
-    assert(peer >= 0); wait_worker(); usb_start_tick(&mqtt);
+    assert(peer >= 0); wait_worker(); settle(&mqtt, 1);
     assert(answer(peer, response, sizeof(response)) == 202 && !strcmp(events, "1020:local:2;"));
     snprintf(copy, sizeof(copy), "gcode/%s", started_name); assert(!unlink(copy));
+    /* A start with a mapping while the Canvas never reports (behaviour change against #347, where it went out at
+     * once): refused after the wait with its own message, before anything is copied. */
+    mqtt.canvas_snapshot_len = 0; usb_start_canvas_wait_ms = 50;
+    peer = begin(&mqtt, "usb\ntwo.gcode\n0:1,1:3\nA\nsaved\n0", response, sizeof(response), &status);
+    assert(peer >= 0); settle(&mqtt, 0); /* the worker waits for the report before copying: only ticks end it */
+    assert(answer(peer, response, sizeof(response)) == 409 && strstr(response, "did not report its trays when the start began"));
+    assert(!events[0] && imports() == 0);
+    usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS;
 
     /* Refusals that need no file access are answered at once, without the worker. */
     mqtt.machine_status = 2;
@@ -177,7 +246,6 @@ int main(void) {
     assert(status == 404 && !usb_start_active());
     assert(begin(&mqtt, "usb\ncube.gcode\n\nA\nsideways\n0", response, sizeof(response), &status) < 0);
     assert(status == 400);
-    assert(gcode_request_is_usb("usb\ncube.gcode", 14) && !gcode_request_is_usb("internal\ncube.gcode", 19));
 
     /* The stick was pulled after the copy: refused like a missing file, and the copy is removed. */
     write_file("usb/gone.gcode", "G28\n");
@@ -192,7 +260,7 @@ int main(void) {
     assert(!pipe(gate));
     usb_start_copy_hook = hold_copy;
     peer = begin(&mqtt, "usb\ncube.gcode\n\nA\nsaved\n0", response, sizeof(response), &status);
-    assert(peer >= 0);
+    assert(peer >= 0); wait_held();
     close(peer);
     usb_start_tick(&mqtt);                       /* noticed while the copy is still held */
     assert(usb_start_active() && usb_start_cancelled == 1 && !atomic_load(&usb_start_done));
@@ -213,7 +281,7 @@ int main(void) {
     for (int i = 0; i < 2; i++) {
         usb_start_copy_hook = hold_copy;
         peer = begin(&mqtt, "usb\ncube.gcode\n\nA\nsaved\n0", response, sizeof(response), &status);
-        assert(peer >= 0);
+        assert(peer >= 0); wait_held();
         int pair[2]; assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
         if (i == 0) control_response(pair[0], &console, &mqtt, "system:emergency_stop", 21);
         else console_command_response(pair[0], &console, &mqtt, "M112", 4);

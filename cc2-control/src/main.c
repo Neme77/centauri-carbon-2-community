@@ -9,7 +9,10 @@
 #include <stdatomic.h>
 #include <poll.h>
 #include <stdint.h>
+#include <sys/file.h>
 #include <sys/statvfs.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
 #include <limits.h>
 #include <math.h>
 #include <signal.h>
@@ -253,8 +256,10 @@ static void memory_values(long *total, long *available) {
     fclose(file);
 }
 
+static void layer_path_health_json(char *out, size_t cap);
 static void health_response(int fd, const mqtt_client *mqtt) {
-    char body[768];
+    char body[1536], layer_path[512];
+    layer_path_health_json(layer_path, sizeof(layer_path));
     char load[96] = "unknown";
     long uptime = read_first_long("/proc/uptime");
     long mem_total, mem_available;
@@ -270,10 +275,10 @@ static void health_response(int fd, const mqtt_client *mqtt) {
         "\"mode\":\"protected-control\",\"uptime_seconds\":%ld,"
         "\"mem_total_kb\":%ld,\"mem_available_kb\":%ld,"
         "\"loadavg\":\"%s\",\"mqtt_connected\":%s,\"mqtt_registered\":%s,"
-        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu,\"mqtt_oversized_replies\":%lu}\n",
+        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu,\"mqtt_oversized_replies\":%lu,%s}\n",
         uptime, mem_total, mem_available, load, mqtt->connected ? "true" : "false",
         mqtt->registered ? "true" : "false", mqtt->snapshot_len ? "true" : "false",
-        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots,mqtt->oversized_replies);
+        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots,mqtt->oversized_replies,layer_path);
     if (length < 0 || (size_t)length >= sizeof(body)) return;
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
@@ -657,7 +662,9 @@ static int gcode_storage_root(const char *storage, const char **root) {
 
 #include "gcode_download.h"
 #include "gcode_layer_path.h"
+#include "gcode_layer_index_store.h"
 #include "gcode_layer_path_http.h"
+#include "gcode_object_preview_http.h"
 
 /* Cursor pages keep the fixed 128-entry window and all traversal guards.
  * A cursor is metadata for ordering only, never an instruction to open a path.
@@ -781,6 +788,7 @@ static void gcode_delete_error(int fd, int status, const char *reason, const cha
     respond(fd,status,reason,"application/json",json,(size_t)n);
 }
 
+static int print_start_preparing(const char *file); /* a start of this file is checked on the worker */
 static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file) {
     time_t now = time(NULL);
     if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status ||
@@ -793,7 +801,7 @@ static const char *gcode_delete_guard(const mqtt_client *mqtt, const char *file)
     pthread_mutex_lock(&orca_pending_mutex);
     int pending = gcode_same_job_name(file, orca_pending_filename) || gcode_same_job_file(file, orca_pending_filename);
     pthread_mutex_unlock(&orca_pending_mutex);
-    if (pending) return "file_delete_pending_print";
+    if (pending || print_start_preparing(file)) return "file_delete_pending_print";
     const char *native = uds_print_state(&telemetry);
     int reported_job = mqtt->machine_status == 2 || !strcmp(mqtt->print_state, "printing") ||
                        !strcmp(mqtt->print_state, "paused") || !strcmp(mqtt->print_state, "error");
@@ -835,6 +843,7 @@ static void gcode_delete_response(int fd,const char *request,const mqtt_client *
        unlink(path)!=0){
         gcode_delete_error(fd,409,"Conflict","file_delete_failed");return;
     }
+    layer_store_forget(path);
     const char *ok="{\"deleted\":true}\n";
     respond(fd,200,"OK","application/json",ok,strlen(ok));
 }
@@ -871,6 +880,7 @@ static void gcode_copy_response(int fd,const mqtt_client *mqtt,const char *body,
     if(fclose(out)!=0)failed=1;
     fclose(in);
     if(failed||rename(temporary,destination)!=0){unlink(temporary);goto copy_failed;}
+    layer_store_note(destination);
     {const char *ok="{\"copied\":true}\n";respond(fd,201,"Created","application/json",ok,strlen(ok));return;}
 invalid:{const char *e="{\"error\":\"Invalid copy request or unavailable storage\"}\n";respond(fd,400,"Bad Request","application/json",e,strlen(e));return;}
 missing:{const char *e="{\"error\":\"Source G-code file not found or unsafe\"}\n";respond(fd,404,"Not Found","application/json",e,strlen(e));return;}
@@ -935,6 +945,15 @@ static int upload_space_guard(int fd,const char *root,size_t length,unsigned cop
     if(upload_has_space(root,length,copies))return 1;
     const char *error="{\"error\":\"Insufficient free space for upload and storage reserve\"}\n";
     respond(fd,507,"Insufficient Storage","application/json",error,strlen(error));return 0;
+}
+/* As upload_space_guard, but an upload into internal memory full of old USB copies first lets the oldest of them
+ * make room (gcode_usb_make_room: only what may be deleted, only as many as needed, only with a fresh printer
+ * status), as a USB start does. Main loop, before the upload slot is taken (so file_delete_upload_busy is not set). */
+static void gcode_usb_make_room(const mqtt_client *mqtt, uint64_t size, const char *name);
+static int upload_space_or_room(int fd,const mqtt_client *mqtt,const char *root,size_t length,unsigned copies){
+    if(!upload_has_space(root,length,copies)&&mqtt&&!strcmp(root,gcode_internal_root))
+        gcode_usb_make_room(mqtt,(uint64_t)length*copies,"");
+    return upload_space_guard(fd,root,length,copies);
 }
 static int upload_seconds_left(const gcode_upload_job *job){
     struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
@@ -1092,6 +1111,7 @@ static void *gcode_upload_worker(void *arg){
         error="Cannot publish uploaded file";goto done;
     }
     temporary[0]=0;
+    layer_store_note(destination);
     code=201;status="Created";
 done:
     if(output>=0)close(output);
@@ -1130,7 +1150,7 @@ static int gcode_upload_start(int fd,const char *request,const char *query,
         const char *e="{\"error\":\"Invalid upload size (maximum 512 MiB)\"}\n";
         respond(fd,413,"Payload Too Large","application/json",e,strlen(e));return 0;
     }
-    if(!upload_space_guard(fd,root,len,1))return 0;
+    if(!upload_space_or_room(fd,mqtt,root,len,1))return 0;
     if(!upload_slot_acquire()){
         const char *e="{\"error\":\"Another upload is running\"}\n";
         respond(fd,409,"Conflict","application/json",e,strlen(e));return 0;
@@ -1374,6 +1394,7 @@ static void *orca_upload_worker(void *arg){
     close(reserve);reserve=-1;
     if(rename(temporary,destination)!=0){unlink(destination);status=507;status_text="Insufficient Storage";error="Cannot publish file";goto fail;}
     temporary[0]=0;
+    layer_store_note(destination);
     unsigned long pending_generation=0;
     if(print_requested){
         pthread_mutex_lock(&orca_pending_mutex);
@@ -1441,7 +1462,7 @@ static int orca_upload_start(int fd,const char *request,size_t used,size_t heade
         const char *msg="{\"error\":\"Invalid upload length\"}\n";
         respond(fd,413,"Payload Too Large","application/json",msg,strlen(msg));return 0;
     }
-    if(!upload_space_guard(fd,gcode_internal_root,length,2))return 0;
+    if(!upload_space_or_room(fd,mqtt,gcode_internal_root,length,2))return 0;
     if(!upload_slot_acquire()){
         const char *msg="{\"error\":\"Another upload is running\"}\n";
         respond(fd,409,"Conflict","application/json",msg,strlen(msg));return 0;
@@ -1501,39 +1522,454 @@ static int gcode_usb_import_name(const char *relative, char imported[PATH_MAX_LO
     return length < 0 || length >= PATH_MAX_LOCAL ? -1 : 0;
 }
 
-static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL]) {
-    char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
-    char temporary[PATH_MAX_LOCAL * 2];
-    if (!gcode_resolved_path(gcode_usb_root, relative, source, sizeof(source))) return -1;
-    if (gcode_usb_import_name(relative, imported) != 0) return -1;
-    int length = snprintf(destination, sizeof(destination), "%s/%s",
-                      gcode_internal_root, imported);
-    if (length < 0 || (size_t)length >= sizeof(destination)) return -1;
-    length = snprintf(temporary, sizeof(temporary), "%s.part", destination);
-    if (length < 0 || (size_t)length >= sizeof(temporary)) return -1;
+/* USB imports are kept for the touchscreen and for a restart of the same file, but not without
+ * end: after a USB start only the newest GCODE_USB_IMPORTS_KEPT stay, the one just started among
+ * them. An older copy is removed only where deleting it from the file list would be allowed
+ * (gcode_delete_guard: never the running, paused or recoverable print, nothing while the printer
+ * state is unclear or an upload or Orca start is pending) and no queued job names it. */
+#define GCODE_USB_IMPORTS_KEPT 3
+/* All USB imports together: above this the oldest go first, until the rest fits or only protected
+ * copies and the one just started are left (which may exceed it on their own). A starting value. */
+#define GCODE_USB_IMPORTS_MAX_BYTES (1024ULL * 1024 * 1024)
+static unsigned long long gcode_usb_imports_max_bytes = GCODE_USB_IMPORTS_MAX_BYTES; /* test seam */
+static int queue_uses_internal_file(const char *name); /* queue.h */
+typedef struct { char name[256]; struct timespec mtime; unsigned long long size; int gone; } gcode_usb_import_entry;
+static int gcode_usb_import_newer(const void *a, const void *b) {
+    const gcode_usb_import_entry *x = a, *y = b;
+    if (x->mtime.tv_sec != y->mtime.tv_sec) return x->mtime.tv_sec < y->mtime.tv_sec ? 1 : -1;
+    if (x->mtime.tv_nsec != y->mtime.tv_nsec) return x->mtime.tv_nsec < y->mtime.tv_nsec ? 1 : -1;
+    return strcmp(x->name, y->name);
+}
+/* Removes one older copy where the file list's delete guard allows it and no queued job names it. */
+static int gcode_usb_import_remove(const mqtt_client *mqtt, const char *name) {
+    if (gcode_delete_guard(mqtt, name) || queue_uses_internal_file(name)) return 0;
+    char path[PATH_MAX_LOCAL * 2]; struct stat info;
+    snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, name);
+    /* As a delete from the file list: the same regular, singly linked file, or nothing. */
+    if (lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 || unlink(path)) return 0;
+    layer_store_forget(path); /* the copy's layer map goes with it */
+    fprintf(stderr, "USB import cleanup: removed %s\n", name);
+    return 1;
+}
+/* Returns the number of copies removed. */
+static int gcode_usb_prune(const mqtt_client *mqtt, const char *keep) {
+    DIR *dir = opendir(gcode_internal_root);
+    if (!dir) return 0;
+    gcode_usb_import_entry *found = NULL; size_t count = 0, cap = 0; struct dirent *entry;
+    while ((entry = readdir(dir))) {
+        size_t length = strlen(entry->d_name);
+        if (strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, strlen(GCODE_USB_IMPORT_PREFIX)) ||
+            length >= sizeof(found->name) || !is_gcode_filename(entry->d_name)) continue;
+        char path[PATH_MAX_LOCAL * 2]; struct stat info;
+        if (snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, entry->d_name) >= (int)sizeof(path) ||
+            lstat(path, &info) != 0 || !S_ISREG(info.st_mode)) continue;
+        if (count == cap) {
+            size_t next = cap ? cap * 2 : 16;
+            gcode_usb_import_entry *grown = realloc(found, next * sizeof(*found));
+            if (!grown) break;
+            found = grown; cap = next;
+        }
+        snprintf(found[count].name, sizeof(found[count].name), "%s", entry->d_name);
+        found[count].size = (unsigned long long)info.st_size; found[count].gone = 0;
+        found[count++].mtime = info.st_mtim;
+    }
+    closedir(dir);
+    if (count) qsort(found, count, sizeof(*found), gcode_usb_import_newer);
+    int kept = keep && *keep ? 1 : 0, removed = 0;
+    unsigned long long total = 0;
+    for (size_t i = 0; i < count; i++) total += found[i].size;
+    /* First the count: the newest three stay. */
+    for (size_t i = 0; i < count; i++) {
+        if (keep && !strcmp(found[i].name, keep)) continue;
+        if (kept < GCODE_USB_IMPORTS_KEPT) { kept++; continue; }
+        if (gcode_usb_import_remove(mqtt, found[i].name)) { found[i].gone = 1; total -= found[i].size; removed++; }
+    }
+    /* Then the size: oldest first while all copies together exceed the limit. */
+    for (size_t i = count; i-- > 0 && total > gcode_usb_imports_max_bytes;) {
+        if (found[i].gone || (keep && !strcmp(found[i].name, keep))) continue;
+        if (gcode_usb_import_remove(mqtt, found[i].name)) { found[i].gone = 1; total -= found[i].size; removed++; }
+    }
+    free(found);
+    return removed;
+}
 
-    FILE *input = fopen(source, "rb");
-    if (!input) return -1;
-    FILE *output = fopen(temporary, "wb");
-    if (!output) { fclose(input); return -1; }
-    char buffer[65536]; int failed = 0;
-    for (;;) {
-        size_t count = fread(buffer, 1, sizeof(buffer), input);
-        if (count && fwrite(buffer, 1, count, output) != count) { failed = 1; break; }
-        if (count < sizeof(buffer)) {
-            if (ferror(input)) failed = 1;
-            break;
+/* Removes the CC2_USB_*.part files a copy leaves behind when CC2 Control ends during it (update, crash, power
+ * loss; procd starts it again at once, so such a file is fresh). A running copy holds an flock on its .part
+ * until it is renamed or removed (gcode_import_usb), and the kernel drops that lock when the process ends,
+ * however it ends; so a .part without a lock has no copy behind it, whatever its age, and one with a lock is a
+ * running copy, also of another instance on the same folders. Only regular, singly linked files. Runs at start
+ * and before every USB copy (on the worker, before its own copy). */
+static int gcode_usb_part_cleanup(void) {
+    DIR *dir = opendir(gcode_internal_root);
+    if (!dir) return 0;
+    int removed = 0; struct dirent *entry;
+    while ((entry = readdir(dir))) {
+        size_t length = strlen(entry->d_name);
+        if (strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, strlen(GCODE_USB_IMPORT_PREFIX)) ||
+            length < 5 || strcmp(entry->d_name + length - 5, ".part")) continue;
+        char path[PATH_MAX_LOCAL * 2]; struct stat info, held;
+        if (snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, entry->d_name) >= (int)sizeof(path) ||
+            lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1) continue;
+        int fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+        if (fd < 0) continue;
+        /* The same file as listed, and no copy holds it: removed while this lock keeps a new copy off it. */
+        if (!fstat(fd, &held) && held.st_dev == info.st_dev && held.st_ino == info.st_ino &&
+            !flock(fd, LOCK_EX | LOCK_NB) && !lstat(path, &info) && info.st_ino == held.st_ino &&
+            info.st_dev == held.st_dev && !unlink(path)) {
+            fprintf(stderr, "USB import cleanup: removed leftover %s\n", entry->d_name);
+            removed++;
+        }
+        close(fd);
+    }
+    closedir(dir);
+    return removed;
+}
+
+/* Why an import was not completed; the start answers each one with its own message. */
+enum { GCODE_IMPORT_FAILED = -1, GCODE_IMPORT_NO_SPACE = -2, GCODE_IMPORT_CHANGED = -3,
+       GCODE_IMPORT_UNVERIFIED = -4, GCODE_IMPORT_CANCELLED = -5 };
+/* The USB file as it was before it was scanned: the copy must be of that same file. */
+typedef struct { int known; off_t size; dev_t dev; ino_t ino; struct timespec mtime; } gcode_source_stamp;
+static void gcode_source_stamp_of(gcode_source_stamp *stamp, const struct stat *info) {
+    stamp->known = 1; stamp->size = info->st_size; stamp->dev = info->st_dev; stamp->ino = info->st_ino;
+    stamp->mtime = info->st_mtim;
+}
+static int gcode_source_stamp_same(const gcode_source_stamp *a, const gcode_source_stamp *b) {
+    return a->size == b->size && a->dev == b->dev && a->ino == b->ino &&
+           a->mtime.tv_sec == b->mtime.tv_sec && a->mtime.tv_nsec == b->mtime.tv_nsec;
+}
+static int usb_import_has_space(uint64_t size, uint64_t replaced) {
+    struct statvfs st;
+    if (upload_statvfs(gcode_internal_root, &st)) return 0;
+    uint64_t block = st.f_frsize ? st.f_frsize : st.f_bsize;
+    if (!block) return 0;
+    uint64_t available = st.f_bavail > UINT64_MAX / block ? UINT64_MAX : (uint64_t)st.f_bavail * block;
+    uint64_t reserve = replaced >= UPLOAD_STORAGE_MARGIN ? 0 : UPLOAD_STORAGE_MARGIN - replaced;
+    return available >= size && available - size >= reserve;
+}
+/* Room for a new USB copy of `size` bytes: when it does not fit, the oldest older copies go first (as the
+ * cleanup after a start would remove them, gcode_usb_import_remove), but only when removing all of them
+ * that may go would be enough; otherwise nothing is removed and the start is refused for lack of space.
+ * `name` is the new copy's own name: an earlier copy of it is replaced, not removed. Main loop only. */
+static void gcode_usb_make_room(const mqtt_client *mqtt, uint64_t size, const char *name) {
+    char path[PATH_MAX_LOCAL * 2]; struct stat earlier;
+    snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, name);
+    uint64_t replaced = lstat(path, &earlier) == 0 && S_ISREG(earlier.st_mode) ? (uint64_t)earlier.st_size : 0;
+    if (usb_import_has_space(size, replaced)) return;
+    DIR *dir = opendir(gcode_internal_root);
+    if (!dir) return;
+    gcode_usb_import_entry *found = NULL; size_t count = 0, cap = 0; struct dirent *entry;
+    unsigned long long removable = 0;
+    while ((entry = readdir(dir))) {
+        if (strncmp(entry->d_name, GCODE_USB_IMPORT_PREFIX, strlen(GCODE_USB_IMPORT_PREFIX)) ||
+            strlen(entry->d_name) >= sizeof(found->name) || !is_gcode_filename(entry->d_name) ||
+            !strcmp(entry->d_name, name)) continue;
+        struct stat info;
+        if (snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, entry->d_name) >= (int)sizeof(path) ||
+            lstat(path, &info) || !S_ISREG(info.st_mode) || info.st_nlink != 1 ||
+            gcode_delete_guard(mqtt, entry->d_name) || queue_uses_internal_file(entry->d_name)) continue;
+        if (count == cap) {
+            size_t next = cap ? cap * 2 : 16;
+            gcode_usb_import_entry *grown = realloc(found, next * sizeof(*found));
+            if (!grown) break;
+            found = grown; cap = next;
+        }
+        snprintf(found[count].name, sizeof(found[count].name), "%s", entry->d_name);
+        found[count].size = (unsigned long long)info.st_size; found[count].gone = 0;
+        found[count++].mtime = info.st_mtim;
+        removable += (unsigned long long)info.st_size;
+    }
+    closedir(dir);
+    struct statvfs st; uint64_t block;
+    if (!upload_statvfs(gcode_internal_root, &st) && (block = st.f_frsize ? st.f_frsize : st.f_bsize)) {
+        uint64_t available = (uint64_t)st.f_bavail * block + removable;
+        uint64_t reserve = replaced >= UPLOAD_STORAGE_MARGIN ? 0 : UPLOAD_STORAGE_MARGIN - replaced;
+        if (available >= size && available - size >= reserve) {
+            if (count) qsort(found, count, sizeof(*found), gcode_usb_import_newer);
+            for (size_t i = count; i-- > 0 && !usb_import_has_space(size, replaced);)
+                (void)gcode_usb_import_remove(mqtt, found[i].name);
         }
     }
-    if (!failed && fflush(output) != 0) failed = 1;
-    if (!failed && fsync(fileno(output)) != 0) failed = 1;
-    if (fclose(output) != 0) failed = 1;
-    fclose(input);
-    if (failed || rename(temporary, destination) != 0) {
-        unlink(temporary);
+    free(found);
+}
+/* FNV-1a, 64 bit: detects a copy that reads back different from the bytes read from the stick. */
+static uint64_t gcode_copy_hash(uint64_t hash, const unsigned char *bytes, size_t length) {
+    while (length--) { hash ^= *bytes++; hash *= 1099511628211ULL; }
+    return hash;
+}
+#define GCODE_COPY_HASH_SEED 14695981039346656037ULL
+/* A USB start copies on its worker thread at normal priority, without pauses: every USB_COPY_FLUSH_BYTES
+ * it writes the copy out and drops those pages of source and copy from the cache, so the copy does not
+ * pile up unwritten data in the printer's memory. The read back drops its pages the same way, every
+ * USB_COPY_FLUSH_BYTES and at the end; the scan before the copy goes through the cache as any read does. Earlier versions also paused after every
+ * block and lowered the worker's priority; the lowered priority also slowed the scan of internal starts,
+ * and the printer's mq-deadline scheduler ignores I/O priorities. A start without the worker
+ * (gcode_start_run without `usb`; the program no longer starts a USB file that way) is not written out
+ * early. */
+#define USB_COPY_FLUSH_BYTES ((size_t)8 << 20)
+/* For tests, about the last import: early write-outs, bytes dropped from the cache. */
+static unsigned long usb_copy_flushes;
+static size_t usb_copy_dropped_in, usb_copy_dropped_out;
+static int usb_copy_readback_dropped; /* drops during and after the read back */
+/* Writes bytes [from, to) of the copy to storage and waits for them, then drops them and the same range
+ * of the source from the cache. A failed write-out fails the copy, as the final fsync would. */
+static int usb_copy_write_out(FILE *output, FILE *input, size_t from, size_t to) {
+    if (fflush(output) != 0) return -1;
+    int fd = fileno(output); off_t start = (off_t)from, length = (off_t)(to - from);
+#ifdef SYNC_FILE_RANGE_WRITE
+    if (sync_file_range(fd, start, length,
+                        SYNC_FILE_RANGE_WAIT_BEFORE | SYNC_FILE_RANGE_WRITE | SYNC_FILE_RANGE_WAIT_AFTER) != 0 &&
+        fdatasync(fd) != 0)
         return -1;
+#else
+    if (fdatasync(fd) != 0) return -1;
+#endif
+    if (posix_fadvise(fd, start, length, POSIX_FADV_DONTNEED) == 0) usb_copy_dropped_out += to - from;
+    if (posix_fadvise(fileno(input), start, length, POSIX_FADV_DONTNEED) == 0) usb_copy_dropped_in += to - from;
+    usb_copy_flushes++;
+    return 0;
+}
+/* Test seams: after each block written (with the bytes copied so far), and after the copy was synced. */
+static void (*usb_copy_block_hook)(size_t copied);
+static void (*usb_copy_synced_hook)(const char *path);
+/* Heartbeat of the start worker: set on every block it reads or writes and on every round of its waits, so the
+ * main loop sees a worker that stands still (a USB stick that stops answering inside fread, Fund 4). */
+static long long monotonic_ms(void);
+static atomic_llong usb_start_beat;
+static void usb_start_beat_now(void) { atomic_store(&usb_start_beat, monotonic_ms()); }
+static void usb_start_nap(long ms) { usb_start_beat_now(); nanosleep(&(struct timespec){0, ms * 1000000L}, NULL); }
+/* Set by the start worker when a read of the file came back with an error (the copy, or a scan before it): after a
+ * read that stopped answering (reason usb_unresponsive) it tells a stick that failed from one that was only slow.
+ * It is noted before the cancel is checked, so a read that ends after the browser was answered still counts. */
+static atomic_int usb_start_read_failed;
+/* Test seam: called after each block of the one-pass scan (0) and of the read back (1). */
+static void (*usb_read_block_hook)(int phase);
+
+/* One line of the tool scan and of the adaptive-mesh scan. The file scans below (fgets with 2048 and
+ * 4096 bytes) and the scan that runs along with a USB copy cut lines the same way and call these, so
+ * both reach the same decision for the same bytes. */
+static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOOLS_MAX]);
+#define GCODE_TOOLS_LINE 2048
+#define GCODE_MESH_LINE 4096
+static void gcode_tools_line(char *line, int present[GCODE_TOOLS_MAX], double *lengths) {
+    char *comment = strchr(line, ';');
+    if (comment) {
+        if (lengths) gcode_filament_lengths(comment, lengths);
+        *comment = '\0';
     }
+    for (char *cursor = line; *cursor; ++cursor) {
+        if ((*cursor != 'T' && *cursor != 't') ||
+            (cursor != line && !isspace((unsigned char)cursor[-1]))) continue;
+        char *number = cursor + 1, *end = number;
+        if (!isdigit((unsigned char)*number)) continue;
+        long tool = strtol(number, &end, 10);
+        if (tool < 0 || tool >= GCODE_TOOLS_MAX) continue;
+        if (*end && !isspace((unsigned char)*end) && *end != '*') continue;
+        present[tool] = 1;
+        cursor = end - 1;
+    }
+}
+static int gcode_mesh_line(const char *line) {
+    char upper[GCODE_MESH_LINE]; size_t index = 0;
+    for (; line[index] && index + 1 < sizeof(upper); ++index)
+        upper[index] = (char)toupper((unsigned char)line[index]);
+    upper[index] = '\0';
+    char *comment = strchr(upper, ';');
+    if (comment) *comment = '\0';
+    return strstr(upper, "BED_MESH_CALIBRATE") &&
+           (strstr(upper, "FROM_SLICER=1") ||
+            (strstr(upper, "MESH_MIN=") && strstr(upper, "MESH_MAX=")) ||
+            strstr(upper, "ADAPTIVE=1"));
+}
+/* The tools present, in ascending order; tool 0 when none is named (as the file scan reports). */
+static void gcode_tools_list(const int present[GCODE_TOOLS_MAX], int tools[GCODE_TOOLS_MAX], size_t *count) {
+    *count = 0;
+    for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool)
+        if (present[tool]) tools[(*count)++] = tool;
+    if (!*count) tools[(*count)++] = 0;
+}
+/* Both scans over bytes as they are copied, lines cut exactly as fgets cuts them: a line ends after
+ * its newline or after size - 1 bytes. */
+typedef struct {
+    char mesh[GCODE_MESH_LINE]; size_t mesh_used; int adaptive;
+    char tools[GCODE_TOOLS_LINE]; size_t tools_used; int present[GCODE_TOOLS_MAX];
+} gcode_stream_scan;
+static void gcode_stream_scan_byte(gcode_stream_scan *scan, char byte) {
+    scan->mesh[scan->mesh_used++] = byte;
+    if (byte == '\n' || scan->mesh_used == sizeof(scan->mesh) - 1) {
+        scan->mesh[scan->mesh_used] = '\0';
+        if (!scan->adaptive && gcode_mesh_line(scan->mesh)) scan->adaptive = 1;
+        scan->mesh_used = 0;
+    }
+    scan->tools[scan->tools_used++] = byte;
+    if (byte == '\n' || scan->tools_used == sizeof(scan->tools) - 1) {
+        scan->tools[scan->tools_used] = '\0';
+        gcode_tools_line(scan->tools, scan->present, NULL);
+        scan->tools_used = 0;
+    }
+}
+static void gcode_stream_scan_feed(gcode_stream_scan *scan, const char *bytes, size_t length) {
+    for (size_t i = 0; i < length; i++) gcode_stream_scan_byte(scan, bytes[i]);
+}
+static void gcode_stream_scan_finish(gcode_stream_scan *scan) {
+    if (scan->mesh_used) {
+        scan->mesh[scan->mesh_used] = '\0';
+        if (!scan->adaptive && gcode_mesh_line(scan->mesh)) scan->adaptive = 1;
+        scan->mesh_used = 0;
+    }
+    if (scan->tools_used) {
+        scan->tools[scan->tools_used] = '\0';
+        gcode_tools_line(scan->tools, scan->present, NULL);
+        scan->tools_used = 0;
+    }
+}
+/* The decision a USB start took before the copy, from the cached file analysis; the copy scans
+ * along and must reach the same one, or it is not printed. */
+typedef struct { int adaptive; int tools[GCODE_TOOLS_MAX]; size_t tool_count; } gcode_scan_expect;
+static int gcode_stream_scan_matches(const gcode_stream_scan *scan, const gcode_scan_expect *expect) {
+    int tools[GCODE_TOOLS_MAX]; size_t count;
+    gcode_tools_list(scan->present, tools, &count);
+    return !scan->adaptive == !expect->adaptive && count == expect->tool_count &&
+           !memcmp(tools, expect->tools, count * sizeof(tools[0]));
+}
+
+/* Copies a USB file into internal memory as <imported>. The copy needs room for itself and the
+ * upload reserve, is read back from storage and compared with the bytes read from the stick, and
+ * is published (renamed from .part) only when it matches. `expected`, when set, is the file as it
+ * was before the scan: a different or changed file is not copied. `cancel`, when set, stops the
+ * copy after the current block and the read back after the current block. Returns 0 or a GCODE_IMPORT_* reason; nothing is left behind on
+ * failure, and an earlier import of the same name stays as it was. */
+static int gcode_import_usb(const char *relative, char imported[PATH_MAX_LOCAL],
+                            const gcode_source_stamp *expected, const atomic_int *cancel,
+                            size_t *copied_out, int write_out, const gcode_scan_expect *decided,
+                            int *unpublished) {
+    char source[PATH_MAX_LOCAL * 2], destination[PATH_MAX_LOCAL * 2];
+    char temporary[PATH_MAX_LOCAL * 2];
+    if (copied_out) *copied_out = 0;
+    usb_copy_flushes = 0; usb_copy_dropped_in = usb_copy_dropped_out = 0;
+    if (!gcode_resolved_path(gcode_usb_root, relative, source, sizeof(source))) return GCODE_IMPORT_FAILED;
+    if (gcode_usb_import_name(relative, imported) != 0) return GCODE_IMPORT_FAILED;
+    int length = snprintf(destination, sizeof(destination), "%s/%s",
+                      gcode_internal_root, imported);
+    if (length < 0 || (size_t)length >= sizeof(destination)) return GCODE_IMPORT_FAILED;
+    length = snprintf(temporary, sizeof(temporary), "%s.part", destination);
+    if (length < 0 || (size_t)length >= sizeof(temporary)) return GCODE_IMPORT_FAILED;
+
+    FILE *input = fopen(source, "rb");
+    if (!input) return GCODE_IMPORT_FAILED;
+    struct stat info; gcode_source_stamp opened, closed;
+    if (fstat(fileno(input), &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
+        (uintmax_t)info.st_size > SIZE_MAX) { fclose(input); return GCODE_IMPORT_FAILED; }
+    gcode_source_stamp_of(&opened, &info);
+    if (expected && expected->known && !gcode_source_stamp_same(expected, &opened)) {
+        fclose(input); return GCODE_IMPORT_CHANGED;
+    }
+    /* Room for the copy, and the storage reserve uploads keep once it is in place. An earlier import
+     * of the same name is replaced by the rename only after the copy, so it counts towards the
+     * reserve, not towards the room the copy needs while it is written. */
+    struct stat earlier;
+    off_t replaced = lstat(destination, &earlier) == 0 && S_ISREG(earlier.st_mode) ? earlier.st_size : 0;
+    if (!usb_import_has_space((uint64_t)info.st_size, (uint64_t)replaced)) { fclose(input); return GCODE_IMPORT_NO_SPACE; }
+    if (cancel && atomic_load(cancel)) { fclose(input); return GCODE_IMPORT_CANCELLED; }
+    /* The .part is locked before it is emptied and stays locked until it is renamed or removed (part_lock
+     * keeps the lock past fclose): gcode_usb_part_cleanup leaves a locked .part alone, and a copy of the same
+     * file still running in another instance is not overwritten. */
+    int part_fd = open(temporary, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0644);
+    if (part_fd < 0) { fclose(input); return GCODE_IMPORT_FAILED; }
+    if (flock(part_fd, LOCK_EX | LOCK_NB) || ftruncate(part_fd, 0)) { close(part_fd); fclose(input); return GCODE_IMPORT_FAILED; }
+    int part_lock = dup(part_fd);
+    FILE *output = part_lock < 0 ? NULL : fdopen(part_fd, "wb");
+    if (!output) { if (part_lock >= 0) close(part_lock); close(part_fd); fclose(input); return GCODE_IMPORT_FAILED; }
+    char buffer[65536]; int result = 0; size_t copied = 0, written_out = 0;
+    uint64_t hash = GCODE_COPY_HASH_SEED;
+    /* On the heap, not in thread-local storage: glibc places static TLS on every thread's stack,
+     * which leaves the 64 KiB download and history workers too little to start. */
+    gcode_stream_scan *scan = decided ? calloc(1, sizeof(*scan)) : NULL;
+    if (decided && !scan) result = GCODE_IMPORT_FAILED;
+    while (!result) {
+        size_t count = fread(buffer, 1, sizeof(buffer), input);
+        if (cancel && count < sizeof(buffer) && ferror(input)) atomic_store(&usb_start_read_failed, 1);
+        if (count && fwrite(buffer, 1, count, output) != count) { result = GCODE_IMPORT_FAILED; break; }
+        copied += count;
+        hash = gcode_copy_hash(hash, (const unsigned char *)buffer, count);
+        if (decided) gcode_stream_scan_feed(scan, buffer, count);
+        if (usb_copy_block_hook) usb_copy_block_hook(copied);
+        if (cancel) usb_start_beat_now();
+        if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
+        if (count < sizeof(buffer)) {
+            if (ferror(input)) result = GCODE_IMPORT_FAILED;
+            break;
+        }
+        if (write_out && copied - written_out >= USB_COPY_FLUSH_BYTES) {
+            if (usb_copy_write_out(output, input, written_out, copied) != 0) { result = GCODE_IMPORT_FAILED; break; }
+            written_out = copied;
+            if (cancel) usb_start_beat_now();
+            if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
+        }
+    }
+    if (copied_out) *copied_out = copied;
+    /* A file shortened, grown or rewritten while it was copied is not the file that was scanned. */
+    /* A start decided from the cached analysis: the copied bytes must give the same decision. */
+    if (!result && decided) {
+        gcode_stream_scan_finish(scan);
+        if (!gcode_stream_scan_matches(scan, decided)) result = GCODE_IMPORT_CHANGED;
+    }
+    free(scan);
+    if (!result) {
+        if (fstat(fileno(input), &info) != 0) result = GCODE_IMPORT_FAILED;
+        else {
+            gcode_source_stamp_of(&closed, &info);
+            if (!gcode_source_stamp_same(&opened, &closed) || (uintmax_t)copied != (uintmax_t)opened.size)
+                result = GCODE_IMPORT_CHANGED;
+        }
+    }
+    if (!result && fflush(output) != 0) result = GCODE_IMPORT_FAILED;
+    if (!result && fsync(fileno(output)) != 0) result = GCODE_IMPORT_FAILED;
+    if (cancel) usb_start_beat_now();
+    /* Drop the synced pages, so the read back below comes from storage where the kernel allows it. */
+    if (!result) (void)posix_fadvise(fileno(output), 0, 0, POSIX_FADV_DONTNEED);
+    if (!result && write_out) (void)posix_fadvise(fileno(input), 0, 0, POSIX_FADV_DONTNEED); /* the rest of the source */
+    if (fclose(output) != 0 && !result) result = GCODE_IMPORT_FAILED;
+    fclose(input);
+    if (!result) {
+        if (usb_copy_synced_hook) usb_copy_synced_hook(temporary);
+        FILE *check = fopen(temporary, "rb");
+        uint64_t back = GCODE_COPY_HASH_SEED; size_t read_back = 0, dropped_at = 0; size_t count;
+        if (cancel && atomic_load(cancel)) result = GCODE_IMPORT_CANCELLED;
+        else if (!check) result = GCODE_IMPORT_UNVERIFIED;
+        else {
+            while ((count = fread(buffer, 1, sizeof(buffer), check)) > 0) {
+                if (cancel) usb_start_beat_now();
+                if (cancel && atomic_load(cancel)) { result = GCODE_IMPORT_CANCELLED; break; }
+                read_back += count;
+                back = gcode_copy_hash(back, (const unsigned char *)buffer, count);
+                if (usb_read_block_hook) usb_read_block_hook(1);
+                /* Every USB_COPY_FLUSH_BYTES the pages read back so far leave the cache again. */
+                if (write_out && read_back - dropped_at >= USB_COPY_FLUSH_BYTES) {
+                    if (posix_fadvise(fileno(check), (off_t)dropped_at, (off_t)(read_back - dropped_at),
+                                      POSIX_FADV_DONTNEED) == 0) usb_copy_readback_dropped++;
+                    dropped_at = read_back;
+                }
+            }
+            if (!result && (ferror(check) || read_back != copied || back != hash)) result = GCODE_IMPORT_UNVERIFIED;
+        }
+        /* And the rest at the end, so the read back never fills the cache with the whole copy. */
+        if (check) {
+            if (write_out && posix_fadvise(fileno(check), 0, 0, POSIX_FADV_DONTNEED) == 0) usb_copy_readback_dropped++;
+            fclose(check);
+        }
+    }
+    /* `unpublished`: the verified copy stays the locked .part, and the caller publishes it (usb_start_publish) only
+     * right before the start is sent, so it never replaces an earlier copy under a print started meanwhile. */
+    if (!result && unpublished) { *unpublished = part_lock; return 0; }
+    if (result || rename(temporary, destination) != 0) {
+        unlink(temporary);
+        close(part_lock);
+        return result ? result : GCODE_IMPORT_FAILED;
+    }
+    close(part_lock);
     chmod(destination, 0644);
+    layer_store_note(destination);
     return 0;
 }
 
@@ -1560,39 +1996,37 @@ static void gcode_filament_lengths(const char *comment, double lengths[GCODE_TOO
 }
 
 /* `lengths`, when given, receives each tool's slicer filament length in mm, or -1. */
+/* Set on the start worker: a scan ends early (as failed) once the start was cancelled. */
+static _Thread_local const atomic_int *gcode_scan_cancel;
+/* Test seams: full passes over a G-code file by the start checks; whether the read back dropped the copy. */
+static atomic_int gcode_scan_passes;
+
+static void gcode_scan_read_error(FILE *file) {
+    if (gcode_scan_cancel && ferror(file)) atomic_store(&usb_start_read_failed, 1); /* only on the start worker */
+}
+static int gcode_scan_cancelled(void) {
+    if (gcode_scan_cancel) usb_start_beat_now(); /* only the start worker sets gcode_scan_cancel */
+    return gcode_scan_cancel && atomic_load(gcode_scan_cancel);
+}
 static int gcode_detect_tools(const char *root, const char *relative,
                               int tools[GCODE_TOOLS_MAX], size_t *tool_count, double *lengths) {
-    char path[PATH_MAX_LOCAL * 2], line[2048];
+    char path[PATH_MAX_LOCAL * 2], line[GCODE_TOOLS_LINE];
     if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
     FILE *file = fopen(path, "r");
     if (!file) return -1;
     int present[GCODE_TOOLS_MAX] = {0};
     if (lengths) for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool) lengths[tool] = -1;
+    atomic_fetch_add(&gcode_scan_passes, 1);
+    int failed = 0;
     while (fgets(line, sizeof(line), file)) {
-        char *comment = strchr(line, ';');
-        if (comment) {
-            if (lengths) gcode_filament_lengths(comment, lengths);
-            *comment = '\0';
-        }
-        for (char *cursor = line; *cursor; ++cursor) {
-            if ((*cursor != 'T' && *cursor != 't') ||
-                (cursor != line && !isspace((unsigned char)cursor[-1]))) continue;
-            char *number = cursor + 1, *end = number;
-            if (!isdigit((unsigned char)*number)) continue;
-            long tool = strtol(number, &end, 10);
-            if (tool < 0 || tool >= GCODE_TOOLS_MAX) continue;
-            if (*end && !isspace((unsigned char)*end) && *end != '*') continue;
-            present[tool] = 1;
-            cursor = end - 1;
-        }
+        if (gcode_scan_cancelled()) { failed = 1; break; }
+        gcode_tools_line(line, present, lengths);
     }
-    int failed = ferror(file);
+    failed |= ferror(file);
+    gcode_scan_read_error(file);
     fclose(file);
     if (failed) return -1;
-    *tool_count = 0;
-    for (int tool = 0; tool < GCODE_TOOLS_MAX; ++tool)
-        if (present[tool]) tools[(*tool_count)++] = tool;
-    if (!*tool_count) tools[(*tool_count)++] = 0;
+    gcode_tools_list(present, tools, tool_count);
     return 0;
 }
 
@@ -1658,18 +2092,18 @@ static int gcode_read_filaments(const char *root, const char *relative,
     /* Orca/Prusa-style config comments can follow the entire print. Seek to a
      * bounded footer rather than scanning large files again. Later valid values
      * take precedence, and a partial first line is never treated as metadata. */
-    if (!failed && fseek(file, 0, SEEK_END) == 0) {
-        long size = ftell(file);
+    if (!failed && fseeko(file, 0, SEEK_END) == 0) { /* off_t: files over 2 GiB on the 32-bit printer */
+        off_t size = ftello(file);
         if (size > GCODE_FILAMENT_SCAN_BYTES) {
-            long start = size - GCODE_FILAMENT_SCAN_BYTES;
+            off_t start = size - GCODE_FILAMENT_SCAN_BYTES;
             if (start < GCODE_FILAMENT_SCAN_BYTES) start = GCODE_FILAMENT_SCAN_BYTES;
-            if (fseek(file, start - 1, SEEK_SET) != 0) failed = 1;
+            if (fseeko(file, start - 1, SEEK_SET) != 0) failed = 1;
             else {
                 int ch = fgetc(file);
                 if (ch != '\n') {
                     while ((ch = fgetc(file)) != EOF && ch != '\n') {}
                 }
-                long position = ftell(file);
+                off_t position = ftello(file);
                 if (position < 0) failed = 1;
                 else if (position < size) gcode_scan_filaments(file, (size_t)(size - position), info);
             }
@@ -1703,8 +2137,8 @@ static int gcode_read_setup(const char *root, const char *relative, double *bed,
             break;
         }
     }
-    long size = fseek(file, 0, SEEK_END) == 0 ? ftell(file) : -1;
-    if (size > 0 && fseek(file, size > 256 * 1024 ? size - 256 * 1024 : 0, SEEK_SET) == 0) {
+    off_t size = fseeko(file, 0, SEEK_END) == 0 ? ftello(file) : -1; /* files over 2 GiB on the 32-bit printer */
+    if (size > 0 && fseeko(file, size > 256 * 1024 ? size - 256 * 1024 : 0, SEEK_SET) == 0) {
         if (size > 256 * 1024 && !fgets(line, sizeof(line), file)) line[0] = 0; /* skip a partial line */
         while (fgets(line, sizeof(line), file)) {
             const char *p = line;
@@ -1723,28 +2157,53 @@ static int gcode_read_setup(const char *root, const char *relative, double *bed,
 }
 
 static int gcode_has_adaptive_mesh(const char *root, const char *relative, int *adaptive) {
-    char path[PATH_MAX_LOCAL * 2], line[4096];
+    char path[PATH_MAX_LOCAL * 2], line[GCODE_MESH_LINE];
     if (!adaptive || !gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
     FILE *file = fopen(path, "r");
     if (!file) return -1;
     *adaptive = 0;
+    atomic_fetch_add(&gcode_scan_passes, 1);
+    int failed = 0;
     while (fgets(line, sizeof(line), file)) {
-        char upper[sizeof(line)]; size_t index = 0;
-        for (; line[index] && index + 1 < sizeof(upper); ++index)
-            upper[index] = (char)toupper((unsigned char)line[index]);
-        upper[index] = '\0';
-        char *comment = strchr(upper, ';');
-        if (comment) *comment = '\0';
-        if (strstr(upper, "BED_MESH_CALIBRATE") &&
-            (strstr(upper, "FROM_SLICER=1") ||
-             (strstr(upper, "MESH_MIN=") && strstr(upper, "MESH_MAX=")) ||
-             strstr(upper, "ADAPTIVE=1"))) {
+        if (gcode_scan_cancelled()) { failed = 1; break; }
+        if (gcode_mesh_line(line)) {
             *adaptive = 1;
             break;
         }
     }
-    int failed = ferror(file);
+    failed |= ferror(file);
+    gcode_scan_read_error(file);
     fclose(file);
+    return failed ? -1 : 0;
+}
+
+/* The mesh and the tool check in one pass, lines cut as the two fgets scans cut them (gcode_stream_scan).
+ * For the start worker; ends as failed on a cancel. */
+static int gcode_scan_both(const char *root, const char *relative, int *adaptive,
+                           int tools[GCODE_TOOLS_MAX], size_t *tool_count) {
+    char path[PATH_MAX_LOCAL * 2];
+    if (!gcode_resolved_path(root, relative, path, sizeof(path))) return -1;
+    FILE *file = fopen(path, "rb");
+    if (!file) return -1;
+    atomic_fetch_add(&gcode_scan_passes, 1);
+    /* On the heap, not in thread-local storage (see gcode_import_usb). */
+    struct { gcode_stream_scan scan; char buffer[65536]; } *work = calloc(1, sizeof(*work));
+    if (!work) { fclose(file); return -1; }
+    size_t count; int failed = 0;
+    while ((count = fread(work->buffer, 1, sizeof(work->buffer), file)) > 0) {
+        if (gcode_scan_cancelled()) { failed = 1; break; }
+        gcode_stream_scan_feed(&work->scan, work->buffer, count);
+        if (usb_read_block_hook) usb_read_block_hook(0);
+    }
+    failed |= ferror(file);
+    gcode_scan_read_error(file);
+    fclose(file);
+    if (!failed) {
+        gcode_stream_scan_finish(&work->scan);
+        *adaptive = work->scan.adaptive;
+        gcode_tools_list(work->scan.present, tools, tool_count);
+    }
+    free(work);
     return failed ? -1 : 0;
 }
 
@@ -2069,7 +2528,32 @@ typedef struct {
     /* From the worker. */
     int scan_failed, adaptive, detect_failed, detected[GCODE_TOOLS_MAX]; size_t detected_count;
     int import_failed, imported_ok, replaced; char imported[PATH_MAX_LOCAL];
+    int unpublished; /* lock fd of the verified copy still waiting as .part to be published, or -1 */
+    gcode_source_stamp source; int import_error; size_t import_copied;
+    int from_cache; /* the decision came from the dialog's cached inspection of the same file */
+    int internal;   /* a start from internal memory: checked on the worker, nothing to copy */
 } gcode_usb_start;
+/* Publishes the verified copy of a USB start (renames its .part over the copy's name) and drops its lock. Main loop,
+ * right before the start is sent, after the printer was confirmed idle. Without a publish the .part is removed
+ * again (usb_start_unpublish), and an earlier copy of the same name stays as it was. */
+static int usb_start_part_path(const gcode_usb_start *usb, char *final, size_t final_size, char *part, size_t part_size) {
+    return snprintf(final, final_size, "%s/%s", gcode_internal_root, usb->imported) < (int)final_size &&
+           snprintf(part, part_size, "%s/%s.part", gcode_internal_root, usb->imported) < (int)part_size;
+}
+static int usb_start_publish(gcode_usb_start *usb) {
+    if (usb->unpublished < 0) return 0;
+    char final[PATH_MAX_LOCAL * 2], part[PATH_MAX_LOCAL * 2 + 8];
+    int ok = usb_start_part_path(usb, final, sizeof(final), part, sizeof(part)) && rename(part, final) == 0;
+    if (ok) chmod(final, 0644); else unlink(part);
+    close(usb->unpublished); usb->unpublished = -1;
+    return ok ? 0 : -1;
+}
+static void usb_start_unpublish(gcode_usb_start *usb) {
+    if (usb->unpublished < 0) return;
+    char final[PATH_MAX_LOCAL * 2], part[PATH_MAX_LOCAL * 2 + 8];
+    if (usb_start_part_path(usb, final, sizeof(final), part, sizeof(part))) unlink(part);
+    close(usb->unpublished); usb->unpublished = -1;
+}
 
 /* Every tool the G-code uses must be mapped, and nothing else. */
 static int gcode_tools_conflict(const int *tools, size_t slot_count, int detect_failed,
@@ -2082,6 +2566,52 @@ static int gcode_tools_conflict(const int *tools, size_t slot_count, int detect_
         if (!found) return 1;
     }
     return 0;
+}
+
+/* The printer program (elegoo_printer, 32-bit ARM) checks a print file with the 32-bit stat(): from 2 GiB on that
+ * fails with EOVERFLOW and it reports the file as missing (read in its disassembly; on the printer a 2.5 GiB start was
+ * answered 202 after a 434.5 s copy and never began, measured). Such a file is started only when the request carries
+ * the confirmation line "large_ok" (open system: the operator decides, perhaps for an adapted firmware); without it
+ * the start is refused with reason file_too_large_for_printer before anything is copied. */
+#define PRINTER_FILE_LIMIT 2147483648LL
+static long long printer_file_limit = PRINTER_FILE_LIMIT; /* test seam */
+/* The file's size, or -1 when it cannot be read. */
+static long long gcode_file_size(const char *root, const char *filename) {
+    char path[PATH_MAX_LOCAL * 2]; struct stat info;
+    if (!gcode_resolved_path(root, filename, path, sizeof(path)) || stat(path, &info) != 0 || !S_ISREG(info.st_mode))
+        return -1;
+    return (long long)info.st_size;
+}
+/* After an accepted start of such a confirmed file, CC2 Control watches whether the printer begins it: a job running
+ * (machine status 2 with print state "printing") or a job uuid other than the one before the start counts as begun;
+ * a refusal of the start request (method 1020 in printer_error) or a printer idle again after PRINT_WATCH_MS counts
+ * as failed. While the printer is busy (a calibrated start levels the bed first, without a 1020 reply) the watch goes
+ * on, up to PRINT_WATCH_CAP_MS. In the measured 2.5 GiB run the printer stayed idle and silent after the start. A
+ * failed start removes the internal CC2_USB_ copy it was given, where the
+ * file list's delete guard allows it and no queued job names it (gcode_usb_import_remove). The outcome is reported in
+ * the status (print_watch) and, for a queued copy, as its last_result "not_opened". */
+#define PRINT_WATCH_MS 30000
+#define PRINT_WATCH_CAP_MS 1800000
+enum { PRINT_WATCH_NONE, PRINT_WATCH_WATCHING, PRINT_WATCH_STARTED, PRINT_WATCH_FAILED };
+typedef struct {
+    unsigned long sequence;
+    int state, imported, queue_id, code;
+    long long armed_ms;
+    unsigned long errors;       /* mqtt->reply_errors when the start went out */
+    char uuid[128];             /* mqtt->uuid when the start went out: the previous job's */
+    char file[PATH_MAX_LOCAL];  /* the file the printer was given */
+} print_watch_state;
+static print_watch_state print_watch;
+static long long print_watch_ms = PRINT_WATCH_MS, print_watch_cap_ms = PRINT_WATCH_CAP_MS; /* test seams */
+static long long monotonic_ms(void);
+static void print_watch_arm(const mqtt_client *mqtt, const char *file, int imported) {
+    print_watch.sequence++;
+    print_watch.state = PRINT_WATCH_WATCHING;
+    print_watch.imported = imported; print_watch.queue_id = 0; print_watch.code = 0;
+    print_watch.armed_ms = monotonic_ms();
+    print_watch.errors = mqtt->reply_errors;
+    snprintf(print_watch.uuid, sizeof(print_watch.uuid), "%s", mqtt->uuid);
+    snprintf(print_watch.file, sizeof(print_watch.file), "%s", file);
 }
 
 /* Answers the client and returns the HTTP status it sent. With `started` (PATH_MAX_LOCAL bytes), an
@@ -2105,8 +2635,8 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
     }
     const char *layout_line = memchr(mapping, '\n', mapping_len);
     size_t map_len = layout_line ? (size_t)(layout_line - mapping) : mapping_len;
-    const char *level_line = NULL, *video_line = NULL, *measure_line = NULL, *nozzle_line = NULL;
-    size_t layout_len = 0, level_len = 0, video_len = 0, measure_len = 0, nozzle_len = 0;
+    const char *level_line = NULL, *video_line = NULL, *measure_line = NULL, *nozzle_line = NULL, *large_line = NULL;
+    size_t layout_len = 0, level_len = 0, video_len = 0, measure_len = 0, nozzle_len = 0, large_len = 0;
     if (layout_line) {
         layout_line++;
         size_t remaining = mapping_len - (size_t)(layout_line - mapping);
@@ -2124,7 +2654,12 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
                     measure_line++;left=mapping_len-(size_t)(measure_line-mapping);
                     nozzle_line=memchr(measure_line,'\n',left);
                     measure_len=nozzle_line?(size_t)(nozzle_line-measure_line):left;
-                    if(nozzle_line){nozzle_line++;nozzle_len=mapping_len-(size_t)(nozzle_line-mapping);}
+                    if(nozzle_line){
+                        nozzle_line++;left=mapping_len-(size_t)(nozzle_line-mapping);
+                        large_line=memchr(nozzle_line,'\n',left);
+                        nozzle_len=large_line?(size_t)(large_line-nozzle_line):left;
+                        if(large_line){large_line++;large_len=mapping_len-(size_t)(large_line-mapping);}
+                    }
                 }
             }
         }
@@ -2139,6 +2674,20 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
     }
     if (measure_len) memcpy(measure, measure_line, measure_len);
     if (nozzle_len) memcpy(nozzle, nozzle_line, nozzle_len);
+    /* Optional ninth line: "large_ok", the operator's confirmation to start a file of 2 GiB or more anyway. */
+    while (large_len && (large_line[large_len - 1] == '\n' || large_line[large_len - 1] == '\r')) large_len--;
+    if (large_len && (large_len != 8 || memcmp(large_line, "large_ok", 8))) {
+        const char *error = "{\"accepted\":false,\"error\":\"Invalid large file confirmation\"}\n";
+        respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
+        return 400;
+    }
+    long long file_size = gcode_file_size(root, filename);
+    int large = file_size >= printer_file_limit;
+    if (large && !large_len) {
+        const char *error = "{\"accepted\":false,\"reason\":\"file_too_large_for_printer\",\"error\":\"The printer has not opened files of 2 GiB or more; confirm the start to try anyway\"}\n";
+        respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+        return 409;
+    }
     char print_layout = 'A';
     if (layout_len) {
         if (layout_len != 1 || (layout_line[0] != 'A' && layout_line[0] != 'B')) {
@@ -2178,17 +2727,17 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
         return 400;
     }
     if (usb && usb->stage == USB_START_CHECK) {
-        if (strcmp(storage, "usb") != 0) {
-            const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
-            respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
-            return 400;
-        }
-        if (!mqtt->connected || !mqtt->registered) {
+        usb->internal = strcmp(storage, "usb") != 0;
+        /* A USB start is refused here, before the stick is read, as develop refuses it; so is an internal start on
+         * a linked printer that is not idle. An internal start without a printer link never gets here
+         * (usb_start_begin_for answers it synchronously, as develop). */
+        if (!usb->internal && (!mqtt->connected || !mqtt->registered)) {
             const char *error = "{\"accepted\":false,\"error\":\"Printer MQTT is not ready\"}\n";
             respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
             return 503;
         }
-        if (!mqtt->have_machine_status || mqtt->machine_status != 1) {
+        if ((!usb->internal || (mqtt->connected && mqtt->registered)) &&
+            (!mqtt->have_machine_status || mqtt->machine_status != 1)) {
             const char *error = "{\"accepted\":false,\"error\":\"Starting a file requires an idle printer\"}\n";
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
             return 409;
@@ -2252,14 +2801,38 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
     const char *print_media = media;
     if (strcmp(storage, "usb") == 0) {
         if (usb) snprintf(print_filename, sizeof(print_filename), "%s", usb->imported);
-        if (usb ? usb->import_failed || !usb->imported_ok : gcode_import_usb(filename, print_filename) != 0) {
-            const char *error = "{\"accepted\":false,\"error\":\"Cannot import the USB file into internal memory\"}\n";
+        int import_error = usb ? (usb->import_failed || !usb->imported_ok
+                                      ? (usb->import_error ? usb->import_error : GCODE_IMPORT_FAILED) : 0)
+                               : gcode_import_usb(filename, print_filename, NULL, NULL, NULL, 0, NULL, NULL);
+        if (!import_error && usb && usb_start_publish(usb) != 0) import_error = GCODE_IMPORT_FAILED;
+        if (import_error) {
+            const char *error =
+                import_error == GCODE_IMPORT_NO_SPACE
+                    ? "{\"accepted\":false,\"error\":\"Insufficient free space for the USB copy and storage reserve\"}\n"
+                : import_error == GCODE_IMPORT_CHANGED
+                    ? "{\"accepted\":false,\"error\":\"The USB file changed while it was copied\"}\n"
+                : import_error == GCODE_IMPORT_UNVERIFIED
+                    ? "{\"accepted\":false,\"error\":\"The internal copy of the USB file failed verification\"}\n"
+                    : "{\"accepted\":false,\"error\":\"Cannot import the USB file into internal memory\"}\n";
             respond(fd, 507, "Insufficient Storage", "application/json; charset=utf-8", error, strlen(error));
             return 507;
         }
         print_media = "local";
     } else {
         snprintf(print_filename, sizeof(print_filename), "%s", filename);
+        /* Checked on the worker: the start goes out only for the file that was checked. */
+        if (usb && usb->stage == USB_START_PREPARED && usb->internal) {
+            char path[PATH_MAX_LOCAL * 2]; struct stat now; gcode_source_stamp current; int same = 0;
+            if (usb->source.known && gcode_resolved_path(root, filename, path, sizeof(path)) && stat(path, &now) == 0) {
+                gcode_source_stamp_of(&current, &now);
+                same = gcode_source_stamp_same(&usb->source, &current);
+            }
+            if (!same) {
+                const char *error = "{\"accepted\":false,\"error\":\"The file changed while the start was prepared\"}\n";
+                respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+                return 409;
+            }
+        }
     }
     int start_result = -1;
     if (calibrated_start && (strchr(print_filename, '"') || strchr(print_filename, '\\'))) {
@@ -2289,16 +2862,20 @@ static int gcode_start_run(int fd, mqtt_client *mqtt, const char *body, size_t b
         return 503;
     }
     plates_print_arm(late, print_layout);
-    char accepted[PATH_MAX_LOCAL * 2 + 128], escaped[PATH_MAX_LOCAL * 2];
+    if (large) print_watch_arm(mqtt, print_filename, strcmp(storage, "usb") == 0);
+    char watch[48] = "";
+    if (large) snprintf(watch, sizeof(watch), ",\"watch\":%lu", print_watch.sequence);
+    char accepted[PATH_MAX_LOCAL * 2 + 176], escaped[PATH_MAX_LOCAL * 2];
     json_escape(escaped, sizeof(escaped), print_filename);
     int accepted_len = snprintf(accepted, sizeof(accepted),
-        "{\"accepted\":true,\"method\":1020,\"storage_media\":\"%s\",\"filename\":\"%s\",\"imported_from_usb\":%s,\"print_layout\":\"%c\",\"leveling\":\"%s\",\"timelapse\":%s,\"late_mesh\":\"%s\"}\n",
+        "{\"accepted\":true,\"method\":1020,\"storage_media\":\"%s\",\"filename\":\"%s\",\"imported_from_usb\":%s,\"print_layout\":\"%c\",\"leveling\":\"%s\",\"timelapse\":%s,\"late_mesh\":\"%s\"%s}\n",
         print_media, escaped, strcmp(storage, "usb") == 0 ? "true" : "false",
-        print_layout, leveling, timelapse ? "true" : "false", late);
+        print_layout, leveling, timelapse ? "true" : "false", late, watch);
     /* The start request is on its way whatever happens to the reply below. */
     if (started) snprintf(started, PATH_MAX_LOCAL, "%s", print_filename);
     if (accepted_len > 0 && (size_t)accepted_len < sizeof(accepted))
         respond(fd, 202, "Accepted", "application/json; charset=utf-8", accepted, (size_t)accepted_len);
+    if (strcmp(storage, "usb") == 0) (void)gcode_usb_prune(mqtt, print_filename);
     return 202;
 }
 
@@ -2307,7 +2884,9 @@ static int gcode_start_response(int fd, mqtt_client *mqtt,
     return gcode_start_run(fd, mqtt, body, body_len, started, NULL);
 }
 
-/* One threaded USB start at a time. The main loop owns the socket and `usb_start` except between
+/* The names say USB, but since the internal start moved here too (it only skips the copy), this is
+ * the one print-start worker for both media; the queue uses it as well.
+ * One threaded USB start at a time. The main loop owns the socket and `usb_start` except between
  * usb_start_begin() and the worker's `usb_start_done`, when only the worker writes the results. */
 static gcode_usb_start usb_start;
 static int usb_start_fd = -1;
@@ -2315,15 +2894,53 @@ static atomic_int usb_start_done;
 static char usb_start_body[PATH_MAX_LOCAL + 512];
 static size_t usb_start_length;
 /* Set by the main loop only: the client left (1) or the emergency stop was pressed (2) before
- * the start was dispatched. The copy still finishes, but the print is never sent. */
-static int usb_start_cancelled;
+ * the start was dispatched. The worker stops copying after the current block and leaves
+ * nothing behind; the print is never sent. */
+static atomic_int usb_start_cancelled;
+/* Room for the copy, made right before it is written: the worker sets 1 with the size and name once the
+ * checks before the copy passed and the copy does not fit; the main loop (which may consult the printer
+ * state for gcode_delete_guard) takes it up (3), removes old copies and sets 2. The worker waits at most
+ * USB_START_ROOM_WAIT_MS for it to be taken up and stops waiting on a cancel; then it withdraws the wish
+ * (1 -> 0), so nothing is removed for a start that went on without room; the copy checks the room itself. */
+#define USB_START_ROOM_WAIT_MS 2000
+static atomic_int usb_start_room;
+static uint64_t usb_start_room_size;
+static char usb_start_room_name[PATH_MAX_LOCAL];
+static int usb_start_canvas_waiting;
+/* A start with a slot mapping that began before the Canvas had reported its trays: it asks for a report at once
+ * and waits for it up to usb_start_canvas_wait_ms (as after the copy, see usb_start_canvas_wait); the report that
+ * comes is kept as the trays at the start. Without one the start is refused, never sent unprotected. */
+static int usb_start_trays_known; /* queue.h */
+static atomic_int usb_start_trays_late; /* read by the worker before it copies */
+static unsigned long usb_start_trays_late_seen;
+static long long usb_start_trays_late_until;
+static long long monotonic_ms(void);
+static long long usb_start_canvas_wait_ms;
+static int usb_start_mapped(const char *body, size_t length);
 /* Test seam: runs on the worker right before the copy. */
 static void (*usb_start_copy_hook)(void);
 
 static int usb_start_active(void) { return usb_start_fd >= 0; }
+/* The file list does not delete a file (or its name on the other medium) while its start is prepared. */
+static int print_start_preparing(const char *file) {
+    return usb_start_active() && gcode_same_job_name(file, usb_start.filename);
+}
 
 /* The emergency stop drops a USB start that has not been dispatched yet. */
 static void usb_start_cancel(void) { if (usb_start_active()) usb_start_cancelled = 2; }
+/* Whether a start on the worker still reads the file a request names ("storage\nname..."): the dialog's analysis of
+ * that same file is then refused at once (reason start_reading) instead of reading the stick in parallel. Main loop. */
+static int usb_start_reading_file(const char *body, size_t length) {
+    if (!usb_start_active() || atomic_load(&usb_start_done)) return 0;
+    const char *newline = memchr(body, '\n', length);
+    if (!newline) return 0;
+    size_t storage_len = (size_t)(newline - body), name_len = length - storage_len - 1;
+    const char *name = newline + 1, *end = memchr(name, '\n', name_len);
+    if (end) name_len = (size_t)(end - name);
+    int usb = storage_len == 3 && !memcmp(body, "usb", 3);
+    return usb == !usb_start.internal && name_len == strlen(usb_start.filename) &&
+           !memcmp(name, usb_start.filename, name_len);
+}
 
 /* The request was read in full, so any readable state on the socket means the peer closed it. */
 static int usb_start_client_gone(int fd) {
@@ -2332,53 +2949,161 @@ static int usb_start_client_gone(int fd) {
     return n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR);
 }
 
-static int gcode_request_is_usb(const char *body, size_t body_len) {
-    return body_len > 4 && memcmp(body, "usb\n", 4) == 0;
-}
 
+static int analysis_cached_scan(const char *path, const struct stat *now, gcode_scan_expect *out);
+static int analysis_reading_file(const char *path); /* the dialog's analysis reads this file right now */
 static void *usb_start_worker(void *unused) {
     (void)unused;
     gcode_usb_start *job = &usb_start;
-    job->scan_failed = gcode_has_adaptive_mesh(gcode_usb_root, job->filename, &job->adaptive) != 0;
-    if (!job->scan_failed && job->slot_count)
-        job->detect_failed = gcode_detect_tools(gcode_usb_root, job->filename, job->detected,
-                                                &job->detected_count, NULL) != 0;
+    /* A start from internal memory runs the same checks here, so a large file does not hold up the
+     * main loop either; it has nothing to copy, and the main loop compares the file's stamp again
+     * before the start is sent. */
+    const char *root = job->internal ? gcode_internal_root : gcode_usb_root;
+    /* The file as it is before the scan: the copy below must be of this same file. It stays open
+     * until the copy is done, so a FAT stick keeps the inode number it reported here. */
+    char source[PATH_MAX_LOCAL * 2]; struct stat before; int pinned = -1;
+    if (gcode_resolved_path(root, job->filename, source, sizeof(source)) &&
+        (pinned = open(source, O_RDONLY | O_CLOEXEC)) >= 0 && fstat(pinned, &before) == 0)
+        gcode_source_stamp_of(&job->source, &before);
+    /* The dialog's own inspection of this same file decides before the copy, without reading it again;
+     * the copy then scans along and must agree. Otherwise the file is scanned first, as before. */
+    /* The dialog's analysis of this same file still reads it: wait for it (an emergency stop or a browser that
+     * leaves ends the wait), then take its decision from the cache below instead of reading the stick in parallel. */
+    while (pinned >= 0 && analysis_reading_file(source) && !atomic_load(&usb_start_cancelled))
+        usb_start_nap(20);
+    gcode_scan_expect decided;
+    job->from_cache = pinned >= 0 && job->source.known && analysis_cached_scan(source, &before, &decided);
+    if (job->from_cache) {
+        job->adaptive = decided.adaptive;
+        job->detected_count = decided.tool_count;
+        memcpy(job->detected, decided.tools, decided.tool_count * sizeof(decided.tools[0]));
+    } else {
+        gcode_scan_cancel = &usb_start_cancelled;
+        if (job->slot_count) /* both checks read the whole file: one pass */
+            job->scan_failed = job->detect_failed =
+                gcode_scan_both(root, job->filename, &job->adaptive, job->detected, &job->detected_count) != 0;
+        else /* the mesh check alone stops at the first leveling line */
+            job->scan_failed = gcode_has_adaptive_mesh(root, job->filename, &job->adaptive) != 0;
+        gcode_scan_cancel = NULL;
+    }
     /* A start the scan already refuses is answered without copying the file. */
     int refused = job->scan_failed || (strcmp(job->leveling, "adaptive") == 0 && !job->adaptive) ||
         (job->slot_count && gcode_tools_conflict(job->tools, job->slot_count, job->detect_failed,
                                                   job->detected, job->detected_count));
-    if (!refused) {
+    if (job->internal) {
+        if (usb_start_copy_hook) usb_start_copy_hook(); /* test seam: the point where a copy would start */
+    } else if (!refused) {
+        /* A start with a mapping that began before the Canvas reported waits for that report here, before anything
+         * is copied: the main loop ends the wait with the report, or without one after usb_start_canvas_wait_ms with
+         * cancel reason 3, so a silent Canvas is answered after the wait, not after a whole copy. */
+        while (atomic_load(&usb_start_trays_late) && !atomic_load(&usb_start_cancelled))
+            usb_start_nap(5);
+        if (atomic_load(&usb_start_cancelled)) {
+            job->import_error = GCODE_IMPORT_CANCELLED; job->import_failed = 1; job->imported_ok = 0;
+            goto copied;
+        }
+        (void)gcode_usb_part_cleanup(); /* leftovers of a copy that ended with its process, before this one */
         /* An earlier import of the same USB file may still be in use (the touchscreen can print it). */
         char existing[PATH_MAX_LOCAL], path[PATH_MAX_LOCAL * 2]; struct stat info;
         if (gcode_usb_import_name(job->filename, existing) == 0 &&
             snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, existing) < (int)sizeof(path))
             job->replaced = lstat(path, &info) == 0;
+        if (job->source.known && (uint64_t)job->source.size > 0 &&
+            !usb_import_has_space((uint64_t)job->source.size, 0) &&
+            gcode_usb_import_name(job->filename, usb_start_room_name) == 0) {
+            usb_start_room_size = (uint64_t)job->source.size;
+            atomic_store(&usb_start_room, 1);
+            for (int waited = 0; waited < USB_START_ROOM_WAIT_MS && atomic_load(&usb_start_room) == 1 &&
+                                 !atomic_load(&usb_start_cancelled); waited += 5)
+                usb_start_nap(5);
+            /* Given up (1 -> 0): the main loop no longer makes room for this start. Taken up (3): it is removing
+             * old copies right now, so the copy waits for it to finish; that takes no stick reads. */
+            int asked = 1;
+            if (!atomic_compare_exchange_strong(&usb_start_room, &asked, 0))
+                while (atomic_load(&usb_start_room) == 3) usb_start_nap(5);
+        }
         if (usb_start_copy_hook) usb_start_copy_hook();
-        job->import_failed = gcode_import_usb(job->filename, job->imported) != 0;
+        job->import_error = gcode_import_usb(job->filename, job->imported, &job->source,
+                                             &usb_start_cancelled, &job->import_copied, 1,
+                                             job->from_cache ? &decided : NULL, &job->unpublished);
+        job->import_failed = job->import_error != 0;
         job->imported_ok = !job->import_failed;
     }
+copied:
+    if (pinned >= 0) close(pinned);
     atomic_store(&usb_start_done, 1);
     return NULL;
 }
 
-/* Returns 1 when the worker took the socket, 0 when the request has been answered. */
-static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
+/* A copy for a queued job (U10): the queue sets the job to "starting" and sends the start only
+ * after the copy, from the main loop; until then the queue file keeps it "pending", so a restart of
+ * CC2 Control during the copy leaves it to be started again. An automatic start has no browser
+ * waiting: it passes one end of a socket pair and keeps the other here, so it never looks gone. */
+static int usb_start_queue_id, usb_start_queue_auto, usb_start_peer = -1;
+static int queue_usb_copied(int fd, mqtt_client *mqtt, int id, int automatic, const char *body, size_t length,
+                            gcode_usb_start *usb); /* queue.h */
+static void queue_usb_dropped(int id, int automatic); /* queue.h */
+
+/* Every start on the worker notes the Canvas trays when it begins and compares the trays its mapping names
+ * after the copy (queue.h): a spool changed meanwhile must not be printed with the mapping chosen before. A queued
+ * start (`from_queue`) keeps exactly the trays its mapping was chosen from (queue_start_item), not a second
+ * reading of the cache. */
+static void usb_start_trays_note(const mqtt_client *mqtt, int from_queue);
+static int usb_start_trays_changed(const mqtt_client *mqtt, const char *body, size_t length);
+
+/* Returns 1 when the worker took the socket, 0 when the request has been answered (`*status`). */
+static int usb_start_begin_for(int fd, mqtt_client *mqtt, const char *body, size_t body_len,
+                               int queue_id, int automatic, int peer, int *status) {
+    int refused = 0; if (!status) status = &refused;
     if (usb_start_active()) {
-        const char *error = "{\"accepted\":false,\"error\":\"A USB file is still being copied for another start\"}\n";
+        const char *error = usb_start.internal
+            ? "{\"accepted\":false,\"error\":\"Another print start is still being prepared\"}\n"
+            : "{\"accepted\":false,\"error\":\"A USB file is still being copied for another start\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
-        return 0;
+        *status = 409; return 0;
     }
     if (body_len >= sizeof(usb_start_body)) {
         const char *error = "{\"accepted\":false,\"error\":\"Invalid print request\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
+        *status = 400; return 0;
+    }
+    /* A start that cannot go out anyway: USB_START_CHECK below refuses it before any file is read, except an
+     * internal start without a printer link. That one gets develop's synchronous checks, in develop's order (file
+     * checks first) and at once, without a worker: nothing prints without a link, and the queue records such a
+     * refusal in the same tick (tests/test_gcode_files.py, tests/test_queue_tracking.c). */
+    const char *storage_end = memchr(body, '\n', body_len);
+    size_t storage_len = storage_end ? (size_t)(storage_end - body) : body_len;
+    int internal = !(storage_len == 3 && memcmp(body, "usb", 3) == 0);
+    if (internal && (!mqtt->connected || !mqtt->registered)) {
+        *status = gcode_start_run(fd, mqtt, body, body_len, NULL, NULL);
         return 0;
     }
     memset(&usb_start, 0, sizeof(usb_start));
+    usb_start.unpublished = -1;
     usb_start.stage = USB_START_CHECK;
-    if (gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start) != 0) return 0;
+    if ((*status = gcode_start_run(fd, mqtt, body, body_len, NULL, &usb_start)) != 0) return 0;
     memcpy(usb_start_body, body, body_len); usb_start_body[body_len] = 0;
     usb_start_length = body_len;
+    usb_start_trays_note(mqtt, queue_id != 0);
+    /* A queued USB start with a mapping was assigned from the fresh report it asked for (queue_check_state). Without
+     * that report it is refused, never compared with a later one: the comparison value is the report the mapping
+     * came from, or nothing is started. */
+    if (queue_id && !usb_start.internal && !usb_start_trays_known && usb_start_mapped(body, body_len)) {
+        const char *error = "{\"accepted\":false,\"reason\":\"canvas_unreported\",\"error\":\"The Canvas did not report its trays when the start began; check that the Canvas is connected, then start the print again\"}\n";
+        respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+        *status = 409; return 0;
+    }
+    usb_start_trays_late = !queue_id && !usb_start.internal && !usb_start_trays_known && usb_start_mapped(body, body_len);
+    if (usb_start_trays_late) {
+        usb_start_trays_late_seen = mqtt->canvas_revision;
+        usb_start_trays_late_until = monotonic_ms() + usb_start_canvas_wait_ms;
+        mqtt->canvas_refresh_due = 1;
+    }
+    atomic_store(&usb_start_room, 0);
+    usb_start_canvas_waiting = 0;
     usb_start_cancelled = 0;
+    atomic_store(&usb_start_read_failed, 0);
+    usb_start_beat_now();
     atomic_store(&usb_start_done, 0);
     pthread_attr_t attr; pthread_t thread;
     int failed = pthread_attr_init(&attr);
@@ -2390,13 +3115,18 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
     if (failed) {
         const char *error = "{\"accepted\":false,\"error\":\"Cannot start the USB import\"}\n";
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
-        return 0;
+        *status = 503; return 0;
     }
     pthread_detach(thread);
     struct timeval timeout = {5, 0};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     usb_start_fd = fd;
+    usb_start_queue_id = queue_id; usb_start_queue_auto = automatic; usb_start_peer = peer;
+    *status = 0;
     return 1;
+}
+static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t body_len) {
+    return usb_start_begin_for(fd, mqtt, body, body_len, 0, 0, -1, NULL);
 }
 
 /* Main loop: once the copy is complete, every check runs again (the printer may have started
@@ -2404,25 +3134,193 @@ static int usb_start_begin(int fd, mqtt_client *mqtt, const char *body, size_t b
  * an earlier import had the same name: that file is left as the synchronous start left it.
  * A client that disconnects before then, or an emergency stop, cancels the start: the browser
  * has reported a failure, so the print must not begin behind its back. */
+/* After the copy of a USB file (print dialog or queue) whose start names Canvas trays, and when the Canvas
+ * reported its trays when the start began, the trays are compared only with a fresh report: the main loop
+ * asks the printer for one (canvas_refresh_due, sent by mqtt_tick) and waits up to USB_START_CANVAS_WAIT_MS
+ * for a new canvas_revision, without blocking. An emergency stop or a client that leaves ends the wait. */
+#define USB_START_CANVAS_WAIT_MS 10000
+/* No progress of the start worker for this long counts as a stick that stopped answering (Fund 4). Measured on the
+ * printer: the slowest 64-KiB block of two healthy sticks took 0.21 s; the kernel gives a USB disk command 30 s
+ * (eh_timeout 10 s). 15 s is over 70 times the slowest healthy block and answers the browser before the kernel. */
+#define USB_START_STALL_MS 15000
+static long long usb_start_stall_ms = USB_START_STALL_MS; /* test seam */
+/* A read that stopped answering (reason usb_unresponsive), for the page: while the worker still hangs in it, whether the
+ * stick has been removed since (its mount is gone from /proc/mounts, read without touching the stick: a stat() of a
+ * stick that does not answer could hold the main loop), and once the worker is back, whether the read came back with
+ * an error or only late. A read still hanging USB_STALL_REMOVED_MS after the stick was removed will not end without a
+ * power cycle: the page then says so (untested and very unlikely: a stick that stops answering could not be
+ * reproduced on the printer). The worker is never cancelled by force; it ends on its own. */
+#define USB_STALL_REMOVED_MS 60000
+enum { USB_STALL_NONE, USB_STALL_READ_ERROR, USB_STALL_SLOW };
+static struct { unsigned long sequence; int hanging, outcome; long long removed_ms, probed_ms; } usb_stall;
+static long long usb_stall_removed_ms = USB_STALL_REMOVED_MS; /* test seam */
+static const char *usb_mounts_path = "/proc/mounts"; /* test seam */
+/* Whether gcode_usb_root is a mount point in usb_mounts_path; -1 when the table cannot be read. */
+static int usb_root_mounted(void) {
+    FILE *mounts = fopen(usb_mounts_path, "re");
+    if (!mounts) return -1;
+    char line[1024]; int found = 0;
+    while (!found && fgets(line, sizeof(line), mounts)) {
+        char *field = strchr(line, ' ');
+        if (!field) continue;
+        char *end = strchr(++field, ' ');
+        if (!end) continue;
+        *end = 0;
+        char point[PATH_MAX_LOCAL]; size_t n = 0;
+        for (const char *p = field; *p && n + 1 < sizeof(point); ++p) {
+            if (p[0] == '\\' && p[1] >= '0' && p[1] <= '3' && p[2] >= '0' && p[2] <= '7' && p[3] >= '0' && p[3] <= '7') {
+                point[n++] = (char)((p[1] - '0') * 64 + (p[2] - '0') * 8 + (p[3] - '0')); p += 3;
+            } else point[n++] = *p;
+        }
+        point[n] = 0;
+        found = !strcmp(point, gcode_usb_root);
+    }
+    fclose(mounts);
+    return found;
+}
+static void usb_stall_probe(long long now) {
+    if (!usb_stall.hanging || usb_stall.removed_ms || now - usb_stall.probed_ms < 1000) return;
+    usb_stall.probed_ms = now;
+    if (usb_root_mounted() == 0) usb_stall.removed_ms = now;
+}
+static void usb_stall_json(char *out, size_t cap) {
+    if (!usb_stall.sequence) { snprintf(out, cap, "null"); return; }
+    int power_cycle = usb_stall.hanging && usb_stall.removed_ms &&
+                      monotonic_ms() - usb_stall.removed_ms >= usb_stall_removed_ms;
+    snprintf(out, cap, "{\"sequence\":%lu,\"hanging\":%s,\"outcome\":%s,\"removed\":%s,\"power_cycle\":%s}",
+             usb_stall.sequence, usb_stall.hanging ? "true" : "false",
+             usb_stall.outcome == USB_STALL_READ_ERROR ? "\"read_error\"" : usb_stall.outcome == USB_STALL_SLOW ? "\"slow\"" : "null",
+             usb_stall.removed_ms ? "true" : "false", power_cycle ? "true" : "false");
+}
+/* A queued start asks for a fresh report before it assigns its slots (queue_check_state); usb_start_trays_note keeps
+ * the trays of exactly that report as the comparison value, and the request after the copy is the second report. */
+/* No fresh report within the wait: 1 refuses the start (the safe side), 0 compares with the stored report
+ * as before. The one place to change this. */
+#define USB_START_CANVAS_SILENT_REFUSES 1
+static long long usb_start_canvas_wait_ms = USB_START_CANVAS_WAIT_MS; /* test seam; also the wait at the start */
+static unsigned long usb_start_canvas_seen;
+static long long usb_start_canvas_until;
+static int usb_start_trays_known; /* queue.h: the trays were noted when the start began */
+static int usb_start_mapped(const char *body, size_t length) {
+    char storage[16], filename[PATH_MAX_LOCAL];
+    const char *mapping, *root, *media;
+    size_t mapping_len = 0, count = 0;
+    int tools[GCODE_TOOLS_MAX], slots[GCODE_TOOLS_MAX];
+    if (!gcode_request_file(body, length, storage, filename, &mapping, &mapping_len, &root, &media)) return 0;
+    const char *line_end = memchr(mapping, '\n', mapping_len);
+    return parse_slot_map(mapping, line_end ? (size_t)(line_end - mapping) : mapping_len, tools, slots, &count) && count > 0;
+}
+/* Returns 1 while the start still waits for the report, 0 when it may be judged, -1 when no report came. */
+static int usb_start_canvas_wait(mqtt_client *mqtt) {
+    /* Only a copy that is there waits: a start the check already refused is answered with that refusal at once. */
+    if (usb_start.internal || !usb_start.imported_ok || !usb_start_trays_known ||
+        !usb_start_mapped(usb_start_body, usb_start_length)) return 0;
+    long long now = monotonic_ms();
+    if (!usb_start_canvas_waiting) {
+        usb_start_canvas_waiting = 1;
+        usb_start_canvas_seen = mqtt->canvas_revision;
+        usb_start_canvas_until = now + usb_start_canvas_wait_ms;
+        mqtt->canvas_refresh_due = 1;
+        return 1;
+    }
+    if (mqtt->canvas_revision != usb_start_canvas_seen) return 0;
+    if (now < usb_start_canvas_until) return 1;
+    return USB_START_CANVAS_SILENT_REFUSES ? -1 : 0;
+}
+static int usb_start_trays_refuse(int fd) {
+    const char *error = "{\"accepted\":false,\"error\":\"The Canvas trays changed while the file was copied; start the print again\"}\n";
+    respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+    return 409;
+}
 static void usb_start_tick(mqtt_client *mqtt) {
     if (!usb_start_active()) return;
     if (!usb_start_cancelled && usb_start_client_gone(usb_start_fd)) usb_start_cancelled = 1;
-    if (!atomic_load(&usb_start_done)) return;
+    int room_asked = 1; /* 1 -> 3: taken up, unless the worker gave up waiting (1 -> 0) first */
+    if (atomic_compare_exchange_strong(&usb_start_room, &room_asked, 3)) {
+        if (!usb_start_cancelled) gcode_usb_make_room(mqtt, usb_start_room_size, usb_start_room_name);
+        atomic_store(&usb_start_room, 2);
+    }
+    if (usb_start_trays_late && mqtt->canvas_revision != usb_start_trays_late_seen) {
+        usb_start_trays_late_seen = mqtt->canvas_revision;
+        usb_start_trays_note(mqtt, 0);
+        usb_start_trays_late = !usb_start_trays_known; /* a report without the trays: keep waiting */
+    }
+    /* No report within the wait while the worker still waits (or scans): it stops before it copies (reason 3). */
+    if (usb_start_trays_late && !usb_start_cancelled && !atomic_load(&usb_start_done) &&
+        monotonic_ms() >= usb_start_trays_late_until) usb_start_cancelled = 3;
+    /* A worker without progress for usb_start_stall_ms stands in a read the stick does not answer (Fund 4): the
+     * browser is answered now (reason 4); the start stays busy until the worker comes back, then it is cleaned up
+     * without a second answer. */
+    if (!usb_start_cancelled && !atomic_load(&usb_start_done) &&
+        monotonic_ms() - atomic_load(&usb_start_beat) > usb_start_stall_ms) {
+        usb_start_cancelled = 4;
+        usb_stall.sequence++; usb_stall.hanging = 1; usb_stall.outcome = USB_STALL_NONE;
+        usb_stall.removed_ms = usb_stall.probed_ms = 0;
+        char error[224];
+        snprintf(error, sizeof(error), "{\"accepted\":false,\"reason\":\"usb_unresponsive\",\"stall\":%lu,\"error\":\"The USB stick does not respond; remove it, then start the print again\"}\n",
+                 usb_stall.sequence);
+        respond(usb_start_fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+        shutdown(usb_start_fd, SHUT_WR);
+    }
+    if (!atomic_load(&usb_start_done)) { usb_stall_probe(monotonic_ms()); return; }
+    if (usb_start_cancelled == 4 && usb_stall.hanging) {
+        usb_stall.hanging = 0;
+        usb_stall.outcome = atomic_load(&usb_start_read_failed) ? USB_STALL_READ_ERROR : USB_STALL_SLOW;
+    }
     int fd = usb_start_fd, status = 409;
     if (usb_start_cancelled == 2) {
         const char *error = "{\"accepted\":false,\"error\":\"Print start cancelled by the emergency stop\"}\n";
         respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+    } else if (usb_start_cancelled == 4) { /* answered when the stick stopped responding; the queue is told below */
+    } else if (usb_start_cancelled == 3) { /* the queue is told below, with the other cancels */
+        const char *error = "{\"accepted\":false,\"reason\":\"canvas_unreported\",\"error\":\"The Canvas did not report its trays when the start began; check that the Canvas is connected, then start the print again\"}\n";
+        respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
     } else if (!usb_start_cancelled) {
+        int waited = usb_start_canvas_wait(mqtt);
+        if (waited > 0) return;
         usb_start.stage = USB_START_PREPARED;
-        status = gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
+        if (waited < 0) {
+            const char *error = "{\"accepted\":false,\"reason\":\"canvas_unreported\",\"error\":\"The Canvas did not report its trays after the copy; check that the Canvas is connected, then start the print again\"}\n";
+            respond(fd, 409, "Conflict", "application/json; charset=utf-8", error, strlen(error));
+            if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
+        } else if (usb_start_trays_changed(mqtt, usb_start_body, usb_start_length)) {
+            status = usb_start_trays_refuse(fd);
+            if (usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
+        } else status = usb_start_queue_id
+                     ? queue_usb_copied(fd, mqtt, usb_start_queue_id, usb_start_queue_auto, usb_start_body,
+                                        usb_start_length, &usb_start)
+                     : gcode_start_run(fd, mqtt, usb_start_body, usb_start_length, NULL, &usb_start);
     }
+    if (usb_start_cancelled && usb_start_queue_id) queue_usb_dropped(usb_start_queue_id, usb_start_queue_auto);
+    usb_start_unpublish(&usb_start); /* not sent: the new copy never replaces the earlier one */
     if (status != 202 && usb_start.imported_ok && !usb_start.replaced) {
         char path[PATH_MAX_LOCAL * 2];
         int length = snprintf(path, sizeof(path), "%s/%s", gcode_internal_root, usb_start.imported);
-        if (length > 0 && (size_t)length < sizeof(path)) unlink(path);
+        if (length > 0 && (size_t)length < sizeof(path) && !unlink(path)) layer_store_forget(path);
     }
-    usb_start_fd = -1;
+    usb_start_fd = -1; usb_start_canvas_waiting = 0; usb_start_trays_late = 0;
     close(fd);
+    if (usb_start_peer >= 0) close(usb_start_peer);
+    usb_start_peer = -1; usb_start_queue_id = usb_start_queue_auto = 0;
+}
+
+/* Main loop: the outcome of a watched start (see print_watch_arm). */
+static void queue_watch_failed(int id); /* queue.h */
+static void print_watch_tick(mqtt_client *mqtt) {
+    if (print_watch.state != PRINT_WATCH_WATCHING) return;
+    long long waited = monotonic_ms() - print_watch.armed_ms;
+    int refused = mqtt->reply_errors != print_watch.errors && mqtt->reply_error_method == 1020;
+    int begun = (mqtt->have_machine_status && mqtt->machine_status == 2 && !strcmp(mqtt->print_state, "printing")) ||
+                (mqtt->uuid[0] && strcmp(mqtt->uuid, print_watch.uuid));
+    if (!refused && begun) { print_watch.state = PRINT_WATCH_STARTED; return; }
+    int idle = mqtt->have_machine_status && mqtt->machine_status == 1;
+    if (!refused && (waited < print_watch_ms || (!idle && waited < print_watch_cap_ms))) return;
+    print_watch.state = PRINT_WATCH_FAILED;
+    print_watch.code = refused ? mqtt->reply_error_code : 0;
+    fprintf(stderr, "Print start: the printer did not open %s (%s)\n", print_watch.file,
+            refused ? "refused" : "no print began");
+    if (print_watch.queue_id) queue_watch_failed(print_watch.queue_id);
+    if (print_watch.imported) (void)gcode_usb_import_remove(mqtt, print_watch.file);
 }
 
 static const char *machine_status_name(int status) {
@@ -2563,10 +3461,68 @@ static pthread_mutex_t analysis_mutex=PTHREAD_MUTEX_INITIALIZER;
 static size_t analysis_head,analysis_count;
 static int analysis_running;
 static char active_analysis_filename[PATH_MAX_LOCAL];
+/* The file the analysis worker reads right now (resolved path, under analysis_mutex), so a start of the same file
+ * waits instead of reading a USB stick from a second thread at the same time. */
+static char analysis_reading[PATH_MAX_LOCAL * 2];
+static int analysis_reading_file(const char *path) {
+    pthread_mutex_lock(&analysis_mutex);
+    int same = analysis_reading[0] && !strcmp(analysis_reading, path);
+    pthread_mutex_unlock(&analysis_mutex);
+    return same;
+}
+/* Test seam, and what the worker below does around each inspection. */
+static void analysis_reading_set(const char *root, const char *name) {
+    char path[PATH_MAX_LOCAL * 2] = "";
+    if (root && name && !gcode_resolved_path(root, name, path, sizeof(path))) path[0] = 0;
+    pthread_mutex_lock(&analysis_mutex);
+    snprintf(analysis_reading, sizeof(analysis_reading), "%s", path);
+    pthread_mutex_unlock(&analysis_mutex);
+}
 static int active_analysis_pending, active_analysis_ready, active_analysis_layers;
 static unsigned active_analysis_generation;
 static long active_analysis_seconds = -1;
-static void active_gcode_scan(const char *filename,int *layers,long *seconds);
+static int active_gcode_scan(const char *filename,unsigned generation,int *layers,long *seconds);
+static void gcode_read_count_stopped(void);
+/* The scan of the running print's file runs at the layer path's lower priority (LAYER_PATH_NICE, idle I/O) on this
+ * worker, which also serves inspect and metadata; those keep the priority they had. So the priority is lowered only
+ * when it can be set back (root, or RLIMIT_NICE allows it), and set back after the scan. Linux only. */
+typedef struct { int lowered, nice, io; } analysis_priority;
+static analysis_priority analysis_priority_lower(void) {
+    analysis_priority old = {0, 0, -1};
+#if defined(__linux__) && defined(SYS_gettid)
+    pid_t tid = (pid_t)syscall(SYS_gettid);
+    errno = 0;
+    int nice_now = getpriority(PRIO_PROCESS, (id_t)tid);
+    if (nice_now == -1 && errno) return old;
+    int restorable = geteuid() == 0;
+#ifdef RLIMIT_NICE
+    struct rlimit limit;
+    if (!restorable && getrlimit(RLIMIT_NICE, &limit) == 0)
+        restorable = limit.rlim_cur == RLIM_INFINITY || 20 - (long)limit.rlim_cur <= nice_now;
+#endif
+    if (!restorable || nice_now >= LAYER_PATH_NICE) return old;
+    if (setpriority(PRIO_PROCESS, (id_t)tid, LAYER_PATH_NICE) != 0) return old;
+    old.lowered = 1; old.nice = nice_now;
+#ifdef SYS_ioprio_get
+    old.io = (int)syscall(SYS_ioprio_get, 1 /* IOPRIO_WHO_PROCESS */, (int)tid);
+    if (old.io >= 0) (void)syscall(SYS_ioprio_set, 1, (int)tid, 3 << 13 /* IOPRIO_CLASS_IDLE */);
+#endif
+#endif
+    return old;
+}
+static void analysis_priority_restore(analysis_priority old) {
+#if defined(__linux__) && defined(SYS_gettid)
+    if (!old.lowered) return;
+    pid_t tid = (pid_t)syscall(SYS_gettid);
+#ifdef SYS_ioprio_set
+    if (old.io >= 0) (void)syscall(SYS_ioprio_set, 1, (int)tid, old.io);
+#endif
+    if (setpriority(PRIO_PROCESS, (id_t)tid, old.nice) != 0)
+        fprintf(stderr, "File analysis: cannot restore the worker priority\n");
+#else
+    (void)old;
+#endif
+}
 static int analysis_same_file(const struct stat *a,const struct stat *b) {
     return a->st_dev==b->st_dev && a->st_ino==b->st_ino && a->st_size==b->st_size &&
         a->st_mtim.tv_sec==b->st_mtim.tv_sec && a->st_mtim.tv_nsec==b->st_mtim.tv_nsec &&
@@ -2582,9 +3538,12 @@ static void *analysis_worker(void *unused) {
         pthread_mutex_unlock(&analysis_mutex);
         if(job.kind==2) {
             int layers=0;long seconds=-1;
-            active_gcode_scan(job.body,&layers,&seconds);
+            analysis_priority priority=analysis_priority_lower();
+            int complete=active_gcode_scan(job.body,job.generation,&layers,&seconds);
+            analysis_priority_restore(priority);
             pthread_mutex_lock(&analysis_mutex);
-            if(job.generation==active_analysis_generation && !strcmp(job.body,active_analysis_filename)) {
+            /* Ended by the read hold: no result; the next /api/printer after the hold starts it again. */
+            if(complete && job.generation==active_analysis_generation && !strcmp(job.body,active_analysis_filename)) {
                 active_analysis_layers=layers;active_analysis_seconds=seconds;active_analysis_ready=1;
             }
             active_analysis_pending=0;
@@ -2599,21 +3558,64 @@ static void *analysis_worker(void *unused) {
         if(keyed && cache->valid && !strcmp(path,cache->path) && analysis_same_file(&before,&cache->stamp)) {
             respond(job.fd,200,"OK","application/json; charset=utf-8",cache->response,cache->length);
         } else {
-            cache->valid=0;cache->length=0;analysis_capture=cache;
+            /* Under the lock: a USB start reads the inspect cache from its own thread. */
+            pthread_mutex_lock(&analysis_mutex);cache->valid=0;cache->length=0;pthread_mutex_unlock(&analysis_mutex);
+            analysis_capture=cache;
+            if(keyed)analysis_reading_set(root,name);
             if(job.kind)gcode_metadata_response(job.fd,job.body,job.length);
             else gcode_inspect_response(job.fd,job.body,job.length);
+            if(keyed)analysis_reading_set(NULL,NULL);
             analysis_capture=NULL;
             if(keyed && cache->length && stat(path,&after)==0 && analysis_same_file(&before,&after)) {
+                pthread_mutex_lock(&analysis_mutex);
                 snprintf(cache->path,sizeof(cache->path),"%s",path);cache->stamp=after;cache->valid=1;
+                pthread_mutex_unlock(&analysis_mutex);
             }
         }
         close(job.fd);
     }
 }
+/* The print dialog inspects the file before it starts it (POST /api/gcode-files/inspect). When that
+ * analysis is cached for this very file (same device, inode, size, modification and change time), a
+ * USB start takes its leveling and tool decision from it instead of reading the file once more, so a
+ * refused start still copies nothing. Returns 1 with `out` filled, 0 when there is no usable entry. */
+static int analysis_cached_scan(const char *path, const struct stat *now, gcode_scan_expect *out) {
+    char response[sizeof(analysis_cached[0].response) + 1]; int hit = 0;
+    pthread_mutex_lock(&analysis_mutex);
+    const analysis_cache *cache = &analysis_cached[0];
+    if (cache->valid && !strcmp(cache->path, path) && analysis_same_file(now, &cache->stamp) &&
+        cache->length < sizeof(response)) {
+        memcpy(response, cache->response, cache->length); response[cache->length] = '\0'; hit = 1;
+    }
+    pthread_mutex_unlock(&analysis_mutex);
+    if (!hit) return 0;
+    const char *at = strstr(response, "{\"tools\":[");
+    if (!at) return 0;
+    at += strlen("{\"tools\":[");
+    out->tool_count = 0;
+    while (*at != ']') {
+        char *end = NULL; long tool = strtol(at, &end, 10);
+        if (end == at || tool < 0 || tool >= GCODE_TOOLS_MAX || out->tool_count == GCODE_TOOLS_MAX ||
+            (out->tool_count && tool <= out->tools[out->tool_count - 1])) return 0;
+        out->tools[out->tool_count++] = (int)tool;
+        at = end;
+        if (*at == ',') at++;
+        else if (*at != ']') return 0;
+    }
+    if (!out->tool_count) return 0;
+    if (strstr(response, ",\"adaptive_mesh\":true,")) out->adaptive = 1;
+    else if (strstr(response, ",\"adaptive_mesh\":false,")) out->adaptive = 0;
+    else return 0;
+    return 1;
+}
 static int analysis_start(int fd,int kind,const char *body,size_t length) {
     if(length>=sizeof(analysis_queue[0].body)) {
         const char *error="{\"error\":\"File request too large\"}\n";
         respond(fd,400,"Bad Request","application/json",error,strlen(error));return 0;
+    }
+    if(usb_start_reading_file(body,length)) {
+        const char *error="{\"reason\":\"start_reading\",\"error\":\"A print start is reading this file right now; open it again once the start is answered\"}\n";
+        respond(fd,409,"Conflict","application/json",error,strlen(error));return 0;
     }
     pthread_mutex_lock(&analysis_mutex);
     if(analysis_count==ANALYSIS_QUEUE_MAX) {
@@ -2639,13 +3641,39 @@ static int analysis_start(int fd,int kind,const char *body,size_t length) {
  * Cache it from the active local G-code instead of leaving demo data in the UI. */
 static long active_gcode_estimated_seconds = -1;
 
-static void active_gcode_scan(const char *filename,int *layers,long *seconds) {
-    char path[PATH_MAX_LOCAL * 2], line[4096];
-    if (!gcode_resolved_path(gcode_internal_root, filename, path, sizeof(path))) return;
+/* The scan of the active print reads the whole file once. It ends early when that print is no longer the active one
+ * (finished, stopped, deleted, another print), so a stale scan never keeps a removed file open and its space taken;
+ * a job already stale does not open the file at all. A file of 2 GiB or more is not read: the printer program
+ * (32-bit stat) cannot open it, so there is no print to describe. While the printer homes, levels, probes or starts a
+ * print (gcode_read_hold, see gcode_read_blocked) the scan ends at the next check as well, without a result: seen on
+ * the printer (18.11.2026), this scan of a 52 MB file running into the homing of a print start, then the MCU's
+ * "Timer too close" (error 803). Returns 0 only then; the scan is started again after the hold. */
+#define ACTIVE_SCAN_CHECK_BYTES (64 * 1024)
+#define ACTIVE_SCAN_FILE_MAX 2147483647LL
+static void (*active_scan_check_hook)(void); /* test seam: called at each check while reading */
+static int active_scan_current(unsigned generation) {
+    pthread_mutex_lock(&analysis_mutex); int current = generation == active_analysis_generation;
+    pthread_mutex_unlock(&analysis_mutex); return current;
+}
+static int active_gcode_scan(const char *filename,unsigned generation,int *layers,long *seconds) {
+    char path[PATH_MAX_LOCAL * 2], line[4096]; struct stat info;
+    if (!gcode_resolved_path(gcode_internal_root, filename, path, sizeof(path))) return 1;
+    if (!active_scan_current(generation)) return 1;
+    if (atomic_load(&gcode_read_hold)) { gcode_read_count_stopped(); return 0; } /* queued before the hold came on */
+    if (stat(path, &info) != 0 || (long long)info.st_size > ACTIVE_SCAN_FILE_MAX) return 1;
     FILE *file = fopen(path, "r");
-    if (!file) return;
-    int maximum_layer = -1;
+    if (!file) return 1;
+    int maximum_layer = -1; size_t unchecked = 0;
     while (fgets(line, sizeof(line), file)) {
+        unchecked += strlen(line);
+        if (unchecked >= ACTIVE_SCAN_CHECK_BYTES) {
+            unchecked = 0;
+            if (active_scan_check_hook) active_scan_check_hook();
+            if (!active_scan_current(generation)) { fclose(file); *layers = 0; *seconds = -1; return 1; }
+            if (atomic_load(&gcode_read_hold)) {
+                fclose(file); *layers = 0; *seconds = -1; gcode_read_count_stopped(); return 0;
+            }
+        }
         const char *comment=line;while(isspace((unsigned char)*comment))comment++;
         if(*comment!=';')continue;
         if(*seconds < 0){
@@ -2674,10 +3702,15 @@ static void active_gcode_scan(const char *filename,int *layers,long *seconds) {
     }
     fclose(file);
     if (!*layers && maximum_layer >= 0) *layers = maximum_layer + 1;
+    return 1;
 }
 
-static int active_gcode_total_layers(const char *filename) {
-    int layers=0,submit=0;active_gcode_estimated_seconds=-1;
+/* `held`: the read hold is on (gcode_read_blocked). Then a result already there is still given, but no scan is
+ * started and nothing stays pending; the first call after the hold starts it. Counted once per withheld scan. */
+static void gcode_read_count_blocked(void);
+static int active_scan_withheld; /* under analysis_mutex */
+static int active_gcode_total_layers_at(const char *filename,int held) {
+    int layers=0,submit=0,withheld=0;active_gcode_estimated_seconds=-1;
     pthread_mutex_lock(&analysis_mutex);
     if(!filename || !filename[0]) {
         if(active_analysis_filename[0])active_analysis_generation++;
@@ -2686,19 +3719,47 @@ static int active_gcode_total_layers(const char *filename) {
         if(strcmp(filename,active_analysis_filename)) {
             active_analysis_generation++;
             snprintf(active_analysis_filename,sizeof(active_analysis_filename),"%s",filename);
-            active_analysis_ready=0;
+            active_analysis_ready=0;active_scan_withheld=0;
         }
         if(active_analysis_ready) {
             layers=active_analysis_layers;active_gcode_estimated_seconds=active_analysis_seconds;
+        } else if(!active_analysis_pending && held) {
+            if(!active_scan_withheld)withheld=1;
+            active_scan_withheld=1;
         } else if(!active_analysis_pending) {
-            active_analysis_pending=1;submit=1;
+            active_analysis_pending=1;submit=1;active_scan_withheld=0;
         }
     }
     pthread_mutex_unlock(&analysis_mutex);
+    if(withheld)gcode_read_count_blocked();
     if(submit && !analysis_start(-1,2,filename,strlen(filename))) {
         pthread_mutex_lock(&analysis_mutex);active_analysis_pending=0;pthread_mutex_unlock(&analysis_mutex);
     }
     return layers;
+}
+/* The hold as the main loop last passed it on (it also covers this service's console jobs). */
+static inline int active_gcode_total_layers(const char *filename) {
+    return active_gcode_total_layers_at(filename,atomic_load(&gcode_read_hold));
+}
+static int gcode_read_blocked(const mqtt_client *mqtt,console_state *console);
+/* /api/printer and the layer path's guard: also the printer state of this very moment. */
+static int active_gcode_total_layers_now(const mqtt_client *mqtt,const char *filename) {
+    return active_gcode_total_layers_at(filename,atomic_load(&gcode_read_hold)||gcode_read_blocked(mqtt,NULL));
+}
+
+/* A print of that file is running while the printer reports it printing or paused (or reports no state at all, as
+ * before). Once it reports another state (cancelled, complete, standby) or no file, the active scan ends: from the
+ * main loop after every MQTT message, so it does not wait for someone to ask /api/printer, and /api/printer starts no
+ * scan for a print that is over. */
+static int active_scan_print_running(const mqtt_client *mqtt) {
+    return mqtt->filename[0] && (!mqtt->print_state[0] || !strcmp(mqtt->print_state, "printing") ||
+                                 !strcmp(mqtt->print_state, "paused"));
+}
+static void active_scan_follow(const mqtt_client *mqtt) {
+    if (active_scan_print_running(mqtt)) return;
+    pthread_mutex_lock(&analysis_mutex);
+    if (active_analysis_filename[0]) { active_analysis_generation++; active_analysis_filename[0] = 0; active_analysis_ready = 0; }
+    pthread_mutex_unlock(&analysis_mutex);
 }
 
 #include "recovery.h"
@@ -2743,6 +3804,8 @@ static void printer_report_json(char *out,size_t size,unsigned long sequence,int
         (long)identity.tv_sec,identity.tv_nsec,sequence,sequence,code,level,message,age<0?0:age);
 }
 
+/* GET /api/printer: the hold time before a screw measurement (screws_soak below). */
+static void screws_soak_json(char *out, size_t cap);
 static void printer_response(int fd, const mqtt_client *mqtt) {
     /* Render from the two caches without copying MQTT transport/history buffers. */
     double live;
@@ -2774,6 +3837,10 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     if(uds_value(&telemetry,U_BG,&live))json_number(bg,sizeof(bg),1,live);
     else json_number(bg,sizeof(bg),mqtt->have_bed_target,mqtt->bed_target);
     json_number(ct,sizeof(ct),mqtt->have_chamber_temp,mqtt->chamber_temp);
+    char screws_bed[16]="null"; /* the bed target of a running screw session, whole degrees */
+    if(control_screws_session_active())snprintf(screws_bed,sizeof(screws_bed),"%d",control_screws_bed());
+    char screws_soak_state[320];
+    screws_soak_json(screws_soak_state,sizeof(screws_soak_state));
     if(uds_value(&telemetry,U_CF,&live))json_number(cf,sizeof(cf),1,live*255);
     else json_number(cf,sizeof(cf),mqtt->have_controller_fan,mqtt->controller_fan);
     if(uds_value(&telemetry,U_HF,&live))json_number(hf,sizeof(hf),1,live*255);
@@ -2784,7 +3851,7 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     json_escape(uuid,sizeof(uuid),mqtt->uuid);json_escape(axes,sizeof(axes),mqtt->homed_axes);
     time_t now=time(NULL);
     long age=mqtt->last_message ? (long)(now-mqtt->last_message) : -1;
-    int file_layers=active_gcode_total_layers(mqtt->filename);
+    int file_layers=active_gcode_total_layers_now(mqtt,active_scan_print_running(mqtt)?mqtt->filename:NULL);
     int total_layers=mqtt->have_total_layers ? mqtt->total_layers : file_layers;
     long remaining=mqtt->remaining_time;
     const char *remaining_source=remaining>0 ? "mqtt" : "unavailable";
@@ -2815,6 +3882,14 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
     char printer_error[160]="null";
     if(mqtt->reply_errors)snprintf(printer_error,sizeof(printer_error),"{\"sequence\":%lu,\"method\":%d,\"code\":%d,\"age\":%ld}",
         mqtt->reply_errors,mqtt->reply_error_method,mqtt->reply_error_code,(long)(now-mqtt->reply_error_time));
+    /* A watched start of a confirmed file of 2 GiB or more (print_watch_tick), and a USB read that stopped answering. */
+    char watch_state[96]="null",stall_state[160];
+    if(print_watch.sequence){
+        static const char *names[]={"none","watching","started","failed"};
+        snprintf(watch_state,sizeof(watch_state),"{\"sequence\":%lu,\"state\":\"%s\",\"code\":%d}",
+            print_watch.sequence,names[print_watch.state],print_watch.code);
+    }
+    usb_stall_json(stall_state,sizeof(stall_state));
     char printer_report[1280],printer_alert[1280];
     printer_report_json(printer_report,sizeof(printer_report),telemetry.report_sequence,
         telemetry.report_code,telemetry.report_level,telemetry.report_message,telemetry.report_identity,telemetry.report_received);
@@ -2841,15 +3916,16 @@ static void printer_response(int fd, const mqtt_client *mqtt) {
         "\"z_offset\":{\"value\":%s,\"pending\":%s,\"timed_out\":%s,\"reference\":%s,\"adjustment\":%s},"
         "\"recovery\":{\"available\":%s,\"reboot_pending\":%s,\"error\":\"%s\"},"
         "\"hardware\":{\"camera\":%s,\"usb\":%s,\"light\":%d,\"filament_detection\":%s,\"filament_detected\":%s},"
-        "\"spools\":%s,\"printer_report\":%s,\"printer_alert\":%s,\"printer_error\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s}}\n",
+        "\"spools\":%s,\"printer_report\":%s,\"printer_alert\":%s,\"printer_error\":%s,\"print_watch\":%s,\"usb_stall\":%s,\"camera_viewer\":%s,\"motor_mode\":%s,\"experiments\":{\"quiet_motors\":%s,\"canvas_uds\":%s,\"bed_drying\":%s},\"bed_drying\":%s,\"screws_session\":{\"active\":%s,\"xy_homed\":%s,\"bed\":%s},\"screws_soak\":%s,\"screws_after_mesh\":%s}\n",
         mqtt->connected?"true":"false",mqtt->messages,age,et,eg,bt,bg,ct,cf,hf,pf,
         mqtt->aux_fan,mqtt->box_fan,mqtt->machine_status,machine_status_name(mqtt->machine_status),mqtt->sub_status,mqtt->sub_status_reason,progress,
         mqtt->print_enabled?"true":"false",filename,state,uuid,current_layer,total_layers,duration,remaining,remaining_source,mqtt->total_duration,native_job,
         mqtt->x,mqtt->y,mqtt->z,mqtt->move_speed,mqtt->speed_mode,axes,speed_percent,flow_percent,live_velocity,pressure_advance,zoffset,z_offset_pending?"true":"false",z_offset_timed_out?"true":"false",zreference,zadjustment,recovery_available()?"true":"false",reboot_pending?"true":"false",reboot_error,mqtt->camera?"true":"false",mqtt->u_disk?"true":"false",mqtt->led_status,
         mqtt->filament_detect_enabled?"true":"false",mqtt->filament_detected?"true":"false",spool_state,printer_report,printer_alert,
-        printer_error,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status,
+        printer_error,watch_state,stall_state,viewer,motor_mode,experiments.quiet_motors?"true":"false",telemetry.canvas_enabled?"true":"false",experiments.bed_drying?"true":"false",drying_status,
         control_screws_session_active()?"true":"false",
-        control_screws_xy_homed(mqtt)?"true":"false");
+        control_screws_xy_homed(mqtt)?"true":"false",screws_bed,screws_soak_state,
+        control_screws_after_mesh_running()?"true":"false");
     if(length>0&&(size_t)length<sizeof(body))
         respond(fd,200,"OK","application/json; charset=utf-8",body,(size_t)length);
 }
@@ -3455,6 +4531,8 @@ static int rotation_pending(void);
 static int rotation_pending_intact(void);
 static int cell_active(void);
 static const char *pending_autosave_guard(void);
+/* A hold time before a screw measurement is running (screws:soak, see screws_soak below). */
+static int screws_soak_active(void);
 
 #include "plates.h"
 #include "screw_history.h"
@@ -3480,6 +4558,32 @@ static int screws_history_store(void) {
     if (screw_history_save(&screws_history, screws_history_path)) return 1;
     fprintf(stderr, "Screw history could not be saved: %s\n", screws_history_path);
     return 0;
+}
+
+/* The actual temperatures of the measurement that runs: the main loop reads them whenever the console output
+ * shows a new "Result is z=", so the last stand is the one at the last probe (within one loop cycle, about 1 s).
+ * A sensor without a current value is left out; nothing is invented. gen ties the sample to one console job. */
+static struct { unsigned long gen; int results; screw_ist ist; } screws_sample;
+static void screws_read_ist(const mqtt_client *m, screw_ist *out) {
+    double live;
+    memset(out, 0, sizeof(*out));
+    if (uds_value(&telemetry, U_BT, &live)) { out->v[0] = live; out->have |= 1u; }
+    else if (m->have_bed_temp) { out->v[0] = m->bed_temp; out->have |= 1u; }
+    if (uds_value(&telemetry, U_ET, &live)) { out->v[1] = live; out->have |= 2u; }
+    else if (m->have_extruder_temp) { out->v[1] = m->extruder_temp; out->have |= 2u; }
+    if (m->have_chamber_temp) { out->v[2] = m->chamber_temp; out->have |= 4u; }
+}
+static void screws_sample_tick(const mqtt_client *m, unsigned long generation, const char *output, size_t length) {
+    if (!control_screws_measuring()) return;
+    if (screws_sample.gen != generation) {
+        memset(&screws_sample, 0, sizeof(screws_sample));
+        screws_sample.gen = generation;
+    }
+    int results = screw_history_count_results(output, length);
+    if (results > screws_sample.results) {
+        screws_sample.results = results;
+        screws_read_ist(m, &screws_sample.ist);
+    }
 }
 
 static void screws_history_get_response(int fd) {
@@ -3508,6 +4612,8 @@ static void screws_history_clear_response(int fd) {
 /* The exclusive sessions during which the request dispatcher refuses every printer change; the print
  * queue asks before an automatic start. Defined once the sessions themselves are. */
 static const char *printer_change_blocked(void);
+/* The same refusals for one request, as the dispatcher answers them (handle_client). */
+static const char *printer_change_refusal(const char *method, const char *path, const char *body, size_t body_len, int *plates_form);
 #include "queue.h"
 #include "spoolman.h"
 #include "sha256.h"
@@ -3606,7 +4712,72 @@ static const char *pending_autosave_guard(void) {
     return NULL;
 }
 
-static void serve_index(int fd, const char *web_root) {
+/* The start page revalidates instead of using no-store: the browser asks on
+   every visit, the ETag (SHA-256 of the page) tells it whether its copy is still
+   the installed one, and a match is answered with a bodyless 304. Only "/" and
+   "/index.html" use this; every other answer keeps the no-store header in respond(). */
+static void respond_revalidate(int fd, int status, const char *status_text,
+                               const char *body, size_t body_len, const char *etag) {
+    char header[512];
+    int header_len;
+    if (status == 304)
+        header_len = snprintf(header, sizeof(header),
+            "HTTP/1.1 %d %s\r\n"
+            "ETag: %s\r\n"
+            "Cache-Control: no-cache\r\n"
+            "X-Content-Type-Options: nosniff\r\n"
+            "X-Frame-Options: DENY\r\n"
+            "Connection: close\r\n\r\n",
+            status, status_text, etag);
+    else
+        header_len = snprintf(header, sizeof(header),
+            "HTTP/1.1 %d %s\r\n"
+            "Content-Type: text/html; charset=utf-8\r\n"
+            "Content-Length: %lu\r\n"
+            "ETag: %s\r\n"
+            "Cache-Control: no-cache\r\n"
+            "X-Content-Type-Options: nosniff\r\n"
+            "X-Frame-Options: DENY\r\n"
+            "Connection: close\r\n\r\n",
+            status, status_text, (unsigned long)body_len, etag);
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header)) return;
+    if (send_all(fd, header, (size_t)header_len) == 0 && status != 304)
+        (void)send_all(fd, body, body_len);
+}
+
+/* Strong validator from the content: the SHA-256 of the page, in quotes. It is made from the very bytes that are
+   sent, so it cannot describe another page than the body, and two different pages never share it, whatever their
+   size, modification time, change time, inode or device are (a switch between installed releases or firmware
+   images can give different pages the same file metadata). */
+static int index_etag(const unsigned char *page, size_t length, char *out, size_t cap) {
+    char digest[65];
+    sha256_state state;
+    sha256_init(&state);
+    sha256_update(&state, page, length);
+    sha256_hex(&state, digest);
+    int written = snprintf(out, cap, "\"%s\"", digest);
+    return written > 0 && (size_t)written < cap;
+}
+
+/* Does the If-None-Match value (comma-separated entity tags, "*", weak "W/"
+   prefix compared weakly) match this ETag? */
+static int if_none_match_matches(const char *value, const char *etag) {
+    size_t etag_len = strlen(etag);
+    const char *p = value;
+    while (*p) {
+        while (*p == ' ' || *p == '\t' || *p == ',') p++;
+        const char *start = p;
+        while (*p && *p != ',') p++;
+        const char *end = p;
+        while (end > start && (end[-1] == ' ' || end[-1] == '\t')) end--;
+        if (end - start == 1 && *start == '*') return 1;
+        if (end - start > 2 && start[0] == 'W' && start[1] == '/') start += 2;
+        if ((size_t)(end - start) == etag_len && memcmp(start, etag, etag_len) == 0) return 1;
+    }
+    return 0;
+}
+
+static void serve_index(int fd, const char *web_root, const char *request) {
     char path[PATH_MAX_LOCAL];
     if (snprintf(path, sizeof(path), "%s/index.html", web_root) >= (int)sizeof(path)) {
         const char *body = "Web root path is too long\n";
@@ -3619,16 +4790,53 @@ static void serve_index(int fd, const char *web_root) {
         respond(fd, 500, "Internal Server Error", "text/plain; charset=utf-8", body, strlen(body));
         return;
     }
-    if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
-    long size = ftell(file);
-    if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
-    rewind(file);
+    /* The length comes from one fstat of the opened file and exactly that many bytes are read. The file is measured
+       again after reading: if it changed meanwhile (an update writes it in place) or was shorter than measured, the
+       answer is a 503 and the next request gets the finished page. Best effort: file times move in clock ticks of a
+       few milliseconds, so a same-size write inside one tick is not seen by this check (the tag below still
+       describes the bytes that are sent). Without stat data the length comes from the end of the file.
+       A page of length 0 is a page that is being replaced too (a copy truncates it before it writes the new content,
+       measured on the printer: 59 of 93 answers had an empty body), so it gets the same 503; an empty start page is
+       never a finished page and a browser would keep the white page until the next visit. A copy that is cut off
+       somewhere in the middle cannot be told from a short page by its size and times when no write happens between the
+       two measurements (3 of 93 in the same run); that case stays best effort. */
+    struct stat info, after;
+    int measured = fstat(fileno(file), &info) == 0 && S_ISREG(info.st_mode);
+    long size;
+    if (measured) {
+        if (info.st_size < 0 || info.st_size > 1024 * 1024) { fclose(file); return; }
+        size = (long)info.st_size;
+    } else {
+        if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
+        size = ftell(file);
+        if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
+        rewind(file);
+    }
+    if (size == 0) {
+        fclose(file);
+        const char *error = "{\"error\":\"Start page is being replaced\"}\n";
+        respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
+        return;
+    }
     char *body = malloc((size_t)size);
     if (!body) { fclose(file); return; }
     size_t read_len = fread(body, 1, (size_t)size, file);
+    int unchanged = !measured || (fstat(fileno(file), &after) == 0 && after.st_size == info.st_size &&
+                                  after.st_mtim.tv_sec == info.st_mtim.tv_sec && after.st_mtim.tv_nsec == info.st_mtim.tv_nsec &&
+                                  after.st_ctim.tv_sec == info.st_ctim.tv_sec && after.st_ctim.tv_nsec == info.st_ctim.tv_nsec);
     fclose(file);
-    if (read_len == (size_t)size)
-        respond(fd, 200, "OK", "text/html; charset=utf-8", body, read_len);
+    char etag[80];
+    if (read_len != (size_t)size || !unchanged || !index_etag((const unsigned char *)body, read_len, etag, sizeof(etag))) {
+        const char *error = "{\"error\":\"Start page is being replaced\"}\n";
+        respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
+        free(body);
+        return;
+    }
+    char sent[512]; /* A longer value is not ours; it is ignored and the page is sent. */
+    if (http_header(request, "If-None-Match", sent, sizeof(sent)) == 1 && if_none_match_matches(sent, etag))
+        respond_revalidate(fd, 304, "Not Modified", NULL, 0, etag);
+    else
+        respond_revalidate(fd, 200, "OK", body, read_len, etag);
     free(body);
 }
 
@@ -4035,7 +5243,7 @@ static void console_monitor_response(int fd) {
  respond(fd,200,"OK","application/json; charset=utf-8",body,used);free(body);
 }
 
-static void console_status_response(int fd, console_state *console) {
+static void console_status_response(int fd, console_state *console, const char *query) {
     size_t capacity = CONSOLE_OUTPUT_MAX * 2 + 1024;
     char *body = malloc(capacity);
     if (!body) {
@@ -4043,7 +5251,7 @@ static void console_status_response(int fd, console_state *console) {
         respond(fd,500,"Internal Server Error","text/plain; charset=utf-8",error,strlen(error));
         return;
     }
-    console_json(console, body, capacity);
+    console_json_query(console, query, body, capacity);
     respond(fd,200,"OK","application/json; charset=utf-8",body,strlen(body));
     free(body);
 }
@@ -4128,23 +5336,38 @@ static void pid_status_response(int fd,console_state *console) {
     respond(fd,200,"OK","application/json",body,(size_t)n);
 }
 
+
 /* A session, and a shutdown that is still pending, live only in this process. The marker
  * file tells the next process that one was left behind when this one was killed or
- * replaced: without it the bed would stay at the session's 60 C with nobody to switch it
- * off. It is kept in /tmp, which a reboot clears together with the heater targets. */
+ * replaced: without it the bed would stay at the session's target with nobody to switch it
+ * off. It is kept in /tmp, which a reboot clears together with the heater targets. It holds
+ * that bed target in degrees; an empty marker (from an earlier version) stands for 60 C. */
 static char screws_marker_default_path[64];
 static const char *screws_marker_path = NULL;
 static int screws_marker_present = -1; /* -1: not looked at yet */
+static int screws_marker_bed = -1;     /* the bed target written to the marker, -1: none */
 static int screws_resumed;             /* the pending shutdown comes from the marker */
+static int screws_resumed_bed = CONTROL_SCREWS_BED_DEFAULT; /* the bed target the earlier process left */
 
 static void screws_marker_sync(void){
     int want=control_screws_session_active()||control_screws_heaters_off_pending();
-    if(!screws_marker_path||want==screws_marker_present)return;
+    /* The tramming session heats the bed to its chosen target. A shutdown that is only pending keeps the
+     * target of the session that asked for it. */
+    int bed=control_screws_session_active()?control_screws_bed():
+            screws_marker_bed>=0?screws_marker_bed:screws_resumed_bed;
+    if(!screws_marker_path||(want==screws_marker_present&&(!want||bed==screws_marker_bed)))return;
     if(want){
+        char text[16];int n=snprintf(text,sizeof(text),"%d\n",bed);
         int fd=open(screws_marker_path,O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW|O_CLOEXEC,0600);
         if(fd<0)return; /* tried again on the next tick */
+        int written=n>0&&write(fd,text,(size_t)n)==n;
         close(fd);
-    }else if(unlink(screws_marker_path)!=0&&errno!=ENOENT)return;
+        if(!written)return;
+        screws_marker_bed=bed;
+    }else{
+        if(unlink(screws_marker_path)!=0&&errno!=ENOENT)return;
+        screws_marker_bed=-1;
+    }
     screws_marker_present=want;
 }
 /* At startup: a marker of our own from an earlier process makes the shutdown pending. */
@@ -4156,11 +5379,19 @@ static void screws_marker_restore(int port){
     struct stat info;
     screws_marker_present=lstat(screws_marker_path,&info)==0;
     if(!screws_marker_present||!S_ISREG(info.st_mode)||info.st_uid!=geteuid())return;
+    /* The marker holds the bed target of the session it stood for (0..110 C); an empty one,
+     * from an earlier version, is the tramming session's 60 C. */
+    char text[16]={0};int fd=open(screws_marker_path,O_RDONLY|O_NOFOLLOW|O_CLOEXEC);
+    if(fd>=0){ssize_t n=read(fd,text,sizeof(text)-1);(void)n;close(fd);}
+    char *end=NULL;long bed=strtol(text,&end,10);
+    screws_resumed_bed=end!=text&&(*end==0||*end=='\n')&&bed>=0&&bed<=CONTROL_SCREWS_BED_MAX?(int)bed
+                                                                                          :CONTROL_SCREWS_BED_DEFAULT;
+    screws_marker_bed=screws_resumed_bed;
     control_screws_restore_pending();
     screws_resumed=1;
 }
 
-/* The session left the bed at 60 C, or an explicit end has not been confirmed:
+/* The session left the bed at its target, or an explicit end has not been confirmed:
  * retry the shutdown on every tick until it is delivered while the printer is
  * idle and the console free. A shutdown inherited from an earlier process is sent
  * only while telemetry still shows the session's bed target: a bed that is off
@@ -4171,9 +5402,244 @@ static void screws_heaters_off_tick(const mqtt_client *mqtt,int busy,int (*send)
     if(busy||!mqtt->connected||!mqtt->registered||!mqtt->have_machine_status||mqtt->machine_status!=1)return;
     if(screws_resumed){
         if(!have_bed_target)return;
-        if(fabs(bed_target-60.0)>0.5){control_screws_heaters_off_sent();screws_resumed=0;return;}
+        if(fabs(bed_target-screws_resumed_bed)>0.5){control_screws_heaters_off_sent();screws_resumed=0;return;}
     }
     if(send("TURN_OFF_HEATERS")==0){control_screws_heaters_off_sent();screws_resumed=0;}
+}
+
+/* Keep the session's bed at its target, but only while telemetry still shows that target:
+ * a target someone else set is left alone. */
+static void screws_bed_renew_tick(const mqtt_client *mqtt,int busy,time_t now,int (*send)(const char *script),
+                                  int have_bed_target,double bed_target){
+    if(!control_screws_bed_renew_due(now)||busy||!mqtt->have_machine_status||mqtt->machine_status!=1)return;
+    if(!have_bed_target||fabs(bed_target-control_screws_bed())>0.5)return;
+    char renew[24];snprintf(renew,sizeof(renew),"M140 S%d",control_screws_bed());
+    control_screws_bed_renewed(now,send(renew)==0);
+}
+
+/* A screw measurement may follow a bed mesh directly (control_screws_after_mesh): the bed target of a calibration whose
+ * probing succeeded (result done, saved or work) when it ended at most SCREWS_AFTER_MESH_MS ago and no other console job
+ * has run since (the console's last job is still its BED_MESH_CALIBRATE), else -1. X, Y and Z homed and the same bed
+ * target are checked when the script is built. */
+#define SCREWS_AFTER_MESH_MS 180000
+static int screws_after_mesh_bed(console_state *console) {
+    if (plates_cal.stage || !plates_cal.ended_at) return -1;
+    long long now = monotonic_ms();
+    if (now < plates_cal.ended_at || now - plates_cal.ended_at > SCREWS_AFTER_MESH_MS) return -1;
+    pthread_mutex_lock(&console->lock);
+    int same = !console->busy && console->generation == plates_cal.generation;
+    pthread_mutex_unlock(&console->lock);
+    return same ? plates_cal.temp : -1;
+}
+
+/* What POST /api/control notes once a screw job is queued. The console's job number is read only for a screw job (as
+ * before the hold time): other actions, and callers without a console, never touch it. */
+static void screws_note_queued(console_state *console, const char *action) {
+    control_screws_note_action(action);
+    if (!console || (!control_screws_is_quick(action) && !control_screws_is_tram(action))) return;
+    pthread_mutex_lock(&console->lock); unsigned long generation = console->generation; pthread_mutex_unlock(&console->lock);
+    if (control_screws_is_quick(action)) control_screws_note_quick(generation);
+    if (control_screws_is_tram(action) && strcmp(action, "screws:tram:end")) control_screws_note_job(generation);
+    if (!strcmp(action, "screws:tram:end")) control_screws_note_end(generation);
+}
+
+/* A hold time before a screw measurement: POST /api/control screws:soak:<minutes>:<measurement>. Built like the soak of
+ * the bed mesh calibration (plates_cal in plates.h): M140 through the console, then the job waits until telemetry reads
+ * the bed at its target, holds it for the minutes given and only then starts the measurement unchanged, the way
+ * /api/control starts it. The console stays free meanwhile (no G4). While the job owns the bed it repeats the target
+ * every ten minutes (the firmware's idle bed shutdown, see plates_cal_keep_bed). It never touches the nozzle: the
+ * measurement's own G180 S3 or G28 heats it to the probing temperature. Every check of the measurement runs when the
+ * hold time is accepted and again when it ends. The job lives only in this process: a restart of CC2 Control ends it
+ * and leaves the bed at its target, which the firmware switches off 15 minutes after the last command, as after a
+ * calibration that a restart ended. */
+enum { SOAK_IDLE, SOAK_HEATING, SOAK_SOAKING };
+#define SCREWS_SOAK_HEAT_MS (30 * 60000)
+static struct {
+    int stage, bed, seconds, m140_done;
+    char action[96];          /* the measurement it starts, without the prefix */
+    unsigned long generation; /* the console job of its M140 */
+    long long since, done_at, soak_until, held, renew_at; /* stage start, M140 seen done, end of the hold, ... */
+    const char *result;       /* "", "started", "cancelled", "ended" or "failed" */
+    char reason[160];
+} screws_soak = {.result = ""};
+/* The bed of a job that ended before its own M140 reached telemetry: switched off once it shows, for a few seconds. */
+static struct { int bed; long long until; } screws_soak_off;
+/* Tests count the repeated targets and the switch-offs instead. */
+static int (*screws_soak_send)(const char *script) = send_local_gcode_script;
+
+static int screws_soak_active(void) { return screws_soak.stage != SOAK_IDLE; }
+
+/* The bed heater is the job's while fresh MQTT reports Idle and fresh telemetry shows its target (as plates_cal_owns_bed). */
+static int screws_soak_owns_bed(const mqtt_client *mqtt, int bed) {
+    time_t now = time(NULL); double target;
+    return mqtt->connected && mqtt->registered && mqtt->have_machine_status && mqtt->machine_status == 1 &&
+           mqtt->last_message > 0 && now >= mqtt->last_message && now - mqtt->last_message <= 15 &&
+           uds_value(&telemetry, U_BG, &target) && fabs(target - bed) <= 0.5;
+}
+/* At the target: at most 1 K below it (as the calibration) and, for a target of 5 C or more, at most 2.5 K above it; a
+ * hotter bed is still cooling down (the measurements' own cooling limit, SCREWS_COOL_LIMIT_K in control.c). */
+static int screws_soak_at_bed(double bed, int target) {
+    return bed >= target - 1.0 && (target < 5 || bed <= target + 2.5);
+}
+
+static void screws_soak_end(const mqtt_client *mqtt, const char *result, const char *reason, int bed_off) {
+    if (!screws_soak.stage) return;
+    if (bed_off) {
+        if (screws_soak_owns_bed(mqtt, screws_soak.bed)) (void)screws_soak_send("M140 S0");
+        else if (screws_soak.stage == SOAK_HEATING && monotonic_ms() - screws_soak.since <= 10000) {
+            screws_soak_off.bed = screws_soak.bed; screws_soak_off.until = screws_soak.since + 15000;
+        }
+    }
+    fprintf(stderr, "Screw hold time at %d C before %s: %s %s\n", screws_soak.bed, screws_soak.action, result, reason);
+    screws_soak.stage = SOAK_IDLE; screws_soak.result = result;
+    snprintf(screws_soak.reason, sizeof(screws_soak.reason), "%s", reason);
+}
+
+static void screws_soak_keep_bed(const mqtt_client *mqtt, long long now) {
+    if (now < screws_soak.renew_at || !screws_soak_owns_bed(mqtt, screws_soak.bed)) return;
+    char command[24]; snprintf(command, sizeof(command), "M140 S%d", screws_soak.bed);
+    screws_soak.renew_at = now + (screws_soak_send(command) == 0 ? PLATE_BED_RENEW_MS : 30000);
+}
+
+/* NULL when the measurement may start: fresh MQTT reports Idle and fresh telemetry reads the bed at its target. */
+static const char *screws_soak_hold(const mqtt_client *mqtt, int have_bed, double bed, double target) {
+    time_t now = time(NULL);
+    if (!mqtt->connected || !mqtt->registered || !mqtt->have_machine_status || mqtt->last_message <= 0 ||
+        now < mqtt->last_message || now - mqtt->last_message > 15) return "Printer status is stale";
+    if (mqtt->machine_status != 1) return "The printer is not idle";
+    if (!have_bed) return "Bed telemetry is unavailable";
+    if (fabs(target - screws_soak.bed) > 0.5 || !screws_soak_at_bed(bed, screws_soak.bed)) return "The bed is not at the temperature";
+    return NULL;
+}
+
+/* The checks POST /api/control makes before it queues `action` (a screws:measure... or screws:tram:start...
+ * measurement), without queueing it: first those of the dispatcher (printer_change_refusal, as for that request), then
+ * those of control_response. With `after_mesh` the direct variant may apply (*direct tells whether it does). */
+static int screws_measure_check(const mqtt_client *mqtt, console_state *console, const char *action, int after_mesh,
+                                char *reason, size_t cap, int *direct) {
+    if (direct) *direct = 0;
+    int plates_form;
+    const char *blocked = printer_change_refusal("POST", "/api/control", action, strlen(action), &plates_form);
+    if (blocked) { snprintf(reason, cap, "%s", blocked); return 0; }
+    if (plates_background_active()) { snprintf(reason, cap, "Plate verification is still running"); return 0; }
+    if (plates_cal.stage) { snprintf(reason, cap, "A bed mesh calibration is running"); return 0; }
+    char script[700];
+    control_screws_after_mesh(after_mesh ? screws_after_mesh_bed(console) : -1);
+    int ok = control_check_script(action, mqtt, script, sizeof(script), reason, cap);
+    if (direct) *direct = ok && control_screws_built_direct();
+    control_screws_after_mesh(-1);
+    return ok;
+}
+
+/* Starts the measurement after the hold time as /api/control would: 0 queued, 1 the console was busy (tried again), -1
+ * not built. Never the direct variant: the job's own M140 ran after the mesh. The script is checked and queued first
+ * and only then built with its effects (control_check_script builds the same script without them): a console that
+ * refuses the start, tried again on every tick, leaves no session behind and no end reason, as no session ran. The
+ * cancel tail is the same before and after the build (a session start's job is not yet done). */
+static int screws_soak_start(const mqtt_client *mqtt, console_state *console, char *reason, size_t cap) {
+    char script[700], built[700];
+    control_screws_after_mesh(-1);
+    if (!control_check_script(screws_soak.action, mqtt, script, sizeof(script), reason, cap)) return -1;
+    const char *tail = control_screws_cancel_tail(screws_soak.action);
+    if (tail) console_arm_staged(console, tail, control_axes_homed(mqtt));
+    if (console_start(console, script, reason, cap) != 0) return 1;
+    if (!control_build_script(screws_soak.action, mqtt, built, sizeof(built), reason, cap) || strcmp(built, script)) {
+        /* Not reached: the same check in the same tick. Stop the queued job rather than run it without its state. */
+        if (control_screws_is_start(screws_soak.action)) control_screws_invalidate();
+        (void)console_cancel(console);
+        snprintf(reason, cap, "The measurement could not be started");
+        return -1;
+    }
+    screws_note_queued(console, screws_soak.action);
+    return 0;
+}
+
+static void screws_soak_tick(const mqtt_client *mqtt, console_state *console, int emergency) {
+    long long now = monotonic_ms();
+    pthread_mutex_lock(&console->lock);
+    int busy = console->busy, completed = console->completed, success = console->success;
+    unsigned long generation = console->generation;
+    pthread_mutex_unlock(&console->lock);
+    if (screws_soak_off.until) {
+        if (now > screws_soak_off.until || emergency) screws_soak_off.until = 0;
+        else if (!busy && screws_soak_owns_bed(mqtt, screws_soak_off.bed) && screws_soak_send("M140 S0") == 0)
+            screws_soak_off.until = 0;
+    }
+    if (!screws_soak.stage) return;
+    if (emergency) { screws_soak_end(mqtt, "ended", "Emergency stop", 0); return; }
+    if (plates_cal.stage) { screws_soak_end(mqtt, "ended", "A bed mesh calibration was started", 0); return; }
+    if (mqtt->have_machine_status && mqtt->machine_status == 2) { screws_soak_end(mqtt, "ended", "A print started", 0); return; }
+    if (!screws_soak.m140_done) {
+        /* A later console job means that the job's M140 has ended. */
+        if (generation != screws_soak.generation || (!busy && completed)) {
+            if (generation == screws_soak.generation && !success) {
+                screws_soak_end(mqtt, "failed", "The bed target could not be set", 1); return;
+            }
+            screws_soak.m140_done = 1; screws_soak.done_at = now;
+        } else {
+            if (now - screws_soak.since > 60000) screws_soak_end(mqtt, "failed", "The bed target could not be set", 1);
+            return;
+        }
+    }
+    if (mqtt->have_machine_status && mqtt->machine_status != 1) { screws_soak_end(mqtt, "ended", "The printer is not idle", 0); return; }
+    double bed = 0, target = 0;
+    int have_bed = uds_value(&telemetry, U_BT, &bed) && uds_value(&telemetry, U_BG, &target);
+    if (screws_soak.stage == SOAK_HEATING) {
+        if (have_bed && fabs(target - screws_soak.bed) > 0.5 && now - screws_soak.done_at > 10000) {
+            screws_soak_end(mqtt, "ended", "The bed target was changed", 0); return;
+        }
+        if (have_bed && fabs(target - screws_soak.bed) <= 0.5 && screws_soak_at_bed(bed, screws_soak.bed)) {
+            screws_soak.stage = SOAK_SOAKING; screws_soak.since = now;
+            screws_soak.soak_until = now + (long long)screws_soak.seconds * 1000;
+            return;
+        }
+        screws_soak_keep_bed(mqtt, now);
+        if (now - screws_soak.since > SCREWS_SOAK_HEAT_MS)
+            screws_soak_end(mqtt, "failed", "The bed did not reach the temperature", 1);
+        return;
+    }
+    if (have_bed && fabs(target - screws_soak.bed) > 0.5) { screws_soak_end(mqtt, "ended", "The bed target was changed", 0); return; }
+    if (!busy) screws_soak_keep_bed(mqtt, now);
+    if (now < screws_soak.soak_until || busy) return; /* a command typed meanwhile finishes first */
+    /* Waits up to a minute for fresh evidence, then stops. */
+    const char *hold = screws_soak_hold(mqtt, have_bed, bed, target);
+    if (hold) {
+        if (!screws_soak.held) screws_soak.held = now;
+        if (now - screws_soak.held > 60000) screws_soak_end(mqtt, "failed", hold, 1);
+        return;
+    }
+    screws_soak.held = 0;
+    char reason[256];
+    if (!screws_measure_check(mqtt, console, screws_soak.action, 0, reason, sizeof(reason), NULL)) {
+        screws_soak_end(mqtt, "failed", reason, 1); return;
+    }
+    int started = screws_soak_start(mqtt, console, reason, sizeof(reason));
+    if (started < 0 || (started > 0 && now - screws_soak.soak_until > 60000)) { screws_soak_end(mqtt, "failed", reason, 1); return; }
+    if (started == 0) screws_soak_end(mqtt, "started", "", 0);
+}
+
+static void screws_soak_json(char *out, size_t cap) {
+    if (!screws_soak.stage) {
+        char escaped[200]; json_escape(escaped, sizeof(escaped), screws_soak.reason);
+        snprintf(out, cap, "{\"active\":false,\"result\":\"%s\",\"reason\":\"%s\"}", screws_soak.result, escaped);
+        return;
+    }
+    long long left = screws_soak.stage == SOAK_SOAKING ? (screws_soak.soak_until - monotonic_ms() + 999) / 1000 : screws_soak.seconds;
+    const char *kind = control_screws_action_kind(screws_soak.action);
+    snprintf(out, cap, "{\"active\":true,\"stage\":\"%s\",\"bed\":%d,\"remaining\":%lld,\"total\":%d,\"action\":\"%s\"}",
+             screws_soak.stage == SOAK_SOAKING ? "soaking" : "heating", screws_soak.bed, left > 0 ? left : 0,
+             screws_soak.seconds, kind ? kind : "quick");
+}
+
+/* A screws:measure... or screws:tram:start... action, with or without a valid form. */
+static int screws_measure_action(const char *action) {
+    size_t n = !strncmp(action, "screws:measure", 14) ? 14 : !strncmp(action, "screws:tram:start", 17) ? 17 : 0;
+    return n && (!action[n] || action[n] == ':');
+}
+static void control_reject(int fd, int status, const char *reason) {
+    char escaped[300], response[420]; json_escape(escaped, sizeof(escaped), reason);
+    int n = snprintf(response, sizeof(response), "{\"accepted\":false,\"error\":\"%s\"}\n", escaped);
+    respond(fd, status, status == 400 ? "Bad Request" : "Conflict", "application/json; charset=utf-8", response, (size_t)n);
 }
 
 static void control_response(int fd,console_state *console,mqtt_client *mqtt,const char *body,size_t body_len){
@@ -4186,7 +5652,8 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     memcpy(action,body,body_len);action[body_len]='\0';
     if(!strcmp(action,"system:emergency_stop")){
-        control_screws_invalidate();
+        control_screws_invalidate_for(CONTROL_SCREWS_END_EMERGENCY);
+        screws_soak_end(mqtt,"ended","Emergency stop",0);
         usb_start_cancel();
         /* Straight to the firmware's emergency_stop endpoint; the queued M112 below is only the fallback. */
         char stop_reason[160];
@@ -4196,11 +5663,65 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         }
         fprintf(stderr,"Emergency stop endpoint failed (%s); sending M112\n",stop_reason);
     }
+    /* R11: stop the running screw measurement after its current line; the console job itself lifts the nozzle and
+     * switches the heaters off. Not a queued script, so it works while the console is busy. */
+    if(!strcmp(action,"screws:cancel")){
+        /* A hold time before a measurement ends at once; the bed goes off while the job owns it. */
+        if(screws_soak.stage){
+            screws_soak_end(mqtt,"cancelled","",1);
+            const char *ok="{\"accepted\":true}\n";
+            respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));return;
+        }
+        if(console_cancel(console)!=0){
+            const char *error="{\"accepted\":false,\"error\":\"No screw measurement is running\"}\n";
+            respond(fd,409,"Conflict","application/json; charset=utf-8",error,strlen(error));return;
+        }
+        control_screws_note_cancel();
+        const char *ok="{\"accepted\":true}\n";
+        respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));return;
+    }
     if(!strcmp(action,"motors:quiet") && !experiments.quiet_motors){
         const char *error="{\"accepted\":false,\"error\":\"Enable the experimental Quiet controls first\"}\n";
         respond(fd,409,"Conflict","application/json",error,strlen(error));return;
     }
     if(plates_background_active() && strcmp(action,"system:emergency_stop")){plates_fail(fd,409,"Plate verification is still running");return;}
+    /* A hold time before a screw measurement (screws:soak:<minutes>:<measurement>, see screws_soak above). With 0 minutes
+     * the measurement runs exactly as without the prefix. */
+    char soak_inner[96];int soak_minutes=0;
+    int soak=control_screws_soak_parse(action,&soak_minutes,soak_inner,sizeof(soak_inner),reason,sizeof(reason));
+    if(soak<0){control_reject(fd,400,reason);return;}
+    if(soak&&!soak_minutes){memmove(action,soak_inner,strlen(soak_inner)+1);soak=0;}
+    if(screws_measure_action(soak?soak_inner:action)){
+        if(screws_soak.stage){control_reject(fd,409,"A screw measurement is waiting for its bed hold time: cancel it first");return;}
+        /* The calibration would only wait for the console while the measurement heats and probes. */
+        if(plates_cal.stage){control_reject(fd,409,"A bed mesh calibration is running");return;}
+    }
+    if(soak){
+        int direct=0;
+        if(!screws_measure_check(mqtt,console,soak_inner,1,reason,sizeof(reason),&direct)){control_reject(fd,409,reason);return;}
+        /* Right after a bed mesh the bed was just held at this target: the hold time is left out. */
+        if(direct)memmove(action,soak_inner,strlen(soak_inner)+1);
+        else{
+            /* The job ends on the next tick after an emergency stop (the latch stays until CC2 Control restarts), and
+             * then without switching its bed off: refused before its M140 is sent. */
+            if(atomic_load(&console->emergency_sent)){
+                control_reject(fd,409,"An emergency stop was sent: restart the printer before a hold time");return;
+            }
+            char command[24];snprintf(command,sizeof(command),"M140 S%d",control_screws_action_bed(soak_inner));
+            if(console_start(console,command,reason,sizeof(reason))!=0){control_reject(fd,409,reason);return;}
+            pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
+            memset(&screws_soak,0,sizeof(screws_soak));
+            screws_soak.stage=SOAK_HEATING;screws_soak.bed=control_screws_action_bed(soak_inner);
+            screws_soak.seconds=soak_minutes*60;screws_soak.generation=generation;screws_soak.result="";
+            snprintf(screws_soak.action,sizeof(screws_soak.action),"%s",soak_inner);
+            screws_soak.since=monotonic_ms();screws_soak.renew_at=screws_soak.since+PLATE_BED_RENEW_MS; /* the M140 */
+            screws_soak_off.until=0;
+            /* The job owns the bed now: a shutdown left pending by an ended session must not undo it. */
+            control_screws_note_action(action);
+            const char *ok="{\"accepted\":true}\n";
+            respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));return;
+        }
+    }
     if(!strncmp(action,"grille:",7)){
         const char *native=uds_print_state(&telemetry);double nozzle,bed;
         /* No raw servo/PWM commands: native grille policy also owns the exhaust fan.
@@ -4282,7 +5803,10 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         }
         free(reply);
     }
+    control_screws_after_mesh(screws_measure_action(action)?screws_after_mesh_bed(console):-1);
     int built=control_build_script(action,mqtt,script,sizeof(script),reason,sizeof(reason));
+    int after_mesh=built&&control_screws_built_direct();
+    control_screws_after_mesh(-1);
     mqtt->external_verified=0;
     if(built&&external_feed_enabled&&!external_source_selected&&
        (!strncmp(action,"canvas:load:",12)||!strncmp(action,"canvas:recover-load:",20)||!strncmp(action,"canvas:unload:",14))){
@@ -4290,31 +5814,28 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
         if(n<0||(size_t)n>=sizeof(next)){built=0;snprintf(reason,sizeof(reason),"Source script exceeds capacity");}
         else memcpy(script,next,(size_t)n+1);
     }
+    if(built&&control_screws_cancel_tail(action))console_arm_staged(console,control_screws_cancel_tail(action),control_axes_homed(mqtt));
     if(!built||console_start(console,script,reason,sizeof(reason))!=0){
-        if(control_screws_is_tram(action)&&!strcmp(action,"screws:tram:start"))control_screws_invalidate();
+        /* Only a start this call built: a start refused because a session is running must not end that session. */
+        if(built&&control_screws_is_start(action))control_screws_invalidate_for(CONTROL_SCREWS_END_CONSOLE);
         char escaped[300],response[420];json_escape(escaped,sizeof(escaped),reason);
         int n=snprintf(response,sizeof(response),"{\"accepted\":false,\"error\":\"%s\"}\n",escaped);
         respond(fd,409,"Conflict","application/json; charset=utf-8",response,(size_t)n);return;
     }
-    control_screws_note_action(action);
-    if(!strcmp(action,"screws:measure")){
-        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
-        control_screws_note_quick(generation);
-    }
-    if(control_screws_is_tram(action)&&strcmp(action,"screws:tram:end")){
-        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
-        control_screws_note_job(generation);
-    }
-    if(!strcmp(action,"screws:tram:end")){
-        pthread_mutex_lock(&console->lock);unsigned long generation=console->generation;pthread_mutex_unlock(&console->lock);
-        control_screws_note_end(generation);
-    }
+    screws_note_queued(console,action);
+    /* Another screw action (the measurements are refused meanwhile) or switched-off heaters end a hold time; the
+     * action itself sets the heaters. */
+    if(!strncmp(action,"screws:",7))screws_soak_end(mqtt,"ended","Another screw action was started",0);
+    if(!strcmp(action,"heaters:off")||!strcmp(action,"system:heaters_off")||!strcmp(action,"system:all_off"))
+        screws_soak_end(mqtt,"ended","The heaters were switched off",0);
+    if(control_heater_action(action))screws_soak_off.until=0;
     if(!strcmp(action,"motors:quiet")||!strcmp(action,"motors:normal")){
         motor_mode_requested=action[7]=='q'?"quiet":"normal";motor_mode_connection=telemetry.connections;
     }
     if(!strncmp(action,"canvas:material:",16)||!strncmp(action,"canvas:catalog:",15)||!strcmp(action,"canvas:reset-all")){mqtt->canvas_material_read_at=time(NULL)+1;mqtt->canvas_watch_until=time(NULL)+15;}
     if(z_action){z_offset_reference=z_reference;z_offset_session=1;z_offset_expected=z_next;z_offset_pending=1;z_offset_timed_out=0;clock_gettime(CLOCK_MONOTONIC,&z_offset_started);}
-    const char *ok="{\"accepted\":true}\n";
+    /* after_mesh: the measurement follows the bed mesh directly (no nozzle cleaning, no full G28, no hold time). */
+    const char *ok=after_mesh?"{\"accepted\":true,\"after_mesh\":true}\n":"{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }
 
@@ -4326,16 +5847,33 @@ static int installer_native_observation(int canvas_only,int canvas_transfer);
 /* Release the steppers the firmware leaves energised once the printer has
  * stood idle with its heaters off; see control_idle_motors_due(). */
 static control_idle_motors idle_motors;
-static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
-    if(maintenance_barrier_active()||rn_blocks())return;
+static control_idle_sample idle_motors_observe(const mqtt_client *mqtt,console_state *console){
     control_idle_sample s={0};
     s.valid=gcode_idle_for_mutation(mqtt)&&mqtt->have_position&&
         uds_value(&telemetry,U_CF,&s.board_fan)&&uds_value(&telemetry,U_EG,&s.nozzle_target)&&
         uds_value(&telemetry,U_BG,&s.bed_target)&&uds_value(&telemetry,U_LIVE_SPEED,&s.velocity);
     s.machine_status=mqtt->machine_status;s.print_state=mqtt->print_state;
     s.x=mqtt->x;s.y=mqtt->y;s.z=mqtt->z;
+    s.session=control_screws_session_active();
     pthread_mutex_lock(&console->lock);s.console_busy=console->busy;pthread_mutex_unlock(&console->lock);
-    if(control_idle_motors_due(&idle_motors,&s,recovery_clock())&&send_local_gcode_script("M84")!=0)
+    return s;
+}
+static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
+    if(maintenance_barrier_active()){idle_motors.holding=0;return;}
+    control_idle_sample s=idle_motors_observe(mqtt,console);
+    if(!control_idle_motors_due(&idle_motors,&s,recovery_clock()))return;
+    /* Admission is expensive with ABI2. Check it when an operation is due,
+     * not on every HTTP/event-loop iteration. Never consume a refused M84;
+     * require a new full idle interval after maintenance or lifecycle refusal. */
+    if(rn_blocks()||maintenance_barrier_active()){
+        idle_motors.holding=0;idle_motors.released=0;return;
+    }
+    /* Admission can take time: re-read freshness and motion/heater state
+     * after it, before committing the release or sending any command. */
+    s=idle_motors_observe(mqtt,console);
+    idle_motors.released=0;
+    if(!control_idle_motors_due(&idle_motors,&s,recovery_clock()))return;
+    if(send_local_gcode_script("M84")!=0)
         idle_motors.holding=0; /* Not delivered: wait a full period before trying again. */
 }
 
@@ -4363,17 +5901,70 @@ static int installer_native_status(int canvas_only);
 #include "bed_drying.h"
 #include "nozzle_expansion.h"
 
-/* Mirrors the POST refusals of handle_client below for a start that no request carries. */
+/* The POST paths that start one of the sessions printer_change_refusal pauses printer changes for (or a firmware tool
+ * or a network change). While a hold time before a screw measurement runs they are refused: its bed is held and the
+ * measurement starts on its own when it ends. */
+static int screws_soak_blocks_path(const char *path) {
+    static const char *const starts[] = {
+        "/api/nozzle-expansion/start", "/api/bed-drying/start", "/api/bed-drying/preheat", "/api/calibration-tools/action",
+        "/api/app-update/upload", "/api/app-update/download", "/api/app-update/install", "/api/network/action",
+        "/api/network/scan", "/api/rfid/action", "/api/rfid/lifecycle/action"};
+    for (size_t i = 0; i < sizeof(starts) / sizeof(starts[0]); i++) if (!strcmp(path, starts[i])) return 1;
+    return 0;
+}
+
+/* The refusals of every printer change while another session owns the printer, in the order and with the exceptions
+ * handle_client answers them: maintenance, RFID lifecycle and scan, the firmware calibration tools, the load-cell
+ * session, a pending rotation distance change (plate settings), an application update or network change, bed heating and
+ * the nozzle expansion calibration; then the starts refused during a screw hold time. GET, HEAD and the emergency stop
+ * always pass. NULL when the request may go on, else the 409 text; *plates_form tells the reply (plates_fail, otherwise
+ * app_update_fail). A start that no request carries asks as the request that would have started it (the measurement
+ * after a hold time: POST /api/control). */
+static const char *printer_change_refusal(const char *method, const char *path, const char *body, size_t body_len, int *plates_form) {
+    int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
+        body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
+    int console_m112 = !strcmp(path, "/api/console/command") && body_len == 4 && !memcmp(body, "M112", 4);
+    int console_emergency = !strcmp(method, "POST") && console_m112;
+    int owned_rfid_cancel = rfid.child && !strcmp(method, "POST") && !strcmp(path, "/api/rfid/action") && body_len == 6 &&
+        !memcmp(body, "cancel", 6);
+    int change = strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency;
+    *plates_form = 0;
+    if (maintenance_request_blocked(method, emergency, console_emergency) && !owned_rfid_cancel)
+        return "Installation or native maintenance is running; printer changes are paused";
+    if (change && !console_emergency && strcmp(path, "/api/rfid/lifecycle/action") && !owned_rfid_cancel && rn_blocks())
+        return "RFID activation or recovery is incomplete; finish the lifecycle before changing the printer";
+    *plates_form = 1;
+    if (rfid.child && change && !console_emergency && strcmp(path, "/api/rfid/action"))
+        return "Cancel the RFID scan before changing printer settings";
+    if (tools.busy && change && !console_emergency) return "A native calibration tool is still running";
+    if (cell_active() && change && !console_emergency && strcmp(path, "/api/calibration-tools/action"))
+        return "Finish the load-cell calibration session first";
+    if (rotation_pending() && !strcmp(method, "POST") && !strncmp(path, "/api/plates/", 12))
+        return "A rotation distance change needs a restart before changing plate settings";
+    *plates_form = 0;
+    if (change && (app_update_active() || (connections_busy() && strcmp(path, "/api/network/action"))))
+        return "Application update is running; printer changes are paused";
+    /* A drying session owns the bed until zero readback and timeout restoration.
+     * M112 stays available; external display/slicer actions are observed by tick. */
+    if (drying_active() && change && strcmp(path, "/api/bed-drying/stop") && !console_m112)
+        return "Stop bed heating and wait for confirmation before another operation";
+    /* The calibration heats the nozzle and moves the printhead until it has switched the nozzle off. */
+    if (nx_active() && change && !console_m112)
+        return "A nozzle expansion calibration is running; use the emergency stop to interrupt it";
+    *plates_form = 1;
+    if (screws_soak_active() && !strcmp(method, "POST") && screws_soak_blocks_path(path))
+        return "A screw measurement is waiting for its bed hold time: cancel it first";
+    *plates_form = 0;
+    return NULL;
+}
+
+/* The refusals of handle_client for a start that no request carries, and a print start being prepared. */
 static const char *printer_change_blocked(void) {
-    if (maintenance_barrier_active()) return "Installation or native maintenance is running; printer changes are paused";
-    if (rn_blocks()) return "RFID activation or recovery is incomplete; finish the lifecycle before changing the printer";
-    if (rfid.child) return "Cancel the RFID scan before changing printer settings";
-    if (tools.busy) return "A native calibration tool is still running";
-    if (cell_active()) return "Finish the load-cell calibration session first";
-    if (app_update_active() || connections_busy()) return "Application update is running; printer changes are paused";
-    if (drying_active()) return "Stop bed heating and wait for confirmation before another operation";
-    if (nx_active()) return "A nozzle expansion calibration is running; use the emergency stop to interrupt it";
-    if (usb_start_active()) return "A USB file is still being copied for a print start";
+    int plates_form;
+    const char *blocked = printer_change_refusal("POST", "", "", 0, &plates_form);
+    if (blocked) return blocked;
+    if (usb_start_active())
+        return usb_start.internal ? "A print start is still being prepared" : "A USB file is still being copied for a print start";
     return NULL;
 }
 #include "experiments.h"
@@ -4404,6 +5995,156 @@ static int http_request_complete(const char *request,size_t used){
     return used>=header+length;
 }
 
+/* 1 when `file` of the internal storage is the running print's, with the layer the service has seen for it. */
+static int running_print_layer(const mqtt_client *mqtt,const char *file,int *current_layer){
+    time_t now=time(NULL);
+    int active_job=mqtt->connected&&mqtt->registered&&mqtt->last_message>0&&now-mqtt->last_message<=15&&
+        mqtt->have_machine_status&&mqtt->machine_status==2&&mqtt->filename[0]&&
+        (!strcmp(mqtt->print_state,"printing")||!strcmp(mqtt->print_state,"paused"));
+    if(!active_job)return 0;
+    const char *job=mqtt->filename;
+    if(!strncmp(job,"local/",6))job+=6;
+    if(strcmp(job,file))return 0;
+    double live;*current_layer=mqtt->current_layer;
+    if(uds_job_matches(&telemetry,mqtt->filename)&&uds_value(&telemetry,U_LAYER,&live))*current_layer=(int)live;
+    return 1;
+}
+
+/* The read hold: while the printer homes, levels, probes or starts a print, no G-code file is read for the
+ * layer path, the object preview or a picture (seen four times, last on 18.11.2026: a long read on the two
+ * small cores while the printer homed for a print start, then the MCU's "Timer too close", error 803, and the
+ * printer program crashed). One check for every file; it is on while
+ * - fresh MQTT reports machine status 5 (Auto leveling), 7 (Resonance test), 8 (Self check) or
+ *   10 (Manual homing): what the touchscreen, the printer's own calibrations and raw G28/PROBE report;
+ * - fresh MQTT reports a print (status 2, printing or paused) that has not reached layer 1: heating, homing,
+ *   probing and the purge of a print start (the layer as /api/printer shows it, which a new print resets to 0);
+ * - this service's console runs a job that homes or probes (G28, G29, G180, PROBE..., BED_MESH_CALIBRATE,
+ *   SCREWS_TILT_CALCULATE, Z_TILT_ADJUST, SHAPER_CALIBRATE, TEST_RESONANCES): the screw session, the mesh
+ *   calibration and the console's own G28; MQTT reports such a job a poll later;
+ * - this service's bed mesh calibration homes or probes.
+ * "Fresh" is the 15 s of every other check here: connected, registered, a message within 15 s. Without the
+ * printer nothing is held, so files can be browsed; MQTT that stops releases the hold after 15 s, so a stale
+ * report never holds for long. What is remembered is still answered; the running print's own 409 refusals
+ * come first. The main loop passes the result to running scans (gcode_read_hold) on every pass. */
+static int gcode_read_homing_word(const char *word,size_t n){
+    static const char *const words[]={"G28","G29","G180","PROBE","BED_MESH_CALIBRATE","SCREWS_TILT_CALCULATE",
+                                      "Z_TILT_ADJUST","SHAPER_CALIBRATE","TEST_RESONANCES"};
+    for(size_t i=0;i<sizeof(words)/sizeof(words[0]);i++){
+        size_t w=strlen(words[i]);
+        if(n==w&&!strncasecmp(word,words[i],n))return 1;
+    }
+    return n>6&&!strncasecmp(word,"PROBE_",6); /* PROBE_ACCURACY, PROBE_CALIBRATE; QUERY_PROBE does not move */
+}
+/* 1 when a line of `script` starts with a command that homes or probes. */
+static int gcode_read_homing_script(const char *script){
+    for(const char *line=script;*line;){
+        while(*line==' '||*line=='\t'||*line=='\r'||*line=='\n')line++;
+        size_t n=strcspn(line," \t\r\n");
+        if(n&&gcode_read_homing_word(line,n))return 1;
+        line+=strcspn(line,"\n");
+    }
+    return 0;
+}
+static int gcode_read_blocked(const mqtt_client *mqtt,console_state *console){
+    if(console){
+        pthread_mutex_lock(&console->lock);
+        int homing=console->busy&&gcode_read_homing_script(console->command);
+        pthread_mutex_unlock(&console->lock);
+        if(homing)return 1;
+    }
+    if(plates_cal.stage==CAL_HOMING||plates_cal.stage==CAL_PROBING)return 1;
+    time_t now=time(NULL);
+    if(!mqtt||!mqtt->connected||!mqtt->registered||!mqtt->have_machine_status||mqtt->last_message<=0||
+       now<mqtt->last_message||now-mqtt->last_message>15)return 0;
+    int status=mqtt->machine_status;
+    if(status==5||status==7||status==8||status==10)return 1;
+    if(status!=2||(strcmp(mqtt->print_state,"printing")&&strcmp(mqtt->print_state,"paused")))return 0;
+    double live;int layer=mqtt->current_layer;
+    if(uds_job_matches(&telemetry,mqtt->filename)&&uds_value(&telemetry,U_LAYER,&live))layer=(int)live;
+    return layer<1;
+}
+/* Answers a request (main thread) and tells running scans: they end at their next line once it is on. */
+static int gcode_read_hold_now(const mqtt_client *mqtt,console_state *console){
+    int held=gcode_read_blocked(mqtt,console);
+    atomic_store(&gcode_read_hold,held);
+    return held;
+}
+/* Every pass of the main loop, so a scan that began before the hold ends within about a second of it. */
+static void gcode_read_follow(const mqtt_client *mqtt,console_state *console){(void)gcode_read_hold_now(mqtt,console);}
+
+/* Refuses a layer-path request before any G-code is read when it names the file of the running print
+ * and cannot belong to that print: a layer above the print's layer count, or a layer above 1 while the
+ * service has not yet seen the print reach layer 1 (a new print can still show the layer of the one before
+ * it, seen: layer 193 right after a start, a 20 s scan of 78.7 MB). Requests for other files, and any
+ * request while no print runs (browsing by hand), pass. The reply is 409, which the page does not retry.
+ * The layer the service has seen is the one /api/printer reports, which a new print resets to 0. */
+static int layer_path_guard(int fd,const mqtt_client *mqtt,const char *query){
+    char storage[16],file[LAYER_PATH_NAME_MAX];int layer=0;
+    if(gcode_layer_path_query(query,storage,file,&layer)!=LAYER_PATH_OK||strcmp(storage,"internal"))return 0;
+    int current_layer=0;
+    if(!running_print_layer(mqtt,file,&current_layer))return 0;
+    int file_layers=active_gcode_total_layers_now(mqtt,mqtt->filename);
+    int total_layers=mqtt->have_total_layers?mqtt->total_layers:file_layers;
+    if(total_layers>0&&layer>total_layers){
+        layer_path_count_rejected();
+        layer_path_fail(fd,409,"Conflict","Layer is beyond the running print");
+        return 1;
+    }
+    if(layer>1&&current_layer<1){
+        layer_path_count_rejected();
+        layer_path_fail(fd,409,"Conflict","The running print has not reached that layer");
+        return 1;
+    }
+    return 0;
+}
+
+/* The object preview of the running print's file waits, like layer 2 and up of the layer path, until the
+ * service has seen the print reach layer 1: right after a start the printer is busiest and a full read of the
+ * file could disturb it. Counted with the layer path's refusals. Layer numbers play no part here. */
+static int object_preview_guard(int fd,const mqtt_client *mqtt,const char *query){
+    char storage[16],file[LAYER_PATH_NAME_MAX],object[OBJECT_PREVIEW_NAME_MAX];int current_layer=0;
+    if(gcode_object_preview_query(query,storage,file,object)!=OBJECT_PREVIEW_OK||strcmp(storage,"internal"))return 0;
+    if(!running_print_layer(mqtt,file,&current_layer)||current_layer>=1)return 0;
+    layer_path_count_rejected();
+    layer_path_fail(fd,409,"Conflict","Object preview waits for the print start");
+    return 1;
+}
+
+/* Drops the remembered object preview when a print of another file starts (the moments that reset the layer:
+ * a new job uuid in mqtt.c, a new print or file in uds.c) or a print ends (printing or paused turns into
+ * standby, complete, cancelled or error), and once it has not been asked for OBJECT_PREVIEW_KEEP_S. What is
+ * remembered, or being read, for the file of the print that starts stays, so that file is not read a second
+ * time after layer 1; a changed file is still read again (its stamp is compared on every request). Runs on
+ * every pass of the main loop. */
+static int object_preview_idle_state(const char *state){
+    return !strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled")||!strcmp(state,"error");
+}
+static void object_preview_print_started(const mqtt_client *mqtt,const uds_client *uds){
+    const char *job=mqtt->filename;
+    if(!strncmp(job,"local/",6))job+=6;
+    pthread_mutex_lock(&object_preview_lock);
+    int held=object_preview_cached.valid||object_preview_reading.active;
+    const char *storage=object_preview_cached.valid?object_preview_cached.storage:object_preview_reading.storage;
+    const char *file=object_preview_cached.valid?object_preview_cached.file:object_preview_reading.file;
+    int same=held&&!strcmp(storage,"internal")&&((*job&&!strcmp(job,file))||uds_job_matches(uds,file));
+    if(!same)object_preview_drop_locked();
+    pthread_mutex_unlock(&object_preview_lock);
+}
+static void object_preview_follow(const mqtt_client *mqtt,const uds_client *uds){
+    static int primed,mqtt_running,uds_running;static unsigned long mqtt_starts,uds_resets;
+    int mqtt_now=!strcmp(mqtt->print_state,"printing")||!strcmp(mqtt->print_state,"paused");
+    int uds_now=uds->have_print_state&&(!strcmp(uds->print_state,"printing")||!strcmp(uds->print_state,"paused"));
+    int ended=(mqtt_running&&object_preview_idle_state(mqtt->print_state))||
+              (uds_running&&uds->have_print_state&&object_preview_idle_state(uds->print_state));
+    int started=mqtt->job_starts!=mqtt_starts||uds->job_resets!=uds_resets;
+    if(primed&&ended)object_preview_forget();
+    else if(primed&&started)object_preview_print_started(mqtt,uds);
+    primed=1;mqtt_starts=mqtt->job_starts;uds_resets=uds->job_resets;
+    if(mqtt_now)mqtt_running=1;else if(object_preview_idle_state(mqtt->print_state))mqtt_running=0;
+    if(uds_now)uds_running=1;else if(uds->have_print_state&&object_preview_idle_state(uds->print_state))uds_running=0;
+    object_preview_expire();
+}
+
 static int handle_client(int fd,char *request,size_t used,const char *web_root,mqtt_client *mqtt,console_state *console){
     /* A full initial read may contain a valid header followed by upload bytes.
      * Reject only oversized headers, not a streaming body's first chunk. */
@@ -4427,44 +6168,13 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     if(!header_end){header_end=strstr(request,"\n\n");separator=2;}
     const char *body=header_end?header_end+separator:request+used;
     size_t body_len=header_end&&used>=(size_t)(body-request)?used-(size_t)(body-request):0;
-    int emergency = !strcmp(method, "POST") && !strcmp(path, "/api/control") &&
-        body_len == strlen("system:emergency_stop") && !memcmp(body, "system:emergency_stop", body_len);
-    int console_emergency=!strcmp(method,"POST")&&!strcmp(path,"/api/console/command")&&body_len==4&&!memcmp(body,"M112",4);
-    int owned_rfid_cancel=rfid.child&&!strcmp(method,"POST")&&!strcmp(path,"/api/rfid/action")&&body_len==6&&!memcmp(body,"cancel",6);
-    if(maintenance_request_blocked(method,emergency,console_emergency)&&!owned_rfid_cancel){
-        app_update_fail(fd,409,"Installation or native maintenance is running; printer changes are paused");return 0;
-    }
-    if(rn_blocks()&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&
-       strcmp(path,"/api/rfid/lifecycle/action")&&!owned_rfid_cancel){
-        app_update_fail(fd,409,"RFID activation or recovery is incomplete; finish the lifecycle before changing the printer");return 0;
-    }
-    if(rfid.child&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&strcmp(path,"/api/rfid/action")){
-        plates_fail(fd,409,"Cancel the RFID scan before changing printer settings");return 0;
-    }
-    if(tools.busy&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency){
-        plates_fail(fd,409,"A native calibration tool is still running");return 0;
-    }
-    if(cell_active()&&strcmp(method,"GET")&&strcmp(method,"HEAD")&&!emergency&&!console_emergency&&strcmp(path,"/api/calibration-tools/action")){
-        plates_fail(fd,409,"Finish the load-cell calibration session first");return 0;
-    }
-    if(rotation_pending()&&!strcmp(method,"POST")&&!strncmp(path,"/api/plates/",12)){
-        plates_fail(fd,409,"A rotation distance change needs a restart before changing plate settings");return 0;
-    }
-    if (strcmp(method, "GET") && strcmp(method, "HEAD") && !emergency && (app_update_active() || (connections_busy() && strcmp(path,"/api/network/action")))) {
-        app_update_fail(fd, 409, "Application update is running; printer changes are paused");
+    /* Every printer change is refused while another session owns the printer; the measurement after a screw hold time
+     * asks the same function (screws_measure_check). */
+    int plates_form;
+    const char *change_refused=printer_change_refusal(method,path,body,body_len,&plates_form);
+    if(change_refused){
+        if(plates_form)plates_fail(fd,409,change_refused);else app_update_fail(fd,409,change_refused);
         return 0;
-    }
-    /* A drying session owns the bed until zero readback and timeout restoration.
-     * M112 stays available; external display/slicer actions are observed by tick. */
-    if(drying_active() && strcmp(method,"GET") && strcmp(method,"HEAD") && !emergency &&
-       strcmp(path,"/api/bed-drying/stop") &&
-       !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
-        app_update_fail(fd,409,"Stop bed heating and wait for confirmation before another operation");return 0;
-    }
-    /* The calibration heats the nozzle and moves the printhead until it has switched the nozzle off. */
-    if(nx_active() && strcmp(method,"GET") && strcmp(method,"HEAD") && !emergency &&
-       !(strcmp(path,"/api/console/command")==0&&body_len==4&&!memcmp(body,"M112",4))){
-        app_update_fail(fd,409,"A nozzle expansion calibration is running; use the emergency stop to interrupt it");return 0;
     }
     if(!strcmp(method,"GET")&&!strcmp(path,"/api/rfid/lifecycle")) {
         rfid_native_status_response(fd);
@@ -4536,7 +6246,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/upload")==0) {
         return header_end ? gcode_upload_start(fd,request,query,used,(size_t)(body-request),mqtt):0;
     } else if (strcmp(method,"GET")==0 && (strcmp(path,"/")==0 || strcmp(path,"/index.html")==0)) {
-        serve_index(fd, web_root);
+        serve_index(fd, web_root, request);
     } else if (strcmp(method,"GET")==0 && strncmp(path,"/i18n/",6)==0) {
         serve_locale(fd, web_root, path);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/orca/pending-print")==0) {
@@ -4629,11 +6339,19 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
         return gcode_download_start(fd,query);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/layer-path")==0) {
-        return gcode_layer_path_start(fd,query);
+        if(layer_path_guard(fd,mqtt,query))return 0;
+        return gcode_layer_path_begin(fd,query,gcode_read_hold_now(mqtt,console));
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/object-preview")==0) {
+        if(object_preview_guard(fd,mqtt,query))return 0;
+        return gcode_object_preview_begin(fd,query,gcode_read_hold_now(mqtt,console));
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
         return analysis_start(fd,0,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/thumbnail")==0) {
-        gcode_thumbnail_response(fd,body,body_len);
+        /* Up to 4 MB are read on this thread (#352): not while the printer homes, levels or starts a print. */
+        if(gcode_read_hold_now(mqtt,console)){
+            gcode_read_count_blocked();
+            layer_path_fail(fd,503,"Service Unavailable",GCODE_READ_HELD_ERROR);
+        }else gcode_thumbnail_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/metadata")==0) {
         return analysis_start(fd,1,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/delete")==0) {
@@ -4644,9 +6362,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         queue_item *waiting=queue_find(queue.active_id);
         if(plates_background_active())plates_fail(fd,409,"Plate verification is still running");
         else if(waiting&&!strcmp(waiting->state,"starting"))plates_fail(fd,409,"A queued copy is starting");
-        else if(usb_start_active())plates_fail(fd,409,"A USB file is still being copied for another start");
-        else if(gcode_request_is_usb(body,body_len))return usb_start_begin(fd,mqtt,body,body_len);
-        else gcode_start_response(fd,mqtt,body,body_len,NULL);
+        else if(usb_start_active())plates_fail(fd,409,usb_start.internal?"Another print start is still being prepared"
+                                                                        :"A USB file is still being copied for another start");
+        /* Every dialog start, from USB and from internal memory, is checked on the worker (usb_start_*). */
+        else return usb_start_begin(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/exclude-objects")==0) {
         exclude_objects_response(fd, mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/mesh")==0) {
@@ -4672,11 +6391,13 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/edit")==0) {
         plates_measure_edit_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate")==0) {
-        plates_calibrate_response(fd,mqtt,console,body,body_len);
+        plates_calibrate_response(fd,mqtt,console,body,body_len,request);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/calibrate/cancel")==0) {
         plates_calibrate_cancel_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measure/delete")==0) {
         plates_measure_delete_response(fd,mqtt,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/measures/clear")==0) {
+        plates_measures_clear_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/keep")==0) {
         plates_keep_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/plates/nozzle")==0) {
@@ -4696,15 +6417,17 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/queue")==0) {
         queue_get_response(fd,mqtt);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/add")==0) {
-        queue_add_response(fd,body,body_len);
+        queue_add_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/start")==0) {
-        queue_start_response(fd,mqtt,body,body_len);
+        if(queue_start_response(fd,mqtt,body,body_len))return 1; /* a USB copy holds the socket */
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/remove")==0) {
         queue_remove_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/reorder")==0) {
         queue_reorder_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/copies")==0) {
         queue_copies_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/filament")==0) {
+        queue_filament_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/policy")==0) {
         queue_policy_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/queue/clear-done")==0) {
@@ -4729,6 +6452,16 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         spools_adjust_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman")==0) {
         spoolman_config_response(fd,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spoolman")==0) {
+        spoolman_status_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/held/send")==0) {
+        spoolman_held_send_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/held/discard")==0) {
+        spoolman_held_discard_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/unlink-old")==0) {
+        spoolman_unlink_old_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/keep-old")==0) {
+        spoolman_keep_old_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/catalog/refresh")==0) {
         spoolman_catalog_refresh_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spoolman/catalog")==0) {
@@ -4741,7 +6474,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/monitor")==0) {
         console_monitor_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/console")==0) {
-        console_status_response(fd,console);
+        console_status_response(fd,console,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/clear")==0) {
         console_clear_response(fd,console);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/console/command")==0) {
@@ -4800,7 +6533,7 @@ static int installer_native_observation(int canvas_only,int canvas_transfer){
         const char *state=ng_string(reply,print,"state");
         if(state&&(!strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled"))&&
            ng_number(reply,print,"machine_status",&machine)&&machine==1&&
-           ng_number(reply,ng_member(reply,status,"motion_report"),"live_velocity",&velocity)&&velocity==0&&
+           ng_number(reply,ng_member(reply,status,"motion_report"),"live_velocity",&velocity)&&fabs(velocity)<=1e-9&&
            installer_native_heater_safe(reply,ng_member(reply,status,"extruder"),50,canvas_transfer)&&
            installer_native_heater_safe(reply,ng_member(reply,status,"heater_bed"),canvas_transfer?40:50,canvas_transfer))result=0;
     }
@@ -4820,7 +6553,9 @@ int main(int argc, char **argv) {
         if(!canvas_only&&result)fputs("STOP: native console did not confirm Idle, no motion and cold heaters with zero targets.\n",stderr);
         return result;
     }
-    if(!rfid_app_update_boot()) {
+    /* The independent panel manager owns panel recovery. RFID recovery
+     * belongs to the RFID service and cannot gate panel startup. */
+    if(0 && !rfid_app_update_boot()) {
         fputs("RFID app-update recovery incomplete; retain the transaction and installation backup.\n",stderr);
         return 1;
     }
@@ -4845,6 +6580,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--update-ca") == 0 && i + 1 < argc) app_update_ca = argv[++i];
         else if (strcmp(argv[i], "--update-runner") == 0 && i + 1 < argc) app_update_runner = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
+        else if (strcmp(argv[i], "--layer-index-dir") == 0 && i + 1 < argc) layer_store_dir = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
         else if (strcmp(argv[i], "--screws-history") == 0 && i + 1 < argc) screws_history_path = argv[++i];
         else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
@@ -4889,6 +6625,7 @@ int main(int argc, char **argv) {
     if (!plates_available) fprintf(stderr, "Plate library disabled: %s (%s)\n", plates_error, plates_path);
     spools_load();
     queue_load();
+    (void)gcode_usb_part_cleanup();
     if (!spools_available) fprintf(stderr, "Spool library disabled: %s (%s)\n", spools_error, spools_path);
     mqtt_init(&mqtt);
     if (mqtt_load_config(&mqtt, mqtt_config_path) != 0) {
@@ -4919,6 +6656,18 @@ int main(int argc, char **argv) {
     }
     printf("CC2 Control " CC2_CONTROL_VERSION " + Panda bridge listening on 0.0.0.0:%d (Panda port %d)\n", port, panda_port);
     fflush(stdout);
+
+    /* Layer maps live next to CC2 Control's other data (the folder of --preferences) unless
+     * --layer-index-dir names another one; never next to the G-code. */
+    static char layer_store_dir_buffer[PATH_MAX_LOCAL * 2];
+    if (!strcmp(layer_store_dir, "./layer-index")) {
+        const char *slash = strrchr(ui_preferences_path, '/');
+        if (slash && snprintf(layer_store_dir_buffer, sizeof(layer_store_dir_buffer), "%.*s/layer-index",
+                              (int)(slash - ui_preferences_path), ui_preferences_path) < (int)sizeof(layer_store_dir_buffer))
+            layer_store_dir = layer_store_dir_buffer;
+    }
+    static int layer_prewarm_done; static time_t layer_started_at; layer_started_at = time(NULL);
+    if (layer_store_start() != 0) fprintf(stderr, "Layer maps disabled: cannot start the background builder\n");
 
     http_pending *pending=calloc(HTTP_PENDING_MAX,sizeof(*pending));
     if(!pending){perror("HTTP receive pool");panda_stop(&panda);close(server);mqtt_close(&mqtt);console_destroy(&console);return 1;}
@@ -4952,20 +6701,24 @@ int main(int argc, char **argv) {
         struct timeval wait={short_wait?0:1,short_wait?100000:0};
         int ready=select(max_fd+1,&read_set,NULL,NULL,&wait);
         if(ready<0){if(errno==EINTR)continue;perror("select");break;}
-        if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set))(void)mqtt_process(&mqtt);
+        if(mqtt.fd>=0&&FD_ISSET(mqtt.fd,&read_set)){(void)mqtt_process(&mqtt);active_scan_follow(&mqtt);}
         if(telemetry.fd>=0&&FD_ISSET(telemetry.fd,&read_set))uds_process(&telemetry);
         uds_motion_light(&telemetry,&mqtt);
         quiet_disable_tick(&console);
         idle_motors_tick(&mqtt,&console);
         motor_mode_tick(&mqtt,&console);
         {
-            int completed=0,success=0,busy=0;unsigned long generation=0;int emergency;
-            pthread_mutex_lock(&console.lock);
-            completed=console.completed;success=console.success;busy=console.busy;
-            generation=console.generation;
-            pthread_mutex_unlock(&console.lock);
+            console_snapshot snap;
+            console_take_snapshot(&console,&snap);
+            int completed=snap.completed,success=snap.success,busy=snap.busy,emergency;unsigned long generation=snap.generation;
+            /* a cancel that met a failing line, or whose tail was cut short or refused at a heater line, never switched the
+             * heaters off: it is not taken for a clean cancel (control.c) */
+            control_screws_note_console_end(snap.completed,snap.cancelled,snap.cancel_tail_failed);
             emergency=atomic_load(&console.emergency_sent);
             time_t tram_now=time(NULL);
+            pthread_mutex_lock(&console.lock);
+            screws_sample_tick(&mqtt,generation,console.output,console.output_len);
+            pthread_mutex_unlock(&console.lock);
             (void)control_screws_tick(&mqtt,completed,success,generation,emergency,tram_now);
             /* Record the measured corners of a session job that just completed (#329). The
              * console output still belongs to that job: nothing new starts within this tick. */
@@ -4973,24 +6726,34 @@ int main(int argc, char **argv) {
             if(control_screws_take_finished(&tram_job)){
                 int recorded;
                 pthread_mutex_lock(&console.lock);
-                recorded=screw_history_record(&screws_history,&tram_job,console.output,console.output_len,tram_now);
+                const screw_ist *sample=screws_sample.gen==generation&&screws_sample.ist.have?&screws_sample.ist:NULL;
+                recorded=screw_history_record_ist(&screws_history,&tram_job,console.output,console.output_len,tram_now,sample);
                 pthread_mutex_unlock(&console.lock);
+                memset(&screws_sample,0,sizeof(screws_sample));
                 if(recorded)(void)screws_history_store();
             }
-            if(screw_history_tick(&screws_history,control_screws_session_active(),tram_now))(void)screws_history_store();
-            /* Keep the session's bed at 60 C, but only while telemetry still shows that
-             * target: a target someone else set is left alone. */
+            if(screw_history_tick(&screws_history,control_screws_session_active(),tram_now,control_screws_end_reason()))
+                (void)screws_history_store();
             double tram_bed=0;
-            if(control_screws_bed_renew_due(tram_now)&&!busy&&mqtt.have_machine_status&&mqtt.machine_status==1&&
-               uds_value(&telemetry,U_BG,&tram_bed)&&fabs(tram_bed-60.0)<=0.5)
-                control_screws_bed_renewed(tram_now,send_local_gcode_script("M140 S60")==0);
+            int have_tram_bed=uds_value(&telemetry,U_BG,&tram_bed);
+            screws_bed_renew_tick(&mqtt,busy,tram_now,send_local_gcode_script,have_tram_bed,tram_bed);
             int have_bed_target=uds_value(&telemetry,U_BG,&tram_bed);
             screws_heaters_off_tick(&mqtt,busy,send_local_gcode_script,have_bed_target,tram_bed);
             screws_marker_sync();
+            /* Last: a measurement it starts must not clear the console output of a job recorded above. */
+            screws_soak_tick(&mqtt,&console,emergency);
         }
         spools_tick(&mqtt);
         queue_tick(&mqtt);
         usb_start_tick(&mqtt);
+        print_watch_tick(&mqtt);
+        object_preview_follow(&mqtt,&telemetry);
+        gcode_read_follow(&mqtt,&console);
+        layer_store_set_idle(gcode_idle_for_mutation(&mqtt) && !atomic_load(&gcode_read_hold) && !usb_start_active());
+        if (!layer_prewarm_done && atomic_load(&layer_store_idle) && time(NULL) - layer_started_at >= 60) {
+            layer_prewarm_done = 1; /* once, a minute after the start and at the first idle time */
+            (void)layer_store_prewarm(gcode_internal_root, LAYER_STORE_PREWARM_MAX);
+        }
         struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
         if (spools_available) spoolman_tick((long long)now.tv_sec * 1000 + now.tv_nsec / 1000000);
         for(int i=0;i<HTTP_PENDING_MAX;i++){

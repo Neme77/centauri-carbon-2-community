@@ -213,6 +213,34 @@ int main(void) {
     step(&state, &mqtt);
     assert(!marker());
 
+    /* R11: a measurement job is armed as a staged console job and can be cancelled; nothing else can. */
+    restart(&state);
+    assert(act(&state, &mqtt, "screws:cancel") == 409);
+    session(&state, &mqtt);
+    assert(state.staged_next == 1 && strstr(state.cancel_tail_next, "RESTORE_GCODE_STATE NAME=CC2_SCREW_TRAM"));
+    state.staged_next = 0;
+    assert(act(&state, &mqtt, "screws:cancel") == 409); /* the start's job is over */
+    strcpy(mqtt.homed_axes, "xyz"); mqtt.have_position = 1;
+    assert(act(&state, &mqtt, "screws:tram:probe:FR") == 202 && state.staged_next == 1);
+    pthread_mutex_lock(&state.lock); state.staged = 1; state.staged_next = 0; pthread_mutex_unlock(&state.lock); /* what the real start does */
+    assert(act(&state, &mqtt, "screws:cancel") == 202 && atomic_load(&state.cancel_requested));
+    assert(strstr(state.cancel_tail_next, "M104 S0\nM140 S60")); /* a measurement of a running session keeps the bed */
+    snprintf(queued, sizeof(queued), "M104 S0\nM140 S60"); /* the cancel tail ran */
+    finish(&state, 0);
+    step(&state, &mqtt);
+    assert(control_screws_session_active() && !control_screws_heaters_off_pending()); /* R23: the session goes on */
+    assert(act(&state, &mqtt, "screws:tram:end") == 202);
+    finish(&state, 1); step(&state, &mqtt);
+    assert(!control_screws_session_active());
+    pthread_mutex_lock(&state.lock); state.staged = 0; pthread_mutex_unlock(&state.lock);
+    atomic_store(&state.cancel_requested, 0);
+    assert(act(&state, &mqtt, "heaters:off") == 202 && state.staged_next == 0);
+    finish(&state, 1); step(&state, &mqtt);
+    assert(act(&state, &mqtt, "screws:measure") == 202 && state.staged_next == 1 &&
+           strstr(state.cancel_tail_next, "RESTORE_GCODE_STATE NAME=CC2_SCREW_MEASURE"));
+    finish(&state, 1); step(&state, &mqtt);
+    puts("PASS R11: measurement jobs are staged, screws:cancel is accepted only while one runs and leaves a session running");
+
     console_destroy(&state);
     rmdir(dir);
     puts("PASS explicit screw tramming end: shutdown pending until confirmed, retried after rejection or failure, "
