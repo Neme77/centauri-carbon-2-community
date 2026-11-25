@@ -5,6 +5,9 @@ Carbon 2**, maintained by **Neme77** and built with the community.
 
 [Discord](https://discord.gg/FGfCaFpm38) · [Facebook](https://www.facebook.com/groups/1658610779139107) · [Support](https://github.com/Neme77/centauri-carbon-2-community/issues) · [Contributors](docs/CONTRIBUTORS.md)
 
+**[Download complete Community Firmware 4.4.4 — Universal 07 (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig)**  
+ELEGOO base **02.01.01.13** · Includes **CC2 Control 1.2.29** · [Installation guide](docs/FIRMWARE_UPGRADE.md) · [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.4)
+
 ## CC2 Control 1.2.30 — a stronger foundation for future updates
 
 A substantial cumulative update: better print preparation, clearer filament
