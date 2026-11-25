@@ -765,5 +765,21 @@
       "de"
     ],
     "reason": "Same spelling in these languages"
+  },
+  "spools.spoolman_id_value": {
+    "text": "Spoolman #{id}",
+    "locales": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "it",
+      "pl",
+      "ru",
+      "tr",
+      "zh"
+    ],
+    "reason": "Spoolman is the product name; the rest is a numeric spool identifier, with no English prose to translate. The exact text and each admitted locale are pinned."
   }
 }
