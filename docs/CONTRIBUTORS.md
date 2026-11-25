@@ -143,3 +143,74 @@ Neme77 developed and printer-tested the integrated layouts, external-spool/mater
 
 The reports and trials from issue #327 are credited individually in [Upgrade credits](UPGRADE_CREDITS.md), including their scope and limitations. Earlier credits above remain unchanged.
 
+
+## CC2 Control 1.2.30 cumulative release
+
+The following table identifies the merged work represented in the cumulative
+release, including foundations and follow-ups. It does not reassign authorship
+to the integrator or imply that every item first appeared in this release.
+
+| PR | Contribution | Original PR author |
+| --- | --- | --- |
+| [#343](https://github.com/Neme77/centauri-carbon-2-community/pull/343) | Show the G-code layer path in the bed map | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#348](https://github.com/Neme77/centauri-carbon-2-community/pull/348) | Mesh-guided screw alignment: tilt and plate shape from a full mesh, guided loop, quick check | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#352](https://github.com/Neme77/centauri-carbon-2-community/pull/352) | Print queue: jobs bound to filaments, pictures and dragging; pictures in Files and History | [beanbo](https://github.com/beanbo) |
+| [#366](https://github.com/Neme77/centauri-carbon-2-community/pull/366) | Spool question: suggest the PLA+ spool for a RAPID PLA+ tray | [beanbo](https://github.com/beanbo) |
+| [#375](https://github.com/Neme77/centauri-carbon-2-community/pull/375) | fix(i18n): translate RFID, external feed and print queue across panel locales | [Neme77](https://github.com/Neme77) |
+| [#378](https://github.com/Neme77/centauri-carbon-2-community/pull/378) | Warn before the Canvas RFID activation | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#379](https://github.com/Neme77/centauri-carbon-2-community/pull/379) | Native display: Hungarian, Czech and Polish, graphics fixes and themed Back | [Neme77](https://github.com/Neme77) |
+| [#383](https://github.com/Neme77/centauri-carbon-2-community/pull/383) | Native display: Hungarian review and remaining HU/PL/CS English labels | [Neme77](https://github.com/Neme77) |
+| [#390](https://github.com/Neme77/centauri-carbon-2-community/pull/390) | USB print start: verified copy, one read for the checks, automatic cleanup, safer stick and Canvas handling | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#391](https://github.com/Neme77/centauri-carbon-2-community/pull/391) | Fix spool history pagination beyond the first 30 records | [Neme77](https://github.com/Neme77) |
+| [#392](https://github.com/Neme77/centauri-carbon-2-community/pull/392) | Fix header title overflow in Android desktop mode | [Neme77](https://github.com/Neme77) |
+| [#393](https://github.com/Neme77/centauri-carbon-2-community/pull/393) | Keep print-completed notice from covering the print queue | [Neme77](https://github.com/Neme77) |
+| [#394](https://github.com/Neme77/centauri-carbon-2-community/pull/394) | Add Aurora light theme | [Neme77](https://github.com/Neme77) |
+| [#395](https://github.com/Neme77/centauri-carbon-2-community/pull/395) | Add Klipper dark theme | [Neme77](https://github.com/Neme77) |
+| [#398](https://github.com/Neme77/centauri-carbon-2-community/pull/398) | Layer path: keep up with fast prints, clean print start, Job page as one card, object preview, no G-code reads while homing | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#403](https://github.com/Neme77/centauri-carbon-2-community/pull/403) | Bed alignment: follow-up to #348 with a reworked layout, a streamlined measuring process and corrections | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#405](https://github.com/Neme77/centauri-carbon-2-community/pull/405) | Makefile: take the backend's header dependencies from the compiler | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#406](https://github.com/Neme77/centauri-carbon-2-community/pull/406) | Revalidate the start page with an ETag instead of no-store | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#407](https://github.com/Neme77/centauri-carbon-2-community/pull/407) | Settings: guide for using ElegooSlicer with CC2 Control (experimental) | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#408](https://github.com/Neme77/centauri-carbon-2-community/pull/408) | Console: answer unchanged polls without the output and poll the screw view less often | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#409](https://github.com/Neme77/centauri-carbon-2-community/pull/409) | Layer path: per-file layer map instead of the 128 MiB scan window | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#410](https://github.com/Neme77/centauri-carbon-2-community/pull/410) | Layer path: show the nozzle on the bed map only in Live mode | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#411](https://github.com/Neme77/centauri-carbon-2-community/pull/411) | Fix large G-code previews on the native CC2 touchscreen | [beanbo](https://github.com/beanbo) |
+| [#412](https://github.com/Neme77/centauri-carbon-2-community/pull/412) | Prepare beanbo's native thumbnail fix for the .13 multilingual display | [Neme77](https://github.com/Neme77) |
+| [#413](https://github.com/Neme77/centauri-carbon-2-community/pull/413) | Add Dune (light) and Swamp (dark) themes | [Neme77](https://github.com/Neme77) |
+| [#416](https://github.com/Neme77/centauri-carbon-2-community/pull/416) | Swamp: fix unreadable selected buttons (Canvas page) | [Neme77](https://github.com/Neme77) |
+| [#417](https://github.com/Neme77/centauri-carbon-2-community/pull/417) | Manual controls: refuse non-finite numbers (nan, inf) | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#418](https://github.com/Neme77/centauri-carbon-2-community/pull/418) | Show changes between saved bed meshes | [beanbo](https://github.com/beanbo) |
+| [#419](https://github.com/Neme77/centauri-carbon-2-community/pull/419) | Mini player: watch the live camera in a small window above every page | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#420](https://github.com/Neme77/centauri-carbon-2-community/pull/420) | Add KlipperScreen classic dark theme | [Neme77](https://github.com/Neme77) |
+| [#422](https://github.com/Neme77/centauri-carbon-2-community/pull/422) | Spools: write a slot that reports nothing, say why nothing is written, keep eight-digit Spoolman colours | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#425](https://github.com/Neme77/centauri-carbon-2-community/pull/425) | Spoolman: list of usage that is not sent, read the spool list in pages, count grey stand-ins | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+| [#426](https://github.com/Neme77/centauri-carbon-2-community/pull/426) | Bed levelling: call the console status hook on every render of the mesh buttons | [lpgamerzockt-ops](https://github.com/lpgamerzockt-ops) |
+
+**beanbo** authored the native thumbnail correction in #411. **Neme77** adapted
+it to the .13 multilingual display in #412; the adaptation retains beanbo's
+original credit. The final package also includes the language-library binding
+and Back touch-through corrections qualified during integration.
+
+**pezso92** supplied Hungarian touchscreen review and wording for #383;
+Polish user feedback also informed those corrections. Neme77 coordinated the
+display integration and physical trials. AI-assisted contributions retain the
+implementation disclosures in their original PRs; automated checks are not
+native-speaker review of every translation.
+
+**DamiBFryta**, our ultimate beta tester, reported #391/#392/#393 and continued
+field testing. **DooshPastesh** reported the spool-assignment problem addressed
+by #422. The per-file layer index in #409 follows Neme77's suggestion during
+review of lpgamerzockt-ops's #343. #407 is an experimental ElegooSlicer guide.
+
+Thank you to **Surfoo** for the interface and testing foundations, **tharje**
+for the original Spoolman integration, **efiten** for Canvas/Orca ideas,
+**Noahwhite2014** for accessory and pull-back work, and **asiersan**, **Skcycos**,
+**pezso92** and all earlier translators. Their detailed credits above remain
+unchanged. Thanks also to the #327 investigators and the #382/#402 recovery
+testers for reports, captures and time spent verifying their printers.
+
+**Neme77** carried out the cumulative firmware/update-manager integration,
+compatibility qualification and final physical install/reboot/full-rollback
+cycle. Individual PR authors retain credit for their designs, implementations
+and documented testing. Thanks to every reviewer and tester, including those
+not named publicly, and to **Ryzehosting** for supporting the project.
