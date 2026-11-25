@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Show the Spoolman spool ID in spool choices, inventory, loaded Canvas/external slots and remote-catalog choices; search by ID or #ID and keep identically named linked spools individually selectable. Implemented by **Neme77**, requested by **onezero1010101** (#430).
+- Show the Spoolman spool ID in spool choices, inventory, loaded Canvas/external slots and remote-catalog choices; search by ID or #ID and keep identically named linked spools individually selectable. Implemented by **Neme77**, requested by **onezero1010101** (#439; request #430).
 
 ## [CC2 Control 1.2.30] - 2026-11-25
 
