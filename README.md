@@ -20,6 +20,7 @@ the [credits](docs/CONTRIBUTORS.md) preserve their authors and testers.
 | --- | --- |
 | Already on a recognised Community 4.4.4, Universal 07 or 07 HU installation | [**Download the signed 1.2.30 update (.cc2update)**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/CC2-Control-1.2.30-Universal.cc2update) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/CC2-Control-1.2.30-Universal.cc2update.sha256.txt) · [Update guide](docs/MANAGED_UPDATES.md). Available through the bell / Settings → Updates as well. |
 | First installation | [Complete Universal 07 firmware](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig) · [First-run guide](docs/FIRST_RUN.md) · [Firmware upgrade guide](docs/FIRMWARE_UPGRADE.md) |
+| Return to original ELEGOO firmware only | [Original ELEGOO 02.01.01.13 (.zip.sig)](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/cc2_eeb001_02.01.01.13_20261020214142.zip.sig) · [Read before installing](#original-elegoo-firmware--optional-return-to-stock). **Not needed for the 1.2.30 update.** |
 | Exact downloads, checksums and release status | [GitHub Releases](https://github.com/Neme77/centauri-carbon-2-community/releases) |
 
 **Manual update:** download the `.cc2update` file above, keep it intact, and upload it in **Settings → Updates** in CC2 Control. Follow the [update guide](docs/MANAGED_UPDATES.md) with a cold, idle printer.
@@ -165,6 +166,27 @@ These checks make the update path more robust; they do not establish support
 for every modified installation or eliminate power-loss and hardware risks.
 The native Canvas auto-refill reports remain a separate investigation: no
 auto-refill fix is claimed by the Spoolman changes.
+
+## Original ELEGOO firmware — optional return to stock
+
+[**Download original ELEGOO 02.01.01.13 (.zip.sig)**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/cc2_eeb001_02.01.01.13_20261020214142.zip.sig) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/cc2_eeb001_02.01.01.13_20261020214142.zip.sig.sha256.txt)
+
+This is the **unchanged vendor firmware archive**, provided for users who
+specifically need to return to original ELEGOO firmware. It does **not** include
+CC2 Control, Community features or the added SSH recovery access.
+
+**You do not need this file to update CC2 Control to 1.2.30, install Community
+Universal 07, or use CC2 Assist's bundled FEL recovery kit.** Use the download
+matching your task in the table above. CC2 Assist already contains a separate,
+modified original-base **.13 + SSH** recovery image; the vendor archive here
+is not a replacement for that board-specific recovery procedure.
+
+Before returning to stock, read [Installation — application updates and return
+to stock](docs/INSTALL.md#application-updates-and-return-to-stock).
+Restore modified Canvas firmware through its supported workflow first.
+Reinstalling vendor firmware is different from a factory reset and does not
+establish that persistent Community files have been removed. Ask for help if
+you are unsure which recovery or installation route applies.
 
 ## CC2 Assist: illustrated FEL recovery guide
 
