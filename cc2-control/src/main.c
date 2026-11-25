@@ -4777,6 +4777,25 @@ static int if_none_match_matches(const char *value, const char *etag) {
     return 0;
 }
 
+/* Largest start page and locale file that are read into memory and sent (the page's boundedJson in i18n.ts refuses
+   a locale above 262144 characters too). A larger file gets an HTTP 500 with a plain-text reason and one log line
+   per kind of file; tests/test_web_size_limits_static.py fails while the shipped files are still below these sizes. */
+#define WEB_INDEX_MAX_BYTES (1024 * 1024)
+#define WEB_LOCALE_MAX_BYTES 262144
+
+/* Answers a web file above its size limit with a reason and logs it once per process and kind of file, so a
+   browser that keeps retrying cannot fill the log. The HTTP threads run in parallel, hence the atomic flag. */
+static void respond_web_file_too_large(int fd, atomic_int *logged, const char *what, const char *limit_text) {
+    char body[160];
+    int length = snprintf(body, sizeof(body), "%s is larger than the %s limit\n", what, limit_text);
+    if (!atomic_exchange(logged, 1)) {
+        fprintf(stderr, "Web UI: %s is larger than the %s limit; answering with HTTP 500\n", what, limit_text);
+    }
+    if (length > 0 && (size_t)length < sizeof(body))
+        respond(fd, 500, "Internal Server Error", "text/plain; charset=utf-8", body, (size_t)length);
+}
+static atomic_int index_too_large_logged, locale_too_large_logged;
+
 static void serve_index(int fd, const char *web_root, const char *request) {
     char path[PATH_MAX_LOCAL];
     if (snprintf(path, sizeof(path), "%s/index.html", web_root) >= (int)sizeof(path)) {
@@ -4804,12 +4823,22 @@ static void serve_index(int fd, const char *web_root, const char *request) {
     int measured = fstat(fileno(file), &info) == 0 && S_ISREG(info.st_mode);
     long size;
     if (measured) {
-        if (info.st_size < 0 || info.st_size > 1024 * 1024) { fclose(file); return; }
+        if (info.st_size < 0) { fclose(file); return; }
+        if (info.st_size > WEB_INDEX_MAX_BYTES) {
+            fclose(file);
+            respond_web_file_too_large(fd, &index_too_large_logged, "web/index.html", "1 MiB");
+            return;
+        }
         size = (long)info.st_size;
     } else {
         if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
         size = ftell(file);
-        if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
+        if (size < 0) { fclose(file); return; }
+        if (size > WEB_INDEX_MAX_BYTES) {
+            fclose(file);
+            respond_web_file_too_large(fd, &index_too_large_logged, "web/index.html", "1 MiB");
+            return;
+        }
         rewind(file);
     }
     if (size == 0) {
@@ -4882,7 +4911,14 @@ static void serve_locale(int fd, const char *web_root, const char *request_path)
     }
     if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
     long size = ftell(file);
-    if (size < 0 || size > 262144) { fclose(file); return; }
+    if (size < 0) { fclose(file); return; }
+    if (size > WEB_LOCALE_MAX_BYTES) {
+        fclose(file);
+        char what[64];
+        snprintf(what, sizeof(what), "web/locales/%s", name);
+        respond_web_file_too_large(fd, &locale_too_large_logged, what, "256 KiB");
+        return;
+    }
     rewind(file);
     char *body = malloc((size_t)size);
     if (!body) { fclose(file); return; }
