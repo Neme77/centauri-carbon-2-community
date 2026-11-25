@@ -80,9 +80,9 @@ int main(void) {
     /* --- The main loop's sample carries the session. --- */
     console_state console; console_init(&console, "/tmp/unused");
     start_session(time(NULL));
-    expect(idle_motors_sample(&m, &console).session == 1, "the idle sample of the main loop marks a running session");
+    expect(idle_motors_observe(&m, &console).session == 1, "the idle sample of the main loop marks a running session");
     assert(control_build_script("screws:tram:end", &m, script, sizeof(script), reason, sizeof(reason)));
-    expect(idle_motors_sample(&m, &console).session == 0, "and no session once it has ended");
+    expect(idle_motors_observe(&m, &console).session == 0, "and no session once it has ended");
     console_destroy(&console);
 
     /* --- The session ends after 10 minutes without an action. --- */

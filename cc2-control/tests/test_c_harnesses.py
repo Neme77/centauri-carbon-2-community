@@ -13,6 +13,7 @@ HARNESSES = {
     "test_maintenance_barrier.c": [],
     "test_maintenance_api.c": BACKEND,
     "test_rfid_runtime.c": [],
+    "test_rfid_runtime_abi.c": [],
     "test_rfid_lifecycle.c": [],
     "test_backup.c": BACKEND,
     "test_external_filament.c": [ROOT / "src/control.c"],
