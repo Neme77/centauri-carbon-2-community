@@ -18,9 +18,11 @@ the [credits](docs/CONTRIBUTORS.md) preserve their authors and testers.
 
 | Get started | Where to go |
 | --- | --- |
-| Already on a recognised Community 4.4.4, Universal 07 or 07 HU installation | Read the [managed update guide](docs/MANAGED_UPDATES.md), then use the signed update offered through the bell / Settings → Updates once published. |
+| Already on a recognised Community 4.4.4, Universal 07 or 07 HU installation | [**Download the signed 1.2.30 update (.cc2update)**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/CC2-Control-1.2.30-Universal.cc2update) · [SHA-256](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/CC2-Control-1.2.30-Universal.cc2update.sha256.txt) · [Update guide](docs/MANAGED_UPDATES.md). Available through the bell / Settings → Updates as well. |
 | First installation | [Complete Universal 07 firmware](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig) · [First-run guide](docs/FIRST_RUN.md) · [Firmware upgrade guide](docs/FIRMWARE_UPGRADE.md) |
 | Exact downloads, checksums and release status | [GitHub Releases](https://github.com/Neme77/centauri-carbon-2-community/releases) |
+
+**Manual update:** download the `.cc2update` file above, keep it intact, and upload it in **Settings → Updates** in CC2 Control. Follow the [update guide](docs/MANAGED_UPDATES.md) with a cold, idle printer.
 
 The complete Universal 07 firmware remains based on **ELEGOO 02.01.01.13**
 and installs CC2 Control 1.2.29. The signed 1.2.30 application update is a
