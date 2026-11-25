@@ -1,5 +1,9 @@
 # Original ELEGOO layout with Community colours
 
+**Requires the published CC2 Control 1.2.30 to be already installed. This manual
+original-layout display kit does not work on 1.2.29, earlier versions or other
+releases. Both installation and restoration require the matching 1.2.30 release.**
+
 An optional, separate **manual/offline display-style kit**, requested in [#428](https://github.com/Neme77/centauri-carbon-2-community/issues/428).
 It restores the original touchscreen layout, icons and boot artwork while retaining
 the Community palette, additional languages, large previews and the corrected Back touch handling.
