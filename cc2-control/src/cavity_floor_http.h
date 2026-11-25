@@ -1,5 +1,21 @@
 #include "cavity_floor_protocol.h"
 
+
+/* The integrated firmware loads the immutable library from /opt/inst.
+ * Legacy standalone installations retain their original mapped path. */
+static int cavity_module_mapping(const char *line) {
+    static const char *const paths[]={
+        CC2_CAVITY_COMPONENT "/libcc2-cavity-floor-r1.so",
+        "/opt/inst/cc2-printer-extensions13/libcc2-cavity-floor-r1.so"
+    };
+    for(unsigned i=0;i<sizeof(paths)/sizeof(paths[0]);i++) {
+        const char *p=strstr(line,paths[i]);
+        if(p && (p==line || p[-1]==' ' || p[-1]=='\t') &&
+           p[strlen(paths[i])]=='\n' && !p[strlen(paths[i])+1])return 1;
+    }
+    return 0;
+}
+
 static int cavity_native_verified(const cavity_identity *id) {
     char path[96],exe[512],line[1024];
     snprintf(path,sizeof(path),"/proc/%ld/exe",id->pid);
@@ -12,8 +28,7 @@ static int cavity_native_verified(const cavity_identity *id) {
     int mapped=0;size_t bytes=0;
     while(fgets(line,sizeof(line),f)) {
         bytes+=strlen(line);if(bytes>131072)break;
-        char *module=strstr(line,CC2_CAVITY_COMPONENT "/libcc2-cavity-floor-r1.so");
-        if(module && !strcmp(module,CC2_CAVITY_COMPONENT "/libcc2-cavity-floor-r1.so\n")){mapped=1;break;}
+        if(cavity_module_mapping(line)){mapped=1;break;}
     }
     fclose(f);return mapped;
 }

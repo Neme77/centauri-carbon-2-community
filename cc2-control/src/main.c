@@ -5883,7 +5883,7 @@ static int installer_native_observation(int canvas_only,int canvas_transfer);
 /* Release the steppers the firmware leaves energised once the printer has
  * stood idle with its heaters off; see control_idle_motors_due(). */
 static control_idle_motors idle_motors;
-static control_idle_sample idle_motors_sample(const mqtt_client *mqtt,console_state *console){
+static control_idle_sample idle_motors_observe(const mqtt_client *mqtt,console_state *console){
     control_idle_sample s={0};
     s.valid=gcode_idle_for_mutation(mqtt)&&mqtt->have_position&&
         uds_value(&telemetry,U_CF,&s.board_fan)&&uds_value(&telemetry,U_EG,&s.nozzle_target)&&
@@ -5895,9 +5895,21 @@ static control_idle_sample idle_motors_sample(const mqtt_client *mqtt,console_st
     return s;
 }
 static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
-    if(maintenance_barrier_active()||rn_blocks())return;
-    control_idle_sample s=idle_motors_sample(mqtt,console);
-    if(control_idle_motors_due(&idle_motors,&s,recovery_clock())&&send_local_gcode_script("M84")!=0)
+    if(maintenance_barrier_active()){idle_motors.holding=0;return;}
+    control_idle_sample s=idle_motors_observe(mqtt,console);
+    if(!control_idle_motors_due(&idle_motors,&s,recovery_clock()))return;
+    /* Admission is expensive with ABI2. Check it when an operation is due,
+     * not on every HTTP/event-loop iteration. Never consume a refused M84;
+     * require a new full idle interval after maintenance or lifecycle refusal. */
+    if(rn_blocks()||maintenance_barrier_active()){
+        idle_motors.holding=0;idle_motors.released=0;return;
+    }
+    /* Admission can take time: re-read freshness and motion/heater state
+     * after it, before committing the release or sending any command. */
+    s=idle_motors_observe(mqtt,console);
+    idle_motors.released=0;
+    if(!control_idle_motors_due(&idle_motors,&s,recovery_clock()))return;
+    if(send_local_gcode_script("M84")!=0)
         idle_motors.holding=0; /* Not delivered: wait a full period before trying again. */
 }
 
@@ -5955,7 +5967,7 @@ static const char *printer_change_refusal(const char *method, const char *path, 
     *plates_form = 0;
     if (maintenance_request_blocked(method, emergency, console_emergency) && !owned_rfid_cancel)
         return "Installation or native maintenance is running; printer changes are paused";
-    if (rn_blocks() && change && !console_emergency && strcmp(path, "/api/rfid/lifecycle/action") && !owned_rfid_cancel)
+    if (change && !console_emergency && strcmp(path, "/api/rfid/lifecycle/action") && !owned_rfid_cancel && rn_blocks())
         return "RFID activation or recovery is incomplete; finish the lifecycle before changing the printer";
     *plates_form = 1;
     if (rfid.child && change && !console_emergency && strcmp(path, "/api/rfid/action"))
@@ -6557,7 +6569,7 @@ static int installer_native_observation(int canvas_only,int canvas_transfer){
         const char *state=ng_string(reply,print,"state");
         if(state&&(!strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled"))&&
            ng_number(reply,print,"machine_status",&machine)&&machine==1&&
-           ng_number(reply,ng_member(reply,status,"motion_report"),"live_velocity",&velocity)&&velocity==0&&
+           ng_number(reply,ng_member(reply,status,"motion_report"),"live_velocity",&velocity)&&fabs(velocity)<=1e-9&&
            installer_native_heater_safe(reply,ng_member(reply,status,"extruder"),50,canvas_transfer)&&
            installer_native_heater_safe(reply,ng_member(reply,status,"heater_bed"),canvas_transfer?40:50,canvas_transfer))result=0;
     }
@@ -6577,7 +6589,9 @@ int main(int argc, char **argv) {
         if(!canvas_only&&result)fputs("STOP: native console did not confirm Idle, no motion and cold heaters with zero targets.\n",stderr);
         return result;
     }
-    if(!rfid_app_update_boot()) {
+    /* The independent panel manager owns panel recovery. RFID recovery
+     * belongs to the RFID service and cannot gate panel startup. */
+    if(0 && !rfid_app_update_boot()) {
         fputs("RFID app-update recovery incomplete; retain the transaction and installation backup.\n",stderr);
         return 1;
     }

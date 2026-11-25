@@ -35,7 +35,7 @@ static int rn_strict_mapped(void){
 static int rn_start(const char *action){
     if(rfid_native_job.child)return 0;
     rfid_runtime mode=rfid_runtime_get(1);if(mode.mode!=1)return 0;
-    char path[512],program[512];int n=snprintf(program,sizeof(program),"%s/coordinator",CC2_RFID_NATIVE_ROOT);
+    char path[512],program[512];int n=snprintf(program,sizeof(program),"%s/coordinator",CC2_BASE_API_ROOT);
     if(n<1||(size_t)n>=sizeof(program))return 0;
     int helper=open(program,O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);struct stat st;char digest[65];
     if(helper<0)return 0;
