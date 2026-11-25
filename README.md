@@ -1,65 +1,58 @@
 # Centauri Carbon 2 Community Firmware
 
-A complete community firmware and local control experience for the **ELEGOO
-Centauri Carbon 2**, maintained by **Neme77** with contributions and printer
-testing from the community.
+A community firmware and local control experience for the **ELEGOO Centauri
+Carbon 2**, maintained by **Neme77** and built with the community.
 
-[Discord](https://discord.gg/FGfCaFpm38) ·
-[Facebook group](https://www.facebook.com/groups/1658610779139107) ·
-[Report a problem](https://github.com/Neme77/centauri-carbon-2-community/issues) ·
-[Contributors](docs/CONTRIBUTORS.md)
+[Discord](https://discord.gg/FGfCaFpm38) · [Facebook](https://www.facebook.com/groups/1658610779139107) · [Support](https://github.com/Neme77/centauri-carbon-2-community/issues) · [Contributors](docs/CONTRIBUTORS.md)
 
-## Community Firmware 4.4.4 · ELEGOO base 02.01.01.13 · CC2 Control 1.2.29
+## CC2 Control 1.2.30 — a stronger foundation for future updates
 
-**Installation is simple again: copy the firmware to USB and run Offline Update.**
+A substantial cumulative update: better print preparation, clearer filament
+management, new themes, native touchscreen improvements and a managed update
+path with a verified return to the previous installation.
 
-After extensive work on incompatibilities left by different earlier update
-branches, **Universal 07 automatically migrates the recognised installations**.
-It resolves the incompatibility cases identified and verified so far, including
-the reviewed inactive legacy variant, and retains personal data.
-The published variant also includes the Hungarian corrections from PR #352.
+This release brings together months of community work: original contributions,
+reviews, translations, integration, compatibility investigations and patient
+printer testing. The [changelog](CHANGELOG.md) records the individual changes;
+the [credits](docs/CONTRIBUTORS.md) preserve their authors and testers.
 
-**No mandatory probe, manual cleanup, downgrade, intermediate panel update or
-Canvas restoration for a supported upgrade.** Finish an ongoing Canvas action
-and its requested reboots first. A Canvas is optional; recognised active,
-inactive and restored RFID states are handled automatically.
-
-| Download | Purpose |
+| Get started | Where to go |
 | --- | --- |
-| [Community Firmware 4.4.4 · Universal 07](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig) | Complete firmware: copy the unchanged .zip.sig to USB and use Offline Update. |
-| [First installation](docs/FIRST_RUN.md) · [Upgrade guide](docs/FIRMWARE_UPGRADE.md) | Short installation steps, backup advice and startup checks. |
-| [Release notes and checksums](https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.4) | Exact package identity, sources and validation scope. |
+| Already on a recognised Community 4.4.4, Universal 07 or 07 HU installation | Read the [managed update guide](docs/MANAGED_UPDATES.md), then use the signed update offered through the bell / Settings → Updates once published. |
+| First installation | [Complete Universal 07 firmware](https://github.com/Neme77/centauri-carbon-2-community/releases/download/V4.4.4/CC2_4.4.4_UNIVERSAL_07_HU_02.01.01.13.zip.sig) · [First-run guide](docs/FIRST_RUN.md) · [Firmware upgrade guide](docs/FIRMWARE_UPGRADE.md) |
+| Exact downloads, checksums and release status | [GitHub Releases](https://github.com/Neme77/centauri-carbon-2-community/releases) |
 
-Use the **Universal 07** download above. The original RC6-based V4.4.4 file and
-its preparation kit are historical; their mandatory preparation instructions
-do not apply to this revision. The separate Recovery package is not released.
-CC2 Control application-only updates remain a different installation path.
+The complete Universal 07 firmware remains based on **ELEGOO 02.01.01.13**
+and installs CC2 Control 1.2.29. The signed 1.2.30 application update is a
+separate package. An older 4.4.3 installation must first follow the documented
+firmware migration; it is not a direct target of this application package.
 
-## What is new on the .13 base
+### Highlights
 
-- **Native touchscreen:** Community Home, Network, colour palette and Z-offset
-  integration, retaining the original printer controls.
-- **Camera and connectivity:** ported Camera Recovery and native LAN/WAN
-  compatibility; local video, Matrix, ELEGOO Slicer and OrcaSlicer received
-  printer trials. Optional qualified RTL8153 USB Ethernet works alongside Wi-Fi.
-- **Native features:** Reactor, EXHAUST minimum, flap controls and extended
-  Canvas pullback are integrated into the new base. The original ELEGOO pullback
-  default is retained until the operator changes it; the supported range now
-  extends to 1000 mm.
-- **First-layer dashboard:** effective Z offset, session-only indication, active
-  mesh and plate side in one card. Heater indicators show whether heating is
-  active, rather than inferring it from measured temperature.
-- **Print preparation:** a print queue, live G-code layer paths, interactive
-  screw tramming and history, and responsive background USB file import.
-- **Maintenance:** update progress and installation logs, clearer Canvas
-  restart validation, revised drying shutdown recovery and Quiet motors fixes.
-- **Readability and languages:** improved themes and eleven interface languages,
-  with German, Turkish and recent Hungarian/Chinese refinements included.
+- **Print preparation:** filament-bound queues, previews in Files and History,
+  safer USB print import, a per-file layer map and improved live job views.
+- **Bed levelling:** streamlined four-screw measurements, a fixed front-left
+  reference with optimisation only by explicit choice, and comparison of saved
+  meshes in 3D, heat-map and table views.
+- **Canvas and Spoolman:** clearer slot-write feedback, corrected colour import,
+  paged spool catalogues and visible handling of consumption awaiting delivery.
+  Uncertain consumption is not automatically sent twice.
+- **Camera and responsiveness:** a floating camera mini player, fewer unchanged
+  console transfers and start-page cache revalidation.
+- **Appearance:** twelve browser themes, including Aurora, Klipper, Dune, Swamp
+  and KlipperScreen, with the Swamp selected-button readability fix. The browser
+  interface supports eleven languages.
+- **Original touchscreen:** fourteen selectable languages, including Hungarian,
+  Czech and Polish, corrected large G-code previews, and a themed Back button
+  that suppresses the touch passing through to the previous screen.
 
-Migration checks the actual installed components and lifecycle evidence rather
-than relying on a panel version label. It preserves supported states and
-archives replaced components. Unknown or inconsistent evidence is reported;
-it is not silently erased.
+### Original touchscreen, Community theme
+
+<a href="docs/images/native-display.png"><img src="docs/images/native-display.png" alt="Original Centauri Carbon 2 touchscreen with the Community Home theme" width="532"></a>
+
+Existing project capture of the Community Home screen. Additional languages
+are selected in the touchscreen's language menu; this image is not a capture
+of that menu. The browser themes and the native touchscreen theme are separate.
 
 ## Open, extensible RFID — with validation still to do
 
@@ -149,57 +142,54 @@ connected accessories.
   </tr>
 </table>
 
-## Tested work, stated limits
+## Built, tested and recoverable
 
-The upgrade programme includes maintainer and independent results from
-Control 1.2.25, 1.2.26, 1.2.27, the reviewed private 1.2.28 variant and supported
-.13 previews. These reports cover preserved settings, normal temperatures,
-Canvas recognition and the available printing, camera and network checks.
-RFID tag reads were checked where testers had compatible tags; reader arming
-alone is not a full tag-read test.
+The integrated update was exercised offline in an ARM environment with the real
+procd/ubus services on three recognised bases: published 4.4.4, Universal 07
+and 07 HU. The sequence covered installation, full rollback, reinstallation
+and a second rollback. Existing byte-identical test evidence was reused.
 
-Universal 07 adds the reviewed inactive legacy case. The Hungarian variant
-changes only the web language catalogue; backend and migration are unchanged.
-Its build and translation checks are recorded separately from physical trials.
-This does not claim every unofficial build, corrupt state or accessory is
-supported. Native-speaker review of the exact projected catalogue remains pending.
+The final package also completed installation, reboot, full rollback and another
+reboot on the maintainer's printer. Display languages, previews, Back, Canvas,
+Wi-Fi, light and panel were checked. RFID file hashes remained unchanged during
+both operations. This is separate from the earlier community migration tests.
 
-## Clearer updates from this base onward
+The managed updater checks recognised components, stages the panel separately
+and retains rollback evidence. Updates remain notified through the bell;
+compatible future panel updates use the panel manager. Changes to the native
+firmware still need their own compatibility qualification.
 
-Compatible **panel features** continue through the normal application-update
-path, with their supported base declared. **Firmware/native changes with
-uncertain compatibility** become a new complete firmware base with a documented
-migration. This separation is intended to make future updates simpler and
-their requirements easier to understand.
+These checks make the update path more robust; they do not establish support
+for every modified installation or eliminate power-loss and hardware risks.
+The native Canvas auto-refill reports remain a separate investigation: no
+auto-refill fix is claimed by the Spoolman changes.
 
-Contributors must document and test their own PRs using the reference
-[contribution guidelines](CONTRIBUTING.md), [working rules](AGENTS.md),
-[testing guide](docs/TESTING.md) and [release policy](RELEASING.md). CI supports
-that evidence; it does not replace hardware testing or author responsibility.
+## Recovery tools and support
 
-## Recovery and support
+**CC2 Assist** provides SSH diagnosis, verified backups and reviewed archive
+cleanup. Cleanup has been exercised successfully on a real printer while
+preserving RFID, calibrations and active components.
 
-Keep your existing verified backups; if needed, save panel data through
-Settings → Backup and restore before installation. Migration retains component
-archives on the printer. A reset or preparation script is not a routine step.
+Its **FEL recovery remains beta**. Read-only collection was tried on both known
+eMMC capacity variants; A-image writing, readback and boot to original-base
+.13 + SSH were demonstrated on a spare board. The newer complete reset of
+overlay and user data has offline validation but still needs a physical trial
+with populated data. Factory reset clears settings, files and calibrations;
+it is a different operation from SSH cleanup. Recovery images with SSH are
+modified images, not byte-identical vendor firmware. See the release's included
+English instructions, cable orientation guide and before/after report checklist.
 
-**If you encounter a problem, we are available to help.** The separate Recovery
-package is still being completed; do not assume a universal reset or guaranteed
-loss-free recovery exists for every unknown state.
-
-If a check refuses the operation or the printer does not start correctly,
-stop and [open a support issue](https://github.com/Neme77/centauri-carbon-2-community/issues/new/choose).
-Include the starting firmware and CC2 Control versions, the exact package,
-the failed step and its log. Redact passwords, LAN access codes and tokens.
-Keep the backup, quarantine and installer logs; do not delete recovery records
-or repeatedly flash firmware to bypass a refusal. We can then help identify the
-appropriate recovery route. Follow the documented Canvas restoration steps
-before returning to original ELEGOO firmware.
+**If something goes wrong, we will help investigate.** Open a
+[support issue](https://github.com/Neme77/centauri-carbon-2-community/issues/new/choose)
+with starting versions, exact package and the failed step. Keep logs and verified
+backups. Send private captures privately, without posting passwords or LAN codes.
+A refusal needs diagnosis; repeated flashing or deleting recovery records is
+not a substitute. The clean firmware edition will follow separately.
 
 ## Built with the community
 
 Thanks to **Surfoo**, **beanbo**, **Noahwhite2014**, **lpgamerzockt-ops**,
-**pezso92**, **Skycos**, the translators, reviewers and everyone who contributed
+**pezso92**, **Skcycos**, the translators, reviewers and everyone who contributed
 ideas, logs and printer time. Special thanks to the people who reproduced the
 upgrade failures and helped verify the recovery paths. Firmware integration
 and the extended physical qualification were carried out by **Neme77**.
