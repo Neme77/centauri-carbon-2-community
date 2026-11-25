@@ -66,6 +66,7 @@ HARNESSES = {
     "test_index_validator.c": BACKEND,
     "test_mqtt_workload.c": [],
     "test_mqtt_registration.c": [],
+    "test_json_member_int.c": BACKEND,
     "test_canvas_discovery.c": [],
     "test_printer_replies.c": [],
     "test_print_options.c": [],

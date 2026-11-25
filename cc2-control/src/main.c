@@ -4078,7 +4078,12 @@ static const char *json_member_object(const char *obj,const char *end,const char
 static int json_member_int(const char *obj,const char *end,const char *key,int *out){
     const char *value=json_member(obj,end,key);
     if(!value||!(isdigit((unsigned char)*value)||*value=='-'))return 0;
-    *out=atoi(value);return 1;
+    /* atoi has no defined result for a number outside int (it truncated 2147483648 to -2147483648): such a number, and a
+     * sign without digits, are "not present", like a missing member. */
+    char *digits_end;errno=0;
+    long number=strtol(value,&digits_end,10);
+    if(digits_end==value||errno==ERANGE||number<INT_MIN||number>INT_MAX)return 0;
+    *out=(int)number;return 1;
 }
 
 /* Raw JSON string contents without quotes; escapes stay as they are. */
