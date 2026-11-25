@@ -65,7 +65,9 @@ of that menu. The browser themes and the native touchscreen theme are separate.
 A separate **manual/offline display-style kit** restores the original layout,
 icons and boot artwork with the Community colours, additional languages and
 preview/Back fixes. It is for the published **CC2 Control 1.2.30** only and is
-**not delivered through the bell**. Windows, macOS and Linux launchers are included.
+**not delivered through the bell**. **CC2 Control 1.2.30 must already be installed;
+this display kit does not work with 1.2.29 or other releases.** Windows, macOS and
+Linux launchers are included.
 [Download, compatibility and restoration instructions](docs/ORIGINAL_DISPLAY_STYLE.md).
 
 ## Open, extensible RFID — with validation still to do
