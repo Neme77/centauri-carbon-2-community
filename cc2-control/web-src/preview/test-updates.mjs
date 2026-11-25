@@ -65,10 +65,10 @@ try {
   await page.goto(server.resolvedUrls.local[0] + '#settings')
   await page.getByRole('tab', { name: 'Updates', exact: true }).click()
   await page.getByText('Compatible update available: 1.2.9', { exact: true }).waitFor()
-  // The application update requires the qualified V4.4.3 base in every locale.
+  // The application update requires the qualified V4.4.4 base in every locale.
   for (const lang of ['en', 'hu', 'cs', 'es', 'fr', 'it', 'pl', 'tr', 'ru', 'zh', 'de']) {
     const dict = JSON.parse(await readFile(path.join(root, `public/locales/${lang}.json`)))
-    assert.deepEqual(dict['updates.requirements'].match(/V\d+\.\d+(?:\.\d+)?/g), ['V4.4.3'], lang + ' update requirements are out of date')
+    assert.deepEqual(dict['updates.requirements'].match(/V\d+\.\d+(?:\.\d+)?/g), ['V4.4.4'], lang + ' update requirements are out of date')
   }
 // DamiBFryta: the native chooser's visible field and both cursor areas must agree.
   await page.locator('details summary').click()

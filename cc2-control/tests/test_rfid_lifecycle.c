@@ -14,7 +14,9 @@
 #include <unistd.h>
 #include "../src/sha256.h"
 static char native_root[256];
+static char api_root[256];
 #define CC2_RFID_NATIVE_ROOT native_root
+#define CC2_BASE_API_ROOT api_root
 #define CC2_RFID_OWNER_UID geteuid()
 typedef struct {int mode,active,phase,new_boot,requested;uint64_t generation;char app[65],coordinator[65],capture[65],profile[65];} rfid_runtime;
 typedef struct {pthread_mutex_t lock;int busy;} console_state;
@@ -55,7 +57,9 @@ static void copy_program(const char *source,const char *target){
 int main(int argc,char **argv){
     assert(argc==1||argc==2);const char *program=argc==2?argv[1]:"/bin/true";
     char root[]="/tmp/cc2-rfid-job-XXXXXX";assert(mkdtemp(root));
-    assert(snprintf(native_root,sizeof(native_root),"%s",root)>0);
+    assert(snprintf(native_root,sizeof(native_root),"%s/native",root)>0);
+    assert(snprintf(api_root,sizeof(api_root),"%s/api",root)>0);
+    assert(!mkdir(native_root,0700)&&!mkdir(api_root,0700));
     fixture.mode=1;fixture.phase=1;fixture.generation=3;
     memset(fixture.app,'a',64);fixture.app[64]=0;
     assert(rn_reboot(fixture)&&!rn_automatic(fixture,1)&&rn_blocks()&&!rn_resume_required(fixture));
@@ -70,8 +74,8 @@ int main(int argc,char **argv){
     fixture.mode=-1;assert(rn_blocks());fixture.mode=0;assert(!rn_blocks());fixture.mode=1;
     fixture.phase=-1;assert(!rn_blocks()&&!rn_automatic(fixture,0));fixture.requested=1;
     assert(!rn_blocks()&&!rn_automatic(fixture,0));fixture.requested=0;
-    char helper[512],log[512];assert(snprintf(helper,sizeof(helper),"%s/coordinator",root)>0);
-    assert(snprintf(log,sizeof(log),"%s/application-action.log",root)>0);
+    char helper[512],log[512];assert(snprintf(helper,sizeof(helper),"%s/coordinator",api_root)>0);
+    assert(snprintf(log,sizeof(log),"%s/application-action.log",native_root)>0);
     copy_program(program,helper);int fd=open(helper,O_RDONLY);assert(fd>=0&&sha256_fd(fd,fixture.coordinator)&&!close(fd));
     fixture.phase=2;
     rfid_native_tick(&console);assert(!rfid_native_job.child);
@@ -87,7 +91,7 @@ int main(int argc,char **argv){
     fd=open(helper,O_WRONLY|O_APPEND);assert(fd>=0&&write(fd,"x",1)==1&&!close(fd));assert(!rn_start("--advance"));
     copy_program(program,helper);
     assert(!unlink(log)&&!symlink("/definitely-missing-job-fixture",log));assert(!rn_start("--advance"));
-    assert(!unlink(log)&&!unlink(helper)&&!rmdir(root));
+    assert(!unlink(log)&&!unlink(helper)&&!rmdir(api_root)&&!rmdir(native_root)&&!rmdir(root));
     puts("PASS: native app job policy, actual asynchronous pinned child, duplicate refusal, busy console, durable-intent refusal and log symlink refusal");
     return 0;
 }

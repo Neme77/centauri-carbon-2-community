@@ -1024,7 +1024,7 @@
   "updates.no_update": "Novější kompatibilní aktualizace není zveřejněna.",
   "updates.check_failed": "Kontrola GitHubu selhala. Ověřte připojení k Internetu a zkuste to znovu.",
   "updates.bootstrap": "Nejprve z počítače nainstalujte balíček CC2 Control s aktualizačním modulem.",
-  "updates.requirements": "Vyžaduje Community Firmware V4.4.3, tiskárnu v klidu, trysku a podložku o teplotě nejvýše 50 °C a cílové teploty ohřevu nastavené na nulu. Před instalací pozastavte živý náhled.",
+  "updates.requirements": "Vyžaduje Community Firmware V4.4.4, tiskárnu v klidu, trysku a podložku o teplotě nejvýše 50 °C a cílové teploty ohřevu nastavené na nulu. Před instalací pozastavte živý náhled.",
   "updates.download": "Stáhnout a ověřit",
   "updates.prepare_confirm": "Stáhnout nebo nahrát balíček k ověření? Aplikace ještě nebude nainstalována.",
   "updates.verified": "Balíček ověřen",
