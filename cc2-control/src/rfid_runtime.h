@@ -4,13 +4,34 @@
  * Cheap status is cached; scan/apply force a fresh journal observation. */
 #ifndef CC2_RFID_RUNTIME_H
 #define CC2_RFID_RUNTIME_H
+#ifndef CC2_BASE_API_ROOT
+#define CC2_BASE_API_ROOT "/opt/usr/cc2-base-api1"
+#endif
+/* Metadata lives with the separately installed API. Lifecycle evidence stays
+ * in CC2_RFID_NATIVE_ROOT; there is no fallback to incompatible protocol 1. */
+static int rr_api_metadata(void){
+    int directory=open(CC2_BASE_API_ROOT,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
+    struct stat st;
+    if(directory<0)return -1;
+    if(fstat(directory,&st)||!S_ISDIR(st.st_mode)||st.st_uid!=CC2_RFID_OWNER_UID||
+       (st.st_mode&0777)!=0700){close(directory);errno=EPERM;return -1;}
+    int fd=openat(directory,"app-integration.json",O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);
+    int saved=errno;close(directory);errno=saved;return fd;
+}
 #include "connections/json.h"
+#ifdef CC2_PANEL_ABI2
+#ifndef CC2_RFID_PANEL_ABI_SELF
+#include "panel_api_self.h"
+#define CC2_RFID_PANEL_ABI_SELF panel_api_self
+#endif
+#endif
 #ifndef CC2_RFID_NATIVE_ROOT
 #define CC2_RFID_NATIVE_ROOT "/opt/usr/cc2-rfid"
 #endif
 typedef struct {
     int mode,active,phase,new_boot,requested;uint64_t generation;
-    char app[65],coordinator[65],capture[65],profile[65];
+    char app[65],coordinator[65],capture[65],profile[65],activation[65];
+    unsigned metadata_protocol;
 } rfid_runtime;
 static rfid_runtime rfid_runtime_cache;
 static double rfid_runtime_checked=-2;
@@ -37,7 +58,7 @@ static int rr_read(int fd,unsigned char *bytes,size_t size){
 }
 static uint64_t rr_u64(const unsigned char *bytes){uint64_t n=0;for(unsigned i=0;i<8;i++)n|=(uint64_t)bytes[i]<<(i*8);return n;}
 static int rr_activation(int root,const rfid_runtime *mode){
-    char expected[192],actual[192];int size=snprintf(expected,sizeof(expected),"CC2-RFID-ACTIVATE-1\n%s\n%s\n",mode->app,mode->profile);
+    char expected[192],actual[192];int size=snprintf(expected,sizeof(expected),"CC2-RFID-ACTIVATE-1\n%s\n%s\n",mode->activation,mode->profile);
     if(size<1||(size_t)size>=sizeof(expected))return 0;
     int fd=openat(root,"activate-on-ready",O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);
     if(fd<0)return 0;
@@ -87,11 +108,8 @@ static rfid_runtime rfid_runtime_get(int force){
     if(root<0){out.mode=errno==ENOENT?0:-1;goto done;}
     out.mode=-1;
     if(fstat(root,&st)||!S_ISDIR(st.st_mode)||st.st_uid!=CC2_RFID_OWNER_UID||(st.st_mode&077))goto close_root;
-    int fd=openat(root,"app-integration.json",O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);
-    if(fd<0){
-        if(errno==ENOENT&&fstatat(root,"lifecycle",&st,AT_SYMLINK_NOFOLLOW)&&errno==ENOENT)out.mode=0;
-        goto close_root;
-    }
+    int fd=rr_api_metadata();
+    if(fd<0)goto close_root; /* Missing base API is not dormant RFID. */
     char bytes[2049];off_t size=0;
     if(!fstat(fd,&st))size=st.st_size;
     int okay=size>0&&size<=2048&&rr_private(fd,size)&&rr_read(fd,(unsigned char*)bytes,(size_t)size);
@@ -99,12 +117,29 @@ static rfid_runtime rfid_runtime_get(int force){
     bytes[size]=0;
     ng_json *j=malloc(sizeof(*j));if(!j)goto close_root;
     double protocol=0;
-    okay=ng_json_parse(j,bytes,(size_t)size)&&j->v[0].type=='{'&&j->v[0].count==5&&
-        ng_number(j,0,"protocol",&protocol)&&protocol==1;
+    okay=ng_json_parse(j,bytes,(size_t)size)&&j->v[0].type=='{'&&
+        ng_number(j,0,"protocol",&protocol);
     const char *a=ng_string(j,0,"app_sha256"),*c=ng_string(j,0,"coordinator_sha256"),
                *h=ng_string(j,0,"capture_sha256"),*p=ng_string(j,0,"profile_sha256");
-    okay=okay&&rr_hex(a)&&rr_hex(c)&&rr_hex(h)&&rr_hex(p)&&rr_self()&&!strcmp(a,rfid_runtime_self_sha);
-    if(okay){memcpy(out.app,a,65);memcpy(out.coordinator,c,65);memcpy(out.capture,h,65);memcpy(out.profile,p,65);out.mode=1;}
+    const char *activation=a;
+    okay=okay&&rr_hex(c)&&rr_hex(h)&&rr_hex(p);
+    if(okay&&protocol==1){
+        okay=j->v[0].count==5&&rr_hex(a)&&rr_self()&&!strcmp(a,rfid_runtime_self_sha);
+    }else if(okay&&protocol==2){
+#ifdef CC2_PANEL_ABI2
+        double api=0;
+        activation=ng_string(j,0,"activation_sha256");
+        okay=j->v[0].count==6&&!a&&ng_number(j,0,"panel_api",&api)&&api==1&&
+            rr_hex(activation)&&rr_self()&&CC2_RFID_PANEL_ABI_SELF(rfid_runtime_self_sha);
+        a=rfid_runtime_self_sha;
+#else
+        okay=0;
+#endif
+    }else okay=0;
+    if(okay){
+        memcpy(out.app,a,65);memcpy(out.activation,activation,65);out.metadata_protocol=(unsigned)protocol;
+        memcpy(out.coordinator,c,65);memcpy(out.capture,h,65);memcpy(out.profile,p,65);out.mode=1;
+    }
     free(j);
     if(okay&&!rr_journal(root,&out)){
         struct stat journal;
@@ -122,7 +157,7 @@ static int rfid_runtime_allowed(int force){rfid_runtime mode=rfid_runtime_get(fo
 static int rfid_runtime_helper(char *path,size_t size,char digest[65],int require_active){
     rfid_runtime mode=rfid_runtime_get(1);
     if(mode.mode<0||(mode.mode==1&&require_active&&!mode.active))return 0;
-    int n=snprintf(path,size,mode.mode==1?"%s/capture":"%s",mode.mode==1?CC2_RFID_NATIVE_ROOT:CC2_RFID_HELPER);
+    int n=snprintf(path,size,mode.mode==1?"%s/capture":"%s",mode.mode==1?CC2_BASE_API_ROOT:CC2_RFID_HELPER);
     if(n<1||(size_t)n>=size)return 0;
     const char *expected=mode.mode==1?mode.capture:CC2_RFID_HELPER_SHA;
     if(!rr_hex(expected))return 0;
