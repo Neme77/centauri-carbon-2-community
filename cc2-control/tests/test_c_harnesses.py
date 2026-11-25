@@ -68,6 +68,8 @@ HARNESSES = {
     "test_mqtt_workload.c": [],
     "test_mqtt_registration.c": [],
     "test_canvas_discovery.c": [],
+    "test_mqtt_snapshot_discovery.c": [],
+    "test_mqtt_snapshot_budget.c": [],
     "test_printer_replies.c": [],
     "test_print_options.c": [],
     "test_light_api.c": BACKEND,
