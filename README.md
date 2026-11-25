@@ -166,6 +166,36 @@ for every modified installation or eliminate power-loss and hardware risks.
 The native Canvas auto-refill reports remain a separate investigation: no
 auto-refill fix is claimed by the Spoolman changes.
 
+## CC2 Assist: illustrated FEL recovery guide
+
+[**Download CC2 Assist for Windows — FEL beta**](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/CC2-Assist-0.7.0-FEL-Beta-r2.zip) · [ZIP checksum](https://github.com/Neme77/centauri-carbon-2-community/releases/download/CC2-Control-1.2.30-V4.4.4-Universal/CC2-Assist-0.7.0-FEL-Beta-r2.zip.sha256.txt) · [**Step-by-step illustrated guide**](docs/CC2_ASSIST.md)
+
+Extract the whole ZIP and open **CC2-Assist.exe**. English and Italian are
+available in the app. The ZIP includes XFEL, the .13 + SSH recovery images,
+English instructions, the cable guide and report checklists.
+
+<table>
+<tr>
+<td width="45%" valign="top"><strong>Real mainboard reference</strong><br>
+<a href="docs/images/cc2-assist/cc2-mainboard-reference.jpg"><img src="docs/images/cc2-assist/cc2-mainboard-reference.jpg" alt="CC2 mainboard photograph showing the J6 header below SW2 and the buzzer to the right" width="330"></a></td>
+<td width="55%" valign="top"><strong>Cable wiring and orientation</strong><br>
+<a href="docs/images/cc2-assist/cc2-fel-cable-map.svg"><img src="docs/images/cc2-assist/cc2-fel-cable-map.svg" alt="J6 to USB-A wiring: GND to 4, D+ to 3, D− to 2, +5 V to 1" width="500"></a></td>
+</tr>
+</table>
+
+1. **Prepare the cable:** follow the [photo, electrical mapping and continuity checks](docs/CC2_ASSIST.md#1-make-and-check-the-usb-fel-cable), with the cable unplugged at both ends.
+2. **Read first:** disconnect printer mains, enter FEL using USB power only, identify the board and save a new read-only collection.
+3. **Prepare and check:** generate the kit from that board's collection and wait for **GENERIC_FEL_READ_ONLY_PASSED**. A working printer can stop here.
+4. **Recover only if needed:** factory recovery resets settings, G-code and calibrations. Wait for **FACTORY_RECOVERY_READY_FOR_MANUAL_BOOT_A** before disconnecting USB and booting manually on mains.
+5. **Finish and report:** reconnect Wi-Fi, use **Finish recovery** to verify and save the protected identity/RFID backup, then retain the AFTER reports.
+
+**Never combine PC USB power and printer mains in this procedure.**
+Factory recovery is designed to preserve identity and RFID files and does not
+flash the Canvas MCU. Its newer complete overlay/user-data reset remains
+**beta and physically unverified on populated user data**. SSH cleanup is a
+separate workflow that preserves calibrations. Read the [complete guide](docs/CC2_ASSIST.md)
+before connecting or writing; keep private reports out of public issues.
+
 ## Recovery tools and support
 
 **CC2 Assist** provides SSH diagnosis, verified backups and reviewed archive
