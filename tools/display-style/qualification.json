@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "release": "1.2.30",
+  "distribution": "separate-manual-offline-only",
+  "bell_channel_changed": false,
+  "existing_signed_update_changed": false,
+  "tested_archive_sha256": "034f420bfff43632367d2b5ca7cc919f730486675f9bd7bc8611ecc87d19f697",
+  "arm_constructor_cases": 8,
+  "installer_cases": 15,
+  "windows_launcher_cases": 8,
+  "portable_launcher_mocked_cases": 10,
+  "physical": {
+    "reported_by": "Neme77",
+    "date": "2026-11-25",
+    "check": true,
+    "install": true,
+    "install_reboot": true,
+    "restore": true,
+    "restore_reboot": true,
+    "layout_and_colours": true,
+    "languages": true,
+    "back": true,
+    "previews": true,
+    "canvas": true,
+    "light": true,
+    "panel": true,
+    "rfid_unchanged_during_install_and_restore": true
+  },
+  "limits": [
+    "macOS/Linux launcher interactive execution not yet physically tried",
+    "Restore Community appearance before a later update unless explicitly compatible",
+    "Original archive profile predates physical acceptance; this record adds the result without changing tested bytes"
+  ]
+}

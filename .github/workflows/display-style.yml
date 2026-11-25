@@ -1,0 +1,19 @@
+name: Manual display style
+on:
+  pull_request:
+    paths:
+      - 'tools/display-style/**'
+      - '.github/workflows/display-style.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  launcher-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check manual launcher refusals and packaging pins
+        run: python3 -B -m unittest discover -s tools/display-style -p 'test_*.py'

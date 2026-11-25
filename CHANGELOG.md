@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Optional manual/offline original ELEGOO touchscreen layout and icons with Community colours, current languages and preview/Back fixes; exact-release Check/Install/Restore/Status launchers for Windows, macOS and Linux, with verified display backup and unchanged RFID evidence (#437, @Neme77; requested by @fffuffff in #428).
+
 ## [CC2 Control 1.2.30] - 2026-11-25
 
 ### Release integration
