@@ -60,6 +60,14 @@ Existing project capture of the Community Home screen. Additional languages
 are selected in the touchscreen's language menu; this image is not a capture
 of that menu. The browser themes and the native touchscreen theme are separate.
 
+### Prefer the original ELEGOO touchscreen layout?
+
+A separate **manual/offline display-style kit** restores the original layout,
+icons and boot artwork with the Community colours, additional languages and
+preview/Back fixes. It is for the published **CC2 Control 1.2.30** only and is
+**not delivered through the bell**. Windows, macOS and Linux launchers are included.
+[Download, compatibility and restoration instructions](docs/ORIGINAL_DISPLAY_STYLE.md).
+
 ## Open, extensible RFID — with validation still to do
 
 Use the Canvas reader beyond the original producer filter:
@@ -280,3 +288,4 @@ does not promise support for an untested printer.
 Community code and vendor firmware have distinct licensing scopes. Obtain
 required vendor/build inputs separately; private signing material and printer
 credentials are not included in the source repository.
+
