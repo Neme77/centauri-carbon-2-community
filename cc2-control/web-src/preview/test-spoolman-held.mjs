@@ -109,7 +109,7 @@ try {
   assert.equal(await row(4).getByRole('checkbox').count(), 0, 'an unsure entry can only be removed')
   // The choice shows name, material and the weight Spoolman has for the spool; a login change starts on its own spool.
   const options = await row(2).getByRole('combobox').locator('option').allTextContents()
-  assert.deepEqual(options, ['Choose a spool', 'Black PLA · PLA · 810.4 g', 'Silk Blue · PLA Silk · 640.0 g', 'Green PLA · PLA · 120.5 g'])
+  assert.deepEqual(options, ['Choose a spool', 'Spoolman #7 · Black PLA · PLA · 810.4 g', 'Spoolman #21 · Silk Blue · PLA Silk · 640.0 g', 'Spoolman #22 · Green PLA · PLA · 120.5 g'])
   // Each choice is named after its entry, so a screen reader can tell the rows apart.
   assert.equal(await row(2).getByRole('combobox', { name: 'Choose a spool: Silk Blue', exact: true }).count(), 1)
   assert.equal(await row(1).getByRole('combobox', { name: 'Choose a spool: Black PLA (Rack 1)', exact: true }).count(), 1)

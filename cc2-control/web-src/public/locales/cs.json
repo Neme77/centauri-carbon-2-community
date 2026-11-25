@@ -1988,5 +1988,6 @@
   "bed.lvl_bar_paused": "časový limit se zastaví, dokud probíhá měření",
   "bed.lvl_bar_open": "K relaci",
   "bed.lvl_header_word": "Vyrovnání",
-  "bed.cal_header_word": "Kalibrace sítě"
+  "bed.cal_header_word": "Kalibrace sítě",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

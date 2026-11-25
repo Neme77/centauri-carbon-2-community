@@ -1988,5 +1988,6 @@
   "bed.lvl_bar_paused": "el límite de tiempo se detiene mientras se mide",
   "bed.lvl_bar_open": "Ir a la sesión",
   "bed.lvl_header_word": "Nivelación",
-  "bed.cal_header_word": "Calibración malla"
+  "bed.cal_header_word": "Calibración malla",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

@@ -1,6 +1,6 @@
 import { store } from './store'
 import { post, request } from './api'
-import type { Key } from './i18n'
+import { type Key, tpl } from './i18n'
 
 // Spool library kept by CC2 Control (/api/spools). Spools sit in the four Canvas trays (slots 0-3) or on
 // the external spool holder (slot 4) and are charged with the filament the printer extrudes from them.
@@ -159,6 +159,9 @@ export const g = (v: number) => (Math.abs(v) < 10 ? v.toFixed(1) : Math.round(v)
 export const percent = (s: Spool) => Math.max(0, Math.min(100, (s.remaining / Math.max(1, s.net)) * 100))
 export const isLow = (s: Spool) => s.remaining <= Math.max(0, s.low)
 export const spoolLabel = (s: Spool) => s.name || [s.brand, s.material].filter(Boolean).join(' ')
+export const spoolmanLabel = (s: Pick<Spool, 'spoolman_id'>) =>
+  s.spoolman_id ? tpl('spools.spoolman_id_value', { id: s.spoolman_id }) : ''
+export const spoolChoiceLabel = (s: Spool) => [spoolLabel(s), spoolmanLabel(s)].filter(Boolean).join(' · ')
 export const slotOf = (lib: SpoolLibrary, id: string) => lib.slots.find(x => x.spool === id)?.slot ?? -1
 export const findSpool = (lib: SpoolLibrary | null, id: string) => (id && lib?.spools.find(s => s.id === id)) || null
 
@@ -236,9 +239,9 @@ export const isSealed = (s: Spool) => s.remaining >= s.net - 1
 // by hand for one colour differ a little; a name without a colour word ("PLA Matte" with material PLA) does
 // not put red and blue spools on one row.
 const colourKey = (s: Spool) => `${norm(colourName(s))}|${colourWord(s.color)}`
-// Spools that differ only in how much is left: the same product, colour value and size.
+// Linked physical spools remain distinct even when their product, colour and size match.
 export const twinKey = (s: Spool) =>
-  `${norm(s.brand)}|${norm(s.material)}|${colourKey(s)}|${s.color.toUpperCase()}|${s.net}`
+  `${norm(s.brand)}|${norm(s.material)}|${colourKey(s)}|${s.color.toUpperCase()}|${s.net}|${s.spoolman_id || ''}`
 
 // Colour-wheel order: whites, greys and blacks first (light to dark), then by hue from red.
 const wheel = (hex: string) => {
@@ -332,7 +335,17 @@ export function spoolHierarchy(list: Spool[]): SpoolBrand[] {
 }
 
 export const matches = (s: Spool, query: string) =>
-  !query.trim() || [s.name, s.brand, s.material, s.note, s.color].some(v => norm(v).includes(norm(query)))
+  !query.trim() ||
+  [
+    s.name,
+    s.brand,
+    s.material,
+    s.note,
+    s.color,
+    s.spoolman_id,
+    s.spoolman_id ? `#${s.spoolman_id}` : '',
+    spoolmanLabel(s),
+  ].some(v => norm(v || '').includes(norm(query)))
 
 // The product line a tray names, from its base type on, without the maker's own word before it: Elegoo's Rapid
 // PLA+ spools name "RAPID PLA+", which is the line "PLA+" of "PLA". A name in which no word starts a line of the

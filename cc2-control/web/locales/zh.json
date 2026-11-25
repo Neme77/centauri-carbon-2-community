@@ -1988,5 +1988,6 @@
   "bed.lvl_bar_paused": "测量进行时，时间限制暂停",
   "bed.lvl_bar_open": "前往会话",
   "bed.lvl_header_word": "调平",
-  "bed.cal_header_word": "网格校准"
+  "bed.cal_header_word": "网格校准",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

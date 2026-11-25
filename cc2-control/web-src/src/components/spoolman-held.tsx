@@ -19,6 +19,7 @@ import {
   type SpoolmanCatalog,
   spools,
   spoolmanSyncState,
+  spoolmanLabel,
   unlinkOldConnections,
 } from '@/lib/spools'
 
@@ -177,7 +178,12 @@ export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: bool
       >
         {option('', t('spools.held_choose'))}
         {target(e) && !known && option(target(e), tpl('spools.held_target_unknown', { id: target(e) }))}
-        {list.map(s => option(s.id, `${s.name || s.material} · ${s.material} · ${grams(s.remaining)} g`))}
+        {list.map(s =>
+          option(
+            s.id,
+            `${spoolmanLabel({ spoolman_id: s.id })} · ${s.name || s.material} · ${s.material} · ${grams(s.remaining)} g`
+          )
+        )}
       </Select>
     )
   }

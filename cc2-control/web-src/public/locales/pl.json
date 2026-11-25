@@ -1988,5 +1988,6 @@
   "bed.lvl_bar_paused": "limit czasu stoi w miejscu podczas pomiaru",
   "bed.lvl_bar_open": "Do sesji",
   "bed.lvl_header_word": "Poziomowanie",
-  "bed.cal_header_word": "Kalibracja siatki"
+  "bed.cal_header_word": "Kalibracja siatki",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

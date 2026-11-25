@@ -1988,5 +1988,6 @@
   "bed.lvl_bar_paused": "die Zeitgrenze steht, solange eine Messung läuft",
   "bed.lvl_bar_open": "Zur Sitzung",
   "bed.lvl_header_word": "Nivellierung",
-  "bed.cal_header_word": "Mesh-Kalibrierung"
+  "bed.cal_header_word": "Mesh-Kalibrierung",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

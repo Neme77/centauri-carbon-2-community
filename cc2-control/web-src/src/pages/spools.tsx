@@ -9,6 +9,7 @@ import { Input, Select } from '@/components/ui/field'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Notice, Warn } from '@/components/shared'
 import { SpoolmanHeld } from '@/components/spoolman-held'
+import { SpoolmanId } from '@/components/spoolman-id'
 import { draftFields, draftFrom, draftProblem, placeName, SpoolEditor, SpoolMeter, Swatch } from '@/components/spool-ui'
 import { errText, notify } from '@/lib/api'
 import { ask } from '@/lib/confirm'
@@ -210,6 +211,7 @@ const SlotCard = ({ lib, s, busy, act }: { lib: SpoolLibrary; s: SpoolSlot; busy
             <b class="min-w-0 text-[13px] [overflow-wrap:anywhere]">{spoolLabel(spool)}</b>
           </div>
           <SpoolMeter spool={spool} />
+          <SpoolmanId spool={spool} />
           {tray && !empty && !fits(spool, tray) && <span class="text-xs text-amber">{t('spools.differs')}</span>}
         </div>
       ) : (
@@ -411,6 +413,7 @@ const SpoolRow = ({
   return (
     <div class="grid gap-1.5 rounded-md border border-edge bg-panel px-2.5 py-2" data-spool={s.id}>
       <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
+        <SpoolmanId spool={s} />
         {sealed && <Tag>{t('spools.sealed')}</Tag>}
         {where >= 0 && <Tag tone="ok">{placeName(where)}</Tag>}
         {low && <Tag tone="warning">{t(s.remaining <= 0 ? 'spools.empty' : 'spools.low_tag')}</Tag>}
