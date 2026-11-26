@@ -12,7 +12,7 @@ The flag persists across browser refreshes and application restarts. It is store
 
 ## What the sync does
 
-- **Address.** The server is given as `http://IPv4-address[:port][/path]`, for example `http://192.0.2.5:7912`. A host name (`spoolman`, `spoolman.local`, `localhost`) is refused when it is saved, because the printer never resolves names; there is no TLS either, so `https://` is refused too.
+- **Address.** The server is given as `http://IPv4-address[:port][/path]`, for example `http://192.0.2.5:7912`. A host name (`spoolman`, `spoolman.local`, `localhost`) is refused when it is saved, because the printer never resolves names; there is no TLS either, so `https://` is refused too. The path may hold only URL characters: a space, `?` or `#` in it is refused.
 - **Every two minutes** (and right after the integration is switched on) the printer reports the grams it has measured for each linked spool, then reads Spoolman's spool list and imports every Spoolman spool that has no local entry yet. Nothing has to be created by hand.
 - **The list is read in pages** of 20 (`GET /api/v1/spool?sort=id:asc&limit=20&offset=…`, with `X-Total-Count` for the end). A page that is too big for the printer's buffer is halved; a spool that cannot be read at all is skipped and counted, the rest is still imported. Archived spools are not asked for, so they are never imported. At most as many spools are imported as the library has room for (128 in all).
 - **A linked spool is refreshed from that same list**, without a request of its own. One that is not in the list (archived or deleted in Spoolman) is asked for by itself.
