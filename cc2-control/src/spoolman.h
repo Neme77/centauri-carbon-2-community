@@ -241,8 +241,14 @@ static int spoolman_request_ex(const char *host, int port, const char *basic_aut
     if (total) *total = -1;
     if (atomic_load(&spoolman_paused)) return SPOOLMAN_E_NOSEND;
     const long long give_up = monotonic_ms() + spoolman_request_max_ms;
+    /* Room for the headers plus the body, with slack for chunk framing; + a NUL after what comes in, so no parse below
+     * reads past it. Taken before anything goes out: no memory for it is then "not sent", not "may have been applied". */
+    size_t raw_cap = SPOOLMAN_HEADER_MAX + reply_cap * 2 + 64, used = 0;
+    char *raw = malloc(raw_cap + 1);
+    if (!raw) return SPOOLMAN_E_NOSEND;
+    raw[0] = 0;
     int fd = spoolman_connect(host, port);
-    if (fd < 0) return SPOOLMAN_E_NOSEND;
+    if (fd < 0) { free(raw); return SPOOLMAN_E_NOSEND; }
     char auth_header[256] = "";
     if (basic_auth[0]) {
         char encoded[200];
@@ -264,20 +270,16 @@ static int spoolman_request_ex(const char *host, int port, const char *basic_aut
     int n = snprintf(request, sizeof(request),
         "%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n%sContent-Type: application/json\r\nContent-Length: %zu\r\n\r\n%s",
         method, path, host, auth_header, body_len, body ? body : "");
-    if (n <= 0 || (size_t)n >= sizeof(request)) { close(fd); return SPOOLMAN_E_NOSEND; }
+    if (n <= 0 || (size_t)n >= sizeof(request)) { close(fd); free(raw); return SPOOLMAN_E_NOSEND; }
     const char *p = request; size_t left = (size_t)n;
     while (left) {
-        if (atomic_load(&spoolman_paused) || monotonic_ms() >= give_up) { close(fd); return SPOOLMAN_E_NOSEND; }
+        if (atomic_load(&spoolman_paused) || monotonic_ms() >= give_up) { close(fd); free(raw); return SPOOLMAN_E_NOSEND; }
         ssize_t sent = send(fd, p, left, MSG_NOSIGNAL);
         /* Part of a request is never acted on: the server waits for the rest of the declared body. */
-        if (sent <= 0) { close(fd); return SPOOLMAN_E_NOSEND; }
+        if (sent <= 0) { close(fd); free(raw); return SPOOLMAN_E_NOSEND; }
         p += sent; left -= (size_t)sent;
     }
-    /* From here on the server may have acted. Room for the headers plus the body, with slack for chunk framing. */
-    size_t raw_cap = SPOOLMAN_HEADER_MAX + reply_cap * 2 + 64, used = 0;
-    char *raw = malloc(raw_cap + 1);           /* + a NUL after what came in: no parse below reads past it */
-    if (!raw) { close(fd); return SPOOLMAN_E_UNKNOWN; }
-    raw[0] = 0;
+    /* From here on the server may have acted. */
     int eof = 0, timed_out = 0, framed = 0;
     size_t framed_head = 0; long framed_length = -1;
     while (used < raw_cap) {

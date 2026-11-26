@@ -1,9 +1,19 @@
 #define _GNU_SOURCE
 #include <stdatomic.h>
 #include <stdlib.h>
-/* Lets a test make the next malloc() of the code under test fail (only for the code in ../src/main.c). */
+/* Lets a test make a malloc() of the code under test fail (only for the code in ../src/main.c): fail_next_malloc = n
+ * fails the n-th call from now (1 = the next one); with fail_malloc_size set, only calls of exactly that size count. */
 static atomic_int fail_next_malloc;
-static void *test_malloc(size_t n) { return atomic_exchange(&fail_next_malloc, 0) ? NULL : malloc(n); }
+static atomic_size_t fail_malloc_size;
+static void *test_malloc(size_t n) {
+    size_t only = atomic_load(&fail_malloc_size);
+    if (only && n != only) return malloc(n);
+    int k = atomic_load(&fail_next_malloc);
+    while (k > 0 && !atomic_compare_exchange_weak(&fail_next_malloc, &k, k - 1)) {}
+    if (k != 1) return malloc(n);
+    atomic_store(&fail_malloc_size, 0);
+    return NULL;
+}
 #define malloc test_malloc
 #define main cc2_main_original
 #include "../src/main.c"
@@ -2380,6 +2390,52 @@ static void test_the_base_path_holds_only_url_characters(void) {
     puts("PASS: the base path of the Spoolman address holds only URL characters and the port only digits; the rest is refused");
 }
 
+static void fail_malloc_of_size(size_t size, int nth) { atomic_store(&fail_malloc_size, size); atomic_store(&fail_next_malloc, nth); }
+
+static void test_no_memory_for_a_reply_buffer_is_not_sent(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    spoolman_spool read; int code = 0;
+    fail_malloc_of_size(SPOOLMAN_BODY_MAX, 1);                                 /* reading one spool */
+    assert(!spoolman_get_spool_ex("127.0.0.1", fake.port, "", "", "7", &read, &code));
+    assert(!atomic_load(&fail_next_malloc) && code == SPOOLMAN_E_NOSEND && fake.get_count == 0);
+    fail_malloc_of_size(SPOOLMAN_BODY_MAX, 2);                                 /* the sync reads the spool, then has no room for /use */
+    cycle();
+    assert(!atomic_load(&fail_next_malloc));
+    assert(fake.use_count == 0 && near(fake.used, 100));
+    assert(near(sp->spoolman_unsent, 12.5) && near(sp->spoolman_inflight, 0));       /* not sent, not "may have been applied" */
+    cycle();
+    assert(fake.use_count == 1 && near(fake.used, 112.5) && near(sp->spoolman_unsent, 0) && near(sp->spoolman_inflight, 0));
+    assert(spoolman_hold(sp, 4, SPOOLMAN_HELD_SERVER));
+    fail_malloc_of_size(SPOOLMAN_BODY_MAX, 2);                                 /* Send selected: the same */
+    assert(call_held_send("1=7") == 202); finish_send();
+    assert(!atomic_load(&fail_next_malloc));
+    assert(fake.use_count == 1 && spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_SERVER && !spools.held[0].sending);
+    assert(call_held_send("1=7") == 202); finish_send();
+    assert(spools.held_count == 0 && fake.use_count == 2 && near(fake.used, 116.5));
+    fake_finish(); teardown_file();
+    puts("PASS: no memory for the reply buffer of a read or a /use counts as not sent (sync and Send selected); the grams wait");
+}
+
+static void test_no_memory_for_the_read_buffer_sends_nothing(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    static char reply[SPOOLMAN_BODY_MAX];
+    atomic_store(&fail_next_malloc, 1);                                        /* the request's own buffer for the reply */
+    assert(spoolman_request("127.0.0.1", fake.port, "", "PUT", "/api/v1/spool/7/use", "{\"use_weight\":1.000}", reply,
+                            sizeof(reply)) == SPOOLMAN_E_NOSEND);
+    assert(!atomic_load(&fail_next_malloc) && fake.use_count == 0 && near(fake.used, 100));     /* nothing went out */
+    /* in the sync: the spool is read, then the read buffer of /use is missing (its size: headers + 2 x body + 64 + NUL) */
+    fail_malloc_of_size(SPOOLMAN_HEADER_MAX + SPOOLMAN_BODY_MAX * 2 + 64 + 1, 2);
+    cycle();
+    assert(!atomic_load(&fail_next_malloc));
+    assert(fake.use_count == 0 && near(fake.used, 100) && near(sp->spoolman_unsent, 12.5) && near(sp->spoolman_inflight, 0));
+    cycle();
+    assert(fake.use_count == 1 && near(fake.used, 112.5) && near(sp->spoolman_unsent, 0));
+    fake_finish(); teardown_file();
+    puts("PASS: no memory for the read buffer stops a request before it goes out: not sent, the grams wait");
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IOLBF, 1024);
     spools_clock = clock_fake; spools_wall = wall_fake;
@@ -2469,5 +2525,7 @@ int main(void) {
     test_a_chunk_too_big_for_the_buffer_is_too_big();
     test_a_reply_is_done_at_its_content_length();
     test_the_base_path_holds_only_url_characters();
+    test_no_memory_for_a_reply_buffer_is_not_sent();
+    test_no_memory_for_the_read_buffer_sends_nothing();
     return 0;
 }
