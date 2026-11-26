@@ -1184,6 +1184,15 @@ static void spools_fail(int fd, int status, const char *error) {
     spools_reply(fd, status, body);
 }
 
+/* Like spools_fail, plus a stable `code` (lowercase letters and underscores) that the page translates; status and
+ * English text stay as they were, for everyone who reads `error`. */
+static void spools_fail_code(int fd, int status, const char *code, const char *error) {
+    char body[400], escaped[256];
+    json_escape(escaped, sizeof(escaped), error);
+    snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\",\"code\":\"%s\"}\n", escaped, code);
+    spools_reply(fd, status, body);
+}
+
 /* Keeps a copy to undo a change that cannot be saved. */
 static spool_store *spools_snapshot(int fd) {
     spool_store *copy = malloc(sizeof(spools));

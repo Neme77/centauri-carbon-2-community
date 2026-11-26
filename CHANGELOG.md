@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Spoolman card on the Spools page: one line under the fields tells what the last sync did in plain words, with what to do next: the time of the last sync, not synchronised yet, an address that is not valid, a login Spoolman refused, Spoolman not reachable or not answering in time, an incomplete reply, too much data, an address Spoolman does not know, an error from Spoolman, spools in Spoolman without a weight that were not added, or a full spool library. The texts are in all eleven languages; the translations other than English and German were made by the contributor and are not checked by native speakers. Implemented by **lpgamerzockt-ops** (#433).
+
+### Changed
+
+- Spoolman: the refusals of the Spoolman functions (list of unsent usage, Spoolman settings, spool choice) now carry a stable `code` next to the unchanged English `error`, and the page shows them in its own language; a code it does not know falls back to the English text. The Spools page asks `GET /api/spoolman` once for all of its parts, and the list of unsent usage asks the printer again for Spoolman's spools at most three more times, counting every try. The page now shows the IPv4-only note under the address field, and a new address or login starts the next sync at once instead of up to two minutes later. Codes are listed in `cc2-control/docs/API.md`. Implemented by **lpgamerzockt-ops** (#433).
+
 ### Fixed
 
 - Manual preheat (`preheat:<nozzle>:<bed>`) is refused when text follows the bed temperature, as the temperature targets already were; it was accepted and the text ignored. A whole number outside the range of a 32-bit integer in a JSON the service reads (queue, plates, spools, history, Canvas status) is read as missing, instead of being cut to a wrong number. Designed and implemented by **lpgamerzockt-ops** (#435).
