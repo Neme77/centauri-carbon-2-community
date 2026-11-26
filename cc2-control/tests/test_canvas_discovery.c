@@ -22,7 +22,7 @@ int main(void){
  mqtt_init(&c);strcpy(c.serial,"TEST");attach();c.registered=1;
  mqtt_tick(&c);assert(!c.automatic_canvas_attempts&&!c.automatic_registration_attempts);
  clock_now+=15;mqtt_tick(&c);drain();
- assert(c.automatic_canvas_attempts==1&&c.automatic_snapshot_attempts==1&&c.automatic_registration_attempts==1);
+ assert(c.automatic_canvas_attempts==1&&c.automatic_snapshot_attempts==1&&!c.automatic_registration_attempts);
  clock_now+=9;mqtt_tick(&c);drain();assert(c.automatic_canvas_attempts==1);
  clock_now++;mqtt_tick(&c);drain();assert(c.automatic_canvas_attempts==2);
  /* Reconnect keeps budgets but still delays each new session. */
@@ -30,7 +30,7 @@ int main(void){
  mqtt_tick(&c);assert(c.automatic_canvas_attempts==2);
  clock_now+=15;
  for(int i=0;i<30;i++){mqtt_tick(&c);drain();clock_now+=60;}
- assert(c.automatic_canvas_attempts==9&&c.automatic_snapshot_attempts==9&&c.automatic_registration_attempts==9);
+ assert(c.automatic_canvas_attempts==9&&c.automatic_snapshot_attempts==9&&!c.automatic_registration_attempts);
  char status[512];mqtt_discovery_diagnostic(&c,status,sizeof(status));assert(strstr(status,"exhausted; use Sync"));
  /* Exhaustion must survive another transport reset. */
  mqtt_close(&c);close(peer);attach();c.registered=1;clock_now+=60;
@@ -38,7 +38,7 @@ int main(void){
  assert(!mqtt_sync_canvas(&c));drain();assert(c.canvas_request_attempts==1&&!c.automatic_canvas_attempts);
  mqtt_tick(&c);drain();assert(!c.automatic_canvas_attempts);
  clock_now+=15;mqtt_tick(&c);drain();assert(c.automatic_canvas_attempts==1);
- /* A passive Canvas snapshot ends automatic discovery; no budget reset needed. */
+ /* A passive Canvas snapshot ends Canvas discovery; general snapshot has its own budget. */
  c.canvas_discovery_complete=1;c.have_auto_refill=1;
  clock_now+=60;mqtt_tick(&c);drain();assert(c.automatic_canvas_attempts==1);
  /* Finished discovery still refreshes while watched, at most once per 10 s. */
@@ -64,7 +64,11 @@ int main(void){
  mqtt_discovery_diagnostic(&c,status,sizeof(status));assert(!strstr(status,"Canvas discovery: complete"));
  clock_now+=10;mqtt_tick(&c);drain();assert(c.automatic_registration_attempts==2);
  c.registered=1;clock_now+=60;mqtt_tick(&c);drain();
- assert(c.automatic_registration_attempts==2&&!c.automatic_snapshot_attempts&&!c.automatic_canvas_attempts);
+ assert(c.automatic_registration_attempts==2&&c.automatic_snapshot_attempts==1&&!c.automatic_canvas_attempts);
+ /* Once the general snapshot exists, both completed phases stay quiet. */
+ strcpy(c.snapshot,"{}");c.snapshot_len=2;
+ clock_now+=60;mqtt_tick(&c);drain();
+ assert(c.automatic_registration_attempts==2&&c.automatic_snapshot_attempts==1&&!c.automatic_canvas_attempts);
  mqtt_discovery_diagnostic(&c,status,sizeof(status));assert(strstr(status,"Canvas discovery: complete"));
  mqtt_close(&c);close(peer);assert(mqtt_sync_canvas(&c)==-1);
  return 0;

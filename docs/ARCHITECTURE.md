@@ -12,7 +12,7 @@ CC2 Control is a small static service designed for the resources available on th
 | Web UI        | Dashboard, files, Canvas, levelling, console and settings |
 | procd service | Startup ordering, supervision and clean restart           |
 
-The backend is written in C and serves the single-page UI from `cc2-control/web/index.html`, with its translations loaded from `cc2-control/web/locales/<code>.json` at `/i18n/<code>.json`. Persistent state belongs under `/opt/usr/cc2-control`; immutable application files belong under `/opt/inst/cc2-control`.
+The backend is written in C and serves the single-page UI from `cc2-control/web/index.html`, with its translations loaded from `cc2-control/web/locales/<code>.json` at `/i18n/<code>.json`. The backend reads each of these files whole and sends nothing above a fixed size: 1 MiB for `index.html`, 256 KiB for a locale file (`WEB_INDEX_MAX_BYTES` and `WEB_LOCALE_MAX_BYTES` in `cc2-control/src/main.c`; the page refuses a locale above 262144 characters, too). A larger file is answered with HTTP 500 and a plain-text reason, and `cc2-control/tests/test_web_size_limits_static.py` fails while the files are still below that (900 KiB and 230 KiB). Persistent state belongs under `/opt/usr/cc2-control`; immutable application files belong under `/opt/inst/cc2-control`.
 
 ## Safety boundary
 

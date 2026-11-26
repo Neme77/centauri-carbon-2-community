@@ -969,9 +969,11 @@ static int build_script(const char *action,const mqtt_client *m,char *script,siz
         else return reject(reason,reason_cap,"Unknown material preset");
         return 1;
     }
-    if(sscanf(action,"preheat:%lf:%lf",&value,&value2)==2){
+    if(strncmp(action,"preheat:",8)==0){
+        int end=0;
         if(printing(m))return reject(reason,reason_cap,"Preheat is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Preheat requires the printer to be idle");
+        if(sscanf(action,"preheat:%lf:%lf%n",&value,&value2,&end)!=2||action[end])return reject(reason,reason_cap,"Invalid preheat targets");
         if(!isfinite(value)||!isfinite(value2)||value<0||value>CC2_NOZZLE_TARGET_MAX||value2<0||value2>120)return reject(reason,reason_cap,"Preheat targets exceed the protected range");
         snprintf(script,cap,"M104 S%.0f\nM140 S%.0f",value,value2);return 1;
     }

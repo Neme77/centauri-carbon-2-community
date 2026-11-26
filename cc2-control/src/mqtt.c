@@ -114,8 +114,10 @@ void mqtt_close(mqtt_client *c) {
     if(c->fd>=0)close(c->fd);
     c->fd=-1; c->connected=0; c->registered=0; c->register_sent=0;
     c->snapshot_sent=0; c->input_len=0;c->discard_remaining=0;
-    c->last_registration_request=0; c->last_snapshot_request=0;
+    c->last_registration_request=0;
     c->registration_attempts=0; c->snapshot_request_attempts=0;
+    /* General snapshot belongs to this MQTT session, just like Canvas. */
+    c->snapshot_len=0; c->snapshot[0]='\0';
     c->canvas_snapshot_len=0; c->canvas_snapshot[0]='\0';
     c->canvas_discovery_complete=0; c->canvas_request_attempts=0;
     c->last_canvas_request=0;
@@ -179,7 +181,7 @@ int mqtt_request_canvas(mqtt_client *c) {
 int mqtt_sync_canvas(mqtt_client *c) {
     if(!c||c->fd<0||!c->connected||!c->serial[0])return -1;
     c->automatic_registration_attempts=0;
-    c->automatic_snapshot_attempts=0;
+    c->automatic_snapshot_attempts=0;c->last_snapshot_request=0;
     c->automatic_canvas_attempts=0;
     c->discovery_ready_at=time(NULL)+DISCOVERY_SETTLE_SECONDS;
     return c->registered ? mqtt_request_canvas(c) : 0;
@@ -195,8 +197,9 @@ static int discovery_due(unsigned int attempts,time_t last,time_t now) {
 static void recover_registration(mqtt_client *c) {
     if(!c->connected || !c->registered)return;
     c->registered=0;c->register_sent=0;c->snapshot_sent=0;
-    c->last_registration_request=0;c->last_snapshot_request=0;
-    c->automatic_registration_attempts=0;c->automatic_snapshot_attempts=0;
+    c->last_registration_request=0;
+    /* Snapshot budget survives automatic registration recovery. */
+    c->automatic_registration_attempts=0;
     c->automatic_canvas_attempts=0;
     c->canvas_discovery_complete=0;c->canvas_snapshot_len=0;c->canvas_snapshot[0]='\0';
     c->snapshot_len=0;c->snapshot[0]='\0';
@@ -884,22 +887,25 @@ void mqtt_tick(mqtt_client *c) {
         c->serial_discovery_attempts++;
         if(discover_serial_factory(c)!=0)(void)discover_serial_http(c);
     }
-    /* Delay automatic discovery after every successful MQTT connection, not
-     * only cold boot. Heartbeats and passive telemetry continue independently.
-     * Another client's Canvas reply can complete Canvas discovery during the
-     * delay; registration, which every request needs, still follows. */
-    if(now>=c->discovery_ready_at && (!c->canvas_discovery_complete || !c->registered)) {
-        if(c->serial[0] && discovery_due(c->automatic_registration_attempts,c->last_registration_request,now)) {
+    /* Keep registration, general snapshot and Canvas discovery independent.
+     * A passive Canvas reply must not suppress the initial method-1002 request.
+     * Each phase retains its existing settle time, retry interval and budget;
+     * completed phases are quiet. Heartbeats and live telemetry are unchanged. */
+    if(now>=c->discovery_ready_at) {
+        if(!c->registered && c->serial[0] &&
+           discovery_due(c->automatic_registration_attempts,c->last_registration_request,now)) {
             c->automatic_registration_attempts++;
             (void)send_registration(c);
             c->last_registration_request=now;
         }
-        if(c->registered && discovery_due(c->automatic_snapshot_attempts,c->last_snapshot_request,now)) {
+        if(c->registered && !c->snapshot_len &&
+           discovery_due(c->automatic_snapshot_attempts,c->last_snapshot_request,now)) {
             c->automatic_snapshot_attempts++;
             (void)send_snapshot_request(c);
             c->last_snapshot_request=now;
         }
-        if(c->registered && discovery_due(c->automatic_canvas_attempts,c->last_canvas_request,now)) {
+        if(c->registered && !c->canvas_discovery_complete &&
+           discovery_due(c->automatic_canvas_attempts,c->last_canvas_request,now)) {
             c->automatic_canvas_attempts++;
             (void)mqtt_request_canvas(c);
             c->last_canvas_request=now;

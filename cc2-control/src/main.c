@@ -4078,7 +4078,12 @@ static const char *json_member_object(const char *obj,const char *end,const char
 static int json_member_int(const char *obj,const char *end,const char *key,int *out){
     const char *value=json_member(obj,end,key);
     if(!value||!(isdigit((unsigned char)*value)||*value=='-'))return 0;
-    *out=atoi(value);return 1;
+    /* atoi has no defined result for a number outside int (it truncated 2147483648 to -2147483648): such a number, and a
+     * sign without digits, are "not present", like a missing member. */
+    char *digits_end;errno=0;
+    long number=strtol(value,&digits_end,10);
+    if(digits_end==value||errno==ERANGE||number<INT_MIN||number>INT_MAX)return 0;
+    *out=(int)number;return 1;
 }
 
 /* Raw JSON string contents without quotes; escapes stay as they are. */
@@ -4777,6 +4782,25 @@ static int if_none_match_matches(const char *value, const char *etag) {
     return 0;
 }
 
+/* Largest start page and locale file that are read into memory and sent (the page's boundedJson in i18n.ts refuses
+   a locale above 262144 characters too). A larger file gets an HTTP 500 with a plain-text reason and one log line
+   per kind of file; tests/test_web_size_limits_static.py fails while the shipped files are still below these sizes. */
+#define WEB_INDEX_MAX_BYTES (1024 * 1024)
+#define WEB_LOCALE_MAX_BYTES 262144
+
+/* Answers a web file above its size limit with a reason and logs it once per process and kind of file, so a
+   browser that keeps retrying cannot fill the log. The HTTP threads run in parallel, hence the atomic flag. */
+static void respond_web_file_too_large(int fd, atomic_int *logged, const char *what, const char *limit_text) {
+    char body[160];
+    int length = snprintf(body, sizeof(body), "%s is larger than the %s limit\n", what, limit_text);
+    if (!atomic_exchange(logged, 1)) {
+        fprintf(stderr, "Web UI: %s is larger than the %s limit; answering with HTTP 500\n", what, limit_text);
+    }
+    if (length > 0 && (size_t)length < sizeof(body))
+        respond(fd, 500, "Internal Server Error", "text/plain; charset=utf-8", body, (size_t)length);
+}
+static atomic_int index_too_large_logged, locale_too_large_logged;
+
 static void serve_index(int fd, const char *web_root, const char *request) {
     char path[PATH_MAX_LOCAL];
     if (snprintf(path, sizeof(path), "%s/index.html", web_root) >= (int)sizeof(path)) {
@@ -4804,12 +4828,22 @@ static void serve_index(int fd, const char *web_root, const char *request) {
     int measured = fstat(fileno(file), &info) == 0 && S_ISREG(info.st_mode);
     long size;
     if (measured) {
-        if (info.st_size < 0 || info.st_size > 1024 * 1024) { fclose(file); return; }
+        if (info.st_size < 0) { fclose(file); return; }
+        if (info.st_size > WEB_INDEX_MAX_BYTES) {
+            fclose(file);
+            respond_web_file_too_large(fd, &index_too_large_logged, "web/index.html", "1 MiB");
+            return;
+        }
         size = (long)info.st_size;
     } else {
         if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
         size = ftell(file);
-        if (size < 0 || size > 1024 * 1024) { fclose(file); return; }
+        if (size < 0) { fclose(file); return; }
+        if (size > WEB_INDEX_MAX_BYTES) {
+            fclose(file);
+            respond_web_file_too_large(fd, &index_too_large_logged, "web/index.html", "1 MiB");
+            return;
+        }
         rewind(file);
     }
     if (size == 0) {
@@ -4882,7 +4916,14 @@ static void serve_locale(int fd, const char *web_root, const char *request_path)
     }
     if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return; }
     long size = ftell(file);
-    if (size < 0 || size > 262144) { fclose(file); return; }
+    if (size < 0) { fclose(file); return; }
+    if (size > WEB_LOCALE_MAX_BYTES) {
+        fclose(file);
+        char what[64];
+        snprintf(what, sizeof(what), "web/locales/%s", name);
+        respond_web_file_too_large(fd, &locale_too_large_logged, what, "256 KiB");
+        return;
+    }
     rewind(file);
     char *body = malloc((size_t)size);
     if (!body) { fclose(file); return; }
@@ -5847,7 +5888,7 @@ static int installer_native_observation(int canvas_only,int canvas_transfer);
 /* Release the steppers the firmware leaves energised once the printer has
  * stood idle with its heaters off; see control_idle_motors_due(). */
 static control_idle_motors idle_motors;
-static control_idle_sample idle_motors_sample(const mqtt_client *mqtt,console_state *console){
+static control_idle_sample idle_motors_observe(const mqtt_client *mqtt,console_state *console){
     control_idle_sample s={0};
     s.valid=gcode_idle_for_mutation(mqtt)&&mqtt->have_position&&
         uds_value(&telemetry,U_CF,&s.board_fan)&&uds_value(&telemetry,U_EG,&s.nozzle_target)&&
@@ -5859,9 +5900,21 @@ static control_idle_sample idle_motors_sample(const mqtt_client *mqtt,console_st
     return s;
 }
 static void idle_motors_tick(const mqtt_client *mqtt,console_state *console){
-    if(maintenance_barrier_active()||rn_blocks())return;
-    control_idle_sample s=idle_motors_sample(mqtt,console);
-    if(control_idle_motors_due(&idle_motors,&s,recovery_clock())&&send_local_gcode_script("M84")!=0)
+    if(maintenance_barrier_active()){idle_motors.holding=0;return;}
+    control_idle_sample s=idle_motors_observe(mqtt,console);
+    if(!control_idle_motors_due(&idle_motors,&s,recovery_clock()))return;
+    /* Admission is expensive with ABI2. Check it when an operation is due,
+     * not on every HTTP/event-loop iteration. Never consume a refused M84;
+     * require a new full idle interval after maintenance or lifecycle refusal. */
+    if(rn_blocks()||maintenance_barrier_active()){
+        idle_motors.holding=0;idle_motors.released=0;return;
+    }
+    /* Admission can take time: re-read freshness and motion/heater state
+     * after it, before committing the release or sending any command. */
+    s=idle_motors_observe(mqtt,console);
+    idle_motors.released=0;
+    if(!control_idle_motors_due(&idle_motors,&s,recovery_clock()))return;
+    if(send_local_gcode_script("M84")!=0)
         idle_motors.holding=0; /* Not delivered: wait a full period before trying again. */
 }
 
@@ -5919,7 +5972,7 @@ static const char *printer_change_refusal(const char *method, const char *path, 
     *plates_form = 0;
     if (maintenance_request_blocked(method, emergency, console_emergency) && !owned_rfid_cancel)
         return "Installation or native maintenance is running; printer changes are paused";
-    if (rn_blocks() && change && !console_emergency && strcmp(path, "/api/rfid/lifecycle/action") && !owned_rfid_cancel)
+    if (change && !console_emergency && strcmp(path, "/api/rfid/lifecycle/action") && !owned_rfid_cancel && rn_blocks())
         return "RFID activation or recovery is incomplete; finish the lifecycle before changing the printer";
     *plates_form = 1;
     if (rfid.child && change && !console_emergency && strcmp(path, "/api/rfid/action"))
@@ -6521,7 +6574,7 @@ static int installer_native_observation(int canvas_only,int canvas_transfer){
         const char *state=ng_string(reply,print,"state");
         if(state&&(!strcmp(state,"standby")||!strcmp(state,"complete")||!strcmp(state,"cancelled"))&&
            ng_number(reply,print,"machine_status",&machine)&&machine==1&&
-           ng_number(reply,ng_member(reply,status,"motion_report"),"live_velocity",&velocity)&&velocity==0&&
+           ng_number(reply,ng_member(reply,status,"motion_report"),"live_velocity",&velocity)&&fabs(velocity)<=1e-9&&
            installer_native_heater_safe(reply,ng_member(reply,status,"extruder"),50,canvas_transfer)&&
            installer_native_heater_safe(reply,ng_member(reply,status,"heater_bed"),canvas_transfer?40:50,canvas_transfer))result=0;
     }
@@ -6541,7 +6594,9 @@ int main(int argc, char **argv) {
         if(!canvas_only&&result)fputs("STOP: native console did not confirm Idle, no motion and cold heaters with zero targets.\n",stderr);
         return result;
     }
-    if(!rfid_app_update_boot()) {
+    /* The independent panel manager owns panel recovery. RFID recovery
+     * belongs to the RFID service and cannot gate panel startup. */
+    if(0 && !rfid_app_update_boot()) {
         fputs("RFID app-update recovery incomplete; retain the transaction and installation backup.\n",stderr);
         return 1;
     }

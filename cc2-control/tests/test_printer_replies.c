@@ -92,6 +92,11 @@ int main(void){
     c.timelapse_requested=time(NULL);
     say(own,"{\"id\":1051,\"method\":1051,\"result\":{\"error_code\":0,\"url\":\"video/Part 1.mp4\"}}");
     mqtt_tick(&c);assert(c.timelapse_requested&&!c.timelapse_rendering&&!c.history_refresh_due&&!c.history_requested);
+    /* A passive Canvas reply does not complete general discovery. Consume and
+     * acknowledge its initial snapshot before inspecting history follow-ups. */
+    sent(listed,sizeof(listed));assert(!strcmp(listed,"{\"method\":1002,\"id\":1002}"));
+    say(own,"{\"id\":1002,\"method\":1002,\"result\":{\"machine_status\":{\"status\":1}}}");
+    assert(c.snapshot_len&&c.automatic_snapshot_attempts==1);
     say("elegoo/SN/api_status","{\"machine_status\":{\"status\":12,\"sub_status\":3020}}");
     mqtt_tick(&c);assert(c.timelapse_rendering&&c.timelapse_requested&&!c.history_requested);
     say("elegoo/SN/api_status","{\"machine_status\":{\"status\":1,\"sub_status\":0}}");
@@ -137,6 +142,7 @@ int main(void){
     assert(!socketpair(AF_UNIX,SOCK_STREAM,0,pair));c.fd=pair[0];peer=pair[1];
     fcntl(c.fd,F_SETFL,fcntl(c.fd,F_GETFL,0)|O_NONBLOCK);
     c.connected=1;c.registered=1;c.last_app_ping=c.last_ping=time(NULL);
+    c.discovery_ready_at=time(NULL)+DISCOVERY_SETTLE_SECONDS;
     say("elegoo/SN/api_status","{\"method\":6000,\"result\":{\"canvas_info\":{\"canvas_list\":[]}}}");
     assert(c.canvas_discovery_complete&&!c.have_auto_refill);
     mqtt_tick(&c);sent(payload,sizeof(payload));

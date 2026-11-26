@@ -53,8 +53,37 @@ static void test_non_finite_numbers_refused(void){
     expect(control_build_script("zoffset:adjust:0.01",&m,script,sizeof(script),reason,sizeof(reason)),"zoffset:adjust:0.01 stays accepted");
 }
 
+/* preheat:<nozzle>:<bed> ends after the second number, like heaters:set. Text behind it used to be ignored and the
+ * preheat went out; now the whole action is refused. */
+static void test_preheat_is_strict(void){
+    mqtt_client m; char script[700],reason[256];
+    memset(&m,0,sizeof(m));
+    m.have_machine_status=1; m.machine_status=1;
+    m.connected=m.registered=1; m.last_message=time(NULL);
+    const char *refused[]={
+        "preheat:200:60junk","preheat:200:60 ","preheat:200:60\n","preheat:200:60\nM112","preheat:200:60:5","preheat:200:60,5",
+        "preheat:200:60 70","preheat:200:60;","preheat:200:60x10","preheat:200:","preheat:200","preheat::60","preheat:200:60:"
+    };
+    for(size_t i=0;i<sizeof(refused)/sizeof(refused[0]);i++){
+        strcpy(script,"unset");reason[0]=0;
+        if(control_build_script(refused[i],&m,script,sizeof(script),reason,sizeof(reason))){
+            fprintf(stderr,"FAIL: \"%s\" must be refused, built script \"%s\"\n",refused[i],script);exit(1);
+        }
+        expect(reason[0]!=0,refused[i]);
+    }
+    struct {const char *action,*script;} accepted[]={
+        {"preheat:200:60","M104 S200\nM140 S60"},{"preheat:0:0","M104 S0\nM140 S0"},{"preheat:200.5:60.5","M104 S200\nM140 S60"},
+        {"preheat:350:120","M104 S350\nM140 S120"}
+    };
+    for(size_t i=0;i<sizeof(accepted)/sizeof(accepted[0]);i++){
+        script[0]=0;
+        expect(control_build_script(accepted[i].action,&m,script,sizeof(script),reason,sizeof(reason))&&!strcmp(script,accepted[i].script),accepted[i].action);
+    }
+}
+
 int main(void){
     test_non_finite_numbers_refused();
+    test_preheat_is_strict();
     mqtt_client mqtt; char script[700],reason[256];
     memset(&mqtt,0,sizeof(mqtt));
     mqtt.have_machine_status=1; mqtt.machine_status=1;

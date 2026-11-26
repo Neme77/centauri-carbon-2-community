@@ -712,6 +712,40 @@ static void test_http_framing(void) {
     puts("PASS: replies over 8 KiB, fragmented, chunked, cut short or oversized are read whole or rejected, never cut");
 }
 
+/* A NUL byte inside the header block of a reply used to spin spoolman_request for ever: strcspn() stops at the NUL, the
+ * line never moves on, and the deadline only covers reading. A reply like that is malformed. It must come back as
+ * SPOOLMAN_E_UNKNOWN (the request went out, no well-formed reply came back) -- and come back. */
+static void test_http_header_with_nul_is_rejected(void) {
+    static char reply[4096];
+    alarm(30);          /* a spin ends this test with SIGALRM instead of a CI job that never ends */
+    const char nul_in_value[] = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection:\0close\r\n\r\n5\r\nhello\r\n0\r\n\r\n";
+    assert(raw_request(nul_in_value, sizeof(nul_in_value) - 1, 0, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);
+    const char nul_in_length[] = "HTTP/1.1 200 OK\r\nContent-Length: 5\0\r\nConnection: close\r\n\r\nhello";
+    assert(raw_request(nul_in_length, sizeof(nul_in_length) - 1, 0, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);
+    const char nul_at_line_start[] = "HTTP/1.1 200 OK\r\n\0X-A: b\r\nContent-Length: 5\r\n\r\nhello";
+    assert(raw_request(nul_at_line_start, sizeof(nul_at_line_start) - 1, 0, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);
+    const char nul_in_status[] = "HTTP/1.1 200\0OK\r\nContent-Length: 5\r\n\r\nhello";
+    assert(raw_request(nul_in_status, sizeof(nul_in_status) - 1, 0, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);
+    assert(raw_request(nul_in_value, sizeof(nul_in_value) - 1, 5, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);   /* fragmented */
+
+    /* Only the headers are checked: a NUL in the body is the body's business, as before. */
+    const char nul_in_body[] = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\na\0b";
+    assert(raw_request(nul_in_body, sizeof(nul_in_body) - 1, 0, reply, sizeof(reply)) == 200 && reply[0] == 'a' && reply[1] == 0);
+
+    /* Long header lines: a long one inside the header limit still works, a block that never ends is rejected. */
+    static char wire[SPOOLMAN_HEADER_MAX + 256];
+    int at = snprintf(wire, sizeof(wire), "HTTP/1.1 200 OK\r\nX-Long: ");
+    memset(wire + at, 'a', 6000); at += 6000;
+    at += snprintf(wire + at, sizeof(wire) - (size_t)at, "\r\nContent-Length: 2\r\n\r\n{}");
+    assert(raw_request(wire, (size_t)at, 0, reply, sizeof(reply)) == 200 && !strcmp(reply, "{}"));
+    at = snprintf(wire, sizeof(wire), "HTTP/1.1 200 OK\r\nX-Long: ");
+    memset(wire + at, 'a', SPOOLMAN_HEADER_MAX + 100); at += SPOOLMAN_HEADER_MAX + 100;
+    at += snprintf(wire + at, sizeof(wire) - (size_t)at, "\r\nContent-Length: 2\r\n\r\n{}");
+    assert(raw_request(wire, (size_t)at, 0, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);
+    alarm(0);
+    puts("PASS: a NUL byte in the headers of a Spoolman reply is rejected as an incomplete reply, never an endless loop");
+}
+
 static void test_remote_values_are_validated(void) {
     spoolman_spool e;
     assert(spoolman_parse_one("{\"id\":5,\"remaining_weight\":1e9,\"used_weight\":-3,\"filament\":{\"material\":\"PLA\\u0001\","
@@ -2109,6 +2143,7 @@ int main(void) {
     test_one_spoolman_spool_links_once();
     test_backup_leaves_out_credentials();
     test_http_framing();
+    test_http_header_with_nul_is_rejected();
     test_remote_values_are_validated();
     test_colour_with_alpha();
     test_auto_import();
