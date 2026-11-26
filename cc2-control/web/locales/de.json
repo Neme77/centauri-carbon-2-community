@@ -1024,7 +1024,7 @@
   "updates.no_update": "Kein neueres kompatibles Update veröffentlicht.",
   "updates.check_failed": "GitHub-Prüfung fehlgeschlagen. Internetverbindung prüfen und erneut versuchen.",
   "updates.bootstrap": "Das Updater-fähige CC2-Control-Paket einmalig von deinem Computer installieren.",
-  "updates.requirements": "Erfordert Community Firmware V4.4.3, einen Drucker im Idle-Zustand, Düse und Bett bei höchstens 50 °C sowie auf null gesetzte Heizziele. Live-Ansicht vor der Installation pausieren.",
+  "updates.requirements": "Erfordert Community Firmware V4.4.4, einen Drucker im Idle-Zustand, Düse und Bett bei höchstens 50 °C sowie auf null gesetzte Heizziele. Live-Ansicht vor der Installation pausieren.",
   "updates.download": "Herunterladen und prüfen",
   "updates.prepare_confirm": "Dieses Paket zur Überprüfung herunterladen oder hochladen? Die Anwendung wird noch nicht installiert.",
   "updates.verified": "Paket überprüft",

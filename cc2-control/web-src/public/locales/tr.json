@@ -1024,7 +1024,7 @@
   "updates.no_update": "Yayınlanmış daha yeni uyumlu güncelleme yok.",
   "updates.check_failed": "GitHub denetimi başarısız. İnternet bağlantınızı kontrol edip tekrar deneyin.",
   "updates.bootstrap": "Güncelleyicili CC2 Control paketini bilgisayarınızdan bir kez kurun.",
-  "updates.requirements": "Community Firmware V4.4.3 gerekir. Yazıcı boşta, nozul ve tabla en fazla 50 °C, hedef sıcaklıklar sıfır olmalıdır. Kurulumdan önce canlı görüntüyü duraklatın.",
+  "updates.requirements": "Community Firmware V4.4.4 gerekir. Yazıcı boşta, nozul ve tabla en fazla 50 °C, hedef sıcaklıklar sıfır olmalıdır. Kurulumdan önce canlı görüntüyü duraklatın.",
   "updates.download": "İndir ve doğrula",
   "updates.prepare_confirm": "Bu paket doğrulama için indirilsin veya yüklensin mi? Uygulama henüz kurulmayacak.",
   "updates.verified": "Paket doğrulandı",
