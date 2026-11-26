@@ -68,6 +68,7 @@ HARNESSES = {
     "test_web_size_limits.c": BACKEND,
     "test_mqtt_workload.c": [],
     "test_mqtt_registration.c": [],
+    "test_json_member_int.c": BACKEND,
     "test_canvas_discovery.c": [],
     "test_mqtt_snapshot_discovery.c": [],
     "test_mqtt_snapshot_budget.c": [],
