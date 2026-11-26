@@ -10,6 +10,7 @@ permissions:
 jobs:
   callbacks:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - run: python3 experimental/native-display/languages/check.py
