@@ -6,6 +6,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input, Select } from '@/components/ui/field'
 import { Tag } from '@/components/ui/badge'
+import { SpoolmanId } from '@/components/spoolman-id'
 import { control, errText, notify } from '@/lib/api'
 import { type Key, t, tpl } from '@/lib/i18n'
 import { presets, printer, view } from '@/lib/state'
@@ -40,6 +41,7 @@ import {
   spoolGrams,
   spoolHierarchy,
   spoolLabel,
+  spoolChoiceLabel,
   spools,
   suits,
   twinKey,
@@ -461,7 +463,7 @@ const SpoolTree = ({
                                 name="cc2-spool-tree"
                                 class="accent-cyan"
                                 aria-label={[
-                                  spoolLabel(s),
+                                  spoolChoiceLabel(s),
                                   `${g(s.remaining)} g`,
                                   count > 1 ? tpl('spools.n_sealed', { n: count }) : '',
                                 ]
@@ -470,6 +472,7 @@ const SpoolTree = ({
                                 checked={choice === s.id}
                                 onChange={() => choose(s.id)}
                               />
+                              <SpoolmanId spool={s} />
                               {sealed && <Tag>{t('spools.sealed')}</Tag>}
                               <span class="whitespace-nowrap tabular-nums">
                                 <b>{g(s.remaining)} g</b>
@@ -703,6 +706,7 @@ const SpoolChooser = ({
             <Swatch color={s.color} class="mt-0.5 size-5" />
             <span class="grid min-w-0 flex-1 gap-0.5">
               <b class="text-sm [overflow-wrap:anywhere]">{spoolLabel(s)}</b>
+              <SpoolmanId spool={s} />
               <span class="text-xs text-muted">
                 {[s.brand && s.name ? s.brand : '', s.material, `${g(s.remaining)} g`].filter(Boolean).join(' · ')}
               </span>
@@ -796,7 +800,7 @@ const SpoolChooser = ({
             >
               {templates.map(s => (
                 <option key={s.id} value={s.id}>
-                  {spoolLabel(s)} · {s.material} · {s.color}
+                  {spoolChoiceLabel(s)} · {s.material} · {s.color}
                 </option>
               ))}
             </Select>
@@ -840,7 +844,7 @@ const SpoolChooser = ({
       </fieldset>
       {chosen && !options.some(o => o.spool.id === chosen.id) && (
         <p class="mt-3 text-[13px]" role="status">
-          {tpl('spools.chosen', { name: `${spoolLabel(chosen)} · ${g(chosen.remaining)} g` })}
+          {tpl('spools.chosen', { name: `${spoolChoiceLabel(chosen)} · ${g(chosen.remaining)} g` })}
         </p>
       )}
       {noWrite && (

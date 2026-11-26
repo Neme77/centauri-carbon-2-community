@@ -2026,5 +2026,6 @@
   "bed.lvl_bar_paused": "il limite di tempo si ferma mentre è in corso una misura",
   "bed.lvl_bar_open": "Alla sessione",
   "bed.lvl_header_word": "Livellamento",
-  "bed.cal_header_word": "Calibrazione mesh"
+  "bed.cal_header_word": "Calibrazione mesh",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

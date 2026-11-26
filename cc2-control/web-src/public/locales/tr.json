@@ -2026,5 +2026,6 @@
   "bed.lvl_bar_paused": "ölçüm sürerken zaman sınırı durur",
   "bed.lvl_bar_open": "Oturuma git",
   "bed.lvl_header_word": "Seviyeleme",
-  "bed.cal_header_word": "Ağ kalibrasyonu"
+  "bed.cal_header_word": "Ağ kalibrasyonu",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

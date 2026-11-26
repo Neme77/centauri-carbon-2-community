@@ -2026,5 +2026,6 @@
   "bed.lvl_bar_paused": "the time limit stands still while a measurement runs",
   "bed.lvl_bar_open": "Go to the session",
   "bed.lvl_header_word": "Levelling",
-  "bed.cal_header_word": "Mesh calibration"
+  "bed.cal_header_word": "Mesh calibration",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }
