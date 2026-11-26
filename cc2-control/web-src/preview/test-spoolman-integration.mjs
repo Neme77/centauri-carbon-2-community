@@ -16,7 +16,7 @@ try {
  page.on('pageerror',e=>errors.push(e.message))
  await page.route('**/api/preferences',r=>r.fulfill({json:{language:'en',theme:'dark'}}))
  await page.route('**/api/spools',async r=>{const response=await r.fetch();const data=await response.json();Object.assign(data,{spoolman_enabled:state.enabled,spoolman_url:state.url,spoolman_has_auth:state.auth});if(data.spools?.length)data.spools[0].spoolman_id='7';await r.fulfill({json:data})})
- await page.route('**/api/spoolman',r=>{const body=r.request().postData();writes.push(body);if(reject)return r.fulfill({status:500,json:{error:'Simulated save failure'}});const flag=body.match(/^enabled=([01])$/m);if(flag)state.enabled=flag[1]==='1';return r.fulfill({json:{ok:true}})})
+ await page.route('**/api/spoolman',r=>{if(r.request().method()==='GET')return r.fulfill({status:404,json:{}});const body=r.request().postData();writes.push(body);if(reject)return r.fulfill({status:500,json:{error:'Simulated save failure'}});const flag=body.match(/^enabled=([01])$/m);if(flag)state.enabled=flag[1]==='1';return r.fulfill({json:{ok:true}})})
  const origin=server.resolvedUrls.local[0]
  await page.goto(origin+'#spools')
  await page.getByRole('heading',{name:'Inventory',exact:true}).waitFor()

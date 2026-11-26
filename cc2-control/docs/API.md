@@ -71,11 +71,34 @@ Example response:
 - `services` reports the actual ports selected at CC2 Control startup.
 - `printer_uuid` may be empty until printer telemetry has supplied it.
 
+## Browser guard for every request
+
+Every request to the CC2 Control HTTP service is checked before the route is looked at (`src/http_guard.h`,
+called from `src/main.c`). A request is refused with `403` and `{"error":"Untrusted HTTP host or browser origin"}`
+when: the `Host` header is missing or is not one of the printer's own addresses or names (this stops DNS
+rebinding); an `Origin` header is present and is not `http://` plus the `Host` value; `Sec-Fetch-Site` is
+`cross-site`; a `Host`, `Origin`, `Sec-Fetch-Site` or `X-CC2-Request` header is repeated or malformed; or a
+`Transfer-Encoding` header is present. In addition, every request that changes something (any method other than
+`GET`, `HEAD` and `OPTIONS`, so every `POST` and `PUT` below) must carry `X-CC2-Request: 1`; without it the answer
+is the same `403`. The one exception is `POST /api/files/local` without `Origin` and `Sec-Fetch-Site` headers,
+which is how OrcaSlicer's own upload arrives. The route descriptions below do not repeat this rule.
+
 ## LAN access-code setup and rotation
 
 - `GET /api/setup` reports credential and MQTT synchronization state.
 - `POST /api/setup` accepts the initial LAN access code during first-run setup.
 - `POST /api/setup/revalidate` atomically replaces an existing LAN code and restarts only CC2 Control.
+
+## LAN code confirmation
+
+`POST /api/access/verify` checks the LAN code that the request carries in the `X-CC2-LAN` header and changes
+nothing; the body is not read. It answers `200` with `{"verified":true}`, or `401` with
+`{"error":"LAN code confirmation required or temporarily locked"}` when the header is missing or repeated, the
+code is wrong, or the lock is on. After 5 wrong codes in a row every code is refused for 60 seconds, the correct
+one included; a correct code resets the count. The count and the lock are the ones every other route that asks for
+`X-CC2-LAN` uses (application updates, `POST /api/experiments`, bed heating, the nozzle expansion calibration and
+the backup import), so a wrong code sent here counts against them. The route needs `X-CC2-Request: 1` like every
+other `POST`. See [REMEMBER_LAN.md](REMEMBER_LAN.md) for how the page uses it.
 
 ## OrcaSlicer Canvas filament synchronization
 
@@ -142,6 +165,47 @@ open until the watch is decided.
 - `POST /api/canvas/auto-refill` with body `on` or `off` sends method 2004. It answers `409` while the printer
   has not reported the setting. After the printer accepts the change, CC2 Control requests the Canvas state
   again so the new value is read back from the printer.
+
+## Canvas refresh
+
+`POST /api/canvas/refresh` asks the printer for its Canvas state again (MQTT method 2005) and restarts the
+automatic discovery attempts. It carries no Canvas data itself: read the result with `GET /api/canvas`. It answers
+`202` with `{"accepted":true,"method":2005}`, or `503` with `{"accepted":false,"error":"MQTT API client is not
+ready"}` when there is no MQTT connection or the printer serial is not known. While the application is not yet
+registered with the printer no 2005 request is sent: the reply is still `202`, and the registration and Canvas
+discovery start again instead.
+
+## Runout: continue from another Canvas slot
+
+When a Canvas slot runs empty during a print, the firmware pauses at the waste box and reports event 1211 at
+level 1. These routes let the page continue the print from another loaded slot.
+
+`GET /api/runout` returns `{"available":…,"reason":…,"match_material":…,"job":{…}}`. `available` is `true`
+(with `reason` `"none"`) only while the print is paused on a settled runout; otherwise `reason` names why not:
+`printer_unavailable` (no fresh native telemetry), `not_paused`, `not_runout`, `busy` (a continue is running),
+`log_unavailable`, `map_unknown` (the tool-to-slot map of this print cannot be read from the printer's log),
+`slot_unknown` or `canvas_unavailable`. `job` is the last continue: `state` (`idle`, `running`, `done`, `failed`),
+`slot` and `from` (`-1` while idle), `automatic`, `message` and `auto_note`. When `available` is `true` the reply
+also has `slot` (the empty slot), `tools` (the tools that used it), `material` and `slots`: for each of the four
+slots `slot`, `status` (`-1` unknown), `type`, `color`, `eligible` (loaded in the Canvas and not the empty slot) and
+`same_material`.
+
+`POST /api/runout/continue` with the body `slot=N` (`N` from 0 to 3) points every tool that used the empty slot at
+slot `N` and resumes: it sends one `CANVAS_SET_COLOR_TABLE` with the whole map (only the empty slot's tools
+changed), `M109` to the print's nozzle temperature (else the middle of the new slot's range) and `RESUME`. It
+answers `202` with `{"accepted":true,"reason":"none"}` once the job is accepted; the command is sent by the
+service afterwards, so follow `job` in `GET /api/runout`. A body that is not `slot=0` to `slot=3` answers `400`
+with `reason` `bad_request`. When a continue is not possible the answer is `409` with `{"accepted":false,"reason":…}`:
+one of the reasons above, or `slot_not_loaded`, `temperature_unknown` or `map_too_large`. Until the first byte is
+written the job is checked again on every cycle and dropped unsent (`state` `failed`, `message` beginning
+`Not sent: the print changed`) if the runout, the print start, the map or the slot changed. Once written, the
+reply is awaited for at most 10 minutes (`No reply from the printer within 10 minutes; check the print`).
+
+`POST /api/runout/match-material` with the body `on` or `off` stores the "match material only" setting
+(`200` with `{"accepted":true}`, `400` for another body, `500` with `reason` `save_failed`). It is off by
+default. With it on, when the firmware's own auto refill is enabled and has given up on a runout, the service
+continues once per runout event from the first loaded slot with the same material type; `auto_note` is
+`no_matching_slot` when there is none. It relies on the material labels the Canvas reports.
 
 ## Canvas pull-back after the cut
 
@@ -441,6 +505,46 @@ never touched.
 headers, for example with 409 because the name exists, it first reads the rest of the
 request body, so a browser receives the error instead of a reset connection.
 
+## Copying a G-code file between storages
+
+`POST /api/gcode-files/copy` copies one G-code file from one storage to the other (`internal` and `usb`). The body
+is text with three lines: the source storage, the destination storage, and the file name (relative to the source
+storage). The two storages must differ and the destination must be writable. The printer must be idle with a
+status no older than 15 seconds (`409`, `Printer must be idle and connected`). The copy keeps the base name of the file and
+never overwrites: an existing destination answers `409` (`Destination file already exists`). The data is written to
+`<name>.part`, flushed and renamed, so an interrupted copy leaves no partial file under the final name. It
+answers `201` with `{"copied":true}`; `400` for a malformed request, an unknown or unwritable storage or a name that
+is not a plain G-code file name; `404` when the source is missing, not a regular file or a symbolic link; and
+`409` (`Cannot copy this file`) when reading, writing or renaming fails.
+
+## Object exclusion list
+
+`GET /api/exclude-objects` returns the objects of the running job together with the excluded and the current
+object. The body is the printer's own `objects/query` reply for `exclude_object`, with the `objects` list put
+into its `exclude_object` object. The list is read from the printer once per job and cached; an empty list is
+asked again after 5 seconds, then at growing intervals up to 5 minutes, or after 5 seconds once the stream reports a
+current object. The excluded and current objects come from the telemetry stream, or, while it is unavailable, from a
+query that is shared for one second between clients. The route only reads. It answers `503` with
+`{"available":false,"error":…}` and one of `Object definitions unavailable`, `Object status unavailable` or
+`Invalid object status response`. See [OBJECT_EXCLUSION.md](OBJECT_EXCLUSION.md) for the page.
+
+## Upload-and-print confirmation and the version route
+
+An upload to `POST /api/files/local` whose form field `print` is `true` or `1` (OrcaSlicer's upload-and-print) is stored first; the
+print itself starts only after the operator has confirmed the Canvas mapping in the page. The upload must find the
+printer idle (`409`, `Printer must be idle for upload-and-print`), and only one such request can wait
+(`409`, `Another upload-and-print awaits Canvas confirmation`).
+
+`GET /api/orca/pending-print` returns `{"pending":…,"filename":…,"generation":…}`. A waiting request expires after
+one hour.
+
+`POST /api/orca/pending-print/clear` with the `generation` as a decimal number in the body drops the waiting request
+(`200`, `{"cleared":true}`). An empty, oversized, zero or non-numeric body answers `400`
+(`Invalid generation`); no waiting request, or another generation, answers `409` (`Print request no longer pending`).
+
+`GET /api/version` returns the fixed OctoPrint-style answer
+`{"api":"0.1","server":"1.11.0","text":"OctoPrint 1.11.0 (CC2 Control compatibility)"}`. It reads no printer state.
+
 ## Timelapse print option
 
 `POST /api/gcode-files/print` accepts an optional sixth newline-separated field after storage,
@@ -458,6 +562,26 @@ Saved-mesh starts include the flag as native method 1020 `config.delay_video`.
 Calibrated starts first send method 1019 with `params.config.delay_video` and a unique request ID.
 A matching successful acknowledgement is required within 1.5 seconds before the existing calibrated
 G-code start runs; rejection, disconnect or timeout prevents the start. Both modes require printer validation.
+
+## External filament source
+
+These two routes belong to the experimental external feed with the Canvas connected; see
+[EXTERNAL_FEED_EXPERIMENT.md](EXTERNAL_FEED_EXPERIMENT.md) and [EXTERNAL_FILAMENT.md](EXTERNAL_FILAMENT.md).
+
+`GET /api/external-filament` reads the native Canvas state and returns `available`, `idle`, `experiment` (the
+external feed experiment is on), `source` (`canvas` or `external`), `can_select`, `can_unload`, `temperature` and
+`filament` (the printer's filament record, or `null`). `available` needs fresh MQTT (no older than 15 seconds), a
+native readback and either a disconnected Canvas or the experiment. `can_select` needs the experiment, a connected
+Canvas, an idle printer, no active Canvas channel and a toolhead sensor that sees no filament.
+
+`POST /api/filament-source` with the body `external` or `canvas` selects the source by sending
+`USED_CANVAS_DEV USED_CANVAS=0` (external) or `USED_CANVAS_DEV USED_CANVAS=1` (Canvas) on the printer's local socket,
+then stores the choice as a preference and answers like `GET /api/external-filament`. Any other body answers `400`
+(`Invalid filament source`). It answers `409` (`Source change requires the enabled experiment, fresh Idle state,
+connected Canvas and an empty printhead`) unless the experiment is on, no console command, application update or
+plate verification is running, the printer is idle with fresh status, the Canvas is connected with no active
+channel, and the toolhead sensor sees no filament. It answers `503` when the printer does not acknowledge the
+command (the stored choice is not changed) or when the choice cannot be saved.
 
 ## External feed print starts
 
@@ -814,6 +938,30 @@ error. Older clients that send no `since` are unaffected. A client that stores t
 its `output_len` and `instance` can show the stored text again whenever `unchanged` is true and the `instance`
 is the one it sent; the Console page and the screw view of the web interface do. An older CC2 Control ignores
 the parameter and always replies in full (without `instance`), so a client must not rely on `unchanged`.
+
+## Console commands and monitor
+
+`POST /api/console/command` runs one console command; its output is read with `GET /api/console`. The body is the
+command: whitespace around it is trimmed, it must be 1 to 511 bytes and a single line. It answers `202` with
+`{"accepted":true}` once the command is started. A body of the wrong length answers `400` with
+`{"accepted":false,"error":"Invalid command length"}`. A refused command answers `409` with
+`{"accepted":false,"error":<reason>}`: the printer is not connected, its status is missing or stale (older than 20
+seconds), the printer is printing or not idle, X, Y and Z are not homed before a command that may move the
+printer (`G28`, range-checked direct `G0`/`G1` moves and non-motion commands excepted), the command can bypass
+homing or motion limits, or `Another command is running`. A pending `SAVE_CONFIG` change or a running plate
+verification refuses it with `409` and `{"ok":false,"error":…}`. The exact command `M112` (any case) is sent
+straight to the firmware's emergency stop socket and does not wait for the console; it is answered `202` once
+sent, and if that fails it takes the ordinary path above.
+
+`POST /api/console/clear` empties the console output: `200` with `{"cleared":true}`, or `409` with
+`{"cleared":false,"error":"Cannot clear while a command is running"}`.
+
+`POST /api/console/monitor` returns the G-code reports the printer sent on its own, without sending a command:
+`{"connected":…,"sequence":…,"dropped":…,"frames":[…]}`, the frames as strings, oldest first. `connected` is `true`
+while the telemetry connection is fresh. Calling it renews a 12-second capture lease; reports are kept only while
+a lease is active, at most 32 of them of fewer than 1024 bytes each, and at most 20 per second are taken. `dropped`
+counts the reports that were overwritten or not taken. `POST /api/console/monitor/clear` empties the stored
+reports and resets `sequence` and `dropped`, then answers like `POST /api/console/monitor`.
 
 ## Heater PID calibration
 
@@ -1219,6 +1367,8 @@ reach the printer.
     under. A list read under another generation is never served: after a change of the address or login the answer has
     the new `gen`, no spools and the error `Not fetched yet` until `POST /api/spoolman/catalog/refresh` has read the new
     server; a read that was started for the old server and ends later is dropped and does not count as `loading`.
+  - Refusals of the Spoolman endpoints (`/api/spoolman`, `/api/spoolman/held/*`, `/api/spoolman/unlink-old`, `/api/spoolman/catalog*`) carry a stable `code` next to the existing English `error`: `{"ok":false,"error":"…","code":"spoolman_busy"}`. The HTTP statuses and the English texts are unchanged; the UI translates the code and shows the English text for a code it does not know. Refusals without a code are the general ones (`Invalid request`, `Out of memory`). Codes: `spoolman_bad_url` (400, the address), `spoolman_bad_flag` (400), `spoolman_auth_too_long` (400), `spoolman_held_full` (409, a change of the address or login with the list full), `spoolman_off` (409), `spoolman_held_unknown` (404), `spoolman_held_twice` (400), `spoolman_pick_spool` (400), `spoolman_held_unsure` (409), `spoolman_held_sending` (409), `spoolman_busy` (409), `spoolman_start_failed` (500), `spoolman_no_old` (409), `spoolman_settings_changed` (409, the generation of `held/send` is not the current one), `spoolman_catalog_off` (409), `spoolman_no_url` (400), `spoolman_catalog_too_large` (500).
+  - A change of the address or login (`POST /api/spoolman`) starts the next sync cycle at once instead of waiting for the two-minute interval; until it has run, `GET /api/spoolman` answers `never`.
   - The list is saved with the spool library, is not part of a backup, and a spool library file from before it has none of its keys.
 
 ## Bounded asynchronous G-code analysis
@@ -1310,6 +1460,45 @@ keeps stored profiles and the active matrix independent and covers successful,
 ignored/refused loads, missing/wrong matrix data, busy/stale guards and pending
 post-restart activation. A controlled V4.4 printer trial is required before release.
 
+## Application update status and index
+
+`GET /api/app-update/status` reports `{"enabled":…,"ready":…,"busy":…,"installed":…,"firmware":…,"job":…,"phase":…,
+"version":…,"progress_log":…}`. `enabled` means the installed update programs are present and trusted; `ready` that
+nothing local blocks an update (no console job, calibration tool, load-cell session, pending rotation distance change,
+bed heating or plate verification, and, with quiet motors on, Normal confirmed); `busy` that an update is running.
+`installed` is the CC2 Control version and `firmware` the community firmware version. `job` is the 32-character id of
+the current job (empty when none) and `phase` its state: `none`, `queued`, `uploading`, `downloading`, `verifying`,
+`installing`, `complete`, `failed`, `interrupted` or `reconciled`. A job left in an active phase while nothing runs
+is reported as `interrupted`; a `failed` or `interrupted` job whose version is installed is reported as
+`reconciled`, with `job` and `version` empty. `version` is the verified package version once known. The route is
+read-only and needs no LAN code. The whole update flow is described in [APPLICATION_UPDATES.md](APPLICATION_UPDATES.md).
+
+`GET /api/app-update/catalog` returns the stored, verified update index (at most 8 KiB), or
+`{"schema":1,"expires":0,"releases":[]}` when none is stored. `POST /api/app-update/catalog` takes a signed index as
+the body (starting with `CC2CAT1` and a newline, 74 to 8264 bytes). The installed verifier checks its signature
+before it is stored, and the reply is the stored index like the `GET`. No LAN code is asked for: only an index
+that the installed trust anchor signed is accepted. `400` is `Invalid or unavailable signed update index` (update
+programs missing, wrong size or prefix, an update is running or the storage is not private) or
+`Update index signature rejected`; `503` is `Update storage unavailable`.
+
+## Network manager
+
+`GET /api/network/manager` returns the state of the Connections manager: `schema`, `installed`, `state_valid`,
+`configured`, `ready` (installed, valid state, and the printer idle and cold as for an application update), `busy`,
+`last_exit`, `phase` (`idle`, `applying`, `pending`, `saving`, `restoring`, `failed`), `config` (the effective
+configuration), `saved`, `actual` (the current Wi-Fi and Ethernet leases), `last_error`, `pending` (`null`, or
+`phase`, `seconds`, `interface`, `ip`, `token`, `origin` and `previous_origin` of a change waiting for
+confirmation), `networks` (the last scan, or `null`), `diagnostic`, `usb`, `automatic_selection` and `temporary`
+(both `false`). `config` and `saved` hold `schema`, `ethernet_support`, `selected` (`wifi` or `ethernet`) and, for
+`wifi` and `ethernet`, `enabled`, `method` (`dhcp` or `static`), `ip`, `prefix`, `gateway`, `dns1`, `dns2` and
+`ssid`; no Wi-Fi password is part of the reply. `503` is `Network state unavailable`. Changes are made with
+`POST /api/network/action` and `POST /api/network/scan`.
+
+`/api/network/select` and `/api/network/trial` are retired: they answer `410` with
+`{"error":"Reload CC2 Control to use the Connections manager"}` for every method, which tells a page from before
+the Connections manager to reload. The browser guard above runs first: a request that fails it, including a `POST`
+without `X-CC2-Request: 1`, gets the `403` instead.
+
 ## Experimental feature preferences
 
 `GET /api/experiments` reports the stored choices, actual Canvas UDS availability,
@@ -1322,6 +1511,22 @@ revokes old direct-state authority and sends no motion/heating command. Disablin
 Quiet controls, or changing Canvas while they are enabled, requires a successful
 explicit Normal command on the current UDS connection. Invalid storage is not
 overwritten. See [experimental features](EXPERIMENTAL_FEATURES.md) for limitations.
+
+## Exhaust minimum during a print
+
+`GET /api/cavity-fan-floor` returns `{"installed":…,"ready":…,"printing":…,"minimum":…}`: whether the native
+exhaust component is installed and ready, whether it is on a running print, and the minimum requested for that
+print in percent (`null` when none is requested).
+
+`POST /api/cavity-fan-floor` takes the minimum as an integer from 0 to 100 in the body. `0` withdraws the request
+and leaves the exhaust to the printer (`202`, `{"accepted":true,"automatic":true}`); it does not force the fan to
+zero. A value above 0 needs a connected, registered printer in machine status 2 (printing) with a status no older
+than 15 seconds, and the native component on that print. It writes the request for the component and answers
+`202` with `{"accepted":true,"applies_on_native_cycle":true}`; the component applies it on its own cycle. If the print
+changes while the request is written, the request is removed again. Errors are `{"ok":false,"error":…}`: `400`
+(`Exhaust minimum must be an integer from 0 to 100`), `409` (`Native exhaust minimum component is not ready`,
+`Exhaust minimum requires a fresh running print and its native component`, `Print state changed; exhaust minimum was
+not retained`) and `503` (`Cannot release exhaust minimum`, `Cannot write exhaust minimum request`).
 
 ## Experimental bed heating
 
@@ -1481,6 +1686,37 @@ Dashboard card and the print-ended notice show it. The printer answers a Canvas 
 changed spool by itself, so while a start from the Canvas is on offer (printer idle, no queued copy running)
 every `GET /api/queue` keeps the Canvas watched for 15 s, as `GET /api/canvas` does: one 2005 request per
 10 s, none during a print.
+
+## Material presets
+
+`GET /api/material-presets` returns the stored preset list, or the built-in list when none is stored or the stored
+one fails the check below. `PUT /api/material-presets` replaces it. The body is not parsed and no element is
+checked. It is accepted when it is 2 to 8192 bytes long; after leading and trailing whitespace is cut off it starts
+with `[` and ends with `]`; the strings `"name"`, `"nozzle"` and `"bed"` each occur somewhere in the text; and every
+character is a letter, a digit, whitespace or one of `[]{}":,._+#-`. It is saved by writing a temporary file and
+renaming it: `200` with `{"saved":true}`; `400` with `{"saved":false,"error":"Invalid preset data"}`; `500` with
+`{"saved":false,"error":"Cannot save presets"}`.
+
+## Read-only status routes
+
+None of these changes anything, and none asks for a LAN code.
+
+- `GET /api/snapshot` returns the printer's last MQTT information reply (method 1002) as the printer sent it, or
+  `{"available":false}` when none has been stored. A reply that does not fit the buffer is not stored.
+- `GET /api/mqtt-diagnostic` returns plain text: the Canvas discovery state (`disconnected`, `settling`,
+  `discovering`, `complete` or `exhausted; use Sync`) with the MQTT connection and request counters, followed by the
+  most recent MQTT messages the service kept, one per line. The kept messages start again when their buffer is full.
+- `GET /api/rfid/lifecycle/scan-readiness`, `GET /api/rfid/lifecycle/restore-readiness` and
+  `GET /api/rfid/lifecycle/host-restore-readiness` answer `200` with `{"ready":true}` or `{"ready":false}`, for the
+  installer's RFID lifecycle check. All need the maintenance barrier and an idle, cold printer read natively
+  (state standby, complete or cancelled, no motion, both heaters off and below their limits); `scan-readiness` also
+  needs a native RFID scan running, not cancelled, on the same identity, with the Canvas connected;
+  `restore-readiness` also needs that no console command, update, network change, calibration, bed heating or pending change is running; `host-restore-readiness` adds the connected
+  Canvas.
+- `GET /api/rfid/lifecycle/canvas-observation` answers only to a request from the printer itself (`127.0.0.1`;
+  every other peer gets `403`). It returns `{"available":…,"machine_status":…,"source":"mqtt"}` and, when a Canvas
+  snapshot exists, the printer's raw MQTT Canvas reply as `telemetry`. Like `GET /api/canvas` it keeps the Canvas
+  watched for 15 seconds.
 
 ## Completed print readback
 

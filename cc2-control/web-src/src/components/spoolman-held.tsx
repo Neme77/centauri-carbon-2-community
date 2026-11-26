@@ -18,7 +18,8 @@ import {
   type SpoolLibrary,
   type SpoolmanCatalog,
   spools,
-  spoolmanSyncState,
+  refreshSpoolmanStatus,
+  spoolmanState,
   spoolmanLabel,
   unlinkOldConnections,
 } from '@/lib/spools'
@@ -83,7 +84,10 @@ export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: bool
       return
     }
     if (got.spools.length) retries.current = 0
-    else lastSync.current = (await spoolmanSyncState()).time
+    else {
+      await refreshSpoolmanStatus()
+      lastSync.current = spoolmanState.get().data?.last_sync ?? 0
+    }
     if (!alive.current) return
     reading.current = false
     setCatalog(got)
@@ -94,21 +98,18 @@ export const SpoolmanHeld = ({ lib, busy, act }: { lib: SpoolLibrary; busy: bool
     asked.current = true
     void read()
   }, [sendable.length])
-  // Spoolman could not be read: ask again after the printer's next good sync (never more than three times in a row),
-  // so the choice fills itself without a reload. The printer's sync is checked with every refresh of the page.
+  // Spoolman could not be read: ask again after the printer's next good sync, never more than three tries in a row (every
+  // try counts, whether or not it works), so the choice fills itself without a reload. The sync is read from the one status
+  // the Spoolman card polls (every 15 s), not with a request of its own for every refresh of the page.
+  const sync = spoolmanState.use().data
+  const syncTime = sync?.result === 'ok' ? sync.last_sync : 0
   useEffect(() => {
     if (!noSpools || !sendable.length || reading.current || retries.current >= 3) return
-    let live = true
-    spoolmanSyncState().then(sync => {
-      if (!live || reading.current || !sync.ok || sync.time <= lastSync.current) return
-      retries.current++
-      lastSync.current = sync.time
-      void read()
-    })
-    return () => {
-      live = false
-    }
-  }, [lib, noSpools])
+    if (syncTime <= lastSync.current) return
+    retries.current++
+    lastSync.current = syncTime
+    void read()
+  }, [syncTime, noSpools, catalog])
   // The notice after a change: once per change, until "Review" is pressed.
   const newest = newestChange(entries)
   useEffect(() => {

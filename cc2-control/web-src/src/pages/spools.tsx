@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ChevronDown, History as HistoryIcon, Pencil, Scale } from 'lucide-preact'
 import { cn } from '@/lib/utils'
 import { ls } from '@/lib/store'
@@ -11,7 +11,7 @@ import { Notice, Warn } from '@/components/shared'
 import { SpoolmanHeld } from '@/components/spoolman-held'
 import { SpoolmanId } from '@/components/spoolman-id'
 import { draftFields, draftFrom, draftProblem, placeName, SpoolEditor, SpoolMeter, Swatch } from '@/components/spool-ui'
-import { errText, notify } from '@/lib/api'
+import { notify } from '@/lib/api'
 import { ask } from '@/lib/confirm'
 import { type Key, t, tpl } from '@/lib/i18n'
 import { usePoll } from '@/lib/poll'
@@ -31,7 +31,9 @@ import {
   matches,
   openChooser,
   percent,
+  refreshSpoolmanStatus,
   refreshSpools,
+  refusalText,
   type Spool,
   type SpoolEvent,
   type SpoolLibrary,
@@ -43,6 +45,8 @@ import {
   slotOf,
   spoolHierarchy,
   spoolLabel,
+  spoolmanLine,
+  spoolmanState,
   spools,
 } from '@/lib/spools'
 
@@ -62,7 +66,7 @@ const useAct = () => {
     try {
       await fn()
     } catch (e) {
-      notify(tpl('common.rejected_error', { error: errText(e) }), 'error')
+      notify(tpl('common.rejected_error', { error: refusalText(e) }), 'error')
     } finally {
       lock.current = false
       setBusy(false)
@@ -126,9 +130,54 @@ const Tracking = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: A
   </Card>
 )
 
+// One line with the result of the printer's last sync, below the fields. In order: Spoolman could not be read or refused, spools
+// without a weight, a full library, all well. The time is written out (not "3 minutes ago"), so it needs no plural forms.
+const SpoolmanStatusLine = () => {
+  const { data } = spoolmanState.use()
+  const line = spoolmanLine(data)
+  if (!line) return null
+  const vars = { time: data?.last_sync ? moment(data.last_sync) : '', n: line.vars.n ?? 0, http: line.vars.http ?? 0 }
+  return (
+    <div
+      role="status"
+      data-spoolman-status
+      class={cn(
+        'mt-3 text-xs',
+        line.ok
+          ? 'flex items-start gap-2.5 rounded-md border border-edge bg-field/60 px-3 py-2.5 text-muted'
+          : 'rounded-md border border-amber bg-amber/10 p-2.5 text-amber'
+      )}
+    >
+      <div class="grid gap-0.5">
+        <span>
+          <span aria-hidden="true">{line.ok ? '✓ ' : '⚠ '}</span>
+          {tpl(line.text, vars)}
+        </span>
+        {line.hint && <span class="opacity-85">{t(line.hint)}</span>}
+      </div>
+    </div>
+  )
+}
+
 const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; act: Act }) => {
   const [url, setUrl] = useState(lib.spoolman_url)
   const [auth, setAuth] = useState('')
+  // The printer's own memory only: no request to Spoolman. While this card is on the page.
+  usePoll(refreshSpoolmanStatus, 15000)
+  // The second look 4 s after "Save": one timer at a time, and none once the card has left the page.
+  const later = useRef(0)
+  const gone = useRef(false)
+  const stopLater = () => {
+    window.clearTimeout(later.current)
+    later.current = 0
+  }
+  useEffect(
+    () => () => {
+      gone.current = true
+      stopLater()
+    },
+    []
+  )
   return (
     <Card>
       <CardHead
@@ -145,6 +194,7 @@ const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; ac
         <label class="grid content-start gap-1 text-xs cc2-sm:col-span-4">
           <span class="text-muted">{t('spools.spoolman_url')}</span>
           <Input placeholder="http://192.168.1.50:7912" value={url} onInput={e => setUrl(e.currentTarget.value)} />
+          <span class="text-[11px] text-muted">{t('spools.sm_url_hint')}</span>
         </label>
         <label class="grid content-start gap-1 text-xs cc2-sm:col-span-2">
           <span class="text-muted">{t('spools.spoolman_auth')}</span>
@@ -157,6 +207,7 @@ const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; ac
           />
         </label>
       </div>
+      <SpoolmanStatusLine />
       <div class="mt-3">
         <Button
           variant="primary"
@@ -164,6 +215,10 @@ const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; ac
           onClick={() =>
             act(async () => {
               await saveSpoolmanConfig({ url, ...(auth ? { basic_auth: auth } : {}) })
+              // The printer starts a sync at once; the line shows "not synchronised yet" until it has finished.
+              void refreshSpoolmanStatus()
+              stopLater()
+              if (!gone.current) later.current = window.setTimeout(() => void refreshSpoolmanStatus(), 4000)
               notify(t('spools.spoolman_saved_toast'))
             })
           }
