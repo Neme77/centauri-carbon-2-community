@@ -25,7 +25,7 @@ import {
 } from '@/lib/i18n'
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
-import { spools, refreshSpools, saveSpoolmanConfig } from '@/lib/spools'
+import { spools, refreshSpools, refusalText, saveSpoolmanConfig } from '@/lib/spools'
 import { usePoll } from '@/lib/poll'
 import { refreshRfidLifecycle, rfidLifecycle } from '@/lib/rfid-lifecycle'
 import {
@@ -173,7 +173,7 @@ const SpoolmanIntegration = () => {
       await saveSpoolmanConfig({ enabled: !data.spoolman_enabled })
       await refreshSpools()
     } catch (error) {
-      notify(errText(error), 'error')
+      notify(refusalText(error), 'error')
     } finally {
       changing.current = false
       setBusy(false)

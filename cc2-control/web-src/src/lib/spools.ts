@@ -1,6 +1,6 @@
 import { store } from './store'
-import { post, request } from './api'
-import type { Key } from './i18n'
+import { errText, post, request } from './api'
+import { type Key, t } from './i18n'
 
 // Spool library kept by CC2 Control (/api/spools). Spools sit in the four Canvas trays (slots 0-3) or on
 // the external spool holder (slot 4) and are charged with the filament the printer extrudes from them.
@@ -420,12 +420,84 @@ export async function loadSpoolmanCatalog(): Promise<SpoolmanCatalog> {
   }
   return catalog
 }
-// When the printer last read Spoolman successfully. This asks the printer, not Spoolman.
-export async function spoolmanSyncState(): Promise<{ time: number; ok: boolean }> {
+// What the printer's last sync with Spoolman did (GET /api/spoolman). It only reads the printer's memory, not Spoolman.
+// One shared copy: the status line of the Spoolman card and the list of unsent usage read the same one, so a page that
+// is refreshed often still asks the printer once per poll.
+export type SpoolmanStatus = {
+  enabled: boolean
+  configured: boolean
+  last_sync: number // seconds; 0 = no sync yet under the current settings
+  result: string // never | ok | unreachable | unauthorized | forbidden | not_found | server_error | refused | bad_reply | too_large | timeout | bad_url
+  http: number
+  list?: { no_weight?: number; library_full?: number }
+}
+export const spoolmanState = store({ data: null as SpoolmanStatus | null })
+export async function refreshSpoolmanStatus() {
   try {
-    const s = (await request('/api/spoolman')) as { last_sync?: number; result?: string }
-    return { time: Number(s.last_sync) || 0, ok: s.result === 'ok' }
+    spoolmanState.set({ data: (await request('/api/spoolman')) as SpoolmanStatus })
   } catch {
-    return { time: 0, ok: false }
+    /* the last answer stays; the next poll asks again */
   }
+}
+
+type StatusLine = { ok: boolean; text: Key; hint?: Key; vars: { n?: number; http?: number } }
+const PROBLEMS: Record<string, { text: Key; hint?: Key }> = {
+  bad_url: { text: 'spools.sm_bad_url', hint: 'spools.sm_bad_url_hint' },
+  unauthorized: { text: 'spools.sm_login', hint: 'spools.sm_login_hint' },
+  forbidden: { text: 'spools.sm_login', hint: 'spools.sm_login_hint' },
+  unreachable: { text: 'spools.sm_unreachable', hint: 'spools.sm_unreachable_hint' },
+  timeout: { text: 'spools.sm_timeout', hint: 'spools.sm_timeout_hint' },
+  bad_reply: { text: 'spools.sm_bad_reply', hint: 'spools.sm_bad_reply_hint' },
+  too_large: { text: 'spools.sm_too_large', hint: 'spools.sm_too_large_hint' },
+  not_found: { text: 'spools.sm_not_found', hint: 'spools.sm_not_found_hint' },
+  server_error: { text: 'spools.sm_server' },
+  refused: { text: 'spools.sm_refused' },
+}
+// One line for the Spoolman card, or none (sync off, no address, nothing read yet). `result` is the first thing that went
+// wrong in the last cycle; only when it is "ok" do the counters of the list say anything. Rank: result, then spools
+// without a weight, then a full library.
+export function spoolmanLine(s: SpoolmanStatus | null): StatusLine | null {
+  if (!s?.enabled || !s.configured) return null
+  const problem = PROBLEMS[s.result]
+  if (problem) return { ok: false, ...problem, vars: { http: s.http } }
+  if (s.result === 'never') return { ok: true, text: 'spools.sm_never', vars: {} }
+  if (s.result !== 'ok') return null
+  const noWeight = s.list?.no_weight ?? 0
+  const full = s.list?.library_full ?? 0
+  if (noWeight > 0)
+    return { ok: false, text: 'spools.sm_no_weight', hint: 'spools.sm_no_weight_hint', vars: { n: noWeight } }
+  if (full > 0)
+    return { ok: false, text: 'spools.sm_library_full', hint: 'spools.sm_library_full_hint', vars: { n: full } }
+  return { ok: true, text: 'spools.sm_ok', vars: {} }
+}
+
+// The printer's refusals of the Spoolman functions carry a stable `code` (docs/API.md); the English `error` stays for
+// everyone else. A code this page does not know falls back to that English text.
+const REFUSALS: Record<string, Key> = {
+  spoolman_bad_url: 'spools.err_bad_url',
+  spoolman_auth_too_long: 'spools.err_auth_too_long',
+  spoolman_bad_flag: 'spools.err_bad_flag',
+  spoolman_held_full: 'spools.err_held_full',
+  spoolman_off: 'spools.err_off',
+  spoolman_catalog_off: 'spools.err_off',
+  spoolman_held_unknown: 'spools.err_held_unknown',
+  spoolman_held_twice: 'spools.err_held_twice',
+  spoolman_pick_spool: 'spools.err_pick_spool',
+  spoolman_held_unsure: 'spools.err_held_unsure',
+  spoolman_held_sending: 'spools.err_held_sending',
+  spoolman_busy: 'spools.err_busy',
+  spoolman_start_failed: 'spools.err_start_failed',
+  spoolman_no_old: 'spools.err_no_old',
+  spoolman_no_url: 'spools.err_no_url',
+  spoolman_catalog_too_large: 'spools.err_catalog_too_large',
+  spoolman_settings_changed: 'spools.held_settings_changed',
+}
+const refusalKey = (error: any): Key | undefined => {
+  const code = String(error?.data?.code)
+  return Object.keys(REFUSALS).includes(code) ? REFUSALS[code] : undefined
+}
+// The text of a refusal in the page's language; without a known code, the printer's English text as before.
+export const refusalText = (error: any) => {
+  const key = refusalKey(error)
+  return key ? t(key) : errText(error)
 }

@@ -1128,6 +1128,15 @@ export function previewPlugin(): Plugin {
               return reply(plateLibrary())
             case '/api/spools':
               return reply(spoolLibrary())
+            case '/api/spoolman': // what the last sync did: the demo has no Spoolman, so it has not synchronised
+              return reply({
+                enabled: spoolmanOn,
+                configured: Boolean(spoolmanUrl),
+                last_sync: 0,
+                result: 'never',
+                http: 0,
+                list: { no_weight: 0, library_full: 0 },
+              })
             case '/api/history':
               return reply({
                 available: true,
