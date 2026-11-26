@@ -144,6 +144,8 @@ try {
       const sizes = new Set(marks.map(m => `${Math.round(m.w * 10) / 10}`))
       if (sizes.size > 1) problems.push(`${label}/${theme}: the marks have different sizes: ${[...sizes].join(', ')}`)
     }
+    // Polling may still be inside the /api/printer handler; drop the routes before closing so it cannot read a disposed response.
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
     await page.close()
   }
   console.log(report.join('\n'))

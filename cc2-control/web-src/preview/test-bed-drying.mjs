@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 const labels = JSON.parse(await readFile(new URL('../public/locales/en.json', import.meta.url), 'utf8'))
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
@@ -80,9 +82,11 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 }); await card.scrollIntoViewIfNeeded()
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
-  await mkdir('preview/artifacts', { recursive: true })
-  await card.screenshot({ path: 'preview/artifacts/bed-drying-mobile.png' })
-  await page.setViewportSize({ width: 1440, height: 1000 }); await card.screenshot({ path: 'preview/artifacts/bed-drying-desktop.png' })
+  // Screenshots go to CC2_SCREENSHOTS (the CI uploads them) or a temporary folder, never over committed files.
+  const shots = process.env.CC2_SCREENSHOTS || path.join(tmpdir(), 'cc2-bed-drying-screenshots')
+  await mkdir(shots, { recursive: true })
+  await card.screenshot({ path: path.join(shots, 'bed-drying-mobile.png') })
+  await page.setViewportSize({ width: 1440, height: 1000 }); await card.screenshot({ path: path.join(shots, 'bed-drying-desktop.png') })
   // The enabled drying card has two controls; footers align within each row of the two-column grid.
   for (const locale of ['en', 'it']) for (const enabled of [false, true]) {
     language = locale; choices.bed_drying = enabled; session.enabled = enabled

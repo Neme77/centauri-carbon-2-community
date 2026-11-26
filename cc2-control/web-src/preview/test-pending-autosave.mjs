@@ -81,6 +81,8 @@ try {
     await mkdir(output, { recursive: true })
     await page.screenshot({ path: path.join(output, 'pending-mesh-conflict.png'), fullPage: true })
   }
+  // Polling may still be inside the /api/plates handler; drop the routes before closing so it cannot call route.fetch on a closed context.
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
   assert.deepEqual(errors, [])
   console.log('PASS #267 browser: pending warning, external overwrite detected while open, no false restart or automatic rewrite, retained input, explicit re-save and plate conflict banner')
 } finally {

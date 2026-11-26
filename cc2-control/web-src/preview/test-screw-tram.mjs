@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdir, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { createServer } from 'vite'
@@ -174,7 +175,8 @@ const server = await createServer({
 let browser
 const actions = []
 const errors = []
-const shots = path.join(root, 'preview/artifacts')
+// Screenshots go to CC2_SCREENSHOTS (the CI uploads them) or a temporary folder, never over committed files.
+const shots = process.env.CC2_SCREENSHOTS || path.join(tmpdir(), 'cc2-screw-tram-screenshots')
 const confirm = page => page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true })
 const posted = (page, body) =>
   page.waitForRequest(r => r.method() === 'POST' && r.url().endsWith('/api/control') && r.postData() === body)
