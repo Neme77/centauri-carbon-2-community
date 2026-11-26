@@ -14,6 +14,7 @@ permissions:
 jobs:
   preview:
     runs-on: ubuntu-26.04
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: cc2-control/web-src

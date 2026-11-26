@@ -16,6 +16,7 @@ jobs:
   cc2-control:
     name: CC2 Control (host tests + ARM build)
     runs-on: ubuntu-26.04
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: cc2-control
@@ -99,6 +100,7 @@ jobs:
   web:
     name: Web UI (type-check, build, up to date)
     runs-on: ubuntu-26.04
+    timeout-minutes: 80
     defaults:
       run:
         working-directory: cc2-control/web-src
@@ -252,6 +254,7 @@ jobs:
   sanitizers:
     name: CC2 Control (${{ matrix.sanitize }} sanitizer)
     runs-on: ubuntu-26.04
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -290,6 +293,7 @@ jobs:
   builder:
     name: Firmware builder (host tests)
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -302,6 +306,7 @@ jobs:
   reactor-fixtures:
     name: Experimental reactor (host fixtures)
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Bridge with UBSan (mocked vendor ABI)
@@ -318,6 +323,7 @@ jobs:
 
   payload-44:
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Install GNU ARM binutils
