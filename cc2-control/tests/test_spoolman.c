@@ -1,6 +1,14 @@
+#define _GNU_SOURCE
+#include <stdatomic.h>
+#include <stdlib.h>
+/* Lets a test make the next malloc() of the code under test fail (only for the code in ../src/main.c). */
+static atomic_int fail_next_malloc;
+static void *test_malloc(size_t n) { return atomic_exchange(&fail_next_malloc, 0) ? NULL : malloc(n); }
+#define malloc test_malloc
 #define main cc2_main_original
 #include "../src/main.c"
 #undef main
+#undef malloc
 #include <assert.h>
 
 static time_t fake_now = 1790000000;
@@ -163,7 +171,10 @@ static void test_config_endpoint(void) {
 typedef struct {
     _Atomic int stop, bound, port;
     _Atomic double used, remaining;  /* the spool's state on the "server" */
-    _Atomic int use_mode;            /* 0 normal, 1 apply then drop the reply, 2 drop without applying, 3 apply + 500, 4 500 without applying */
+    _Atomic int use_mode;            /* 0 normal, 1 apply then drop the reply, 2 drop without applying, 3 apply + 500, 4 500 without applying,
+                                      * 5 answer use_status without applying */
+    _Atomic int use_status;
+    _Atomic int pad;                 /* the single spool (GET and the reply to /use) carries a comment of this many characters */
     _Atomic int get_mode;            /* 0 normal, 1 drop, 2 chunked, 3 fragmented, 4 truncated */
     _Atomic int gets_down;           /* every GET is dropped while set */
     _Atomic int auto_gets_down;      /* set gets_down once a /use has been seen */
@@ -186,6 +197,7 @@ typedef struct {
 
 static fake_spoolman fake;
 static pthread_t fake_thread;
+static char pad_text[SPOOLMAN_PAGE_BODY_MAX + 1];
 
 static void fake_send(int fd, const char *data, size_t length, size_t piece) {
     for (size_t at = 0; at < length;) {
@@ -268,7 +280,7 @@ static void *fake_server(void *unused) {
             long want = cl ? atol(cl + 16) : 0;
             if (used >= (size_t)(split - req) + 4 + (size_t)want) break;
         }
-        char body[2048];
+        static char body[SPOOLMAN_PAGE_BODY_MAX + 2048];
         int is_use = strstr(req, "PUT") && strstr(req, "/use");
         int is_list = strstr(req, "GET /api/v1/spool ") != NULL || strstr(req, "GET /api/v1/spool?") != NULL;
         const char *idp = strstr(req, "/api/v1/spool/");
@@ -288,26 +300,32 @@ static void *fake_server(void *unused) {
             if (!is_use) fake.get_count++;
             close(fd); continue;
         }
+        const int pad = fake.pad;
         if (fake.no_remaining)
             snprintf(body, sizeof(body),
-                "{\"id\":%d,\"used_weight\":%.3f,\"archived\":%s,\"filament\":{\"material\":\"PETG\","
-                "\"name\":\"Jet Black\",\"color_hex\":\"1a1a1a\"}}", id, (double)fake.used, fake.archived ? "true" : "false");
+                "{\"id\":%d,\"comment\":\"%.*s\",\"used_weight\":%.3f,\"archived\":%s,\"filament\":{\"material\":\"PETG\","
+                "\"name\":\"Jet Black\",\"color_hex\":\"1a1a1a\"}}", id, pad, pad_text, (double)fake.used, fake.archived ? "true" : "false");
         else
             snprintf(body, sizeof(body),
-                "{\"id\":%d,\"remaining_weight\":%.3f,\"used_weight\":%.3f,\"archived\":%s,\"filament\":{\"material\":\"PETG\","
-                "\"name\":\"Jet Black\",\"color_hex\":\"1a1a1a\"}}", id, (double)fake.remaining, (double)fake.used,
+                "{\"id\":%d,\"comment\":\"%.*s\",\"remaining_weight\":%.3f,\"used_weight\":%.3f,\"archived\":%s,\"filament\":{\"material\":\"PETG\","
+                "\"name\":\"Jet Black\",\"color_hex\":\"1a1a1a\"}}", id, pad, pad_text, (double)fake.remaining, (double)fake.used,
                 fake.archived ? "true" : "false");
         if (is_use) {
             fake.use_count++;
             const char *w = strstr(req, "use_weight");
             double grams = w ? atof(strchr(w, ':') + 1) : 0;
             fake.last_use = grams;
-            if (fake.use_mode != 2 && fake.use_mode != 4) { fake.used = fake.used + grams; fake.remaining = fake.remaining - grams; }
-            snprintf(body, sizeof(body), "{\"id\":%d,\"remaining_weight\":%.3f,\"used_weight\":%.3f}", id, fake.remaining, fake.used);
+            if (fake.use_mode != 2 && fake.use_mode != 4 && fake.use_mode != 5) { fake.used = fake.used + grams; fake.remaining = fake.remaining - grams; }
+            snprintf(body, sizeof(body), "{\"id\":%d,\"comment\":\"%.*s\",\"remaining_weight\":%.3f,\"used_weight\":%.3f}", id, pad, pad_text,
+                     fake.remaining, fake.used);
             if (fake.auto_gets_down) fake.gets_down = 1;
             if (fake.use_mode == 1 || fake.use_mode == 2) { close(fd); continue; }
             if (fake.use_mode == 3 || fake.use_mode == 4) fake_send(fd, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", 77, 0);
-            else reply_body(fd, body, 0);
+            else if (fake.use_mode == 5) {
+                char head[128];
+                int h = snprintf(head, sizeof(head), "HTTP/1.1 %d X\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}", (int)fake.use_status);
+                fake_send(fd, head, (size_t)h, 0);
+            } else reply_body(fd, body, 0);
         } else {
             if (is_list) {
                 fake.list_count++;
@@ -334,6 +352,7 @@ static void *fake_server(void *unused) {
 
 static void fake_start(double used, double remaining) {
     memset((void *)&fake, 0, sizeof(fake));
+    memset(pad_text, 'x', sizeof(pad_text) - 1);
     fake.used = used; fake.remaining = remaining;
     fake.list_body = "[]";
 }
@@ -634,7 +653,7 @@ static void test_backup_leaves_out_credentials(void) {
 
 /* ---- HTTP framing --------------------------------------------------------------------------- */
 
-typedef struct { const char *data; size_t length, piece; int cut_early; _Atomic int bound, port; } raw_server;
+typedef struct { const char *data; size_t length, piece; int cut_early; _Atomic int bound, port; int hold_ms; } raw_server;
 
 static void *raw_server_run(void *arg) {
     raw_server *r = arg;
@@ -651,19 +670,27 @@ static void *raw_server_run(void *arg) {
     if (fd >= 0) {
         char req[1024]; (void)recv(fd, req, sizeof(req), 0);
         fake_send(fd, r->data, r->length, r->piece);
+        for (int waited = 0; waited < r->hold_ms; waited += 10) sleep_ms(10);   /* a proxy that keeps the connection open */
         close(fd);
     }
     close(server);
     return NULL;
 }
 
-static int raw_request(const char *data, size_t length, size_t piece, char *reply, size_t cap) {
-    raw_server r = {data, length, piece, 0, 0, 0};
+static long long raw_took_ms;   /* how long the last raw_request took, without the time the server held the connection after */
+static int raw_request_held(const char *data, size_t length, size_t piece, char *reply, size_t cap, int hold_ms) {
+    raw_server r = {data, length, piece, 0, 0, 0, hold_ms};
     pthread_t t; assert(!pthread_create(&t, NULL, raw_server_run, &r));
     for (int i = 0; i < 200 && !r.bound; ++i) sleep_ms(5);
+    long long t0 = monotonic_ms();
     int status = spoolman_request("127.0.0.1", r.port, "", "GET", "/x", NULL, reply, cap);
+    raw_took_ms = monotonic_ms() - t0;
     pthread_join(t, NULL);
     return status;
+}
+
+static int raw_request(const char *data, size_t length, size_t piece, char *reply, size_t cap) {
+    return raw_request_held(data, length, piece, reply, cap, 0);
 }
 
 static char *big_list(int n) {
@@ -682,7 +709,7 @@ static void test_http_framing(void) {
     static char reply[200000];
     char *list = big_list(40);
     size_t length = strlen(list);
-    assert(length > SPOOLMAN_BODY_MAX);                                    /* larger than the old single read buffer */
+    assert(length > 8192);                                                 /* larger than the old single read buffer */
     char head[128], *wire = malloc(length + 256);
     int h = snprintf(head, sizeof(head), "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\n\r\n", length);
     memcpy(wire, head, (size_t)h); memcpy(wire + h, list, length);
@@ -2225,6 +2252,134 @@ static void test_a_new_address_or_login_is_synchronised_at_once(void) {
     puts("PASS: a changed address or login starts the next sync at once; unchanged settings or a sync that is off leave the clock alone");
 }
 
+/* ---- error paths: a large spool, a refused /use, no memory, chunk sizes, a connection kept open, the base path ---- */
+
+static void test_a_spool_over_8_kib_is_read_and_sent(void) {
+    /* Spoolman's spool object grows with its comment and extra fields. One the list can carry is read and sent alone too. */
+    fake_start(100, 600); fake.pad = 20000; fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    cycle();
+    assert(fake.use_count == 1 && near(fake.used, 112.5));
+    assert(near(sp->spoolman_unsent, 0) && near(sp->spoolman_inflight, 0) && near(sp->remaining, 587.5));
+    get_status(); status_has("\"result\":\"ok\"");
+    assert(spoolman_hold(sp, 4, SPOOLMAN_HELD_SERVER));                        /* Send selected reads and sends the same way */
+    assert(call_held_send("1=7") == 202); finish_send();
+    assert(spools.held_count == 0 && fake.use_count == 2 && near(fake.used, 116.5));
+    /* Larger than a page may be: refused as too large, never cut; the grams wait. */
+    fake.pad = SPOOLMAN_PAGE_BODY_MAX; sp->spoolman_unsent = 3;
+    cycle();
+    assert(fake.use_count == 2 && near(sp->spoolman_unsent, 3) && near(sp->spoolman_inflight, 0));
+    get_status(); status_has("\"result\":\"too_large\"");
+    fake_finish(); teardown_file();
+    puts("PASS: a spool object over 8 KiB is read and sent alone (sync and Send selected); one larger than a page is refused, its grams wait");
+}
+
+static void test_a_refused_use_is_not_sent_and_tried_again(void) {
+    const int codes[] = {401, 403, 422};
+    for (int i = 0; i < 3; ++i) {
+        fake_start(100, 600); fake.use_mode = 5; fake.use_status = codes[i]; fake_launch();
+        spool_entry *sp = setup_linked(12.5, 500);
+        cycle();                                                               /* the spool is read, then /use is refused */
+        assert(fake.use_count == 1 && near(fake.used, 100));
+        assert(near(sp->spoolman_unsent, 12.5) && near(sp->spoolman_inflight, 0));      /* back to unsent, not left in flight */
+        fake.use_mode = 0;
+        cycle();
+        assert(fake.use_count == 2 && near(fake.used, 112.5) && near(sp->spoolman_unsent, 0) && near(sp->spoolman_inflight, 0));
+        assert(spoolman_hold(sp, 4, SPOOLMAN_HELD_SERVER));
+        fake.use_mode = 5;
+        assert(call_held_send("1=7") == 202); finish_send();
+        assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_SERVER && !spools.held[0].sending);   /* not "unsure" */
+        fake.use_mode = 0;
+        assert(call_held_send("1=7") == 202); finish_send();
+        assert(spools.held_count == 0 && fake.use_count == 4 && near(fake.used, 116.5));
+        fake_finish(); teardown_file();
+    }
+    puts("PASS: a /use that Spoolman refuses (401, 403, 422) counts as not sent: the grams are sent again later, the entry stays as it was");
+}
+
+static void test_results_wait_when_there_is_no_memory_to_take_them(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    virtual_now += SPOOLMAN_TICK_MS;
+    spoolman_tick(virtual_now); wait_worker();
+    assert(fake.use_count == 1 && near(sp->spoolman_inflight, 12.5));         /* sent; its result waits to be taken over */
+    atomic_store(&fail_next_malloc, 1);
+    spoolman_tick(virtual_now + SPOOLMAN_TICK_MS);                             /* no memory to copy the results */
+    assert(!atomic_load(&fail_next_malloc));                                   /* that copy is what failed */
+    assert(near(sp->spoolman_inflight, 12.5) && !worker_running());           /* no new cycle on top of results not taken over */
+    spoolman_tick(virtual_now + SPOOLMAN_TICK_MS + 1);
+    assert(near(sp->spoolman_inflight, 0) && near(sp->spoolman_unsent, 0) && near(sp->remaining, 587.5));
+    if (worker_running()) wait_worker();
+    assert(fake.use_count == 1);
+    fake_finish(); teardown_file();
+    puts("PASS: results that cannot be copied for lack of memory wait in the outbox for the next tick instead of being lost");
+}
+
+static void test_a_chunk_too_big_for_the_buffer_is_too_big(void) {
+    static char reply[4096], page[SPOOLMAN_PAGE_BODY_MAX];
+    const size_t sizes[] = {100000, 140000};
+    for (int i = 0; i < 2; ++i) {
+        char *wire = malloc(sizes[i] + 256);
+        int h = sprintf(wire, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n%zx\r\n", sizes[i]);
+        memset(wire + h, 'a', sizes[i]); memcpy(wire + (size_t)h + sizes[i], "\r\n0\r\n\r\n", 7);
+        size_t length = (size_t)h + sizes[i] + 7;
+        /* the buffer fills up before the chunk ends: that is a reply too large, not an incomplete one (a page then halves) */
+        assert(raw_request(wire, length, 0, reply, sizeof(reply)) == SPOOLMAN_E_TOOBIG);
+        assert(raw_request(wire, length, 0, page, sizeof(page)) == SPOOLMAN_E_TOOBIG);
+        free(wire);
+    }
+    const char *fits = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nb\r\nhello world\r\n0\r\n\r\n";
+    assert(raw_request(fits, strlen(fits), 0, reply, 12) == 200 && !strcmp(reply, "hello world"));     /* exactly full */
+    assert(raw_request(fits, strlen(fits), 0, reply, 11) == SPOOLMAN_E_TOOBIG);
+    const char *sign = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n-5\r\nhello\r\n0\r\n\r\n";
+    assert(raw_request(sign, strlen(sign), 0, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);
+    const char *space = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n 5\r\nhello\r\n0\r\n\r\n";
+    assert(raw_request(space, strlen(space), 0, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);
+    const char *no_eol = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5";
+    assert(raw_request(no_eol, strlen(no_eol), 0, reply, sizeof(reply)) == SPOOLMAN_E_UNKNOWN);
+    puts("PASS: a chunk larger than the buffer is \"too large\" also when the buffer fills before it ends; a size with a sign or space is refused");
+}
+
+static void test_a_reply_is_done_at_its_content_length(void) {
+    static char reply[4096];
+    const char *open_reply = "HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\n{\"a\":1}";
+    for (size_t piece = 0; piece <= 5; piece += 5) {
+        assert(raw_request_held(open_reply, strlen(open_reply), piece, reply, sizeof(reply), 2000) == 200 && !strcmp(reply, "{\"a\":1}"));
+        assert(raw_took_ms < 1000);               /* not after the 2 s the proxy keeps the connection open */
+    }
+    const char *more = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabcdef";
+    assert(raw_request_held(more, strlen(more), 0, reply, sizeof(reply), 300) == 200 && !strcmp(reply, "abc"));
+    /* without a length the end of the connection still ends the reply, as before */
+    const char *chunked = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 2\r\n\r\n5\r\nhello\r\n0\r\n\r\n";
+    assert(raw_request_held(chunked, strlen(chunked), 0, reply, sizeof(reply), 300) == 200 && !strcmp(reply, "hello"));
+    const char *closed = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n{}";
+    assert(raw_request_held(closed, strlen(closed), 0, reply, sizeof(reply), 300) == 200 && !strcmp(reply, "{}"));
+    puts("PASS: a reply with a Content-Length is complete when the body is in, also when the connection stays open");
+}
+
+static void test_the_base_path_holds_only_url_characters(void) {
+    char host[SPOOLMAN_HOST_MAX], base[SPOOLMAN_PATH_MAX]; int port;
+    assert(spoolman_parse_url("http://192.0.2.5:7912/spool-man_1.0~x/a%20b/", host, sizeof(host), &port, base, sizeof(base)));
+    assert(port == 7912 && !strcmp(base, "/spool-man_1.0~x/a%20b"));
+    assert(spoolman_parse_url("http://192.0.2.5/a!$&'()*+,;=:@b", host, sizeof(host), &port, base, sizeof(base)) && port == 80);
+    static const char *const bad[] = {
+        "http://192.0.2.5/a b", "http://192.0.2.5/a\rX-Evil: 1", "http://192.0.2.5/a\nb", "http://192.0.2.5/a\tb",
+        "http://192.0.2.5/a?x=1", "http://192.0.2.5/a#y", "http://192.0.2.5/a%2", "http://192.0.2.5/a%zz", "http://192.0.2.5/\xc3\xa4",
+        "http://192.0.2.5/a\"b", "http://192.0.2.5/a<b>", "http://192.0.2.5/a\\b",
+        "http://192.0.2.5:80x", "http://192.0.2.5:+80", "http://192.0.2.5:/a", "http://192.0.2.5:080800"};
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); ++i)
+        if (spoolman_parse_url(bad[i], host, sizeof(host), &port, base, sizeof(base))) { fprintf(stderr, "accepted: %s\n", bad[i]); abort(); }
+    static char path[64];
+    snprintf(path, sizeof(path), "spoolman-test-base-%ld.json", (long)getpid());
+    spools_path = path; unlink(path);
+    memset(&spools, 0, sizeof(spools)); spools.job.last_tray = -1; spools_available = 1;
+    assert(call_config("url=http://192.0.2.5/a\rX-Evil: 1") == 400 && strstr(response, "spoolman_bad_url") && !spools.spoolman_url[0]);
+    assert(call_config("url=http://192.0.2.5/a b") == 400 && !spools.spoolman_url[0]);
+    assert(call_config("url=http://192.0.2.5:7912/spoolman") == 200 && !strcmp(spools.spoolman_url, "http://192.0.2.5:7912/spoolman"));
+    unlink(path);
+    puts("PASS: the base path of the Spoolman address holds only URL characters and the port only digits; the rest is refused");
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IOLBF, 1024);
     spools_clock = clock_fake; spools_wall = wall_fake;
@@ -2308,5 +2463,11 @@ int main(void) {
     test_the_catalog_belongs_to_the_server_settings();
     test_refusals_carry_a_code();
     test_a_new_address_or_login_is_synchronised_at_once();
+    test_a_spool_over_8_kib_is_read_and_sent();
+    test_a_refused_use_is_not_sent_and_tried_again();
+    test_results_wait_when_there_is_no_memory_to_take_them();
+    test_a_chunk_too_big_for_the_buffer_is_too_big();
+    test_a_reply_is_done_at_its_content_length();
+    test_the_base_path_holds_only_url_characters();
     return 0;
 }
