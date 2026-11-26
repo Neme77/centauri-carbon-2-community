@@ -27,7 +27,7 @@ import { poll, usePoll } from '@/lib/poll'
 import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
 import { canvasTimeline, clearCanvasTimeline, type ObservedPrinterPhase } from '@/lib/canvas-events'
 import { printer } from '@/lib/state'
-import { findSpool, g, openChooser, refreshSpools, spoolLabel, spools } from '@/lib/spools'
+import { findSpool, g, openChooser, refreshSpools, spoolChoiceLabel, spools } from '@/lib/spools'
 
 const I = { size: 16, strokeWidth: 1 }
 const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }) => (
@@ -318,7 +318,9 @@ export const Canvas = () => {
             />
             {tracking && (
               <p class="cc2-canvas-spool-name" data-canvas-spool-name>
-                {s.spool ? spoolLabel(s.spool) : t(s.held?.question ? 'spools.question_tag' : 'spools.not_assigned')}
+                {s.spool
+                  ? spoolChoiceLabel(s.spool)
+                  : t(s.held?.question ? 'spools.question_tag' : 'spools.not_assigned')}
               </p>
             )}
             <div class="cc2-canvas-slot-data">

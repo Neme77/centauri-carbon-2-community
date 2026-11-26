@@ -2026,5 +2026,6 @@
   "bed.lvl_bar_paused": "az időkorlát áll, amíg mérés folyik",
   "bed.lvl_bar_open": "Munkamenethez",
   "bed.lvl_header_word": "Szintezés",
-  "bed.cal_header_word": "Hálókalibrálás"
+  "bed.cal_header_word": "Hálókalibrálás",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

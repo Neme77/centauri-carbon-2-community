@@ -2026,5 +2026,6 @@
   "bed.lvl_bar_paused": "лимит времени стоит, пока идёт измерение",
   "bed.lvl_bar_open": "К сессии",
   "bed.lvl_header_word": "Выравнивание",
-  "bed.cal_header_word": "Калибровка сетки"
+  "bed.cal_header_word": "Калибровка сетки",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }

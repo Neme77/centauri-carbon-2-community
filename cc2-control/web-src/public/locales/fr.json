@@ -2026,5 +2026,6 @@
   "bed.lvl_bar_paused": "la limite de temps est suspendue pendant une mesure",
   "bed.lvl_bar_open": "Vers la session",
   "bed.lvl_header_word": "Réglage",
-  "bed.cal_header_word": "Calibration maillage"
+  "bed.cal_header_word": "Calibration maillage",
+  "spools.spoolman_id_value": "Spoolman #{id}"
 }
