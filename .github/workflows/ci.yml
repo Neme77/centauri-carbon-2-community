@@ -44,6 +44,9 @@ jobs:
       - name: Root-owned application recovery bootstrap fixtures
         run: sudo -n make test-app-update-boot
 
+      - name: Root-owned cavity fan floor API fixture
+        run: sudo -n python3 tests/test_cavity_floor_api.py
+
       - name: Host build and tests (warnings are errors)
         run: make clean test CROSS= CC=gcc EXTRA_CFLAGS=-Werror
 
