@@ -6,13 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Manual preheat (`preheat:<nozzle>:<bed>`) is refused when text follows the bed temperature, as the temperature targets already were; it was accepted and the text ignored. A whole number outside the range of a 32-bit integer in a JSON the service reads (queue, plates, spools, history, Canvas status) is read as missing, instead of being cut to a wrong number. Designed and implemented by **lpgamerzockt-ops** (#435).
+
+## [CC2 Control 1.2.30] - 2026-11-25
+
+### Release integration
+
+- Qualified the cumulative signed 1.2.30 bridge on recognised 4.4.4, 07 and 07 HU bases with real ARM procd/ubus service sequences offline; the final package also passed a physical install/reboot/full-rollback/reboot cycle on Neme77's printer with RFID file hashes unchanged. Integration and printer validation: **Neme77**. The native display includes the language binding and Back touch-through corrections; original thumbnail implementation: **beanbo** (#411), .13 adaptation: **Neme77** (#412). Detailed author credits remain with each PR below and in `docs/CONTRIBUTORS.md`.
+
 ### Added
 
 - After a bed mesh calibration replaces a saved measurement, the previous mesh is kept. Bed Levelling opens the change (new mesh minus the previous one) in the 3D view, the heat map and the value table: blue is lower than before, amber is higher, and the range is how the plate shape changed. The same view stays available on that measurement until the next change. Designed and implemented by **beanbo** (#418).
 
 - Settings → Integrations has an experimental guide for ElegooSlicer: a copy of the CC2 printer profile with five print-host entries makes the slicer's Device tab show CC2 Control and sends Print to CC2 Control, where the Canvas spool is confirmed before the print starts. The guide shows the configuration folder, the lines to add with the address of the page, a button that copies them and the warning that the slicer falls back to the default printer profile; it is also written down in docs/ELEGOOSLICER.md. Implemented by **lpgamerzockt-ops** (#407).
 
-- Native touchscreen source candidate: Hungarian, Czech and Polish in a fourteen-language selector, persistent display preference, X/Y Home labels, chamber-temperature glyph and a themed Back control. Prepared and printer-tested in its earlier languages/graphics revision by **Neme77**; the new Back control and cumulative updater integration remain under qualification before release (#379).
+- Native touchscreen source candidate: Hungarian, Czech and Polish in a fourteen-language selector, persistent display preference, X/Y Home labels, chamber-temperature glyph and a themed Back control. Prepared and printer-tested in its earlier languages/graphics revision by **Neme77**; the final integrated package subsequently passed the maintainer's native-display checks after installation and reboot, including the Back touch-through fix (#379/#383/#412).
 
 - Bed alignment with a mesh on the Bed alignment tab of Bed Levelling: the four screw points are evaluated together with a saved mesh of the plate library. A plane is fitted through every point of the mesh, and what remains (heat map, range, RMS and a name such as dome or saddle) is the plate shape, which the screws cannot change. The shape at each screw is taken off the four probes, and the tilt in X and Y over 240 mm and the turn of each screw are calculated from what is left. A plate shape above 0.3 mm shows a note under the evaluation and never blocks it. The evaluation only reads; nothing is sent to the printer until a measurement is started. Designed and implemented by **lpgamerzockt-ops** (#348).
 - The evaluation with a saved mesh on the Bed alignment tab replaces the Quick check of the Mesh alignment tab: with “With mesh” ticked and a saved mesh chosen, the four screw points are measured, quickly or in a session, and evaluated with the plate shape of that mesh, without measuring a new mesh. A mesh is offered at every age; one older than 30 days or with more than 10 prints since its measurement carries a note that recommends a new mesh. The page warns when the mesh was measured at another bed temperature than the screw points, belongs to another plate than the mounted one, was measured with another nozzle than the selected one, or the four probes differ from its plate shape by a twist above 0.05 mm. The limits are estimates. Designed and implemented by **lpgamerzockt-ops** (#348).
@@ -106,7 +116,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The pictures in the Files, History and Queue lists are not read from their G-code files while the printer homes, levels, probes or starts a print: `POST /api/gcode-files/thumbnail` answers 503 then, and the page lets its picture queue rest for 3 seconds before it asks for the same picture again. Designed and implemented by **lpgamerzockt-ops** (#398).
 - Bed map: Live can be pressed on the Objects tab during a print; it then switches to the Layer path tab and follows the printer, and the layer arrows work only on the Layer path tab. An object can be selected by clicking its whole area, not only its number. The Layer path tab keeps the status colours and the legend of the Objects tab and adds the path and the nozzle; the numbers sit beside each object so they do not cover the path, and the path of an excluded object is pale grey. The status line keeps naming the layer while one loads, with a small mark instead of the text, and a busy answer of the service is retried after 300 ms instead of 1.5 s. Reported and fixed by **lpgamerzockt-ops** (#398).
 - Manual controls refuse non-finite numbers: the console (axis targets, also in relative mode and for a repeated axis word), UI moves, extrusion, bed heater, fans and the Z offset no longer pass `nan` or `inf` on to the printer; they were accepted before. Designed and implemented by **lpgamerzockt-ops** (#417).
-- Manual preheat (`preheat:<nozzle>:<bed>`) is refused when text follows the bed temperature, as the temperature targets already were; it was accepted and the text ignored. A whole number outside the range of a 32-bit integer in a JSON the service reads (queue, plates, spools, history, Canvas status) is read as missing, instead of being cut to a wrong number. Designed and implemented by **lpgamerzockt-ops** (#435).
 
 ## [Community Firmware V4.4.4 / CC2 Control 1.2.29] - 2026-11-12
 
@@ -675,7 +684,7 @@ Standalone update. The internal service version remains 1.1.31, and it does not 
 
 Earlier release details remain available through GitHub Releases, tags and Git history.
 
-[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.23-V4.4...HEAD
+[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.30-V4.4.4-Universal...HEAD
 [CC2 Control 1.2.23]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.23-V4.4
 [CC2 Control 1.2.19]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.19-V4.4
 [CC2 Control 1.2.18]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.18-V4.4
@@ -693,7 +702,9 @@ Earlier release details remain available through GitHub Releases, tags and Git h
 
 [CC2 Control 1.2.22]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.22-V4.4
 
-[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/V4.4.4...HEAD
+[Unreleased]: https://github.com/Neme77/centauri-carbon-2-community/compare/CC2-Control-1.2.30-V4.4.4-Universal...HEAD
 [Community Firmware V4.4.4 / CC2 Control 1.2.29]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/V4.4.4
 [CC2 Control 1.2.26]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.26-V4.4
 
+
+[CC2 Control 1.2.30]: https://github.com/Neme77/centauri-carbon-2-community/releases/tag/CC2-Control-1.2.30-V4.4.4-Universal

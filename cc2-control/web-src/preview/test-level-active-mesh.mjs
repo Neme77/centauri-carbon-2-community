@@ -78,6 +78,9 @@ try {
   const dialog = page.getByRole('dialog')
   // Step 1 with the tick, "Quick" and the given choices, as this browser keeps them.
   const open = async saved => {
+    // The choices are written on a page of the same origin without the app: the running app keeps its own choices in
+    // memory and could write them back over these before the reload.
+    await page.goto(`${origin}/api/version`)
     await page.evaluate(s => {
       localStorage.setItem('cc2-level-base', JSON.stringify(s))
       localStorage.setItem('cc2-level-mesh', '1')
@@ -85,7 +88,6 @@ try {
     }, saved)
     const reads = meshReads
     await page.goto(`${origin}/#bed/align`)
-    await page.reload()
     await page.locator('#cc2-preview-banner').waitFor()
     await card.waitFor()
     for (let i = 0; i < 50 && meshReads === reads; i++) await page.waitForTimeout(100)
@@ -207,14 +209,29 @@ try {
     job = output(measured)
     return route.fulfill({ json: { accepted: true } })
   })
+  // Starts the quick measurement and waits until the route above has answered it, then for its heights. The plate shape
+  // alone does not show that: it comes from the copy, which is taken before the request is sent. A request still on its
+  // way when the test goes on would miss the route; the preview's own server would then hold the bed first and the page
+  // would stay locked.
+  const measure = async (grid, what) => {
+    await startButton.click()
+    const answered = page.waitForResponse(r => r.url().endsWith('/api/control') && r.request().method() === 'POST')
+    await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
+    await answered
+    await eventually(async () => {
+      for (const id of IDS) {
+        const got = um(await card.locator(`[data-screw-zheight="${id}"]`).innerText()) / 1000
+        assert.ok(Math.abs(got - measured[id]) <= 0.001, `${what}: height ${id} ${got} vs ${measured[id]}`)
+      }
+      await shapeShown(grid, measured, what)
+    }, what)
+  }
   active = fullMesh
   job = null
   await open({ ...custom60, choice: 'active' })
   measured = probes(fullMesh, -0.1, 0.25)
   await startButton.getByText('Measure only (quick)').waitFor()
-  await startButton.click()
-  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
-  await eventually(() => shapeShown(fullMesh, measured, 'quick, mesh unloaded'), 'quick, mesh unloaded')
+  await measure(fullMesh, 'quick, mesh unloaded')
   // A reload reads the printer again, which reports no mesh now (as on the CC2).
   await open({ ...custom60, choice: 'active' })
   // The device's symptom was an evaluation without the plate shape: it has to be there with the copy.
@@ -231,9 +248,7 @@ try {
   await open({ ...custom60, choice: 'active' })
   await shapeShown(fullMesh, measured, 'another mesh applied, old measurement')
   measured = probes(otherMesh, 0.1, 0.1)
-  await startButton.click()
-  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
-  await eventually(() => shapeShown(otherMesh, measured, 'new measurement, new mesh'), 'new measurement, new mesh')
+  await measure(otherMesh, 'new measurement, new mesh')
   await page.unroute('**/api/control')
 
   // (7) With session: the session's heights are evaluated with the active mesh too, from the copy of its start, also
