@@ -65,7 +65,7 @@ try {
   spoolman.time = 2000
   spoolman.result = 'ok'
   await failed.waitFor({ state: 'detached', timeout: 40000 })
-  assert.deepEqual(await choice().locator('option').allTextContents(), ['Choose a spool', 'Silk Blue · PLA Silk · 640.0 g', 'Green PLA · PLA · 120.5 g'])
+  assert.deepEqual(await choice().locator('option').allTextContents(), ['Choose a spool', 'Spoolman #21 · Silk Blue · PLA Silk · 640.0 g', 'Spoolman #22 · Green PLA · PLA · 120.5 g'])
   assert.equal(spoolman.catalogReads, 2, 'exactly one more read, after the sync')
 
   // 4. Nothing more is read once the list is there.

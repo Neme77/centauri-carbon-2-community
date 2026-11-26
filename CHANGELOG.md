@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Show the Spoolman spool ID in spool choices, inventory, loaded Canvas/external slots and remote-catalog choices; search by ID or #ID and keep identically named linked spools individually selectable. Implemented by **Neme77**, requested by **onezero1010101** (#439; request #430).
 - Spoolman card on the Spools page: one line under the fields tells what the last sync did in plain words, with what to do next: the time of the last sync, not synchronised yet, an address that is not valid, a login Spoolman refused, Spoolman not reachable or not answering in time, an incomplete reply, too much data, an address Spoolman does not know, an error from Spoolman, spools in Spoolman without a weight that were not added, or a full spool library. The texts are in all eleven languages; the translations other than English and German were made by the contributor and are not checked by native speakers. Implemented by **lpgamerzockt-ops** (#433).
 
 ### Changed
