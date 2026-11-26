@@ -14,12 +14,14 @@ try {
   let sequence = 1
   let connected = true
   let level = 2
+  let code = 1264
+  let message = 'Filament clog <script>window.injected=1</script>'
   await page.route('**/api/preferences', r => r.fulfill({ json: { language: 'en', theme: 'dark' } }))
   await page.route('**/api/printer', async route => {
     const response = await route.fetch()
     const data = await response.json()
     data.connected = connected
-    data.printer_report = { event_id: `test-${sequence}`, sequence, code: 1264, level, message: 'Filament clog <script>window.injected=1</script>', age: 5 }
+    data.printer_report = { event_id: `test-${sequence}`, sequence, code, level, message, age: 5 }
     await route.fulfill({ json: data })
   })
   await page.goto(server.resolvedUrls.local[0])
@@ -44,7 +46,18 @@ try {
   assert.equal(await alert.count(), 0, 'resume is not an alarm')
   level = 1; sequence++
   await alert.waitFor()
-  console.log('PASS: native reports persist, render as text, survive disconnect and can be dismissed')
+  assert.match(await alert.innerText(), /Filament clog <script>/, 'native text wins over the wiki table')
+  code = 707; message = null; sequence++
+  await alert.getByText('Toolhead front cover detached. Please check if it is loose or abnormal.').waitFor()
+  const wiki = alert.getByRole('link', { name: 'Cause and troubleshooting steps on the ELEGOO wiki' })
+  assert.equal(await wiki.getAttribute('href'), 'https://wiki.elegoo.com/en/centauri-carbon-2-combo/errorcode-707')
+  code = 1267; message = ''; sequence++
+  await alert.getByText(/Abnormal filament trigger detected at the toolhead/).waitFor()
+  assert.equal(await wiki.getAttribute('href'), 'https://wiki.elegoo.com/en/centauri-carbon-2-combo/errorcode-1266-1267')
+  code = 9999; message = null; sequence++
+  await alert.getByText('Code 9999').waitFor()
+  assert.equal(await wiki.count(), 0, 'unknown codes stay a bare number without a link')
+  console.log('PASS: native reports persist, render as text, survive disconnect and can be dismissed; empty messages fall back to the ELEGOO wiki text')
 } finally {
   await browser?.close()
   await server.close()
