@@ -93,6 +93,28 @@ jobs:
           CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
       - name: Browser upload and same-name reload
         run: npm run test:upload
+      - name: Verify the held fan slider drag, the persistent camera size and the Control page layout
+        run: npm run test:control-interactions && npm run test:control-restyle
+      - name: Verify the exhaust fan minimum controls
+        run: node preview/test-cavity-fan-floor.mjs
+      - name: Verify the Canvas unload setting under a pending SAVE_CONFIG conflict
+        run: node preview/test-pending-autosave.mjs
+      - name: Verify the translated bed side names in the mesh profile selector
+        run: npm run test:mesh-side-labels
+      - name: Verify print start refusals, start timeout, USB stall and 2 GiB file messages
+        run: |
+          npm run test:canvas-unreported
+          npm run test:start-reading
+          npm run test:start-timeout
+          npm run test:usb-stall
+          npm run test:not-printable-2gib
+          npm run test:large-file-confirm
+      - name: Verify file deletion retry right after a stopped print
+        run: npm run test:delete-retry
+      - name: Verify screw tramming plan, session and layout
+        run: npm run test:screw-tram
+        env:
+          CC2_SCREENSHOTS: ${{ runner.temp }}/cc2-preview-screenshots
       - name: Save screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v6
