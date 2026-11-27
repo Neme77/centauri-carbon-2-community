@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The start page and the translation files can be sent gzip-compressed: when it installs CC2 Control, the installer writes a gzip copy next to each file with the printer's `gzip`, and CC2 Control sends the copy (with `Content-Encoding: gzip`) to a browser that accepts gzip while the copy unpacks to exactly the installed file, otherwise the file as before. The start page then needs about a third of its bytes, a translation about a quarter. The package and the update verifier are unchanged; without `gzip` or with too little space the plain files are sent. Implemented by **lpgamerzockt-ops** (#NNN).
 - Spoolman: the refusals of the Spoolman functions (list of unsent usage, Spoolman settings, spool choice) now carry a stable `code` next to the unchanged English `error`, and the page shows them in its own language; a code it does not know falls back to the English text. The Spools page asks `GET /api/spoolman` once for all of its parts, and the list of unsent usage asks the printer again for Spoolman's spools at most three more times, counting every try. The page now shows the IPv4-only note under the address field, and a new address or login starts the next sync at once instead of up to two minutes later. Codes are listed in `cc2-control/docs/API.md`. Implemented by **lpgamerzockt-ops** (#433).
 
 ### Fixed
