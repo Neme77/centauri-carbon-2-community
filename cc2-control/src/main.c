@@ -6697,6 +6697,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         spoolman_config_response(fd,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/spoolman")==0) {
         spoolman_status_response(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/sync")==0) {
+        spoolman_sync_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/held/send")==0) {
         spoolman_held_send_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/spoolman/held/discard")==0) {

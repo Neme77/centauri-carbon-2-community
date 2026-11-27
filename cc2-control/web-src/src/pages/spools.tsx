@@ -41,6 +41,7 @@ import {
   type SpoolStack,
   saveSpool,
   saveSpoolmanConfig,
+  syncSpoolman,
   setTracking,
   slotOf,
   spoolHierarchy,
@@ -163,7 +164,13 @@ const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; ac
   const [url, setUrl] = useState(lib.spoolman_url)
   const [auth, setAuth] = useState('')
   // The printer's own memory only: no request to Spoolman. While this card is on the page.
-  usePoll(refreshSpoolmanStatus, 15000)
+  const status = spoolmanState.use().data
+  usePoll(refreshSpoolmanStatus, status?.busy ? 2000 : 15000)
+  const wasBusy = useRef(false)
+  useEffect(() => {
+    if (wasBusy.current && !status?.busy) void refreshSpools()
+    wasBusy.current = !!status?.busy
+  }, [status?.busy])
   // The second look 4 s after "Save": one timer at a time, and none once the card has left the page.
   const later = useRef(0)
   const gone = useRef(false)
@@ -208,7 +215,7 @@ const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; ac
         </label>
       </div>
       <SpoolmanStatusLine />
-      <div class="mt-3">
+      <div class="mt-3 flex flex-wrap gap-2">
         <Button
           variant="primary"
           disabled={busy}
@@ -225,7 +232,22 @@ const SpoolmanCard = ({ lib, busy, act }: { lib: SpoolLibrary; busy: boolean; ac
         >
           {t('spools.save')}
         </Button>
+        <Button
+          disabled={
+            busy || !!status?.busy || !lib.spoolman_enabled || !lib.spoolman_url || url !== lib.spoolman_url || !!auth
+          }
+          aria-busy={!!status?.busy}
+          onClick={() =>
+            act(async () => {
+              await syncSpoolman()
+              await refreshSpoolmanStatus()
+            })
+          }
+        >
+          {t('spools.sm_sync_now')}
+        </Button>
       </div>
+      <p class="mt-2 text-xs text-muted">{t('spools.sm_sync_hint')}</p>
     </Card>
   )
 }
