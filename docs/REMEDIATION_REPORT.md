@@ -369,9 +369,9 @@ presented as a hardware test.
 - `python3 experimental/pr128-integration/sync_source.py` was run on the merge
   commit: `source.zip` was regenerated (`sha256
   1aae46ccde2685ba2d2c2f7c5cc717e25c98b0278159c9f266b1323d6418aea8`), and the
-  pins in `prepare.py`/`firmware_builder.py` point at `4079f34b` (the commit
-  that carries the same `cc2-control` tree as the merge), with
-  `BUILDER_SHA256` updated. The archive was inspected: it contains both the
+  pins in `prepare.py`/`firmware_builder.py` point at the commit that carries
+  the same `cc2-control` tree as the merge (the parent of the snapshot commit),
+  and `BUILDER_SHA256` is updated. The archive was inspected: it contains both the
   upstream `spoolman.h` changes and the new `appearance.h` /
   `display_theme.h` / `json_body.h` / `json_large.h`, and its `web/index.html`
   is byte-identical to the committed bundle.
