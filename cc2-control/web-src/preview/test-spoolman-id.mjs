@@ -8,11 +8,12 @@ import { chromium } from 'playwright'
 const root = fileURLToPath(new URL('..', import.meta.url))
 process.env.CC2_BACKEND = 'http://127.0.0.1:1'
 const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), mode: 'demo', server: { port: 0, host: '127.0.0.1' } })
-let browser
+let browser, page, releaseCloseProbe
+let closeProbeStarted = false, closeProbeFinished = false
 try {
   await server.listen()
   browser = await chromium.launch({ headless: true, ...(process.env.CC2_BROWSER_PATH ? { executablePath: process.env.CC2_BROWSER_PATH } : {}) })
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   if (process.env.CC2_AXE_PATH) await page.addInitScript({ path: process.env.CC2_AXE_PATH })
   const errors = [], assignments = []
   const accessibility = []
@@ -112,10 +113,39 @@ try {
   await page.goto(origin + '/#canvas')
   await page.locator('[data-canvas-spool-name]').filter({ hasText: 'Spoolman #42' }).waitFor()
   await audit('Canvas Spoolman ID')
+  // Hold a real route.fetch response open across teardown. Without draining routes,
+  // browser.close races the handler even though all functional checks have passed.
+  let entered
+  const started = new Promise(resolve => { entered = resolve })
+  const released = new Promise(resolve => { releaseCloseProbe = resolve })
+  await page.route('**/__spoolman-close-probe', async route => {
+    const response = await route.fetch({ url: origin + '/api/printer' })
+    closeProbeStarted = true
+    entered()
+    await released
+    await route.fulfill({ response })
+    closeProbeFinished = true
+  })
+  await page.evaluate(() => { void fetch('/__spoolman-close-probe').catch(() => {}) })
+  let probeTimeout
+  try {
+    await Promise.race([started, new Promise((_, reject) => {
+      probeTimeout = setTimeout(() => reject(new Error('teardown probe did not enter its route')), 5000)
+    })])
+  } finally {
+    clearTimeout(probeTimeout)
+  }
   if (accessibility.length) console.log(`PASS: ${accessibility.length} axe accessibility checks`)
   assert.deepEqual(errors, [])
   console.log('PASS: visible Spoolman IDs, numeric/hash search, linked sealed twins distinct, local twins grouped, exact local assignment, Canvas and desktop/mobile chooser')
 } finally {
-  await browser?.close()
-  await server.close()
+  try {
+    const drained = page?.unrouteAll({ behavior: 'wait' })
+    releaseCloseProbe?.()
+    await drained
+    if (closeProbeStarted) assert(closeProbeFinished, 'in-flight route finished before browser close')
+  } finally {
+    await browser?.close()
+    await server.close()
+  }
 }

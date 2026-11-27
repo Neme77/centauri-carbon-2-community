@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Connections: recognise the exact .13 manager already shipped in Community 4.4.4 / Universal 07, retaining the existing HTTP and file-integrity guards. Add a manual DHCP-delegate repair restricted to the verified native-script mismatch; aligned supported installations are left unchanged. Implemented by **Neme77** (#444).
+
 - Manual preheat (`preheat:<nozzle>:<bed>`) is refused when text follows the bed temperature, as the temperature targets already were; it was accepted and the text ignored. A whole number outside the range of a 32-bit integer in a JSON the service reads (queue, plates, spools, history, Canvas status) is read as missing, instead of being cut to a wrong number. Designed and implemented by **lpgamerzockt-ops** (#435).
 - Appearance studio: a document at the advertised capacity (six profiles, four layouts of nine widgets, eight custom themes, about 18 KiB) is saved, parsed back before the save is acknowledged and reloaded after a restart. The shared decoder used by request bodies and MQTT is unchanged; the appearance document, display manifest and display state use a dedicated, still bounded decoder sized for their documented maxima. A damaged or newer-schema file is reported and never silently rewritten.
 - Custom theme ids follow one 24-character rule in the studio, the import path, `/api/appearance` and the legacy preferences field; imported themes receive the same colour validation as manually edited ones. Themes are created, changed and deleted with per-item requests, and a stale document save no longer replaces (or deletes) another browser's theme library.
@@ -30,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - “Restore original display” no longer depends on the current manifest or GUI hash: after a firmware or panel update the verified baseline is still restorable (`firmwareChanged` is reported), while files written by another tool are never overwritten. A new apply is refused until the old baseline has been restored.
 - The control service stays responsive while a display pack uploads: the transfer and staging no longer hold the display state lock, and a status request is answered during the upload.
 - The Appearance ▸ Advanced tab no longer throws in the demo/development build (missing icon), and every studio tab is covered by the browser test.
+- Spoolman sync: a spool whose Spoolman entry is larger than 8 KiB (a long comment or many extra fields) is read and sent again, up to the size of one page of the list; it was refused in every cycle and its grams never reached Spoolman. A chunked reply too large to read counts as too large, so the list asks for smaller pages instead of stopping; a reply is complete once its Content-Length has arrived, also when a proxy keeps the connection open; results of a sync wait for the next round when there is no memory to take them over, instead of being lost; and the base path of the Spoolman address accepts only URL characters (no spaces, control characters, `?` or `#`) and the port only digits. Designed and implemented by **lpgamerzockt-ops** (#448).
 
 ## [CC2 Control 1.2.30] - 2026-11-25
 

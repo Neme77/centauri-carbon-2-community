@@ -1285,7 +1285,9 @@ reach the printer.
 
 - `POST /api/spoolman` (`url`, `basic_auth`) configures it. `url` must be `http://IPv4[:port][/base]` —
   there is no TLS stack linked into this binary, so `https://` is refused, and a host name is refused too
-  (the printer connects to an address and never resolves a name). An empty `url` turns sync off.
+  (the printer connects to an address and never resolves a name). The port is digits only, and the base path
+  goes into the request line as it is, so it may hold only what a URL path may (letters, digits,
+  `-._~!$&'()*+,;=:@/` and `%XX`); a space, a control character, `?` or `#` is refused. An empty `url` turns sync off.
   `basic_auth` is `user:pass` for a reverse proxy some self-hosters put in front of Spoolman; Spoolman
   itself needs no key. `GET /api/spools` reports `spoolman_url` and `spoolman_has_auth` (never the secret
   itself).
@@ -1315,8 +1317,10 @@ reach the printer.
 - A pull sets the remaining weight to Spoolman's figure minus what Spoolman has not been told about yet
   (`unsent` + `inflight`), so usage charged while a request was in flight is kept.
 - Replies are read whole or rejected: headers and `Content-Length` or chunked framing are checked, a reply that
-  is cut short is an unknown outcome, and a reply larger than its buffer (8 KiB for one spool, 64 KiB for one
-  page of the spool list) is refused, never truncated. A request has 15 seconds in all; a sync cycle starts no new work after 90 seconds (a job that has begun is finished, up to
+  is cut short is an unknown outcome, and a reply larger than its buffer (64 KiB for one spool and for one
+  page of the spool list) is refused, never truncated; a chunk larger than the buffer counts as too large, so a page
+  of the list is halved. A reply with a `Content-Length` is complete when its body is in, also when a proxy keeps the
+  connection open. A request has 15 seconds in all; a sync cycle starts no new work after 90 seconds (a job that has begun is finished, up to
   three requests, so a cycle lasts about 135 seconds at most); usage the cycle did not reach stays queued and the next cycle starts there. Numbers and texts from Spoolman pass the same bounded parsers as
   local data; a value that fails is ignored.
   A filament `color_hex` of six (`RRGGBB`) or eight (`RRGGBBAA`) hex digits is taken as `#RRGGBB`; the transparency is
