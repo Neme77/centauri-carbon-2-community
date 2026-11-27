@@ -155,5 +155,27 @@ with tempfile.TemporaryDirectory(prefix="cc2-display-capacity-") as temporary:
     assert body["customizedCount"] == 0  # none of those names is an applied asset
     os.chmod(state_file, 0o600)
 
-    print(f"PASS: real {len(manifest['assets'])}-asset manifest is supported; "
+    # The documented maximum asset count (320) must parse and be reported.
+    if state_file.exists():
+        state_file.unlink()
+    maximum = dict(manifest)
+    assets = list(manifest["assets"])
+    for index in range(320 - len(assets)):
+        name = f"extra{index:03d}.png"
+        (theme / name).write_bytes(b"placeholder")
+        assets.append({"name": name, "role": "accent", "width": 1, "height": 1,
+                       "sha256": hashlib.sha256(name.encode()).hexdigest()})
+    maximum["assets"] = assets
+    (theme / "cc2-display-manifest.json").write_text(
+        json.dumps(maximum, sort_keys=True, separators=(",", ":")) + "\n")
+    fresh = Server(root, theme, gui)
+    try:
+        body = fresh.wait()
+        assert body["supported"] is True, body["error"]
+        assert body["fileCount"] == 320, body["fileCount"]
+        assert len(body["assets"]) == 320
+    finally:
+        fresh.stop()
+
+    print(f"PASS: real {len(manifest['assets'])}-asset and 320-asset manifests are supported; "
           "missing, unreadable, corrupt, oversized and 154-entry state files are handled without a crash")

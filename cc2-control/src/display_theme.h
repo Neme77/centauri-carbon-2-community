@@ -1244,6 +1244,10 @@ static int disp_receive_pack(disp_upload_job *job) {
             disp_set_error("display_pack_invalid_header");
             goto out;
         }
+        if (size > job->content_length - job->received) {
+            disp_set_error("display_pack_truncated");
+            goto out;
+        }
         pthread_mutex_lock(&disp_mutex);
         const disp_asset *asset = disp_find_asset(name);
         int allowed = asset != NULL;
@@ -1331,6 +1335,9 @@ static int disp_receive_pack(disp_upload_job *job) {
                 pthread_mutex_unlock(&disp_apply_mutex);
                 goto out;
             }
+            /* The refusal above set display_firmware_changed; the apply that
+             * follows is a success and must not report it. */
+            disp_clear_error();
         }
     }
     /* Every staged asset must have a verified original before any write. */

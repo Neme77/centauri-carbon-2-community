@@ -244,14 +244,34 @@ int main(void) {
     unsigned char *restore_tar = make_tar(restore_pack, 1, &restore_pack_size);
     assert(!disp_receive_pack(&(disp_upload_job){ -1, restore_tar, restore_pack_size, restore_pack_size, 0, {0, 0}, &fake_mqtt }));
     assert(strstr(disp_error, "firmware_changed"));
-    assert(disp_restore_baseline(1, &disp_state_cache, NULL));
+    /* Restore through the real HTTP handler: it must return the originals,
+     * report firmwareChanged and drop the baseline. */
+    int restore_pair[2];
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, restore_pair));
+    disp_restore_response(restore_pair[0], &fake_mqtt);
+    char restore_answer[4096];
+    size_t restore_used = 0;
+    struct timeval restore_timeout = { 3, 0 };
+    setsockopt(restore_pair[1], SOL_SOCKET, SO_RCVTIMEO, &restore_timeout, sizeof(restore_timeout));
+    while (restore_used < sizeof(restore_answer) - 1) {
+        ssize_t n = recv(restore_pair[1], restore_answer + restore_used,
+                         sizeof(restore_answer) - 1 - restore_used, 0);
+        if (n <= 0) break;
+        restore_used += (size_t)n;
+    }
+    restore_answer[restore_used] = 0;
+    close(restore_pair[1]);
+    if (!strstr(restore_answer, "HTTP/1.1 200") || !strstr(restore_answer, "firmwareChanged\":true")) {
+        fprintf(stderr, "restore answer: %s\n", restore_answer);
+        assert(0);
+    }
     snprintf(path, sizeof(path), "%s/theme/boot.png", root);
     assert(file_equals(path, boot_original, boot_size));
+    snprintf(path, sizeof(path), "%s/display-theme/baseline.json", root);
+    assert(access(path, F_OK) != 0);
 
-    /* 5b. The restore above is the HTTP path in production and removes the
-     * baseline; here the direct call left it, so remove it to model that and
-     * verify that a new apply then starts on the new identity. */
-    assert(disp_baseline_remove());
+    /* 5b. The restore removed the baseline, so a new apply starts on the new
+     * identity instead of staying refused. */
     assert(disp_receive_pack(&(disp_upload_job){ -1, restore_tar, restore_pack_size, restore_pack_size, 0, {0, 0}, &fake_mqtt }));
     snprintf(path, sizeof(path), "%s/theme/boot.png", root);
     assert(file_equals(path, red, red_size));
@@ -272,6 +292,19 @@ int main(void) {
     assert(disp_receive_pack(&(disp_upload_job){ -1, make_tar((tar_file[]){{"boot.png", red, red_size}, {"bg.png", red, red_size}}, 2, &tar_size), tar_size, tar_size, 0, {0, 0}, &fake_mqtt }));
     snprintf(path, sizeof(path), "%s/theme/boot.png", root);
     assert(file_equals(path, red, red_size));
+
+    /* 5d. With our customised bytes still present, the same situation must be
+     * refused and the baseline kept: nothing may be mistaken for an original. */
+    char fourth[65];
+    write_file("/tmp/cc2-display-gui", (const unsigned char *)"fourth-gui", 10);
+    disp_sha_file("/tmp/cc2-display-gui", fourth);
+    manifest(fourth, 1);
+    disp_manifest_cache.valid = 0;
+    assert(disp_load_manifest(1));
+    assert(!disp_receive_pack(&(disp_upload_job){ -1, make_tar((tar_file[]){{"boot.png", green, green_size}, {"bg.png", green, green_size}}, 2, &tar_size), tar_size, tar_size, 0, {0, 0}, &fake_mqtt }));
+    assert(strstr(disp_error, "firmware_changed"));
+    snprintf(path, sizeof(path), "%s/display-theme/baseline.json", root);
+    assert(access(path, F_OK) == 0);
 
     /* 6. Startup recovery rolls an interrupted apply back from the journal. */
     write_file("/tmp/cc2-display-gui", (const unsigned char *)"fake-gui", 8);

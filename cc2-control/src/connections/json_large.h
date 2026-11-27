@@ -10,7 +10,7 @@
  *   154 baseline/state entries                     ~   780 tokens
  *
  * NG_LARGE_TOKENS is 6 144, above every supported document with headroom, and
- * the string arena is 32 KiB. Every caller heap-allocates the struct (~230 KiB);
+ * the string arena is 64 KiB. Every caller heap-allocates the struct (~230 KiB);
  * none may place it on a stack. Every other consumer keeps the 640-token
  * decoder in json.h, unchanged.
  *
@@ -30,7 +30,7 @@
  * The maximum document matches AP_MAX_JSON (32 KiB) with room for a future
  * field, and never permits an unbounded read. */
 #define NG_LARGE_TOKENS 6144
-#define NG_LARGE_STRINGS 32768
+#define NG_LARGE_STRINGS 65536
 #define NG_LARGE_MAX_DOCUMENT 65536
 
 #define NGI_TOKENS NG_LARGE_TOKENS
