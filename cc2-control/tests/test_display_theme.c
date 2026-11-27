@@ -248,6 +248,31 @@ int main(void) {
     snprintf(path, sizeof(path), "%s/theme/boot.png", root);
     assert(file_equals(path, boot_original, boot_size));
 
+    /* 5b. The restore above is the HTTP path in production and removes the
+     * baseline; here the direct call left it, so remove it to model that and
+     * verify that a new apply then starts on the new identity. */
+    assert(disp_baseline_remove());
+    assert(disp_receive_pack(&(disp_upload_job){ -1, restore_tar, restore_pack_size, restore_pack_size, 0, {0, 0}, &fake_mqtt }));
+    snprintf(path, sizeof(path), "%s/theme/boot.png", root);
+    assert(file_equals(path, red, red_size));
+
+    /* 5c. A baseline from another identity is discarded when every target is
+     * provably an original (the files the new firmware ships), so an update
+     * that rewrote the theme does not lock the feature out. */
+    char third[65];
+    write_file("/tmp/cc2-display-gui", (const unsigned char *)"third-gui", 10);
+    disp_sha_file("/tmp/cc2-display-gui", third);
+    manifest(third, 1);
+    disp_manifest_cache.valid = 0;
+    assert(disp_load_manifest(1));
+    snprintf(path, sizeof(path), "%s/theme/boot.png", root);
+    write_file(path, boot_original, boot_size);
+    snprintf(path, sizeof(path), "%s/theme/bg.png", root);
+    write_file(path, bg_original, bg_size);
+    assert(disp_receive_pack(&(disp_upload_job){ -1, make_tar((tar_file[]){{"boot.png", red, red_size}, {"bg.png", red, red_size}}, 2, &tar_size), tar_size, tar_size, 0, {0, 0}, &fake_mqtt }));
+    snprintf(path, sizeof(path), "%s/theme/boot.png", root);
+    assert(file_equals(path, red, red_size));
+
     /* 6. Startup recovery rolls an interrupted apply back from the journal. */
     write_file("/tmp/cc2-display-gui", (const unsigned char *)"fake-gui", 8);
     manifest(gui_hash, 1);
@@ -340,6 +365,27 @@ int main(void) {
         assert(file_equals(file, (const unsigned char *)body, (size_t)length));
     }
 
+    /* 7b. A state write that fails rolls the files back and leaves no journal,
+     * so the next apply is not blocked by a recovery that has nothing to do. */
+    char cap_state_file[1200], cap_journal[1200], cap_target[1200];
+    snprintf(cap_state_file, sizeof(cap_state_file), "%s/state.json", cap_state);
+    snprintf(cap_journal, sizeof(cap_journal), "%s/journal.json", cap_state);
+    snprintf(cap_target, sizeof(cap_target), "%s/cap000.png", cap_theme);
+    unlink(cap_state_file);
+    assert(!mkdir(cap_state_file, 0700)); /* a directory cannot be renamed over */
+    tar_file failing[1] = {{"cap000.png", red, red_size}};
+    size_t failing_size;
+    unsigned char *failing_tar = make_tar(failing, 1, &failing_size);
+    assert(!disp_receive_pack(&(disp_upload_job){ -1, failing_tar, failing_size, failing_size, 0, {0, 0}, &fake_mqtt }));
+    assert(strstr(disp_error, "state_write_failed"));
+    {
+        char body[96];
+        int length = snprintf(body, sizeof(body), "original-000-%s", "padding-padding-padding-padding-padding");
+        assert(file_equals(cap_target, (const unsigned char *)body, (size_t)length));
+    }
+    assert(access(cap_journal, F_OK) != 0);
+    rmdir(cap_state_file);
+
     /* 8. The status endpoint stays responsive while an upload is streaming. */
     snprintf(disp_theme_dir, sizeof(disp_theme_dir), "%s", theme_dir);
     snprintf(disp_gui_path, sizeof(disp_gui_path), "/tmp/cc2-display-gui");
@@ -392,6 +438,41 @@ int main(void) {
     close(upload[1]);
     if (!strstr(answer, "HTTP/1.1 200")) { fprintf(stderr, "apply answer: %s\n", answer); assert(0); }
     if (!strstr(answer, "\"ok\":true")) { fprintf(stderr, "apply answer: %s\n", answer); assert(0); }
+
+    /* 8b. A declared Content-Length shorter than the bytes actually sent must
+     * be answered promptly (content-length is authoritative), never read past
+     * the declared body or block on the extra bytes. */
+    {
+        int short_pair[2];
+        assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, short_pair));
+        size_t declared = slow_size / 2;
+        char short_header[512];
+        int short_length = snprintf(short_header, sizeof(short_header),
+            "POST /api/display/apply HTTP/1.1\r\nHost: 127.0.0.1:8081\r\n"
+            "X-CC2-Request: 1\r\nContent-Type: application/x-tar\r\nContent-Length: %zu\r\n\r\n",
+            declared);
+        assert(send(short_pair[1], slow_tar, slow_size, 0) == (ssize_t)slow_size);
+        struct timespec started, finished;
+        clock_gettime(CLOCK_MONOTONIC, &started);
+        assert(disp_apply_start(short_pair[0], short_header, (size_t)short_length,
+                                (size_t)short_length, &fake_mqtt) == 1);
+        char short_answer[4096];
+        size_t used = 0;
+        struct timeval tv = { 3, 0 };
+        setsockopt(short_pair[1], SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        while (used < sizeof(short_answer) - 1) {
+            ssize_t n = recv(short_pair[1], short_answer + used, sizeof(short_answer) - 1 - used, 0);
+            if (n <= 0) break;
+            used += (size_t)n;
+        }
+        short_answer[used] = 0;
+        clock_gettime(CLOCK_MONOTONIC, &finished);
+        long elapsed = (finished.tv_sec - started.tv_sec) * 1000 +
+                       (finished.tv_nsec - started.tv_nsec) / 1000000;
+        close(short_pair[1]);
+        assert(strstr(short_answer, "HTTP/1.1 200") || strstr(short_answer, "HTTP/1.1 409"));
+        assert(elapsed < 3000);
+    }
 
     printf("PASS: display pack validation, apply, baseline restore, foreign-change and firmware refusal, "
            "154-file capacity, responsive status, recovery\n");

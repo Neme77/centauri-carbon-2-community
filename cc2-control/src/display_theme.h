@@ -293,7 +293,7 @@ static int disp_load_manifest(int force) {
     if (!file) { disp_set_error("display_manifest_unreadable"); return 0; }
     if (fseek(file, 0, SEEK_END) != 0) { fclose(file); disp_set_error("display_manifest_unreadable"); return 0; }
     long size = ftell(file);
-    if (size <= 0 || size > AP_MAX_JSON) {
+    if (size <= 0 || size > NG_LARGE_MAX_DOCUMENT) {
         fclose(file);
         disp_set_error("display_manifest_unreadable");
         return 0;
@@ -566,6 +566,27 @@ static int disp_state_has(const disp_state *state, const char *name, const char 
     return 0;
 }
 
+/* Delete every preserved original and the baseline manifest. Used after a
+ * verified restore (the originals are back on the display) and when a baseline
+ * from another firmware is provably stale. */
+static int disp_baseline_remove(void) {
+    char dir[PATH_MAX_LOCAL], path[PATH_MAX_LOCAL];
+    DIR *d = disp_baseline_dir(dir, sizeof(dir)) ? opendir(dir) : NULL;
+    if (d) {
+        struct dirent *entry;
+        while ((entry = readdir(d))) {
+            if (!disp_name_valid(entry->d_name)) continue;
+            if (disp_path_join(path, sizeof(path), dir, entry->d_name)) unlink(path);
+        }
+        closedir(d);
+        rmdir(dir);
+    }
+    if (!disp_baseline_manifest(path, sizeof(path))) return 0;
+    unlink(path);
+    ap_sync_parent(path);
+    return 1;
+}
+
 static int disp_baseline_write(const disp_manifest *m) {
     char dir[PATH_MAX_LOCAL], path[PATH_MAX_LOCAL];
     if (!disp_baseline_dir(dir, sizeof(dir)) || !disp_baseline_manifest(path, sizeof(path))) return 0;
@@ -744,6 +765,27 @@ static int disp_backup_original(const disp_asset *asset) {
         return 0;
     }
     return 1;
+}
+
+static int disp_baseline_is_stale_and_safe(const disp_manifest *current) {
+    char manifest[PATH_MAX_LOCAL];
+    if (!disp_baseline_manifest(manifest, sizeof(manifest))) return 0;
+    if (!disp_regular(manifest)) return 1; /* nothing to discard */
+    disp_baseline_entry entries[DISP_MAX_STAGE];
+    int count = 0;
+    if (disp_baseline_read(entries, &count, NULL, 0) <= 0) return 0; /* wrong directory or unreadable */
+    for (int i = 0; i < count; ++i) {
+        if (!entries[i].present) continue;
+        char target[PATH_MAX_LOCAL], hash[65];
+        if (!disp_path_join(target, sizeof(target), disp_theme_dir, entries[i].name) ||
+            !disp_regular(target) || !disp_sha_file(target, hash)) return 0;
+        const disp_asset *asset = NULL;
+        for (int p = 0; p < current->count; ++p)
+            if (!strcmp(current->assets[p].name, entries[i].name)) asset = &current->assets[p];
+        int known = !strcasecmp(hash, entries[i].sha256) || (asset && !strcasecmp(hash, asset->sha256));
+        if (!known) return 0;
+    }
+    return disp_baseline_remove();
 }
 
 static const disp_asset *disp_find_asset_in(const disp_manifest *m, const char *name) {
@@ -953,8 +995,8 @@ static void disp_status_response(int fd) {
     disp_baseline_identity identity;
     int baseline_read = disp_baseline_read(baseline, &baseline_count, &identity, 0);
     int backup = baseline_read > 0 && baseline_count > 0;
-    int firmware_changed = backup && !disp_manifest_identity(&disp_manifest_cache, identity.firmware_base,
-                                                             identity.gui_sha256);
+    int firmware_changed = backup && (!supported ||
+        !disp_manifest_identity(&disp_manifest_cache, identity.firmware_base, identity.gui_sha256));
     char error[160];
     disp_copy_error(error, sizeof(error));
     char *body = malloc(32768);
@@ -1175,8 +1217,12 @@ static int disp_receive_pack(disp_upload_job *job) {
     int result = 0;
     char journal[PATH_MAX_LOCAL];
     disp_state local_state;
-    local_state.file_count = 0;
+    disp_state_defaults(&local_state);
     while (job->received < job->content_length) {
+        if (job->content_length - job->received < 512) {
+            disp_set_error("display_pack_truncated");
+            goto out;
+        }
         if (!disp_read(job, header, 512)) { disp_set_error("display_pack_truncated"); goto out; }
         char name[DISP_NAME_MAX + 1];
         size_t size = 0;
@@ -1214,6 +1260,11 @@ static int disp_receive_pack(disp_upload_job *job) {
         size_t padding = (512 - (size % 512)) % 512;
         if (padding) {
             unsigned char pad[512];
+            if (padding > job->content_length - job->received) {
+                free(data);
+                disp_set_error("display_pack_truncated");
+                goto out;
+            }
             if (!disp_read(job, pad, padding)) { free(data); disp_set_error("display_pack_truncated"); goto out; }
         }
         char why[64] = "";
@@ -1271,9 +1322,15 @@ static int disp_receive_pack(disp_upload_job *job) {
         disp_baseline_identity existing_identity;
         int existing_read = disp_baseline_read(existing, &existing_count, &existing_identity, 1);
         if (existing_read < 0) {
-            free(manifest);
-            pthread_mutex_unlock(&disp_apply_mutex);
-            goto out;
+            /* The saved originals belong to another firmware/GUI. Discard them
+             * only when every target is provably an original (the old one or
+             * the current firmware's own); otherwise the user must restore
+             * first, which removes the baseline. */
+            if (!disp_baseline_is_stale_and_safe(manifest)) {
+                free(manifest);
+                pthread_mutex_unlock(&disp_apply_mutex);
+                goto out;
+            }
         }
     }
     /* Every staged asset must have a verified original before any write. */
@@ -1363,13 +1420,18 @@ static int disp_receive_pack(disp_upload_job *job) {
         pthread_mutex_unlock(&disp_mutex);
     }
     if (!ok) {
-        /* Roll the already replaced files back from the baseline. */
-        (void)disp_restore_baseline(0, &local_state, NULL);
+        /* Roll the already replaced files back from the baseline; when that
+         * succeeds there is nothing left for startup recovery to do. */
+        int rolled_back = disp_restore_baseline(0, &local_state, NULL);
         pthread_mutex_lock(&disp_mutex);
         disp_state_cache = local_state;
         disp_state_cache.phase = 2;
         (void)disp_state_write();
         pthread_mutex_unlock(&disp_mutex);
+        if (rolled_back) {
+            unlink(journal);
+            ap_sync_parent(journal);
+        }
     } else {
         unlink(journal);
         ap_sync_parent(journal);
@@ -1531,6 +1593,9 @@ static void disp_restore_response(int fd, const mqtt_client *mqtt) {
         disp_boot_id(disp_state_cache.boot_id);
         ok = disp_state_write();
         pthread_mutex_unlock(&disp_mutex);
+        /* The originals are back: the baseline (and its identity) is no longer
+         * needed, and dropping it lets a new apply start on a new firmware. */
+        if (ok) (void)disp_baseline_remove();
     }
     disp_copy_error(error, sizeof(error));
     pthread_mutex_unlock(&disp_apply_mutex);
