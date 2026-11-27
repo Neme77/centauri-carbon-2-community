@@ -4622,6 +4622,8 @@ static const char *printer_change_refusal(const char *method, const char *path, 
 #include "queue.h"
 #include "spoolman.h"
 #include "sha256.h"
+#include "crc32.h"
+#include "gzip_check.h"
 #include "canvas_unload.h"
 #include "runout.h"
 #include "calibration_tools.h"
@@ -4720,9 +4722,12 @@ static const char *pending_autosave_guard(void) {
 /* The start page revalidates instead of using no-store: the browser asks on
    every visit, the ETag (SHA-256 of the page) tells it whether its copy is still
    the installed one, and a match is answered with a bodyless 304. Only "/" and
-   "/index.html" use this; every other answer keeps the no-store header in respond(). */
+   "/index.html" use this; every other answer keeps the no-store header in respond().
+   `encoding` is "gzip" when the body is the gzip copy (its ETag is the SHA-256 of
+   those bytes, so it never equals the tag of the plain page), NULL otherwise; every
+   answer names Accept-Encoding in Vary because either form can be sent. */
 static void respond_revalidate(int fd, int status, const char *status_text,
-                               const char *body, size_t body_len, const char *etag) {
+                               const char *body, size_t body_len, const char *etag, const char *encoding) {
     char header[512];
     int header_len;
     if (status == 304)
@@ -4730,6 +4735,7 @@ static void respond_revalidate(int fd, int status, const char *status_text,
             "HTTP/1.1 %d %s\r\n"
             "ETag: %s\r\n"
             "Cache-Control: no-cache\r\n"
+            "Vary: Accept-Encoding\r\n"
             "X-Content-Type-Options: nosniff\r\n"
             "X-Frame-Options: DENY\r\n"
             "Connection: close\r\n\r\n",
@@ -4738,13 +4744,16 @@ static void respond_revalidate(int fd, int status, const char *status_text,
         header_len = snprintf(header, sizeof(header),
             "HTTP/1.1 %d %s\r\n"
             "Content-Type: text/html; charset=utf-8\r\n"
+            "%s%s%s"
             "Content-Length: %lu\r\n"
             "ETag: %s\r\n"
             "Cache-Control: no-cache\r\n"
+            "Vary: Accept-Encoding\r\n"
             "X-Content-Type-Options: nosniff\r\n"
             "X-Frame-Options: DENY\r\n"
             "Connection: close\r\n\r\n",
-            status, status_text, (unsigned long)body_len, etag);
+            status, status_text, encoding ? "Content-Encoding: " : "", encoding ? encoding : "", encoding ? "\r\n" : "",
+            (unsigned long)body_len, etag);
     if (header_len <= 0 || (size_t)header_len >= sizeof(header)) return;
     if (send_all(fd, header, (size_t)header_len) == 0 && status != 304)
         (void)send_all(fd, body, body_len);
@@ -4801,6 +4810,189 @@ static void respond_web_file_too_large(int fd, atomic_int *logged, const char *w
 }
 static atomic_int index_too_large_logged, locale_too_large_logged;
 
+/* respond() for a locale file: the same headers (no-store included) plus Vary: Accept-Encoding, and
+   Content-Encoding when `encoding` is set (the body is then the gzip copy). */
+static void respond_negotiated(int fd, int status, const char *status_text, const char *content_type,
+                               const char *body, size_t body_len, const char *encoding) {
+    char header[512];
+    int header_len = snprintf(header, sizeof(header),
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: %s\r\n"
+        "%s%s%s"
+        "Content-Length: %lu\r\n"
+        "Cache-Control: no-store\r\n"
+        "Vary: Accept-Encoding\r\n"
+        "X-Content-Type-Options: nosniff\r\n"
+        "X-Frame-Options: DENY\r\n"
+        "Connection: close\r\n\r\n",
+        status, status_text, content_type, encoding ? "Content-Encoding: " : "", encoding ? encoding : "",
+        encoding ? "\r\n" : "", (unsigned long)body_len);
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header)) return;
+    if (send_all(fd, header, (size_t)header_len) == 0)
+        (void)send_all(fd, body, body_len);
+}
+
+/* Is a weight of zero among the parameters of one Accept-Encoding entry (";q=0", ";q=0.000")? */
+static int encoding_refused(const char *p, const char *end) {
+    while (p < end) {
+        if (*p++ != ';') continue;
+        while (p < end && (*p == ' ' || *p == '\t')) p++;
+        if (end - p >= 2 && (*p == 'q' || *p == 'Q') && p[1] == '=') {
+            p += 2;
+            if (p >= end || *p != '0') return 0;
+            for (p++; p < end && *p != ';' && *p != ' ' && *p != '\t'; p++)
+                if (*p != '.' && *p != '0') return 0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Does the request take a gzip body? Accept-Encoding is read like every header here (http_header: a single copy,
+   value below 512 bytes). An entry "gzip" or "x-gzip" decides, otherwise "*"; weight 0 refuses. A missing, repeated
+   or oversized header means no: the plain file is a valid answer to every request. */
+static int accepts_gzip(const char *request) {
+    char value[512];
+    if (http_header(request, "Accept-Encoding", value, sizeof(value)) != 1) return 0;
+    int gzip = -1, any = -1;
+    for (const char *item = value; *item;) {
+        const char *end = strchr(item, ',');
+        if (!end) end = item + strlen(item);
+        const char *name = item;
+        while (name < end && (*name == ' ' || *name == '\t')) name++;
+        const char *name_end = name;
+        while (name_end < end && *name_end != ';' && *name_end != ' ' && *name_end != '\t') name_end++;
+        size_t length = (size_t)(name_end - name);
+        int taken = !encoding_refused(name_end, end);
+        if ((length == 4 && !strncasecmp(name, "gzip", 4)) || (length == 6 && !strncasecmp(name, "x-gzip", 6))) gzip = taken;
+        else if (length == 1 && *name == '*') any = taken;
+        item = *end ? end + 1 : end;
+    }
+    return gzip >= 0 ? gzip : any == 1;
+}
+
+static int same_file_state(const struct stat *before, const struct stat *after) {
+    return after->st_size == before->st_size &&
+           after->st_mtim.tv_sec == before->st_mtim.tv_sec && after->st_mtim.tv_nsec == before->st_mtim.tv_nsec &&
+           after->st_ctim.tv_sec == before->st_ctim.tv_sec && after->st_ctim.tv_nsec == before->st_ctim.tv_nsec;
+}
+
+/* CRC-32 of the next `size` bytes of `file`, read in small pieces: the plain file is never held whole for this. */
+static int web_file_crc32(FILE *file, size_t size, uint32_t *crc) {
+    unsigned char piece[4096];
+    uint32_t value = 0;
+    while (size > 0) {
+        size_t want = size < sizeof(piece) ? size : sizeof(piece);
+        if (fread(piece, 1, want, file) != want) return 0;
+        value = cc2_crc32_update(value, piece, want);
+        size -= want;
+    }
+    *crc = value;
+    return 1;
+}
+
+static uint32_t little_endian32(const unsigned char *p) {
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+/* Copies whose payload was unpacked, remembered by the CRC-32 and length of their compressed bytes and of the plain
+   file, with the answer. The next request for the same copy only reads it once for that CRC-32 instead of unpacking it
+   again (about a thirteenth of the work for the start page). A copy that differs in any byte has another CRC-32 (all but
+   1 in 2^32 changes, the strength of the gzip trailer itself) and is unpacked again; nothing is taken from file names
+   or times, so a copy replaced or damaged in place, with or without a restart of the service, is checked anew.
+   16 entries cover the start page and every locale file. */
+#define WEB_GZIP_CHECKED 16
+static struct { uint32_t copy_crc, copy_size, plain_crc, plain_size; int fits, used; } web_gzip_checked[WEB_GZIP_CHECKED];
+static unsigned web_gzip_checked_next;
+static pthread_mutex_t web_gzip_checked_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int web_gzip_payload_fits(const unsigned char *data, size_t size, uint32_t crc, size_t plain_size) {
+    uint32_t copy_crc = cc2_crc32_update(0, data, size);
+    pthread_mutex_lock(&web_gzip_checked_lock);
+    for (unsigned i = 0; i < WEB_GZIP_CHECKED; i++) {
+        if (web_gzip_checked[i].used && web_gzip_checked[i].copy_crc == copy_crc &&
+            web_gzip_checked[i].copy_size == (uint32_t)size && web_gzip_checked[i].plain_crc == crc &&
+            web_gzip_checked[i].plain_size == (uint32_t)plain_size) {
+            int fits = web_gzip_checked[i].fits;
+            pthread_mutex_unlock(&web_gzip_checked_lock);
+            return fits;
+        }
+    }
+    pthread_mutex_unlock(&web_gzip_checked_lock);
+    int fits = cc2_gzip_unpacks_to(data, size, crc, plain_size);
+    pthread_mutex_lock(&web_gzip_checked_lock);
+    unsigned at = web_gzip_checked_next++ % WEB_GZIP_CHECKED;
+    web_gzip_checked[at].copy_crc = copy_crc;
+    web_gzip_checked[at].copy_size = (uint32_t)size;
+    web_gzip_checked[at].plain_crc = crc;
+    web_gzip_checked[at].plain_size = (uint32_t)plain_size;
+    web_gzip_checked[at].fits = fits;
+    web_gzip_checked[at].used = 1;
+    pthread_mutex_unlock(&web_gzip_checked_lock);
+    return fits;
+}
+
+/* The gzip copy that the installer writes next to a file (<path>.gz, installer/install-on-printer.sh), read whole when it
+   can stand in for the plain file: a regular file smaller than the plain one, a gzip member (1f 8b 08) whose trailer
+   (its last 8 bytes) names exactly the CRC-32 and the length of the plain bytes, unchanged while it was read, and
+   whose compressed payload really unpacks to that length and CRC-32 (gzip_check.h decodes it in a 32 KiB window
+   without keeping the output, once per content of the copy: web_gzip_payload_fits). A missing copy (an installation from before the copies), a stale one
+   (left from another release), a cut-off one, one being written or one damaged anywhere in its payload gives NULL,
+   and the caller sends the plain file. The service itself compresses nothing. */
+static unsigned char *web_gzip_twin(const char *path, uint32_t crc, size_t plain_size, size_t *length) {
+    char twin[PATH_MAX_LOCAL];
+    if (snprintf(twin, sizeof(twin), "%s.gz", path) >= (int)sizeof(twin)) return NULL;
+    FILE *file = fopen(twin, "rb");
+    if (!file) return NULL;
+    struct stat info, after;
+    unsigned char *data = NULL;
+    if (fstat(fileno(file), &info) == 0 && S_ISREG(info.st_mode) && info.st_size >= 18 &&
+        (unsigned long long)info.st_size < (unsigned long long)plain_size) {
+        size_t size = (size_t)info.st_size;
+        data = malloc(size);
+        if (data && (fread(data, 1, size, file) != size || fstat(fileno(file), &after) != 0 ||
+                     !same_file_state(&info, &after) || data[0] != 0x1f || data[1] != 0x8b || data[2] != 8 ||
+                     little_endian32(data + size - 8) != crc || little_endian32(data + size - 4) != (uint32_t)plain_size ||
+                     !web_gzip_payload_fits(data, size, crc, plain_size))) {
+            free(data);
+            data = NULL;
+        }
+        if (data) *length = size;
+    }
+    fclose(file);
+    return data;
+}
+
+/* Sends the gzip copy of the web file open in `file` (`size` bytes from its start; `measured`, when given, is its
+   state before reading) and returns 1. Returns 0 with `file` back at its start when the copy cannot stand in for it,
+   and the caller sends the plain file as before. The start page (index = 1) keeps its ETag and 304 answer. */
+static int serve_gzip_twin(int fd, FILE *file, const char *path, size_t size, const struct stat *measured,
+                           const char *request, int index) {
+    uint32_t crc;
+    struct stat after;
+    size_t length = 0;
+    unsigned char *packed = NULL;
+    if (web_file_crc32(file, size, &crc) &&
+        (!measured || (fstat(fileno(file), &after) == 0 && same_file_state(measured, &after))))
+        packed = web_gzip_twin(path, crc, size, &length);
+    char etag[80];
+    if (!packed || (index && !index_etag(packed, length, etag, sizeof(etag)))) {
+        free(packed);
+        rewind(file);
+        return 0;
+    }
+    if (index) {
+        char sent[512]; /* A longer value is not ours; it is ignored and the page is sent. */
+        if (http_header(request, "If-None-Match", sent, sizeof(sent)) == 1 && if_none_match_matches(sent, etag))
+            respond_revalidate(fd, 304, "Not Modified", NULL, 0, etag, "gzip");
+        else
+            respond_revalidate(fd, 200, "OK", (const char *)packed, length, etag, "gzip");
+    } else
+        respond_negotiated(fd, 200, "OK", "application/json; charset=utf-8", (const char *)packed, length, "gzip");
+    free(packed);
+    return 1;
+}
+
 static void serve_index(int fd, const char *web_root, const char *request) {
     char path[PATH_MAX_LOCAL];
     if (snprintf(path, sizeof(path), "%s/index.html", web_root) >= (int)sizeof(path)) {
@@ -4852,6 +5044,12 @@ static void serve_index(int fd, const char *web_root, const char *request) {
         respond(fd, 503, "Service Unavailable", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
+    /* A browser that takes gzip gets the installed gzip copy while it is the gzip form of exactly this page; the page is
+       then only read through CRC-32, never held whole. Otherwise, and when the copy does not fit, the page below. */
+    if (accepts_gzip(request) && serve_gzip_twin(fd, file, path, (size_t)size, measured ? &info : NULL, request, 1)) {
+        fclose(file);
+        return;
+    }
     char *body = malloc((size_t)size);
     if (!body) { fclose(file); return; }
     size_t read_len = fread(body, 1, (size_t)size, file);
@@ -4868,9 +5066,9 @@ static void serve_index(int fd, const char *web_root, const char *request) {
     }
     char sent[512]; /* A longer value is not ours; it is ignored and the page is sent. */
     if (http_header(request, "If-None-Match", sent, sizeof(sent)) == 1 && if_none_match_matches(sent, etag))
-        respond_revalidate(fd, 304, "Not Modified", NULL, 0, etag);
+        respond_revalidate(fd, 304, "Not Modified", NULL, 0, etag, NULL);
     else
-        respond_revalidate(fd, 200, "OK", body, read_len, etag);
+        respond_revalidate(fd, 200, "OK", body, read_len, etag, NULL);
     free(body);
 }
 
@@ -4891,7 +5089,7 @@ static int locale_code_valid(const char *code, size_t length) {
 /* Serves cc2-control/web/locales/<code>.json. The UI loads en.json as a
    fallback plus the requested locale, so a missing or partial file degrades
    to English strings instead of breaking the page. */
-static void serve_locale(int fd, const char *web_root, const char *request_path) {
+static void serve_locale(int fd, const char *web_root, const char *request_path, const char *request) {
     const char *name = request_path + strlen("/i18n/");
     size_t name_len = strlen(name);
     static const char suffix[] = ".json";
@@ -4925,12 +5123,16 @@ static void serve_locale(int fd, const char *web_root, const char *request_path)
         return;
     }
     rewind(file);
+    if (size > 0 && accepts_gzip(request) && serve_gzip_twin(fd, file, path, (size_t)size, NULL, request, 0)) {
+        fclose(file);
+        return;
+    }
     char *body = malloc((size_t)size);
     if (!body) { fclose(file); return; }
     size_t read_len = fread(body, 1, (size_t)size, file);
     fclose(file);
     if (read_len == (size_t)size)
-        respond(fd, 200, "OK", "application/json; charset=utf-8", body, read_len);
+        respond_negotiated(fd, 200, "OK", "application/json; charset=utf-8", body, read_len, NULL);
     free(body);
 }
 
@@ -6289,7 +6491,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && (strcmp(path,"/")==0 || strcmp(path,"/index.html")==0)) {
         serve_index(fd, web_root, request);
     } else if (strcmp(method,"GET")==0 && strncmp(path,"/i18n/",6)==0) {
-        serve_locale(fd, web_root, path);
+        serve_locale(fd, web_root, path, request);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/orca/pending-print")==0) {
         orca_pending_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/orca/pending-print/clear")==0) {
