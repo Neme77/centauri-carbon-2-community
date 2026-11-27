@@ -3,8 +3,8 @@
 
 GET / and GET /i18n/<code>.json send web/index.html.gz or web/locales/<code>.json.gz with
 `Content-Encoding: gzip` when Accept-Encoding takes gzip and the copy unpacks to exactly the file
-(CRC-32 and length in its trailer). Every other case, a missing, stale, cut-off or larger copy included,
-gets the plain file as before. Both forms carry `Vary: Accept-Encoding`; the start page keeps its ETag
+(CRC-32 and length in its trailer, and its payload unpacked to the same). Every other case, a missing, stale,
+cut-off or larger copy and one damaged in the middle of its payload included, gets the plain file as before. Both forms carry `Vary: Accept-Encoding`; the start page keeps its ETag
 (the SHA-256 of the bytes sent) and 304, the locale files keep `Cache-Control: no-store`, and the size
 limits still apply to the plain files.
 """
@@ -48,6 +48,21 @@ def fetch(port, path="/", headers=()):
 
 def packed(data):
     return gzip.compress(data, compresslevel=9, mtime=0)
+
+
+def damaged_in_the_middle(data):
+    """The gzip copy of `data` with 16 bytes of its compressed payload inverted. Header and trailer stay as they are, so
+    the copy still starts with the gzip magic, is smaller than the file and its trailer names the CRC-32 and length of
+    `data`: everything the service checked before it unpacked the payload. Unpacking it fails."""
+    good = packed(data)
+    middle = len(good) // 2
+    bad = good[:middle] + bytes(b ^ 0xFF for b in good[middle:middle + 16]) + good[middle + 16:]
+    assert len(bad) == len(good) < len(data) and bad[:10] == good[:10] and bad[-8:] == good[-8:], "damage left the payload"
+    try:
+        gzip.decompress(bad)
+    except Exception:
+        return bad
+    raise AssertionError("the damaged copy still unpacks; pick other bytes")
 
 
 def tag(data):
@@ -164,6 +179,11 @@ with tempfile.TemporaryDirectory(prefix="cc2-gzip-") as temporary:
         page_with(b"\x1f\x8b\x08", "copy shorter than a gzip member")
         page_with(b"", "empty copy")
         page_with(b"PK\x03\x04" + packed(PAGE)[4:], "copy without the gzip magic")
+        # Damaged inside its payload, header and trailer untouched: the payload itself is unpacked, the page is sent.
+        page_with(damaged_in_the_middle(PAGE), "copy damaged in the middle of its payload")
+        page_with(damaged_in_the_middle(PAGE), "copy damaged in the middle, asked again")
+        index_gz.write_bytes(packed(PAGE))
+        expect_gzip(port, "/", PAGE, packed(PAGE), GZIP, "copy repaired after the damage")
         changed = PAGE.replace(b"page", b"PAGE", 1)
         page_with(packed(PAGE), "page changed, copy still the old one", changed)
         small = b"<html>tiny</html>\n"
@@ -179,6 +199,10 @@ with tempfile.TemporaryDirectory(prefix="cc2-gzip-") as temporary:
 
         locale_gz.write_bytes(packed(b'{"common.ok":"old"}\n'))
         expect_plain(port, "/i18n/ru.json", LOCALE, GZIP, "stale locale copy")
+        locale_gz.write_bytes(damaged_in_the_middle(LOCALE))
+        expect_plain(port, "/i18n/ru.json", LOCALE, GZIP, "locale copy damaged in the middle of its payload")
+        locale_gz.write_bytes(packed(LOCALE))
+        expect_gzip(port, "/i18n/ru.json", LOCALE, packed(LOCALE), GZIP, "locale copy repaired after the damage")
 
         # The limits stay on the plain files: a page above 1 MiB is refused even with a small copy.
         big = b"<html>" + b"a" * (1024 * 1024) + b"</html>"

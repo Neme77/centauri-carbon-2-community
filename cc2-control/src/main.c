@@ -4623,6 +4623,7 @@ static const char *printer_change_refusal(const char *method, const char *path, 
 #include "spoolman.h"
 #include "sha256.h"
 #include "crc32.h"
+#include "gzip_check.h"
 #include "canvas_unload.h"
 #include "runout.h"
 #include "calibration_tools.h"
@@ -4894,11 +4895,50 @@ static uint32_t little_endian32(const unsigned char *p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
 }
 
+/* Copies whose payload was unpacked, remembered by the CRC-32 and length of their compressed bytes and of the plain
+   file, with the answer. The next request for the same copy only reads it once for that CRC-32 instead of unpacking it
+   again (about a thirteenth of the work for the start page). A copy that differs in any byte has another CRC-32 (all but
+   1 in 2^32 changes, the strength of the gzip trailer itself) and is unpacked again; nothing is taken from file names
+   or times, so a copy replaced or damaged in place, with or without a restart of the service, is checked anew.
+   16 entries cover the start page and every locale file. */
+#define WEB_GZIP_CHECKED 16
+static struct { uint32_t copy_crc, copy_size, plain_crc, plain_size; int fits, used; } web_gzip_checked[WEB_GZIP_CHECKED];
+static unsigned web_gzip_checked_next;
+static pthread_mutex_t web_gzip_checked_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int web_gzip_payload_fits(const unsigned char *data, size_t size, uint32_t crc, size_t plain_size) {
+    uint32_t copy_crc = cc2_crc32_update(0, data, size);
+    pthread_mutex_lock(&web_gzip_checked_lock);
+    for (unsigned i = 0; i < WEB_GZIP_CHECKED; i++) {
+        if (web_gzip_checked[i].used && web_gzip_checked[i].copy_crc == copy_crc &&
+            web_gzip_checked[i].copy_size == (uint32_t)size && web_gzip_checked[i].plain_crc == crc &&
+            web_gzip_checked[i].plain_size == (uint32_t)plain_size) {
+            int fits = web_gzip_checked[i].fits;
+            pthread_mutex_unlock(&web_gzip_checked_lock);
+            return fits;
+        }
+    }
+    pthread_mutex_unlock(&web_gzip_checked_lock);
+    int fits = cc2_gzip_unpacks_to(data, size, crc, plain_size);
+    pthread_mutex_lock(&web_gzip_checked_lock);
+    unsigned at = web_gzip_checked_next++ % WEB_GZIP_CHECKED;
+    web_gzip_checked[at].copy_crc = copy_crc;
+    web_gzip_checked[at].copy_size = (uint32_t)size;
+    web_gzip_checked[at].plain_crc = crc;
+    web_gzip_checked[at].plain_size = (uint32_t)plain_size;
+    web_gzip_checked[at].fits = fits;
+    web_gzip_checked[at].used = 1;
+    pthread_mutex_unlock(&web_gzip_checked_lock);
+    return fits;
+}
+
 /* The gzip copy that the installer writes next to a file (<path>.gz, installer/install-on-printer.sh), read whole when it
    can stand in for the plain file: a regular file smaller than the plain one, a gzip member (1f 8b 08) whose trailer
-   (its last 8 bytes) names exactly the CRC-32 and the length of the plain bytes, unchanged while it was read. A missing
-   copy (an installation from before the copies), a stale one (left from another release), a cut-off one or one being
-   written gives NULL, and the caller sends the plain file. The service itself compresses nothing. */
+   (its last 8 bytes) names exactly the CRC-32 and the length of the plain bytes, unchanged while it was read, and
+   whose compressed payload really unpacks to that length and CRC-32 (gzip_check.h decodes it in a 32 KiB window
+   without keeping the output, once per content of the copy: web_gzip_payload_fits). A missing copy (an installation from before the copies), a stale one
+   (left from another release), a cut-off one, one being written or one damaged anywhere in its payload gives NULL,
+   and the caller sends the plain file. The service itself compresses nothing. */
 static unsigned char *web_gzip_twin(const char *path, uint32_t crc, size_t plain_size, size_t *length) {
     char twin[PATH_MAX_LOCAL];
     if (snprintf(twin, sizeof(twin), "%s.gz", path) >= (int)sizeof(twin)) return NULL;
@@ -4912,7 +4952,8 @@ static unsigned char *web_gzip_twin(const char *path, uint32_t crc, size_t plain
         data = malloc(size);
         if (data && (fread(data, 1, size, file) != size || fstat(fileno(file), &after) != 0 ||
                      !same_file_state(&info, &after) || data[0] != 0x1f || data[1] != 0x8b || data[2] != 8 ||
-                     little_endian32(data + size - 8) != crc || little_endian32(data + size - 4) != (uint32_t)plain_size)) {
+                     little_endian32(data + size - 8) != crc || little_endian32(data + size - 4) != (uint32_t)plain_size ||
+                     !web_gzip_payload_fits(data, size, crc, plain_size))) {
             free(data);
             data = NULL;
         }
