@@ -79,7 +79,9 @@ static int z_offset_readback(double *value){
     return 1;
 }
 
-#define REQUEST_MAX 12288
+/* 16 KiB: an appearance document with several layouts and profiles is larger
+ * than the old 12 KiB, and the bounded parser refuses anything above this. */
+#define REQUEST_MAX 16384
 #define FILE_UPLOAD_MAX (512UL * 1024UL * 1024UL)
 #define UPLOAD_CHUNK 16384
 #define PATH_MAX_LOCAL 512
@@ -318,7 +320,9 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"canvas_auto_refill\":true,"
             "\"canvas_unload_distance\":true,"
             "\"bed_plates\":true,"
-            "\"spool_tracking\":true"
+            "\"spool_tracking\":true,"
+            "\"appearance_profiles\":true,"
+            "\"touchscreen_appearance\":true"
         "},"
         "\"endpoints\":{"
             "\"printer\":\"/api/printer\","
@@ -332,6 +336,8 @@ static void system_info_response(int fd, const mqtt_client *mqtt) {
             "\"plates\":\"/api/plates\","
             "\"screws_history\":\"/api/screws/history\","
             "\"spools\":\"/api/spools\","
+            "\"appearance\":\"/api/appearance\","
+            "\"display\":\"/api/display\","
             "\"discovery\":\"/api/v1/system/info\""
         "},"
         "\"runtime\":{"
@@ -5938,6 +5944,11 @@ static void motor_mode_tick(const mqtt_client *mqtt,console_state *console){
 
 static int installer_native_status(int canvas_only);
 #include "app_updates.h"
+/* Appearance profiles (dashboard themes, layouts, profiles) and the reversible
+ * native-display theme pack. Both are presentation-only and never touch
+ * print, motion, heater, network or firmware-update code. */
+#include "appearance.h"
+#include "display_theme.h"
 #include "app_update_catalog.h"
 #include "bed_drying.h"
 #include "nozzle_expansion.h"
@@ -6028,6 +6039,7 @@ static int http_request_complete(const char *request,size_t used){
     if(!end)return 0;
     if(!strncmp(request,"POST /api/app-update/upload ",sizeof("POST /api/app-update/upload ")-1)||
        !strncmp(request,"POST /api/gcode-files/upload?",29)||
+       !strncmp(request,"POST /api/display/apply ",24)||
        !strncmp(request,"POST /api/files/local ",22)||
        !strncmp(request,"POST /api/files/local?",22))return 1;
     size_t header=(size_t)(end-request)+separator;
@@ -6373,6 +6385,28 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         preferences_get_response(fd);
     } else if (strcmp(method,"PUT")==0 && strcmp(path,"/api/preferences")==0) {
         preferences_put_response(fd,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/appearance")==0) {
+        ap_get_response(fd);
+    } else if (strcmp(method,"PUT")==0 && strcmp(path,"/api/appearance")==0) {
+        ap_put_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/themes")==0) {
+        ap_theme_put_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/profiles")==0) {
+        ap_profile_put_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/profiles/delete")==0) {
+        ap_profile_delete_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/profiles/apply")==0) {
+        ap_profile_apply_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/reset")==0) {
+        ap_reset_response(fd,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/display")==0) {
+        disp_status_response(fd);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/display/asset")==0) {
+        disp_asset_response(fd,query);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/display/apply")==0) {
+        return header_end ? disp_apply_start(fd,request,used,(size_t)(body-request),mqtt) : 0;
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/display/restore")==0) {
+        disp_restore_response(fd,mqtt);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files")==0) {
         gcode_files_response(fd);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/page")==0) {
@@ -6621,6 +6655,10 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--update-ca") == 0 && i + 1 < argc) app_update_ca = argv[++i];
         else if (strcmp(argv[i], "--update-runner") == 0 && i + 1 < argc) app_update_runner = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
+        else if (strcmp(argv[i], "--display-dir") == 0 && i + 1 < argc)
+            snprintf(disp_theme_dir, sizeof(disp_theme_dir), "%s", argv[++i]);
+        else if (strcmp(argv[i], "--display-gui") == 0 && i + 1 < argc)
+            snprintf(disp_gui_path, sizeof(disp_gui_path), "%s", argv[++i]);
         else if (strcmp(argv[i], "--layer-index-dir") == 0 && i + 1 < argc) layer_store_dir = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
         else if (strcmp(argv[i], "--screws-history") == 0 && i + 1 < argc) screws_history_path = argv[++i];
@@ -6644,6 +6682,9 @@ int main(int argc, char **argv) {
     }
     service_http_port = port;
     service_panda_port = panda_port;
+    /* A display apply interrupted by a power loss is rolled back on disk
+     * before the first request can observe or continue it. */
+    disp_startup_recover();
     signal(SIGINT, stop_server);
     signal(SIGTERM, stop_server);
     signal(SIGPIPE, SIG_IGN);
