@@ -145,11 +145,31 @@ with tempfile.TemporaryDirectory(prefix="cc2-appearance-") as temporary:
             {"themes": [{"id": "custom-a", "name": "A", "tokens": {**custom, "bg": "red"}}]},
             {"themes": [{"id": "custom-a", "name": "A", "tokens": custom},
                         {"id": "custom-a", "name": "B", "tokens": custom}]},
+            # The legacy preferences field can hold 24 characters: the appearance
+            # endpoint refuses a longer custom id rather than storing a theme the
+            # other store cannot name.
+            {"themes": [{"id": "custom-" + "a" * 18, "name": "Long", "tokens": custom}]},
+            {"themes": [{"id": "custom-a1", "name": "Digit", "tokens": custom}]},
         ]
         for value in bad_values:
             assert status_of(endpoint, value) == 400, value
         code, doc = get(endpoint)
         assert doc["dashboard"]["theme"] == "nord"
+
+        # A themes array merges by id; it never deletes another browser's themes.
+        code, _ = put(endpoint, {"themes": [{"id": "custom-merge-a", "name": "Merge A", "tokens": custom}]})
+        assert code == 200
+        code, _ = put(endpoint, {"themes": [{"id": "custom-merge-b", "name": "Merge B", "tokens": custom}]})
+        assert code == 200
+        code, doc = get(endpoint)
+        merged = {theme["id"] for theme in doc["themes"]}
+        assert {"custom-merge-a", "custom-merge-b"} <= merged, merged
+        assert status_of(endpoint + "/themes/delete", {"id": "custom-merge-b"}, "POST") == 200
+        code, doc = get(endpoint)
+        assert "custom-merge-b" not in {theme["id"] for theme in doc["themes"]}
+        assert "custom-merge-a" in {theme["id"] for theme in doc["themes"]}
+        assert status_of(endpoint + "/themes/delete", {"id": "dark"}, "POST") == 400
+        assert status_of(endpoint + "/themes/delete", {"id": "custom-merge-a"}, "POST") == 200
 
         # Profiles: create, list, apply, refuse deleting the built-in one, delete.
         profile = {
