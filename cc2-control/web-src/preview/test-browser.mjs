@@ -246,6 +246,14 @@ try {
     }
     await route.continue()
   })
+  // The appearance document is the authoritative store now; the same failure
+  // must also be simulated there, otherwise the palette legitimately persists.
+  await page.route('**/api/appearance', async route => {
+    if (route.request().method() === 'PUT' && route.request().postDataJSON()?.dashboard?.theme === 'nord') {
+      return route.fulfill({ status: 503, json: { error: 'Simulated preference save failure' } })
+    }
+    await route.continue()
+  })
   const rejectedTheme = page.waitForResponse(r =>
     r.url().endsWith('/api/preferences') && r.request().method() === 'PUT' &&
     r.request().postDataJSON()?.theme === 'nord')
@@ -255,6 +263,7 @@ try {
   const persisted = await (await page.request.get(`${origin}/api/preferences`)).json()
   assert.equal(persisted.theme, 'light', 'Failed save must leave server theme unchanged')
   await page.unroute('**/api/preferences')
+  await page.unroute('**/api/appearance')
   await page.reload()
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light')
   await page.getByRole('tab').nth(2).click()

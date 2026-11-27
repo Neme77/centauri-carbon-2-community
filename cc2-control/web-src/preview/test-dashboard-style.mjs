@@ -54,6 +54,8 @@ try {
   await page.locator('.cc2-camera-card').getByRole('button', { name: 'Pause', exact: true }).click()
   for (const mode of ['light', 'dark']) for (const width of [1440, 390]) {
     await page.request.put(origin + 'api/preferences', { data: { language: 'en', theme: mode, camera_persistent: false } })
+    const appearance = await (await page.request.get(origin + 'api/appearance')).json()
+    await page.request.put(origin + 'api/appearance', { data: { dashboard: { ...appearance.dashboard, theme: mode } } })
     await page.setViewportSize({ width, height: 1000 }); await page.reload()
     await page.getByRole('checkbox', { name: 'Keep active', exact: true }).waitFor()
     await page.locator('.cc2-quick-actions').waitFor({ state: 'visible' })

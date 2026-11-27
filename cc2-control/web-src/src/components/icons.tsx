@@ -9,6 +9,13 @@ import {
   Folder,
   Grid3x3,
   House,
+  LayoutGrid,
+  RotateCcw,
+  Save,
+  Sparkles,
+  Smartphone,
+  UserRound,
+  Download,
   History,
   Info,
   Layers,
@@ -71,6 +78,13 @@ const icons = {
   motors: Power,
   spool: Spool,
   queue: ListOrdered,
+  sparkles: Sparkles,
+  layout: LayoutGrid,
+  profiles: UserRound,
+  save: Save,
+  transfer: Download,
+  restore: RotateCcw,
+  smartphone: Smartphone,
 }
 
 // Lucide icons (plus the Canvas glyph, drawn the same way), with a 1.75 px stroke everywhere.

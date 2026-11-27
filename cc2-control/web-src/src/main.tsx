@@ -2,6 +2,7 @@ import { render } from 'preact'
 import './index.css'
 import { App } from './App'
 import { setTheme, theme, loadUiPreferences } from '@/lib/i18n'
+import { applyAppearance, cachedAppearance, loadAppearance } from '@/lib/appearance'
 import { checkUpdateNotice, UPDATE_RETRY_INTERVAL } from '@/lib/updates'
 import { poll } from '@/lib/poll'
 import { loadPresets, nav, refreshHealth, refreshPrinter } from '@/lib/state'
@@ -9,6 +10,10 @@ import { checkOrcaPendingPrint } from '@/pages/print-dialog'
 
 const root = document.getElementById('app')
 setTheme(theme.get().mode)
+// Apply the cached appearance before the first paint: a custom palette or a
+// density change must not flash the default dashboard while the API answers.
+const cachedAppearanceDoc = cachedAppearance()
+if (cachedAppearanceDoc) applyAppearance(cachedAppearanceDoc)
 if (root)
   render(
     <div
@@ -27,6 +32,7 @@ if (root)
 async function start() {
   setTheme(theme.get().mode)
   await loadUiPreferences()
+  await loadAppearance()
   // Sources that always run (the header needs them). Pages poll faster only while they are open, see usePoll.
   poll(refreshPrinter, 3000)
   // The separate camera window has no header, material presets or print dialog: it only needs the printer state.

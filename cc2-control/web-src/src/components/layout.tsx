@@ -19,6 +19,7 @@ import {
   ListOrdered,
   Settings,
   SlidersHorizontal,
+  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   Spool,
@@ -60,11 +61,12 @@ const items: [Page, NavIcon, Key][] = [
   ['spools', Spool, 'spools.title'],
   ['pandabreath', Flame, 'common.pandabreath'],
   ['console', SquareTerminal, 'common.console'],
+  ['appearance', Palette, 'appearance.title'],
   ['settings', Settings, 'common.settings'],
 ]
 
 // A separator is drawn before these pages: monitor | operate | calibrate | system.
-const groupStart: Page[] = ['control', 'bed', 'console']
+const groupStart: Page[] = ['control', 'bed', 'console', 'appearance']
 
 // Hold for one second to trigger the emergency stop; a plain click only explains how.
 const EStop = () => {

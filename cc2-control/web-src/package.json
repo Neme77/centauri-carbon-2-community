@@ -18,6 +18,7 @@
     "test:sidebar-canvas-polish": "node preview/test-sidebar-canvas-polish.mjs && node preview/test-android-desktop-header.mjs",
     "test:obsidian-layout": "node preview/test-obsidian-layout.mjs",
     "test:dashboard-style": "node preview/test-dashboard-style.mjs",
+    "test:appearance": "node preview/test-appearance.mjs",
     "test:camera": "node preview/test-camera-stream.mjs",
     "test:miniplayer": "node preview/test-miniplayer.mjs",
     "test:quick": "node preview/test-quick-actions.mjs",

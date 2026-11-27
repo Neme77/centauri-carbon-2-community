@@ -26,6 +26,7 @@ import { Canvas } from '@/pages/canvas'
 import { Spools } from '@/pages/spools'
 import { PandaBreath } from '@/pages/pandabreath'
 import { Console } from '@/pages/console'
+import { Appearance } from '@/pages/appearance'
 import { Settings } from '@/pages/settings'
 
 const pages = {
@@ -40,6 +41,7 @@ const pages = {
   spools: Spools,
   pandabreath: PandaBreath,
   console: Console,
+  appearance: Appearance,
   settings: Settings,
 }
 

@@ -236,6 +236,58 @@ export function previewPlugin(): Plugin {
     return m ? Number(m[1]) : 60
   }
   let preferences: Record<string, unknown> = { language: 'en', theme: 'dark' }
+  // The demo keeps appearance profiles in memory, with the same shape the
+  // backend validates. Native display customisation is honestly unsupported.
+  const appearanceLayouts = () => [
+    { id: 'classic', name: 'Classic', columns: 4, widgets: [] },
+    {
+      id: 'custom-grid',
+      name: 'Custom grid',
+      columns: 4,
+      widgets: ['camera', 'quick', 'job', 'tuning', 'thermal', 'fans', 'firstLayer', 'position', 'system'].map(
+        (id, index) => ({
+          id,
+          enabled: true,
+          span: id === 'fans' || id === 'firstLayer' ? 1 : 2,
+          compact: false,
+          accent: index === 0 ? '' : '',
+        })
+      ),
+    },
+  ]
+  const defaultAppearance = () => {
+    const dashboard = {
+      theme: 'dark',
+      mode: 'dark',
+      layout: 'classic',
+      density: 0,
+      font: 0,
+      scale: 1,
+      radius: 12,
+      spacing: 1,
+      animations: true,
+      layouts: appearanceLayouts(),
+    }
+    const touchscreen = {
+      enabled: false,
+      linkAccent: true,
+      experimental: false,
+      accent: '#7eead8',
+      background: '#0a0c11',
+      boot: 'community',
+    }
+    return {
+      version: 1,
+      recovered: false,
+      error: '',
+      activeProfile: 'community',
+      dashboard,
+      touchscreen,
+      themes: [],
+      profiles: [{ id: 'community', name: 'Community Default', dashboard, touchscreen }],
+    }
+  }
+  let appearance: any = defaultAppearance()
   let cameraViewer: string | null = null
   let deleted = new Set<string>()
   let autoRefill = false
@@ -1032,6 +1084,24 @@ export function previewPlugin(): Plugin {
               return reply(printer())
             case '/api/preferences':
               return reply(preferences)
+            case '/api/appearance':
+              return reply(appearance)
+            case '/api/display':
+              return reply({
+                supported: false,
+                error: 'display_manifest_missing',
+                schema: 0,
+                firmwareBase: '',
+                themeDir: '',
+                assets: [],
+                fileCount: 0,
+                customizedCount: 0,
+                rebootRequired: false,
+                phase: 0,
+                recoveryRequired: false,
+                backupAvailable: false,
+                experimental: true,
+              })
             case '/api/health':
               return reply({
                 service: 'cc2-control-preview',
@@ -1236,6 +1306,14 @@ export function previewPlugin(): Plugin {
           '/api/control',
           '/api/screws/history/clear',
           '/api/preferences',
+          '/api/appearance',
+          '/api/appearance/themes',
+          '/api/appearance/profiles',
+          '/api/appearance/profiles/apply',
+          '/api/appearance/profiles/delete',
+          '/api/appearance/reset',
+          '/api/display/apply',
+          '/api/display/restore',
           '/api/canvas/auto-refill',
           '/api/canvas/unload',
           '/api/canvas/unload/restart',
@@ -1488,6 +1566,61 @@ export function previewPlugin(): Plugin {
               preferences = { ...preferences, ...value }
               return reply(preferences)
             }
+            if (path === '/api/appearance' && req.method === 'PUT') {
+              const value = JSON.parse(body)
+              appearance = {
+                ...appearance,
+                ...(value.activeProfile ? { activeProfile: value.activeProfile } : {}),
+                ...(value.dashboard ? { dashboard: value.dashboard } : {}),
+                ...(value.touchscreen ? { touchscreen: value.touchscreen } : {}),
+                ...(Array.isArray(value.themes) ? { themes: value.themes } : {}),
+                recovered: false,
+                error: '',
+              }
+              return reply({ saved: true })
+            }
+            if (path === '/api/appearance/themes' && req.method === 'POST') {
+              const theme = JSON.parse(body).theme
+              appearance.themes = [...appearance.themes.filter((item: any) => item.id !== theme.id), theme]
+              return reply({ saved: true })
+            }
+            if (path === '/api/appearance/profiles' && req.method === 'POST') {
+              const value = JSON.parse(body)
+              appearance.profiles = [
+                ...appearance.profiles.filter((item: any) => item.id !== value.profile.id),
+                value.profile,
+              ]
+              if (value.theme)
+                appearance.themes = [
+                  ...appearance.themes.filter((item: any) => item.id !== value.theme.id),
+                  value.theme,
+                ]
+              return reply({ saved: true })
+            }
+            if (path === '/api/appearance/profiles/apply' && req.method === 'POST') {
+              const { id } = JSON.parse(body)
+              const profile = appearance.profiles.find((item: any) => item.id === id)
+              if (!profile) return reply({ error: 'Profile not found' }, 404)
+              appearance.dashboard = profile.dashboard
+              appearance.touchscreen = profile.touchscreen
+              appearance.activeProfile = id
+              return reply({ saved: true })
+            }
+            if (path === '/api/appearance/profiles/delete' && req.method === 'POST') {
+              const { id } = JSON.parse(body)
+              if (id === 'community') return reply({ error: 'The built-in profile cannot be removed' }, 400)
+              appearance.profiles = appearance.profiles.filter((item: any) => item.id !== id)
+              if (appearance.activeProfile === id) appearance.activeProfile = 'community'
+              return reply({ saved: true })
+            }
+            if (path === '/api/appearance/reset' && req.method === 'POST') {
+              const all = JSON.parse(body || '{}').profiles === true
+              const fresh = defaultAppearance()
+              appearance = all ? fresh : { ...fresh, themes: appearance.themes, profiles: appearance.profiles }
+              return reply({ saved: true })
+            }
+            if (path === '/api/display/apply' || path === '/api/display/restore')
+              return reply({ ok: false, error: 'display_manifest_missing' }, 409)
             if (path === '/api/camera/claim' && req.method === 'POST') {
               const viewer = body.trim()
               if (!/^[0-9a-z-]{8,40}$/.test(viewer)) return reply({ error: 'Invalid camera viewer' }, 400)

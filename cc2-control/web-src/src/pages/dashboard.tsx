@@ -1,3 +1,4 @@
+import type { ComponentChildren, JSX } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import { Settings } from 'lucide-preact'
 import { PrintTuning } from '@/components/print-tuning'
@@ -38,6 +39,7 @@ import {
   view,
   zoffset,
 } from '@/lib/state'
+import { activeLayout, appearance, type WidgetId, type WidgetPref } from '@/lib/appearance'
 import { JobControls } from '@/pages/job'
 
 const Slot = ({ action, idle, lightOn }: { action: string; idle: boolean; lightOn: boolean }) => {
@@ -172,6 +174,289 @@ const FanTile = ({ label, pct }: { label: Key; pct: number }) => (
   </div>
 )
 
+type DashboardContext = {
+  d: any
+  h: any
+  v: ReturnType<typeof view>
+  off: number | null
+  printerAvailable: boolean
+  meshLabel: string
+  mountedPlate: any
+  quickActions: string[]
+  editQuick: () => void
+}
+
+const CameraWidget = () => <CameraCard preferences />
+
+const QuickWidget = ({ quickActions, editQuick, v }: DashboardContext) => (
+  <Card class="cc2-quick-actions">
+    <CardHead
+      icon="bolt"
+      title="dashboard.quick_actions"
+      end={
+        <Button class="min-h-8 px-2 text-xs text-fg" onClick={editQuick}>
+          <Settings size={14} strokeWidth={1} />
+          {t('dashboard.edit')}
+        </Button>
+      }
+    />
+    <div class="cc2-quick-grid grid grid-cols-2 gap-2 cc2-sm:grid-cols-4">
+      {quickActions.map((action, n) => (
+        <Slot key={n} action={action} idle={v.idle} lightOn={v.lightOn} />
+      ))}
+    </div>
+  </Card>
+)
+
+const JobWidget = ({ v }: DashboardContext) => (
+  <Card class="flex flex-col">
+    <CardHead icon="file" title="common.current_job" end={stateText(v)} />
+    <div
+      title={v.rawFilename || undefined}
+      class="cc2-job-filename mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]"
+    >
+      {v.rawFilename || t('common.no_active_file')}
+    </div>
+    {!v.active && (
+      <a href="#files" class="mb-3 -mt-1 w-fit text-[13px] text-cyan underline underline-offset-2">
+        {t('common.choose_a_file_to_print')}
+      </a>
+    )}
+    <QueueNext />
+    <Progress pct={v.progress} />
+    <div class="cc2-job-stats mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 cc2-sm:grid-cols-4">
+      {[
+        [v.elapsedText, t('common.elapsed')],
+        [v.remainingText, tpl('common.remaining_ends_time', { time: v.finishText })],
+        [v.active ? v.layer || '—' : '—', t('common.current_layer')],
+        [v.total, t('common.total_layers')],
+      ].map(([val, label], i) => (
+        <div key={i} class="border-edge cc2-sm:border-r cc2-sm:last:border-0">
+          <strong class="block text-[15px]">{val}</strong>
+          <small class="text-xs text-muted">{label}</small>
+        </div>
+      ))}
+    </div>
+    <div class="mt-auto">
+      <JobControls v={v} />
+    </div>
+  </Card>
+)
+
+const TuningWidget = () => <PrintTuning sliders />
+
+const ThermalWidget = ({ d, printerAvailable }: DashboardContext) => {
+  const target = (x: any) => (Number(x) > 0 ? ` / ${num(x)}` : '')
+  return (
+    <Card class="flex flex-col cc2-md:col-span-2">
+      <CardHead icon="temp" title="dashboard.thermals" end={t('dashboard.live_history_5_minutes')} />
+      <div class="grid gap-3.5">
+        <div class="grid gap-2.5 cc2-sm:grid-cols-3">
+          {(
+            [
+              ['red', 'common.nozzle', d?.extruder?.temperature, d?.extruder?.target, 300],
+              ['blue', 'common.heated_bed', d?.heater_bed?.temperature, d?.heater_bed?.target, 120],
+              ['amber', 'dashboard.chamber', d?.chamber?.temperature, 0, 65],
+            ] as const
+          ).map(([dot, label, val, goal, max]) => (
+            <div key={label} class="cc2-temp-tile" style={{ color: `var(--${dot})` }}>
+              <div class="flex items-center gap-2 text-xs text-muted">
+                <Dot c={dot} />
+                {t(label)}
+              </div>
+              <div class="cc2-temp-tile-value text-fg">
+                {num(val)}
+                <small>{target(goal)} °C</small>
+              </div>
+              <div class="cc2-temp-tile-bar">
+                <i style={{ width: `${Math.max(0, Math.min(100, (Number(val) / max) * 100)) || 0}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <ThermalChart />
+      </div>
+      <dl class="mt-auto grid gap-2 pt-3 cc2-sm:grid-cols-2" data-heater-status>
+        {(
+          [
+            ['common.nozzle', d?.extruder?.target],
+            ['common.heated_bed', d?.heater_bed?.target],
+          ] as const
+        ).map(([label, goal]) => {
+          const known = printerAvailable && d?.connected === true && typeof goal === 'number' && Number.isFinite(goal)
+          return (
+            <div
+              key={label}
+              class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-edge px-2 py-2"
+            >
+              <dt class="text-sm text-muted">{t(label)}</dt>
+              <dd title={tpl('control.name_target', { name: t(label) })}>
+                <Tag>{t(!known ? 'state.unknown' : goal > 0 ? 'control.on' : 'control.off')}</Tag>
+              </dd>
+            </div>
+          )
+        })}
+      </dl>
+    </Card>
+  )
+}
+
+const FansWidget = ({ v }: DashboardContext) => (
+  <Card class="cc2-dashboard-fans flex flex-col">
+    <CardHead icon="fan" title="common.fans" />
+    <div class="mt-4 flex flex-1 flex-col gap-2.5 cc2-lg:mt-0 cc2-lg:gap-4.5">
+      <FanTile label="common.part_fan" pct={v.fan('part')} />
+      <FanTile label="common.aux_fan" pct={v.fan('aux')} />
+      <FanTile label="dashboard.chamber" pct={v.fan('box')} />
+    </div>
+  </Card>
+)
+
+const FirstLayerWidget = ({ off, meshLabel, mountedPlate }: DashboardContext) => (
+  <Card class="flex min-w-0 flex-col" data-first-layer>
+    <CardHead icon="z" title="dashboard.first_layer" />
+    <dl class="grid flex-1 grid-rows-2 gap-2 text-center">
+      <div
+        class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3"
+        title={t('dashboard.z_offset_page_only')}
+      >
+        <dt class="text-base font-semibold text-fg">{t('dashboard.effective_z_offset')}</dt>
+        <dd class="mt-2 flex flex-col items-center gap-2">
+          <span class="text-3xl font-semibold tabular-nums">
+            {off === null ? '—' : (off > 0 ? '+' : '') + off.toFixed(3)} <small class="text-sm text-muted">mm</small>
+          </span>
+          <Tag tone="warning">{t('common.session_only')}</Tag>
+        </dd>
+      </div>
+      <div class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3">
+        <dt class="text-base font-semibold text-fg">{t('bed.active_mesh')}</dt>
+        <dd class="mt-2 truncate text-xl font-semibold" title={meshLabel}>
+          {meshLabel}
+        </dd>
+        <dd class="mt-2 truncate text-base font-semibold text-fg" title={mountedPlate?.name}>
+          {mountedPlate ? tpl('plates.side_n', { side: mountedPlate.side }) : t('dashboard.plate_side_unknown')}
+        </dd>
+      </div>
+    </dl>
+  </Card>
+)
+
+const PositionWidget = ({ v }: DashboardContext) => (
+  <Card class="flex flex-col">
+    <CardHead icon="target" title="common.position" />
+    {(['x', 'y', 'z'] as const).map(a => (
+      <Row key={a} text={a.toUpperCase()} value={v.pos(a)} />
+    ))}
+    <div class="mt-auto pt-3">
+      <Tag tone={['x', 'y', 'z'].every(a => v.homed.includes(a)) ? 'ok' : 'warning'}>
+        {v.homed ? `${v.homed.toUpperCase()} ${t('common.homed')}` : t('common.not_homed')}
+      </Tag>
+    </div>
+  </Card>
+)
+
+const SystemWidget = ({ h }: DashboardContext) => (
+  <Card>
+    <CardHead icon="monitor" title="dashboard.system" />
+    <Row
+      label="dashboard.service"
+      value={
+        h ? (
+          <>
+            <Dot /> {t('dashboard.online')}
+          </>
+        ) : (
+          t('common.connecting')
+        )
+      }
+    />
+    <Row label="dashboard.system_uptime" value={h ? duration(h.uptime_seconds) : '—'} />
+    <Row label="dashboard.cpu_load" value={h ? String(h.loadavg).split(/\s+/).slice(0, 3).join(' ') : '—'} />
+    <Row label="dashboard.available_memory" value={h ? `${(h.mem_available_kb / 1024).toFixed(1)} MiB` : '—'} />
+  </Card>
+)
+
+const WIDGET_COMPONENTS: Record<WidgetId, (ctx: DashboardContext) => JSX.Element> = {
+  camera: () => <CameraWidget />,
+  quick: ctx => <QuickWidget {...ctx} />,
+  job: ctx => <JobWidget {...ctx} />,
+  tuning: () => <TuningWidget />,
+  thermal: ctx => <ThermalWidget {...ctx} />,
+  fans: ctx => <FansWidget {...ctx} />,
+  firstLayer: ctx => <FirstLayerWidget {...ctx} />,
+  position: ctx => <PositionWidget {...ctx} />,
+  system: ctx => <SystemWidget {...ctx} />,
+}
+
+/* A custom layout puts each widget in a plain grid cell; the widget itself
+ * already renders its Card. A per-widget accent overrides --cyan locally,
+ * which every widget already uses for its accent, so no widget needs a
+ * separate colour prop. */
+const WidgetCell = ({ widget, children }: { widget: WidgetPref; children: ComponentChildren }) => (
+  <div
+    class="cc2-widget-cell min-w-0"
+    data-widget={widget.id}
+    data-compact={widget.compact ? 'true' : undefined}
+    data-span={widget.span}
+    style={widget.accent ? ({ '--cyan': widget.accent } as JSX.CSSProperties) : undefined}
+  >
+    {children}
+  </div>
+)
+
+const ClassicDashboard = (ctx: DashboardContext) => (
+  <div class="cc2-dashboard grid gap-3.5">
+    <div class="cc2-dashboard-primary grid gap-3.5 cc2-lg:grid-cols-2">
+      <div class="cc2-dashboard-camera-column grid content-start gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
+        <CameraWidget />
+        <QuickWidget {...ctx} />
+      </div>
+      <div class="grid gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
+        <JobWidget {...ctx} />
+        <TuningWidget />
+      </div>
+    </div>
+
+    <div class="grid gap-3.5 cc2-md:grid-cols-2 cc2-lg:grid-cols-4">
+      <ThermalWidget {...ctx} />
+      <FansWidget {...ctx} />
+      <FirstLayerWidget {...ctx} />
+    </div>
+
+    <div class="cc2-dashboard-bottom grid gap-3.5">
+      <div class="grid gap-3.5 cc2-md:grid-cols-2">
+        <PositionWidget {...ctx} />
+        <SystemWidget {...ctx} />
+      </div>
+    </div>
+  </div>
+)
+
+const CustomDashboard = ({
+  ctx,
+  layout,
+}: {
+  ctx: DashboardContext
+  layout: NonNullable<ReturnType<typeof activeLayout>>
+}) => {
+  const widgets = layout.widgets.filter(widget => widget.enabled && WIDGET_COMPONENTS[widget.id])
+  const columns = layout.columns === 2 ? 'cc2-dashboard-cols-2' : 'cc2-dashboard-cols-4'
+  return (
+    <div class={cn('cc2-dashboard cc2-dashboard-custom grid gap-3.5', columns)}>
+      {widgets.map(widget => (
+        <WidgetCell key={widget.id} widget={widget}>
+          {WIDGET_COMPONENTS[widget.id](ctx)}
+        </WidgetCell>
+      ))}
+      {!widgets.length && (
+        <Card>
+          <p class="text-muted">{t('appearance.no_widgets_enabled')}</p>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 export const Dashboard = () => {
   usePoll(refreshPrinter, 1500)
   usePoll(refreshHealth, 5000)
@@ -193,190 +478,23 @@ export const Dashboard = () => {
   const v = view(d)
   const quickActions = quick.use().actions
   const [editing, setEditing] = useState(false)
-  const target = (x: any) => (Number(x) > 0 ? ` / ${num(x)}` : '')
+  const doc = appearance.use().doc
+  const layout = activeLayout(doc)
+  const ctx: DashboardContext = {
+    d,
+    h,
+    v,
+    off,
+    printerAvailable,
+    meshLabel,
+    mountedPlate,
+    quickActions,
+    editQuick: () => setEditing(true),
+  }
   return (
-    <div class="cc2-dashboard grid gap-3.5">
+    <>
       {editing && <QuickEditor onClose={() => setEditing(false)} />}
-      <div class="cc2-dashboard-primary grid gap-3.5 cc2-lg:grid-cols-2">
-        <div class="cc2-dashboard-camera-column grid content-start gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
-          <CameraCard preferences />
-          <Card class="cc2-quick-actions">
-            <CardHead
-              icon="bolt"
-              title="dashboard.quick_actions"
-              end={
-                <Button class="min-h-8 px-2 text-xs text-fg" onClick={() => setEditing(true)}>
-                  <Settings size={14} strokeWidth={1} />
-                  {t('dashboard.edit')}
-                </Button>
-              }
-            />
-            <div class="cc2-quick-grid grid grid-cols-2 gap-2 cc2-sm:grid-cols-4">
-              {quickActions.map((action, n) => (
-                <Slot key={n} action={action} idle={v.idle} lightOn={v.lightOn} />
-              ))}
-            </div>
-          </Card>
-        </div>
-        <div class="grid gap-3.5 cc2-lg:grid-rows-[1fr_auto]">
-          <Card class="flex flex-col">
-            <CardHead icon="file" title="common.current_job" end={stateText(v)} />
-            <div
-              title={v.rawFilename || undefined}
-              class="cc2-job-filename mb-3 mt-1 text-2xl font-semibold leading-snug [overflow-wrap:anywhere]"
-            >
-              {v.rawFilename || t('common.no_active_file')}
-            </div>
-            {!v.active && (
-              <a href="#files" class="mb-3 -mt-1 w-fit text-[13px] text-cyan underline underline-offset-2">
-                {t('common.choose_a_file_to_print')}
-              </a>
-            )}
-            <QueueNext />
-            <Progress pct={v.progress} />
-            <div class="cc2-job-stats mt-5 grid grid-cols-2 gap-x-2.5 gap-y-4 cc2-sm:grid-cols-4">
-              {[
-                [v.elapsedText, t('common.elapsed')],
-                [v.remainingText, tpl('common.remaining_ends_time', { time: v.finishText })],
-                [v.active ? v.layer || '—' : '—', t('common.current_layer')],
-                [v.total, t('common.total_layers')],
-              ].map(([val, label], i) => (
-                <div key={i} class="border-edge cc2-sm:border-r cc2-sm:last:border-0">
-                  <strong class="block text-[15px]">{val}</strong>
-                  <small class="text-xs text-muted">{label}</small>
-                </div>
-              ))}
-            </div>
-            <div class="mt-auto">
-              <JobControls v={v} />
-            </div>
-          </Card>
-          <PrintTuning sliders />
-        </div>
-      </div>
-
-      <div class="grid gap-3.5 cc2-md:grid-cols-2 cc2-lg:grid-cols-4">
-        <Card class="flex flex-col cc2-md:col-span-2">
-          <CardHead icon="temp" title="dashboard.thermals" end={t('dashboard.live_history_5_minutes')} />
-          <div class="grid gap-3.5">
-            <div class="grid gap-2.5 cc2-sm:grid-cols-3">
-              {(
-                [
-                  ['red', 'common.nozzle', d?.extruder?.temperature, d?.extruder?.target, 300],
-                  ['blue', 'common.heated_bed', d?.heater_bed?.temperature, d?.heater_bed?.target, 120],
-                  ['amber', 'dashboard.chamber', d?.chamber?.temperature, 0, 65],
-                ] as const
-              ).map(([dot, label, val, goal, max]) => (
-                <div key={label} class="cc2-temp-tile" style={{ color: `var(--${dot})` }}>
-                  <div class="flex items-center gap-2 text-xs text-muted">
-                    <Dot c={dot} />
-                    {t(label)}
-                  </div>
-                  <div class="cc2-temp-tile-value text-fg">
-                    {num(val)}
-                    <small>{target(goal)} °C</small>
-                  </div>
-                  <div class="cc2-temp-tile-bar">
-                    <i style={{ width: `${Math.max(0, Math.min(100, (Number(val) / max) * 100)) || 0}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <ThermalChart />
-          </div>
-          <dl class="mt-auto grid gap-2 pt-3 cc2-sm:grid-cols-2" data-heater-status>
-            {(
-              [
-                ['common.nozzle', d?.extruder?.target],
-                ['common.heated_bed', d?.heater_bed?.target],
-              ] as const
-            ).map(([label, goal]) => {
-              const known =
-                printerAvailable && d?.connected === true && typeof goal === 'number' && Number.isFinite(goal)
-              return (
-                <div
-                  key={label}
-                  class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-edge px-2 py-2"
-                >
-                  <dt class="text-sm text-muted">{t(label)}</dt>
-                  <dd title={tpl('control.name_target', { name: t(label) })}>
-                    <Tag>{t(!known ? 'state.unknown' : goal > 0 ? 'control.on' : 'control.off')}</Tag>
-                  </dd>
-                </div>
-              )
-            })}
-          </dl>
-        </Card>
-        <Card class="cc2-dashboard-fans flex flex-col">
-          <CardHead icon="fan" title="common.fans" />
-          <div class="mt-4 flex flex-1 flex-col gap-2.5 cc2-lg:mt-0 cc2-lg:gap-4.5">
-            <FanTile label="common.part_fan" pct={v.fan('part')} />
-            <FanTile label="common.aux_fan" pct={v.fan('aux')} />
-            <FanTile label="dashboard.chamber" pct={v.fan('box')} />
-          </div>
-        </Card>
-        <Card class="flex min-w-0 flex-col" data-first-layer>
-          <CardHead icon="z" title="dashboard.first_layer" />
-          <dl class="grid flex-1 grid-rows-2 gap-2 text-center">
-            <div
-              class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3"
-              title={t('dashboard.z_offset_page_only')}
-            >
-              <dt class="text-base font-semibold text-fg">{t('dashboard.effective_z_offset')}</dt>
-              <dd class="mt-2 flex flex-col items-center gap-2">
-                <span class="text-3xl font-semibold tabular-nums">
-                  {off === null ? '—' : (off > 0 ? '+' : '') + off.toFixed(3)}{' '}
-                  <small class="text-sm text-muted">mm</small>
-                </span>
-                <Tag tone="warning">{t('common.session_only')}</Tag>
-              </dd>
-            </div>
-            <div class="flex min-w-0 flex-col justify-center rounded-md border border-edge bg-field px-2 py-3">
-              <dt class="text-base font-semibold text-fg">{t('bed.active_mesh')}</dt>
-              <dd class="mt-2 truncate text-xl font-semibold" title={meshLabel}>
-                {meshLabel}
-              </dd>
-              <dd class="mt-2 truncate text-base font-semibold text-fg" title={mountedPlate?.name}>
-                {mountedPlate ? tpl('plates.side_n', { side: mountedPlate.side }) : t('dashboard.plate_side_unknown')}
-              </dd>
-            </div>
-          </dl>
-        </Card>
-      </div>
-
-      <div class="cc2-dashboard-bottom grid gap-3.5">
-        <div class="grid gap-3.5 cc2-md:grid-cols-2">
-          <Card class="flex flex-col">
-            <CardHead icon="target" title="common.position" />
-            {(['x', 'y', 'z'] as const).map(a => (
-              <Row key={a} text={a.toUpperCase()} value={v.pos(a)} />
-            ))}
-            <div class="mt-auto pt-3">
-              <Tag tone={['x', 'y', 'z'].every(a => v.homed.includes(a)) ? 'ok' : 'warning'}>
-                {v.homed ? `${v.homed.toUpperCase()} ${t('common.homed')}` : t('common.not_homed')}
-              </Tag>
-            </div>
-          </Card>
-          <Card>
-            <CardHead icon="monitor" title="dashboard.system" />
-            <Row
-              label="dashboard.service"
-              value={
-                h ? (
-                  <>
-                    <Dot /> {t('dashboard.online')}
-                  </>
-                ) : (
-                  t('common.connecting')
-                )
-              }
-            />
-            <Row label="dashboard.system_uptime" value={h ? duration(h.uptime_seconds) : '—'} />
-            <Row label="dashboard.cpu_load" value={h ? String(h.loadavg).split(/\s+/).slice(0, 3).join(' ') : '—'} />
-            <Row label="dashboard.available_memory" value={h ? `${(h.mem_available_kb / 1024).toFixed(1)} MiB` : '—'} />
-          </Card>
-        </div>
-      </div>
-    </div>
+      {layout ? <CustomDashboard ctx={ctx} layout={layout} /> : <ClassicDashboard {...ctx} />}
+    </>
   )
 }

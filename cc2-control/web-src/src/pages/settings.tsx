@@ -19,10 +19,11 @@ import {
   setLanguage,
   setTheme,
   t,
-  THEMES,
+  THEME_CHOICES,
   theme,
   tpl,
 } from '@/lib/i18n'
+import { appearance, selectTheme } from '@/lib/appearance'
 import { QUICK_DEFAULTS, saveQuickActions } from '@/lib/quick'
 import { ls } from '@/lib/store'
 import { spools, refreshSpools, refusalText, saveSpoolmanConfig } from '@/lib/spools'
@@ -37,7 +38,7 @@ import {
   setPandaBreathFirmware,
   setPandaBreathHost,
 } from '@/lib/pandabreath'
-import { health, nav, openSettings, type SettingsTab, refreshHealth, refreshSetup } from '@/lib/state'
+import { health, nav, openAppearance, openSettings, type SettingsTab, refreshHealth, refreshSetup } from '@/lib/state'
 import { RememberLan } from '@/components/remember-lan'
 import { forgetLanCode } from '@/lib/lan-code'
 import { Updates } from './Updates'
@@ -418,6 +419,7 @@ const Integrations = () => {
 const Appearance = () => {
   const lang = i18n.get().lang,
     mode = theme.use().mode
+  const customThemes = appearance.use().doc.themes
   const restore = async () => {
     if (!(await ask(t('settings.restore_interface_preferences'), true))) return
     try {
@@ -428,6 +430,7 @@ const Appearance = () => {
     }
     await setPersistentCamera(false)
     ;['cc2-language', 'cc2-theme'].forEach(ls.del)
+    selectTheme('dark')
     setTheme('dark', true)
     await setLanguage(detectLanguage(), true)
     notify(t('settings.interface_preferences_restored'))
@@ -450,14 +453,34 @@ const Appearance = () => {
           </label>
           <label class={lab}>
             {t('settings.theme')}
-            <Select class="mt-1.5" value={mode} onChange={e => setTheme(e.currentTarget.value, true)}>
-              {THEMES.map(x => (
+            <Select
+              class="mt-1.5"
+              value={mode}
+              onChange={e => {
+                const value = e.currentTarget.value
+                selectTheme(value)
+                setTheme(value, true)
+              }}
+            >
+              {THEME_CHOICES.map(x => (
                 <option key={x.id} value={x.id}>
                   {x.key ? t(x.key) : x.label}
                 </option>
               ))}
+              {customThemes.map(x => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
             </Select>
           </label>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-edge pt-3">
+          <p class="mr-auto text-xs text-muted">{t('settings.appearance_studio_hint')}</p>
+          <Button onClick={() => openAppearance('overview')}>
+            <Palette {...G} />
+            {t('settings.open_appearance_studio')}
+          </Button>
         </div>
       </Card>
       <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-edge pt-3">
