@@ -1392,6 +1392,15 @@ export const importAppearance = async (raw: unknown) => {
   const rawProfiles: unknown[] = Array.isArray(rawDocument.profiles) ? rawDocument.profiles : []
   const rawLayouts: unknown[] =
     isObject(rawDocument.dashboard) && Array.isArray(rawDocument.dashboard.layouts) ? rawDocument.dashboard.layouts : []
+  const duplicateId = (items: unknown[]) => {
+    const seen = new Set<string>()
+    return items.some(item => {
+      if (!isObject(item) || typeof item.id !== 'string') return false
+      if (seen.has(item.id)) return true
+      seen.add(item.id)
+      return false
+    })
+  }
   const lostTheme = rawThemes.some(item => {
     const parsed = normalizeThemes([item])
     return parsed.length !== 1 || !doc.themes.some(theme => theme.id === parsed[0].id)
@@ -1404,7 +1413,14 @@ export const importAppearance = async (raw: unknown) => {
     item =>
       isObject(item) && typeof item.id === 'string' && !doc.dashboard.layouts.some(layout => layout.id === item.id)
   )
-  if (lostTheme || lostProfile || lostLayout) {
+  if (
+    lostTheme ||
+    lostProfile ||
+    lostLayout ||
+    duplicateId(rawThemes) ||
+    duplicateId(rawProfiles) ||
+    duplicateId(rawLayouts)
+  ) {
     notify(t('appearance.import_bad'), 'error')
     return false
   }
