@@ -28,14 +28,14 @@ release gate.
 | Item | Value |
 | --- | --- |
 | Branch | `feature/appearance-customization` |
-| Final HEAD | The commit that contains this report and the regenerated snapshot (parent `76fbdba8`; `git log -1`) |
-| Code/merge commit | `80033f1d` (merge + audit fixes), then `1b8c0c70`, `e24e7a41`, `a939896f` (docs/test, final fixes, screenshot artifact removal), `76fbdba8` (duplicate-id import) |
+| Final HEAD | The commit that contains this report and the regenerated snapshot (parent `6b3e6611`; `git log -1`) |
+| Code/merge commit | `80033f1d` (merge + audit fixes), then `1b8c0c70`, `e24e7a41`, `a939896f` (docs/test, final fixes, screenshot artifact removal), `76fbdba8` (duplicate-id import), `6b3e6611` (Ember/Rose upstream merge, addendum H) |
 | Upstream `origin/develop` | `b5968048` (moved twice during this audit: `3892a174` added gzip web delivery #449, Spoolman on-demand sync #451 and ELEGOO error texts #445; `b5968048` added the Ember/Rose themes #453, see addendum H) |
 | Merge base (original) | `a59ae640` |
 | Integrated with upstream | Yes: `b5968048` is an ancestor of HEAD; 0 behind |
-| Ahead of `origin/develop` | 5 source commits after the merge (`80033f1d`, `1b8c0c70`, `e24e7a41`, `a939896f`, `76fbdba8`) plus the final report/snapshot commit |
+| Ahead of `origin/develop` | `b5968048..6b3e6611` plus the final snapshot commit (31 commits ahead, 0 behind at publication time) |
 | Working tree | clean (`git status --porcelain` empty) |
-| Commits added during this audit | `80033f1d` (merge + audit fixes), `1b8c0c70` (docs/test), `e24e7a41` (last fixes), `a939896f` (artifact cleanup), `76fbdba8` (duplicate-id import), final report+snapshot commit |
+| Commits added during this audit | `80033f1d` (merge + audit fixes), `1b8c0c70` (docs/test), `e24e7a41` (last fixes), `a939896f` (artifact cleanup), `76fbdba8` (duplicate-id import), `6b3e6611` (second upstream merge), final snapshot commit |
 | Pushed / PR | **No push, no PR, no merge into upstream** |
 | Merge conflicts | none unresolved; generated web/builder files resolved by regeneration |
 
@@ -192,7 +192,7 @@ plain file that must fit in memory.
 | Command | Result |
 | --- | --- |
 | `python3 experimental/pr128-integration/sync_source.py` on the committed tree | regenerated `source.zip`, `prepare.py`, `firmware_builder.py`, `run_build.py` |
-| `test_cc2_control_source_snapshot.py`, `test_pinned_inputs.py`, `test_cc2_control_integration.py` | PASS; `source.zip` sha256 `f3e85e65…`, pin `76fbdba8` |
+| `test_cc2_control_source_snapshot.py`, `test_pinned_inputs.py`, `test_cc2_control_integration.py` | PASS; final `source.zip` sha256 `c4016b3e…`, pin `6b3e6611` (before addendum H: `f3e85e65…`, pin `76fbdba8`) |
 | `python3 -m unittest discover -s builder/current/tests -p 'test_*.py'` | **Ran 61, 60 passed, 3 skipped, 1 failed only for missing `dash`/BusyBox** (`test_connections_firmware`) |
 
 ---
@@ -289,7 +289,7 @@ That commit was therefore integrated before publication:
 | Mode mapping | Ember is dark, Rose is light; `applyAppearance` derives the form-control colour scheme from `LIGHT_THEME_IDS`, so both custom and the newly light built-ins get `color-scheme: light` |
 | Tests added | `test:obsidian-layout` asserts both themes persist through `/api/preferences` and `/api/appearance`, keep their stored mode and colour scheme across a reload, and are seen by a fresh browser; `test:appearance` asserts both cards in the gallery and Rose/Ember stored as light/dark |
 | Counts | the studio now ships fourteen palettes; `CHANGELOG.md` and `docs/APPEARANCE.md` say fourteen |
-| Snapshot | regenerated again from the final committed tree, last |
+| Snapshot | regenerated again from the final committed tree (`6b3e6611`), last: pin `6b3e6611`, `source.zip` sha256 `c4016b3e…` |
 
 Verification after this integration (all re-run, not inherited):
 
