@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Two new colour themes, **Mocha** (dark, lilac on midnight blue) and **Latte** (light, paper grey with a deep violet accent), in the soft pastel style of the popular Catppuccin palettes. Every text colour is at least 4.5:1 on its backgrounds. Requested and tested by **Neme77**, implemented with Claude Code.
+- Two new colour themes, **Ember** (dark: warm charcoal with a glowing copper accent) and **Rose** (light: pale rose paper with a deep raspberry accent). Every text colour is at least 4.5:1 on its backgrounds. Requested and tested by **Neme77**, implemented with Claude Code.
 
 - Printer report card shows ELEGOO's text for 35 known error codes, with a link to the matching wiki.elegoo.com page, when the printer sends no message (#445, **efiten**; Hungarian review by **pezso92**).
 - Add a manual Spoolman synchronization button with in-progress status and fresh spool imports, using the existing usage safeguards. Implemented by **Neme77**, requested by **HeiderakCZ** (#451; request #450).

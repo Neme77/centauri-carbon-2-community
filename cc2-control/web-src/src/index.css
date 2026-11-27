@@ -260,52 +260,52 @@
 :root[data-theme="klipperscreen"] nav a[href="#spools"] svg { color: #9fa8da; }
 :root[data-theme="klipperscreen"] nav a[href="#console"] svg { color: #b0bec5; }
 :root[data-theme="klipperscreen"] nav a[href="#settings"] svg { color: #ffd54f; }
-/* Mocha: a dark theme in the soft pastel-on-midnight style of the popular Catppuccin Mocha palette (inspired by it, not a copy of its whole spec). Lilac accent on blue-black panels; every text token is >= 4.5:1 on bg, panel and field. */
-:root[data-theme="mocha"] {
+/* Ember: a dark theme of warm charcoal and glowing copper, like a forge at night. Brown-black page, toasted panels, a copper-orange accent; status red is pinker than the accent so errors never read as plain buttons. Every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="ember"] {
   color-scheme: dark;
-  --bg: #11111b; --panel: #1e1e2e; --edge: #45475a; --text: #cdd6f4; --muted: #a6adc8; --field: #181825; --ink: #11111b;
-  --cyan: #cba6f7; --green: #a6e3a1; --amber: #f9e2af; --red: #f38ba8; --blue: #89b4fa;
-  --well: #0b0b12; --well-fg: #cdd6f4;
-  --shadow-card: 0 0 0 1px color-mix(in srgb, #cba6f7 8%, transparent), 0 10px 26px -14px #000c;
-  --shadow-pop: 0 14px 40px -8px #000d, 0 0 0 1px color-mix(in srgb, #cba6f7 22%, transparent);
-  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 50%, transparent), 0 0 16px -4px color-mix(in srgb, var(--cyan) 40%, transparent);
+  --bg: #120d0a; --panel: #1d1612; --edge: #55443a; --text: #f3e6da; --muted: #bba593; --field: #251c16; --ink: #140d08;
+  --cyan: #ff8a3d; --green: #8fd16b; --amber: #ffd166; --red: #ff6b81; --blue: #6fb3d9;
+  --well: #0a0705; --well-fg: #f3e6da;
+  --shadow-card: 0 0 0 1px color-mix(in srgb, #ff8a3d 9%, transparent), 0 10px 26px -14px #000d;
+  --shadow-pop: 0 14px 40px -8px #000e, 0 0 0 1px color-mix(in srgb, #ff8a3d 26%, transparent);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 50%, transparent), 0 0 18px -4px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
-:root[data-theme="mocha"] body {
+:root[data-theme="ember"] body {
   background:
-    radial-gradient(ellipse 55% 40% at 6% -6%, color-mix(in srgb, #cba6f7 14%, transparent), transparent 70%),
-    radial-gradient(ellipse 50% 38% at 100% 100%, color-mix(in srgb, #89b4fa 11%, transparent), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 50% 112%, color-mix(in srgb, #ff6a1a 22%, transparent), transparent 70%),
+    radial-gradient(ellipse 45% 30% at 100% -4%, color-mix(in srgb, #ffb347 10%, transparent), transparent 70%),
     var(--bg);
   background-repeat: no-repeat;
   background-size: 100% max(100vh, 100%);
 }
-:root[data-theme="mocha"] section.bg-panel { border-radius: 14px; }
-:root[data-theme="mocha"] nav a.text-cyan,
-:root[data-theme="mocha"] button[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--cyan) 14%, var(--panel));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 38%, transparent);
+:root[data-theme="ember"] section.bg-panel { border-bottom: 2px solid color-mix(in srgb, var(--cyan) 40%, var(--edge)); }
+:root[data-theme="ember"] nav a.text-cyan,
+:root[data-theme="ember"] button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--cyan) 13%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent);
 }
-:root[data-theme="mocha"] .cc2-dashboard .text-2xl:not(h2),
-:root[data-theme="mocha"] .cc2-job-stats strong { color: var(--blue); }
-/* Latte: the light sibling of Mocha. Warm-cool grey paper, deep violet accent (darkened from the pastel original so it reads on white); every text token is >= 4.5:1 on bg, panel and field. */
-:root[data-theme="latte"] {
+:root[data-theme="ember"] .cc2-dashboard .text-2xl:not(h2),
+:root[data-theme="ember"] .cc2-job-stats strong { color: var(--amber); }
+/* Rose: a light theme of pale rose paper with a deep raspberry accent. Status red is a burnt orange-red so it stays distinct from the accent. Every text token is >= 4.5:1 on bg, panel and field. */
+:root[data-theme="rose"] {
   color-scheme: light;
-  --bg: #e6e9ef; --panel: #f8f9fc; --edge: #aeb3c5; --text: #4c4f69; --muted: #565a73; --field: #eceff4; --ink: #ffffff;
-  --cyan: #7c2fe0; --green: #266f17; --amber: #865800; --red: #c80f36; --blue: #1a5fe0;
-  --well: #232634; --well-fg: #eef0f8;
-  --shadow-card: 0 1px 0 #fff inset, 0 1px 2px rgb(76 79 105 / .12), 0 12px 26px -14px rgb(124 47 224 / .30);
-  --shadow-pop: 0 14px 40px -8px rgb(76 79 105 / .32), 0 2px 8px rgb(76 79 105 / .14);
-  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 38%, transparent), 0 2px 12px -2px color-mix(in srgb, var(--cyan) 32%, transparent);
+  --bg: #f3e3e6; --panel: #fffafb; --edge: #d1a9b3; --text: #2e1a20; --muted: #6b4752; --field: #f9edef; --ink: #ffffff;
+  --cyan: #a3175a; --green: #1f6b3a; --amber: #8a5200; --red: #c42b0a; --blue: #1d5fa8;
+  --well: #2e1a20; --well-fg: #fbeef1;
+  --shadow-card: 0 1px 0 #fff inset, 0 1px 2px rgb(94 40 56 / .12), 0 12px 26px -14px rgb(163 23 90 / .35);
+  --shadow-pop: 0 14px 40px -8px rgb(94 40 56 / .32), 0 2px 8px rgb(94 40 56 / .14);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--cyan) 38%, transparent), 0 2px 12px -2px color-mix(in srgb, var(--cyan) 30%, transparent);
 }
-:root[data-theme="latte"] body {
+:root[data-theme="rose"] body {
   background:
-    radial-gradient(ellipse 55% 42% at 4% -6%, color-mix(in srgb, #dd7878 22%, transparent), transparent 70%),
-    radial-gradient(ellipse 50% 40% at 98% 0%, color-mix(in srgb, #8caaee 30%, transparent), transparent 70%),
+    radial-gradient(ellipse 55% 42% at 98% -6%, color-mix(in srgb, #ff9bb3 34%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 0% 100%, color-mix(in srgb, #ffd2a8 30%, transparent), transparent 70%),
     var(--bg);
   background-repeat: no-repeat;
   background-size: 100% max(100vh, 100%);
 }
-:root[data-theme="latte"] section.bg-panel { border-radius: 14px; }
-:root[data-theme="latte"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 10%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 32%, transparent); }
+:root[data-theme="rose"] section.bg-panel { border-top: 2px solid color-mix(in srgb, var(--cyan) 40%, var(--edge)); }
+:root[data-theme="rose"] nav a.text-cyan { background: color-mix(in srgb, var(--cyan) 9%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cyan) 32%, transparent); }
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400-700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
@@ -784,12 +784,12 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 60%, #315061), color-mix(in srgb, var(--bg) 55%, #132a36));
 }
 .cc2-camera-idle-controls { bottom: 2px; }
-:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"], [data-theme="latte"]) .cc2-camera-paused {
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"], [data-theme="rose"]) .cc2-camera-paused {
   background: radial-gradient(ellipse at 52% 36%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 58%), linear-gradient(145deg, #e9f1f4, #dce8ed);
 }
-:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"], [data-theme="latte"]) .cc2-camera-grid { opacity: .12; }
-:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"], [data-theme="latte"]) .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
-:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"], [data-theme="latte"]) .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"], [data-theme="rose"]) .cc2-camera-grid { opacity: .12; }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"], [data-theme="rose"]) .cc2-camera-paused::before { border-color: #9bb1bc; background: linear-gradient(135deg, #d6e4ea, #edf3f5); }
+:root:is([data-theme="light"], [data-theme="aurora"], [data-theme="dune"], [data-theme="rose"]) .cc2-camera-paused::after { border-color: #879eaa; background: linear-gradient(180deg, #c4d7df, #e1ebef); }
 
 /* Fit the slider into the existing heading space instead of adding another card row. */
 .cc2-tuning-field > .cc2-tuning-heading {

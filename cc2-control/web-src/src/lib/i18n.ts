@@ -46,8 +46,8 @@ export const THEMES: { id: string; key?: Key; label?: string }[] = [
   { id: 'dune', label: 'Dune' },
   { id: 'swamp', label: 'Swamp' },
   { id: 'klipperscreen', label: 'KlipperScreen' },
-  { id: 'mocha', label: 'Mocha' },
-  { id: 'latte', label: 'Latte' },
+  { id: 'ember', label: 'Ember' },
+  { id: 'rose', label: 'Rose' },
 ]
 const themeId = (mode: unknown) => (THEMES.some(x => x.id === mode) ? (mode as string) : 'dark')
 export const theme = store({ mode: themeId(ls.get('cc2-theme')) })
