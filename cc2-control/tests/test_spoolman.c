@@ -1,6 +1,13 @@
 #define _GNU_SOURCE
 #include <stdatomic.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <errno.h>
+static atomic_int fail_next_thread;
+static int test_pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
+    if (atomic_exchange(&fail_next_thread, 0)) return EAGAIN;
+    return pthread_create(thread, attr, fn, arg);
+}
 /* Lets a test make a malloc() of the code under test fail (only for the code in ../src/main.c): fail_next_malloc = n
  * fails the n-th call from now (1 = the next one); with fail_malloc_size set, only calls of exactly that size count. */
 static atomic_int fail_next_malloc;
@@ -16,8 +23,10 @@ static void *test_malloc(size_t n) {
 }
 #define malloc test_malloc
 #define main cc2_main_original
+#define pthread_create test_pthread_create
 #include "../src/main.c"
 #undef main
+#undef pthread_create
 #undef malloc
 #include <assert.h>
 
@@ -2436,9 +2445,86 @@ static void test_no_memory_for_the_read_buffer_sends_nothing(void) {
     puts("PASS: no memory for the read buffer stops a request before it goes out: not sent, the grams wait");
 }
 
+
+/* Manual requests bypass only the timer: normal import, accounting and uncertainty guards remain. */
+static void sync_adapter(int fd, const char *body, size_t length) {
+    (void)body; (void)length; spoolman_sync_response(fd);
+}
+static int call_sync(void) { return call_handler(sync_adapter, ""); }
+
+static void test_manual_sync_imports_and_coalesces(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    fake.list_body = "[{\"id\":8,\"remaining_weight\":900,\"filament\":{\"name\":\"Fresh manual spool\",\"material\":\"PLA\",\"color_hex\":\"ff0000\",\"weight\":1000}}]";
+    fake.get_delay_ms = 100;
+    spoolman_last_tick_ms = monotonic_ms();       /* the normal two-minute interval has not elapsed */
+    unsigned epoch = spoolman_epoch, gen = sp->spoolman_gen;
+    assert(call_sync() == 202);
+    get_status(); status_has("\"busy\":true");
+    assert(call_sync() == 202);                  /* joins existing work, never queues a second cycle */
+    wait_worker();
+    assert(fake.use_count == 1);
+    get_status(); status_has("\"busy\":true"); /* finished, but main-thread results still pending */
+    assert(call_sync() == 202);                  /* no new request while imports wait to be applied */
+    spoolman_tick(monotonic_ms());
+    get_status(); status_has("\"busy\":false"); status_has("\"result\":\"ok\"");
+    assert(spools.count == 2 && !strcmp(spools.spools[1].spoolman_id, "8"));
+    assert(!strcmp(spools.spools[1].name, "Fresh manual spool"));
+    assert(near(sp->spoolman_unsent, 0) && near(sp->spoolman_inflight, 0));
+    assert(spoolman_epoch == epoch && sp->spoolman_gen == gen);
+    assert(fake.use_count == 1 && near(fake.used, 112.5));
+    fake_finish(); teardown_file();
+    puts("PASS: manual sync imports fresh spools, sends usage once, and coalesces while a worker or its results wait");
+}
+
+static void test_manual_sync_refusals_and_memory(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    spools.spoolman_enabled = 0;
+    assert(call_sync() == 409 && strstr(response, "spoolman_off"));
+    spools.spoolman_enabled = 1;
+    char url[SPOOLMAN_URL_MAX + 1]; snprintf(url, sizeof(url), "%s", spools.spoolman_url);
+    spools.spoolman_url[0] = 0;
+    assert(call_sync() == 400 && strstr(response, "spoolman_no_url"));
+    snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "http://127.0.0.1/a b");
+    assert(call_sync() == 400 && strstr(response, "spoolman_bad_url"));
+    snprintf(spools.spoolman_url, sizeof(spools.spoolman_url), "%s", url);
+    spools_available = 0; assert(call_sync() == 503); spools_available = 1;
+    fail_malloc_of_size(sizeof(spoolman_job_batch), 1);
+    assert(call_sync() == 500 && strstr(response, "spoolman_start_failed"));
+    assert(!atomic_load(&fail_next_malloc));
+    assert(!spoolman_busy() && fake.use_count == 0 && fake.list_count == 0);
+    assert(near(sp->spoolman_unsent, 12.5) && near(sp->spoolman_inflight, 0));
+    atomic_store(&fail_next_thread, 1);
+    assert(call_sync() == 500 && strstr(response, "spoolman_start_failed"));
+    assert(!atomic_load(&fail_next_thread) && !spoolman_busy());
+    assert(fake.use_count == 0 && near(sp->spoolman_unsent, 12.5) && near(sp->spoolman_inflight, 0));
+    fake_finish(); teardown_file();
+    puts("PASS: manual sync refuses disabled, missing/invalid settings, unavailable storage and allocation failure without sending");
+}
+
+static void test_manual_sync_keeps_held_and_stale_guards(void) {
+    fake_start(100, 600); fake_launch();
+    spool_entry *sp = setup_linked(12.5, 500);
+    assert(spoolman_hold(sp, 3, SPOOLMAN_HELD_UNSURE));
+    sp->spoolman_stale = 1;
+    assert(call_sync() == 202); wait_worker(); spoolman_tick(monotonic_ms());
+    assert(fake.use_count == 0 && near(sp->spoolman_unsent, 12.5));
+    assert(spools.held_count == 1 && spools.held[0].reason == SPOOLMAN_HELD_UNSURE && near(spools.held[0].grams, 3));
+    assert(sp->spoolman_stale);
+    fake_finish(); teardown_file();
+    puts("PASS: manual sync does not resend unsure amounts or bypass a pending decision about a changed server");
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IOLBF, 1024);
     spools_clock = clock_fake; spools_wall = wall_fake;
+    if (getenv("CC2_TEST_MANUAL_SYNC_ONLY")) {
+        test_manual_sync_imports_and_coalesces();
+        test_manual_sync_refusals_and_memory();
+        test_manual_sync_keeps_held_and_stale_guards();
+        return 0;
+    }
     test_parse_url();
     test_persistence_and_backward_compat();
     test_charge_accumulates_only_when_linked();
@@ -2527,5 +2613,8 @@ int main(void) {
     test_the_base_path_holds_only_url_characters();
     test_no_memory_for_a_reply_buffer_is_not_sent();
     test_no_memory_for_the_read_buffer_sends_nothing();
+    test_manual_sync_imports_and_coalesces();
+    test_manual_sync_refusals_and_memory();
+    test_manual_sync_keeps_held_and_stale_guards();
     return 0;
 }

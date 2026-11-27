@@ -436,7 +436,9 @@ export async function loadSpoolmanCatalog(): Promise<SpoolmanCatalog> {
 // What the printer's last sync with Spoolman did (GET /api/spoolman). It only reads the printer's memory, not Spoolman.
 // One shared copy: the status line of the Spoolman card and the list of unsent usage read the same one, so a page that
 // is refreshed often still asks the printer once per poll.
+export const syncSpoolman = () => post('/api/spoolman/sync')
 export type SpoolmanStatus = {
+  busy?: boolean // running worker or results waiting to be applied; absent on older backends
   enabled: boolean
   configured: boolean
   last_sync: number // seconds; 0 = no sync yet under the current settings
@@ -471,6 +473,7 @@ const PROBLEMS: Record<string, { text: Key; hint?: Key }> = {
 // without a weight, then a full library.
 export function spoolmanLine(s: SpoolmanStatus | null): StatusLine | null {
   if (!s?.enabled || !s.configured) return null
+  if (s.busy) return { ok: true, text: 'spools.sm_syncing', vars: {} }
   const problem = PROBLEMS[s.result]
   if (problem) return { ok: false, ...problem, vars: { http: s.http } }
   if (s.result === 'never') return { ok: true, text: 'spools.sm_never', vars: {} }
