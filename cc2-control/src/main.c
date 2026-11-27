@@ -6391,6 +6391,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         ap_put_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/themes")==0) {
         ap_theme_put_response(fd,body,body_len);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/themes/delete")==0) {
+        ap_theme_delete_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/profiles")==0) {
         ap_profile_put_response(fd,body,body_len);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/appearance/profiles/delete")==0) {

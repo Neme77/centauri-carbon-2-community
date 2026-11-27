@@ -49,6 +49,7 @@ assert "http://" not in ts.replace("http://127.0.0.1", "")  # no remote styles o
 for route in (
     '"/api/appearance"',
     '"/api/appearance/themes"',
+    '"/api/appearance/themes/delete"',
     '"/api/appearance/profiles"',
     '"/api/appearance/profiles/apply"',
     '"/api/appearance/profiles/delete"',
