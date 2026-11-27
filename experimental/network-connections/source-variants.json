@@ -14,8 +14,8 @@
     },
     "http.h": {
       "helper_sha256": "eeadf596a99bb75893cceac29417db743fe0b221951deda4b37374f0e1432840",
-      "app_sha256": "1216ca3aaa6b43e61d5692538a494b238e2467bb156d6157f8802088e9ceb332",
-      "reason": "The application HTTP bridge accepts the separately qualified .13 manager digest."
+      "app_sha256": "7a6dc5ad486fca4911b7bb908bc8996d22c91e5fdf5bbea835a9b13e8d329a17",
+      "reason": "The application HTTP bridge accepts the separately qualified .13 manager and the exact manager shipped in Community 4.4.4 / Universal 07; all other helper sources and runtime pins remain unchanged."
     },
     "native.h": {
       "helper_sha256": "f8589ba831e2fc16b76251026dae1759e2130cba080985479336b1cefeb08b67",

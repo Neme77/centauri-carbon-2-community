@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Connections: recognise the exact .13 manager already shipped in Community 4.4.4 / Universal 07, retaining the existing HTTP and file-integrity guards. Add a manual DHCP-delegate repair restricted to the verified native-script mismatch; aligned supported installations are left unchanged. Implemented by **Neme77** (#444).
+
 - Manual preheat (`preheat:<nozzle>:<bed>`) is refused when text follows the bed temperature, as the temperature targets already were; it was accepted and the text ignored. A whole number outside the range of a 32-bit integer in a JSON the service reads (queue, plates, spools, history, Canvas status) is read as missing, instead of being cut to a wrong number. Designed and implemented by **lpgamerzockt-ops** (#435).
 - Spoolman sync: a spool whose Spoolman entry is larger than 8 KiB (a long comment or many extra fields) is read and sent again, up to the size of one page of the list; it was refused in every cycle and its grams never reached Spoolman. A chunked reply too large to read counts as too large, so the list asks for smaller pages instead of stopping; a reply is complete once its Content-Length has arrived, also when a proxy keeps the connection open; results of a sync wait for the next round when there is no memory to take them over, instead of being lost; and the base path of the Spoolman address accepts only URL characters (no spaces, control characters, `?` or `#`) and the port only digits. Designed and implemented by **lpgamerzockt-ops** (#448).
 
