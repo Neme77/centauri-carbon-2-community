@@ -311,6 +311,10 @@ presented as a hardware test.
   the merge base): **1 744 PASS lines, exit 0**, including the extended
   display harness. Before the merge the same run produced 1 736 PASS lines and
   exit 0.
+- A review-only end-to-end check (not committed) streamed a 154-file pack through
+  the production `disp_apply_start`/upload-thread path over a real socket: 200
+  with `{"ok":true}`, all 154 targets replaced, the state and the baseline each
+  holding 154 entries, then `disp_restore_response` returned all 154 originals.
 - Focused appearance/display tests: `test_appearance_api`,
   `test_appearance_capacity`, `test_appearance_static`,
   `test_theme_contract_static`, `test_display_api`, `test_display_capacity`,
@@ -364,9 +368,10 @@ presented as a hardware test.
   `test_connections_helper_pins.py` and `test_connections_sources.py` pass.
 - `python3 experimental/pr128-integration/sync_source.py` was run on the merge
   commit: `source.zip` was regenerated (`sha256
-  1aae46ccde2685ba2d2c2f7c5cc717e25c98b0278159c9f266b1323d6418aea8`), the pins in
-  `prepare.py`/`firmware_builder.py` point at the merge commit, and
-  `BUILDER_SHA256` was updated. The archive was inspected: it contains both the
+  1aae46ccde2685ba2d2c2f7c5cc717e25c98b0278159c9f266b1323d6418aea8`), and the
+  pins in `prepare.py`/`firmware_builder.py` point at `4079f34b` (the commit
+  that carries the same `cc2-control` tree as the merge), with
+  `BUILDER_SHA256` updated. The archive was inspected: it contains both the
   upstream `spoolman.h` changes and the new `appearance.h` /
   `display_theme.h` / `json_body.h` / `json_large.h`, and its `web/index.html`
   is byte-identical to the committed bundle.

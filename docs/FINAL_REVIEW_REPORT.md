@@ -8,6 +8,13 @@ Feature branch: `feature/appearance-customization`.
 No commit, branch, pull request, release or printer was created or modified by
 this review. The only file added to the repository is this report.
 
+> **Remediation status.** The findings in this document were addressed in
+> [`REMEDIATION_REPORT.md`](REMEDIATION_REPORT.md), which records each finding,
+> its root cause, the change, the regression tests and the remaining risks.
+> This file is preserved as the historical independent review and is not
+> rewritten; where the two disagree, the remediation report describes the
+> current implementation.
+
 ---
 
 ## 1. Review scope
