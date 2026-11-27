@@ -275,10 +275,21 @@ second remediation round, except where noted.
 | F-11 | INFO | `DISP_MAX_ASSETS` 320 was unreachable because the manifest was capped at 32 KiB, and `firmwareChanged` was false without a manifest. | **Fixed.** The manifest accepts up to 64 KiB (the large decoder bound), so 320 assets fit; `firmwareChanged` is true when a baseline exists and the current manifest is unavailable. |
 | F-12 | INFO | An import is not atomic across a network failure. | **Documented** as a known limitation (capacity is checked first; items written before a failure remain). |
 
+A third targeted round closed the two items the reviewer found in the fixes
+themselves and the remaining hardening:
+
+| ID | Sev | Finding | Disposition |
+| --- | --- | --- | --- |
+| N-01 | LOW | A successful apply that discarded a stale baseline reported the `display_firmware_changed` identifier of the refusal that preceded it. | **Fixed.** `disp_clear_error()` runs after a successful discard. |
+| N-02 | LOW (test) | The negative half of the stale-baseline guard (customised bytes present) was not in the suite. | **Fixed.** `test_display_theme.c` step 5d asserts the refusal and that the baseline is kept. |
+| F-05 residual | INFO | The entry size was not compared with the remaining declared body. | **Fixed.** An entry larger than the remaining body is refused before it is read. |
+| F-11 residual | INFO | A 320-asset manifest needs more than the 32 KiB string arena. | **Fixed.** The large decoder's arena is 64 KiB; `test_display_capacity.py` proves both the real 154-asset and a synthetic 320-asset manifest. |
+
 The reviewer's weak-test observations were also addressed: the theme-contract
 test and the API/browser tests now exercise the one-letter boundary, the
 capacity test uses longer names, and the display harness covers the failed
-state write and the mismatched `Content-Length`.
+state write, the mismatched `Content-Length`, the real HTTP restore with
+baseline removal and the refused stale discard.
 
 Additional defects found during remediation and fixed:
 
@@ -304,7 +315,7 @@ Additional defects found during remediation and fixed:
 | --- | --- |
 | `tests/test_appearance_capacity.py` | Maximum document save → disk → restart → exact values |
 | `tests/test_theme_contract_static.py` | 24-character id rule in C/TS/legacy, one palette list, per-item theme writes |
-| `tests/test_display_capacity.py` | Real 154-asset manifest parses; missing/unreadable/corrupt/oversized/154-entry state |
+| `tests/test_display_capacity.py` | Real 154-asset and synthetic 320-asset manifests parse; missing/unreadable/corrupt/oversized/154-entry state |
 | `tests/test_display_limits_static.py` | Client and server pack/file/asset limits agree |
 | `tests/test_display_theme.c` (extended) | 154-file baseline/state, restore across a firmware change, apply refusal, status during an upload, stage cleanup |
 | `tests/test_appearance_api.py` (extended) | Theme merge, explicit delete, over-long/digit theme ids refused |
