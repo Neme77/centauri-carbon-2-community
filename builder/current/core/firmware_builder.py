@@ -79,8 +79,8 @@ def reqhash(p,h,label):
  if a!=h: raise RuntimeError(f"{label} SHA256 mismatch\n expected {h}\n actual   {a}")
  print(f"[OK] {label}: {a[:16]}...")
 
-CC2_CONTROL_SOURCE_COMMIT='90742079845ecf9fb67673f1f4a76b7ed250e2b2'
-CC2_CONTROL_SOURCE_SHA256='739ff64e22df993186f48a3aa892a1e4fd1ad79d9b59f53c53b25916d9e4c269'
+CC2_CONTROL_SOURCE_COMMIT='98c72d33d996e36f7761573257e13644ac2a0c85'
+CC2_CONTROL_SOURCE_SHA256='762ffda1d7e0840c6055e9353b04e47bcd97bac91bc2d7b67b19cb07a396f90c'
 CC2_CONTROL_FILES=('cc2-control','web/index.html','defaults/material-presets.json','start.sh','launch.sh','cc2-control.init','cc2-configure')
 CC2_UPDATE_FILES=('cc2-update-worker', 'cc2-https-download', 'update-runner.sh', 'ca-bundle.pem', 'updater-trusted-key.json', 'THIRD_PARTY_NOTICES.txt')
 # Translation files are optional and open-ended (one per language), unlike the
@@ -448,7 +448,7 @@ REACTOR_HELPER_SHA256='6f503bf0aa116c5478f38b3805fb9a148206e277b9ba07f82f894f676
 CAMERA_HELPER_SHA256='4b79c897a5f83910681a5eaac10c4c58296939bdc7bee6683c604df70b154c40'
 INTEGRATION_HELPERS = {
  'connections_component.py': 'a92320c1f86be88e71c741c23111f31991603868f1cf3bb453c22cd3ae7bdcfa',
- 'native_display_component.py': '2c9a271b02af60bcb0751f192db5607c950649bf7bac7e948c39ebca5acb1647',
+ 'native_display_component.py': '227a1f3100393b3ac689746605f0fbad49353cdbaf5ca763ab07d8128c36e01d',
  'resource_update.py': '672f1b369e31723a52f79e24e55e58c31ff3185ec763c14394d78c65ddd789e1',
 }
 INTEGRATION_INPUTS = {
