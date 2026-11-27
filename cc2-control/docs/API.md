@@ -1745,13 +1745,18 @@ with defaults, not rewritten.
 `PUT /api/appearance` accepts any subset of `activeProfile`, `dashboard`,
 `touchscreen`, `themes` and `version` (1). Unknown JSON members are ignored;
 invalid colours, identifiers, numbers, duplicate ids and unknown widgets are
-refused with `400` without changing the stored document. `POST
+refused with `400` without changing the stored document. A successful save has
+been parsed back, so it can be read at the next start. A `themes` array is
+merged by id (never a replacement), so a stale browser cannot delete another
+browser's themes; use `POST /api/appearance/themes/delete` for removal. `POST
 /api/appearance/themes` inserts one custom theme, and `POST
 /api/appearance/profiles` one profile (optionally with its theme),
 `/profiles/apply` copies a profile into the active document,
 `/profiles/delete` removes a non-built-in profile and `/reset` restores
 defaults (`{"profiles":true}` also clears the libraries). Limits: 6 profiles,
-4 layouts, 8 themes, 9 widgets. The file is `appearance.json` next to
+4 layouts, 8 themes, 9 widgets. A custom theme id is `custom-` plus lowercase
+letters and single interior hyphens, at most 24 characters (the same shape the
+legacy preferences field accepts). The file is `appearance.json` next to
 `ui-preferences.json`, mode `0600`, with `appearance.json.bak` as the previous
 accepted version.
 
@@ -1761,8 +1766,12 @@ touchscreen. `supported` is true only with a valid
 hash, a safe active-theme link and a parseable asset list. The response
 includes `firmwareBase`, allow-listed `assets` with roles `boot`,
 `background` and `accent`, `fileCount`, `customizedCount`, `rebootRequired`,
-`recoveryRequired`, `phase`, `backupAvailable` and `error` (a stable reason
-identifier). Nothing is guessed from file names.
+`recoveryRequired`, `phase`, `backupAvailable`, `restoreAvailable`,
+`firmwareChanged`, `stateValid`, `experimental` and `error` (a stable reason
+identifier). Nothing is guessed from file names. `restoreAvailable` is true
+when a verified baseline exists; it stays true (and `firmwareChanged` becomes
+true) when the current manifest or GUI no longer matches that baseline, so the
+originals remain reachable after an update.
 
 `GET /api/display/asset?name=…` serves one allow-listed PNG only. `POST
 /api/display/apply` accepts an uncompressed tar of at most 4 MiB containing
@@ -1773,4 +1782,8 @@ back and rolls back on failure. A journal replays an interrupted apply at the
 next CC2 Control start. `POST /api/display/restore` restores the baseline and
 refuses files changed by another tool or a changed firmware display identity.
 Both actions require a complete printer reboot; the status clears the notice
-when the native GUI process restarts.
+when the native GUI process restarts. Restore does not require the current
+manifest to match: it verifies each backup against its recorded SHA-256 and
+only replaces a file that is the original or a version this feature recorded.
+An apply is refused while a baseline from a different firmware/GUI exists, so
+a new baseline is never written over originals from another version.

@@ -119,10 +119,32 @@ Rules:
   unknown widget ids are refused with HTTP 400 and leave the stored document
   unchanged.
 - The profile limit is six, layouts four, custom themes eight, widgets nine.
-  These are enforced by the bounded parser, not only by the UI.
+  These are enforced by a dedicated bounded decoder whose budget is sized for
+  the documented maximum (6 profiles × 4 layouts × 9 widgets + 8 themes is
+  about 3 600 JSON tokens; the decoder allows 6 144 and a 32 KiB string arena).
+  The shared 640-token decoder used for request bodies and MQTT snapshots is
+  unchanged. The maximum document is about 18 KiB, below `AP_MAX_JSON`
+  (32 KiB).
+- A save is only acknowledged after the serialized document has been parsed
+  back and its profile and theme counts match, so `{"saved":true}` means the
+  file can be read at the next start. A round-trip test
+  (`tests/test_appearance_capacity.py`) saves the documented maximum, restarts
+  the process and compares every value.
+- A custom theme id is `custom-` plus lowercase letters and single interior
+  hyphens, at most 24 characters, because the same id is also written to the
+  legacy `/api/preferences` theme field. The studio truncates long names and
+  the importers reject an id outside that shape; a static test compares the
+  three implementations.
+- A theme is added or changed with `POST /api/appearance/themes` and removed
+  with `POST /api/appearance/themes/delete`. The document `PUT` never replaces
+  the whole theme library; a `themes` array in it is merged by id. Two browsers
+  that add or edit different themes therefore cannot delete each other's work,
+  and a deletion is always explicit.
 - A damaged file is reported as `recovered: true` with the server's reason and
   defaults are served; it is **not** silently rewritten. Saving replaces it and
-  keeps the previous bytes as `.bak`.
+  keeps the previous bytes as `.bak`. A file written by a newer schema is
+  reported as `unsupported` as well as `recovered`; the next save from this
+  release keeps the older bytes in `.bak`.
 
 ## Native touchscreen
 
@@ -160,36 +182,56 @@ name.
    - boot artwork: converted to a small-palette 532×300 PNG and repeated for
      the fixed native frames.
 3. The browser packs the PNGs into an uncompressed tar and uploads it as one
-   bounded request (≤4 MiB).
+   bounded request (≤4 MiB, ≤512 KiB per file, ≤320 assets). The per-frame boot
+   budget is derived from what the other assets really occupy, so a normal
+   1200×800 photo produces a pack inside the limit (about 3.4 MiB for 100
+   frames) instead of being rejected after the upload; the client refuses an
+   oversized file or pack before sending anything.
 4. The printer validates every tar header and checksum, every name against the
    manifest, every size, every IHDR dimension and every PNG chunk CRC before
    any target is touched. It also checks the GUI hash, the active theme
    directory, that the printer is idle and that no update is running.
 5. Every original is copied to a verified baseline before its first change.
    A journal is written, files are replaced atomically and read back.
-6. On failure the baseline is restored. On power loss, the journal is replayed
-   at the next CC2 Control start; the status reports `recoveryRequired` while a
-   journal remains.
+6. On failure the baseline is restored. Backups are written atomically
+   (temporary file, `fsync`, rename, directory sync) and every backup is
+   verified against its recorded SHA-256 before it is used; an incomplete
+   backup is never treated as an original. On power loss the journal is
+   replayed at the next CC2 Control start, with a strict check that only files
+   this feature wrote are replaced. The status reports `recoveryRequired` while
+   a journal remains, and the replay is idempotent.
 7. A complete printer reboot loads the new files. The notice clears when the
    native GUI process restarts (a CC2 Control restart alone does not clear it).
 
 ### Restore
 
-“Restore original display” copies the verified baseline back. It refuses if a
-display file was changed by something else or if the firmware display identity
-changed after the backup; in that case use the original firmware/panel
-procedure or reflash. Restoring the native display is independent of resetting
-the dashboard appearance.
+“Restore original display” copies the verified baseline back. It does **not**
+require the current manifest or GUI hash to match the saved baseline, so the
+originals stay reachable after a firmware or panel update; the status reports
+`firmwareChanged` and the studio shows a warning. It still refuses if a display
+file was changed by something else: only the original or a version this
+feature recorded is replaced, so a newer firmware's own files are never
+overwritten. Restoring the native display is independent of resetting the
+dashboard appearance.
+
+Interaction with `experimental/native-display/manage.sh`: that tool verifies
+each file against its own original/preview pins and therefore refuses while a
+studio pack is applied (`RESTORE REFUSED: a target contains a foreign change`),
+and its `check`/`install` modes refuse as well. Use “Restore original display”
+in the studio first; afterwards the directory matches the vendor originals
+again and `manage.sh` works as before. Do not run both tools at the same time.
 
 ### Limits
 
 - No layout, widget position, font, icon set or native program is changed.
-- Arbitrary photos are reduced to a small palette; very detailed images are
-  refused.
+- Arbitrary photos are reduced to a small palette. The frame is quantised until
+  it fits the remaining pack budget; only an image that cannot fit even at four
+  levels per channel is refused, with a message before the upload.
 - Background colours are limited to dark shades because the native text is
   light and hard-coded.
-- A firmware/panel update may replace the theme directory and invalidate the
-  baseline. The studio reports the mismatch instead of writing anyway.
+- A firmware/panel update may replace the theme directory. The studio reports
+  the identity mismatch, refuses new applies until the baseline is restored,
+  and still allows the restore itself.
 - The touchscreen tools are behind an explicit experimental switch and an
   idle-printer confirmation.
 
@@ -211,11 +253,12 @@ active theme; the file is a small JSON document and does not affect the GUI.
 | `GET` | `/api/appearance` | Full document plus read-only `recovered`/`error` |
 | `PUT` | `/api/appearance` | Update active dashboard, touchscreen, themes, active profile |
 | `POST` | `/api/appearance/themes` | Insert or replace one custom theme |
+| `POST` | `/api/appearance/themes/delete` | Remove one custom theme |
 | `POST` | `/api/appearance/profiles` | Insert or replace one profile (optionally with its theme) |
 | `POST` | `/api/appearance/profiles/apply` | Copy a profile into the active appearance |
 | `POST` | `/api/appearance/profiles/delete` | Delete a non-built-in profile |
 | `POST` | `/api/appearance/reset` | Reset the active appearance; `{"profiles":true}` also clears themes/profiles |
-| `GET` | `/api/display` | Capability, manifest summary, state, reboot/recovery flags |
+| `GET` | `/api/display` | Capability, manifest summary, state, reboot/recovery flags, `restoreAvailable`, `firmwareChanged`, `stateValid` |
 | `GET` | `/api/display/asset?name=…` | One allow-listed PNG |
 | `POST` | `/api/display/apply` | Upload and apply a validated tar pack |
 | `POST` | `/api/display/restore` | Restore the verified baseline |
@@ -232,15 +275,27 @@ Host tests:
 cd cc2-control
 make clean test CROSS= CC=gcc
 python3 tests/test_appearance_api.py build/cc2-control
+python3 tests/test_appearance_capacity.py build/cc2-control
 python3 tests/test_display_api.py build/cc2-control
+python3 tests/test_display_capacity.py build/cc2-control
 python3 tests/test_appearance_static.py
+python3 tests/test_theme_contract_static.py
+python3 tests/test_display_limits_static.py
 ```
+
+`test_appearance_capacity.py` saves the documented maximum (six profiles, four
+layouts of nine widgets, eight themes), restarts the process and compares every
+value. `test_display_capacity.py` feeds the real 154-asset manifest generated by
+the builder to the production parser, and checks that a missing, unreadable,
+corrupt or oversized state file never crashes the daemon.
 
 The display apply/restore core is covered by `tests/test_display_theme.c`
 (compiled by `tests/test_c_harnesses.py`): valid pack, unknown name,
 duplicate, corrupt PNG, dimension mismatch, baseline restore, foreign change,
-firmware identity change and interrupted-apply recovery. No vendor program is
-executed and no real printer is touched.
+firmware identity change with a restore that still succeeds, a 154-file
+baseline/state round trip, a status request answered while an upload streams,
+and interrupted-apply recovery. No vendor program is executed and no real
+printer is touched.
 
 Browser tests:
 
@@ -251,17 +306,36 @@ npm run build
 npm run test:appearance
 ```
 
-The Playwright test covers theme switching, custom tokens, system theme,
-layout creation, widget enable/reorder, profile save/apply, the honest
-unsupported touchscreen state and persistence across reload.
+The Playwright tests cover every studio tab, theme switching, per-item theme
+writes and deletion, the 24-character theme-id contract, custom tokens, system
+theme, layout creation, widget enable/reorder, profile save/apply, the honest
+unsupported touchscreen state, 320 px and 390 px widths and persistence across
+reload. `preview/test-display-pack.mjs` builds a 100-frame pack from a normal
+photo and checks it stays inside the 4 MiB budget.
 
-### Outstanding hardware tests
+### Hardware validation status
 
-- Apply and restore a pack on a printer with the manifest-bearing firmware,
-  observing the native boot and home screens after a full reboot.
-- Interrupt the printer during an apply and confirm the next-start recovery.
-- Verify that a later panel update reports the identity mismatch and refuses
-  to overwrite the new vendor files.
+Everything below is **unverified**: no physical printer was available. Host
+tests simulate the files and the API only.
+
+- [ ] Firmware build installs a manifest into `/opt/inst/images/theme_default`.
+- [ ] The vendor init copies `cc2-display-manifest.json` to
+      `/opt/usr/images/theme_default` (the runtime reports `supported:false`
+      until it does).
+- [ ] The directory is **not** re-synchronised on every boot (which would erase
+      the customization at the reboot it requires).
+- [ ] `/opt/usr/images/current_theme` is an absolute symlink to the active theme
+      directory.
+- [ ] The native GUI decodes the browser-produced RGBA PNGs and shows the new
+      boot frames and backgrounds after a full reboot.
+- [ ] An interrupted apply is recovered on the next CC2 Control start, and the
+      display still boots if an applied frame is unreadable.
+- [ ] A firmware/panel update reports `firmwareChanged`, refuses a new apply and
+      still restores the verified baseline.
+- [ ] Factory reset and `manage.sh restore/check/install` behave as documented
+      after a studio pack has been applied and restored.
+- [ ] Power loss during backup, replacement, journal update, rollback and
+      restore returns to a known-good baseline.
 
 Do not claim these tests from host fixtures alone.
 
