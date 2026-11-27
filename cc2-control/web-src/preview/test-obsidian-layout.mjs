@@ -17,7 +17,7 @@ try {
   const theme = page.locator('select').filter({ has: page.locator('option[value="obsidian"]') })
   await theme.waitFor()
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-  assert.deepEqual(await theme.locator('option').evaluateAll(options => options.map(option => option.value)), ['dark', 'light', 'dracula', 'nord', 'monokai', 'solarized-light', 'obsidian', 'aurora', 'klipper', 'dune', 'swamp', 'klipperscreen'])
+  assert.deepEqual(await theme.locator('option').evaluateAll(options => options.map(option => option.value)), ['dark', 'light', 'dracula', 'nord', 'monokai', 'solarized-light', 'obsidian', 'aurora', 'klipper', 'dune', 'swamp', 'klipperscreen', 'ember', 'rose'])
   const saved = page.waitForResponse(r => r.url().endsWith('/api/preferences') && r.request().method() === 'PUT')
   await theme.selectOption('obsidian')
   assert.equal((await saved).ok(), true)
@@ -64,14 +64,25 @@ try {
     await page.keyboard.press('Escape')
     assert.equal((await box()).overflow, false)
   }
-  for (const id of ['light', 'dark', 'obsidian', 'aurora']) {
+  for (const id of ['light', 'dark', 'obsidian', 'aurora', 'ember', 'rose']) {
     await page.goto(origin + '#settings/appearance')
     const saved = page.waitForResponse(r => r.url().endsWith('/api/preferences') && r.request().method() === 'PUT')
     await theme.selectOption(id)
-    await saved
+    assert.equal((await saved).ok(), true, `${id}: preferences saved`)
+    assert.equal(await theme.inputValue(), id)
+    await page.waitForFunction(value => document.documentElement.dataset.theme === value, id)
+    assert.equal((await (await page.request.get(origin + 'api/preferences')).json()).theme, id, `${id}: server preference`)
     await page.reload()
     await page.waitForFunction(value => document.documentElement.dataset.theme === value, id)
+    assert.equal(await theme.inputValue(), id, `${id}: selection survives reload`)
+    const fresh = await browser.newContext()
+    try {
+      const other = await fresh.newPage()
+      await other.goto(origin + '#settings/appearance')
+      await other.waitForFunction(value => document.documentElement.dataset.theme === value, id)
+      assert.equal(await other.locator('select').filter({ has: other.locator(`option[value="${id}"]`) }).inputValue(), id, `${id}: fresh browser uses saved preference`)
+    } finally { await fresh.close() }
   }
   assert.deepEqual(errors, [])
-  console.log('PASS: Obsidian selection/server persistence, theme switching, desktop page/camera sizing and centring, mobile drawer')
+  console.log('PASS: theme selection/server persistence/reload/fresh browser including Ember and Rose, desktop page/camera sizing and centring, mobile drawer')
 } finally { await browser?.close(); await server.close() }

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Two new colour themes, **Ember** (dark: warm charcoal with a glowing copper accent) and **Rose** (light: pale rose paper with a deep raspberry accent). Every text colour is at least 4.5:1 on its backgrounds. Requested and tested by **Neme77**, implemented with Claude Code (#453).
+
 - Printer report card shows ELEGOO's text for 35 known error codes, with a link to the matching wiki.elegoo.com page, when the printer sends no message (#445, **efiten**; Hungarian review by **pezso92**).
 - Add a manual Spoolman synchronization button with in-progress status and fresh spool imports, using the existing usage safeguards. Implemented by **Neme77**, requested by **HeiderakCZ** (#451; request #450).
 
@@ -20,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Spoolman: the refusals of the Spoolman functions (list of unsent usage, Spoolman settings, spool choice) now carry a stable `code` next to the unchanged English `error`, and the page shows them in its own language; a code it does not know falls back to the English text. The Spools page asks `GET /api/spoolman` once for all of its parts, and the list of unsent usage asks the printer again for Spoolman's spools at most three more times, counting every try. The page now shows the IPv4-only note under the address field, and a new address or login starts the next sync at once instead of up to two minutes later. Codes are listed in `cc2-control/docs/API.md`. Implemented by **lpgamerzockt-ops** (#433).
 
 ### Fixed
+
+- Plate-library action menus attach their outside-click and scroll guards before becoming visible, preventing an immediately scrolled menu from remaining open. Added a deterministic browser regression and Ember/Rose preference persistence checks. Implemented by **Neme77** (#453).
 
 - Connections: recognise the exact .13 manager already shipped in Community 4.4.4 / Universal 07, retaining the existing HTTP and file-integrity guards. Add a manual DHCP-delegate repair restricted to the verified native-script mismatch; aligned supported installations are left unchanged. Implemented by **Neme77** (#444).
 
