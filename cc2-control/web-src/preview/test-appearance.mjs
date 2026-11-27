@@ -145,6 +145,28 @@ try {
   await page.getByText('Not supported', { exact: true }).waitFor()
   assert((await page.locator('.cc2-appearance').innerText()).toLowerCase().includes('manifest'))
 
+  // Export then import the configuration through the UI, and refuse a file
+  // whose theme tokens are invalid (the same validation as the editor).
+  await page.goto(origin + '#appearance/transfer')
+  await page.getByRole('tab', { name: 'Import and export', exact: true }).waitFor()
+  const downloaded = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export all appearance settings', exact: true }).click()
+  const archive = await downloaded
+  const archivePath = await archive.path()
+  const fileInputs = page.locator('input[type=file]')
+  const importResponse = page.waitForResponse(r => r.url().endsWith('/api/appearance') && r.request().method() === 'PUT')
+  await fileInputs.first().setInputFiles(archivePath)
+  assert.equal((await importResponse).status(), 200, 'import must save the document')
+  await page.getByText('Imported.', { exact: true }).waitFor()
+  const writesBeforeBad = writes.length
+  await fileInputs.nth(1).setInputFiles({
+    name: 'invalid-theme.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ format: 'cc2-theme', version: 1, name: 'Bad', tokens: { bg: 'red' } })),
+  })
+  await page.getByText('This file is not a valid CC2 appearance export.', { exact: true }).waitFor()
+  assert.equal(writes.length, writesBeforeBad, 'an invalid theme must not be written')
+
   // Reload keeps the stored appearance (the mock backend is the source of truth).
   await page.reload()
   await page.getByRole('tab', { name: 'Touchscreen', exact: true }).waitFor()

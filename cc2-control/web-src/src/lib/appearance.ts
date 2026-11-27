@@ -1384,11 +1384,8 @@ export const importAppearance = async (raw: unknown) => {
         body: JSON.stringify({ theme }),
       })
     }
-    await request('/api/appearance', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload(doc)),
-    })
+    /* Profiles before the document: the document names the active profile and
+     * the server keeps that name only when the profile already exists. */
     for (const profile of doc.profiles.slice(0, 6)) {
       if (profile.id === 'community') continue
       const theme = doc.themes.find(item => item.id === profile.dashboard.theme)
@@ -1398,6 +1395,11 @@ export const importAppearance = async (raw: unknown) => {
         body: JSON.stringify(theme ? { profile, theme } : { profile }),
       })
     }
+    await request('/api/appearance', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload(doc)),
+    })
     await loadAppearance()
     return true
   } catch (error) {
