@@ -254,6 +254,32 @@ snapshot is committed last.
 | L-12 localStorage writes | Accepted | A performance note, not a defect; changes are still debounced for the network |
 | L-13 system preview | Fixed | The theme gallery listens to the OS colour-scheme change |
 
+### 7.1 Findings of the independent adversarial review, and their disposition
+
+The reviewer reproduced H-01, H-02, H-03, H-05 and H-06 as fixed, confirmed
+H-04 as partially fixed, and found the following items. All were addressed in a
+second remediation round, except where noted.
+
+| ID | Sev | Finding | Disposition |
+| --- | --- | --- | --- |
+| F-01 | MEDIUM | A restore after a firmware/GUI change left the stale baseline in place, so a new apply stayed refused (`display_firmware_changed`); if the vendor also rewrote the theme files, restore refused too, leaving no API/UI path. | **Fixed.** A successful restore now deletes the baseline (the originals are back), so the next apply takes a fresh one. An apply also discards a stale baseline automatically when every target is provably an original (the old baseline or the current firmware's own image). Both paths are covered by `test_display_theme.c` steps 5b/5c. |
+| F-02 | LOW | The shortest generated id (`custom-a`, from a one-letter theme name) was accepted by the printer but rejected by the client normaliser, so the theme vanished on reload and occupied a slot. | **Fixed.** Both validators now accept one to 17 characters after `custom-`; `test_appearance_api.py` saves `custom-a` and restarts, and the browser test creates a one-letter theme and reloads. |
+| F-03 | LOW | The HTTP transport caps a request body at 16 KiB while `AP_MAX_JSON` advertised 32 KiB; the maximum document could not be sent in one PUT. | **Fixed.** `AP_MAX_REQUEST` (16 KiB) is separate from the stored-document bound (32 KiB); the documentation says a client changes one section at a time. |
+| F-04 | LOW | A successful rollback left the journal, so the feature stayed blocked until a restore or restart. | **Fixed.** The journal (and its directory entry) is removed when the rollback succeeded; a test makes the state write fail and verifies the rollback and the absent journal. |
+| F-05 | LOW | A declared `Content-Length` shorter than the stream could make the upload thread read past the body and block until the socket timeout. | **Fixed.** The header, body and padding reads are guarded by the remaining declared length; a test sends more bytes than declared and asserts a prompt answer. |
+| F-06 | LOW | `local_state` in `disp_receive_pack` was not fully initialised before the failure path copied it into the state. | **Fixed.** `disp_state_defaults()` zeroes it. |
+| F-07 | LOW | The client ignored the server's `unsupported` flag, and the local `recovered` banner persisted after a successful save. | **Fixed.** `unsupported` is carried in the document, the banner covers both, and a successful save clears both locally. |
+| F-08 | LOW | The theme editor announced "saved" even when the theme was refused. | **Fixed.** `updateTheme` reports success; the editor closes and confirms only then. |
+| F-09 | INFO | Size alarms were close to the hard limits (locale 94 %). | **Improved.** The locale alarm is back at 230 KiB (89.8 %), which the compact catalogues now satisfy (ru.json 234 088 B). The page stays at 940 KiB; the hard headroom is 105 KiB. |
+| F-10 | INFO | The changelog entries lacked a PR number/credit and understated the maximum document (18 KiB vs 20 746 B measured). | **Partly fixed.** The size wording is corrected; the PR number and the per-entry credit must be added when the pull request is opened (they cannot exist before it). |
+| F-11 | INFO | `DISP_MAX_ASSETS` 320 was unreachable because the manifest was capped at 32 KiB, and `firmwareChanged` was false without a manifest. | **Fixed.** The manifest accepts up to 64 KiB (the large decoder bound), so 320 assets fit; `firmwareChanged` is true when a baseline exists and the current manifest is unavailable. |
+| F-12 | INFO | An import is not atomic across a network failure. | **Documented** as a known limitation (capacity is checked first; items written before a failure remain). |
+
+The reviewer's weak-test observations were also addressed: the theme-contract
+test and the API/browser tests now exercise the one-letter boundary, the
+capacity test uses longer names, and the display harness covers the failed
+state write and the mismatched `Content-Length`.
+
 Additional defects found during remediation and fixed:
 
 - `source-variants.json` needs a reviewed entry for the split decoder, or the
@@ -342,10 +368,10 @@ presented as a hardware test.
 
 ### Sizes
 
-- `web/index.html`: 943 342 bytes (89.96 % of 1 MiB; 105 234 bytes before the
-  hard limit, 19 218 before the test alarm).
-- Tightest locale `ru.json`: 234 088 bytes (89.3 % of 256 KiB; 11 672 bytes
-  before the alarm). It was 241 328 bytes before remediation and 218 482 bytes
+- `web/index.html`: 943 582 bytes (89.99 % of 1 MiB; 104 994 bytes before the
+  hard limit, 18 978 before the test alarm).
+- Tightest locale `ru.json`: 234 088 bytes (89.3 % of 256 KiB; 1 432 bytes
+  before the restored 230 KiB alarm). It was 241 328 bytes before remediation and 218 482 bytes
   before the feature; the nine added strings are included and the compact
   encoding recovered the budget.
 

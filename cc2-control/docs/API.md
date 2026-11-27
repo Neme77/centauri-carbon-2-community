@@ -1752,7 +1752,9 @@ invalid colours, identifiers, numbers, duplicate ids and unknown widgets are
 refused with `400` without changing the stored document. A successful save has
 been parsed back, so it can be read at the next start. A `themes` array is
 merged by id (never a replacement), so a stale browser cannot delete another
-browser's themes; use `POST /api/appearance/themes/delete` for removal. `POST
+browser's themes; use `POST /api/appearance/themes/delete` for removal. A single
+request body is limited to 16 KiB by the HTTP transport (the stored document
+may reach about 21 KiB), so a client changes one section at a time. `POST
 /api/appearance/themes` inserts one custom theme, and `POST
 /api/appearance/profiles` one profile (optionally with its theme),
 `/profiles/apply` copies a profile into the active document,

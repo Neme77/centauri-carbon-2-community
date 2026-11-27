@@ -19,7 +19,7 @@ here. The studio never claims that a browser theme appears on the touchscreen.
 | Dashboard layouts | Stable | Classic layout unchanged; up to four custom grid layouts |
 | Widgets | Stable | Enable/disable, width, compact density, per-widget accent, drag or arrow reordering |
 | Profiles | Stable | Up to six named snapshots; apply, rename, duplicate, export, import, delete |
-| Import/export | Stable | Versioned JSON, no credentials or printer data |
+| Import/export | Stable | Versioned JSON, no credentials or printer data; capacity is checked before writing, a mid-import network failure can leave the items already written |
 | Density, font, text size, corners, spacing, animations | Stable | Bounded values applied through CSS custom properties |
 | Touchscreen accent, dark background, boot artwork | Experimental | Requires a firmware display manifest; on-disk PNG replacement only; full reboot |
 | Touchscreen layout, fonts, icons, widget positions | Not supported | Owned by the proprietary LVGL program; not modified |
@@ -140,6 +140,10 @@ Rules:
   the whole theme library; a `themes` array in it is merged by id. Two browsers
   that add or edit different themes therefore cannot delete each other's work,
   and a deletion is always explicit.
+- The stored document may reach about 21 KiB, but one HTTP request body is
+  limited by the transport to 16 KiB. The browser therefore changes one section
+  at a time (dashboard, one theme, one profile); a full-library PUT is not
+  needed and is refused above the transport limit.
 - A damaged file is reported as `recovered: true` with the server's reason and
   defaults are served; it is **not** silently rewritten. Saving replaces it and
   keeps the previous bytes as `.bak`. A file written by a newer schema is
@@ -211,7 +215,12 @@ originals stay reachable after a firmware or panel update; the status reports
 `firmwareChanged` and the studio shows a warning. It still refuses if a display
 file was changed by something else: only the original or a version this
 feature recorded is replaced, so a newer firmware's own files are never
-overwritten. Restoring the native display is independent of resetting the
+overwritten. A successful restore removes the saved baseline (the originals
+are back on the display), so the studio is not locked out afterwards: the next
+apply takes a fresh baseline for the current firmware. If a firmware update
+rewrote the theme files with its own images, an apply discards the old baseline
+automatically when every file is provably an original, without needing a
+restore first. Restoring the native display is independent of resetting the
 dashboard appearance.
 
 Interaction with `experimental/native-display/manage.sh`: that tool verifies
@@ -333,8 +342,8 @@ tests simulate the files and the API only.
       boot frames and backgrounds after a full reboot.
 - [ ] An interrupted apply is recovered on the next CC2 Control start, and the
       display still boots if an applied frame is unreadable.
-- [ ] A firmware/panel update reports `firmwareChanged`, refuses a new apply and
-      still restores the verified baseline.
+- [ ] A firmware/panel update reports `firmwareChanged`, still restores the
+      verified baseline, and a new apply afterwards takes a fresh baseline.
 - [ ] Factory reset and `manage.sh restore/check/install` behave as documented
       after a studio pack has been applied and restored.
 - [ ] Power loss during backup, replacement, journal update, rollback and
