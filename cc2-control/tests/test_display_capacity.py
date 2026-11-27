@@ -161,7 +161,9 @@ with tempfile.TemporaryDirectory(prefix="cc2-display-capacity-") as temporary:
     maximum = dict(manifest)
     assets = list(manifest["assets"])
     for index in range(320 - len(assets)):
-        name = f"extra{index:03d}.png"
+        # The longest allowed name (64 characters, .png included) is the worst
+        # case for the status answer.
+        name = f"{str(index):0>2}" + "n" * 56 + ".png"
         (theme / name).write_bytes(b"placeholder")
         assets.append({"name": name, "role": "accent", "width": 1, "height": 1,
                        "sha256": hashlib.sha256(name.encode()).hexdigest()})

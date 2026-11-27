@@ -999,9 +999,11 @@ static void disp_status_response(int fd) {
         !disp_manifest_identity(&disp_manifest_cache, identity.firmware_base, identity.gui_sha256));
     char error[160];
     disp_copy_error(error, sizeof(error));
-    char *body = malloc(32768);
+    /* The documented maximum is 320 assets; with the longest allowed names
+     * the answer is about 40 KiB, so the status body gets 64 KiB. */
+    char *body = malloc(65536);
     if (!body) { pthread_mutex_unlock(&disp_mutex); disp_json(fd, 500, "Internal Server Error", "Out of memory"); return; }
-    json_builder b = {body, 0, 32768, 0};
+    json_builder b = {body, 0, 65536, 0};
     json_builder_printf(&b, "{\"supported\":%s,\"error\":", supported ? "true" : "false");
     json_builder_string(&b, error);
     json_builder_printf(&b, ",\"schema\":%d,\"firmwareBase\":", supported ? disp_manifest_cache.schema : 0);
