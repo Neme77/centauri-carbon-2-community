@@ -379,8 +379,9 @@ presented as a hardware test.
 
 ### Sizes
 
-- `web/index.html`: 943 582 bytes (89.99 % of 1 MiB; 104 994 bytes before the
-  hard limit, 18 978 before the test alarm).
+- `web/index.html` before the final upstream integration: 943 582 bytes
+  (89.99 % of 1 MiB; 18 978 before the test alarm). The integrated tree is
+  measured in [`PRE_PR_AUDIT_REPORT.md`](PRE_PR_AUDIT_REPORT.md).
 - Tightest locale `ru.json`: 234 088 bytes (89.3 % of 256 KiB; 1 432 bytes
   before the restored 230 KiB alarm). It was 241 328 bytes before remediation and 218 482 bytes
   before the feature; the nine added strings are included and the compact
@@ -418,6 +419,18 @@ presented as a hardware test.
   test and documentation changes.
 
 ---
+
+## 9.2 Post-remediation integration and pre-PR audit
+
+The branch was integrated again with `origin/develop` after three further
+upstream commits (gzip web delivery, Spoolman on-demand sync, ELEGOO error-code
+texts). The merge resolutions, the raised locale alarm (240 KiB, required by the
+38 new upstream strings; the hard limits are unchanged) and the audit findings
+are recorded in [`PRE_PR_AUDIT_REPORT.md`](PRE_PR_AUDIT_REPORT.md). The audit
+found and fixed one regression introduced by this remediation (a use-after-free
+in the two appearance delete handlers), a contract mismatch between the
+advertised 320 assets and the 256-entry stage/state cap, and several frontend
+name, focus and overflow defects; the audit report lists them with evidence.
 
 ## 10. Remaining risks
 

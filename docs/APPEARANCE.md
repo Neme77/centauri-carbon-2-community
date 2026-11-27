@@ -130,6 +130,9 @@ Rules:
   file can be read at the next start. A round-trip test
   (`tests/test_appearance_capacity.py`) saves the documented maximum, restarts
   the process and compares every value.
+- Names (profiles, layouts, themes) are limited to 64 UTF-8 **bytes**, the
+  printer's storage bound; the studio truncates a long name by bytes rather
+  than characters, so a long Cyrillic or emoji name cannot make a save fail.
 - A custom theme id is `custom-` plus lowercase letters and single interior
   hyphens, at most 24 characters, because the same id is also written to the
   legacy `/api/preferences` theme field. The studio truncates long names and
@@ -144,6 +147,8 @@ Rules:
   limited by the transport to 16 KiB. The browser therefore changes one section
   at a time (dashboard, one theme, one profile); a full-library PUT is not
   needed and is refused above the transport limit.
+- A profile that names a custom theme the library does not hold is stored with
+  the default palette, so the profile list never shows a phantom theme.
 - A damaged file is reported as `recovered: true` with the server's reason and
   defaults are served; it is **not** silently rewritten. Saving replaces it and
   keeps the previous bytes as `.bak`. A file written by a newer schema is

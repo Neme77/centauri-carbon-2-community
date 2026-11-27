@@ -506,6 +506,6 @@ int main(void) {
     }
 
     printf("PASS: display pack validation, apply, baseline restore, foreign-change and firmware refusal, "
-           "154-file capacity, responsive status, recovery\n");
+           "320-file capacity, responsive status, recovery\n");
     return 0;
 }
