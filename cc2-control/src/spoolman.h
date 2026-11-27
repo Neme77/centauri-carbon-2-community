@@ -1161,7 +1161,7 @@ static void spoolman_keep_old_response(int fd) {
  * -- at most once per SPOOLMAN_TICK_MS, and only if no worker is already
  * running -- starts a new one for every spool that is linked (spoolman_id
  * set) and either has unsent usage or is simply due a refresh. */
-static void spoolman_tick(long long now) {
+static int spoolman_tick_ex(long long now, int force) {
     atomic_store(&spoolman_paused, !spools.spoolman_enabled);
     pthread_mutex_lock(&spoolman_outbox_mutex);
     /* Taken out of the outbox only once copied: without the memory for it the results wait there for the next tick. */
@@ -1257,9 +1257,9 @@ static void spoolman_tick(long long now) {
     free(drained);
 
     /* No new cycle while results of the last one still wait: it would be built on the accounting they have not changed yet. */
-    if (count < waiting || running || !spools.spoolman_enabled || !spools.spoolman_url[0] || now - spoolman_last_tick_ms < SPOOLMAN_TICK_MS) return;
+    if (count < waiting || running || !spools.spoolman_enabled || !spools.spoolman_url[0] || (!force && now - spoolman_last_tick_ms < SPOOLMAN_TICK_MS)) return 0;
     spoolman_job_batch *batch = malloc(sizeof(*batch));
-    if (!batch) return;
+    if (!batch) return -1;
     memset(batch, 0, sizeof(*batch));
     snprintf(batch->url, sizeof(batch->url), "%s", spools.spoolman_url);
     snprintf(batch->basic_auth, sizeof(batch->basic_auth), "%s", spools.spoolman_basic_auth);
@@ -1296,7 +1296,8 @@ static void spoolman_tick(long long now) {
     if (moved) { spools_touch(1); (void)spools_save(); }
     pthread_t thread;
     pthread_mutex_lock(&spoolman_outbox_mutex);
-    if (pthread_create(&thread, NULL, spoolman_worker, batch) == 0) { spoolman_worker_running = 1; pthread_detach(thread); }
+    int started = pthread_create(&thread, NULL, spoolman_worker, batch) == 0;
+    if (started) { spoolman_worker_running = 1; pthread_detach(thread); }
     else {
         free(batch);
         /* Nothing went out: put the grams back where they were. */
@@ -1309,6 +1310,33 @@ static void spoolman_tick(long long now) {
     }
     pthread_mutex_unlock(&spoolman_outbox_mutex);
     spoolman_last_tick_ms = now;
+    return started ? 1 : -1;
+}
+
+static void spoolman_tick(long long now) { (void)spoolman_tick_ex(now, 0); }
+
+/* A completed worker can still have results waiting for the main-thread import/accounting. */
+static int spoolman_busy(void) {
+    pthread_mutex_lock(&spoolman_outbox_mutex);
+    int busy = spoolman_worker_running || spoolman_outbox_count || spoolman_send_outbox_count;
+    pthread_mutex_unlock(&spoolman_outbox_mutex);
+    return busy;
+}
+
+/* POST /api/spoolman/sync: the normal cycle now, using saved settings, never a parallel worker.
+ * Main-thread handler like the periodic tick. Held/unsure entries keep their existing guards. */
+static void spoolman_sync_response(int fd) {
+    if (!spools_open(fd)) return;
+    if (!spools.spoolman_enabled) { spools_fail_code(fd, 409, "spoolman_off", "Spoolman integration is disabled"); return; }
+    if (!spools.spoolman_url[0]) { spools_fail_code(fd, 400, "spoolman_no_url", "Set the Spoolman server URL first"); return; }
+    char host[SPOOLMAN_HOST_MAX], base[SPOOLMAN_PATH_MAX]; int port;
+    if (!spoolman_parse_url(spools.spoolman_url, host, sizeof(host), &port, base, sizeof(base))) {
+        spools_fail_code(fd, 400, "spoolman_bad_url", "Invalid Spoolman URL"); return;
+    }
+    if (!spoolman_busy() && spoolman_tick_ex(monotonic_ms(), 1) < 0) {
+        spools_fail_code(fd, 500, "spoolman_start_failed", "Cannot start the request"); return;
+    }
+    spools_reply(fd, 202, "{\"ok\":true}\n");
 }
 
 /* The same host, port and base path: how the address is written does not matter. Anything that is not a usable address
@@ -1410,11 +1438,11 @@ static void spoolman_status_response(int fd) {
     }
     char text[1536];
     int n = snprintf(text, sizeof(text),
-        "{\"enabled\":%s,\"configured\":%s,\"last_sync\":%lld,\"result\":\"%s\",\"http\":%d,"
+        "{\"busy\":%s,\"enabled\":%s,\"configured\":%s,\"last_sync\":%lld,\"result\":\"%s\",\"http\":%d,"
         "\"unsent_spools\":%d,\"unsent_grams\":%.2f,\"inflight_spools\":%d,\"held_entries\":%d,\"held_grams\":%.2f,"
         "\"list\":{\"pages\":%d,\"read\":%d,\"new\":%d,\"unreadable\":%d,\"no_weight\":%d,\"library_full\":%d,"
         "\"too_large\":%d,\"no_material\":%d,\"no_colour\":%d},\"archived_linked\":%d,\"linked_no_weight\":%d,\"orphaned\":[",
-        spools.spoolman_enabled ? "true" : "false", spools.spoolman_url[0] ? "true" : "false", st.time,
+        spoolman_busy() ? "true" : "false", spools.spoolman_enabled ? "true" : "false", spools.spoolman_url[0] ? "true" : "false", st.time,
         spoolman_reason_name[st.reason], st.http, unsent, grams, inflight, spools.held_count, held_grams, st.pages, st.read, st.offered,
         st.unreadable, st.no_weight, st.library_full, st.too_large, st.no_material, st.no_colour, st.archived_linked,
         st.linked_no_weight);
