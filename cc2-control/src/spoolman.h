@@ -40,12 +40,13 @@
 
 #define SPOOLMAN_TICK_MS 120000LL     /* same cadence as the local library's own autosave */
 #define SPOOLMAN_TIMEOUT_S 5
-#define SPOOLMAN_BODY_MAX 8192        /* one spool object */
+/* One spool object read alone (GET /api/v1/spool/{id}, the reply to PUT .../use): as large as a page may be, so a spool
+ * the list can carry (its page halves down to one spool) can also be read and sent alone. Kept on the heap. */
+#define SPOOLMAN_BODY_MAX SPOOLMAN_PAGE_BODY_MAX
 #define SPOOLMAN_HEADER_MAX 8192
 #define SPOOLMAN_HOST_MAX 128
 #define SPOOLMAN_PATH_MAX 128
 #define SPOOLMAN_CATALOG_MAX 200
-#define SPOOLMAN_CATALOG_BODY_MAX 131072   /* the largest chunk of a chunked reply that is believed */
 #define SPOOLMAN_TOLERANCE_G 0.05     /* used_weight comparisons, grams */
 /* The auto-import reads the list in pages (GET /api/v1/spool?sort=id:asc&limit=..&offset=..): Spoolman's list has
  * no order unless one is asked for, and without `limit` it answers with everything at once. */
@@ -143,10 +144,26 @@ static int spoolman_parse_url(const char *url, char *host, size_t host_cap, int 
      * fail every cycle without a word, so it is refused up front. */
     struct in_addr probe;
     if (inet_pton(AF_INET, host, &probe) != 1) return 0;
-    *port = colon ? atoi(colon + 1) : 80;
+    /* The port is digits only: "80x" or "+80" is not a port. */
+    *port = 80;
+    if (colon) {
+        const char *d = colon + 1;
+        if (d == host_end || host_end - d > 5) return 0;
+        for (; d < host_end; ++d) if (!isdigit((unsigned char)*d)) return 0;
+        *port = atoi(colon + 1);
+    }
     if (*port <= 0 || *port > 65535) return 0;
     size_t bn = slash ? strlen(slash) : 0;
     if (bn >= base_cap) return 0;
+    /* The base path goes into the request line as it is, so it may hold only what a URL path may (RFC 3986): letters,
+     * digits, -._~!$&'()*+,;=:@/ and %XX. A space, a control character, ? or # would change or cut the request. */
+    for (size_t i = 0; i < bn; ++i) {
+        unsigned char c = (unsigned char)slash[i];
+        if (c == '%') {
+            if (i + 2 >= bn || !isxdigit((unsigned char)slash[i + 1]) || !isxdigit((unsigned char)slash[i + 2])) return 0;
+            i += 2;
+        } else if (!isalnum(c) && !strchr("-._~!$&'()*+,;=:@/", c)) return 0;
+    }
     if (slash) { memcpy(base, slash, bn); if (bn && base[bn - 1] == '/') --bn; }
     base[bn] = 0;
     return 1;
@@ -190,14 +207,48 @@ static int spoolman_prefix_ci(const char *text, const char *prefix, size_t n) {
  * within spoolman_request_max_ms. `total` (may be NULL) receives the X-Total-Count header, or -1. */
 static long long spoolman_request_max_ms = SPOOLMAN_REQUEST_MAX_MS;
 
+/* While a reply comes in: once its header block is complete, 1, with `*head` set past it and `*length` set to its
+ * Content-Length, or to -1 when it has none, has chunked framing, or the header block holds a NUL (the full parse after
+ * the read rejects that). `raw` is NUL-terminated at `used`. */
+static int spoolman_reply_head(const char *raw, size_t used, size_t *head, long *length) {
+    *head = 0; *length = -1;
+    for (size_t i = 0; i + 4 <= used && i < SPOOLMAN_HEADER_MAX; ++i)
+        if (!memcmp(raw + i, "\r\n\r\n", 4)) { *head = i + 4; break; }
+    if (!*head) return 0;
+    if (memchr(raw, 0, *head)) return 1;
+    long found = -1;
+    for (size_t line = 0; line < *head;) {
+        const char *eol = memchr(raw + line, '\n', *head - line);
+        size_t len = eol ? (size_t)(eol - (raw + line)) : *head - line;
+        if (len >= 18 && !spoolman_prefix_ci(raw + line, "transfer-encoding:", 18)) return 1;
+        if (len >= 15 && !spoolman_prefix_ci(raw + line, "content-length:", 15)) {
+            const char *v = raw + line + 15;
+            while (*v == ' ' || *v == '\t') ++v;
+            char *endp; errno = 0;
+            long value = strtol(v, &endp, 10);
+            if (endp == v || errno || value < 0) return 1;
+            found = value;
+        }
+        line += len + 1;
+    }
+    *length = found;
+    return 1;
+}
+
 static int spoolman_request_ex(const char *host, int port, const char *basic_auth, const char *method,
                                const char *path, const char *body, char *reply, size_t reply_cap, long *total) {
     if (reply_cap) reply[0] = 0;
     if (total) *total = -1;
     if (atomic_load(&spoolman_paused)) return SPOOLMAN_E_NOSEND;
     const long long give_up = monotonic_ms() + spoolman_request_max_ms;
+    /* Room for the headers plus the body, with slack for chunk framing; + a NUL after what comes in, so no parse below
+     * reads past it. Taken before anything goes out: no memory for it is then "not sent", not "may have been applied". */
+    size_t raw_cap = SPOOLMAN_HEADER_MAX + reply_cap * 2 + 64, used = 0;
+    char *raw = malloc(raw_cap + 1);
+    if (!raw) return SPOOLMAN_E_NOSEND;
+    raw[0] = 0;
     int fd = spoolman_connect(host, port);
-    if (fd < 0) return SPOOLMAN_E_NOSEND;
+    if (fd < 0) { free(raw); return SPOOLMAN_E_NOSEND; }
     char auth_header[256] = "";
     if (basic_auth[0]) {
         char encoded[200];
@@ -219,20 +270,18 @@ static int spoolman_request_ex(const char *host, int port, const char *basic_aut
     int n = snprintf(request, sizeof(request),
         "%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n%sContent-Type: application/json\r\nContent-Length: %zu\r\n\r\n%s",
         method, path, host, auth_header, body_len, body ? body : "");
-    if (n <= 0 || (size_t)n >= sizeof(request)) { close(fd); return SPOOLMAN_E_NOSEND; }
+    if (n <= 0 || (size_t)n >= sizeof(request)) { close(fd); free(raw); return SPOOLMAN_E_NOSEND; }
     const char *p = request; size_t left = (size_t)n;
     while (left) {
-        if (atomic_load(&spoolman_paused) || monotonic_ms() >= give_up) { close(fd); return SPOOLMAN_E_NOSEND; }
+        if (atomic_load(&spoolman_paused) || monotonic_ms() >= give_up) { close(fd); free(raw); return SPOOLMAN_E_NOSEND; }
         ssize_t sent = send(fd, p, left, MSG_NOSIGNAL);
         /* Part of a request is never acted on: the server waits for the rest of the declared body. */
-        if (sent <= 0) { close(fd); return SPOOLMAN_E_NOSEND; }
+        if (sent <= 0) { close(fd); free(raw); return SPOOLMAN_E_NOSEND; }
         p += sent; left -= (size_t)sent;
     }
-    /* From here on the server may have acted. Room for the headers plus the body, with slack for chunk framing. */
-    size_t raw_cap = SPOOLMAN_HEADER_MAX + reply_cap * 2 + 64, used = 0;
-    char *raw = malloc(raw_cap);
-    if (!raw) { close(fd); return SPOOLMAN_E_UNKNOWN; }
-    int eof = 0, timed_out = 0;
+    /* From here on the server may have acted. */
+    int eof = 0, timed_out = 0, framed = 0;
+    size_t framed_head = 0; long framed_length = -1;
     while (used < raw_cap) {
         long long remaining_ms = give_up - monotonic_ms();
         if (remaining_ms <= 0) { timed_out = 1; break; }
@@ -243,6 +292,11 @@ static int spoolman_request_ex(const char *host, int port, const char *basic_aut
         if (got < 0) { timed_out = errno == EAGAIN || errno == EWOULDBLOCK; break; }
         if (got == 0) { eof = 1; break; }
         used += (size_t)got;
+        raw[used] = 0;
+        /* Complete once the body has its Content-Length: a proxy that keeps the connection open despite "Connection:
+         * close" must not hold every request until the timeout. */
+        if (!framed) framed = spoolman_reply_head(raw, used, &framed_head, &framed_length);
+        if (framed && framed_length >= 0 && used - framed_head >= (size_t)framed_length) break;
     }
     close(fd);
     int result = SPOOLMAN_E_UNKNOWN;
@@ -291,15 +345,18 @@ static int spoolman_request_ex(const char *host, int port, const char *basic_aut
         } else if (chunked) {
             size_t at = 0; int finished = 0;
             while (at < have) {
+                if (!isxdigit((unsigned char)data[at])) goto done;     /* strtoul would also take a space or a sign */
                 char *endp; errno = 0;
                 unsigned long size = strtoul(data + at, &endp, 16);
-                if (endp == data + at || errno || size > SPOOLMAN_CATALOG_BODY_MAX * 2UL) goto done;
+                if (endp == data + at) goto done;
+                /* A chunk that cannot fit is too big, also when not all of it came in (the buffer fills up first): the
+                 * caller can then ask for less, as for a reply with a Content-Length. */
+                if (errno || size >= reply_cap - out) { result = SPOOLMAN_E_TOOBIG; goto done; }
                 const char *eol = memchr(endp, '\n', have - (size_t)(endp - data));
                 if (!eol) goto done;
                 at = (size_t)(eol - data) + 1;
                 if (!size) { finished = 1; break; }
                 if (at + size + 2 > have) goto done;
-                if (out + size + 1 > reply_cap) { result = SPOOLMAN_E_TOOBIG; goto done; }
                 memcpy(reply + out, data + at, size); out += size;
                 at += size;
                 if (data[at] == '\r') ++at;
@@ -621,11 +678,13 @@ static void spoolman_status_commit(const spoolman_status_t *now) {
 /* GET /api/v1/spool/{id}. 1 = read and parsed; `code` (may be NULL) gets the request's result. */
 static int spoolman_get_spool_ex(const char *host, int port, const char *base, const char *auth, const char *id,
                                  spoolman_spool *out, int *code) {
-    char reply[SPOOLMAN_BODY_MAX], path[SPOOLMAN_PATH_MAX + 64];
+    char path[SPOOLMAN_PATH_MAX + 64], *reply = malloc(SPOOLMAN_BODY_MAX);
     snprintf(path, sizeof(path), "%s/api/v1/spool/%s", base, id);
-    int status = spoolman_request(host, port, auth, "GET", path, NULL, reply, sizeof(reply));
+    int status = reply ? spoolman_request(host, port, auth, "GET", path, NULL, reply, SPOOLMAN_BODY_MAX) : SPOOLMAN_E_NOSEND;
     if (code) *code = status;
-    return status == 200 && spoolman_parse_one(reply, out) && !strcmp(out->spoolman_id, id);
+    int ok = status == 200 && spoolman_parse_one(reply, out) && !strcmp(out->spoolman_id, id);
+    free(reply);
+    return ok;
 }
 
 static int spoolman_get_spool(const char *host, int port, const char *base, const char *auth, const char *id,
@@ -636,9 +695,11 @@ static int spoolman_get_spool(const char *host, int port, const char *base, cons
 /* Does Spoolman's list answer at all? A 404 for one spool only says the spool is gone when it does; a wrong base path
  * or a proxy that answers wrongly says 404 for everything. */
 static int spoolman_list_answers(const char *host, int port, const char *base, const char *auth) {
-    char reply[SPOOLMAN_BODY_MAX], path[SPOOLMAN_PATH_MAX + 64];
+    char path[SPOOLMAN_PATH_MAX + 64], *reply = malloc(SPOOLMAN_BODY_MAX);
     snprintf(path, sizeof(path), "%s/api/v1/spool?limit=1", base);
-    return spoolman_request(host, port, auth, "GET", path, NULL, reply, sizeof(reply)) == 200;
+    int ok = reply && spoolman_request(host, port, auth, "GET", path, NULL, reply, SPOOLMAN_BODY_MAX) == 200;
+    free(reply);
+    return ok;
 }
 
 static long long spoolman_cycle_max_ms = SPOOLMAN_CYCLE_MAX_MS;
@@ -780,10 +841,12 @@ static void spoolman_run_job(const spoolman_job_batch *batch, int index, const c
             /* could not even read the baseline: nothing was sent; a spool Spoolman does not have goes on the list */
             r.outcome = !have_before && code == 404 ? SPOOLMAN_MISSING : SPOOLMAN_NOT_SENT;
         } else {
-            char body[64], path[SPOOLMAN_PATH_MAX + 64], reply[SPOOLMAN_BODY_MAX];
+            char body[64], path[SPOOLMAN_PATH_MAX + 64], *reply = malloc(SPOOLMAN_BODY_MAX);
             snprintf(body, sizeof(body), "{\"use_weight\":%.3f}", grams);
             snprintf(path, sizeof(path), "%s/api/v1/spool/%s/use", base, sid);
-            int status = spoolman_request(host, port, batch->basic_auth, "PUT", path, body, reply, sizeof(reply));
+            int status = reply ? spoolman_request(host, port, batch->basic_auth, "PUT", path, body, reply, SPOOLMAN_BODY_MAX)
+                               : SPOOLMAN_E_NOSEND;
+            free(reply);
             if (status == 200) r.outcome = SPOOLMAN_SENT;
             else if (status == 404) { r.outcome = SPOOLMAN_MISSING; r.missing = 1; r.api_ok = 1; }   /* it was read a moment ago */
             else if (status == SPOOLMAN_E_NOSEND || (status >= 300 && status < 500)) r.outcome = SPOOLMAN_NOT_SENT;
@@ -911,10 +974,11 @@ static int spoolman_send_one(const char *host, int port, const char *base, const
     if (!spoolman_get_spool_ex(host, port, base, auth, sid, &before, &code))
         return code == 404 && spoolman_list_answers(host, port, base, auth) ? SPOOLMAN_MISSING : SPOOLMAN_NOT_SENT;
     if (!before.have_used) return SPOOLMAN_NOT_SENT;
-    char body[64], path[SPOOLMAN_PATH_MAX + 64], reply[SPOOLMAN_BODY_MAX];
+    char body[64], path[SPOOLMAN_PATH_MAX + 64], *reply = malloc(SPOOLMAN_BODY_MAX);
     snprintf(body, sizeof(body), "{\"use_weight\":%.3f}", grams);
     snprintf(path, sizeof(path), "%s/api/v1/spool/%s/use", base, sid);
-    int status = spoolman_request(host, port, auth, "PUT", path, body, reply, sizeof(reply));
+    int status = reply ? spoolman_request(host, port, auth, "PUT", path, body, reply, SPOOLMAN_BODY_MAX) : SPOOLMAN_E_NOSEND;
+    free(reply);
     if (status == 200) return SPOOLMAN_SENT;
     if (status == 404) return SPOOLMAN_MISSING;
     if (status == SPOOLMAN_E_NOSEND || (status >= 300 && status < 500)) return SPOOLMAN_NOT_SENT;
@@ -1100,10 +1164,11 @@ static void spoolman_keep_old_response(int fd) {
 static void spoolman_tick(long long now) {
     atomic_store(&spoolman_paused, !spools.spoolman_enabled);
     pthread_mutex_lock(&spoolman_outbox_mutex);
-    int count = spoolman_outbox_count; spoolman_outbox_count = 0;
-    spoolman_result *drained = count ? malloc((size_t)count * sizeof(*drained)) : NULL;
-    if (drained) memcpy(drained, spoolman_outbox, (size_t)count * sizeof(*drained));
-    else count = 0;
+    /* Taken out of the outbox only once copied: without the memory for it the results wait there for the next tick. */
+    const int waiting = spoolman_outbox_count;
+    spoolman_result *drained = waiting ? malloc((size_t)waiting * sizeof(*drained)) : NULL;
+    const int count = drained ? waiting : 0;
+    if (drained) { memcpy(drained, spoolman_outbox, (size_t)count * sizeof(*drained)); spoolman_outbox_count = 0; }
     spoolman_send_result sent[SPOOLMAN_HELD_MAX];
     int sent_count = spoolman_send_outbox_count;
     memcpy(sent, spoolman_send_outbox, (size_t)sent_count * sizeof(sent[0]));
@@ -1191,7 +1256,8 @@ static void spoolman_tick(long long now) {
     }
     free(drained);
 
-    if (running || !spools.spoolman_enabled || !spools.spoolman_url[0] || now - spoolman_last_tick_ms < SPOOLMAN_TICK_MS) return;
+    /* No new cycle while results of the last one still wait: it would be built on the accounting they have not changed yet. */
+    if (count < waiting || running || !spools.spoolman_enabled || !spools.spoolman_url[0] || now - spoolman_last_tick_ms < SPOOLMAN_TICK_MS) return;
     spoolman_job_batch *batch = malloc(sizeof(*batch));
     if (!batch) return;
     memset(batch, 0, sizeof(*batch));
