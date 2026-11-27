@@ -15,7 +15,8 @@ try {
   const writes = []
   page.on('pageerror', e => errors.push(e.message))
   page.on('request', r => {
-    if (r.url().includes('/api/appearance') && r.method() !== 'GET') writes.push({ url: r.url(), method: r.method(), body: r.postData() })
+    if (r.url().includes('/api/appearance') && r.method() !== 'GET')
+      writes.push({ url: r.url(), method: r.method(), body: r.postData() })
   })
   const origin = server.resolvedUrls.local[0]
   await page.goto(origin + '#appearance/themes')
@@ -35,7 +36,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'nord')
   assert(writes.some(w => w.method === 'PUT' && w.body.includes('"theme":"nord"')), JSON.stringify(writes))
 
-  // A custom theme starts from a preset, saves, and applies its tokens inline.
+  // A custom theme starts from a preset, is written per item, and applies.
   await page.getByRole('button', { name: 'New theme', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await dialog.locator('select').selectOption('klipper-dark')
@@ -44,7 +45,7 @@ try {
     el.value = '#ff00aa'
     el.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  const themeWrite = page.waitForRequest(r => r.url().endsWith('/api/appearance') && r.method() === 'PUT')
+  const themeWrite = page.waitForRequest(r => r.url().endsWith('/api/appearance/themes') && r.method() === 'POST')
   await dialog.getByRole('button', { name: 'Save theme', exact: true }).click()
   await themeWrite
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'custom')
@@ -54,16 +55,46 @@ try {
   }))
   assert.equal(custom.bg, '#121212')
   assert.equal(custom.accent, '#ff00aa')
-  assert(writes.some(w => w.body.includes('"id":"custom-demo-industrial"')), JSON.stringify(writes))
+  const postedTheme = writes.find(w => w.url.endsWith('/api/appearance/themes') && w.method === 'POST')
+  assert(postedTheme && postedTheme.body.includes('"id":"custom-demo-industrial"'), JSON.stringify(writes))
+  // The document save must not carry the theme library any more.
+  const documentPut = writes.filter(w => w.url.endsWith('/api/appearance') && w.method === 'PUT').pop()
+  assert(!documentPut.body.includes('"themes"'), 'the document PUT must not replace the theme library')
+
+  // A long theme name still produces an id inside the 24-character contract.
+  await page.getByRole('button', { name: 'New theme', exact: true }).click()
+  await page.getByRole('dialog').locator('input').first().fill('A very long custom theme name for the contract')
+  const longWrite = page.waitForRequest(r => r.url().endsWith('/api/appearance/themes') && r.method() === 'POST')
+  await page.getByRole('dialog').getByRole('button', { name: 'Save theme', exact: true }).click()
+  await longWrite
+  const longTheme = writes.filter(w => w.url.endsWith('/api/appearance/themes') && w.method === 'POST').pop()
+  const longId = JSON.parse(longTheme.body).theme.id
+  assert(longId.length <= 24, `${longId} (${longId.length})`)
+  assert(/^custom-[a-z][a-z-]*[a-z]$/.test(longId) && !longId.includes('--'), longId)
+
+  // Deleting a custom theme uses the explicit endpoint and does not lose the
+  // other theme another browser could have added.
+  await page.goto(origin + '#appearance/themes')
+  await page.getByRole('tab', { name: 'Themes', exact: true }).waitFor()
+  const cards = page.locator('button[aria-pressed]')
+  await cards.filter({ hasText: 'A very long custom theme' }).first().click()
+  await page.locator('section').filter({ hasText: 'Themes' }).getByRole('button', { name: 'Edit', exact: true }).last().click()
+  const deleteWrite = page.waitForRequest(r => r.url().endsWith('/api/appearance/themes/delete') && r.method() === 'POST')
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Confirm', exact: true }).click()
+  await deleteWrite
+  await page.waitForTimeout(300)
+  assert(writes.some(w => w.url.endsWith('/api/appearance/themes/delete')), JSON.stringify(writes))
 
   // System theme follows the operating-system preference and reacts to it.
   await page.emulateMedia({ colorScheme: 'light' })
+  await page.getByRole('tab', { name: 'Themes', exact: true }).click()
   await page.locator('button[aria-pressed]').filter({ hasText: 'Follow the system' }).first().click()
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light')
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
 
-  // Layout and widgets: create a custom layout, disable Fans, reorder Camera.
+  // Layout and widgets.
   await page.getByRole('tab', { name: 'Dashboard layout', exact: true }).click()
   await page.getByRole('button', { name: 'Create a custom layout', exact: true }).click()
   await page.getByRole('tab', { name: 'Widgets', exact: true }).click()
@@ -80,7 +111,7 @@ try {
   const firstAfter = await page.locator('.cc2-widget-cell').first().getAttribute('data-widget')
   assert.notEqual(firstBefore, firstAfter)
 
-  // Profiles: save the current appearance and apply it again.
+  // Profiles.
   await page.goto(origin + '#appearance/profiles')
   await page.getByRole('textbox', { name: 'Profile name' }).fill('Evening')
   const profileWrite = page.waitForResponse(r => r.url().endsWith('/api/appearance/profiles') && r.request().method() === 'POST')
@@ -91,8 +122,26 @@ try {
   await page.getByRole('button', { name: 'Apply', exact: true }).first().click()
   await page.waitForFunction(() => document.body.textContent.includes('Evening'))
 
+  // Every tab renders, including the one that used to throw (Advanced).
+  const tabs = [
+    ['overview', 'Overview'],
+    ['themes', 'Themes'],
+    ['layout', 'Dashboard layout'],
+    ['widgets', 'Widgets'],
+    ['touchscreen', 'Touchscreen'],
+    ['profiles', 'Profiles'],
+    ['transfer', 'Import and export'],
+    ['advanced', 'Advanced'],
+  ]
+  for (const [slug, name] of tabs) {
+    await page.goto(`${origin}#appearance/${slug}`)
+    await page.getByRole('tab', { name, exact: true }).waitFor()
+    await page.waitForTimeout(150)
+    assert.equal(await page.locator('.cc2-appearance section').count() > 0, true, `${name} rendered no card`)
+  }
+
   // The touchscreen tab is honest about this demo's missing manifest.
-  await page.getByRole('tab', { name: 'Touchscreen', exact: true }).click()
+  await page.goto(origin + '#appearance/touchscreen')
   await page.getByText('Not supported', { exact: true }).waitFor()
   assert((await page.locator('.cc2-appearance').innerText()).toLowerCase().includes('manifest'))
 
@@ -102,14 +151,16 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark')
 
   // The studio must stay usable at phone width: wrapped tabs, no horizontal overflow.
-  await page.setViewportSize({ width: 390, height: 900 })
-  await page.goto(origin + '#appearance/themes')
-  await page.getByRole('tab', { name: 'Themes', exact: true }).waitFor()
-  await page.waitForTimeout(400)
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false)
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(origin + '#appearance/themes')
+    await page.getByRole('tab', { name: 'Themes', exact: true }).waitFor()
+    await page.waitForTimeout(400)
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width}px overflow`)
+  }
 
   assert.deepEqual(errors, [])
-  console.log('PASS: appearance themes, custom tokens, auto mode, layout/widget changes, profiles, touchscreen honesty, reload and phone width')
+  console.log('PASS: appearance themes, per-item writes, theme-id contract, delete, auto mode, layout/widget changes, profiles, all tabs, touchscreen honesty, reload and phone width')
 } finally {
   if (browser) await browser.close()
   await server.close()

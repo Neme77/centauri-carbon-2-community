@@ -50,9 +50,15 @@ export const THEMES: { id: string; key?: Key; label?: string }[] = [
 // `auto` follows the operating system; `custom`/`custom-<slug>` are themes the
 // appearance studio stores in /api/appearance (the identifier is still the only
 // thing the legacy preferences endpoint needs).
+// A custom theme id is stored by both /api/appearance and the legacy
+// /api/preferences field: "custom-" plus lowercase letters and single interior
+// hyphens, at most 24 characters (see lib/appearance.ts THEME_ID_MAX and
+// src/appearance.h AP_THEME_ID_MAX; test_theme_contract_static.py checks it).
+const customThemeId = (mode: string) =>
+  mode.length <= 24 && /^custom-[a-z][a-z-]*[a-z]$/.test(mode) && !mode.includes('--')
 const themeId = (mode: unknown) =>
   typeof mode === 'string' &&
-  (THEMES.some(x => x.id === mode) || mode === 'auto' || mode === 'custom' || /^custom-[a-z0-9-]{2,32}$/.test(mode))
+  (THEMES.some(x => x.id === mode) || mode === 'auto' || mode === 'custom' || customThemeId(mode))
     ? mode
     : 'dark'
 export const theme = store({ mode: themeId(ls.get('cc2-theme')) })

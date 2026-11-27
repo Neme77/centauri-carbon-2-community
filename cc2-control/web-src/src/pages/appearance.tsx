@@ -57,6 +57,7 @@ import {
   loadAppearance,
   moveWidget,
   newLayout,
+  normalizeThemes,
   removeProfile,
   resetAppearance,
   saveAppearance,
@@ -1176,18 +1177,37 @@ const Touchscreen = () => {
                 <Check size={16} />
                 {t('appearance.apply_touchscreen')}
               </Button>
-              <Button
-                variant="danger"
-                disabled={!touch.experimental || busy || !status.backupAvailable}
-                onClick={() => void restore()}
-              >
-                <RotateCcw size={16} />
-                {t('appearance.restore_touchscreen')}
-              </Button>
             </div>
           </>
         )}
       </Card>
+      {status?.restoreAvailable && (
+        <Card>
+          <CardHead
+            icon="restore"
+            title="appearance.restore_touchscreen"
+            end={
+              status.firmwareChanged ? (
+                <Tag tone="warning">
+                  <Dot c="amber" /> {t('appearance.firmware_changed')}
+                </Tag>
+              ) : undefined
+            }
+          />
+          <p class="mb-3 text-sm text-muted">
+            {status.supported ? t('appearance.restore_hint') : t('appearance.restore_without_manifest')}
+          </p>
+          {status.firmwareChanged && (
+            <p class="mb-3 rounded-md border border-amber/50 bg-amber/10 p-2.5 text-sm text-amber" role="alert">
+              {t('appearance.firmware_changed_warning')}
+            </p>
+          )}
+          <Button variant="danger" disabled={busy} onClick={() => void restore()}>
+            <RotateCcw size={16} />
+            {t('appearance.restore_touchscreen')}
+          </Button>
+        </Card>
+      )}
       <Card>
         <CardHead icon="info" title="appearance.touchscreen_limits" />
         <p class="text-sm text-muted">{t('appearance.limit_text')}</p>
@@ -1367,7 +1387,9 @@ const Transfer = () => {
     try {
       const parsed = JSON.parse(await readFile(file))
       if (parsed?.format !== 'cc2-theme' || typeof parsed.name !== 'string' || !parsed.tokens) throw Error()
-      const theme = createTheme(parsed.name, parsed.tokens as ThemeTokens, false)
+      const valid = normalizeThemes([{ id: 'custom-imported', name: parsed.name, tokens: parsed.tokens }])[0]
+      if (!valid) throw Error()
+      const theme = createTheme(valid.name, valid.tokens, false)
       if (theme) notify(t('appearance.import_success'))
     } catch {
       notify(t('appearance.import_bad'), 'error')

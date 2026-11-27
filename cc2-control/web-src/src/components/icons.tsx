@@ -40,6 +40,7 @@ import {
   Zap,
   Wifi,
   EthernetPort,
+  Wand2,
 } from 'lucide-preact'
 import { CanvasIcon } from '@/components/canvas-icon'
 
@@ -85,6 +86,7 @@ const icons = {
   transfer: Download,
   restore: RotateCcw,
   smartphone: Smartphone,
+  advanced: Wand2,
 }
 
 // Lucide icons (plus the Canvas glyph, drawn the same way), with a 1.75 px stroke everywhere.

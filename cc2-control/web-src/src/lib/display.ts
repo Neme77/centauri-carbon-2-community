@@ -14,6 +14,18 @@ import { hexToRgb, hsl, hslToHex, normalizeHex, rgbToHex } from '@/lib/appearanc
 
 export type DisplayRole = 'boot' | 'background' | 'accent'
 
+/* These mirror the server limits in cc2-control/src/display_theme.h
+ * (DISP_MAX_PACK, DISP_MAX_FILE, DISP_MAX_ASSETS, DISP_MAX_STAGE). A test in
+ * tests/test_display_limits_static.py fails if they drift. */
+export const MAX_PACK_BYTES = 4 * 1024 * 1024
+export const MAX_FILE_BYTES = 512 * 1024
+export const MAX_ASSETS = 320
+/* The native boot animation reads a fixed 100 frames. */
+export const BOOT_FRAMES = 100
+/* Leave room for the 1024-byte end marker and the tar headers already counted
+ * by tarBytes(); a pack must never be built at exactly the server limit. */
+const PACK_MARGIN_BYTES = 8 * 1024
+
 export interface DisplayAsset {
   name: string
   role: DisplayRole
@@ -34,6 +46,11 @@ export interface DisplayStatus {
   phase: number
   recoveryRequired: boolean
   backupAvailable: boolean
+  /* A verified baseline can be restored even when the current manifest or GUI
+   * no longer matches it (firmware update). */
+  restoreAvailable: boolean
+  firmwareChanged: boolean
+  stateValid: boolean
   experimental: boolean
 }
 
@@ -150,10 +167,19 @@ export const tintBackground = async (name: string, colour: string): Promise<Uint
   )
 }
 
-/* Turn an uploaded image into a small-palette 532x300 boot frame. The native
- * boot animation reads a fixed 100 frames; the same frame is repeated, which
- * is a static boot image rather than a new animation. */
-export const bootFrame = async (file: File, background: string, width: number, height: number): Promise<Uint8Array> => {
+/* Turn an uploaded image into a small-palette boot frame no larger than
+ * `maxBytes`. The native boot animation reads a fixed 100 frames; the same
+ * frame is repeated, which is a static boot image rather than a new animation.
+ * Quantisation is reduced until the encoded frame fits the per-frame budget,
+ * so a normal photograph is accepted and the assembled pack stays inside the
+ * server limit; only an image that cannot fit even at four levels is refused. */
+export const bootFrame = async (
+  file: File,
+  background: string,
+  width: number,
+  height: number,
+  maxBytes = MAX_FILE_BYTES
+): Promise<Uint8Array> => {
   const bitmap = await createImageBitmap(file)
   try {
     const draw = document.createElement('canvas')
@@ -169,6 +195,7 @@ export const bootFrame = async (file: File, background: string, width: number, h
     context.imageSmoothingEnabled = true
     context.drawImage(bitmap, Math.round((width - w) / 2), Math.round((height - h) / 2), w, h)
     const image = context.getImageData(0, 0, width, height)
+    const budget = Math.min(maxBytes, MAX_FILE_BYTES)
     for (const levels of [32, 16, 8, 4]) {
       const pixels = new Uint8ClampedArray(image.data)
       const step = 255 / (levels - 1)
@@ -178,12 +205,9 @@ export const bootFrame = async (file: File, background: string, width: number, h
         pixels[i + 2] = Math.round(pixels[i + 2] / step) * step
       }
       const blob = await blobOf(canvasFor(new ImageData(pixels, width, height)))
-      if (blob.size <= 28 * 1024 || levels === 4) {
-        if (blob.size > 120 * 1024) throw Error('Boot artwork is too detailed; choose a simpler image')
-        return new Uint8Array(await blob.arrayBuffer())
-      }
+      if (blob.size <= budget) return new Uint8Array(await blob.arrayBuffer())
     }
-    throw Error('Boot artwork is too large')
+    throw Error('Boot artwork is too detailed; choose a simpler image')
   } finally {
     bitmap.close()
   }
@@ -198,7 +222,14 @@ export interface PackFile {
 
 const octal = (value: number, length: number) => `${value.toString(8).padStart(length - 1, '0')}\0`
 
+/* Exact size of the tar that buildTar() will create: 512-byte header per file,
+ * 512-byte padding per file and the 1024-byte end marker. */
+export const tarBytes = (files: PackFile[]): number =>
+  files.reduce((total, file) => total + 512 + Math.ceil(file.bytes.length / 512) * 512, 1024)
+
 export const buildTar = (files: PackFile[]): Blob => {
+  const size = tarBytes(files)
+  if (size > MAX_PACK_BYTES) throw Error('Display pack is larger than the 4 MiB limit')
   const chunks: BlobPart[] = []
   for (const file of files) {
     const header = new Uint8Array(512)
@@ -242,18 +273,24 @@ export const buildPack = async (
   const accents = status.assets.filter(a => a.role === 'accent')
   const backgrounds = status.assets.filter(a => a.role === 'background')
   const boots = status.assets.filter(a => a.role === 'boot')
+  if (status.assets.length > MAX_ASSETS) throw Error('This firmware exposes more assets than the supported maximum')
   let done = 0
   const total = accents.length + backgrounds.length + (selection.boot === 'custom' ? 1 : 0)
   const stage = (text: string) => onStage?.(text, done, total)
+  const add = (file: PackFile) => {
+    if (file.bytes.length === 0 || file.bytes.length > MAX_FILE_BYTES)
+      throw Error(`${file.name} is larger than the 512 KiB per-file limit`)
+    files.push(file)
+  }
   stage('accent')
   for (const asset of accents) {
-    files.push({ name: asset.name, bytes: await recolorAccent(asset.name, selection.accent) })
+    add({ name: asset.name, bytes: await recolorAccent(asset.name, selection.accent) })
     done++
     stage('accent')
   }
   stage('background')
   for (const asset of backgrounds) {
-    files.push({ name: asset.name, bytes: await tintBackground(asset.name, selection.background) })
+    add({ name: asset.name, bytes: await tintBackground(asset.name, selection.background) })
     done++
     stage('background')
   }
@@ -262,12 +299,31 @@ export const buildPack = async (
     if (!selection.bootArt) throw Error('Choose a boot image first')
     const frameAsset = boots[0]
     if (!frameAsset) throw Error('This firmware exposes no boot frames')
-    const frame = await bootFrame(selection.bootArt, selection.background, frameAsset.width, frameAsset.height)
-    for (const asset of boots) files.push({ name: asset.name, bytes: frame })
+    if (!boots.length || boots.length > BOOT_FRAMES)
+      throw Error('This firmware exposes an unexpected number of boot frames')
+    /* Derive the per-frame budget from what the rest of the pack really
+     * occupies, so 100 frames and the other assets always fit the server's
+     * single 4 MiB request. */
+    const others = tarBytes(files) - 1024
+    const available = MAX_PACK_BYTES - PACK_MARGIN_BYTES - others - 1024
+    const perFrame = Math.floor(available / boots.length) - 512 - 511
+    if (perFrame < 1024) throw Error('The selected firmware assets leave no room for boot artwork')
+    const frame = await bootFrame(
+      selection.bootArt,
+      selection.background,
+      frameAsset.width,
+      frameAsset.height,
+      Math.min(perFrame, MAX_FILE_BYTES)
+    )
+    for (const asset of boots) add({ name: asset.name, bytes: frame })
     done++
     stage('boot')
   }
   stage('pack')
+  if (files.length > MAX_ASSETS) throw Error('Display pack contains more files than supported')
+  const size = tarBytes(files)
+  if (size > MAX_PACK_BYTES - PACK_MARGIN_BYTES)
+    throw Error('Display pack is larger than the 4 MiB limit; choose simpler boot artwork')
   return buildTar(files)
 }
 
@@ -319,6 +375,17 @@ export const reasonKey = (reason: string): string => {
     display_backup_missing: 'appearance.display_reason_no_backup',
     display_asset_missing: 'appearance.display_reason_asset_missing',
     display_pack_invalid_header: 'appearance.display_reason_pack',
+    display_pack_too_many_files: 'appearance.display_reason_pack',
+    display_backup_mismatch: 'appearance.display_reason_backup',
+    display_backup_write_failed: 'appearance.display_reason_backup',
+    display_backup_manifest_failed: 'appearance.display_reason_backup',
+    display_theme_changed: 'appearance.display_reason_theme_changed',
+    display_restore_failed: 'appearance.display_reason_restore',
+    display_state_invalid: 'appearance.display_reason_state',
+    display_metadata_size_invalid: 'appearance.display_reason_state',
+    display_metadata_unreadable: 'appearance.display_reason_state',
+    display_metadata_truncated: 'appearance.display_reason_state',
+    display_metadata_oom: 'appearance.display_reason_state',
     display_pack_truncated: 'appearance.display_reason_pack',
     display_pack_empty: 'appearance.display_reason_pack',
     display_pack_duplicate: 'appearance.display_reason_pack',

@@ -697,6 +697,14 @@ export const deriveTokens = (background: string, accent: string, mode: 'dark' | 
 
 const isObject = (v: unknown): v is Record<string, any> => Boolean(v) && typeof v === 'object' && !Array.isArray(v)
 const idOk = (id: unknown) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]{1,39}$/.test(id)
+/* A custom theme id is used by the appearance document AND by the legacy
+ * /api/preferences theme field: "custom-" plus 2..17 lowercase letters and
+ * single interior hyphens, 24 characters in total. src/appearance.h
+ * (AP_THEME_ID_MAX) and uc2-control/src/main.c (theme_valid) enforce the same
+ * rule; test_theme_contract_static.py compares them. */
+export const THEME_ID_MAX = 24
+export const themeIdOk = (id: unknown): id is string =>
+  typeof id === 'string' && id.length <= THEME_ID_MAX && /^custom-[a-z][a-z-]*[a-z]$/.test(id) && !id.includes('--')
 const nameOk = (name: unknown) =>
   typeof name === 'string' &&
   name.trim().length > 0 &&
@@ -773,13 +781,13 @@ const normalizeTokens = (raw: unknown): ThemeTokens | null => {
   return tokens
 }
 
-const normalizeThemes = (raw: unknown): CustomTheme[] => {
+export const normalizeThemes = (raw: unknown): CustomTheme[] => {
   const list = Array.isArray(raw) ? raw : []
   const out: CustomTheme[] = []
   for (const item of list) {
-    if (!isObject(item) || !idOk(item.id) || !idOk(item.id.startsWith('custom-') ? item.id : `custom-${item.id}`))
-      continue
+    if (!isObject(item) || typeof item.id !== 'string') continue
     const id = item.id.startsWith('custom-') ? item.id : `custom-${item.id}`
+    if (!themeIdOk(id)) continue
     const tokens = normalizeTokens(item.tokens)
     if (!tokens || out.some(t => t.id === id)) continue
     out.push({ id, name: nameOk(item.name) ? item.name.trim() : id, tokens })
@@ -938,12 +946,30 @@ let saveTimer = 0
 let saveInFlight = false
 let saveDirty = false
 
+/* The document PUT never carries the theme library: adding or changing a theme
+ * is an explicit per-item request, so two browsers cannot delete each other's
+ * themes by saving a stale array. The server still merges a "themes" array for
+ * older clients and imports. */
 const payload = (doc: AppearanceDoc) => ({
   activeProfile: doc.activeProfile,
   dashboard: doc.dashboard,
   touchscreen: doc.touchscreen,
-  themes: doc.themes,
 })
+
+const saveThemeRequest = async (theme: CustomTheme) => {
+  try {
+    await request('/api/appearance/themes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme }),
+    })
+    return true
+  } catch (error) {
+    notify(errText(error), 'error')
+    await loadAppearance()
+    return false
+  }
+}
 
 export async function saveAppearance(): Promise<void> {
   if (saveInFlight) {
@@ -1002,52 +1028,87 @@ export const slug = (name: string) =>
     .normalize('NFKD')
     .replace(/[^a-z]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 28) || 'theme'
+    .slice(0, 17) || 'theme'
 
-const uniqueThemeId = (doc: AppearanceDoc, name: string) => {
-  const base = `custom-${slug(name)}`
-  let id = base
-  let suffix = 0
-  while (doc.themes.some(theme => theme.id === id) || BUILTIN_THEME_IDS.includes(id)) {
-    suffix = (suffix + 1) % 26
-    id = `${base}-${String.fromCharCode(97 + suffix)}`
+export const uniqueThemeId = (doc: AppearanceDoc, name: string) => {
+  const limit = THEME_ID_MAX
+  const base = `custom-${slug(name)}`.slice(0, limit).replace(/-+$/g, '')
+  const taken = (candidate: string) =>
+    doc.themes.some(theme => theme.id === candidate) || BUILTIN_THEME_IDS.includes(candidate)
+  if (!taken(base)) return base
+  for (let suffix = 0; suffix < 26; suffix++) {
+    const tail = `-${String.fromCharCode(97 + suffix)}`
+    const candidate = base.slice(0, limit - tail.length).replace(/-+$/g, '') + tail
+    if (!taken(candidate)) return candidate
   }
-  return id
+  return `${base.slice(0, limit - 2).replace(/-+$/g, '')}-z`
 }
 
 export const createTheme = (name: string, tokens: ThemeTokens, applyNow = true): CustomTheme | null => {
   const current = docStore.get().doc
+  const validTokens = normalizeTokens(tokens)
+  if (!validTokens) {
+    notify(t('appearance.error_theme_invalid'), 'error')
+    return null
+  }
   if (current.themes.length >= 8) {
     notify(t('appearance.error_theme_limit'), 'error')
     return null
   }
+  const trimmed = typeof name === 'string' ? name.trim().slice(0, 64) : ''
   const theme: CustomTheme = {
-    id: uniqueThemeId(current, name),
-    name: name.trim().slice(0, 64) || 'Custom',
-    tokens: { ...tokens },
+    id: uniqueThemeId(current, trimmed || 'Custom'),
+    name: trimmed || 'Custom',
+    tokens: validTokens,
   }
   updateDoc(doc => {
     doc.themes.push(theme)
     if (applyNow) {
       doc.dashboard.theme = theme.id
-      doc.dashboard.mode = isDark(tokens.bg) ? 'dark' : 'light'
+      doc.dashboard.mode = isDark(theme.tokens.bg) ? 'dark' : 'light'
     }
-  })
+  }, false)
+  /* The theme must exist on the printer before a dashboard that names it is
+   * saved, otherwise the server's normaliser would fall back to the default. */
+  void (async () => {
+    if ((await saveThemeRequest(theme)) && applyNow) {
+      await saveAppearance().catch(error => notify(errText(error), 'error'))
+    }
+  })()
   return theme
 }
 
 export const updateTheme = (theme: CustomTheme) => {
+  const validTokens = normalizeTokens(theme.tokens)
+  if (!validTokens || !themeIdOk(theme.id)) {
+    notify(t('appearance.error_theme_invalid'), 'error')
+    return
+  }
+  const next = { ...theme, tokens: validTokens }
   updateDoc(doc => {
-    const index = doc.themes.findIndex(item => item.id === theme.id)
-    if (index >= 0) doc.themes[index] = { ...theme, tokens: { ...theme.tokens } }
-  })
+    const index = doc.themes.findIndex(item => item.id === next.id)
+    if (index >= 0) doc.themes[index] = { ...next }
+  }, false)
+  void saveThemeRequest(next)
 }
 
-export const deleteTheme = (id: string) => {
+export const deleteTheme = async (id: string) => {
+  const wasActive = docStore.get().doc.dashboard.theme === id
   updateDoc(doc => {
     doc.themes = doc.themes.filter(theme => theme.id !== id)
     if (doc.dashboard.theme === id) doc.dashboard.theme = 'dark'
-  })
+  }, false)
+  try {
+    await request('/api/appearance/themes/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    if (wasActive) await saveAppearance().catch(error => notify(errText(error), 'error'))
+  } catch (error) {
+    notify(errText(error), 'error')
+    await loadAppearance()
+  }
 }
 
 export const selectTheme = (id: string) => {
@@ -1298,6 +1359,16 @@ export const importAppearance = async (raw: unknown) => {
   }
   const doc = normalizeDoc(raw)
   try {
+    /* Themes first: the dashboard save resolves a custom theme id against the
+     * stored library, so an import must not name a theme that does not exist
+     * yet. Per-item writes also keep libraries that other browsers added. */
+    for (const theme of doc.themes) {
+      await request('/api/appearance/themes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme }),
+      })
+    }
     await request('/api/appearance', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -1336,9 +1407,3 @@ export const downloadJson = (name: string, value: unknown) => {
   link.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-
-export const themePreviewStyle = (tokens: ThemeTokens) => ({
-  background: tokens.bg,
-  color: tokens.text,
-  borderColor: tokens.edge,
-})

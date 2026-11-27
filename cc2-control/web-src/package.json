@@ -94,7 +94,8 @@
     "test:start-reading": "node preview/test-start-reading.mjs",
     "test:not-printable-2gib": "node preview/test-not-printable-2gib.mjs",
     "test:large-file-confirm": "node preview/test-large-file-confirm.mjs",
-    "test:usb-stall": "node preview/test-usb-stall.mjs"
+    "test:usb-stall": "node preview/test-usb-stall.mjs",
+    "test:display-pack": "node preview/test-display-pack.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

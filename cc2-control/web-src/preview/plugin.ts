@@ -1100,6 +1100,9 @@ export function previewPlugin(): Plugin {
                 phase: 0,
                 recoveryRequired: false,
                 backupAvailable: false,
+                restoreAvailable: false,
+                firmwareChanged: false,
+                stateValid: true,
                 experimental: true,
               })
             case '/api/health':
@@ -1568,12 +1571,20 @@ export function previewPlugin(): Plugin {
             }
             if (path === '/api/appearance' && req.method === 'PUT') {
               const value = JSON.parse(body)
+              // Same merge semantics as the server: a themes array upserts by id
+              // and never deletes a theme another browser created.
+              const merged = [...appearance.themes]
+              for (const theme of Array.isArray(value.themes) ? value.themes : []) {
+                const index = merged.findIndex((item: any) => item.id === theme.id)
+                if (index >= 0) merged[index] = theme
+                else merged.push(theme)
+              }
               appearance = {
                 ...appearance,
                 ...(value.activeProfile ? { activeProfile: value.activeProfile } : {}),
                 ...(value.dashboard ? { dashboard: value.dashboard } : {}),
                 ...(value.touchscreen ? { touchscreen: value.touchscreen } : {}),
-                ...(Array.isArray(value.themes) ? { themes: value.themes } : {}),
+                themes: merged,
                 recovered: false,
                 error: '',
               }
@@ -1582,6 +1593,13 @@ export function previewPlugin(): Plugin {
             if (path === '/api/appearance/themes' && req.method === 'POST') {
               const theme = JSON.parse(body).theme
               appearance.themes = [...appearance.themes.filter((item: any) => item.id !== theme.id), theme]
+              return reply({ saved: true })
+            }
+            if (path === '/api/appearance/themes/delete' && req.method === 'POST') {
+              const { id } = JSON.parse(body)
+              if (!String(id).startsWith('custom-')) return reply({ error: 'Only a custom theme can be removed' }, 400)
+              appearance.themes = appearance.themes.filter((item: any) => item.id !== id)
+              if (appearance.dashboard.theme === id) appearance.dashboard.theme = 'dark'
               return reply({ saved: true })
             }
             if (path === '/api/appearance/profiles' && req.method === 'POST') {
