@@ -696,16 +696,20 @@ try {
     await page.locator('[data-level-chain-bar="screws"]').waitFor({ timeout: 10000 })
     await page.waitForTimeout(6000)
     // Five minutes are not waited for: the remembered first try is moved back, as if they had passed.
+    // Stop the app before editing its persisted state. Otherwise a concurrent retry
+    // saves its in-memory firstTry over the fixture before reload (timing-dependent).
+    await page.goto(`${origin}/api/version`)
     const moved = await page.evaluate(() => {
       const raw = sessionStorage.getItem('cc2-level-chain')
       if (!raw) return false
       const c = JSON.parse(raw)
+      if (c.stage !== 'screws' || !(c.firstTry > 0)) return false
       c.firstTry -= 6 * 60 * 1000
       sessionStorage.setItem('cc2-level-chain', JSON.stringify(c))
       return true
     })
     assert.ok(moved, 'the chain is kept in this browser tab')
-    await page.reload()
+    await page.goto(`${origin}/#bed/align`)
     const hint = page.locator('[data-level-chain-hint]')
     await hint.waitFor({ timeout: 15000 })
     await hint.getByText('Screw measurement requires the printer to be idle', { exact: false }).waitFor()
