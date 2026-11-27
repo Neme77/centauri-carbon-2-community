@@ -299,23 +299,29 @@ presented as a hardware test.
   driver stops at `tests/test_binding_observation_retry.py`, which needs the
   `dash` shell that this host does not have. This is an environment limitation
   and also fails at the merge base.
-- Every script run individually (the two Makefile-excluded payload tests and
-  the C harness driver omitted here):
-  **62 passed, 4 failed only for missing `dash`/BusyBox**
+- After the upstream merge, every script run individually (the two
+  Makefile-excluded payload tests and the C harness driver omitted here):
+  **64 passed, 4 failed only for missing `dash`/BusyBox**
   (`test_binding_observation_retry`, `test_canvas_install_selection`,
-  `test_managed_connections`, `test_pc_staging`). One further script
-  (`test_connections_sources.py`) failed before its `source-variants.json`
-  entry was added and passes afterwards.
+  `test_managed_connections`, `test_pc_staging`). The same four also fail at
+  the merge base on this host.
 - `python3 tests/test_c_harnesses.py` with
   `CC2_TEST_CFLAGS="-Wno-error=maybe-uninitialized"` (GCC 16 reports a
   pre-existing false positive in `tests/test_mesh_api.c`, also reproducible at
-  the merge base): see the final count below.
+  the merge base): **1 744 PASS lines, exit 0**, including the extended
+  display harness. Before the merge the same run produced 1 736 PASS lines and
+  exit 0.
 - Focused appearance/display tests: `test_appearance_api`,
   `test_appearance_capacity`, `test_appearance_static`,
   `test_theme_contract_static`, `test_display_api`, `test_display_capacity`,
   `test_display_limits_static` — all PASS.
 - Builder tests: `python3 -m unittest discover -s builder/current/tests -p
-  'test_*.py'` — see §9.1.
+  'test_*.py'` — **Ran 61, 60 pass, 3 skipped, 1 failure**. The failure is
+  `test_connections_firmware.test_actual_bootstrap_success_refusal_and_rollback`,
+  which requires the `dash` shell and BusyBox that this host lacks (it also
+  fails at the merge base). `test_cc2_control_source_snapshot`,
+  `test_pinned_inputs` and `test_cc2_control_integration` pass against the
+  regenerated snapshot.
 
 ### Frontend
 
@@ -332,17 +338,42 @@ presented as a hardware test.
 
 ### Sizes
 
-- `web/index.html`: 943 009 bytes (89.93 % of 1 MiB; 105 567 bytes before the
-  hard limit, 19 551 before the test alarm).
+- `web/index.html`: 943 342 bytes (89.96 % of 1 MiB; 105 234 bytes before the
+  hard limit, 19 218 before the test alarm).
 - Tightest locale `ru.json`: 234 088 bytes (89.3 % of 256 KiB; 11 672 bytes
   before the alarm). It was 241 328 bytes before remediation and 218 482 bytes
   before the feature; the nine added strings are included and the compact
   encoding recovered the budget.
 
-### 9.1 Integration (filled in after the merge)
+### 9.1 Integration with upstream
 
-Placeholder — updated in §7 of the final answer after the merge, web rebuild
-and snapshot regeneration. The commands and their results are recorded there.
+- `git fetch origin`; `origin/develop` was at `b7daa441` (two commits after the
+  merge base `a59ae640`). The branch was merged with `git merge --no-ff
+  origin/develop` (no rebase, no history rewrite). Merge commit:
+  `764f0ea4b8744d2365dae7df742fd678fcfc01a8`.
+- Conflicts were exactly the four generated/pinned files. They were resolved by
+  keeping the branch version temporarily and regenerating them from their
+  sources afterwards; no hand edit of a generated file was kept. `CHANGELOG.md`
+  conflicted and was merged by hand, keeping both the appearance and the two
+  upstream entries.
+- Upstream functionality is preserved and verified present: `src/spoolman.h`
+  (the large-spool/streaming/validation changes), `src/connections_http.h` and
+  `src/connections/pin.h` (the published .13 manager digest),
+  `tests/test_connections_helper_pins.py`, `tools/network-repair/*`,
+  `docs/SPOOLMAN.md`, `cc2-control/docs/API.md` and the workflow/test changes.
+  `test_connections_helper_pins.py` and `test_connections_sources.py` pass.
+- `python3 experimental/pr128-integration/sync_source.py` was run on the merge
+  commit: `source.zip` was regenerated (`sha256
+  1aae46ccde2685ba2d2c2f7c5cc717e25c98b0278159c9f266b1323d6418aea8`), the pins in
+  `prepare.py`/`firmware_builder.py` point at the merge commit, and
+  `BUILDER_SHA256` was updated. The archive was inspected: it contains both the
+  upstream `spoolman.h` changes and the new `appearance.h` /
+  `display_theme.h` / `json_body.h` / `json_large.h`, and its `web/index.html`
+  is byte-identical to the committed bundle.
+- `npm run build` after the merge produced no change in `cc2-control/web`, so
+  the committed bundle is the build of the merged sources.
+- The regenerated snapshot and pins are committed last, after all source,
+  test and documentation changes.
 
 ---
 

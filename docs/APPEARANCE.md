@@ -219,7 +219,10 @@ each file against its own original/preview pins and therefore refuses while a
 studio pack is applied (`RESTORE REFUSED: a target contains a foreign change`),
 and its `check`/`install` modes refuse as well. Use “Restore original display”
 in the studio first; afterwards the directory matches the vendor originals
-again and `manage.sh` works as before. Do not run both tools at the same time.
+again to the images the firmware installed, so `manage.sh restore` behaves as
+it did before the pack was applied (its `check`/`install` modes still compare
+against the stock vendor images, as on any community firmware). Do not run both
+tools at the same time.
 
 ### Limits
 
