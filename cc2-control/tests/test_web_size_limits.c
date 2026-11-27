@@ -35,7 +35,7 @@ static answer ask(const char *root, const char *path) {
     CHECK(r.data);
     pthread_t thread; CHECK(pthread_create(&thread, NULL, drain, &r) == 0);
     if (!strcmp(path, "/")) serve_index(pair[0], root, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
-    else serve_locale(pair[0], root, path);
+    else serve_locale(pair[0], root, path, "GET /i18n/ HTTP/1.1\r\nHost: localhost\r\n\r\n");
     close(pair[0]);
     pthread_join(thread, NULL);
     close(pair[1]);

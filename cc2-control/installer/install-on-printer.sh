@@ -185,6 +185,24 @@ for locale in "$STAGE/web/locales/"*.json; do
     after=$(sha256sum "$TARGET/web/locales/$name" | awk '{print $1}')
     [ "$before" = "$after" ] || { echo "Installed locale checksum mismatch: $name" >&2; exit 1; }
 done
+# gzip copies of the start page and the locale files for browsers that accept gzip. The service sends a copy
+# only while its gzip trailer names the CRC-32 and length of the installed file, so a copy left by another
+# version is never used. Best effort: without gzip, on an error or on a full disk no copy is left and the
+# plain files are sent; the installation never fails here.
+web_gzip_copies() {
+    rm -f "$TARGET/web/index.html.gz" "$TARGET/web/index.html.gz.new" "$TARGET/web/locales/"*.json.gz "$TARGET/web/locales/"*.json.gz.new
+    command -v gzip >/dev/null 2>&1 || return 0
+    for web_file in "$TARGET/web/index.html" "$TARGET/web/locales/"*.json; do
+        [ -f "$web_file" ] || continue
+        if gzip -c "$web_file" > "$web_file.gz.new" && chmod 644 "$web_file.gz.new" && mv "$web_file.gz.new" "$web_file.gz"; then
+            :
+        else
+            rm -f "$web_file.gz.new" "$web_file.gz"
+        fi
+    done
+    return 0
+}
+web_gzip_copies 2>/dev/null || true
 install_phase start-service
 "$INIT" start
 tries=0
