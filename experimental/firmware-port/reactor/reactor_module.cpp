@@ -218,6 +218,10 @@ extern "C" void cc2_wait(void *out,void *self,double waketime,const void *fallba
  }
  original<void(*)(void*,const void*)>(0xdb05c)(out,result);
 }
+// Vendor ToolHead::_handle_shutdown() clears can_pause and then calls shared_ptr<LookAheadQueue>::reset().
+// That frees the queue: a paused drip_move() (homing) still inside LookAheadQueue::flush() crashes at once, and
+// later callers such as check_busy() from the idle timeout read a null queue. Keep the queue and only clear can_pause.
+extern "C" void cc2_toolhead_shutdown(void *toolhead){*static_cast<byte*>(at(toolhead,0x90))=0;}
 }
 #if !defined(CC2_SYNTAX_ONLY) && !defined(CC2_BRIDGE_TEST)
 static void fail(const char *reason){dprintf(2,"CC2 REACTOR V2 STOP: %s\n",reason);_exit(125);}
@@ -246,10 +250,11 @@ __attribute__((constructor)) static void activate(){
  patch(0x26ccac,reinterpret_cast<void*>(&bridge::cc2_timers));
  patch(0x26e3a8,reinterpret_cast<void*>(&bridge::cc2_poll));
  patch(0x26a640,reinterpret_cast<void*>(&bridge::cc2_wait));
+ patch(0x2bcce8,reinterpret_cast<void*>(&bridge::cc2_toolhead_shutdown));
  int marker=open("/opt/usr/cc2-reactor-runtime-v2/activation.marker",O_WRONLY|O_CREAT|O_TRUNC,0600);
  if(marker<0)fail("activation marker");
- dprintf(marker,"pid=%ld callback=%p timers=%p poll=%p wait=%p\n",static_cast<long>(getpid()),reinterpret_cast<void*>(&bridge::cc2_callback),reinterpret_cast<void*>(&bridge::cc2_timers),reinterpret_cast<void*>(&bridge::cc2_poll),reinterpret_cast<void*>(&bridge::cc2_wait));close(marker);
+ dprintf(marker,"pid=%ld callback=%p timers=%p poll=%p wait=%p toolhead_shutdown=%p\n",static_cast<long>(getpid()),reinterpret_cast<void*>(&bridge::cc2_callback),reinterpret_cast<void*>(&bridge::cc2_timers),reinterpret_cast<void*>(&bridge::cc2_poll),reinterpret_cast<void*>(&bridge::cc2_wait),reinterpret_cast<void*>(&bridge::cc2_toolhead_shutdown));close(marker);
  unsetenv("LD_PRELOAD");unsetenv("CC2_REACTOR_RUNTIME_V2");
- dprintf(2,"CC2 REACTOR V2 ACTIVE: callback, timers, poll, completion wait; original code preserved on disk\n");
+ dprintf(2,"CC2 REACTOR V2 ACTIVE: callback, timers, poll, completion wait, toolhead shutdown; original code preserved on disk\n");
 }
 #endif

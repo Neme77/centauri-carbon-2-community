@@ -153,10 +153,79 @@ int main(){
   pause_action=[](void*,double){return 1.0;};cc2_wait(out,&c,1,fallback);assert(*reinterpret_cast<int*>(out)==9&&c.waiting.empty());destroy_json(out);
  }
  assert(alive==0&&json_alive==0);
+ // Toolhead shutdown: only can_pause changes; the lookahead slot (+36) and all other bytes stay untouched.
+ {
+  alignas(16) byte toolhead[0x400];for(size_t i=0;i<sizeof(toolhead);i++)toolhead[i]=static_cast<byte>(i*7+1);
+  byte *can_pause=static_cast<byte*>(at(toolhead,0x90));*can_pause=1;
+  byte expected[sizeof(toolhead)];std::memcpy(expected,toolhead,sizeof(toolhead));expected[can_pause-toolhead]=0;
+  cc2_toolhead_shutdown(toolhead);assert(std::memcmp(expected,toolhead,sizeof(toolhead))==0);
+ }
+ // Toolhead shutdown against a model of the vendor look-ahead queue (read from 02.01.01.13):
+ // ToolHead +36 shared_ptr<LookAheadQueue>, queue vector<Move*>; flush() copies the queue,
+ // calls _process_moves(copy) (the reactor can run the shutdown handler there, as in drip_move),
+ // then deletes and erases its own moves; check_busy() reads queue.empty(); drip_move's
+ // end-signal catch calls LookAheadQueue::reset(). CC2_SHOW_VENDOR_SHUTDOWN swaps in the vendor
+ // handler (shared_ptr reset) to show the use-after-free under ASan.
+ {
+  struct M{static int &live(){static int n=0;return n;}M(){++live();}~M(){--live();}};
+  struct Q{std::vector<M*> q;~Q(){for(auto m:q)delete m;}};
+  const size_t la=sizeof(void*)==4?36:40;
+  alignas(16) byte th[0x400]{};
+  auto &sp=*new(at(th,la))std::shared_ptr<Q>(std::make_shared<Q>());
+  Q *const original=sp.get();
+  static void (*shutdown)(void*)=nullptr;
+#ifdef CC2_SHOW_VENDOR_SHUTDOWN
+  shutdown=[](void *t){*static_cast<byte*>(at(t,0x90))=0;static_cast<std::shared_ptr<Q>*>(at(t,sizeof(void*)==4?36:40))->reset();};
+#else
+  shutdown=&cc2_toolhead_shutdown;
+#endif
+  auto add=[&](int n){for(int i=0;i<n;i++)sp->q.push_back(new M);};
+  auto flush=[&](bool shut_inside){Q *self=sp.get();std::vector<M*> copy=self->q;if(shut_inside)shutdown(th);(void)copy;for(auto m:self->q)delete m;self->q.clear();};
+  auto check_busy=[&](){return sp->q.empty();};
+  auto drip_end=[&](){for(auto m:sp->q)delete m;sp->q.clear();};
+  // 1. shutdown while flush() is inside _process_moves: no use-after-free, no double free
+  *static_cast<byte*>(at(th,0x90))=1;add(5);flush(true);
+  assert(sp.get()==original&&*static_cast<byte*>(at(th,0x90))==0&&sp->q.empty()&&M::live()==0);
+  // 2. later check_busy() from the idle timeouts reads the kept, valid queue
+  for(int i=0;i<3;i++)assert(check_busy());
+  // 3. repeated shutdown, also with moves still queued and no flush running
+  add(4);for(int i=0;i<3;i++)shutdown(th);
+  assert(sp.get()==original&&sp->q.size()==4&&M::live()==4&&!check_busy());
+  // 4. the kept moves are consumed once by the next flush or by drip_move's end-signal reset
+  flush(false);assert(M::live()==0&&check_busy());
+  add(3);shutdown(th);drip_end();assert(M::live()==0&&check_busy());
+  // 5. no growth: many shutdown/flush rounds leave nothing behind
+  for(int r=0;r<100;r++){add(2);flush(true);shutdown(th);}
+  assert(M::live()==0&&sp->q.empty()&&sp.get()==original);
+  // 6. Partial flush with a remainder (flush(true) keeps the tail): shutdown inside the flush and a move added
+  //    meanwhile; the real flush deletes and erases only its first flush_count moves, so the rest stays queued.
+  auto flush_part=[&](size_t count,bool shut_inside,int added_inside){Q *self=sp.get();std::vector<M*> copy(self->q.begin(),self->q.begin()+count);if(shut_inside)shutdown(th);for(int i=0;i<added_inside;i++)self->q.push_back(new M);(void)copy;for(auto it=self->q.begin();it!=self->q.begin()+count;++it)delete *it;self->q.erase(self->q.begin(),self->q.begin()+count);};
+  add(6);flush_part(4,true,1);
+  assert(sp.get()==original&&sp->q.size()==3&&M::live()==3&&!check_busy());
+  shutdown(th);assert(sp.get()==original&&sp->q.size()==3&&M::live()==3);
+  flush_part(3,false,0);assert(M::live()==0&&check_busy());
+  add(5);flush_part(2,true,0);drip_end();assert(M::live()==0&&check_busy()&&sp.get()==original);
+  // 7. MODEL of the bed idle-timeout handler after the shutdown (KNOWN, NOT fixed by this change):
+  //    the handler first asks check_busy() (now valid), then runs "M140 S0", which throws a CommandError
+  //    in the shutdown state; the bridge only notes the exception and rethrows it (the vendor program
+  //    has no catch above the coroutine). This asserts the current behaviour so that it is not mistaken
+  //    for a fix: the exception still leaves cc2_timers(). Whether it ends the process is not shown here.
+  {
+   struct CommandErrorModel:std::runtime_error{using std::runtime_error::runtime_error;};
+   Owner o;next_timer(o.data)=0;int checks=0;bool thrown=false;auto t=new Timer();Shared st=own(t,[t]{delete t;});t->wake=0;
+   t->fn=[&](double){++checks;if(!check_busy())return 1.0;throw CommandErrorModel("M140 S0 in shutdown");};
+   o.refs(16).push_back(st);
+   shutdown(th);
+   try{cc2_timers(o.data,1,false);}catch(const CommandErrorModel&){thrown=true;}
+   assert(checks==1&&thrown&&sp.get()==original&&check_busy());
+  }
+  assert(alive==0);
+  sp.~shared_ptr();assert(M::live()==0);
+ }
 #ifdef CC2_NATIVE_CO
  if(!floating_cycles())return 42;
  native_cycles();
 #endif
- std::cout<<"PASS: replacement bridge callback/timer/poll/wait logic, refcounts, exception cleanup, reallocation and fd removal\n";
+ std::cout<<"PASS: replacement bridge callback/timer/poll/wait/toolhead-shutdown logic, refcounts, exception cleanup, reallocation and fd removal\n";
  std::cout<<"LIMIT: vendor entry calls mocked; original ARM function binding is separately fingerprint-audited and requires runtime testing.\n";
 }
