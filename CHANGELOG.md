@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Printer report card shows ELEGOO's text for 35 known error codes, with a link to the matching wiki.elegoo.com page, when the printer sends no message (#445, **efiten**; Hungarian review by **pezso92**).
 - Add a manual Spoolman synchronization button with in-progress status and fresh spool imports, using the existing usage safeguards. Implemented by **Neme77**, requested by **HeiderakCZ** (#451; request #450).
 
 - Show the Spoolman spool ID in spool choices, inventory, loaded Canvas/external slots and remote-catalog choices; search by ID or #ID and keep identically named linked spools individually selectable. Implemented by **Neme77**, requested by **onezero1010101** (#439; request #430).

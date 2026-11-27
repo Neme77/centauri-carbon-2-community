@@ -1413,7 +1413,9 @@ native text or null if missing, invalid or longer than 1023 encoded JSON bytes.
 The same response includes `printer_alert`, the latest WARNING or CRITICAL
 report in the same format. Informational and RESUME events still update
 `printer_report` and leave `printer_alert` intact. The UI renders alert text and
-remembers explicit dismissal across reloads. Consecutive identical native reports retain their event ID;
+remembers explicit dismissal across reloads. When `message` is empty, the UI shows the
+translated text of ELEGOO's published error code table for known codes, with a link to the
+matching wiki.elegoo.com page; native text always takes precedence. Consecutive identical native reports retain their event ID;
 a warning following a RESUME is a new event, even with the same error code.
 The vendor stream does not provide an authoritative occurrence ID, so repeated
 identical warnings without an intervening transition cannot be distinguished.
