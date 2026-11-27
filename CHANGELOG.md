@@ -8,9 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Two new colour themes, **Ember** (dark: warm charcoal with a glowing copper accent) and **Rose** (light: pale rose paper with a deep raspberry accent). Every text colour is at least 4.5:1 on its backgrounds. Requested and tested by **Neme77**, implemented with Claude Code (#453).
+
 - Printer report card shows ELEGOO's text for 35 known error codes, with a link to the matching wiki.elegoo.com page, when the printer sends no message (#445, **efiten**; Hungarian review by **pezso92**).
 - Add a manual Spoolman synchronization button with in-progress status and fresh spool imports, using the existing usage safeguards. Implemented by **Neme77**, requested by **HeiderakCZ** (#451; request #450).
-- Appearance studio in the dashboard (`#appearance`): twelve built-in themes plus a system-following mode, custom colour themes with live preview, WCAG contrast checks and theme import/export; dashboard layouts with enable/disable, width, compact density, per-widget accent, drag or arrow reordering and up to four layouts per profile; six named appearance profiles, duplication, factory reset and versioned JSON import/export. The settings are stored as one validated document on the printer, written atomically with a rollback copy and preserved across reloads, reboots and compatible application updates. The classic dashboard remains the default and is unchanged. Implemented by **PaperCompiler**.
+- Appearance studio in the dashboard (`#appearance`): fourteen built-in themes plus a system-following mode, custom colour themes with live preview, WCAG contrast checks and theme import/export; dashboard layouts with enable/disable, width, compact density, per-widget accent, drag or arrow reordering and up to four layouts per profile; six named appearance profiles, duplication, factory reset and versioned JSON import/export. The settings are stored as one validated document on the printer, written atomically with a rollback copy and preserved across reloads, reboots and compatible application updates. The classic dashboard remains the default and is unchanged. Implemented by **PaperCompiler**.
 - Optional native-touchscreen appearance pack: accent recolouring, dark background tints and custom boot artwork for the presentation PNGs named by a firmware display manifest. The printer validates the GUI hash, active theme directory, every name, size, dimension and PNG chunk before an atomic replacement; it keeps a verified baseline, restores it on failure and replays an interrupted apply at the next CC2 Control start. Requires an idle printer and a complete reboot; layout, fonts, icons and the native program are not modified. Experimental and gated behind an explicit switch. Implemented by **PaperCompiler**.
 
 - Show the Spoolman spool ID in spool choices, inventory, loaded Canvas/external slots and remote-catalog choices; search by ID or #ID and keep identically named linked spools individually selectable. Implemented by **Neme77**, requested by **onezero1010101** (#439; request #430).
@@ -24,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Appearance studio: the theme library is no longer part of the document save (themes use explicit per-item requests), and the shipped locale catalogues are compact JSON to recover size headroom on the printer. The appearance guides and API documentation describe the real capacity, the theme-id contract, restore after an update and the interaction with `experimental/native-display/manage.sh`. Implemented by **PaperCompiler**.
 
 ### Fixed
+
+- Plate-library action menus attach their outside-click and scroll guards before becoming visible, preventing an immediately scrolled menu from remaining open. Added a deterministic browser regression and Ember/Rose preference persistence checks. Implemented by **Neme77** (#453).
 
 - Connections: recognise the exact .13 manager already shipped in Community 4.4.4 / Universal 07, retaining the existing HTTP and file-integrity guards. Add a manual DHCP-delegate repair restricted to the verified native-script mismatch; aligned supported installations are left unchanged. Implemented by **Neme77** (#444).
 

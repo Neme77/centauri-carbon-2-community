@@ -36,6 +36,27 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'nord')
   assert(writes.some(w => w.method === 'PUT' && w.body.includes('"theme":"nord"')), JSON.stringify(writes))
 
+  // The two themes added upstream are in the gallery; Rose is a light palette,
+  // so it must be stored with the light mode and use the light colour scheme.
+  for (const name of ['Ember', 'Rose']) {
+    assert.equal(await page.locator('button[aria-pressed]').filter({ hasText: name }).count(), 1, `${name} in the gallery`)
+  }
+  const gallery = page.locator('button[aria-pressed]').filter({ hasText: 'Rose' }).first()
+  const roseWrite = page.waitForRequest(r => r.url().endsWith('/api/appearance') && r.method() === 'PUT')
+  await gallery.click()
+  const roseBody = JSON.parse((await roseWrite).postData())
+  assert.equal(roseBody.dashboard.theme, 'rose', JSON.stringify(roseBody.dashboard))
+  assert.equal(roseBody.dashboard.mode, 'light', JSON.stringify(roseBody.dashboard))
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'rose')
+  assert.equal(await page.evaluate(() => document.documentElement.style.colorScheme), 'light')
+  const ember = page.locator('button[aria-pressed]').filter({ hasText: 'Ember' }).first()
+  const emberWrite = page.waitForRequest(r => r.url().endsWith('/api/appearance') && r.method() === 'PUT')
+  await ember.click()
+  const emberBody = JSON.parse((await emberWrite).postData())
+  assert.equal(emberBody.dashboard.theme, 'ember', JSON.stringify(emberBody.dashboard))
+  assert.equal(emberBody.dashboard.mode, 'dark', JSON.stringify(emberBody.dashboard))
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'ember')
+
   // A custom theme starts from a preset, is written per item, and applies.
   await page.getByRole('button', { name: 'New theme', exact: true }).click()
   const dialog = page.getByRole('dialog')

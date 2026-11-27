@@ -46,6 +46,8 @@ export const THEMES: { id: string; key?: Key; label?: string }[] = [
   { id: 'dune', label: 'Dune' },
   { id: 'swamp', label: 'Swamp' },
   { id: 'klipperscreen', label: 'KlipperScreen' },
+  { id: 'ember', label: 'Ember' },
+  { id: 'rose', label: 'Rose' },
 ]
 // `auto` follows the operating system; `custom`/`custom-<slug>` are themes the
 // appearance studio stores in /api/appearance (the identifier is still the only

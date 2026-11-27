@@ -181,7 +181,7 @@ export const defaultLayout = (): Layout => ({
 
 export const classicLayout = (): Layout => ({ id: 'classic', name: 'Classic', columns: 4, widgets: [] })
 
-/* The twelve shipped palettes. Duplicated from index.css only so the theme
+/* The fourteen shipped palettes. Duplicated from index.css only so the theme
  * studio can preview and duplicate them without re-parsing the stylesheet;
  * the runtime still uses the CSS block for a built-in theme. */
 export const BUILTIN_TOKENS: Record<string, ThemeTokens> = {
@@ -377,7 +377,43 @@ export const BUILTIN_TOKENS: Record<string, ThemeTokens> = {
     well: '#121212',
     wellFg: '#f2f2f2',
   },
+  ember: {
+    bg: '#120d0a',
+    panel: '#1d1612',
+    edge: '#55443a',
+    text: '#f3e6da',
+    muted: '#bba593',
+    field: '#251c16',
+    ink: '#140d08',
+    cyan: '#ff8a3d',
+    green: '#8fd16b',
+    amber: '#ffd166',
+    red: '#ff6b81',
+    blue: '#6fb3d9',
+    well: '#0a0705',
+    wellFg: '#f3e6da',
+  },
+  rose: {
+    bg: '#f3e3e6',
+    panel: '#fffafb',
+    edge: '#d1a9b3',
+    text: '#2e1a20',
+    muted: '#6b4752',
+    field: '#f9edef',
+    ink: '#ffffff',
+    cyan: '#a3175a',
+    green: '#1f6b3a',
+    amber: '#8a5200',
+    red: '#c42b0a',
+    blue: '#1d5fa8',
+    well: '#2e1a20',
+    wellFg: '#fbeef1',
+  },
 }
+
+/* Shipped palettes whose surfaces are light; everything else, and every
+ * custom palette, uses the dark form-control scheme. */
+export const LIGHT_THEME_IDS = ['light', 'solarized-light', 'aurora', 'dune', 'rose']
 
 export const BUILTIN_THEME_IDS = Object.keys(BUILTIN_TOKENS)
 
@@ -902,7 +938,7 @@ export const applyAppearance = (doc: AppearanceDoc = docStore.get().doc) => {
     for (const token of TOKEN_IDS) root.style.setProperty(TOKEN_VARS[token], custom.tokens[token])
     root.style.colorScheme = isDark(custom.tokens.bg) ? 'dark' : 'light'
   } else {
-    root.style.colorScheme = resolved === 'light' ? 'light' : 'dark'
+    root.style.colorScheme = LIGHT_THEME_IDS.includes(resolved) ? 'light' : 'dark'
   }
   /* The shipped palettes define their own corner language (Klipper 6 px,
    * KlipperScreen 18 px). Only a custom palette or an explicit non-default
@@ -1147,9 +1183,7 @@ export const selectTheme = (id: string) => {
     else if (id.startsWith('custom-')) {
       const theme = doc.themes.find(item => item.id === id)
       if (theme) doc.dashboard.mode = isDark(theme.tokens.bg) ? 'dark' : 'light'
-    } else
-      doc.dashboard.mode =
-        id === 'light' || id === 'solarized-light' || id === 'aurora' || id === 'dune' ? 'light' : 'dark'
+    } else doc.dashboard.mode = LIGHT_THEME_IDS.includes(id) ? 'light' : 'dark'
   }, false)
   void saveAppearance().catch(error => notify(errText(error), 'error'))
 }

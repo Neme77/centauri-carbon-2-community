@@ -157,9 +157,19 @@ try {
   for (const name of ['Edit measurement']) await panel.getByRole('button', { name, exact: true }).waitFor()
   await page.mouse.click(5, 5)
   await panel.waitFor({ state: 'detached' })
+  // Scroll as soon as the reopened menu enters the DOM, before a deferred
+  // after-paint effect could attach its listener. This deterministically covers
+  // the visibility/listener race instead of relying on the runner's timing.
+  await firstRow.evaluate(row => {
+    const observer = new MutationObserver(() => {
+      if (!row.querySelector('[role="menu"]')) return
+      observer.disconnect()
+      row.closest('[data-measure-list]').scrollBy(0, 40)
+    })
+    observer.observe(row, { childList: true, subtree: true })
+  })
   await firstRow.locator('[data-more] summary').click()
-  await panel.waitFor()
-  await mlist.evaluate(e => e.scrollBy(0, 40))
+  await page.waitForFunction(list => list.scrollTop > 0, await mlist.elementHandle())
   await panel.waitFor({ state: 'detached' })
   // Deleting still asks first (the safeguard is unchanged): open the menu of a row that can be deleted and cancel.
   await many.locator('[data-measure]').nth(1).locator('[data-more] summary').click()

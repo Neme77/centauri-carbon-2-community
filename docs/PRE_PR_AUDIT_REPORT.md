@@ -30,9 +30,9 @@ release gate.
 | Branch | `feature/appearance-customization` |
 | Final HEAD | The commit that contains this report and the regenerated snapshot (parent `76fbdba8`; `git log -1`) |
 | Code/merge commit | `80033f1d` (merge + audit fixes), then `1b8c0c70`, `e24e7a41`, `a939896f` (docs/test, final fixes, screenshot artifact removal), `76fbdba8` (duplicate-id import) |
-| Upstream `origin/develop` | `3892a174` (moved from `b7daa441` during this audit: gzip web delivery #449, Spoolman on-demand sync #451, ELEGOO error texts #445) |
+| Upstream `origin/develop` | `b5968048` (moved twice during this audit: `3892a174` added gzip web delivery #449, Spoolman on-demand sync #451 and ELEGOO error texts #445; `b5968048` added the Ember/Rose themes #453, see addendum H) |
 | Merge base (original) | `a59ae640` |
-| Integrated with upstream | Yes: `3892a174` is an ancestor of HEAD; 0 behind |
+| Integrated with upstream | Yes: `b5968048` is an ancestor of HEAD; 0 behind |
 | Ahead of `origin/develop` | 5 source commits after the merge (`80033f1d`, `1b8c0c70`, `e24e7a41`, `a939896f`, `76fbdba8`) plus the final report/snapshot commit |
 | Working tree | clean (`git status --porcelain` empty) |
 | Commits added during this audit | `80033f1d` (merge + audit fixes), `1b8c0c70` (docs/test), `e24e7a41` (last fixes), `a939896f` (artifact cleanup), `76fbdba8` (duplicate-id import), final report+snapshot commit |
@@ -176,7 +176,8 @@ Chromium present, no `dash`, no BusyBox, no ARM toolchain, no printer.
 
 | File | Bytes | % of hard limit | Headroom |
 | --- | ---: | ---: | ---: |
-| `web/index.html` | **950 527** | 90.65 % of 1 MiB | 12 033 B before the 940 KiB test alarm; 98 049 B before the 1 MiB hard limit |
+| `web/index.html` (before the Ember/Rose integration) | 950 527 | 90.65 % of 1 MiB | 12 033 B before the 940 KiB test alarm |
+| `web/index.html` (final, addendum H) | **954 650** | 91.04 % of 1 MiB | 7 910 B before the 940 KiB test alarm; 93 926 B before the 1 MiB hard limit |
 | `web/locales/ru.json` (largest) | **239 922** | 91.5 % of 256 KiB | 5 838 B before the 240 KiB test alarm; 22 222 B before the hard limit |
 | other locales | 151 279–181 691 | 57.7–69.3 % | ≥ 64 KiB |
 
@@ -266,3 +267,48 @@ add the PR number and contributor credit to the changelog entries, and decide
 how to recover page/locale headroom for the next feature (the alarms are 940 KiB
 and 240 KiB; the hard limits are unchanged). No push, PR or merge has been made
 by this audit.
+
+---
+
+## H. Addendum — second upstream integration (Ember and Rose themes)
+
+After this audit was written, `origin/develop` advanced once more, to
+`b5968048` (*"Add Ember (dark) and Rose (light) themes"*, #453). Publishing the
+audited tree as it stood would have left the branch one commit behind, with
+conflicts in six files and, more importantly, with a feature that cannot store
+the two new built-in palettes: the printer's validator did not know them, so
+selecting Ember or Rose would have been refused by `PUT /api/appearance`.
+
+That commit was therefore integrated before publication:
+
+| Item | Value |
+| --- | --- |
+| Integrated upstream commit | `b5968048` (Ember/Rose themes, #453) |
+| Conflicts | generated only (`source.zip`, `firmware_builder.py`, `run_build.py`, `prepare.py`, `web/index.html`) plus the real one in `preview/test-obsidian-layout.mjs`; generated files were rebuilt/regenerated, the test was combined |
+| Theme contract | `ap_theme_id_valid()` (`src/appearance.h`) and `BUILTIN_TOKENS`/`LIGHT_THEME_IDS` (`web-src/src/lib/appearance.ts`) now carry `ember` and `rose` with the authoritative palettes from `web-src/src/index.css`; the gallery, `effectiveTokens`, accent linking and `selectTheme` follow the same list |
+| Mode mapping | Ember is dark, Rose is light; `applyAppearance` derives the form-control colour scheme from `LIGHT_THEME_IDS`, so both custom and the newly light built-ins get `color-scheme: light` |
+| Tests added | `test:obsidian-layout` asserts both themes persist through `/api/preferences` and `/api/appearance`, keep their stored mode and colour scheme across a reload, and are seen by a fresh browser; `test:appearance` asserts both cards in the gallery and Rose/Ember stored as light/dark |
+| Counts | the studio now ships fourteen palettes; `CHANGELOG.md` and `docs/APPEARANCE.md` say fourteen |
+| Snapshot | regenerated again from the final committed tree, last |
+
+Verification after this integration (all re-run, not inherited):
+
+- `test_theme_contract_static.py` PASS — 14 palettes agree between the C
+  validator, the CSS blocks and the frontend list; `test_themes_static.py`
+  PASS — 14 themes define the full token set; `test_appearance_static.py` PASS.
+- `npm run check` PASS (134 files); `npm run build` reproduces the committed
+  `web/` exactly; `test_web_sync_static.py` PASS (11 compact locales).
+- Sizes after the integration: `web/index.html` 954 650 B (91.04 % of the 1 MiB
+  hard limit; 7 910 B before the 940 KiB alarm), `web/locales/ru.json`
+  239 922 B (91.5 %; 5 838 B before the 240 KiB alarm). Headroom is thinner
+  than before because of the two extra palettes and their styles; the hard
+  limits are unchanged.
+- Backend: clean host build, `test_appearance_api`, `test_appearance_capacity`,
+  `test_display_api`, `test_display_capacity` PASS on the merged tree.
+- `test:obsidian-layout` PASS (theme selection/persistence/reload/fresh browser
+  including Ember and Rose, layout sizing); `test:appearance` PASS (gallery,
+  per-item writes, delete persistence, profiles, all tabs, phone widths).
+
+The audit's verdict is unchanged: nothing in `b5968048` touches the display,
+restore, import or capacity code the audit examined, and the theme contract gate
+that would have caught an omission did fire and now passes.

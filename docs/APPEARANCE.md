@@ -14,7 +14,7 @@ here. The studio never claims that a browser theme appears on the touchscreen.
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Browser themes | Stable | Twelve shipped palettes, system preference, unlimited-by-tokens custom palettes (up to 8 stored) |
+| Browser themes | Stable | Fourteen shipped palettes (including Ember and Rose), system preference, custom palettes (up to 8 stored) |
 | Colour tokens | Stable | Fourteen named tokens, validated as `#rrggbb`; no free-form CSS |
 | Dashboard layouts | Stable | Classic layout unchanged; up to four custom grid layouts |
 | Widgets | Stable | Enable/disable, width, compact density, per-widget accent, drag or arrow reordering |

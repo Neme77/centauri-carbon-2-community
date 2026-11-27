@@ -1,6 +1,6 @@
 import { InfoHint } from '@/components/info-hint'
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Card, CardHead } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tag } from '@/components/ui/badge'
@@ -144,7 +144,9 @@ const More = ({ children }: { children: ComponentChildren }) => {
         : { top: r.bottom + 4, right }
     )
   }
-  useEffect(() => {
+  // Attach before the menu can be observed or scrolled; an after-paint effect
+  // leaves a visible menu temporarily without its outside/scroll guards.
+  useLayoutEffect(() => {
     if (!pos) return
     const close = (e: Event) => {
       if (!box.current?.contains(e.target as Node)) box.current?.removeAttribute('open')

@@ -163,7 +163,8 @@ static int ap_widget_valid(const char *id) {
 static int ap_theme_id_valid(const char *id) {
     static const char *const builtin[] = {
         "dark", "light", "dracula", "nord", "monokai", "solarized-light",
-        "obsidian", "aurora", "klipper", "dune", "swamp", "klipperscreen", "auto"
+        "obsidian", "aurora", "klipper", "dune", "swamp", "klipperscreen",
+        "ember", "rose", "auto"
     };
     for (size_t i = 0; i < sizeof(builtin) / sizeof(builtin[0]); ++i)
         if (!strcmp(id, builtin[i])) return 1;
