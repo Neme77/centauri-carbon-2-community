@@ -55,7 +55,7 @@ export const THEMES: { id: string; key?: Key; label?: string }[] = [
 // hyphens, at most 24 characters (see lib/appearance.ts THEME_ID_MAX and
 // src/appearance.h AP_THEME_ID_MAX; test_theme_contract_static.py checks it).
 const customThemeId = (mode: string) =>
-  mode.length <= 24 && /^custom-[a-z][a-z-]*[a-z]$/.test(mode) && !mode.includes('--')
+  mode.length <= 24 && /^custom-[a-z](?:[a-z-]*[a-z])?$/.test(mode) && !mode.includes('--')
 const themeId = (mode: unknown) =>
   typeof mode === 'string' &&
   (THEMES.some(x => x.id === mode) || mode === 'auto' || mode === 'custom' || customThemeId(mode))

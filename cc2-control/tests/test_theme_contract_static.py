@@ -30,9 +30,9 @@ assert "if (strlen(id) > AP_THEME_ID_MAX) return 0;" in header
 # The server accepts "custom-" plus lowercase letters/hyphens; the clients must
 # generate and normalise to the same shape.
 assert "export const themeIdOk" in ts
-assert "/^custom-[a-z][a-z-]*[a-z]$/" in ts
+assert "/^custom-[a-z](?:[a-z-]*[a-z])?$/" in ts
 assert "!id.includes('--')" in ts
-assert "!mode.includes('--')" in i18n
+assert "!mode.includes('--')" in i18n and "/^custom-[a-z](?:[a-z-]*[a-z])?$/" in i18n
 assert ".slice(0, 17)" in ts, "slug must leave room for 'custom-' and a suffix inside 24 characters"
 assert "THEME_ID_MAX" in ts and "limit - tail.length" in ts, "uniqueThemeId must cap at the contract"
 assert "normalizeTokens(tokens)" in ts, "createTheme must validate imported tokens"

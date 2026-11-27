@@ -156,6 +156,16 @@ with tempfile.TemporaryDirectory(prefix="cc2-appearance-") as temporary:
         code, doc = get(endpoint)
         assert doc["dashboard"]["theme"] == "nord"
 
+        # The shortest name the studio can generate ("A" -> custom-a) must be
+        # accepted by the printer and survive a restart, or the client would
+        # silently drop a theme it can still name.
+        code, _ = post(endpoint + "/themes", {"theme": {"id": "custom-a", "name": "A", "tokens": custom}})
+        assert code == 200
+        assert status_of(endpoint, {"dashboard": {"theme": "custom-a"}}, "PUT") == 200
+        code, doc = get(endpoint)
+        assert doc["dashboard"]["theme"] == "custom-a"
+        assert any(theme["id"] == "custom-a" for theme in doc["themes"])
+
         # A themes array merges by id; it never deletes another browser's themes.
         code, _ = put(endpoint, {"themes": [{"id": "custom-merge-a", "name": "Merge A", "tokens": custom}]})
         assert code == 200

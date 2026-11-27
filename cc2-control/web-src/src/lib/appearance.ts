@@ -129,6 +129,7 @@ export interface AppearanceDoc {
   profiles: AppearanceProfile[]
   /* Read-only diagnostics from GET /api/appearance; never sent back. */
   recovered?: boolean
+  unsupported?: boolean
   error?: string
 }
 
@@ -704,7 +705,10 @@ const idOk = (id: unknown) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]{1,39
  * rule; test_theme_contract_static.py compares them. */
 export const THEME_ID_MAX = 24
 export const themeIdOk = (id: unknown): id is string =>
-  typeof id === 'string' && id.length <= THEME_ID_MAX && /^custom-[a-z][a-z-]*[a-z]$/.test(id) && !id.includes('--')
+  typeof id === 'string' &&
+  id.length <= THEME_ID_MAX &&
+  /^custom-[a-z](?:[a-z-]*[a-z])?$/.test(id) &&
+  !id.includes('--')
 const nameOk = (name: unknown) =>
   typeof name === 'string' &&
   name.trim().length > 0 &&
@@ -844,6 +848,7 @@ export const normalizeDoc = (raw: unknown): AppearanceDoc => {
     themes,
     profiles,
     recovered: raw.recovered === true,
+    unsupported: raw.unsupported === true,
     error: typeof raw.error === 'string' ? raw.error : '',
   }
 }
@@ -985,7 +990,13 @@ export async function saveAppearance(): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload(doc)),
     })
-    docStore.set({ saving: false, savedAt: Date.now(), error: '' })
+    const stored = docStore.get().doc
+    docStore.set({
+      doc: { ...stored, recovered: false, unsupported: false, error: '' },
+      saving: false,
+      savedAt: Date.now(),
+      error: '',
+    })
   } catch (error) {
     docStore.set({ saving: false, error: errText(error) })
     throw error
@@ -1078,18 +1089,24 @@ export const createTheme = (name: string, tokens: ThemeTokens, applyNow = true):
   return theme
 }
 
-export const updateTheme = (theme: CustomTheme) => {
+export const updateTheme = (theme: CustomTheme): boolean => {
   const validTokens = normalizeTokens(theme.tokens)
   if (!validTokens || !themeIdOk(theme.id)) {
     notify(t('appearance.error_theme_invalid'), 'error')
-    return
+    return false
   }
   const next = { ...theme, tokens: validTokens }
+  const exists = docStore.get().doc.themes.some(item => item.id === next.id)
+  if (!exists) {
+    notify(t('appearance.error_theme_invalid'), 'error')
+    return false
+  }
   updateDoc(doc => {
     const index = doc.themes.findIndex(item => item.id === next.id)
     if (index >= 0) doc.themes[index] = { ...next }
   }, false)
   void saveThemeRequest(next)
+  return true
 }
 
 export const deleteTheme = async (id: string) => {

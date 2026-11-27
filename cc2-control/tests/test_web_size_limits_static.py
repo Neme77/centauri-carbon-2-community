@@ -7,7 +7,7 @@ The backend reads web/index.html and web/locales/<code>.json whole into memory a
 language back to English. This test fails while there is still room, so the fix (smaller file, compressed delivery or a
 raised limit in all three places) can be made before a release is affected:
 
-  - every web/locales/*.json at most 240 KiB (limit 256 KiB, alarm at 94 %)
+  - every web/locales/*.json at most 230 KiB (limit 256 KiB, alarm at 89.8 %)
   - web/index.html at most 940 KiB (limit 1024 KiB, alarm at 92 %)
 """
 import re
@@ -21,7 +21,7 @@ KIB = 1024
 # alarms stay below the limits the backend and the page really enforce, with at
 # least 5 % headroom so the next change fails before the limit is reached.
 INDEX_LIMIT, INDEX_ALARM = 1024 * KIB, 940 * KIB
-LOCALE_LIMIT, LOCALE_ALARM = 256 * KIB, 240 * KIB
+LOCALE_LIMIT, LOCALE_ALARM = 256 * KIB, 230 * KIB
 HINT = ("serve_index/serve_locale in cc2-control/src/main.c answer a file above the limit with HTTP 500, and "
         "boundedJson in cc2-control/web-src/src/lib/i18n.ts drops a locale above 262144 characters; "
         "shrink the file, deliver it compressed, or raise the limit in all three places and this test together")

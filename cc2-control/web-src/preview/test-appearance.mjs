@@ -72,6 +72,26 @@ try {
   assert(longId.length <= 24, `${longId} (${longId.length})`)
   assert(/^custom-[a-z][a-z-]*[a-z]$/.test(longId) && !longId.includes('--'), longId)
 
+  // A one-letter name is the shortest id the studio can generate ("custom-a");
+  // the client must keep it after a reload instead of dropping it.
+  await page.getByRole('button', { name: 'New theme', exact: true }).click()
+  await page.getByRole('dialog').locator('input').first().fill('A')
+  const shortWrite = page.waitForRequest(r => r.url().endsWith('/api/appearance/themes') && r.method() === 'POST')
+  await page.getByRole('dialog').getByRole('button', { name: 'Save theme', exact: true }).click()
+  await shortWrite
+  const shortTheme = writes.filter(w => w.url.endsWith('/api/appearance/themes') && w.method === 'POST').pop()
+  assert.equal(JSON.parse(shortTheme.body).theme.id, 'custom-a')
+  await page.goto(origin + '#appearance/themes')
+  await page.getByRole('tab', { name: 'Themes', exact: true }).waitFor()
+  await page.waitForTimeout(400)
+  await page.reload()
+  await page.getByRole('tab', { name: 'Themes', exact: true }).waitFor()
+  await page.waitForTimeout(400)
+  assert(
+    (await page.locator('button[aria-pressed]').filter({ hasText: /^A/ }).count()) > 0,
+    'the one-letter theme must survive a reload'
+  )
+
   // Deleting a custom theme uses the explicit endpoint and does not lose the
   // other theme another browser could have added.
   await page.goto(origin + '#appearance/themes')

@@ -264,13 +264,14 @@ const ThemeEditor = ({ theme, onClose }: { theme: CustomTheme | null; onClose: (
       notify(t('appearance.name_required'), 'error')
       return
     }
-    if (editing && theme) updateTheme({ id: theme.id, name: name.trim(), tokens })
-    else createTheme(name.trim(), tokens)
+    const saved =
+      editing && theme ? updateTheme({ id: theme.id, name: name.trim(), tokens }) : createTheme(name.trim(), tokens)
+    if (!saved) return
     notify(t('appearance.theme_saved'))
     onClose()
   }
   const duplicate = () => {
-    createTheme(`${name.trim()} ${t('appearance.copy_suffix')}`.trim(), tokens)
+    if (!createTheme(`${name.trim()} ${t('appearance.copy_suffix')}`.trim(), tokens)) return
     notify(t('appearance.theme_saved'))
     onClose()
   }
@@ -1657,7 +1658,7 @@ export const Appearance = () => {
           </div>
         }
       >
-        {doc.recovered && (
+        {(doc.recovered || doc.unsupported) && (
           <p role="alert" class="mb-3 rounded-md border border-amber/50 bg-amber/10 p-2.5 text-sm text-amber">
             {tpl('appearance.recovered_error', { error: doc.error || t('appearance.recovered_unknown') })}
           </p>

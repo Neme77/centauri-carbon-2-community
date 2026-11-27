@@ -24,7 +24,12 @@
 #define AP_MAX_LAYOUTS 4
 #define AP_MAX_WIDGETS 9
 #define AP_MAX_THEMES 8
+/* The stored document may grow to 32 KiB (the advertised maxima are about
+ * 21 KiB); a single request body is limited by the HTTP transport to 16 KiB,
+ * so a client changes one section at a time (themes and profiles have their
+ * own per-item endpoints). */
 #define AP_MAX_JSON 32768
+#define AP_MAX_REQUEST 16384
 #define AP_TOKEN_COUNT 14
 #define AP_NAME_MAX 64
 #define AP_ID_MAX 40
@@ -972,7 +977,7 @@ static void ap_get_response(int fd) {
 }
 
 static void ap_put_response(int fd, const char *body, size_t length) {
-    if (!body || length < 2 || length >= AP_MAX_JSON) {
+    if (!body || length < 2 || length >= AP_MAX_REQUEST) {
         ap_json_error(fd, 400, "Bad Request", "Invalid appearance document");
         return;
     }
@@ -998,7 +1003,7 @@ static void ap_put_response(int fd, const char *body, size_t length) {
 }
 
 static void ap_theme_put_response(int fd, const char *body, size_t length) {
-    if (!body || length < 2 || length >= AP_MAX_JSON) {
+    if (!body || length < 2 || length >= AP_MAX_REQUEST) {
         ap_json_error(fd, 400, "Bad Request", "Invalid theme document");
         return;
     }
@@ -1043,7 +1048,7 @@ static void ap_theme_put_response(int fd, const char *body, size_t length) {
 /* Delete one custom theme. Removal is explicit so that a document save from a
  * stale browser can never delete a theme created elsewhere. */
 static void ap_theme_delete_response(int fd, const char *body, size_t length) {
-    if (!body || length < 2 || length >= AP_MAX_JSON) {
+    if (!body || length < 2 || length >= AP_MAX_REQUEST) {
         ap_json_error(fd, 400, "Bad Request", "Invalid theme selection");
         return;
     }
@@ -1088,7 +1093,8 @@ static void ap_theme_delete_response(int fd, const char *body, size_t length) {
     respond(fd, 200, "OK", "application/json; charset=utf-8", reply, strlen(reply));
 }
 
-static void ap_profile_put_response(int fd, const char *body, size_t length) {    if (!body || length < 2 || length >= AP_MAX_JSON) {
+static void ap_profile_put_response(int fd, const char *body, size_t length) {
+    if (!body || length < 2 || length >= AP_MAX_REQUEST) {
         ap_json_error(fd, 400, "Bad Request", "Invalid profile document");
         return;
     }
@@ -1142,7 +1148,7 @@ static void ap_profile_put_response(int fd, const char *body, size_t length) {  
 }
 
 static void ap_profile_delete_response(int fd, const char *body, size_t length) {
-    if (!body || length < 2 || length >= AP_MAX_JSON) {
+    if (!body || length < 2 || length >= AP_MAX_REQUEST) {
         ap_json_error(fd, 400, "Bad Request", "Invalid profile selection");
         return;
     }
@@ -1200,7 +1206,7 @@ static int ap_apply_profile(ap_state *s, const char *id) {
 }
 
 static void ap_profile_apply_response(int fd, const char *body, size_t length) {
-    if (!body || length < 2 || length >= AP_MAX_JSON) {
+    if (!body || length < 2 || length >= AP_MAX_REQUEST) {
         ap_json_error(fd, 400, "Bad Request", "Invalid profile selection");
         return;
     }
