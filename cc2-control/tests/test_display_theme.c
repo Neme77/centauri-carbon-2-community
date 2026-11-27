@@ -103,7 +103,7 @@ static char root[512];
 static mqtt_client fake_mqtt;
 
 static void seed(const char *name, unsigned char r, unsigned char g, unsigned char b, size_t *size, unsigned char **bytes) {
-    char path[600];
+    char path[2048];
     snprintf(path, sizeof(path), "%s/theme/%s", root, name);
     *bytes = png_bytes(1, 1, r, g, b, size);
     write_file(path, *bytes, *size);
@@ -133,7 +133,7 @@ int main(void) {
     fake_mqtt.last_message = time(NULL);
     snprintf(root, sizeof(root), "/tmp/cc2-display-test-XXXXXX");
     assert(mkdtemp(root));
-    char path[600];
+    char path[2048];
     snprintf(path, sizeof(path), "%s/theme", root); assert(!mkdir(path, 0700));
     snprintf(path, sizeof(path), "%s/ui-preferences.json", root);
     ui_preferences_path = path;
@@ -193,7 +193,7 @@ int main(void) {
     }
 
     /* 2. Restore returns both originals. */
-    assert(disp_restore_baseline(1));
+    assert(disp_restore_baseline(1, &disp_state_cache, NULL));
     snprintf(path, sizeof(path), "%s/theme/boot.png", root);
     assert(file_equals(path, boot_original, boot_size));
     snprintf(path, sizeof(path), "%s/theme/bg.png", root);
@@ -225,18 +225,28 @@ int main(void) {
     assert(disp_receive_pack(&(disp_upload_job){ -1, make_tar((tar_file[]){{"boot.png", red, red_size}, {"bg.png", red, red_size}}, 2, &tar_size), tar_size, tar_size, 0, {0, 0}, &fake_mqtt }));
     snprintf(path, sizeof(path), "%s/theme/boot.png", root);
     write_file(path, green, green_size);
-    assert(!disp_restore_baseline(1));
+    assert(!disp_restore_baseline(1, &disp_state_cache, NULL));
     assert(strstr(disp_error, "foreign_change"));
 
-    /* 5. A changed firmware identity refuses restore. */
+    /* 5. A changed firmware identity: restore still returns the verified
+     *    baseline (the recovery path must survive an update), but a new apply
+     *    is refused until it has been restored. The foreign file from step 4
+     *    is put back to the version this feature applied first. */
+    write_file(path, red, red_size);
     char other[65];
     write_file("/tmp/cc2-display-gui", (const unsigned char *)"other-gui", 9);
     disp_sha_file("/tmp/cc2-display-gui", other);
     manifest(other, 1);
     disp_manifest_cache.valid = 0;
     assert(disp_load_manifest(1));
-    assert(!disp_restore_baseline(1));
+    tar_file restore_pack[1] = {{"boot.png", red, red_size}};
+    size_t restore_pack_size;
+    unsigned char *restore_tar = make_tar(restore_pack, 1, &restore_pack_size);
+    assert(!disp_receive_pack(&(disp_upload_job){ -1, restore_tar, restore_pack_size, restore_pack_size, 0, {0, 0}, &fake_mqtt }));
     assert(strstr(disp_error, "firmware_changed"));
+    assert(disp_restore_baseline(1, &disp_state_cache, NULL));
+    snprintf(path, sizeof(path), "%s/theme/boot.png", root);
+    assert(file_equals(path, boot_original, boot_size));
 
     /* 6. Startup recovery rolls an interrupted apply back from the journal. */
     write_file("/tmp/cc2-display-gui", (const unsigned char *)"fake-gui", 8);
@@ -258,6 +268,132 @@ int main(void) {
     snprintf(path, sizeof(path), "%s/display-theme/journal.json", root);
     assert(access(path, F_OK) != 0);
 
-    printf("PASS: display pack validation, apply, baseline restore, foreign-change and firmware refusal, recovery\n");
+    /* 7. A realistic 154-file baseline and state round-trip. */
+    char cap[640], cap_theme[768], cap_state[768], cap_prefs[768];
+    snprintf(cap, sizeof(cap), "%s/capacity", root);
+    assert(!mkdir(cap, 0700));
+    snprintf(cap_theme, sizeof(cap_theme), "%s/theme", cap);
+    assert(!mkdir(cap_theme, 0700));
+    snprintf(cap_prefs, sizeof(cap_prefs), "%s/ui-preferences.json", cap);
+    write_file(cap_prefs, (const unsigned char *)"{}", 2);
+    ui_preferences_path = cap_prefs;
+    disp_state_dir[0] = '\0'; /* recompute from the new preferences path */
+    disp_state_loaded = 0;
+    assert(disp_ensure_state_dir());
+    snprintf(cap_state, sizeof(cap_state), "%s/display-theme", cap);
+    if (strlen(cap_theme) >= sizeof(disp_theme_dir)) assert(0);
+    memcpy(disp_theme_dir, cap_theme, strlen(cap_theme) + 1);
+    memset(&disp_manifest_cache, 0, sizeof(disp_manifest_cache));
+    disp_manifest_cache.valid = 1;
+    disp_manifest_cache.schema = 1;
+    snprintf(disp_manifest_cache.firmware_base, sizeof(disp_manifest_cache.firmware_base), "capacity");
+    snprintf(disp_manifest_cache.gui_sha256, sizeof(disp_manifest_cache.gui_sha256), "%s", gui_hash);
+    for (int i = 0; i < 154; ++i) {
+        char name[32], body[96], file[1024];
+        snprintf(name, sizeof(name), "cap%03d.png", i);
+        int length = snprintf(body, sizeof(body), "original-%03d-%s", i, "padding-padding-padding-padding-padding");
+        snprintf(file, sizeof(file), "%s/%s", cap_theme, name);
+        write_file(file, (const unsigned char *)body, (size_t)length);
+        disp_asset *asset = &disp_manifest_cache.assets[disp_manifest_cache.count++];
+        snprintf(asset->name, sizeof(asset->name), "%s", name);
+        snprintf(asset->role, sizeof(asset->role), "accent");
+        asset->width = 1;
+        asset->height = 1;
+        snprintf(asset->sha256, sizeof(asset->sha256), "%s", gui_hash); /* placeholder, replaced below */
+        disp_sha_file(file, asset->sha256);
+    }
+    assert(disp_manifest_cache.count == 154);
+    for (int i = 0; i < 154; ++i) assert(disp_backup_original(&disp_manifest_cache.assets[i]));
+    assert(disp_baseline_write(&disp_manifest_cache));
+    snprintf(path, sizeof(path), "%s/baseline.json", cap_state);
+    struct stat baseline_stat;
+    assert(stat(path, &baseline_stat) == 0 && baseline_stat.st_size < DISP_META_MAX);
+    /* Customize every file and record that as the applied state. */
+    memset(&disp_state_cache, 0, sizeof(disp_state_cache));
+    disp_state_cache.phase = 1;
+    for (int i = 0; i < 154; ++i) {
+        char name[32], file[1024], body[96], hash[65];
+        snprintf(name, sizeof(name), "cap%03d.png", i);
+        snprintf(file, sizeof(file), "%s/%s", cap_theme, name);
+        int length = snprintf(body, sizeof(body), "customized-%03d-%s", i, "padding-padding-padding-padding");
+        write_file(file, (const unsigned char *)body, (size_t)length);
+        disp_sha_file(file, hash);
+        snprintf(disp_state_cache.files[i], sizeof(disp_state_cache.files[i]), "%s", name);
+        snprintf(disp_state_cache.hashes[i], sizeof(disp_state_cache.hashes[i]), "%s", hash);
+        disp_state_cache.file_count++;
+    }
+    assert(disp_state_write());
+    snprintf(path, sizeof(path), "%s/state.json", cap_state);
+    assert(stat(path, &baseline_stat) == 0 && baseline_stat.st_size < DISP_META_MAX);
+    disp_state_loaded = 0;
+    assert(disp_state_read());
+    assert(disp_state_cache.file_count == 154);
+    assert(disp_state_cache.phase == 1);
+    assert(!strcmp(disp_state_cache.files[153], "cap153.png"));
+    /* Restore all 154 verified originals. */
+    assert(disp_restore_baseline(1, &disp_state_cache, NULL));
+    for (int i = 0; i < 154; ++i) {
+        char name[32], file[1024], body[96];
+        snprintf(name, sizeof(name), "cap%03d.png", i);
+        snprintf(file, sizeof(file), "%s/%s", cap_theme, name);
+        int length = snprintf(body, sizeof(body), "original-%03d-%s", i, "padding-padding-padding-padding-padding");
+        assert(file_equals(file, (const unsigned char *)body, (size_t)length));
+    }
+
+    /* 8. The status endpoint stays responsive while an upload is streaming. */
+    snprintf(disp_theme_dir, sizeof(disp_theme_dir), "%s", theme_dir);
+    snprintf(disp_gui_path, sizeof(disp_gui_path), "/tmp/cc2-display-gui");
+    snprintf(path, sizeof(path), "%s/ui-preferences.json", root);
+    ui_preferences_path = path;
+    disp_state_dir[0] = '\0';
+    disp_state_loaded = 0;
+    assert(disp_ensure_state_dir());
+    disp_manifest_cache.valid = 0;
+    assert(disp_load_manifest(1));
+    disp_state_loaded = 0;
+    int upload[2];
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, upload));
+    tar_file slow_pack[1] = {{"boot.png", red, red_size}};
+    size_t slow_size;
+    unsigned char *slow_tar = make_tar(slow_pack, 1, &slow_size);
+    char request[512];
+    int request_length = snprintf(request, sizeof(request),
+        "POST /api/display/apply HTTP/1.1\r\nHost: 127.0.0.1:8081\r\n"
+        "X-CC2-Request: 1\r\nContent-Type: application/x-tar\r\nContent-Length: %zu\r\n\r\n", slow_size);
+    /* Send only the first half: the upload thread blocks in recv(). */
+    assert(send(upload[1], slow_tar, slow_size / 2, 0) == (ssize_t)(slow_size / 2));
+    assert(disp_apply_start(upload[0], request, (size_t)request_length, (size_t)request_length, &fake_mqtt) == 1);
+    struct timespec before, after;
+    clock_gettime(CLOCK_MONOTONIC, &before);
+    int status_pair[2];
+    assert(!socketpair(AF_UNIX, SOCK_STREAM, 0, status_pair));
+    disp_status_response(status_pair[0]);
+    char status_answer[32768];
+    ssize_t status_length = recv(status_pair[1], status_answer, sizeof(status_answer) - 1, 0);
+    clock_gettime(CLOCK_MONOTONIC, &after);
+    long elapsed_ms = (after.tv_sec - before.tv_sec) * 1000 + (after.tv_nsec - before.tv_nsec) / 1000000;
+    assert(status_length > 0);
+    status_answer[status_length] = 0;
+    if (!strstr(status_answer, "HTTP/1.1 200")) { fprintf(stderr, "status answer: %s\n", status_answer); assert(0); }
+    assert(elapsed_ms < 2000);
+    close(status_pair[0]);
+    close(status_pair[1]);
+    /* Finish the upload and read its answer. */
+    size_t rest = slow_size - slow_size / 2;
+    assert(send(upload[1], slow_tar + slow_size / 2, rest, 0) == (ssize_t)rest);
+    char answer[4096];
+    size_t got = 0;
+    while (got < sizeof(answer) - 1) {
+        ssize_t n = recv(upload[1], answer + got, sizeof(answer) - 1 - got, 0);
+        if (n <= 0) break;
+        got += (size_t)n;
+    }
+    answer[got] = 0;
+    close(upload[1]);
+    if (!strstr(answer, "HTTP/1.1 200")) { fprintf(stderr, "apply answer: %s\n", answer); assert(0); }
+    if (!strstr(answer, "\"ok\":true")) { fprintf(stderr, "apply answer: %s\n", answer); assert(0); }
+
+    printf("PASS: display pack validation, apply, baseline restore, foreign-change and firmware refusal, "
+           "154-file capacity, responsive status, recovery\n");
     return 0;
 }

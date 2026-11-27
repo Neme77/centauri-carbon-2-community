@@ -28,12 +28,18 @@
 #ifndef CC2_DISPLAY_THEME_H
 #define CC2_DISPLAY_THEME_H
 
+#include "connections/json_large.h"
+
 #define DISP_MAX_ASSETS 320
 #define DISP_NAME_MAX 64
 #define DISP_ROLE_MAX 16
 #define DISP_MAX_PACK (4 * 1024 * 1024)
 #define DISP_MAX_FILE (512 * 1024)
 #define DISP_MAX_STAGE 256
+/* Upper bound for one metadata document (state, journal, baseline manifest).
+ * 320 assets x ~110 bytes = ~35 KiB, so 64 KiB is the supported maximum and
+ * every writer and reader uses it. Baseline image files are separate. */
+#define DISP_META_MAX (64 * 1024)
 
 typedef struct {
     char name[DISP_NAME_MAX + 1];
@@ -72,7 +78,16 @@ static char disp_error[160];
 static disp_manifest disp_manifest_cache;
 static disp_state disp_state_cache;
 static int disp_state_loaded;
+/* The error string is written by the apply thread and read by status/asset
+ * handlers on the single request thread; a dedicated mutex keeps it whole
+ * without serialising the display state itself. */
+static pthread_mutex_t disp_error_mutex = PTHREAD_MUTEX_INITIALIZER;
+/* Guards the manifest and state caches and their files. It is never held
+ * across a network transfer, so unrelated API requests stay responsive while
+ * an upload streams in. */
 static pthread_mutex_t disp_mutex = PTHREAD_MUTEX_INITIALIZER;
+/* Serialises apply, restore and startup recovery (all mutate display files). */
+static pthread_mutex_t disp_apply_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int disp_regular(const char *path) {
     struct stat st;
@@ -130,7 +145,60 @@ static int disp_sha_bytes(const unsigned char *data, size_t length, char out[65]
 }
 
 static void disp_set_error(const char *text) {
+    pthread_mutex_lock(&disp_error_mutex);
     snprintf(disp_error, sizeof(disp_error), "%s", text ? text : "");
+    pthread_mutex_unlock(&disp_error_mutex);
+}
+
+static void disp_copy_error(char *out, size_t cap) {
+    pthread_mutex_lock(&disp_error_mutex);
+    snprintf(out, cap, "%s", disp_error);
+    pthread_mutex_unlock(&disp_error_mutex);
+}
+
+static void disp_clear_error(void) {
+    pthread_mutex_lock(&disp_error_mutex);
+    disp_error[0] = '\0';
+    pthread_mutex_unlock(&disp_error_mutex);
+}
+
+/* Read one bounded JSON metadata file. Returns a malloc'd, NUL-terminated body
+ * (caller frees) or NULL when the file is absent, unreadable, empty, too large
+ * or shorter than its own size. Never passes a NULL FILE* to fread. */
+static char *disp_read_json_file(const char *path, size_t *length) {
+    struct stat st;
+    if (lstat(path, &st) != 0) return NULL;
+    if (!S_ISREG(st.st_mode) || st.st_size <= 0 || (size_t)st.st_size > DISP_META_MAX) {
+        disp_set_error("display_metadata_size_invalid");
+        return NULL;
+    }
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        disp_set_error("display_metadata_unreadable");
+        return NULL;
+    }
+    char *body = malloc((size_t)st.st_size + 1);
+    if (!body) {
+        close(fd);
+        disp_set_error("display_metadata_oom");
+        return NULL;
+    }
+    size_t done = 0;
+    while (done < (size_t)st.st_size) {
+        ssize_t n = read(fd, body + done, (size_t)st.st_size - done);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) break;
+        done += (size_t)n;
+    }
+    close(fd);
+    if (done != (size_t)st.st_size) {
+        free(body);
+        disp_set_error("display_metadata_truncated");
+        return NULL;
+    }
+    body[done] = '\0';
+    if (length) *length = done;
+    return body;
 }
 
 /* ---- boot id ---------------------------------------------------------- */
@@ -236,34 +304,34 @@ static int disp_load_manifest(int force) {
     size_t got = fread(body, 1, (size_t)size, file);
     fclose(file);
     body[got] = '\0';
-    ng_json *doc = malloc(sizeof(*doc));
-    int ok = got == (size_t)size && doc && ng_json_parse(doc, body, got) && doc->v[0].type == '{';
+    ngl_json *doc = malloc(sizeof(*doc));
+    int ok = got == (size_t)size && doc && ngl_json_parse(doc, body, got) && doc->v[0].type == '{';
     if (!ok) { free(doc); free(body); disp_set_error("display_manifest_invalid"); return 0; }
     disp_manifest *m = &disp_manifest_cache;
     double schema = 0;
-    if (!ng_number(doc, 0, "schema", &schema) || schema != 1) { ok = 0; fprintf(stderr,"DBG schema\n"); }
+    if (!ngl_number(doc, 0, "schema", &schema) || schema != 1) ok = 0;
     m->schema = 1;
-    const char *base = ng_string(doc, 0, "firmwareBase");
+    const char *base = ngl_string(doc, 0, "firmwareBase");
     if (base) snprintf(m->firmware_base, sizeof(m->firmware_base), "%s", base);
-    const char *gui = ng_string(doc, 0, "guiSha256");
-    if (gui && !disp_hex64(gui)) { ok = 0; fprintf(stderr,"DBG gui bad len=%zu\n", gui?strlen(gui):0); }
+    const char *gui = ngl_string(doc, 0, "guiSha256");
+    if (gui && !disp_hex64(gui)) ok = 0;
     if (gui) snprintf(m->gui_sha256, sizeof(m->gui_sha256), "%s", gui);
-    int assets = ng_member(doc, 0, "assets");
-    if (assets < 0 || doc->v[assets].type != '[') { ok = 0; fprintf(stderr,"DBG assets=%d type=%c\n",assets, assets>=0?doc->v[assets].type:'?' ); }
+    int assets = ngl_member(doc, 0, "assets");
+    if (assets < 0 || doc->v[assets].type != '[') ok = 0;
     if (ok) {
         for (int i = assets + 1; i < doc->v[assets].next; i = doc->v[i].next) {
-            if (m->count >= DISP_MAX_ASSETS || doc->v[i].type != '{') { ok = 0; fprintf(stderr,"DBG loop i=%d type=%c count=%d next=%d\n",i, doc->v[i].type, m->count, doc->v[assets].next); break; }
+            if (m->count >= DISP_MAX_ASSETS || doc->v[i].type != '{') { ok = 0; break; }
             disp_asset *a = &m->assets[m->count];
-            const char *name = ng_string(doc, i, "name");
-            const char *role = ng_string(doc, i, "role");
-            const char *sha = ng_string(doc, i, "sha256");
+            const char *name = ngl_string(doc, i, "name");
+            const char *role = ngl_string(doc, i, "role");
+            const char *sha = ngl_string(doc, i, "sha256");
             double width = 0, height = 0;
             if (!name || !disp_name_valid(name) || !role ||
                 (strcmp(role, "boot") && strcmp(role, "background") && strcmp(role, "accent")) ||
                 !sha || !disp_hex64(sha) ||
-                !ng_number(doc, i, "width", &width) || !ng_number(doc, i, "height", &height) ||
+                !ngl_number(doc, i, "width", &width) || !ngl_number(doc, i, "height", &height) ||
                 width < 1 || height < 1 || width > 2048 || height > 2048 ||
-                width != floor(width) || height != floor(height)) { ok = 0; fprintf(stderr,"DBG asset name=%s role=%s sha=%s w=%g h=%g\n",name?name:"-",role?role:"-",sha?sha:"-",width,height); break; }
+                width != floor(width) || height != floor(height)) { ok = 0; break; }
             for (int p = 0; p < m->count; ++p)
                 if (!strcmp(m->assets[p].name, name)) { ok = 0; break; }
             if (!ok) break;
@@ -278,13 +346,12 @@ static int disp_load_manifest(int force) {
     free(doc);
     free(body);
     if (!ok || !m->count) {
-        fprintf(stderr,"DBG final ok=%d count=%d\n",ok,m->count);
         memset(m, 0, sizeof(*m));
         disp_set_error("display_manifest_invalid");
         return 0;
     }
     m->valid = 1;
-    disp_error[0] = '\0';
+    disp_clear_error();
     return 1;
 }
 
@@ -334,7 +401,7 @@ static int disp_capability(void) {
     if (!disp_load_manifest(0)) return 0;
     if (!disp_gui_matches(&disp_manifest_cache)) return 0;
     if (!disp_active_theme_ok()) return 0;
-    disp_error[0] = '\0';
+    disp_clear_error();
     return 1;
 }
 
@@ -381,33 +448,42 @@ static int disp_state_read(void) {
     disp_state_defaults(&disp_state_cache);
     char path[PATH_MAX_LOCAL];
     if (!disp_ensure_state_dir() || !disp_state_path(path, sizeof(path))) return 0;
-    if (!disp_regular(path)) return 1;
-    FILE *file = fopen(path, "rb");
-    char body[4096];
-    size_t got = fread(body, 1, sizeof(body) - 1, file);
-    fclose(file);
-    body[got] = '\0';
-    ng_json *doc = malloc(sizeof(*doc));
-    if (!doc || !ng_json_parse(doc, body, got) || doc->v[0].type != '{') { free(doc); return 0; }
-    const char *phase = ng_string(doc, 0, "phase");
+    struct stat st;
+    if (lstat(path, &st) != 0) return 1; /* no state yet: defaults are valid */
+    if (!S_ISREG(st.st_mode)) {
+        disp_set_error("display_state_invalid");
+        return 0;
+    }
+    size_t length = 0;
+    char *body = disp_read_json_file(path, &length);
+    if (!body) return 0;
+    ngl_json *doc = malloc(sizeof(*doc));
+    if (!doc || !ngl_json_parse(doc, body, length) || doc->v[0].type != '{') {
+        free(doc);
+        free(body);
+        disp_set_error("display_state_invalid");
+        return 0;
+    }
+    free(body);
+    const char *phase = ngl_string(doc, 0, "phase");
     if (phase) {
         if (!strcmp(phase, "applied")) disp_state_cache.phase = 1;
         else if (!strcmp(phase, "failed")) disp_state_cache.phase = 2;
         else if (!strcmp(phase, "recovered")) disp_state_cache.phase = 3;
         else if (!strcmp(phase, "restored")) disp_state_cache.phase = 0;
     }
-    const char *boot = ng_string(doc, 0, "bootId");
+    const char *boot = ngl_string(doc, 0, "bootId");
     if (boot) snprintf(disp_state_cache.boot_id, sizeof(disp_state_cache.boot_id), "%s", boot);
-    const char *marker = ng_string(doc, 0, "guiMarker");
+    const char *marker = ngl_string(doc, 0, "guiMarker");
     if (marker) snprintf(disp_state_cache.gui_marker, sizeof(disp_state_cache.gui_marker), "%s", marker);
     double at = 0;
-    if (ng_number(doc, 0, "appliedAt", &at) && at > 0 && at < 4e9) disp_state_cache.applied_at = (long long)at;
-    int files = ng_member(doc, 0, "files");
+    if (ngl_number(doc, 0, "appliedAt", &at) && at > 0 && at < 4e9) disp_state_cache.applied_at = (long long)at;
+    int files = ngl_member(doc, 0, "files");
     if (files >= 0 && doc->v[files].type == '[') {
         for (int i = files + 1; i < doc->v[files].next && disp_state_cache.file_count < DISP_MAX_STAGE;
              i = doc->v[i].next) {
-            const char *name = ng_string(doc, i, "name");
-            const char *hash = ng_string(doc, i, "sha256");
+            const char *name = ngl_string(doc, i, "name");
+            const char *hash = ngl_string(doc, i, "sha256");
             if (!name || !hash || !disp_name_valid(name) || !disp_hex64(hash)) continue;
             snprintf(disp_state_cache.files[disp_state_cache.file_count],
                      sizeof(disp_state_cache.files[0]), "%s", name);
@@ -425,9 +501,9 @@ static int disp_state_write(void) {
     char path[PATH_MAX_LOCAL];
     if (!disp_state_path(path, sizeof(path))) return 0;
     json_builder b;
-    char *body = malloc(8192);
+    char *body = malloc(DISP_META_MAX);
     if (!body) return 0;
-    b = (json_builder){body, 0, 8192, 0};
+    b = (json_builder){body, 0, DISP_META_MAX, 0};
     const char *phase = disp_state_cache.phase == 1 ? "applied"
                       : disp_state_cache.phase == 2 ? "failed"
                       : disp_state_cache.phase == 3 ? "recovered" : "restored";
@@ -447,25 +523,64 @@ static int disp_state_write(void) {
     json_builder_printf(&b, "]}\n");
     int ok = !b.failed;
     if (ok) ok = ap_write_all(path, body, b.length, 0600);
+    if (!ok) disp_set_error("display_state_write_failed");
     free(body);
     return ok;
 }
 
 /* Baseline manifest: identity of the firmware display the originals came from,
- * plus each original's SHA-256. */
-static int disp_baseline_write(void) {
+ * the theme directory they belong to, and each original's SHA-256. */
+typedef struct {
+    char firmware_base[32];
+    char gui_sha256[65];
+    char theme_dir[PATH_MAX_LOCAL];
+} disp_baseline_identity;
+
+/* A set of file names and expected SHA-256 digests: the state of an applied
+ * pack, or the files recorded by an interrupted apply's journal. */
+typedef struct {
+    char names[DISP_MAX_STAGE][DISP_NAME_MAX + 1];
+    char hashes[DISP_MAX_STAGE][65];
+    int count;
+} disp_hash_set;
+
+static int disp_hash_set_add(disp_hash_set *set, const char *name, const char *hash) {
+    if (set->count >= DISP_MAX_STAGE) return 0;
+    snprintf(set->names[set->count], sizeof(set->names[0]), "%s", name);
+    snprintf(set->hashes[set->count], sizeof(set->hashes[0]), "%s", hash);
+    set->count++;
+    return 1;
+}
+
+static int disp_hash_set_has(const disp_hash_set *set, const char *name, const char *hash) {
+    for (int i = 0; i < set->count; ++i)
+        if (!strcmp(set->names[i], name) && !strcasecmp(set->hashes[i], hash)) return 1;
+    return 0;
+}
+
+/* The state cache is also a hash set; keep a small adapter so restore can use
+ * both without copying. */
+static int disp_state_has(const disp_state *state, const char *name, const char *hash) {
+    for (int i = 0; i < state->file_count; ++i)
+        if (!strcmp(state->files[i], name) && !strcasecmp(state->hashes[i], hash)) return 1;
+    return 0;
+}
+
+static int disp_baseline_write(const disp_manifest *m) {
     char dir[PATH_MAX_LOCAL], path[PATH_MAX_LOCAL];
     if (!disp_baseline_dir(dir, sizeof(dir)) || !disp_baseline_manifest(path, sizeof(path))) return 0;
     DIR *d = opendir(dir);
     if (!d) return 0;
     json_builder b;
-    char *body = malloc(65536);
+    char *body = malloc(DISP_META_MAX);
     if (!body) { closedir(d); return 0; }
-    b = (json_builder){body, 0, 65536, 0};
+    b = (json_builder){body, 0, DISP_META_MAX, 0};
     json_builder_printf(&b, "{\"version\":1,\"firmwareBase\":");
-    json_builder_string(&b, disp_manifest_cache.firmware_base);
+    json_builder_string(&b, m->firmware_base);
     json_builder_printf(&b, ",\"guiSha256\":");
-    json_builder_string(&b, disp_manifest_cache.gui_sha256);
+    json_builder_string(&b, m->gui_sha256);
+    json_builder_printf(&b, ",\"themeDir\":");
+    json_builder_string(&b, disp_theme_dir);
     json_builder_printf(&b, ",\"files\":[");
     struct dirent *entry;
     int first = 1;
@@ -486,6 +601,7 @@ static int disp_baseline_write(void) {
     json_builder_printf(&b, "]}\n");
     int ok = !b.failed && ap_write_all(path, body, b.length, 0600);
     free(body);
+    if (!ok) disp_set_error("display_backup_manifest_failed");
     return ok;
 }
 
@@ -493,33 +609,55 @@ typedef struct {
     char name[DISP_NAME_MAX + 1];
     char sha256[65];
     int present;
-    int parsed;
 } disp_baseline_entry;
 
-static int disp_baseline_read(disp_baseline_entry *entries, int *count) {
+/* Read the baseline manifest.
+ *   1  the manifest is valid; entries, count and identity are filled
+ *   0  no usable baseline (absent, unreadable, invalid, or belongs to another
+ *      theme directory)
+ *  -1  the baseline exists but belongs to a different firmware/GUI, which only
+ *      matters when `compare_current` is set (the apply path). Restore passes 0
+ *      so it can still return to a verified baseline after an update. */
+static int disp_baseline_read(disp_baseline_entry *entries, int *count,
+                              disp_baseline_identity *identity, int compare_current) {
     *count = 0;
+    if (identity) memset(identity, 0, sizeof(*identity));
     char path[PATH_MAX_LOCAL];
     if (!disp_baseline_manifest(path, sizeof(path))) return 0;
-    FILE *file = fopen(path, "rb");
-    if (!file) return 0;
-    char body[65536];
-    size_t got = fread(body, 1, sizeof(body) - 1, file);
-    fclose(file);
-    body[got] = '\0';
-    ng_json *doc = malloc(sizeof(*doc));
-    if (!doc || !ng_json_parse(doc, body, got) || doc->v[0].type != '{') { free(doc); return 0; }
-    const char *base = ng_string(doc, 0, "firmwareBase");
-    const char *gui = ng_string(doc, 0, "guiSha256");
-    if (!disp_manifest_identity(&disp_manifest_cache, base, gui)) {
+    size_t length = 0;
+    char *body = disp_read_json_file(path, &length);
+    if (!body) return 0;
+    ngl_json *doc = malloc(sizeof(*doc));
+    if (!doc || !ngl_json_parse(doc, body, length) || doc->v[0].type != '{') {
+        free(doc);
+        free(body);
+        disp_set_error("display_backup_missing");
+        return 0;
+    }
+    free(body);
+    const char *base = ngl_string(doc, 0, "firmwareBase");
+    const char *gui = ngl_string(doc, 0, "guiSha256");
+    const char *theme = ngl_string(doc, 0, "themeDir");
+    if (identity) {
+        if (base) snprintf(identity->firmware_base, sizeof(identity->firmware_base), "%s", base);
+        if (gui) snprintf(identity->gui_sha256, sizeof(identity->gui_sha256), "%s", gui);
+        if (theme) snprintf(identity->theme_dir, sizeof(identity->theme_dir), "%s", theme);
+    }
+    if (theme && theme[0] && strcmp(theme, disp_theme_dir)) {
+        free(doc);
+        disp_set_error("display_theme_changed");
+        return 0;
+    }
+    if (compare_current && !disp_manifest_identity(&disp_manifest_cache, base, gui)) {
         free(doc);
         disp_set_error("display_firmware_changed");
         return -1;
     }
-    int files = ng_member(doc, 0, "files");
+    int files = ngl_member(doc, 0, "files");
     if (files < 0 || doc->v[files].type != '[') { free(doc); return 0; }
     for (int i = files + 1; i < doc->v[files].next && *count < DISP_MAX_STAGE; i = doc->v[i].next) {
-        const char *name = ng_string(doc, i, "name");
-        const char *hash = ng_string(doc, i, "sha256");
+        const char *name = ngl_string(doc, i, "name");
+        const char *hash = ngl_string(doc, i, "sha256");
         if (!name || !hash || !disp_name_valid(name) || !disp_hex64(hash)) continue;
         disp_baseline_entry *e = &entries[(*count)++];
         snprintf(e->name, sizeof(e->name), "%s", name);
@@ -534,45 +672,72 @@ static int disp_baseline_read(disp_baseline_entry *entries, int *count) {
     return 1;
 }
 
+/* Read the hashes recorded by an interrupted apply, so startup recovery may
+ * replace a file this feature was writing as well as one that is still the
+ * original. Absent or invalid journals simply contribute nothing. */
+static int disp_journal_read(disp_hash_set *set) {
+    set->count = 0;
+    char path[PATH_MAX_LOCAL];
+    if (!disp_journal_path(path, sizeof(path))) return 0;
+    if (!disp_regular(path)) return 0;
+    size_t length = 0;
+    char *body = disp_read_json_file(path, &length);
+    if (!body) return 0;
+    ngl_json *doc = malloc(sizeof(*doc));
+    if (!doc || !ngl_json_parse(doc, body, length) || doc->v[0].type != '{') {
+        free(doc);
+        free(body);
+        return 0;
+    }
+    free(body);
+    int files = ngl_member(doc, 0, "files");
+    if (files >= 0 && doc->v[files].type == '[') {
+        for (int i = files + 1; i < doc->v[files].next; i = doc->v[i].next) {
+            const char *name = ngl_string(doc, i, "name");
+            const char *hash = ngl_string(doc, i, "sha256");
+            if (!name || !hash || !disp_name_valid(name) || !disp_hex64(hash)) continue;
+            if (!disp_hash_set_add(set, name, hash)) break;
+        }
+    }
+    free(doc);
+    return set->count > 0;
+}
+
 /* Back up one target before its first change. Returns 1 when a verified
- * original exists afterwards. */
+ * original exists afterwards. The copy is atomic (temporary file, fsync,
+ * rename, directory sync), so a power loss never leaves a final partial file;
+ * a backup that does not match the manifest is repaired only when the target
+ * still is the manifest original. */
 static int disp_backup_original(const disp_asset *asset) {
     char dir[PATH_MAX_LOCAL], backup[PATH_MAX_LOCAL], target[PATH_MAX_LOCAL];
     if (!disp_baseline_dir(dir, sizeof(dir))) return 0;
     if (mkdir(dir, 0700) != 0 && errno != EEXIST) return 0;
     if (!disp_path_join(backup, sizeof(backup), dir, asset->name) ||
         !disp_path_join(target, sizeof(target), disp_theme_dir, asset->name)) return 0;
-    struct stat st;
-    if (lstat(backup, &st) == 0 && S_ISREG(st.st_mode)) return 1; /* already preserved */
-    if (!disp_regular(target)) { disp_set_error("display_asset_missing"); return 0; }
     char hash[65];
+    struct stat st;
+    if (lstat(backup, &st) == 0) {
+        if (S_ISREG(st.st_mode) && disp_sha_file(backup, hash) && !strcasecmp(hash, asset->sha256))
+            return 1; /* already preserved and verified */
+        /* Unverified leftover: only a target that still is the manifest
+         * original may replace it. A customised target means we would save
+         * customised bytes as the original: refuse instead. */
+        if (!disp_regular(target) || !disp_sha_file(target, hash) || strcasecmp(hash, asset->sha256)) {
+            disp_set_error("display_backup_mismatch");
+            return 0;
+        }
+        unlink(backup);
+    }
+    if (!disp_regular(target)) { disp_set_error("display_asset_missing"); return 0; }
     if (!disp_sha_file(target, hash)) { disp_set_error("display_asset_missing"); return 0; }
     if (strcasecmp(hash, asset->sha256)) {
         disp_set_error("display_asset_modified");
         return 0;
     }
-    FILE *in = fopen(target, "rb");
-    if (!in) return 0;
-    int out = open(backup, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
-    if (out < 0) { fclose(in); return 0; }
-    unsigned char buffer[16384];
-    size_t n;
-    int ok = 1;
-    while ((n = fread(buffer, 1, sizeof(buffer), in)) > 0) {
-        size_t done = 0;
-        while (done < n) {
-            ssize_t w = write(out, buffer + done, n - done);
-            if (w < 0 && errno == EINTR) continue;
-            if (w <= 0) { ok = 0; break; }
-            done += (size_t)w;
-        }
-        if (!ok) break;
+    if (!ap_copy_verified(target, backup, 0600)) {
+        disp_set_error("display_backup_write_failed");
+        return 0;
     }
-    if (ferror(in)) ok = 0;
-    fclose(in);
-    if (ok && (fsync(out) != 0 || close(out) != 0)) ok = 0;
-    else if (!ok) close(out);
-    if (!ok) { unlink(backup); return 0; }
     if (!disp_sha_file(backup, hash) || strcasecmp(hash, asset->sha256)) {
         unlink(backup);
         disp_set_error("display_backup_mismatch");
@@ -581,45 +746,65 @@ static int disp_backup_original(const disp_asset *asset) {
     return 1;
 }
 
-static const disp_asset *disp_find_asset(const char *name) {
-    for (int i = 0; i < disp_manifest_cache.count; ++i)
-        if (!strcmp(disp_manifest_cache.assets[i].name, name))
-            return &disp_manifest_cache.assets[i];
+static const disp_asset *disp_find_asset_in(const disp_manifest *m, const char *name) {
+    for (int i = 0; i < m->count; ++i)
+        if (!strcmp(m->assets[i].name, name))
+            return &m->assets[i];
     return NULL;
 }
 
-/* Restore every baseline file. Used by restore, rollback and startup recovery.
- * `strict` refuses a current file that is neither our applied version nor the
- * original; the startup path uses it too, so foreign changes are preserved. */
-static int disp_restore_baseline(int strict) {
+static const disp_asset *disp_find_asset(const char *name) {
+    return disp_find_asset_in(&disp_manifest_cache, name);
+}
+
+/* Restore every baseline file. Used by restore, the apply failure path and
+ * startup recovery. `strict` accepts only a current file that is the original
+ * or one of our recorded versions (state plus `extra`, normally the journal),
+ * so foreign changes are preserved. Every backup is verified against the
+ * manifest hash before anything is copied. */
+static int disp_restore_baseline(int strict, const disp_state *state, const disp_hash_set *extra) {
     disp_baseline_entry entries[DISP_MAX_STAGE];
     int count = 0;
-    int read = disp_baseline_read(entries, &count);
+    int read = disp_baseline_read(entries, &count, NULL, 0);
     if (read <= 0) {
-        disp_set_error(read < 0 ? "display_firmware_changed" : "display_backup_missing");
+        if (read == 0) disp_set_error("display_backup_missing");
         return 0;
     }
     char dir[PATH_MAX_LOCAL];
     if (!disp_baseline_dir(dir, sizeof(dir))) return 0;
+    /* First pass: every backup must be exactly the recorded original and every
+     * strict target must be one of ours. Nothing is written if one fails. */
     for (int i = 0; i < count; ++i) {
-        if (!entries[i].present) continue;
+        if (!entries[i].present) {
+            disp_set_error("display_backup_missing");
+            return 0;
+        }
         char backup[PATH_MAX_LOCAL], target[PATH_MAX_LOCAL], hash[65];
         if (!disp_path_join(backup, sizeof(backup), dir, entries[i].name) ||
             !disp_path_join(target, sizeof(target), disp_theme_dir, entries[i].name)) return 0;
+        if (!disp_regular(backup) || !disp_sha_file(backup, hash) || strcasecmp(hash, entries[i].sha256)) {
+            disp_set_error("display_backup_mismatch");
+            return 0;
+        }
         if (strict) {
             if (!disp_regular(target) || !disp_sha_file(target, hash)) {
                 disp_set_error("display_asset_missing");
                 return 0;
             }
-            int ours = !strcasecmp(hash, entries[i].sha256);
-            for (int p = 0; p < disp_state_cache.file_count; ++p)
-                if (!strcmp(disp_state_cache.files[p], entries[i].name) &&
-                    !strcasecmp(hash, disp_state_cache.hashes[p])) ours = 1;
+            int ours = !strcasecmp(hash, entries[i].sha256) ||
+                       (state && disp_state_has(state, entries[i].name, hash)) ||
+                       (extra && disp_hash_set_has(extra, entries[i].name, hash));
             if (!ours) {
                 disp_set_error("display_asset_foreign_change");
                 return 0;
             }
         }
+    }
+    /* Second pass: copy and read back. */
+    for (int i = 0; i < count; ++i) {
+        char backup[PATH_MAX_LOCAL], target[PATH_MAX_LOCAL];
+        if (!disp_path_join(backup, sizeof(backup), dir, entries[i].name) ||
+            !disp_path_join(target, sizeof(target), disp_theme_dir, entries[i].name)) return 0;
         if (!ap_copy_verified(backup, target, 0644)) {
             disp_set_error("display_restore_failed");
             return 0;
@@ -737,7 +922,7 @@ static int disp_asset_count_customized(void) {
 static void disp_status_response(int fd) {
     pthread_mutex_lock(&disp_mutex);
     int supported = disp_capability();
-    disp_state_read();
+    int state_ok = disp_state_read();
     int reboot = 0;
     if (supported && disp_state_cache.phase == 1) {
         char marker[64];
@@ -758,11 +943,23 @@ static void disp_status_response(int fd) {
             (void)disp_state_write();
         }
     }
-    char *body = malloc(16384);
+    /* A verified baseline stays restorable even when the current manifest or
+     * GUI no longer matches it, so the UI can offer recovery after an update. */
+    disp_baseline_entry baseline[DISP_MAX_STAGE];
+    int baseline_count = 0;
+    disp_baseline_identity identity;
+    int baseline_read = disp_baseline_read(baseline, &baseline_count, &identity, 0);
+    int backup = baseline_read > 0 && baseline_count > 0;
+    int firmware_changed = backup && !disp_manifest_identity(&disp_manifest_cache, identity.firmware_base,
+                                                             identity.gui_sha256);
+    char error[160];
+    disp_copy_error(error, sizeof(error));
+    char *body = malloc(32768);
     if (!body) { pthread_mutex_unlock(&disp_mutex); disp_json(fd, 500, "Internal Server Error", "Out of memory"); return; }
-    json_builder b = {body, 0, 16384, 0};
-    json_builder_printf(&b, "{\"supported\":%s,\"error\":\"%s\",\"schema\":%d,\"firmwareBase\":",
-                        supported ? "true" : "false", disp_error, supported ? disp_manifest_cache.schema : 0);
+    json_builder b = {body, 0, 32768, 0};
+    json_builder_printf(&b, "{\"supported\":%s,\"error\":", supported ? "true" : "false");
+    json_builder_string(&b, error);
+    json_builder_printf(&b, ",\"schema\":%d,\"firmwareBase\":", supported ? disp_manifest_cache.schema : 0);
     json_builder_string(&b, supported ? disp_manifest_cache.firmware_base : "");
     json_builder_printf(&b, ",\"themeDir\":");
     json_builder_string(&b, disp_theme_dir);
@@ -781,15 +978,15 @@ static void disp_status_response(int fd) {
     char journal[PATH_MAX_LOCAL];
     int recovery = disp_journal_path(journal, sizeof(journal)) && disp_regular(journal);
     json_builder_printf(&b, "],\"fileCount\":%d,\"customizedCount\":%d,\"rebootRequired\":%s,"
-                            "\"phase\":%d,\"recoveryRequired\":%s,\"backupAvailable\":",
+                            "\"phase\":%d,\"recoveryRequired\":%s,\"backupAvailable\":%s,"
+                            "\"restoreAvailable\":%s,\"firmwareChanged\":%s,\"stateValid\":%s,"
+                            "\"experimental\":true}\n",
                         supported ? disp_manifest_cache.count : 0,
-                        supported ? disp_asset_count_customized() : 0,
+                        state_ok ? disp_asset_count_customized() : 0,
                         reboot ? "true" : "false", disp_state_cache.phase,
-                        recovery ? "true" : "false");
-    char baseline_manifest[PATH_MAX_LOCAL];
-    int backup = disp_baseline_manifest(baseline_manifest, sizeof(baseline_manifest)) &&
-                 access(baseline_manifest, R_OK) == 0;
-    json_builder_printf(&b, "%s,\"experimental\":true}\n", backup ? "true" : "false");
+                        recovery ? "true" : "false", backup ? "true" : "false",
+                        backup ? "true" : "false", firmware_changed ? "true" : "false",
+                        state_ok ? "true" : "false");
     pthread_mutex_unlock(&disp_mutex);
     if (b.failed) {
         free(body);
@@ -799,7 +996,6 @@ static void disp_status_response(int fd) {
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, b.length);
     free(body);
 }
-
 static void disp_asset_response(int fd, const char *query) {
     if (!query || strncmp(query, "name=", 5)) {
         disp_json(fd, 400, "Bad Request", "Missing asset name");
@@ -820,16 +1016,12 @@ static void disp_asset_response(int fd, const char *query) {
         name[n++] = (char)value;
     }
     name[n] = '\0';
+    char path[PATH_MAX_LOCAL];
     pthread_mutex_lock(&disp_mutex);
-    if (!disp_capability() || !disp_name_valid(name) || !disp_find_asset(name)) {
+    if (!disp_capability() || !disp_name_valid(name) || !disp_find_asset(name) ||
+        !disp_path_join(path, sizeof(path), disp_theme_dir, name)) {
         pthread_mutex_unlock(&disp_mutex);
         disp_json(fd, 404, "Not Found", "Unknown display asset");
-        return;
-    }
-    char path[PATH_MAX_LOCAL];
-    if (!disp_path_join(path, sizeof(path), disp_theme_dir, name)) {
-        pthread_mutex_unlock(&disp_mutex);
-        disp_json(fd, 500, "Internal Server Error", "Asset path too long");
         return;
     }
     /* Serve the preserved original when one exists: the browser uses these
@@ -838,41 +1030,45 @@ static void disp_asset_response(int fd, const char *query) {
      * baseline is available. */
     disp_baseline_entry baseline[DISP_MAX_STAGE];
     int baseline_count = 0;
-    if (disp_baseline_read(baseline, &baseline_count) > 0) {
+    if (disp_baseline_read(baseline, &baseline_count, NULL, 0) > 0) {
         for (int i = 0; i < baseline_count; ++i) {
             if (strcmp(baseline[i].name, name) || !baseline[i].present) continue;
             char original[PATH_MAX_LOCAL], digest[65];
-            if (disp_baseline_dir(path, sizeof(path)) &&
-                disp_path_join(original, sizeof(original), path, name) &&
-                disp_regular(original) && disp_sha_file(original, digest) &&
+            if (disp_baseline_dir(original, sizeof(original)) &&
+                disp_path_join(path, sizeof(path), original, name) &&
+                disp_regular(path) && disp_sha_file(path, digest) &&
                 !strcasecmp(digest, baseline[i].sha256)) {
-                snprintf(path, sizeof(path), "%s", original);
+                /* path now names the verified original */
+            } else if (!disp_path_join(path, sizeof(path), disp_theme_dir, name)) {
+                pthread_mutex_unlock(&disp_mutex);
+                disp_json(fd, 500, "Internal Server Error", "Asset path too long");
+                return;
             }
             break;
         }
     }
-    if (!disp_regular(path)) {
-        pthread_mutex_unlock(&disp_mutex);
-        disp_json(fd, 404, "Not Found", "Display asset missing");
-        return;
-    }
-    FILE *file = fopen(path, "rb");
-    if (!file) {
-        pthread_mutex_unlock(&disp_mutex);
-        disp_json(fd, 404, "Not Found", "Display asset missing");
-        return;
-    }
+    pthread_mutex_unlock(&disp_mutex);
     struct stat st;
-    if (fstat(fileno(file), &st) != 0 || st.st_size <= 0 || st.st_size > DISP_MAX_FILE) {
-        fclose(file);
-        pthread_mutex_unlock(&disp_mutex);
-        disp_json(fd, 404, "Not Found", "Display asset size invalid");
+    if (!disp_regular(path) || stat(path, &st) != 0 || st.st_size <= 0 || st.st_size > DISP_MAX_FILE) {
+        disp_json(fd, 404, "Not Found", "Display asset missing");
+        return;
+    }
+    int in = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (in < 0) {
+        disp_json(fd, 404, "Not Found", "Display asset missing");
         return;
     }
     unsigned char *data = malloc((size_t)st.st_size);
-    size_t got = data ? fread(data, 1, (size_t)st.st_size, file) : 0;
-    fclose(file);
-    pthread_mutex_unlock(&disp_mutex);
+    size_t got = 0;
+    if (data) {
+        while (got < (size_t)st.st_size) {
+            ssize_t r = read(in, data + got, (size_t)st.st_size - got);
+            if (r < 0 && errno == EINTR) continue;
+            if (r <= 0) break;
+            got += (size_t)r;
+        }
+    }
+    close(in);
     if (!data || got != (size_t)st.st_size) {
         free(data);
         disp_json(fd, 500, "Internal Server Error", "Cannot read display asset");
@@ -950,7 +1146,10 @@ static int disp_stage_write(const char *stage, const char *name, const unsigned 
     return 1;
 }
 
-/* Validate and stage a tar stream. Returns 0 and sets disp_error on refusal. */
+/* Validate and stage a tar stream. Returns 0 and sets disp_error on refusal.
+ * Network transfer, staging and validation run without any display lock; only
+ * the short state snapshots and the state update take it, so unrelated API
+ * requests stay responsive while a pack uploads. */
 static int disp_receive_pack(disp_upload_job *job) {
     char stage[PATH_MAX_LOCAL];
     if (!disp_ensure_state_dir() || !disp_stage_dir(stage, sizeof(stage))) return 0;
@@ -966,11 +1165,16 @@ static int disp_receive_pack(disp_upload_job *job) {
         }
         closedir(old);
     }
-    disp_staged staged[DISP_MAX_STAGE];
+    disp_staged *staged = calloc(DISP_MAX_STAGE, sizeof(*staged));
+    if (!staged) { disp_set_error("display_pack_oom"); return 0; }
     int staged_count = 0;
     unsigned char header[512];
+    int result = 0;
+    char journal[PATH_MAX_LOCAL];
+    disp_state local_state;
+    local_state.file_count = 0;
     while (job->received < job->content_length) {
-        if (!disp_read(job, header, 512)) { disp_set_error("display_pack_truncated"); return 0; }
+        if (!disp_read(job, header, 512)) { disp_set_error("display_pack_truncated"); goto out; }
         char name[DISP_NAME_MAX + 1];
         size_t size = 0;
         int parsed = disp_tar_header(header, name, sizeof(name), &size);
@@ -980,40 +1184,49 @@ static int disp_receive_pack(disp_upload_job *job) {
             while (left) {
                 unsigned char zero[512];
                 size_t take = left < sizeof(zero) ? left : sizeof(zero);
-                if (!disp_read(job, zero, take)) { disp_set_error("display_pack_truncated"); return 0; }
+                if (!disp_read(job, zero, take)) { disp_set_error("display_pack_truncated"); goto out; }
                 for (size_t z = 0; z < take; ++z)
-                    if (zero[z]) { disp_set_error("display_pack_trailing_data"); return 0; }
+                    if (zero[z]) { disp_set_error("display_pack_trailing_data"); goto out; }
                 left -= take;
             }
             break;
         }
         if (parsed < 0 || !disp_name_valid(name) || size == 0 || size > DISP_MAX_FILE) {
             disp_set_error("display_pack_invalid_header");
-            return 0;
+            goto out;
         }
+        pthread_mutex_lock(&disp_mutex);
         const disp_asset *asset = disp_find_asset(name);
-        if (!asset) { disp_set_error("display_asset_not_allowed"); return 0; }
-        if (staged_count >= DISP_MAX_STAGE) { disp_set_error("display_pack_too_many_files"); return 0; }
+        int allowed = asset != NULL;
+        int asset_width = allowed ? asset->width : 0;
+        int asset_height = allowed ? asset->height : 0;
+        pthread_mutex_unlock(&disp_mutex);
+        if (!allowed) { disp_set_error("display_asset_not_allowed"); goto out; }
+        if (staged_count >= DISP_MAX_STAGE) { disp_set_error("display_pack_too_many_files"); goto out; }
         for (int i = 0; i < staged_count; ++i)
-            if (!strcmp(staged[i].name, name)) { disp_set_error("display_pack_duplicate"); return 0; }
+            if (!strcmp(staged[i].name, name)) { disp_set_error("display_pack_duplicate"); goto out; }
         unsigned char *data = malloc(size);
-        if (!data) { disp_set_error("display_pack_oom"); return 0; }
-        if (!disp_read(job, data, size)) { free(data); disp_set_error("display_pack_truncated"); return 0; }
+        if (!data) { disp_set_error("display_pack_oom"); goto out; }
+        if (!disp_read(job, data, size)) { free(data); disp_set_error("display_pack_truncated"); goto out; }
         size_t padding = (512 - (size % 512)) % 512;
         if (padding) {
             unsigned char pad[512];
-            if (!disp_read(job, pad, padding)) { free(data); disp_set_error("display_pack_truncated"); return 0; }
+            if (!disp_read(job, pad, padding)) { free(data); disp_set_error("display_pack_truncated"); goto out; }
         }
         char why[64] = "";
-        if (!disp_png_valid(data, size, asset->width, asset->height, why, sizeof(why))) {
+        if (!disp_png_valid(data, size, asset_width, asset_height, why, sizeof(why))) {
             free(data);
-            snprintf(disp_error, sizeof(disp_error), "display_png_invalid:%s", why);
-            return 0;
+            {
+                char message[160];
+                snprintf(message, sizeof(message), "display_png_invalid:%s", why);
+                disp_set_error(message);
+            }
+            goto out;
         }
         if (!disp_stage_write(stage, name, data, size)) {
             free(data);
             disp_set_error("display_stage_write_failed");
-            return 0;
+            goto out;
         }
         snprintf(staged[staged_count].name, sizeof(staged[0].name), "%s", name);
         disp_sha_bytes(data, size, staged[staged_count].sha256);
@@ -1021,32 +1234,68 @@ static int disp_receive_pack(disp_upload_job *job) {
         staged_count++;
         free(data);
     }
-    if (!staged_count) { disp_set_error("display_pack_empty"); return 0; }
-    if (job->received != job->content_length) { disp_set_error("display_pack_trailing_data"); return 0; }
-    /* The upload can take minutes: confirm the printer is still idle and the
-     * manifest is still the one the client saw before touching the disk. */
+    if (!staged_count) { disp_set_error("display_pack_empty"); goto out; }
+    if (job->received != job->content_length) { disp_set_error("display_pack_trailing_data"); goto out; }
+    /* The upload can take minutes: confirm the printer is still idle, read the
+     * state once, and confirm the manifest is still the one the client saw. */
     if (!job->mqtt || !gcode_idle_for_mutation(job->mqtt)) {
         disp_set_error("display_not_idle");
-        return 0;
+        goto out;
     }
     if (app_update_active() || maintenance_barrier_active()) {
         disp_set_error("display_busy");
-        return 0;
+        goto out;
     }
-    if (!disp_capability()) return 0;
-    /* Every staged asset must have a preserved original before any write. */
+    pthread_mutex_lock(&disp_apply_mutex);
+    pthread_mutex_lock(&disp_mutex);
+    int state_ok = disp_state_read();
+    if (state_ok) local_state = disp_state_cache;
+    int supported = disp_capability();
+    disp_manifest *manifest = supported ? malloc(sizeof(*manifest)) : NULL;
+    if (manifest) *manifest = disp_manifest_cache;
+    pthread_mutex_unlock(&disp_mutex);
+    if (!supported || !manifest) {
+        free(manifest);
+        pthread_mutex_unlock(&disp_apply_mutex);
+        goto out;
+    }
+
+    /* A baseline taken from another firmware/GUI must never be extended with
+     * a new identity: restore it first, then customise the new display. */
+    {
+        disp_baseline_entry existing[DISP_MAX_STAGE];
+        int existing_count = 0;
+        disp_baseline_identity existing_identity;
+        int existing_read = disp_baseline_read(existing, &existing_count, &existing_identity, 1);
+        if (existing_read < 0) {
+            free(manifest);
+            pthread_mutex_unlock(&disp_apply_mutex);
+            goto out;
+        }
+    }
+    /* Every staged asset must have a verified original before any write. */
     for (int i = 0; i < staged_count; ++i) {
-        const disp_asset *asset = disp_find_asset(staged[i].name);
-        if (!asset || !disp_backup_original(asset)) return 0;
+        const disp_asset *asset = disp_find_asset_in(manifest, staged[i].name);
+        if (!asset || !disp_backup_original(asset)) {
+            free(manifest);
+            pthread_mutex_unlock(&disp_apply_mutex);
+            goto out;
+        }
     }
-    if (!disp_baseline_write()) { disp_set_error("display_backup_manifest_failed"); return 0; }
+    if (!disp_baseline_write(manifest)) {
+        disp_set_error("display_backup_manifest_failed");
+        free(manifest);
+        pthread_mutex_unlock(&disp_apply_mutex);
+        goto out;
+    }
+    free(manifest);
+    manifest = NULL;
     /* Journal: a power loss from here on is recovered at the next start. */
-    char journal[PATH_MAX_LOCAL], state_path[PATH_MAX_LOCAL];
-    if (!disp_journal_path(journal, sizeof(journal)) || !disp_state_path(state_path, sizeof(state_path))) return 0;
+    if (!disp_journal_path(journal, sizeof(journal))) { pthread_mutex_unlock(&disp_apply_mutex); goto out; }
     json_builder jb;
-    char *journal_body = malloc(32768);
-    if (!journal_body) return 0;
-    jb = (json_builder){journal_body, 0, 32768, 0};
+    char *journal_body = malloc(DISP_META_MAX);
+    if (!journal_body) { pthread_mutex_unlock(&disp_apply_mutex); goto out; }
+    jb = (json_builder){journal_body, 0, DISP_META_MAX, 0};
     json_builder_printf(&jb, "{\"version\":1,\"phase\":\"applying\",\"stage\":");
     json_builder_string(&jb, stage);
     json_builder_printf(&jb, ",\"files\":[");
@@ -1061,19 +1310,19 @@ static int disp_receive_pack(disp_upload_job *job) {
     json_builder_printf(&jb, "]}\n");
     int ok = !jb.failed && ap_write_all(journal, journal_body, jb.length, 0600);
     free(journal_body);
-    if (!ok) return 0;
-    /* Merge the new applied hashes into the state before writing the files,
-     * so a failed apply still knows which files are ours. */
+    if (!ok) { pthread_mutex_unlock(&disp_apply_mutex); goto out; }
+    /* Merge the new applied hashes into the local state before writing the
+     * files, so a failed apply still knows which files are ours. */
     for (int i = 0; i < staged_count; ++i) {
         int slot = -1;
-        for (int p = 0; p < disp_state_cache.file_count; ++p)
-            if (!strcmp(disp_state_cache.files[p], staged[i].name)) slot = p;
+        for (int p = 0; p < local_state.file_count; ++p)
+            if (!strcmp(local_state.files[p], staged[i].name)) slot = p;
         if (slot < 0) {
-            if (disp_state_cache.file_count >= DISP_MAX_STAGE) continue;
-            slot = disp_state_cache.file_count++;
+            if (local_state.file_count >= DISP_MAX_STAGE) continue;
+            slot = local_state.file_count++;
         }
-        snprintf(disp_state_cache.files[slot], sizeof(disp_state_cache.files[slot]), "%.64s", staged[i].name);
-        snprintf(disp_state_cache.hashes[slot], sizeof(disp_state_cache.hashes[slot]), "%.64s", staged[i].sha256);
+        snprintf(local_state.files[slot], sizeof(local_state.files[slot]), "%.64s", staged[i].name);
+        snprintf(local_state.hashes[slot], sizeof(local_state.hashes[slot]), "%.64s", staged[i].sha256);
     }
     int applied = 0;
     for (int i = 0; i < staged_count; ++i) {
@@ -1098,37 +1347,47 @@ static int disp_receive_pack(disp_upload_job *job) {
     }
     sync();
     if (ok) {
-        disp_boot_id(disp_state_cache.boot_id);
-        disp_gui_marker(disp_state_cache.gui_marker);
+        char boot[40], marker[64];
+        disp_boot_id(boot);
+        disp_gui_marker(marker);
+        pthread_mutex_lock(&disp_mutex);
+        disp_state_cache = local_state;
+        snprintf(disp_state_cache.boot_id, sizeof(disp_state_cache.boot_id), "%s", boot);
+        snprintf(disp_state_cache.gui_marker, sizeof(disp_state_cache.gui_marker), "%s", marker);
         disp_state_cache.phase = 1;
         disp_state_cache.applied_at = (long long)time(NULL);
         ok = disp_state_write();
+        pthread_mutex_unlock(&disp_mutex);
     }
     if (!ok) {
         /* Roll the already replaced files back from the baseline. */
-        (void)disp_restore_baseline(0);
+        (void)disp_restore_baseline(0, &local_state, NULL);
+        pthread_mutex_lock(&disp_mutex);
+        disp_state_cache = local_state;
         disp_state_cache.phase = 2;
         (void)disp_state_write();
+        pthread_mutex_unlock(&disp_mutex);
     } else {
         unlink(journal);
+        ap_sync_parent(journal);
         for (int i = 0; i < staged_count; ++i) {
             char path[PATH_MAX_LOCAL];
             if (disp_path_join(path, sizeof(path), stage, staged[i].name)) unlink(path);
         }
         rmdir(stage);
     }
-    return ok && applied == staged_count;
+    pthread_mutex_unlock(&disp_apply_mutex);
+    result = ok && applied == staged_count;
+out:
+    free(staged);
+    return result;
 }
 
 static void *disp_upload_thread(void *argument) {
     disp_upload_job *job = argument;
-    int ok = 0;
-    pthread_mutex_lock(&disp_mutex);
-    if (disp_state_read()) ok = disp_receive_pack(job);
-    const char *error = disp_error;
+    int ok = disp_receive_pack(job);
     char message[160];
-    snprintf(message, sizeof(message), "%s", error);
-    pthread_mutex_unlock(&disp_mutex);
+    disp_copy_error(message, sizeof(message));
     char body[320];
     int n = snprintf(body, sizeof(body),
         "{\"ok\":%s,\"error\":\"%s\",\"rebootRequired\":%s}\n",
@@ -1144,9 +1403,14 @@ static void *disp_upload_thread(void *argument) {
 }
 
 static int disp_apply_start(int fd, const char *request, size_t used, size_t header_length, const mqtt_client *mqtt) {
-    if (!disp_capability()) {
+    pthread_mutex_lock(&disp_mutex);
+    int supported = disp_capability();
+    char error[160];
+    disp_copy_error(error, sizeof(error));
+    pthread_mutex_unlock(&disp_mutex);
+    if (!supported) {
         char body[256];
-        int n = snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", disp_error);
+        int n = snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%.160s\"}\n", error);
         if (n > 0 && (size_t)n < sizeof(body))
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", body, (size_t)n);
         return 0;
@@ -1190,7 +1454,7 @@ static int disp_apply_start(int fd, const char *request, size_t used, size_t hea
     job->fd = fd;
     job->mqtt = mqtt;
     clock_gettime(CLOCK_MONOTONIC, &job->started);
-    disp_error[0] = '\0';
+    disp_clear_error();
     pthread_t thread;
     if (pthread_create(&thread, NULL, disp_upload_thread, job)) {
         free(job->initial);
@@ -1203,50 +1467,83 @@ static int disp_apply_start(int fd, const char *request, size_t used, size_t hea
     return 1;
 }
 
+/* Restore the verified baseline. This path deliberately does not require the
+ * current display manifest or GUI hash: after a firmware or panel update the
+ * baseline must still be reachable. It does require that the target files are
+ * the original or a version this feature recorded, so a newer firmware's own
+ * files are never overwritten. */
 static void disp_restore_response(int fd, const mqtt_client *mqtt) {
-    pthread_mutex_lock(&disp_mutex);
-    if (!disp_capability()) {
-        pthread_mutex_unlock(&disp_mutex);
-        char body[256];
-        int n = snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", disp_error);
-        if (n > 0 && (size_t)n < sizeof(body))
-            respond(fd, 409, "Conflict", "application/json; charset=utf-8", body, (size_t)n);
-        return;
-    }
     if (!mqtt || !gcode_idle_for_mutation(mqtt)) {
-        pthread_mutex_unlock(&disp_mutex);
         disp_json(fd, 409, "Conflict", "Printer must be idle");
         return;
     }
-    if (!disp_state_read()) {
-        pthread_mutex_unlock(&disp_mutex);
-        disp_json(fd, 500, "Internal Server Error", "Display state unavailable");
+    pthread_mutex_lock(&disp_apply_mutex);
+    disp_baseline_entry entries[DISP_MAX_STAGE];
+    int count = 0;
+    disp_baseline_identity identity;
+    disp_state local_state;
+    memset(&local_state, 0, sizeof(local_state));
+    pthread_mutex_lock(&disp_mutex);
+    int state_ok = disp_state_read();
+    if (state_ok) local_state = disp_state_cache;
+    struct stat dir_stat;
+    int dir_ok = lstat(disp_theme_dir, &dir_stat) == 0 && S_ISDIR(dir_stat.st_mode);
+    int baseline_ok = dir_ok && disp_baseline_read(entries, &count, &identity, 0) > 0 && count > 0;
+    int supported = disp_capability(); /* only for the warning below */
+    int firmware_changed = baseline_ok && supported &&
+        !disp_manifest_identity(&disp_manifest_cache, identity.firmware_base, identity.gui_sha256);
+    char error[160];
+    disp_copy_error(error, sizeof(error));
+    pthread_mutex_unlock(&disp_mutex);
+    if (!dir_ok) {
+        pthread_mutex_unlock(&disp_apply_mutex);
+        disp_json(fd, 409, "Conflict", "display_theme_missing");
         return;
     }
-    int ok = disp_restore_baseline(1);
+    if (!baseline_ok) {
+        pthread_mutex_unlock(&disp_apply_mutex);
+        disp_json(fd, 409, "Conflict", error[0] ? error : "display_backup_missing");
+        return;
+    }
+    disp_hash_set journal;
+    disp_journal_read(&journal);
+    int ok = disp_restore_baseline(1, &local_state, &journal);
     if (ok) {
+        char path[PATH_MAX_LOCAL];
+        if (disp_journal_path(path, sizeof(path))) {
+            unlink(path);
+            ap_sync_parent(path);
+        }
+        pthread_mutex_lock(&disp_mutex);
         disp_state_cache.phase = 0;
         disp_state_cache.file_count = 0;
         disp_state_cache.gui_marker[0] = '\0';
         disp_boot_id(disp_state_cache.boot_id);
         ok = disp_state_write();
+        pthread_mutex_unlock(&disp_mutex);
     }
-    char error[160];
-    snprintf(error, sizeof(error), "%s", disp_error);
-    pthread_mutex_unlock(&disp_mutex);
+    disp_copy_error(error, sizeof(error));
+    pthread_mutex_unlock(&disp_apply_mutex);
     if (!ok) {
-        char body[256];
-        int n = snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}\n", error);
+        char body[320];
+        int n = snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%.160s\"}\n", error);
         if (n > 0 && (size_t)n < sizeof(body))
             respond(fd, 409, "Conflict", "application/json; charset=utf-8", body, (size_t)n);
         return;
     }
-    const char *reply = "{\"ok\":true,\"rebootRequired\":true}\n";
-    respond(fd, 200, "OK", "application/json; charset=utf-8", reply, strlen(reply));
+    char body[256];
+    int n = snprintf(body, sizeof(body),
+                     "{\"ok\":true,\"rebootRequired\":true,\"firmwareChanged\":%s}\n",
+                     firmware_changed ? "true" : "false");
+    if (n > 0 && (size_t)n < sizeof(body))
+        respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)n);
 }
 
 /* Startup recovery: an interrupted apply is rolled back before the web server
- * serves the first request. No printer process is signalled. */
+ * serves the first request. It relies on the baseline and the journal, never
+ * on the current manifest, so a recovery works after a firmware update. The
+ * strict target check keeps files written by another tool. Idempotent: a
+ * repeated run restores the same bytes. No printer process is signalled. */
 static void disp_startup_recover(void) {
     if (!disp_ensure_state_dir()) return;
     char journal[PATH_MAX_LOCAL], stage[PATH_MAX_LOCAL];
@@ -1256,22 +1553,37 @@ static void disp_startup_recover(void) {
         if (stage[0]) rmdir(stage); /* empty leftovers only */
         return;
     }
+    pthread_mutex_lock(&disp_apply_mutex);
     pthread_mutex_lock(&disp_mutex);
-    if (!disp_load_manifest(1)) {
-        fprintf(stderr, "Display recovery: manifest unavailable (%s); journal retained\n", disp_error);
-        pthread_mutex_unlock(&disp_mutex);
+    int state_ok = disp_state_read();
+    disp_state local_state;
+    memset(&local_state, 0, sizeof(local_state));
+    if (state_ok) local_state = disp_state_cache;
+    pthread_mutex_unlock(&disp_mutex);
+    disp_hash_set recorded;
+    int have_journal = disp_journal_read(&recorded);
+    if (!have_journal) {
+        char error[160];
+        disp_copy_error(error, sizeof(error));
+        fprintf(stderr, "Display recovery: journal unreadable (%s); journal retained\n", error);
+        pthread_mutex_unlock(&disp_apply_mutex);
         return;
     }
-    (void)disp_state_read();
-    if (disp_restore_baseline(0)) {
+    if (disp_restore_baseline(1, &local_state, &recorded)) {
+        pthread_mutex_lock(&disp_mutex);
         disp_state_cache.phase = 3;
         (void)disp_state_write();
+        pthread_mutex_unlock(&disp_mutex);
         unlink(journal);
+        ap_sync_parent(journal);
+        if (stage[0]) rmdir(stage); /* empty leftovers only */
         fprintf(stderr, "Display recovery: previous theme files restored\n");
     } else {
-        fprintf(stderr, "Display recovery failed (%s); keep the backup and inspect the display files\n", disp_error);
+        char error[160];
+        disp_copy_error(error, sizeof(error));
+        fprintf(stderr, "Display recovery failed (%s); keep the backup and inspect the display files\n", error);
     }
-    pthread_mutex_unlock(&disp_mutex);
+    pthread_mutex_unlock(&disp_apply_mutex);
 }
 
 #endif /* CC2_DISPLAY_THEME_H */
