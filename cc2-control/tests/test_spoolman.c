@@ -2519,6 +2519,12 @@ static void test_manual_sync_keeps_held_and_stale_guards(void) {
 int main(void) {
     setvbuf(stdout, NULL, _IOLBF, 1024);
     spools_clock = clock_fake; spools_wall = wall_fake;
+    if (getenv("CC2_TEST_MANUAL_SYNC_ONLY")) {
+        test_manual_sync_imports_and_coalesces();
+        test_manual_sync_refusals_and_memory();
+        test_manual_sync_keeps_held_and_stale_guards();
+        return 0;
+    }
     test_parse_url();
     test_persistence_and_backward_compat();
     test_charge_accumulates_only_when_linked();
